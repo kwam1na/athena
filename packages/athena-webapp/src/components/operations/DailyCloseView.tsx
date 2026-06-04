@@ -43,6 +43,7 @@ import type { ApprovalRequirement } from "~/shared/approvalPolicy";
 import { currencyFormatter } from "~/shared/currencyFormatter";
 import View from "../View";
 import { FadeIn } from "../common/FadeIn";
+import { FinancialValue } from "../common/FinancialValue";
 import { ListPagination } from "../common/ListPagination";
 import {
   PageLevelHeader,
@@ -245,6 +246,7 @@ type BucketConfig = {
 
 type DailyCloseViewContentProps = {
   currency: string;
+  hasFinancialDetailsAccess: boolean;
   hasFullAdminAccess: boolean;
   isAuthenticated: boolean;
   isCompleting: boolean;
@@ -524,6 +526,24 @@ export function formatDailyCloseMoney(
   });
 }
 
+function DailyCloseFinancialValue({
+  amount,
+  canView,
+  currency,
+  label,
+}: {
+  amount?: number | null;
+  canView: boolean;
+  currency: string;
+  label: string;
+}) {
+  return (
+    <FinancialValue canView={canView} label={label}>
+      {formatDailyCloseMoney(currency, amount)}
+    </FinancialValue>
+  );
+}
+
 export function formatDailyCloseOperatingDate(operatingDate: string) {
   const parsed = new Date(`${operatingDate}T00:00:00`);
 
@@ -737,6 +757,8 @@ const moneyMetadataLabels = new Set([
   "variance",
 ]);
 
+const financialNarrativeMetadataLabels = new Set(["reason"]);
+
 const timestampMetadataLabels = new Set([
   "completedat",
   "createdat",
@@ -872,6 +894,15 @@ function normalizeMetadataLabel(label: string) {
 
 function isMoneyMetadataLabel(label: string) {
   return moneyMetadataLabels.has(normalizeMetadataLabel(label));
+}
+
+function isFinancialMetadataLabel(label: string) {
+  const normalizedLabel = normalizeMetadataLabel(label);
+
+  return (
+    moneyMetadataLabels.has(normalizedLabel) ||
+    financialNarrativeMetadataLabels.has(normalizedLabel)
+  );
 }
 
 function isTimestampMetadataLabel(label: string) {
@@ -1026,6 +1057,7 @@ function formatMetadataValue(label: string, value: unknown, currency: string) {
 }
 
 function formatMetadataDisplayValue({
+  canViewFinancialDetails,
   currency,
   item,
   label,
@@ -1033,6 +1065,7 @@ function formatMetadataDisplayValue({
   storeUrlSlug,
   value,
 }: {
+  canViewFinancialDetails: boolean;
   currency: string;
   item: DailyCloseItem;
   label: string;
@@ -1041,6 +1074,17 @@ function formatMetadataDisplayValue({
   value: unknown;
 }): ReactNode {
   const formattedValue = formatMetadataValue(label, value, currency);
+  const isFinancialValue = isFinancialMetadataLabel(label);
+  const visibleValue = isFinancialValue ? (
+    <FinancialValue
+      canView={canViewFinancialDetails}
+      label={getDisplayMetadataLabel(label, value)}
+    >
+      {formattedValue}
+    </FinancialValue>
+  ) : (
+    formattedValue
+  );
   const transactionId =
     getMetadataStringValue(item.metadata, "transactionId") ??
     (item.subject?.type === "pos_transaction" ? item.subject.id : undefined);
@@ -1064,7 +1108,7 @@ function formatMetadataDisplayValue({
         search={{ o: getOrigin() } as never}
         to="/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId"
       >
-        {formattedValue}
+        {visibleValue}
         <ArrowUpRight aria-hidden="true" className="h-3 w-3" />
       </Link>
     );
@@ -1084,7 +1128,7 @@ function formatMetadataDisplayValue({
         search={{ o: getOrigin() } as never}
         to="/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/$reportId"
       >
-        {formattedValue}
+        {visibleValue}
         <ArrowUpRight aria-hidden="true" className="h-3 w-3" />
       </Link>
     );
@@ -1098,16 +1142,17 @@ function formatMetadataDisplayValue({
         <span
           className={cn("font-numeric tabular-nums", getVarianceTone(variance))}
         >
-          {formattedValue}
+          {visibleValue}
         </span>
       );
     }
   }
 
-  return formattedValue;
+  return visibleValue;
 }
 
 function getMetadataEntries(
+  canViewFinancialDetails: boolean,
   item: DailyCloseItem,
   currency: string,
   orgUrlSlug: string,
@@ -1218,6 +1263,7 @@ function getMetadataEntries(
           .map((entry) => ({
             label: getDisplayMetadataLabel(entry.label, entry.value),
             value: formatMetadataDisplayValue({
+              canViewFinancialDetails,
               currency,
               item,
               label: entry.label,
@@ -1245,6 +1291,7 @@ function getMetadataEntries(
           return {
             label: getDisplayMetadataLabel(label, value),
             value: formatMetadataDisplayValue({
+              canViewFinancialDetails,
               currency,
               item,
               label,
@@ -1262,6 +1309,7 @@ function getMetadataEntries(
         .map(([label, value]) => ({
           label: getDisplayMetadataLabel(label, value),
           value: formatMetadataDisplayValue({
+            canViewFinancialDetails,
             currency,
             item,
             label,
@@ -1790,6 +1838,7 @@ function ItemLink({
 }
 
 function DailyCloseItemCard({
+  canViewFinancialDetails,
   currency,
   item,
   orgUrlSlug,
@@ -1798,6 +1847,7 @@ function DailyCloseItemCard({
   storeUrlSlug,
   onSelectedChange,
 }: {
+  canViewFinancialDetails: boolean;
   currency: string;
   item: DailyCloseItem;
   onSelectedChange?: (selected: boolean) => void;
@@ -1811,6 +1861,7 @@ function DailyCloseItemCard({
   const description = getItemDescription(item);
   const showCollapsedDescription = shouldShowCollapsedDescription(description);
   const metadataEntries = getMetadataEntries(
+    canViewFinancialDetails,
     item,
     currency,
     orgUrlSlug,
@@ -1860,6 +1911,7 @@ function DailyCloseItemCard({
 
 function BucketSection({
   ariaLabel,
+  canViewFinancialDetails,
   currency,
   description,
   emptyText,
@@ -1875,6 +1927,7 @@ function BucketSection({
   onSelectedIdsChange,
 }: {
   ariaLabel: string;
+  canViewFinancialDetails: boolean;
   currency: string;
   description: string;
   emptyText: string;
@@ -1956,6 +2009,7 @@ function BucketSection({
 
             return (
               <DailyCloseItemCard
+                canViewFinancialDetails={canViewFinancialDetails}
                 currency={currency}
                 item={item}
                 key={getItemId(item)}
@@ -1992,6 +2046,7 @@ function BucketSection({
 
 function BucketTabs({
   buckets,
+  canViewFinancialDetails,
   currency,
   value,
   orgUrlSlug,
@@ -2003,6 +2058,7 @@ function BucketTabs({
   onSelectedIdsChange,
 }: {
   buckets: BucketConfig[];
+  canViewFinancialDetails: boolean;
   currency: string;
   value: BucketStatus;
   onPageChange: (page: number) => void;
@@ -2051,6 +2107,7 @@ function BucketTabs({
         <TabsContent className="mt-0" key={bucket.value} value={bucket.value}>
           <BucketSection
             ariaLabel={bucket.ariaLabel}
+            canViewFinancialDetails={canViewFinancialDetails}
             currency={currency}
             description={bucket.description}
             emptyText={bucket.emptyText}
@@ -2076,11 +2133,13 @@ function BucketTabs({
 }
 
 function TransactionReportAction({
+  canViewFinancialDetails,
   currency,
   orgUrlSlug,
   snapshot,
   storeUrlSlug,
 }: {
+  canViewFinancialDetails: boolean;
   currency: string;
   orgUrlSlug: string;
   snapshot: DailyCloseSnapshot;
@@ -2166,7 +2225,12 @@ function TransactionReportAction({
                           {getTransactionReportTime(item)}
                         </div>
                         <div className="font-numeric font-semibold text-foreground tabular-nums md:text-right">
-                          {getTransactionReportAmount(item, currency)}
+                          <FinancialValue
+                            canView={canViewFinancialDetails}
+                            label="Transaction amount"
+                          >
+                            {getTransactionReportAmount(item, currency)}
+                          </FinancialValue>
                         </div>
                       </div>
                     );
@@ -2182,11 +2246,13 @@ function TransactionReportAction({
 }
 
 export function DailyCloseReadOnlyReport({
+  canViewFinancialDetails = true,
   currency,
   orgUrlSlug,
   snapshot,
   storeUrlSlug,
 }: {
+  canViewFinancialDetails?: boolean;
   currency: string;
   orgUrlSlug: string;
   snapshot: DailyCloseSnapshot;
@@ -2221,6 +2287,7 @@ export function DailyCloseReadOnlyReport({
           </div>
           <div className="flex flex-col gap-layout-sm sm:flex-row sm:items-center">
             <TransactionReportAction
+              canViewFinancialDetails={canViewFinancialDetails}
               currency={currency}
               orgUrlSlug={orgUrlSlug}
               snapshot={displaySnapshot}
@@ -2255,14 +2322,18 @@ export function DailyCloseReadOnlyReport({
               storeUrlSlug,
               to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions",
             }}
-            value={formatDailyCloseMoney(
-              currency,
-              getSummaryAmount(
-                displaySnapshot.summary,
-                "totalSales",
-                "salesTotal",
-              ),
-            )}
+            value={
+              <DailyCloseFinancialValue
+                amount={getSummaryAmount(
+                  displaySnapshot.summary,
+                  "totalSales",
+                  "salesTotal",
+                )}
+                canView={canViewFinancialDetails}
+                currency={currency}
+                label={salesMetricLabels.netSales}
+              />
+            }
           />
           <OperationsSummaryMetric
             helper={formatTodayCashTransactionCount(
@@ -2283,14 +2354,18 @@ export function DailyCloseReadOnlyReport({
               storeUrlSlug,
               to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions",
             }}
-            value={formatDailyCloseMoney(
-              currency,
-              getSummaryAmount(
-                displaySnapshot.summary,
-                "currentDayCashTotal",
-                "cashExpected",
-              ),
-            )}
+            value={
+              <DailyCloseFinancialValue
+                amount={getSummaryAmount(
+                  displaySnapshot.summary,
+                  "currentDayCashTotal",
+                  "cashExpected",
+                )}
+                canView={canViewFinancialDetails}
+                currency={currency}
+                label={salesMetricLabels.cash}
+              />
+            }
           />
           {otherPaymentTotals.map((paymentTotal) => (
             <OperationsSummaryMetric
@@ -2307,7 +2382,14 @@ export function DailyCloseReadOnlyReport({
                 storeUrlSlug,
                 to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions",
               }}
-              value={formatDailyCloseMoney(currency, paymentTotal.amount)}
+              value={
+                <DailyCloseFinancialValue
+                  amount={paymentTotal.amount}
+                  canView={canViewFinancialDetails}
+                  currency={currency}
+                  label={formatPaymentMethodLabel(paymentTotal.method)}
+                />
+              }
             />
           ))}
           <OperationsSummaryMetric
@@ -2319,14 +2401,18 @@ export function DailyCloseReadOnlyReport({
               ),
             )}
             label="Carried-over cash"
-            value={formatDailyCloseMoney(
-              currency,
-              getSummaryAmount(
-                displaySnapshot.summary,
-                "carriedOverCashTotal",
-                "carriedOverCashTotal",
-              ),
-            )}
+            value={
+              <DailyCloseFinancialValue
+                amount={getSummaryAmount(
+                  displaySnapshot.summary,
+                  "carriedOverCashTotal",
+                  "carriedOverCashTotal",
+                )}
+                canView={canViewFinancialDetails}
+                currency={currency}
+                label="Carried-over cash"
+              />
+            }
           />
           {shouldShowExpenseMetric(displaySnapshot.summary) ? (
             <OperationsSummaryMetric
@@ -2334,10 +2420,14 @@ export function DailyCloseReadOnlyReport({
                 getExpenseTransactionCount(displaySnapshot.summary),
               )}
               label="Expenses"
-              value={formatDailyCloseMoney(
-                currency,
-                displaySnapshot.summary.expenseTotal,
-              )}
+              value={
+                <DailyCloseFinancialValue
+                  amount={displaySnapshot.summary.expenseTotal}
+                  canView={canViewFinancialDetails}
+                  currency={currency}
+                  label="Expenses"
+                />
+              }
             />
           ) : null}
           {shouldShowVarianceMetric(displaySnapshot.summary) ? (
@@ -2346,14 +2436,18 @@ export function DailyCloseReadOnlyReport({
                 getSummaryRegisterVarianceCount(displaySnapshot.summary),
               )}
               label="Variance"
-              value={formatDailyCloseMoney(
-                currency,
-                getSummaryAmount(
-                  displaySnapshot.summary,
-                  "varianceTotal",
-                  "netCashVariance",
-                ),
-              )}
+              value={
+                <DailyCloseFinancialValue
+                  amount={getSummaryAmount(
+                    displaySnapshot.summary,
+                    "varianceTotal",
+                    "netCashVariance",
+                  )}
+                  canView={canViewFinancialDetails}
+                  currency={currency}
+                  label="Variance"
+                />
+              }
             />
           ) : null}
         </div>
@@ -2397,6 +2491,7 @@ export function DailyCloseReadOnlyReport({
             <TabsContent className="mt-0" value={selectedBucket.value}>
               <BucketSection
                 ariaLabel={selectedBucket.ariaLabel}
+                canViewFinancialDetails={canViewFinancialDetails}
                 currency={currency}
                 description={selectedBucket.description}
                 emptyText={selectedBucket.emptyText}
@@ -2718,6 +2813,7 @@ function CompletionRail({
 
 export function DailyCloseViewContent({
   currency,
+  hasFinancialDetailsAccess,
   hasFullAdminAccess,
   isAuthenticated,
   isCompleting,
@@ -2961,6 +3057,7 @@ export function DailyCloseViewContent({
         displaySnapshot ? (
           <>
             <TransactionReportAction
+              canViewFinancialDetails={hasFinancialDetailsAccess}
               currency={currency}
               orgUrlSlug={orgUrlSlug}
               snapshot={displaySnapshot}
@@ -2982,6 +3079,7 @@ export function DailyCloseViewContent({
         displaySnapshot ? (
           <BucketTabs
             buckets={buckets}
+            canViewFinancialDetails={hasFinancialDetailsAccess}
             currency={currency}
             onPageChange={handleBucketPageChange}
             onSelectedIdsChange={setSelectedCarryForwardIds}
@@ -3016,14 +3114,18 @@ export function DailyCloseViewContent({
                 storeUrlSlug,
                 to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions",
               }}
-              value={formatDailyCloseMoney(
-                currency,
-                getSummaryAmount(
-                  displaySnapshot.summary,
-                  "totalSales",
-                  "salesTotal",
-                ),
-              )}
+              value={
+                <DailyCloseFinancialValue
+                  amount={getSummaryAmount(
+                    displaySnapshot.summary,
+                    "totalSales",
+                    "salesTotal",
+                  )}
+                  canView={hasFinancialDetailsAccess}
+                  currency={currency}
+                  label={salesMetricLabels?.netSales ?? "Net sales"}
+                />
+              }
             />
             <OperationsSummaryMetric
               helper={formatTodayCashTransactionCount(
@@ -3044,14 +3146,18 @@ export function DailyCloseViewContent({
                 storeUrlSlug,
                 to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions",
               }}
-              value={formatDailyCloseMoney(
-                currency,
-                getSummaryAmount(
-                  displaySnapshot.summary,
-                  "currentDayCashTotal",
-                  "cashExpected",
-                ),
-              )}
+              value={
+                <DailyCloseFinancialValue
+                  amount={getSummaryAmount(
+                    displaySnapshot.summary,
+                    "currentDayCashTotal",
+                    "cashExpected",
+                  )}
+                  canView={hasFinancialDetailsAccess}
+                  currency={currency}
+                  label={salesMetricLabels?.cash ?? "Cash"}
+                />
+              }
             />
             {otherPaymentTotals.map((paymentTotal) => (
               <OperationsSummaryMetric
@@ -3068,7 +3174,14 @@ export function DailyCloseViewContent({
                   storeUrlSlug,
                   to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions",
                 }}
-                value={formatDailyCloseMoney(currency, paymentTotal.amount)}
+                value={
+                  <DailyCloseFinancialValue
+                    amount={paymentTotal.amount}
+                    canView={hasFinancialDetailsAccess}
+                    currency={currency}
+                    label={formatPaymentMethodLabel(paymentTotal.method)}
+                  />
+                }
               />
             ))}
             <OperationsSummaryMetric
@@ -3080,14 +3193,18 @@ export function DailyCloseViewContent({
                 ),
               )}
               label="Carried-over cash"
-              value={formatDailyCloseMoney(
-                currency,
-                getSummaryAmount(
-                  displaySnapshot.summary,
-                  "carriedOverCashTotal",
-                  "carriedOverCashTotal",
-                ),
-              )}
+              value={
+                <DailyCloseFinancialValue
+                  amount={getSummaryAmount(
+                    displaySnapshot.summary,
+                    "carriedOverCashTotal",
+                    "carriedOverCashTotal",
+                  )}
+                  canView={hasFinancialDetailsAccess}
+                  currency={currency}
+                  label="Carried-over cash"
+                />
+              }
             />
             {shouldShowExpenseMetric(displaySnapshot.summary) ? (
               <OperationsSummaryMetric
@@ -3095,10 +3212,14 @@ export function DailyCloseViewContent({
                   getExpenseTransactionCount(displaySnapshot.summary),
                 )}
                 label="Expenses"
-                value={formatDailyCloseMoney(
-                  currency,
-                  displaySnapshot.summary.expenseTotal,
-                )}
+                value={
+                  <DailyCloseFinancialValue
+                    amount={displaySnapshot.summary.expenseTotal}
+                    canView={hasFinancialDetailsAccess}
+                    currency={currency}
+                    label="Expenses"
+                  />
+                }
               />
             ) : null}
             {shouldShowVarianceMetric(displaySnapshot.summary) ? (
@@ -3107,14 +3228,18 @@ export function DailyCloseViewContent({
                   getSummaryRegisterVarianceCount(displaySnapshot.summary),
                 )}
                 label="Variance"
-                value={formatDailyCloseMoney(
-                  currency,
-                  getSummaryAmount(
-                    displaySnapshot.summary,
-                    "varianceTotal",
-                    "netCashVariance",
-                  ),
-                )}
+                value={
+                  <DailyCloseFinancialValue
+                    amount={getSummaryAmount(
+                      displaySnapshot.summary,
+                      "varianceTotal",
+                      "netCashVariance",
+                    )}
+                    canView={hasFinancialDetailsAccess}
+                    currency={currency}
+                    label="Variance"
+                  />
+                }
               />
             ) : null}
           </>
@@ -3184,6 +3309,7 @@ function DailyCloseConnectedView({
     activeStore,
     canAccessProtectedSurface,
     canQueryProtectedData,
+    hasFinancialDetailsAccess,
     hasFullAdminAccess,
     isAuthenticated,
     isLoadingAccess,
@@ -3294,6 +3420,7 @@ function DailyCloseConnectedView({
   return (
     <DailyCloseViewContent
       currency={activeStore?.currency || "USD"}
+      hasFinancialDetailsAccess={hasFinancialDetailsAccess}
       hasFullAdminAccess={canAccessSurface}
       isAuthenticated={isAuthenticated}
       isCompleting={isCompleting}

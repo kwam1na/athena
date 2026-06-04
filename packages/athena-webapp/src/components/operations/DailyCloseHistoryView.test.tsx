@@ -16,6 +16,7 @@ const mockedHooks = vi.hoisted(() => ({
 }));
 
 const mockedRouter = vi.hoisted(() => ({
+  navigate: vi.fn(),
   navigateBack: vi.fn(),
   search: {} as Record<string, unknown>,
 }));
@@ -57,6 +58,7 @@ vi.mock("@tanstack/react-router", () => ({
     orgUrlSlug: "wigclub",
     storeUrlSlug: "osu",
   }),
+  useNavigate: () => mockedRouter.navigate,
   useSearch: () => mockedRouter.search,
 }));
 
@@ -358,6 +360,37 @@ describe("DailyCloseHistoryView", () => {
     expect(screen.getByRole("region", { name: "Historical Daily Close detail" }))
       .toHaveTextContent("Clean close.");
     expect(screen.getByText(/Completed by Kofi Mensah/)).toBeInTheDocument();
+    expect(mockedRouter.navigate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        search: expect.any(Function),
+      }),
+    );
+
+    const navigateCall = mockedRouter.navigate.mock.calls.at(-1)?.[0] as {
+      search: (current: Record<string, unknown>) => Record<string, unknown>;
+    };
+
+    expect(navigateCall.search({ o: "/wigclub/store/osu/operations" })).toEqual({
+      day: "2026-05-07",
+      o: "/wigclub/store/osu/operations",
+    });
+  });
+
+  it("selects the active day from the route search", () => {
+    mockedRouter.search = {
+      day: "2026-05-07",
+      o: "/wigclub/store/osu/operations",
+    };
+
+    render(<DailyCloseHistoryView />);
+
+    const detail = screen.getByRole("region", {
+      name: "Historical Daily Close detail",
+    });
+
+    expect(within(detail).getAllByText("Thursday, May 7, 2026")[0])
+      .toBeInTheDocument();
+    expect(within(detail).getByText("Clean close.")).toBeInTheDocument();
   });
 
   it("renders the empty state when there are no completed records", () => {

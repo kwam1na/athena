@@ -128,6 +128,15 @@ vi.mock("sonner", () => ({
 import { registerAndProvisionPosTerminal } from "@/lib/pos/application/registerAndProvisionPosTerminal";
 import { POSSettingsView } from "./POSSettingsView";
 
+async function waitForFingerprintEffect() {
+  await waitFor(() =>
+    expect(window.localStorage.setItem).toHaveBeenCalledWith(
+      "athena.pos.fingerprint",
+      expect.any(String),
+    ),
+  );
+}
+
 describe("registerAndProvisionPosTerminal", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -154,6 +163,7 @@ describe("registerAndProvisionPosTerminal", () => {
             failedAttemptCount: 0,
             lastUsedAt: undefined,
             lockedUntil: undefined,
+            plaintextCode: "mintlamp42",
             rotatedAt: 1,
             status: "active",
           }
@@ -309,7 +319,16 @@ describe("registerAndProvisionPosTerminal", () => {
     );
   });
 
-  it("lets full admins rotate the POS recovery code and shows plaintext once", async () => {
+  it("shows the current POS recovery code from status", async () => {
+    render(<POSSettingsView />);
+
+    expect(await screen.findByText("mintlamp42")).toBeInTheDocument();
+    expect(
+      screen.getByText("Current recovery code"),
+    ).toBeInTheDocument();
+  });
+
+  it("lets full admins rotate the POS recovery code and keeps plaintext visible", async () => {
     const user = userEvent.setup();
 
     render(<POSSettingsView />);
@@ -390,6 +409,7 @@ describe("registerAndProvisionPosTerminal", () => {
     });
 
     render(<POSSettingsView />);
+    await waitForFingerprintEffect();
 
     expect(screen.queryByText("POS recovery code")).not.toBeInTheDocument();
     expect(mocks.useQuery).toHaveBeenCalledWith(

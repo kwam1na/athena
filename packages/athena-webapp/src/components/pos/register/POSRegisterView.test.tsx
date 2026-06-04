@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -132,10 +138,10 @@ vi.mock("@/components/pos/ProductEntry", async () => {
         },
         ref,
       ) => {
-      React.useImperativeHandle(ref, () => ({
-        focusProductSearchInput: () => true,
-        openQuickAddProduct: mockOpenQuickAddProduct,
-      }));
+        React.useImperativeHandle(ref, () => ({
+          focusProductSearchInput: () => true,
+          openQuickAddProduct: mockOpenQuickAddProduct,
+        }));
 
         return (
           <div>
@@ -221,7 +227,9 @@ vi.mock("./RegisterActionBar", () => ({
       register-action-bar
       <div>
         Cashier {cashierCard?.cashierName ?? "Unassigned"}
-        {cashierCard ? <button onClick={cashierCard.onSignOut}>Sign out</button> : null}
+        {cashierCard ? (
+          <button onClick={cashierCard.onSignOut}>Sign out</button>
+        ) : null}
       </div>
       {closeoutControl ? (
         <>
@@ -372,7 +380,9 @@ describe("POSRegisterView", () => {
     expect(screen.getByText("product-search-input")).toBeInTheDocument();
     expect(screen.getByText("Ready for product lookup")).toBeInTheDocument();
     expect(screen.getByText("⌘+K")).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "Sale summary" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("region", { name: "Sale summary" }),
+    ).toBeInTheDocument();
     expect(screen.getByText("Balance due")).toBeInTheDocument();
     expect(screen.getByText("GH₵0")).toBeInTheDocument();
     expect(screen.getByText("cart-items")).toBeInTheDocument();
@@ -443,7 +453,9 @@ describe("POSRegisterView", () => {
     searchInput.blur();
     expect(searchInput).not.toHaveFocus();
 
-    await userEvent.click(screen.getByRole("button", { name: "mock-add-service" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "mock-add-service" }),
+    );
 
     await waitFor(() => expect(searchInput).toHaveFocus());
     expect(onAddService).toHaveBeenCalledWith(
@@ -648,7 +660,9 @@ describe("POSRegisterView", () => {
     expect(screen.getByText("2026-05-15T12:35:01Z")).toBeInTheDocument();
     expect(screen.getByText("check-in note")).toBeInTheDocument();
     expect(
-      screen.getByText("You do not have access to update this POS terminal status."),
+      screen.getByText(
+        "You do not have access to update this POS terminal status.",
+      ),
     ).toBeInTheDocument();
     expect(screen.getByText("local-only events")).toBeInTheDocument();
     expect(screen.getByText("oldest pending")).toBeInTheDocument();
@@ -902,11 +916,19 @@ describe("POSRegisterView", () => {
         "This register was closed locally. Athena will reconcile the closeout after sync.",
       ),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /retry sync/i })).toBeInTheDocument();
-    expect(screen.queryByText("register-customer-panel")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /retry sync/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("register-customer-panel"),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText("register-action-bar")).not.toBeInTheDocument();
-    expect(screen.queryByText("register-checkout-panel")).not.toBeInTheDocument();
-    expect(screen.queryByText("Ready for product lookup")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("register-checkout-panel"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Ready for product lookup"),
+    ).not.toBeInTheDocument();
   });
 
   it("focuses the product lookup entry when the empty lookup workspace is clicked", async () => {
@@ -1247,7 +1269,9 @@ describe("POSRegisterView", () => {
     render(<POSRegisterView />);
 
     expect(screen.getByText("Onboarding")).toBeInTheDocument();
-    expect(screen.getByText("Finish setup before your first checkout")).toBeInTheDocument();
+    expect(
+      screen.getByText("Finish setup before your first checkout"),
+    ).toBeInTheDocument();
     expect(screen.getByText("Set up this register")).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: /open register setup/i }),
@@ -1362,9 +1386,13 @@ describe("POSRegisterView", () => {
     render(<POSRegisterView />);
 
     expect(screen.queryByText("Onboarding")).not.toBeInTheDocument();
-    expect(screen.queryByText("Ready for product lookup")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Ready for product lookup"),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText("product-search-input")).not.toBeInTheDocument();
-    expect(screen.queryByText("register-customer-panel")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("register-customer-panel"),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText("cart-items")).not.toBeInTheDocument();
     expect(
       screen.queryByText("register-checkout-panel"),
@@ -1469,6 +1497,16 @@ describe("POSRegisterView", () => {
     render(<POSRegisterView workflowMode="expense" />);
 
     expect(screen.getByText("expense-completion-panel")).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId("register-workspace-sidebar")).getByText(
+        "expense-completion-panel",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId("register-main-workspace")).queryByText(
+        "expense-completion-panel",
+      ),
+    ).not.toBeInTheDocument();
     expect(screen.getByText("cart-items")).toBeInTheDocument();
     expect(screen.queryByText("register-action-bar")).not.toBeInTheDocument();
     expect(
@@ -1569,10 +1607,22 @@ describe("POSRegisterView", () => {
     const { POSRegisterView } = await import("./POSRegisterView");
     render(<POSRegisterView />);
 
-    expect(screen.getByText("Ready for expense entry")).toBeInTheDocument();
     expect(
-      screen.getByText("Search or scan products to add expense items"),
+      within(screen.getByTestId("register-main-workspace")).getByText(
+        "expense-completion-panel",
+      ),
     ).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId("register-workspace-sidebar")).queryByText(
+        "expense-completion-panel",
+      ),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Ready for expense entry"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Search or scan products to add expense items"),
+    ).not.toBeInTheDocument();
     expect(screen.getByText("cart-items")).toBeInTheDocument();
     expect(screen.getByText("expense-completion-panel")).toBeInTheDocument();
     expect(screen.getByText("Cashier")).toBeInTheDocument();

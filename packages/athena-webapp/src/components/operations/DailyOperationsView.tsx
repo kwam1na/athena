@@ -30,6 +30,7 @@ import type { Id } from "~/convex/_generated/dataModel";
 import { currencyFormatter } from "~/shared/currencyFormatter";
 import View from "../View";
 import { FadeIn } from "../common/FadeIn";
+import { FinancialValue } from "../common/FinancialValue";
 import {
   PageLevelHeader,
   PageWorkspace,
@@ -188,6 +189,7 @@ export type DailyOperationsSnapshot = {
 type DailyOperationsViewContentProps = {
   currency: string;
   hasFullAdminAccess: boolean;
+  hasFinancialDetailsAccess: boolean;
   isAuthenticated: boolean;
   isLoadingAccess: boolean;
   isLoadingSnapshot: boolean;
@@ -834,11 +836,13 @@ function OperatingDatePicker({
 
 function WeekMetricsStrip({
   currency,
+  hasFinancialDetailsAccess,
   metrics,
   orgUrlSlug,
   storeUrlSlug,
 }: {
   currency: string;
+  hasFinancialDetailsAccess: boolean;
   metrics: DailyOperationsSnapshot["weekMetrics"];
   orgUrlSlug: string;
   storeUrlSlug: string;
@@ -882,7 +886,9 @@ function WeekMetricsStrip({
           <p className="flex items-baseline gap-2 text-sm text-muted-foreground">
             <span>Week sales</span>
             <span className="font-numeric text-base font-semibold tabular-nums text-foreground">
-              {formatMoney(currency, weekSalesTotal)}
+              <FinancialValue canView={hasFinancialDetailsAccess} label="Week sales">
+                {formatMoney(currency, weekSalesTotal)}
+              </FinancialValue>
             </span>
           </p>
           <div className="flex items-center gap-1">
@@ -979,7 +985,14 @@ function WeekMetricsStrip({
                 <p className="mt-layout-sm font-numeric text-lg tabular-nums text-foreground">
                   {isFutureDate
                     ? "-"
-                    : formatMoney(currency, metric.salesTotal)}
+                    : (
+                        <FinancialValue
+                          canView={hasFinancialDetailsAccess}
+                          label={`${formatOperatingDate(metric.operatingDate)} sales`}
+                        >
+                          {formatMoney(currency, metric.salesTotal)}
+                        </FinancialValue>
+                      )}
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">
                   {isFutureDate
@@ -1028,6 +1041,7 @@ function WeekMetricsStrip({
 export function DailyOperationsViewContent({
   currency,
   hasFullAdminAccess,
+  hasFinancialDetailsAccess,
   isAuthenticated,
   isLoadingAccess,
   isLoadingSnapshot,
@@ -1157,10 +1171,17 @@ export function DailyOperationsViewContent({
                       storeUrlSlug,
                       to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions",
                     }}
-                    value={formatMoney(
-                      snapshot.currency ?? currency,
-                      snapshot.closeSummary.salesTotal,
-                    )}
+                    value={
+                      <FinancialValue
+                        canView={hasFinancialDetailsAccess}
+                        label={metricLabels?.netSales ?? "Net sales"}
+                      >
+                        {formatMoney(
+                          snapshot.currency ?? currency,
+                          snapshot.closeSummary.salesTotal,
+                        )}
+                      </FinancialValue>
+                    }
                   />
                   <OperationsSummaryMetric
                     helper={formatTodayCashTransactionCount(
@@ -1177,20 +1198,34 @@ export function DailyOperationsViewContent({
                       storeUrlSlug,
                       to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions",
                     }}
-                    value={formatMoney(
-                      snapshot.currency ?? currency,
-                      snapshot.closeSummary.currentDayCashTotal,
-                    )}
+                    value={
+                      <FinancialValue
+                        canView={hasFinancialDetailsAccess}
+                        label={metricLabels?.cash ?? "Cash"}
+                      >
+                        {formatMoney(
+                          snapshot.currency ?? currency,
+                          snapshot.closeSummary.currentDayCashTotal,
+                        )}
+                      </FinancialValue>
+                    }
                   />
                   <OperationsSummaryMetric
                     helper={formatCarriedOverRegisterCount(
                       snapshot.closeSummary.carriedOverRegisterCount,
                     )}
                     label="Carried-over cash"
-                    value={formatMoney(
-                      snapshot.currency ?? currency,
-                      snapshot.closeSummary.carriedOverCashTotal,
-                    )}
+                    value={
+                      <FinancialValue
+                        canView={hasFinancialDetailsAccess}
+                        label="Carried-over cash"
+                      >
+                        {formatMoney(
+                          snapshot.currency ?? currency,
+                          snapshot.closeSummary.carriedOverCashTotal,
+                        )}
+                      </FinancialValue>
+                    }
                   />
                   <OperationsSummaryMetric
                     helper={formatEntityCount(
@@ -1198,25 +1233,40 @@ export function DailyOperationsViewContent({
                       "expense transaction",
                     )}
                     label="Expenses"
-                    value={formatMoney(
-                      snapshot.currency ?? currency,
-                      snapshot.closeSummary.expenseTotal,
-                    )}
+                    value={
+                      <FinancialValue
+                        canView={hasFinancialDetailsAccess}
+                        label="Expenses"
+                      >
+                        {formatMoney(
+                          snapshot.currency ?? currency,
+                          snapshot.closeSummary.expenseTotal,
+                        )}
+                      </FinancialValue>
+                    }
                   />
                   <OperationsSummaryMetric
                     helper={formatRegisterVarianceCount(
                       snapshot.closeSummary.registerVarianceCount,
                     )}
                     label="Variance"
-                    value={formatMoney(
-                      snapshot.currency ?? currency,
-                      snapshot.closeSummary.netCashVariance,
-                    )}
+                    value={
+                      <FinancialValue
+                        canView={hasFinancialDetailsAccess}
+                        label="Variance"
+                      >
+                        {formatMoney(
+                          snapshot.currency ?? currency,
+                          snapshot.closeSummary.netCashVariance,
+                        )}
+                      </FinancialValue>
+                    }
                   />
                 </div>
 
                 <WeekMetricsStrip
                   currency={snapshot.currency ?? currency}
+                  hasFinancialDetailsAccess={hasFinancialDetailsAccess}
                   metrics={snapshot.weekMetrics}
                   orgUrlSlug={orgUrlSlug}
                   storeUrlSlug={storeUrlSlug}
@@ -1367,6 +1417,7 @@ function DailyOperationsConnectedView({
     activeStore,
     canAccessProtectedSurface,
     canQueryProtectedData,
+    hasFinancialDetailsAccess,
     hasFullAdminAccess,
     isAuthenticated,
     isLoadingAccess,
@@ -1424,6 +1475,7 @@ function DailyOperationsConnectedView({
     <DailyOperationsViewContent
       currency={activeStore?.currency ?? "GHS"}
       hasFullAdminAccess={canAccessSurface}
+      hasFinancialDetailsAccess={hasFinancialDetailsAccess}
       isAuthenticated={isAuthenticated}
       isLoadingAccess={isLoadingAccess}
       isLoadingSnapshot={snapshot === undefined}

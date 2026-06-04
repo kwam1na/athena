@@ -49,6 +49,17 @@ export function canAccessStoreDaySurface({
   activeManagerElevation,
   role,
 }: SurfaceAccessContext): boolean {
+  return (
+    role === "pos_only" ||
+    canAccessFullAdminSurface({ role }) ||
+    Boolean(activeManagerElevation)
+  );
+}
+
+export function canViewFinancialDetails({
+  activeManagerElevation,
+  role,
+}: SurfaceAccessContext): boolean {
   return canAccessFullAdminSurface({ role }) || Boolean(activeManagerElevation);
 }
 

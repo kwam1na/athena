@@ -10,6 +10,12 @@ interface ExpenseCompletionPanelProps {
   checkout: RegisterCheckoutState;
 }
 
+const attemptedAutoPrintReceiptKeys = new Set<string>();
+
+export function clearAttemptedExpenseAutoPrintReceiptKeysForTest() {
+  attemptedAutoPrintReceiptKeys.clear();
+}
+
 export function ExpenseCompletionPanel({
   checkout,
 }: ExpenseCompletionPanelProps) {
@@ -51,7 +57,7 @@ export function ExpenseCompletionPanel({
 
   const handlePrintReceipt = useCallback(async () => {
     if (!activeStore || !completedTransactionData) {
-      return;
+      return false;
     }
 
     try {
@@ -68,8 +74,10 @@ export function ExpenseCompletionPanel({
       });
 
       printReceipt(receiptHtml);
+      return true;
     } catch (error) {
       console.error("Error printing expense receipt:", error);
+      return false;
     }
   }, [
     activeStore,
@@ -91,12 +99,23 @@ export function ExpenseCompletionPanel({
       return;
     }
 
-    if (printedReceiptKeyRef.current === completedReceiptKey) {
+    if (
+      printedReceiptKeyRef.current === completedReceiptKey ||
+      attemptedAutoPrintReceiptKeys.has(completedReceiptKey)
+    ) {
       return;
     }
 
     printedReceiptKeyRef.current = completedReceiptKey;
-    void handlePrintReceipt();
+    attemptedAutoPrintReceiptKeys.add(completedReceiptKey);
+    void handlePrintReceipt().then((didPrint) => {
+      if (!didPrint) {
+        attemptedAutoPrintReceiptKeys.delete(completedReceiptKey);
+        if (printedReceiptKeyRef.current === completedReceiptKey) {
+          printedReceiptKeyRef.current = null;
+        }
+      }
+    });
   }, [
     checkout.isTransactionCompleted,
     completedReceiptKey,
@@ -133,7 +152,10 @@ export function ExpenseCompletionPanel({
       isCompleted={checkout.isTransactionCompleted}
       completedTransactionData={completedTransactionData}
       reportNumber={checkout.completedOrderNumber}
-      onPrintReceipt={handlePrintReceipt}
+      recordedBy={checkout.cashierName}
+      onPrintReceipt={() => {
+        void handlePrintReceipt();
+      }}
     />
   );
 }

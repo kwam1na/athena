@@ -204,6 +204,7 @@ function POSRecoveryCodeAdminPanel({
         failedAttemptCount: number;
         lastUsedAt?: number;
         lockedUntil?: number;
+        plaintextCode?: string;
         rotatedAt: number;
         status: "active" | "locked" | "revoked";
       }
@@ -280,6 +281,7 @@ function POSRecoveryCodeAdminPanel({
   }
 
   const statusLabel = status?.status ?? "not configured";
+  const currentRecoveryCode = revealedCode ?? status?.plaintextCode ?? null;
 
   return (
     <section className="grid gap-layout-xl border-b border-border py-layout-2xl lg:grid-cols-[17rem_minmax(0,1fr)]">
@@ -288,8 +290,8 @@ function POSRecoveryCodeAdminPanel({
           POS recovery code
         </h2>
         <p className="text-sm leading-6 text-muted-foreground">
-          Manage the recovery code for the shared POS app account. Athena shows
-          a new code only when it is created or rotated.
+          Manage the recovery code for the shared POS app account. The current
+          code stays visible to full admins.
         </p>
       </div>
 
@@ -306,20 +308,20 @@ function POSRecoveryCodeAdminPanel({
           </span>
         </div>
 
-        {revealedCode ? (
+        {currentRecoveryCode ? (
           <div
             className="rounded-md border border-signal/30 bg-signal/10 px-layout-md py-layout-sm"
             role="status"
           >
             <p className="text-sm font-medium text-foreground">
-              New recovery code
+              Current recovery code
             </p>
             <p className="mt-layout-xs font-mono text-lg tracking-wide text-foreground">
-              {revealedCode}
+              {currentRecoveryCode}
             </p>
             <p className="mt-layout-xs text-sm text-muted-foreground">
-              Store this with the field operations runbook. It will not be shown
-              again.
+              Keep this with the field operations runbook. Rotate it when staff
+              need a new code.
             </p>
           </div>
         ) : null}
@@ -335,7 +337,7 @@ function POSRecoveryCodeAdminPanel({
           </div>
           <div>
             <p className="font-medium text-foreground">Plaintext</p>
-            <p>Shown only after rotate</p>
+            <p>{currentRecoveryCode ? "Visible" : "Rotate to show"}</p>
           </div>
         </div>
 
@@ -553,10 +555,12 @@ export function POSSettingsView({
         browserInfo: fingerprintResult.browserInfo,
         displayName: registrationState.trimmedDisplayName,
         fingerprintHash: fingerprintResult.fingerprintHash,
-	        registerNumber: registrationState.trimmedRegisterNumber,
-	        registerTerminalMutation,
-	        storeFactory,
-	      });
+        orgUrlSlug: routeParams?.orgUrlSlug,
+        registerNumber: registrationState.trimmedRegisterNumber,
+        registerTerminalMutation,
+        storeFactory,
+        storeUrlSlug: routeParams?.storeUrlSlug,
+      });
       if (result.kind === "user_error") {
         toast.error(result.error.message);
         return;
@@ -596,10 +600,12 @@ export function POSSettingsView({
         browserInfo: fingerprintResult.browserInfo,
         displayName: registrationState.trimmedDisplayName,
         fingerprintHash: fingerprintResult.fingerprintHash,
-	        registerNumber: existingTerminal.registerNumber ?? "",
-	        registerTerminalMutation,
-	        storeFactory,
-	      });
+        orgUrlSlug: routeParams?.orgUrlSlug,
+        registerNumber: existingTerminal.registerNumber ?? "",
+        registerTerminalMutation,
+        storeFactory,
+        storeUrlSlug: routeParams?.storeUrlSlug,
+      });
       if (result.kind === "user_error") {
         toast.error(result.error.message);
         return;

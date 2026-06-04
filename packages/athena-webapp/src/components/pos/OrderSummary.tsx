@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { render } from "@react-email/components";
 import {
   Ban,
@@ -157,6 +157,12 @@ interface OrderSummaryProps {
   onPaymentsExpandedChange?: (isExpanded: boolean) => void;
 }
 
+const attemptedAutoPrintReceiptKeys = new Set<string>();
+
+export function clearAttemptedOrderSummaryAutoPrintReceiptKeysForTest() {
+  attemptedAutoPrintReceiptKeys.clear();
+}
+
 export function OrderSummary({
   cartItems,
   customerInfo,
@@ -203,13 +209,15 @@ export function OrderSummary({
   const [paymentAmountDraft, setPaymentAmountDraft] = useState<
     number | undefined
   >(undefined);
+  const printedReceiptKeyRef = useRef<string | null>(null);
 
   const effectiveCartItems =
     completedTransactionData?.cartItems && (readOnly || isTransactionCompleted)
       ? completedTransactionData.cartItems
       : cartItems;
   const effectiveServiceLines =
-    completedTransactionData?.serviceLines && (readOnly || isTransactionCompleted)
+    completedTransactionData?.serviceLines &&
+    (readOnly || isTransactionCompleted)
       ? completedTransactionData.serviceLines
       : serviceLines;
   const completedServiceLines = completedTransactionData?.serviceLines ?? [];
@@ -232,7 +240,8 @@ export function OrderSummary({
       ? completedTransactionAmountPaid - total
       : 0;
   const hasCompletedTransactionChangeGiven =
-    completedTransactionData !== undefined && completedTransactionChangeGiven > 0;
+    completedTransactionData !== undefined &&
+    completedTransactionChangeGiven > 0;
   const completedTransactionPayments = completedTransactionData
     ? (completedTransactionData.payments ?? payments)
     : payments;
@@ -271,10 +280,9 @@ export function OrderSummary({
     ? "Adjusted total"
     : "Total";
   const isEditingPaymentAmount = editingPaymentId !== null;
-  const cartItemsCount = effectiveCartItems.reduce(
-    (sum, item) => sum + item.quantity,
-    0,
-  ) + serviceLinesCount;
+  const cartItemsCount =
+    effectiveCartItems.reduce((sum, item) => sum + item.quantity, 0) +
+    serviceLinesCount;
   const completedAtDate = completedTransactionData?.completedAt
     ? completedTransactionData.completedAt instanceof Date
       ? completedTransactionData.completedAt
@@ -330,8 +338,8 @@ export function OrderSummary({
           customerPhone: effectiveCustomerInfo?.phone,
           transactionId: completedTransactionData.transactionId ?? null,
           transactionNumber: completedOrderNumber,
-      }
-    : null;
+        }
+      : null;
   void effectiveReceiptMessaging;
   const summaryRows = [
     { label: "Transaction", value: `#${receiptLabel}` },
@@ -402,7 +410,8 @@ export function OrderSummary({
         const [title, ...detailParts] = completionBlockMessage.split(". ");
         return [
           title.replace(/\.$/, ""),
-          detailParts.join(". ").replace(/\.$/, "") || "Add a customer to continue.",
+          detailParts.join(". ").replace(/\.$/, "") ||
+            "Add a customer to continue.",
         ];
       })()
     : [null, null];
@@ -507,10 +516,16 @@ export function OrderSummary({
     onEditingPaymentChange?.(paymentId !== null);
   };
 
-  const handlePrintReceipt = async () => {
+  const completedReceiptKey =
+    completedOrderNumber ??
+    completedTransactionData?.transactionId ??
+    completedAtDate?.toISOString() ??
+    null;
+
+  const handlePrintReceipt = useCallback(async () => {
     const completedData = completedTransactionData;
     if (!completedData || !activeStore) {
-      return;
+      return false;
     }
 
     try {
@@ -548,16 +563,17 @@ export function OrderSummary({
           skuOrBarcode: line.serviceCaseId
             ? `Service case ${line.serviceCaseId}`
             : undefined,
-          attributes: [
-            line.serviceMode
-              ? `Service mode: ${formatServiceLabel(line.serviceMode)}`
-              : null,
-            line.servicePaymentStatus
-              ? `Payment: ${formatServiceLabel(line.servicePaymentStatus)}`
-              : null,
-          ]
-            .filter(Boolean)
-            .join(" • ") || undefined,
+          attributes:
+            [
+              line.serviceMode
+                ? `Service mode: ${formatServiceLabel(line.serviceMode)}`
+                : null,
+              line.servicePaymentStatus
+                ? `Payment: ${formatServiceLabel(line.servicePaymentStatus)}`
+                : null,
+            ]
+              .filter(Boolean)
+              .join(" • ") || undefined,
         }),
       );
       const receiptItems = [...receiptProductItems, ...receiptServiceItems];
@@ -637,17 +653,67 @@ export function OrderSummary({
           paymentMethodLabel={paymentMethodLabel}
           payments={formattedPayments}
           changeGiven={changeGiven}
-          statusLabel={
-            completedData.status === "voided" ? "Voided" : undefined
-          }
+          statusLabel={completedData.status === "voided" ? "Voided" : undefined}
         />,
       );
 
       printReceipt(receiptHTML);
+      return true;
     } catch (error) {
       console.error("Error in handlePrintReceipt:", error);
+      return false;
     }
-  };
+  }, [
+    activeStore,
+    cashierName,
+    cartItemsCount,
+    completedOrderNumber,
+    completedTransactionData,
+    formatter,
+    payments,
+    printReceipt,
+    readOnly,
+    receiptNumberOverride,
+    registerNumber,
+  ]);
+
+  useEffect(() => {
+    if (
+      readOnly ||
+      !isTransactionCompleted ||
+      !completedTransactionData ||
+      !completedReceiptKey ||
+      hasCompletedTransactionChangeGiven
+    ) {
+      printedReceiptKeyRef.current = null;
+      return;
+    }
+
+    if (
+      printedReceiptKeyRef.current === completedReceiptKey ||
+      attemptedAutoPrintReceiptKeys.has(completedReceiptKey)
+    ) {
+      return;
+    }
+
+    printedReceiptKeyRef.current = completedReceiptKey;
+    attemptedAutoPrintReceiptKeys.add(completedReceiptKey);
+    void handlePrintReceipt().then((didPrint) => {
+      if (!didPrint) {
+        attemptedAutoPrintReceiptKeys.delete(completedReceiptKey);
+        if (printedReceiptKeyRef.current === completedReceiptKey) {
+          printedReceiptKeyRef.current = null;
+        }
+      }
+    });
+  }, [
+    completedReceiptKey,
+    completedTransactionData,
+    handlePrintReceipt,
+    hasCompletedTransactionChangeGiven,
+    isTransactionCompleted,
+    readOnly,
+  ]);
 
   if ((readOnly || isTransactionCompleted) && presentation === "rail") {
     return (
@@ -1138,43 +1204,45 @@ export function OrderSummary({
           isPaymentFlowActive && "gap-3",
         )}
       >
-        {showPaymentEditor && payments.length === 0 && !hideActiveSummaryCards && (
-          <div
-            className={cn(
-              "grid gap-3",
-              hidePaymentItemCountSummary ? "grid-cols-1" : "grid-cols-2",
-            )}
-          >
-            {!hidePaymentItemCountSummary && (
-              <div className="rounded-xl border border-border bg-surface-raised p-4 shadow-surface">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Items
-                </p>
-                <p className="mt-2 text-2xl font-semibold leading-none text-foreground">
-                  {cartItemsCount}
-                </p>
-              </div>
-            )}
+        {showPaymentEditor &&
+          payments.length === 0 &&
+          !hideActiveSummaryCards && (
             <div
               className={cn(
-                "rounded-xl border p-4 shadow-sm",
-                balanceDueToneClass,
+                "grid gap-3",
+                hidePaymentItemCountSummary ? "grid-cols-1" : "grid-cols-2",
               )}
             >
-              <p
+              {!hidePaymentItemCountSummary && (
+                <div className="rounded-xl border border-border bg-surface-raised p-4 shadow-surface">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Items
+                  </p>
+                  <p className="mt-2 text-2xl font-semibold leading-none text-foreground">
+                    {cartItemsCount}
+                  </p>
+                </div>
+              )}
+              <div
                 className={cn(
-                  "text-xs font-medium uppercase tracking-wide",
-                  balanceDueLabelClass,
+                  "rounded-xl border p-4 shadow-sm",
+                  balanceDueToneClass,
                 )}
               >
-                {balanceDueLabel}
-              </p>
-              <p className="mt-2 text-2xl font-semibold leading-none text-foreground">
-                {formatStoredAmount(formatter, balanceDueAmount)}
-              </p>
+                <p
+                  className={cn(
+                    "text-xs font-medium uppercase tracking-wide",
+                    balanceDueLabelClass,
+                  )}
+                >
+                  {balanceDueLabel}
+                </p>
+                <p className="mt-2 text-2xl font-semibold leading-none text-foreground">
+                  {formatStoredAmount(formatter, balanceDueAmount)}
+                </p>
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
         {payments.length > 0 && (
           <PaymentsAddedList

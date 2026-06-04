@@ -3,7 +3,7 @@ import { CartItem } from "../pos/types";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import { currencyFormatter } from "~/convex/utils";
 import { toDisplayAmount } from "~/convex/lib/currency";
-import { Check, Printer } from "lucide-react";
+import { Check, Plus, Printer } from "lucide-react";
 
 interface ExpenseCompletionProps {
   cartItems: CartItem[];
@@ -20,6 +20,7 @@ interface ExpenseCompletionProps {
     notes?: string | null;
   } | null;
   reportNumber?: string | null;
+  recordedBy?: string | null;
   onPrintReceipt?: () => void | Promise<void>;
   onTransactionStateChange?: (isCompleted: boolean) => void;
 }
@@ -32,6 +33,7 @@ export function ExpenseCompletion({
   isCompleted,
   completedTransactionData,
   reportNumber,
+  recordedBy,
   onPrintReceipt,
   onTransactionStateChange,
 }: ExpenseCompletionProps) {
@@ -45,84 +47,93 @@ export function ExpenseCompletion({
     );
 
     return (
-      <div className="flex min-h-0 flex-1 flex-col gap-4">
-        <div className="rounded-lg border border-[hsl(var(--success)/0.24)] bg-[hsl(var(--success)/0.08)] p-4">
-          <div className="flex items-start gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))]">
-              <Check className="h-5 w-5" />
+      <section className="relative flex h-full min-h-[36rem] flex-1 flex-col overflow-hidden rounded-[1.75rem] border border-border/80 bg-[linear-gradient(145deg,hsl(var(--surface-raised))_0%,hsl(var(--surface))_52%,hsl(var(--muted)/0.72)_100%)] p-8 shadow-[var(--shadow-surface)] md:p-10">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent"
+        />
+
+        <div className="flex flex-1 flex-col">
+          <div className="space-y-10">
+            <div className="inline-flex h-16 w-16 items-center justify-center rounded-[1.4rem] bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))] shadow-[0_20px_40px_-24px_hsl(var(--success)/0.75)] animate-[presence-lift_var(--motion-standard)_var(--ease-emphasized)_both]">
+              <Check className="h-7 w-7" />
             </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[hsl(var(--success))]">
-                Expense recorded
+
+            <div className="max-w-2xl space-y-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-muted-foreground">
+                Expense complete
               </p>
-              <h3 className="mt-1 text-xl font-semibold text-foreground">
-                Receipt ready
-              </h3>
-              {reportNumber ? (
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Report #{reportNumber}
+              <h2 className="text-3xl font-semibold tracking-tight text-foreground md:text-[3rem]">
+                Ready for next expense
+              </h2>
+            </div>
+          </div>
+
+          <div className="mt-auto space-y-5">
+            <div className="grid gap-3 md:grid-cols-4 md:gap-4">
+              <div className="rounded-lg border border-border/70 bg-surface-raised p-4 backdrop-blur-sm">
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                  Total value
                 </p>
-              ) : null}
+                <p className="mt-3 text-2xl font-semibold text-foreground">
+                  {formatter.format(
+                    toDisplayAmount(completedTransactionData.totalValue),
+                  )}
+                </p>
+              </div>
+              <div className="rounded-lg border border-border/70 bg-surface-raised p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                  Items
+                </p>
+                <p className="mt-3 text-2xl font-semibold text-foreground">
+                  {itemCount}
+                </p>
+              </div>
+              <div className="rounded-lg border border-border/70 bg-surface-raised p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                  Report
+                </p>
+                <p className="mt-3 truncate text-sm font-medium text-foreground">
+                  #{reportNumber ?? "Pending"}
+                </p>
+              </div>
+              <div className="rounded-lg border border-border/70 bg-surface-raised p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                  Recorded by
+                </p>
+                <p className="mt-3 truncate text-sm font-medium text-foreground">
+                  {recordedBy ?? "Unassigned"}
+                </p>
+              </div>
             </div>
-          </div>
-        </div>
 
-        <div className="grid gap-3">
-          <div className="rounded-lg border border-border bg-surface-raised p-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-              Total value
-            </p>
-            <p className="mt-2 text-3xl font-bold text-foreground">
-              {formatter.format(
-                toDisplayAmount(completedTransactionData.totalValue),
-              )}
-            </p>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-lg border border-border bg-surface-raised p-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                Items
-              </p>
-              <p className="mt-2 text-lg font-semibold text-foreground">
-                {itemCount}
-              </p>
-            </div>
-            <div className="rounded-lg border border-border bg-surface-raised p-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                Printed
-              </p>
-              <p className="mt-2 text-lg font-semibold text-foreground">
-                Ready
-              </p>
+            <div className="grid gap-3 md:grid-cols-2">
+              <Button
+                type="button"
+                onClick={onPrintReceipt}
+                disabled={!onPrintReceipt}
+                className="h-14 rounded-2xl border-[hsl(var(--foreground))] bg-[hsl(var(--foreground))] px-5 text-sm font-semibold text-white shadow-[hsl(var(--foreground))/0.18] hover:border-[hsl(var(--primary))] hover:bg-[hsl(var(--primary))] hover:text-[hsl(var(--primary-foreground))]"
+                variant="outline"
+              >
+                <Printer className="h-4 w-4" />
+                Print receipt
+              </Button>
+              <Button
+                type="button"
+                onClick={() => {
+                  onTransactionStateChange?.(false);
+                  onComplete();
+                }}
+                className="h-14 rounded-2xl border-border bg-background px-5 text-sm font-semibold"
+                variant="outline"
+              >
+                <Plus className="h-4 w-4" />
+                Start new expense
+              </Button>
             </div>
           </div>
         </div>
-
-        <div className="mt-auto grid gap-3">
-          <Button
-            type="button"
-            onClick={onPrintReceipt}
-            disabled={!onPrintReceipt}
-            className="w-full gap-2"
-            variant="outline"
-            size="lg"
-          >
-            <Printer className="h-4 w-4" />
-            Print receipt
-          </Button>
-          <Button
-            onClick={() => {
-              onTransactionStateChange?.(false);
-              onComplete();
-            }}
-            className="w-full bg-signal p-8 text-signal-foreground hover:bg-signal/90 hover:text-signal-foreground"
-            variant="outline"
-            size="lg"
-          >
-            Start new expense
-          </Button>
-        </div>
-      </div>
+      </section>
     );
   }
 
@@ -168,7 +179,6 @@ export function ExpenseCompletion({
               ? "Recording expense..."
               : "Complete expense"}
         </Button>
-
       </div>
     </div>
   );

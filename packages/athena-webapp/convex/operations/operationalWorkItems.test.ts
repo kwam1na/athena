@@ -92,8 +92,8 @@ describe("getQueueSnapshot", () => {
     expect(
       athenaUserAuth.requireOrganizationMemberRoleWithCtx,
     ).toHaveBeenCalledWith(ctx, {
-      allowedRoles: ["full_admin"],
-      failureMessage: "Only full admins can view approval queue.",
+      allowedRoles: ["full_admin", "pos_only"],
+      failureMessage: "Only POS operators can view approval queue.",
       organizationId: "org-1",
       userId: "user-1",
     });

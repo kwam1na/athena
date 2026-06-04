@@ -1,15 +1,27 @@
-import { type ReactNode, useMemo } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 import { Link, useParams } from "@tanstack/react-router";
-import { useQuery } from "convex/react";
-import { ArrowUpRight, Store } from "lucide-react";
+import { useMutation, useQuery } from "convex/react";
+import { ArrowUpRight, CheckCircle2, Store } from "lucide-react";
+import { toast } from "sonner";
 
 import { ComposedPageHeader } from "@/components/common/PageHeader";
 import { FadeIn } from "@/components/common/FadeIn";
+import {
+  StaffAuthenticationDialog,
+  type StaffAuthenticationResult,
+} from "@/components/staff-auth/StaffAuthenticationDialog";
 import { Button } from "@/components/ui/button";
+import { LoadingButton } from "@/components/ui/loading-button";
 import View from "@/components/View";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
+import { presentCommandToast } from "@/lib/errors/presentCommandToast";
+import {
+  type NormalizedCommandResult,
+  runCommand,
+} from "@/lib/errors/runCommand";
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
+import type { CommandResult } from "~/shared/commandResult";
 import { useLocalPosEntryContext } from "@/lib/pos/infrastructure/local/localPosEntryContext";
 import { useLocalPosReadiness } from "@/lib/pos/infrastructure/local/localPosReadiness";
 
@@ -109,7 +121,13 @@ export function POSRegisterOpeningGuard({
     localReadiness.status === "blocked" &&
     localReadiness.reason === "not_started"
   ) {
-    return <StoreDayNotStartedState />;
+    return (
+      <StoreDayNotStartedState
+        operatingDateRange={operatingDateRange}
+        snapshot={snapshot}
+        storeId={storeId}
+      />
+    );
   }
 
   if (
@@ -133,7 +151,15 @@ export function POSRegisterOpeningGuard({
   return <>{children}</>;
 }
 
-function StoreDayNotStartedState() {
+function StoreDayNotStartedState({
+  operatingDateRange,
+  snapshot,
+  storeId,
+}: {
+  operatingDateRange: ReturnType<typeof getLocalOperatingDateRange>;
+  snapshot?: DailyOpeningSnapshot;
+  storeId?: Id<"store">;
+}) {
   const params = useParams({ strict: false }) as
     | {
         orgUrlSlug?: string;
@@ -141,6 +167,65 @@ function StoreDayNotStartedState() {
       }
     | undefined;
   const canLinkToOpening = Boolean(params?.orgUrlSlug && params.storeUrlSlug);
+  const startStoreDay = useMutation(api.operations.dailyOpening.startStoreDay);
+  const authenticateStaffCredential = useMutation(
+    api.operations.staffCredentials.authenticateStaffCredential,
+  );
+  const [isStarting, setIsStarting] = useState(false);
+  const [isStaffAuthOpen, setIsStaffAuthOpen] = useState(false);
+  const canStartFromGate = Boolean(storeId && snapshot?.status === "ready");
+
+  const handleStartDay = async (staff: StaffAuthenticationResult) => {
+    if (!storeId || isStarting) {
+      return;
+    }
+
+    setIsStaffAuthOpen(false);
+    setIsStarting(true);
+
+    try {
+      const result = await runCommand(() =>
+        startStoreDay({
+          ...operatingDateRange,
+          actorStaffProfileId: staff.staffProfileId,
+          storeId,
+        }) as Promise<CommandResult<unknown>>,
+      );
+
+      if (result.kind === "ok") {
+        toast.success("Store day started");
+        return;
+      }
+
+      presentCommandToast(result);
+    } finally {
+      setIsStarting(false);
+    }
+  };
+
+  const handleAuthenticateStaff = async (args: {
+    pinHash: string;
+    username: string;
+  }): Promise<NormalizedCommandResult<StaffAuthenticationResult>> => {
+    if (!storeId) {
+      return {
+        kind: "user_error",
+        error: {
+          code: "validation_failed",
+          message: "Select a store before confirming staff credentials.",
+        },
+      };
+    }
+
+    return runCommand(() =>
+      authenticateStaffCredential({
+        allowedRoles: ["cashier", "manager"],
+        pinHash: args.pinHash,
+        storeId,
+        username: args.username,
+      }) as Promise<CommandResult<StaffAuthenticationResult>>,
+    );
+  };
 
   return (
     <View
@@ -171,30 +256,62 @@ function StoreDayNotStartedState() {
             Store day not started
           </h2>
           <p className="mt-3 max-w-lg text-base leading-7 text-muted-foreground">
-            Opening Handoff needs to be completed before sales can begin. Ask a
-            manager to start the store day.
+            Start the day when Opening Handoff is ready.
           </p>
-          {canLinkToOpening ? (
-            <Button
-              asChild
-              className="mt-8 bg-background/80 text-muted-foreground hover:text-foreground"
-              size="lg"
-              variant="outline"
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-layout-sm">
+            <LoadingButton
+              className="min-w-40"
+              disabled={!canStartFromGate || isStarting}
+              isLoading={isStarting}
+              onClick={() => setIsStaffAuthOpen(true)}
+              type="button"
+              variant="workflow"
             >
-              <Link
-                params={{
-                  orgUrlSlug: params!.orgUrlSlug!,
-                  storeUrlSlug: params!.storeUrlSlug!,
-                }}
-                to="/$orgUrlSlug/store/$storeUrlSlug/operations/opening"
+              Start day
+              <CheckCircle2 className="h-4 w-4" />
+            </LoadingButton>
+            {canLinkToOpening ? (
+              <Button
+                asChild
+                className="bg-background/80 text-muted-foreground hover:text-foreground"
+                size="lg"
+                variant="outline"
               >
-                Opening Handoff
-                <ArrowUpRight className="h-4 w-4" />
-              </Link>
-            </Button>
+                <Link
+                  params={{
+                    orgUrlSlug: params!.orgUrlSlug!,
+                    storeUrlSlug: params!.storeUrlSlug!,
+                  }}
+                  to="/$orgUrlSlug/store/$storeUrlSlug/operations/opening"
+                >
+                  Opening Handoff
+                  <ArrowUpRight className="h-4 w-4" />
+                </Link>
+              </Button>
+            ) : null}
+          </div>
+          {!canStartFromGate ? (
+            <p className="mt-layout-md max-w-md text-sm leading-6 text-muted-foreground">
+              Opening Handoff needs review before the store day can start from
+              POS.
+            </p>
           ) : null}
         </div>
       </FadeIn>
+      <StaffAuthenticationDialog
+        copy={{
+          title: "Confirm staff credentials",
+          description: "Start the store day with your staff sign-in.",
+          submitLabel: "Start day",
+        }}
+        getSuccessMessage={() => null}
+        onAuthenticate={(args) => handleAuthenticateStaff(args)}
+        onAuthenticated={(result) => {
+          void handleStartDay(result);
+        }}
+        onDismiss={() => setIsStaffAuthOpen(false)}
+        open={isStaffAuthOpen}
+      />
     </View>
   );
 }

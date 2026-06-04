@@ -51,10 +51,12 @@ export interface PosProvisionedTerminalSeed {
   cloudTerminalId: string;
   syncSecretHash: string;
   storeId: string;
+  orgUrlSlug?: string;
   registerNumber?: string;
   displayName: string;
   provisionedAt: number;
   schemaVersion: number;
+  storeUrlSlug?: string;
 }
 
 export interface PosLocalEventRecord {

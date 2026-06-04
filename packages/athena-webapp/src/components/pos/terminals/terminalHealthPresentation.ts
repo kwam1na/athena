@@ -97,6 +97,9 @@ export function getSnapshotAgeSummary(
     snapshots.catalogAgeMs !== undefined
       ? `Catalog ${formatAge(snapshots.catalogAgeMs)}`
       : null,
+    snapshots.serviceCatalogAgeMs !== undefined
+      ? `Service catalog ${formatAge(snapshots.serviceCatalogAgeMs)}`
+      : null,
     snapshots.registerReadModelAgeMs !== undefined
       ? `Register read model ${formatAge(snapshots.registerReadModelAgeMs)}`
       : null,

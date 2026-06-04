@@ -11,6 +11,7 @@ export function useProtectedAdminPageState(
   const { activeStore, isLoadingStores } = useGetActiveStore();
   const {
     canAccessOperations,
+    hasFinancialDetailsAccess,
     hasFullAdminAccess,
     hasStoreDaySurfaceAccess,
     isLoading: isLoadingPermissions,
@@ -36,6 +37,7 @@ export function useProtectedAdminPageState(
     activeStore,
     canAccessProtectedSurface: canAccessSurface,
     canQueryProtectedData,
+    hasFinancialDetailsAccess,
     hasFullAdminAccess: fullAdminAccess,
     hasStoreDaySurfaceAccess: storeDaySurfaceAccess,
     isAuthenticated: hasReadyAuthenticatedUser,

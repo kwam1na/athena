@@ -13,6 +13,7 @@ export const posRecoveryCredentialSchema = v.object({
   lockedAt: v.optional(v.number()),
   lockedUntil: v.optional(v.number()),
   organizationId: v.id("organization"),
+  plaintextCode: v.optional(v.string()),
   posAccountId: v.id("athenaUser"),
   revokedAt: v.optional(v.number()),
   revokedByUserId: v.optional(v.id("athenaUser")),

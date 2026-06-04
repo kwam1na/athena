@@ -2,9 +2,13 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import userEvent from "@testing-library/user-event";
 import { render as renderEmail } from "@react-email/components";
+import type { ComponentProps } from "react";
 
 import { currencyFormatter } from "~/shared/currencyFormatter";
-import { OrderSummary } from "./OrderSummary";
+import {
+  clearAttemptedOrderSummaryAutoPrintReceiptKeysForTest,
+  OrderSummary,
+} from "./OrderSummary";
 
 const mockStoreState = vi.hoisted(() => ({
   activeStore: {
@@ -12,7 +16,8 @@ const mockStoreState = vi.hoisted(() => ({
     currency: "GHS",
     name: "Wig Club",
     config: {},
-  } as Record<string, unknown>,
+  } as Record<string, unknown> | null,
+  printReceipt: vi.fn(),
 }));
 
 vi.mock("@react-email/components", () => ({
@@ -27,11 +32,14 @@ vi.mock("~/src/hooks/useGetActiveStore", () => ({
 
 vi.mock("~/src/hooks/usePrint", () => ({
   usePrint: () => ({
-    printReceipt: vi.fn(),
+    printReceipt: mockStoreState.printReceipt,
   }),
 }));
 
 const formatter = currencyFormatter("GHS");
+type CompletedTransactionData = NonNullable<
+  ComponentProps<typeof OrderSummary>["completedTransactionData"]
+>;
 
 function stripWhitespace(value: string) {
   return value.replace(/\s/g, "");
@@ -69,13 +77,202 @@ function getBalanceDuePanel() {
 
 describe("OrderSummary completed transaction summary", () => {
   beforeEach(() => {
+    clearAttemptedOrderSummaryAutoPrintReceiptKeysForTest();
     vi.mocked(renderEmail).mockClear();
+    vi.mocked(renderEmail).mockResolvedValue("<receipt />");
     mockStoreState.activeStore = {
       _id: "store-1",
       currency: "GHS",
       name: "Wig Club",
       config: {},
     };
+    mockStoreState.printReceipt.mockClear();
+  });
+
+  it("opens the print window when a POS sale completes", async () => {
+    render(
+      <OrderSummary
+        cartItems={[]}
+        completedOrderNumber="404927"
+        completedTransactionData={{
+          paymentMethod: "cash",
+          transactionId: "txn-1",
+          completedAt: new Date("2026-04-25T18:08:00.000Z"),
+          cartItems: [],
+          customerInfo: undefined,
+          subtotal: 1000,
+          tax: 0,
+          total: 1000,
+          payments: [
+            { id: "payment-1", method: "cash", amount: 1000, timestamp: 1 },
+          ],
+        }}
+        isTransactionCompleted
+      />,
+    );
+
+    await waitFor(() => {
+      expect(renderEmail).toHaveBeenCalledTimes(1);
+      expect(mockStoreState.printReceipt).toHaveBeenCalledWith("<receipt />");
+    });
+  });
+
+  it("opens the print window after POS completion once store data is available", async () => {
+    mockStoreState.activeStore = null;
+    const completedTransactionData = {
+      paymentMethod: "cash",
+      transactionId: "txn-1",
+      completedAt: new Date("2026-04-25T18:08:00.000Z"),
+      cartItems: [],
+      customerInfo: undefined,
+      subtotal: 1000,
+      tax: 0,
+      total: 1000,
+      payments: [
+        { id: "payment-1", method: "cash", amount: 1000, timestamp: 1 },
+      ],
+    } satisfies CompletedTransactionData;
+
+    const { rerender } = render(
+      <OrderSummary
+        cartItems={[]}
+        completedOrderNumber="404927"
+        completedTransactionData={completedTransactionData}
+        isTransactionCompleted
+      />,
+    );
+
+    await waitFor(() => {
+      expect(mockStoreState.printReceipt).not.toHaveBeenCalled();
+    });
+
+    mockStoreState.activeStore = {
+      _id: "store-1",
+      currency: "GHS",
+      name: "Wig Club",
+      config: {},
+    };
+    rerender(
+      <OrderSummary
+        cartItems={[]}
+        completedOrderNumber="404927"
+        completedTransactionData={completedTransactionData}
+        isTransactionCompleted
+      />,
+    );
+
+    await waitFor(() => {
+      expect(renderEmail).toHaveBeenCalledTimes(1);
+      expect(mockStoreState.printReceipt).toHaveBeenCalledWith("<receipt />");
+    });
+  });
+
+  it("does not auto-open the print window again after the completed POS sale remounts", async () => {
+    const completedTransactionData = {
+      paymentMethod: "cash",
+      transactionId: "txn-remount",
+      completedAt: new Date("2026-04-25T18:08:00.000Z"),
+      cartItems: [],
+      customerInfo: undefined,
+      subtotal: 1000,
+      tax: 0,
+      total: 1000,
+      payments: [
+        { id: "payment-1", method: "cash", amount: 1000, timestamp: 1 },
+      ],
+    } satisfies CompletedTransactionData;
+
+    const { unmount } = render(
+      <OrderSummary
+        cartItems={[]}
+        completedOrderNumber="404930"
+        completedTransactionData={completedTransactionData}
+        isTransactionCompleted
+      />,
+    );
+
+    await waitFor(() => {
+      expect(mockStoreState.printReceipt).toHaveBeenCalledTimes(1);
+    });
+
+    unmount();
+    render(
+      <OrderSummary
+        cartItems={[]}
+        completedOrderNumber="404930"
+        completedTransactionData={completedTransactionData}
+        isTransactionCompleted
+      />,
+    );
+
+    await waitFor(() => {
+      expect(mockStoreState.printReceipt).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("does not auto-print when a completed POS sale has change to give", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <OrderSummary
+        cartItems={[]}
+        completedOrderNumber="404927"
+        completedTransactionData={{
+          paymentMethod: "cash",
+          transactionId: "txn-1",
+          completedAt: new Date("2026-04-25T18:08:00.000Z"),
+          cartItems: [],
+          customerInfo: undefined,
+          subtotal: 1000,
+          tax: 0,
+          total: 1000,
+          payments: [
+            { id: "payment-1", method: "cash", amount: 2000, timestamp: 1 },
+          ],
+        }}
+        isTransactionCompleted
+      />,
+    );
+
+    await waitFor(() => {
+      expect(mockStoreState.printReceipt).not.toHaveBeenCalled();
+    });
+    expect(screen.getAllByText("Change given").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("GH₵10").length).toBeGreaterThan(0);
+
+    await user.click(screen.getByRole("button", { name: /Print receipt/i }));
+
+    await waitFor(() => {
+      expect(mockStoreState.printReceipt).toHaveBeenCalledWith("<receipt />");
+    });
+  });
+
+  it("does not auto-print read-only POS receipts", async () => {
+    render(
+      <OrderSummary
+        cartItems={[]}
+        completedOrderNumber="404927"
+        completedTransactionData={{
+          paymentMethod: "cash",
+          transactionId: "txn-1",
+          completedAt: new Date("2026-04-25T18:08:00.000Z"),
+          cartItems: [],
+          customerInfo: undefined,
+          subtotal: 1000,
+          tax: 0,
+          total: 1000,
+          payments: [
+            { id: "payment-1", method: "cash", amount: 1000, timestamp: 1 },
+          ],
+        }}
+        isTransactionCompleted
+        readOnly
+      />,
+    );
+
+    await waitFor(() => {
+      expect(mockStoreState.printReceipt).not.toHaveBeenCalled();
+    });
   });
 
   it("does not render the tax line in the completed sale totals", () => {
@@ -782,9 +979,7 @@ describe("OrderSummary completed transaction summary", () => {
     );
 
     expect(
-      screen.getByText(
-        "Customer required",
-      ).closest("button"),
+      screen.getByText("Customer required").closest("button"),
     ).toBeDisabled();
   });
 
@@ -899,9 +1094,9 @@ describe("OrderSummary completed transaction summary", () => {
 
     expect(onPaymentsExpandedChange).toHaveBeenCalledWith(false);
     expect(onRemovePayment).toHaveBeenCalledWith("payment-1");
-    expect(onPaymentsExpandedChange.mock.invocationCallOrder[0]).toBeGreaterThan(
-      onRemovePayment.mock.invocationCallOrder[0],
-    );
+    expect(
+      onPaymentsExpandedChange.mock.invocationCallOrder[0],
+    ).toBeGreaterThan(onRemovePayment.mock.invocationCallOrder[0]);
   });
 
   it("collapses payment-summary state after clearing all payments succeeds", async () => {
@@ -949,9 +1144,9 @@ describe("OrderSummary completed transaction summary", () => {
 
     expect(onPaymentsExpandedChange).toHaveBeenCalledWith(false);
     expect(onClearPayments).toHaveBeenCalled();
-    expect(onPaymentsExpandedChange.mock.invocationCallOrder[0]).toBeGreaterThan(
-      onClearPayments.mock.invocationCallOrder[0],
-    );
+    expect(
+      onPaymentsExpandedChange.mock.invocationCallOrder[0],
+    ).toBeGreaterThan(onClearPayments.mock.invocationCallOrder[0]);
   });
 
   it("keeps payment-summary state when clearing all payments fails", async () => {
@@ -991,7 +1186,9 @@ describe("OrderSummary completed transaction summary", () => {
     await user.click(screen.getByRole("button", { name: /clear all/i }));
 
     expect(onClearPayments).toHaveBeenCalled();
-    expect(screen.getByRole("button", { name: /clear all/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /clear all/i }),
+    ).toBeInTheDocument();
     expect(onPaymentFlowChange).not.toHaveBeenCalledWith(false);
   });
 
@@ -1141,9 +1338,9 @@ describe("OrderSummary completed transaction summary", () => {
     expect(onPaymentsExpandedChange).toHaveBeenCalledWith(false);
     expect(onUpdatePayment).toHaveBeenCalledWith("payment-1", 1700);
     expect(onEditingPaymentChange).toHaveBeenCalledWith(false);
-    expect(onPaymentsExpandedChange.mock.invocationCallOrder[0]).toBeGreaterThan(
-      onUpdatePayment.mock.invocationCallOrder[0],
-    );
+    expect(
+      onPaymentsExpandedChange.mock.invocationCallOrder[0],
+    ).toBeGreaterThan(onUpdatePayment.mock.invocationCallOrder[0]);
     expect(onUpdatePayment.mock.invocationCallOrder[0]).toBeLessThan(
       onEditingPaymentChange.mock.invocationCallOrder[0],
     );

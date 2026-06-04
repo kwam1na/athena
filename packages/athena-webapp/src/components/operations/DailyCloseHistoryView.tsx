@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams, useSearch } from "@tanstack/react-router";
+import { Link, useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 import { ArrowUpRight, History } from "lucide-react";
 
@@ -220,6 +220,10 @@ function sortNewestFirst(
   return right.operatingDate.localeCompare(left.operatingDate);
 }
 
+function getSearchString(value: unknown) {
+  return typeof value === "string" && value.trim().length > 0 ? value : undefined;
+}
+
 function DailyCloseHistoryApiPendingView({
   showBackButton,
 }: {
@@ -290,6 +294,12 @@ function DailyCloseHistoryConnectedView({
     orgUrlSlug: string;
     storeUrlSlug: string;
   };
+  const navigate = useNavigate();
+  const search = useSearch({ strict: false }) as {
+    day?: unknown;
+    o?: unknown;
+  };
+  const selectedOperatingDateFromSearch = getSearchString(search.day);
   const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null);
   const historyResult = useExpectedDailyCloseHistoryQuery(
     listCompletedDailyCloseHistory,
@@ -303,6 +313,9 @@ function DailyCloseHistoryConnectedView({
   );
   const selectedRecord =
     completedRecords.find((record) => getHistoryRecordId(record) === selectedRecordId) ??
+    completedRecords.find(
+      (record) => record.operatingDate === selectedOperatingDateFromSearch,
+    ) ??
     completedRecords[0];
   const selectedDailyCloseId = selectedRecord ? getHistoryRecordId(selectedRecord) : null;
   const detailResult = useExpectedDailyCloseHistoryQuery(
@@ -318,10 +331,24 @@ function DailyCloseHistoryConnectedView({
   const currency = activeStore?.currency ?? "GHS";
 
   useEffect(() => {
-    if (!selectedRecordId && selectedRecord) {
-      setSelectedRecordId(getHistoryRecordId(selectedRecord));
+    if (!selectedRecord) return;
+
+    const nextRecordId = getHistoryRecordId(selectedRecord);
+
+    if (selectedRecordId !== nextRecordId) {
+      setSelectedRecordId(nextRecordId);
     }
-  }, [selectedRecord, selectedRecordId]);
+
+    if (selectedOperatingDateFromSearch !== selectedRecord.operatingDate) {
+      void navigate({
+        replace: true,
+        search: ((current: Record<string, unknown>) => ({
+          ...current,
+          day: selectedRecord.operatingDate,
+        })) as never,
+      });
+    }
+  }, [navigate, selectedOperatingDateFromSearch, selectedRecord, selectedRecordId]);
 
   if (isLoadingAccess) {
     return null;
@@ -401,7 +428,15 @@ function DailyCloseHistoryConnectedView({
                             isSelected && "bg-muted/25",
                           )}
                           key={recordId}
-                          onClick={() => setSelectedRecordId(recordId)}
+                          onClick={() => {
+                            setSelectedRecordId(recordId);
+                            void navigate({
+                              search: ((current: Record<string, unknown>) => ({
+                                ...current,
+                                day: record.operatingDate,
+                              })) as never,
+                            });
+                          }}
                           type="button"
                         >
                           <div className="flex items-start justify-between gap-layout-sm">

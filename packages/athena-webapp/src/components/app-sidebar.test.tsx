@@ -135,7 +135,7 @@ describe("AppSidebar capability gates", () => {
     mocks.useQuery.mockReturnValue([]);
   });
 
-  it("lets manager elevation expose store-day surfaces without admin surfaces", () => {
+  it("lets POS-only accounts open store-day surfaces without admin surfaces", () => {
     mocks.usePermissions.mockReturnValue({
       canAccessAdmin: () => false,
       canAccessFullAdminSurfaces: () => false,

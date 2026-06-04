@@ -6,7 +6,7 @@ import { Input } from "../../ui/input";
 import { LoadingButton } from "../../ui/loading-button";
 import { ATHENA_EMAIL_OTP_PROVIDER_ID } from "../../../../shared/auth";
 import { z } from "zod";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, KeyRound } from "lucide-react";
 
 export function LoginForm({
   onUsePosRecoveryCode,
@@ -46,7 +46,7 @@ export function LoginForm({
         </h2>
       </div>
       <form
-        className="relative flex w-full flex-col items-start gap-layout-md overflow-hidden rounded-lg border border-none bg-background p-layout-xs before:pointer-events-none before:absolute before:inset-0"
+        className="relative flex w-full flex-col items-start gap-layout-lg overflow-hidden rounded-lg border border-none bg-background p-layout-xs before:pointer-events-none before:absolute before:inset-0"
         onSubmit={(e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -96,13 +96,25 @@ export function LoginForm({
           <ArrowRight className="h-4 w-4 transition-transform duration-standard ease-emphasized group-hover:translate-x-1 group-focus-visible:translate-x-1" />
         </LoadingButton>
         {onUsePosRecoveryCode ? (
-          <button
-            type="button"
-            className="relative z-10 text-sm text-muted-foreground underline-offset-4 transition-colors duration-standard ease-standard hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            onClick={onUsePosRecoveryCode}
-          >
-            Use POS recovery code
-          </button>
+          <section className="relative z-10 w-full border-t border-border pt-layout-md">
+            <button
+              type="button"
+              aria-label="POS sign in"
+              className="group flex w-full items-center justify-between gap-layout-sm rounded-md border border-action-workflow-border bg-action-workflow-soft px-layout-md py-layout-sm text-left text-sm font-medium text-action-workflow transition-colors duration-standard ease-standard hover:bg-action-workflow-soft/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              onClick={onUsePosRecoveryCode}
+            >
+              <span className="inline-flex min-w-0 items-center gap-layout-sm">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-background text-action-workflow">
+                  <KeyRound aria-hidden="true" className="h-4 w-4" />
+                </span>
+                <span>POS sign in</span>
+              </span>
+              <ArrowRight
+                aria-hidden="true"
+                className="h-4 w-4 shrink-0 transition-transform duration-standard ease-emphasized group-hover:translate-x-1 group-focus-visible:translate-x-1"
+              />
+            </button>
+          </section>
         ) : null}
       </form>
     </div>
