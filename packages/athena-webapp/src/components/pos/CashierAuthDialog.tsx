@@ -77,9 +77,9 @@ export function CashierAuthDialog({
     pin: string;
     posLocalStaffProof?: { expiresAt: number; token: string };
     staffProfileId: Id<"staffProfile">;
-  }) => {
+  }): Promise<PosLocalStaffAuthorityRecord | null> => {
     if (isBrowserOffline()) {
-      return;
+      return null;
     }
 
     let result: CommandResult<PosLocalStaffAuthorityRecord[]>;
@@ -96,7 +96,7 @@ export function CashierAuthDialog({
         storeId,
         terminalId,
       });
-      return;
+      return null;
     }
 
     if (result.kind !== "ok") {
@@ -117,7 +117,7 @@ export function CashierAuthDialog({
           terminalId,
         });
       }
-      return;
+      return null;
     }
 
     const records = await Promise.all(
@@ -161,7 +161,16 @@ export function CashierAuthDialog({
         storeId,
         terminalId,
       });
+      return null;
     }
+
+    return (
+      records.find(
+        (record) =>
+          unlock?.staffProfileId === record.staffProfileId &&
+          Boolean(record.wrappedPosLocalStaffProof),
+      ) ?? null
+    );
   }, [localStore, refreshTerminalStaffAuthority, storeId, terminalId]);
 
   useEffect(() => {
@@ -232,6 +241,7 @@ export function CashierAuthDialog({
 
     return ok({
       activeRoles: authority.activeRoles,
+      localStaffAuthority: authority,
       posLocalStaffProof,
       staffProfile: {
         fullName: authority.displayName ?? null,
@@ -281,14 +291,20 @@ export function CashierAuthDialog({
       return authenticationResult;
     }
 
-    void refreshLocalAuthority({
+    const localStaffAuthority = await refreshLocalAuthority({
       pin: args.pin,
       posLocalStaffProof: authenticationResult.data.posLocalStaffProof,
       staffProfileId: authenticationResult.data.staffProfileId,
     });
+    const authenticationData = localStaffAuthority
+      ? {
+          ...authenticationResult.data,
+          localStaffAuthority,
+        }
+      : authenticationResult.data;
 
     if (args.mode === "authenticate") {
-      return authenticationResult;
+      return ok(authenticationData);
     }
 
     const expireResult = await expireAllSessionsForStaff({
@@ -315,11 +331,17 @@ export function CashierAuthDialog({
       }),
     );
     if (recoveryResult.kind === "ok") {
-      void refreshLocalAuthority({
+      const recoveryLocalStaffAuthority = await refreshLocalAuthority({
         pin: args.pin,
         posLocalStaffProof: recoveryResult.data.posLocalStaffProof,
         staffProfileId: recoveryResult.data.staffProfileId,
       });
+      if (recoveryLocalStaffAuthority) {
+        return ok({
+          ...recoveryResult.data,
+          localStaffAuthority: recoveryLocalStaffAuthority,
+        });
+      }
     }
 
     return recoveryResult;

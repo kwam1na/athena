@@ -14,6 +14,7 @@ import { type NormalizedCommandResult } from "@/lib/errors/runCommand";
 import { presentCommandToast } from "@/lib/errors/presentCommandToast";
 import { hashPin } from "@/lib/security/pinHash";
 import type { Id } from "~/convex/_generated/dataModel";
+import type { PosLocalStaffAuthorityRecord } from "@/lib/pos/infrastructure/local/posLocalStore";
 import {
   GENERIC_UNEXPECTED_ERROR_MESSAGE,
   GENERIC_UNEXPECTED_ERROR_TITLE,
@@ -33,6 +34,7 @@ export type StaffAuthenticationResult = {
     expiresAt: number;
     token: string;
   };
+  localStaffAuthority?: PosLocalStaffAuthorityRecord;
   staffProfile: {
     firstName?: string | null;
     fullName?: string | null;

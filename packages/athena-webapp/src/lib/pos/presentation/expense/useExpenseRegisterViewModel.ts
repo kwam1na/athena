@@ -647,6 +647,7 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
       cashierName: getCashierDisplayName(staffProfile ?? undefined),
       onSignOut: handleCashierSignOut,
     },
+    cashierPresenceRestore: { status: "missing" },
     drawerGate: null,
     closeoutControl: null,
     authDialog:

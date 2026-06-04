@@ -1,0 +1,427 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Plan Review - Terminal-Scoped Cashier Store-Day Presence</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f7f7f4;
+        --panel: #ffffff;
+        --ink: #172033;
+        --muted: #5f6b7a;
+        --line: #d8ddd5;
+        --accent: #176b5d;
+        --accent-soft: #e4f2ee;
+        --warn: #9a5a13;
+        --warn-soft: #fff1dd;
+        --danger: #a33a3a;
+        --danger-soft: #fde8e8;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
+        line-height: 1.55;
+      }
+
+      main {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 40px 24px 56px;
+      }
+
+      header {
+        border-bottom: 1px solid var(--line);
+        padding-bottom: 24px;
+        margin-bottom: 28px;
+      }
+
+      .eyebrow {
+        color: var(--accent);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        font-size: clamp(32px, 5vw, 56px);
+        line-height: 1.02;
+        margin: 10px 0 14px;
+        max-width: 900px;
+      }
+
+      h2 {
+        font-size: 22px;
+        margin: 0 0 12px;
+      }
+
+      h3 {
+        font-size: 16px;
+        margin: 0 0 8px;
+      }
+
+      p {
+        margin: 0 0 12px;
+      }
+
+      .lead {
+        color: var(--muted);
+        font-size: 18px;
+        max-width: 900px;
+      }
+
+      .grid {
+        display: grid;
+        gap: 18px;
+      }
+
+      .grid.two {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .grid.three {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      section,
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 22px;
+      }
+
+      section {
+        margin-bottom: 18px;
+      }
+
+      ul,
+      ol {
+        padding-left: 20px;
+        margin: 0;
+      }
+
+      li + li {
+        margin-top: 8px;
+      }
+
+      code {
+        background: #eef1ee;
+        border-radius: 4px;
+        padding: 2px 5px;
+        font-size: 0.92em;
+      }
+
+      .pill-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 16px;
+      }
+
+      .pill {
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        color: var(--muted);
+        font-size: 12px;
+        padding: 5px 10px;
+      }
+
+      .decision {
+        background: var(--accent-soft);
+        border-color: #b8d8cf;
+      }
+
+      .warning {
+        background: var(--warn-soft);
+        border-color: #eed0a4;
+      }
+
+      .danger {
+        background: var(--danger-soft);
+        border-color: #efb4b4;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+      }
+
+      th,
+      td {
+        border-bottom: 1px solid var(--line);
+        padding: 12px;
+        text-align: left;
+        vertical-align: top;
+      }
+
+      th {
+        color: var(--muted);
+        font-size: 12px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
+      .flow {
+        display: grid;
+        grid-template-columns: repeat(6, minmax(120px, 1fr));
+        gap: 10px;
+      }
+
+      .flow div {
+        background: #f9faf8;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 14px;
+        min-height: 96px;
+      }
+
+      .flow strong {
+        display: block;
+        margin-bottom: 6px;
+      }
+
+      .small {
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      @media (max-width: 900px) {
+        .grid.two,
+        .grid.three,
+        .flow {
+          grid-template-columns: 1fr;
+        }
+
+        main {
+          padding: 28px 16px 40px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div class="eyebrow">Plan review artifact</div>
+        <h1>Terminal-scoped cashier store-day presence</h1>
+        <p class="lead">
+          Persist the active POS cashier through reloads on the same terminal
+          and store day without weakening terminal repair, drawer authority,
+          local staff proof, or manager approval boundaries.
+        </p>
+        <div class="pill-row">
+          <span class="pill">Feature plan</span>
+          <span class="pill">POS register</span>
+          <span class="pill">Local-first</span>
+          <span class="pill">Terminal scoped</span>
+          <span class="pill">Store-day scoped</span>
+        </div>
+      </header>
+
+      <section>
+        <h2>What Changes</h2>
+        <div class="grid three">
+          <div class="card decision">
+            <h3>New local presence record</h3>
+            <p>
+              Add a POS local store record for the active cashier on one
+              terminal and operating date.
+            </p>
+          </div>
+          <div class="card decision">
+            <h3>Fast reload restore</h3>
+            <p>
+              Restore <code>staffProfileId</code>, proof token, roles, and
+              cashier display state before showing the sign-in gate.
+            </p>
+          </div>
+          <div class="card decision">
+            <h3>Quiet validation</h3>
+            <p>
+              Validate existing unexpired proof online without success toasts;
+              proof renewal stays out of the MVP.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Boundary Model</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Record</th>
+              <th>Answers</th>
+              <th>Must Not Do</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>staffAuthority</code></td>
+              <td>Can this staff member sign in offline with username and PIN?</td>
+              <td>Represent the active signed-in cashier after reload.</td>
+            </tr>
+            <tr>
+              <td><code>cashierPresence</code></td>
+              <td>Who is currently signed in on this terminal for this store day?</td>
+              <td>Follow to another terminal or approve manager-only actions.</td>
+            </tr>
+            <tr>
+              <td><code>drawerAuthority</code></td>
+              <td>Can this drawer/register session sell right now?</td>
+              <td>Trust cashier presence as drawer authority.</td>
+            </tr>
+            <tr>
+              <td><code>terminalIntegrity</code></td>
+              <td>Is this terminal trusted to keep appending local sale events?</td>
+              <td>Let a restored cashier override terminal repair/reset blocks.</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>Reload Lifecycle</h2>
+        <div class="flow">
+          <div>
+            <strong>1. Sign in</strong>
+            <span class="small">Cashier authenticates online or through valid offline authority.</span>
+          </div>
+          <div>
+            <strong>2. Persist</strong>
+            <span class="small">Write active cashier presence with terminal, store, day, role, credential, and proof scope.</span>
+          </div>
+          <div>
+            <strong>3. Reload</strong>
+            <span class="small">Register boot reads same-terminal, same-day presence.</span>
+          </div>
+          <div>
+            <strong>4. Validate</strong>
+            <span class="small">Resolve local presence to sign-in guidance without granting cashier authority from storage.</span>
+          </div>
+          <div>
+            <strong>5. Validate</strong>
+            <span class="small">When online, confirm staff, terminal, credential, and role state.</span>
+          </div>
+          <div>
+            <strong>6. Sell safely</strong>
+            <span class="small">Local sale events still pass drawer and terminal gates.</span>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Store-Day And Repair Rules</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>State</th>
+              <th>Cashier Identity</th>
+              <th>Sellability</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Same operating date reload</td>
+              <td>Restore if proof and freshness are valid</td>
+              <td>Allowed only after drawer, terminal, and proof gates pass</td>
+            </tr>
+            <tr>
+              <td>Ordinary drawer close</td>
+              <td>Preserved</td>
+              <td>Blocked until drawer opens</td>
+            </tr>
+            <tr>
+              <td>Non-destructive terminal repair</td>
+              <td>Preserved only after online validation</td>
+              <td>Blocked until repair and validation pass</td>
+            </tr>
+            <tr>
+              <td>Terminal reset or re-provision</td>
+              <td>Cleared</td>
+              <td>Blocked until sign-in</td>
+            </tr>
+            <tr>
+              <td>Register or store-day close</td>
+              <td>Cleared</td>
+              <td>Blocked until a new ready store day/register</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>Implementation Units</h2>
+        <ol>
+          <li>Define and expose the POS store-day identity.</li>
+          <li>Add cashier presence storage, migration, proof wrapping, and redaction tests.</li>
+          <li>Write presence on sign-in and clear it on identity-clearing transitions.</li>
+          <li>Rehydrate presence during register boot before the sign-in gate opens.</li>
+          <li>Add online validation for existing unexpired active presence.</li>
+          <li>Update POS UI state, copy, accessibility, and local diagnostics.</li>
+          <li>Add targeted validation, graph maintenance, and a solution note.</li>
+        </ol>
+      </section>
+
+      <section>
+        <h2>Safety Checks</h2>
+        <div class="grid two">
+          <div class="card warning">
+            <h3>Presence can restore identity, not sellability</h3>
+            <p>
+              Terminal repair, drawer authority, closeout, and local review
+              states still block sale-affecting commands.
+            </p>
+          </div>
+          <div class="card warning">
+            <h3>Proof freshness is checked at append</h3>
+            <p>
+              Restore-time validity is not enough. Sale start, cart changes,
+              payment updates, and completion must fail closed if proof expires.
+            </p>
+          </div>
+          <div class="card danger">
+            <h3>No plaintext proof</h3>
+            <p>
+              Persisted POS local staff proof material must be wrapped or
+              encrypted. Raw bearer tokens cannot appear in local serialization.
+            </p>
+          </div>
+          <div class="card danger">
+            <h3>No manager approval shortcut</h3>
+            <p>
+              A restored manager cashier still needs command-boundary approval
+              for protected actions.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Success Criteria</h2>
+        <ul>
+          <li>Same-terminal reload resolves presence to validation-pending sign-in guidance for the current store day.</li>
+          <li>Different terminal, store, organization, or date cannot restore the cashier.</li>
+          <li>Explicit sign-out, register closeout, store-day close, terminal reset, and credential changes clear presence.</li>
+          <li>Ordinary drawer close preserves cashier continuity context but blocks sale commands until drawer authority returns.</li>
+          <li>Proof expiry mid-sale preserves the draft and blocks further sale-affecting commands.</li>
+          <li>Warm offline hard reload reaches validation-pending sign-in guidance when the app shell is already available.</li>
+          <li>Offline PIN sign-in still fails closed when local proof truly needs refresh.</li>
+          <li>No success toasts are shown for restore, validation, or non-destructive repair.</li>
+        </ul>
+      </section>
+    </main>
+  </body>
+</html>

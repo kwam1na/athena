@@ -740,6 +740,120 @@ describe("POSRegisterView", () => {
     expect(onRetrySync).toHaveBeenCalled();
   });
 
+  it("shows restrained copy while restored cashier access is validating", async () => {
+    mockUseRegisterViewModel.mockReturnValue({
+      hasActiveStore: true,
+      header: {
+        title: "POS",
+        isSessionActive: false,
+      },
+      registerInfo: {
+        registerLabel: "Front Counter",
+        hasTerminal: true,
+      },
+      customerPanel: {},
+      productEntry: {
+        disabled: true,
+        productSearchQuery: "",
+        setProductSearchQuery: vi.fn(),
+        onBarcodeSubmit: vi.fn(),
+      },
+      cart: {
+        items: [],
+      },
+      checkout: {
+        isTransactionCompleted: false,
+      },
+      sessionPanel: null,
+      cashierCard: null,
+      cashierPresenceRestore: {
+        status: "validation_pending",
+        message: "Checking cashier access before new sales.",
+      },
+      closeoutControl: null,
+      authDialog: {
+        open: true,
+      },
+      drawerGate: null,
+      onNavigateBack: vi.fn(),
+    });
+
+    const { POSRegisterView } = await import("./POSRegisterView");
+    render(<POSRegisterView />);
+
+    expect(
+      screen.getByText("Checking cashier access before new sales."),
+    ).toBeInTheDocument();
+    expect(screen.getByText("cashier-auth-dialog")).toBeInTheDocument();
+    expect(screen.queryByText(/Cashier Ama K\./)).not.toBeInTheDocument();
+  });
+
+  it("shows cashier presence in support diagnostics without proof material", async () => {
+    mockUseRegisterViewModel.mockReturnValue({
+      hasActiveStore: true,
+      header: {
+        title: "POS",
+        isSessionActive: true,
+      },
+      registerInfo: {
+        registerLabel: "Front Counter",
+        hasTerminal: true,
+      },
+      customerPanel: {},
+      productEntry: {
+        disabled: false,
+        productSearchQuery: "",
+        setProductSearchQuery: vi.fn(),
+        onBarcodeSubmit: vi.fn(),
+      },
+      cart: {
+        items: [],
+      },
+      checkout: {
+        isTransactionCompleted: false,
+      },
+      sessionPanel: {},
+      cashierCard: {},
+      cashierPresenceRestore: {
+        status: "restored",
+      },
+      closeoutControl: null,
+      authDialog: {
+        open: false,
+      },
+      drawerGate: null,
+      debug: {
+        activeStoreSource: "live",
+        authDialogOpen: false,
+        cashierPresence: "restored",
+        hasLiveActiveStore: true,
+        localStaffAuthorityStatus: "ready",
+        localEntryStatus: "ready",
+        online: true,
+        staffSignedIn: true,
+        syncFlow: {
+          eventAppendToken: 1,
+          source: "none",
+          staffProof: "present",
+          status: "synced",
+        },
+        terminalSource: "live",
+      },
+      onNavigateBack: vi.fn(),
+    });
+
+    const { POSRegisterView } = await import("./POSRegisterView");
+    render(<POSRegisterView />);
+
+    await userEvent.keyboard("{Meta>}/{/Meta}");
+
+    expect(screen.getByText("cashier presence")).toBeInTheDocument();
+    expect(screen.getByText("Restored")).toBeInTheDocument();
+    expect(
+      screen.queryByText(/proof-token|pin|sync-secret/i),
+    ).not.toBeInTheDocument();
+  });
+
   it("shows an operable register as ready when manager review exists elsewhere", async () => {
     const onRetrySync = vi.fn();
     mockUseRegisterViewModel.mockReturnValue({

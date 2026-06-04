@@ -309,12 +309,28 @@ export interface RegisterOnboardingState {
   nextStep: "terminal" | "cashierSetup" | "ready";
 }
 
+export type CashierPresenceRestoreStatus =
+  | "pending"
+  | "restored"
+  | "validation_pending"
+  | "missing"
+  | "expired"
+  | "offline_freshness_expired"
+  | "invalidated"
+  | "failed";
+
+export interface RegisterCashierPresenceRestoreState {
+  status: CashierPresenceRestoreStatus;
+  message?: string;
+}
+
 export interface RegisterViewModel {
   workflowMode?: RegisterWorkflowMode;
   hasActiveStore: boolean;
   debug?: {
     activeStoreSource: "live" | "local" | "missing";
     authDialogOpen: boolean;
+    cashierPresence: CashierPresenceRestoreStatus;
     hasLiveActiveStore: boolean;
     localStaffAuthorityStatus: string;
     localEntryStatus: string;
@@ -370,6 +386,7 @@ export interface RegisterViewModel {
   checkout: RegisterCheckoutState;
   sessionPanel: RegisterSessionPanelState | null;
   cashierCard: RegisterCashierCardState | null;
+  cashierPresenceRestore: RegisterCashierPresenceRestoreState;
   drawerGate: RegisterDrawerGateState | null;
   closeoutControl: RegisterCloseoutControlState | null;
   syncStatus?: (PosSyncStatusPresentation & {

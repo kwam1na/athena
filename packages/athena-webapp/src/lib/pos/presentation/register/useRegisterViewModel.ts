@@ -36,6 +36,7 @@ import { useConvexCommandGateway } from "@/lib/pos/infrastructure/convex/command
 import {
   createIndexedDbPosLocalStorageAdapter,
   createPosLocalStore,
+  type PosLocalActiveCashierPresenceRecord,
   type PosLocalEventRecord,
 } from "@/lib/pos/infrastructure/local/posLocalStore";
 import { createLocalCommandGateway } from "@/lib/pos/infrastructure/local/localCommandGateway";
@@ -70,6 +71,7 @@ import {
 
 import type {
   RegisterCommandApprovalDialogState,
+  CashierPresenceRestoreStatus,
   RegisterServiceLineState,
   RegisterServiceSearchResult,
   RegisterViewModel,
@@ -121,6 +123,75 @@ type LocalAuthenticatedStaff = {
   activeRoles: string[];
   displayName: string;
 } | null;
+
+type RestoredCashierPresence = {
+  activeRoles?: string[];
+  displayName?: string | null;
+  expiresAt?: number | null;
+  freshnessExpiresAt?: number | null;
+  offlineFreshUntil?: number | null;
+  operatingDate?: string;
+  organizationId?: string;
+  proofExpiresAt?: number | null;
+  staffProfileId?: string;
+  staffProofToken?: string | null;
+  storeId?: string;
+  terminalId?: string;
+};
+
+type CashierPresenceRestoreState = {
+  message?: string;
+  status: CashierPresenceRestoreStatus;
+};
+
+const POS_CASHIER_PRESENCE_OFFLINE_FRESHNESS_MS = 15 * 60 * 1000;
+
+type CashierPresenceStore = {
+  clearActiveCashierPresence?: (input: {
+    operatingDate: string;
+    organizationId?: string;
+    storeId: string;
+    terminalId: string;
+  }) => Promise<{ ok: boolean }>;
+  clearCashierPresence?: (input: {
+    operatingDate: string;
+    organizationId: string;
+    storeId: string;
+    terminalId: string;
+  }) => Promise<{ ok: boolean }>;
+  invalidateCashierPresenceForTerminal?: (input: {
+    organizationId?: string;
+    storeId?: string;
+    terminalId: string;
+  }) => Promise<{ ok: boolean }>;
+  readActiveCashierPresence?: (input: {
+    now?: number;
+    operatingDate: string;
+    organizationId?: string;
+    storeId: string;
+    terminalId: string;
+  }) => Promise<{
+    ok: boolean;
+    value?: RestoredCashierPresence | null;
+  }>;
+  readCashierPresence?: (input: {
+    now?: number;
+    operatingDate: string;
+    organizationId: string;
+    storeId: string;
+    terminalId: string;
+  }) => Promise<{
+    ok: boolean;
+    value?: RestoredCashierPresence | null;
+  }>;
+  writeCashierPresence?: (
+    presence: PosLocalActiveCashierPresenceRecord,
+  ) => Promise<{
+    ok: boolean;
+    value?: PosLocalActiveCashierPresenceRecord;
+    error?: { code: string };
+  }>;
+};
 
 type ServiceCatalogRow = {
   basePrice?: number;
@@ -264,6 +335,80 @@ function getStaffDisplayNameFromAuthResult(result: StaffAuthenticationResult) {
       .filter(Boolean)
       .join(" ")
   );
+}
+
+function getLocalOperatingDate(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function validateRestoredCashierPresence(input: {
+  isOnline: boolean;
+  now: number;
+  operatingDate: string;
+  organizationId?: string;
+  presence: RestoredCashierPresence;
+  storeId: string;
+  terminalId: string;
+}): CashierPresenceRestoreState {
+  const {
+    isOnline,
+    now,
+    operatingDate,
+    organizationId,
+    presence,
+    storeId,
+    terminalId,
+  } = input;
+  const proofExpiresAt = presence.proofExpiresAt ?? presence.expiresAt;
+  const freshnessExpiresAt =
+    presence.freshnessExpiresAt ?? presence.offlineFreshUntil;
+
+  if (
+    (presence.organizationId &&
+      organizationId &&
+      presence.organizationId !== organizationId) ||
+    presence.storeId !== storeId ||
+    presence.terminalId !== terminalId ||
+    presence.operatingDate !== operatingDate ||
+    !presence.staffProfileId ||
+    !hasRegisterOperatorRole(presence.activeRoles)
+  ) {
+    return {
+      message: "Cashier sign-in no longer matches this register. Sign in to continue.",
+      status: "invalidated",
+    };
+  }
+
+  if (typeof proofExpiresAt === "number" && proofExpiresAt <= now) {
+    return {
+      message: "Cashier sign-in expired. Sign in to continue.",
+      status: "expired",
+    };
+  }
+
+  if (
+    !isOnline &&
+    typeof freshnessExpiresAt === "number" &&
+    freshnessExpiresAt <= now
+  ) {
+    return {
+      message:
+        "This terminal needs an online staff refresh before offline sign-in. Reconnect, then sign in once.",
+      status: "offline_freshness_expired",
+    };
+  }
+
+  return {
+    message: "Checking cashier access before new sales.",
+    status: "validation_pending",
+  };
+}
+
+function isCashierPresenceBlockingSale(status: CashierPresenceRestoreStatus) {
+  return status === "pending" || status === "validation_pending";
 }
 
 function hasCustomerDetails(
@@ -1165,6 +1310,10 @@ export function useRegisterViewModel(): RegisterViewModel {
     (localEntryContext.status === "ready"
       ? localEntryContext.storeId
       : undefined)) as Id<"store"> | undefined;
+  const activeStoreOrganizationId = (activeStore as
+    | { organizationId?: string }
+    | null
+    | undefined)?.organizationId;
   const activeStoreCurrency = activeStore?.currency ?? "GHS";
   const navigateBack = useNavigateBack();
   const [staffProfileId, setStaffProfileId] =
@@ -1176,6 +1325,8 @@ export function useRegisterViewModel(): RegisterViewModel {
   staffProofTokenRef.current = staffProofToken;
   const [localAuthenticatedStaff, setLocalAuthenticatedStaff] =
     useState<LocalAuthenticatedStaff>(null);
+  const [cashierPresenceRestore, setCashierPresenceRestore] =
+    useState<CashierPresenceRestoreState>({ status: "pending" });
   const [autoStartRequestedStaffProfileId, setAutoStartRequestedStaffProfileId] =
     useState<Id<"staffProfile"> | null>(null);
   const terminalRegisterNumber = terminal?.registerNumber
@@ -1183,6 +1334,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     : undefined;
   const [localStaffAuthorityStatus, setLocalStaffAuthorityStatus] =
     useState("unknown");
+  const activeOperatingDate = useMemo(() => getLocalOperatingDate(), []);
   const [showCustomerPanel, setShowCustomerPanel] = useState(false);
   const [showProductEntry, setShowProductEntry] = useState(true);
   const [productSearchQuery, setProductSearchQuery] = useState("");
@@ -1703,6 +1855,148 @@ export function useRegisterViewModel(): RegisterViewModel {
       }),
     [localStore, terminal?._id],
   );
+  useEffect(() => {
+    let cancelled = false;
+
+    async function restoreCashierPresence() {
+      if (!activeStoreId || !terminal?._id) {
+        setCashierPresenceRestore({ status: "pending" });
+        return;
+      }
+
+      if (staffProfileIdRef.current) {
+        setCashierPresenceRestore({ status: "restored" });
+        return;
+      }
+
+      if (typeof indexedDB === "undefined") {
+        setCashierPresenceRestore({
+          message: "Cashier sign-in could not be restored. Sign in to continue.",
+          status: "failed",
+        });
+        return;
+      }
+
+      setCashierPresenceRestore({ status: "pending" });
+
+      const storeDayReadiness = await localStore.readStoreDayReadiness({
+        operatingDate: activeOperatingDate,
+        storeId: activeStoreId,
+      });
+      if (cancelled) return;
+
+      if (!storeDayReadiness.ok) {
+        setCashierPresenceRestore({
+          message: "Cashier sign-in could not be restored. Sign in to continue.",
+          status: "failed",
+        });
+        return;
+      }
+
+      if (
+        storeDayReadiness.value?.status !== "started" &&
+        storeDayReadiness.value?.status !== "reopened"
+      ) {
+        setCashierPresenceRestore({
+          message: "Store day not ready. Complete opening before cashier sign-in.",
+          status: "failed",
+        });
+        return;
+      }
+
+      const presenceStore = localStore as CashierPresenceStore;
+      if (!activeStoreOrganizationId || !presenceStore.readCashierPresence) {
+        setCashierPresenceRestore({ status: "missing" });
+        return;
+      }
+
+      const now = Date.now();
+      const presenceResult = await presenceStore.readCashierPresence({
+        now,
+        operatingDate: activeOperatingDate,
+        organizationId: activeStoreOrganizationId,
+        storeId: activeStoreId,
+        terminalId: terminal._id,
+      });
+      if (cancelled) return;
+
+      if (staffProfileIdRef.current) {
+        setCashierPresenceRestore({ status: "restored" });
+        return;
+      }
+
+      if (!presenceResult.ok) {
+        setCashierPresenceRestore({
+          message: "Cashier sign-in could not be restored. Sign in to continue.",
+          status: "failed",
+        });
+        return;
+      }
+
+      const presence = presenceResult.value;
+      if (!presence) {
+        setCashierPresenceRestore({ status: "missing" });
+        return;
+      }
+
+      const nextRestoreState = validateRestoredCashierPresence({
+        isOnline: globalThis.navigator?.onLine ?? true,
+        now,
+        operatingDate: activeOperatingDate,
+        organizationId: activeStoreOrganizationId,
+        presence,
+        storeId: activeStoreId,
+        terminalId: terminal._id,
+      });
+
+      if (nextRestoreState.status === "restored") {
+        staffProfileIdRef.current = presence.staffProfileId as Id<"staffProfile">;
+        staffProofTokenRef.current = presence.staffProofToken ?? null;
+        setStaffProfileId(presence.staffProfileId as Id<"staffProfile">);
+        setStaffProofToken(presence.staffProofToken ?? null);
+        setLocalAuthenticatedStaff({
+          activeRoles: presence.activeRoles ?? [],
+          displayName: presence.displayName ?? "Signed-in cashier",
+        });
+      } else if (nextRestoreState.status === "validation_pending") {
+        staffProfileIdRef.current = null;
+        staffProofTokenRef.current = null;
+        setStaffProfileId(null);
+        setStaffProofToken(null);
+        setLocalAuthenticatedStaff(null);
+      } else {
+        staffProfileIdRef.current = null;
+        staffProofTokenRef.current = null;
+        setStaffProfileId(null);
+        setStaffProofToken(null);
+        setLocalAuthenticatedStaff(null);
+        if (presenceStore.clearCashierPresence) {
+          await presenceStore.clearCashierPresence({
+            operatingDate: activeOperatingDate,
+            organizationId: activeStoreOrganizationId,
+            storeId: activeStoreId,
+            terminalId: terminal._id,
+          });
+        }
+      }
+
+      if (!cancelled) {
+        setCashierPresenceRestore(nextRestoreState);
+      }
+    }
+
+    void restoreCashierPresence();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    activeOperatingDate,
+    activeStoreId,
+    activeStoreOrganizationId,
+    localStore,
+    terminal?._id,
+  ]);
   const localRuntimeStoreFactory = useCallback(() => localStore, [localStore]);
   useEffect(() => {
     if (!staffProfileId || !staffProofToken) {
@@ -2506,6 +2800,7 @@ export function useRegisterViewModel(): RegisterViewModel {
         setStaffProofToken(null);
         setLocalAuthenticatedStaff(null);
         setLocalOperableRegisterSession(null);
+        setCashierPresenceRestore({ status: "missing" });
       }
     },
     [setPaymentState],
@@ -4743,10 +5038,69 @@ export function useRegisterViewModel(): RegisterViewModel {
           displayName: getStaffDisplayNameFromAuthResult(result),
         });
         setAutoStartRequestedStaffProfileId(authenticatedStaffProfileId);
+
+        const localAuthority = result.localStaffAuthority;
+        if (
+          activeStoreId &&
+          activeStoreOrganizationId &&
+          activeOperatingDate &&
+          terminal?._id &&
+          localAuthority?.wrappedPosLocalStaffProof
+        ) {
+          const now = Date.now();
+          const expiresAt = Math.min(
+            localAuthority.expiresAt,
+            result.posLocalStaffProof?.expiresAt ??
+              localAuthority.wrappedPosLocalStaffProof.expiresAt,
+            localAuthority.wrappedPosLocalStaffProof.expiresAt,
+          );
+          const offlineFreshUntil = Math.min(
+            expiresAt,
+            now + POS_CASHIER_PRESENCE_OFFLINE_FRESHNESS_MS,
+          );
+
+          void (localStore as CashierPresenceStore)
+            .writeCashierPresence?.({
+              activeRoles: localAuthority.activeRoles,
+              credentialId: localAuthority.credentialId,
+              credentialVersion: localAuthority.credentialVersion,
+              displayName: localAuthority.displayName,
+              expiresAt,
+              lastValidatedAt: now,
+              offlineFreshUntil,
+              operatingDate: activeOperatingDate,
+              organizationId: activeStoreOrganizationId,
+              signedInAt: now,
+              staffProfileId: authenticatedStaffProfileId,
+              storeId: activeStoreId,
+              terminalId: terminal._id,
+              username: localAuthority.username,
+              wrappedPosLocalStaffProof:
+                localAuthority.wrappedPosLocalStaffProof,
+            })
+            .then((writeResult) => {
+              if (writeResult && !writeResult.ok) {
+                logger.warn("[POS] Cashier presence could not be stored", {
+                  code: writeResult.error?.code,
+                  staffProfileId: authenticatedStaffProfileId,
+                  storeId: activeStoreId,
+                  terminalId: terminal._id,
+                });
+              }
+            });
+        }
       }
+      setCashierPresenceRestore({ status: "restored" });
       requestBootstrap();
     },
-    [requestBootstrap],
+    [
+      activeOperatingDate,
+      activeStoreId,
+      activeStoreOrganizationId,
+      localStore,
+      requestBootstrap,
+      terminal?._id,
+    ],
   );
 
   useEffect(() => {
@@ -4831,6 +5185,35 @@ export function useRegisterViewModel(): RegisterViewModel {
   ]);
 
   const handleCashierSignOut = useCallback(async () => {
+    const clearStoredCashierPresence = async () => {
+      if (!activeStoreId || !terminal?._id) {
+        return true;
+      }
+
+      const presenceStore = localStore as CashierPresenceStore;
+      const clearResult = activeStoreOrganizationId
+        ? await presenceStore.clearCashierPresence?.({
+            operatingDate: activeOperatingDate,
+            organizationId: activeStoreOrganizationId,
+            storeId: activeStoreId,
+            terminalId: terminal._id,
+          })
+        : await presenceStore.invalidateCashierPresenceForTerminal?.({
+            storeId: activeStoreId,
+            terminalId: terminal._id,
+          });
+      if (clearResult && !clearResult.ok) {
+        logger.warn("[POS] Cashier presence could not be cleared on sign-out", {
+          storeId: activeStoreId,
+          terminalId: terminal._id,
+        });
+        toast.error("Cashier sign-out could not finish. Try again.");
+        return false;
+      }
+
+      return true;
+    };
+
     const isRecoveringLocalSale = Boolean(
       drawerGateMode === "recovery" &&
         operableActiveSession &&
@@ -4840,6 +5223,9 @@ export function useRegisterViewModel(): RegisterViewModel {
     );
 
     if (isRecoveringLocalSale) {
+      if (!(await clearStoredCashierPresence())) {
+        return;
+      }
       staffProfileIdRef.current = null;
       staffProofTokenRef.current = null;
       resetDraftState();
@@ -4872,16 +5258,24 @@ export function useRegisterViewModel(): RegisterViewModel {
       }
     }
 
+    if (!(await clearStoredCashierPresence())) {
+      return;
+    }
     resetDraftState();
   }, [
+    activeOperatingDate,
+    activeStoreId,
+    activeStoreOrganizationId,
     drawerGateMode,
     operableActiveSession,
     activeCartItems.length,
     holdCurrentSession,
+    localStore,
     localRegisterReadModel?.activeSale?.localPosSessionId,
     requestBootstrap,
     resetDraftState,
     serviceLineDrafts.length,
+    terminal?._id,
     voidCurrentSession,
   ]);
 
@@ -4893,6 +5287,11 @@ export function useRegisterViewModel(): RegisterViewModel {
 
     if (!operableActiveSession || !staffProfileId) {
       toast.error("No sale in progress. Start a sale before taking payment.");
+      return false;
+    }
+
+    if (isCashierPresenceBlockingSale(cashierPresenceRestore.status)) {
+      toast.error("Cashier sign-in required. Sign in to continue this sale.");
       return false;
     }
 
@@ -5036,6 +5435,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     localEventRegisterSessionId,
     activeStoreId,
     activeTotals,
+    cashierPresenceRestore.status,
     serviceSubtotal,
     serviceLineDrafts,
     serviceCheckoutBlockMessage,
@@ -5245,6 +5645,9 @@ export function useRegisterViewModel(): RegisterViewModel {
     staffProfileId,
     terminal,
   ]);
+  const cashierPresenceBlocksSale = isCashierPresenceBlockingSale(
+    cashierPresenceRestore.status,
+  );
 
   const sessionPanel =
     activeStoreId && terminal?._id && staffProfileId
@@ -5255,7 +5658,7 @@ export function useRegisterViewModel(): RegisterViewModel {
           canHoldSession: Boolean(operableActiveSession) && hasActiveCartDraft,
           canClearSale: hasClearableSaleState,
           disableNewSession: Boolean(
-            operableActiveSession?.status === "active",
+            cashierPresenceBlocksSale || operableActiveSession?.status === "active",
           ),
           heldSessions:
             heldSessions?.map((session) => ({
@@ -5581,11 +5984,14 @@ export function useRegisterViewModel(): RegisterViewModel {
           },
         }
       : null;
+  const shouldOpenCashierAuth =
+    !staffProfileId &&
+    cashierPresenceRestore.status !== "pending";
 
   const authDialog =
     activeStoreId && terminal?._id
       ? {
-          open: !staffProfileId,
+          open: shouldOpenCashierAuth,
           storeId: activeStoreId!,
           terminalId: terminal._id,
 	          onAuthenticated: (
@@ -5609,6 +6015,7 @@ export function useRegisterViewModel(): RegisterViewModel {
           ? "local"
           : "missing",
       authDialogOpen: Boolean(authDialog?.open),
+      cashierPresence: cashierPresenceRestore.status,
       hasLiveActiveStore: Boolean(activeStore),
       localStaffAuthorityStatus,
       localEntryStatus: localEntryContext.status,
@@ -5694,6 +6101,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       disabled:
         !terminal ||
         !staffProfileId ||
+        cashierPresenceBlocksSale ||
         isProjectedLocalActiveSaleBlockingCurrentStaff ||
         shouldShowDrawerGate ||
         cloudRegisterSessionBlocksLocalProjection ||
@@ -5714,6 +6122,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       disabled:
         !terminal ||
         !staffProfileId ||
+        cashierPresenceBlocksSale ||
         isProjectedLocalActiveSaleBlockingCurrentStaff ||
         shouldShowDrawerGate ||
         cloudRegisterSessionBlocksLocalProjection ||
@@ -5782,6 +6191,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     },
     sessionPanel,
     cashierCard,
+    cashierPresenceRestore,
     drawerGate,
     closeoutControl,
     syncStatus,

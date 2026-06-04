@@ -202,6 +202,30 @@ function CashierAuthWorkspace({
   );
 }
 
+function CashierPresenceRestoreWorkspace({
+  restore,
+}: {
+  restore: RegisterViewModel["cashierPresenceRestore"];
+}) {
+  if (!restore.message) return null;
+
+  return (
+    <section
+      aria-live="polite"
+      className="flex min-h-[8rem] items-center justify-center rounded-lg border border-border bg-surface-raised px-6 py-6 text-center"
+    >
+      <div className="max-w-xl space-y-2">
+        <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+          Cashier sign-in
+        </p>
+        <h2 className="text-xl font-semibold text-foreground">
+          {restore.message}
+        </h2>
+      </div>
+    </section>
+  );
+}
+
 function DrawerGateWorkspace({
   drawerGate,
 }: {
@@ -515,6 +539,7 @@ function POSLocalDebugStrip({
     ["store record", formatDebugStatus(debug.activeStoreSource)],
     ["register record", formatDebugStatus(debug.terminalSource)],
     ["staff sign-in", debug.staffSignedIn ? "Signed in" : "Not signed in"],
+    ["cashier presence", formatDebugStatus(debug.cashierPresence)],
     [
       "staff authorization",
       debug.syncFlow.staffProof === "present" ? "Ready" : "Needed",
@@ -977,6 +1002,8 @@ export function POSRegisterView({
   const pendingProductLookupFocusAfterSaleStartRef = useRef(false);
   const headerProductSearchInputRef = useRef<HTMLInputElement>(null);
   const isDebugPanelVisible = usePosDebugPanelToggle();
+  const cashierPresenceRestore =
+    viewModel.cashierPresenceRestore ?? ({ status: "missing" } as const);
 
   useCollapseSidebarForPosFlow();
   const isSessionActive = viewModel.header.isSessionActive;
@@ -1494,7 +1521,17 @@ export function POSRegisterView({
                 ) : isPosWorkflow && viewModel.drawerGate ? (
                   <DrawerGateWorkspace drawerGate={viewModel.drawerGate} />
                 ) : isAwaitingCashierAuth && viewModel.authDialog ? (
-                  <CashierAuthWorkspace authDialog={viewModel.authDialog} />
+                  <div className="flex min-h-0 flex-1 flex-col gap-4">
+                    <CashierPresenceRestoreWorkspace
+                      restore={cashierPresenceRestore}
+                    />
+                    <CashierAuthWorkspace authDialog={viewModel.authDialog} />
+                  </div>
+                ) : cashierPresenceRestore.status === "validation_pending" &&
+                  cashierPresenceRestore.message ? (
+                  <CashierPresenceRestoreWorkspace
+                    restore={cashierPresenceRestore}
+                  />
                 ) : shouldRenderExpenseCompletionWorkspace ? (
                   <div className="min-h-0 flex-1 overflow-y-auto rounded-lg bg-surface p-4">
                     <ExpenseCompletionPanel checkout={viewModel.checkout} />

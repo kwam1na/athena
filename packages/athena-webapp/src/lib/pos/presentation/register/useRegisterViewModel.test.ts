@@ -8,6 +8,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Id } from "~/convex/_generated/dataModel";
 import { ok, userError } from "~/shared/commandResult";
+import type { StaffAuthenticationResult } from "@/components/staff-auth/StaffAuthenticationDialog";
 
 const mockUseQuery = vi.fn();
 const mockUseMutation = vi.fn();
@@ -39,6 +40,11 @@ const mockReadProvisionedTerminalSeed = vi.fn();
 const mockWriteProvisionedTerminalSeed = vi.fn();
 const mockWriteProvisionedTerminalSeedAndClearTerminalIntegrity = vi.fn();
 const mockGetStaffAuthorityReadiness = vi.fn();
+const mockReadStoreDayReadiness = vi.fn();
+const mockReadCashierPresence = vi.fn();
+const mockClearCashierPresence = vi.fn();
+const mockInvalidateCashierPresenceForTerminal = vi.fn();
+const mockWriteCashierPresence = vi.fn();
 const mockMarkLocalEventsSynced = vi.fn();
 const mockWriteLocalCloudMapping = vi.fn();
 const mockListLocalCloudMappings = vi.fn();
@@ -47,7 +53,13 @@ const mockReadTerminalIntegrityState = vi.fn();
 const mockWriteDrawerAuthorityState = vi.fn();
 const mockUsePosTerminalAppSessionRecoveryRuntimeInput = vi.fn();
 
-let mockActiveStore: { _id: Id<"store">; currency: string } | null;
+let mockActiveStore:
+  | {
+      _id: Id<"store">;
+      currency: string;
+      organizationId: Id<"organization">;
+    }
+  | null;
 let mockTerminal:
   | {
       _id: Id<"posTerminal">;
@@ -325,9 +337,17 @@ vi.mock("@/lib/pos/infrastructure/local/posLocalStore", () => ({
     listEvents: mockListLocalEvents,
     listEventsForUpload: mockListLocalEvents,
     listLocalCloudMappings: mockListLocalCloudMappings,
+    readActiveCashierPresence: mockReadCashierPresence,
+    readCashierPresence: mockReadCashierPresence,
     readDrawerAuthorityState: mockReadDrawerAuthorityState,
     readProvisionedTerminalSeed: mockReadProvisionedTerminalSeed,
+    readStoreDayReadiness: mockReadStoreDayReadiness,
     readTerminalIntegrityState: mockReadTerminalIntegrityState,
+    clearActiveCashierPresence: mockClearCashierPresence,
+    clearCashierPresence: mockClearCashierPresence,
+    invalidateCashierPresenceForTerminal:
+      mockInvalidateCashierPresenceForTerminal,
+    writeCashierPresence: mockWriteCashierPresence,
     markEventsSynced: mockMarkLocalEventsSynced,
     writeProvisionedTerminalSeed: mockWriteProvisionedTerminalSeed,
     writeProvisionedTerminalSeedAndClearTerminalIntegrity:
@@ -406,17 +426,79 @@ function buildLocalEvent(
 
 function buildStaffAuthenticationResult(
   overrides: Partial<Record<string, unknown>> = {},
-) {
+): StaffAuthenticationResult {
+  const expiresAt = Date.now() + 60_000;
   return {
     activeRoles: ["manager"],
+    localStaffAuthority: {
+      activeRoles: ["manager"],
+      credentialId: "credential-1",
+      credentialVersion: 2,
+      displayName: "Ama Kusi",
+      expiresAt,
+      issuedAt: Date.now() - 1_000,
+      organizationId: "org-1",
+      refreshedAt: Date.now(),
+      staffProfileId: "staff-1",
+      status: "active",
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      username: "ama",
+      verifier: {
+        algorithm: "PBKDF2-SHA256",
+        hash: "hash",
+        iterations: 100_000,
+        salt: "salt",
+        version: 1,
+      },
+      wrappedPosLocalStaffProof: {
+        ciphertext: "ciphertext",
+        expiresAt,
+        iv: "iv",
+      },
+    },
     staffProfileId: "staff-1" as Id<"staffProfile">,
     staffProfile: {
       firstName: "Ama",
       lastName: "Kusi",
     },
     posLocalStaffProof: {
-      expiresAt: Date.now() + 60_000,
+      expiresAt,
       token: "staff-proof-token",
+    },
+    ...overrides,
+  };
+}
+
+function getTestOperatingDate(date = new Date()) {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0"),
+  ].join("-");
+}
+
+function buildCashierPresence(overrides: Partial<Record<string, unknown>> = {}) {
+  const expiresAt = Date.now() + 60_000;
+  return {
+    activeRoles: ["cashier"],
+    credentialId: "credential-1",
+    credentialVersion: 2,
+    displayName: "Ama Kusi",
+    expiresAt,
+    lastValidatedAt: Date.now(),
+    offlineFreshUntil: expiresAt,
+    operatingDate: getTestOperatingDate(),
+    organizationId: "org-1",
+    signedInAt: Date.now(),
+    staffProfileId: "staff-1",
+    storeId: "store-1",
+    terminalId: "terminal-1",
+    username: "ama",
+    wrappedPosLocalStaffProof: {
+      ciphertext: "ciphertext",
+      expiresAt,
+      iv: "iv",
     },
     ...overrides,
   };
@@ -451,6 +533,7 @@ describe("useRegisterViewModel", () => {
     mockActiveStore = {
       _id: "store-1" as Id<"store">,
       currency: "GHS",
+      organizationId: "org-1" as Id<"organization">,
     };
     mockTerminal = {
       _id: "terminal-1" as Id<"posTerminal">,
@@ -533,6 +616,10 @@ describe("useRegisterViewModel", () => {
     mockUsePosTerminalAppSessionRecoveryRuntimeInput.mockReturnValue(null);
     mockUsePosLocalSyncRuntimeStatus.mockReset();
     mockUsePosLocalSyncRuntimeStatus.mockReturnValue(null);
+    Object.defineProperty(globalThis.navigator, "onLine", {
+      configurable: true,
+      value: true,
+    });
     mockAppendLocalEvent.mockReset();
     mockAppendLocalEvent.mockResolvedValue({
       ok: true,
@@ -573,6 +660,28 @@ describe("useRegisterViewModel", () => {
       ok: true,
       value: "ready",
     });
+    mockReadStoreDayReadiness.mockReset();
+    mockReadStoreDayReadiness.mockResolvedValue({
+      ok: true,
+      value: {
+        operatingDate: getTestOperatingDate(),
+        source: "local",
+        status: "started",
+        storeId: "store-1",
+        updatedAt: Date.now(),
+      },
+    });
+    mockReadCashierPresence.mockReset();
+    mockReadCashierPresence.mockResolvedValue({
+      ok: true,
+      value: null,
+    });
+    mockClearCashierPresence.mockReset();
+    mockClearCashierPresence.mockResolvedValue({ ok: true });
+    mockInvalidateCashierPresenceForTerminal.mockReset();
+    mockInvalidateCashierPresenceForTerminal.mockResolvedValue({ ok: true });
+    mockWriteCashierPresence.mockReset();
+    mockWriteCashierPresence.mockResolvedValue({ ok: true, value: {} });
     mockMarkLocalEventsSynced.mockReset();
     mockMarkLocalEventsSynced.mockResolvedValue({ ok: true, value: [] });
     mockWriteLocalCloudMapping.mockReset();
@@ -771,6 +880,230 @@ describe("useRegisterViewModel", () => {
     expect(result.current.productEntry.canQuickAddProduct).toBe(true);
     expect(result.current.authDialog?.open).toBe(false);
     expect(result.current.syncStatus).toBeNull();
+  });
+
+  it("persists terminal-scoped cashier presence after successful cashier sign-in", async () => {
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        buildStaffAuthenticationResult(),
+      );
+    });
+
+    await waitFor(() =>
+      expect(mockWriteCashierPresence).toHaveBeenCalledWith(
+        expect.objectContaining({
+          credentialId: "credential-1",
+          credentialVersion: 2,
+          operatingDate: getTestOperatingDate(),
+          organizationId: "org-1",
+          staffProfileId: "staff-1",
+          storeId: "store-1",
+          terminalId: "terminal-1",
+          username: "ama",
+          wrappedPosLocalStaffProof: expect.objectContaining({
+            ciphertext: "ciphertext",
+          }),
+        }),
+      ),
+    );
+  });
+
+  it("keeps cashier sign-in closed while cashier presence restore is pending", async () => {
+    const pendingPresence = deferred<{ ok: true; value: null }>();
+    mockReadCashierPresence.mockReturnValueOnce(pendingPresence.promise);
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    expect(result.current.cashierPresenceRestore.status).toBe("pending");
+    expect(result.current.authDialog?.open).toBe(false);
+
+    await act(async () => {
+      pendingPresence.resolve({ ok: true, value: null });
+    });
+
+    await waitFor(() =>
+      expect(result.current.cashierPresenceRestore.status).toBe("missing"),
+    );
+    expect(result.current.authDialog?.open).toBe(true);
+  });
+
+  it("does not let a delayed presence restore clear a fresh cashier sign-in", async () => {
+    const pendingPresence = deferred<{
+      ok: true;
+      value: ReturnType<typeof buildCashierPresence>;
+    }>();
+    mockReadCashierPresence.mockReturnValueOnce(pendingPresence.promise);
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        buildStaffAuthenticationResult(),
+      );
+    });
+    expect(result.current.cashierPresenceRestore.status).toBe("restored");
+
+    await act(async () => {
+      pendingPresence.resolve({
+        ok: true,
+        value: buildCashierPresence({ staffProofToken: "stale-token" }),
+      });
+      await pendingPresence.promise;
+    });
+
+    expect(result.current.cashierPresenceRestore.status).toBe("restored");
+    expect(result.current.cashierCard?.cashierName).toBe("Ama K.");
+    expect(result.current.authDialog?.open).toBe(false);
+  });
+
+  it("does not trust plaintext staff proof fields from restored cashier presence", async () => {
+    mockReadCashierPresence.mockResolvedValue({
+      ok: true,
+      value: buildCashierPresence({
+        activeRoles: ["manager"],
+        freshnessExpiresAt: Date.now() + 60_000,
+        proofExpiresAt: Date.now() + 60_000,
+        staffProofToken: "forged-proof-token",
+      }),
+    });
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await waitFor(() =>
+      expect(result.current.cashierPresenceRestore.status).toBe(
+        "validation_pending",
+      ),
+    );
+
+    expect(result.current.cashierCard).toBeNull();
+    expect(result.current.authDialog?.open).toBe(true);
+    expect(result.current.debug?.cashierPresence).toBe("validation_pending");
+    expect(mockStartSession).not.toHaveBeenCalled();
+  });
+
+  it("requires sign-in for persisted cashier presence that still needs proof validation", async () => {
+    mockReadCashierPresence.mockResolvedValue({
+      ok: true,
+      value: buildCashierPresence(),
+    });
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await waitFor(() =>
+      expect(result.current.cashierPresenceRestore.status).toBe(
+        "validation_pending",
+      ),
+    );
+
+    expect(result.current.cashierPresenceRestore.message).toBe(
+      "Checking cashier access before new sales.",
+    );
+    expect(result.current.cashierCard).toBeNull();
+    expect(result.current.authDialog?.open).toBe(true);
+    expect(result.current.productEntry.disabled).toBe(true);
+    expect(result.current.sessionPanel).toBeNull();
+  });
+
+  it("invalidates cashier presence for mismatched scope and clears the record", async () => {
+    mockReadCashierPresence.mockResolvedValue({
+      ok: true,
+      value: buildCashierPresence({
+        terminalId: "terminal-2",
+      }),
+    });
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await waitFor(() =>
+      expect(result.current.cashierPresenceRestore.status).toBe("invalidated"),
+    );
+
+    expect(result.current.cashierPresenceRestore.message).toBe(
+      "Cashier sign-in no longer matches this register. Sign in to continue.",
+    );
+    expect(result.current.cashierCard).toBeNull();
+    expect(result.current.authDialog?.open).toBe(true);
+    expect(mockClearCashierPresence).toHaveBeenCalledWith({
+      operatingDate: getTestOperatingDate(),
+      organizationId: "org-1",
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    });
+  });
+
+  it("requires an online refresh when offline cashier presence freshness expires", async () => {
+    Object.defineProperty(globalThis.navigator, "onLine", {
+      configurable: true,
+      value: false,
+    });
+    mockReadCashierPresence.mockResolvedValue({
+      ok: true,
+      value: buildCashierPresence({
+        offlineFreshUntil: Date.now() - 1_000,
+      }),
+    });
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await waitFor(() =>
+      expect(result.current.cashierPresenceRestore.status).toBe(
+        "offline_freshness_expired",
+      ),
+    );
+
+    expect(result.current.cashierPresenceRestore.message).toBe(
+      "This terminal needs an online staff refresh before offline sign-in. Reconnect, then sign in once.",
+    );
+    expect(result.current.authDialog?.open).toBe(true);
+    expect(mockClearCashierPresence).toHaveBeenCalledWith({
+      operatingDate: getTestOperatingDate(),
+      organizationId: "org-1",
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    });
+  });
+
+  it("clears expired cashier presence and opens deterministic sign-in guidance", async () => {
+    mockReadCashierPresence.mockResolvedValue({
+      ok: true,
+      value: buildCashierPresence({
+        expiresAt: Date.now() - 1_000,
+        offlineFreshUntil: Date.now() - 1_000,
+        wrappedPosLocalStaffProof: {
+          ciphertext: "ciphertext",
+          expiresAt: Date.now() - 1_000,
+          iv: "iv",
+        },
+      }),
+    });
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await waitFor(() =>
+      expect(result.current.cashierPresenceRestore.status).toBe("expired"),
+    );
+
+    expect(result.current.cashierPresenceRestore.message).toBe(
+      "Cashier sign-in expired. Sign in to continue.",
+    );
+    expect(result.current.cashierCard).toBeNull();
+    expect(result.current.authDialog?.open).toBe(true);
+    expect(mockClearCashierPresence).toHaveBeenCalledWith({
+      operatingDate: getTestOperatingDate(),
+      organizationId: "org-1",
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    });
   });
 
   it("maps local pending-sync status into POS presentation state", async () => {
@@ -2149,7 +2482,77 @@ describe("useRegisterViewModel", () => {
       staffProfileId: "staff-1",
       reason: "Signing out",
     });
+    expect(mockClearCashierPresence).toHaveBeenCalledWith({
+      operatingDate: getTestOperatingDate(),
+      organizationId: "org-1",
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    });
     expect(result.current.authDialog?.open).toBe(true);
+  });
+
+  it("invalidates terminal cashier presence on sign-out when live store organization metadata is unavailable", async () => {
+    mockActiveStore = null;
+    mockRegisterState = undefined;
+    mockActiveSession = null;
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await waitFor(() =>
+      expect(result.current.debug?.activeStoreSource).toBe("local"),
+    );
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        buildStaffAuthenticationResult(),
+      );
+    });
+
+    await act(async () => {
+      await result.current.cashierCard?.onSignOut();
+    });
+
+    expect(mockClearCashierPresence).not.toHaveBeenCalled();
+    expect(mockInvalidateCashierPresenceForTerminal).toHaveBeenCalledWith({
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    });
+    expect(result.current.authDialog?.open).toBe(true);
+  });
+
+  it("keeps cashier signed in when cashier presence cannot be cleared on sign-out", async () => {
+    mockActiveSession = null;
+    mockRegisterState = {
+      ...mockRegisterState!,
+      activeSession: null,
+    };
+    mockClearCashierPresence.mockResolvedValueOnce({ ok: false });
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        buildStaffAuthenticationResult(),
+      );
+    });
+
+    await act(async () => {
+      await result.current.cashierCard?.onSignOut();
+    });
+
+    expect(mockClearCashierPresence).toHaveBeenCalledWith({
+      operatingDate: getTestOperatingDate(),
+      organizationId: "org-1",
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    });
+    expect(toast.error).toHaveBeenCalledWith(
+      "Cashier sign-out could not finish. Try again.",
+    );
+    expect(result.current.cashierCard?.cashierName).toBe("Ama K.");
+    expect(result.current.authDialog?.open).toBe(false);
   });
 
   it("opens the cashier auth dialog when a terminal exists but no cashier is signed in", async () => {
@@ -2201,6 +2604,9 @@ describe("useRegisterViewModel", () => {
     const { result } = renderHook(() => useRegisterViewModel());
     const expiresAt = Date.now() + 60_000;
 
+    await waitFor(() =>
+      expect(result.current.cashierPresenceRestore.status).toBe("missing"),
+    );
     expect(result.current.authDialog?.open).toBe(true);
     expect(result.current.authDialog?.onAuthenticated).toBeTypeOf("function");
 
@@ -2265,6 +2671,9 @@ describe("useRegisterViewModel", () => {
     const { useRegisterViewModel } = await import("./useRegisterViewModel");
     const { result } = renderHook(() => useRegisterViewModel());
 
+    await waitFor(() =>
+      expect(result.current.cashierPresenceRestore.status).toBe("missing"),
+    );
     expect(result.current.authDialog?.open).toBe(true);
     expect(result.current.cashierCard).toBeNull();
 
