@@ -59,7 +59,12 @@ vi.mock("@tanstack/react-router", () => ({
 
 vi.mock("~/convex/_generated/api", () => ({
   api: {
-    inventory: { posTerminal: {} },
+    inventory: {
+      posTerminal: {
+        getTerminalByFingerprint: "getTerminalByFingerprint",
+        registerTerminal: "registerTerminal",
+      },
+    },
     pos: {
       public: {
         posRecoveryCodes: {
@@ -172,6 +177,10 @@ describe("registerAndProvisionPosTerminal", () => {
     mocks.generateBrowserFingerprint.mockResolvedValue({
       browserInfo: { userAgent: "test" },
       fingerprintHash: "fingerprint-1",
+    });
+    Object.defineProperty(globalThis, "caches", {
+      configurable: true,
+      value: undefined,
     });
     Object.defineProperty(globalThis, "crypto", {
       configurable: true,
@@ -425,11 +434,13 @@ describe("registerAndProvisionPosTerminal", () => {
     expect(screen.getByText("Offline diagnostics need attention")).toBeInTheDocument();
     expect(
       screen.getByText((_content, element) =>
-        Boolean(element?.textContent?.trim() === "0 of 6 ready"),
+        Boolean(element?.textContent?.trim() === "0 of 6 reporting"),
       ),
     ).toBeInTheDocument();
     expect(
-      screen.getByText("App shell readiness has not reported from this checkout station."),
+      screen.getByText(
+        "App shell recovery needs attention before offline route access is reliable.",
+      ),
     ).toBeInTheDocument();
     expect(
       screen.getByText(
@@ -439,6 +450,93 @@ describe("registerAndProvisionPosTerminal", () => {
     expect(
       screen.getByRole("link", { name: "Open terminal health" }),
     ).toHaveAttribute("href", "/acme/store/downtown/pos/terminals");
+  });
+
+  it("shows when the current register is ready for offline checkout", async () => {
+    const existingTerminal = {
+      _id: "terminal-existing",
+      _creationTime: 1,
+      browserInfo: { userAgent: "test" },
+      displayName: "Front counter",
+      fingerprintHash: "fingerprint-1",
+      registeredAt: 1,
+      registeredByUserId: "user-1",
+      registerNumber: "3",
+      status: "active",
+      storeId: "store-1",
+    };
+    mocks.useQuery.mockImplementation((ref) => {
+      if (ref === "getRecoveryCodeStatus") {
+        return {
+          failedAttemptCount: 0,
+          lastUsedAt: undefined,
+          lockedUntil: undefined,
+          plaintextCode: "mintlamp42",
+          rotatedAt: 1,
+          status: "active",
+        };
+      }
+      if (ref === "getTerminalByFingerprint") {
+        return existingTerminal;
+      }
+      return null;
+    });
+    Object.defineProperty(globalThis, "caches", {
+      configurable: true,
+      value: {
+        keys: vi.fn(async () => ["athena-pos-app-shell-v6"]),
+        open: vi.fn(async () => ({
+          match: vi.fn(async () => ({ ok: true })),
+        })),
+      },
+    });
+
+    render(
+      <POSSettingsView
+        storeFactory={() =>
+          ({
+            getStaffAuthorityReadiness: vi.fn(async () => ({
+              ok: true,
+              value: "ready",
+            })),
+            readProvisionedTerminalSeed: vi.fn(async () => ({
+              ok: true,
+              value: {
+                cloudTerminalId: "terminal-existing",
+                storeId: "store-1",
+                terminalId: "fingerprint-1",
+              },
+            })),
+            readRegisterAvailabilitySnapshot: vi.fn(async () => ({
+              ok: true,
+              value: { refreshedAt: Date.now() },
+            })),
+            readRegisterCatalogSnapshot: vi.fn(async () => ({
+              ok: true,
+              value: { refreshedAt: Date.now() },
+            })),
+            readRegisterServiceCatalogSnapshot: vi.fn(async () => ({
+              ok: true,
+              value: { refreshedAt: Date.now() },
+            })),
+          }) as never
+        }
+      />,
+    );
+
+    expect(
+      await screen.findByText("Register ready for offline checkout"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "This checkout station has the app shell, terminal setup, staff authority, catalog, and availability data needed for offline POS.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText((_content, element) =>
+        Boolean(element?.textContent?.trim() === "6 of 6 reporting"),
+      ),
+    ).toBeInTheDocument();
   });
 
   it("sends an independent sync secret and writes it into the local terminal seed", async () => {

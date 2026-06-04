@@ -205,7 +205,7 @@ export default function PointOfSaleView() {
       href: "/$orgUrlSlug/store/$storeUrlSlug/pos/settings" as const,
       params: liveLinkParams,
       color: "bg-gray-500",
-      available: hasFullAdminAccess && Boolean(liveLinkParams),
+      available: canAccessPOS() && Boolean(liveLinkParams),
     },
   ];
 

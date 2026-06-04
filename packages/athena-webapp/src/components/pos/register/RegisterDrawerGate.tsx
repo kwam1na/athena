@@ -124,6 +124,11 @@ export function RegisterDrawerGate({
                 ? `${drawerGate.registerLabel} cannot record new sales until terminal setup is repaired. Existing local activity is preserved for support.`
                 : `${drawerGate.registerLabel} needs a current drawer before sales can continue. Existing local activity is preserved for support.`}
             </p>
+            {drawerGate.errorMessage ? (
+              <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm leading-6 text-destructive">
+                {drawerGate.errorMessage}
+              </p>
+            ) : null}
           </div>
           <div className="flex flex-wrap gap-2 pt-2">
             {isTerminalRepair && drawerGate.onRepairTerminalSetup ? (

@@ -50,16 +50,19 @@ modal relationship explicit:
   scanned barcode before writing it into `quickAddLookupCode`.
 - Give the scanner overlay explicit pointer-event access because it is portaled
   above a modalized Radix dialog.
-- While the scanner is open, prevent the parent quick-add `DialogContent` from
-  handling pointer, interact-outside, or escape events as parent-dismiss events.
+- Treat the quick-add modal as a deliberate-dismiss surface: prevent parent
+  pointer/interact-outside events from dismissing the dialog, and continue to
+  block Escape only while the scanner is open so the child overlay can close
+  without taking down the parent.
 
 ## Why This Works
 
 The quick-add dialog owns the barcode field state, validation, submit payload,
 and existing-SKU barcode recovery path. Keeping scanner state in the same
 component avoids caller-specific plumbing and makes the affordance available
-wherever quick add is used. Blocking parent outside-dismiss only while the
-scanner is open preserves normal quick-add close behavior the rest of the time.
+wherever quick add is used. Blocking parent outside-dismiss keeps in-progress
+product entry from disappearing on accidental backdrop taps, while explicit
+close, cancel, submit, and scanner-close paths remain available.
 
 ## Prevention
 
@@ -69,3 +72,5 @@ scanner is open preserves normal quick-add close behavior the rest of the time.
   path and the parent remaining open.
 - Add focused tests that assert scanner decode fills the field and scanner close
   does not call the parent `onOpenChange(false)`.
+- Add focused tests that assert backdrop pointer events do not close the parent
+  quick-add dialog.

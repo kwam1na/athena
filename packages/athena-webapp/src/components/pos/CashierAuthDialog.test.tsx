@@ -109,7 +109,7 @@ const storeId = "store-1" as Id<"store">;
 const terminalId = "terminal-1" as Id<"posTerminal">;
 const staffProfileId = "staff-1" as Id<"staffProfile">;
 
-function buildLocalAuthorityRecord() {
+function buildLocalAuthorityRecord(overrides = {}) {
   return {
     activeRoles: ["cashier"],
     credentialId: "credential-1",
@@ -136,6 +136,7 @@ function buildLocalAuthorityRecord() {
       expiresAt: Date.now() + 10_000,
       iv: "proof-iv",
     },
+    ...overrides,
   };
 }
 
@@ -209,6 +210,10 @@ describe("CashierAuthDialog", () => {
       replaceStaffAuthoritySnapshot: vi.fn(async () => ({
         ok: true,
         value: [],
+      })),
+      upsertStaffAuthorityRecord: vi.fn(async ({ record }) => ({
+        ok: true,
+        value: record,
       })),
     });
     mocks.verifyLocalPin.mockResolvedValue({ ok: true });
@@ -344,6 +349,63 @@ describe("CashierAuthDialog", () => {
     ).toBeInTheDocument();
   });
 
+  it("stores the current cashier offline proof immediately after online sign-in", async () => {
+    const upsertStaffAuthorityRecord = vi.fn(async ({ record }) => ({
+      ok: true,
+      value: record,
+    }));
+    mocks.createPosLocalStore.mockReturnValue({
+      readStaffAuthorityForUsername: vi.fn(async () => ({
+        ok: true,
+        value: null,
+      })),
+      replaceStaffAuthoritySnapshot: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      upsertStaffAuthorityRecord,
+    });
+    const authenticateMutation = vi.fn(async () =>
+      ok({
+        activeRoles: ["cashier"],
+        posLocalStaffAuthority: buildLocalAuthorityRecord({
+          wrappedPosLocalStaffProof: undefined,
+        }),
+        posLocalStaffProof: {
+          expiresAt: Date.now() + 10_000,
+          token: "proof-token-1",
+        },
+        staffProfile: { fullName: "Ama Mensah" },
+        staffProfileId,
+      }),
+    );
+
+    const { user, onAuthenticated } = renderDialog({ authenticateMutation });
+
+    await submitCredentials(user);
+
+    await waitFor(() =>
+      expect(upsertStaffAuthorityRecord).toHaveBeenCalledWith({
+        record: expect.objectContaining({
+          staffProfileId,
+          wrappedPosLocalStaffProof: {
+            ciphertext: "wrapped-proof-token",
+            expiresAt: expect.any(Number),
+            iv: "proof-iv",
+          },
+        }),
+        storeId,
+        terminalId,
+      }),
+    );
+    expect(mocks.wrapLocalStaffProofToken).toHaveBeenCalledWith(
+      expect.objectContaining({ algorithm: "PBKDF2-SHA256" }),
+      "1234",
+      expect.objectContaining({ token: "proof-token-1" }),
+    );
+    expect(onAuthenticated).toHaveBeenCalled();
+  });
+
   it("authenticates a locally authorized cashier while offline", async () => {
     Object.defineProperty(window.navigator, "onLine", {
       configurable: true,
@@ -358,6 +420,10 @@ describe("CashierAuthDialog", () => {
       replaceStaffAuthoritySnapshot: vi.fn(async () => ({
         ok: true,
         value: [],
+      })),
+      upsertStaffAuthorityRecord: vi.fn(async ({ record }) => ({
+        ok: true,
+        value: record,
       })),
     });
     const authenticateMutation = vi.fn();
@@ -405,6 +471,10 @@ describe("CashierAuthDialog", () => {
         ok: true,
         value: [],
       })),
+      upsertStaffAuthorityRecord: vi.fn(async ({ record }) => ({
+        ok: true,
+        value: record,
+      })),
     });
     const authenticateMutation = vi.fn();
 
@@ -440,6 +510,10 @@ describe("CashierAuthDialog", () => {
         ok: true,
         value: [],
       })),
+      upsertStaffAuthorityRecord: vi.fn(async ({ record }) => ({
+        ok: true,
+        value: record,
+      })),
     });
     const authenticateMutation = vi.fn();
 
@@ -471,6 +545,10 @@ describe("CashierAuthDialog", () => {
       replaceStaffAuthoritySnapshot: vi.fn(async () => ({
         ok: true,
         value: [],
+      })),
+      upsertStaffAuthorityRecord: vi.fn(async ({ record }) => ({
+        ok: true,
+        value: record,
       })),
     });
     const authenticateMutation = vi.fn();

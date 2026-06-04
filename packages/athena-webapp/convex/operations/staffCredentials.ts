@@ -72,6 +72,28 @@ type StaffCredentialAuthenticationData = {
   activeRoles: OperationalRole[];
   credentialId: Id<"staffCredential">;
   credentialVersion?: number;
+  posLocalStaffAuthority?: {
+    activeRoles: Array<"cashier" | "manager">;
+    credentialId: Id<"staffCredential">;
+    credentialVersion: number;
+    displayName?: string | null;
+    expiresAt: number;
+    issuedAt: number;
+    organizationId: Id<"organization">;
+    refreshedAt: number;
+    staffProfileId: Id<"staffProfile">;
+    status: "active";
+    storeId: Id<"store">;
+    terminalId: Id<"posTerminal">;
+    username: string;
+    verifier: {
+      algorithm: string;
+      hash: string;
+      iterations: number;
+      salt: string;
+      version: number;
+    };
+  };
   posLocalStaffProof?: {
     expiresAt: number;
     token: string;
@@ -819,9 +841,44 @@ async function withPosLocalStaffProof(
     storeId: args.storeId,
     terminalId: args.terminalId,
   });
+  const activePosRoles = authentication.data.activeRoles.filter(
+    (role): role is "cashier" | "manager" =>
+      role === "cashier" || role === "manager",
+  );
+  const issuedAt = Date.now();
+  const posLocalStaffAuthority =
+    credential?.localPinVerifier &&
+    credential.localVerifierVersion &&
+    activePosRoles.length > 0
+      ? {
+          activeRoles: activePosRoles,
+          credentialId: credential._id,
+          credentialVersion: credential.localVerifierVersion,
+          displayName:
+            authentication.data.staffProfile.fullName ??
+            [
+              authentication.data.staffProfile.firstName,
+              authentication.data.staffProfile.lastName,
+            ]
+              .filter(Boolean)
+              .join(" ") ??
+            null,
+          expiresAt: proof.expiresAt,
+          issuedAt,
+          organizationId: credential.organizationId,
+          refreshedAt: issuedAt,
+          staffProfileId: authentication.data.staffProfileId,
+          status: "active" as const,
+          storeId: args.storeId,
+          terminalId: args.terminalId,
+          username: credential.username,
+          verifier: credential.localPinVerifier,
+        }
+      : undefined;
 
   return ok({
     ...authentication.data,
+    ...(posLocalStaffAuthority ? { posLocalStaffAuthority } : {}),
     posLocalStaffProof: proof,
   });
 }

@@ -89,7 +89,7 @@ describe("OrderSummary completed transaction summary", () => {
     mockStoreState.printReceipt.mockClear();
   });
 
-  it("opens the print window when a POS sale completes", async () => {
+  it("does not open the print window when a POS sale completes", async () => {
     render(
       <OrderSummary
         cartItems={[]}
@@ -112,12 +112,12 @@ describe("OrderSummary completed transaction summary", () => {
     );
 
     await waitFor(() => {
-      expect(renderEmail).toHaveBeenCalledTimes(1);
-      expect(mockStoreState.printReceipt).toHaveBeenCalledWith("<receipt />");
+      expect(renderEmail).not.toHaveBeenCalled();
+      expect(mockStoreState.printReceipt).not.toHaveBeenCalled();
     });
   });
 
-  it("opens the print window after POS completion once store data is available", async () => {
+  it("does not open the print window after POS completion once store data is available", async () => {
     mockStoreState.activeStore = null;
     const completedTransactionData = {
       paymentMethod: "cash",
@@ -162,12 +162,12 @@ describe("OrderSummary completed transaction summary", () => {
     );
 
     await waitFor(() => {
-      expect(renderEmail).toHaveBeenCalledTimes(1);
-      expect(mockStoreState.printReceipt).toHaveBeenCalledWith("<receipt />");
+      expect(renderEmail).not.toHaveBeenCalled();
+      expect(mockStoreState.printReceipt).not.toHaveBeenCalled();
     });
   });
 
-  it("does not auto-open the print window again after the completed POS sale remounts", async () => {
+  it("does not auto-open the print window after the completed POS sale remounts", async () => {
     const completedTransactionData = {
       paymentMethod: "cash",
       transactionId: "txn-remount",
@@ -192,7 +192,7 @@ describe("OrderSummary completed transaction summary", () => {
     );
 
     await waitFor(() => {
-      expect(mockStoreState.printReceipt).toHaveBeenCalledTimes(1);
+      expect(mockStoreState.printReceipt).not.toHaveBeenCalled();
     });
 
     unmount();
@@ -206,7 +206,7 @@ describe("OrderSummary completed transaction summary", () => {
     );
 
     await waitFor(() => {
-      expect(mockStoreState.printReceipt).toHaveBeenCalledTimes(1);
+      expect(mockStoreState.printReceipt).not.toHaveBeenCalled();
     });
   });
 

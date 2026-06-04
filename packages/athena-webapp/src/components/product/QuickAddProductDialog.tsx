@@ -415,6 +415,10 @@ export function QuickAddProductDialog({
     onOpenChange(false);
   };
 
+  const preventOutsideDismiss = (event: Event) => {
+    event.preventDefault();
+  };
+
   const handleBarcodeDetected = useCallback((barcode: string) => {
     setQuickAddLookupCode(normalizeQuickAddLookupCode(barcode));
     setQuickAddError(null);
@@ -650,16 +654,8 @@ export function QuickAddProductDialog({
             event.preventDefault();
           }
         }}
-        onInteractOutside={(event) => {
-          if (isBarcodeScannerOpen) {
-            event.preventDefault();
-          }
-        }}
-        onPointerDownOutside={(event) => {
-          if (isBarcodeScannerOpen) {
-            event.preventDefault();
-          }
-        }}
+        onInteractOutside={preventOutsideDismiss}
+        onPointerDownOutside={preventOutsideDismiss}
       >
         <form
           onSubmit={handleQuickAddSubmit}

@@ -155,6 +155,7 @@ This index enumerates the current automated test files and ties them back to the
 
 ## Section `src`
 
+- [`src/components/View.test.tsx`](../../src/components/View.test.tsx)
 - [`src/components/add-product/ProductStock.test.ts`](../../src/components/add-product/ProductStock.test.ts)
 - [`src/components/add-product/ProductView.test.tsx`](../../src/components/add-product/ProductView.test.tsx)
 - [`src/components/analytics/analyticsWorkspaceEfficiency.test.ts`](../../src/components/analytics/analyticsWorkspaceEfficiency.test.ts)

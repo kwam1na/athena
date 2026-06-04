@@ -64,7 +64,7 @@ const DOMAIN_DEFINITIONS: Array<{
       domain: "app_shell",
       label: "App shell",
       missingDescription:
-        "App shell readiness has not reported from this checkout station.",
+        "App shell status has not reported to this page yet.",
       needsAttentionDescription:
         "App shell recovery needs attention before offline route access is reliable.",
       readyDescription: "App shell recovery is ready.",
@@ -76,7 +76,7 @@ const DOMAIN_DEFINITIONS: Array<{
       domain: "terminal_seed",
       label: "Terminal setup",
       missingDescription:
-        "Terminal setup has not reported from this checkout station.",
+        "Terminal setup has not reported to this page yet.",
       needsAttentionDescription:
         "Terminal setup data is missing on this checkout station.",
       readyDescription: "Terminal setup data is stored locally.",
@@ -87,7 +87,7 @@ const DOMAIN_DEFINITIONS: Array<{
     definition: {
       domain: "staff_authority",
       label: "Staff authority",
-      missingDescription: "Staff authority readiness has not reported yet.",
+      missingDescription: "Staff authority has not reported to this page yet.",
       needsAttentionDescription:
         "Local staff authority is missing or expired on this checkout station.",
       readyDescription: "Local staff authority is ready.",
@@ -99,7 +99,7 @@ const DOMAIN_DEFINITIONS: Array<{
     definition: {
       domain: "register_catalog",
       label: "Register catalog",
-      missingDescription: "Register catalog freshness has not reported yet.",
+      missingDescription: "Register catalog has not reported to this page yet.",
       needsAttentionDescription:
         "Register catalog data needs a fresh local snapshot.",
       readyDescription: "Register catalog data is available locally.",
@@ -111,7 +111,7 @@ const DOMAIN_DEFINITIONS: Array<{
     definition: {
       domain: "service_catalog",
       label: "Service catalog",
-      missingDescription: "Service catalog freshness has not reported yet.",
+      missingDescription: "Service catalog has not reported to this page yet.",
       needsAttentionDescription:
         "Service catalog data needs a fresh local snapshot.",
       readyDescription: "Service catalog data is available locally.",
@@ -124,7 +124,7 @@ const DOMAIN_DEFINITIONS: Array<{
       domain: "availability_snapshot",
       label: "Availability snapshot",
       missingDescription:
-        "Availability snapshot freshness has not reported yet.",
+        "Availability snapshot has not reported to this page yet.",
       needsAttentionDescription:
         "Availability data needs a fresh local snapshot.",
       readyDescription: "Availability data is available locally.",
@@ -232,9 +232,9 @@ function getSignalDescription(
 }
 
 function getSummaryTitle(status: PosOfflineReadinessSignalStatus) {
-  if (status === "ready") return "Offline diagnostics ready";
+  if (status === "ready") return "Register ready for offline checkout";
   if (status === "needs_attention") return "Offline diagnostics need attention";
-  return "Offline diagnostics incomplete";
+  return "Offline diagnostics partially reported";
 }
 
 function getSummaryDescription(
@@ -243,14 +243,14 @@ function getSummaryDescription(
   totalCount: number,
 ) {
   if (status === "ready") {
-    return "This diagnostic view has all offline readiness signals. Sale authorization still comes from the register workflow.";
+    return "This checkout station has the app shell, terminal setup, staff authority, catalog, and availability data needed for offline POS.";
   }
 
   if (status === "needs_attention") {
-    return "One or more offline readiness signals need attention. This view is diagnostic only.";
+    return "One or more offline diagnostic signals need attention. This view is diagnostic only.";
   }
 
-  return `${readyCount} of ${totalCount} offline readiness signals have reported. This view is diagnostic only.`;
+  return `${readyCount} of ${totalCount} offline diagnostic signals are reporting here. Missing signals do not block checkout by themselves.`;
 }
 
 function formatAge(ageMs: number) {

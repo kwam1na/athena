@@ -192,6 +192,20 @@ describe("PointOfSaleView", () => {
     ).toBeInTheDocument();
   });
 
+  it("links POS-only users to POS settings from the POS landing page", () => {
+    usePermissionsMock.mockReturnValue({
+      canAccessPOS: () => true,
+      hasFullAdminAccess: false,
+    });
+
+    render(<PointOfSaleView />);
+
+    const link = screen.getByRole("link", { name: /POS Settings/i });
+
+    expect(link).toHaveAttribute("href", "/acme/store/downtown/pos/settings");
+    expect(screen.queryByRole("link", { name: /Active Sessions/i })).toBeNull();
+  });
+
   it("renders the POS launcher from local entry context when live summary and store context are unavailable", () => {
     useGetActiveStoreMock.mockReturnValue({
       activeStore: null,

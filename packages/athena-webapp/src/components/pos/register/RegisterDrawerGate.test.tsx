@@ -160,6 +160,27 @@ describe("RegisterDrawerGate", () => {
     expect(onSignOut).toHaveBeenCalledTimes(1);
   });
 
+  it("shows terminal repair errors when repair cannot continue", async () => {
+    const user = userEvent.setup();
+    const onRepairTerminalSetup = vi.fn();
+    renderGate({
+      errorMessage:
+        "Terminal setup repair needs the current local setup record. Open POS Settings to repair setup.",
+      mode: "terminalRepair",
+      onRepairTerminalSetup,
+    });
+
+    expect(
+      screen.getByText(
+        "Terminal setup repair needs the current local setup record. Open POS Settings to repair setup.",
+      ),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Repair setup" }));
+
+    expect(onRepairTerminalSetup).toHaveBeenCalledTimes(1);
+  });
+
   it("shows drawer authority repair copy and sign-out action", async () => {
     const user = userEvent.setup();
     const onSignOut = vi.fn();

@@ -786,6 +786,35 @@ export function usePosLocalSyncRuntimeStatus(input: {
         if (!isCurrentPublishScope()) return;
 
         if (result.kind === "ok") {
+          if (runtimeReadiness.terminalSeed) {
+            const authorityStore =
+              storeFactory?.() ??
+              (typeof indexedDB === "undefined"
+                ? null
+                : createPosLocalStore({
+                    adapter: createIndexedDbPosLocalStorageAdapter(),
+                  }));
+
+            if (authorityStore) {
+              const cleared = await clearAcceptedTerminalIntegrityState({
+                checkInTerminalId,
+                store: authorityStore,
+                storeId: checkInStoreId,
+                terminalSeed: runtimeReadiness.terminalSeed,
+              });
+              if (!isCurrentPublishScope()) return;
+
+              if (cleared) {
+                setRuntimeReadiness((current) => ({
+                  ...current,
+                  terminalIntegrity: null,
+                }));
+                setRuntimeStatusObservationToken((current) => current + 1);
+                onLocalEventsChanged?.();
+              }
+            }
+          }
+
           setDebug((current) =>
             withCheckInPublishDebug(current, {
               checkInPublishCompletedAt: Date.now(),
@@ -886,6 +915,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
     runtimeStatusInput,
     runtimeStatusSyncSecretHash,
     runtimeStatusTerminalId,
+    onLocalEventsChanged,
     storeFactory,
     storeId,
   ]);
@@ -1046,6 +1076,56 @@ async function refreshTerminalRuntimeReadiness(input: {
     terminalIntegrity: terminalIntegrity.ok ? terminalIntegrity.value : null,
     terminalSeed: input.terminalSeed,
   };
+}
+
+async function clearAcceptedTerminalIntegrityState(input: {
+  checkInTerminalId: string;
+  store: PosLocalRuntimeStore;
+  storeId: string;
+  terminalSeed: PosProvisionedTerminalSeed;
+}): Promise<boolean> {
+  if (
+    typeof input.store.readTerminalIntegrityState !== "function" ||
+    typeof input.store.clearTerminalIntegrityState !== "function"
+  ) {
+    return false;
+  }
+
+  const terminalIds = Array.from(
+    new Set(
+      [
+        input.checkInTerminalId,
+        input.terminalSeed.cloudTerminalId,
+        input.terminalSeed.terminalId,
+      ].filter((value): value is string => Boolean(value)),
+    ),
+  );
+  let hasIntegrityBlock = false;
+  for (const terminalId of terminalIds) {
+    const state = await input.store.readTerminalIntegrityState({
+      storeId: input.storeId,
+      terminalId,
+    });
+    assertPosLocalStoreOk(state);
+    if (state.value && state.value.status !== "healthy") {
+      hasIntegrityBlock = true;
+      break;
+    }
+  }
+
+  if (!hasIntegrityBlock) {
+    return false;
+  }
+
+  for (const terminalId of terminalIds) {
+    const clearResult = await input.store.clearTerminalIntegrityState({
+      storeId: input.storeId,
+      terminalId,
+    });
+    assertPosLocalStoreOk(clearResult);
+  }
+
+  return true;
 }
 
 async function persistTerminalAuthorizationFailure(input: {

@@ -33,6 +33,11 @@ interface CashierAuthDialogProps {
   workflowMode?: RegisterWorkflowMode;
 }
 
+type StaffAuthenticationResultWithLocalAuthority = StaffAuthenticationResult & {
+  localStaffAuthority?: PosLocalStaffAuthorityRecord;
+  posLocalStaffAuthority?: PosLocalStaffAuthorityRecord;
+};
+
 function getStaffDisplayName(result: StaffAuthenticationResult) {
   return (
     result.staffProfile.fullName ||
@@ -72,6 +77,57 @@ export function CashierAuthDialog({
     [],
   );
   const isExpenseWorkflow = workflowMode === "expense";
+
+  const persistAuthenticatedStaffAuthority = useCallback(
+    async (result: StaffAuthenticationResult, pin: string) => {
+      const localAuthority = (
+        result as StaffAuthenticationResultWithLocalAuthority
+      ).localStaffAuthority ?? (
+        result as StaffAuthenticationResultWithLocalAuthority
+      ).posLocalStaffAuthority;
+      const proof = result.posLocalStaffProof;
+      if (
+        !localAuthority ||
+        !proof ||
+        localAuthority.storeId !== storeId ||
+        localAuthority.terminalId !== terminalId
+      ) {
+        return;
+      }
+
+      const wrappedProof = await wrapLocalStaffProofToken(
+        localAuthority.verifier,
+        pin,
+        proof,
+      );
+      if (!wrappedProof) {
+        logger.warn("[POS] Authenticated staff proof could not be wrapped", {
+          staffProfileId: localAuthority.staffProfileId,
+          storeId,
+          terminalId,
+        });
+        return;
+      }
+
+      const writeResult = await localStore.upsertStaffAuthorityRecord({
+        record: {
+          ...localAuthority,
+          wrappedPosLocalStaffProof: wrappedProof,
+        },
+        storeId,
+        terminalId,
+      });
+      if (!writeResult.ok) {
+        logger.warn("[POS] Authenticated staff authority could not be stored", {
+          code: writeResult.error.code,
+          staffProfileId: localAuthority.staffProfileId,
+          storeId,
+          terminalId,
+        });
+      }
+    },
+    [localStore, storeId, terminalId],
+  );
 
   const refreshLocalAuthority = useCallback(async (unlock?: {
     pin: string;
@@ -291,6 +347,7 @@ export function CashierAuthDialog({
       return authenticationResult;
     }
 
+    void persistAuthenticatedStaffAuthority(authenticationResult.data, args.pin);
     const localStaffAuthority = await refreshLocalAuthority({
       pin: args.pin,
       posLocalStaffProof: authenticationResult.data.posLocalStaffProof,
@@ -331,6 +388,7 @@ export function CashierAuthDialog({
       }),
     );
     if (recoveryResult.kind === "ok") {
+      void persistAuthenticatedStaffAuthority(recoveryResult.data, args.pin);
       const recoveryLocalStaffAuthority = await refreshLocalAuthority({
         pin: args.pin,
         posLocalStaffProof: recoveryResult.data.posLocalStaffProof,

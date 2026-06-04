@@ -37,7 +37,10 @@ import {
   usePosLocalSyncRuntimeStatus,
   writeReturnedLocalCloudMappings,
 } from "./usePosLocalSyncRuntime";
-import type { PosLocalEventRecord } from "./posLocalStore";
+import type {
+  PosLocalEventRecord,
+  PosTerminalIntegrityState,
+} from "./posLocalStore";
 import { buildPosLocalSyncUploadEvents } from "./syncContract";
 
 function deferred<T>() {
@@ -2214,6 +2217,78 @@ describe("usePosLocalSyncRuntimeStatus", () => {
         storeId: "store-1",
         terminalId: "local-terminal-1",
       }),
+    );
+  });
+
+  it("clears stale terminal integrity after an accepted runtime check-in", async () => {
+    let terminalIntegrity: PosTerminalIntegrityState | null = {
+      cloudTerminalId: "terminal-cloud-1",
+      observedAt: 1,
+      reason: "authorization_failed" as const,
+      status: "requires_reprovision" as const,
+      storeId: "store-1",
+      terminalId: "local-terminal-1",
+    };
+    const onLocalEventsChanged = vi.fn();
+    const store = {
+      clearTerminalIntegrityState: vi.fn(async () => {
+        terminalIntegrity = null;
+        return {
+          ok: true,
+          value: null,
+        };
+      }),
+      listEvents: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      readProvisionedTerminalSeed: vi.fn(async () => ({
+        ok: true,
+        value: {
+          cloudTerminalId: "terminal-cloud-1",
+          displayName: "Front",
+          provisionedAt: 1,
+          schemaVersion: 1,
+          syncSecretHash: "sync-secret-1",
+          storeId: "store-1",
+          terminalId: "local-terminal-1",
+        },
+      })),
+      readTerminalIntegrityState: vi.fn(async () => ({
+        ok: true,
+        value: terminalIntegrity,
+      })),
+    };
+
+    renderHook(() =>
+      usePosLocalSyncRuntimeStatus({
+        mode: "status-only",
+        onLocalEventsChanged,
+        storeFactory: () => store as never,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(store.clearTerminalIntegrityState).toHaveBeenCalledWith({
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+    expect(store.clearTerminalIntegrityState).toHaveBeenCalledWith({
+      storeId: "store-1",
+      terminalId: "local-terminal-1",
+    });
+    expect(onLocalEventsChanged).toHaveBeenCalled();
+    await waitFor(() =>
+      expect(mocks.reportTerminalRuntimeStatus).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          status: expect.not.objectContaining({
+            terminalIntegrity: expect.anything(),
+          }),
+        }),
+      ),
     );
   });
 

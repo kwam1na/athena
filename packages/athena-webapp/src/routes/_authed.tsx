@@ -281,14 +281,18 @@ function PosTerminalShell({
           <PosTerminalAppSessionRecoveryProvider
             value={appSessionRecovery ?? null}
           >
-            <main
-              className={cn(
-                "flex min-h-0 flex-1 flex-col overflow-hidden bg-background",
-                isFullscreenActive ? "h-svh p-0" : "h-svh p-8",
-              )}
-            >
-              {children}
-            </main>
+            <SidebarProvider className="contents" defaultOpen={false}>
+              <main
+                className={cn(
+                  "flex min-h-0 flex-1 flex-col overflow-hidden bg-background",
+                  isFullscreenActive
+                    ? "h-[calc(100svh-4rem)] p-0"
+                    : "h-[calc(100svh-4rem)] p-8",
+                )}
+              >
+                {children}
+              </main>
+            </SidebarProvider>
           </PosTerminalAppSessionRecoveryProvider>
         </AppShellFullscreenContext.Provider>
       </ManagerElevationProvider>
@@ -602,7 +606,7 @@ export default function Layout() {
             >
               <AppSidebar />
               <SidebarInset className="h-full !min-h-0 overflow-hidden">
-                <main className="flex min-h-0 flex-1 flex-col overflow-hidden bg-transparent p-8">
+                <main className="box-border flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-transparent p-8">
                   <AuthedComponent />
                 </main>
               </SidebarInset>
