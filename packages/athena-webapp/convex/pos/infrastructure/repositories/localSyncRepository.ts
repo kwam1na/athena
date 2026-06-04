@@ -20,7 +20,7 @@ import type {
   LocalSyncRepository,
   PosSyncOperationalRole,
 } from "../../application/sync/types";
-import { hashPosLocalStaffProofToken } from "../../application/sync/staffProof";
+import { validatePosLocalStaffProofWithCtx } from "../../application/sync/staffProofValidation";
 
 export function createConvexLocalSyncRepository(
   ctx: MutationCtx,
@@ -66,37 +66,8 @@ export function createConvexLocalSyncRepository(
       );
     },
     async validateLocalStaffProof(args) {
-      const tokenHash = await hashPosLocalStaffProofToken(args.token);
-      const proof = await ctx.db
-        .query("posLocalStaffProof")
-        .withIndex("by_tokenHash", (q) => q.eq("tokenHash", tokenHash))
-        .unique();
-      if (
-        !proof ||
-        proof.status !== "active" ||
-        proof.staffProfileId !== args.staffProfileId ||
-        proof.storeId !== args.storeId ||
-        proof.terminalId !== args.terminalId ||
-        proof.expiresAt <= args.now
-      ) {
-        return false;
-      }
-
-      const credential = await ctx.db.get("staffCredential", proof.credentialId);
-      if (
-        !credential ||
-        credential.status !== "active" ||
-        credential.staffProfileId !== args.staffProfileId ||
-        credential.storeId !== args.storeId ||
-        credential.localVerifierVersion !== proof.credentialVersion
-      ) {
-        return false;
-      }
-
-      await ctx.db.patch("posLocalStaffProof", proof._id, {
-        lastUsedAt: args.now,
-      });
-      return true;
+      const validation = await validatePosLocalStaffProofWithCtx(ctx, args);
+      return validation.kind === "ok";
     },
     getStore(storeId) {
       return ctx.db.get("store", storeId);

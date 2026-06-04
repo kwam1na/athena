@@ -9,6 +9,7 @@ import {
   createIndexedDbPosLocalStorageAdapter,
   createMemoryPosLocalStorageAdapter,
   createPosLocalStore,
+  toSafePosLocalCashierPresenceDiagnostic,
 } from "./posLocalStore";
 import { readProjectedLocalRegisterModel } from "./localRegisterReader";
 
@@ -38,6 +39,31 @@ function buildAuthorityRecord(overrides = {}) {
       iterations: 120000,
       salt: "salt",
       version: 1 as const,
+    },
+    ...overrides,
+  };
+}
+
+function buildCashierPresenceRecord(overrides = {}) {
+  return {
+    activeRoles: ["cashier" as const],
+    credentialId: "credential-1",
+    credentialVersion: 1,
+    displayName: "Ama Mensah",
+    expiresAt: 10_000,
+    lastValidatedAt: 1_500,
+    offlineFreshUntil: 5_000,
+    operatingDate: "2026-06-04",
+    organizationId: "org-1",
+    signedInAt: 1_000,
+    staffProfileId: "staff-1",
+    storeId: "store-1",
+    terminalId: "terminal-1",
+    username: "FrontDesk",
+    wrappedPosLocalStaffProof: {
+      ciphertext: "wrapped-proof-token",
+      expiresAt: 10_000,
+      iv: "proof-iv",
     },
     ...overrides,
   };
@@ -1178,6 +1204,292 @@ describe("posLocalStore", () => {
         username: "broken",
       }),
     ).resolves.toEqual({ ok: true, value: null });
+  });
+
+  it("writes and restores terminal store-day cashier presence across store instances", async () => {
+    const adapter = createMemoryPosLocalStorageAdapter();
+    const store = createPosLocalStore({
+      adapter,
+      clock: () => 2_000,
+    });
+
+    await expect(
+      store.writeCashierPresence(buildCashierPresenceRecord()),
+    ).resolves.toEqual({
+      ok: true,
+      value: expect.objectContaining({
+        organizationId: "org-1",
+        operatingDate: "2026-06-04",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+        username: "frontdesk",
+        wrappedPosLocalStaffProof: {
+          ciphertext: "wrapped-proof-token",
+          expiresAt: 10_000,
+          iv: "proof-iv",
+        },
+      }),
+    });
+
+    const reloadedStore = createPosLocalStore({
+      adapter,
+      clock: () => 2_500,
+    });
+
+    await expect(
+      reloadedStore.readCashierPresence({
+        organizationId: "org-1",
+        operatingDate: "2026-06-04",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      }),
+    ).resolves.toEqual({
+      ok: true,
+      value: expect.objectContaining({
+        staffProfileId: "staff-1",
+        username: "frontdesk",
+        wrappedPosLocalStaffProof: expect.objectContaining({
+          ciphertext: "wrapped-proof-token",
+        }),
+      }),
+    });
+  });
+
+  it("keeps cashier presence isolated by terminal store organization and operating date", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+      clock: () => 2_000,
+    });
+
+    await store.writeCashierPresence(buildCashierPresenceRecord());
+
+    for (const input of [
+      {
+        organizationId: "org-2",
+        operatingDate: "2026-06-04",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      },
+      {
+        organizationId: "org-1",
+        operatingDate: "2026-06-04",
+        storeId: "store-2",
+        terminalId: "terminal-1",
+      },
+      {
+        organizationId: "org-1",
+        operatingDate: "2026-06-04",
+        storeId: "store-1",
+        terminalId: "terminal-2",
+      },
+      {
+        organizationId: "org-1",
+        operatingDate: "2026-06-05",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      },
+    ]) {
+      await expect(store.readCashierPresence(input)).resolves.toEqual({
+        ok: true,
+        value: null,
+      });
+    }
+  });
+
+  it("drops expired cashier presence proof material before returning it", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+      clock: () => 6_000,
+    });
+
+    await store.writeCashierPresence(buildCashierPresenceRecord());
+
+    await expect(
+      store.readCashierPresence({
+        organizationId: "org-1",
+        operatingDate: "2026-06-04",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      }),
+    ).resolves.toEqual({ ok: true, value: null });
+    await expect(
+      store.readCashierPresence({
+        organizationId: "org-1",
+        operatingDate: "2026-06-04",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      }),
+    ).resolves.toEqual({ ok: true, value: null });
+  });
+
+  it("clears cashier presence without deleting staff authority", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+      clock: () => 2_000,
+    });
+
+    await store.replaceStaffAuthoritySnapshot({
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      records: [buildAuthorityRecord({ expiresAt: 10_000 })],
+    });
+    await store.writeCashierPresence(buildCashierPresenceRecord());
+
+    await expect(
+      store.clearCashierPresence({
+        organizationId: "org-1",
+        operatingDate: "2026-06-04",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      }),
+    ).resolves.toEqual({ ok: true, value: null });
+    await expect(
+      store.readCashierPresence({
+        organizationId: "org-1",
+        operatingDate: "2026-06-04",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      }),
+    ).resolves.toEqual({ ok: true, value: null });
+    await expect(
+      store.readStaffAuthorityForUsername({
+        storeId: "store-1",
+        terminalId: "terminal-1",
+        username: "frontdesk",
+      }),
+    ).resolves.toEqual({
+      ok: true,
+      value: expect.objectContaining({
+        credentialId: "credential-1",
+      }),
+    });
+  });
+
+  it("invalidates cashier presence for one terminal without clearing another terminal", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+      clock: () => 2_000,
+    });
+
+    await store.writeCashierPresence(buildCashierPresenceRecord());
+    await store.writeCashierPresence(
+      buildCashierPresenceRecord({
+        terminalId: "terminal-2",
+      }),
+    );
+
+    await expect(
+      store.invalidateCashierPresenceForTerminal({
+        organizationId: "org-1",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      }),
+    ).resolves.toEqual({ ok: true, value: 1 });
+    await expect(
+      store.readCashierPresence({
+        organizationId: "org-1",
+        operatingDate: "2026-06-04",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      }),
+    ).resolves.toEqual({ ok: true, value: null });
+    await expect(
+      store.readCashierPresence({
+        organizationId: "org-1",
+        operatingDate: "2026-06-04",
+        storeId: "store-1",
+        terminalId: "terminal-2",
+      }),
+    ).resolves.toEqual({
+      ok: true,
+      value: expect.objectContaining({
+        terminalId: "terminal-2",
+      }),
+    });
+  });
+
+  it("redacts cashier presence diagnostics without exposing wrapped proof material", () => {
+    const diagnostic = toSafePosLocalCashierPresenceDiagnostic(
+      buildCashierPresenceRecord({
+        wrappedPosLocalStaffProof: {
+          ciphertext: "wrapped-proof-token-secret",
+          expiresAt: 10_000,
+          iv: "proof-iv-secret",
+        },
+      }),
+    );
+    const serialized = JSON.stringify(diagnostic);
+
+    expect(diagnostic).toMatchObject({
+      proof: {
+        expiresAt: 10_000,
+        status: "present",
+      },
+      staffProfileId: "staff-1",
+      username: "frontdesk",
+    });
+    expect(serialized).not.toContain("wrapped-proof-token-secret");
+    expect(serialized).not.toContain("proof-iv-secret");
+    expect(serialized).not.toContain("staffProofToken");
+    expect(serialized).not.toContain("verifier");
+    expect(serialized).not.toContain("syncSecret");
+  });
+
+  it("persists cashier presence through the IndexedDB cashier presence store", async () => {
+    const originalIndexedDb = globalThis.indexedDB;
+    const fakeIndexedDb = createControlledIndexedDb();
+    Object.defineProperty(globalThis, "indexedDB", {
+      configurable: true,
+      value: fakeIndexedDb.indexedDB,
+    });
+
+    try {
+      const store = createPosLocalStore({
+        adapter: createIndexedDbPosLocalStorageAdapter({
+          databaseName: "athena-pos-local-cashier-presence-test",
+        }),
+        clock: () => 2_000,
+      });
+
+      const write = store.writeCashierPresence(buildCashierPresenceRecord());
+      await fakeIndexedDb.waitForTransaction();
+      fakeIndexedDb.completeLastTransaction();
+      await expect(write).resolves.toMatchObject({
+        ok: true,
+        value: {
+          staffProfileId: "staff-1",
+          username: "frontdesk",
+        },
+      });
+
+      const read = store.readCashierPresence({
+        organizationId: "org-1",
+        operatingDate: "2026-06-04",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      });
+      await fakeIndexedDb.waitForTransaction();
+      fakeIndexedDb.completeLastTransaction();
+      await expect(read).resolves.toMatchObject({
+        ok: true,
+        value: expect.objectContaining({
+          staffProfileId: "staff-1",
+        }),
+      });
+
+      expect(fakeIndexedDb.database.createObjectStore).toHaveBeenCalledWith(
+        "cashierPresence",
+      );
+      expect(fakeIndexedDb.database.transaction).toHaveBeenCalledWith(
+        ["meta", "cashierPresence"],
+        "readwrite",
+      );
+    } finally {
+      Object.defineProperty(globalThis, "indexedDB", {
+        configurable: true,
+        value: originalIndexedDb,
+      });
+    }
   });
 
   it("reads local-to-cloud mappings for later events on the same local entity", async () => {

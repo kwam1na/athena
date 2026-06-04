@@ -174,6 +174,7 @@ import type * as pos_application_sync_ingestLocalEvents from "../pos/application
 import type * as pos_application_sync_projectLocalEvents from "../pos/application/sync/projectLocalEvents.js";
 import type * as pos_application_sync_registerSessionSyncReview from "../pos/application/sync/registerSessionSyncReview.js";
 import type * as pos_application_sync_staffProof from "../pos/application/sync/staffProof.js";
+import type * as pos_application_sync_staffProofValidation from "../pos/application/sync/staffProofValidation.js";
 import type * as pos_application_sync_terminalSyncSecret from "../pos/application/sync/terminalSyncSecret.js";
 import type * as pos_application_sync_types from "../pos/application/sync/types.js";
 import type * as pos_domain_errors from "../pos/domain/errors.js";
@@ -518,6 +519,7 @@ declare const fullApi: ApiFromModules<{
   "pos/application/sync/projectLocalEvents": typeof pos_application_sync_projectLocalEvents;
   "pos/application/sync/registerSessionSyncReview": typeof pos_application_sync_registerSessionSyncReview;
   "pos/application/sync/staffProof": typeof pos_application_sync_staffProof;
+  "pos/application/sync/staffProofValidation": typeof pos_application_sync_staffProofValidation;
   "pos/application/sync/terminalSyncSecret": typeof pos_application_sync_terminalSyncSecret;
   "pos/application/sync/types": typeof pos_application_sync_types;
   "pos/domain/errors": typeof pos_domain_errors;

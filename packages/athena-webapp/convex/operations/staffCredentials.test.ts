@@ -28,6 +28,8 @@ import {
   refreshTerminalStaffAuthority,
   updateStaffCredential,
   updateStaffCredentialWithCtx,
+  validateRestoredPosLocalStaffProof,
+  validateRestoredPosLocalStaffProofWithCtx,
 } from "./staffCredentials";
 import { hashPosLocalStaffProofToken } from "../pos/application/sync/staffProof";
 
@@ -136,6 +138,12 @@ function createStaffCredentialsMutationCtx(seed?: {
 
     return {
       first: async () => matches[0] ?? null,
+      unique: async () => {
+        if (matches.length > 1) {
+          throw new Error(`Expected unique ${table} query result`);
+        }
+        return matches[0] ?? null;
+      },
       take: async (count: number) => matches.slice(0, count),
       collect: async () => matches,
     };
@@ -185,6 +193,83 @@ function createStaffCredentialsMutationCtx(seed?: {
 
 function getHandler(definition: unknown) {
   return (definition as { _handler: Function })._handler;
+}
+
+async function createRestoredProofValidationCtx(overrides: {
+  credential?: Partial<Row> | null;
+  proof?: Partial<Row> | null;
+  profile?: Partial<Row> | null;
+  role?: Partial<Row> | null;
+  token?: string;
+} = {}) {
+  const token = overrides.token ?? "proof-token-1";
+  const tokenHash = await hashPosLocalStaffProofToken(token);
+
+  return createStaffCredentialsMutationCtx({
+    posLocalStaffProofs:
+      overrides.proof === null
+        ? []
+        : [
+            {
+              _id: "proof-1",
+              credentialId: "credential-1",
+              credentialVersion: 2,
+              createdAt: 50,
+              expiresAt: 200,
+              staffProfileId: "staff_profile_1",
+              status: "active",
+              storeId: "store_1",
+              terminalId: "terminal-1",
+              tokenHash,
+              ...overrides.proof,
+            },
+          ],
+    credentials:
+      overrides.credential === null
+        ? []
+        : [
+            {
+              _id: "credential-1",
+              staffProfileId: "staff_profile_1",
+              organizationId: "org_1",
+              storeId: "store_1",
+              username: "frontdesk",
+              pinHash: "hash-1",
+              localVerifierVersion: 2,
+              status: "active",
+              ...overrides.credential,
+            },
+          ],
+    profiles:
+      overrides.profile === null
+        ? []
+        : [
+            {
+              _id: "staff_profile_1",
+              storeId: "store_1",
+              organizationId: "org_1",
+              status: "active",
+              fullName: "Ari Mensah",
+              ...overrides.profile,
+            },
+          ],
+    roles:
+      overrides.role === null
+        ? []
+        : [
+            {
+              _id: "role_1",
+              staffProfileId: "staff_profile_1",
+              organizationId: "org_1",
+              storeId: "store_1",
+              role: "cashier",
+              isPrimary: true,
+              status: "active",
+              assignedAt: 1,
+              ...overrides.role,
+            },
+          ],
+  });
 }
 
 describe("staff credential operations", () => {
@@ -1541,6 +1626,413 @@ describe("staff credential operations", () => {
         userId: "athena-user-1",
       },
     );
+  });
+
+  it("validates a restored POS local staff proof without minting a renewed proof", async () => {
+    const tokenHash = await hashPosLocalStaffProofToken("proof-token-1");
+    const { ctx, tables } = createStaffCredentialsMutationCtx({
+      posLocalStaffProofs: [
+        {
+          _id: "proof-1",
+          credentialId: "credential-1",
+          credentialVersion: 2,
+          createdAt: 50,
+          expiresAt: 200,
+          staffProfileId: "staff_profile_1",
+          status: "active",
+          storeId: "store_1",
+          terminalId: "terminal-1",
+          tokenHash,
+        },
+      ],
+      credentials: [
+        {
+          _id: "credential-1",
+          staffProfileId: "staff_profile_1",
+          organizationId: "org_1",
+          storeId: "store_1",
+          username: "frontdesk",
+          pinHash: "hash-1",
+          localVerifierVersion: 2,
+          status: "active",
+        },
+      ],
+      profiles: [
+        {
+          _id: "staff_profile_1",
+          storeId: "store_1",
+          organizationId: "org_1",
+          status: "active",
+          fullName: "Ari Mensah",
+        },
+      ],
+      roles: [
+        {
+          _id: "role_1",
+          staffProfileId: "staff_profile_1",
+          organizationId: "org_1",
+          storeId: "store_1",
+          role: "cashier",
+          isPrimary: true,
+          status: "active",
+          assignedAt: 1,
+        },
+      ],
+    });
+
+    await expect(
+      validateRestoredPosLocalStaffProofWithCtx(ctx, {
+        allowedRoles: ["cashier"],
+        now: 100,
+        staffProfileId: "staff_profile_1" as Id<"staffProfile">,
+        storeId: "store_1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+        token: "proof-token-1",
+      }),
+    ).resolves.toEqual({
+      kind: "ok",
+      data: expect.objectContaining({
+        activeRoles: ["cashier"],
+        credentialId: "credential-1",
+        credentialVersion: 2,
+        posLocalStaffProof: {
+          expiresAt: 200,
+          token: "proof-token-1",
+        },
+        staffProfileId: "staff_profile_1",
+      }),
+    });
+    expect(tables.posLocalStaffProof.size).toBe(1);
+    expect(tables.posLocalStaffProof.get("proof-1")).toEqual(
+      expect.objectContaining({ lastUsedAt: 100 }),
+    );
+  });
+
+  it("returns explicit restored POS local staff proof failure reasons", async () => {
+    const tokenHash = await hashPosLocalStaffProofToken("proof-token-1");
+    const { ctx } = createStaffCredentialsMutationCtx({
+      posLocalStaffProofs: [
+        {
+          _id: "proof-1",
+          credentialId: "credential-1",
+          credentialVersion: 2,
+          createdAt: 50,
+          expiresAt: 200,
+          staffProfileId: "staff_profile_1",
+          status: "active",
+          storeId: "store_1",
+          terminalId: "terminal-1",
+          tokenHash,
+        },
+      ],
+      credentials: [
+        {
+          _id: "credential-1",
+          staffProfileId: "staff_profile_1",
+          organizationId: "org_1",
+          storeId: "store_1",
+          username: "frontdesk",
+          pinHash: "hash-1",
+          localVerifierVersion: 3,
+          status: "active",
+        },
+      ],
+      profiles: [
+        {
+          _id: "staff_profile_1",
+          storeId: "store_1",
+          organizationId: "org_1",
+          status: "active",
+          fullName: "Ari Mensah",
+        },
+      ],
+      roles: [
+        {
+          _id: "role_1",
+          staffProfileId: "staff_profile_1",
+          organizationId: "org_1",
+          storeId: "store_1",
+          role: "cashier",
+          isPrimary: true,
+          status: "active",
+          assignedAt: 1,
+        },
+      ],
+    });
+
+    await expect(
+      validateRestoredPosLocalStaffProofWithCtx(ctx, {
+        allowedRoles: ["cashier"],
+        now: 100,
+        staffProfileId: "staff_profile_1" as Id<"staffProfile">,
+        storeId: "store_1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+        token: "proof-token-1",
+      }),
+    ).resolves.toEqual({
+      kind: "user_error",
+      error: {
+        code: "precondition_failed",
+        message: "Stored staff proof is no longer valid. Sign in again.",
+        metadata: {
+          reason: "credential_version_mismatch",
+        },
+      },
+    });
+  });
+
+  it("returns proof and credential failure reasons without touching proof usage", async () => {
+    const cases: Array<{
+      name: string;
+      overrides: Parameters<typeof createRestoredProofValidationCtx>[0];
+      reason: string;
+      token?: string;
+    }> = [
+      {
+        name: "missing proof",
+        overrides: { proof: null },
+        reason: "proof_not_found",
+      },
+      {
+        name: "inactive proof",
+        overrides: { proof: { status: "revoked" } },
+        reason: "proof_inactive",
+      },
+      {
+        name: "wrong proof terminal",
+        overrides: { proof: { terminalId: "terminal-2" } },
+        reason: "proof_scope_mismatch",
+      },
+      {
+        name: "expired proof",
+        overrides: { proof: { expiresAt: 99 } },
+        reason: "proof_expired",
+      },
+      {
+        name: "missing credential",
+        overrides: { credential: null },
+        reason: "credential_not_found",
+      },
+      {
+        name: "inactive credential",
+        overrides: { credential: { status: "suspended" } },
+        reason: "credential_inactive",
+      },
+      {
+        name: "wrong credential store",
+        overrides: { credential: { storeId: "store_2" } },
+        reason: "credential_scope_mismatch",
+      },
+    ];
+
+    for (const testCase of cases) {
+      const { ctx, tables } = await createRestoredProofValidationCtx(
+        testCase.overrides,
+      );
+
+      await expect(
+        validateRestoredPosLocalStaffProofWithCtx(ctx, {
+          allowedRoles: ["cashier"],
+          now: 100,
+          staffProfileId: "staff_profile_1" as Id<"staffProfile">,
+          storeId: "store_1" as Id<"store">,
+          terminalId: "terminal-1" as Id<"posTerminal">,
+          token: testCase.token ?? "proof-token-1",
+        }),
+      ).resolves.toEqual({
+        kind: "user_error",
+        error: {
+          code: "precondition_failed",
+          message: "Stored staff proof is no longer valid. Sign in again.",
+          metadata: {
+            reason: testCase.reason,
+          },
+        },
+      });
+
+      expect(
+        tables.posLocalStaffProof.get("proof-1")?.lastUsedAt,
+        testCase.name,
+      ).toBeUndefined();
+    }
+  });
+
+  it("fails closed when restored proof token hash matches multiple rows", async () => {
+    const tokenHash = await hashPosLocalStaffProofToken("proof-token-1");
+    const { ctx, tables } = createStaffCredentialsMutationCtx({
+      posLocalStaffProofs: [
+        {
+          _id: "proof-1",
+          credentialId: "credential-1",
+          credentialVersion: 2,
+          createdAt: 50,
+          expiresAt: 200,
+          staffProfileId: "staff_profile_1",
+          status: "active",
+          storeId: "store_1",
+          terminalId: "terminal-1",
+          tokenHash,
+        },
+        {
+          _id: "proof-2",
+          credentialId: "credential-1",
+          credentialVersion: 2,
+          createdAt: 60,
+          expiresAt: 200,
+          staffProfileId: "staff_profile_1",
+          status: "active",
+          storeId: "store_1",
+          terminalId: "terminal-1",
+          tokenHash,
+        },
+      ],
+      credentials: [
+        {
+          _id: "credential-1",
+          staffProfileId: "staff_profile_1",
+          organizationId: "org_1",
+          storeId: "store_1",
+          username: "frontdesk",
+          pinHash: "hash-1",
+          localVerifierVersion: 2,
+          status: "active",
+        },
+      ],
+      profiles: [
+        {
+          _id: "staff_profile_1",
+          storeId: "store_1",
+          organizationId: "org_1",
+          status: "active",
+          fullName: "Ari Mensah",
+        },
+      ],
+      roles: [
+        {
+          _id: "role_1",
+          staffProfileId: "staff_profile_1",
+          organizationId: "org_1",
+          storeId: "store_1",
+          role: "cashier",
+          isPrimary: true,
+          status: "active",
+          assignedAt: 1,
+        },
+      ],
+    });
+
+    await expect(
+      validateRestoredPosLocalStaffProofWithCtx(ctx, {
+        allowedRoles: ["cashier"],
+        now: 100,
+        staffProfileId: "staff_profile_1" as Id<"staffProfile">,
+        storeId: "store_1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+        token: "proof-token-1",
+      }),
+    ).resolves.toEqual({
+      kind: "user_error",
+      error: {
+        code: "precondition_failed",
+        message: "Stored staff proof is no longer valid. Sign in again.",
+        metadata: {
+          reason: "proof_not_found",
+        },
+      },
+    });
+
+    expect(tables.posLocalStaffProof.get("proof-1")?.lastUsedAt).toBeUndefined();
+    expect(tables.posLocalStaffProof.get("proof-2")?.lastUsedAt).toBeUndefined();
+  });
+
+  it("returns staff profile failure reasons without touching proof usage", async () => {
+    const cases: Array<{
+      name: string;
+      overrides: Parameters<typeof createRestoredProofValidationCtx>[0];
+      reason: string;
+      allowedRoles?: Array<"cashier" | "manager">;
+    }> = [
+      {
+        name: "missing staff profile",
+        overrides: { profile: null },
+        reason: "staff_profile_not_found",
+      },
+      {
+        name: "wrong staff profile store",
+        overrides: { profile: { storeId: "store_2" } },
+        reason: "staff_profile_scope_mismatch",
+      },
+      {
+        name: "inactive staff profile",
+        overrides: { profile: { status: "inactive" } },
+        reason: "staff_profile_inactive",
+      },
+      {
+        name: "no active roles",
+        overrides: { role: null },
+        reason: "staff_profile_no_active_roles",
+      },
+      {
+        name: "role not allowed",
+        overrides: {},
+        allowedRoles: ["manager"],
+        reason: "staff_profile_role_not_allowed",
+      },
+    ];
+
+    for (const testCase of cases) {
+      const { ctx, tables } = await createRestoredProofValidationCtx(
+        testCase.overrides,
+      );
+
+      await expect(
+        validateRestoredPosLocalStaffProofWithCtx(ctx, {
+          allowedRoles: testCase.allowedRoles ?? ["cashier"],
+          now: 100,
+          staffProfileId: "staff_profile_1" as Id<"staffProfile">,
+          storeId: "store_1" as Id<"store">,
+          terminalId: "terminal-1" as Id<"posTerminal">,
+          token: "proof-token-1",
+        }),
+      ).resolves.toEqual({
+        kind: "user_error",
+        error: {
+          code: "precondition_failed",
+          message: "Stored staff proof is no longer valid. Sign in again.",
+          metadata: {
+            reason: testCase.reason,
+          },
+        },
+      });
+
+      expect(
+        tables.posLocalStaffProof.get("proof-1")?.lastUsedAt,
+        testCase.name,
+      ).toBeUndefined();
+    }
+  });
+
+  it("requires POS terminal access before public restored proof validation", async () => {
+    const { ctx } = createStaffCredentialsMutationCtx();
+    authMocks.requireOrganizationMemberRoleWithCtx.mockRejectedValueOnce(
+      new Error("No POS access"),
+    );
+
+    await expect(
+      getHandler(validateRestoredPosLocalStaffProof)(ctx, {
+        allowedRoles: ["cashier"],
+        staffProfileId: "staff_profile_1" as Id<"staffProfile">,
+        storeId: "store_1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+        token: "proof-token-1",
+      }),
+    ).resolves.toEqual({
+      kind: "user_error",
+      error: {
+        code: "authorization_failed",
+        message: "This terminal is not available for staff authentication.",
+      },
+    });
   });
 
   it("refreshes terminal-scoped local staff authority without exposing legacy credentials", async () => {

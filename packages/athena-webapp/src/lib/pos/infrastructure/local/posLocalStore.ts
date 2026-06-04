@@ -8,7 +8,7 @@ import type {
   PosServiceCatalogRowDto,
 } from "@/lib/pos/application/dto";
 
-export const POS_LOCAL_STORE_SCHEMA_VERSION = 7;
+export const POS_LOCAL_STORE_SCHEMA_VERSION = 8;
 
 export type PosLocalEntityKind =
   | "registerSession"
@@ -174,6 +174,41 @@ export type PosLocalStaffAuthorityReadiness =
   | "expired"
   | "ready";
 
+export type PosLocalActiveCashierPresenceRecord = {
+  activeRoles: Array<"cashier" | "manager">;
+  credentialId: string;
+  credentialVersion: number;
+  displayName?: string | null;
+  expiresAt: number;
+  lastValidatedAt: number;
+  offlineFreshUntil: number;
+  operatingDate: string;
+  organizationId: string;
+  signedInAt: number;
+  staffProfileId: string;
+  storeId: string;
+  terminalId: string;
+  username: string;
+  wrappedPosLocalStaffProof: WrappedLocalStaffProof;
+};
+
+export type PosLocalCashierPresenceScope = {
+  operatingDate: string;
+  organizationId: string;
+  storeId: string;
+  terminalId: string;
+};
+
+export type PosLocalCashierPresenceDiagnostic = Omit<
+  PosLocalActiveCashierPresenceRecord,
+  "wrappedPosLocalStaffProof"
+> & {
+  proof: {
+    expiresAt: number;
+    status: "present";
+  };
+};
+
 export interface PosLocalRegisterCatalogSnapshot {
   refreshedAt: number;
   rows: PosRegisterCatalogRowDto[];
@@ -217,6 +252,7 @@ export type PosLocalObjectStoreName =
   | "mappings"
   | "readiness"
   | "staffAuthority"
+  | "cashierPresence"
   | "registerCatalog"
   | "registerServiceCatalog"
   | "registerAvailability";
@@ -709,6 +745,127 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
                 readinessKey(input.storeId, input.operatingDate),
               )) ?? null
             );
+          },
+        );
+
+        return { ok: true, value };
+      } catch (error) {
+        return toFailure(error);
+      }
+    },
+
+    async writeCashierPresence(
+      presence: PosLocalActiveCashierPresenceRecord,
+    ): Promise<PosLocalStoreResult<PosLocalActiveCashierPresenceRecord>> {
+      try {
+        const value = await options.adapter.transaction(
+          "readwrite",
+          ["meta", "cashierPresence"],
+          async (transaction) => {
+            await ensureSupportedSchema(transaction, "readwrite");
+            const normalized = normalizeCashierPresenceRecord(presence);
+            await transaction.put(
+              "cashierPresence",
+              cashierPresenceKey(normalized),
+              normalized,
+            );
+            return normalized;
+          },
+        );
+
+        return { ok: true, value };
+      } catch (error) {
+        return toFailure(error);
+      }
+    },
+
+    async readCashierPresence(
+      input: PosLocalCashierPresenceScope & { now?: number },
+    ): Promise<PosLocalStoreResult<PosLocalActiveCashierPresenceRecord | null>> {
+      try {
+        const value = await options.adapter.transaction(
+          "readwrite",
+          ["meta", "cashierPresence"],
+          async (transaction) => {
+            await ensureSupportedSchema(transaction, "readwrite");
+            const key = cashierPresenceKey(input);
+            const record =
+              (await transaction.get<unknown>("cashierPresence", key)) ?? null;
+
+            if (
+              !isCashierPresenceRecord(record) ||
+              !matchesCashierPresenceScope(record, input)
+            ) {
+              return null;
+            }
+
+            if (isExpiredCashierPresence(record, input.now ?? clock())) {
+              await transaction.delete("cashierPresence", key);
+              return null;
+            }
+
+            return record;
+          },
+        );
+
+        return { ok: true, value };
+      } catch (error) {
+        return toFailure(error);
+      }
+    },
+
+    async clearCashierPresence(
+      input: PosLocalCashierPresenceScope,
+    ): Promise<PosLocalStoreResult<null>> {
+      try {
+        await options.adapter.transaction(
+          "readwrite",
+          ["meta", "cashierPresence"],
+          async (transaction) => {
+            await ensureSupportedSchema(transaction, "readwrite");
+            await transaction.delete(
+              "cashierPresence",
+              cashierPresenceKey(input),
+            );
+          },
+        );
+
+        return { ok: true, value: null };
+      } catch (error) {
+        return toFailure(error);
+      }
+    },
+
+    async invalidateCashierPresenceForTerminal(input: {
+      organizationId?: string;
+      storeId?: string;
+      terminalId: string;
+    }): Promise<PosLocalStoreResult<number>> {
+      try {
+        const value = await options.adapter.transaction(
+          "readwrite",
+          ["meta", "cashierPresence"],
+          async (transaction) => {
+            await ensureSupportedSchema(transaction, "readwrite");
+            const records =
+              await transaction.getAll<unknown>("cashierPresence");
+            let cleared = 0;
+            for (const record of records) {
+              if (
+                isCashierPresenceRecord(record) &&
+                record.terminalId === input.terminalId &&
+                (!input.storeId || record.storeId === input.storeId) &&
+                (!input.organizationId ||
+                  record.organizationId === input.organizationId)
+              ) {
+                await transaction.delete(
+                  "cashierPresence",
+                  cashierPresenceKey(record),
+                );
+                cleared += 1;
+              }
+            }
+            return cleared;
           },
         );
 
@@ -1299,6 +1456,15 @@ function readinessKey(storeId: string, operatingDate: string) {
   return `${storeId}:${operatingDate}`;
 }
 
+function cashierPresenceKey(input: PosLocalCashierPresenceScope) {
+  return [
+    input.organizationId,
+    input.storeId,
+    input.terminalId,
+    input.operatingDate,
+  ].join(":");
+}
+
 function uploadSequenceKey(localRegisterSessionId: string) {
   return `${META_UPLOAD_SEQUENCE_PREFIX}${localRegisterSessionId}`;
 }
@@ -1322,6 +1488,38 @@ function normalizeStaffAuthorityRecord(
     ...record,
     username: normalizeUsername(record.username),
   };
+}
+
+function normalizeCashierPresenceRecord(
+  record: PosLocalActiveCashierPresenceRecord,
+): PosLocalActiveCashierPresenceRecord {
+  return {
+    ...record,
+    username: normalizeUsername(record.username),
+  };
+}
+
+function matchesCashierPresenceScope(
+  record: PosLocalActiveCashierPresenceRecord,
+  scope: PosLocalCashierPresenceScope,
+) {
+  return (
+    record.operatingDate === scope.operatingDate &&
+    record.organizationId === scope.organizationId &&
+    record.storeId === scope.storeId &&
+    record.terminalId === scope.terminalId
+  );
+}
+
+function isExpiredCashierPresence(
+  record: PosLocalActiveCashierPresenceRecord,
+  now: number,
+) {
+  return (
+    record.expiresAt <= now ||
+    record.offlineFreshUntil <= now ||
+    record.wrappedPosLocalStaffProof.expiresAt <= now
+  );
 }
 
 function preserveWrappedStaffProof(
@@ -1465,6 +1663,58 @@ function isStaffAuthorityRecord(
   );
 }
 
+function isCashierPresenceRecord(
+  value: unknown,
+): value is PosLocalActiveCashierPresenceRecord {
+  if (!value || typeof value !== "object") return false;
+  const record = value as Record<string, unknown>;
+  const wrappedProof = record.wrappedPosLocalStaffProof as
+    | Record<string, unknown>
+    | undefined;
+
+  return (
+    Array.isArray(record.activeRoles) &&
+    record.activeRoles.some(
+      (role) => role === "cashier" || role === "manager",
+    ) &&
+    record.activeRoles.every(
+      (role) => role === "cashier" || role === "manager",
+    ) &&
+    typeof record.credentialId === "string" &&
+    typeof record.credentialVersion === "number" &&
+    Number.isSafeInteger(record.credentialVersion) &&
+    typeof record.expiresAt === "number" &&
+    typeof record.lastValidatedAt === "number" &&
+    typeof record.offlineFreshUntil === "number" &&
+    typeof record.operatingDate === "string" &&
+    typeof record.organizationId === "string" &&
+    typeof record.signedInAt === "number" &&
+    typeof record.staffProfileId === "string" &&
+    typeof record.storeId === "string" &&
+    typeof record.terminalId === "string" &&
+    typeof record.username === "string" &&
+    typeof wrappedProof?.ciphertext === "string" &&
+    typeof wrappedProof.expiresAt === "number" &&
+    typeof wrappedProof.iv === "string"
+  );
+}
+
+export function toSafePosLocalCashierPresenceDiagnostic(
+  presence: PosLocalActiveCashierPresenceRecord | null,
+): PosLocalCashierPresenceDiagnostic | null {
+  if (!presence) return null;
+  const { wrappedPosLocalStaffProof: proof, ...safePresence } =
+    normalizeCashierPresenceRecord(presence);
+
+  return {
+    ...safePresence,
+    proof: {
+      expiresAt: proof.expiresAt,
+      status: "present",
+    },
+  };
+}
+
 export function createIndexedDbPosLocalStorageAdapter(options?: {
   databaseName?: string;
 }): PosLocalStorageAdapter {
@@ -1484,6 +1734,7 @@ export function createIndexedDbPosLocalStorageAdapter(options?: {
           "mappings",
           "readiness",
           "staffAuthority",
+          "cashierPresence",
           "registerCatalog",
           "registerServiceCatalog",
           "registerAvailability",
@@ -1652,6 +1903,7 @@ function createEmptyMemoryStore(): MemoryStore {
     mappings: new Map(),
     readiness: new Map(),
     staffAuthority: new Map(),
+    cashierPresence: new Map(),
     registerCatalog: new Map(),
     registerServiceCatalog: new Map(),
     registerAvailability: new Map(),
@@ -1667,6 +1919,7 @@ function cloneMemoryStore(store: MemoryStore): MemoryStore {
     mappings: new Map(store.mappings),
     readiness: new Map(store.readiness),
     staffAuthority: new Map(store.staffAuthority),
+    cashierPresence: new Map(store.cashierPresence),
     registerCatalog: new Map(store.registerCatalog),
     registerServiceCatalog: new Map(store.registerServiceCatalog),
     registerAvailability: new Map(store.registerAvailability),

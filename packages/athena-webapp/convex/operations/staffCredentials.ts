@@ -17,6 +17,10 @@ import {
   POS_LOCAL_STAFF_PROOF_TTL_MS,
 } from "../pos/application/sync/staffProof";
 import {
+  validatePosLocalStaffProofWithCtx,
+  type PosLocalStaffProofValidationFailureReason,
+} from "../pos/application/sync/staffProofValidation";
+import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
 } from "../lib/athenaUserAuth";
@@ -139,6 +143,22 @@ function staffPreconditionFailedResult(
   return userError({
     code: "precondition_failed",
     message,
+  });
+}
+
+function restoredStaffProofInvalidResult(
+  reason:
+    | PosLocalStaffProofValidationFailureReason
+    | "staff_profile_not_found"
+    | "staff_profile_scope_mismatch"
+    | "staff_profile_inactive"
+    | "staff_profile_no_active_roles"
+    | "staff_profile_role_not_allowed",
+): StaffCredentialAuthenticationResult {
+  return userError({
+    code: "precondition_failed",
+    message: "Stored staff proof is no longer valid. Sign in again.",
+    metadata: { reason },
   });
 }
 
@@ -837,6 +857,83 @@ async function issuePosLocalStaffProofWithCtx(
   return { expiresAt, token };
 }
 
+export async function validateRestoredPosLocalStaffProofWithCtx(
+  ctx: Pick<MutationCtx, "db">,
+  args: {
+    allowedRoles?: OperationalRole[];
+    now?: number;
+    staffProfileId: Id<"staffProfile">;
+    storeId: Id<"store">;
+    terminalId: Id<"posTerminal">;
+    token: string;
+  },
+): Promise<StaffCredentialAuthenticationResult> {
+  const now = args.now ?? Date.now();
+  const validation = await validatePosLocalStaffProofWithCtx(ctx, {
+    now,
+    staffProfileId: args.staffProfileId,
+    storeId: args.storeId,
+    terminalId: args.terminalId,
+    token: args.token,
+    touchLastUsed: false,
+  });
+
+  if (validation.kind !== "ok") {
+    return restoredStaffProofInvalidResult(validation.reason);
+  }
+
+  const staffProfile = await ctx.db.get("staffProfile", args.staffProfileId);
+  if (!staffProfile) {
+    return restoredStaffProofInvalidResult("staff_profile_not_found");
+  }
+
+  if (
+    staffProfile.storeId !== args.storeId ||
+    staffProfile.organizationId !== validation.credential.organizationId
+  ) {
+    return restoredStaffProofInvalidResult("staff_profile_scope_mismatch");
+  }
+
+  if (staffProfile.status !== "active") {
+    return restoredStaffProofInvalidResult("staff_profile_inactive");
+  }
+
+  const activeRoles = await getActiveRolesForStaffProfile(ctx, {
+    organizationId: validation.credential.organizationId,
+    staffProfileId: args.staffProfileId,
+    storeId: args.storeId,
+  });
+  if (activeRoles.length === 0) {
+    return restoredStaffProofInvalidResult("staff_profile_no_active_roles");
+  }
+
+  const authorizedRoles =
+    args.allowedRoles && args.allowedRoles.length > 0
+      ? activeRoles.filter((role) => args.allowedRoles!.includes(role.role))
+      : activeRoles;
+  if (authorizedRoles.length === 0) {
+    return restoredStaffProofInvalidResult("staff_profile_role_not_allowed");
+  }
+
+  await ctx.db.patch("posLocalStaffProof", validation.proof._id, {
+    lastUsedAt: now,
+  });
+
+  return ok({
+    activeRoles: authorizedRoles.map((role) => role.role),
+    credentialId: validation.credential._id,
+    ...(validation.proof.credentialVersion !== undefined
+      ? { credentialVersion: validation.proof.credentialVersion }
+      : {}),
+    posLocalStaffProof: {
+      expiresAt: validation.proof.expiresAt,
+      token: args.token,
+    },
+    staffProfile,
+    staffProfileId: args.staffProfileId,
+  });
+}
+
 export async function authenticateStaffCredentialForApprovalWithCtx(
   ctx: Pick<MutationCtx, "db">,
   args: {
@@ -1060,6 +1157,27 @@ export const authenticateStaffCredentialForTerminal = mutation({
     }
 
     return authenticateStaffCredentialForTerminalWithCtx(ctx, args);
+  },
+});
+
+export const validateRestoredPosLocalStaffProof = mutation({
+  args: {
+    allowedRoles: v.optional(v.array(operationalRoleValidator)),
+    staffProfileId: v.id("staffProfile"),
+    storeId: v.id("store"),
+    terminalId: v.id("posTerminal"),
+    token: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const terminalAuthority = await requirePosTerminalAuthorityWithCtx(ctx, {
+      storeId: args.storeId,
+      terminalId: args.terminalId,
+    });
+    if (terminalAuthority.kind !== "ok") {
+      return terminalAuthority;
+    }
+
+    return validateRestoredPosLocalStaffProofWithCtx(ctx, args);
   },
 });
 
