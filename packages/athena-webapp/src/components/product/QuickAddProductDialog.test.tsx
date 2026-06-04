@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -129,6 +129,18 @@ describe("QuickAddProductDialog", () => {
       }),
     );
     expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it("does not dismiss quick add when tapping outside the dialog", async () => {
+    const onOpenChange = vi.fn();
+    renderQuickAddDialog({ onOpenChange });
+
+    fireEvent.pointerDown(document.body);
+
+    expect(
+      screen.getByRole("heading", { name: /quick add product/i }),
+    ).toBeInTheDocument();
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
   });
 
   it("fills the barcode field from the shared scanner trigger", async () => {

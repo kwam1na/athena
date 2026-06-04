@@ -1144,7 +1144,7 @@ describe("useRegisterViewModel", () => {
     expect(onRetrySync).toHaveBeenCalled();
   });
 
-  it("starts a new sale after cashier sign-in when the drawer is already open", async () => {
+  it("does not start a sale immediately after cashier sign-in when the drawer is already open", async () => {
     mockRegisterState = {
       phase: "readyToStart",
       terminal: { _id: "terminal-1", displayName: "Front Counter" },
@@ -1173,21 +1173,17 @@ describe("useRegisterViewModel", () => {
       );
     });
 
-    await waitFor(() =>
-      expect(mockAppendLocalEvent).toHaveBeenCalledWith(
-        expect.objectContaining({
-          type: "session.started",
-          localRegisterSessionId: "drawer-1",
-          staffProfileId: "staff-1",
-        }),
+    expect(
+      mockAppendLocalEvent.mock.calls.filter(
+        ([event]) => event.type === "session.started",
       ),
-    );
+    ).toHaveLength(0);
     expect(result.current.checkout.isTransactionCompleted).toBe(false);
     expect(result.current.productEntry.disabled).toBe(false);
     expect(toast.success).not.toHaveBeenCalledWith("Sale started");
   });
 
-  it("starts a new sale when cashier sign-in beats the local drawer bootstrap", async () => {
+  it("does not start a sale after cashier sign-in when local drawer bootstrap finishes", async () => {
     mockRegisterState = {
       phase: "readyToStart",
       terminal: { _id: "terminal-1", displayName: "Front Counter" },
@@ -1239,19 +1235,15 @@ describe("useRegisterViewModel", () => {
       await pendingLocalEvents.promise;
     });
 
-    await waitFor(() =>
-      expect(mockAppendLocalEvent).toHaveBeenCalledWith(
-        expect.objectContaining({
-          type: "session.started",
-          localRegisterSessionId: "drawer-1",
-          staffProfileId: "staff-1",
-        }),
+    expect(
+      mockAppendLocalEvent.mock.calls.filter(
+        ([event]) => event.type === "session.started",
       ),
-    );
+    ).toHaveLength(0);
     expect(result.current.productEntry.disabled).toBe(false);
   });
 
-  it("keeps cashier autostart pending until the local drawer is sellable", async () => {
+  it("does not keep a cashier sign-in start pending until the local drawer is sellable", async () => {
     mockRegisterState = {
       phase: "readyToStart",
       terminal: { _id: "terminal-1", displayName: "Front Counter" },
@@ -1293,18 +1285,10 @@ describe("useRegisterViewModel", () => {
       );
     });
 
-    await waitFor(() =>
-      expect(mockAppendLocalEvent).toHaveBeenCalledWith(
-        expect.objectContaining({
-          type: "register.opened",
-          localRegisterSessionId: "drawer-1",
-          staffProfileId: "staff-1",
-        }),
-      ),
-    );
     expect(
       mockAppendLocalEvent.mock.calls.filter(
-        ([event]) => event.type === "session.started",
+        ([event]) =>
+          event.type === "register.opened" || event.type === "session.started",
       ),
     ).toHaveLength(0);
 
@@ -1336,19 +1320,15 @@ describe("useRegisterViewModel", () => {
       runtimeInput?.onLocalEventsChanged?.();
     });
 
-    await waitFor(() =>
-      expect(mockAppendLocalEvent).toHaveBeenCalledWith(
-        expect.objectContaining({
-          type: "session.started",
-          localRegisterSessionId: "drawer-1",
-          staffProfileId: "staff-1",
-        }),
+    expect(
+      mockAppendLocalEvent.mock.calls.filter(
+        ([event]) => event.type === "session.started",
       ),
-    );
+    ).toHaveLength(0);
     expect(result.current.productEntry.disabled).toBe(false);
   });
 
-  it("starts a new sale when the active-session summary is stale but no sale is operable", async () => {
+  it("does not start a new sale after sign-in when the active-session summary is stale but no sale is operable", async () => {
     mockRegisterState = {
       phase: "readyToStart",
       terminal: { _id: "terminal-1", displayName: "Front Counter" },
@@ -1377,19 +1357,15 @@ describe("useRegisterViewModel", () => {
       );
     });
 
-    await waitFor(() =>
-      expect(mockAppendLocalEvent).toHaveBeenCalledWith(
-        expect.objectContaining({
-          type: "session.started",
-          localRegisterSessionId: "drawer-1",
-          staffProfileId: "staff-1",
-        }),
+    expect(
+      mockAppendLocalEvent.mock.calls.filter(
+        ([event]) => event.type === "session.started",
       ),
-    );
+    ).toHaveLength(0);
     expect(result.current.sessionPanel?.disableNewSession).toBe(false);
   });
 
-  it("does not start duplicate local sales when cashier sign-in completes twice", async () => {
+  it("does not start local sales when cashier sign-in completes twice", async () => {
     mockRegisterState = {
       phase: "readyToStart",
       terminal: { _id: "terminal-1", displayName: "Front Counter" },
@@ -1429,13 +1405,11 @@ describe("useRegisterViewModel", () => {
       result.current.authDialog?.onAuthenticated(buildStaffAuthenticationResult());
     });
 
-    await waitFor(() =>
-      expect(
-        mockAppendLocalEvent.mock.calls.filter(
-          ([event]) => event.type === "session.started",
-        ),
-      ).toHaveLength(1),
-    );
+    expect(
+      mockAppendLocalEvent.mock.calls.filter(
+        ([event]) => event.type === "session.started",
+      ),
+    ).toHaveLength(0);
 
     pendingStart.resolve({
       ok: true,
@@ -7141,7 +7115,7 @@ describe("useRegisterViewModel", () => {
         terminalId: "local-terminal-1",
       },
     });
-    expect(toast.success).toHaveBeenCalledWith("Terminal setup repaired");
+    expect(toast.success).not.toHaveBeenCalledWith("Terminal setup repaired");
   });
 
   it("routes lifecycle drawer authority blocks to the open-drawer gate", async () => {
@@ -10597,6 +10571,76 @@ describe("useRegisterViewModel", () => {
     await waitFor(() => expect(result.current.checkout.cartItems).toEqual([]));
     expect(result.current.checkout.total).toBe(0);
     expect(result.current.checkout.isTransactionCompleted).toBe(false);
+  });
+
+  it("does not keep retrying a new sale when terminal setup blocks post-completion start", async () => {
+    mockListLocalEvents.mockResolvedValue({
+      ok: true,
+      value: [
+        buildLocalEvent({
+          sequence: 1,
+          terminalId: "terminal-1",
+          type: "register.opened",
+          payload: {
+            expectedCash: 5_000,
+            localRegisterSessionId: "drawer-1",
+            openingFloat: 5_000,
+            status: "open",
+          },
+        }),
+      ],
+    });
+    mockCompleteTransaction.mockResolvedValueOnce(
+      userError({
+        code: "unavailable",
+        message: "Connection unavailable.",
+      }),
+    );
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        buildStaffAuthenticationResult(),
+      );
+    });
+
+    await act(async () => {
+      await result.current.checkout.onAddPayment("cash", 120);
+    });
+
+    await act(async () => {
+      await result.current.checkout.onCompleteTransaction();
+    });
+
+    mockAppendLocalEvent.mockClear();
+    vi.mocked(toast.error).mockClear();
+    mockReadTerminalIntegrityState.mockResolvedValue({
+      ok: true,
+      value: {
+        observedAt: 110,
+        reason: "authorization_failed",
+        status: "requires_reprovision",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      },
+    });
+
+    await act(async () => {
+      await result.current.checkout.onStartNewTransaction();
+    });
+
+    await waitFor(() =>
+      expect(result.current.drawerGate?.mode).toBe("terminalRepair"),
+    );
+    expect(mockAppendLocalEvent).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: "session.started" }),
+    );
+    expect(toast.error).toHaveBeenCalledTimes(1);
+    expect(toast.error).toHaveBeenCalledWith(
+      "Terminal setup needs repair before selling can continue.",
+    );
   });
 
   it("does not resurrect a cloud-backed sale after a reload replays local completion", async () => {

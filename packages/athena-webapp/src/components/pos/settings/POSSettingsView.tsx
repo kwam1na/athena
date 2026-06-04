@@ -23,8 +23,13 @@ import {
 import { usePermissions } from "@/hooks/usePermissions";
 import {
   buildPosOfflineReadinessSummary,
+  type PosOfflineReadinessInput,
   type PosOfflineReadinessSummary,
 } from "@/offline/posOfflineReadiness";
+import {
+  createIndexedDbPosLocalStorageAdapter,
+  createPosLocalStore,
+} from "@/lib/pos/infrastructure/local/posLocalStore";
 
 type HealthLinkProps = {
   children: ReactNode;
@@ -37,6 +42,7 @@ type HealthLinkProps = {
 };
 
 const HealthLink = Link as unknown as ComponentType<HealthLinkProps>;
+const POS_APP_SHELL_CACHE_PREFIX = "athena-pos-app-shell-";
 
 type FingerprintRegistrationCardProps = {
   displayName: string;
@@ -191,7 +197,7 @@ function FingerprintRegistrationCard({
             </div>
             <span className="inline-flex rounded-full border border-border bg-background px-layout-sm py-layout-2xs text-sm text-muted-foreground">
               {offlineReadiness.readyCount} of{" "}
-              {offlineReadiness.signals.length} ready
+              {offlineReadiness.signals.length} reporting
             </span>
           </div>
 
@@ -411,6 +417,193 @@ function POSRecoveryCodeAdminPanel({
   );
 }
 
+type PosSettingsLocalReadinessStore = ReturnType<typeof createPosLocalStore>;
+
+function createDefaultLocalReadinessStore() {
+  if (typeof indexedDB === "undefined") {
+    return null;
+  }
+
+  return createPosLocalStore({
+    adapter: createIndexedDbPosLocalStorageAdapter(),
+  });
+}
+
+async function readPosAppShellReadiness(input: {
+  orgUrlSlug?: string;
+  storeUrlSlug?: string;
+}): Promise<PosOfflineReadinessInput["appShell"]> {
+  if (typeof caches === "undefined") {
+    return { ready: false };
+  }
+
+  try {
+    const cacheNames = await caches.keys();
+    const shellCacheName = cacheNames.find((name) =>
+      name.startsWith(POS_APP_SHELL_CACHE_PREFIX),
+    );
+    if (!shellCacheName) {
+      return { ready: false };
+    }
+
+    const cache = await caches.open(shellCacheName);
+    const registerPath =
+      input.orgUrlSlug && input.storeUrlSlug
+        ? `/${input.orgUrlSlug}/store/${input.storeUrlSlug}/pos/register`
+        : null;
+    const cachedRegister =
+      registerPath && typeof window !== "undefined"
+        ? await cache.match(
+            new URL(registerPath, window.location.origin).toString(),
+            {
+              ignoreVary: true,
+            },
+          )
+        : null;
+    const cachedRoot = await cache.match("/", { ignoreVary: true });
+
+    return { ready: Boolean(cachedRegister || cachedRoot) };
+  } catch {
+    return { ready: false };
+  }
+}
+
+function signalFromSnapshot(
+  snapshot:
+    | { ok: true; value: { refreshedAt?: number } | null }
+    | { ok: false }
+    | null
+    | undefined,
+): PosOfflineReadinessInput["registerCatalog"] {
+  if (!snapshot?.ok) {
+    return { ready: false };
+  }
+  if (!snapshot.value) {
+    return { ready: false };
+  }
+
+  return {
+    ageMs:
+      typeof snapshot.value.refreshedAt === "number"
+        ? Date.now() - snapshot.value.refreshedAt
+        : undefined,
+    ready: true,
+  };
+}
+
+function usePosSettingsOfflineReadiness(input: {
+  existingTerminal: ProvisionedTerminalRecord | null;
+  storeFactory?: Parameters<typeof registerAndProvisionPosTerminal>[0]["storeFactory"];
+  storeId?: string;
+  orgUrlSlug?: string;
+  storeUrlSlug?: string;
+}) {
+  const [signals, setSignals] = useState<PosOfflineReadinessInput>({
+    appShell: null,
+    availabilitySnapshot: null,
+    registerCatalog: null,
+    serviceCatalog: null,
+    staffAuthority: null,
+    terminalSeed: null,
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadReadiness() {
+      const appShell = await readPosAppShellReadiness({
+        orgUrlSlug: input.orgUrlSlug,
+        storeUrlSlug: input.storeUrlSlug,
+      });
+
+      if (!input.storeId || !input.existingTerminal) {
+        if (!cancelled) {
+          setSignals({
+            appShell,
+            availabilitySnapshot: { ready: false },
+            registerCatalog: { ready: false },
+            serviceCatalog: { ready: false },
+            staffAuthority: { ready: false },
+            terminalSeed: { ready: false },
+          });
+        }
+        return;
+      }
+
+      const store =
+        (input.storeFactory?.() as PosSettingsLocalReadinessStore | undefined) ??
+        createDefaultLocalReadinessStore();
+      if (!store) {
+        if (!cancelled) {
+          setSignals({
+            appShell,
+            availabilitySnapshot: { ready: false },
+            registerCatalog: { ready: false },
+            serviceCatalog: { ready: false },
+            staffAuthority: { ready: false },
+            terminalSeed: { ready: false },
+          });
+        }
+        return;
+      }
+
+      const [
+        terminalSeed,
+        staffAuthority,
+        registerCatalog,
+        serviceCatalog,
+        availabilitySnapshot,
+      ] = await Promise.all([
+        store.readProvisionedTerminalSeed?.() ??
+          Promise.resolve({ ok: true as const, value: null }),
+        store.getStaffAuthorityReadiness?.({
+          storeId: input.storeId,
+          terminalId: input.existingTerminal._id,
+        }) ?? Promise.resolve({ ok: true as const, value: "missing" as const }),
+        store.readRegisterCatalogSnapshot?.({ storeId: input.storeId }) ??
+          Promise.resolve({ ok: true as const, value: null }),
+        store.readRegisterServiceCatalogSnapshot?.({ storeId: input.storeId }) ??
+          Promise.resolve({ ok: true as const, value: null }),
+        store.readRegisterAvailabilitySnapshot?.({ storeId: input.storeId }) ??
+          Promise.resolve({ ok: true as const, value: null }),
+      ]);
+
+      if (cancelled) return;
+
+      const localTerminalSeed = terminalSeed.ok ? terminalSeed.value : null;
+      setSignals({
+        appShell,
+        availabilitySnapshot: signalFromSnapshot(availabilitySnapshot),
+        registerCatalog: signalFromSnapshot(registerCatalog),
+        serviceCatalog: signalFromSnapshot(serviceCatalog),
+        staffAuthority: {
+          ready: staffAuthority.ok && staffAuthority.value === "ready",
+        },
+        terminalSeed: {
+          ready:
+            Boolean(localTerminalSeed) &&
+            localTerminalSeed?.storeId === input.storeId &&
+            localTerminalSeed?.cloudTerminalId === input.existingTerminal._id,
+        },
+      });
+    }
+
+    void loadReadiness();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    input.existingTerminal,
+    input.orgUrlSlug,
+    input.storeFactory,
+    input.storeId,
+    input.storeUrlSlug,
+  ]);
+
+  return signals;
+}
+
 export function POSSettingsView({
   storeFactory,
 }: {
@@ -569,21 +762,16 @@ export function POSSettingsView({
     registerNumber,
   ]);
 
+  const offlineReadinessSignals = usePosSettingsOfflineReadiness({
+    existingTerminal,
+    orgUrlSlug: routeParams?.orgUrlSlug,
+    storeFactory,
+    storeId: activeStore?._id,
+    storeUrlSlug: routeParams?.storeUrlSlug,
+  });
   const offlineReadiness = useMemo(
-    () =>
-      buildPosOfflineReadinessSummary({
-        appShell: null,
-        terminalSeed: existingTerminal
-          ? { ready: true }
-          : fingerprintError
-            ? { ready: false }
-            : { ready: false },
-        staffAuthority: null,
-        registerCatalog: null,
-        serviceCatalog: null,
-        availabilitySnapshot: null,
-      }),
-    [existingTerminal, fingerprintError],
+    () => buildPosOfflineReadinessSummary(offlineReadinessSignals),
+    [offlineReadinessSignals],
   );
 
   const handleRegisterTerminal = async () => {

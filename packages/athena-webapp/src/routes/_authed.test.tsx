@@ -22,6 +22,7 @@ const mocked = vi.hoisted(() => ({
   usePermissions: vi.fn(),
   usePosTerminalAppSessionRecovery: vi.fn(),
   readStoredPosAppAccountId: vi.fn(),
+  SidebarProvider: vi.fn(),
   useRouterState: vi.fn(),
 }));
 
@@ -76,7 +77,17 @@ vi.mock("../contexts/ManagerElevationContext", () => ({
 }));
 
 vi.mock("../components/ui/sidebar", () => ({
-  SidebarProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
+  SidebarProvider: ({
+    children,
+    ...props
+  }: {
+    children: ReactNode;
+    className?: string;
+    defaultOpen?: boolean;
+  }) => {
+    mocked.SidebarProvider(props);
+    return <div data-testid="sidebar-provider">{children}</div>;
+  },
   SidebarInset: ({ children }: { children: ReactNode }) => <>{children}</>,
   SidebarTrigger: () => null,
   useSidebar: () => ({ state: "expanded" }),
@@ -182,6 +193,7 @@ describe("Authed layout", () => {
     );
     mocked.readStoredPosAppAccountId.mockReset();
     mocked.readStoredPosAppAccountId.mockReturnValue("stored-app-user-1");
+    mocked.SidebarProvider.mockReset();
     mocked.useManagerElevation.mockReturnValue({
       activeElevation: null,
       endManagerElevation: mocked.endManagerElevation,
@@ -227,6 +239,18 @@ describe("Authed layout", () => {
     render(<Layout />);
 
     expect(screen.getByTestId("authed-outlet")).toBeInTheDocument();
+    expect(screen.getByTestId("authed-outlet").closest("main")).toHaveClass(
+      "h-[calc(100svh-4rem)]",
+      "p-0",
+      "overflow-hidden",
+    );
+    expect(screen.getByTestId("sidebar-provider")).toBeInTheDocument();
+    expect(mocked.SidebarProvider).toHaveBeenCalledWith(
+      expect.objectContaining({
+        className: "contents",
+        defaultOpen: false,
+      }),
+    );
     expect(screen.queryByTestId("app-sidebar")).not.toBeInTheDocument();
     expect(screen.queryByTestId("app-header")).not.toBeInTheDocument();
     expect(screen.queryByTestId("store-modal")).not.toBeInTheDocument();
@@ -894,6 +918,11 @@ describe("Authed layout", () => {
 
     expect(screen.queryByTestId("app-header")).not.toBeInTheDocument();
     expect(screen.getByTestId("app-sidebar")).toBeInTheDocument();
+    expect(screen.getByTestId("authed-outlet").closest("main")).toHaveClass(
+      "box-border",
+      "h-full",
+      "overflow-hidden",
+    );
   });
 
   it("starts fullscreen from the browser pathname on first register render", () => {

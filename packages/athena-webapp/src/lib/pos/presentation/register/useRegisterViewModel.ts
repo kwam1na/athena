@@ -1327,8 +1327,6 @@ export function useRegisterViewModel(): RegisterViewModel {
     useState<LocalAuthenticatedStaff>(null);
   const [cashierPresenceRestore, setCashierPresenceRestore] =
     useState<CashierPresenceRestoreState>({ status: "pending" });
-  const [autoStartRequestedStaffProfileId, setAutoStartRequestedStaffProfileId] =
-    useState<Id<"staffProfile"> | null>(null);
   const terminalRegisterNumber = terminal?.registerNumber
     ? trimOptional(terminal.registerNumber)
     : undefined;
@@ -2708,7 +2706,6 @@ export function useRegisterViewModel(): RegisterViewModel {
       setLocalRegisterReadModelVersion((current) => current + 1);
       setLocalSyncEventAppendToken((current) => current + 1);
       await refreshLocalRegisterReadModel();
-      toast.success("Terminal setup repaired");
     } catch (error) {
       logger.warn("[POS] Terminal setup auto repair failed", {
         error,
@@ -2795,7 +2792,6 @@ export function useRegisterViewModel(): RegisterViewModel {
       }
 
       if (!options?.keepCashier) {
-        setAutoStartRequestedStaffProfileId(null);
         setStaffProfileId(null);
         setStaffProofToken(null);
         setLocalAuthenticatedStaff(null);
@@ -3616,14 +3612,14 @@ export function useRegisterViewModel(): RegisterViewModel {
       });
 
       if (result.kind !== "ok") {
-        presentOperatorError("Unable to start this sale. Try again.");
+        await refreshLocalRegisterReadModel();
+        presentOperatorError(result.error.message);
         return;
       }
 
       const localPosSessionId = result.data.localPosSessionId;
       keepSessionStartGuard = true;
       noteLocalRegisterEventChanged();
-      setAutoStartRequestedStaffProfileId(null);
       resetDraftState({
         keepCashier: true,
       });
@@ -3658,6 +3654,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     locallyOperableRegisterSession?.localRegisterSessionId,
     noteLocalRegisterEventChanged,
     projectedLocalActiveSale,
+    refreshLocalRegisterReadModel,
     registerNumber,
     resetDraftState,
     serviceLineDrafts.length,
@@ -3726,7 +3723,6 @@ export function useRegisterViewModel(): RegisterViewModel {
 
     const localRegisterSessionId = result.data.localRegisterSessionId;
     noteLocalRegisterEventChanged();
-    setAutoStartRequestedStaffProfileId(null);
     setLocalOperableRegisterSession({
       expectedCash: parsedOpeningFloat,
       localRegisterSessionId,
@@ -3927,7 +3923,6 @@ export function useRegisterViewModel(): RegisterViewModel {
     noteLocalRegisterEventChanged();
     setCloseoutCountedCash("");
     setCloseoutNotes("");
-    setAutoStartRequestedStaffProfileId(null);
     setLocalOperableRegisterSession({
       expectedCash: closeoutBlockedRegisterSession.expectedCash,
       localRegisterSessionId: registerSessionId,
@@ -5025,7 +5020,6 @@ export function useRegisterViewModel(): RegisterViewModel {
         setStaffProfileId(authenticatedStaffProfileId);
         setStaffProofToken(null);
         setLocalAuthenticatedStaff(null);
-        setAutoStartRequestedStaffProfileId(null);
       } else {
         authenticatedStaffProfileId = result.staffProfileId;
         const authenticatedStaffProofToken = readStaffProofFromAuthResult(result);
@@ -5037,7 +5031,6 @@ export function useRegisterViewModel(): RegisterViewModel {
           activeRoles: result.activeRoles ?? [],
           displayName: getStaffDisplayNameFromAuthResult(result),
         });
-        setAutoStartRequestedStaffProfileId(authenticatedStaffProfileId);
 
         const localAuthority = result.localStaffAuthority;
         if (
@@ -5102,37 +5095,6 @@ export function useRegisterViewModel(): RegisterViewModel {
       terminal?._id,
     ],
   );
-
-  useEffect(() => {
-    const autoStartStaffProfileId = autoStartRequestedStaffProfileId;
-    if (
-      !autoStartStaffProfileId ||
-      !activeStoreId ||
-      !terminal?._id ||
-      !localEventRegisterSessionId ||
-      projectedLocalActiveSale ||
-      operableActiveSession ||
-      activeSessionConflict ||
-      isTransactionCompleted
-    ) {
-      return;
-    }
-
-    void handleStartNewSession({
-      staffProfileId: autoStartStaffProfileId,
-    });
-  }, [
-    activeSessionConflict,
-    activeStoreId,
-    autoStartRequestedStaffProfileId,
-    handleStartNewSession,
-    isTransactionCompleted,
-    localRegisterReadModel?.syncStatus.lastLocalSequence,
-    localEventRegisterSessionId,
-    operableActiveSession,
-    projectedLocalActiveSale,
-    terminal?._id,
-  ]);
 
   const handleNavigateBack = useCallback(async () => {
     if (

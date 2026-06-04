@@ -158,6 +158,7 @@ interface OrderSummaryProps {
 }
 
 const attemptedAutoPrintReceiptKeys = new Set<string>();
+const AUTO_PRINT_COMPLETED_SALE_RECEIPTS = false;
 
 export function clearAttemptedOrderSummaryAutoPrintReceiptKeysForTest() {
   attemptedAutoPrintReceiptKeys.clear();
@@ -679,6 +680,7 @@ export function OrderSummary({
 
   useEffect(() => {
     if (
+      !AUTO_PRINT_COMPLETED_SALE_RECEIPTS ||
       readOnly ||
       !isTransactionCompleted ||
       !completedTransactionData ||

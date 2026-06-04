@@ -101,7 +101,7 @@ describe("POS terminal public mutations", () => {
     });
   });
 
-  it("derives terminal ownership from the signed-in user and verifies store membership", async () => {
+  it("derives terminal ownership from the signed-in user and allows POS store membership", async () => {
     const ctx = buildCtx();
 
     await getHandler(registerTerminal)(ctx as never, {
@@ -116,7 +116,7 @@ describe("POS terminal public mutations", () => {
     expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
       ctx,
       expect.objectContaining({
-        allowedRoles: ["full_admin"],
+        allowedRoles: ["full_admin", "pos_only"],
         organizationId: "org-1",
         userId: "athena-user-1",
       }),

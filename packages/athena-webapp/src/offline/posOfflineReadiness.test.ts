@@ -14,6 +14,7 @@ describe("buildPosOfflineReadinessSummary", () => {
     });
 
     expect(summary.status).toBe("ready");
+    expect(summary.title).toBe("Register ready for offline checkout");
     expect(summary.readyCount).toBe(6);
     expect(summary.signals.map((signal) => signal.domain)).toEqual([
       "app_shell",
@@ -23,7 +24,7 @@ describe("buildPosOfflineReadinessSummary", () => {
       "service_catalog",
       "availability_snapshot",
     ]);
-    expect(summary.description).toContain("diagnostic view");
+    expect(summary.description).toContain("needed for offline POS");
   });
 
   it("reports stale snapshots as diagnostic attention without authorizing sales", () => {
@@ -38,7 +39,7 @@ describe("buildPosOfflineReadinessSummary", () => {
 
     expect(summary.status).toBe("needs_attention");
     expect(summary.description).toBe(
-      "One or more offline readiness signals need attention. This view is diagnostic only.",
+      "One or more offline diagnostic signals need attention. This view is diagnostic only.",
     );
     expect(
       summary.signals.find(
@@ -58,6 +59,7 @@ describe("buildPosOfflineReadinessSummary", () => {
     expect(summary.status).toBe("unknown");
     expect(summary.readyCount).toBe(1);
     expect(summary.signals[0]).toMatchObject({
+      description: "App shell status has not reported to this page yet.",
       domain: "app_shell",
       status: "unknown",
     });

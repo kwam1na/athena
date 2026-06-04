@@ -251,8 +251,8 @@ export type PosLocalObjectStoreName =
   | "events"
   | "mappings"
   | "readiness"
-  | "staffAuthority"
   | "cashierPresence"
+  | "staffAuthority"
   | "registerCatalog"
   | "registerServiceCatalog"
   | "registerAvailability";
@@ -937,6 +937,50 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
       }
     },
 
+    async upsertStaffAuthorityRecord(input: {
+      record: PosLocalStaffAuthorityRecord;
+      storeId: string;
+      terminalId: string;
+    }): Promise<PosLocalStoreResult<PosLocalStaffAuthorityRecord>> {
+      try {
+        const value = await options.adapter.transaction(
+          "readwrite",
+          ["meta", "staffAuthority"],
+          async (transaction) => {
+            await ensureSupportedSchema(transaction, "readwrite");
+            if (
+              input.record.storeId !== input.storeId ||
+              input.record.terminalId !== input.terminalId
+            ) {
+              return normalizeStaffAuthorityRecord(input.record);
+            }
+
+            const existing =
+              (await transaction.get<unknown>(
+                "staffAuthority",
+                staffAuthorityKey(input.record),
+              )) ?? null;
+            const existingByKey = isStaffAuthorityRecord(existing)
+              ? new Map([[staffAuthorityKey(existing), existing]])
+              : new Map<string, PosLocalStaffAuthorityRecord>();
+            const record = normalizeStaffAuthorityRecord(
+              preserveWrappedStaffProof(input.record, existingByKey),
+            );
+            await transaction.put(
+              "staffAuthority",
+              staffAuthorityKey(record),
+              record,
+            );
+            return record;
+          },
+        );
+
+        return { ok: true, value };
+      } catch (error) {
+        return toFailure(error);
+      }
+    },
+
     async readStaffAuthorityForUsername(input: {
       now?: number;
       storeId: string;
@@ -963,7 +1007,7 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
               record.storeId !== input.storeId ||
               record.terminalId !== input.terminalId ||
               record.status !== "active" ||
-              record.expiresAt <= (input.now ?? clock())
+              record.expiresAt < (input.now ?? clock())
             ) {
               return null;
             }
@@ -1002,10 +1046,9 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
               return "missing" as const;
             }
 
-            return scopedRecords.some(
-              (record) =>
-                record.status === "active" &&
-                record.expiresAt > (input.now ?? clock()),
+            const now = input.now ?? clock();
+            return scopedRecords.some((record) =>
+              isOfflineStaffAuthorityReady(record, now),
             )
               ? ("ready" as const)
               : ("expired" as const);
@@ -1456,15 +1499,6 @@ function readinessKey(storeId: string, operatingDate: string) {
   return `${storeId}:${operatingDate}`;
 }
 
-function cashierPresenceKey(input: PosLocalCashierPresenceScope) {
-  return [
-    input.organizationId,
-    input.storeId,
-    input.terminalId,
-    input.operatingDate,
-  ].join(":");
-}
-
 function uploadSequenceKey(localRegisterSessionId: string) {
   return `${META_UPLOAD_SEQUENCE_PREFIX}${localRegisterSessionId}`;
 }
@@ -1481,6 +1515,10 @@ function staffAuthorityKey(input: {
   return `${input.storeId}:${input.terminalId}:${normalizeUsername(input.username)}`;
 }
 
+function cashierPresenceKey(input: PosLocalCashierPresenceScope) {
+  return `${input.organizationId}:${input.storeId}:${input.terminalId}:${input.operatingDate}`;
+}
+
 function normalizeStaffAuthorityRecord(
   record: PosLocalStaffAuthorityRecord,
 ): PosLocalStaffAuthorityRecord {
@@ -1495,6 +1533,10 @@ function normalizeCashierPresenceRecord(
 ): PosLocalActiveCashierPresenceRecord {
   return {
     ...record,
+    activeRoles: Array.from(new Set(record.activeRoles)).filter(
+      (role): role is "cashier" | "manager" =>
+        role === "cashier" || role === "manager",
+    ),
     username: normalizeUsername(record.username),
   };
 }
@@ -1543,6 +1585,18 @@ function preserveWrappedStaffProof(
     ...record,
     wrappedPosLocalStaffProof: existing.wrappedPosLocalStaffProof,
   };
+}
+
+function isOfflineStaffAuthorityReady(
+  record: PosLocalStaffAuthorityRecord,
+  now: number,
+) {
+  return (
+    record.status === "active" &&
+    record.expiresAt > now &&
+    Boolean(record.wrappedPosLocalStaffProof) &&
+    (record.wrappedPosLocalStaffProof?.expiresAt ?? 0) > now
+  );
 }
 
 function normalizeTerminalIntegrityState(
@@ -1714,7 +1768,6 @@ export function toSafePosLocalCashierPresenceDiagnostic(
     },
   };
 }
-
 export function createIndexedDbPosLocalStorageAdapter(options?: {
   databaseName?: string;
 }): PosLocalStorageAdapter {
@@ -1733,6 +1786,7 @@ export function createIndexedDbPosLocalStorageAdapter(options?: {
           "events",
           "mappings",
           "readiness",
+          "cashierPresence",
           "staffAuthority",
           "cashierPresence",
           "registerCatalog",
@@ -1902,8 +1956,8 @@ function createEmptyMemoryStore(): MemoryStore {
     events: new Map(),
     mappings: new Map(),
     readiness: new Map(),
-    staffAuthority: new Map(),
     cashierPresence: new Map(),
+    staffAuthority: new Map(),
     registerCatalog: new Map(),
     registerServiceCatalog: new Map(),
     registerAvailability: new Map(),
@@ -1918,8 +1972,8 @@ function cloneMemoryStore(store: MemoryStore): MemoryStore {
     events: new Map(store.events),
     mappings: new Map(store.mappings),
     readiness: new Map(store.readiness),
-    staffAuthority: new Map(store.staffAuthority),
     cashierPresence: new Map(store.cashierPresence),
+    staffAuthority: new Map(store.staffAuthority),
     registerCatalog: new Map(store.registerCatalog),
     registerServiceCatalog: new Map(store.registerServiceCatalog),
     registerAvailability: new Map(store.registerAvailability),

@@ -32,8 +32,12 @@ vi.mock("@/lib/pos/presentation/register/useRegisterViewModel", () => ({
 }));
 
 vi.mock("@/components/ui/sidebar", () => ({
+  SidebarProvider: ({ children }: { children: ReactNode }) => (
+    <div data-testid="sidebar-provider">{children}</div>
+  ),
   useSidebar: () => ({
     isMobile: false,
+    open: true,
     setOpen: vi.fn(),
   }),
 }));
@@ -86,7 +90,13 @@ vi.mock("@/components/View", () => ({
 }));
 
 vi.mock("@/components/common/FadeIn", () => ({
-  FadeIn: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  FadeIn: ({
+    children,
+    className,
+  }: {
+    children: ReactNode;
+    className?: string;
+  }) => <div className={className}>{children}</div>,
 }));
 
 vi.mock("@/components/common/PageHeader", () => ({
@@ -388,6 +398,9 @@ describe("POSRegisterView", () => {
     expect(screen.getByText("cart-items")).toBeInTheDocument();
     expect(screen.getByText("register-checkout-panel")).toBeInTheDocument();
     expect(screen.getByText("hide-active-summary-cards")).toBeInTheDocument();
+    expect(
+      screen.getByTestId("register-main-workspace").closest(".box-border"),
+    ).toBeInTheDocument();
     expect(screen.queryByText("cashier-auth-dialog")).not.toBeInTheDocument();
   });
 
@@ -1092,9 +1105,7 @@ describe("POSRegisterView", () => {
     const { POSRegisterView } = await import("./POSRegisterView");
     render(<POSRegisterView />);
 
-    await userEvent.click(
-      screen.getByRole("button", { name: /Ready for product lookup/i }),
-    );
+    await userEvent.click(screen.getByTestId("product-lookup-empty-state"));
 
     expect(setShowProductLookup).toHaveBeenCalledWith(true);
     expect(screen.getByLabelText("product search input")).toHaveFocus();
@@ -1154,9 +1165,7 @@ describe("POSRegisterView", () => {
     const { POSRegisterView } = await import("./POSRegisterView");
     const { rerender } = render(<POSRegisterView />);
 
-    await userEvent.click(
-      screen.getByRole("button", { name: /Ready for product lookup/i }),
-    );
+    await userEvent.click(screen.getByTestId("product-lookup-empty-state"));
     expect(onStartNewSession).toHaveBeenCalledTimes(1);
 
     rerender(<POSRegisterView />);

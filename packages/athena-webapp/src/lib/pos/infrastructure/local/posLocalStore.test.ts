@@ -1302,7 +1302,17 @@ describe("posLocalStore", () => {
       clock: () => 6_000,
     });
 
-    await store.writeCashierPresence(buildCashierPresenceRecord());
+    await store.writeCashierPresence(
+      buildCashierPresenceRecord({
+        expiresAt: 10_000,
+        offlineFreshUntil: 5_000,
+        wrappedPosLocalStaffProof: {
+          ciphertext: "wrapped-proof-token",
+          expiresAt: 10_000,
+          iv: "proof-iv",
+        },
+      }),
+    );
 
     await expect(
       store.readCashierPresence({
@@ -1490,6 +1500,103 @@ describe("posLocalStore", () => {
         value: originalIndexedDb,
       });
     }
+  });
+
+  it("requires an unexpired wrapped proof before staff authority is offline ready", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+      clock: () => 1_500,
+    });
+
+    await store.replaceStaffAuthoritySnapshot({
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      records: [
+        buildAuthorityRecord({
+          expiresAt: 3_000,
+          wrappedPosLocalStaffProof: undefined,
+        }),
+      ],
+    });
+
+    await expect(
+      store.getStaffAuthorityReadiness({
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      }),
+    ).resolves.toEqual({ ok: true, value: "expired" });
+
+    await store.upsertStaffAuthorityRecord({
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      record: buildAuthorityRecord({
+        expiresAt: 3_000,
+        wrappedPosLocalStaffProof: {
+          ciphertext: "wrapped-proof-token",
+          expiresAt: 3_000,
+          iv: "proof-iv",
+        },
+      }),
+    });
+
+    await expect(
+      store.getStaffAuthorityReadiness({
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      }),
+    ).resolves.toEqual({ ok: true, value: "ready" });
+  });
+
+  it("upserts one staff authority record without clearing the terminal snapshot", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+      clock: () => 1_500,
+    });
+
+    await store.replaceStaffAuthoritySnapshot({
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      records: [
+        buildAuthorityRecord({ username: "frontdesk" }),
+        buildAuthorityRecord({
+          credentialId: "credential-2",
+          staffProfileId: "staff-2",
+          username: "manager",
+        }),
+      ],
+    });
+
+    await expect(
+      store.upsertStaffAuthorityRecord({
+        storeId: "store-1",
+        terminalId: "terminal-1",
+        record: buildAuthorityRecord({
+          displayName: "Ama Updated",
+          expiresAt: 4_000,
+          username: "frontdesk",
+        }),
+      }),
+    ).resolves.toEqual({
+      ok: true,
+      value: expect.objectContaining({
+        displayName: "Ama Updated",
+        username: "frontdesk",
+      }),
+    });
+
+    await expect(
+      store.readStaffAuthorityForUsername({
+        storeId: "store-1",
+        terminalId: "terminal-1",
+        username: "manager",
+      }),
+    ).resolves.toEqual({
+      ok: true,
+      value: expect.objectContaining({
+        credentialId: "credential-2",
+        username: "manager",
+      }),
+    });
   });
 
   it("reads local-to-cloud mappings for later events on the same local entity", async () => {

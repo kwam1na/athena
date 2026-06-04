@@ -495,7 +495,7 @@ export const registerTerminal = mutation({
     try {
       const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
       await requireTerminalStoreAccess(ctx, {
-        allowedRoles: ["full_admin"],
+        allowedRoles: ["full_admin", "pos_only"],
         failureMessage: "You do not have access to register this POS terminal.",
         storeId: args.storeId,
         userId: athenaUser._id,

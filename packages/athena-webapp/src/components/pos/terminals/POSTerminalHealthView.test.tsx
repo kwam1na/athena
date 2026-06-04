@@ -255,7 +255,7 @@ describe("POSTerminalHealthViewContent", () => {
     expect(
       screen.getAllByText("Register session evidence is shown in cash controls").length,
     ).toBeGreaterThan(0);
-    expect(screen.getAllByText("Offline diagnostics incomplete").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Offline diagnostics need attention").length).toBeGreaterThan(0);
     expect(
       screen.getAllByText(
         "Service catalog data is available locally. Last refreshed 3 minutes ago.",
@@ -263,7 +263,7 @@ describe("POSTerminalHealthViewContent", () => {
     ).toBeGreaterThan(0);
     expect(
       screen.getAllByText(
-        "App shell readiness has not reported from this checkout station.",
+        "App shell status has not reported to this page yet.",
       ).length,
     ).toBeGreaterThan(0);
     expect(screen.getByRole("link", { name: /Front counter/i })).toHaveAttribute(

@@ -58,15 +58,15 @@ export default function View({
     <section
       className={cn(
         width === "full"
-          ? "w-full max-w-none px-4 sm:px-6 lg:px-8"
+          ? "box-border w-full max-w-none px-4 sm:px-6 lg:px-8"
           : "container mx-auto",
-        fullHeight && "h-full max-h-full min-h-0",
+        fullHeight && "box-border h-full max-h-full min-h-0",
         className,
       )}
     >
       <div
         className={cn(
-          "min-h-0 flex flex-col rounded-lg",
+          "box-border min-h-0 flex flex-col rounded-lg",
           fullHeight && scrollMode === "content" && "h-full overflow-hidden",
           fullHeight &&
             scrollMode === "page" &&

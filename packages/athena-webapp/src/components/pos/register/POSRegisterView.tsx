@@ -10,7 +10,7 @@ import {
   ProductSearchInput,
 } from "@/components/pos/ProductEntry";
 import type { Product } from "@/components/pos/types";
-import { useSidebar } from "@/components/ui/sidebar";
+import { SidebarProvider, useSidebar } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import View from "@/components/View";
 import {
@@ -32,7 +32,15 @@ import {
   Users,
 } from "lucide-react";
 import { Link } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import {
   type RegisterServiceSearchResult,
@@ -94,15 +102,49 @@ function ProductLookupEmptyState({
   workflowMode: RegisterWorkflowMode;
 }) {
   const isExpenseWorkflow = workflowMode === "expense";
+  const isInteractive = Boolean(onActivate);
+  const handleActivate = useCallback(() => {
+    void onActivate?.();
+  }, [onActivate]);
+  const handleKeyDown = useCallback(
+    (event: ReactKeyboardEvent<HTMLDivElement>) => {
+      if (!onActivate || (event.key !== "Enter" && event.key !== " ")) {
+        return;
+      }
+
+      event.preventDefault();
+      void onActivate();
+    },
+    [onActivate],
+  );
+  const handleQuickAddClick = useCallback(
+    (event: MouseEvent<HTMLButtonElement>) => {
+      event.stopPropagation();
+      onQuickAddProduct?.();
+    },
+    [onQuickAddProduct],
+  );
 
   return (
-    <div className="flex h-full min-h-0 w-full flex-col items-center justify-center rounded-lg border border-border bg-surface-raised p-8 text-center transition hover:border-ring hover:bg-muted/30">
-      <button
-        type="button"
-        onClick={onActivate}
-        className="flex flex-col items-center text-center focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4 disabled:cursor-default"
-        disabled={!onActivate}
-      >
+    <div
+      aria-label={
+        isExpenseWorkflow
+          ? "Ready for expense entry"
+          : "Ready for product lookup"
+      }
+      className={cn(
+        "flex h-full min-h-0 w-full flex-col items-center justify-center rounded-lg border border-border bg-surface-raised p-8 text-center transition focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4",
+        isInteractive
+          ? "cursor-pointer hover:border-ring hover:bg-muted/30"
+          : "cursor-default",
+      )}
+      data-testid="product-lookup-empty-state"
+      role={isInteractive ? "button" : undefined}
+      tabIndex={isInteractive ? 0 : undefined}
+      onClick={isInteractive ? handleActivate : undefined}
+      onKeyDown={isInteractive ? handleKeyDown : undefined}
+    >
+      <div className="flex flex-col items-center text-center">
         <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-surface text-muted-foreground shadow-surface">
           <Search className="h-7 w-7" />
         </div>
@@ -118,7 +160,7 @@ function ProductLookupEmptyState({
               : "Scan a barcode or search products to add items to this sale"}
           </p>
         </div>
-      </button>
+      </div>
       <div className="mt-5 flex flex-wrap items-center justify-center gap-2 text-xs text-muted-foreground">
         <span className="inline-flex items-center gap-1 rounded-full border border-border bg-surface px-3 py-1">
           <ScanBarcode className="h-3.5 w-3.5" />
@@ -137,7 +179,7 @@ function ProductLookupEmptyState({
             variant="outline"
             size="sm"
             className="h-7 gap-1.5 rounded-full bg-surface px-3 text-xs"
-            onClick={onQuickAddProduct}
+            onClick={handleQuickAddClick}
           >
             <PackagePlus className="h-3.5 w-3.5" />
             Quick add product
@@ -983,7 +1025,15 @@ interface POSRegisterViewProps {
   viewModel?: RegisterViewModel;
 }
 
-export function POSRegisterView({
+export function POSRegisterView(props: POSRegisterViewProps) {
+  return (
+    <SidebarProvider className="contents" defaultOpen={false}>
+      <POSRegisterViewContent {...props} />
+    </SidebarProvider>
+  );
+}
+
+function POSRegisterViewContent({
   workflowMode,
   viewModel: injectedViewModel,
 }: POSRegisterViewProps) {
@@ -1009,7 +1059,7 @@ export function POSRegisterView({
   const isSessionActive = viewModel.header.isSessionActive;
   const registerViewWidth = "full";
   const registerContentClassName = cn(
-    "w-full px-6 py-5",
+    "box-border w-full px-6 py-5",
     "h-full min-h-0",
     "overflow-hidden",
   );
