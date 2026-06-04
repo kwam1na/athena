@@ -324,8 +324,8 @@ function stripRuntimeStatusInput(
       : undefined,
     snapshots: {
       catalogAgeMs: status.snapshots.catalogAgeMs,
-      availabilityAgeMs: status.snapshots.availabilityAgeMs,
       serviceCatalogAgeMs: status.snapshots.serviceCatalogAgeMs,
+      availabilityAgeMs: status.snapshots.availabilityAgeMs,
       registerReadModelAgeMs: status.snapshots.registerReadModelAgeMs,
     },
   };

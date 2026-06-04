@@ -21,7 +21,9 @@
     "email:dev": "email dev --dir convex/emails",
     "storybook": "storybook dev -p 6006 --config-dir ../../.storybook-athena",
     "storybook:build": "storybook build --config-dir ../../.storybook-athena",
-    "build-storybook": "bun run storybook:build"
+    "build-storybook": "bun run storybook:build",
+    "test:e2e": "playwright test --config playwright.config.ts",
+    "test:e2e:headed": "playwright test --config playwright.config.ts --headed"
   },
   "devDependencies": {
     "@convex-dev/eslint-plugin": "^1.2.2",
@@ -29,6 +31,7 @@
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^14.6.1",
     "@types/bun": "latest",
+    "@playwright/test": "^1.58.2",
     "@types/react": "^18.3.11",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.2",

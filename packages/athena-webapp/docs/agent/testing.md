@@ -8,6 +8,8 @@ Use the repo-root harness commands together:
 - `bun run harness:inferential-review` is the blocking inferential pass. It emits human-readable remediation plus a machine-readable inferential review artifact in the repo-level artifacts directory.
 - `bun run harness:behavior --scenario <name>` runs shared runtime behavior scenarios that boot app processes, wait for readiness, drive browser interactions, assert runtime signals, and clean up automatically.
 - `bun run harness:behavior --scenario <name> --record-video` captures browser-flow evidence for handoff under `artifacts/harness-behavior/videos/<scenario>/<run-stamp>/`.
+- `bun run --filter '@athena/webapp' test:e2e` builds the Athena webapp, serves the production build with Vite preview, and runs package-local Playwright specs.
+- `bun run --filter '@athena/webapp' test:e2e -- <spec>` limits that Playwright run to a specific spec such as `src/tests/pos/offlineRouteAccess.spec.ts`.
 
 Behavior runs emit `[harness:behavior:report]` JSON with per-phase latency and runtime-signal diagnostics. Thresholds are configured per scenario through `runtimeSignals[].minMatches` / `runtimeSignals[].maxMatches` and `thresholds.latency` in [scripts/harness-behavior-scenarios.ts](../../../../scripts/harness-behavior-scenarios.ts).
 

@@ -867,6 +867,53 @@ describe("HARNESS_APP_REGISTRY", () => {
     ]);
   });
 
+  it("documents POS offline route access validation coverage in Athena harness docs", () => {
+    const athena = HARNESS_APP_REGISTRY.find(
+      (entry) => entry.appName === "athena-webapp",
+    );
+    const offlineRouteScenario = athena?.validationScenarios.find(
+      (scenario) =>
+        scenario.title === "POS offline route access and app-shell edits",
+    );
+
+    expect(offlineRouteScenario?.touchedPaths).toEqual([
+      "public/pos-app-shell-sw.js",
+      "playwright.config.ts",
+      "src/main.tsx",
+      "src/offline",
+      "src/routes/_authed.tsx",
+      "src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos",
+      "src/components/pos/PointOfSaleView.tsx",
+      "src/components/pos/register",
+      "src/components/pos/settings/POSSettingsView.tsx",
+      "src/components/pos/terminals/POSTerminalHealthView.tsx",
+      "src/lib/pos/infrastructure/local",
+      "src/lib/pos/presentation/register",
+      "src/tests/pos/offlineRouteAccess.spec.ts",
+    ]);
+    expect(offlineRouteScenario?.commands).toEqual([
+      {
+        kind: "raw",
+        command:
+          "bun run --filter '@athena/webapp' test -- src/offline/posAppShellRoutes.test.ts src/offline/registerPosAppShellServiceWorker.test.ts src/offline/posOfflineReadiness.test.ts src/routes/_authed.test.tsx src/components/pos/PointOfSaleView.test.tsx src/components/pos/settings/POSSettingsView.test.tsx src/components/pos/terminals/POSTerminalHealthView.test.tsx src/components/pos/register/POSRegisterOpeningGuard.test.tsx src/lib/pos/presentation/register/useRegisterViewModel.test.ts",
+      },
+      {
+        kind: "raw",
+        command:
+          "bun run --filter '@athena/webapp' test:e2e -- src/tests/pos/offlineRouteAccess.spec.ts",
+      },
+      {
+        kind: "raw",
+        command: "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json",
+      },
+      { kind: "script", script: "build" },
+    ]);
+    expect(offlineRouteScenario?.behaviorScenarios).toBeUndefined();
+    expect(offlineRouteScenario?.note).toBe(
+      "Use this when POS service-worker app-shell caching, POS-only offline route entry, offline readiness diagnostics, or hard-reload register continuity changes. Cache Storage must stay limited to static shell assets; POS business state, staff authority, cart events, payments, and catalog snapshots remain in IndexedDB/local POS stores.",
+    );
+  });
+
   it("documents POS terminal health visibility validation coverage in Athena harness docs", () => {
     const athena = HARNESS_APP_REGISTRY.find(
       (entry) => entry.appName === "athena-webapp"

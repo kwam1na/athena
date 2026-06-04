@@ -19,6 +19,10 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
 import {
+  buildPosOfflineReadinessSummary,
+  type PosOfflineReadinessSummary,
+} from "@/offline/posOfflineReadiness";
+import {
   classifyTerminalHealth,
   formatRegisterNumber,
   formatTerminalTimestamp,
@@ -64,6 +68,80 @@ function CountMetric({
       </p>
     </div>
   );
+}
+
+function OfflineReadinessDiagnostic({
+  readiness,
+}: {
+  readiness: PosOfflineReadinessSummary;
+}) {
+  return (
+    <div className="mt-layout-md border-t border-border pt-layout-md">
+      <div className="flex flex-wrap items-start justify-between gap-layout-sm">
+        <div>
+          <p className="text-sm font-medium text-foreground">
+            {readiness.title}
+          </p>
+          <p className="mt-layout-2xs text-sm text-muted-foreground">
+            {readiness.description}
+          </p>
+        </div>
+        <span className="inline-flex rounded-full border border-border bg-background px-layout-sm py-layout-2xs text-sm text-muted-foreground">
+          {readiness.readyCount} of {readiness.signals.length} ready
+        </span>
+      </div>
+
+      <dl className="mt-layout-md grid gap-layout-sm md:grid-cols-2 xl:grid-cols-3">
+        {readiness.signals.map((signal) => (
+          <div
+            className="rounded-md border border-border bg-background px-layout-sm py-layout-xs"
+            key={signal.domain}
+          >
+            <dt className="text-xs font-medium uppercase text-muted-foreground">
+              {signal.label}
+            </dt>
+            <dd className="mt-layout-2xs text-sm text-foreground">
+              {signal.description}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  );
+}
+
+function buildTerminalOfflineReadiness(
+  summary: TerminalHealthSummary,
+): PosOfflineReadinessSummary {
+  const runtimeStatus = summary.runtimeStatus;
+  const snapshots = runtimeStatus?.snapshots;
+  const appSessionRecovery = runtimeStatus?.appSessionRecovery?.status;
+
+  return buildPosOfflineReadinessSummary({
+    appShell: appSessionRecovery
+      ? {
+          ready: appSessionRecovery === "ready",
+        }
+      : null,
+    terminalSeed: runtimeStatus
+      ? { ready: runtimeStatus.localStore.terminalSeedReady }
+      : null,
+    staffAuthority: runtimeStatus
+      ? { ready: runtimeStatus.staffAuthority.status === "ready" }
+      : null,
+    registerCatalog:
+      snapshots?.catalogAgeMs !== undefined
+        ? { ageMs: snapshots.catalogAgeMs, ready: true }
+        : null,
+    serviceCatalog:
+      snapshots?.serviceCatalogAgeMs !== undefined
+        ? { ageMs: snapshots.serviceCatalogAgeMs, ready: true }
+        : null,
+    availabilitySnapshot:
+      snapshots?.availabilityAgeMs !== undefined
+        ? { ageMs: snapshots.availabilityAgeMs, ready: true }
+        : null,
+  });
 }
 
 export function POSTerminalHealthViewContent({
@@ -131,6 +209,8 @@ export function POSTerminalHealthViewContent({
                     const runtimeStatus = summary.runtimeStatus;
                     const primaryReason =
                       getPrimaryTerminalAttentionReason(summary);
+                    const offlineReadiness =
+                      buildTerminalOfflineReadiness(summary);
 
                     return (
                       <article
@@ -221,6 +301,10 @@ export function POSTerminalHealthViewContent({
                             </p>
                           </div>
                         </div>
+
+                        <OfflineReadinessDiagnostic
+                          readiness={offlineReadiness}
+                        />
                       </article>
                     );
                   })}

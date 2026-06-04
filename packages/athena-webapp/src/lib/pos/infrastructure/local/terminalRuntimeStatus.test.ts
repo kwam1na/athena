@@ -55,6 +55,11 @@ describe("terminalRuntimeStatus", () => {
       ],
       localStoreFailureMessage:
         "syncSecretHash abcdef1234567890abcdef1234567890 failed",
+      snapshots: {
+        availabilityRefreshedAt: 1_880,
+        catalogRefreshedAt: 1_760,
+        serviceCatalogRefreshedAt: 1_820,
+      },
       source: "register",
       staffAuthorityStatus: "ready",
       staffProfileId: "staff-1",
@@ -111,7 +116,11 @@ describe("terminalRuntimeStatus", () => {
         terminalSeedReady: true,
       },
       reportedAt: 2_000,
-      snapshots: {},
+      snapshots: {
+        availabilityAgeMs: 120,
+        catalogAgeMs: 240,
+        serviceCatalogAgeMs: 180,
+      },
       source: "register",
       staffAuthority: {
         staffProfileId: "staff-1",

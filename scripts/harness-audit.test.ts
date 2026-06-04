@@ -90,6 +90,7 @@ async function createFixtureRepo() {
           "lint:convex:changed": "echo lint",
           "lint:frontend:changed": "echo lint frontend",
           test: "echo test",
+          "test:e2e": "echo e2e",
         },
       },
       null,
@@ -154,6 +155,11 @@ async function createFixtureRepo() {
   await write("packages/athena-webapp/.storybook/main.ts", "export default {};\n", rootDir);
   await write("packages/athena-webapp/index.html", "<div id=\"app\"></div>\n", rootDir);
   await write(
+    "packages/athena-webapp/public/pos-app-shell-sw.js",
+    "self.addEventListener('fetch', () => {});\n",
+    rootDir
+  );
+  await write(
     "packages/athena-webapp/src/stories/Guidance/Introduction.stories.tsx",
     "export default {};\n",
     rootDir
@@ -163,6 +169,7 @@ async function createFixtureRepo() {
   await write("packages/athena-webapp/eslint.config.js", "export default [];\n", rootDir);
   await write("packages/athena-webapp/tailwind.config.js", "export default {};\n", rootDir);
   await write("packages/athena-webapp/postcss.config.js", "export default {};\n", rootDir);
+  await write("packages/athena-webapp/playwright.config.ts", "export default {};\n", rootDir);
   await write(
     "packages/athena-webapp/src/design-system-build-config.test.ts",
     "export {};\n",
@@ -300,6 +307,7 @@ async function createFixtureRepo() {
       "- `storefront-checkout-validation-blocker`",
       "- `storefront-checkout-verification-recovery`",
       "Default regression: `bun run --filter '@athena/webapp' test`.",
+      "POS browser journeys: `bun run --filter '@athena/webapp' test:e2e`.",
       "Convex validation: `bun run --filter '@athena/webapp' audit:convex` and `bun run --filter '@athena/webapp' lint:convex:changed`.",
       "Covered test surfaces include `src/tests` and `convex`.",
     ].join("\n"),
@@ -579,6 +587,36 @@ async function createFixtureRepo() {
   );
 
   await write("packages/athena-webapp/src/main.tsx", "export {};\n", rootDir);
+  await write(
+    "packages/athena-webapp/src/offline/posAppShellRoutes.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/src/offline/posAppShellRoutes.test.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/src/offline/posOfflineReadiness.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/src/offline/posOfflineReadiness.test.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/src/offline/registerPosAppShellServiceWorker.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/src/offline/registerPosAppShellServiceWorker.test.ts",
+    "export {};\n",
+    rootDir
+  );
   await write("packages/athena-webapp/src/assets/placeholder.png", "", rootDir);
   await write("packages/athena-webapp/src/config.ts", "export {};\n", rootDir);
   await write(
@@ -1052,6 +1090,11 @@ async function createFixtureRepo() {
   await write("packages/athena-webapp/src/utils/format.ts", "export {};\n", rootDir);
   await write("packages/athena-webapp/vitest.config.ts", "export default {};\n", rootDir);
   await write("packages/athena-webapp/src/tests/app.test.tsx", "export {};\n", rootDir);
+  await write(
+    "packages/athena-webapp/src/tests/pos/offlineRouteAccess.spec.ts",
+    "export {};\n",
+    rootDir
+  );
   await write("packages/athena-webapp/src/test/setup.ts", "export {};\n", rootDir);
   await write("packages/athena-webapp/convex/http.ts", "export {};\n", rootDir);
   await write("packages/athena-webapp/convex/http/router.ts", "export {};\n", rootDir);

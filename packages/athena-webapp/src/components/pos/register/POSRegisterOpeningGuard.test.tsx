@@ -120,7 +120,8 @@ vi.mock("@/lib/pos/infrastructure/local/localPosEntryContext", () => ({
 }));
 
 vi.mock("@/lib/pos/infrastructure/local/localPosReadiness", () => ({
-  useLocalPosReadiness: () => useLocalPosReadinessMock(),
+  useLocalPosReadiness: (...args: unknown[]) =>
+    useLocalPosReadinessMock(...args),
 }));
 
 vi.mock("~/convex/_generated/api", () => ({
@@ -448,6 +449,67 @@ describe("POSRegisterOpeningGuard", () => {
     );
 
     expect(screen.getByText("Register workspace")).toBeInTheDocument();
+  });
+
+  it("keeps a reloaded register route open from local entry context while live state rehydrates", () => {
+    getActiveStoreMock.mockReturnValue({
+      activeStore: null,
+      isLoadingStores: false,
+    });
+    useLocalPosEntryContextMock.mockReturnValue({
+      status: "ready",
+      orgUrlSlug: "wigclub",
+      storeUrlSlug: "wigclub",
+      storeId: "store-from-local-seed",
+      terminalSeed: {
+        registeredAt: 1_778_000_000_000,
+        registeredByUserId: "user-1",
+        storeId: "store-from-local-seed",
+        terminalId: "terminal-1",
+      },
+      source: "local",
+    });
+    useQueryMock.mockReturnValue(undefined);
+    useLocalPosReadinessMock.mockImplementation((input) => {
+      expect(input).toMatchObject({
+        closeSnapshot: undefined,
+        entryContext: {
+          source: "local",
+          status: "ready",
+          storeId: "store-from-local-seed",
+        },
+        openingSnapshot: undefined,
+        operatingDate: "2026-05-09",
+      });
+
+      return {
+        status: "ready",
+        source: "local",
+        storeDayStatus: "started",
+      };
+    });
+
+    render(
+      <POSRegisterOpeningGuard>
+        <div>Register workspace</div>
+      </POSRegisterOpeningGuard>,
+    );
+
+    expect(screen.getByText("Register workspace")).toBeInTheDocument();
+    expect(useQueryMock).toHaveBeenCalledWith(
+      "getDailyOpeningSnapshot",
+      expect.objectContaining({
+        operatingDate: "2026-05-09",
+        storeId: "store-from-local-seed",
+      }),
+    );
+    expect(useQueryMock).toHaveBeenCalledWith(
+      "getDailyCloseSnapshot",
+      expect.objectContaining({
+        operatingDate: "2026-05-09",
+        storeId: "store-from-local-seed",
+      }),
+    );
   });
 
   it("shows setup-required guidance when local authority is missing", () => {

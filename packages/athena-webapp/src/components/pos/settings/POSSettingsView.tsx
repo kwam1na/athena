@@ -21,6 +21,10 @@ import {
   type ProvisionedTerminalRecord,
 } from "@/lib/pos/application/registerAndProvisionPosTerminal";
 import { usePermissions } from "@/hooks/usePermissions";
+import {
+  buildPosOfflineReadinessSummary,
+  type PosOfflineReadinessSummary,
+} from "@/offline/posOfflineReadiness";
 
 type HealthLinkProps = {
   children: ReactNode;
@@ -50,6 +54,7 @@ type FingerprintRegistrationCardProps = {
   fingerprintError: string | null;
   existingTerminalName?: string | null;
   existingTerminalRegisterNumber?: string | null;
+  offlineReadiness: PosOfflineReadinessSummary;
 };
 
 function FingerprintRegistrationCard({
@@ -68,6 +73,7 @@ function FingerprintRegistrationCard({
   fingerprintError,
   existingTerminalName,
   existingTerminalRegisterNumber,
+  offlineReadiness,
 }: FingerprintRegistrationCardProps) {
   const terminalStatusLabel = fingerprintError
     ? "Needs attention"
@@ -171,6 +177,39 @@ function FingerprintRegistrationCard({
               {primaryActionLabel}
             </LoadingButton>
           )}
+        </div>
+
+        <div className="border-t border-border pt-layout-md">
+          <div className="flex flex-wrap items-center justify-between gap-layout-sm">
+            <div>
+              <p className="text-sm font-medium text-foreground">
+                {offlineReadiness.title}
+              </p>
+              <p className="mt-layout-2xs text-sm text-muted-foreground">
+                {offlineReadiness.description}
+              </p>
+            </div>
+            <span className="inline-flex rounded-full border border-border bg-background px-layout-sm py-layout-2xs text-sm text-muted-foreground">
+              {offlineReadiness.readyCount} of{" "}
+              {offlineReadiness.signals.length} ready
+            </span>
+          </div>
+
+          <dl className="mt-layout-md grid gap-layout-sm sm:grid-cols-2">
+            {offlineReadiness.signals.map((signal) => (
+              <div
+                className="rounded-md border border-border bg-background px-layout-sm py-layout-xs"
+                key={signal.domain}
+              >
+                <dt className="text-xs font-medium uppercase text-muted-foreground">
+                  {signal.label}
+                </dt>
+                <dd className="mt-layout-2xs text-sm text-foreground">
+                  {signal.description}
+                </dd>
+              </div>
+            ))}
+          </dl>
         </div>
       </div>
     </section>
@@ -530,6 +569,23 @@ export function POSSettingsView({
     registerNumber,
   ]);
 
+  const offlineReadiness = useMemo(
+    () =>
+      buildPosOfflineReadinessSummary({
+        appShell: null,
+        terminalSeed: existingTerminal
+          ? { ready: true }
+          : fingerprintError
+            ? { ready: false }
+            : { ready: false },
+        staffAuthority: null,
+        registerCatalog: null,
+        serviceCatalog: null,
+        availabilitySnapshot: null,
+      }),
+    [existingTerminal, fingerprintError],
+  );
+
   const handleRegisterTerminal = async () => {
     if (!activeStore?._id) {
       toast.error("Missing active store context");
@@ -656,6 +712,7 @@ export function POSSettingsView({
               existingTerminalRegisterNumber={
                 registrationState.existingTerminalRegisterNumber
               }
+              offlineReadiness={offlineReadiness}
             />
           </section>
 

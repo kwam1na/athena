@@ -7,6 +7,7 @@ import { ConvexAuthProvider } from "@convex-dev/auth/react";
 import "./index.css";
 import { useEffect } from "react";
 import { createVersionChecker } from "./utils/versionChecker";
+import { registerPosAppShellServiceWorker } from "./offline/registerPosAppShellServiceWorker";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -61,6 +62,7 @@ function App() {
 const rootElement = document.getElementById("app")!;
 
 if (!rootElement.innerHTML) {
+  registerPosAppShellServiceWorker();
   const root = ReactDOM.createRoot(rootElement);
   root.render(<App />);
 }

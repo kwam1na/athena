@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Plan: Make POS route accessible with no network</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f8fa;
+      --panel: #ffffff;
+      --text: #1f2937;
+      --muted: #5f6b7a;
+      --border: #d8dee8;
+      --accent: #166534;
+      --accent-soft: #e8f5ed;
+      --warn-soft: #fff7ed;
+      --warn: #9a3412;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.55;
+    }
+
+    main {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 40px 24px 64px;
+    }
+
+    header {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 28px;
+      margin-bottom: 24px;
+    }
+
+    h1, h2, h3 {
+      margin: 0;
+      line-height: 1.2;
+    }
+
+    h1 {
+      font-size: 2rem;
+      letter-spacing: 0;
+    }
+
+    h2 {
+      margin-top: 32px;
+      font-size: 1.3rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 8px;
+    }
+
+    h3 {
+      margin-top: 20px;
+      font-size: 1rem;
+    }
+
+    p {
+      margin: 12px 0 0;
+    }
+
+    a {
+      color: #1d4ed8;
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 16px;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    .pill {
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: #fbfcfd;
+      padding: 4px 10px;
+    }
+
+    nav {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 18px 22px;
+      margin-bottom: 24px;
+    }
+
+    nav ul, section ul {
+      margin: 10px 0 0;
+      padding-left: 22px;
+    }
+
+    section {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 24px;
+      margin-top: 18px;
+    }
+
+    .callout {
+      background: var(--accent-soft);
+      border: 1px solid #b7dfc4;
+      border-radius: 8px;
+      padding: 16px;
+      margin-top: 16px;
+    }
+
+    .warning {
+      background: var(--warn-soft);
+      border-color: #fed7aa;
+      color: var(--warn);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+      font-size: 0.94rem;
+    }
+
+    th, td {
+      border: 1px solid var(--border);
+      padding: 10px;
+      vertical-align: top;
+      text-align: left;
+    }
+
+    th {
+      background: #f1f5f9;
+    }
+
+    code {
+      background: #f1f5f9;
+      border-radius: 4px;
+      padding: 1px 4px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.92em;
+    }
+
+    .unit {
+      border-left: 4px solid var(--accent);
+      padding-left: 16px;
+      margin-top: 20px;
+    }
+
+    .unit h3 {
+      color: var(--accent);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 14px;
+      margin-top: 14px;
+    }
+
+    .card {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px;
+      background: #fbfcfd;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>feat: Make POS route accessible with no network</h1>
+      <p>This plan closes the remaining route-access gap in Athena's local-first POS work: an already-provisioned terminal should be able to open or hard reload the POS route after total network loss.</p>
+      <div class="meta">
+        <span class="pill">Type: feat</span>
+        <span class="pill">Status: active</span>
+        <span class="pill">Date: 2026-06-03</span>
+        <span class="pill">Source: <a href="2026-06-03-002-feat-pos-offline-route-access-plan.md">Markdown plan</a></span>
+      </div>
+    </header>
+
+    <nav>
+      <strong>Review sections</strong>
+      <ul>
+        <li><a href="#scope">Scope</a></li>
+        <li><a href="#requirements">Requirements</a></li>
+        <li><a href="#decisions">Key decisions</a></li>
+        <li><a href="#units">Implementation units</a></li>
+        <li><a href="#risks">Risks</a></li>
+        <li><a href="#verification">Verification strategy</a></li>
+      </ul>
+    </nav>
+
+    <section id="scope">
+      <h2>Scope</h2>
+      <div class="callout">
+        The minimum offline route contract is <code>/pos</code> plus <code>/pos/register</code>. The service worker provides the static app shell; POS business state remains in the existing IndexedDB local stores.
+      </div>
+      <ul>
+        <li>Already-provisioned terminals only; the terminal must load POS online once after this feature is deployed so the browser can install the service worker and cache the static app shell.</li>
+        <li>POS remains the only offline-first Athena workflow.</li>
+        <li>Cache Storage must not hold staff proofs, sync secrets, payments, customer data, or POS event payloads.</li>
+        <li>Expense POS and offline-friendly POS history/report subroutes are deferred unless later requirements include them.</li>
+      </ul>
+    </section>
+
+    <section id="requirements">
+      <h2>Requirements</h2>
+      <ul>
+        <li>Previously provisioned POS terminals can load POS with no active network after POS has loaded online once, giving the browser a chance to install the service worker and cache the static app shell.</li>
+        <li><code>/pos</code> and <code>/pos/register</code> render from route slugs and local terminal seed when live reads are unavailable.</li>
+        <li>Offline route continuity does not widen POS app-session recovery into generic Athena access.</li>
+        <li>Register behavior continues through local staff authority, local readiness, local command gateway, catalog snapshots, and sync status.</li>
+        <li>Browser-level verification proves hard reload with network blocked reaches the local register/sign-in path.</li>
+      </ul>
+    </section>
+
+    <section id="decisions">
+      <h2>Key Decisions</h2>
+      <div class="grid">
+        <div class="card">
+          <strong>Focused service worker</strong>
+          <p>Add POS app-shell caching rather than making every Athena route offline-first.</p>
+        </div>
+        <div class="card">
+          <strong>Static shell only</strong>
+          <p>Cache HTML, JS, CSS, and static assets; keep business data in POS IndexedDB.</p>
+        </div>
+        <div class="card">
+          <strong>Route-scoped continuity</strong>
+          <p>POS app-session recovery remains limited to POS hub/register routes.</p>
+        </div>
+        <div class="card">
+          <strong>Browser proof</strong>
+          <p>Hard-reload no-network coverage is required because unit tests cannot prove app-shell delivery.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="units">
+      <h2>Implementation Units</h2>
+      <article class="unit">
+        <h3>U1. Add POS app-shell service worker infrastructure</h3>
+        <p>Add build/runtime service-worker support, route policy helpers, and startup registration. Test POS navigation classification and excluded request types.</p>
+      </article>
+      <article class="unit">
+        <h3>U2. Make POS hub and register route entry local-first under offline shell</h3>
+        <p>Use local entry context for POS-critical links and preserve non-POS route protection. Test hub/register render paths without live org/store reads.</p>
+      </article>
+      <article class="unit">
+        <h3>U3. Surface offline readiness for app shell and POS local prerequisites</h3>
+        <p>Expose app-shell, terminal seed, staff authority, catalog, and availability readiness without leaking sensitive diagnostics.</p>
+      </article>
+      <article class="unit">
+        <h3>U4. Harden register reload continuity around local staff and drawer state</h3>
+        <p>Characterize and protect the offline reload path through local staff sign-in, drawer state, register readiness, and local command gates.</p>
+      </article>
+      <article class="unit">
+        <h3>U5. Add no-network browser regression coverage for POS route accessibility</h3>
+        <p>Prepare online, block network, hard reload POS, and assert the local register/sign-in shell renders without server access.</p>
+      </article>
+      <article class="unit">
+        <h3>U6. Document the POS offline route boundary and validation map</h3>
+        <p>Record the service-worker app-shell versus IndexedDB business-state boundary and wire future validation to the new test slice.</p>
+      </article>
+    </section>
+
+    <section id="risks">
+      <h2>Risks</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Risk</th>
+            <th>Mitigation</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Service worker caches sensitive data.</td>
+            <td>Restrict caching to static app-shell assets and exclude API/Convex/fetch payloads.</td>
+          </tr>
+          <tr>
+            <td>Stale cached chunks break POS after deploy.</td>
+            <td>Use build/precache manifests and clean outdated caches coherently.</td>
+          </tr>
+          <tr>
+            <td>Offline shell is mistaken for sale authority.</td>
+            <td>Keep app shell separate from terminal, drawer, staff proof, and local command gates.</td>
+          </tr>
+          <tr>
+            <td>POS continuity leaks to non-POS routes.</td>
+            <td>Preserve route-scope tests in <code>_authed.test.tsx</code>.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="verification">
+      <h2>Verification Strategy</h2>
+      <ul>
+        <li>Unit-test service-worker route policy and excluded request types.</li>
+        <li>Unit-test POS hub/register route rendering from local entry context when live reads are absent.</li>
+        <li>Characterize register reload behavior around staff authority, drawer state, and local command gates.</li>
+        <li>Add a browser regression that blocks network and hard reloads <code>/pos/register</code>.</li>
+        <li>Validate the HTML review artifact with <code>scripts/validate-plan-html.ts</code>.</li>
+      </ul>
+      <p class="warning callout">The plan intentionally does not implement code in this planning pass.</p>
+    </section>
+  </main>
+</body>
+</html>

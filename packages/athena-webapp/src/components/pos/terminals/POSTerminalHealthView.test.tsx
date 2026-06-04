@@ -106,6 +106,7 @@ const baseSummary: TerminalHealthSummary = {
       availabilityAgeMs: 120_000,
       catalogAgeMs: 240_000,
       registerReadModelAgeMs: 60_000,
+      serviceCatalogAgeMs: 180_000,
     },
     source: "pos-hub",
     staffAuthority: {
@@ -253,6 +254,17 @@ describe("POSTerminalHealthViewContent", () => {
     expect(screen.getAllByText("Staff authority ready").length).toBeGreaterThan(0);
     expect(
       screen.getAllByText("Register session evidence is shown in cash controls").length,
+    ).toBeGreaterThan(0);
+    expect(screen.getAllByText("Offline diagnostics incomplete").length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText(
+        "Service catalog data is available locally. Last refreshed 3 minutes ago.",
+      ).length,
+    ).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText(
+        "App shell readiness has not reported from this checkout station.",
+      ).length,
     ).toBeGreaterThan(0);
     expect(screen.getByRole("link", { name: /Front counter/i })).toHaveAttribute(
       "href",
