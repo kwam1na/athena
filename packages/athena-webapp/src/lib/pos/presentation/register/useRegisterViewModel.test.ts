@@ -981,9 +981,14 @@ describe("useRegisterViewModel", () => {
       ),
     );
 
-    expect(result.current.cashierCard).toBeNull();
+    expect(result.current.cashierCard?.cashierName).toBe("Ama K.");
     expect(result.current.authDialog?.open).toBe(true);
+    expect(result.current.authDialog?.restoredCashier).toEqual({
+      displayName: "Ama Kusi",
+      username: "ama",
+    });
     expect(result.current.debug?.cashierPresence).toBe("validation_pending");
+    expect(result.current.debug?.syncFlow.staffProof).toBe("missing");
     expect(mockStartSession).not.toHaveBeenCalled();
   });
 
@@ -1005,10 +1010,10 @@ describe("useRegisterViewModel", () => {
     expect(result.current.cashierPresenceRestore.message).toBe(
       "Checking cashier access before new sales.",
     );
-    expect(result.current.cashierCard).toBeNull();
+    expect(result.current.cashierCard?.cashierName).toBe("Ama K.");
     expect(result.current.authDialog?.open).toBe(true);
     expect(result.current.productEntry.disabled).toBe(true);
-    expect(result.current.sessionPanel).toBeNull();
+    expect(result.current.sessionPanel?.disableNewSession).toBe(true);
   });
 
   it("invalidates cashier presence for mismatched scope and clears the record", async () => {

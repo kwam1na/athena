@@ -137,11 +137,14 @@ type RestoredCashierPresence = {
   staffProofToken?: string | null;
   storeId?: string;
   terminalId?: string;
+  username?: string | null;
 };
 
 type CashierPresenceRestoreState = {
+  displayName?: string | null;
   message?: string;
   status: CashierPresenceRestoreStatus;
+  username?: string | null;
 };
 
 const POS_CASHIER_PRESENCE_OFFLINE_FRESHNESS_MS = 15 * 60 * 1000;
@@ -1957,11 +1960,14 @@ export function useRegisterViewModel(): RegisterViewModel {
           displayName: presence.displayName ?? "Signed-in cashier",
         });
       } else if (nextRestoreState.status === "validation_pending") {
-        staffProfileIdRef.current = null;
+        staffProfileIdRef.current = presence.staffProfileId as Id<"staffProfile">;
         staffProofTokenRef.current = null;
-        setStaffProfileId(null);
+        setStaffProfileId(presence.staffProfileId as Id<"staffProfile">);
         setStaffProofToken(null);
-        setLocalAuthenticatedStaff(null);
+        setLocalAuthenticatedStaff({
+          activeRoles: presence.activeRoles ?? [],
+          displayName: presence.displayName ?? "Signed-in cashier",
+        });
       } else {
         staffProfileIdRef.current = null;
         staffProofTokenRef.current = null;
@@ -1979,7 +1985,11 @@ export function useRegisterViewModel(): RegisterViewModel {
       }
 
       if (!cancelled) {
-        setCashierPresenceRestore(nextRestoreState);
+        setCashierPresenceRestore({
+          ...nextRestoreState,
+          displayName: presence.displayName ?? null,
+          username: presence.username ?? null,
+        });
       }
     }
 
@@ -5947,13 +5957,21 @@ export function useRegisterViewModel(): RegisterViewModel {
         }
       : null;
   const shouldOpenCashierAuth =
-    !staffProfileId &&
-    cashierPresenceRestore.status !== "pending";
+    cashierPresenceRestore.status === "validation_pending" ||
+    (!staffProfileId && cashierPresenceRestore.status !== "pending");
 
   const authDialog =
     activeStoreId && terminal?._id
       ? {
           open: shouldOpenCashierAuth,
+          restoredCashier:
+            cashierPresenceRestore.status === "validation_pending" &&
+            cashierPresenceRestore.username
+              ? {
+                  displayName: cashierPresenceRestore.displayName ?? null,
+                  username: cashierPresenceRestore.username,
+                }
+              : null,
           storeId: activeStoreId!,
           terminalId: terminal._id,
 	          onAuthenticated: (

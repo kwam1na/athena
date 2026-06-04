@@ -279,6 +279,10 @@ export interface RegisterCloseoutControlState {
 
 export interface RegisterAuthDialogState {
   open: boolean;
+  restoredCashier?: {
+    displayName?: string | null;
+    username: string;
+  } | null;
   storeId: Id<"store">;
   terminalId: Id<"posTerminal">;
   workflowMode?: RegisterWorkflowMode;
@@ -321,7 +325,9 @@ export type CashierPresenceRestoreStatus =
 
 export interface RegisterCashierPresenceRestoreState {
   status: CashierPresenceRestoreStatus;
+  displayName?: string | null;
   message?: string;
+  username?: string | null;
 }
 
 export interface RegisterViewModel {

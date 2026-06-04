@@ -235,6 +235,7 @@ function CashierAuthWorkspace({
     <CashierAuthDialog
       open={authDialog.open}
       presentation="inline"
+      restoredCashier={authDialog.restoredCashier}
       storeId={authDialog.storeId}
       terminalId={authDialog.terminalId}
       workflowMode={authDialog.workflowMode}
@@ -1572,9 +1573,11 @@ function POSRegisterViewContent({
                   <DrawerGateWorkspace drawerGate={viewModel.drawerGate} />
                 ) : isAwaitingCashierAuth && viewModel.authDialog ? (
                   <div className="flex min-h-0 flex-1 flex-col gap-4">
-                    <CashierPresenceRestoreWorkspace
-                      restore={cashierPresenceRestore}
-                    />
+                    {cashierPresenceRestore.status === "validation_pending" ? null : (
+                      <CashierPresenceRestoreWorkspace
+                        restore={cashierPresenceRestore}
+                      />
+                    )}
                     <CashierAuthWorkspace authDialog={viewModel.authDialog} />
                   </div>
                 ) : cashierPresenceRestore.status === "validation_pending" &&

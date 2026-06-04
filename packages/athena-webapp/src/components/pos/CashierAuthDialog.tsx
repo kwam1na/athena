@@ -28,6 +28,10 @@ interface CashierAuthDialogProps {
   onDismiss: () => void;
   open: boolean;
   presentation?: "dialog" | "inline";
+  restoredCashier?: {
+    displayName?: string | null;
+    username: string;
+  } | null;
   storeId: Id<"store">;
   terminalId: Id<"posTerminal">;
   workflowMode?: RegisterWorkflowMode;
@@ -56,6 +60,7 @@ export function CashierAuthDialog({
   onDismiss,
   open,
   presentation = "dialog",
+  restoredCashier,
   storeId,
   terminalId,
   workflowMode = "pos",
@@ -427,6 +432,12 @@ export function CashierAuthDialog({
         title: primaryCopy.title,
         description: primaryCopy.description,
         submitLabel: "Sign in",
+      }}
+      lockedUsername={restoredCashier}
+      lockedUsernameCopy={{
+        title: "Unlock cashier session",
+        description: "Enter the cashier PIN to continue on this register",
+        submitLabel: "Unlock",
       }}
       alternateCopy={{
         title: recoveryLabel,

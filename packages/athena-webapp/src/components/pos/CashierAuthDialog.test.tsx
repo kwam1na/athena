@@ -144,11 +144,16 @@ function renderDialog({
   authenticateMutation = vi.fn(),
   expireMutation = vi.fn(),
   refreshAuthorityMutation = vi.fn().mockResolvedValue(ok([])),
+  restoredCashier,
   workflowMode,
 }: {
   authenticateMutation?: ReturnType<typeof vi.fn>;
   expireMutation?: ReturnType<typeof vi.fn>;
   refreshAuthorityMutation?: ReturnType<typeof vi.fn>;
+  restoredCashier?: {
+    displayName?: string | null;
+    username: string;
+  } | null;
   workflowMode?: "pos" | "expense";
 } = {}) {
   mocks.useMutation.mockReset();
@@ -169,6 +174,7 @@ function renderDialog({
       open
       onAuthenticated={onAuthenticated}
       onDismiss={onDismiss}
+      restoredCashier={restoredCashier}
       storeId={storeId}
       terminalId={terminalId}
       workflowMode={workflowMode}
@@ -182,6 +188,14 @@ function renderDialog({
     onDismiss,
     user: userEvent.setup(),
   };
+}
+
+async function submitLockedCashierPin(
+  user: ReturnType<typeof userEvent.setup>,
+  pin = "1234",
+) {
+  await waitFor(() => expect(screen.getByLabelText(/pin/i)).toHaveFocus());
+  await user.type(screen.getByLabelText(/pin/i), pin);
 }
 
 async function submitCredentials(
@@ -455,6 +469,116 @@ describe("CashierAuthDialog", () => {
       expect.objectContaining({ ciphertext: "wrapped-proof-token" }),
     );
     expect(mocks.toastSuccess).toHaveBeenCalledWith("Signed in as Ama Mensah");
+  });
+
+  it("unlocks a restored cashier session with PIN only", async () => {
+    Object.defineProperty(window.navigator, "onLine", {
+      configurable: true,
+      value: false,
+    });
+    const readStaffAuthorityForUsername = vi.fn(async () => ({
+      ok: true,
+      value: buildLocalAuthorityRecord(),
+    }));
+    mocks.createPosLocalStore.mockReturnValue({
+      readStaffAuthorityForUsername,
+      replaceStaffAuthoritySnapshot: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      upsertStaffAuthorityRecord: vi.fn(async ({ record }) => ({
+        ok: true,
+        value: record,
+      })),
+    });
+    const { user, onAuthenticated } = renderDialog({
+      restoredCashier: {
+        displayName: "Ama Mensah",
+        username: "frontdesk",
+      },
+    });
+
+    await submitLockedCashierPin(user);
+
+    await waitFor(() =>
+      expect(onAuthenticated).toHaveBeenCalledWith(
+        expect.objectContaining({
+          staffProfileId,
+        }),
+      ),
+    );
+    expect(readStaffAuthorityForUsername).toHaveBeenCalledWith({
+      storeId,
+      terminalId,
+      username: "frontdesk",
+    });
+  });
+
+  it("lets a restored cashier session switch to a different cashier sign-in", async () => {
+    Object.defineProperty(window.navigator, "onLine", {
+      configurable: true,
+      value: false,
+    });
+    const readStaffAuthorityForUsername = vi.fn(async () => ({
+      ok: true,
+      value: buildLocalAuthorityRecord(),
+    }));
+    mocks.createPosLocalStore.mockReturnValue({
+      readStaffAuthorityForUsername,
+      replaceStaffAuthoritySnapshot: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      upsertStaffAuthorityRecord: vi.fn(async ({ record }) => ({
+        ok: true,
+        value: record,
+      })),
+    });
+    const { user, onAuthenticated } = renderDialog({
+      restoredCashier: {
+        displayName: "Ama Mensah",
+        username: "frontdesk",
+      },
+    });
+
+    expect(
+      screen.getByRole("heading", { name: "Unlock cashier session" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Ama Mensah")).toBeInTheDocument();
+    expect(screen.queryByLabelText(/username/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Sign out from other registers" }),
+    ).not.toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: "Sign in as a different cashier" }),
+    );
+
+    expect(
+      screen.getByRole("heading", { name: "Sign in required" }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText(/username/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Sign out from other registers" }),
+    ).toBeInTheDocument();
+
+    const usernameInput = screen.getByLabelText(/username/i);
+    await user.type(usernameInput, "frontdesk");
+    await waitFor(() => expect(usernameInput).toHaveValue("frontdesk"));
+    await user.type(screen.getByLabelText(/pin/i), "1234");
+
+    await waitFor(() =>
+      expect(onAuthenticated).toHaveBeenCalledWith(
+        expect.objectContaining({
+          staffProfileId,
+        }),
+      ),
+    );
+    expect(readStaffAuthorityForUsername).toHaveBeenCalledWith({
+      storeId,
+      terminalId,
+      username: "frontdesk",
+    });
   });
 
   it("clears the PIN when local offline authority cannot be read", async () => {
