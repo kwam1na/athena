@@ -3,6 +3,7 @@ import { useOptionalManagerElevation } from "../contexts/ManagerElevationContext
 import {
   canAccessFullAdminSurface,
   canAccessStoreDaySurface,
+  canViewFinancialDetails,
 } from "@/lib/access/capabilities";
 import { Role } from "~/types";
 
@@ -13,6 +14,7 @@ interface UsePermissionsReturn {
   canAccessStoreDaySurfaces: () => boolean;
   canAccessFullAdminSurfaces: () => boolean;
   hasFullAdminAccess: boolean;
+  hasFinancialDetailsAccess: boolean;
   hasStoreDaySurfaceAccess: boolean;
   role: Role | null;
   isLoading: boolean;
@@ -28,6 +30,10 @@ export function usePermissions(): UsePermissionsReturn {
     activeManagerElevation,
     role,
   });
+  const hasFinancialDetailsAccess = canViewFinancialDetails({
+    activeManagerElevation,
+    role,
+  });
 
   return {
     canAccessOperations: () => hasStoreDaySurfaceAccess,
@@ -36,6 +42,7 @@ export function usePermissions(): UsePermissionsReturn {
     canAccessStoreDaySurfaces: () => hasStoreDaySurfaceAccess,
     canAccessFullAdminSurfaces: () => hasFullAdminAccess,
     hasFullAdminAccess,
+    hasFinancialDetailsAccess,
     hasStoreDaySurfaceAccess,
     role,
     isLoading,

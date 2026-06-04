@@ -1,12 +1,45 @@
-import { render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { POSRegisterOpeningGuard } from "./POSRegisterOpeningGuard";
 
 const useQueryMock = vi.fn();
 const getActiveStoreMock = vi.fn();
+const startStoreDayMock = vi.fn();
+const authenticateStaffCredentialMock = vi.fn();
 const useLocalPosEntryContextMock = vi.fn();
 const useLocalPosReadinessMock = vi.fn();
+
+vi.mock("@/components/staff-auth/StaffAuthenticationDialog", () => ({
+  StaffAuthenticationDialog: ({
+    onAuthenticate,
+    onAuthenticated,
+    open,
+  }: {
+    onAuthenticate: (args: {
+      pinHash: string;
+      username: string;
+    }) => Promise<unknown>;
+    onAuthenticated: (result: { staffProfileId: string }) => void;
+    open: boolean;
+  }) =>
+    open ? (
+      <div role="dialog" aria-label="Confirm staff credentials">
+        <button
+          type="button"
+          onClick={async () => {
+            await onAuthenticate({
+              pinHash: "hashed-pin",
+              username: "frontdesk",
+            });
+            onAuthenticated({ staffProfileId: "staff-1" });
+          }}
+        >
+          Confirm staff
+        </button>
+      </div>
+    ) : null,
+}));
 
 vi.mock("@tanstack/react-router", () => ({
   Link: ({
@@ -64,7 +97,18 @@ vi.mock("@/components/common/PageHeader", () => ({
 }));
 
 vi.mock("convex/react", () => ({
+  useMutation: (mutationName: string) =>
+    mutationName === "authenticateStaffCredential"
+      ? authenticateStaffCredentialMock
+      : startStoreDayMock,
   useQuery: (...args: unknown[]) => useQueryMock(...args),
+}));
+
+vi.mock("sonner", () => ({
+  toast: {
+    error: vi.fn(),
+    success: vi.fn(),
+  },
 }));
 
 vi.mock("@/hooks/useGetActiveStore", () => ({
@@ -87,6 +131,10 @@ vi.mock("~/convex/_generated/api", () => ({
       },
       dailyOpening: {
         getDailyOpeningSnapshot: "getDailyOpeningSnapshot",
+        startStoreDay: "startStoreDay",
+      },
+      staffCredentials: {
+        authenticateStaffCredential: "authenticateStaffCredential",
       },
     },
   },
@@ -97,6 +145,18 @@ describe("POSRegisterOpeningGuard", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2026, 4, 9, 12));
     vi.clearAllMocks();
+    startStoreDayMock.mockResolvedValue({
+      data: { action: "started" },
+      kind: "ok",
+    });
+    authenticateStaffCredentialMock.mockResolvedValue({
+      data: {
+        activeRoles: ["cashier"],
+        staffProfile: { fullName: "Ama Mensah" },
+        staffProfileId: "staff-1",
+      },
+      kind: "ok",
+    });
     getActiveStoreMock.mockReturnValue({
       activeStore: {
         _id: "store-1",
@@ -185,16 +245,102 @@ describe("POSRegisterOpeningGuard", () => {
     expect(screen.queryByText("Register workspace")).not.toBeInTheDocument();
     expect(screen.getByText("Store day not started")).toBeInTheDocument();
     expect(
-      screen.getByText(
-        "Opening Handoff needs to be completed before sales can begin. Ask a manager to start the store day.",
-      ),
+      screen.getByText("Start the day when Opening Handoff is ready."),
     ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Start day/i })).toBeEnabled();
     expect(
       screen.getByRole("link", { name: /Opening Handoff/i }),
     ).toHaveAttribute(
       "href",
       "/wigclub/store/wigclub/operations/opening",
     );
+  });
+
+  it("authenticates staff and starts the store day from the POS gate when opening is ready", async () => {
+    useQueryMock.mockImplementation((queryName: string) => {
+      if (queryName === "getDailyOpeningSnapshot") {
+        return { status: "ready" };
+      }
+
+      if (queryName === "getDailyCloseSnapshot") {
+        return { status: "ready" };
+      }
+
+      return undefined;
+    });
+    useLocalPosReadinessMock.mockReturnValue({
+      status: "blocked",
+      reason: "not_started",
+      message:
+        "Store day not started. Complete Opening Handoff before starting sales.",
+    });
+
+    render(
+      <POSRegisterOpeningGuard>
+        <div>Register workspace</div>
+      </POSRegisterOpeningGuard>,
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /Start day/i }));
+      await Promise.resolve();
+    });
+
+    expect(
+      screen.getByRole("dialog", { name: "Confirm staff credentials" }),
+    ).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /Confirm staff/i }));
+      await Promise.resolve();
+    });
+
+    expect(authenticateStaffCredentialMock).toHaveBeenCalledWith({
+      allowedRoles: ["cashier", "manager"],
+      pinHash: "hashed-pin",
+      storeId: "store-1",
+      username: "frontdesk",
+    });
+    expect(startStoreDayMock).toHaveBeenCalledWith({
+      actorStaffProfileId: "staff-1",
+      endAt: new Date(2026, 4, 10).getTime(),
+      operatingDate: "2026-05-09",
+      startAt: new Date(2026, 4, 9).getTime(),
+      storeId: "store-1",
+    });
+  });
+
+  it("keeps the POS start action disabled when Opening Handoff needs review", () => {
+    useQueryMock.mockImplementation((queryName: string) => {
+      if (queryName === "getDailyOpeningSnapshot") {
+        return { status: "needs_attention" };
+      }
+
+      if (queryName === "getDailyCloseSnapshot") {
+        return { status: "ready" };
+      }
+
+      return undefined;
+    });
+    useLocalPosReadinessMock.mockReturnValue({
+      status: "blocked",
+      reason: "not_started",
+      message:
+        "Store day not started. Complete Opening Handoff before starting sales.",
+    });
+
+    render(
+      <POSRegisterOpeningGuard>
+        <div>Register workspace</div>
+      </POSRegisterOpeningGuard>,
+    );
+
+    expect(screen.getByRole("button", { name: /Start day/i })).toBeDisabled();
+    expect(
+      screen.getByText(
+        "Opening Handoff needs review before the store day can start from POS.",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("directs the operator to EOD Review when the store day is closed", () => {

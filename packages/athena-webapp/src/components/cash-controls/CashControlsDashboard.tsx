@@ -1,6 +1,7 @@
 import { Link, useParams } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 import { ArrowRight, ArrowUpRight } from "lucide-react";
+import type { ReactNode } from "react";
 
 import { useProtectedAdminPageState } from "@/hooks/useProtectedAdminPageState";
 import { capitalizeWords, cn } from "@/lib/utils";
@@ -8,6 +9,7 @@ import { formatStoredCurrencyAmount } from "@/lib/pos/displayAmounts";
 import { api } from "~/convex/_generated/api";
 import View from "../View";
 import { FadeIn } from "../common/FadeIn";
+import { FinancialValue } from "../common/FinancialValue";
 import {
   PageLevelHeader,
   PageWorkspace,
@@ -93,6 +95,7 @@ export type CashControlsDashboardSnapshot = {
 type CashControlsDashboardContentProps = {
   currency: string;
   dashboardSnapshot: CashControlsDashboardSnapshot;
+  hasFinancialDetailsAccess?: boolean;
   isLoading: boolean;
   orgUrlSlug: string;
   storeUrlSlug: string;
@@ -106,6 +109,24 @@ function formatCurrency(currency: string, amount?: number | null) {
   return formatStoredCurrencyAmount(currency, amount, {
     revealMinorUnits: true,
   });
+}
+
+function CashControlsFinancialValue({
+  amount,
+  canView,
+  currency,
+  label,
+}: {
+  amount?: number | null;
+  canView: boolean;
+  currency: string;
+  label: string;
+}) {
+  return (
+    <FinancialValue canView={canView} label={label}>
+      {formatCurrency(currency, amount)}
+    </FinancialValue>
+  );
 }
 
 function formatStatusLabel(status: string) {
@@ -196,9 +217,11 @@ function formatCashExposureSupporting(snapshot: CashControlsDashboardSnapshot) {
 
 function CashPositionSummary({
   currency,
+  hasFinancialDetailsAccess,
   snapshot,
 }: {
   currency: string;
+  hasFinancialDetailsAccess: boolean;
   snapshot: CashControlsDashboardSnapshot;
 }) {
   const {
@@ -212,22 +235,50 @@ function CashPositionSummary({
     {
       label: "Expected in drawers",
       supporting: formatCashExposureSupporting(snapshot),
-      value: formatCurrency(currency, expectedCashTotal),
+      value: (
+        <CashControlsFinancialValue
+          amount={expectedCashTotal}
+          canView={hasFinancialDetailsAccess}
+          currency={currency}
+          label="Expected in drawers"
+        />
+      ),
     },
     {
       label: "Deposits recorded",
       supporting: `${snapshot.recentDeposits.length == 0 ? "No" : snapshot.recentDeposits.length} recent drop${snapshot.recentDeposits.length === 1 ? "" : "s"}`,
-      value: formatCurrency(currency, depositedTotal),
+      value: (
+        <CashControlsFinancialValue
+          amount={depositedTotal}
+          canView={hasFinancialDetailsAccess}
+          currency={currency}
+          label="Deposits recorded"
+        />
+      ),
     },
     {
       label: "Still in drawers",
       supporting: "Live and review drawers minus deposits",
-      value: formatCurrency(currency, onHandTotal),
+      value: (
+        <CashControlsFinancialValue
+          amount={onHandTotal}
+          canView={hasFinancialDetailsAccess}
+          currency={currency}
+          label="Still in drawers"
+        />
+      ),
     },
     {
       label: "Variance to review",
       supporting: `${snapshot.unresolvedVariances.length} unresolved`,
-      value: formatCurrency(currency, unresolvedVarianceTotal),
+      value: (
+        <CashControlsFinancialValue
+          amount={unresolvedVarianceTotal}
+          canView={hasFinancialDetailsAccess}
+          currency={currency}
+          label="Variance to review"
+        />
+      ),
       valueClassName:
         snapshot.unresolvedVariances.length > 0
           ? "text-danger"
@@ -377,7 +428,7 @@ function WorkflowSummaryItem({
 }: {
   label: string;
   tone?: string;
-  value: string;
+  value: ReactNode;
 }) {
   return (
     <div className="rounded-lg border border-border bg-background/70 px-layout-sm py-layout-xs">
@@ -398,12 +449,14 @@ function WorkflowSummaryItem({
 
 function DrawerSessionCard({
   currency,
+  hasFinancialDetailsAccess,
   orgUrlSlug,
   session,
   storeUrlSlug,
   variant = "standard",
 }: {
   currency: string;
+  hasFinancialDetailsAccess: boolean;
   orgUrlSlug: string;
   session: CashControlsDashboardSession;
   storeUrlSlug: string;
@@ -503,7 +556,12 @@ function DrawerSessionCard({
             Expected cash
           </dt>
           <dd className="mt-1 font-numeric tabular-nums text-sm text-foreground">
-            {formatCurrency(currency, session.expectedCash)}
+            <CashControlsFinancialValue
+              amount={session.expectedCash}
+              canView={hasFinancialDetailsAccess}
+              currency={currency}
+              label="Expected cash"
+            />
           </dd>
         </div>
         {showDeposited ? (
@@ -512,7 +570,12 @@ function DrawerSessionCard({
               Deposited
             </dt>
             <dd className="mt-1 font-numeric tabular-nums text-sm text-foreground">
-              {formatCurrency(currency, session.totalDeposited)}
+              <CashControlsFinancialValue
+                amount={session.totalDeposited}
+                canView={hasFinancialDetailsAccess}
+                currency={currency}
+                label="Deposited"
+              />
             </dd>
           </div>
         ) : null}
@@ -522,7 +585,12 @@ function DrawerSessionCard({
               Counted
             </dt>
             <dd className="mt-1 font-numeric tabular-nums text-sm text-foreground">
-              {formatCurrency(currency, session.countedCash ?? 0)}
+              <CashControlsFinancialValue
+                amount={session.countedCash ?? 0}
+                canView={hasFinancialDetailsAccess}
+                currency={currency}
+                label="Counted cash"
+              />
             </dd>
           </div>
         ) : null}
@@ -537,7 +605,12 @@ function DrawerSessionCard({
                 getVarianceTone(variance),
               )}
             >
-              {formatCurrency(currency, variance)}
+              <CashControlsFinancialValue
+                amount={variance}
+                canView={hasFinancialDetailsAccess}
+                currency={currency}
+                label="Variance"
+              />
             </dd>
           </div>
         ) : null}
@@ -575,6 +648,7 @@ function DrawerSessionCard({
 function DrawerSessionLane({
   currency,
   emptyDescription,
+  hasFinancialDetailsAccess,
   orgUrlSlug,
   sessions,
   storeUrlSlug,
@@ -583,6 +657,7 @@ function DrawerSessionLane({
 }: {
   currency: string;
   emptyDescription: string;
+  hasFinancialDetailsAccess: boolean;
   orgUrlSlug: string;
   sessions: CashControlsDashboardSession[];
   storeUrlSlug: string;
@@ -611,6 +686,7 @@ function DrawerSessionLane({
           {sessions.map((session) => (
             <DrawerSessionCard
               currency={currency}
+              hasFinancialDetailsAccess={hasFinancialDetailsAccess}
               key={session._id}
               orgUrlSlug={orgUrlSlug}
               session={session}
@@ -626,11 +702,13 @@ function DrawerSessionLane({
 
 function ClosedSessionsSummary({
   currency,
+  hasFinancialDetailsAccess,
   orgUrlSlug,
   sessions,
   storeUrlSlug,
 }: {
   currency: string;
+  hasFinancialDetailsAccess: boolean;
   orgUrlSlug: string;
   sessions: CashControlsDashboardSession[];
   storeUrlSlug: string;
@@ -742,7 +820,7 @@ function ClosedSessionsSummary({
                     <Link
                       aria-label={`Open ${formatRegisterName(session.registerNumber)} variance ${formatCurrency(
                         currency,
-                        session.variance ?? 0,
+                        hasFinancialDetailsAccess ? (session.variance ?? 0) : null,
                       )}`}
                       className="block h-full w-full px-4 py-4 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                       params={{
@@ -753,7 +831,12 @@ function ClosedSessionsSummary({
                       search={{ o: getOrigin() }}
                       to="/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId"
                     >
-                      {formatCurrency(currency, session.variance ?? 0)}
+                      <CashControlsFinancialValue
+                        amount={session.variance ?? 0}
+                        canView={hasFinancialDetailsAccess}
+                        currency={currency}
+                        label="Variance"
+                      />
                     </Link>
                   </TableCell>
                 </TableRow>
@@ -787,11 +870,13 @@ function ClosedSessionsSummary({
 
 function ClosedSessionsSnapshot({
   currency,
+  hasFinancialDetailsAccess,
   orgUrlSlug,
   sessions,
   storeUrlSlug,
 }: {
   currency: string;
+  hasFinancialDetailsAccess: boolean;
   orgUrlSlug: string;
   sessions: CashControlsDashboardSession[];
   storeUrlSlug: string;
@@ -867,16 +952,37 @@ function ClosedSessionsSnapshot({
         <WorkflowSummaryItem label="Closed sessions" value={`${closedCount}`} />
         <WorkflowSummaryItem
           label="Expected cash"
-          value={formatCurrency(currency, expectedTotal)}
+          value={
+            <CashControlsFinancialValue
+              amount={expectedTotal}
+              canView={hasFinancialDetailsAccess}
+              currency={currency}
+              label="Expected cash"
+            />
+          }
         />
         <WorkflowSummaryItem
           label="Counted cash"
-          value={formatCurrency(currency, countedTotal)}
+          value={
+            <CashControlsFinancialValue
+              amount={countedTotal}
+              canView={hasFinancialDetailsAccess}
+              currency={currency}
+              label="Counted cash"
+            />
+          }
         />
         <WorkflowSummaryItem
           label="Net variance"
           tone={getVarianceTone(netVariance)}
-          value={formatCurrency(currency, netVariance)}
+          value={
+            <CashControlsFinancialValue
+              amount={netVariance}
+              canView={hasFinancialDetailsAccess}
+              currency={currency}
+              label="Net variance"
+            />
+          }
         />
       </dl>
 
@@ -894,7 +1000,13 @@ function ClosedSessionsSnapshot({
             Short drawers
           </p>
           <p className="font-numeric tabular-nums text-sm text-danger">
-            {shortSessions.length} / {formatCurrency(currency, shortTotal)}
+            {shortSessions.length} /{" "}
+            <CashControlsFinancialValue
+              amount={shortTotal}
+              canView={hasFinancialDetailsAccess}
+              currency={currency}
+              label="Short drawers total"
+            />
           </p>
         </div>
         <div className="space-y-1">
@@ -902,7 +1014,13 @@ function ClosedSessionsSnapshot({
             Over drawers
           </p>
           <p className="font-numeric tabular-nums text-sm text-success">
-            {overSessions.length} / {formatCurrency(currency, overTotal)}
+            {overSessions.length} /{" "}
+            <CashControlsFinancialValue
+              amount={overTotal}
+              canView={hasFinancialDetailsAccess}
+              currency={currency}
+              label="Over drawers total"
+            />
           </p>
         </div>
         <div className="space-y-1">
@@ -921,7 +1039,12 @@ function ClosedSessionsSnapshot({
             Deposited across closed sessions
           </span>
           <span className="font-numeric tabular-nums text-foreground">
-            {formatCurrency(currency, depositedTotal)}
+            <CashControlsFinancialValue
+              amount={depositedTotal}
+              canView={hasFinancialDetailsAccess}
+              currency={currency}
+              label="Deposited across closed sessions"
+            />
           </span>
         </div>
       </div>
@@ -931,11 +1054,13 @@ function ClosedSessionsSnapshot({
 
 function CashroomWorkflow({
   currency,
+  hasFinancialDetailsAccess,
   snapshot,
   orgUrlSlug,
   storeUrlSlug,
 }: {
   currency: string;
+  hasFinancialDetailsAccess: boolean;
   snapshot: CashControlsDashboardSnapshot;
   orgUrlSlug: string;
   storeUrlSlug: string;
@@ -991,6 +1116,7 @@ function CashroomWorkflow({
             <DrawerSessionLane
               currency={currency}
               emptyDescription={primaryLane.emptyDescription}
+              hasFinancialDetailsAccess={hasFinancialDetailsAccess}
               orgUrlSlug={orgUrlSlug}
               sessions={primaryLane.sessions}
               storeUrlSlug={storeUrlSlug}
@@ -1003,6 +1129,7 @@ function CashroomWorkflow({
               <DrawerSessionLane
                 currency={currency}
                 emptyDescription="No live drawers are open right now"
+                hasFinancialDetailsAccess={hasFinancialDetailsAccess}
                 orgUrlSlug={orgUrlSlug}
                 sessions={liveDrawers}
                 storeUrlSlug={storeUrlSlug}
@@ -1012,6 +1139,7 @@ function CashroomWorkflow({
             {primaryLane ? (
               <ClosedSessionsSummary
                 currency={currency}
+                hasFinancialDetailsAccess={hasFinancialDetailsAccess}
                 orgUrlSlug={orgUrlSlug}
                 sessions={closedSessions}
                 storeUrlSlug={storeUrlSlug}
@@ -1019,6 +1147,7 @@ function CashroomWorkflow({
             ) : (
               <ClosedSessionsSnapshot
                 currency={currency}
+                hasFinancialDetailsAccess={hasFinancialDetailsAccess}
                 orgUrlSlug={orgUrlSlug}
                 sessions={closedSessions}
                 storeUrlSlug={storeUrlSlug}
@@ -1034,11 +1163,13 @@ function CashroomWorkflow({
 function DepositsLedger({
   currency,
   deposits,
+  hasFinancialDetailsAccess,
   orgUrlSlug,
   storeUrlSlug,
 }: {
   currency: string;
   deposits: CashControlsDashboardDeposit[];
+  hasFinancialDetailsAccess: boolean;
   orgUrlSlug: string;
   storeUrlSlug: string;
 }) {
@@ -1090,7 +1221,12 @@ function DepositsLedger({
                     {formatRegisterName(deposit.registerNumber)}
                   </TableCell>
                   <TableCell className="font-numeric tabular-nums text-foreground">
-                    {formatCurrency(currency, deposit.amount)}
+                    <CashControlsFinancialValue
+                      amount={deposit.amount}
+                      canView={hasFinancialDetailsAccess}
+                      currency={currency}
+                      label="Deposit amount"
+                    />
                   </TableCell>
                   <TableCell className="text-muted-foreground">
                     {formatTimestamp(deposit.recordedAt)}
@@ -1141,6 +1277,7 @@ function DepositsLedger({
 export function CashControlsDashboardContent({
   currency,
   dashboardSnapshot,
+  hasFinancialDetailsAccess = true,
   isLoading,
   orgUrlSlug,
   storeUrlSlug,
@@ -1174,12 +1311,14 @@ export function CashControlsDashboardContent({
                 </div>
                 <CashPositionSummary
                   currency={currency}
+                  hasFinancialDetailsAccess={hasFinancialDetailsAccess}
                   snapshot={dashboardSnapshot}
                 />
               </section>
 
               <CashroomWorkflow
                 currency={currency}
+                hasFinancialDetailsAccess={hasFinancialDetailsAccess}
                 orgUrlSlug={orgUrlSlug}
                 snapshot={dashboardSnapshot}
                 storeUrlSlug={storeUrlSlug}
@@ -1188,6 +1327,7 @@ export function CashControlsDashboardContent({
               <DepositsLedger
                 currency={currency}
                 deposits={dashboardSnapshot.recentDeposits}
+                hasFinancialDetailsAccess={hasFinancialDetailsAccess}
                 orgUrlSlug={orgUrlSlug}
                 storeUrlSlug={storeUrlSlug}
               />
@@ -1204,6 +1344,7 @@ export function CashControlsDashboard() {
     activeStore,
     canAccessProtectedSurface,
     canQueryProtectedData,
+    hasFinancialDetailsAccess,
     hasFullAdminAccess,
     isAuthenticated,
     isLoadingAccess,
@@ -1261,6 +1402,7 @@ export function CashControlsDashboard() {
           unresolvedVariances: [],
         }
       }
+      hasFinancialDetailsAccess={hasFinancialDetailsAccess}
       isLoading={dashboardSnapshot === undefined}
       orgUrlSlug={params.orgUrlSlug}
       storeUrlSlug={params.storeUrlSlug}

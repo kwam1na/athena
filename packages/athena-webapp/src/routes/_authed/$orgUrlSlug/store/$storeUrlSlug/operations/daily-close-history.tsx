@@ -4,6 +4,7 @@ import { z } from "zod";
 import { DailyCloseHistoryView } from "~/src/components/operations/DailyCloseHistoryView";
 
 const dailyCloseHistorySearchSchema = z.object({
+  day: z.string().optional(),
   o: z.string().optional(),
 });
 

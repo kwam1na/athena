@@ -38,7 +38,7 @@ Keep terminal elevation in its own table and capability path.
 - Scope elevation by store, organization, terminal, signed-in Athena account, manager staff profile, credential, creation time, expiry, and end state.
 - Authenticate elevation through active staff credentials with an active `manager` role for the current store.
 - Query active elevation server-side; refresh should preserve only unexpired, unended records.
-- Combine active elevation with account role in capability helpers. Elevation may unlock approved store-day surfaces, but it must not change the underlying account role or make `hasFullAdminAccess` true.
+- Combine active elevation with account role in capability helpers. POS-only accounts may open approved store-day surfaces directly; elevation may also unlock those surfaces for the current account, but it must not change the underlying account role or make `hasFullAdminAccess` true.
 - Keep procurement, analytics, configuration, organization members, storefront admin, services admin, bulk operations, promo codes, and reviews admin tied to `full_admin`.
 - Keep protected mutations on the existing command approval rail. Elevation state is not an `approvalProofId`, does not satisfy action/subject binding, and is never trusted from the browser as command authority.
 - Record operational events for elevation lifecycle transitions so operator-facing access changes are auditable.

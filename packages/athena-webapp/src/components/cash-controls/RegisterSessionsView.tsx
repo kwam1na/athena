@@ -27,6 +27,7 @@ import type {
 
 type RegisterSessionsViewContentProps = {
   currency: string;
+  hasFinancialDetailsAccess?: boolean;
   isLoading: boolean;
   orgUrlSlug: string;
   registerSessions: CashControlsDashboardSession[];
@@ -41,6 +42,18 @@ function formatCurrency(currency: string, amount?: number | null) {
   return formatStoredCurrencyAmount(currency, amount, {
     revealMinorUnits: true,
   });
+}
+
+function formatFinancialLabel(
+  hasFinancialDetailsAccess: boolean,
+  currency: string,
+  amount?: number | null,
+) {
+  if (!hasFinancialDetailsAccess) {
+    return "Manager only";
+  }
+
+  return formatCurrency(currency, amount);
 }
 
 function formatRegisterName(registerNumber?: string | null) {
@@ -147,6 +160,7 @@ function formatSessionCode(sessionId: string) {
 
 export function RegisterSessionsViewContent({
   currency,
+  hasFinancialDetailsAccess = true,
   isLoading,
   orgUrlSlug,
   registerSessions,
@@ -160,9 +174,21 @@ export function RegisterSessionsViewContent({
         closedAtLabel: session.closedAt
           ? formatTimestamp(session.closedAt)
           : "Not closed",
-        countedCashLabel: formatCurrency(currency, session.countedCash),
-        depositedLabel: formatCurrency(currency, session.totalDeposited),
-        expectedCashLabel: formatCurrency(currency, session.expectedCash),
+        countedCashLabel: formatFinancialLabel(
+          hasFinancialDetailsAccess,
+          currency,
+          session.countedCash,
+        ),
+        depositedLabel: formatFinancialLabel(
+          hasFinancialDetailsAccess,
+          currency,
+          session.totalDeposited,
+        ),
+        expectedCashLabel: formatFinancialLabel(
+          hasFinancialDetailsAccess,
+          currency,
+          session.expectedCash,
+        ),
         expectedCashValue: session.expectedCash,
         openedAtLabel: formatTimestamp(session.openedAt),
         openedAtSort: session.openedAt,
@@ -178,11 +204,15 @@ export function RegisterSessionsViewContent({
           session.closedAt,
         ),
         varianceCaption: getVarianceCaption(session.variance),
-        varianceLabel: formatCurrency(currency, session.variance ?? 0),
+        varianceLabel: formatFinancialLabel(
+          hasFinancialDetailsAccess,
+          currency,
+          session.variance ?? 0,
+        ),
         varianceTone: getVarianceTone(session.variance),
         varianceValue: session.variance ?? 0,
       })),
-    [currency, registerSessions],
+    [currency, hasFinancialDetailsAccess, registerSessions],
   );
 
   return (
@@ -240,6 +270,7 @@ export function RegisterSessionsView() {
     activeStore,
     canAccessProtectedSurface,
     canQueryProtectedData,
+    hasFinancialDetailsAccess,
     hasFullAdminAccess,
     isAuthenticated,
     isLoadingAccess,
@@ -288,6 +319,7 @@ export function RegisterSessionsView() {
   return (
     <RegisterSessionsViewContent
       currency={activeStore.currency || "USD"}
+      hasFinancialDetailsAccess={hasFinancialDetailsAccess}
       isLoading={dashboardSnapshot === undefined}
       orgUrlSlug={params.orgUrlSlug}
       registerSessions={dashboardSnapshot?.registerSessions ?? []}

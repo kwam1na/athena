@@ -38,6 +38,7 @@ export async function registerAndProvisionPosTerminal(input: {
   browserInfo: BrowserInfo;
   displayName: string;
   fingerprintHash: string;
+  orgUrlSlug?: string;
   registerNumber: string;
   registerTerminalMutation: (args: {
     browserInfo: BrowserInfo;
@@ -51,6 +52,7 @@ export async function registerAndProvisionPosTerminal(input: {
     | { kind: "user_error"; error: { message: string } }
   >;
   storeFactory?: () => ReturnType<typeof createPosLocalStore>;
+  storeUrlSlug?: string;
   now?: () => number;
 }) {
   const syncSecretToken = await createTerminalSyncSecretToken();
@@ -74,10 +76,12 @@ export async function registerAndProvisionPosTerminal(input: {
     cloudTerminalId: result.data._id,
     syncSecretHash: result.data.syncSecretHash ?? syncSecretToken,
     storeId: input.activeStoreId,
+    orgUrlSlug: input.orgUrlSlug,
     registerNumber: result.data.registerNumber,
     displayName: result.data.displayName,
     provisionedAt: input.now?.() ?? Date.now(),
     schemaVersion: POS_LOCAL_STORE_SCHEMA_VERSION,
+    storeUrlSlug: input.storeUrlSlug,
   };
   const seedWrite = store.writeProvisionedTerminalSeedAndClearTerminalIntegrity
     ? await store.writeProvisionedTerminalSeedAndClearTerminalIntegrity({

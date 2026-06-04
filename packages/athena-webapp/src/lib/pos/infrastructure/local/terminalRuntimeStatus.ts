@@ -571,6 +571,14 @@ function snapshotAges(
     ...(snapshots?.catalogRefreshedAt
       ? { catalogAgeMs: Math.max(0, now - snapshots.catalogRefreshedAt) }
       : {}),
+    ...(snapshots?.serviceCatalogRefreshedAt
+      ? {
+          serviceCatalogAgeMs: Math.max(
+            0,
+            now - snapshots.serviceCatalogRefreshedAt,
+          ),
+        }
+      : {}),
     ...(snapshots?.registerReadModelRefreshedAt
       ? {
           registerReadModelAgeMs: Math.max(

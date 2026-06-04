@@ -158,6 +158,7 @@ export function PosRecoveryCodeForm({
           <Input
             id="pos-recovery-code"
             autoComplete="off"
+            autoCapitalize="none"
             inputMode="text"
             value={code}
             onChange={(event) => setCode(event.target.value)}

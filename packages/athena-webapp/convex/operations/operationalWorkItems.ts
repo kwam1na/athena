@@ -230,8 +230,8 @@ export const getQueueSnapshot = query({
 
     const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
     await requireOrganizationMemberRoleWithCtx(ctx, {
-      allowedRoles: ["full_admin"],
-      failureMessage: "Only full admins can view approval queue.",
+      allowedRoles: ["full_admin", "pos_only"],
+      failureMessage: "Only POS operators can view approval queue.",
       organizationId: store.organizationId,
       userId: athenaUser._id,
     });

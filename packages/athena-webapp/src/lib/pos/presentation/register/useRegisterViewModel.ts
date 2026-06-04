@@ -2398,9 +2398,11 @@ export function useRegisterViewModel(): RegisterViewModel {
         browserInfo: fingerprint.browserInfo,
         displayName: terminal.displayName || seed.displayName,
         fingerprintHash: fingerprint.fingerprintHash,
+        orgUrlSlug: seed.orgUrlSlug,
         registerNumber: repairRegisterNumber,
         registerTerminalMutation,
         storeFactory: () => localStore,
+        storeUrlSlug: seed.storeUrlSlug,
       });
 
       if (result.kind === "user_error") {

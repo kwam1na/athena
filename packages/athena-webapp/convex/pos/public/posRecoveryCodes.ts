@@ -16,8 +16,102 @@ import {
 
 const POS_RECOVERY_ACCOUNT_EMAIL = "pos@wigclub.store";
 const POS_RECOVERY_CODE_VERSION = 1;
-const POS_RECOVERY_CODE_BYTES = 18;
 const POS_RECOVERY_FAILURE_AUDIT_BUCKET_MS = 15 * 60 * 1000;
+const POS_RECOVERY_CODE_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
+const POS_RECOVERY_CODE_GROUP_SIZE = 4;
+const POS_RECOVERY_CODE_GROUP_COUNT = 3;
+const POS_RECOVERY_CODE_LENGTH =
+  POS_RECOVERY_CODE_GROUP_SIZE * POS_RECOVERY_CODE_GROUP_COUNT;
+const POS_RECOVERY_CODE_WORDS = [
+  "anchor",
+  "apron",
+  "basket",
+  "beacon",
+  "berry",
+  "blanket",
+  "bottle",
+  "bridge",
+  "brush",
+  "button",
+  "candle",
+  "canvas",
+  "cart",
+  "cedar",
+  "chair",
+  "circle",
+  "clay",
+  "clock",
+  "cloud",
+  "cocoa",
+  "copper",
+  "coral",
+  "cotton",
+  "cup",
+  "daisy",
+  "desk",
+  "drum",
+  "fabric",
+  "feather",
+  "field",
+  "flame",
+  "flower",
+  "frame",
+  "garden",
+  "ginger",
+  "glass",
+  "globe",
+  "grape",
+  "harbor",
+  "hazel",
+  "honey",
+  "ivory",
+  "jacket",
+  "jewel",
+  "kettle",
+  "ladder",
+  "lamp",
+  "leaf",
+  "linen",
+  "maple",
+  "marble",
+  "meadow",
+  "mint",
+  "mirror",
+  "moss",
+  "needle",
+  "notebook",
+  "olive",
+  "orange",
+  "paddle",
+  "paper",
+  "pearl",
+  "pencil",
+  "pepper",
+  "petal",
+  "pillow",
+  "plum",
+  "pocket",
+  "ribbon",
+  "river",
+  "saddle",
+  "saffron",
+  "shell",
+  "silver",
+  "sketch",
+  "slate",
+  "spoon",
+  "stone",
+  "table",
+  "thread",
+  "ticket",
+  "toast",
+  "velvet",
+  "violet",
+  "walnut",
+  "window",
+  "wood",
+  "wool",
+] as const;
 const GENERIC_RECOVERY_FAILURE = "POS recovery sign-in failed.";
 
 type PosRecoveryCredential = Doc<"posRecoveryCredential">;
@@ -43,8 +137,47 @@ function randomHex(byteCount: number) {
   return bytesToHex(bytes);
 }
 
+function randomIndex(max: number) {
+  const maxUniformByte = Math.floor(256 / max) * max;
+  const byte = new Uint8Array(1);
+
+  do {
+    crypto.getRandomValues(byte);
+  } while (byte[0] >= maxUniformByte);
+
+  return byte[0] % max;
+}
+
+function formatRecoveryCode(compactCode: string) {
+  return (
+    compactCode
+      .match(new RegExp(`.{1,${POS_RECOVERY_CODE_GROUP_SIZE}}`, "g"))
+      ?.join("-") ?? compactCode
+  );
+}
+
 function generateRecoveryCode() {
-  return randomHex(POS_RECOVERY_CODE_BYTES).match(/.{1,6}/g)?.join("-") ?? "";
+  const words = Array.from({ length: 2 }, () =>
+    POS_RECOVERY_CODE_WORDS[randomIndex(POS_RECOVERY_CODE_WORDS.length)],
+  );
+  const number = randomIndex(100).toString().padStart(2, "0");
+
+  return `${words.join("")}${number}`;
+}
+
+function normalizeRecoveryCode(code: string) {
+  const compactCode = code.trim().toUpperCase().replace(/[\s-]+/g, "");
+
+  if (
+    compactCode.length === POS_RECOVERY_CODE_LENGTH &&
+    Array.from(compactCode).every((character) =>
+      POS_RECOVERY_CODE_ALPHABET.includes(character),
+    )
+  ) {
+    return formatRecoveryCode(compactCode);
+  }
+
+  return code.trim().toLowerCase().replace(/[-\s]+/g, "");
 }
 
 function getFailureAuditBucket(now: number) {
@@ -57,7 +190,7 @@ export async function hashPosRecoveryCode(args: {
 }) {
   const digest = await crypto.subtle.digest(
     "SHA-256",
-    new TextEncoder().encode(`${args.salt}:${args.code.trim()}`),
+    new TextEncoder().encode(`${args.salt}:${normalizeRecoveryCode(args.code)}`),
   );
 
   return bytesToHex(digest);
@@ -216,6 +349,35 @@ async function requirePosRecoveryAccount(ctx: PosRecoveryCtx) {
   return account;
 }
 
+async function requireUsablePosRecoveryAccount(
+  ctx: PosRecoveryCtx,
+  args: {
+    account: Doc<"athenaUser">;
+    organizationId: Id<"organization">;
+  },
+) {
+  const membership = await ctx.db
+    .query("organizationMember")
+    .filter((q) =>
+      q.and(
+        q.eq(q.field("organizationId"), args.organizationId),
+        q.eq(q.field("userId"), args.account._id),
+      ),
+    )
+    .first();
+
+  if (!membership || membership.role !== "pos_only") {
+    throw new Error("POS recovery account must have POS-only access.");
+  }
+
+  const authUser = await findAuthUserByEmail(ctx, POS_RECOVERY_ACCOUNT_EMAIL);
+  if (!authUser) {
+    throw new Error("POS recovery account auth user is not configured.");
+  }
+
+  return { authUser, membership };
+}
+
 function publicCredentialStatus(credential: PosRecoveryCredential | null) {
   if (!credential) {
     return null;
@@ -229,6 +391,7 @@ function publicCredentialStatus(credential: PosRecoveryCredential | null) {
     lastUsedAt: credential.lastUsedAt,
     lockedAt: credential.lockedAt,
     lockedUntil: credential.lockedUntil,
+    plaintextCode: credential.plaintextCode,
     posAccountId: credential.posAccountId,
     revokedAt: credential.revokedAt,
     rotatedAt: credential.rotatedAt,
@@ -251,6 +414,10 @@ async function rotateCredentialWithCtx(
     throw new Error("Store not found.");
   }
   const account = await requirePosRecoveryAccount(ctx);
+  await requireUsablePosRecoveryAccount(ctx, {
+    account,
+    organizationId: store.organizationId,
+  });
   const now = Date.now();
   const code = generateRecoveryCode();
   const codeSalt = randomHex(16);
@@ -270,6 +437,7 @@ async function rotateCredentialWithCtx(
       lastFailedAt: undefined,
       lockedAt: undefined,
       lockedUntil: undefined,
+      plaintextCode: code,
       revokedAt: undefined,
       revokedByUserId: undefined,
       rotatedAt: now,
@@ -294,6 +462,7 @@ async function rotateCredentialWithCtx(
     createdByUserId: args.actorUserId,
     failedAttemptCount: 0,
     organizationId: store.organizationId,
+    plaintextCode: code,
     posAccountId: account._id,
     rotatedAt: now,
     rotatedByUserId: args.actorUserId,
@@ -473,11 +642,17 @@ export const revokeRecoveryCode = mutation({
     }
     const now = Date.now();
     await ctx.db.patch("posRecoveryCredential", credential._id, {
+      plaintextCode: undefined,
       revokedAt: now,
       revokedByUserId: actor._id,
       status: "revoked",
     });
-    const nextCredential = { ...credential, revokedAt: now, status: "revoked" as const };
+    const nextCredential = {
+      ...credential,
+      plaintextCode: undefined,
+      revokedAt: now,
+      status: "revoked" as const,
+    };
     await recordRecoveryCodeEvent(ctx, {
       actorUserId: actor._id,
       credential: nextCredential,

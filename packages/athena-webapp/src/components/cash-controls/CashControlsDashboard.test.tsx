@@ -416,6 +416,60 @@ describe("CashControlsDashboardContent", () => {
     expect(screen.getByText("BANK-339")).toBeInTheDocument();
   });
 
+  it("redacts cash amounts for POS-only users without manager access", () => {
+    render(
+      <CashControlsDashboardContent
+        currency="USD"
+        dashboardSnapshot={{
+          ...baseSnapshot,
+          openSessions: [
+            {
+              _id: "session-open",
+              expectedCash: 24800,
+              openedAt: new Date("2026-04-21T09:15:00.000Z").getTime(),
+              openingFloat: 5000,
+              registerNumber: "Register 1",
+              status: "active",
+              totalDeposited: 8000,
+              variance: 0,
+            },
+          ],
+          recentDeposits: [
+            {
+              _id: "deposit-1",
+              amount: 8000,
+              recordedAt: new Date("2026-04-21T13:00:00.000Z").getTime(),
+              reference: "BANK-117",
+              registerNumber: "Register 1",
+              registerSessionId: "session-open",
+            },
+          ],
+          registerSessions: [
+            {
+              _id: "session-open",
+              expectedCash: 24800,
+              openedAt: new Date("2026-04-21T09:15:00.000Z").getTime(),
+              openingFloat: 5000,
+              registerNumber: "Register 1",
+              status: "active",
+              totalDeposited: 8000,
+              variance: 0,
+            },
+          ],
+        }}
+        hasFinancialDetailsAccess={false}
+        isLoading={false}
+        orgUrlSlug="v26"
+        storeUrlSlug="east-legon"
+      />,
+    );
+
+    expect(screen.queryByText("$248")).not.toBeInTheDocument();
+    expect(screen.queryByText("$80")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Manager only")).not.toHaveLength(0);
+    expect(screen.getAllByText("Register 1")).not.toHaveLength(0);
+  });
+
   it("replaces the closed-session preview table with a store history snapshot when all drawers are closed", () => {
     render(
       <CashControlsDashboardContent

@@ -296,6 +296,7 @@ function renderContent(
   return render(
     <DailyCloseViewContent
       currency="GHS"
+      hasFinancialDetailsAccess
       hasFullAdminAccess
       isAuthenticated
       isCompleting={false}
@@ -1076,6 +1077,37 @@ describe("DailyCloseViewContent", () => {
     );
   });
 
+  it("redacts EOD Review financial details without manager access", async () => {
+    const user = userEvent.setup();
+    renderContent(blockedSnapshot, {
+      hasFinancialDetailsAccess: false,
+    });
+
+    const detailsButton = screen.getAllByRole("button", {
+      name: /show details/i,
+    })[0];
+
+    if (detailsButton) {
+      await user.click(detailsButton);
+    }
+
+    expect(screen.queryByText("GH₵1,255")).not.toBeInTheDocument();
+    expect(screen.queryByText("GH₵450")).not.toBeInTheDocument();
+    expect(screen.queryByText("GH₵25")).not.toBeInTheDocument();
+    expect(screen.queryByText("GH₵400")).not.toBeInTheDocument();
+    expect(screen.queryByText("GH₵-200")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        "Variance of GH₵-200 exceeded the closeout approval threshold",
+      ),
+    ).not.toBeInTheDocument();
+    expect(screen.getAllByText("Manager only")).not.toHaveLength(0);
+    expect(
+      screen.getByText("Register session is still open"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("2 cash transactions")).toBeInTheDocument();
+  });
+
   it("omits operating date from transaction links for the current operating day", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-05-07T12:00:00"));
@@ -1327,6 +1359,7 @@ describe("DailyCloseViewContent", () => {
     rerender(
       <DailyCloseViewContent
         currency="GHS"
+        hasFinancialDetailsAccess
         hasFullAdminAccess
         isAuthenticated
         isCompleting={false}
@@ -1399,6 +1432,7 @@ describe("DailyCloseViewContent", () => {
     renderResult.rerender(
       <DailyCloseViewContent
         currency="GHS"
+        hasFinancialDetailsAccess
         hasFullAdminAccess
         isAuthenticated
         isCompleting={false}

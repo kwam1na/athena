@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { ArrowUpRight } from "lucide-react";
+import type { ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
 import { Button } from "../ui/button";
@@ -35,7 +36,7 @@ export function OperationsSummaryMetric({
   label: string;
   link?: OperationsSummaryMetricLink;
   tone?: "default" | "quiet";
-  value: string | number;
+  value: ReactNode;
 }) {
   return (
     <div

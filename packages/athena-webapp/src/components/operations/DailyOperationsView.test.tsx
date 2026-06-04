@@ -400,6 +400,7 @@ function renderContent(
     <DailyOperationsViewContent
       currency="GHS"
       hasFullAdminAccess
+      hasFinancialDetailsAccess
       isAuthenticated
       isLoadingAccess={false}
       isLoadingSnapshot={snapshot === undefined}
@@ -523,6 +524,19 @@ describe("DailyOperationsViewContent", () => {
     expect(
       screen.queryByRole("link", { name: "Open Open work" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("redacts financial metrics when a POS-only user has no manager elevation", () => {
+    renderContent(operatingSnapshot, {
+      hasFinancialDetailsAccess: false,
+    });
+
+    expect(screen.queryByText("GH₵15,331")).not.toBeInTheDocument();
+    expect(screen.queryByText("GH₵3,491")).not.toBeInTheDocument();
+    expect(screen.queryByText("GH₵17,461")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Manager only")).not.toHaveLength(0);
+    expect(screen.getAllByText("3 transactions")).not.toHaveLength(0);
+    expect(screen.getByText("2 cash transactions")).toBeInTheDocument();
   });
 
   it("uses today labels and current-day transaction links for the current operating date", () => {

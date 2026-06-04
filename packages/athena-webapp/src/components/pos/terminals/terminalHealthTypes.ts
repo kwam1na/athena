@@ -54,6 +54,7 @@ export type TerminalRuntimeStatus = {
   snapshots: {
     availabilityAgeMs?: number;
     catalogAgeMs?: number;
+    serviceCatalogAgeMs?: number;
     registerReadModelAgeMs?: number;
   };
   source:

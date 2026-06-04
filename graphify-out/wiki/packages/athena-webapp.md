@@ -17,7 +17,7 @@ Landing page for packages/athena-webapp. Use this page to orient around graph ho
 - [validation-map.json](../../../packages/athena-webapp/docs/agent/validation-map.json)
 
 ## Graph Hotspots
-- `DailyCloseView.tsx` (82 edges, Community 0) - [`packages/athena-webapp/src/components/operations/DailyCloseView.tsx`](../../../packages/athena-webapp/src/components/operations/DailyCloseView.tsx)
+- `DailyCloseView.tsx` (84 edges, Community 0) - [`packages/athena-webapp/src/components/operations/DailyCloseView.tsx`](../../../packages/athena-webapp/src/components/operations/DailyCloseView.tsx)
 - `dailyClose.ts` (65 edges, Community 1) - [`packages/athena-webapp/convex/operations/dailyClose.ts`](../../../packages/athena-webapp/convex/operations/dailyClose.ts)
 - `useRegisterViewModel.ts` (55 edges, Community 2) - [`packages/athena-webapp/src/lib/pos/presentation/register/useRegisterViewModel.ts`](../../../packages/athena-webapp/src/lib/pos/presentation/register/useRegisterViewModel.ts)
 - `RegisterSessionView.tsx` (45 edges, Community 4) - [`packages/athena-webapp/src/components/cash-controls/RegisterSessionView.tsx`](../../../packages/athena-webapp/src/components/cash-controls/RegisterSessionView.tsx)

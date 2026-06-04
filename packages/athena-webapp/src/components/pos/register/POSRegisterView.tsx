@@ -280,7 +280,9 @@ function RegisterSyncStatusChip({
           ? "text-warning"
           : "text-muted-foreground";
   const canRetry =
-    !isOperableReview && syncStatus.status !== "synced" && syncStatus.onRetrySync;
+    !isOperableReview &&
+    syncStatus.status !== "synced" &&
+    syncStatus.onRetrySync;
   const label = getRegisterSyncStatusChipLabel(syncStatus.status, {
     isRegisterOperable,
   });
@@ -473,8 +475,7 @@ function usePosDebugPanelToggle() {
 
   useEffect(() => {
     function isDebugShortcut(event: KeyboardEvent) {
-      const isDebugShortcut =
-        event.key === "/" || event.code === "Slash";
+      const isDebugShortcut = event.key === "/" || event.code === "Slash";
       return (event.metaKey || event.ctrlKey) && isDebugShortcut;
     }
 
@@ -887,9 +888,9 @@ function POSOnboardingWorkspace({
                     "rounded-lg border p-layout-md transition-colors",
                     step.isComplete && "border-border bg-surface",
                     step.isCurrent &&
-                    "border-action-commit/40 bg-background shadow-sm",
+                      "border-action-commit/40 bg-background shadow-sm",
                     isWaiting &&
-                    "border-transparent bg-transparent py-layout-sm opacity-55",
+                      "border-transparent bg-transparent py-layout-sm opacity-55",
                   )}
                 >
                   <div className="flex gap-layout-md">
@@ -897,12 +898,12 @@ function POSOnboardingWorkspace({
                       className={cn(
                         "mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border bg-background text-muted-foreground",
                         step.isComplete &&
-                        "border-success/30 bg-success/10 text-success",
+                          "border-success/30 bg-success/10 text-success",
                         step.isCurrent &&
-                        !step.isComplete &&
-                        "border-action-commit/30 bg-action-neutral-soft text-action-commit",
+                          !step.isComplete &&
+                          "border-action-commit/30 bg-action-neutral-soft text-action-commit",
                         isWaiting &&
-                        "h-8 w-8 border-border/60 bg-transparent text-muted-foreground",
+                          "h-8 w-8 border-border/60 bg-transparent text-muted-foreground",
                       )}
                     >
                       {step.isComplete ? (
@@ -1047,7 +1048,12 @@ export function POSRegisterView({
   const shouldRenderSaleSurface = isPosWorkflow
     ? !viewModel.checkout.isTransactionCompleted && !isLocallyClosedPendingSync
     : true;
-  const shouldRenderExpenseCompletionPanel = !isPosWorkflow;
+  const shouldRenderExpenseCompletionWorkspace =
+    !isPosWorkflow &&
+    viewModel.checkout.isTransactionCompleted &&
+    !isAwaitingCashierAuth;
+  const shouldRenderExpenseCompletionPanel =
+    !isPosWorkflow && !shouldRenderExpenseCompletionWorkspace;
   const shouldRenderCheckoutPanel =
     isPosWorkflow || shouldRenderExpenseCompletionPanel;
   const shouldShowPaymentWorkspace =
@@ -1414,7 +1420,9 @@ export function POSRegisterView({
                   ref={headerProductSearchInputRef}
                   disabled={!isHeaderProductSearchSupported}
                   productSearchQuery={viewModel.productEntry.productSearchQuery}
-                  setProductSearchQuery={viewModel.productEntry.setProductSearchQuery}
+                  setProductSearchQuery={
+                    viewModel.productEntry.setProductSearchQuery
+                  }
                   onBarcodeSubmit={viewModel.productEntry.onBarcodeSubmit}
                   className="max-w-[800px] flex-1"
                   inputClassName="h-14"
@@ -1423,7 +1431,9 @@ export function POSRegisterView({
             </div>
           }
           trailingContent={
-            (canSearchProducts && isPosWorkflow && !isLocallyClosedPendingSync) ||
+            (canSearchProducts &&
+              isPosWorkflow &&
+              !isLocallyClosedPendingSync) ||
             shouldShowDrawerRecoveryActionBar ? (
               <RegisterActionBar
                 cashierCard={viewModel.cashierCard}
@@ -1465,10 +1475,13 @@ export function POSRegisterView({
           <div className="grid min-h-0 flex-1 grid-cols-1 gap-6 overflow-hidden lg:grid-cols-[minmax(0,2fr)_minmax(340px,1fr)]">
             {isLocallyClosedPendingSync && viewModel.syncStatus ? (
               <div className="lg:col-span-2">
-                <LocalRegisterClosedWorkspace syncStatus={viewModel.syncStatus} />
+                <LocalRegisterClosedWorkspace
+                  syncStatus={viewModel.syncStatus}
+                />
               </div>
             ) : shouldRenderSaleSurface ? (
               <div
+                data-testid="register-main-workspace"
                 className={cn(
                   "flex min-h-0 flex-col overflow-hidden pr-1",
                   !shouldRenderWorkspaceSidebar && "lg:col-span-2",
@@ -1482,6 +1495,10 @@ export function POSRegisterView({
                   <DrawerGateWorkspace drawerGate={viewModel.drawerGate} />
                 ) : isAwaitingCashierAuth && viewModel.authDialog ? (
                   <CashierAuthWorkspace authDialog={viewModel.authDialog} />
+                ) : shouldRenderExpenseCompletionWorkspace ? (
+                  <div className="min-h-0 flex-1 overflow-y-auto rounded-lg bg-surface p-4">
+                    <ExpenseCompletionPanel checkout={viewModel.checkout} />
+                  </div>
                 ) : shouldShowPaymentWorkspace ? (
                   <CartItems
                     cartItems={viewModel.cart.items}
@@ -1494,9 +1511,7 @@ export function POSRegisterView({
                     density="comfortable"
                   />
                 ) : hasLookupIntent ? (
-                  <div className="min-h-0 flex-1">
-                    {renderProductEntry()}
-                  </div>
+                  <div className="min-h-0 flex-1">{renderProductEntry()}</div>
                 ) : shouldShowIdleLookupCartSplit ? (
                   <div className="grid h-full min-h-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(20rem,0.72fr)]">
                     <ProductLookupEmptyState
@@ -1521,7 +1536,9 @@ export function POSRegisterView({
                       serviceItems={viewModel.cart.serviceItems}
                       onUpdateQuantity={viewModel.cart.onUpdateQuantity}
                       onRemoveItem={viewModel.cart.onRemoveItem}
-                      onUpdateServiceAmount={viewModel.cart.onUpdateServiceAmount}
+                      onUpdateServiceAmount={
+                        viewModel.cart.onUpdateServiceAmount
+                      }
                       onRemoveService={viewModel.cart.onRemoveService}
                       clearCart={viewModel.cart.onClearCart}
                       density="compact"
@@ -1569,6 +1586,7 @@ export function POSRegisterView({
 
             {shouldRenderWorkspaceSidebar ? (
               <div
+                data-testid="register-workspace-sidebar"
                 className={cn(
                   "flex h-full min-h-0 overflow-hidden",
                   shouldRenderSaleSurface ? "lg:col-span-1" : "lg:col-span-2",
@@ -1581,7 +1599,9 @@ export function POSRegisterView({
                       serviceItems={viewModel.cart.serviceItems}
                       onUpdateQuantity={viewModel.cart.onUpdateQuantity}
                       onRemoveItem={viewModel.cart.onRemoveItem}
-                      onUpdateServiceAmount={viewModel.cart.onUpdateServiceAmount}
+                      onUpdateServiceAmount={
+                        viewModel.cart.onUpdateServiceAmount
+                      }
                       onRemoveService={viewModel.cart.onRemoveService}
                       clearCart={viewModel.cart.onClearCart}
                       density="compact"

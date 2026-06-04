@@ -336,8 +336,11 @@ describe("terminal health presentation", () => {
       getSnapshotAgeSummary({
         availabilityAgeMs: 90_000,
         catalogAgeMs: 12 * 60_000,
+        serviceCatalogAgeMs: 3 * 60_000,
       }),
-    ).toBe("Availability 2 minutes old / Catalog 12 minutes old");
+    ).toBe(
+      "Availability 2 minutes old / Catalog 12 minutes old / Service catalog 3 minutes old",
+    );
 
     vi.useRealTimers();
   });

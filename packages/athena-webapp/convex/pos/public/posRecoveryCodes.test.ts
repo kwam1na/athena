@@ -30,6 +30,7 @@ const POS_ACCOUNT_ID = "athena-pos-account-1" as Id<"athenaUser">;
 const AUTH_USER_ID = "auth-user-pos" as Id<"users">;
 const FULL_ADMIN_ID = "athena-full-admin-1" as Id<"athenaUser">;
 const FULL_ADMIN_AUTH_USER_ID = "auth-user-full-admin" as Id<"users">;
+const RECOVERY_CODE_PATTERN = /^[a-z]+\d{2}$/;
 
 describe("POS recovery codes", () => {
   beforeEach(() => {
@@ -60,18 +61,17 @@ describe("POS recovery codes", () => {
     });
   });
 
-  it("creates a hash-only credential and verifies the generated code", async () => {
+  it("creates a persisted credential and verifies the generated code", async () => {
     const ctx = buildCtx();
     const create = getHandler(createOrRotateRecoveryCodeForTest);
     const verify = getHandler(verifyRecoveryCodeForAuthProvider);
 
     const created = await create(ctx, { storeId: STORE_ID });
 
-    expect(created.code).toMatch(/^[0-9a-f-]+$/);
+    expect(created.code).toMatch(RECOVERY_CODE_PATTERN);
     expect(ctx.tables.posRecoveryCredential).toHaveLength(1);
     const credential = ctx.tables.posRecoveryCredential[0];
     expect(credential.codeHash).not.toBe(created.code);
-    expect(JSON.stringify(credential)).not.toContain(created.code);
 
     const result = await verify(ctx, {
       code: created.code,
@@ -83,6 +83,11 @@ describe("POS recovery codes", () => {
     expect(ctx.tables.posRecoveryCredential[0].failedAttemptCount).toBe(0);
     expect(ctx.tables.posRecoveryCredential[0].lastUsedAt).toEqual(
       expect.any(Number),
+    );
+    expect(created.credential).toEqual(
+      expect.objectContaining({
+        plaintextCode: created.code,
+      }),
     );
     expect(JSON.stringify(ctx.tables.operationalEvent)).not.toContain(
       created.code,
@@ -105,6 +110,26 @@ describe("POS recovery codes", () => {
         email: "pos@wigclub.store",
         orgUrlSlug: "wigclub",
         storeUrlSlug: "wigclub",
+      }),
+    ).resolves.toEqual({ authUserId: AUTH_USER_ID });
+  });
+
+  it("accepts recovery codes without exact casing or word separators", async () => {
+    const ctx = buildCtx();
+    const create = getHandler(createOrRotateRecoveryCodeForTest);
+    const verify = getHandler(verifyRecoveryCodeForAuthProvider);
+
+    const created = await create(ctx, { storeId: STORE_ID });
+    const staffTypedCode = created.code
+      .replace(/(.{4})/g, "$1 ")
+      .trim()
+      .toUpperCase();
+
+    await expect(
+      verify(ctx, {
+        code: staffTypedCode,
+        email: "pos@wigclub.store",
+        storeId: STORE_ID,
       }),
     ).resolves.toEqual({ authUserId: AUTH_USER_ID });
   });
@@ -234,7 +259,11 @@ describe("POS recovery codes", () => {
 
     authServerMocks.getAuthUserId.mockResolvedValue(FULL_ADMIN_AUTH_USER_ID);
     await expect(getStatus(ctx, { storeId: STORE_ID })).resolves.toEqual(
-      expect.objectContaining({ status: "active", storeId: STORE_ID }),
+      expect.objectContaining({
+        plaintextCode: expect.any(String),
+        status: "active",
+        storeId: STORE_ID,
+      }),
     );
 
     authServerMocks.getAuthUserId.mockResolvedValue(AUTH_USER_ID);
@@ -252,7 +281,7 @@ describe("POS recovery codes", () => {
     authServerMocks.getAuthUserId.mockResolvedValue(FULL_ADMIN_AUTH_USER_ID);
     const result = await rotate(ctx, { storeId: STORE_ID });
 
-    expect(result.code).toMatch(/^[0-9a-f-]+$/);
+    expect(result.code).toMatch(RECOVERY_CODE_PATTERN);
     expect(result.credential).toEqual(
       expect.objectContaining({
         rotatedByUserId: FULL_ADMIN_ID,
@@ -260,11 +289,9 @@ describe("POS recovery codes", () => {
         storeId: STORE_ID,
       }),
     );
-    expect(JSON.stringify(ctx.tables.posRecoveryCredential[0])).not.toContain(
-      result.code,
-    );
     expect(ctx.tables.posRecoveryCredential[0]).toEqual(
       expect.objectContaining({
+        plaintextCode: result.code,
         rotatedByUserId: FULL_ADMIN_ID,
         status: "active",
       }),
@@ -275,6 +302,53 @@ describe("POS recovery codes", () => {
           actorUserId: FULL_ADMIN_ID,
           eventType: "pos_recovery_code_rotated",
           metadata: expect.objectContaining({ reason: "rotated" }),
+        }),
+      ]),
+    );
+  });
+
+  it.each([
+    {
+      label: "missing POS membership",
+      mutate: (ctx: ReturnType<typeof buildCtx>) => {
+        ctx.tables.organizationMember = ctx.tables.organizationMember.filter(
+          (member) => member.userId !== POS_ACCOUNT_ID,
+        );
+      },
+      reason: "POS recovery account must have POS-only access.",
+    },
+    {
+      label: "admin POS membership",
+      mutate: (ctx: ReturnType<typeof buildCtx>) => {
+        const membership = ctx.tables.organizationMember.find(
+          (member) => member.userId === POS_ACCOUNT_ID,
+        );
+        membership.role = "full_admin";
+      },
+      reason: "POS recovery account must have POS-only access.",
+    },
+    {
+      label: "missing auth user",
+      mutate: (ctx: ReturnType<typeof buildCtx>) => {
+        ctx.tables.users = ctx.tables.users.filter(
+          (user) => user.email !== "pos@wigclub.store",
+        );
+      },
+      reason: "POS recovery account auth user is not configured.",
+    },
+  ])("does not generate recovery codes for $label", async ({ mutate, reason }) => {
+    const ctx = buildCtx();
+    const rotate = getHandler(rotateRecoveryCode);
+    mutate(ctx);
+
+    authServerMocks.getAuthUserId.mockResolvedValue(FULL_ADMIN_AUTH_USER_ID);
+    await expect(rotate(ctx, { storeId: STORE_ID })).rejects.toThrow(reason);
+
+    expect(ctx.tables.posRecoveryCredential).toHaveLength(0);
+    expect(ctx.tables.operationalEvent).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          eventType: expect.stringMatching(/^pos_recovery_code_/),
         }),
       ]),
     );
