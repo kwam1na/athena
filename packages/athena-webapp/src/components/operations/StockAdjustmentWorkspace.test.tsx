@@ -105,6 +105,7 @@ const baseProps = {
       imageUrl: "https://cdn.example.com/closure-wig.jpg",
       inventoryCount: 8,
       length: 18,
+      netPrice: 4200,
       price: 4500,
       productCategory: "Hair",
       productId: "product-1" as Id<"product">,
@@ -1631,7 +1632,8 @@ describe("StockAdjustmentWorkspaceContent", () => {
     expect(screen.getAllByText("SKU").length).toBeGreaterThan(1);
     expect(screen.getByText("Barcode")).toBeInTheDocument();
     expect(screen.getByText("Price")).toBeInTheDocument();
-    expect(screen.getAllByText("GH₵45").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("GH₵42").length).toBeGreaterThan(0);
+    expect(screen.queryByText("GH₵45")).not.toBeInTheDocument();
     expect(screen.getByText("Category")).toBeInTheDocument();
     expect(screen.getByText("Size")).toBeInTheDocument();
     expect(screen.getByText("Length")).toBeInTheDocument();

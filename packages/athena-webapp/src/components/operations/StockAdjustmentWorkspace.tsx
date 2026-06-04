@@ -84,6 +84,7 @@ export type InventorySnapshotItem = {
   imageUrl?: string | null;
   inventoryCount: number;
   length?: number | null;
+  netPrice?: number | null;
   posReservedQuantity?: number;
   price?: number | null;
   productCategory?: string | null;
@@ -362,14 +363,15 @@ function formatReservationSourceSummary(args: {
 
 function getSkuDetailEntries(item: InventorySnapshotItem) {
   const reservationLabels = getReservationLabels(item);
+  const operationalPrice = getInventoryItemOperationalPrice(item);
 
   return [
     item.sku ? { label: "SKU", value: item.sku } : null,
     item.barcode ? { label: "Barcode", value: item.barcode } : null,
-    typeof item.price === "number"
+    typeof operationalPrice === "number"
       ? {
           label: "Price",
-          value: formatStoredCurrencyAmount("GHS", item.price, {
+          value: formatStoredCurrencyAmount("GHS", operationalPrice, {
             revealMinorUnits: true,
           }),
         }
@@ -394,9 +396,15 @@ function getSkuDetailEntries(item: InventorySnapshotItem) {
   );
 }
 
+function getInventoryItemOperationalPrice(item: InventorySnapshotItem) {
+  return typeof item.netPrice === "number" ? item.netPrice : item.price;
+}
+
 function formatInventoryItemPriceLabel(item: InventorySnapshotItem) {
-  return typeof item.price === "number"
-    ? `Price ${formatStoredCurrencyAmount("GHS", item.price, {
+  const operationalPrice = getInventoryItemOperationalPrice(item);
+
+  return typeof operationalPrice === "number"
+    ? `Price ${formatStoredCurrencyAmount("GHS", operationalPrice, {
         revealMinorUnits: true,
       })}`
     : "Price pending";

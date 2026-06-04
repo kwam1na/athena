@@ -593,6 +593,7 @@ export async function listInventorySnapshotWithCtx(
           imageUrl: productSku.images[0] ?? null,
           inventoryCount: productSku.inventoryCount,
           length: productSku.length ?? null,
+          netPrice: productSku.netPrice,
           price: productSku.price,
           productCategory: category?.name ?? null,
           productId: productSku.productId,
