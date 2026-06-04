@@ -265,8 +265,8 @@ export type TerminalRuntimeStatusInput = {
   };
   snapshots: {
     catalogAgeMs?: number;
-    availabilityAgeMs?: number;
     serviceCatalogAgeMs?: number;
+    availabilityAgeMs?: number;
     registerReadModelAgeMs?: number;
   };
 };
@@ -403,11 +403,11 @@ export async function submitTerminalRuntimeStatus(
     }),
     snapshots: omitUndefined({
       catalogAgeMs: nonNegativeInteger(args.status.snapshots.catalogAgeMs),
-      availabilityAgeMs: nonNegativeInteger(
-        args.status.snapshots.availabilityAgeMs,
-      ),
       serviceCatalogAgeMs: nonNegativeInteger(
         args.status.snapshots.serviceCatalogAgeMs,
+      ),
+      availabilityAgeMs: nonNegativeInteger(
+        args.status.snapshots.availabilityAgeMs,
       ),
       registerReadModelAgeMs: nonNegativeInteger(
         args.status.snapshots.registerReadModelAgeMs,

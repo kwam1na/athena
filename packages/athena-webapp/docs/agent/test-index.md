@@ -7,12 +7,14 @@ This index enumerates the current automated test files and ties them back to the
 ## Package-level commands
 
 - `bun run --filter '@athena/webapp' test`
+- `bun run --filter '@athena/webapp' test:e2e`
 
 ## Detected test surfaces
 
 - `convex`
 - `shared`
 - `src`
+- `src/tests`
 
 ## Section `convex`
 
@@ -251,6 +253,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/hooks/useAuth.test.tsx`](../../src/hooks/useAuth.test.tsx)
 - [`src/hooks/useBulkOperations.test.ts`](../../src/hooks/useBulkOperations.test.ts)
 - [`src/hooks/useExpenseSessions.test.ts`](../../src/hooks/useExpenseSessions.test.ts)
+- [`src/hooks/useGetActiveStore.test.ts`](../../src/hooks/useGetActiveStore.test.ts)
 - [`src/hooks/useGetTerminal.test.ts`](../../src/hooks/useGetTerminal.test.ts)
 - [`src/hooks/useProtectedAdminPageState.test.tsx`](../../src/hooks/useProtectedAdminPageState.test.tsx)
 - [`src/lib/access/capabilities.test.ts`](../../src/lib/access/capabilities.test.ts)
@@ -291,6 +294,9 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/lib/storeConfig.test.ts`](../../src/lib/storeConfig.test.ts)
 - [`src/lib/traces/createWorkflowTraceId.test.ts`](../../src/lib/traces/createWorkflowTraceId.test.ts)
 - [`src/lib/utils.test.ts`](../../src/lib/utils.test.ts)
+- [`src/offline/posAppShellRoutes.test.ts`](../../src/offline/posAppShellRoutes.test.ts)
+- [`src/offline/posOfflineReadiness.test.ts`](../../src/offline/posOfflineReadiness.test.ts)
+- [`src/offline/registerPosAppShellServiceWorker.test.ts`](../../src/offline/registerPosAppShellServiceWorker.test.ts)
 - [`src/routeTree.browser-boundary.test.ts`](../../src/routeTree.browser-boundary.test.ts)
 - [`src/routes/_authed.test.tsx`](../../src/routes/_authed.test.tsx)
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/sku-activity.test.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/sku-activity.test.tsx)
@@ -309,6 +315,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/stories/storybook-theme-decorator.test.ts`](../../src/stories/storybook-theme-decorator.test.ts)
 - [`src/tests/pos/backend.test.ts`](../../src/tests/pos/backend.test.ts)
 - [`src/tests/pos/inventoryValidationLogic.test.ts`](../../src/tests/pos/inventoryValidationLogic.test.ts)
+- [`src/tests/pos/offlineRouteAccess.spec.ts`](../../src/tests/pos/offlineRouteAccess.spec.ts)
 - [`src/tests/pos/simple.test.ts`](../../src/tests/pos/simple.test.ts)
 - [`src/tests/pos/usePrint.test.ts`](../../src/tests/pos/usePrint.test.ts)
 

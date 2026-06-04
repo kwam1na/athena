@@ -457,8 +457,18 @@ export default function Layout() {
     isLoading &&
     isBrowserOffline() &&
     hasStoredLocalSession();
+  const routeWantsFullscreen =
+    isPosRegisterPath(pathname) ||
+    (isUnknownRouterPath(pathname) && isPosRegisterPath(browserPathname));
+  const canRenderSignedInPosRegisterShell =
+    Boolean(user) &&
+    routeWantsFullscreen &&
+    localPosEntryContext.status === "ready" &&
+    Boolean(localPosEntryContext.terminalSeed);
   const shouldRenderPosTerminalShell =
-    canRenderRehydratingPosShell || isRecoveredPosAppSession;
+    canRenderRehydratingPosShell ||
+    isRecoveredPosAppSession ||
+    canRenderSignedInPosRegisterShell;
   const shouldRenderPendingPosTerminalShell =
     isPendingPosAppSessionRecovery || isClassifyingPosAppSession;
   const userEmail =
@@ -466,9 +476,6 @@ export default function Layout() {
     (shouldRenderPosTerminalShell || shouldRenderPendingPosTerminalShell
       ? "POS terminal"
       : "");
-  const routeWantsFullscreen =
-    isPosRegisterPath(pathname) ||
-    (isUnknownRouterPath(pathname) && isPosRegisterPath(browserPathname));
   const isFullscreenActive = fullscreenOverride ?? routeWantsFullscreen;
 
   // useEffect(() => {

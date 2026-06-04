@@ -686,6 +686,7 @@ function buildRuntimeStatus(extra: Record<string, unknown> = {}) {
     },
     snapshots: {
       catalogAgeMs: 10,
+      serviceCatalogAgeMs: 15,
       availabilityAgeMs: 20,
       registerReadModelAgeMs: 30,
     },

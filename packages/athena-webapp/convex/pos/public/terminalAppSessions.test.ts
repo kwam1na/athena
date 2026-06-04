@@ -326,7 +326,7 @@ describe("terminal app-session recovery validation", () => {
         metadata: {
           otp: "111222",
           rawToken: "secret-token",
-          staffPin: "1234",
+          staffPin: "staff-pin-should-not-leak",
         },
       }),
     );
@@ -339,7 +339,7 @@ describe("terminal app-session recovery validation", () => {
       "terminal-proof-1",
       "111222",
       "secret-token",
-      "1234",
+      "staff-pin-should-not-leak",
       "syncSecretHash",
       "terminalProof",
       "staffPin",

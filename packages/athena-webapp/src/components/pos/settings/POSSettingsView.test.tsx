@@ -422,6 +422,15 @@ describe("registerAndProvisionPosTerminal", () => {
     render(<POSSettingsView />);
 
     expect(await screen.findByText("Terminal health")).toBeInTheDocument();
+    expect(screen.getByText("Offline diagnostics need attention")).toBeInTheDocument();
+    expect(
+      screen.getByText((_content, element) =>
+        Boolean(element?.textContent?.trim() === "0 of 6 ready"),
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("App shell readiness has not reported from this checkout station."),
+    ).toBeInTheDocument();
     expect(
       screen.getByText(
         "This settings page only changes the current checkout station.",

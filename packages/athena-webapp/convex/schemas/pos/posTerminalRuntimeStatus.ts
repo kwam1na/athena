@@ -89,8 +89,8 @@ export const posTerminalRuntimeStaffAuthorityValidator = v.object({
 
 export const posTerminalRuntimeSnapshotsValidator = v.object({
   catalogAgeMs: v.optional(v.number()),
-  availabilityAgeMs: v.optional(v.number()),
   serviceCatalogAgeMs: v.optional(v.number()),
+  availabilityAgeMs: v.optional(v.number()),
   registerReadModelAgeMs: v.optional(v.number()),
 });
 

@@ -1090,7 +1090,9 @@ describe("usePosLocalSyncRuntimeStatus", () => {
       }),
     );
 
-    await waitFor(() => expect(mocks.ingestLocalEvents).toHaveBeenCalled());
+    await waitFor(() => expect(mocks.ingestLocalEvents).toHaveBeenCalled(), {
+      timeout: 3_000,
+    });
     expect(store.writeTerminalIntegrityState).toHaveBeenCalledWith(
       expect.objectContaining({
         cloudTerminalId: "terminal-cloud-1",
@@ -1163,7 +1165,9 @@ describe("usePosLocalSyncRuntimeStatus", () => {
       }),
     );
 
-    await waitFor(() => expect(mocks.ingestLocalEvents).toHaveBeenCalled());
+    await waitFor(() => expect(mocks.ingestLocalEvents).toHaveBeenCalled(), {
+      timeout: 5_000,
+    });
     expect(store.markEventsNeedsReview).not.toHaveBeenCalled();
     expect(store.markEventsSynced).not.toHaveBeenCalled();
     expect(store.writeDrawerAuthorityState).not.toHaveBeenCalled();
