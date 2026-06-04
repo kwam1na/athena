@@ -16,8 +16,21 @@ import {
   matchesSkuSearchTerms,
   normalizeSkuSearchQuery,
 } from "@/lib/stockOps/skuSearch";
-import { Link2, Loader2, PackagePlus, Plus, Trash2 } from "lucide-react";
+import {
+  BrowserMultiFormatReader,
+  type IScannerControls,
+} from "@zxing/browser";
+import {
+  Link2,
+  Loader2,
+  PackagePlus,
+  Plus,
+  ScanBarcode,
+  Trash2,
+  X,
+} from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   isLikelyQuickAddBarcode,
   normalizeQuickAddLookupCode,
@@ -125,6 +138,173 @@ function getExistingSkuMetadata(option: QuickAddExistingSkuOption) {
     .filter((value): value is string => Boolean(value));
 }
 
+function QuickAddBarcodeScannerDialog({
+  onBarcodeDetected,
+  onOpenChange,
+  open,
+}: {
+  onBarcodeDetected: (barcode: string) => void;
+  onOpenChange: (open: boolean) => void;
+  open: boolean;
+}) {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const scannerControlsRef = useRef<IScannerControls | null>(null);
+  const [scannerState, setScannerState] = useState<
+    "starting" | "scanning" | "unsupported" | "blocked" | "error"
+  >("starting");
+
+  const stopScanner = useCallback(() => {
+    scannerControlsRef.current?.stop();
+    scannerControlsRef.current = null;
+  }, []);
+
+  useEffect(() => {
+    if (!open) {
+      stopScanner();
+      setScannerState("starting");
+      return;
+    }
+
+    const videoElement = videoRef.current;
+    const hasCamera = Boolean(navigator.mediaDevices?.getUserMedia);
+
+    if (!videoElement || !hasCamera) {
+      setScannerState("unsupported");
+      return;
+    }
+
+    let cancelled = false;
+    const reader = new BrowserMultiFormatReader(undefined, {
+      delayBetweenScanAttempts: 180,
+      tryPlayVideoTimeout: 15000,
+    });
+
+    setScannerState("starting");
+
+    void reader
+      .decodeFromConstraints(
+        {
+          audio: false,
+          video: { facingMode: { ideal: "environment" } },
+        },
+        videoElement,
+        (result, _error, controls) => {
+          if (cancelled) {
+            return;
+          }
+
+          const decodedValue = result?.getText().trim();
+
+          if (!decodedValue) {
+            return;
+          }
+
+          controls.stop();
+          scannerControlsRef.current = null;
+          onBarcodeDetected(decodedValue);
+          onOpenChange(false);
+        },
+      )
+      .then((controls) => {
+        if (cancelled) {
+          controls.stop();
+          return;
+        }
+
+        scannerControlsRef.current = controls;
+        setScannerState("scanning");
+      })
+      .catch((error: unknown) => {
+        if (cancelled) {
+          return;
+        }
+
+        const errorName =
+          error instanceof DOMException ? error.name : undefined;
+        setScannerState(
+          errorName === "NotAllowedError" || errorName === "SecurityError"
+            ? "blocked"
+            : "error",
+        );
+      });
+
+    return () => {
+      cancelled = true;
+      stopScanner();
+    };
+  }, [onBarcodeDetected, onOpenChange, open, stopScanner]);
+
+  if (!open || typeof document === "undefined") {
+    return null;
+  }
+
+  const scannerMessage =
+    scannerState === "starting"
+      ? "Starting camera..."
+      : scannerState === "scanning"
+        ? "Scanning barcode..."
+        : scannerState === "unsupported"
+          ? "Camera barcode scanning is not available in this browser."
+          : scannerState === "blocked"
+            ? "Camera access is blocked for this site."
+            : "Could not read from the camera.";
+
+  return createPortal(
+    <div
+      aria-modal="true"
+      className="pointer-events-auto fixed inset-0 z-[60] overflow-y-auto bg-slate-950/60 p-layout-md sm:flex sm:items-center sm:justify-center"
+      role="dialog"
+      style={{ pointerEvents: "auto" }}
+    >
+      <section className="relative mx-auto grid w-full max-w-md gap-4 rounded-lg border border-border bg-background p-6 shadow-lg">
+        <button
+          aria-label="Close barcode scanner"
+          className="absolute right-4 top-4 rounded-sm text-muted-foreground opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+          onClick={() => onOpenChange(false)}
+          type="button"
+        >
+          <X className="h-4 w-4" />
+        </button>
+        <header className="space-y-1.5 pr-8">
+          <h2 className="text-lg font-semibold leading-none tracking-tight">
+            Scan barcode
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Use the device camera to fill the product barcode.
+          </p>
+        </header>
+        <div className="space-y-layout-md">
+          <div className="relative aspect-[4/3] overflow-hidden rounded-md border border-border bg-muted">
+            <video
+              aria-label="Barcode camera preview"
+              autoPlay
+              className="h-full w-full object-cover"
+              muted
+              playsInline
+              ref={videoRef}
+            />
+            {scannerState === "starting" ? (
+              <div className="pointer-events-none absolute inset-x-layout-md bottom-layout-md rounded-md border border-border bg-background/85 px-3 py-2 text-center text-sm text-muted-foreground shadow-sm">
+                {scannerMessage}
+              </div>
+            ) : scannerState === "scanning" ? (
+              <div className="pointer-events-none absolute inset-x-layout-xl top-1/2 h-px -translate-y-1/2 bg-primary/80 shadow-[0_0_18px_hsl(var(--primary))]" />
+            ) : (
+              <div className="absolute inset-0 flex items-center justify-center bg-muted/95 px-layout-md text-center text-sm text-muted-foreground">
+                {scannerMessage}
+              </div>
+            )}
+          </div>
+          {scannerState === "scanning" ? (
+            <p className="text-sm text-muted-foreground">{scannerMessage}</p>
+          ) : null}
+        </div>
+      </section>
+    </div>,
+    document.body,
+  );
+}
+
 export function QuickAddProductDialog({
   open,
   onOpenChange,
@@ -155,6 +335,7 @@ export function QuickAddProductDialog({
   const [quickAddError, setQuickAddError] = useState<string | null>(null);
   const [isQuickAddSaving, setIsQuickAddSaving] = useState(false);
   const [isAttachSaving, setIsAttachSaving] = useState(false);
+  const [isBarcodeScannerOpen, setIsBarcodeScannerOpen] = useState(false);
   const [existingSkuQuery, setExistingSkuQuery] = useState("");
   const [selectedExistingSkuId, setSelectedExistingSkuId] = useState<
     string | null
@@ -233,6 +414,11 @@ export function QuickAddProductDialog({
     resetQuickAddForm();
     onOpenChange(false);
   };
+
+  const handleBarcodeDetected = useCallback((barcode: string) => {
+    setQuickAddLookupCode(normalizeQuickAddLookupCode(barcode));
+    setQuickAddError(null);
+  }, []);
 
   const handleQuickAddSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -457,7 +643,24 @@ export function QuickAddProductDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="flex max-h-[min(94vh,900px)] flex-col overflow-hidden sm:max-w-3xl">
+      <DialogContent
+        className="flex max-h-[min(94vh,900px)] flex-col overflow-hidden sm:max-w-3xl"
+        onEscapeKeyDown={(event) => {
+          if (isBarcodeScannerOpen) {
+            event.preventDefault();
+          }
+        }}
+        onInteractOutside={(event) => {
+          if (isBarcodeScannerOpen) {
+            event.preventDefault();
+          }
+        }}
+        onPointerDownOutside={(event) => {
+          if (isBarcodeScannerOpen) {
+            event.preventDefault();
+          }
+        }}
+      >
         <form
           onSubmit={handleQuickAddSubmit}
           className="flex min-h-0 flex-1 flex-col gap-6 overflow-hidden"
@@ -671,15 +874,29 @@ export function QuickAddProductDialog({
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)_minmax(0,1fr)]">
                     <div className="space-y-2">
                       <Label htmlFor="quick-add-lookup-code">Barcode</Label>
-                      <Input
-                        id="quick-add-lookup-code"
-                        value={quickAddLookupCode}
-                        onChange={(event) =>
-                          setQuickAddLookupCode(event.target.value)
-                        }
-                        placeholder="Optional"
-                        disabled={isSaving}
-                      />
+                      <div className="relative">
+                        <Input
+                          className="pr-10"
+                          id="quick-add-lookup-code"
+                          value={quickAddLookupCode}
+                          onChange={(event) =>
+                            setQuickAddLookupCode(event.target.value)
+                          }
+                          placeholder="Optional"
+                          disabled={isSaving}
+                        />
+                        <Button
+                          aria-label="Scan with camera"
+                          className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                          disabled={isSaving}
+                          onClick={() => setIsBarcodeScannerOpen(true)}
+                          size="icon"
+                          type="button"
+                          variant="ghost"
+                        >
+                          <ScanBarcode className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
 
                     <div className="space-y-2">
@@ -827,6 +1044,11 @@ export function QuickAddProductDialog({
           </DialogFooter>
         </form>
       </DialogContent>
+      <QuickAddBarcodeScannerDialog
+        onBarcodeDetected={handleBarcodeDetected}
+        onOpenChange={setIsBarcodeScannerOpen}
+        open={isBarcodeScannerOpen}
+      />
     </Dialog>
   );
 }

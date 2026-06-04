@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { QuickAddProductDialog } from "./QuickAddProductDialog";
 
@@ -11,6 +11,16 @@ class ResizeObserverStub {
 }
 
 globalThis.ResizeObserver = ResizeObserverStub;
+
+const mockedScanner = vi.hoisted(() => ({
+  BrowserMultiFormatReader: vi.fn(),
+  decodeFromConstraints: vi.fn(),
+  stop: vi.fn(),
+}));
+
+vi.mock("@zxing/browser", () => ({
+  BrowserMultiFormatReader: mockedScanner.BrowserMultiFormatReader,
+}));
 
 function renderQuickAddDialog(input?: {
   onSubmit?: ReturnType<typeof vi.fn>;
@@ -65,6 +75,15 @@ function renderQuickAddDialog(input?: {
 }
 
 describe("QuickAddProductDialog", () => {
+  beforeEach(() => {
+    mockedScanner.BrowserMultiFormatReader.mockReset();
+    mockedScanner.decodeFromConstraints.mockReset();
+    mockedScanner.stop.mockReset();
+    mockedScanner.BrowserMultiFormatReader.mockImplementation(() => ({
+      decodeFromConstraints: mockedScanner.decodeFromConstraints,
+    }));
+  });
+
   it("does not seed an extra variant when multiple variants are enabled", async () => {
     const user = userEvent.setup();
     renderQuickAddDialog();
@@ -110,6 +129,70 @@ describe("QuickAddProductDialog", () => {
       }),
     );
     expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it("fills the barcode field from the shared scanner trigger", async () => {
+    const user = userEvent.setup();
+
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: { getUserMedia: vi.fn() },
+    });
+    mockedScanner.decodeFromConstraints.mockImplementation(
+      async (_constraints, _videoElement, onResult) => {
+        onResult(
+          { getText: () => "1234567890123" },
+          undefined,
+          { stop: mockedScanner.stop },
+        );
+
+        return { stop: mockedScanner.stop };
+      },
+    );
+
+    renderQuickAddDialog();
+
+    await user.click(screen.getByRole("button", { name: /scan with camera/i }));
+
+    await waitFor(() =>
+      expect(screen.getByLabelText(/^barcode$/i)).toHaveValue("1234567890123"),
+    );
+    expect(mockedScanner.decodeFromConstraints).toHaveBeenCalled();
+    expect(mockedScanner.stop).toHaveBeenCalled();
+  });
+
+  it("closes the shared scanner dialog while quick add remains open", async () => {
+    const user = userEvent.setup();
+
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: { getUserMedia: vi.fn() },
+    });
+    mockedScanner.decodeFromConstraints.mockImplementation(
+      () => new Promise(() => {}),
+    );
+
+    const { onOpenChange } = renderQuickAddDialog();
+
+    await user.click(screen.getByRole("button", { name: /scan with camera/i }));
+
+    expect(
+      screen.getByRole("heading", { name: /scan barcode/i }),
+    ).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: /close barcode scanner/i }),
+    );
+
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("heading", { name: /scan barcode/i }),
+      ).not.toBeInTheDocument(),
+    );
+    expect(
+      screen.getByRole("heading", { name: /quick add product/i }),
+    ).toBeInTheDocument();
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
   });
 
   it("attaches a scanned barcode to an existing SKU without requiring product fields", async () => {
