@@ -679,6 +679,29 @@ function LaneCard({
   );
 }
 
+function isActionableLane(lane: DailyOperationsSnapshot["lanes"][number]) {
+  return !["ready", "closed"].includes(lane.status);
+}
+
+function WorkflowAllClearPanel() {
+  return (
+    <div className="rounded-md border border-border/70 bg-background/60 px-layout-md py-layout-sm">
+      <div className="flex items-start gap-layout-sm">
+        <SuccessCheckIcon className="mt-0.5" label="Workflow clear" />
+        <div className="min-w-0">
+          <h3 className="text-sm font-medium text-foreground">
+            No active workflow blockers
+          </h3>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+            Clear lanes are hidden here. Use the shortcuts below when you need
+            to open a supporting workspace.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function HistoricalWorkflowPanel({
   orgUrlSlug,
   snapshot,
@@ -1081,6 +1104,9 @@ export function DailyOperationsViewContent({
   const isHistoricalDate = snapshot
     ? isHistoricalOperatingDate(snapshot.operatingDate)
     : false;
+  const actionableLanes = snapshot
+    ? snapshot.lanes.filter(isActionableLane)
+    : [];
 
   return (
     <View hideBorder hideHeaderBottomBorder scrollMode="page">
@@ -1290,15 +1316,19 @@ export function DailyOperationsViewContent({
                       </div>
                       <div className="overflow-hidden rounded-lg border border-border bg-surface-raised shadow-surface">
                         <div className="grid gap-layout-xs p-layout-sm md:grid-cols-2 xl:grid-cols-3">
-                          {snapshot.lanes.map((lane) => (
-                            <LaneCard
-                              key={lane.key}
-                              lane={lane}
-                              operatingDate={snapshot.operatingDate}
-                              orgUrlSlug={orgUrlSlug}
-                              storeUrlSlug={storeUrlSlug}
-                            />
-                          ))}
+                          {actionableLanes.length > 0 ? (
+                            actionableLanes.map((lane) => (
+                              <LaneCard
+                                key={lane.key}
+                                lane={lane}
+                                operatingDate={snapshot.operatingDate}
+                                orgUrlSlug={orgUrlSlug}
+                                storeUrlSlug={storeUrlSlug}
+                              />
+                            ))
+                          ) : (
+                            <WorkflowAllClearPanel />
+                          )}
                         </div>
                         <SupportingWorkspaceLinks
                           operatingDate={snapshot.operatingDate}

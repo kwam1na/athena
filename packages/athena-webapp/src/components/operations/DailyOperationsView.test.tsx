@@ -566,25 +566,17 @@ describe("DailyOperationsViewContent", () => {
       "/wigclub/store/osu/operations/daily-close?o=%252Fwigclub%252Fstore%252Fosu%252Foperations",
     );
     expect(screen.queryByText("Current day only")).not.toBeInTheDocument();
-    expect(screen.getByLabelText("Opening ready")).toBeInTheDocument();
+    expect(screen.getByText("No active workflow blockers")).toBeInTheDocument();
+    expect(screen.getByLabelText("Workflow clear")).toBeInTheDocument();
     expect(
-      screen.getByLabelText("EOD Review ready"),
-    ).toBeInTheDocument();
-    expect(screen.getByLabelText("Open work ready")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Open Opening" })).toHaveAttribute(
-      "href",
-      "/wigclub/store/osu/operations/opening?o=%252Fwigclub%252Fstore%252Fosu%252Foperations",
-    );
+      screen.queryByRole("link", { name: "Open Opening" }),
+    ).not.toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: "Open EOD Review" }),
-    ).toHaveAttribute(
-      "href",
-      "/wigclub/store/osu/operations/daily-close?o=%252Fwigclub%252Fstore%252Fosu%252Foperations",
-    );
-    expect(screen.getByRole("link", { name: "Open Open work" })).toHaveAttribute(
-      "href",
-      "/wigclub/store/osu/operations/open-work?o=%252Fwigclub%252Fstore%252Fosu%252Foperations",
-    );
+      screen.queryByRole("link", { name: "Open EOD Review" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "Open Open work" }),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: "Open Close history workspace" }),
     ).toHaveAttribute(
@@ -671,11 +663,11 @@ describe("DailyOperationsViewContent", () => {
       operatingDate: getCurrentLocalOperatingDate(),
     });
 
-    expect(screen.getByLabelText("Opening ready")).toBeInTheDocument();
     expect(
       screen.getByLabelText("EOD Review needs attention"),
     ).toBeInTheDocument();
     expect(screen.getByLabelText("Registers blocked")).toBeInTheDocument();
+    expect(screen.queryByText("Opening")).not.toBeInTheDocument();
     expect(screen.queryByText("Needs attention")).not.toBeInTheDocument();
     expect(screen.queryByText("Blocked")).not.toBeInTheDocument();
   });
