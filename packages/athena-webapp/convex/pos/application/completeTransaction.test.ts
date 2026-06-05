@@ -1117,10 +1117,15 @@ describe("completeTransaction checkout side effects", () => {
       expect.objectContaining({
         adjustmentKind: "sale",
         changeGiven: 2,
+        paymentCount: 1,
+        paymentMethodLabels: ["cash"],
         registerSessionId: "register-1",
         registerNumber: "1",
+        saleTotal: 10,
         storeId: "store-1",
         terminalId: "terminal-1",
+        transactionId: "txn-1",
+        transactionNumber: expect.any(String),
       }),
     );
     expect(recordRetailSalePaymentAllocations).toHaveBeenCalledWith(
@@ -1131,6 +1136,31 @@ describe("completeTransaction checkout side effects", () => {
         posTransactionId: "txn-1",
         registerSessionId: "register-1",
         storeId: "store-1",
+      }),
+    );
+    expect(recordOperationalEventWithCtx).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        eventType: "pos_transaction_completed",
+        metadata: expect.objectContaining({
+          completedAt: expect.any(Number),
+          cashDelta: 10,
+          lineCount: 1,
+          paymentCount: 1,
+          paymentMethods: ["cash"],
+          receiptNumber: expect.any(String),
+          saleTotal: 10,
+          syncOrigin: "online",
+          total: 10,
+          transactionNumber: expect.any(String),
+        }),
+        message: expect.stringMatching(
+          /^POS sale #.+ completed: GH₵0\.1, cash\.$/,
+        ),
+        posTransactionId: "txn-1",
+        registerSessionId: "register-1",
+        subjectId: "txn-1",
+        subjectType: "posTransaction",
       }),
     );
     expect(recordInventoryMovementWithCtx).toHaveBeenCalledWith(
@@ -1570,13 +1600,42 @@ describe("completeTransaction trace ordering", () => {
     expect(runMutation).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
+        paymentCount: 1,
+        paymentMethodLabels: ["cash"],
         registerSessionId: "register-1",
+        saleTotal: 10,
+        transactionId: "txn-1",
+        transactionNumber: expect.any(String),
       }),
     );
     expect(recordRetailSalePaymentAllocations).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         registerSessionId: "register-1",
+      }),
+    );
+    expect(recordOperationalEventWithCtx).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        actorStaffProfileId: "staff-1",
+        customerProfileId: "profile-1",
+        eventType: "pos_transaction_completed",
+        metadata: expect.objectContaining({
+          completedAt: expect.any(Number),
+          cashDelta: 10,
+          lineCount: 1,
+          paymentCount: 1,
+          paymentMethods: ["cash"],
+          receiptNumber: expect.any(String),
+          saleTotal: 10,
+          syncOrigin: "online",
+          total: 10,
+          transactionNumber: expect.any(String),
+        }),
+        posTransactionId: "txn-1",
+        registerSessionId: "register-1",
+        subjectId: "txn-1",
+        subjectType: "posTransaction",
       }),
     );
     expect(consumeInventoryHoldsForSession).toHaveBeenCalledWith(

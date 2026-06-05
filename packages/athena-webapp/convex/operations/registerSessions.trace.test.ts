@@ -591,6 +591,52 @@ describe("register session workflow trace handlers", () => {
     });
   });
 
+  it("records online non-cash sale evidence without changing expected cash", async () => {
+    const ctx = createMutationCtx({
+      sessions: [buildRegisterSession()],
+    });
+
+    const updatedSession = await getHandler(recordRegisterSessionTransaction)(
+      ctx as never,
+      {
+        registerSessionId: "session-1",
+        storeId: "store-1",
+        adjustmentKind: "sale",
+        payments: [{ method: "card", amount: 9_000, timestamp: 1 }],
+        paymentCount: 1,
+        paymentMethodLabels: ["card"],
+        registerNumber: "A1",
+        saleTotal: 9_000,
+        terminalId: "terminal-1",
+        transactionId: "transaction-1",
+        transactionNumber: "R-001",
+      },
+    );
+
+    expect(updatedSession).toEqual(
+      expect.objectContaining({
+        _id: "session-1",
+        expectedCash: 5_000,
+        status: "active",
+      }),
+    );
+    expect(mocks.traceRecord).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        amount: 0,
+        cashDelta: 0,
+        occurredAt: 999,
+        paymentCount: 1,
+        paymentMethodLabels: ["card"],
+        saleTotal: 9_000,
+        stage: "sale_recorded",
+        syncOrigin: "online",
+        transactionId: "transaction-1",
+        transactionNumber: "R-001",
+      }),
+    );
+  });
+
   it("records a void adjustment trace when register-session cash decreases", async () => {
     const ctx = createMutationCtx({
       sessions: [buildRegisterSession({ expectedCash: 13_000, status: "closing" })],

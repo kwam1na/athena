@@ -57,6 +57,20 @@ vi.mock("../common/FadeIn", () => ({
   FadeIn: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
 }));
 
+vi.mock("~/src/components/traces/WorkflowTraceRouteLink", () => ({
+  WorkflowTraceRouteLink: ({
+    children,
+    traceId,
+  }: {
+    children?: React.ReactNode;
+    traceId: string;
+  }) => (
+    <a data-trace-id={traceId} href={`/traces/${encodeURIComponent(traceId)}`}>
+      {children ?? "View trace"}
+    </a>
+  ),
+}));
+
 vi.mock("./session/HeldSessionsList", () => ({
   HeldSessionsList: () => <div>held-sessions-list</div>,
 }));
@@ -88,6 +102,10 @@ describe("SessionManager", () => {
     expect(
       screen.queryByRole("button", { name: /hold/i }),
     ).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "View trace" })).toHaveAttribute(
+      "data-trace-id",
+      "pos_session:ses-001",
+    );
     expect(
       screen.getByRole("button", { name: /clear sale/i }),
     ).toBeInTheDocument();
