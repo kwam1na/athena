@@ -100,7 +100,16 @@ describe("projectLocalSyncEvent", () => {
     expect(repository.createdOperationalEvents).toEqual([
       expect.objectContaining({
         eventType: "pos_local_sync.sale_projected",
-        message: "Offline POS sale synced.",
+        message:
+          "Offline POS sale #LR-001 synced: 1 sale line, GH₵0.25, cash.",
+        metadata: expect.objectContaining({
+          lineCount: 1,
+          localReceiptNumber: "LR-001",
+          paymentMethods: ["cash"],
+          receiptNumber: "LR-001",
+          total: 25,
+          transactionNumber: "LR-001",
+        }),
         posTransactionId: "transaction-1",
       }),
     ]);
@@ -225,6 +234,18 @@ describe("projectLocalSyncEvent", () => {
         }),
       ]),
     );
+    expect(repository.createdOperationalEvents).toEqual([
+      expect.objectContaining({
+        eventType: "pos_local_sync.sale_projected",
+        message:
+          "Offline POS sale #LR-001 synced: 2 sale lines, GH₵1, cash and card.",
+        metadata: expect.objectContaining({
+          lineCount: 2,
+          paymentMethods: ["cash", "card"],
+          total: 100,
+        }),
+      }),
+    ]);
     expect(repository.registerSessionPatches).toEqual(
       expect.arrayContaining([
         {
@@ -251,6 +272,54 @@ describe("projectLocalSyncEvent", () => {
         }),
       ]),
     );
+  });
+
+  it("names every payment method on the projected sale timeline event", async () => {
+    const repository = createProjectionRepository();
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: buildSaleCompletedEvent({
+        payload: {
+          ...buildSaleCompletedEvent().payload,
+          payments: [
+            {
+              localPaymentId: "local-payment-cash",
+              method: "cash",
+              amount: 10,
+              timestamp: 21,
+            },
+            {
+              localPaymentId: "local-payment-card",
+              method: "card",
+              amount: 5,
+              timestamp: 22,
+            },
+            {
+              localPaymentId: "local-payment-mobile-money",
+              method: "mobile_money",
+              amount: 10,
+              timestamp: 23,
+            },
+          ],
+        },
+      }),
+      syncEventId: "sync-event-1",
+      now: 100,
+    });
+
+    expect(result.status).toBe("projected");
+    expect(repository.createdOperationalEvents).toEqual([
+      expect.objectContaining({
+        eventType: "pos_local_sync.sale_projected",
+        message:
+          "Offline POS sale #LR-001 synced: 1 sale line, GH₵0.25, cash, card, and mobile money.",
+        metadata: expect.objectContaining({
+          paymentMethods: ["cash", "card", "mobile money"],
+        }),
+      }),
+    ]);
   });
 
   it("projects service-only sales without product inventory movement or retail allocations", async () => {

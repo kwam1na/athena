@@ -1,5 +1,7 @@
 import type { Id } from "../../../_generated/dataModel";
 import { normalizeInStorePayments } from "../../../cashControls/paymentAllocationAttribution";
+import { toDisplayAmount } from "../../../lib/currency";
+import { currencyFormatter } from "../../../utils";
 import type {
   LocalSyncConflictRecord,
   LocalSyncMappingRecord,
@@ -559,6 +561,7 @@ async function projectSaleCompleted(
   });
 
   await recordSaleProjectedEvent(repository, args, {
+    payments,
     payload: validation.payload,
     sale,
     session: sessionResolution,
@@ -1510,6 +1513,7 @@ function recordSaleProjectedEvent(
   repository: SyncProjectionRepository,
   args: SaleCompletedArgs,
   input: {
+    payments: SalePaymentCalculation;
     payload: PosLocalSalePayload;
     sale: PersistedSale;
     session: SaleSessionResolution;
@@ -1522,17 +1526,113 @@ function recordSaleProjectedEvent(
     eventType: "pos_local_sync.sale_projected",
     subjectType: "posTransaction",
     subjectId: input.sale.transactionId,
-    message: "Offline POS sale synced.",
+    message: buildSaleProjectedMessage({
+      currency: input.store?.currency,
+      payments: input.payments,
+      payload: input.payload,
+    }),
     metadata: {
+      lineCount: getSaleLineCount(input.payload),
       localEventId: args.event.localEventId,
       localReceiptNumber: input.payload.localReceiptNumber,
+      paymentMethods: getPaymentMethodLabels(input.payments.validPayments),
       receiptNumber: input.payload.receiptNumber,
+      total: input.payload.totals.total,
+      transactionNumber: input.payload.receiptNumber,
     },
     createdAt: args.event.occurredAt,
     actorStaffProfileId: args.event.staffProfileId,
     registerSessionId: input.session.registerSession._id,
     posTransactionId: input.sale.transactionId,
   });
+}
+
+function buildSaleProjectedMessage(args: {
+  currency?: string;
+  payments: SalePaymentCalculation;
+  payload: PosLocalSalePayload;
+}) {
+  const receiptNumber =
+    args.payload.receiptNumber?.trim() ||
+    args.payload.localReceiptNumber?.trim();
+  const transactionLabel = receiptNumber ? ` #${receiptNumber}` : "";
+  const lineCount = getSaleLineCount(args.payload);
+  const paymentLabel = getPaymentSummaryLabel(args.payments.validPayments);
+
+  return [
+    `Offline POS sale${transactionLabel} synced: ${formatSaleLineCount(lineCount)}`,
+    formatSaleTotal(args.currency, args.payload.totals.total),
+    paymentLabel,
+  ].join(", ") + ".";
+}
+
+function getSaleLineCount(payload: PosLocalSalePayload) {
+  return payload.items.length + (payload.serviceLines?.length ?? 0);
+}
+
+function formatSaleLineCount(lineCount: number) {
+  return lineCount === 1 ? "1 sale line" : `${lineCount} sale lines`;
+}
+
+function formatSaleTotal(currency: string | undefined, amount: number) {
+  const displayAmount = toDisplayAmount(amount);
+  const storeCurrency = currency?.trim() || "GHS";
+
+  try {
+    return currencyFormatter(storeCurrency).format(displayAmount);
+  } catch (error) {
+    console.error("[pos-sync] sale.projected.currency-format", {
+      currency: storeCurrency,
+      error,
+    });
+
+    return currencyFormatter("GHS").format(displayAmount);
+  }
+}
+
+function getPaymentMethodLabels(payments: PosLocalSalePayload["payments"]) {
+  return Array.from(
+    new Set(
+      payments
+        .map((payment) => formatPaymentMethod(payment.method))
+        .filter(Boolean),
+    ),
+  );
+}
+
+function getPaymentSummaryLabel(payments: PosLocalSalePayload["payments"]) {
+  const labels = getPaymentMethodLabels(payments);
+
+  if (labels.length === 0) {
+    return "payment needs review";
+  }
+
+  if (labels.length === 1) {
+    return labels[0];
+  }
+
+  return formatPaymentMethodList(labels);
+}
+
+function formatPaymentMethodList(labels: string[]) {
+  if (labels.length === 2) {
+    return `${labels[0]} and ${labels[1]}`;
+  }
+
+  const lastLabel = labels[labels.length - 1];
+  const leadingLabels = labels.slice(0, -1).join(", ");
+
+  return `${leadingLabels}, and ${lastLabel}`;
+}
+
+function formatPaymentMethod(method: string) {
+  const normalized = method.trim().toLowerCase();
+
+  if (normalized === "mobile_money") return "mobile money";
+  if (normalized === "card") return "card";
+  if (normalized === "cash") return "cash";
+
+  return normalized.replaceAll("_", " ");
 }
 
 async function recordSaleWorkflowEvidence(

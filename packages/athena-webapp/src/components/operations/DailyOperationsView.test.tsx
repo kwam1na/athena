@@ -347,6 +347,58 @@ const quickAddTimelineSnapshot: DailyOperationsSnapshot = {
   ],
 };
 
+const posSyncedSaleTimelineSnapshot: DailyOperationsSnapshot = {
+  ...operatingSnapshot,
+  timeline: [
+    {
+      createdAt: Date.UTC(2026, 4, 8, 18),
+      id: "event-pos-sale-synced",
+      message:
+        "Offline POS sale 946956 synced: 3 sale lines, GH₵1,039, cash.",
+      subject: {
+        id: "txn-946956",
+        type: "posTransaction",
+      },
+      transactionLink: {
+        label: "#946956",
+        params: {
+          transactionId: "txn-946956",
+        },
+        to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId",
+      },
+      type: "pos_local_sync.sale_projected",
+    },
+  ],
+};
+
+const cycleCountSkuTimelineSnapshot: DailyOperationsSnapshot = {
+  ...operatingSnapshot,
+  timeline: [
+    {
+      createdAt: Date.UTC(2026, 4, 8, 18),
+      id: "event-cycle-count-sku",
+      message:
+        "pos@wigclub.store counted AI Engineering (6N2Y-8T-6RM) as 24. Draft has 1 change",
+      productLink: {
+        label: "AI Engineering (6N2Y-8T-6RM)",
+        params: {
+          productSlug: "product-1",
+        },
+        search: {
+          variant: "6N2Y-8T-6RM",
+        },
+        to: "/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug",
+      },
+      subject: {
+        id: "draft-1",
+        label: "Cycle count draft",
+        type: "cycle_count_draft",
+      },
+      type: "cycle_count_draft_updated",
+    },
+  ],
+};
+
 function getCurrentLocalOperatingDate() {
   const date = new Date();
   const localDate = new Date(
@@ -898,6 +950,56 @@ describe("DailyOperationsViewContent", () => {
         );
       }),
     ).toBeInTheDocument();
+  });
+
+  it("links synced offline POS sale transaction numbers with link-out affordance", () => {
+    renderContent(posSyncedSaleTimelineSnapshot);
+
+    const transactionLink = screen.getByRole("link", { name: "#946956" });
+
+    expect(transactionLink).toHaveAttribute(
+      "href",
+      expect.stringContaining(
+        "/wigclub/store/osu/pos/transactions/txn-946956?o=",
+      ),
+    );
+    expect(
+      screen.getByText((content, node) => {
+        return (
+          node?.textContent ===
+          "Offline POS sale #946956 synced: 3 sale lines, GH₵1,039, cash."
+        );
+      }),
+    ).toBeInTheDocument();
+    expect(transactionLink.querySelector("svg")).toBeInTheDocument();
+  });
+
+  it("links cycle-count product labels and SKU tokens with link-out affordance", () => {
+    renderContent(cycleCountSkuTimelineSnapshot);
+
+    const skuLink = screen.getByRole("link", {
+      name: "AI Engineering (6N2Y-8T-6RM)",
+    });
+
+    expect(skuLink).toHaveAttribute(
+      "href",
+      expect.stringContaining(
+        "/wigclub/store/osu/products/product-1?o=",
+      ),
+    );
+    expect(skuLink).toHaveAttribute(
+      "href",
+      expect.stringContaining("variant=6N2Y-8T-6RM"),
+    );
+    expect(
+      screen.getByText((content, node) => {
+        return (
+          node?.textContent ===
+          "pos@wigclub.store counted AI Engineering (6N2Y-8T-6RM) as 24. Draft has 1 change"
+        );
+      }),
+    ).toBeInTheDocument();
+    expect(skuLink.querySelector("svg")).toBeInTheDocument();
   });
 
   it("leaves content empty while the store-day snapshot loads", () => {
