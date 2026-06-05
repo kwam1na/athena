@@ -36,6 +36,19 @@ export type PosLocalSyncEventStatus =
   | "needs_review"
   | "failed";
 
+export type PosLocalEventValidationFlag =
+  | "app-session-unverified"
+  | "cloud-validation-uncertain";
+
+export type PosLocalEventUploadDeferral =
+  | "app-session-validated";
+
+export interface PosLocalEventValidationMetadata {
+  flags: PosLocalEventValidationFlag[];
+  observedAt?: number;
+  uploadDeferredUntil?: PosLocalEventUploadDeferral;
+}
+
 export function canUploadPosLocalEventType(type: PosLocalEventType): boolean {
   return (
     type === "register.opened" ||
@@ -73,6 +86,7 @@ export interface PosLocalEventRecord {
   localTransactionId?: string;
   staffProfileId?: string;
   staffProofToken?: string;
+  validationMetadata?: PosLocalEventValidationMetadata;
   payload: unknown;
   createdAt: number;
   sync: {
@@ -295,6 +309,7 @@ export type PosLocalAppendEventInput = {
   localTransactionId?: string;
   staffProfileId?: string;
   staffProofToken?: string;
+  validationMetadata?: PosLocalEventValidationMetadata;
   initialSyncStatus?: PosLocalSyncEventStatus;
   payload: unknown;
 };
@@ -376,6 +391,9 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
       transaction,
       input,
     );
+    const validationMetadata = normalizeEventValidationMetadata(
+      input.validationMetadata,
+    );
     const event: PosLocalEventRecord = {
       localEventId: createLocalId("event"),
       schemaVersion: POS_LOCAL_STORE_SCHEMA_VERSION,
@@ -398,6 +416,7 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
       ...(shouldPersistStaffProofToken(input)
         ? { staffProofToken: input.staffProofToken }
         : {}),
+      ...(validationMetadata ? { validationMetadata } : {}),
       payload: input.payload,
       createdAt: clock(),
       sync: { status: input.initialSyncStatus ?? getInitialSyncStatus(input.type) },
@@ -1538,6 +1557,31 @@ function normalizeCashierPresenceRecord(
         role === "cashier" || role === "manager",
     ),
     username: normalizeUsername(record.username),
+  };
+}
+
+function normalizeEventValidationMetadata(
+  metadata?: PosLocalEventValidationMetadata,
+): PosLocalEventValidationMetadata | undefined {
+  if (!metadata) return undefined;
+
+  const flags = Array.from(new Set(metadata.flags)).filter(
+    (flag): flag is PosLocalEventValidationFlag =>
+      flag === "app-session-unverified" ||
+      flag === "cloud-validation-uncertain",
+  );
+
+  if (flags.length === 0) return undefined;
+
+  return {
+    flags,
+    ...(typeof metadata.observedAt === "number" &&
+    Number.isFinite(metadata.observedAt)
+      ? { observedAt: metadata.observedAt }
+      : {}),
+    ...(metadata.uploadDeferredUntil === "app-session-validated"
+      ? { uploadDeferredUntil: metadata.uploadDeferredUntil }
+      : {}),
   };
 }
 

@@ -663,6 +663,57 @@ describe("syncContract", () => {
       .not.toHaveProperty("staffProofToken");
   });
 
+  it("defers app-session-unverified events until supported validation is present", () => {
+    const event = buildLocalEvent({
+      localEventId: "event-offline-sale",
+      type: "transaction.completed",
+      validationMetadata: {
+        flags: [
+          "app-session-unverified",
+          "cloud-validation-uncertain",
+        ],
+        observedAt: 2_000,
+        uploadDeferredUntil: "app-session-validated",
+      },
+      payload: {
+        localPosSessionId: "local-session-1",
+        localTransactionId: "local-txn-1",
+        receiptNumber: "LOCAL-1-000001",
+        subtotal: 25,
+        tax: 0,
+        total: 25,
+        customerEmail: "customer@example.com",
+        payments: [{ method: "cash", amount: 25, timestamp: 4 }],
+      },
+    });
+
+    expect(isSyncablePosLocalEvent(event)).toBe(false);
+    expect(buildPosLocalSyncUploadEvents([event], [event])).toEqual([]);
+
+    expect(
+      isSyncablePosLocalEvent(event, {
+        appSessionValidation: "supported",
+      }),
+    ).toBe(true);
+    expect(
+      buildPosLocalSyncUploadEvents([event], [event], {
+        appSessionValidation: "supported",
+      }),
+    ).toEqual([
+      expect.objectContaining({
+        localEventId: "event-offline-sale",
+        eventType: "sale_completed",
+      }),
+    ]);
+    expect(
+      JSON.stringify(
+        buildPosLocalSyncUploadEvents([event], [event], {
+          appSessionValidation: "supported",
+        }),
+      ),
+    ).toContain("customer@example.com");
+  });
+
   it("uses stored upload sequence instead of recomputing from currently uploadable rows", () => {
     const events: PosLocalEventRecord[] = [
       buildLocalEvent({

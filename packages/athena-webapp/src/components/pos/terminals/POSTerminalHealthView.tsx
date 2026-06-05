@@ -118,11 +118,10 @@ function buildTerminalOfflineReadiness(
   const appSessionRecovery = runtimeStatus?.appSessionRecovery?.status;
 
   return buildPosOfflineReadinessSummary({
-    appShell: appSessionRecovery
-      ? {
-          ready: appSessionRecovery === "ready",
-        }
+    appSession: appSessionRecovery
+      ? getAppSessionReadinessInput(appSessionRecovery)
       : null,
+    appShell: null,
     terminalSeed: runtimeStatus
       ? { ready: runtimeStatus.localStore.terminalSeedReady }
       : null,
@@ -142,6 +141,18 @@ function buildTerminalOfflineReadiness(
         ? { ageMs: snapshots.availabilityAgeMs, ready: true }
         : null,
   });
+}
+
+function getAppSessionReadinessInput(status: string) {
+  if (status === "waiting_for_network") {
+    return { status: "local_continuation" as const };
+  }
+
+  if (status === "ready") {
+    return { ready: true };
+  }
+
+  return { ready: false };
 }
 
 export function POSTerminalHealthViewContent({
@@ -282,11 +293,13 @@ export function POSTerminalHealthViewContent({
                           </div>
                           <div>
                             <p className="text-xs font-medium uppercase text-muted-foreground">
-                              Active session
+                              App-session posture
                             </p>
                             <p className="mt-1 text-sm text-foreground">
-                              Register session evidence is shown in cash
-                              controls
+                              {runtimeStatus?.appSessionRecovery?.status ===
+                              "waiting_for_network"
+                                ? "Local sale continuation"
+                                : "Register session evidence is shown in cash controls"}
                             </p>
                           </div>
                           <div>

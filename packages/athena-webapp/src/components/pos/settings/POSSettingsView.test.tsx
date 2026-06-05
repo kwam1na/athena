@@ -434,7 +434,7 @@ describe("registerAndProvisionPosTerminal", () => {
     expect(screen.getByText("Offline diagnostics need attention")).toBeInTheDocument();
     expect(
       screen.getByText((_content, element) =>
-        Boolean(element?.textContent?.trim() === "0 of 6 reporting"),
+        Boolean(element?.textContent?.trim() === "0 of 7 reporting"),
       ),
     ).toBeInTheDocument();
     expect(
@@ -525,16 +525,16 @@ describe("registerAndProvisionPosTerminal", () => {
     );
 
     expect(
-      await screen.findByText("Register ready for offline checkout"),
+      await screen.findByText("This register is ready for checkout"),
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        "This checkout station has the app shell, terminal setup, staff authority, catalog, and availability data needed for offline POS.",
+        "6 of 7 offline diagnostic signals are reporting here. Missing signals do not block checkout by themselves.",
       ),
     ).toBeInTheDocument();
     expect(
       screen.getByText((_content, element) =>
-        Boolean(element?.textContent?.trim() === "6 of 6 reporting"),
+        Boolean(element?.textContent?.trim() === "6 of 7 reporting"),
       ),
     ).toBeInTheDocument();
   });

@@ -315,6 +315,68 @@ describe("terminalRuntimeStatus", () => {
     );
   });
 
+  it("reports uncertainty metadata as support-safe counts without exposing payload details", () => {
+    const input = {
+      clock: () => 2_000,
+      events: [
+        buildLocalEvent({
+          localEventId: "event-offline-sale",
+          localPosSessionId: "sale-1",
+          localTransactionId: "transaction-1",
+          payload: {
+            customerEmail: "customer@example.com",
+            payments: [{ amount: 10_000, method: "cash" }],
+            rawTerminalProof: "terminal-proof-secret",
+          },
+          sequence: 2,
+          type: "transaction.completed",
+          uploadSequence: 2,
+          validationMetadata: {
+            flags: [
+              "app-session-unverified",
+              "cloud-validation-uncertain",
+            ],
+            observedAt: 1_500,
+            uploadDeferredUntil: "app-session-validated",
+          },
+        }),
+      ],
+      source: "support-diagnostics",
+    } satisfies PosTerminalRuntimeStatusInput;
+
+    const status = buildPosTerminalRuntimeStatus(input);
+    const diagnostics = buildPosTerminalRuntimeCopyDiagnostics(input);
+
+    expect(status.sync).toEqual(
+      expect.objectContaining({
+        localOnlyEventCount: 1,
+        pendingEventCount: 1,
+        uploadableEventCount: 0,
+      }),
+    );
+    expect(diagnostics.counts).toEqual(
+      expect.objectContaining({
+        appSessionUnverifiedEventCount: 1,
+        cloudValidationUncertainEventCount: 1,
+        deferredUploadEventCount: 1,
+        localOnlyEventCount: 1,
+        uploadableEventCount: 0,
+      }),
+    );
+    expect(diagnostics.events).toEqual([
+      expect.objectContaining({
+        localEventId: "event-offline-sale",
+        status: "pending",
+        type: "transaction.completed",
+        uploadSequence: 2,
+      }),
+    ]);
+    const serialized = JSON.stringify({ diagnostics, status });
+    expect(serialized).not.toContain("payments");
+    expect(serialized).not.toContain("customer@example.com");
+    expect(serialized).not.toContain("terminal-proof-secret");
+  });
+
   it.each([
     {
       expected: "ready",

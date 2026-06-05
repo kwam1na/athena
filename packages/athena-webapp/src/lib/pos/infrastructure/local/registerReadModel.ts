@@ -5,6 +5,10 @@ import type {
 } from "@/lib/pos/application/dto";
 
 import { derivePosLocalSyncStatus } from "./syncStatus";
+import {
+  deriveLocalSaleBlocker,
+  type PosLocalSaleBlockReason,
+} from "./saleBlockerPolicy";
 import type {
   PosLocalCloudMapping,
   PosLocalEventRecord,
@@ -12,11 +16,6 @@ import type {
   PosTerminalIntegrityState,
   PosProvisionedTerminalSeed,
 } from "./posLocalStore";
-
-export type PosLocalSaleBlockReason =
-  | "terminal_integrity"
-  | "drawer_authority"
-  | "lifecycle_needs_review";
 
 export type PosLocalRegisterReadModelErrorCode =
   | "malformed_payload"
@@ -416,7 +415,6 @@ export function projectLocalRegisterReadModel(input: {
   const saleBlockReason = getSaleBlockReason({
     activeRegisterSession,
     drawerAuthority: input.drawerAuthority,
-    events: orderedEvents,
     terminalIntegrity: input.terminalIntegrity,
   });
   const canSell =
@@ -457,50 +455,24 @@ export function projectLocalRegisterReadModel(input: {
 function getSaleBlockReason(input: {
   activeRegisterSession: PosLocalCashDrawerReadModel | null;
   drawerAuthority?: PosDrawerAuthorityState | null;
-  events: PosLocalEventRecord[];
   terminalIntegrity?: PosTerminalIntegrityState | null;
 }): PosLocalSaleBlockReason | undefined {
-  if (
-    input.terminalIntegrity &&
-    input.terminalIntegrity.status !== "healthy"
-  ) {
-    return "terminal_integrity";
-  }
-
-  if (input.drawerAuthority?.status === "blocked") {
-    return "drawer_authority";
-  }
-
-  const activeRegisterSession = input.activeRegisterSession;
-  if (
-    activeRegisterSession &&
-    input.events.some((event) =>
-      isBlockingLifecycleReviewEvent(event, activeRegisterSession),
-    )
-  ) {
-    return "lifecycle_needs_review";
-  }
-
-  return undefined;
-}
-
-function isBlockingLifecycleReviewEvent(
-  event: PosLocalEventRecord,
-  activeRegisterSession: PosLocalCashDrawerReadModel,
-) {
-  if (event.sync.status !== "needs_review" || !event.sync.uploaded) {
-    return false;
-  }
-  if (
-    event.type !== "register.opened" &&
-    event.type !== "register.closeout_started" &&
-    event.type !== "register.reopened" &&
-    event.type !== "transaction.completed"
-  ) {
-    return false;
-  }
-
-  return registerLifecycleEventMatchesActiveSession(event, activeRegisterSession);
+  return (
+    deriveLocalSaleBlocker({
+      activeRegisterSession: input.activeRegisterSession
+        ? {
+            canReopen: false,
+            localRegisterSessionId:
+              input.activeRegisterSession.localRegisterSessionId,
+            status: input.activeRegisterSession.status,
+          }
+        : null,
+      drawerAuthority: input.drawerAuthority,
+      hasLocalEventDestination: true,
+      hasRequiredIdentities: true,
+      terminalIntegrity: input.terminalIntegrity,
+    })?.reason ?? undefined
+  );
 }
 
 function createMappingIndex(mappings: PosLocalCloudMapping[]) {

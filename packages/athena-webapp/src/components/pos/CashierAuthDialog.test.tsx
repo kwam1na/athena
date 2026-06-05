@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -565,7 +565,9 @@ describe("CashierAuthDialog", () => {
     const usernameInput = screen.getByLabelText(/username/i);
     await user.type(usernameInput, "frontdesk");
     await waitFor(() => expect(usernameInput).toHaveValue("frontdesk"));
-    await user.type(screen.getByLabelText(/pin/i), "1234");
+    fireEvent.change(screen.getByLabelText(/pin/i), {
+      target: { value: "1234" },
+    });
 
     await waitFor(() =>
       expect(onAuthenticated).toHaveBeenCalledWith(

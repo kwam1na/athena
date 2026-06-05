@@ -211,25 +211,22 @@ describe("POS local sync public mutation", () => {
     });
   });
 
-  it("rejects sync when the signed-in user does not own the terminal seed", async () => {
+  it("accepts sync from an authorized store member even when they did not register the terminal", async () => {
     const ctx = buildCtx({ terminalRegisteredByUserId: "athena-admin-1" });
 
-    const result = await getHandler(ingestLocalEvents)(ctx as never, {
+    await getHandler(ingestLocalEvents)(ctx as never, {
       storeId: "store-1",
       terminalId: "terminal-1",
       syncSecretHash: "sync-secret-1",
       events: [buildEvent()],
     });
 
-    expect(result).toEqual({
-      kind: "user_error",
-      error: {
-        code: "authorization_failed",
-        message: "You do not have access to sync this POS terminal.",
-        metadata: { terminalAuthorizationFailure: true },
-      },
-    });
-    expect(mocks.ingestLocalEventsWithCtx).not.toHaveBeenCalled();
+    expect(mocks.ingestLocalEventsWithCtx).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({
+        submittedByUserId: "athena-user-1",
+      }),
+    );
   });
 
   it("rejects sync without the provisioned terminal secret", async () => {

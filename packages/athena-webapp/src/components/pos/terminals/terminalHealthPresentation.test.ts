@@ -193,6 +193,35 @@ describe("terminal health presentation", () => {
     );
   });
 
+  it("keeps app-session-unverified local continuation out of manager review classification", () => {
+    expect(
+      classifyTerminalHealth({
+        health: "online",
+        runtimeStatus: {
+          appSessionRecovery: { status: "waiting_for_network" },
+          receivedAt: Date.now(),
+          localStore: { available: true, terminalSeedReady: true },
+          sync: {
+            failedEventCount: 0,
+            localOnlyEventCount: 3,
+            pendingEventCount: 3,
+            reviewEventCount: 0,
+            status: "pending",
+            uploadableEventCount: 0,
+          },
+        },
+        syncEvidence: { unresolvedConflictCount: 0 },
+        terminal: { status: "active" },
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        description:
+          "App session unverified; local sales stay on this terminal until cloud validation returns.",
+        label: "Local continuation",
+      }),
+    );
+  });
+
   it("honors backend attention reasons when runtime status is missing", () => {
     expect(
       classifyTerminalHealth({

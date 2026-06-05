@@ -10534,6 +10534,52 @@ describe("useRegisterViewModel", () => {
     expect(toast.success).not.toHaveBeenCalled();
   });
 
+  it("marks local sale events as app-session-unverified while recovery waits for network", async () => {
+    mockUsePosTerminalAppSessionRecoveryRuntimeInput.mockReturnValue({
+      reason: "network_offline",
+      routeScope: "pos_hub",
+      status: "waiting_for_network",
+    });
+    mockCompleteTransaction.mockResolvedValueOnce(
+      userError({
+        code: "unavailable",
+        message: "Connection unavailable.",
+      }),
+    );
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    await act(async () => {
+      await result.current.checkout.onAddPayment("cash", 120);
+    });
+
+    await act(async () => {
+      await result.current.checkout.onCompleteTransaction();
+    });
+
+    await waitFor(() =>
+      expect(mockAppendLocalEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "transaction.completed",
+          validationMetadata: expect.objectContaining({
+            flags: [
+              "app-session-unverified",
+              "cloud-validation-uncertain",
+            ],
+            uploadDeferredUntil: "app-session-validated",
+          }),
+        }),
+      ),
+    );
+  });
+
   it("does not resurrect a cloud-backed sale after completing it locally", async () => {
     mockCompleteTransaction.mockResolvedValueOnce(
       userError({

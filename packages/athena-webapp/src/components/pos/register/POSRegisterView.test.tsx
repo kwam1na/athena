@@ -867,6 +867,90 @@ describe("POSRegisterView", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("shows app-session-unverified local continuation only in support diagnostics", async () => {
+    mockUseRegisterViewModel.mockReturnValue({
+      hasActiveStore: true,
+      header: {
+        title: "POS",
+        isSessionActive: true,
+      },
+      registerInfo: {
+        registerLabel: "Front Counter",
+        hasTerminal: true,
+      },
+      customerPanel: {},
+      productEntry: {
+        disabled: false,
+        productSearchQuery: "",
+        setProductSearchQuery: vi.fn(),
+        onBarcodeSubmit: vi.fn(),
+      },
+      cart: {
+        items: [],
+      },
+      checkout: {
+        isTransactionCompleted: false,
+      },
+      sessionPanel: {},
+      cashierCard: {
+        cashierName: "Ama Serwa",
+        onSignOut: vi.fn(),
+      },
+      closeoutControl: null,
+      authDialog: {
+        open: false,
+      },
+      drawerGate: null,
+      debug: {
+        activeStoreSource: "local",
+        appSessionRecovery: "waiting_for_network",
+        authDialogOpen: false,
+        cashierPresence: "restored",
+        hasLiveActiveStore: false,
+        localStaffAuthorityStatus: "ready",
+        localEntryStatus: "ready",
+        online: false,
+        staffSignedIn: true,
+        syncFlow: {
+          eventAppendToken: 3,
+          localOnlyEventCount: 2,
+          pendingEventCount: 2,
+          pendingUploadEventCount: 0,
+          source: "runtime",
+          staffProof: "present",
+          status: "pending_sync",
+        },
+        terminalId: "terminal-1",
+        terminalSource: "local",
+      },
+      onNavigateBack: vi.fn(),
+    });
+
+    const { POSRegisterView } = await import("./POSRegisterView");
+    render(<POSRegisterView />);
+
+    expect(screen.getByText("register-checkout-panel")).toBeInTheDocument();
+    expect(screen.getByText("Ready for product lookup")).toBeInTheDocument();
+    expect(
+      screen.queryByText("App session unverified"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/reconciliation/i)).not.toBeInTheDocument();
+
+    pressDebugPanelShortcut();
+
+    expect(screen.getByText("app session")).toBeInTheDocument();
+    expect(screen.getByText("Local sale continuation")).toBeInTheDocument();
+    expect(screen.getByText("reconciliation posture")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "App session unverified; local sales stay on this register until cloud validation returns.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/assertion|token|secret|password|otp/i),
+    ).not.toBeInTheDocument();
+  });
+
   it("shows an operable register as ready when manager review exists elsewhere", async () => {
     const onRetrySync = vi.fn();
     mockUseRegisterViewModel.mockReturnValue({

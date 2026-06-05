@@ -69,7 +69,6 @@ const POS_RECOVERY_SHELL_PENDING_STATUSES = new Set([
   "idle",
   "validating",
   "retrying",
-  "waiting_for_network",
 ]);
 
 function getPosHubRouteParams(pathname?: string) {
@@ -435,6 +434,11 @@ export default function Layout() {
     isAppUserMissing &&
     hasLocalPosRecoveryTarget &&
     posTerminalAppSessionRecovery.status === "recoverable";
+  const isNetworkWaitingPosAppSessionRecovery =
+    routeWantsPos &&
+    isAppUserMissing &&
+    hasLocalPosRecoveryTarget &&
+    posTerminalAppSessionRecovery.status === "waiting_for_network";
   const isPendingPosAppSessionRecovery =
     routeWantsPos &&
     isAppUserMissing &&
@@ -472,6 +476,7 @@ export default function Layout() {
   const shouldRenderPosTerminalShell =
     canRenderRehydratingPosShell ||
     isRecoveredPosAppSession ||
+    isNetworkWaitingPosAppSessionRecovery ||
     canRenderSignedInPosRegisterShell;
   const shouldRenderPendingPosTerminalShell =
     isPendingPosAppSessionRecovery || isClassifyingPosAppSession;

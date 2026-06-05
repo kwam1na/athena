@@ -298,6 +298,47 @@ describe("POSTerminalHealthViewContent", () => {
       screen.getByText("Terminal health is not available right now"),
     ).toBeInTheDocument();
   });
+
+  it("shows redacted app-session reconciliation posture without marking cashier continuation as review", () => {
+    render(
+      <POSTerminalHealthViewContent
+        healthSummaries={[
+          {
+            ...baseSummary,
+            health: "online",
+            runtimeStatus: {
+              ...baseSummary.runtimeStatus!,
+              appSessionRecovery: {
+                status: "waiting_for_network",
+              },
+              sync: {
+                ...baseSummary.runtimeStatus!.sync,
+                localOnlyEventCount: 2,
+                pendingEventCount: 2,
+                status: "pending",
+                uploadableEventCount: 0,
+              },
+            },
+          },
+        ]}
+        isLoading={false}
+        orgUrlSlug="acme"
+        storeUrlSlug="osu"
+      />,
+    );
+
+    expect(screen.getByText("Local continuation")).toBeInTheDocument();
+    expect(screen.getAllByText("Needs review")).toHaveLength(1);
+    expect(screen.getByText("App-session posture")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "App session unverified; local sales stay on this terminal until cloud validation returns.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/assertion|token|secret|password|otp/i),
+    ).not.toBeInTheDocument();
+  });
 });
 
 describe("POSTerminalHealthView", () => {

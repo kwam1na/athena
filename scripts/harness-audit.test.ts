@@ -1095,6 +1095,11 @@ async function createFixtureRepo() {
     "export {};\n",
     rootDir
   );
+  await write(
+    "packages/athena-webapp/src/tests/pos/offlineSalesContinuity.spec.ts",
+    "export {};\n",
+    rootDir
+  );
   await write("packages/athena-webapp/src/test/setup.ts", "export {};\n", rootDir);
   await write("packages/athena-webapp/convex/http.ts", "export {};\n", rootDir);
   await write("packages/athena-webapp/convex/http/router.ts", "export {};\n", rootDir);

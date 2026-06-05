@@ -12,7 +12,10 @@ import {
   type PosProvisionedTerminalSeed,
 } from "./posLocalStore";
 import { derivePosLocalSyncStatus } from "./syncStatus";
-import { isSyncablePosLocalEvent } from "./syncContract";
+import {
+  isSyncablePosLocalEvent,
+  isUploadDeferredByValidation,
+} from "./syncContract";
 import type { PosLocalSyncTrigger } from "./syncScheduler";
 
 type ReportTerminalRuntimeStatusArgs = FunctionArgs<
@@ -117,6 +120,9 @@ export type PosTerminalRuntimeStatusInput = {
 
 export type PosTerminalRuntimeCopyDiagnostics = {
   counts: {
+    appSessionUnverifiedEventCount: number;
+    cloudValidationUncertainEventCount: number;
+    deferredUploadEventCount: number;
     failedEventCount: number;
     localOnlyEventCount: number;
     pendingEventCount: number;
@@ -301,6 +307,7 @@ export function buildPosTerminalRuntimeCopyDiagnostics(
 ): PosTerminalRuntimeCopyDiagnostics {
   const now = input.clock?.() ?? Date.now();
   const sync = buildSyncMetrics(input);
+  const validation = buildValidationMetadataMetrics(input.events);
   const localStoreFailure = toSafeFailureMessage(input.localStoreFailureMessage);
   const syncFailure = toSafeFailureMessage(input.syncDebug?.lastFailure);
   const staffAuthorityStatus = normalizeStaffAuthorityStatus(
@@ -313,6 +320,11 @@ export function buildPosTerminalRuntimeCopyDiagnostics(
   return {
     ...(appSessionRecovery ? { appSessionRecovery } : {}),
     counts: {
+      appSessionUnverifiedEventCount:
+        validation.appSessionUnverifiedEventCount,
+      cloudValidationUncertainEventCount:
+        validation.cloudValidationUncertainEventCount,
+      deferredUploadEventCount: validation.deferredUploadEventCount,
       failedEventCount: sync.failedEventCount,
       localOnlyEventCount: sync.localOnlyEventCount,
       pendingEventCount: sync.pendingEventCount,
@@ -421,6 +433,20 @@ export function buildPosTerminalRuntimeCopyDiagnostics(
         ? { registerReadModelRefreshedAt: input.snapshots.registerReadModelRefreshedAt }
         : {}),
     },
+  };
+}
+
+function buildValidationMetadataMetrics(events: PosLocalEventRecord[]) {
+  return {
+    appSessionUnverifiedEventCount: events.filter((event) =>
+      event.validationMetadata?.flags.includes("app-session-unverified"),
+    ).length,
+    cloudValidationUncertainEventCount: events.filter((event) =>
+      event.validationMetadata?.flags.includes("cloud-validation-uncertain"),
+    ).length,
+    deferredUploadEventCount: events.filter((event) =>
+      isUploadDeferredByValidation(event),
+    ).length,
   };
 }
 

@@ -38,6 +38,7 @@ import {
   createPosLocalStore,
   type PosLocalActiveCashierPresenceRecord,
   type PosLocalEventRecord,
+  type PosLocalEventValidationMetadata,
 } from "@/lib/pos/infrastructure/local/posLocalStore";
 import { createLocalCommandGateway } from "@/lib/pos/infrastructure/local/localCommandGateway";
 import {
@@ -123,6 +124,24 @@ type LocalAuthenticatedStaff = {
   activeRoles: string[];
   displayName: string;
 } | null;
+
+function buildLocalSaleValidationMetadata(
+  appSessionRecoveryStatus?: string | null,
+): PosLocalEventValidationMetadata | undefined {
+  if (
+    !appSessionRecoveryStatus ||
+    appSessionRecoveryStatus === "idle" ||
+    appSessionRecoveryStatus === "recoverable"
+  ) {
+    return undefined;
+  }
+
+  return {
+    flags: ["app-session-unverified", "cloud-validation-uncertain"],
+    observedAt: Date.now(),
+    uploadDeferredUntil: "app-session-validated",
+  };
+}
 
 type RestoredCashierPresence = {
   activeRoles?: string[];
@@ -1856,6 +1875,11 @@ export function useRegisterViewModel(): RegisterViewModel {
       }),
     [localStore, terminal?._id],
   );
+  const appSessionRecovery = usePosTerminalAppSessionRecoveryRuntimeInput();
+  const localSaleValidationMetadata = useMemo(
+    () => buildLocalSaleValidationMetadata(appSessionRecovery?.status),
+    [appSessionRecovery?.status],
+  );
   useEffect(() => {
     let cancelled = false;
 
@@ -2561,7 +2585,6 @@ export function useRegisterViewModel(): RegisterViewModel {
   const hasRecoverableDrawerAuthorityBlock =
     localDrawerAuthorityReason === "authority_unknown";
   const hasLifecycleReviewDrawerBlock =
-    localSaleAuthorityBlockReason === "lifecycle_needs_review" ||
     localDrawerAuthorityReason === "lifecycle_rejected";
   const hasLocalSaleAuthorityBlock = Boolean(localSaleAuthorityBlockReason);
   const requiresDrawerGate = Boolean(
@@ -2948,6 +2971,7 @@ export function useRegisterViewModel(): RegisterViewModel {
         registerNumber,
         localRegisterSessionId,
         staffProfileId: actingStaffProfileId,
+        validationMetadata: localSaleValidationMetadata,
         openingFloat: usableActiveRegisterSession.openingFloat,
         expectedCash: usableActiveRegisterSession.expectedCash,
         notes: usableActiveRegisterSession.notes ?? null,
@@ -2964,6 +2988,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       localRegisterReadModel?.activeRegisterSession?.localRegisterSessionId,
       localRegisterReadModel?.canSell,
       localCommandGateway,
+      localSaleValidationMetadata,
       locallyOperableRegisterSession?.localRegisterSessionId,
       noteLocalRegisterEventChanged,
       registerNumber,
@@ -3007,6 +3032,7 @@ export function useRegisterViewModel(): RegisterViewModel {
         registerNumber,
         localRegisterSessionId,
         localPosSessionId: operableActiveSession._id.toString(),
+        validationMetadata: localSaleValidationMetadata,
       });
       if (localSession.kind !== "ok") {
         toast.error("Unable to start this sale. Try again.");
@@ -3056,6 +3082,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       staffProfileId,
       registerNumber,
       localRegisterSessionId,
+      validationMetadata: localSaleValidationMetadata,
     });
 
     if (result.kind !== "ok") {
@@ -3084,6 +3111,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     hasProvisionedLocalSyncSeed,
     isProjectedLocalActiveSaleLockedToAnotherStaff,
     localCommandGateway,
+    localSaleValidationMetadata,
     locallyOperableRegisterSession,
     noteLocalRegisterEventChanged,
     staffProfileId,
@@ -3264,6 +3292,7 @@ export function useRegisterViewModel(): RegisterViewModel {
         localRegisterSessionId: localEventRegisterSessionId ?? registerNumber,
         localPosSessionId: operableActiveSession._id.toString(),
         staffProfileId,
+        validationMetadata: localSaleValidationMetadata,
         checkoutStateVersion: args.checkoutStateVersion,
         payments: args.nextPayments,
         stage: args.stage,
@@ -3290,6 +3319,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       activeStoreId,
       hasProvisionedLocalSyncSeed,
       localCommandGateway,
+      localSaleValidationMetadata,
       noteLocalRegisterEventChanged,
       registerNumber,
       refreshLocalRegisterReadModel,
@@ -3619,6 +3649,7 @@ export function useRegisterViewModel(): RegisterViewModel {
         staffProfileId: actingStaffProfileId,
         registerNumber,
         localRegisterSessionId,
+        validationMetadata: localSaleValidationMetadata,
       });
 
       if (result.kind !== "ok") {
@@ -3661,6 +3692,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     hasProvisionedLocalSyncSeed,
     holdCurrentSession,
     localCommandGateway,
+    localSaleValidationMetadata,
     locallyOperableRegisterSession?.localRegisterSessionId,
     noteLocalRegisterEventChanged,
     projectedLocalActiveSale,
@@ -3720,6 +3752,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       terminalId: terminal._id as Id<"posTerminal">,
       staffProfileId,
       registerNumber,
+      validationMetadata: localSaleValidationMetadata,
       openingFloat: parsedOpeningFloat,
       notes: trimOptional(drawerNotes),
     });
@@ -3754,6 +3787,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     drawerOpeningFloat,
     hasProvisionedLocalSyncSeed,
     localCommandGateway,
+    localSaleValidationMetadata,
     noteLocalRegisterEventChanged,
     registerNumber,
     terminal?._id,
@@ -3801,6 +3835,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       registerNumber,
       localRegisterSessionId: registerSessionId,
       staffProfileId,
+      validationMetadata: localSaleValidationMetadata,
       countedCash: parsedCountedCash,
       notes: trimmedCloseoutNotes ?? null,
     });
@@ -3857,6 +3892,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     closeoutCountedCash,
     closeoutNotes,
     localCommandGateway,
+    localSaleValidationMetadata,
     localStore,
     localRegisterReadModel,
     locallyOperableRegisterSession?.localRegisterSessionId,
@@ -3921,6 +3957,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       registerNumber,
       localRegisterSessionId: registerSessionId,
       staffProfileId,
+      validationMetadata: localSaleValidationMetadata,
       reason: "Register closeout reopened from POS drawer gate.",
     });
     setIsReopeningCloseout(false);
@@ -3950,6 +3987,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     closeoutBlockedRegisterSession,
     isCashierManager,
     localCommandGateway,
+    localSaleValidationMetadata,
     localRegisterReadModel,
     noteLocalRegisterEventChanged,
     registerNumber,
@@ -4158,6 +4196,7 @@ export function useRegisterViewModel(): RegisterViewModel {
         localRegisterSessionId: localEventRegisterSessionId ?? registerNumber,
         localPosSessionId: input.localPosSessionId,
         staffProfileId,
+        validationMetadata: localSaleValidationMetadata,
         payload: input.payload,
       });
     },
@@ -4165,6 +4204,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       localEventRegisterSessionId,
       activeStoreId,
       localCommandGateway,
+      localSaleValidationMetadata,
       registerNumber,
       staffProfileId,
       terminal?._id,
@@ -4250,6 +4290,7 @@ export function useRegisterViewModel(): RegisterViewModel {
             localRegisterSessionId: localEventRegisterSessionId ?? registerNumber,
             localPosSessionId,
             staffProfileId,
+            validationMetadata: localSaleValidationMetadata,
             payload: serviceLineStateToLocalPayload(serviceLine),
           });
 
@@ -4276,6 +4317,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       activeStoreId,
       ensureLocalPosSessionId,
       localCommandGateway,
+      localSaleValidationMetadata,
       localEventRegisterSessionId,
       registerNumber,
       staffProfileId,
@@ -4324,6 +4366,7 @@ export function useRegisterViewModel(): RegisterViewModel {
               localRegisterSessionId: localEventRegisterSessionId ?? registerNumber,
               localPosSessionId,
               staffProfileId,
+              validationMetadata: localSaleValidationMetadata,
               payload: serviceLineStateToLocalPayload(nextLine),
             });
             if (!savedLocally) {
@@ -4358,6 +4401,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       activeStoreId,
       ensureLocalPosSessionId,
       localCommandGateway,
+      localSaleValidationMetadata,
       localEventRegisterSessionId,
       registerNumber,
       serviceLineDrafts,
@@ -4398,6 +4442,7 @@ export function useRegisterViewModel(): RegisterViewModel {
             localRegisterSessionId: localEventRegisterSessionId ?? registerNumber,
             localPosSessionId,
             staffProfileId,
+            validationMetadata: localSaleValidationMetadata,
             payload: {
               ...serviceLineStateToLocalPayload(existing),
               quantity: 0,
@@ -4425,6 +4470,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     activeStoreId,
     ensureLocalPosSessionId,
     localCommandGateway,
+    localSaleValidationMetadata,
     localEventRegisterSessionId,
     registerNumber,
     serviceLineDrafts,
@@ -5379,6 +5425,7 @@ export function useRegisterViewModel(): RegisterViewModel {
         localPosSessionId,
         localTransactionId,
         staffProfileId,
+        validationMetadata: localSaleValidationMetadata,
         payload: buildSalePayload({
           localTransactionId,
           receiptNumber,
@@ -5415,6 +5462,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     customerInfo,
     hasProvisionedLocalSyncSeed,
     localCommandGateway,
+    localSaleValidationMetadata,
     noteLocalRegisterEventChanged,
     readCurrentLocalRegisterModel,
     registerNumber,
@@ -5687,7 +5735,6 @@ export function useRegisterViewModel(): RegisterViewModel {
     activeCloseoutRegisterSession ||
     activeOpeningFloatCorrectionRegisterSession,
   );
-  const appSessionRecovery = usePosTerminalAppSessionRecoveryRuntimeInput();
   const localRuntimeSyncSource = usePosLocalSyncRuntimeStatus({
     appSessionRecovery,
     drainOnAppend: true,
@@ -5994,6 +6041,7 @@ export function useRegisterViewModel(): RegisterViewModel {
         : activeStoreId
           ? "local"
           : "missing",
+      appSessionRecovery: appSessionRecovery?.status ?? null,
       authDialogOpen: Boolean(authDialog?.open),
       cashierPresence: cashierPresenceRestore.status,
       hasLiveActiveStore: Boolean(activeStore),

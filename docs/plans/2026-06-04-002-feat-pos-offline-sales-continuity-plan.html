@@ -1,0 +1,472 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>feat: Keep provisioned POS terminals selling offline</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f7f4;
+      --surface: #ffffff;
+      --text: #1f2933;
+      --muted: #596774;
+      --line: #d9ded8;
+      --accent: #1f6f5b;
+      --accent-soft: #e7f2ed;
+      --warn-soft: #fff4df;
+      --warn: #8a5a00;
+      --code: #f1f3f1;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.55;
+    }
+    main {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 40px 24px 64px;
+    }
+    header {
+      border-bottom: 1px solid var(--line);
+      margin-bottom: 28px;
+      padding-bottom: 22px;
+    }
+    h1 {
+      font-size: 2rem;
+      line-height: 1.15;
+      margin: 0 0 12px;
+      letter-spacing: 0;
+    }
+    h2 {
+      border-bottom: 1px solid var(--line);
+      font-size: 1.2rem;
+      margin: 34px 0 14px;
+      padding-bottom: 6px;
+    }
+    h3 {
+      font-size: 1rem;
+      margin: 22px 0 8px;
+    }
+    p { margin: 0 0 12px; }
+    a { color: var(--accent); }
+    code {
+      background: var(--code);
+      border-radius: 4px;
+      padding: 0.1rem 0.25rem;
+      font-size: 0.92em;
+    }
+    .meta {
+      color: var(--muted);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 18px;
+      font-size: 0.95rem;
+    }
+    .summary {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-left: 4px solid var(--accent);
+      border-radius: 8px;
+      padding: 18px;
+    }
+    .toc {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px 18px;
+    }
+    .toc ul {
+      columns: 2;
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+    .toc li { break-inside: avoid; margin: 5px 0; }
+    .grid {
+      display: grid;
+      gap: 14px;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .card h3 { margin-top: 0; }
+    .badge {
+      background: var(--accent-soft);
+      border-radius: 999px;
+      color: var(--accent);
+      display: inline-block;
+      font-size: 0.82rem;
+      font-weight: 650;
+      margin-bottom: 8px;
+      padding: 2px 9px;
+    }
+    table {
+      border-collapse: collapse;
+      margin: 12px 0;
+      width: 100%;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 9px 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: #eef1ed; }
+    ul { padding-left: 1.25rem; }
+    li { margin: 6px 0; }
+    .callout {
+      background: var(--warn-soft);
+      border: 1px solid #ead3a3;
+      border-radius: 8px;
+      color: var(--warn);
+      padding: 14px 16px;
+    }
+    .unit {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      margin: 14px 0;
+      padding: 16px;
+    }
+    .unit h3 {
+      margin-top: 0;
+    }
+    .small {
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+    pre {
+      background: #eef1ed;
+      border-radius: 8px;
+      overflow-x: auto;
+      padding: 14px;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>feat: Keep provisioned POS terminals selling offline</h1>
+      <div class="meta">
+        <span>Type: feat</span>
+        <span>Status: active</span>
+        <span>Date: 2026-06-04</span>
+        <span>Markdown: <a href="2026-06-04-002-feat-pos-offline-sales-continuity-plan.md">2026-06-04-002-feat-pos-offline-sales-continuity-plan.md</a></span>
+      </div>
+    </header>
+
+    <section class="summary" id="summary">
+      <h2>Summary</h2>
+      <p>This plan extends Athena's route-scoped POS continuity into local sales continuity: a returning provisioned terminal with local sale authority can keep starting and completing sales when app-session validation is unavailable, including when Convex is totally unreachable. The implementation updates the POS route shell, audits sale blockers, converts cloud-validation uncertainty into reconciliation metadata, and verifies the full no-network register path.</p>
+    </section>
+
+    <nav class="toc" aria-label="Plan sections">
+      <h2>Contents</h2>
+      <ul>
+        <li><a href="#requirements">Requirements</a></li>
+        <li><a href="#scope">Scope Boundaries</a></li>
+        <li><a href="#research">Context &amp; Research</a></li>
+        <li><a href="#decisions">Key Technical Decisions</a></li>
+        <li><a href="#design">Design Shape</a></li>
+        <li><a href="#units">Implementation Units</a></li>
+        <li><a href="#impact">System-Wide Impact</a></li>
+        <li><a href="#risks">Risks</a></li>
+        <li><a href="#sources">Sources</a></li>
+      </ul>
+    </nav>
+
+    <section id="requirements">
+      <h2>Requirements Digest</h2>
+      <div class="grid">
+        <article class="card">
+          <span class="badge">Route continuity</span>
+          <p>Returning provisioned terminals should enter POS without fresh app sign-in when network, Convex, and app-session validation are unavailable.</p>
+        </article>
+        <article class="card">
+          <span class="badge">Sales continuity</span>
+          <p>New sale start and active cart/payment completion continue locally when local POS authority is sufficient.</p>
+        </article>
+        <article class="card">
+          <span class="badge">Blocker audit</span>
+          <p>Every sale-affecting blocker is classified as local recording impossible, locally known unsafe, or cloud-validation uncertainty.</p>
+        </article>
+        <article class="card">
+          <span class="badge">Reconciliation</span>
+          <p>Cloud-validation uncertainty becomes internal audit/reconciliation context; clean history syncs normally and mismatches route to review.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="scope">
+      <h2>Scope Boundaries</h2>
+      <ul>
+        <li>Fresh app login, fresh POS recovery-code verification, first-time terminal provisioning, and broad non-POS offline access remain out of scope.</li>
+        <li>Offline manager approval for protected manager-only commands remains out of scope unless planned separately.</li>
+        <li>Terminal repair offline is out of scope unless it can be completed entirely from already trusted local state.</li>
+        <li>Payment-provider-specific offline authorization behavior is unchanged; the plan preserves current POS payment recording.</li>
+        <li>Follow-up work may broaden offline continuity to non-register POS subroutes or add fleet-level reporting.</li>
+      </ul>
+    </section>
+
+    <section id="research">
+      <h2>Context &amp; Research</h2>
+      <p>The plan reuses existing POS local-first boundaries rather than adding a new offline auth model.</p>
+      <ul>
+        <li><code>src/routes/_authed.tsx</code> owns route-scoped POS shell and app-session recovery behavior.</li>
+        <li><code>usePosTerminalAppSessionRecovery.ts</code> publishes recovery states including <code>waiting_for_network</code>.</li>
+        <li><code>registerReadModel.ts</code> and <code>localCommandGateway.ts</code> compute and enforce sale authority.</li>
+        <li><code>usePosLocalSyncRuntime.ts</code>, <code>syncScheduler.ts</code>, and <code>terminalRuntimeStatus.ts</code> own sync/review diagnostics.</li>
+        <li>The offline route access Playwright spec provides the no-network browser regression pattern.</li>
+      </ul>
+    </section>
+
+    <section id="decisions">
+      <h2>Key Technical Decisions</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Decision</th>
+            <th>Rationale</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Keep app-session continuity POS-scoped</td>
+            <td>Prevents register reliability work from becoming generic offline Athena access.</td>
+          </tr>
+          <tr>
+            <td>Turn <code>waiting_for_network</code> into local sale continuation</td>
+            <td>Network absence, including total Convex unreachability, should delay cloud validation and sync, not local sale recording.</td>
+          </tr>
+          <tr>
+            <td>Add a sale-blocker policy boundary</td>
+            <td>Stops product decisions from staying scattered across route, read-model, command, and UI code.</td>
+          </tr>
+          <tr>
+            <td>Keep cashier UI normal</td>
+            <td>Operators need confidence that sales proceed; review housekeeping belongs behind the scenes.</td>
+          </tr>
+          <tr>
+            <td>Do not bypass authenticated cloud sync boundaries</td>
+            <td>Offline recording can proceed, but upload waits for supported recovery, POS-scoped validation, or existing authenticated sync context.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="design">
+      <h2>Design Shape</h2>
+      <div class="callout">
+        POS sale authority remains grounded in local terminal, staff, drawer/register, readiness, and command evidence. App-session uncertainty is metadata for reconciliation, not the sale gate.
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Blocker class</th>
+            <th>Meaning</th>
+            <th>Cashier behavior</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Local recording impossible</td>
+            <td>The terminal cannot create durable local sale evidence.</td>
+            <td>Hard block.</td>
+          </tr>
+          <tr>
+            <td>Locally known unsafe</td>
+            <td>Local evidence says the terminal or drawer cannot safely append sale-affecting work.</td>
+            <td>Hard block with recovery path.</td>
+          </tr>
+          <tr>
+            <td>Cloud-validation uncertainty</td>
+            <td>The cloud cannot validate now, but local recording remains possible.</td>
+            <td>Continue sale locally and reconcile later.</td>
+          </tr>
+        </tbody>
+      </table>
+      <h3>Preliminary Sale-Blocker Audit Results</h3>
+      <p>This table moves the blocker audit into the plan for product sign-off. Implementation should verify these classifications with tests, and any newly discovered sale stop must be added here before it remains a hard block.</p>
+      <table>
+        <thead>
+          <tr>
+            <th>Current blocker</th>
+            <th>Intended classification</th>
+            <th>Sign-off disposition</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>App-session recovery is <code>waiting_for_network</code>, the app user is missing on a POS route, or Convex is totally unreachable while local POS prerequisites exist.</td>
+            <td>Cloud-validation uncertainty.</td>
+            <td>Continue route entry, new sale start, active cart/payment updates, and completion locally. Tag local history and defer upload.</td>
+          </tr>
+          <tr>
+            <td>Missing POS app shell, local POS entry context, terminal seed, stored app account id, or supported POS route scope.</td>
+            <td>Local recording impossible.</td>
+            <td>Hard block with setup/reload guidance because the app cannot prove the terminal/store scope for local sale evidence.</td>
+          </tr>
+          <tr>
+            <td>Missing store, terminal, register-session, sync-secret, or writable local event-store evidence; unreadable IndexedDB or unsupported local schema.</td>
+            <td>Local recording impossible.</td>
+            <td>Hard block until local storage/setup is repaired.</td>
+          </tr>
+          <tr>
+            <td>No open or active local drawer/register session.</td>
+            <td>Local recording impossible until a local drawer event exists.</td>
+            <td>Block sale commands, but keep drawer open/recovery local-first when local setup is sufficient.</td>
+          </tr>
+          <tr>
+            <td>Register is locally closing or closed after closeout started.</td>
+            <td>Locally known unsafe.</td>
+            <td>Block new sales for that drawer until a permitted local reopen is recorded.</td>
+          </tr>
+          <tr>
+            <td>Terminal integrity is not healthy, including terminal authorization failure.</td>
+            <td>Locally known unsafe.</td>
+            <td>Hard block future sale-affecting writes until terminal repair/reprovision clears integrity state; preserve completed local history.</td>
+          </tr>
+          <tr>
+            <td>Drawer authority says the mapped cloud drawer is closed or a drawer lifecycle command was rejected for the current drawer.</td>
+            <td>Locally known unsafe for the affected drawer.</td>
+            <td>Stop appending to that drawer. Allow a new/recovered local drawer session when distinct drawer evidence can be recorded.</td>
+          </tr>
+          <tr>
+            <td>Drawer authority is unknown, mapping write failed, live cloud drawer/store state is stale, or review lacks explicit local-unsafe evidence.</td>
+            <td>Cloud-validation uncertainty.</td>
+            <td>Continue locally when terminal/drawer/staff/local-store evidence is otherwise sufficient; reconcile after the fact.</td>
+          </tr>
+          <tr>
+            <td>Uploaded <code>needs_review</code> exists for register lifecycle or completed sale.</td>
+            <td>Split by review reason.</td>
+            <td>Hard block only when review proves the current drawer/session is locally unsafe. Ordinary sync review must not block future local sales.</td>
+          </tr>
+          <tr>
+            <td>Pending sync, failed sync retry, held batch, retryable sync authorization failure, browser offline, or Convex unavailable.</td>
+            <td>Cloud-validation uncertainty.</td>
+            <td>Keep appending local sale evidence; retry/defer upload and surface manager/support reconciliation later.</td>
+          </tr>
+          <tr>
+            <td>No signed-in cashier, missing staff profile/proof, expired or revoked local authority, or staff presence scoped to the wrong store/terminal/date.</td>
+            <td>Local recording impossible or locally known unsafe.</td>
+            <td>Require local cashier sign-in or online staff refresh. If fresh local proof exists and only cloud validation is pending, continue.</td>
+          </tr>
+          <tr>
+            <td>Product/service local identity or required payload fields are missing, including SKU, product, service, price, customer/amount, or payment details required to complete.</td>
+            <td>Local recording impossible.</td>
+            <td>Hard block only until the cashier supplies the missing local sale data.</td>
+          </tr>
+          <tr>
+            <td>Catalog availability is unknown, stale, or reports no trusted quantity remaining, but local SKU identity and price exist.</td>
+            <td>Inventory validation uncertainty.</td>
+            <td>Target behavior: allow the sale locally and create inventory reconciliation if cloud stock later disagrees. Hard block only when item/price cannot be identified locally.</td>
+          </tr>
+          <tr>
+            <td>Payment-provider-specific online authorization is unavailable.</td>
+            <td>Outside this plan's authority.</td>
+            <td>Preserve current POS payment recording behavior without implying Athena can override an external provider refusal.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="units">
+      <h2>Implementation Units</h2>
+      <article class="unit">
+        <h3>U1. Allow POS route continuity while recovery waits for network</h3>
+        <p>Change the route shell so trusted POS terminals mount the register while app-session recovery is waiting for network. Keep blocked recovery and non-POS redirects unchanged.</p>
+        <p class="small">Primary tests: <code>src/routes/_authed.test.tsx</code>, <code>usePosTerminalAppSessionRecovery.test.ts</code>.</p>
+      </article>
+      <article class="unit">
+        <h3>U2. Create the POS sale-blocker audit policy</h3>
+        <p>Encode the preliminary audit table as a shared decision boundary for the read model and command gateway. Any newly discovered sale stop must be classified before it remains a hard block.</p>
+        <p class="small">Primary tests: <code>saleBlockerPolicy.test.ts</code>, <code>registerReadModel.test.ts</code>, <code>localCommandGateway.test.ts</code>.</p>
+      </article>
+      <article class="unit">
+        <h3>U3. Let local read model and command gateway continue sales under cloud uncertainty</h3>
+        <p>Apply the blocker policy to sale-affecting local commands so new sales and active sale completion proceed locally when only cloud validation is missing.</p>
+        <p class="small">Primary tests: local read-model, command-gateway, and register view-model tests.</p>
+      </article>
+      <article class="unit">
+        <h3>U4. Carry app-session uncertainty into sync and reconciliation metadata</h3>
+        <p>Preserve support-safe evidence for events recorded while app-session validation was unavailable, then accept clean history or route mismatches to review on reconnect.</p>
+        <p class="small">Primary tests: local store, sync contract, sync scheduler, runtime status, and Convex sync tests.</p>
+      </article>
+      <article class="unit">
+        <h3>U5. Keep cashier presentation normal while preserving support visibility</h3>
+        <p>Remove normal-flow app-session/review interruption from the cashier path while preserving hard-block recovery copy and terminal-health diagnostics.</p>
+        <p class="small">Primary tests: POS register, opening guard, drawer gate, terminal health, and readiness tests.</p>
+      </article>
+      <article class="unit">
+        <h3>U6. Add no-network sales-continuity regression coverage</h3>
+        <p>Prove the browser case end to end: no network and no reachable Convex backend, missing app session, local cashier sign-in, new sale start, active payment/completion, and local evidence persistence without Convex reads, mutations, or sync.</p>
+        <p class="small">Primary tests: <code>src/tests/pos/offlineSalesContinuity.spec.ts</code>.</p>
+      </article>
+      <article class="unit">
+        <h3>U7. Document the final blocker policy and validation map</h3>
+        <p>Add solution guidance and harness mapping so future POS changes do not reintroduce cloud-validation sale stops.</p>
+      </article>
+    </section>
+
+    <section id="impact">
+      <h2>System-Wide Impact</h2>
+      <ul>
+        <li><strong>Interaction graph:</strong> route classification feeds recovery context, register view-model, sync runtime, terminal health, and browser no-network behavior.</li>
+        <li><strong>Error propagation:</strong> cloud failures become support-safe reconciliation categories; local impossibility and unsafe evidence remain hard blockers.</li>
+        <li><strong>State lifecycle:</strong> app-session-unverified local events must survive reload and sync retry without storing reusable credentials.</li>
+        <li><strong>Unchanged invariants:</strong> non-POS routes still require app auth; local staff authority remains separate from app-session recovery.</li>
+      </ul>
+    </section>
+
+    <section id="risks">
+      <h2>Risks</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Risk</th>
+            <th>Mitigation</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Converting too many blockers could allow sales under locally unsafe state.</td>
+            <td>Use the explicit taxonomy and retain locally unsafe or impossible states as hard-block candidates.</td>
+          </tr>
+          <tr>
+            <td>Quiet cashier UI could hide support work.</td>
+            <td>Keep reconciliation in terminal health, sync diagnostics, and manager/support surfaces.</td>
+          </tr>
+          <tr>
+            <td>No-network browser tests may be brittle in CI.</td>
+            <td>Reuse existing offline route access patterns and assert DOM/local evidence rather than network idle.</td>
+          </tr>
+          <tr>
+            <td>Sync may still be blocked after reconnect if the app session is missing.</td>
+            <td>Keep local sales durable and defer upload until supported recovery or POS-scoped validation succeeds.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="sources">
+      <h2>Sources</h2>
+      <ul>
+        <li><a href="../brainstorms/2026-06-04-pos-offline-app-session-sales-continuity-requirements.md">Origin requirements</a></li>
+        <li><a href="2026-06-02-001-feat-pos-register-terminal-app-session-plan.md">POS app-session continuity plan</a></li>
+        <li><a href="2026-06-03-002-feat-pos-offline-route-access-plan.md">POS offline route access plan</a></li>
+        <li><a href="../solutions/architecture/athena-pos-local-first-sync-2026-05-13.md">POS local-first sync solution</a></li>
+        <li><a href="../solutions/architecture/athena-pos-hub-app-session-continuity-2026-06-02.md">POS app-session continuity solution</a></li>
+        <li><a href="../solutions/logic-errors/athena-pos-stale-terminal-sale-block-2026-05-29.md">POS stale-terminal sale block solution</a></li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>

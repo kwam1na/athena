@@ -826,7 +826,7 @@ describe("projectLocalRegisterReadModel", () => {
     expect(model.drawerAuthorityReason).toBe("cloud_closed");
   });
 
-  it("blocks selling when an uploaded register lifecycle event needs review", () => {
+  it("keeps selling available when uploaded lifecycle review does not invalidate local authority", () => {
     const model = projectLocalRegisterReadModel({
       events: [
         event({
@@ -840,8 +840,8 @@ describe("projectLocalRegisterReadModel", () => {
       isOnline: true,
     });
 
-    expect(model.canSell).toBe(false);
-    expect(model.saleBlockReason).toBe("lifecycle_needs_review");
+    expect(model.canSell).toBe(true);
+    expect(model.saleBlockReason).toBeUndefined();
     expect(model.syncStatus.state).toBe("needs_review");
   });
 });

@@ -1233,6 +1233,201 @@ describe("usePosLocalSyncRuntimeStatus", () => {
     expect(store.markEventsSynced).not.toHaveBeenCalled();
   });
 
+  it("defers app-session-unverified uploads while recovery is waiting for network", async () => {
+    const appSessionRecovery = {
+      assertion: "present" as const,
+      status: "waiting_for_network" as const,
+    };
+    const store = {
+      listEvents: vi.fn(async () => ({
+        ok: true,
+        value: [
+          buildLocalEvent({
+            localEventId: "event-offline-sale",
+            localPosSessionId: "local-session-1",
+            localTransactionId: "local-txn-1",
+            payload: {
+              localPosSessionId: "local-session-1",
+              localTransactionId: "local-txn-1",
+              receiptNumber: "LOCAL-1-000001",
+              subtotal: 25,
+              tax: 0,
+              total: 25,
+              customerEmail: "customer@example.com",
+              payments: [{ method: "cash", amount: 25, timestamp: 2 }],
+            },
+            sequence: 1,
+            type: "transaction.completed",
+            validationMetadata: {
+              flags: [
+                "app-session-unverified",
+                "cloud-validation-uncertain",
+              ],
+              observedAt: 2_000,
+              uploadDeferredUntil: "app-session-validated",
+            },
+          }),
+        ],
+      })),
+      markEventsSynced: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      readProvisionedTerminalSeed: vi.fn(async () => ({
+        ok: true,
+        value: {
+          cloudTerminalId: "terminal-cloud-1",
+          displayName: "Front",
+          provisionedAt: 1,
+          schemaVersion: 1,
+          syncSecretHash: "sync-secret-1",
+          storeId: "store-1",
+          terminalId: "local-terminal-1",
+        },
+      })),
+    };
+
+    const { result } = renderHook(() =>
+      usePosLocalSyncRuntimeStatus({
+        appSessionRecovery,
+        storeFactory: () => store as never,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(result.current?.debug).toEqual(
+        expect.objectContaining({
+          appSessionUnverifiedEventCount: 1,
+          cloudValidationUncertainEventCount: 1,
+          deferredUploadEventCount: 1,
+          pendingUploadEventCount: 0,
+        }),
+      ),
+    );
+    expect(result.current?.copyDiagnostics?.counts).toEqual(
+      expect.objectContaining({
+        appSessionUnverifiedEventCount: 1,
+        cloudValidationUncertainEventCount: 1,
+        deferredUploadEventCount: 1,
+      }),
+    );
+    expect(mocks.ingestLocalEvents).not.toHaveBeenCalled();
+    expect(store.markEventsSynced).not.toHaveBeenCalled();
+    expect(JSON.stringify(result.current?.copyDiagnostics)).not.toContain(
+      "customer@example.com",
+    );
+    expect(JSON.stringify(result.current?.copyDiagnostics)).not.toContain(
+      "payments",
+    );
+  });
+
+  it("uploads app-session-unverified history after supported recovery is present", async () => {
+    const appSessionRecovery = {
+      assertion: "present" as const,
+      status: "recoverable" as const,
+    };
+    mocks.ingestLocalEvents.mockResolvedValue({
+      kind: "ok",
+      data: {
+        accepted: [
+          {
+            localEventId: "event-offline-sale",
+            sequence: 1,
+            status: "projected",
+          },
+        ],
+        held: [],
+        mappings: [],
+        conflicts: [],
+        syncCursor: {
+          localRegisterSessionId: "register-1",
+          acceptedThroughSequence: 1,
+        },
+      },
+    });
+    const store = {
+      listEvents: vi.fn(async () => ({
+        ok: true,
+        value: [
+          buildLocalEvent({
+            localEventId: "event-offline-sale",
+            localPosSessionId: "local-session-1",
+            localTransactionId: "local-txn-1",
+            payload: {
+              localPosSessionId: "local-session-1",
+              localTransactionId: "local-txn-1",
+              receiptNumber: "LOCAL-1-000001",
+              subtotal: 25,
+              tax: 0,
+              total: 25,
+              payments: [{ method: "cash", amount: 25, timestamp: 2 }],
+            },
+            sequence: 1,
+            type: "transaction.completed",
+            validationMetadata: {
+              flags: [
+                "app-session-unverified",
+                "cloud-validation-uncertain",
+              ],
+              observedAt: 2_000,
+              uploadDeferredUntil: "app-session-validated",
+            },
+          }),
+        ],
+      })),
+      markEventsSynced: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      readProvisionedTerminalSeed: vi.fn(async () => ({
+        ok: true,
+        value: {
+          cloudTerminalId: "terminal-cloud-1",
+          displayName: "Front",
+          provisionedAt: 1,
+          schemaVersion: 1,
+          syncSecretHash: "sync-secret-1",
+          storeId: "store-1",
+          terminalId: "local-terminal-1",
+        },
+      })),
+      writeLocalCloudMapping: vi.fn(async () => ({
+        ok: true,
+        value: {},
+      })),
+    };
+
+    renderHook(() =>
+      usePosLocalSyncRuntimeStatus({
+        appSessionRecovery,
+        eventAppendToken: 1,
+        storeFactory: () => store as never,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+
+    await waitFor(
+      () =>
+        expect(mocks.ingestLocalEvents).toHaveBeenCalledWith(
+          expect.objectContaining({
+            events: [
+              expect.objectContaining({
+                eventType: "sale_completed",
+                localEventId: "event-offline-sale",
+              }),
+            ],
+          }),
+        ),
+      { timeout: 5_000 },
+    );
+    expect(store.markEventsSynced).toHaveBeenCalledWith(["event-offline-sale"], {
+      uploaded: true,
+    });
+  });
+
   it("returns failure when local cloud mapping persistence fails", async () => {
     const store = {
       writeLocalCloudMapping: vi.fn(async () => ({
