@@ -26,6 +26,7 @@ import {
   PackagePlus,
   RefreshCw,
   ScanBarcode,
+  Scissors,
   Search,
   ShoppingBasket,
   Settings,
@@ -92,17 +93,37 @@ function useCollapseSidebarForPosFlow() {
 }
 
 function ProductLookupEmptyState({
+  canSearchProducts = true,
+  canSearchServices = true,
   canQuickAddProduct = false,
   onActivate,
   onQuickAddProduct,
   workflowMode,
 }: {
+  canSearchProducts?: boolean;
+  canSearchServices?: boolean;
   canQuickAddProduct?: boolean;
   onActivate?: () => void | Promise<void>;
   onQuickAddProduct?: () => void;
   workflowMode: RegisterWorkflowMode;
 }) {
   const isExpenseWorkflow = workflowMode === "expense";
+  const isServiceOnly = !isExpenseWorkflow && !canSearchProducts && canSearchServices;
+  const isProductOnly = isExpenseWorkflow || (canSearchProducts && !canSearchServices);
+  const title = isExpenseWorkflow
+    ? "Ready for expense entry"
+    : isServiceOnly
+      ? "Ready for service lookup"
+      : isProductOnly
+        ? "Ready for product lookup"
+        : "Ready for checkout lookup";
+  const description = isExpenseWorkflow
+    ? "Search or scan products to add expense items"
+    : isServiceOnly
+      ? "Search services to add service lines to this sale"
+      : isProductOnly
+        ? "Scan a barcode or search products to add items to this sale"
+        : "Scan products or search products and services to add items to this sale";
   const isInteractive = Boolean(onActivate);
   const handleActivate = useCallback(() => {
     void onActivate?.();
@@ -128,11 +149,7 @@ function ProductLookupEmptyState({
 
   return (
     <div
-      aria-label={
-        isExpenseWorkflow
-          ? "Ready for expense entry"
-          : "Ready for product lookup"
-      }
+      aria-label={title}
       className={cn(
         "flex h-full min-h-0 w-full flex-col items-center justify-center rounded-lg border border-border bg-surface-raised p-8 text-center transition focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4",
         isInteractive
@@ -147,33 +164,42 @@ function ProductLookupEmptyState({
     >
       <div className="flex flex-col items-center text-center">
         <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-surface text-muted-foreground shadow-surface">
-          <Search className="h-7 w-7" />
+          {isServiceOnly ? (
+            <Scissors className="h-7 w-7" />
+          ) : (
+            <Search className="h-7 w-7" />
+          )}
         </div>
         <div className="space-y-1">
-          <p className="text-sm font-medium text-foreground">
-            {isExpenseWorkflow
-              ? "Ready for expense entry"
-              : "Ready for product lookup"}
-          </p>
-          <p className="text-sm text-muted-foreground">
-            {isExpenseWorkflow
-              ? "Search or scan products to add expense items"
-              : "Scan a barcode or search products to add items to this sale"}
-          </p>
+          <p className="text-sm font-medium text-foreground">{title}</p>
+          <p className="text-sm text-muted-foreground">{description}</p>
         </div>
       </div>
       <div className="mt-5 flex flex-wrap items-center justify-center gap-2 text-xs text-muted-foreground">
-        <span className="inline-flex items-center gap-1 rounded-full border border-border bg-surface px-3 py-1">
-          <ScanBarcode className="h-3.5 w-3.5" />
-          Barcode
-        </span>
-        <span className="inline-flex items-center gap-1 rounded-full border border-border bg-surface px-3 py-1">
-          <Search className="h-3.5 w-3.5" />
-          Product search
-          <kbd className="ml-1 rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] font-semibold leading-none text-muted-foreground">
-            ⌘+K
-          </kbd>
-        </span>
+        {canSearchProducts ? (
+          <span className="inline-flex items-center gap-1 rounded-full border border-border bg-surface px-3 py-1">
+            <ScanBarcode className="h-3.5 w-3.5" />
+            Barcode
+          </span>
+        ) : null}
+        {canSearchProducts ? (
+          <span className="inline-flex items-center gap-1 rounded-full border border-border bg-surface px-3 py-1">
+            <Search className="h-3.5 w-3.5" />
+            Product search
+            <kbd className="ml-1 rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] font-semibold leading-none text-muted-foreground">
+              ⌘+K
+            </kbd>
+          </span>
+        ) : null}
+        {canSearchServices && !isExpenseWorkflow ? (
+          <span className="inline-flex items-center gap-1 rounded-full border border-border bg-surface px-3 py-1">
+            <Scissors className="h-3.5 w-3.5" />
+            Service search
+            <kbd className="ml-1 rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] font-semibold leading-none text-muted-foreground">
+              ⌘+K
+            </kbd>
+          </span>
+        ) : null}
         {canQuickAddProduct && onQuickAddProduct ? (
           <Button
             type="button"
@@ -1119,6 +1145,8 @@ function POSRegisterViewContent({
   const isAwaitingCashierAuth = Boolean(viewModel.authDialog?.open);
   const isStaffSignedIn =
     viewModel.debug?.staffSignedIn === true || Boolean(viewModel.cashierCard);
+  const isResolvingCashierPresence =
+    cashierPresenceRestore.status === "pending" && !isStaffSignedIn;
   const onboardingState =
     viewModel.onboarding ??
     ({
@@ -1144,23 +1172,35 @@ function POSRegisterViewContent({
     !viewModel.authDialog &&
     !viewModel.drawerGate &&
     !viewModel.checkout.isTransactionCompleted;
+  const terminalCanSearchProducts =
+    viewModel.productEntry?.canSearchProducts !== false;
+  const terminalCanSearchServices =
+    viewModel.productEntry?.canSearchServices !== false;
+  const terminalCanSearchAnyCatalog =
+    terminalCanSearchProducts || terminalCanSearchServices;
   const canSearchProducts =
     !viewModel.checkout.isTransactionCompleted &&
     !isLocallyClosedPendingSync &&
     !viewModel.drawerGate &&
+    !isResolvingCashierPresence &&
     !isAwaitingCashierAuth &&
     !shouldShowOnboarding &&
     !isResolvingRegisterSetup;
   const isHeaderProductSearchSupported =
-    isSessionActive && canSearchProducts && !viewModel.productEntry.disabled;
+    isSessionActive &&
+    canSearchProducts &&
+    terminalCanSearchAnyCatalog &&
+    !viewModel.productEntry.disabled;
   const canStartSaleFromProductLookup =
     isPosWorkflow &&
     canSearchProducts &&
+    terminalCanSearchAnyCatalog &&
     !isSessionActive &&
     Boolean(viewModel.sessionPanel) &&
     !viewModel.sessionPanel?.disableNewSession;
   const canActivateProductLookup =
     isHeaderProductSearchSupported || canStartSaleFromProductLookup;
+  const canTouchHeaderProductSearch = canActivateProductLookup;
   const isRegisterOperable =
     isPosWorkflow && isHeaderProductSearchSupported && !viewModel.drawerGate;
   const shouldRenderSaleSurface = isPosWorkflow
@@ -1194,6 +1234,7 @@ function POSRegisterViewContent({
     !isPaymentsListExpanded &&
     !shouldShowOnboarding &&
     !isResolvingRegisterSetup &&
+    !isResolvingCashierPresence &&
     !isAwaitingCashierAuth &&
     !viewModel.drawerGate;
   const shouldShowCartSummarySidebar =
@@ -1204,6 +1245,7 @@ function POSRegisterViewContent({
       isPaymentsListExpanded) &&
     !shouldShowPaymentWorkspace &&
     !shouldShowOnboarding &&
+    !isResolvingCashierPresence &&
     !isResolvingRegisterSetup;
   const shouldRenderCartSidebar =
     shouldRenderSaleSurface &&
@@ -1211,9 +1253,11 @@ function POSRegisterViewContent({
     !shouldShowPaymentWorkspace &&
     !shouldShowCartSummarySidebar &&
     !shouldShowOnboarding &&
+    !isResolvingCashierPresence &&
     !isResolvingRegisterSetup;
   const shouldRenderWorkspaceSidebar =
     !shouldShowOnboarding &&
+    !isResolvingCashierPresence &&
     !isResolvingRegisterSetup &&
     (shouldRenderCartSidebar ||
       shouldRenderCheckoutPanel ||
@@ -1315,7 +1359,11 @@ function POSRegisterViewContent({
       return;
     }
 
-    if (!canStartSaleFromProductLookup || !viewModel.sessionPanel) {
+    if (
+      pendingProductLookupFocusAfterSaleStartRef.current ||
+      !canStartSaleFromProductLookup ||
+      !viewModel.sessionPanel
+    ) {
       return;
     }
 
@@ -1331,6 +1379,7 @@ function POSRegisterViewContent({
   const handleProductLookupEmptyStateQuickAdd = useCallback(() => {
     if (
       !isHeaderProductSearchSupported ||
+      !terminalCanSearchProducts ||
       !viewModel.productEntry.canQuickAddProduct
     ) {
       return;
@@ -1350,6 +1399,7 @@ function POSRegisterViewContent({
   }, [
     isEmptyStateQuickAddActive,
     isHeaderProductSearchSupported,
+    terminalCanSearchProducts,
     viewModel.productEntry,
   ]);
 
@@ -1455,6 +1505,8 @@ function POSRegisterViewContent({
       searchResults={viewModel.productEntry.searchResults}
       isSearchLoading={viewModel.productEntry.isSearchLoading}
       isSearchReady={viewModel.productEntry.isSearchReady}
+      canSearchProducts={terminalCanSearchProducts}
+      canSearchServices={terminalCanSearchServices}
       canQuickAddProduct={viewModel.productEntry.canQuickAddProduct}
       onQuickAddOpenChange={setIsEmptyStateQuickAddActive}
       forceQuickAddHost={forceQuickAddHost}
@@ -1533,15 +1585,33 @@ function POSRegisterViewContent({
                 ) : null}
               </div>
 
-              {!shouldShowOnboarding && !isResolvingRegisterSetup ? (
+              {!shouldShowOnboarding &&
+              !isResolvingCashierPresence &&
+              !isResolvingRegisterSetup ? (
                 <ProductSearchInput
                   ref={headerProductSearchInputRef}
-                  disabled={!isHeaderProductSearchSupported}
+                  disabled={!canTouchHeaderProductSearch}
                   productSearchQuery={viewModel.productEntry.productSearchQuery}
                   setProductSearchQuery={
                     viewModel.productEntry.setProductSearchQuery
                   }
                   onBarcodeSubmit={viewModel.productEntry.onBarcodeSubmit}
+                  onActivate={
+                    canTouchHeaderProductSearch
+                      ? handleProductLookupEmptyStateActivate
+                      : undefined
+                  }
+                  readOnly={!canTouchHeaderProductSearch}
+                  lookupKind={
+                    terminalCanSearchProducts && terminalCanSearchServices
+                      ? "products_services"
+                      : terminalCanSearchServices
+                        ? "services"
+                        : "products"
+                  }
+                  submitOnEnter={
+                    isHeaderProductSearchSupported && terminalCanSearchProducts
+                  }
                   className="max-w-[800px] flex-1"
                   inputClassName="h-14"
                 />
@@ -1580,6 +1650,7 @@ function POSRegisterViewContent({
           {isPosWorkflow &&
           shouldRenderSaleSurface &&
           !shouldShowOnboarding &&
+          !isResolvingCashierPresence &&
           !isResolvingRegisterSetup ? (
             <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,0.48fr)]">
               <RegisterCustomerPanel
@@ -1610,6 +1681,8 @@ function POSRegisterViewContent({
               >
                 {shouldShowOnboarding ? (
                   <POSOnboardingWorkspace onboarding={onboardingState} />
+                ) : isResolvingCashierPresence ? (
+                  <RegisterSetupResolvingWorkspace />
                 ) : isResolvingRegisterSetup ? (
                   <RegisterSetupResolvingWorkspace />
                 ) : isPosWorkflow && viewModel.drawerGate ? (
@@ -1649,8 +1722,11 @@ function POSRegisterViewContent({
                   <div className="grid h-full min-h-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(20rem,0.72fr)]">
                     <ProductLookupEmptyState
                       canQuickAddProduct={
+                        terminalCanSearchProducts &&
                         viewModel.productEntry.canQuickAddProduct
                       }
+                      canSearchProducts={terminalCanSearchProducts}
+                      canSearchServices={terminalCanSearchServices}
                       onActivate={
                         canActivateProductLookup
                           ? handleProductLookupEmptyStateActivate
@@ -1658,6 +1734,7 @@ function POSRegisterViewContent({
                       }
                       onQuickAddProduct={
                         isHeaderProductSearchSupported &&
+                        terminalCanSearchProducts &&
                         viewModel.productEntry.canQuickAddProduct
                           ? handleProductLookupEmptyStateQuickAdd
                           : undefined
@@ -1689,8 +1766,11 @@ function POSRegisterViewContent({
                   <>
                     <ProductLookupEmptyState
                       canQuickAddProduct={
+                        terminalCanSearchProducts &&
                         viewModel.productEntry.canQuickAddProduct
                       }
+                      canSearchProducts={terminalCanSearchProducts}
+                      canSearchServices={terminalCanSearchServices}
                       onActivate={
                         canActivateProductLookup
                           ? handleProductLookupEmptyStateActivate
@@ -1698,6 +1778,7 @@ function POSRegisterViewContent({
                       }
                       onQuickAddProduct={
                         isHeaderProductSearchSupported &&
+                        terminalCanSearchProducts &&
                         viewModel.productEntry.canQuickAddProduct
                           ? handleProductLookupEmptyStateQuickAdd
                           : undefined

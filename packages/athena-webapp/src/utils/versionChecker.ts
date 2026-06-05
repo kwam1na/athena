@@ -1,5 +1,7 @@
 // This service will check for new versions of the app by detecting changes in bundled assets
 
+const POS_LIVE_SALES_ROUTE_PATTERN = /\/pos\/register\/?$/;
+
 // Store the scripts that were loaded when the app started
 const initialScripts = Array.from(document.querySelectorAll("script"))
   .filter(
@@ -9,14 +11,28 @@ const initialScripts = Array.from(document.querySelectorAll("script"))
   )
   .map((script) => script.src);
 
+export function shouldAutoReloadForPath(pathname: string) {
+  return !POS_LIVE_SALES_ROUTE_PATTERN.test(pathname);
+}
+
+function shouldAutoReloadForCurrentRoute() {
+  if (typeof window === "undefined") {
+    return true;
+  }
+
+  return shouldAutoReloadForPath(window.location.pathname);
+}
+
 /**
  * Creates a version checker that detects when the app has been updated by checking
  * if the HTML entry point references different script files than when the app was loaded.
  */
 export function createVersionChecker({
+  shouldReload = shouldAutoReloadForCurrentRoute,
   pollingIntervalMs = 1 * 60 * 1000, // 1 minute
   onNewVersionAvailable,
 }: {
+  shouldReload?: () => boolean;
   pollingIntervalMs?: number;
   onNewVersionAvailable: () => void;
 }) {
@@ -57,7 +73,9 @@ export function createVersionChecker({
 
       if (hasNewVersion) {
         console.log("New version detected - script references have changed");
-        onNewVersionAvailable();
+        if (shouldReload()) {
+          onNewVersionAvailable();
+        }
       }
     } catch (error) {
       console.error("Failed to check for new version:", error);

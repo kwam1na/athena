@@ -7,8 +7,33 @@ const useQueryMock = vi.fn();
 const getActiveStoreMock = vi.fn();
 const startStoreDayMock = vi.fn();
 const authenticateStaffCredentialMock = vi.fn();
+const refreshTerminalStaffAuthorityMock = vi.fn();
 const useLocalPosEntryContextMock = vi.fn();
 const useLocalPosReadinessMock = vi.fn();
+const replaceStaffAuthoritySnapshotMock = vi.fn();
+const writeStoreDayReadinessMock = vi.fn();
+
+vi.mock("@/components/pos/CashierAuthDialog", () => ({
+  CashierAuthDialog: ({
+    onAuthenticated,
+    open,
+  }: {
+    onAuthenticated: (result: { staffProfileId: string }) => void;
+    open: boolean;
+  }) =>
+    open ? (
+      <div role="dialog" aria-label="Sign in required">
+        <button
+          type="button"
+          onClick={() => {
+            onAuthenticated({ staffProfileId: "staff-1" });
+          }}
+        >
+          Confirm cashier
+        </button>
+      </div>
+    ) : null,
+}));
 
 vi.mock("@/components/staff-auth/StaffAuthenticationDialog", () => ({
   StaffAuthenticationDialog: ({
@@ -97,10 +122,16 @@ vi.mock("@/components/common/PageHeader", () => ({
 }));
 
 vi.mock("convex/react", () => ({
-  useMutation: (mutationName: string) =>
-    mutationName === "authenticateStaffCredential"
-      ? authenticateStaffCredentialMock
-      : startStoreDayMock,
+  useMutation: (mutationName: string) => {
+    if (mutationName === "authenticateStaffCredential") {
+      return authenticateStaffCredentialMock;
+    }
+    if (mutationName === "refreshTerminalStaffAuthority") {
+      return refreshTerminalStaffAuthorityMock;
+    }
+
+    return startStoreDayMock;
+  },
   useQuery: (...args: unknown[]) => useQueryMock(...args),
 }));
 
@@ -124,6 +155,14 @@ vi.mock("@/lib/pos/infrastructure/local/localPosReadiness", () => ({
     useLocalPosReadinessMock(...args),
 }));
 
+vi.mock("@/lib/pos/infrastructure/local/posLocalStore", () => ({
+  createIndexedDbPosLocalStorageAdapter: vi.fn(() => ({})),
+  createPosLocalStore: vi.fn(() => ({
+    replaceStaffAuthoritySnapshot: replaceStaffAuthoritySnapshotMock,
+    writeStoreDayReadiness: writeStoreDayReadinessMock,
+  })),
+}));
+
 vi.mock("~/convex/_generated/api", () => ({
   api: {
     operations: {
@@ -136,6 +175,7 @@ vi.mock("~/convex/_generated/api", () => ({
       },
       staffCredentials: {
         authenticateStaffCredential: "authenticateStaffCredential",
+        refreshTerminalStaffAuthority: "refreshTerminalStaffAuthority",
       },
     },
   },
@@ -150,6 +190,16 @@ describe("POSRegisterOpeningGuard", () => {
       data: { action: "started" },
       kind: "ok",
     });
+    writeStoreDayReadinessMock.mockResolvedValue({
+      ok: true,
+      value: {
+        storeId: "store-1",
+        operatingDate: "2026-05-09",
+        status: "started",
+        source: "local",
+        updatedAt: new Date(2026, 4, 9, 12).getTime(),
+      },
+    });
     authenticateStaffCredentialMock.mockResolvedValue({
       data: {
         activeRoles: ["cashier"],
@@ -157,6 +207,14 @@ describe("POSRegisterOpeningGuard", () => {
         staffProfileId: "staff-1",
       },
       kind: "ok",
+    });
+    refreshTerminalStaffAuthorityMock.mockResolvedValue({
+      data: [],
+      kind: "ok",
+    });
+    replaceStaffAuthoritySnapshotMock.mockResolvedValue({
+      ok: true,
+      value: [],
     });
     getActiveStoreMock.mockReturnValue({
       activeStore: {
@@ -246,7 +304,7 @@ describe("POSRegisterOpeningGuard", () => {
     expect(screen.queryByText("Register workspace")).not.toBeInTheDocument();
     expect(screen.getByText("Store day not started")).toBeInTheDocument();
     expect(
-      screen.getByText("Start the day when Opening Handoff is ready."),
+      screen.getByText("Start the store day to begin POS sales."),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Start day/i })).toBeEnabled();
     expect(
@@ -255,6 +313,78 @@ describe("POSRegisterOpeningGuard", () => {
       "href",
       "/wigclub/store/wigclub/operations/opening",
     );
+  });
+
+  it("refreshes terminal staff authority while online so credentials are available offline", async () => {
+    useLocalPosEntryContextMock.mockReturnValue({
+      status: "ready",
+      orgUrlSlug: "wigclub",
+      storeUrlSlug: "wigclub",
+      storeId: "store-1",
+      terminalSeed: {
+        cloudTerminalId: "terminal-cloud-1",
+        displayName: "Front register",
+        provisionedAt: 1_778_000_000_000,
+        schemaVersion: 1,
+        storeId: "store-1",
+        syncSecretHash: "secret-hash",
+        terminalId: "terminal-1",
+      },
+      source: "live",
+    });
+    refreshTerminalStaffAuthorityMock.mockResolvedValue({
+      data: [
+        {
+          activeRoles: ["cashier"],
+          credentialId: "credential-1",
+          credentialVersion: 1,
+          displayName: "Ama Mensah",
+          expiresAt: Date.now() + 10_000,
+          issuedAt: Date.now(),
+          organizationId: "org-1",
+          refreshedAt: Date.now(),
+          staffProfileId: "staff-1",
+          status: "active",
+          storeId: "store-1",
+          terminalId: "terminal-cloud-1",
+          username: "frontdesk",
+          verifier: {
+            algorithm: "PBKDF2-SHA256",
+            hash: "hash",
+            iterations: 120000,
+            salt: "salt",
+            version: 1,
+          },
+        },
+      ],
+      kind: "ok",
+    });
+
+    render(
+      <POSRegisterOpeningGuard>
+        <div>Register workspace</div>
+      </POSRegisterOpeningGuard>,
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(refreshTerminalStaffAuthorityMock).toHaveBeenCalledWith({
+      storeId: "store-1",
+      terminalId: "terminal-cloud-1",
+    });
+    expect(replaceStaffAuthoritySnapshotMock).toHaveBeenCalledWith({
+      records: [
+        expect.objectContaining({
+          staffProfileId: "staff-1",
+          username: "frontdesk",
+        }),
+      ],
+      storeId: "store-1",
+      terminalId: "terminal-cloud-1",
+    });
   });
 
   it("authenticates staff and starts the store day from the POS gate when opening is ready", async () => {
@@ -311,7 +441,7 @@ describe("POSRegisterOpeningGuard", () => {
     });
   });
 
-  it("keeps the POS start action disabled when Opening Handoff needs review", () => {
+  it("starts the store day locally when Opening Handoff needs review so sales can continue", async () => {
     useQueryMock.mockImplementation((queryName: string) => {
       if (queryName === "getDailyOpeningSnapshot") {
         return { status: "needs_attention" };
@@ -326,8 +456,25 @@ describe("POSRegisterOpeningGuard", () => {
     useLocalPosReadinessMock.mockReturnValue({
       status: "blocked",
       reason: "not_started",
+      canStartLocally: true,
       message:
         "Store day not started. Complete Opening Handoff before starting sales.",
+    });
+    useLocalPosEntryContextMock.mockReturnValue({
+      status: "ready",
+      orgUrlSlug: "wigclub",
+      storeUrlSlug: "wigclub",
+      storeId: "store-1",
+      terminalSeed: {
+        cloudTerminalId: "terminal-cloud-1",
+        displayName: "Front register",
+        provisionedAt: 1_778_000_000_000,
+        schemaVersion: 1,
+        storeId: "store-1",
+        syncSecretHash: "secret-hash",
+        terminalId: "terminal-1",
+      },
+      source: "local",
     });
 
     render(
@@ -336,12 +483,31 @@ describe("POSRegisterOpeningGuard", () => {
       </POSRegisterOpeningGuard>,
     );
 
-    expect(screen.getByRole("button", { name: /Start day/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /Start day/i })).toBeEnabled();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /Start day/i }));
+      await Promise.resolve();
+    });
+
     expect(
-      screen.getByText(
-        "Opening Handoff needs review before the store day can start from POS.",
-      ),
+      screen.getByRole("dialog", { name: "Sign in required" }),
     ).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /Confirm cashier/i }));
+      await Promise.resolve();
+    });
+
+    expect(writeStoreDayReadinessMock).toHaveBeenCalledWith({
+      storeId: "store-1",
+      operatingDate: "2026-05-09",
+      status: "started",
+      source: "local",
+      updatedAt: new Date(2026, 4, 9, 12).getTime(),
+    });
+    expect(startStoreDayMock).not.toHaveBeenCalled();
+    expect(screen.getByText("Register workspace")).toBeInTheDocument();
   });
 
   it("directs the operator to EOD Review when the store day is closed", () => {

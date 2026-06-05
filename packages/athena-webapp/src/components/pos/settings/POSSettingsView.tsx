@@ -5,10 +5,12 @@ import type { ComponentType, ReactNode } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LoadingButton } from "@/components/ui/loading-button";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { FadeIn } from "../../common/FadeIn";
 import { PageLevelHeader, PageWorkspace } from "../../common/PageLevelHeader";
 import View from "../../View";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
+import { useAuth } from "@/hooks/useAuth";
 import { api } from "~/convex/_generated/api";
 import {
   BrowserFingerprintResult,
@@ -30,6 +32,18 @@ import {
   createIndexedDbPosLocalStorageAdapter,
   createPosLocalStore,
 } from "@/lib/pos/infrastructure/local/posLocalStore";
+import {
+  DEFAULT_POS_TERMINAL_TRANSACTION_CAPABILITY,
+  normalizePosTerminalTransactionCapability,
+  type PosTerminalTransactionCapability,
+} from "~/shared/posTerminalCapability";
+import {
+  DEFAULT_POS_TERMINAL_LOGIN_MODE,
+  normalizePosTerminalLoginMode,
+  type PosTerminalLoginMode,
+} from "~/shared/posTerminalLoginMode";
+import { usePosTerminalAppSessionRecoveryRuntimeInput } from "@/lib/pos/infrastructure/terminal/posTerminalAppSessionRecoveryContext";
+import type { PosTerminalRuntimeAppSessionRecoveryInput } from "@/lib/pos/infrastructure/local/terminalRuntimeStatus";
 
 type HealthLinkProps = {
   children: ReactNode;
@@ -43,12 +57,55 @@ type HealthLinkProps = {
 
 const HealthLink = Link as unknown as ComponentType<HealthLinkProps>;
 const POS_APP_SHELL_CACHE_PREFIX = "athena-pos-app-shell-";
+const terminalCapabilityOptions: Array<{
+  value: PosTerminalTransactionCapability;
+  label: string;
+  description: string;
+}> = [
+  {
+    value: "products_and_services",
+    label: "Product SKUs and services",
+    description: "Use this register for retail items and service work.",
+  },
+  {
+    value: "products_only",
+    label: "Product SKUs only",
+    description: "Use this register for retail items only.",
+  },
+  {
+    value: "services_only",
+    label: "Services only",
+    description: "Use this register for service work only.",
+  },
+];
+const terminalLoginModeOptions: Array<{
+  value: PosTerminalLoginMode;
+  label: string;
+  description: string;
+}> = [
+  {
+    value: "standard",
+    label: "Standard login",
+    description: "Show email code first. POS sign in stays available.",
+  },
+  {
+    value: "pos_only",
+    label: "POS only",
+    description: "Show POS sign in first. Email code remains secondary.",
+  },
+];
 
 type FingerprintRegistrationCardProps = {
   displayName: string;
   onDisplayNameChange: (value: string) => void;
   registerNumber: string;
   onRegisterNumberChange: (value: string) => void;
+  transactionCapability: PosTerminalTransactionCapability;
+  onTransactionCapabilityChange: (
+    value: PosTerminalTransactionCapability,
+  ) => void;
+  loginMode: PosTerminalLoginMode;
+  onLoginModeChange: (value: PosTerminalLoginMode) => void;
   canRegister: boolean;
   onRegister: () => void;
   isRegistering: boolean;
@@ -68,6 +125,10 @@ function FingerprintRegistrationCard({
   onDisplayNameChange,
   registerNumber,
   onRegisterNumberChange,
+  transactionCapability,
+  onTransactionCapabilityChange,
+  loginMode,
+  onLoginModeChange,
   canRegister,
   onRegister,
   isRegistering,
@@ -146,6 +207,70 @@ function FingerprintRegistrationCard({
                 : "Use the number printed on the drawer or assigned by the manager"}
             </p>
           </div>
+        </div>
+
+        <div className="space-y-layout-xs">
+          <Label>Terminal can transact</Label>
+          <RadioGroup
+            className="grid gap-layout-sm sm:grid-cols-3"
+            value={transactionCapability}
+            onValueChange={(value) =>
+              onTransactionCapabilityChange(
+                normalizePosTerminalTransactionCapability(value),
+              )
+            }
+          >
+            {terminalCapabilityOptions.map((option) => (
+              <label
+                className="flex min-h-[6.5rem] cursor-pointer flex-col gap-layout-xs rounded-md border border-border bg-background p-layout-sm text-sm transition-colors has-[:checked]:border-action-commit has-[:checked]:bg-action-neutral-soft"
+                key={option.value}
+              >
+                <span className="flex items-start gap-layout-xs">
+                  <RadioGroupItem
+                    aria-label={option.label}
+                    value={option.value}
+                  />
+                  <span className="font-medium text-foreground">
+                    {option.label}
+                  </span>
+                </span>
+                <span className="text-xs leading-5 text-muted-foreground">
+                  {option.description}
+                </span>
+              </label>
+            ))}
+          </RadioGroup>
+        </div>
+
+        <div className="space-y-layout-xs">
+          <Label>Terminal login</Label>
+          <RadioGroup
+            className="grid gap-layout-sm sm:grid-cols-2"
+            value={loginMode}
+            onValueChange={(value) =>
+              onLoginModeChange(normalizePosTerminalLoginMode(value))
+            }
+          >
+            {terminalLoginModeOptions.map((option) => (
+              <label
+                className="flex min-h-[5.75rem] cursor-pointer flex-col gap-layout-xs rounded-md border border-border bg-background p-layout-sm text-sm transition-colors has-[:checked]:border-action-commit has-[:checked]:bg-action-neutral-soft"
+                key={option.value}
+              >
+                <span className="flex items-start gap-layout-xs">
+                  <RadioGroupItem
+                    aria-label={option.label}
+                    value={option.value}
+                  />
+                  <span className="font-medium text-foreground">
+                    {option.label}
+                  </span>
+                </span>
+                <span className="text-xs leading-5 text-muted-foreground">
+                  {option.description}
+                </span>
+              </label>
+            ))}
+          </RadioGroup>
         </div>
 
         {fingerprintError ? (
@@ -491,14 +616,57 @@ function signalFromSnapshot(
   };
 }
 
+function signalFromAppSession(input: {
+  appSessionRecovery?: PosTerminalRuntimeAppSessionRecoveryInput | null;
+  isAuthLoading: boolean;
+  hasUser: boolean;
+}): PosOfflineReadinessInput["appSession"] {
+  if (input.hasUser) {
+    return { ready: true };
+  }
+
+  const status = input.appSessionRecovery?.status;
+  if (!status) {
+    return input.isAuthLoading ? null : { ready: false };
+  }
+
+  if (status === "recoverable") {
+    return { ready: true };
+  }
+
+  if (status === "waiting_for_network") {
+    return { status: "local_continuation" };
+  }
+
+  return { ready: false };
+}
+
 function usePosSettingsOfflineReadiness(input: {
+  appSessionRecovery?: PosTerminalRuntimeAppSessionRecoveryInput | null;
   existingTerminal: ProvisionedTerminalRecord | null;
   storeFactory?: Parameters<typeof registerAndProvisionPosTerminal>[0]["storeFactory"];
+  hasUser: boolean;
+  isAuthLoading: boolean;
   storeId?: string;
   orgUrlSlug?: string;
   storeUrlSlug?: string;
 }) {
+  const {
+    appSessionRecovery,
+    existingTerminal,
+    hasUser,
+    isAuthLoading,
+    orgUrlSlug,
+    storeFactory,
+    storeId,
+    storeUrlSlug,
+  } = input;
   const [signals, setSignals] = useState<PosOfflineReadinessInput>({
+    appSession: signalFromAppSession({
+      appSessionRecovery,
+      hasUser,
+      isAuthLoading,
+    }),
     appShell: null,
     availabilitySnapshot: null,
     registerCatalog: null,
@@ -512,13 +680,18 @@ function usePosSettingsOfflineReadiness(input: {
 
     async function loadReadiness() {
       const appShell = await readPosAppShellReadiness({
-        orgUrlSlug: input.orgUrlSlug,
-        storeUrlSlug: input.storeUrlSlug,
+        orgUrlSlug,
+        storeUrlSlug,
       });
 
-      if (!input.storeId || !input.existingTerminal) {
+      if (!storeId || !existingTerminal) {
         if (!cancelled) {
           setSignals({
+            appSession: signalFromAppSession({
+              appSessionRecovery,
+              hasUser,
+              isAuthLoading,
+            }),
             appShell,
             availabilitySnapshot: { ready: false },
             registerCatalog: { ready: false },
@@ -531,11 +704,16 @@ function usePosSettingsOfflineReadiness(input: {
       }
 
       const store =
-        (input.storeFactory?.() as PosSettingsLocalReadinessStore | undefined) ??
+        (storeFactory?.() as PosSettingsLocalReadinessStore | undefined) ??
         createDefaultLocalReadinessStore();
       if (!store) {
         if (!cancelled) {
           setSignals({
+            appSession: signalFromAppSession({
+              appSessionRecovery,
+              hasUser,
+              isAuthLoading,
+            }),
             appShell,
             availabilitySnapshot: { ready: false },
             registerCatalog: { ready: false },
@@ -557,14 +735,14 @@ function usePosSettingsOfflineReadiness(input: {
         store.readProvisionedTerminalSeed?.() ??
           Promise.resolve({ ok: true as const, value: null }),
         store.getStaffAuthorityReadiness?.({
-          storeId: input.storeId,
-          terminalId: input.existingTerminal._id,
+          storeId,
+          terminalId: existingTerminal._id,
         }) ?? Promise.resolve({ ok: true as const, value: "missing" as const }),
-        store.readRegisterCatalogSnapshot?.({ storeId: input.storeId }) ??
+        store.readRegisterCatalogSnapshot?.({ storeId }) ??
           Promise.resolve({ ok: true as const, value: null }),
-        store.readRegisterServiceCatalogSnapshot?.({ storeId: input.storeId }) ??
+        store.readRegisterServiceCatalogSnapshot?.({ storeId }) ??
           Promise.resolve({ ok: true as const, value: null }),
-        store.readRegisterAvailabilitySnapshot?.({ storeId: input.storeId }) ??
+        store.readRegisterAvailabilitySnapshot?.({ storeId }) ??
           Promise.resolve({ ok: true as const, value: null }),
       ]);
 
@@ -572,6 +750,11 @@ function usePosSettingsOfflineReadiness(input: {
 
       const localTerminalSeed = terminalSeed.ok ? terminalSeed.value : null;
       setSignals({
+        appSession: signalFromAppSession({
+          appSessionRecovery,
+          hasUser,
+          isAuthLoading,
+        }),
         appShell,
         availabilitySnapshot: signalFromSnapshot(availabilitySnapshot),
         registerCatalog: signalFromSnapshot(registerCatalog),
@@ -582,8 +765,8 @@ function usePosSettingsOfflineReadiness(input: {
         terminalSeed: {
           ready:
             Boolean(localTerminalSeed) &&
-            localTerminalSeed?.storeId === input.storeId &&
-            localTerminalSeed?.cloudTerminalId === input.existingTerminal._id,
+            localTerminalSeed?.storeId === storeId &&
+            localTerminalSeed?.cloudTerminalId === existingTerminal._id,
         },
       });
     }
@@ -594,11 +777,14 @@ function usePosSettingsOfflineReadiness(input: {
       cancelled = true;
     };
   }, [
-    input.existingTerminal,
-    input.orgUrlSlug,
-    input.storeFactory,
-    input.storeId,
-    input.storeUrlSlug,
+    appSessionRecovery,
+    existingTerminal,
+    hasUser,
+    isAuthLoading,
+    orgUrlSlug,
+    storeFactory,
+    storeId,
+    storeUrlSlug,
   ]);
 
   return signals;
@@ -610,6 +796,8 @@ export function POSSettingsView({
   storeFactory?: Parameters<typeof registerAndProvisionPosTerminal>[0]["storeFactory"];
 } = {}) {
   const { activeStore } = useGetActiveStore();
+  const { isLoading: isAuthLoading, user } = useAuth();
+  const appSessionRecovery = usePosTerminalAppSessionRecoveryRuntimeInput();
   const routeParams = useParams({ strict: false }) as
     | {
         orgUrlSlug?: string;
@@ -628,6 +816,16 @@ export function POSSettingsView({
   const [nameTouched, setNameTouched] = useState(false);
   const [registerNumber, setRegisterNumber] = useState("");
   const [registerNumberTouched, setRegisterNumberTouched] = useState(false);
+  const [transactionCapability, setTransactionCapability] =
+    useState<PosTerminalTransactionCapability>(
+      DEFAULT_POS_TERMINAL_TRANSACTION_CAPABILITY,
+    );
+  const [transactionCapabilityTouched, setTransactionCapabilityTouched] =
+    useState(false);
+  const [loginMode, setLoginMode] = useState<PosTerminalLoginMode>(
+    DEFAULT_POS_TERMINAL_LOGIN_MODE,
+  );
+  const [loginModeTouched, setLoginModeTouched] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
   const [isUpdatingExisting, setIsUpdatingExisting] = useState(false);
   const fingerprintHash = fingerprintResult?.fingerprintHash;
@@ -663,6 +861,24 @@ export function POSSettingsView({
     }
     setRegisterNumber("");
   }, [existingTerminal, registerNumberTouched]);
+
+  useEffect(() => {
+    if (transactionCapabilityTouched) {
+      return;
+    }
+    setTransactionCapability(
+      normalizePosTerminalTransactionCapability(
+        existingTerminal?.transactionCapability,
+      ),
+    );
+  }, [existingTerminal, transactionCapabilityTouched]);
+
+  useEffect(() => {
+    if (loginModeTouched) {
+      return;
+    }
+    setLoginMode(normalizePosTerminalLoginMode(existingTerminal?.loginMode));
+  }, [existingTerminal, loginModeTouched]);
 
   useEffect(() => {
     let cancelled = false;
@@ -763,7 +979,10 @@ export function POSSettingsView({
   ]);
 
   const offlineReadinessSignals = usePosSettingsOfflineReadiness({
+    appSessionRecovery,
     existingTerminal,
+    hasUser: Boolean(user),
+    isAuthLoading,
     orgUrlSlug: routeParams?.orgUrlSlug,
     storeFactory,
     storeId: activeStore?._id,
@@ -804,6 +1023,8 @@ export function POSSettingsView({
         registerTerminalMutation,
         storeFactory,
         storeUrlSlug: routeParams?.storeUrlSlug,
+        loginMode,
+        transactionCapability,
       });
       if (result.kind === "user_error") {
         toast.error(result.error.message);
@@ -817,6 +1038,8 @@ export function POSSettingsView({
       );
       setNameTouched(false);
       setRegisterNumberTouched(false);
+      setLoginModeTouched(false);
+      setTransactionCapabilityTouched(false);
     } catch (error) {
       console.error(error);
       toast.error("Unable to register terminal");
@@ -849,12 +1072,16 @@ export function POSSettingsView({
         registerTerminalMutation,
         storeFactory,
         storeUrlSlug: routeParams?.storeUrlSlug,
+        loginMode,
+        transactionCapability,
       });
       if (result.kind === "user_error") {
         toast.error(result.error.message);
         return;
       }
       setNameTouched(false);
+      setLoginModeTouched(false);
+      setTransactionCapabilityTouched(false);
       toast.success("Terminal settings saved");
     } catch (error) {
       console.error(error);
@@ -886,6 +1113,16 @@ export function POSSettingsView({
               onRegisterNumberChange={(value) => {
                 setRegisterNumberTouched(true);
                 setRegisterNumber(value);
+              }}
+              transactionCapability={transactionCapability}
+              onTransactionCapabilityChange={(value) => {
+                setTransactionCapabilityTouched(true);
+                setTransactionCapability(value);
+              }}
+              loginMode={loginMode}
+              onLoginModeChange={(value) => {
+                setLoginModeTouched(true);
+                setLoginMode(value);
               }}
               canRegister={registrationState.canRegister}
               onRegister={handleRegisterTerminal}

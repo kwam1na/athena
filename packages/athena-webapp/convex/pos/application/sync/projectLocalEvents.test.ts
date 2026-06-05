@@ -758,6 +758,34 @@ describe("projectLocalSyncEvent", () => {
     expect(repository.createdTransactions).toHaveLength(0);
   });
 
+  it("does not let stored staff trust override an invalid offline staff proof", async () => {
+    const repository = createProjectionRepository({ validStaffProof: false });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: buildSaleCompletedEvent(),
+      syncEventId: "sync-event-1",
+      now: 100,
+      options: {
+        trustStoredStaffProof: true,
+      },
+    });
+
+    expect(result.status).toBe("conflicted");
+    expect(result.conflicts).toEqual([
+      expect.objectContaining({
+        conflictType: "permission",
+        details: expect.objectContaining({
+          eventType: "sale_completed",
+          hasStaffProof: true,
+          staffProfileId: "staff-1",
+        }),
+      }),
+    ]);
+    expect(repository.createdTransactions).toHaveLength(0);
+  });
+
   it("conflicts active cashier sales without an offline staff proof token", async () => {
     const repository = createProjectionRepository();
     const event = buildSaleCompletedEvent();

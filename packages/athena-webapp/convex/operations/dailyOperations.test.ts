@@ -922,6 +922,57 @@ describe("daily operations overview read model", () => {
     expect(snapshot.attentionItems).toEqual([]);
   });
 
+  it("surfaces register closeout records when no operational event was recorded", async () => {
+    const snapshot = await buildDailyOperationsSnapshotWithCtx(
+      buildCtx({
+        dailyClose: [priorClose],
+        dailyOpening: [startedOpening],
+        registerSession: [
+          {
+            _id: "register-2",
+            closeoutRecords: [
+              {
+                actorStaffProfileId: "staff-1",
+                countedCash: 450,
+                expectedCash: 450,
+                occurredAt: Date.UTC(2026, 4, 8, 20, 45),
+                type: "closed",
+                variance: 0,
+              },
+            ],
+            expectedCash: 450,
+            openedAt: Date.UTC(2026, 4, 8, 8),
+            openingFloat: 100,
+            organizationId: "org-1",
+            registerNumber: "Register 2",
+            status: "closed",
+            storeId: "store-1",
+          },
+        ],
+        store: [store],
+      }),
+      { operatingDate: "2026-05-08", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(snapshot.timeline[0]).toMatchObject({
+      id: "register_closeout:register-2:closed:1778273100000",
+      message: "Register 2 closeout recorded with an exact cash match.",
+      registerLink: {
+        label: "Register 2",
+        params: {
+          sessionId: "register-2",
+        },
+        to: "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId",
+      },
+      subject: {
+        id: "register-2",
+        label: "Register 2",
+        type: "register_session",
+      },
+      type: "register_session_closed",
+    });
+  });
+
   it("returns the newest timeline events before applying the timeline limit", async () => {
     const events = Array.from({ length: 201 }, (_, index) => ({
       _id: `event-${index}`,

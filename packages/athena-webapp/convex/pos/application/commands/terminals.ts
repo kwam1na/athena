@@ -5,6 +5,14 @@ import {
   userError,
   type CommandResult,
 } from "../../../../shared/commandResult";
+import {
+  normalizePosTerminalTransactionCapability,
+  type PosTerminalTransactionCapability,
+} from "../../../../shared/posTerminalCapability";
+import {
+  normalizePosTerminalLoginMode,
+  type PosTerminalLoginMode,
+} from "../../../../shared/posTerminalLoginMode";
 
 import {
   getTerminalByFingerprint,
@@ -85,6 +93,8 @@ export async function registerTerminal(
     syncSecretHash: string;
     displayName: string;
     registerNumber: string;
+    loginMode?: PosTerminalLoginMode;
+    transactionCapability?: PosTerminalTransactionCapability;
     registeredByUserId: Id<"athenaUser">;
     browserInfo: Doc<"posTerminal">["browserInfo"];
   },
@@ -99,6 +109,9 @@ export async function registerTerminal(
       registerNumber: args.registerNumber,
       terminalId: existing?._id,
     });
+    const transactionCapability =
+      normalizePosTerminalTransactionCapability(args.transactionCapability);
+    const loginMode = normalizePosTerminalLoginMode(args.loginMode);
 
     if (existing) {
       if (existing.status !== "active") {
@@ -123,6 +136,8 @@ export async function registerTerminal(
         browserInfo: args.browserInfo,
         status: "active",
         registerNumber: nextRegisterNumber,
+        loginMode,
+        transactionCapability,
       });
 
       return ok({
@@ -133,6 +148,8 @@ export async function registerTerminal(
         browserInfo: args.browserInfo,
         status: "active",
         registerNumber: nextRegisterNumber,
+        loginMode,
+        transactionCapability,
       });
     }
 
@@ -146,6 +163,8 @@ export async function registerTerminal(
       browserInfo: args.browserInfo,
       registeredAt: Date.now(),
       status: "active",
+      loginMode,
+      transactionCapability,
     });
     const terminal = await getTerminalById(ctx, terminalId);
 

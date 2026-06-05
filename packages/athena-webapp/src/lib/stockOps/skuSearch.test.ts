@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { matchesSkuSearchTerms, normalizeSkuSearchQuery } from "./skuSearch";
+import {
+  matchesSkuSearchTerms,
+  normalizeSkuSearchQuery,
+  scoreSkuSearchTerms,
+} from "./skuSearch";
 
 describe("skuSearch", () => {
   it("matches exact and prefix text tokens", () => {
@@ -59,5 +63,21 @@ describe("skuSearch", () => {
         normalizeSkuSearchQuery("111222333444"),
       ),
     ).toBe(true);
+  });
+
+  it("scores compact product-name phrases above broader fuzzy matches", () => {
+    const query = normalizeSkuSearchQuery("meltband");
+
+    const directPhraseScore = scoreSkuSearchTerms(
+      ["Hair Band", "Melt Band", "POS quick add"],
+      query,
+    );
+    const broadFuzzyScore = scoreSkuSearchTerms(
+      ["Brazilian Hair And Body Fragrance Mist", "POS quick add"],
+      query,
+    );
+
+    expect(directPhraseScore).toBeGreaterThan(0);
+    expect(directPhraseScore).toBeGreaterThan(broadFuzzyScore);
   });
 });

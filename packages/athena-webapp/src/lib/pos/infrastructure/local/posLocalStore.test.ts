@@ -1346,6 +1346,56 @@ describe("posLocalStore", () => {
     });
   });
 
+  it("restores active cashier presence for a terminal without live organization metadata", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+      clock: () => 2_000,
+    });
+
+    await store.writeCashierPresence(
+      buildCashierPresenceRecord({
+        organizationId: "org-1",
+        signedInAt: 1_000,
+      }),
+    );
+    await store.writeCashierPresence(
+      buildCashierPresenceRecord({
+        organizationId: "org-2",
+        signedInAt: 1_500,
+      }),
+    );
+
+    await expect(
+      store.readActiveCashierPresence({
+        operatingDate: "2026-06-04",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      }),
+    ).resolves.toEqual({
+      ok: true,
+      value: expect.objectContaining({
+        organizationId: "org-2",
+        signedInAt: 1_500,
+        staffProfileId: "staff-1",
+        username: "frontdesk",
+      }),
+    });
+    await expect(
+      store.readActiveCashierPresence({
+        operatingDate: "2026-06-04",
+        organizationId: "org-1",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      }),
+    ).resolves.toEqual({
+      ok: true,
+      value: expect.objectContaining({
+        organizationId: "org-1",
+        signedInAt: 1_000,
+      }),
+    });
+  });
+
   it("keeps cashier presence isolated by terminal store organization and operating date", async () => {
     const store = createPosLocalStore({
       adapter: createMemoryPosLocalStorageAdapter(),

@@ -102,6 +102,12 @@ function scoreQueryTokenForEntry<TItem>(
   token: string,
   fieldWeights: FuzzySearchFieldWeights,
 ): number {
+  const compactFieldScore = scoreCompactFieldContains(
+    entry.normalizedFields,
+    token,
+    fieldWeights,
+  );
+
   if (entry.tokens.has(token)) {
     return (
       1 +
@@ -110,15 +116,53 @@ function scoreQueryTokenForEntry<TItem>(
           score +
           scoreFieldContains(entry.normalizedFields[field] ?? "", token, weight)
         );
-      }, 0)
+      }, 0) +
+      compactFieldScore
     );
   }
 
-  return bestFuzzyTokenScore(entry.tokens, token);
+  return Math.max(bestFuzzyTokenScore(entry.tokens, token), compactFieldScore);
 }
 
 function scoreFieldContains(field: string, token: string, score: number): number {
   return field.includes(token) ? score : 0;
+}
+
+function scoreCompactFieldContains(
+  normalizedFields: Record<string, string>,
+  token: string,
+  fieldWeights: FuzzySearchFieldWeights,
+): number {
+  const compactToken = compactSearchText(token);
+
+  if (compactToken.length < 3) return 0;
+
+  let bestScore = 0;
+
+  for (const [field, value] of Object.entries(normalizedFields)) {
+    const compactField = compactSearchText(value);
+
+    if (!compactField) continue;
+
+    const fieldWeight = fieldWeights[field] ?? 1;
+
+    if (compactField === compactToken) {
+      bestScore = Math.max(bestScore, 40 + fieldWeight * 10);
+    } else if (compactField.includes(compactToken)) {
+      bestScore = Math.max(bestScore, 24 + fieldWeight * 8);
+    } else if (
+      compactToken.includes(compactField) &&
+      compactField.length >= Math.max(3, compactToken.length - 2)
+    ) {
+      bestScore = Math.max(bestScore, 16 + fieldWeight * 6);
+    }
+  }
+
+  return bestScore;
+}
+
+function compactSearchText(value: string) {
+  return normalizeFuzzySearchText(value).replace(/\s+/g, "");
 }
 
 function bestFuzzyTokenScore(tokens: Set<string>, queryToken: string): number {

@@ -6,6 +6,8 @@ import type {
 } from "@/lib/pos/domain";
 import type { Id } from "~/convex/_generated/dataModel";
 import type { CommandResult } from "~/shared/commandResult";
+import type { PosTerminalLoginMode } from "~/shared/posTerminalLoginMode";
+import type { PosTerminalTransactionCapability } from "~/shared/posTerminalCapability";
 
 type PosOperationalRole =
   | "manager"
@@ -20,6 +22,8 @@ export interface PosTerminalDto {
   displayName: string;
   localTerminalId?: string;
   registerNumber?: string;
+  loginMode?: PosTerminalLoginMode;
+  transactionCapability?: PosTerminalTransactionCapability;
   status?: string;
   registeredAt?: number;
 }
@@ -30,6 +34,8 @@ export interface PosRegisteredTerminalDto {
   displayName: string;
   localTerminalId?: string;
   registerNumber?: string;
+  loginMode?: PosTerminalLoginMode;
+  transactionCapability?: PosTerminalTransactionCapability;
   storeId?: Id<"store">;
   fingerprintHash?: string;
   syncSecretHash?: string;

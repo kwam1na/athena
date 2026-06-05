@@ -1,4 +1,4 @@
-import { type ReactNode, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
 import { ArrowUpRight, CheckCircle2, Store } from "lucide-react";
@@ -13,6 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { LoadingButton } from "@/components/ui/loading-button";
 import View from "@/components/View";
+import { CashierAuthDialog } from "@/components/pos/CashierAuthDialog";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { presentCommandToast } from "@/lib/errors/presentCommandToast";
 import {
@@ -23,7 +24,16 @@ import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
 import type { CommandResult } from "~/shared/commandResult";
 import { useLocalPosEntryContext } from "@/lib/pos/infrastructure/local/localPosEntryContext";
-import { useLocalPosReadiness } from "@/lib/pos/infrastructure/local/localPosReadiness";
+import {
+  type LocalPosReadiness,
+  useLocalPosReadiness,
+} from "@/lib/pos/infrastructure/local/localPosReadiness";
+import {
+  createIndexedDbPosLocalStorageAdapter,
+  createPosLocalStore,
+  type PosLocalStaffAuthorityRecord,
+} from "@/lib/pos/infrastructure/local/posLocalStore";
+import { logger } from "@/lib/logger";
 
 type DailyOpeningSnapshot = {
   status?: "blocked" | "needs_attention" | "ready" | "started";
@@ -61,6 +71,10 @@ function getLocalOperatingDateRange(date = new Date()) {
     operatingDate: getLocalOperatingDate(date),
     startAt: localStart.getTime(),
   };
+}
+
+function isBrowserOffline() {
+  return typeof navigator !== "undefined" && navigator.onLine === false;
 }
 
 export function POSRegisterOpeningGuard({
@@ -108,21 +122,113 @@ export function POSRegisterOpeningGuard({
     openingSnapshot: snapshot,
     operatingDate: operatingDateRange.operatingDate,
   });
+  const [locallyStartedDayKey, setLocallyStartedDayKey] = useState<
+    string | null
+  >(null);
+  const localStore = useMemo(
+    () =>
+      createPosLocalStore({
+        adapter: createIndexedDbPosLocalStorageAdapter(),
+      }),
+    [],
+  );
+  const refreshTerminalStaffAuthority = useMutation(
+    api.operations.staffCredentials.refreshTerminalStaffAuthority,
+  );
+  const terminalId =
+    entryContext.status === "ready"
+      ? (entryContext.terminalSeed?.cloudTerminalId as
+          | Id<"posTerminal">
+          | undefined)
+      : undefined;
+  useEffect(() => {
+    if (!storeId || !terminalId || isBrowserOffline()) {
+      return;
+    }
+
+    void (async () => {
+      let result: CommandResult<PosLocalStaffAuthorityRecord[]>;
+      try {
+        result = await (
+          refreshTerminalStaffAuthority as (args: {
+            storeId: Id<"store">;
+            terminalId: Id<"posTerminal">;
+          }) => Promise<CommandResult<PosLocalStaffAuthorityRecord[]>>
+        )({ storeId, terminalId });
+      } catch (error) {
+        logger.warn("[POS] Staff authority background refresh failed", {
+          message: error instanceof Error ? error.message : String(error),
+          storeId,
+          terminalId,
+        });
+        return;
+      }
+
+      if (result.kind !== "ok") {
+        logger.warn("[POS] Staff authority background refresh skipped", {
+          kind: result.kind,
+          storeId,
+          terminalId,
+        });
+        const clearResult = await localStore.replaceStaffAuthoritySnapshot({
+          records: [],
+          storeId,
+          terminalId,
+        });
+        if (!clearResult.ok) {
+          logger.warn("[POS] Staff authority snapshot could not be cleared", {
+            code: clearResult.error.code,
+            storeId,
+            terminalId,
+          });
+        }
+        return;
+      }
+
+      const writeResult = await localStore.replaceStaffAuthoritySnapshot({
+        records: result.data,
+        storeId,
+        terminalId,
+      });
+      if (!writeResult.ok) {
+        logger.warn("[POS] Staff authority background refresh could not be stored", {
+          code: writeResult.error.code,
+          storeId,
+          terminalId,
+        });
+      }
+    })();
+  }, [localStore, refreshTerminalStaffAuthority, storeId, terminalId]);
+  const activeDayKey = storeId
+    ? `${storeId}:${operatingDateRange.operatingDate}`
+    : null;
+  const effectiveReadiness =
+    activeDayKey && locallyStartedDayKey === activeDayKey
+      ? ({
+          status: "ready",
+          source: "local_readiness",
+          storeDayStatus: "started",
+        } satisfies LocalPosReadiness)
+      : localReadiness;
 
   if (isLoadingStores && entryContext.status === "loading") {
     return null;
   }
 
-  if (localReadiness.status === "loading") {
+  if (effectiveReadiness.status === "loading") {
     return null;
   }
 
   if (
-    localReadiness.status === "blocked" &&
-    localReadiness.reason === "not_started"
+    effectiveReadiness.status === "blocked" &&
+    effectiveReadiness.reason === "not_started"
   ) {
     return (
       <StoreDayNotStartedState
+        entryContext={entryContext}
+        localReadiness={effectiveReadiness}
+        localStore={localStore}
+        onStarted={() => setLocallyStartedDayKey(activeDayKey)}
         operatingDateRange={operatingDateRange}
         snapshot={snapshot}
         storeId={storeId}
@@ -131,31 +237,39 @@ export function POSRegisterOpeningGuard({
   }
 
   if (
-    localReadiness.status === "blocked" &&
-    localReadiness.reason === "closed"
+    effectiveReadiness.status === "blocked" &&
+    effectiveReadiness.reason === "closed"
   ) {
     return <StoreDayClosedState />;
   }
 
   if (
-    localReadiness.status === "blocked" &&
-    localReadiness.reason === "local_closeout"
+    effectiveReadiness.status === "blocked" &&
+    effectiveReadiness.reason === "local_closeout"
   ) {
     return <>{children}</>;
   }
 
-  if (localReadiness.status === "blocked") {
-    return <POSSetupRequiredState message={localReadiness.message} />;
+  if (effectiveReadiness.status === "blocked") {
+    return <POSSetupRequiredState message={effectiveReadiness.message} />;
   }
 
   return <>{children}</>;
 }
 
 function StoreDayNotStartedState({
+  entryContext,
+  localReadiness,
+  localStore,
+  onStarted,
   operatingDateRange,
   snapshot,
   storeId,
 }: {
+  entryContext: ReturnType<typeof useLocalPosEntryContext>;
+  localReadiness: Extract<LocalPosReadiness, { status: "blocked" }>;
+  localStore: ReturnType<typeof createPosLocalStore>;
+  onStarted: () => void;
   operatingDateRange: ReturnType<typeof getLocalOperatingDateRange>;
   snapshot?: DailyOpeningSnapshot;
   storeId?: Id<"store">;
@@ -173,7 +287,18 @@ function StoreDayNotStartedState({
   );
   const [isStarting, setIsStarting] = useState(false);
   const [isStaffAuthOpen, setIsStaffAuthOpen] = useState(false);
-  const canStartFromGate = Boolean(storeId && snapshot?.status === "ready");
+  const terminalId =
+    entryContext.status === "ready"
+      ? (entryContext.terminalSeed?.cloudTerminalId as
+          | Id<"posTerminal">
+          | undefined)
+      : undefined;
+  const canStartFromGate = Boolean(
+    storeId &&
+      (snapshot?.status === "ready" || localReadiness.canStartLocally),
+  );
+  const shouldStartLocally =
+    Boolean(localReadiness.canStartLocally) && snapshot?.status !== "ready";
 
   const handleStartDay = async (staff: StaffAuthenticationResult) => {
     if (!storeId || isStarting) {
@@ -184,6 +309,25 @@ function StoreDayNotStartedState({
     setIsStarting(true);
 
     try {
+      if (shouldStartLocally) {
+        const result = await localStore.writeStoreDayReadiness({
+          storeId,
+          operatingDate: operatingDateRange.operatingDate,
+          status: "started",
+          source: "local",
+          updatedAt: Date.now(),
+        });
+
+        if (result.ok) {
+          toast.success("Store day started");
+          onStarted();
+          return;
+        }
+
+        toast.error(result.error.message);
+        return;
+      }
+
       const result = await runCommand(() =>
         startStoreDay({
           ...operatingDateRange,
@@ -194,6 +338,7 @@ function StoreDayNotStartedState({
 
       if (result.kind === "ok") {
         toast.success("Store day started");
+        onStarted();
         return;
       }
 
@@ -256,7 +401,7 @@ function StoreDayNotStartedState({
             Store day not started
           </h2>
           <p className="mt-3 max-w-lg text-base leading-7 text-muted-foreground">
-            Start the day when Opening Handoff is ready.
+            Start the store day to begin POS sales.
           </p>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-layout-sm">
             <LoadingButton
@@ -292,26 +437,37 @@ function StoreDayNotStartedState({
           </div>
           {!canStartFromGate ? (
             <p className="mt-layout-md max-w-md text-sm leading-6 text-muted-foreground">
-              Opening Handoff needs review before the store day can start from
-              POS.
+              Terminal setup is required before POS can start the day.
             </p>
           ) : null}
         </div>
       </FadeIn>
-      <StaffAuthenticationDialog
-        copy={{
-          title: "Confirm staff credentials",
-          description: "Start the store day with your staff sign-in.",
-          submitLabel: "Start day",
-        }}
-        getSuccessMessage={() => null}
-        onAuthenticate={(args) => handleAuthenticateStaff(args)}
-        onAuthenticated={(result) => {
-          void handleStartDay(result);
-        }}
-        onDismiss={() => setIsStaffAuthOpen(false)}
-        open={isStaffAuthOpen}
-      />
+      {terminalId && storeId ? (
+        <CashierAuthDialog
+          onAuthenticated={(result) => {
+            void handleStartDay(result);
+          }}
+          onDismiss={() => setIsStaffAuthOpen(false)}
+          open={isStaffAuthOpen}
+          storeId={storeId}
+          terminalId={terminalId}
+        />
+      ) : (
+        <StaffAuthenticationDialog
+          copy={{
+            title: "Confirm staff credentials",
+            description: "Start the store day with your staff sign-in.",
+            submitLabel: "Start day",
+          }}
+          getSuccessMessage={() => null}
+          onAuthenticate={(args) => handleAuthenticateStaff(args)}
+          onAuthenticated={(result) => {
+            void handleStartDay(result);
+          }}
+          onDismiss={() => setIsStaffAuthOpen(false)}
+          open={isStaffAuthOpen}
+        />
+      )}
     </View>
   );
 }

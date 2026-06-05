@@ -119,6 +119,33 @@ describe("Login", () => {
     });
   });
 
+  it("defaults POS-only provisioned terminals to POS recovery while keeping email secondary", async () => {
+    mocked.useSearch.mockReturnValue({});
+    mocked.readProvisionedTerminalSeed.mockResolvedValue({
+      ok: true,
+      value: {
+        cloudTerminalId: "terminal-1",
+        displayName: "Front register",
+        loginMode: "pos_only",
+        orgUrlSlug: "wigclub",
+        provisionedAt: 1,
+        schemaVersion: 8,
+        storeId: "store-1",
+        storeUrlSlug: "wigclub",
+        syncSecretHash: "secret-hash",
+        terminalId: "fingerprint-1",
+      },
+    });
+
+    render(<Login />);
+
+    expect(
+      await screen.findByRole("heading", { name: /pos recovery/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /use email code/i }))
+      .toBeInTheDocument();
+  });
+
   it("uses an existing provisioned terminal seed without slugs for store-scoped recovery", async () => {
     const user = userEvent.setup();
     mocked.signIn.mockResolvedValue({ signingIn: true });

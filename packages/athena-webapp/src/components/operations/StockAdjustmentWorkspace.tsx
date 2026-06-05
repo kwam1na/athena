@@ -39,8 +39,8 @@ import { getProductName } from "~/src/lib/productUtils";
 import { getOrigin } from "~/src/lib/navigationUtils";
 import { formatStoredCurrencyAmount } from "@/lib/pos/displayAmounts";
 import {
-  matchesSkuSearchTerms,
   normalizeSkuSearchQuery,
+  scoreSkuSearchTerms,
 } from "@/lib/stockOps/skuSearch";
 import type { NormalizedCommandResult } from "../../lib/errors/runCommand";
 import { presentCommandToast } from "../../lib/errors/presentCommandToast";
@@ -410,27 +410,25 @@ function formatInventoryItemPriceLabel(item: InventorySnapshotItem) {
     : "Price pending";
 }
 
-function rowMatchesStockAdjustmentSearch(
-  row: StockAdjustmentRow,
-  query: string,
-) {
-  if (!query) return true;
+function scoreStockAdjustmentSearchRow(row: StockAdjustmentRow, query: string) {
+  if (!query) return 1;
 
+  return scoreSkuSearchTerms(getStockAdjustmentSearchTerms(row), query);
+}
+
+function getStockAdjustmentSearchTerms(row: StockAdjustmentRow) {
   const item = row.inventoryItem;
-  return matchesSkuSearchTerms(
-    [
-      getInventoryItemDisplayName(item),
-      item.sku,
-      item.barcode,
-      item.colorName,
-      item.productCategory,
-      item.size,
-      item.length === null || item.length === undefined
-        ? undefined
-        : String(item.length),
-    ],
-    query,
-  );
+  return [
+    getInventoryItemDisplayName(item),
+    item.sku,
+    item.barcode,
+    item.colorName,
+    item.productCategory,
+    item.size,
+    item.length === null || item.length === undefined
+      ? undefined
+      : String(item.length),
+  ];
 }
 
 function rowMatchesCategoryFilter(row: StockAdjustmentRow, category: string) {
@@ -1977,12 +1975,30 @@ export function StockAdjustmentWorkspaceContent({
     [inventoryItems],
   );
   const queryAvailabilityFilteredRows = useMemo(
-    () =>
-      rows.filter(
-        (row) =>
-          rowMatchesStockAdjustmentSearch(row, normalizedFilterQuery) &&
-          rowMatchesAvailabilityFilter(row, filters.availability),
-      ),
+    () => {
+      const scoredRows = rows
+        .map((row, position) => ({
+          position,
+          row,
+          score: scoreStockAdjustmentSearchRow(row, normalizedFilterQuery),
+        }))
+        .filter(
+          ({ row, score }) =>
+            score > 0 &&
+            rowMatchesAvailabilityFilter(row, filters.availability),
+        );
+
+      if (!normalizedFilterQuery) {
+        return scoredRows.map(({ row }) => row);
+      }
+
+      return scoredRows
+        .sort((left, right) => {
+          if (right.score !== left.score) return right.score - left.score;
+          return left.position - right.position;
+        })
+        .map(({ row }) => row);
+    },
     [filters.availability, normalizedFilterQuery, rows],
   );
   const filteredRows = useMemo(
@@ -2426,11 +2442,23 @@ export function StockAdjustmentWorkspaceContent({
 
   const getFirstFilteredItem = (nextFilters: StockAdjustmentFilterState) => {
     const nextNormalizedQuery = normalizeSkuSearchQuery(nextFilters.query);
-    const nextRows = rows.filter(
-      (row) =>
-        rowMatchesStockAdjustmentSearch(row, nextNormalizedQuery) &&
-        rowMatchesAvailabilityFilter(row, nextFilters.availability),
-    );
+    const nextRows = rows
+      .map((row, position) => ({
+        position,
+        row,
+        score: scoreStockAdjustmentSearchRow(row, nextNormalizedQuery),
+      }))
+      .filter(
+        ({ row, score }) =>
+          score > 0 &&
+          rowMatchesAvailabilityFilter(row, nextFilters.availability),
+      )
+      .sort((left, right) => {
+        if (!nextNormalizedQuery) return left.position - right.position;
+        if (right.score !== left.score) return right.score - left.score;
+        return left.position - right.position;
+      })
+      .map(({ row }) => row);
     const firstExactItem = nextRows.find((row) =>
       rowMatchesCategoryFilter(row, nextFilters.category),
     )?.inventoryItem;

@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   rotateRecoveryCode: vi.fn(),
   revokeRecoveryCode: vi.fn(),
   unlockRecoveryCode: vi.fn(),
+  useAuth: vi.fn(),
   useMutation: vi.fn(),
   usePermissions: vi.fn(),
   useQuery: vi.fn(),
@@ -26,6 +27,10 @@ vi.mock("convex/react", () => ({
 
 vi.mock("@/hooks/useGetActiveStore", () => ({
   default: () => ({ activeStore: { _id: "store-1" } }),
+}));
+
+vi.mock("@/hooks/useAuth", () => ({
+  useAuth: () => mocks.useAuth(),
 }));
 
 vi.mock("@/hooks/usePermissions", () => ({
@@ -162,6 +167,10 @@ describe("registerAndProvisionPosTerminal", () => {
       hasFullAdminAccess: true,
       isLoading: false,
     });
+    mocks.useAuth.mockReturnValue({
+      isLoading: false,
+      user: { _id: "athena-user-1", email: "pos@wigclub.store" },
+    });
     mocks.useQuery.mockImplementation((ref) =>
       ref === "getRecoveryCodeStatus"
         ? {
@@ -232,6 +241,8 @@ describe("registerAndProvisionPosTerminal", () => {
     await screen.findByLabelText("Terminal name");
     await user.type(screen.getByLabelText("Terminal name"), "  Front counter  ");
     await user.type(screen.getByLabelText("Register number"), "  7  ");
+    await user.click(screen.getByText("Services only"));
+    await user.click(screen.getByText("POS only"));
     await user.click(
       await screen.findByRole("button", { name: "Register terminal" }),
     );
@@ -241,8 +252,10 @@ describe("registerAndProvisionPosTerminal", () => {
         expect.objectContaining({
           displayName: "Front counter",
           fingerprintHash: "fingerprint-1",
+          loginMode: "pos_only",
           registerNumber: "7",
           storeId: "store-1",
+          transactionCapability: "services_only",
         }),
       ),
     );
@@ -252,6 +265,8 @@ describe("registerAndProvisionPosTerminal", () => {
         registerNumber: "7",
         syncSecretHash: "01020304",
         terminalId: "fingerprint-1",
+        loginMode: "pos_only",
+        transactionCapability: "services_only",
       }),
     );
   });
@@ -271,6 +286,8 @@ describe("registerAndProvisionPosTerminal", () => {
       registeredAt: 1,
       registeredByUserId: "user-1",
       registerNumber: "3",
+      loginMode: "pos_only",
+      transactionCapability: "products_only",
       status: "active",
       storeId: "store-1",
     });
@@ -302,8 +319,12 @@ describe("registerAndProvisionPosTerminal", () => {
     );
 
     await screen.findByDisplayValue("Front counter");
+    expect(screen.getByLabelText("Product SKUs only")).toBeChecked();
+    expect(screen.getByLabelText("POS only")).toBeChecked();
     await user.clear(screen.getByLabelText("Terminal name"));
     await user.type(screen.getByLabelText("Terminal name"), "  Front desk  ");
+    await user.click(screen.getByText("Services only"));
+    await user.click(screen.getByText("Standard login"));
     await user.click(
       await screen.findByRole("button", { name: "Save terminal settings" }),
     );
@@ -313,8 +334,10 @@ describe("registerAndProvisionPosTerminal", () => {
         expect.objectContaining({
           displayName: "Front desk",
           fingerprintHash: "fingerprint-1",
+          loginMode: "standard",
           registerNumber: "3",
           storeId: "store-1",
+          transactionCapability: "services_only",
         }),
       ),
     );
@@ -324,6 +347,8 @@ describe("registerAndProvisionPosTerminal", () => {
         registerNumber: "3",
         syncSecretHash: "01020304",
         terminalId: "fingerprint-1",
+        loginMode: "standard",
+        transactionCapability: "services_only",
       }),
     );
   });
@@ -434,8 +459,11 @@ describe("registerAndProvisionPosTerminal", () => {
     expect(screen.getByText("Offline diagnostics need attention")).toBeInTheDocument();
     expect(
       screen.getByText((_content, element) =>
-        Boolean(element?.textContent?.trim() === "0 of 7 reporting"),
+        Boolean(element?.textContent?.trim() === "1 of 7 reporting"),
       ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("App-session continuity is verified for POS."),
     ).toBeInTheDocument();
     expect(
       screen.getByText(
@@ -528,13 +556,14 @@ describe("registerAndProvisionPosTerminal", () => {
       await screen.findByText("This register is ready for checkout"),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(
-        "6 of 7 offline diagnostic signals are reporting here. Missing signals do not block checkout by themselves.",
-      ),
+      screen.getByText("Register ready for offline checkout"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("App-session continuity is verified for POS."),
     ).toBeInTheDocument();
     expect(
       screen.getByText((_content, element) =>
-        Boolean(element?.textContent?.trim() === "6 of 7 reporting"),
+        Boolean(element?.textContent?.trim() === "7 of 7 reporting"),
       ),
     ).toBeInTheDocument();
   });
@@ -578,15 +607,19 @@ describe("registerAndProvisionPosTerminal", () => {
     expect(registerTerminalMutation).toHaveBeenCalledWith(
       expect.objectContaining({
         fingerprintHash: "fingerprint-1",
+        loginMode: "standard",
         syncSecretHash: "01020304",
+        transactionCapability: "products_and_services",
       }),
     );
     expect(writeProvisionedTerminalSeed).toHaveBeenCalledWith(
       expect.objectContaining({
         cloudTerminalId: "terminal-1",
+        loginMode: "standard",
         provisionedAt: 123,
         syncSecretHash: "01020304",
         terminalId: "fingerprint-1",
+        transactionCapability: "products_and_services",
       }),
     );
   });

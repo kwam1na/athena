@@ -7,6 +7,8 @@ import type {
   PosRegisterCatalogRowDto,
   PosServiceCatalogRowDto,
 } from "@/lib/pos/application/dto";
+import type { PosTerminalLoginMode } from "~/shared/posTerminalLoginMode";
+import type { PosTerminalTransactionCapability } from "~/shared/posTerminalCapability";
 
 export const POS_LOCAL_STORE_SCHEMA_VERSION = 8;
 
@@ -66,6 +68,8 @@ export interface PosProvisionedTerminalSeed {
   storeId: string;
   orgUrlSlug?: string;
   registerNumber?: string;
+  loginMode?: PosTerminalLoginMode;
+  transactionCapability?: PosTerminalTransactionCapability;
   displayName: string;
   provisionedAt: number;
   schemaVersion: number;
@@ -824,6 +828,53 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
             }
 
             return record;
+          },
+        );
+
+        return { ok: true, value };
+      } catch (error) {
+        return toFailure(error);
+      }
+    },
+
+    async readActiveCashierPresence(input: {
+      now?: number;
+      operatingDate: string;
+      organizationId?: string;
+      storeId: string;
+      terminalId: string;
+    }): Promise<PosLocalStoreResult<PosLocalActiveCashierPresenceRecord | null>> {
+      try {
+        const value = await options.adapter.transaction(
+          "readwrite",
+          ["meta", "cashierPresence"],
+          async (transaction) => {
+            await ensureSupportedSchema(transaction, "readwrite");
+            const now = input.now ?? clock();
+            const records = await transaction.getAll<unknown>("cashierPresence");
+            const candidates: PosLocalActiveCashierPresenceRecord[] = [];
+
+            for (const record of records) {
+              if (!isCashierPresenceRecord(record)) {
+                continue;
+              }
+
+              if (isExpiredCashierPresence(record, now)) {
+                await transaction.delete(
+                  "cashierPresence",
+                  cashierPresenceKey(record),
+                );
+                continue;
+              }
+
+              if (matchesActiveCashierPresenceScope(record, input)) {
+                candidates.push(record);
+              }
+            }
+
+            return candidates.sort(
+              (left, right) => right.signedInAt - left.signedInAt,
+            )[0] ?? null;
           },
         );
 
@@ -1592,6 +1643,23 @@ function matchesCashierPresenceScope(
   return (
     record.operatingDate === scope.operatingDate &&
     record.organizationId === scope.organizationId &&
+    record.storeId === scope.storeId &&
+    record.terminalId === scope.terminalId
+  );
+}
+
+function matchesActiveCashierPresenceScope(
+  record: PosLocalActiveCashierPresenceRecord,
+  scope: {
+    operatingDate: string;
+    organizationId?: string;
+    storeId: string;
+    terminalId: string;
+  },
+) {
+  return (
+    record.operatingDate === scope.operatingDate &&
+    (!scope.organizationId || record.organizationId === scope.organizationId) &&
     record.storeId === scope.storeId &&
     record.terminalId === scope.terminalId
   );

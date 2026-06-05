@@ -48,15 +48,21 @@ commands as separate layers:
 - Cashier commands remain local-first. Browser connectivity can trigger sync,
   but it does not decide whether cashier work is first recorded locally.
 
-Live daily-operation snapshots are authoritative once present: a not-started
-Opening Handoff blocks POS, and a completed Daily Close blocks POS unless that
-close lifecycle has been reopened. While those live snapshots are unresolved, a
-valid local readiness record can allow entry.
+Live Daily Close snapshots remain authoritative once present: a completed Daily
+Close blocks POS unless that close lifecycle has been reopened. Opening Handoff
+is more nuanced for operability: if POS already recorded a local store-day start
+for the same store and operating date, live Opening Handoff arrears should stay
+review work instead of sending the cashier back to the start-day gate. A
+not-started Opening Handoff only blocks POS when there is no matching local
+started/reopened readiness record yet.
 
 ## Prevention
 
 - Do not put analytics, summary, or admin-card data in the `/pos` render gate.
 - Do not use `navigator.onLine` as POS entry authority.
+- Do not let a live not-started Opening Handoff snapshot overwrite a matching
+  local started/reopened readiness record. Demoting that record can strand a
+  cashier after offline sales when the network returns.
 - Do not encode daily-opening or daily-close state as register events.
 - Keep local drawer closeout separate from store-day close. Drawer closeout is
   register state; Daily Close is a store-day boundary.

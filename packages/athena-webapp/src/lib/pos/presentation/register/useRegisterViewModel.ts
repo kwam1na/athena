@@ -63,6 +63,11 @@ import { isPosUsableRegisterSessionStatus } from "~/shared/registerSessionStatus
 import { userError, type CommandResult } from "~/shared/commandResult";
 import type { ApprovalRequirement } from "~/shared/approvalPolicy";
 import {
+  normalizePosTerminalTransactionCapability,
+  posTerminalCanTransactProducts,
+  posTerminalCanTransactServices,
+} from "~/shared/posTerminalCapability";
+import {
   useConvexActiveSession,
   useConvexHeldSessions,
   useConvexSessionActions,
@@ -1352,6 +1357,16 @@ export function useRegisterViewModel(): RegisterViewModel {
   const terminalRegisterNumber = terminal?.registerNumber
     ? trimOptional(terminal.registerNumber)
     : undefined;
+  const terminalTransactionCapability =
+    normalizePosTerminalTransactionCapability(
+      terminal?.transactionCapability,
+    );
+  const terminalCanTransactProducts = posTerminalCanTransactProducts(
+    terminalTransactionCapability,
+  );
+  const terminalCanTransactServices = posTerminalCanTransactServices(
+    terminalTransactionCapability,
+  );
   const [localStaffAuthorityStatus, setLocalStaffAuthorityStatus] =
     useState("unknown");
   const activeOperatingDate = useMemo(() => getLocalOperatingDate(), []);
@@ -1930,19 +1945,30 @@ export function useRegisterViewModel(): RegisterViewModel {
       }
 
       const presenceStore = localStore as CashierPresenceStore;
-      if (!activeStoreOrganizationId || !presenceStore.readCashierPresence) {
+      if (
+        !presenceStore.readCashierPresence &&
+        !presenceStore.readActiveCashierPresence
+      ) {
         setCashierPresenceRestore({ status: "missing" });
         return;
       }
 
       const now = Date.now();
-      const presenceResult = await presenceStore.readCashierPresence({
-        now,
-        operatingDate: activeOperatingDate,
-        organizationId: activeStoreOrganizationId,
-        storeId: activeStoreId,
-        terminalId: terminal._id,
-      });
+      const presenceResult =
+        activeStoreOrganizationId && presenceStore.readCashierPresence
+          ? await presenceStore.readCashierPresence({
+              now,
+              operatingDate: activeOperatingDate,
+              organizationId: activeStoreOrganizationId,
+              storeId: activeStoreId,
+              terminalId: terminal._id,
+            })
+          : await presenceStore.readActiveCashierPresence!({
+              now,
+              operatingDate: activeOperatingDate,
+              storeId: activeStoreId,
+              terminalId: terminal._id,
+            });
       if (cancelled) return;
 
       if (staffProfileIdRef.current) {
@@ -1998,10 +2024,17 @@ export function useRegisterViewModel(): RegisterViewModel {
         setStaffProfileId(null);
         setStaffProofToken(null);
         setLocalAuthenticatedStaff(null);
-        if (presenceStore.clearCashierPresence) {
+        const presenceOrganizationId =
+          activeStoreOrganizationId ?? presence.organizationId;
+        if (presenceOrganizationId && presenceStore.clearCashierPresence) {
           await presenceStore.clearCashierPresence({
             operatingDate: activeOperatingDate,
-            organizationId: activeStoreOrganizationId,
+            organizationId: presenceOrganizationId,
+            storeId: activeStoreId,
+            terminalId: terminal._id,
+          });
+        } else if (presenceStore.invalidateCashierPresenceForTerminal) {
+          await presenceStore.invalidateCashierPresenceForTerminal({
             storeId: activeStoreId,
             terminalId: terminal._id,
           });
@@ -2386,6 +2419,25 @@ export function useRegisterViewModel(): RegisterViewModel {
     return adjusted;
   }, [localAvailabilityConsumptionBySkuId, registerCatalogAvailabilityBySkuId]);
   const registerSearchState = useMemo<RegisterCatalogSearchResult>(() => {
+    if (!terminalCanTransactProducts) {
+      const query = productSearchQuery.trim();
+      return query
+        ? {
+            canAutoAdd: false,
+            exactMatch: null,
+            intent: "text",
+            query,
+            results: [],
+          }
+        : {
+            canAutoAdd: false,
+            exactMatch: null,
+            intent: "empty",
+            query: "",
+            results: [],
+          };
+    }
+
     if (registerMetadataSearchState.intent !== "exact") {
       return registerMetadataSearchState;
     }
@@ -2404,7 +2456,12 @@ export function useRegisterViewModel(): RegisterViewModel {
           exactAvailability.quantityAvailable > 0,
       ),
     };
-  }, [localRegisterCatalogAvailabilityBySkuId, registerMetadataSearchState]);
+  }, [
+    localRegisterCatalogAvailabilityBySkuId,
+    productSearchQuery,
+    registerMetadataSearchState,
+    terminalCanTransactProducts,
+  ]);
   const registerSearchProducts = useMemo(
     () =>
       registerSearchState.results.map((row) =>
@@ -2473,6 +2530,10 @@ export function useRegisterViewModel(): RegisterViewModel {
   );
   const serviceSearchResults = useMemo(
     () => {
+      if (!terminalCanTransactServices) {
+        return [];
+      }
+
       const index = buildRegisterServiceCatalogIndex(
         serviceCatalogRows
           .filter((row) => row.status === undefined || row.status === "active")
@@ -2499,7 +2560,7 @@ export function useRegisterViewModel(): RegisterViewModel {
         }),
       );
     },
-    [productSearchQuery, serviceCatalogRows],
+    [productSearchQuery, serviceCatalogRows, terminalCanTransactServices],
   );
   const serviceSubtotal = useMemo(
     () =>
@@ -4226,6 +4287,11 @@ export function useRegisterViewModel(): RegisterViewModel {
             return false;
           }
 
+          if (!terminalCanTransactServices) {
+            toast.error("This terminal is not configured for service sales.");
+            return false;
+          }
+
           if (activeSessionHasBlockedRegisterBinding) {
             toast.error("Drawer closed. Open the drawer before adding services.");
             return false;
@@ -4322,6 +4388,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       registerNumber,
       staffProfileId,
       terminal?._id,
+      terminalCanTransactServices,
     ],
   );
 
@@ -4489,6 +4556,11 @@ export function useRegisterViewModel(): RegisterViewModel {
         return false;
       }
 
+      if (!terminalCanTransactProducts) {
+        toast.error("This terminal is not configured for product sales.");
+        return false;
+      }
+
       if (!product.productId || !product.skuId) {
         toast.error("Item details unavailable. Try another item.");
         return false;
@@ -4639,6 +4711,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       registerCatalogAvailabilityBySkuId,
       registerCatalogSkuIds,
       staffProfileId,
+      terminalCanTransactProducts,
     ],
   );
 
@@ -6126,6 +6199,8 @@ export function useRegisterViewModel(): RegisterViewModel {
       setCustomerInfo,
     },
     productEntry: {
+      canSearchProducts: terminalCanTransactProducts,
+      canSearchServices: terminalCanTransactServices,
       disabled:
         !terminal ||
         !staffProfileId ||
@@ -6144,29 +6219,31 @@ export function useRegisterViewModel(): RegisterViewModel {
       searchResults: registerSearchProducts,
       isSearchLoading: isRegisterSearchLoading,
       isSearchReady: isRegisterCatalogReady,
-      canQuickAddProduct: isCashierManager,
+      canQuickAddProduct: terminalCanTransactProducts && isCashierManager,
     },
-    serviceEntry: {
-      disabled:
-        !terminal ||
-        !staffProfileId ||
-        cashierPresenceBlocksSale ||
-        isProjectedLocalActiveSaleBlockingCurrentStaff ||
-        shouldShowDrawerGate ||
-        cloudRegisterSessionBlocksLocalProjection ||
-        activeSessionHasBlockedRegisterBinding ||
-        isOpeningDrawer,
-      serviceSearchQuery: productSearchQuery,
-      setServiceSearchQuery: setProductSearchQuery,
-      searchResults: serviceSearchResults,
-      isSearchLoading: serviceCatalogResult === undefined,
-      isSearchReady: serviceCatalogResult !== undefined,
-      items: serviceLineDrafts,
-      onAddService: handleAddService,
-      onUpdateServiceAmount: handleUpdateServiceAmount,
-      onRemoveService: handleRemoveService,
-      checkoutBlockMessage: serviceCheckoutBlockMessage,
-    },
+    serviceEntry: terminalCanTransactServices
+      ? {
+          disabled:
+            !terminal ||
+            !staffProfileId ||
+            cashierPresenceBlocksSale ||
+            isProjectedLocalActiveSaleBlockingCurrentStaff ||
+            shouldShowDrawerGate ||
+            cloudRegisterSessionBlocksLocalProjection ||
+            activeSessionHasBlockedRegisterBinding ||
+            isOpeningDrawer,
+          serviceSearchQuery: productSearchQuery,
+          setServiceSearchQuery: setProductSearchQuery,
+          searchResults: serviceSearchResults,
+          isSearchLoading: serviceCatalogResult === undefined,
+          isSearchReady: serviceCatalogResult !== undefined,
+          items: serviceLineDrafts,
+          onAddService: handleAddService,
+          onUpdateServiceAmount: handleUpdateServiceAmount,
+          onRemoveService: handleRemoveService,
+          checkoutBlockMessage: serviceCheckoutBlockMessage,
+        }
+      : undefined,
     cart: {
       items: activeCartItems,
       serviceItems: serviceLineDrafts,

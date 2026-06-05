@@ -45,6 +45,8 @@ const STAFF_ROLE_LOOKUP_LIMIT = 20;
 const TIMELINE_LIMIT = 200;
 const REGISTER_NOT_OPEN_SYNC_REVIEW_SUMMARY =
   "Register was not open before this sale synced.";
+const STAFF_ACCESS_SYNC_REVIEW_SUMMARY =
+  "Staff access changed before this POS history synced.";
 const SERVICE_CUSTOMER_ATTRIBUTION_SYNC_REVIEW_SUMMARY =
   "Service line is missing customer attribution.";
 const CLOSED_REGISTER_SYNCED_CLOSEOUT_SUMMARY =
@@ -103,6 +105,16 @@ const registerSessionSyncReviewResultValidator = v.union(
     error: userErrorValidator,
   }),
 );
+
+function isProoflessStaffAccessSyncReview(
+  conflict: RegisterSessionSyncConflict,
+) {
+  return (
+    conflict.conflictType === "permission" &&
+    conflict.summary === STAFF_ACCESS_SYNC_REVIEW_SUMMARY &&
+    conflict.details?.hasStaffProof === false
+  );
+}
 
 type StaffNameMap = Map<Id<"staffProfile">, string>;
 
@@ -1089,7 +1101,7 @@ export const recordRegisterSessionDeposit = mutation({
 
 export const resolveRegisterSessionSyncReview = mutation({
   args: {
-    actorStaffProfileId: v.id("staffProfile"),
+    actorStaffProfileId: v.optional(v.id("staffProfile")),
     decision: v.optional(v.union(v.literal("approved"), v.literal("rejected"))),
     registerSessionId: v.id("registerSession"),
     storeId: v.id("store"),
@@ -1114,16 +1126,27 @@ export const resolveRegisterSessionSyncReview = mutation({
       });
     }
 
-    const canResolveReview = await staffProfileCanResolveSyncReview(ctx, {
-      organizationId: store.organizationId,
-      staffProfileId: args.actorStaffProfileId,
-      storeId: args.storeId,
-    });
-    if (!canResolveReview) {
+    const decision = args.decision ?? "approved";
+    const isAutomaticResolution = !args.actorStaffProfileId;
+    if (decision === "rejected" && isAutomaticResolution) {
       return userError({
-        code: "authorization_failed",
-        message: "Only managers can resolve synced register reviews.",
+        code: "precondition_failed",
+        message:
+          "Automatic sync repair can only apply eligible register activity.",
       });
+    }
+    if (args.actorStaffProfileId) {
+      const canResolveReview = await staffProfileCanResolveSyncReview(ctx, {
+        organizationId: store.organizationId,
+        staffProfileId: args.actorStaffProfileId,
+        storeId: args.storeId,
+      });
+      if (!canResolveReview) {
+        return userError({
+          code: "authorization_failed",
+          message: "Only managers can resolve synced register reviews.",
+        });
+      }
     }
 
     const conflictsBySessionId = await listRegisterSessionSyncReviewConflicts(
@@ -1150,7 +1173,6 @@ export const resolveRegisterSessionSyncReview = mutation({
     const sequences: number[] = [];
     let managerOverrideCount = 0;
     let projectedCloseoutCount = 0;
-    const decision = args.decision ?? "approved";
 
     for (const conflict of conflicts) {
       const terminalId = conflict.terminalId ?? registerSession.terminalId;
@@ -1198,11 +1220,16 @@ export const resolveRegisterSessionSyncReview = mutation({
       }
 
       const shouldApplyManagerOverride =
+        !isAutomaticResolution &&
         syncEvent.status === "rejected" &&
         conflict.conflictType === "server_rejected";
       if (shouldApplyManagerOverride) {
         managerOverrideCount += 1;
       }
+      const shouldApplyProoflessStaffAccessEvent =
+        isProoflessStaffAccessSyncReview(conflict) &&
+        (syncEvent.eventType === "register_opened" ||
+          syncEvent.eventType === "sale_completed");
       const shouldApplyReviewedSale =
         (syncEvent.eventType === "sale_completed" &&
           (!conflict.localRegisterSessionId ||
@@ -1223,7 +1250,19 @@ export const resolveRegisterSessionSyncReview = mutation({
         (shouldApplyManagerOverride &&
           syncEvent.eventType === "register_closed");
 
-      if (!shouldApplyReviewedSale && !shouldApplyReviewedCloseout) {
+      if (isAutomaticResolution && !shouldApplyProoflessStaffAccessEvent) {
+        return userError({
+          code: "precondition_failed",
+          message:
+            "This register review is not eligible for automatic sync repair.",
+        });
+      }
+
+      if (
+        !shouldApplyReviewedSale &&
+        !shouldApplyReviewedCloseout &&
+        !shouldApplyProoflessStaffAccessEvent
+      ) {
         if (
           syncEvent.eventType === "register_closed" &&
           conflict.summary === CLOSED_REGISTER_SYNCED_CLOSEOUT_SUMMARY
@@ -1269,6 +1308,9 @@ export const resolveRegisterSessionSyncReview = mutation({
       if (
         !parsedEvent.ok ||
         (shouldApplyReviewedSale &&
+          parsedEvent.event.eventType !== "sale_completed") ||
+        (shouldApplyProoflessStaffAccessEvent &&
+          parsedEvent.event.eventType !== "register_opened" &&
           parsedEvent.event.eventType !== "sale_completed") ||
         (shouldApplyReviewedCloseout &&
           parsedEvent.event.eventType !== "register_closed")
@@ -1334,7 +1376,9 @@ export const resolveRegisterSessionSyncReview = mutation({
           conflictId,
           {
             resolvedAt,
-            resolvedByStaffProfileId: args.actorStaffProfileId,
+            ...(args.actorStaffProfileId
+              ? { resolvedByStaffProfileId: args.actorStaffProfileId }
+              : {}),
             status: "resolved",
           },
         ),
@@ -1342,7 +1386,9 @@ export const resolveRegisterSessionSyncReview = mutation({
     );
 
     await recordOperationalEventWithCtx(ctx, {
-      actorStaffProfileId: args.actorStaffProfileId,
+      ...(args.actorStaffProfileId
+        ? { actorStaffProfileId: args.actorStaffProfileId }
+        : {}),
       actorUserId: athenaUser._id,
       eventType: "register_session_sync_review_resolved",
       message:
@@ -1350,6 +1396,14 @@ export const resolveRegisterSessionSyncReview = mutation({
           ? conflicts.length === 1
             ? "Rejected synced register review."
             : `Rejected ${conflicts.length} synced register reviews.`
+          : isAutomaticResolution
+            ? projectedTransactionIds.length === 0
+              ? conflicts.length === 1
+                ? "Automatically resolved proofless synced register review."
+                : `Automatically resolved ${conflicts.length} proofless synced register reviews.`
+              : projectedTransactionIds.length === 1
+                ? "Automatically applied proofless synced register sale."
+                : `Automatically applied ${projectedTransactionIds.length} proofless synced register sales.`
           : managerOverrideCount > 0
             ? managerOverrideCount === 1
               ? projectedTransactionIds.length === 1
