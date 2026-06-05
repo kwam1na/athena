@@ -257,6 +257,15 @@ export function classifyTerminalHealth(
     };
   }
 
+  if (isAppSessionLocalContinuation(runtimeStatus)) {
+    return {
+      description:
+        "App session unverified; local sales stay on this terminal until cloud validation returns.",
+      label: "Local continuation",
+      toneClassName: "border-warning/30 bg-warning/15 text-warning",
+    };
+  }
+
   if (summary.health === "offline") {
     return {
       description: "This terminal is offline.",
@@ -302,4 +311,21 @@ export function classifyTerminalHealth(
     label: "Healthy",
     toneClassName: "border-success/30 bg-success/10 text-success",
   };
+}
+
+function isAppSessionLocalContinuation(
+  runtimeStatus: TerminalHealthClassificationInput["runtimeStatus"],
+) {
+  if (!runtimeStatus) return false;
+  if (runtimeStatus.appSessionRecovery?.status !== "waiting_for_network") {
+    return false;
+  }
+
+  const sync = runtimeStatus.sync;
+  return (
+    (sync?.pendingEventCount ?? 0) > 0 &&
+    (sync?.uploadableEventCount ?? 0) === 0 &&
+    (sync?.reviewEventCount ?? 0) === 0 &&
+    (sync?.failedEventCount ?? 0) === 0
+  );
 }

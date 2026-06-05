@@ -517,7 +517,8 @@
         "packages/athena-webapp/src/components/pos/terminals/POSTerminalHealthView.tsx",
         "packages/athena-webapp/src/lib/pos/infrastructure/local",
         "packages/athena-webapp/src/lib/pos/presentation/register",
-        "packages/athena-webapp/src/tests/pos/offlineRouteAccess.spec.ts"
+        "packages/athena-webapp/src/tests/pos/offlineRouteAccess.spec.ts",
+        "packages/athena-webapp/src/tests/pos/offlineSalesContinuity.spec.ts"
       ],
       "commands": [
         {
@@ -526,7 +527,7 @@
         },
         {
           "kind": "raw",
-          "command": "bun run --filter '@athena/webapp' test:e2e -- src/tests/pos/offlineRouteAccess.spec.ts"
+          "command": "bun run --filter '@athena/webapp' test:e2e -- src/tests/pos/offlineRouteAccess.spec.ts src/tests/pos/offlineSalesContinuity.spec.ts"
         },
         {
           "kind": "raw",

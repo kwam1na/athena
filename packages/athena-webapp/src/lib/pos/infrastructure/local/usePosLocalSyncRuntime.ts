@@ -18,7 +18,9 @@ import {
 import {
   buildPosLocalSyncUploadEvents,
   isSyncablePosLocalEvent,
+  isUploadDeferredByValidation,
   type PosLocalUploadEvent,
+  type PosLocalSyncUploadSupport,
 } from "./syncContract";
 import {
   createPosLocalSyncScheduler,
@@ -74,6 +76,9 @@ export type PosLocalRuntimeSyncDebug = {
     | "not_ready"
     | "pending"
     | "rejected";
+  appSessionUnverifiedEventCount?: number;
+  cloudValidationUncertainEventCount?: number;
+  deferredUploadEventCount?: number;
   failureCount?: number;
   failedEventCount?: number;
   lastBatchEventCount?: number;
@@ -150,6 +155,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
   const onRetrySync = input.onRetrySync;
   const source = input.source ?? "sync-runtime";
   const staffProfileId = input.staffProfileId;
+  const uploadSupport = getAppSessionUploadSupport(input.appSessionRecovery);
   const lastRuntimeStatusSignatureRef = useRef<string | null>(null);
   const requestRetry = useCallback(() => {
     setRefreshToken((current) => current + 1);
@@ -274,7 +280,11 @@ export function usePosLocalSyncRuntimeStatus(input: {
         setRuntimeStatusObservationToken((current) => current + 1);
         setDebug((current) => ({
           ...current,
-          ...buildRuntimeSyncDebug(refreshedEvents.value.events, mode),
+          ...buildRuntimeSyncDebug(
+            refreshedEvents.value.events,
+            mode,
+            uploadSupport,
+          ),
         }));
         return true;
       };
@@ -283,7 +293,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
       setRuntimeStatusObservationToken((current) => current + 1);
       setDebug((current) => ({
         ...current,
-        ...buildRuntimeSyncDebug(eventsResult.value.events, mode),
+        ...buildRuntimeSyncDebug(eventsResult.value.events, mode, uploadSupport),
         lastTrigger: trigger,
         lastTriggerAt: Date.now(),
         lastTriggerPriority: triggerPriority,
@@ -347,11 +357,15 @@ export function usePosLocalSyncRuntimeStatus(input: {
                 isUploadedReviewEvent
               );
             })
-            .filter((event) => isSyncablePosLocalEvent(event));
+            .filter((event) => isSyncablePosLocalEvent(event, uploadSupport));
           if (!shouldStop()) {
             setDebug((current) => ({
               ...current,
-              ...buildRuntimeSyncDebug(pending.value.events, mode),
+              ...buildRuntimeSyncDebug(
+                pending.value.events,
+                mode,
+                uploadSupport,
+              ),
             }));
           }
           return uploadableEvents.map((event) => ({
@@ -414,6 +428,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
           const uploadedEvents = buildPosLocalSyncUploadEvents(
             eventsToUpload,
             latestEvents.value.events,
+            uploadSupport,
           );
           const locallySettledEventIds = collectLocallySettledSkippedReviewEventIds(
             eventsToUpload,
@@ -645,6 +660,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
     manualRetryToken,
     mode,
     onLocalEventsChanged,
+    input.appSessionRecovery,
     storeFactory,
     storeId,
     terminalId,
@@ -1599,16 +1615,20 @@ async function readScopedPosLocalUploadEvents(input: {
 function buildRuntimeSyncDebug(
   events: PosLocalEventRecord[],
   mode: PosLocalSyncRuntimeMode,
+  uploadSupport: PosLocalSyncUploadSupport = {},
 ): PosLocalRuntimeSyncDebug {
   const pendingUploadCandidates = events.filter(isPendingUploadCandidate);
   const pendingUploadableEvents = pendingUploadCandidates.filter(
-    isSyncablePosLocalEvent,
+    (event) => isSyncablePosLocalEvent(event, uploadSupport),
+  );
+  const deferredUploadEvents = pendingUploadCandidates.filter((event) =>
+    isUploadDeferredByValidation(event, uploadSupport),
   );
   const nextPendingUploadableEvent = [...pendingUploadableEvents]
     .sort(compareUploadableEventOrder)
     .at(0);
   const localOnlyEvents = pendingUploadCandidates.filter(
-    (event) => !isSyncablePosLocalEvent(event),
+    (event) => !isSyncablePosLocalEvent(event, uploadSupport),
   );
   const reviewEvents = events.filter(
     (event) => event.sync.status === "needs_review",
@@ -1620,6 +1640,13 @@ function buildRuntimeSyncDebug(
     .at(0);
 
   return {
+    appSessionUnverifiedEventCount: events.filter((event) =>
+      event.validationMetadata?.flags.includes("app-session-unverified"),
+    ).length,
+    cloudValidationUncertainEventCount: events.filter((event) =>
+      event.validationMetadata?.flags.includes("cloud-validation-uncertain"),
+    ).length,
+    deferredUploadEventCount: deferredUploadEvents.length,
     failedEventCount: failedEvents.length,
     localOnlyEventCount: localOnlyEvents.length,
     mode,
@@ -1630,6 +1657,21 @@ function buildRuntimeSyncDebug(
     nextPendingUploadSequence: nextPendingUploadableEvent?.uploadSequence,
     pendingUploadEventCount: pendingUploadableEvents.length,
     reviewEventCount: reviewEvents.length,
+  };
+}
+
+function getAppSessionUploadSupport(
+  recovery?: PosTerminalRuntimeAppSessionRecoveryInput | null,
+): PosLocalSyncUploadSupport {
+  if (!recovery) {
+    return { appSessionValidation: "supported" };
+  }
+
+  return {
+    appSessionValidation:
+      recovery.status === "idle" || recovery.status === "recoverable"
+        ? "supported"
+        : "unverified",
   };
 }
 

@@ -47,6 +47,7 @@ import {
   type RegisterViewModel,
   type RegisterWorkflowMode,
 } from "@/lib/pos/presentation/register/registerUiState";
+import { usePosTerminalAppSessionRecoveryRuntimeInput } from "@/lib/pos/infrastructure/terminal/posTerminalAppSessionRecoveryContext";
 import { useRegisterViewModel } from "@/lib/pos/presentation/register/useRegisterViewModel";
 import { currencyFormatter } from "~/shared/currencyFormatter";
 import { formatStoredAmount } from "~/src/lib/pos/displayAmounts";
@@ -469,6 +470,36 @@ function formatDebugRuntimeMode(value?: string | null) {
   }
 }
 
+function formatDebugAppSessionRecovery(value?: string | null) {
+  switch (value) {
+    case "waiting_for_network":
+      return "Local sale continuation";
+    case "recoverable":
+    case "idle":
+      return "Verified";
+    case "validating":
+      return "Validating";
+    case "retrying":
+      return "Retrying";
+    case "blocked":
+      return "Blocked";
+    default:
+      return "Not reported";
+  }
+}
+
+function getDebugAppSessionReconciliationPosture(value?: string | null) {
+  if (value === "waiting_for_network") {
+    return "App session unverified; local sales stay on this register until cloud validation returns.";
+  }
+
+  if (value === "blocked") {
+    return "App-session recovery is blocked. Keep terminal, drawer, and staff evidence separate before taking support action.";
+  }
+
+  return "No app-session reconciliation posture reported.";
+}
+
 function formatDebugCheckInPublishStatus(value?: string | null) {
   switch (value) {
     case "accepted":
@@ -567,9 +598,11 @@ function usePosDebugPanelToggle() {
 }
 
 function POSLocalDebugStrip({
+  appSessionRecovery,
   debug,
   isVisible,
 }: {
+  appSessionRecovery?: string | null;
   debug: RegisterViewModel["debug"];
   isVisible: boolean;
 }) {
@@ -583,6 +616,11 @@ function POSLocalDebugStrip({
     ["register record", formatDebugStatus(debug.terminalSource)],
     ["staff sign-in", debug.staffSignedIn ? "Signed in" : "Not signed in"],
     ["cashier presence", formatDebugStatus(debug.cashierPresence)],
+    ["app session", formatDebugAppSessionRecovery(appSessionRecovery)],
+    [
+      "reconciliation posture",
+      getDebugAppSessionReconciliationPosture(appSessionRecovery),
+    ],
     [
       "staff authorization",
       debug.syncFlow.staffProof === "present" ? "Ready" : "Needed",
@@ -1040,6 +1078,8 @@ function POSRegisterViewContent({
 }: POSRegisterViewProps) {
   const registerViewModel = useRegisterViewModel();
   const viewModel = injectedViewModel ?? registerViewModel;
+  const appSessionRecovery = usePosTerminalAppSessionRecoveryRuntimeInput();
+  const debugAppSessionRecovery = viewModel.debug?.appSessionRecovery;
   const effectiveWorkflowMode: RegisterWorkflowMode =
     workflowMode ?? viewModel.workflowMode ?? "pos";
   const isPosWorkflow = effectiveWorkflowMode === "pos";
@@ -1529,6 +1569,9 @@ function POSRegisterViewContent({
         <div className="flex h-full min-h-0 flex-col gap-6 overflow-hidden">
           {isPosWorkflow ? (
             <POSLocalDebugStrip
+              appSessionRecovery={
+                debugAppSessionRecovery ?? appSessionRecovery?.status ?? null
+              }
               debug={viewModel.debug}
               isVisible={isDebugPanelVisible}
             />

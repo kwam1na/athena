@@ -279,6 +279,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/lib/pos/infrastructure/local/registerAvailabilitySnapshot.test.ts`](../../src/lib/pos/infrastructure/local/registerAvailabilitySnapshot.test.ts)
 - [`src/lib/pos/infrastructure/local/registerReadModel.test.ts`](../../src/lib/pos/infrastructure/local/registerReadModel.test.ts)
 - [`src/lib/pos/infrastructure/local/registerServiceCatalogSnapshot.test.ts`](../../src/lib/pos/infrastructure/local/registerServiceCatalogSnapshot.test.ts)
+- [`src/lib/pos/infrastructure/local/saleBlockerPolicy.test.ts`](../../src/lib/pos/infrastructure/local/saleBlockerPolicy.test.ts)
 - [`src/lib/pos/infrastructure/local/syncContract.test.ts`](../../src/lib/pos/infrastructure/local/syncContract.test.ts)
 - [`src/lib/pos/infrastructure/local/syncScheduler.test.ts`](../../src/lib/pos/infrastructure/local/syncScheduler.test.ts)
 - [`src/lib/pos/infrastructure/local/syncStatus.test.ts`](../../src/lib/pos/infrastructure/local/syncStatus.test.ts)
@@ -317,6 +318,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/tests/pos/backend.test.ts`](../../src/tests/pos/backend.test.ts)
 - [`src/tests/pos/inventoryValidationLogic.test.ts`](../../src/tests/pos/inventoryValidationLogic.test.ts)
 - [`src/tests/pos/offlineRouteAccess.spec.ts`](../../src/tests/pos/offlineRouteAccess.spec.ts)
+- [`src/tests/pos/offlineSalesContinuity.spec.ts`](../../src/tests/pos/offlineSalesContinuity.spec.ts)
 - [`src/tests/pos/simple.test.ts`](../../src/tests/pos/simple.test.ts)
 - [`src/tests/pos/usePrint.test.ts`](../../src/tests/pos/usePrint.test.ts)
 

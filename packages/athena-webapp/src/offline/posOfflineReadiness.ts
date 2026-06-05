@@ -1,5 +1,6 @@
 export type PosOfflineReadinessDomain =
   | "app_shell"
+  | "app_session"
   | "terminal_seed"
   | "staff_authority"
   | "register_catalog"
@@ -7,6 +8,7 @@ export type PosOfflineReadinessDomain =
   | "availability_snapshot";
 
 export type PosOfflineReadinessSignalStatus =
+  | "local_continuation"
   | "ready"
   | "needs_attention"
   | "unknown";
@@ -19,6 +21,7 @@ export type PosOfflineReadinessSignalInput = {
 };
 
 export type PosOfflineReadinessInput = {
+  appSession?: PosOfflineReadinessSignalInput | null;
   appShell?: PosOfflineReadinessSignalInput | null;
   availabilitySnapshot?: PosOfflineReadinessSignalInput | null;
   registerCatalog?: PosOfflineReadinessSignalInput | null;
@@ -70,6 +73,18 @@ const DOMAIN_DEFINITIONS: Array<{
       readyDescription: "App shell recovery is ready.",
     },
     getInput: (input) => input.appShell,
+  },
+  {
+    definition: {
+      domain: "app_session",
+      label: "App session",
+      missingDescription:
+        "App-session continuity has not reported to this page yet.",
+      needsAttentionDescription:
+        "App-session continuity needs an online refresh before POS route recovery is reliable.",
+      readyDescription: "App-session continuity is verified for POS.",
+    },
+    getInput: (input) => input.appSession,
   },
   {
     definition: {
@@ -140,7 +155,7 @@ export function buildPosOfflineReadinessSummary(
   const signals = DOMAIN_DEFINITIONS.map(({ definition, getInput }) =>
     buildSignal(definition, getInput(input)),
   );
-  const readyCount = signals.filter((signal) => signal.status === "ready").length;
+  const readyCount = signals.filter((signal) => isReadyLike(signal.status)).length;
   const needsAttentionCount = signals.filter(
     (signal) => signal.status === "needs_attention",
   ).length;
@@ -152,7 +167,7 @@ export function buildPosOfflineReadinessSummary(
         : "unknown";
 
   return {
-    description: getSummaryDescription(status, readyCount, signals.length),
+    description: getSummaryDescription(status, readyCount, signals),
     readyCount,
     signals,
     status,
@@ -208,6 +223,13 @@ function getSignalDescription(
   input: PosOfflineReadinessSignalInput,
   status: PosOfflineReadinessSignalStatus,
 ) {
+  if (
+    definition.domain === "app_session" &&
+    status === "local_continuation"
+  ) {
+    return "App session is unverified while offline. Sales can continue locally and sync later for reconciliation.";
+  }
+
   if (status === "needs_attention") {
     if (
       definition.staleAfterMs &&
@@ -240,9 +262,17 @@ function getSummaryTitle(status: PosOfflineReadinessSignalStatus) {
 function getSummaryDescription(
   status: PosOfflineReadinessSignalStatus,
   readyCount: number,
-  totalCount: number,
+  signals: PosOfflineReadinessSignal[],
 ) {
+  const hasLocalContinuation = signals.some(
+    (signal) => signal.status === "local_continuation",
+  );
+
   if (status === "ready") {
+    if (hasLocalContinuation) {
+      return "This checkout station has the local POS state needed for local sale continuation while app-session validation waits for the network.";
+    }
+
     return "This checkout station has the app shell, terminal setup, staff authority, catalog, and availability data needed for offline POS.";
   }
 
@@ -250,7 +280,11 @@ function getSummaryDescription(
     return "One or more offline diagnostic signals need attention. This view is diagnostic only.";
   }
 
-  return `${readyCount} of ${totalCount} offline diagnostic signals are reporting here. Missing signals do not block checkout by themselves.`;
+  return `${readyCount} of ${signals.length} offline diagnostic signals are reporting here. Missing signals do not block checkout by themselves.`;
+}
+
+function isReadyLike(status: PosOfflineReadinessSignalStatus) {
+  return status === "ready" || status === "local_continuation";
 }
 
 function formatAge(ageMs: number) {

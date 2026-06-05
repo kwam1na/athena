@@ -5,11 +5,13 @@ import type {
 import { ok, userError, type CommandResult } from "~/shared/commandResult";
 
 import { readProjectedLocalRegisterModel } from "./localRegisterReader";
+import { deriveLocalSaleBlocker } from "./saleBlockerPolicy";
 import type {
   PosLocalAppendEventInput,
   PosDrawerAuthorityState,
   PosLocalEventRecord,
   PosLocalCloudMapping,
+  PosLocalEventValidationMetadata,
   PosLocalStoreResult,
   PosTerminalIntegrityState,
   PosProvisionedTerminalSeed,
@@ -72,7 +74,7 @@ export function createLocalCommandGateway(
   appendServiceLine(input: AppendLocalServiceLineInput): Promise<boolean>;
   clearCart(input: ClearLocalCartInput): Promise<boolean>;
   completeTransaction(input: CompleteLocalTransactionInput): Promise<boolean>;
-  openDrawer(input: PosOpenDrawerInput): Promise<LocalOpenDrawerResult>;
+  openDrawer(input: LocalOpenDrawerInput): Promise<LocalOpenDrawerResult>;
   reopenRegister(input: ReopenLocalRegisterInput): Promise<boolean>;
   seedRegisterSession(input: SeedLocalRegisterSessionInput): Promise<boolean>;
   startSession(input: LocalStartSessionInput): Promise<LocalStartSessionResult>;
@@ -111,7 +113,7 @@ export function createLocalCommandGateway(
     return !(await append(input));
   }
 
-  async function appendNewDrawer(input: PosOpenDrawerInput) {
+  async function appendNewDrawer(input: LocalOpenDrawerInput) {
     const localRegisterSessionId = createLocalId("local-register-session");
     const openedAt = clock();
     const appendError = await append({
@@ -125,6 +127,7 @@ export function createLocalCommandGateway(
         options.staffProofToken,
         input.staffProfileId.toString(),
       ),
+      validationMetadata: input.validationMetadata,
       payload: {
         localRegisterSessionId,
         openingFloat: input.openingFloat,
@@ -165,9 +168,11 @@ export function createLocalCommandGateway(
 
   async function canAppendSaleAffectingEvent(input: {
     localRegisterSessionId?: string;
+    staffProfileId?: string;
     storeId: string;
     terminalId: string;
   }) {
+    if (!hasCommandIdentity(input)) return false;
     const model = await readModel(input);
     if (!model.ok) return false;
     if (model.value.canSell) {
@@ -191,19 +196,12 @@ export function createLocalCommandGateway(
   }
 
   async function canAppendRegisterReopen(input: ReopenLocalRegisterInput) {
+    if (!hasCommandIdentity(input)) return false;
     const model = await readModel({
       storeId: input.storeId,
       terminalId: input.terminalId,
     });
     if (!model.ok) return false;
-    if (
-      hasLifecycleReviewForRegisterSession(
-        model.value.sourceEvents,
-        input.localRegisterSessionId,
-      )
-    ) {
-      return false;
-    }
     if (!model.value.activeRegisterSession) {
       if (
         !options.allowExplicitRegisterSessionWithoutProjection ||
@@ -219,10 +217,34 @@ export function createLocalCommandGateway(
       return drawerAuthority.ok && !drawerAuthority.blocked;
     }
 
-    return !model.value.saleBlockReason;
+    const drawerAuthority = await readDrawerAuthorityBlock({
+      localRegisterSessionId: input.localRegisterSessionId,
+      storeId: input.storeId,
+      terminalId: input.terminalId,
+    });
+    if (!drawerAuthority.ok || drawerAuthority.blocked) return false;
+
+    const blocker = deriveLocalSaleBlocker({
+      activeRegisterSession: {
+        canReopen:
+          model.value.activeRegisterSession.localRegisterSessionId ===
+          input.localRegisterSessionId,
+        localRegisterSessionId:
+          model.value.activeRegisterSession.localRegisterSessionId,
+        status: model.value.activeRegisterSession.status,
+      },
+      hasLocalEventDestination: true,
+      hasRequiredIdentities: true,
+      terminalIntegrity:
+        model.value.saleBlockReason === "terminal_integrity"
+          ? { status: "requires_reprovision" }
+          : { status: "healthy" },
+    });
+    return !blocker;
   }
 
   async function canSeedRegisterSession(input: SeedLocalRegisterSessionInput) {
+    if (!hasCommandIdentity(input)) return false;
     const model = await readModel({
       storeId: input.storeId,
       terminalId: input.terminalId,
@@ -263,6 +285,7 @@ export function createLocalCommandGateway(
         localRegisterSessionId: input.localRegisterSessionId,
         localPosSessionId: input.localPosSessionId,
         staffProfileId: input.staffProfileId,
+        validationMetadata: input.validationMetadata,
         payload: input.payload,
       });
     },
@@ -277,6 +300,7 @@ export function createLocalCommandGateway(
         localRegisterSessionId: input.localRegisterSessionId,
         localPosSessionId: input.localPosSessionId,
         staffProfileId: input.staffProfileId,
+        validationMetadata: input.validationMetadata,
         payload: {
           localPosSessionId: input.localPosSessionId,
           ...input.payload,
@@ -294,6 +318,7 @@ export function createLocalCommandGateway(
         localRegisterSessionId: input.localRegisterSessionId,
         localPosSessionId: input.localPosSessionId,
         staffProfileId: input.staffProfileId,
+        validationMetadata: input.validationMetadata,
         payload: {
           localPosSessionId: input.localPosSessionId,
           checkoutStateVersion: input.checkoutStateVersion,
@@ -336,6 +361,7 @@ export function createLocalCommandGateway(
         localRegisterSessionId: input.localRegisterSessionId,
         localPosSessionId: input.localPosSessionId,
         staffProfileId: input.staffProfileId,
+        validationMetadata: input.validationMetadata,
         ...(hasPriorSaleActivity
           ? {
               staffProofToken: resolveStaffProofToken(
@@ -366,13 +392,23 @@ export function createLocalCommandGateway(
           options.staffProofToken,
           input.staffProfileId,
         ),
+        validationMetadata: input.validationMetadata,
         payload: input.payload,
       });
     },
 
     async openDrawer(
-      input: PosOpenDrawerInput,
+      input: LocalOpenDrawerInput,
     ): Promise<LocalOpenDrawerResult> {
+      if (!hasCommandIdentity({ ...input, localRegisterSessionId: "pending" })) {
+        return toLocalUserError(
+          blockedSaleMessage(
+            !input.staffProfileId
+              ? "missing_identity"
+              : "missing_event_destination",
+          ),
+        );
+      }
       const existingModel = await readModel({
         storeId: input.storeId.toString(),
         terminalId: input.terminalId.toString(),
@@ -384,9 +420,8 @@ export function createLocalCommandGateway(
         existingModel.value.saleBlockReason === "drawer_authority" &&
         existingModel.value.drawerAuthorityReason === "cloud_closed";
       const isLifecycleReviewDrawerBlock =
-        existingModel.value.saleBlockReason === "lifecycle_needs_review" ||
-        (existingModel.value.saleBlockReason === "drawer_authority" &&
-          existingModel.value.drawerAuthorityReason === "lifecycle_rejected");
+        existingModel.value.saleBlockReason === "drawer_authority" &&
+        existingModel.value.drawerAuthorityReason === "lifecycle_rejected";
       if (
         existingModel.value.saleBlockReason &&
         !isClosedCloudDrawerBlock &&
@@ -455,6 +490,7 @@ export function createLocalCommandGateway(
           options.staffProofToken,
           input.staffProfileId,
         ),
+        validationMetadata: input.validationMetadata,
         payload: {
           reason: input.reason,
         },
@@ -474,6 +510,7 @@ export function createLocalCommandGateway(
           options.staffProofToken,
           input.staffProfileId,
         ),
+        validationMetadata: input.validationMetadata,
         payload: {
           localRegisterSessionId: input.localRegisterSessionId,
           openingFloat: input.openingFloat,
@@ -487,6 +524,15 @@ export function createLocalCommandGateway(
     async startSession(
       input: LocalStartSessionInput,
     ): Promise<LocalStartSessionResult> {
+      if (!hasCommandIdentity({ ...input, localRegisterSessionId: "pending" })) {
+        return toLocalUserError(
+          blockedSaleMessage(
+            !input.staffProfileId
+              ? "missing_identity"
+              : "missing_event_destination",
+          ),
+        );
+      }
       const model = await readModel({
         storeId: input.storeId.toString(),
         terminalId: input.terminalId.toString(),
@@ -551,6 +597,7 @@ export function createLocalCommandGateway(
         localRegisterSessionId,
         localPosSessionId,
         staffProfileId: input.staffProfileId?.toString(),
+        validationMetadata: input.validationMetadata,
         payload: {
           localPosSessionId,
           localRegisterSessionId,
@@ -582,6 +629,7 @@ export function createLocalCommandGateway(
           options.staffProofToken,
           input.staffProfileId,
         ),
+        validationMetadata: input.validationMetadata,
         payload: {
           countedCash: input.countedCash,
           notes: input.notes ?? null,
@@ -630,28 +678,6 @@ function hasLocalSaleActivity(
   });
 }
 
-function hasLifecycleReviewForRegisterSession(
-  events: PosLocalEventRecord[],
-  localRegisterSessionId: string,
-) {
-  return events.some((event) => {
-    if (
-      event.localRegisterSessionId !== localRegisterSessionId ||
-      event.sync.status !== "needs_review" ||
-      !event.sync.uploaded
-    ) {
-      return false;
-    }
-
-    return (
-      event.type === "register.opened" ||
-      event.type === "register.closeout_started" ||
-      event.type === "register.reopened" ||
-      event.type === "transaction.completed"
-    );
-  });
-}
-
 function isOpenLocalRegisterSessionStatus(status: string) {
   return status === "open" || status === "active";
 }
@@ -671,8 +697,14 @@ function blockedSaleMessage(reason?: string) {
   if (reason === "drawer_authority") {
     return "Drawer setup needs repair before selling can continue.";
   }
-  if (reason === "lifecycle_needs_review") {
-    return "Drawer sync needs review before selling can continue.";
+  if (reason === "missing_event_destination") {
+    return "Local sale recording is not ready on this terminal.";
+  }
+  if (reason === "missing_identity") {
+    return "Staff sign-in required before selling can continue.";
+  }
+  if (reason === "drawer_closed") {
+    return "Open the drawer before starting a sale.";
   }
   return "Open the drawer before starting a sale.";
 }
@@ -683,7 +715,22 @@ type LocalCommandContext = {
   registerNumber?: string;
   localRegisterSessionId: string;
   staffProfileId: string;
+  validationMetadata?: PosLocalEventValidationMetadata;
 };
+
+function hasCommandIdentity(input: {
+  localRegisterSessionId?: string;
+  staffProfileId?: string;
+  storeId?: string;
+  terminalId?: string;
+}) {
+  return Boolean(
+    input.localRegisterSessionId &&
+      input.staffProfileId &&
+      input.storeId &&
+      input.terminalId,
+  );
+}
 
 type LocalStartSessionInput = {
   terminalId: string;
@@ -692,6 +739,11 @@ type LocalStartSessionInput = {
   localRegisterSessionId?: string;
   staffProfileId?: string;
   localPosSessionId?: string;
+  validationMetadata?: PosLocalEventValidationMetadata;
+};
+
+type LocalOpenDrawerInput = PosOpenDrawerInput & {
+  validationMetadata?: PosLocalEventValidationMetadata;
 };
 
 type LocalSaleCommandContext = LocalCommandContext & {

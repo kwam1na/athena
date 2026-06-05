@@ -335,6 +335,7 @@ export interface RegisterViewModel {
   hasActiveStore: boolean;
   debug?: {
     activeStoreSource: "live" | "local" | "missing";
+    appSessionRecovery?: string | null;
     authDialogOpen: boolean;
     cashierPresence: CashierPresenceRestoreStatus;
     hasLiveActiveStore: boolean;

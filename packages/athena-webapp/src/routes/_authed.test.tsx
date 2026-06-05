@@ -578,7 +578,7 @@ describe("Authed layout", () => {
     },
   );
 
-  it.each(["idle", "validating", "retrying", "waiting_for_network"])(
+  it.each(["idle", "validating", "retrying"])(
     "keeps POS mutations paused while app-session recovery is %s",
     (status) => {
       mocked.useAuth.mockReturnValue({
@@ -600,10 +600,7 @@ describe("Authed layout", () => {
       expect(screen.queryByTestId("authed-outlet")).not.toBeInTheDocument();
       expect(
         screen.getByRole("heading", {
-          name:
-            status === "waiting_for_network"
-              ? "POS terminal recovery waiting for network"
-              : "POS terminal recovery in progress",
+          name: "POS terminal recovery in progress",
         }),
       ).toBeInTheDocument();
       expect(screen.queryByTestId("app-sidebar")).not.toBeInTheDocument();
@@ -611,6 +608,33 @@ describe("Authed layout", () => {
       expect(mocked.navigate).not.toHaveBeenCalled();
     },
   );
+
+  it("renders the POS shell while app-session recovery waits for network with local continuity evidence", () => {
+    mocked.useAuth.mockReturnValue({
+      user: null,
+      isLoading: false,
+    });
+    mocked.useLocalPosEntryContext.mockReturnValue(readyLocalPosEntryContext());
+    mocked.usePosTerminalAppSessionRecovery.mockReturnValue(
+      recoveryState("waiting_for_network"),
+    );
+    mocked.readStoredPosAppAccountId.mockReturnValue("stored-app-user-1");
+    mocked.useRouterState.mockImplementation(({ select }) =>
+      select({ location: { pathname: "/wigclub/store/wigclub/pos/register" } }),
+    );
+
+    render(<Layout />);
+
+    expect(screen.getByTestId("authed-outlet")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", {
+        name: "POS terminal recovery waiting for network",
+      }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByTestId("app-sidebar")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("app-header")).not.toBeInTheDocument();
+    expect(mocked.navigate).not.toHaveBeenCalled();
+  });
 
   it.each([
     ["/wigclub/store/wigclub/products", "Products"],

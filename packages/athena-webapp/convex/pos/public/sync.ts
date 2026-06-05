@@ -230,7 +230,6 @@ export const ingestLocalEvents = mutation({
       !terminal ||
       terminal.storeId !== args.storeId ||
       terminal.status !== "active" ||
-      terminal.registeredByUserId !== athenaUser._id ||
       !terminal.syncSecretHash ||
       terminal.syncSecretHash !== submittedSyncSecretHash
     ) {

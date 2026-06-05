@@ -51,8 +51,9 @@ Keep offline POS route access as a static shell plus local POS state:
 - POS route entry remains local-first through `_authed.tsx`,
   `useGetActiveStore.ts`, local terminal seed, and existing register guards.
 - Offline readiness copy is diagnostic only. It distinguishes app shell,
-  terminal setup, staff authority, register catalog, service catalog, and
-  availability snapshot readiness without becoming sale authority.
+  app-session continuity, terminal setup, staff authority, register catalog,
+  service catalog, and availability snapshot readiness without becoming sale
+  authority.
 
 ## Storage Boundary
 
@@ -89,6 +90,8 @@ route entry, readiness diagnostics, or register hard-reload behavior changes:
 - `src/tests/pos/offlineRouteAccess.spec.ts` proves a production-built app can
   load POS online, install/cache the app shell, block network, hard reload, and
   still mount the POS register shell.
+- `src/tests/pos/offlineSalesContinuity.spec.ts` keeps the no-network register
+  shell redacted while app-session validation is unavailable.
 
 The Athena harness registry now includes "POS offline route access and app-shell
 edits" so future changed-file validation points to these commands and the
@@ -102,6 +105,9 @@ production-build Playwright regression.
   business payloads in Cache Storage.
 - Do not treat app-shell readiness as terminal integrity, drawer authority,
   local staff authority, or command permission.
+- Do not derive app-shell readiness from app-session recovery status. Keep
+  app-session-unverified continuation as redacted support posture, not
+  cashier-facing review.
 - Run browser validation against production build/preview rather than Vite dev
   HMR modules; dev-only clients can create false offline failures.
 - Rebuild graphify after code changes and regenerate harness docs after

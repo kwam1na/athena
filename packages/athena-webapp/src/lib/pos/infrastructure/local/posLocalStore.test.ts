@@ -869,6 +869,97 @@ describe("posLocalStore", () => {
     );
   });
 
+  it("persists app-session/cloud-validation uncertainty metadata through local review without storing unsafe details", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+      createLocalId: () => "local-event-1",
+    });
+
+    await expect(
+      store.appendEvent({
+        type: "transaction.completed",
+        terminalId: "local-terminal-1",
+        storeId: "store_cloud_1",
+        localRegisterSessionId: "local-register-session-1",
+        localPosSessionId: "local-session-1",
+        localTransactionId: "local-transaction-1",
+        staffProfileId: "staff_cloud_1",
+        staffProofToken: "proof-token-1",
+        validationMetadata: {
+          flags: [
+            "app-session-unverified",
+            "cloud-validation-uncertain",
+          ],
+          observedAt: 2_000,
+          uploadDeferredUntil: "app-session-validated",
+        },
+        payload: {
+          customerEmail: "customer@example.com",
+          payments: [{ method: "cash", amount: 25, timestamp: 2_000 }],
+          rawRecoveryReason: "raw-terminal-proof should not be metadata",
+        },
+      }),
+    ).resolves.toEqual({
+      ok: true,
+      value: expect.objectContaining({
+        validationMetadata: {
+          flags: [
+            "app-session-unverified",
+            "cloud-validation-uncertain",
+          ],
+          observedAt: 2_000,
+          uploadDeferredUntil: "app-session-validated",
+        },
+      }),
+    });
+
+    await expect(
+      store.markEventsNeedsReview(
+        ["local-event-1"],
+        "Cloud sync needs review before this local event can finish.",
+        { uploaded: true },
+      ),
+    ).resolves.toEqual({
+      ok: true,
+      value: [
+        expect.objectContaining({
+          validationMetadata: {
+            flags: [
+              "app-session-unverified",
+              "cloud-validation-uncertain",
+            ],
+            observedAt: 2_000,
+            uploadDeferredUntil: "app-session-validated",
+          },
+        }),
+      ],
+    });
+
+    const listed = await store.listEvents();
+    expect(listed).toEqual({
+      ok: true,
+      value: [
+        expect.objectContaining({
+          validationMetadata: {
+            flags: [
+              "app-session-unverified",
+              "cloud-validation-uncertain",
+            ],
+            observedAt: 2_000,
+            uploadDeferredUntil: "app-session-validated",
+          },
+        }),
+      ],
+    });
+    const serializedMetadata = JSON.stringify(
+      listed.ok ? listed.value[0]?.validationMetadata : null,
+    );
+    expect(serializedMetadata).not.toContain("proof-token-1");
+    expect(serializedMetadata).not.toContain("customer@example.com");
+    expect(serializedMetadata).not.toContain("payments");
+    expect(serializedMetadata).not.toContain("raw-terminal-proof");
+  });
+
   it("persists upload proof on pending uploadable events so offline sync survives reload", async () => {
     const adapter = createMemoryPosLocalStorageAdapter();
     const store = createPosLocalStore({

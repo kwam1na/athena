@@ -214,12 +214,12 @@ Use this when POS hub app-session recovery, route-shell continuity, terminal rec
 
 ## POS offline route access and app-shell edits
 
-Touched surfaces: `public/pos-app-shell-sw.js`, `playwright.config.ts`, `src/main.tsx`, `src/offline`, `src/routes/_authed.tsx`, `src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos`, `src/components/pos/PointOfSaleView.tsx`, `src/components/pos/register`, `src/components/pos/settings/POSSettingsView.tsx`, `src/components/pos/terminals/POSTerminalHealthView.tsx`, `src/lib/pos/infrastructure/local`, `src/lib/pos/presentation/register`, `src/tests/pos/offlineRouteAccess.spec.ts`
+Touched surfaces: `public/pos-app-shell-sw.js`, `playwright.config.ts`, `src/main.tsx`, `src/offline`, `src/routes/_authed.tsx`, `src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos`, `src/components/pos/PointOfSaleView.tsx`, `src/components/pos/register`, `src/components/pos/settings/POSSettingsView.tsx`, `src/components/pos/terminals/POSTerminalHealthView.tsx`, `src/lib/pos/infrastructure/local`, `src/lib/pos/presentation/register`, `src/tests/pos/offlineRouteAccess.spec.ts`, `src/tests/pos/offlineSalesContinuity.spec.ts`
 
 Run:
 
 - `bun run --filter '@athena/webapp' test -- src/offline/posAppShellRoutes.test.ts src/offline/registerPosAppShellServiceWorker.test.ts src/offline/posOfflineReadiness.test.ts src/routes/_authed.test.tsx src/components/pos/PointOfSaleView.test.tsx src/components/pos/settings/POSSettingsView.test.tsx src/components/pos/terminals/POSTerminalHealthView.test.tsx src/components/pos/register/POSRegisterOpeningGuard.test.tsx src/lib/pos/presentation/register/useRegisterViewModel.test.ts`
-- `bun run --filter '@athena/webapp' test:e2e -- src/tests/pos/offlineRouteAccess.spec.ts`
+- `bun run --filter '@athena/webapp' test:e2e -- src/tests/pos/offlineRouteAccess.spec.ts src/tests/pos/offlineSalesContinuity.spec.ts`
 - `bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json`
 - `bun run --filter '@athena/webapp' build`
 

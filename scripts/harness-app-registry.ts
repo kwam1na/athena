@@ -717,6 +717,7 @@ export const HARNESS_APP_REGISTRY = [
           "src/lib/pos/infrastructure/local",
           "src/lib/pos/presentation/register",
           "src/tests/pos/offlineRouteAccess.spec.ts",
+          "src/tests/pos/offlineSalesContinuity.spec.ts",
         ],
         commands: [
           {
@@ -727,7 +728,7 @@ export const HARNESS_APP_REGISTRY = [
           {
             kind: "raw",
             command:
-              "bun run --filter '@athena/webapp' test:e2e -- src/tests/pos/offlineRouteAccess.spec.ts",
+              "bun run --filter '@athena/webapp' test:e2e -- src/tests/pos/offlineRouteAccess.spec.ts src/tests/pos/offlineSalesContinuity.spec.ts",
           },
           {
             kind: "raw",

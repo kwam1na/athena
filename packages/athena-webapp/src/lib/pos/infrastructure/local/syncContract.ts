@@ -9,6 +9,9 @@ import type {
 } from "../../../../../shared/posLocalSyncContract";
 
 export type PosLocalUploadEvent = PosLocalSyncUploadEvent;
+export type PosLocalSyncUploadSupport = {
+  appSessionValidation?: "supported" | "unverified";
+};
 type PosLocalUploadEventWithoutSequence = {
   [EventType in PosLocalUploadEvent["eventType"]]: Omit<
     Extract<PosLocalUploadEvent, { eventType: EventType }>,
@@ -19,6 +22,7 @@ type PosLocalUploadEventWithoutSequence = {
 export function buildPosLocalSyncUploadEvents(
   eventsToUpload: PosLocalEventRecord[],
   allEvents: PosLocalEventRecord[],
+  uploadSupport: PosLocalSyncUploadSupport = {},
 ): PosLocalUploadEvent[] {
   const orderedEvents = [...allEvents].sort(
     (left, right) => left.sequence - right.sequence,
@@ -28,6 +32,7 @@ export function buildPosLocalSyncUploadEvents(
   for (const event of [...eventsToUpload].sort(
     (left, right) => left.sequence - right.sequence,
   )) {
+    if (!isSyncablePosLocalEvent(event, uploadSupport)) continue;
     const uploadEvent = toUploadEvent(event, orderedEvents);
     if (!uploadEvent) continue;
     const sequence = event.uploadSequence;
@@ -38,14 +43,31 @@ export function buildPosLocalSyncUploadEvents(
   return uploadEvents;
 }
 
-export function isSyncablePosLocalEvent(event: PosLocalEventRecord): boolean {
+export function isSyncablePosLocalEvent(
+  event: PosLocalEventRecord,
+  uploadSupport: PosLocalSyncUploadSupport | number = {},
+): boolean {
+  const support = typeof uploadSupport === "number" ? {} : uploadSupport;
+
   return (
     Boolean(
       event.localRegisterSessionId &&
         event.staffProfileId &&
         typeof event.uploadSequence === "number",
     ) &&
-    canUploadPosLocalEventType(event.type)
+    canUploadPosLocalEventType(event.type) &&
+    !isUploadDeferredByValidation(event, support)
+  );
+}
+
+export function isUploadDeferredByValidation(
+  event: PosLocalEventRecord,
+  uploadSupport: PosLocalSyncUploadSupport = {},
+): boolean {
+  return (
+    event.validationMetadata?.uploadDeferredUntil ===
+      "app-session-validated" &&
+    uploadSupport.appSessionValidation !== "supported"
   );
 }
 
