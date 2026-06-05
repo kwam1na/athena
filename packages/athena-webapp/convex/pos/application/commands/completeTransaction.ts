@@ -2,13 +2,19 @@ import { internal } from "../../../_generated/api";
 import type { Doc, Id } from "../../../_generated/dataModel";
 import type { MutationCtx } from "../../../_generated/server";
 import type { ApprovalRequirement } from "../../../../shared/approvalPolicy";
-import { capitalizeWords, generateTransactionNumber } from "../../../utils";
+import {
+  capitalizeWords,
+  currencyFormatter,
+  generateTransactionNumber,
+} from "../../../utils";
+import { toDisplayAmount } from "../../../lib/currency";
 import { buildApprovalRequest } from "../../../operations/approvalRequestHelpers";
 import {
   APPROVAL_ACTIONS,
   consumeCommandApprovalProofWithCtx,
 } from "../../../operations/approvalActions";
 import { recordOperationalEventWithCtx } from "../../../operations/operationalEvents";
+import { calculateRegisterSessionCashDelta } from "../../../operations/registerSessions";
 import {
   recordRetailSalePaymentAllocations,
   recordRetailVoidPaymentAllocations,
@@ -93,6 +99,87 @@ export function buildCompleteTransactionResult(input: {
 
 function calculateTotalPaid(payments: PosPaymentInput[]) {
   return payments.reduce((sum, payment) => sum + payment.amount, 0);
+}
+
+function formatPaymentMethodLabel(method: string) {
+  return method.trim().toLowerCase().replaceAll("_", " ");
+}
+
+function paymentMethodLabels(payments: PosPaymentInput[]) {
+  return Array.from(
+    new Set(
+      payments
+        .map((payment) => formatPaymentMethodLabel(payment.method))
+        .filter(Boolean),
+    ),
+  );
+}
+
+function formatSaleAmount(currency: string | undefined, amount: number) {
+  const storeCurrency = currency?.trim() || "GHS";
+
+  try {
+    return currencyFormatter(storeCurrency).format(toDisplayAmount(amount));
+  } catch {
+    return currencyFormatter("GHS").format(toDisplayAmount(amount));
+  }
+}
+
+async function recordCompletedSaleOperationalEvent(
+  ctx: MutationCtx,
+  args: {
+    completedAt: number;
+    changeGiven?: number;
+    customerProfileId?: Id<"customerProfile">;
+    lineCount: number;
+    organizationId?: Id<"organization">;
+    payments: PosPaymentInput[];
+    posTransactionId: Id<"posTransaction">;
+    registerSessionId?: Id<"registerSession">;
+    staffProfileId?: Id<"staffProfile">;
+    storeCurrency?: string;
+    storeId: Id<"store">;
+    total: number;
+    transactionNumber: string;
+  },
+) {
+  const labels = paymentMethodLabels(args.payments);
+  const paymentSummary =
+    labels.length === 0
+      ? "payment needs review"
+      : labels.length === 1
+        ? labels[0]
+        : labels.length === 2
+          ? `${labels[0]} and ${labels[1]}`
+          : `${labels.slice(0, -1).join(", ")}, and ${labels[labels.length - 1]}`;
+
+  await recordOperationalEventWithCtx(ctx, {
+    storeId: args.storeId,
+    organizationId: args.organizationId,
+    eventType: "pos_transaction_completed",
+    subjectType: "posTransaction",
+    subjectId: args.posTransactionId,
+    message: `POS sale #${args.transactionNumber} completed: ${formatSaleAmount(args.storeCurrency, args.total)}, ${paymentSummary}.`,
+    metadata: {
+      cashDelta: calculateRegisterSessionCashDelta({
+        changeGiven: args.changeGiven,
+        payments: args.payments,
+      }),
+      completedAt: args.completedAt,
+      lineCount: args.lineCount,
+      paymentCount: args.payments.length,
+      paymentMethods: labels,
+      receiptNumber: args.transactionNumber,
+      saleTotal: args.total,
+      syncOrigin: "online",
+      total: args.total,
+      transactionNumber: args.transactionNumber,
+    },
+    actorStaffProfileId: args.staffProfileId,
+    customerProfileId: args.customerProfileId,
+    registerSessionId: args.registerSessionId,
+    posTransactionId: args.posTransactionId,
+  });
 }
 
 async function recordPosSaleInventoryMovement(
@@ -265,8 +352,11 @@ export async function recordRegisterSessionSale(
     payments: PosPaymentInput[];
     registerSessionId: Id<"registerSession">;
     registerNumber?: string;
+    saleTotal?: number;
     storeId: Id<"store">;
     terminalId: Id<"posTerminal">;
+    transactionId?: Id<"posTransaction">;
+    transactionNumber?: string;
   },
 ) {
   await ctx.runMutation(
@@ -275,10 +365,15 @@ export async function recordRegisterSessionSale(
       adjustmentKind: "sale",
       changeGiven: args.changeGiven,
       payments: args.payments,
+      paymentCount: args.payments.length,
+      paymentMethodLabels: paymentMethodLabels(args.payments),
       registerSessionId: args.registerSessionId,
       registerNumber: args.registerNumber,
+      saleTotal: args.saleTotal,
       storeId: args.storeId,
       terminalId: args.terminalId,
+      transactionId: args.transactionId,
+      transactionNumber: args.transactionNumber,
     },
   );
 }
@@ -495,8 +590,11 @@ export async function completeTransaction(
       payments: args.payments,
       registerSessionId: args.registerSessionId,
       registerNumber: args.registerNumber,
+      saleTotal: canonicalTotals.total,
       storeId: args.storeId,
       terminalId: sessionTerminalId,
+      transactionId,
+      transactionNumber,
     });
   }
 
@@ -561,6 +659,22 @@ export async function completeTransaction(
       return transactionItemId;
     }),
   );
+
+  await recordCompletedSaleOperationalEvent(ctx, {
+    completedAt,
+    changeGiven,
+    customerProfileId: args.customerProfileId,
+    lineCount: args.items.length,
+    organizationId: store?.organizationId,
+    payments: args.payments,
+    posTransactionId: transactionId,
+    registerSessionId: args.registerSessionId,
+    staffProfileId: args.staffProfileId,
+    storeCurrency: store?.currency,
+    storeId: args.storeId,
+    total: canonicalTotals.total,
+    transactionNumber,
+  });
 
   return ok({
     transactionId: completionResult.data.transactionId,
@@ -1515,8 +1629,11 @@ export async function createTransactionFromSessionHandler(
       payments: args.payments,
       registerSessionId: resolvedRegisterSessionId.data,
       registerNumber: session.registerNumber,
+      saleTotal: total,
       storeId: session.storeId,
       terminalId: session.terminalId,
+      transactionId,
+      transactionNumber,
     });
   }
 
@@ -1614,6 +1731,22 @@ export async function createTransactionFromSessionHandler(
   await patchPosSession(ctx, args.sessionId, {
     transactionId,
     registerSessionId: resolvedRegisterSessionId.data,
+  });
+
+  await recordCompletedSaleOperationalEvent(ctx, {
+    completedAt,
+    changeGiven,
+    customerProfileId: session.customerProfileId,
+    lineCount: items.length,
+    organizationId: store?.organizationId,
+    payments: args.payments,
+    posTransactionId: transactionId,
+    registerSessionId: resolvedRegisterSessionId.data,
+    staffProfileId: session.staffProfileId,
+    storeCurrency: store?.currency,
+    storeId: session.storeId,
+    total,
+    transactionNumber,
   });
 
   return ok({
