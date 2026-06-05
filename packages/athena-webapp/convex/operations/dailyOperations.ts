@@ -12,6 +12,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_OPERATIONS_QUERY_LIMIT = 200;
 const MAX_OPERATIONS_LOOKAHEAD_LIMIT = MAX_OPERATIONS_QUERY_LIMIT + 1;
 const OPEN_WORK_ITEM_STATUSES = ["open", "in_progress"] as const;
+const TIMELINE_REGISTER_SESSION_STATUSES = ["closed", "closing"] as const;
 
 type LinkTarget = {
   label?: string;
@@ -85,6 +86,7 @@ type DailyOperationsTimelineEvent = {
   id: string;
   message: string;
   productLink?: LinkTarget;
+  registerLink?: LinkTarget;
   subject: SourceSubject;
   transactionLink?: LinkTarget;
   type: string;
@@ -463,7 +465,7 @@ async function listTimelineEvents(
 ): Promise<DailyOperationsTimelineEvent[]> {
   if (!args.startAt || !args.endAt) return [];
 
-  const events = await ctx.db
+  const eventsPromise = ctx.db
     .query("operationalEvent")
     .withIndex("by_storeId_createdAt", (q) =>
       q
@@ -473,8 +475,50 @@ async function listTimelineEvents(
     )
     .order("desc")
     .take(MAX_OPERATIONS_QUERY_LIMIT);
+  const registerSessionsPromise = listTimelineRegisterSessions(ctx, args.storeId);
+  const [events, registerSessions] = await Promise.all([
+    eventsPromise,
+    registerSessionsPromise,
+  ]);
+  const operationalCloseoutKeys = new Set(
+    events
+      .map((event) => getOperationalRegisterCloseoutKey(event))
+      .filter((key): key is string => key !== null),
+  );
+  const [operationalTimelineEvents, registerCloseoutTimelineEvents] =
+    await Promise.all([
+      Promise.all(events.map((event) => mapOperationalTimelineEvent(ctx, event))),
+      Promise.resolve(
+        buildRegisterCloseoutTimelineEvents({
+          endAt: args.endAt,
+          operationalCloseoutKeys,
+          registerSessions,
+          startAt: args.startAt,
+        }),
+      ),
+    ]);
 
-  return Promise.all(events.sort(compareTimelineEvents).map(async (event) => {
+  return [
+    ...operationalTimelineEvents,
+    ...registerCloseoutTimelineEvents,
+  ]
+    .sort(compareDailyOperationsTimelineEvents)
+    .slice(0, MAX_OPERATIONS_QUERY_LIMIT);
+}
+
+async function mapOperationalTimelineEvent(
+  ctx: Pick<QueryCtx, "db">,
+  event: {
+    _id: Id<"operationalEvent">;
+    createdAt: number;
+    eventType: string;
+    message: string;
+    metadata?: Record<string, unknown>;
+    subjectId: string;
+    subjectLabel?: string;
+    subjectType: string;
+  },
+): Promise<DailyOperationsTimelineEvent> {
     const metadata = event.metadata ?? {};
     const productId =
       typeof metadata.productId === "string" ? metadata.productId : undefined;
@@ -550,7 +594,141 @@ async function listTimelineEvents(
       transactionLink,
       type: event.eventType,
     };
-  }));
+}
+
+async function listTimelineRegisterSessions(
+  ctx: Pick<QueryCtx, "db">,
+  storeId: Id<"store">,
+) {
+  const sessionBatches = await Promise.all(
+    TIMELINE_REGISTER_SESSION_STATUSES.map((status) =>
+      ctx.db
+        .query("registerSession")
+        .withIndex("by_storeId_status", (q) =>
+          q.eq("storeId", storeId).eq("status", status),
+        )
+        .take(MAX_OPERATIONS_QUERY_LIMIT),
+    ),
+  );
+  const sessionsById = new Map<Id<"registerSession">, Doc<"registerSession">>();
+
+  for (const session of sessionBatches.flat()) {
+    sessionsById.set(session._id, session);
+  }
+
+  return [...sessionsById.values()];
+}
+
+function buildRegisterCloseoutTimelineEvents(args: {
+  endAt: number;
+  operationalCloseoutKeys: Set<string>;
+  registerSessions: Array<Doc<"registerSession">>;
+  startAt: number;
+}): DailyOperationsTimelineEvent[] {
+  return args.registerSessions.flatMap((session) =>
+    (session.closeoutRecords ?? [])
+      .filter(
+        (record) =>
+          record.occurredAt >= args.startAt && record.occurredAt < args.endAt,
+      )
+      .filter(
+        (record) =>
+          !args.operationalCloseoutKeys.has(
+            getRegisterCloseoutKey({
+              occurredAt: record.occurredAt,
+              registerSessionId: session._id,
+              type: record.type,
+            }),
+          ),
+      )
+      .map((record) => {
+        const label = formatRegisterSessionLabel(session.registerNumber);
+        const eventType =
+          record.type === "closed"
+            ? "register_session_closed"
+            : "register_session_closeout_reopened";
+
+        return {
+          createdAt: record.occurredAt,
+          id: `register_closeout:${session._id}:${record.type}:${record.occurredAt}`,
+          message: buildRegisterCloseoutTimelineMessage({
+            label,
+            type: record.type,
+            variance: record.variance,
+          }),
+          registerLink: {
+            label,
+            params: {
+              sessionId: session._id,
+            },
+            to: "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId",
+          },
+          subject: {
+            id: session._id,
+            label,
+            type: "register_session",
+          },
+          type: eventType,
+        };
+      }),
+  );
+}
+
+function buildRegisterCloseoutTimelineMessage(args: {
+  label: string;
+  type: "closed" | "reopened";
+  variance?: number;
+}) {
+  if (args.type === "reopened") {
+    return `${args.label} closeout reopened for correction.`;
+  }
+
+  if (args.variance && args.variance !== 0) {
+    return `${args.label} closeout recorded with a cash variance of ${args.variance}.`;
+  }
+
+  return `${args.label} closeout recorded with an exact cash match.`;
+}
+
+function formatRegisterSessionLabel(registerNumber?: string) {
+  const trimmed = registerNumber?.trim();
+
+  if (!trimmed) return "Register session";
+  if (/^register\b/i.test(trimmed)) return trimmed;
+  return `Register ${trimmed}`;
+}
+
+function getOperationalRegisterCloseoutKey(event: {
+  createdAt: number;
+  eventType: string;
+  subjectId: string;
+  subjectType: string;
+}) {
+  if (event.subjectType !== "register_session") return null;
+
+  const type =
+    event.eventType === "register_session_closed" ||
+    event.eventType === "register_session_closeout_approved"
+      ? "closed"
+      : event.eventType === "register_session_closeout_reopened"
+        ? "reopened"
+        : null;
+
+  if (!type) return null;
+
+  return getRegisterCloseoutKey({
+    occurredAt: event.createdAt,
+    registerSessionId: event.subjectId,
+    type,
+  });
+}
+
+function getRegisterCloseoutKey(args: {
+  occurredAt: number;
+  registerSessionId: string;
+  type: "closed" | "reopened";
+}) {
+  return `${args.registerSessionId}:${args.type}:${getTimelineMinuteBucket(args.occurredAt)}`;
 }
 
 function getTimelineMinuteBucket(createdAt: number) {
@@ -597,6 +775,24 @@ function compareTimelineEvents(
 
   if (left.createdAt !== right.createdAt) return right.createdAt - left.createdAt;
   return String(right._id).localeCompare(String(left._id));
+}
+
+function compareDailyOperationsTimelineEvents(
+  left: DailyOperationsTimelineEvent,
+  right: DailyOperationsTimelineEvent,
+) {
+  return compareTimelineEvents(
+    {
+      _id: left.id as Id<"operationalEvent">,
+      createdAt: left.createdAt,
+      eventType: left.type,
+    },
+    {
+      _id: right.id as Id<"operationalEvent">,
+      createdAt: right.createdAt,
+      eventType: right.type,
+    },
+  );
 }
 
 async function getDailyCloseRecordForDate(

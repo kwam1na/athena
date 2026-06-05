@@ -109,9 +109,13 @@ function buildServiceResult(
 }
 
 function renderProductEntryWithServices(input: {
+  canSearchProducts?: boolean;
+  canSearchServices?: boolean;
   lookupMode?: RegisterLookupMode;
+  searchResults?: Product[];
   serviceEntry: RegisterServiceEntryState;
   setProductSearchQuery?: (query: string) => void;
+  onBarcodeSubmit?: () => void;
 }) {
   function Harness() {
     const [lookupMode, setLookupMode] = useState<RegisterLookupMode>(
@@ -121,13 +125,15 @@ function renderProductEntryWithServices(input: {
 
     return (
       <ProductEntry
+        canSearchProducts={input.canSearchProducts}
+        canSearchServices={input.canSearchServices}
         isSearchLoading={false}
         isSearchReady
         lookupMode={lookupMode}
         onAddProduct={vi.fn()}
-        onBarcodeSubmit={vi.fn()}
+        onBarcodeSubmit={input.onBarcodeSubmit ?? vi.fn()}
         productSearchQuery={productSearchQuery}
-        searchResults={[]}
+        searchResults={input.searchResults ?? []}
         serviceEntry={input.serviceEntry}
         setLookupMode={setLookupMode}
         setProductSearchQuery={(query) => {
@@ -429,6 +435,66 @@ describe("ProductEntry", () => {
         screen.getByPlaceholderText(/lookup product or service by name/i),
       ).toHaveFocus(),
     );
+  });
+
+  it("does not surface product results or barcode submit on service-only terminals", async () => {
+    const user = userEvent.setup();
+    const onBarcodeSubmit = vi.fn();
+    const service = buildServiceResult();
+    const serviceEntry: RegisterServiceEntryState = {
+      disabled: false,
+      serviceSearchQuery: "closure",
+      setServiceSearchQuery: vi.fn(),
+      searchResults: [service],
+      isSearchLoading: false,
+      isSearchReady: true,
+      items: [],
+      onAddService: vi.fn(async () => true),
+      onUpdateServiceAmount: vi.fn(),
+      onRemoveService: vi.fn(),
+    };
+
+    renderProductEntryWithServices({
+      canSearchProducts: false,
+      serviceEntry,
+      searchResults: [buildQuickAddedProduct()],
+      onBarcodeSubmit,
+    });
+
+    const input = screen.getByPlaceholderText(/lookup service by name/i);
+    expect(input).toBeInTheDocument();
+    expect(screen.getByText("Closure Repair")).toBeInTheDocument();
+    expect(screen.queryByText("Quick item")).not.toBeInTheDocument();
+    expect(screen.queryByText("No products found")).not.toBeInTheDocument();
+
+    await user.type(input, "{enter}");
+
+    expect(onBarcodeSubmit).not.toHaveBeenCalled();
+  });
+
+  it("does not surface service results on product-only terminals", () => {
+    const serviceEntry: RegisterServiceEntryState = {
+      disabled: false,
+      serviceSearchQuery: "closure",
+      setServiceSearchQuery: vi.fn(),
+      searchResults: [buildServiceResult()],
+      isSearchLoading: false,
+      isSearchReady: true,
+      items: [],
+      onAddService: vi.fn(async () => true),
+      onUpdateServiceAmount: vi.fn(),
+      onRemoveService: vi.fn(),
+    };
+
+    renderProductEntryWithServices({
+      canSearchServices: false,
+      serviceEntry,
+    });
+
+    expect(
+      screen.getByPlaceholderText(/lookup product by name/i),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Closure Repair")).not.toBeInTheDocument();
   });
 
   it("requires an entered amount before adding a starting-at service", async () => {

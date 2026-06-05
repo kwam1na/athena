@@ -347,6 +347,30 @@ const quickAddTimelineSnapshot: DailyOperationsSnapshot = {
   ],
 };
 
+const registerCloseoutTimelineSnapshot: DailyOperationsSnapshot = {
+  ...operatingSnapshot,
+  timeline: [
+    {
+      createdAt: Date.UTC(2026, 4, 8, 20, 45),
+      id: "register_closeout:register-2:closed:1778273100000",
+      message: "Register 2 closeout recorded with an exact cash match.",
+      registerLink: {
+        label: "Register 2",
+        params: {
+          sessionId: "register-2",
+        },
+        to: "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId",
+      },
+      subject: {
+        id: "register-2",
+        label: "Register 2",
+        type: "register_session",
+      },
+      type: "register_session_closed",
+    },
+  ],
+};
+
 const posSyncedSaleTimelineSnapshot: DailyOperationsSnapshot = {
   ...operatingSnapshot,
   timeline: [
@@ -947,6 +971,27 @@ describe("DailyOperationsViewContent", () => {
         return (
           node?.textContent ===
           "Kwamina Nuh quick added Vitamilk with quantity 100."
+        );
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it("links register closeout timeline events to the register session", () => {
+    renderContent(registerCloseoutTimelineSnapshot);
+
+    const registerLink = screen.getByRole("link", { name: "Register 2" });
+
+    expect(registerLink).toHaveAttribute(
+      "href",
+      expect.stringContaining(
+        "/wigclub/store/osu/cash-controls/registers/register-2?o=",
+      ),
+    );
+    expect(
+      screen.getByText((content, node) => {
+        return (
+          node?.textContent ===
+          "Register 2 closeout recorded with an exact cash match."
         );
       }),
     ).toBeInTheDocument();

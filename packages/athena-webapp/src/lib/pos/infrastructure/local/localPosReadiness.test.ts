@@ -243,6 +243,47 @@ describe("localPosReadiness", () => {
     });
   });
 
+  it("treats live Opening Handoff review arrears as locally startable from POS", () => {
+    expect(
+      evaluateLocalPosReadiness({
+        closeSnapshot: { status: "ready" },
+        entryContext,
+        openingSnapshot: { status: "needs_attention" },
+        operatingDate: "2026-05-14",
+        registerReadModel,
+      }),
+    ).toEqual({
+      status: "blocked",
+      reason: "not_started",
+      canStartLocally: true,
+      message:
+        "Store day not started. Complete Opening Handoff before starting sales.",
+    });
+  });
+
+  it("keeps POS open after the day was started locally even when live Opening Handoff still needs review", () => {
+    expect(
+      evaluateLocalPosReadiness({
+        closeSnapshot: { status: "ready" },
+        entryContext,
+        localReadiness: {
+          storeId: "store-1",
+          operatingDate: "2026-05-14",
+          status: "started",
+          source: "local",
+          updatedAt: 1_000,
+        },
+        openingSnapshot: { status: "needs_attention" },
+        operatingDate: "2026-05-14",
+        registerReadModel,
+      }),
+    ).toEqual({
+      status: "ready",
+      source: "local_readiness",
+      storeDayStatus: "started",
+    });
+  });
+
   it("treats reopened completed close snapshots as live reopened readiness", () => {
     expect(
       evaluateLocalPosReadiness({
@@ -581,5 +622,40 @@ describe("localPosReadiness", () => {
       status: "blocked",
       reason: "closed",
     });
+  });
+
+  it("does not overwrite a locally started day with a live not-started opening snapshot", async () => {
+    const writes: unknown[] = [];
+
+    await expect(
+      refreshLocalPosReadinessFromSnapshots({
+        clock: () => 2_100,
+        closeSnapshot: { status: "ready" },
+        entryContext,
+        openingSnapshot: { status: "needs_attention" },
+        operatingDate: "2026-05-14",
+        store: {
+          readStoreDayReadiness: async () => ({
+            ok: true,
+            value: {
+              storeId: "store-1",
+              operatingDate: "2026-05-14",
+              status: "started",
+              source: "local",
+              updatedAt: 2_000,
+            },
+          }),
+          writeStoreDayReadiness: async (readiness) => {
+            writes.push(readiness);
+            return { ok: true, value: readiness };
+          },
+        },
+      }),
+    ).resolves.toEqual({
+      ok: true,
+      value: null,
+    });
+
+    expect(writes).toEqual([]);
   });
 });

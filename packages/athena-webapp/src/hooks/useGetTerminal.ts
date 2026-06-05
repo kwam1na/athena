@@ -7,6 +7,8 @@ import {
 } from "@/lib/pos/infrastructure/local/posLocalStore";
 import { readStoredTerminalFingerprintHash } from "@/lib/pos/infrastructure/terminal/fingerprint";
 import type { Id } from "~/convex/_generated/dataModel";
+import type { PosTerminalLoginMode } from "~/shared/posTerminalLoginMode";
+import type { PosTerminalTransactionCapability } from "~/shared/posTerminalCapability";
 import useGetActiveStore from "./useGetActiveStore";
 
 export const useGetTerminal = () => {
@@ -21,6 +23,8 @@ export const useGetTerminal = () => {
       displayName: string;
       localTerminalId?: string;
       registerNumber?: string;
+      loginMode?: PosTerminalLoginMode;
+      transactionCapability?: PosTerminalTransactionCapability;
       status: string;
     };
   } | null>(null);
@@ -64,6 +68,8 @@ export const useGetTerminal = () => {
             displayName: result.value.displayName,
             localTerminalId: result.value.terminalId,
             registerNumber: result.value.registerNumber,
+            loginMode: result.value.loginMode,
+            transactionCapability: result.value.transactionCapability,
             status: "local",
           },
         });

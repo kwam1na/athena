@@ -50,6 +50,9 @@ Keep offline POS route access as a static shell plus local POS state:
   duplicate registration loops.
 - POS route entry remains local-first through `_authed.tsx`,
   `useGetActiveStore.ts`, local terminal seed, and existing register guards.
+- The app build version checker must not auto-reload the live sales entry
+  surface (`/pos` or `/pos/register`) when a new static build is detected. Keep
+  polling so the app can refresh after the operator leaves live selling.
 - Offline readiness copy is diagnostic only. It distinguishes app shell,
   app-session continuity, terminal setup, staff authority, register catalog,
   service catalog, and availability snapshot readiness without becoming sale

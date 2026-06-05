@@ -10,7 +10,7 @@ import {
   Smartphone,
   WalletCards,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { useAuth } from "@/hooks/useAuth";
@@ -79,6 +79,8 @@ const CLOSED_REGISTER_SYNCED_CLOSEOUT_SUMMARY =
   "register session is not open for synced pos closeout";
 const REGISTER_NOT_OPEN_SYNC_REVIEW_SUMMARY =
   "Register was not open before this sale synced.";
+const STAFF_ACCESS_SYNC_REVIEW_SUMMARY =
+  "Staff access changed before this POS history synced.";
 const SERVICE_CUSTOMER_ATTRIBUTION_SYNC_REVIEW_SUMMARY =
   "Service line is missing customer attribution.";
 
@@ -598,6 +600,43 @@ function hasOnlyRejectedSyncReviewItems(syncStatus: PosSyncStatusPresentation) {
   );
 }
 
+function getAutomaticStaffAccessSyncReviewSignature(
+  registerSession?: RegisterSessionDetail | null,
+) {
+  const syncStatus = buildPosSyncStatusPresentation(
+    registerSession?.localSyncStatus,
+  );
+  if (
+    !registerSession ||
+    syncStatus.status !== "needs_review" ||
+    syncStatus.reconciliationItems.length === 0
+  ) {
+    return null;
+  }
+
+  const unresolvedItems = syncStatus.reconciliationItems.filter(
+    (item) => item.status !== "rejected",
+  );
+  if (
+    unresolvedItems.length === 0 ||
+    unresolvedItems.some(
+      (item) =>
+        item.type !== "permission" ||
+        item.summary?.trim() !== STAFF_ACCESS_SYNC_REVIEW_SUMMARY,
+    )
+  ) {
+    return null;
+  }
+
+  return [
+    registerSession._id,
+    ...unresolvedItems.map(
+      (item) =>
+        `${item.id ?? item.localEventId ?? "event"}:${item.sequence ?? ""}`,
+    ),
+  ].join("|");
+}
+
 function isApprovableRegisterSyncReviewItem(item: PosReconciliationItem) {
   if (item.status === "rejected") {
     return true;
@@ -609,7 +648,8 @@ function isApprovableRegisterSyncReviewItem(item: PosReconciliationItem) {
 
   return (
     item.type === "permission" &&
-    item.summary?.trim() === REGISTER_NOT_OPEN_SYNC_REVIEW_SUMMARY
+    (item.summary?.trim() === REGISTER_NOT_OPEN_SYNC_REVIEW_SUMMARY ||
+      item.summary?.trim() === STAFF_ACCESS_SYNC_REVIEW_SUMMARY)
   );
 }
 
@@ -3269,6 +3309,7 @@ export function RegisterSessionView() {
         storeUrlSlug?: string;
       }
     | undefined;
+  const automaticSyncReviewAttemptRef = useRef<string | null>(null);
 
   const registerSessionSnapshotArgs =
     canQueryProtectedData && params?.sessionId
@@ -3334,6 +3375,50 @@ export function RegisterSessionView() {
     (correctOpeningFloatReference ??
       api.operations.staffCredentials.authenticateStaffCredential) as never,
   );
+  const automaticSyncReviewSignature = useMemo(
+    () =>
+      getAutomaticStaffAccessSyncReviewSignature(
+        registerSessionSnapshot?.registerSession,
+      ),
+    [registerSessionSnapshot?.registerSession],
+  );
+
+  useEffect(() => {
+    const registerSessionId = registerSessionSnapshot?.registerSession?._id;
+    if (
+      !activeStore?._id ||
+      !automaticSyncReviewSignature ||
+      !registerSessionId
+    ) {
+      return;
+    }
+
+    if (automaticSyncReviewAttemptRef.current === automaticSyncReviewSignature) {
+      return;
+    }
+    automaticSyncReviewAttemptRef.current = automaticSyncReviewSignature;
+
+    void runCommand(() =>
+      resolveRegisterSessionSyncReview({
+        decision: "approved",
+        registerSessionId: registerSessionId as Id<"registerSession">,
+        storeId: activeStore._id,
+      }),
+    ).then((result) => {
+      if (result.kind !== "ok") {
+        automaticSyncReviewAttemptRef.current = null;
+        return;
+      }
+      if (result.data.action === "resolved") {
+        toast.success("Synced register activity applied");
+      }
+    });
+  }, [
+    activeStore?._id,
+    automaticSyncReviewSignature,
+    registerSessionSnapshot?.registerSession?._id,
+    resolveRegisterSessionSyncReview,
+  ]);
 
   async function onRecordDeposit(args: RecordRegisterSessionDepositArgs) {
     const result = await runCommand(() =>

@@ -725,6 +725,644 @@ describe("cash control deposits", () => {
     );
   });
 
+  it("applies proofless staff-access sync reviews after manager approval", async () => {
+    const ctx = createAuthorizedRegisterDepositCtx({
+      operationalEvent: [],
+      posLocalSyncConflict: [
+        {
+          _id: "sync_conflict_open",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-1",
+          localEventId: "event_open",
+          sequence: 6,
+          conflictType: "permission",
+          status: "needs_review",
+          summary: "Staff access changed before this POS history synced.",
+          details: {
+            eventType: "register_opened",
+            hasStaffProof: false,
+            staffProfileId: "staff_1",
+          },
+          createdAt: 1,
+        },
+        {
+          _id: "sync_conflict_sale",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-1",
+          localEventId: "event_sale",
+          sequence: 7,
+          conflictType: "permission",
+          status: "needs_review",
+          summary: "Staff access changed before this POS history synced.",
+          details: {
+            eventType: "sale_completed",
+            hasStaffProof: false,
+            staffProfileId: "staff_1",
+          },
+          createdAt: 2,
+        },
+      ],
+      posLocalSyncEvent: [
+        {
+          _id: "sync_event_open",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-1",
+          localEventId: "event_open",
+          sequence: 6,
+          eventType: "register_opened",
+          occurredAt: 2,
+          staffProfileId: "staff_1",
+          payload: {
+            openingFloat: 35000,
+            registerNumber: "1",
+          },
+          status: "conflicted",
+          submittedAt: 4,
+          acceptedAt: 4,
+        },
+        {
+          _id: "sync_event_sale",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-1",
+          localEventId: "event_sale",
+          sequence: 7,
+          eventType: "sale_completed",
+          occurredAt: 3,
+          staffProfileId: "staff_1",
+          payload: {
+            localPosSessionId: "local-pos-session-1",
+            localTransactionId: "local-transaction-1",
+            localReceiptNumber: "881GJJ-001",
+            receiptNumber: "881GJJ-001",
+            registerNumber: "1",
+            totals: {
+              subtotal: 15000,
+              tax: 0,
+              total: 15000,
+            },
+            items: [
+              {
+                localTransactionItemId: "local-item-1",
+                productId: "product_1",
+                productSkuId: "product_sku_1",
+                productName: "Wig Cap",
+                productSku: "CAP-1",
+                quantity: 1,
+                unitPrice: 15000,
+              },
+            ],
+            payments: [
+              {
+                localPaymentId: "local-payment-1",
+                method: "cash",
+                amount: 15000,
+                timestamp: 3,
+              },
+            ],
+          },
+          status: "conflicted",
+          submittedAt: 4,
+          acceptedAt: 4,
+        },
+      ],
+      posLocalSyncMapping: [
+        {
+          _id: "sync_mapping_register",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-1",
+          localIdKind: "registerSession",
+          localId: "local-register-1",
+          cloudTable: "registerSession",
+          cloudId: "session_open",
+        },
+      ],
+      registerSession: [
+        {
+          _id: "session_open",
+          expectedCash: 35000,
+          openedAt: 1,
+          openingFloat: 35000,
+          organizationId: "org_1",
+          registerNumber: "1",
+          status: "active",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+        },
+      ],
+      posTerminal: [
+        {
+          _id: "terminal_1",
+          registerNumber: "1",
+          registeredByUserId: "athena_user_1",
+          status: "active",
+          storeId: "store_1",
+        },
+      ],
+      product: [
+        {
+          _id: "product_1",
+          storeId: "store_1",
+        },
+      ],
+      productSku: [
+        {
+          _id: "product_sku_1",
+          images: [],
+          inventoryCount: 10,
+          price: 15000,
+          productId: "product_1",
+          quantityAvailable: 10,
+          sku: "CAP-1",
+          storeId: "store_1",
+        },
+      ],
+      staffProfile: [
+        {
+          _id: "manager_1",
+          organizationId: "org_1",
+          status: "active",
+          storeId: "store_1",
+        },
+        {
+          _id: "staff_1",
+          organizationId: "org_1",
+          status: "active",
+          storeId: "store_1",
+        },
+      ],
+      staffRoleAssignment: [
+        {
+          _id: "role_1",
+          organizationId: "org_1",
+          role: "manager",
+          staffProfileId: "manager_1",
+          status: "active",
+          storeId: "store_1",
+        },
+        {
+          _id: "role_2",
+          organizationId: "org_1",
+          role: "cashier",
+          staffProfileId: "staff_1",
+          status: "active",
+          storeId: "store_1",
+        },
+      ],
+    });
+
+    const result = await getHandler(resolveRegisterSessionSyncReview)(
+      ctx as never,
+      {
+        actorStaffProfileId: "manager_1" as Id<"staffProfile">,
+        registerSessionId: "session_open" as Id<"registerSession">,
+        storeId: "store_1" as Id<"store">,
+      },
+    );
+
+    expect(result).toEqual(
+      ok({
+        action: "resolved",
+        projectedCount: 1,
+        registerSession: expect.objectContaining({ _id: "session_open" }),
+        resolvedCount: 2,
+      }),
+    );
+    expect(ctx.tables.get("posLocalSyncConflict")).toEqual([
+      expect.objectContaining({
+        _id: "sync_conflict_open",
+        resolvedByStaffProfileId: "manager_1",
+        status: "resolved",
+      }),
+      expect.objectContaining({
+        _id: "sync_conflict_sale",
+        resolvedByStaffProfileId: "manager_1",
+        status: "resolved",
+      }),
+    ]);
+    expect(ctx.tables.get("posLocalSyncEvent")).toEqual([
+      expect.objectContaining({
+        _id: "sync_event_open",
+        projectedAt: expect.any(Number),
+        status: "projected",
+      }),
+      expect.objectContaining({
+        _id: "sync_event_sale",
+        projectedAt: expect.any(Number),
+        status: "projected",
+      }),
+    ]);
+    expect(ctx.tables.get("posTransaction")).toEqual([
+      expect.objectContaining({
+        registerSessionId: "session_open",
+        total: 15000,
+        transactionNumber: "881GJJ-001",
+      }),
+    ]);
+    expect(ctx.tables.get("registerSession")).toEqual([
+      expect.objectContaining({
+        _id: "session_open",
+        expectedCash: 50000,
+      }),
+    ]);
+  });
+
+  it("does not apply staff-access reviews that had an invalid proof", async () => {
+    const ctx = createAuthorizedRegisterDepositCtx({
+      posLocalSyncConflict: [
+        {
+          _id: "sync_conflict_sale",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-1",
+          localEventId: "event_sale",
+          sequence: 7,
+          conflictType: "permission",
+          status: "needs_review",
+          summary: "Staff access changed before this POS history synced.",
+          details: {
+            eventType: "sale_completed",
+            hasStaffProof: true,
+            staffProfileId: "staff_1",
+          },
+          createdAt: 2,
+        },
+      ],
+      posLocalSyncEvent: [
+        {
+          _id: "sync_event_sale",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-1",
+          localEventId: "event_sale",
+          sequence: 7,
+          eventType: "sale_completed",
+          occurredAt: 3,
+          staffProfileId: "staff_1",
+          payload: {},
+          status: "conflicted",
+          submittedAt: 4,
+          acceptedAt: 4,
+        },
+      ],
+      posLocalSyncMapping: [
+        {
+          _id: "sync_mapping_register",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-1",
+          localIdKind: "registerSession",
+          localId: "local-register-1",
+          cloudTable: "registerSession",
+          cloudId: "session_open",
+        },
+      ],
+      registerSession: [
+        {
+          _id: "session_open",
+          expectedCash: 35000,
+          openedAt: 1,
+          openingFloat: 35000,
+          organizationId: "org_1",
+          registerNumber: "1",
+          status: "active",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+        },
+      ],
+      staffProfile: [
+        {
+          _id: "manager_1",
+          organizationId: "org_1",
+          status: "active",
+          storeId: "store_1",
+        },
+        {
+          _id: "staff_1",
+          organizationId: "org_1",
+          status: "active",
+          storeId: "store_1",
+        },
+      ],
+      staffRoleAssignment: [
+        {
+          _id: "role_1",
+          organizationId: "org_1",
+          role: "manager",
+          staffProfileId: "manager_1",
+          status: "active",
+          storeId: "store_1",
+        },
+        {
+          _id: "role_2",
+          organizationId: "org_1",
+          role: "cashier",
+          staffProfileId: "staff_1",
+          status: "active",
+          storeId: "store_1",
+        },
+      ],
+    });
+
+    await expect(
+      getHandler(resolveRegisterSessionSyncReview)(ctx as never, {
+        actorStaffProfileId: "manager_1" as Id<"staffProfile">,
+        registerSessionId: "session_open" as Id<"registerSession">,
+        storeId: "store_1" as Id<"store">,
+      }),
+    ).resolves.toEqual(
+      userError({
+        code: "precondition_failed",
+        message:
+          "This register review still needs attention before the synced activity can be applied.",
+      }),
+    );
+  });
+
+  it("automatically applies proofless staff-access synced sales without manager approval", async () => {
+    const ctx = createAuthorizedRegisterDepositCtx({
+      operationalEvent: [],
+      posLocalSyncConflict: [
+        {
+          _id: "sync_conflict_sale",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-1",
+          localEventId: "event_sale",
+          sequence: 7,
+          conflictType: "permission",
+          status: "needs_review",
+          summary: "Staff access changed before this POS history synced.",
+          details: {
+            eventType: "sale_completed",
+            hasStaffProof: false,
+            staffProfileId: "staff_1",
+          },
+          createdAt: 2,
+        },
+      ],
+      posLocalSyncEvent: [
+        {
+          _id: "sync_event_sale",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-1",
+          localEventId: "event_sale",
+          sequence: 7,
+          eventType: "sale_completed",
+          occurredAt: 3,
+          staffProfileId: "staff_1",
+          payload: {
+            localPosSessionId: "local-pos-session-1",
+            localTransactionId: "local-transaction-1",
+            localReceiptNumber: "881GJJ-002",
+            receiptNumber: "881GJJ-002",
+            registerNumber: "1",
+            totals: {
+              subtotal: 15000,
+              tax: 0,
+              total: 15000,
+            },
+            items: [
+              {
+                localTransactionItemId: "local-item-1",
+                productId: "product_1",
+                productSkuId: "product_sku_1",
+                productName: "Wig Cap",
+                productSku: "CAP-1",
+                quantity: 1,
+                unitPrice: 15000,
+              },
+            ],
+            payments: [
+              {
+                localPaymentId: "local-payment-1",
+                method: "cash",
+                amount: 15000,
+                timestamp: 3,
+              },
+            ],
+          },
+          status: "conflicted",
+          submittedAt: 4,
+          acceptedAt: 4,
+        },
+      ],
+      posLocalSyncMapping: [
+        {
+          _id: "sync_mapping_register",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-1",
+          localIdKind: "registerSession",
+          localId: "local-register-1",
+          cloudTable: "registerSession",
+          cloudId: "session_open",
+        },
+      ],
+      registerSession: [
+        {
+          _id: "session_open",
+          expectedCash: 35000,
+          openedAt: 1,
+          openingFloat: 35000,
+          organizationId: "org_1",
+          registerNumber: "1",
+          status: "active",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+        },
+      ],
+      posTerminal: [
+        {
+          _id: "terminal_1",
+          registerNumber: "1",
+          registeredByUserId: "athena_user_1",
+          status: "active",
+          storeId: "store_1",
+        },
+      ],
+      product: [
+        {
+          _id: "product_1",
+          storeId: "store_1",
+        },
+      ],
+      productSku: [
+        {
+          _id: "product_sku_1",
+          images: [],
+          inventoryCount: 10,
+          price: 15000,
+          productId: "product_1",
+          quantityAvailable: 10,
+          sku: "CAP-1",
+          storeId: "store_1",
+        },
+      ],
+      staffProfile: [
+        {
+          _id: "staff_1",
+          organizationId: "org_1",
+          status: "active",
+          storeId: "store_1",
+        },
+      ],
+      staffRoleAssignment: [
+        {
+          _id: "role_1",
+          organizationId: "org_1",
+          role: "cashier",
+          staffProfileId: "staff_1",
+          status: "active",
+          storeId: "store_1",
+        },
+      ],
+    });
+
+    const result = await getHandler(resolveRegisterSessionSyncReview)(
+      ctx as never,
+      {
+        registerSessionId: "session_open" as Id<"registerSession">,
+        storeId: "store_1" as Id<"store">,
+      },
+    );
+
+    expect(result).toEqual(
+      ok({
+        action: "resolved",
+        projectedCount: 1,
+        registerSession: expect.objectContaining({ _id: "session_open" }),
+        resolvedCount: 1,
+      }),
+    );
+    expect(ctx.tables.get("posLocalSyncConflict")).toEqual([
+      expect.objectContaining({
+        _id: "sync_conflict_sale",
+        status: "resolved",
+      }),
+    ]);
+    expect(ctx.tables.get("posLocalSyncConflict")?.[0]).not.toHaveProperty(
+      "resolvedByStaffProfileId",
+    );
+    expect(ctx.tables.get("posLocalSyncEvent")).toEqual([
+      expect.objectContaining({
+        _id: "sync_event_sale",
+        projectedAt: expect.any(Number),
+        status: "projected",
+      }),
+    ]);
+    expect(ctx.tables.get("posTransaction")).toEqual([
+      expect.objectContaining({
+        registerSessionId: "session_open",
+        total: 15000,
+        transactionNumber: "881GJJ-002",
+      }),
+    ]);
+    expect(ctx.tables.get("operationalEvent")).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          actorUserId: "athena_user_1",
+          eventType: "register_session_sync_review_resolved",
+          message: "Automatically applied proofless synced register sale.",
+        }),
+      ]),
+    );
+  });
+
+  it("does not automatically apply non-proofless synced reviews", async () => {
+    const ctx = createAuthorizedRegisterDepositCtx({
+      posLocalSyncConflict: [
+        {
+          _id: "sync_conflict_sale",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-1",
+          localEventId: "event_sale",
+          sequence: 7,
+          conflictType: "permission",
+          status: "needs_review",
+          summary: "Staff access changed before this POS history synced.",
+          details: {
+            eventType: "sale_completed",
+            hasStaffProof: true,
+            staffProfileId: "staff_1",
+          },
+          createdAt: 2,
+        },
+      ],
+      posLocalSyncEvent: [
+        {
+          _id: "sync_event_sale",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-1",
+          localEventId: "event_sale",
+          sequence: 7,
+          eventType: "sale_completed",
+          occurredAt: 3,
+          staffProfileId: "staff_1",
+          payload: {},
+          status: "conflicted",
+          submittedAt: 4,
+          acceptedAt: 4,
+        },
+      ],
+      posLocalSyncMapping: [
+        {
+          _id: "sync_mapping_register",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-1",
+          localIdKind: "registerSession",
+          localId: "local-register-1",
+          cloudTable: "registerSession",
+          cloudId: "session_open",
+        },
+      ],
+      registerSession: [
+        {
+          _id: "session_open",
+          expectedCash: 35000,
+          openedAt: 1,
+          openingFloat: 35000,
+          organizationId: "org_1",
+          registerNumber: "1",
+          status: "active",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+        },
+      ],
+    });
+
+    const result = await getHandler(resolveRegisterSessionSyncReview)(
+      ctx as never,
+      {
+        registerSessionId: "session_open" as Id<"registerSession">,
+        storeId: "store_1" as Id<"store">,
+      },
+    );
+
+    expect(result).toEqual(
+      userError({
+        code: "precondition_failed",
+        message:
+          "This register review is not eligible for automatic sync repair.",
+      }),
+    );
+    expect(ctx.tables.get("posLocalSyncEvent")).toEqual([
+      expect.objectContaining({
+        _id: "sync_event_sale",
+        status: "conflicted",
+      }),
+    ]);
+    expect(ctx.tables.get("posTransaction") ?? []).toEqual([]);
+  });
+
   it("lets managers override and project server-rejected synced sales", async () => {
     const ctx = createAuthorizedRegisterDepositCtx({
       operationalEvent: [],

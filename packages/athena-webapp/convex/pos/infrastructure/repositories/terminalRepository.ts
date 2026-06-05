@@ -26,6 +26,8 @@ export function mapTerminalRecord(
     fingerprintHash: terminal.fingerprintHash,
     displayName: terminal.displayName,
     registerNumber: terminal.registerNumber,
+    loginMode: terminal.loginMode,
+    transactionCapability: terminal.transactionCapability,
     registeredByUserId: terminal.registeredByUserId,
     browserInfo: terminal.browserInfo,
     registeredAt: terminal.registeredAt,
@@ -57,6 +59,8 @@ export async function getTerminalForRegisterState(
     _id: terminal._id,
     displayName: terminal.displayName,
     registerNumber: terminal.registerNumber,
+    loginMode: terminal.loginMode,
+    transactionCapability: terminal.transactionCapability,
     status: terminal.status,
     registeredAt: terminal.registeredAt,
   };

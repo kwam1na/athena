@@ -65,6 +65,12 @@ token. When proof or freshness is stale or only local continuity evidence is
 available, preserve cashier context only for operator guidance and block
 sale-affecting commands until sign-in supplies a valid proof.
 
+Offline route entry can come from the provisioned terminal seed when live store
+metadata is unavailable. In that state, restore cashier presence by active
+store, terminal, and operating date, then validate the stored organization from
+the presence record itself. Do not require live organization metadata before
+showing the returning-cashier PIN unlock.
+
 Do not render generic username/PIN sign-in as the first reload state for a valid
 presence record. Generic sign-in erases the operator's mental model that the
 same cashier is still associated with the terminal. Prefer a PIN-only unlock

@@ -40,6 +40,17 @@ const statusValidator = v.union(
   v.literal("lost"),
 );
 
+const transactionCapabilityValidator = v.union(
+  v.literal("products_and_services"),
+  v.literal("products_only"),
+  v.literal("services_only"),
+);
+
+const loginModeValidator = v.union(
+  v.literal("standard"),
+  v.literal("pos_only"),
+);
+
 const browserInfoValidator = v.object({
   userAgent: v.string(),
   platform: v.optional(v.string()),
@@ -56,6 +67,8 @@ const terminalReturnValidator = v.object({
   fingerprintHash: v.string(),
   displayName: v.string(),
   registerNumber: v.optional(v.string()),
+  loginMode: v.optional(loginModeValidator),
+  transactionCapability: v.optional(transactionCapabilityValidator),
   registeredByUserId: v.id("athenaUser"),
   browserInfo: browserInfoValidator,
   registeredAt: v.number(),
@@ -70,6 +83,8 @@ const terminalProvisioningReturnValidator = v.object({
   syncSecretHash: v.optional(v.string()),
   displayName: v.string(),
   registerNumber: v.optional(v.string()),
+  loginMode: v.optional(loginModeValidator),
+  transactionCapability: v.optional(transactionCapabilityValidator),
   registeredByUserId: v.id("athenaUser"),
   browserInfo: browserInfoValidator,
   registeredAt: v.number(),
@@ -236,6 +251,8 @@ const terminalRegistrationSummaryReturnValidator = v.object({
   _id: v.id("posTerminal"),
   displayName: v.string(),
   registerNumber: v.optional(v.string()),
+  loginMode: v.optional(loginModeValidator),
+  transactionCapability: v.optional(transactionCapabilityValidator),
   registeredByUserId: v.id("athenaUser"),
   browserInfo: browserInfoValidator,
   registeredAt: v.number(),
@@ -488,6 +505,8 @@ export const registerTerminal = mutation({
     syncSecretHash: v.string(),
     displayName: v.string(),
     registerNumber: v.string(),
+    loginMode: v.optional(loginModeValidator),
+    transactionCapability: v.optional(transactionCapabilityValidator),
     browserInfo: browserInfoValidator,
   },
   returns: commandResultValidator(terminalProvisioningReturnValidator),

@@ -19,6 +19,8 @@ export interface PosTerminalSummary {
   _id: string;
   displayName: string;
   registerNumber?: string;
+  loginMode?: "standard" | "pos_only";
+  transactionCapability?: "products_and_services" | "products_only" | "services_only";
   status?: string;
   registeredAt?: number;
 }

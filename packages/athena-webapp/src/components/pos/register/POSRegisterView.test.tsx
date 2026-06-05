@@ -121,9 +121,13 @@ vi.mock("@/components/pos/ProductEntry", async () => {
     ProductEntry: React.forwardRef(
       (
         {
+          canSearchProducts,
+          canSearchServices,
           onAddProduct,
           serviceEntry,
         }: {
+          canSearchProducts?: boolean;
+          canSearchServices?: boolean;
           onAddProduct?: (
             product: {
               id: string;
@@ -156,7 +160,7 @@ vi.mock("@/components/pos/ProductEntry", async () => {
         return (
           <div>
             product-entry
-            {onAddProduct ? (
+            {onAddProduct && canSearchProducts !== false ? (
               <button
                 type="button"
                 onClick={() =>
@@ -172,7 +176,7 @@ vi.mock("@/components/pos/ProductEntry", async () => {
                 mock-add-product
               </button>
             ) : null}
-            {serviceEntry?.onAddService ? (
+            {serviceEntry?.onAddService && canSearchServices !== false ? (
               <button
                 type="button"
                 onClick={() =>
@@ -191,12 +195,37 @@ vi.mock("@/components/pos/ProductEntry", async () => {
         );
       },
     ),
-    ProductSearchInput: React.forwardRef<HTMLInputElement>((_, ref) => (
-      <div>
-        <input ref={ref} aria-label="product search input" />
-        <span>product-search-input</span>
-      </div>
-    )),
+    ProductSearchInput: React.forwardRef<
+      HTMLInputElement,
+      {
+        disabled?: boolean;
+        lookupKind?: string;
+        onActivate?: () => void;
+        readOnly?: boolean;
+      }
+    >(
+      (
+        {
+          disabled,
+          lookupKind = "products_services",
+          onActivate,
+          readOnly,
+        },
+        ref,
+      ) => (
+        <div>
+          <input
+            ref={ref}
+            aria-label="product search input"
+            disabled={disabled}
+            readOnly={readOnly}
+            onPointerDown={onActivate}
+          />
+          <span>product-search-input</span>
+          <span>{`lookup-kind-${lookupKind}`}</span>
+        </div>
+      ),
+    ),
   };
 });
 
@@ -388,8 +417,8 @@ describe("POSRegisterView", () => {
     expect(screen.getByText("closeout-control")).toBeInTheDocument();
     expect(screen.getByText("register-customer-panel")).toBeInTheDocument();
     expect(screen.getByText("product-search-input")).toBeInTheDocument();
-    expect(screen.getByText("Ready for product lookup")).toBeInTheDocument();
-    expect(screen.getByText("⌘+K")).toBeInTheDocument();
+    expect(screen.getByText("Ready for checkout lookup")).toBeInTheDocument();
+    expect(screen.getAllByText("⌘+K").length).toBeGreaterThan(0);
     expect(
       screen.getByRole("region", { name: "Sale summary" }),
     ).toBeInTheDocument();
@@ -402,6 +431,143 @@ describe("POSRegisterView", () => {
       screen.getByTestId("register-main-workspace").closest(".box-border"),
     ).toBeInTheDocument();
     expect(screen.queryByText("cashier-auth-dialog")).not.toBeInTheDocument();
+  });
+
+  it("surfaces service-only lookup without product actions", async () => {
+    mockUseRegisterViewModel.mockReturnValue({
+      hasActiveStore: true,
+      header: {
+        title: "POS",
+        isSessionActive: true,
+      },
+      registerInfo: {
+        registerLabel: "Front Counter",
+        hasTerminal: true,
+      },
+      customerPanel: {},
+      productEntry: {
+        canSearchProducts: false,
+        canSearchServices: true,
+        disabled: false,
+        productSearchQuery: "",
+        setProductSearchQuery: vi.fn(),
+        onBarcodeSubmit: vi.fn(),
+        onAddProduct: vi.fn(async () => true),
+        searchResults: [],
+        isSearchLoading: false,
+        isSearchReady: true,
+        canQuickAddProduct: true,
+      },
+      serviceEntry: {
+        disabled: false,
+        serviceSearchQuery: "",
+        setServiceSearchQuery: vi.fn(),
+        searchResults: [],
+        isSearchLoading: false,
+        isSearchReady: true,
+        items: [],
+        onAddService: vi.fn(async () => true),
+        onUpdateServiceAmount: vi.fn(),
+        onRemoveService: vi.fn(),
+      },
+      cart: {
+        items: [],
+      },
+      checkout: {
+        isTransactionCompleted: false,
+      },
+      sessionPanel: {},
+      cashierCard: {
+        cashierName: "Ato K.",
+        onSignOut: vi.fn(),
+      },
+      closeoutControl: null,
+      authDialog: {
+        open: false,
+      },
+      drawerGate: null,
+      onNavigateBack: vi.fn(),
+    });
+
+    const { POSRegisterView } = await import("./POSRegisterView");
+    render(<POSRegisterView />);
+
+    expect(screen.getByText("lookup-kind-services")).toBeInTheDocument();
+    expect(screen.getByText("Ready for service lookup")).toBeInTheDocument();
+    expect(screen.getByText("Service search")).toBeInTheDocument();
+    expect(screen.queryByText("Barcode")).not.toBeInTheDocument();
+    expect(screen.queryByText("Product search")).not.toBeInTheDocument();
+    expect(screen.queryByText("Quick add product")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "mock-add-product" }))
+      .not.toBeInTheDocument();
+  });
+
+  it("surfaces product-only lookup without service actions", async () => {
+    mockUseRegisterViewModel.mockReturnValue({
+      hasActiveStore: true,
+      header: {
+        title: "POS",
+        isSessionActive: true,
+      },
+      registerInfo: {
+        registerLabel: "Front Counter",
+        hasTerminal: true,
+      },
+      customerPanel: {},
+      productEntry: {
+        canSearchProducts: true,
+        canSearchServices: false,
+        disabled: false,
+        productSearchQuery: "",
+        setProductSearchQuery: vi.fn(),
+        onBarcodeSubmit: vi.fn(),
+        onAddProduct: vi.fn(async () => true),
+        searchResults: [],
+        isSearchLoading: false,
+        isSearchReady: true,
+        canQuickAddProduct: true,
+      },
+      serviceEntry: {
+        disabled: false,
+        serviceSearchQuery: "",
+        setServiceSearchQuery: vi.fn(),
+        searchResults: [],
+        isSearchLoading: false,
+        isSearchReady: true,
+        items: [],
+        onAddService: vi.fn(async () => true),
+        onUpdateServiceAmount: vi.fn(),
+        onRemoveService: vi.fn(),
+      },
+      cart: {
+        items: [],
+      },
+      checkout: {
+        isTransactionCompleted: false,
+      },
+      sessionPanel: {},
+      cashierCard: {
+        cashierName: "Ato K.",
+        onSignOut: vi.fn(),
+      },
+      closeoutControl: null,
+      authDialog: {
+        open: false,
+      },
+      drawerGate: null,
+      onNavigateBack: vi.fn(),
+    });
+
+    const { POSRegisterView } = await import("./POSRegisterView");
+    render(<POSRegisterView />);
+
+    expect(screen.getByText("lookup-kind-products")).toBeInTheDocument();
+    expect(screen.getByText("Ready for product lookup")).toBeInTheDocument();
+    expect(screen.getByText("Barcode")).toBeInTheDocument();
+    expect(screen.getByText("Product search")).toBeInTheDocument();
+    expect(screen.queryByText("Service search")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "mock-add-service" }))
+      .not.toBeInTheDocument();
   });
 
   it("returns focus to the header product search after adding a service", async () => {
@@ -930,7 +1096,7 @@ describe("POSRegisterView", () => {
     render(<POSRegisterView />);
 
     expect(screen.getByText("register-checkout-panel")).toBeInTheDocument();
-    expect(screen.getByText("Ready for product lookup")).toBeInTheDocument();
+    expect(screen.getByText("Ready for checkout lookup")).toBeInTheDocument();
     expect(
       screen.queryByText("App session unverified"),
     ).not.toBeInTheDocument();
@@ -1260,6 +1426,75 @@ describe("POSRegisterView", () => {
     });
   });
 
+  it("starts a new sale before focusing product lookup when the idle header lookup is touched", async () => {
+    const setShowProductLookup = vi.fn();
+    let isSessionActive = false;
+    const onStartNewSession = vi.fn(async () => {
+      isSessionActive = true;
+    });
+    mockUseRegisterViewModel.mockImplementation(() => ({
+      hasActiveStore: true,
+      header: {
+        title: "POS",
+        isSessionActive,
+      },
+      registerInfo: {
+        customerName: "Ama Serwa",
+        registerLabel: "Front Counter",
+        hasTerminal: true,
+      },
+      customerPanel: {},
+      productEntry: {
+        disabled: false,
+        productSearchQuery: "",
+        setProductSearchQuery: vi.fn(),
+        setShowProductLookup,
+        onBarcodeSubmit: vi.fn(),
+        canQuickAddProduct: false,
+      },
+      cart: {
+        items: [],
+      },
+      checkout: {
+        isTransactionCompleted: false,
+      },
+      sessionPanel: {
+        disableNewSession: false,
+        onStartNewSession,
+      },
+      cashierCard: {},
+      closeoutControl: {
+        canCloseout: true,
+        canShowOpeningFloatCorrection: true,
+        canCorrectOpeningFloat: true,
+        onRequestCloseout: vi.fn(),
+        onRequestOpeningFloatCorrection: vi.fn(),
+      },
+      authDialog: {
+        open: false,
+      },
+      drawerGate: null,
+      onNavigateBack: vi.fn(),
+    }));
+
+    const { POSRegisterView } = await import("./POSRegisterView");
+    const { rerender } = render(<POSRegisterView />);
+
+    const searchInput = screen.getByLabelText("product search input");
+    expect(searchInput).not.toBeDisabled();
+    expect(searchInput).not.toHaveAttribute("readonly");
+
+    await userEvent.click(searchInput);
+    expect(onStartNewSession).toHaveBeenCalledTimes(1);
+
+    rerender(<POSRegisterView />);
+
+    await waitFor(() => {
+      expect(setShowProductLookup).toHaveBeenCalledWith(true);
+      expect(screen.getByLabelText("product search input")).toHaveFocus();
+    });
+  });
+
   it("returns focus to the header product search after an item is added", async () => {
     const onAddProduct = vi.fn().mockResolvedValue(true);
 
@@ -1370,7 +1605,7 @@ describe("POSRegisterView", () => {
       screen.getByRole("button", { name: /quick add product/i }),
     );
 
-    expect(screen.getByText("Ready for product lookup")).toBeInTheDocument();
+    expect(screen.getByText("Ready for checkout lookup")).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /add service/i }),
     ).not.toBeInTheDocument();
@@ -1603,6 +1838,61 @@ describe("POSRegisterView", () => {
     expect(screen.queryByText("cart-items")).not.toBeInTheDocument();
     expect(
       screen.queryByText("register-checkout-panel"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("holds a blank register workspace while cashier presence restore is pending", async () => {
+    mockUseRegisterViewModel.mockReturnValue({
+      hasActiveStore: true,
+      header: {
+        title: "POS",
+        isSessionActive: true,
+      },
+      registerInfo: {
+        customerName: undefined,
+        registerLabel: "Front Counter",
+        hasTerminal: true,
+      },
+      customerPanel: {},
+      productEntry: {
+        disabled: true,
+        productSearchQuery: "",
+        setProductSearchQuery: vi.fn(),
+        onBarcodeSubmit: vi.fn(),
+      },
+      cart: {
+        items: [],
+      },
+      checkout: {
+        isTransactionCompleted: false,
+      },
+      sessionPanel: null,
+      cashierCard: null,
+      cashierPresenceRestore: {
+        status: "pending",
+      },
+      closeoutControl: null,
+      authDialog: {
+        open: false,
+      },
+      drawerGate: null,
+      onNavigateBack: vi.fn(),
+    });
+
+    const { POSRegisterView } = await import("./POSRegisterView");
+    render(<POSRegisterView />);
+
+    expect(screen.queryByText("product-search-input")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("register-customer-panel"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("cart-items")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("register-checkout-panel"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("cashier-auth-dialog")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Ready for product lookup"),
     ).not.toBeInTheDocument();
   });
 
@@ -1989,7 +2279,7 @@ describe("POSRegisterView", () => {
 
     await userEvent.click(screen.getByText("show-payment-methods"));
 
-    expect(screen.getByText("Ready for product lookup")).toBeInTheDocument();
+    expect(screen.getByText("Ready for checkout lookup")).toBeInTheDocument();
     expect(screen.getByTestId("cart-items-compact")).toBeInTheDocument();
     expect(screen.queryByText("product-entry")).not.toBeInTheDocument();
 
@@ -2119,12 +2409,12 @@ describe("POSRegisterView", () => {
     const { POSRegisterView } = await import("./POSRegisterView");
     render(<POSRegisterView />);
 
-    expect(screen.getByText("Ready for product lookup")).toBeInTheDocument();
+    expect(screen.getByText("Ready for checkout lookup")).toBeInTheDocument();
     expect(screen.getByTestId("cart-items-compact")).toBeInTheDocument();
 
     await userEvent.click(screen.getByText("start-payment-edit"));
 
-    expect(screen.getByText("Ready for product lookup")).toBeInTheDocument();
+    expect(screen.getByText("Ready for checkout lookup")).toBeInTheDocument();
     expect(screen.queryByTestId("cart-items-compact")).not.toBeInTheDocument();
     expect(
       screen.queryByTestId("cart-items-comfortable"),

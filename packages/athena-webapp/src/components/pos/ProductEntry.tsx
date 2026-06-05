@@ -49,6 +49,10 @@ interface ProductSearchInputProps {
   setProductSearchQuery: (query: string) => void;
   onBarcodeSubmit: (e: React.FormEvent) => void;
   disabled?: boolean;
+  lookupKind?: "products_services" | "products" | "services";
+  onActivate?: () => void;
+  readOnly?: boolean;
+  submitOnEnter?: boolean;
   className?: string;
   inputClassName?: string;
   placeholder?: string;
@@ -64,6 +68,8 @@ interface ProductEntryProps extends ProductSearchInputProps {
   searchResults: Product[];
   isSearchLoading: boolean;
   isSearchReady: boolean;
+  canSearchProducts?: boolean;
+  canSearchServices?: boolean;
   canQuickAddProduct?: boolean;
   showSearchInput?: boolean;
   containerClassName?: string;
@@ -321,7 +327,11 @@ export const ProductSearchInput = forwardRef<
     onBarcodeSubmit,
     className,
     inputClassName,
-    placeholder = "Lookup product or service by name, bar/qr code, sku, or product url...",
+    lookupKind = "products_services",
+    onActivate,
+    placeholder,
+    readOnly = false,
+    submitOnEnter = true,
   },
   ref,
 ) {
@@ -342,27 +352,45 @@ export const ProductSearchInput = forwardRef<
   const handleClearSearch = () => {
     setProductSearchQuery("");
   };
+  const resolvedPlaceholder =
+    placeholder ??
+    (lookupKind === "services"
+      ? "Lookup service by name or service type..."
+      : lookupKind === "products"
+        ? "Lookup product by name, barcode, SKU, or product URL..."
+        : "Lookup product or service by name, bar/qr code, SKU, or product URL...");
 
   return (
     <div className={cn("relative", className)}>
       <div className="absolute text-gray-500 z-10 left-4 top-1/2 transform -translate-y-1/2 flex items-center gap-2">
-        <Search className="w-4 h-4" />
-        <ScanBarcode className="w-4 h-4" />
+        {lookupKind === "services" ? (
+          <Scissors className="w-4 h-4" />
+        ) : (
+          <>
+            <Search className="w-4 h-4" />
+            <ScanBarcode className="w-4 h-4" />
+          </>
+        )}
       </div>
       <Input
         ref={searchInputRef}
-        placeholder={placeholder}
+        placeholder={resolvedPlaceholder}
         value={productSearchQuery}
         disabled={disabled}
+        readOnly={readOnly}
         onChange={(e) => setProductSearchQuery(e.target.value)}
+        onPointerDown={onActivate}
         onKeyDown={(e) => {
-          if (e.key === "Enter" && productSearchQuery.trim()) {
+          if (submitOnEnter && e.key === "Enter" && productSearchQuery.trim()) {
             e.preventDefault();
             onBarcodeSubmit(e);
           }
         }}
         className={cn(
-          "h-12 pl-20 pr-10 border-gray-200 focus:border-blue-400 rounded-lg text-sm font-medium bg-white/80 backdrop-blur-sm",
+          cn(
+            "h-12 pr-10 border-gray-200 focus:border-blue-400 rounded-lg text-sm font-medium bg-white/80 backdrop-blur-sm",
+            lookupKind === "services" ? "pl-12" : "pl-20",
+          ),
           inputClassName,
         )}
         autoFocus
@@ -402,6 +430,8 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
       isSearchLoading,
       isSearchReady,
       canQuickAddProduct = false,
+      canSearchProducts = true,
+      canSearchServices,
       showSearchInput = true,
       containerClassName,
       lookupPanelClassName,
@@ -425,15 +455,25 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
     const productSearchInputRef = useRef<HTMLInputElement>(null);
 
     const inputIsUrlOrBarcode = isUrlOrBarcode(productSearchQuery);
+    const productLookupEnabled = canSearchProducts;
+    const serviceLookupEnabled =
+      Boolean(serviceEntry) && canSearchServices !== false;
+    const lookupKind =
+      productLookupEnabled && serviceLookupEnabled
+        ? "products_services"
+        : serviceLookupEnabled
+          ? "services"
+          : "products";
 
     const formatter = currencyFormatter(activeStore?.currency || "GHS");
     const serviceSearchQuery = serviceEntry?.serviceSearchQuery ?? "";
     const shouldShowServiceResults =
-      Boolean(serviceEntry) &&
+      serviceLookupEnabled &&
       serviceSearchQuery.trim().length > 0 &&
       serviceEntry!.searchResults.length > 0 &&
-      !inputIsUrlOrBarcode;
+      (!inputIsUrlOrBarcode || !productLookupEnabled);
     const shouldShowProductResults =
+      productLookupEnabled &&
       Boolean(productSearchQuery) &&
       (!shouldShowServiceResults ||
         searchResults.length > 0 ||
@@ -472,7 +512,7 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
 
     const handleOpenQuickAdd = useCallback(
       (selectedProduct?: Product) => {
-        if (!canQuickAddProduct) {
+        if (!productLookupEnabled || !canQuickAddProduct) {
           return;
         }
 
@@ -495,6 +535,7 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
         canQuickAddProduct,
         inputIsUrlOrBarcode,
         onQuickAddOpenChange,
+        productLookupEnabled,
         productSearchQuery,
       ],
     );
@@ -518,7 +559,7 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
           return true;
         },
         openQuickAddProduct: () => {
-          if (!canQuickAddProduct) {
+          if (!productLookupEnabled || !canQuickAddProduct) {
             return false;
           }
 
@@ -526,7 +567,7 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
           return true;
         },
       }),
-      [canQuickAddProduct, handleOpenQuickAdd],
+      [canQuickAddProduct, handleOpenQuickAdd, productLookupEnabled],
     );
 
     const handleQuickAddOpenChange = (open: boolean) => {
@@ -643,7 +684,7 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
       (!showSearchInput &&
         !productSearchQuery &&
         !serviceSearchQuery &&
-        !isQuickAddOpen &&
+        (!productLookupEnabled || !isQuickAddOpen) &&
         !forceQuickAddHost)
     ) {
       return null;
@@ -664,9 +705,11 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
                 <ProductSearchInput
                   ref={productSearchInputRef}
                   disabled={disabled || isQuickAddOpen}
+                  lookupKind={lookupKind}
                   productSearchQuery={productSearchQuery}
                   setProductSearchQuery={setProductSearchQuery}
                   onBarcodeSubmit={onBarcodeSubmit}
+                  submitOnEnter={productLookupEnabled}
                 />
               </div>
             )}
@@ -688,7 +731,7 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
                 formatter={formatter}
                 onClearSearch={handleClearSearch}
                 onQuickAddProduct={
-                  isSearchReady && canQuickAddProduct
+                  productLookupEnabled && isSearchReady && canQuickAddProduct
                     ? handleOpenQuickAdd
                     : undefined
                 }
@@ -700,20 +743,22 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
           </div>
         </div>
 
-        <QuickAddProductDialog
-          open={isQuickAddOpen}
-          onOpenChange={handleQuickAddOpenChange}
-          onSubmit={handleQuickAddSubmit}
-          onAttachBarcode={
-            isAddingVariant ? undefined : handleAttachBarcodeSubmit
-          }
-          existingSkuOptions={existingSkuOptions}
-          initialName={quickAddInitialName}
-          initialLookupCode={quickAddInitialLookupCode}
-          lockProductName={isAddingVariant}
-          referenceVariant={quickAddSourceProduct}
-          submitErrorMessage="Could not quick add this product. Try again."
-        />
+        {productLookupEnabled ? (
+          <QuickAddProductDialog
+            open={isQuickAddOpen}
+            onOpenChange={handleQuickAddOpenChange}
+            onSubmit={handleQuickAddSubmit}
+            onAttachBarcode={
+              isAddingVariant ? undefined : handleAttachBarcodeSubmit
+            }
+            existingSkuOptions={existingSkuOptions}
+            initialName={quickAddInitialName}
+            initialLookupCode={quickAddInitialLookupCode}
+            lockProductName={isAddingVariant}
+            referenceVariant={quickAddSourceProduct}
+            submitErrorMessage="Could not quick add this product. Try again."
+          />
+        ) : null}
       </div>
     );
   },

@@ -38,6 +38,11 @@ Use POS-only local-first infrastructure:
 - Upload local events in strict register-session sequence through the POS sync boundary.
 - Accept each local event once, record local-to-cloud mappings, and return stable outcomes when the same event is retried.
 - Project accepted events into existing Athena records: register sessions, POS sessions, transactions, transaction items, payment allocations, inventory changes, cash controls, and workflow/audit surfaces.
+- Treat terminal-ingested events with a missing offline staff proof as
+  automatically syncable when the terminal is active, the staff profile still
+  belongs to the store, and the staff role still permits the event. A supplied
+  but invalid proof remains live permission evidence and must create review
+  instead of being masked by stored-staff trust.
 - Preserve completed local sales when inventory, payment, or permission drift appears. Create manager-review reconciliation records instead of rewriting or hiding local history.
 
 ## Boundaries

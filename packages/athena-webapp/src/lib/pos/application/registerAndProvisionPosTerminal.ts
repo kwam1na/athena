@@ -1,4 +1,14 @@
 import type { Id } from "~/convex/_generated/dataModel";
+import {
+  DEFAULT_POS_TERMINAL_TRANSACTION_CAPABILITY,
+  normalizePosTerminalTransactionCapability,
+  type PosTerminalTransactionCapability,
+} from "~/shared/posTerminalCapability";
+import {
+  DEFAULT_POS_TERMINAL_LOGIN_MODE,
+  normalizePosTerminalLoginMode,
+  type PosTerminalLoginMode,
+} from "~/shared/posTerminalLoginMode";
 
 import type { BrowserInfo } from "@/lib/browserFingerprint";
 import {
@@ -17,6 +27,8 @@ export type ProvisionedTerminalRecord = {
   syncSecretHash?: string;
   displayName: string;
   registerNumber?: string;
+  loginMode?: PosTerminalLoginMode;
+  transactionCapability?: PosTerminalTransactionCapability;
   registeredByUserId: Id<"athenaUser">;
   browserInfo: BrowserInfo;
   registeredAt: number;
@@ -40,6 +52,8 @@ export async function registerAndProvisionPosTerminal(input: {
   fingerprintHash: string;
   orgUrlSlug?: string;
   registerNumber: string;
+  loginMode?: PosTerminalLoginMode;
+  transactionCapability?: PosTerminalTransactionCapability;
   registerTerminalMutation: (args: {
     browserInfo: BrowserInfo;
     displayName: string;
@@ -47,6 +61,8 @@ export async function registerAndProvisionPosTerminal(input: {
     registerNumber: string;
     storeId: Id<"store">;
     syncSecretHash: string;
+    loginMode: PosTerminalLoginMode;
+    transactionCapability: PosTerminalTransactionCapability;
   }) => Promise<
     | { kind: "ok"; data: ProvisionedTerminalRecord }
     | { kind: "user_error"; error: { message: string } }
@@ -56,12 +72,17 @@ export async function registerAndProvisionPosTerminal(input: {
   now?: () => number;
 }) {
   const syncSecretToken = await createTerminalSyncSecretToken();
+  const transactionCapability =
+    normalizePosTerminalTransactionCapability(input.transactionCapability);
+  const loginMode = normalizePosTerminalLoginMode(input.loginMode);
   const result = await input.registerTerminalMutation({
     storeId: input.activeStoreId,
     fingerprintHash: input.fingerprintHash,
     syncSecretHash: syncSecretToken,
     displayName: input.displayName,
     registerNumber: input.registerNumber,
+    loginMode,
+    transactionCapability,
     browserInfo: input.browserInfo,
   });
   if (result.kind === "user_error") return result;
@@ -78,6 +99,12 @@ export async function registerAndProvisionPosTerminal(input: {
     storeId: input.activeStoreId,
     orgUrlSlug: input.orgUrlSlug,
     registerNumber: result.data.registerNumber,
+    loginMode:
+      result.data.loginMode ?? loginMode ?? DEFAULT_POS_TERMINAL_LOGIN_MODE,
+    transactionCapability:
+      result.data.transactionCapability ??
+      transactionCapability ??
+      DEFAULT_POS_TERMINAL_TRANSACTION_CAPABILITY,
     displayName: result.data.displayName,
     provisionedAt: input.now?.() ?? Date.now(),
     schemaVersion: POS_LOCAL_STORE_SCHEMA_VERSION,

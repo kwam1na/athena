@@ -550,6 +550,8 @@ function terminalFromSeed(seed: PosProvisionedTerminalSeed | null): PosTerminalD
     displayName: seed.displayName,
     localTerminalId: seed.terminalId,
     registerNumber: seed.registerNumber,
+    loginMode: seed.loginMode,
+    transactionCapability: seed.transactionCapability,
     status: "local",
     registeredAt: seed.provisionedAt,
   };

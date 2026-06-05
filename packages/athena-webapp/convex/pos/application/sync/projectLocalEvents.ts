@@ -242,8 +242,10 @@ async function validateProjectionPermission(
         now: args.now,
       })
     : false;
+  const canTrustStoredStaffProof =
+    args.options?.trustStoredStaffProof === true && !args.event.staffProofToken;
   const hasTrustedStoredStaffProof =
-    args.options?.trustStoredStaffProof === true &&
+    canTrustStoredStaffProof &&
     Boolean(staff) &&
     staff?.storeId === args.storeId &&
     staff?.status === "active" &&
@@ -275,7 +277,7 @@ async function validateProjectionPermission(
         })
       : false;
   const hasTrustedStoredCashierOrManagerProof =
-    args.options?.trustStoredStaffProof === true &&
+    canTrustStoredStaffProof &&
     Boolean(staff) &&
     staff?.storeId === args.storeId &&
     staff?.status === "active" &&

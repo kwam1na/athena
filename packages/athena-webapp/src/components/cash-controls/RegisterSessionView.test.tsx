@@ -966,6 +966,65 @@ describe("RegisterSessionViewContent", () => {
     });
   });
 
+  it("approves proofless staff-access synced activity after manager sign-in", async () => {
+    const user = userEvent.setup();
+    const onAuthenticateStaff = vi.fn().mockResolvedValue(
+      ok({
+        activeRoles: ["manager"],
+        staffProfile: { fullName: "Ato Kofi" },
+        staffProfileId: "manager-1",
+      }),
+    );
+    const onResolveSyncReview = vi
+      .fn()
+      .mockResolvedValue(
+        ok({ action: "resolved", projectedCount: 1, resolvedCount: 3 }),
+      );
+
+    render(
+      <RegisterSessionViewContent
+        currency="GHS"
+        isLoading={false}
+        onRecordDeposit={vi.fn()}
+        {...closeoutHandlers}
+        onAuthenticateStaff={onAuthenticateStaff}
+        onResolveSyncReview={onResolveSyncReview}
+        registerSessionSnapshot={{
+          ...baseSnapshot,
+          registerSession: {
+            ...baseSnapshot.registerSession,
+            localSyncStatus: {
+              status: "needs_review",
+              reconciliationItems: [
+                {
+                  id: "sync_conflict_1",
+                  sequence: 6,
+                  status: "needs_review",
+                  summary:
+                    "Staff access changed before this POS history synced.",
+                  type: "permission",
+                },
+              ],
+            },
+          },
+        }}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Approve synced sales" }));
+    await user.click(
+      screen.getByRole("button", {
+        name: "Confirm staff for Approve synced sales",
+      }),
+    );
+
+    expect(onResolveSyncReview).toHaveBeenCalledWith({
+      actorStaffProfileId: "manager-1",
+      decision: "approved",
+      registerSessionId: "session-1",
+    });
+  });
+
   it("rejects synced register review items after manager sign-in", async () => {
     const user = userEvent.setup();
     const onAuthenticateStaff = vi.fn().mockResolvedValue(

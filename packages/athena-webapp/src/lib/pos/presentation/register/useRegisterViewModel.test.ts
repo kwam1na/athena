@@ -65,6 +65,10 @@ let mockTerminal:
       _id: Id<"posTerminal">;
       displayName: string;
       registerNumber?: string;
+      transactionCapability?:
+        | "products_and_services"
+        | "products_only"
+        | "services_only";
     }
   | null
   | undefined;
@@ -2578,6 +2582,52 @@ describe("useRegisterViewModel", () => {
     );
   });
 
+  it("prefills restored cashier unlock from local presence while offline without live store metadata", async () => {
+    Object.defineProperty(globalThis.navigator, "onLine", {
+      configurable: true,
+      value: false,
+    });
+    mockActiveStore = null;
+    mockRegisterState = undefined;
+    mockActiveSession = null;
+    mockTerminal = {
+      _id: "terminal-1" as Id<"posTerminal">,
+      displayName: "Front Counter",
+      registerNumber: "1",
+    };
+    mockReadCashierPresence.mockResolvedValue({
+      ok: true,
+      value: buildCashierPresence(),
+    });
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await waitFor(() =>
+      expect(result.current.cashierPresenceRestore.status).toBe(
+        "validation_pending",
+      ),
+    );
+
+    expect(mockReadCashierPresence).toHaveBeenCalledWith({
+      now: expect.any(Number),
+      operatingDate: getTestOperatingDate(),
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    });
+    expect(result.current.authDialog?.open).toBe(true);
+    expect(result.current.authDialog?.restoredCashier).toEqual({
+      displayName: "Ama Kusi",
+      username: "ama",
+    });
+    expect(result.current.debug).toEqual(
+      expect.objectContaining({
+        activeStoreSource: "local",
+        hasLiveActiveStore: false,
+      }),
+    );
+  });
+
   it("uses the short-lived local POS staff proof for local events", async () => {
     const { useRegisterViewModel } = await import("./useRegisterViewModel");
     const { result } = renderHook(() => useRegisterViewModel());
@@ -4420,6 +4470,109 @@ describe("useRegisterViewModel", () => {
         ([event]) => event?.type === "cart.item_added",
       ),
     ).toHaveLength(1);
+  });
+
+  it("surfaces only service lookup when the terminal is configured for services", async () => {
+    mockTerminal = {
+      ...mockTerminal!,
+      transactionCapability: "services_only",
+    };
+    mockRegisterCatalogRows = [buildRegisterCatalogRow()];
+    mockRegisterCatalogAvailabilityRows = [
+      buildRegisterCatalogAvailabilityRow(),
+    ];
+    mockRegisterServiceCatalogRows = [
+      {
+        serviceCatalogId: "service-1" as Id<"serviceCatalog">,
+        name: "Closure Repair",
+        description: "Repair a closure install.",
+        serviceMode: "repair",
+        pricingModel: "fixed",
+        basePrice: 4500,
+        status: "active",
+      },
+    ];
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    act(() => {
+      result.current.productEntry.setProductSearchQuery("1234567890123");
+    });
+
+    await waitFor(() =>
+      expect(result.current.productEntry.searchResults).toEqual([]),
+    );
+    expect(result.current.productEntry.canSearchProducts).toBe(false);
+    expect(result.current.productEntry.canSearchServices).toBe(true);
+    expect(
+      mockAppendLocalEvent.mock.calls.some(
+        ([event]) => event?.type === "cart.item_added",
+      ),
+    ).toBe(false);
+
+    act(() => {
+      result.current.productEntry.setProductSearchQuery("closure");
+    });
+
+    await waitFor(() =>
+      expect(result.current.serviceEntry?.searchResults).toHaveLength(1),
+    );
+    expect(result.current.serviceEntry?.searchResults[0]).toEqual(
+      expect.objectContaining({ name: "Closure Repair" }),
+    );
+  });
+
+  it("surfaces only product lookup when the terminal is configured for product SKUs", async () => {
+    mockTerminal = {
+      ...mockTerminal!,
+      transactionCapability: "products_only",
+    };
+    mockRegisterCatalogRows = [buildRegisterCatalogRow()];
+    mockRegisterCatalogAvailabilityRows = [
+      buildRegisterCatalogAvailabilityRow(),
+    ];
+    mockRegisterServiceCatalogRows = [
+      {
+        serviceCatalogId: "service-1" as Id<"serviceCatalog">,
+        name: "Closure Repair",
+        description: "Repair a closure install.",
+        serviceMode: "repair",
+        pricingModel: "fixed",
+        basePrice: 4500,
+        status: "active",
+      },
+    ];
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    expect(result.current.productEntry.canSearchProducts).toBe(true);
+    expect(result.current.productEntry.canSearchServices).toBe(false);
+    expect(result.current.serviceEntry).toBeUndefined();
+
+    act(() => {
+      result.current.productEntry.setProductSearchQuery("deep");
+    });
+
+    await waitFor(() =>
+      expect(result.current.productEntry.searchResults).toHaveLength(1),
+    );
+    expect(result.current.productEntry.searchResults[0]).toEqual(
+      expect.objectContaining({ name: "Deep Wave" }),
+    );
   });
 
   it("adds service lines to the register review state and blocks checkout without customer attribution", async () => {

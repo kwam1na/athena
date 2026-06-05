@@ -8,6 +8,7 @@ import "./index.css";
 import { useEffect } from "react";
 import { createVersionChecker } from "./utils/versionChecker";
 import { registerPosAppShellServiceWorker } from "./offline/registerPosAppShellServiceWorker";
+import { removeConvexAuthCodeParamFromUrl } from "./auth/convexAuthUrl";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -62,6 +63,7 @@ function App() {
 const rootElement = document.getElementById("app")!;
 
 if (!rootElement.innerHTML) {
+  removeConvexAuthCodeParamFromUrl();
   registerPosAppShellServiceWorker();
   const root = ReactDOM.createRoot(rootElement);
   root.render(<App />);

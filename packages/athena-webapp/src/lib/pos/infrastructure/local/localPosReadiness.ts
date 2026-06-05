@@ -39,6 +39,7 @@ export type LocalPosReadiness =
         | "waiting_for_close_snapshot"
         | "unknown"
         | "local_store_unavailable";
+      canStartLocally?: boolean;
       message: string;
     };
 
@@ -152,16 +153,6 @@ export function evaluateLocalPosReadiness(input: {
     );
   }
 
-  if (
-    input.openingSnapshot?.status &&
-    input.openingSnapshot.status !== "started"
-  ) {
-    return blocked(
-      "not_started",
-      "Store day not started. Complete Opening Handoff before starting sales.",
-    );
-  }
-
   if (input.registerReadModel?.closeoutState?.status === "closed_locally") {
     return blocked(
       "local_closeout",
@@ -206,6 +197,14 @@ export function evaluateLocalPosReadiness(input: {
     };
   }
 
+  if (input.openingSnapshot?.status) {
+    return blocked(
+      "not_started",
+      "Store day not started. Complete Opening Handoff before starting sales.",
+      { canStartLocally: true },
+    );
+  }
+
   if (localReadiness?.status === "closed") {
     return blocked(
       "closed",
@@ -213,10 +212,13 @@ export function evaluateLocalPosReadiness(input: {
     );
   }
 
-  if (localReadiness?.status === "not_started") {
+  if (
+    localReadiness?.status === "not_started"
+  ) {
     return blocked(
       "not_started",
       "Store day not started. Complete Opening Handoff before starting sales.",
+      { canStartLocally: !input.openingSnapshot },
     );
   }
 
@@ -325,7 +327,8 @@ export async function refreshLocalPosReadinessFromSnapshots(input: {
   entryContext: PosLocalEntryContext;
   openingSnapshot?: PosLocalDailyOpeningSnapshot;
   operatingDate: string;
-  store: Pick<PosLocalReadinessStore, "writeStoreDayReadiness">;
+  store: Pick<PosLocalReadinessStore, "writeStoreDayReadiness"> &
+    Partial<Pick<PosLocalReadinessStore, "readStoreDayReadiness">>;
 }): Promise<PosLocalStoreResult<PosLocalStoreDayReadiness | null>> {
   if (input.entryContext.status !== "ready") {
     return { ok: true, value: null };
@@ -341,6 +344,26 @@ export async function refreshLocalPosReadinessFromSnapshots(input: {
 
   if (!readiness || !input.store.writeStoreDayReadiness) {
     return { ok: true, value: null };
+  }
+
+  if (readiness.status === "not_started" && input.store.readStoreDayReadiness) {
+    const existing = await input.store.readStoreDayReadiness({
+      storeId: input.entryContext.storeId,
+      operatingDate: input.operatingDate,
+    });
+    if (!existing.ok) return existing;
+
+    if (
+      localReadinessMatchesInput({
+        entryContext: input.entryContext,
+        localReadiness: existing.value,
+        operatingDate: input.operatingDate,
+      }) &&
+      (existing.value?.status === "started" ||
+        existing.value?.status === "reopened")
+    ) {
+      return { ok: true, value: null };
+    }
   }
 
   return input.store.writeStoreDayReadiness(readiness);
@@ -547,10 +570,12 @@ function readinessStateKeysEqual(
 function blocked(
   reason: Extract<LocalPosReadiness, { status: "blocked" }>["reason"],
   message: string,
+  options?: { canStartLocally?: boolean },
 ): LocalPosReadiness {
   return {
     status: "blocked",
     reason,
+    ...(options?.canStartLocally ? { canStartLocally: true } : {}),
     message,
   };
 }

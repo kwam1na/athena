@@ -269,7 +269,7 @@ export function CashierAuthDialog({
       return userError({
         code: "precondition_failed",
         message:
-          "This staff sign-in is not available offline on this terminal. Reconnect, then try again.",
+          "Staff list is not ready on this terminal. Reconnect once to refresh staff credentials.",
       });
     }
 
@@ -288,26 +288,41 @@ export function CashierAuthDialog({
       });
     }
 
+    const authenticationResult = {
+      activeRoles: authority.activeRoles,
+      localStaffAuthority: authority,
+      staffProfile: {
+        fullName: authority.displayName ?? null,
+      },
+      staffProfileId: authority.staffProfileId as Id<"staffProfile">,
+    };
+
+    if (!authority.wrappedPosLocalStaffProof) {
+      logger.info("[POS] Offline staff sign-in continuing without staff proof", {
+        staffProfileId: authority.staffProfileId,
+        storeId,
+        terminalId,
+      });
+      return ok(authenticationResult);
+    }
+
     const posLocalStaffProof = await unwrapLocalStaffProofToken(
       authority.verifier,
       args.pin,
       authority.wrappedPosLocalStaffProof,
     );
     if (!posLocalStaffProof || posLocalStaffProof.expiresAt <= Date.now()) {
-      return userError({
-        code: "precondition_failed",
-        message: "Offline staff sign-in needs a refresh. Reconnect, then try again.",
+      logger.info("[POS] Offline staff sign-in continuing with proof refresh due", {
+        staffProfileId: authority.staffProfileId,
+        storeId,
+        terminalId,
       });
+      return ok(authenticationResult);
     }
 
     return ok({
-      activeRoles: authority.activeRoles,
-      localStaffAuthority: authority,
+      ...authenticationResult,
       posLocalStaffProof,
-      staffProfile: {
-        fullName: authority.displayName ?? null,
-      },
-      staffProfileId: authority.staffProfileId as Id<"staffProfile">,
     });
   }
 

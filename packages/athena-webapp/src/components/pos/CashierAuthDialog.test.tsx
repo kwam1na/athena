@@ -352,7 +352,7 @@ describe("CashierAuthDialog", () => {
 
     await waitFor(() =>
       expect(mocks.toastError).toHaveBeenCalledWith(
-        "This staff sign-in is not available offline on this terminal. Reconnect, then try again.",
+        "Staff list is not ready on this terminal. Reconnect once to refresh staff credentials.",
       ),
     );
     expect(authenticateMutation).not.toHaveBeenCalled();
@@ -468,6 +468,58 @@ describe("CashierAuthDialog", () => {
       "1234",
       expect.objectContaining({ ciphertext: "wrapped-proof-token" }),
     );
+    expect(mocks.toastSuccess).toHaveBeenCalledWith("Signed in as Ama Mensah");
+  });
+
+  it("authenticates a locally authorized cashier offline before a proof has been wrapped", async () => {
+    Object.defineProperty(window.navigator, "onLine", {
+      configurable: true,
+      value: false,
+    });
+    const readStaffAuthorityForUsername = vi.fn(async () => ({
+      ok: true,
+      value: buildLocalAuthorityRecord({
+        wrappedPosLocalStaffProof: undefined,
+      }),
+    }));
+    mocks.createPosLocalStore.mockReturnValue({
+      readStaffAuthorityForUsername,
+      replaceStaffAuthoritySnapshot: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      upsertStaffAuthorityRecord: vi.fn(async ({ record }) => ({
+        ok: true,
+        value: record,
+      })),
+    });
+    const authenticateMutation = vi.fn();
+
+    const { user, onAuthenticated } = renderDialog({ authenticateMutation });
+
+    await submitCredentials(user);
+
+    await waitFor(() =>
+      expect(onAuthenticated).toHaveBeenCalledWith(
+        expect.objectContaining({
+          activeRoles: ["cashier"],
+          localStaffAuthority: expect.objectContaining({
+            staffProfileId,
+            username: "frontdesk",
+          }),
+          staffProfileId,
+        }),
+      ),
+    );
+    expect(onAuthenticated.mock.calls[0][0]).not.toHaveProperty(
+      "posLocalStaffProof",
+    );
+    expect(authenticateMutation).not.toHaveBeenCalled();
+    expect(mocks.verifyLocalPin).toHaveBeenCalledWith(
+      expect.objectContaining({ algorithm: "PBKDF2-SHA256" }),
+      "1234",
+    );
+    expect(mocks.unwrapLocalStaffProofToken).not.toHaveBeenCalled();
     expect(mocks.toastSuccess).toHaveBeenCalledWith("Signed in as Ama Mensah");
   });
 
@@ -657,7 +709,7 @@ describe("CashierAuthDialog", () => {
     await waitFor(() => expect(screen.getByLabelText(/pin/i)).toHaveValue(""));
   });
 
-  it("clears the PIN when an offline staff proof cannot be unwrapped", async () => {
+  it("continues offline when a cached staff proof cannot be unwrapped", async () => {
     Object.defineProperty(window.navigator, "onLine", {
       configurable: true,
       value: false,
@@ -684,13 +736,22 @@ describe("CashierAuthDialog", () => {
     await submitCredentials(user);
 
     await waitFor(() =>
-      expect(mocks.toastError).toHaveBeenCalledWith(
-        "Offline staff sign-in needs a refresh. Reconnect, then try again.",
+      expect(onAuthenticated).toHaveBeenCalledWith(
+        expect.objectContaining({
+          activeRoles: ["cashier"],
+          localStaffAuthority: expect.objectContaining({
+            staffProfileId,
+            username: "frontdesk",
+          }),
+          staffProfileId,
+        }),
       ),
     );
     expect(authenticateMutation).not.toHaveBeenCalled();
-    expect(onAuthenticated).not.toHaveBeenCalled();
-    await waitFor(() => expect(screen.getByLabelText(/pin/i)).toHaveValue(""));
+    expect(onAuthenticated.mock.calls[0][0]).not.toHaveProperty(
+      "posLocalStaffProof",
+    );
+    expect(mocks.toastSuccess).toHaveBeenCalledWith("Signed in as Ama Mensah");
   });
 
   it("rejects offline recover mode without claiming other registers were signed out", async () => {

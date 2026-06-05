@@ -165,6 +165,12 @@ export type DailyOperationsSnapshot = {
       search?: Record<string, string>;
       to?: string;
     };
+    registerLink?: {
+      label?: string;
+      params?: Record<string, string>;
+      search?: Record<string, string>;
+      to?: string;
+    };
     transactionLink?: {
       label?: string;
       params?: Record<string, string>;
@@ -462,7 +468,8 @@ function TimelineMessage({
   orgUrlSlug: string;
   storeUrlSlug: string;
 }) {
-  const inlineLink = event.transactionLink ?? event.productLink;
+  const inlineLink =
+    event.transactionLink ?? event.registerLink ?? event.productLink;
   const linkLabel = inlineLink?.label?.trim();
   const linkMatch = findTimelineLinkMatch(event.message, linkLabel);
 

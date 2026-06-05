@@ -1,6 +1,7 @@
 import {
   createFuzzySearchEntry,
-  searchFuzzyEntries,
+  scoreFuzzySearchEntry,
+  tokenizeFuzzySearchText,
 } from "@/lib/search/fuzzySearch";
 
 export function normalizeSkuSearchQuery(value?: string | null) {
@@ -11,12 +12,21 @@ export function matchesSkuSearchTerms(
   terms: Array<string | number | null | undefined>,
   query: string,
 ) {
-  if (!query) return true;
+  return scoreSkuSearchTerms(terms, query) > 0;
+}
+
+export function scoreSkuSearchTerms(
+  terms: Array<string | number | null | undefined>,
+  query: string,
+) {
+  if (!query) return 1;
 
   if (isBarcodeShapedSearchQuery(query)) {
     const normalizedQuery = normalizeIdentifier(query);
 
-    return terms.some((term) => normalizeIdentifier(term) === normalizedQuery);
+    return terms.some((term) => normalizeIdentifier(term) === normalizedQuery)
+      ? 100
+      : 0;
   }
 
   const searchableText = terms
@@ -24,14 +34,16 @@ export function matchesSkuSearchTerms(
       (term): term is string | number => term !== null && term !== undefined,
     )
     .join(" ");
+  const queryTokens = [...tokenizeFuzzySearchText([query])];
 
-  return (
-    searchFuzzyEntries(
-      [createFuzzySearchEntry(searchableText, { searchableText })],
-      query,
-      { limit: 1 },
-    ).length > 0
+  if (!searchableText || queryTokens.length === 0) return 0;
+
+  const fuzzyScore = scoreFuzzySearchEntry(
+    createFuzzySearchEntry(searchableText, { searchableText }),
+    queryTokens,
   );
+
+  return fuzzyScore;
 }
 
 function isBarcodeShapedSearchQuery(input: string): boolean {

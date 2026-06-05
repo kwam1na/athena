@@ -35,6 +35,8 @@ export interface RegisterCustomerPanelState {
 
 export interface RegisterProductEntryState {
   disabled: boolean;
+  canSearchProducts?: boolean;
+  canSearchServices?: boolean;
   showProductLookup: boolean;
   setShowProductLookup: (show: boolean) => void;
   productSearchQuery: string;

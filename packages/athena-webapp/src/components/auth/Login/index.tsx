@@ -8,6 +8,7 @@ import {
   createPosLocalStore,
   type PosProvisionedTerminalSeed,
 } from "@/lib/pos/infrastructure/local/posLocalStore";
+import { isPosOnlyTerminalLoginMode } from "~/shared/posTerminalLoginMode";
 
 const POS_ROUTE_PATTERN =
   /^\/(?<orgUrlSlug>[^/]+)\/store\/(?<storeUrlSlug>[^/]+)\/pos(?:\/.*)?$/;
@@ -60,6 +61,11 @@ export function Login() {
 
       if (!cancelled && result.ok) {
         setLocalTerminalSeed(result.value);
+        if (isPosOnlyTerminalLoginMode(result.value?.loginMode)) {
+          setStep((current) =>
+            current === "signIn" ? "posRecovery" : current,
+          );
+        }
       }
     })();
 

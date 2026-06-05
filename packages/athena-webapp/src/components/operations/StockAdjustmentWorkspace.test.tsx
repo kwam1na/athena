@@ -1102,6 +1102,51 @@ describe("StockAdjustmentWorkspaceContent", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("ranks direct product-name phrase matches before broader fuzzy hits", async () => {
+    const user = userEvent.setup();
+
+    renderStockAdjustmentWorkspace({
+      inventoryItems: [
+        {
+          _id: "sku-fragrance" as Id<"productSku">,
+          inventoryCount: 8,
+          productCategory: "POS quick add",
+          productName:
+            "Brazilian Hair And Body Fragrance Mist Black Amber Plum",
+          quantityAvailable: 8,
+          sku: "KK38-6Q0-EMF",
+        },
+        {
+          _id: "sku-melt-band" as Id<"productSku">,
+          inventoryCount: 17_000,
+          productCategory: "POS quick add",
+          productName: "Melt Band",
+          quantityAvailable: 17_000,
+          sku: "KK38-MELT-BAND",
+        },
+      ],
+    });
+
+    await user.type(
+      screen.getByRole("textbox", {
+        name: /search products, skus, or barcodes/i,
+      }),
+      "meltband",
+    );
+
+    const table = screen.getByRole("table");
+    const rowNames = within(table)
+      .getAllByRole("row")
+      .map((row) => row.textContent ?? "");
+
+    expect(rowNames.findIndex((text) => text.includes("Melt Band")))
+      .toBeLessThan(
+        rowNames.findIndex((text) =>
+          text.includes("Brazilian Hair And Body Fragrance Mist"),
+        ),
+      );
+  });
+
   it("shows matching SKUs from other categories when the active category has no results", async () => {
     const user = userEvent.setup();
     const onSearchStateChange = vi.fn();

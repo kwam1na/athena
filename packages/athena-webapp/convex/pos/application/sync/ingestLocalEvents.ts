@@ -98,6 +98,9 @@ type IngestionDependencies = {
 
 const TERMINAL_NOT_PROVISIONED_MESSAGE =
   "This terminal is not provisioned for POS sync.";
+const TERMINAL_INGESTION_PROJECTION_OPTIONS = {
+  trustStoredStaffProof: true,
+} as const;
 
 export function createLocalSyncIngestionService(
   dependencies: IngestionDependencies,
@@ -200,6 +203,7 @@ export function createLocalSyncIngestionService(
                     syncEventId: existing._id,
                     submittedByUserId: batch.submittedByUserId,
                     now: acceptedAt,
+                    options: TERMINAL_INGESTION_PROJECTION_OPTIONS,
                   },
                 );
                 await dependencies.repository.patchEvent(existing._id, {
@@ -347,6 +351,7 @@ export function createLocalSyncIngestionService(
             syncEventId: syncEvent._id,
             submittedByUserId: batch.submittedByUserId,
             now: acceptedAt,
+            options: TERMINAL_INGESTION_PROJECTION_OPTIONS,
           },
         );
         const finalStatus = projection.status;

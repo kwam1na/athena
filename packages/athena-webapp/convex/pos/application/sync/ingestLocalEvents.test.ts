@@ -345,6 +345,61 @@ describe("createLocalSyncIngestionService", () => {
     ]);
   });
 
+  it("projects proofless offline register opens and completed sales for active terminal staff", async () => {
+    const repository = createFakeSyncRepository({
+      existingRegisterSession: null,
+    });
+    const service = createLocalSyncIngestionService({
+      repository,
+      projectionRepository: repository,
+      now: () => 100,
+    });
+    const registerOpened = buildRegisterOpenedEvent({ sequence: 1 });
+    const saleCompleted = buildSaleCompletedEvent({ sequence: 2 });
+    delete registerOpened.staffProofToken;
+    delete saleCompleted.staffProofToken;
+
+    const result = await service.ingestBatch(
+      buildBatch({
+        events: [registerOpened, saleCompleted],
+      }),
+    );
+
+    expect(result.kind).toBe("ok");
+    if (result.kind !== "ok") throw new Error("Expected ok result");
+    expect(result.data.accepted).toEqual([
+      {
+        localEventId: "event-register-opened-1",
+        sequence: 1,
+        status: "projected",
+      },
+      {
+        localEventId: "event-sale-completed-2",
+        sequence: 2,
+        status: "projected",
+      },
+    ]);
+    expect(result.data.conflicts).toEqual([]);
+    expect(repository.events).toEqual([
+      expect.not.objectContaining({ staffProofTokenHash: expect.any(String) }),
+      expect.not.objectContaining({ staffProofTokenHash: expect.any(String) }),
+    ]);
+    expect(repository.createdRegisterSessions).toEqual([
+      expect.objectContaining({
+        openedByStaffProfileId: "staff-1",
+        openingFloat: 100,
+      }),
+    ]);
+    expect(repository.createdTransactions).toEqual([
+      expect.objectContaining({
+        registerSessionId: "register-session-1",
+        staffProfileId: "staff-1",
+        total: 25,
+      }),
+    ]);
+    expect(repository.createdPaymentAllocations).toHaveLength(1);
+  });
+
   it("holds an out-of-order event without projection side effects", async () => {
     const repository = createFakeSyncRepository();
     const service = createLocalSyncIngestionService({

@@ -211,6 +211,46 @@ describe("catalogSearch", () => {
     ]);
   });
 
+  it("ranks compact product-name phrase matches before broader fuzzy hits", () => {
+    const result = searchRegisterCatalog(
+      buildRegisterCatalogIndex([
+        {
+          productId: "product-fragrance",
+          productSkuId: "sku-fragrance",
+          name: "Brazilian Hair And Body Fragrance Mist Black Amber Plum",
+          sku: "KK38-6Q0-EMF",
+          barcode: "111222333557",
+          category: "POS quick add",
+          description: null,
+          price: 80,
+          size: null,
+          color: null,
+          length: null,
+        },
+        {
+          productId: "product-melt-band",
+          productSkuId: "sku-melt-band",
+          name: "Melt Band",
+          sku: "KK38-MELT-BAND",
+          barcode: "111222333558",
+          category: "POS quick add",
+          description: null,
+          price: 30,
+          size: null,
+          color: null,
+          length: null,
+        },
+      ]),
+      "meltband",
+    );
+
+    expect(result.intent).toBe("text");
+    expect(result.results.map((row) => row.productSkuId)).toEqual([
+      "sku-melt-band",
+      "sku-fragrance",
+    ]);
+  });
+
   it("requires every text query token to match somewhere in the row", () => {
     const result = searchRegisterCatalog(
       buildRegisterCatalogIndex([
