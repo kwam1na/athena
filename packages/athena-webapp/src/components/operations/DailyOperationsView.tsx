@@ -165,6 +165,12 @@ export type DailyOperationsSnapshot = {
       search?: Record<string, string>;
       to?: string;
     };
+    transactionLink?: {
+      label?: string;
+      params?: Record<string, string>;
+      search?: Record<string, string>;
+      to?: string;
+    };
     subject: {
       id: string;
       label?: string;
@@ -456,16 +462,21 @@ function TimelineMessage({
   orgUrlSlug: string;
   storeUrlSlug: string;
 }) {
-  const productLink = event.productLink;
-  const linkLabel = productLink?.label?.trim();
-  const linkIndex = linkLabel ? event.message.indexOf(linkLabel) : -1;
+  const inlineLink = event.transactionLink ?? event.productLink;
+  const linkLabel = inlineLink?.label?.trim();
+  const linkMatch = findTimelineLinkMatch(event.message, linkLabel);
 
-  if (!productLink?.to || !productLink.params || !linkLabel || linkIndex < 0) {
+  if (
+    !inlineLink?.to ||
+    !inlineLink.params ||
+    !linkLabel ||
+    !linkMatch
+  ) {
     return <>{formatTimelineMessage(event.message)}</>;
   }
 
-  const before = event.message.slice(0, linkIndex);
-  const after = event.message.slice(linkIndex + linkLabel.length);
+  const before = event.message.slice(0, linkMatch.index);
+  const after = event.message.slice(linkMatch.index + linkMatch.length);
 
   return (
     <>
@@ -473,12 +484,12 @@ function TimelineMessage({
       <Link
         className="inline-flex items-center gap-0.5 font-medium text-link underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         params={{
-          ...productLink.params,
+          ...inlineLink.params,
           orgUrlSlug,
           storeUrlSlug,
         }}
-        search={{ o: getOrigin(), ...(productLink.search ?? {}) }}
-        to={productLink.to}
+        search={{ o: getOrigin(), ...(inlineLink.search ?? {}) }}
+        to={inlineLink.to}
       >
         <span>{linkLabel}</span>
         <ArrowUpRight aria-hidden="true" className="h-3 w-3" />
@@ -486,6 +497,24 @@ function TimelineMessage({
       {formatTimelineMessage(after)}
     </>
   );
+}
+
+function findTimelineLinkMatch(message: string, label: string | undefined) {
+  if (!label) return null;
+
+  const exactIndex = message.indexOf(label);
+  if (exactIndex >= 0) {
+    return { index: exactIndex, length: label.length };
+  }
+
+  if (!label.startsWith("#")) return null;
+
+  const plainLabel = label.slice(1);
+  const plainIndex = plainLabel ? message.indexOf(plainLabel) : -1;
+
+  if (plainIndex < 0) return null;
+
+  return { index: plainIndex, length: plainLabel.length };
 }
 
 function formatWeekdayLabel(operatingDate: string) {

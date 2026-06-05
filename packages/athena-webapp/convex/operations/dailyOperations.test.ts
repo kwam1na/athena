@@ -15,6 +15,7 @@ type TableName =
   | "posTerminal"
   | "posTransactionAdjustment"
   | "posTransaction"
+  | "productSku"
   | "registerSession"
   | "staffProfile"
   | "store";
@@ -856,6 +857,20 @@ describe("daily operations overview read model", () => {
             subjectType: "product_sku",
           },
           {
+            _id: "event-pos-sale-synced",
+            createdAt: Date.UTC(2026, 4, 8, 18),
+            eventType: "pos_local_sync.sale_projected",
+            message:
+              "Offline POS sale #946956 synced: 3 sale lines, GH₵1,039, cash.",
+            metadata: {
+              receiptNumber: "946956",
+              transactionNumber: "946956",
+            },
+            storeId: "store-1",
+            subjectId: "txn-946956",
+            subjectType: "posTransaction",
+          },
+          {
             _id: "event-other-day",
             createdAt: Date.UTC(2026, 4, 9, 8),
             eventType: "daily_opening.started",
@@ -877,9 +892,20 @@ describe("daily operations overview read model", () => {
     });
     expect(snapshot.timeline.map((event) => event.id)).toEqual([
       "event-2",
+      "event-pos-sale-synced",
       "event-quick-add",
       "event-1",
     ]);
+    expect(
+      snapshot.timeline.find((event) => event.id === "event-pos-sale-synced")
+        ?.transactionLink,
+    ).toEqual({
+      label: "#946956",
+      params: {
+        transactionId: "txn-946956",
+      },
+      to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId",
+    });
     expect(
       snapshot.timeline.find((event) => event.id === "event-quick-add")
         ?.productLink,
@@ -965,9 +991,22 @@ describe("daily operations overview read model", () => {
             createdAt: Date.UTC(2026, 4, 8, 20, 41, 20),
             eventType: "cycle_count_draft_updated",
             message: "Operator counted agya (6N2Y-RFF-1J1) as 950.",
+            metadata: {
+              productSkuId: "sku-1",
+              productSkuLabel: "agya (6N2Y-RFF-1J1)",
+            },
             storeId: "store-1",
             subjectId: "draft-1",
             subjectType: "cycle_count_draft",
+          },
+        ],
+        productSku: [
+          {
+            _id: "sku-1",
+            productId: "product-1",
+            productName: "agya",
+            sku: "6N2Y-RFF-1J1",
+            storeId: "store-1",
           },
         ],
         store: [store],
@@ -981,5 +1020,18 @@ describe("daily operations overview read model", () => {
       "event-draft-updated",
       "event-draft-started",
     ]);
+    expect(
+      snapshot.timeline.find((event) => event.id === "event-draft-updated")
+        ?.productLink,
+    ).toEqual({
+      label: "agya (6N2Y-RFF-1J1)",
+      params: {
+        productSlug: "product-1",
+      },
+      search: {
+        variant: "6N2Y-RFF-1J1",
+      },
+      to: "/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug",
+    });
   });
 });

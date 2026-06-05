@@ -87,6 +87,20 @@ function formatServiceLineMeta(line: PosServiceReceiptLine) {
     .join(" • ");
 }
 
+function formatProductLineMeta(
+  item: CartItem,
+  formatter: Intl.NumberFormat,
+) {
+  const skuOrBarcode = item.sku || item.barcode;
+
+  return [
+    `${item.quantity} x ${formatStoredAmount(formatter, item.price)}`,
+    skuOrBarcode,
+  ]
+    .filter(Boolean)
+    .join(" • ");
+}
+
 interface OrderSummaryProps {
   cartItems: CartItem[];
   customerInfo?: {
@@ -222,6 +236,10 @@ export function OrderSummary({
       ? completedTransactionData.serviceLines
       : serviceLines;
   const completedServiceLines = completedTransactionData?.serviceLines ?? [];
+  const completedProductLines = completedTransactionData
+    ? effectiveCartItems.filter((item) => item.lineKind !== "service")
+    : [];
+  const showCompletedLineSections = Boolean(completedTransactionData) && !readOnly;
   const serviceLinesCount = effectiveServiceLines.reduce(
     (sum, line) => sum + (line.quantity ?? 1),
     0,
@@ -757,7 +775,34 @@ export function OrderSummary({
               {formatStoredAmount(formatter, summarySubtotal)}
             </span>
           </div>
-          {completedServiceLines.length > 0 ? (
+          {showCompletedLineSections && completedProductLines.length > 0 ? (
+            <div className="space-y-4 border-y border-border/70 py-4 text-sm">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                Product lines
+              </p>
+              <div className="space-y-4">
+                {completedProductLines.map((item) => (
+                  <div className="grid gap-1" key={item.id}>
+                    <div className="flex items-start justify-between gap-3">
+                      <span className="min-w-0 text-foreground">
+                        {capitalizeWords(item.name)}
+                      </span>
+                      <span className="font-medium text-foreground">
+                        {formatStoredAmount(
+                          formatter,
+                          item.price * item.quantity,
+                        )}
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {formatProductLineMeta(item, formatter)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          {showCompletedLineSections && completedServiceLines.length > 0 ? (
             <div className="space-y-4 border-y border-border/70 py-4 text-sm">
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                 Service lines
@@ -1086,7 +1131,34 @@ export function OrderSummary({
                   </span>
                 </div>
               )}
-              {completedServiceLines.length > 0 ? (
+              {showCompletedLineSections && completedProductLines.length > 0 ? (
+                <div className="space-y-3 border-y border-border/70 py-4 text-sm">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                    Product lines
+                  </p>
+                  <div className="space-y-3">
+                    {completedProductLines.map((item) => (
+                      <div className="grid gap-1" key={item.id}>
+                        <div className="flex items-start justify-between gap-3">
+                          <span className="min-w-0 text-foreground">
+                            {capitalizeWords(item.name)}
+                          </span>
+                          <span className="font-medium text-foreground">
+                            {formatStoredAmount(
+                              formatter,
+                              item.price * item.quantity,
+                            )}
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {formatProductLineMeta(item, formatter)}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+              {showCompletedLineSections && completedServiceLines.length > 0 ? (
                 <div className="space-y-3 border-y border-border/70 py-4 text-sm">
                   <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                     Service lines

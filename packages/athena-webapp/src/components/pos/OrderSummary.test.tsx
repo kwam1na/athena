@@ -492,7 +492,7 @@ describe("OrderSummary completed transaction summary", () => {
     ]);
   });
 
-  it("includes service lines in completed summaries and printed receipts", async () => {
+  it("includes product and service lines in completed summaries and printed receipts", async () => {
     const user = userEvent.setup();
 
     render(
@@ -510,6 +510,7 @@ describe("OrderSummary completed transaction summary", () => {
               price: 7000,
               quantity: 1,
               productId: "product-1",
+              sku: "CAP-1",
               skuId: "sku-1",
             },
           ] as never,
@@ -540,6 +541,10 @@ describe("OrderSummary completed transaction summary", () => {
       />,
     );
 
+    expect(screen.getByText("Product lines")).toBeInTheDocument();
+    expect(screen.getByText("Edge Brush")).toBeInTheDocument();
+    expect(screen.getByText("1 x GH₵70 • CAP-1")).toBeInTheDocument();
+    expect(screen.getByText("GH₵70")).toBeInTheDocument();
     expect(screen.getByText("Service lines")).toBeInTheDocument();
     expect(screen.getByText("Tokin")).toBeInTheDocument();
     expect(
@@ -568,8 +573,66 @@ describe("OrderSummary completed transaction summary", () => {
           name: "Tokin",
           totalPrice: "GH₵150",
         }),
+        expect.objectContaining({
+          name: "Edge Brush",
+          totalPrice: "GH₵70",
+        }),
       ]),
     );
+  });
+
+  it("hides product and service line sections in read-only rail summaries", () => {
+    render(
+      <OrderSummary
+        cartItems={[]}
+        completedOrderNumber="956338"
+        completedTransactionData={{
+          paymentMethod: "cash",
+          completedAt: new Date("2026-06-04T17:53:00.000Z"),
+          cartItems: [
+            {
+              id: "item-1",
+              name: "nicca",
+              barcode: "4739394883944",
+              price: 6500,
+              quantity: 4,
+              productId: "product-1",
+              sku: "6N2Y-WMA-EAW",
+              skuId: "sku-1",
+            },
+          ] as never,
+          serviceLines: [
+            {
+              id: "service-line-1",
+              name: "chieftin",
+              quantity: 1,
+              serviceCaseId: "case-1",
+              serviceCaseTitle: "chieftin",
+              servicePaymentStatus: "paid",
+              serviceStatus: "intake",
+              totalPrice: 40000,
+              unitPrice: 40000,
+            },
+          ],
+          customerInfo: undefined,
+          subtotal: 66000,
+          tax: 0,
+          total: 66000,
+          payments: [
+            { id: "payment-1", method: "cash", amount: 66000, timestamp: 1 },
+          ],
+        }}
+        readOnly
+        presentation="rail"
+      />,
+    );
+
+    expect(screen.getByText("Subtotal")).toBeInTheDocument();
+    expect(screen.getByText("Amount paid")).toBeInTheDocument();
+    expect(screen.queryByText("Product lines")).not.toBeInTheDocument();
+    expect(screen.queryByText("Service lines")).not.toBeInTheDocument();
+    expect(screen.queryByText("Nicca")).not.toBeInTheDocument();
+    expect(screen.queryByText("Chieftin")).not.toBeInTheDocument();
   });
 
   it("prints receipt header contact fields from grouped store configuration", async () => {

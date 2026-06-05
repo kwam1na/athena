@@ -86,6 +86,7 @@ type DailyOperationsTimelineEvent = {
   message: string;
   productLink?: LinkTarget;
   subject: SourceSubject;
+  transactionLink?: LinkTarget;
   type: string;
 };
 
@@ -473,21 +474,61 @@ async function listTimelineEvents(
     .order("desc")
     .take(MAX_OPERATIONS_QUERY_LIMIT);
 
-  return events.sort(compareTimelineEvents).map((event) => {
+  return Promise.all(events.sort(compareTimelineEvents).map(async (event) => {
     const metadata = event.metadata ?? {};
     const productId =
       typeof metadata.productId === "string" ? metadata.productId : undefined;
+    const productSkuId =
+      typeof metadata.productSkuId === "string"
+        ? (metadata.productSkuId as Id<"productSku">)
+        : undefined;
+    const productSku = productSkuId
+      ? await ctx.db.get("productSku", productSkuId)
+      : null;
     const productName =
       typeof metadata.productName === "string"
         ? metadata.productName
         : event.subjectLabel;
-    const sku = typeof metadata.sku === "string" ? metadata.sku : undefined;
-    const productLink =
-      event.subjectType === "product_sku" && productId && productName
+    const productSkuLabel =
+      typeof metadata.productSkuLabel === "string"
+        ? metadata.productSkuLabel
+        : undefined;
+    const sku =
+      typeof metadata.sku === "string"
+        ? metadata.sku
+        : productSku?.sku ?? undefined;
+    const productLinkProductId = productId ?? productSku?.productId;
+    const productLinkLabel =
+      event.subjectType === "product_sku"
+        ? productName
+        : productSkuLabel ||
+          (productSku?.productName && sku
+            ? `${productSku.productName} (${sku})`
+            : productSku?.productName || productName);
+    const canLinkProduct =
+      event.subjectType === "product_sku" || productSkuId !== undefined;
+    const transactionNumber =
+      typeof metadata.transactionNumber === "string"
+        ? metadata.transactionNumber
+        : typeof metadata.receiptNumber === "string"
+          ? metadata.receiptNumber
+          : undefined;
+    const transactionLink =
+      event.subjectType === "posTransaction" && transactionNumber
         ? {
-            label: productName,
+            label: `#${transactionNumber}`,
             params: {
-              productSlug: productId,
+              transactionId: event.subjectId,
+            },
+            to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId",
+          }
+        : undefined;
+    const productLink =
+      canLinkProduct && productLinkProductId && productLinkLabel
+        ? {
+            label: productLinkLabel,
+            params: {
+              productSlug: productLinkProductId,
             },
             search: {
               ...(sku ? { variant: sku } : {}),
@@ -506,9 +547,10 @@ async function listTimelineEvents(
         label: event.subjectLabel,
         type: event.subjectType,
       },
+      transactionLink,
       type: event.eventType,
     };
-  });
+  }));
 }
 
 function getTimelineMinuteBucket(createdAt: number) {
