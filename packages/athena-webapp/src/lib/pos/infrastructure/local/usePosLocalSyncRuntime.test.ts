@@ -1734,6 +1734,133 @@ describe("usePosLocalSyncRuntimeStatus", () => {
     });
   });
 
+  it("clears older recoverable drawer blocks when a replacement open maps to the same cloud drawer", async () => {
+    mocks.ingestLocalEvents.mockResolvedValue({
+      kind: "ok",
+      data: {
+        accepted: [
+          {
+            localEventId: "event-new-open",
+            sequence: 1,
+            status: "projected",
+          },
+        ],
+        held: [],
+        mappings: [
+          {
+            cloudId: "register-cloud-1",
+            localId: "register-new",
+            localIdKind: "registerSession",
+            createdAt: 20,
+          },
+        ],
+        conflicts: [],
+        syncCursor: {
+          localRegisterSessionId: "register-new",
+          acceptedThroughSequence: 1,
+        },
+      },
+    });
+    const store = {
+      listEvents: vi.fn(async () => ({
+        ok: true,
+        value: [
+          buildLocalEvent({
+            createdAt: 1,
+            localEventId: "event-old-open",
+            localRegisterSessionId: "register-old",
+            sequence: 1,
+            sync: { status: "synced", uploaded: true },
+            type: "register.opened",
+          }),
+          buildLocalEvent({
+            createdAt: 20,
+            localEventId: "event-new-open",
+            localRegisterSessionId: "register-new",
+            payload: { localRegisterSessionId: "register-new" },
+            sequence: 2,
+            sync: { status: "pending" },
+            type: "register.opened",
+            uploadSequence: 1,
+          }),
+        ],
+      })),
+      clearDrawerAuthorityState: vi.fn(async () => ({
+        ok: true,
+        value: null,
+      })),
+      listLocalCloudMappings: vi.fn(async () => ({
+        ok: true,
+        value: [
+          {
+            cloudId: "register-cloud-1",
+            entity: "registerSession",
+            localId: "register-old",
+            mappedAt: 1,
+          },
+        ],
+      })),
+      markEventsSynced: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      readDrawerAuthorityState: vi.fn(async (input: {
+        localRegisterSessionId: string;
+        storeId: string;
+        terminalId: string;
+      }) => ({
+        ok: true,
+        value:
+          input.localRegisterSessionId === "register-old"
+            ? {
+                cloudRegisterSessionId: "register-cloud-1",
+                localRegisterSessionId: "register-old",
+                observedAt: 10,
+                reason: "lifecycle_rejected" as const,
+                status: "blocked" as const,
+                storeId: "store-1",
+                terminalId: "local-terminal-1",
+              }
+            : null,
+      })),
+      readProvisionedTerminalSeed: vi.fn(async () => ({
+        ok: true,
+        value: {
+          cloudTerminalId: "terminal-cloud-1",
+          displayName: "Front",
+          provisionedAt: 1,
+          schemaVersion: 1,
+          syncSecretHash: "sync-secret-1",
+          storeId: "store-1",
+          terminalId: "local-terminal-1",
+        },
+      })),
+      writeLocalCloudMapping: vi.fn(async () => ({
+        ok: true,
+        value: {},
+      })),
+    };
+
+    renderHook(() =>
+      usePosLocalSyncRuntimeStatus({
+        storeFactory: () => store as never,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(store.clearDrawerAuthorityState).toHaveBeenCalledWith({
+        localRegisterSessionId: "register-old",
+        storeId: "store-1",
+        terminalId: "local-terminal-1",
+      }),
+    );
+    expect(store.markEventsSynced).toHaveBeenCalledWith(["event-new-open"], {
+      uploaded: true,
+    });
+  });
+
   it("clears stale recoverable drawer blocks when lifecycle events are already settled", async () => {
     const store = {
       listEvents: vi.fn(async () => ({

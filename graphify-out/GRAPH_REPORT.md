@@ -5,7 +5,7 @@
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 6188 nodes · 6682 edges · 1762 communities detected
+- 6189 nodes · 6684 edges · 1762 communities detected
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
 - Token cost: 0 input · 0 output
 
@@ -1817,11 +1817,11 @@ Nodes (47): assertNever(), buildSaleProjectedMessage(), calculateSalePayments(),
 
 ### Community 4 - "Community 4"
 Cohesion: 0.06
-Nodes (27): applyCloseoutCommandResult(), applyCommandResult(), buildDepositSubmissionKey(), formatCompactTextList(), formatRegisterHeaderName(), formatRegisterName(), formatReviewItemTimestamp(), formatReviewQueueSummary() (+19 more)
+Nodes (24): assertPosLocalStoreOk(), clearAcceptedTerminalIntegrityState(), clearRecoverableDrawerAuthorityForSyncedEvents(), clearSettledRecoverableDrawerAuthorityBlock(), clearSupersededRecoverableDrawerAuthorityBlocks(), collectAcceptedEventIdsWithLocalPrecursors(), collectReviewLocalEventIds(), collectRuntimeRelevantEvents() (+16 more)
 
 ### Community 5 - "Community 5"
 Cohesion: 0.06
-Nodes (25): assertPosLocalStoreOk(), clearAcceptedTerminalIntegrityState(), clearRecoverableDrawerAuthorityForSyncedEvents(), clearSettledRecoverableDrawerAuthorityBlock(), collectAcceptedEventIdsWithLocalPrecursors(), collectReviewLocalEventIds(), collectRuntimeRelevantEvents(), collectSyncedLocalEventIds() (+17 more)
+Nodes (27): applyCloseoutCommandResult(), applyCommandResult(), buildDepositSubmissionKey(), formatCompactTextList(), formatRegisterHeaderName(), formatRegisterName(), formatReviewItemTimestamp(), formatReviewQueueSummary() (+19 more)
 
 ### Community 6 - "Community 6"
 Cohesion: 0.1
@@ -2688,8 +2688,8 @@ Cohesion: 0.53
 Nodes (3): handleUpdateFees(), parseDeliveryFeeInputs(), parseOptionalDeliveryFeeInput()
 
 ### Community 222 - "Community 222"
-Cohesion: 0.33
-Nodes (0):
+Cohesion: 0.47
+Nodes (3): onDrop(), removeImage(), unmarkForDeletion()
 
 ### Community 223 - "Community 223"
 Cohesion: 0.33
@@ -2708,64 +2708,64 @@ Cohesion: 0.33
 Nodes (0):
 
 ### Community 227 - "Community 227"
-Cohesion: 0.53
-Nodes (4): calculatePosChange(), calculatePosRemainingDue(), calculatePosTotalPaid(), roundPosAmount()
-
-### Community 228 - "Community 228"
 Cohesion: 0.33
 Nodes (0):
+
+### Community 228 - "Community 228"
+Cohesion: 0.53
+Nodes (4): calculatePosChange(), calculatePosRemainingDue(), calculatePosTotalPaid(), roundPosAmount()
 
 ### Community 229 - "Community 229"
 Cohesion: 0.33
 Nodes (0):
 
 ### Community 230 - "Community 230"
-Cohesion: 0.53
-Nodes (4): isBarcodeShapedSearchQuery(), matchesSkuSearchTerms(), normalizeIdentifier(), scoreSkuSearchTerms()
-
-### Community 231 - "Community 231"
-Cohesion: 0.6
-Nodes (5): isExcludedFromPosAppShellCache(), isPosAppShellNavigationRequest(), isPosAppShellRoutePath(), isPosAppShellStaticAssetRequest(), readHeader()
-
-### Community 232 - "Community 232"
 Cohesion: 0.33
 Nodes (0):
 
+### Community 231 - "Community 231"
+Cohesion: 0.53
+Nodes (4): isBarcodeShapedSearchQuery(), matchesSkuSearchTerms(), normalizeIdentifier(), scoreSkuSearchTerms()
+
+### Community 232 - "Community 232"
+Cohesion: 0.6
+Nodes (5): isExcludedFromPosAppShellCache(), isPosAppShellNavigationRequest(), isPosAppShellRoutePath(), isPosAppShellStaticAssetRequest(), readHeader()
+
 ### Community 233 - "Community 233"
-Cohesion: 0.4
-Nodes (2): onSubmit(), saveStoreChanges()
+Cohesion: 0.33
+Nodes (0):
 
 ### Community 234 - "Community 234"
 Cohesion: 0.4
 Nodes (2): onSubmit(), saveStoreChanges()
 
 ### Community 235 - "Community 235"
-Cohesion: 0.33
-Nodes (0):
+Cohesion: 0.4
+Nodes (2): onSubmit(), saveStoreChanges()
 
 ### Community 236 - "Community 236"
-Cohesion: 0.47
-Nodes (4): fetchPosTransaction(), getBaseUrl(), getPosTransactionByReceiptToken(), PosTransactionReceiptError
+Cohesion: 0.33
+Nodes (0):
 
 ### Community 237 - "Community 237"
 Cohesion: 0.47
-Nodes (3): getBaseUrl(), getPromoCodes(), redeemPromoCode()
+Nodes (4): fetchPosTransaction(), getBaseUrl(), getPosTransactionByReceiptToken(), PosTransactionReceiptError
 
 ### Community 238 - "Community 238"
+Cohesion: 0.47
+Nodes (3): getBaseUrl(), getPromoCodes(), redeemPromoCode()
+
+### Community 239 - "Community 239"
 Cohesion: 0.33
 Nodes (0):
 
-### Community 239 - "Community 239"
+### Community 240 - "Community 240"
 Cohesion: 0.4
 Nodes (2): handleConfirm(), handlePrimaryAction()
 
-### Community 240 - "Community 240"
+### Community 241 - "Community 241"
 Cohesion: 0.33
 Nodes (0):
-
-### Community 241 - "Community 241"
-Cohesion: 0.47
-Nodes (3): onDrop(), removeImage(), unmarkForDeletion()
 
 ### Community 242 - "Community 242"
 Cohesion: 0.53

@@ -8,8 +8,8 @@ Graphify is the navigation layer for the repo graph. Use the entry docs below fo
 
 ## Repo Summary
 - Code files discovered: 1834
-- Graph nodes: 6188
-- Graph edges: 6682
+- Graph nodes: 6189
+- Graph edges: 6684
 - Communities: 1762
 
 ## Graph Hotspots
@@ -17,9 +17,9 @@ Graphify is the navigation layer for the repo graph. Use the entry docs below fo
 - `dailyClose.ts` (65 edges, Community 1) - [`packages/athena-webapp/convex/operations/dailyClose.ts`](../../packages/athena-webapp/convex/operations/dailyClose.ts)
 - `useRegisterViewModel.ts` (59 edges, Community 2) - [`packages/athena-webapp/src/lib/pos/presentation/register/useRegisterViewModel.ts`](../../packages/athena-webapp/src/lib/pos/presentation/register/useRegisterViewModel.ts)
 - `projectLocalEvents.ts` (49 edges, Community 3) - [`packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.ts`](../../packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.ts)
+- `usePosLocalSyncRuntime.ts` (47 edges, Community 4) - [`packages/athena-webapp/src/lib/pos/infrastructure/local/usePosLocalSyncRuntime.ts`](../../packages/athena-webapp/src/lib/pos/infrastructure/local/usePosLocalSyncRuntime.ts)
 - `harness-inferential-review.ts` (46 edges, Community 6) - [`scripts/harness-inferential-review.ts`](../../scripts/harness-inferential-review.ts)
-- `RegisterSessionView.tsx` (46 edges, Community 4) - [`packages/athena-webapp/src/components/cash-controls/RegisterSessionView.tsx`](../../packages/athena-webapp/src/components/cash-controls/RegisterSessionView.tsx)
-- `usePosLocalSyncRuntime.ts` (46 edges, Community 5) - [`packages/athena-webapp/src/lib/pos/infrastructure/local/usePosLocalSyncRuntime.ts`](../../packages/athena-webapp/src/lib/pos/infrastructure/local/usePosLocalSyncRuntime.ts)
+- `RegisterSessionView.tsx` (46 edges, Community 5) - [`packages/athena-webapp/src/components/cash-controls/RegisterSessionView.tsx`](../../packages/athena-webapp/src/components/cash-controls/RegisterSessionView.tsx)
 - `storefrontJourneyEvents.ts` (45 edges, Community 7) - [`packages/storefront-webapp/src/lib/storefrontJourneyEvents.ts`](../../packages/storefront-webapp/src/lib/storefrontJourneyEvents.ts)
 
 ## Registered Packages
