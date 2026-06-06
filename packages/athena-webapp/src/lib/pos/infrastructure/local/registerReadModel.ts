@@ -184,6 +184,14 @@ export function projectLocalRegisterReadModel(input: {
         errors.push(errorFor(event, "missing_register_session"));
         continue;
       }
+      if (
+        activeRegisterSession &&
+        isOpenLocalRegisterSessionStatus(activeRegisterSession.status) &&
+        isUploadedRegisterOpenReview(event) &&
+        !registerLifecycleEventMatchesActiveSession(event, activeRegisterSession)
+      ) {
+        continue;
+      }
 
       const payload = asRecord(event.payload);
       const openingFloat = numberField(payload, "openingFloat") ?? 0;
@@ -919,6 +927,16 @@ function registerStatus(
     value === "closed"
     ? value
     : undefined;
+}
+
+function isOpenLocalRegisterSessionStatus(
+  status: PosLocalCashDrawerReadModel["status"],
+) {
+  return status === "open" || status === "active";
+}
+
+function isUploadedRegisterOpenReview(event: PosLocalEventRecord) {
+  return event.sync.status === "needs_review" && event.sync.uploaded === true;
 }
 
 function serviceModeField(

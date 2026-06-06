@@ -5,7 +5,7 @@
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 6186 nodes · 6678 edges · 1762 communities detected
+- 6188 nodes · 6682 edges · 1762 communities detected
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
 - Token cost: 0 input · 0 output
 
@@ -1776,7 +1776,7 @@
 ## God Nodes (most connected - your core abstractions)
 1. `createJourneyEvent()` - 40 edges
 2. `buildDailyCloseSnapshotWithCtx()` - 28 edges
-3. `projectLocalRegisterReadModel()` - 24 edges
+3. `projectLocalRegisterReadModel()` - 26 edges
 4. `buildDailyOpeningSnapshotWithCtx()` - 17 edges
 5. `useRegisterViewModel()` - 17 edges
 6. `getStoreConfigV2()` - 17 edges
@@ -1864,16 +1864,16 @@ Cohesion: 0.13
 Nodes (27): applyApprovedTransactionVoid(), buildCompleteTransactionResult(), buildVoidApprovalRequirement(), calculateCanonicalTransactionTotals(), calculateTotalPaid(), completedTransactionLabel(), completeTransaction(), createTransactionFromSessionHandler() (+19 more)
 
 ### Community 16 - "Community 16"
+Cohesion: 0.16
+Nodes (32): asRecord(), createMappingIndex(), errorFor(), errorMessage(), getCompletedSale(), getExpectedCashDelta(), getOrCreateSale(), getPhase() (+24 more)
+
+### Community 17 - "Community 17"
 Cohesion: 0.15
 Nodes (31): collectHarnessOnboardingErrors(), collectMarkdownLinkErrors(), collectMissingRequiredLinkErrors(), collectPackageGuideLinkErrors(), collectPackagesRouterLinkErrors(), collectReadmeLinkErrors(), collectReferencedPathErrors(), collectRuntimeScenarioDocSyncErrors() (+23 more)
 
-### Community 17 - "Community 17"
+### Community 18 - "Community 18"
 Cohesion: 0.12
 Nodes (28): asRegExp(), collectLatencyDiagnostics(), collectRuntimeSignalDiagnostics(), collectRuntimeSignalMatches(), consumeLines(), escapeRegExp(), formatAssertionDiagnostics(), formatError() (+20 more)
-
-### Community 18 - "Community 18"
-Cohesion: 0.18
-Nodes (30): asRecord(), createMappingIndex(), errorFor(), errorMessage(), getCompletedSale(), getExpectedCashDelta(), getOrCreateSale(), getPhase() (+22 more)
 
 ### Community 19 - "Community 19"
 Cohesion: 0.15
@@ -2988,36 +2988,36 @@ Cohesion: 0.5
 Nodes (2): completePendingAuthSync(), sleep()
 
 ### Community 297 - "Community 297"
-Cohesion: 0.4
-Nodes (0):
+Cohesion: 0.5
+Nodes (3): createVersionChecker(), shouldAutoReloadForCurrentRoute(), shouldAutoReloadForPath()
 
 ### Community 298 - "Community 298"
-Cohesion: 0.7
-Nodes (4): getAllCategories(), getAllCategoriesWithSubcategories(), getBaseUrl(), getCategory()
+Cohesion: 0.4
+Nodes (0):
 
 ### Community 299 - "Community 299"
 Cohesion: 0.7
-Nodes (4): getBaseUrl(), getOrder(), getOrders(), updateOrdersOwner()
+Nodes (4): getAllCategories(), getAllCategoriesWithSubcategories(), getBaseUrl(), getCategory()
 
 ### Community 300 - "Community 300"
 Cohesion: 0.7
-Nodes (4): getActiveUser(), getBaseUrl(), getGuest(), updateUser()
+Nodes (4): getBaseUrl(), getOrder(), getOrders(), updateOrdersOwner()
 
 ### Community 301 - "Community 301"
-Cohesion: 0.4
-Nodes (0):
+Cohesion: 0.7
+Nodes (4): getActiveUser(), getBaseUrl(), getGuest(), updateUser()
 
 ### Community 302 - "Community 302"
 Cohesion: 0.4
 Nodes (0):
 
 ### Community 303 - "Community 303"
-Cohesion: 0.7
-Nodes (4): createStorefrontFailureEvent(), emitStorefrontFailure(), inferStorefrontJourneyFromRoute(), normalizeStorefrontError()
+Cohesion: 0.4
+Nodes (0):
 
 ### Community 304 - "Community 304"
-Cohesion: 0.5
-Nodes (3): createVersionChecker(), shouldAutoReloadForCurrentRoute(), shouldAutoReloadForPath()
+Cohesion: 0.7
+Nodes (4): createStorefrontFailureEvent(), emitStorefrontFailure(), inferStorefrontJourneyFromRoute(), normalizeStorefrontError()
 
 ### Community 305 - "Community 305"
 Cohesion: 0.4

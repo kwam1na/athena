@@ -2306,7 +2306,7 @@ describe("projectLocalSyncEvent", () => {
     ]);
   });
 
-  it("conflicts register opens when the terminal already has an open drawer", async () => {
+  it("maps duplicate register opens to the terminal's existing active drawer", async () => {
     const repository = createProjectionRepository({
       blockingRegisterSession: {
         _id: "register-session-open",
@@ -2337,11 +2337,14 @@ describe("projectLocalSyncEvent", () => {
       now: 100,
     });
 
-    expect(result.status).toBe("conflicted");
-    expect(result.conflicts).toEqual([
+    expect(result.status).toBe("projected");
+    expect(result.conflicts).toEqual([]);
+    expect(result.mappings).toEqual([
       expect.objectContaining({
-        conflictType: "permission",
-        summary: "A register session is already open for this terminal.",
+        localIdKind: "registerSession",
+        localId: "local-register-2",
+        cloudTable: "registerSession",
+        cloudId: "register-session-open",
       }),
     ]);
   });

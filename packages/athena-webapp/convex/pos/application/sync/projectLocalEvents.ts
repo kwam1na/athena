@@ -427,6 +427,16 @@ async function projectRegisterOpened(
     registerNumber: terminalRegisterNumber,
   });
   if (blockingRegisterSession) {
+    if (isPosUsableRegisterSession(blockingRegisterSession)) {
+      const mapping = await createMapping(repository, args, {
+        localIdKind: "registerSession",
+        localId: args.event.localRegisterSessionId,
+        cloudTable: "registerSession",
+        cloudId: blockingRegisterSession._id,
+      });
+      return { status: "projected", mappings: [mapping], conflicts: [] };
+    }
+
     const conflict = await createConflict(repository, args, {
       conflictType: "permission",
       summary: "A register session is already open for this terminal.",
