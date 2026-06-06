@@ -12,7 +12,8 @@
         "packages/athena-webapp/src/components",
         "packages/athena-webapp/src/hooks",
         "packages/athena-webapp/src/contexts",
-        "packages/athena-webapp/src/index.css"
+        "packages/athena-webapp/src/index.css",
+        "packages/athena-webapp/public/athena-boundaries-walkthrough.html"
       ],
       "commands": [
         {

@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as LandingRouteImport } from './routes/landing'
+import { Route as AthenaBoundariesRouteImport } from './routes/athena-boundaries'
 import { Route as AuthedRouteImport } from './routes/_authed'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as JoinTeamIndexRouteImport } from './routes/join-team.index'
@@ -90,6 +91,11 @@ import { Route as AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsRegistersSessionI
 const LandingRoute = LandingRouteImport.update({
   id: '/landing',
   path: '/landing',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AthenaBoundariesRoute = AthenaBoundariesRouteImport.update({
+  id: '/athena-boundaries',
+  path: '/athena-boundaries',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthedRoute = AuthedRouteImport.update({
@@ -558,6 +564,7 @@ const AuthedOrgUrlSlugStoreStoreUrlSlugCashControlsRegistersSessionIdRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/athena-boundaries': typeof AthenaBoundariesRoute
   '/landing': typeof LandingRoute
   '/login': typeof LoginLayoutRouteWithChildren
   '/join-team/': typeof JoinTeamIndexRoute
@@ -636,6 +643,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/athena-boundaries': typeof AthenaBoundariesRoute
   '/landing': typeof LandingRoute
   '/join-team': typeof JoinTeamIndexRoute
   '/$orgUrlSlug': typeof AuthedOrgUrlSlugIndexRoute
@@ -715,6 +723,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_authed': typeof AuthedRouteWithChildren
+  '/athena-boundaries': typeof AthenaBoundariesRoute
   '/landing': typeof LandingRoute
   '/login/_layout': typeof LoginLayoutRouteWithChildren
   '/join-team/': typeof JoinTeamIndexRoute
@@ -795,6 +804,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/athena-boundaries'
     | '/landing'
     | '/login'
     | '/join-team/'
@@ -873,6 +883,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/athena-boundaries'
     | '/landing'
     | '/join-team'
     | '/$orgUrlSlug'
@@ -951,6 +962,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/_authed'
+    | '/athena-boundaries'
     | '/landing'
     | '/login/_layout'
     | '/join-team/'
@@ -1031,6 +1043,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthedRoute: typeof AuthedRouteWithChildren
+  AthenaBoundariesRoute: typeof AthenaBoundariesRoute
   LandingRoute: typeof LandingRoute
   LoginLayoutRoute: typeof LoginLayoutRouteWithChildren
   JoinTeamIndexRoute: typeof JoinTeamIndexRoute
@@ -1043,6 +1056,13 @@ declare module '@tanstack/react-router' {
       path: '/landing'
       fullPath: '/landing'
       preLoaderRoute: typeof LandingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/athena-boundaries': {
+      id: '/athena-boundaries'
+      path: '/athena-boundaries'
+      fullPath: '/athena-boundaries'
+      preLoaderRoute: typeof AthenaBoundariesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authed': {
@@ -1814,6 +1834,7 @@ const LoginLayoutRouteWithChildren = LoginLayoutRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthedRoute: AuthedRouteWithChildren,
+  AthenaBoundariesRoute: AthenaBoundariesRoute,
   LandingRoute: LandingRoute,
   LoginLayoutRoute: LoginLayoutRouteWithChildren,
   JoinTeamIndexRoute: JoinTeamIndexRoute,

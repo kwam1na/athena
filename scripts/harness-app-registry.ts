@@ -301,6 +301,7 @@ export const HARNESS_APP_REGISTRY = [
           "src/hooks",
           "src/contexts",
           "src/index.css",
+          "public/athena-boundaries-walkthrough.html",
         ],
         commands: [
           { kind: "script", script: "test" },

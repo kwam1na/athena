@@ -1,0 +1,1008 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Athena Boundaries Walkthrough</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --background: #fbfaf8;
+        --foreground: #202432;
+        --muted: #6d7180;
+        --surface: #ffffff;
+        --surface-muted: #f0ece6;
+        --shell: #151a2a;
+        --shell-soft: #202638;
+        --shell-foreground: #fbf5ec;
+        --border: #ded8cf;
+        --signal: #b72b61;
+        --signal-soft: #f7e8ef;
+        --workflow: #4d5aac;
+        --workflow-soft: #eef0ff;
+        --success: #2f7a56;
+        --success-soft: #e7f3ed;
+        --warning: #d58a20;
+        --warning-soft: #fbefd9;
+        --cloud: #9f2f62;
+        --evidence: #343846;
+        --radius: 16px;
+        --shadow: 0 22px 60px -38px rgba(22, 26, 42, 0.45);
+        --ease: cubic-bezier(0.22, 1, 0.36, 1);
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        background: var(--background);
+        color: var(--foreground);
+      }
+
+      button {
+        font: inherit;
+      }
+
+      .page {
+        min-height: 100vh;
+      }
+
+      .hero {
+        position: relative;
+        overflow: hidden;
+        background:
+          radial-gradient(circle at 18% 12%, rgba(183, 43, 97, 0.24), transparent 34%),
+          radial-gradient(circle at 78% 8%, rgba(213, 138, 32, 0.18), transparent 28%),
+          linear-gradient(135deg, #151a2a 0%, #191b2f 58%, #2d2434 100%);
+        color: var(--shell-foreground);
+      }
+
+      .hero::after {
+        content: "";
+        position: absolute;
+        inset: auto 0 0;
+        height: 38%;
+        background: linear-gradient(0deg, var(--shell) 0%, transparent 100%);
+        pointer-events: none;
+      }
+
+      .hero-inner {
+        position: relative;
+        z-index: 1;
+        display: grid;
+        grid-template-columns: minmax(0, 0.85fr) minmax(560px, 1.15fr);
+        gap: clamp(28px, 5vw, 72px);
+        max-width: 1440px;
+        min-height: 100svh;
+        margin: 0 auto;
+        padding: clamp(28px, 5vw, 72px);
+        align-items: center;
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        width: fit-content;
+        border: 1px solid rgba(251, 245, 236, 0.18);
+        border-radius: 999px;
+        background: rgba(251, 245, 236, 0.08);
+        padding: 10px 14px;
+        color: rgba(251, 245, 236, 0.74);
+        font-size: 12px;
+        font-weight: 750;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+      }
+
+      .hero-copy {
+        display: grid;
+        gap: 28px;
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+
+      h1 {
+        max-width: 760px;
+        font-size: clamp(3.35rem, 7vw, 6.9rem);
+        line-height: 0.92;
+        letter-spacing: 0;
+        font-weight: 650;
+      }
+
+      .hero-lede {
+        max-width: 680px;
+        color: rgba(251, 245, 236, 0.78);
+        font-size: clamp(1.05rem, 1.6vw, 1.35rem);
+        line-height: 1.65;
+      }
+
+      .hero-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+      }
+
+      .button {
+        display: inline-flex;
+        min-height: 46px;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        border: 1px solid transparent;
+        border-radius: 14px;
+        padding: 12px 18px;
+        cursor: pointer;
+        font-weight: 740;
+        text-decoration: none;
+        transition:
+          transform 180ms var(--ease),
+          background 180ms var(--ease),
+          border-color 180ms var(--ease);
+      }
+
+      .button:focus-visible,
+      .layer-card:focus-visible,
+      .mini-card:focus-visible {
+        outline: 3px solid rgba(183, 43, 97, 0.42);
+        outline-offset: 3px;
+      }
+
+      .button:hover {
+        transform: translateY(-1px);
+      }
+
+      .button.primary {
+        background: var(--signal);
+        color: #fff7fb;
+      }
+
+      .button.secondary {
+        border-color: rgba(251, 245, 236, 0.2);
+        background: rgba(251, 245, 236, 0.92);
+        color: var(--workflow);
+      }
+
+      .family-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+        margin-top: 24px;
+      }
+
+      .family-card {
+        border: 1px solid rgba(251, 245, 236, 0.12);
+        border-radius: 14px;
+        background: rgba(251, 245, 236, 0.07);
+        padding: 16px;
+      }
+
+      .family-card strong {
+        display: block;
+        margin-bottom: 8px;
+        color: var(--shell-foreground);
+      }
+
+      .family-card span {
+        display: block;
+        color: rgba(251, 245, 236, 0.67);
+        font-size: 14px;
+        line-height: 1.55;
+      }
+
+      .walkthrough {
+        border: 1px solid rgba(251, 245, 236, 0.16);
+        border-radius: calc(var(--radius) + 6px);
+        background:
+          linear-gradient(rgba(251, 245, 236, 0.06) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(251, 245, 236, 0.06) 1px, transparent 1px),
+          rgba(251, 245, 236, 0.055);
+        background-size: 42px 42px;
+        box-shadow: var(--shadow);
+        padding: clamp(16px, 2vw, 26px);
+        backdrop-filter: blur(16px);
+      }
+
+      .walkthrough-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        border-bottom: 1px solid rgba(251, 245, 236, 0.18);
+        padding-bottom: 18px;
+      }
+
+      .micro-label {
+        margin-bottom: 6px;
+        color: rgba(251, 245, 236, 0.52);
+        font-size: 12px;
+        font-weight: 780;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+      }
+
+      .current-title {
+        color: var(--shell-foreground);
+        font-size: clamp(1.45rem, 2.4vw, 2rem);
+        font-weight: 760;
+      }
+
+      .nav-buttons {
+        display: flex;
+        gap: 10px;
+      }
+
+      .icon-button {
+        width: 44px;
+        height: 44px;
+        border: 1px solid rgba(251, 245, 236, 0.18);
+        border-radius: 13px;
+        background: rgba(251, 245, 236, 0.08);
+        color: var(--shell-foreground);
+        cursor: pointer;
+      }
+
+      .icon-button.next {
+        border-color: transparent;
+        background: var(--signal);
+      }
+
+      .progress {
+        height: 8px;
+        margin-top: 18px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: rgba(251, 245, 236, 0.12);
+      }
+
+      .progress-bar {
+        height: 100%;
+        width: 12.5%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, var(--signal), #e1a335);
+        transition: width 420ms var(--ease);
+      }
+
+      .map {
+        position: relative;
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+        margin-top: 22px;
+        padding: 18px;
+        border: 1px solid rgba(251, 245, 236, 0.1);
+        border-radius: 18px;
+        background: rgba(10, 14, 28, 0.28);
+      }
+
+      .layer-card {
+        min-height: 136px;
+        border: 1px solid rgba(251, 245, 236, 0.14);
+        border-radius: 15px;
+        background: rgba(251, 245, 236, 0.06);
+        color: rgba(251, 245, 236, 0.7);
+        cursor: pointer;
+        padding: 16px;
+        text-align: left;
+        transition:
+          transform 220ms var(--ease),
+          background 220ms var(--ease),
+          border-color 220ms var(--ease),
+          color 220ms var(--ease);
+      }
+
+      .layer-card:hover {
+        transform: translateY(-2px);
+        border-color: rgba(251, 245, 236, 0.32);
+        background: rgba(251, 245, 236, 0.1);
+      }
+
+      .layer-card.active {
+        transform: translateY(-4px);
+        border-color: rgba(251, 245, 236, 0.7);
+        background: var(--shell-foreground);
+        color: var(--shell);
+      }
+
+      .layer-card.passed {
+        border-color: rgba(47, 122, 86, 0.48);
+        background: rgba(47, 122, 86, 0.13);
+        color: rgba(251, 245, 236, 0.86);
+      }
+
+      .layer-meta {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 34px;
+      }
+
+      .kind {
+        border-radius: 999px;
+        padding: 7px 10px;
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+      }
+
+      .kind.shell {
+        background: var(--workflow-soft);
+        color: var(--workflow);
+      }
+
+      .kind.authority {
+        background: rgba(213, 138, 32, 0.2);
+        color: #4c2d00;
+      }
+
+      .kind.local {
+        background: rgba(47, 122, 86, 0.18);
+        color: #1f6b49;
+      }
+
+      .kind.cloud {
+        background: rgba(183, 43, 97, 0.16);
+        color: var(--signal);
+      }
+
+      .kind.evidence {
+        background: rgba(52, 56, 70, 0.12);
+        color: var(--evidence);
+      }
+
+      .step {
+        color: inherit;
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.18em;
+        opacity: 0.62;
+        text-transform: uppercase;
+      }
+
+      .layer-card strong {
+        display: block;
+        font-size: clamp(1.05rem, 1.8vw, 1.3rem);
+        line-height: 1.12;
+      }
+
+      .detail {
+        margin-top: 18px;
+        border: 1px solid rgba(251, 245, 236, 0.13);
+        border-radius: 18px;
+        background: rgba(251, 245, 236, 0.08);
+        padding: clamp(18px, 3vw, 28px);
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        border-radius: 999px;
+        background: var(--workflow-soft);
+        color: var(--workflow);
+        padding: 8px 12px;
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+      }
+
+      .detail h2 {
+        margin-top: 16px;
+        color: var(--shell-foreground);
+        font-size: clamp(2rem, 4vw, 3rem);
+        line-height: 1.03;
+        font-weight: 760;
+      }
+
+      .handoff {
+        margin-top: 16px;
+        max-width: 880px;
+        color: rgba(251, 245, 236, 0.8);
+        font-size: 18px;
+        line-height: 1.65;
+      }
+
+      .detail-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 16px;
+        margin-top: 24px;
+      }
+
+      .detail-box {
+        border: 1px solid rgba(251, 245, 236, 0.1);
+        border-radius: 14px;
+        background: rgba(10, 14, 28, 0.24);
+        padding: 16px;
+      }
+
+      .detail-box h3 {
+        color: rgba(251, 245, 236, 0.54);
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+      }
+
+      .detail-box ul {
+        display: grid;
+        gap: 10px;
+        margin: 14px 0 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .detail-box li {
+        color: rgba(251, 245, 236, 0.78);
+        font-size: 15px;
+        line-height: 1.55;
+      }
+
+      .anchors {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 22px;
+        padding-top: 18px;
+        border-top: 1px solid rgba(251, 245, 236, 0.12);
+      }
+
+      .anchor {
+        border: 1px solid rgba(251, 245, 236, 0.12);
+        border-radius: 9px;
+        background: rgba(10, 14, 28, 0.28);
+        color: rgba(251, 245, 236, 0.72);
+        padding: 7px 9px;
+        font-family:
+          "SFMono-Regular", "Cascadia Code", "Liberation Mono", monospace;
+        font-size: 12px;
+      }
+
+      .summary {
+        padding: clamp(36px, 6vw, 84px) clamp(22px, 5vw, 72px);
+      }
+
+      .summary-inner {
+        display: grid;
+        grid-template-columns: minmax(260px, 0.72fr) minmax(0, 1.28fr);
+        gap: clamp(24px, 5vw, 68px);
+        max-width: 1300px;
+        margin: 0 auto;
+      }
+
+      .summary h2 {
+        font-size: clamp(2.4rem, 5vw, 5.4rem);
+        line-height: 0.98;
+        font-weight: 660;
+      }
+
+      .summary p {
+        margin-top: 18px;
+        color: var(--muted);
+        font-size: 18px;
+        line-height: 1.7;
+      }
+
+      .mini-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .mini-card {
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        background: var(--surface);
+        box-shadow: var(--shadow);
+        padding: 18px;
+      }
+
+      .mini-card strong {
+        display: block;
+        margin-bottom: 10px;
+        font-size: 18px;
+      }
+
+      .mini-card span {
+        color: var(--muted);
+        font-size: 15px;
+        line-height: 1.6;
+      }
+
+      [data-animate] {
+        opacity: 0;
+        transform: translateY(18px);
+      }
+
+      @media (max-width: 1100px) {
+        .hero-inner,
+        .summary-inner {
+          grid-template-columns: 1fr;
+        }
+
+        .walkthrough {
+          margin-top: 10px;
+        }
+      }
+
+      @media (max-width: 720px) {
+        .hero-inner {
+          padding: 28px 18px 40px;
+        }
+
+        .eyebrow {
+          max-width: 100%;
+          white-space: normal;
+        }
+
+        h1 {
+          font-size: clamp(3rem, 17vw, 4.5rem);
+        }
+
+        .hero-actions .button {
+          flex: 1 1 100%;
+        }
+
+        .family-grid,
+        .detail-grid,
+        .mini-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .walkthrough-top {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+
+        .nav-buttons {
+          width: 100%;
+        }
+
+        .icon-button {
+          flex: 1;
+        }
+
+        .map {
+          grid-template-columns: 1fr;
+          padding: 12px;
+        }
+
+        .layer-card {
+          min-height: 104px;
+        }
+
+        .layer-meta {
+          margin-bottom: 18px;
+        }
+
+        .detail {
+          padding: 18px;
+        }
+
+        .detail h2 {
+          font-size: clamp(2rem, 11vw, 3rem);
+        }
+
+        .handoff {
+          font-size: 16px;
+        }
+
+        .summary {
+          padding: 40px 18px;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        html {
+          scroll-behavior: auto;
+        }
+
+        *,
+        *::before,
+        *::after {
+          animation-duration: 1ms !important;
+          scroll-behavior: auto !important;
+          transition-duration: 1ms !important;
+        }
+
+        [data-animate] {
+          opacity: 1;
+          transform: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <section class="hero" aria-labelledby="page-title">
+        <div class="hero-inner">
+          <div class="hero-copy">
+            <span class="eyebrow" data-animate>Athena systems atlas</span>
+            <div data-animate>
+              <h1 id="page-title">Walk the boundaries before changing Athena.</h1>
+              <p class="hero-lede">
+                Athena is easier to reason about when each layer has one job:
+                shell, authority, local record, cloud projection, or evidence.
+              </p>
+            </div>
+            <div class="hero-actions" data-animate>
+              <button class="button primary" type="button" id="play-tour">
+                Play tour
+              </button>
+              <a class="button secondary" href="#summary">Skip to summary</a>
+            </div>
+            <div class="family-grid" aria-label="Athena system families" data-animate>
+              <div class="family-card">
+                <strong>POS</strong>
+                <span>Local-first checkout, terminal recovery, cashier proof, drawer lifecycle, sync review.</span>
+              </div>
+              <div class="family-card">
+                <strong>Operations</strong>
+                <span>Open work, approvals, daily open and close, register sessions, traces, and cash controls.</span>
+              </div>
+              <div class="family-card">
+                <strong>Stock</strong>
+                <span>Catalog, SKUs, adjustments, procurement, receiving, reservations, and availability.</span>
+              </div>
+              <div class="family-card">
+                <strong>Storefront</strong>
+                <span>Orders, payments, returns, rewards, reviews, observability, and customer timelines.</span>
+              </div>
+            </div>
+          </div>
+
+          <section class="walkthrough" aria-label="Interactive boundary walkthrough" data-animate>
+            <div class="walkthrough-top">
+              <div>
+                <p class="micro-label">Current layer</p>
+                <p class="current-title" id="current-title">App shell</p>
+              </div>
+              <div class="nav-buttons" aria-label="Boundary navigation">
+                <button class="icon-button" type="button" id="previous-layer" aria-label="Previous boundary">
+                  Back
+                </button>
+                <button class="icon-button next" type="button" id="next-layer" aria-label="Next boundary">
+                  Next
+                </button>
+              </div>
+            </div>
+            <div class="progress" aria-hidden="true">
+              <div class="progress-bar" id="progress-bar"></div>
+            </div>
+            <div class="map" id="layer-map" aria-label="Boundary layers"></div>
+            <article class="detail" id="layer-detail" aria-live="polite"></article>
+          </section>
+        </div>
+      </section>
+
+      <section class="summary" id="summary" aria-labelledby="summary-title">
+        <div class="summary-inner">
+          <div>
+            <p class="micro-label" style="color: var(--signal)">What to remember</p>
+            <h2 id="summary-title">The same boundary rule repeats.</h2>
+            <p>
+              Let each layer own one decision, pass forward the minimum safe
+              evidence, and refuse authority that belongs somewhere deeper.
+            </p>
+          </div>
+          <div class="mini-grid">
+            <div class="mini-card">
+              <strong>Route access is not command authority.</strong>
+              <span>A mounted shell can orient the operator, but sale-affecting work still needs terminal, staff, drawer, and command gates.</span>
+            </div>
+            <div class="mini-card">
+              <strong>Local-first means durable local records.</strong>
+              <span>Checkout work records locally first, then sync projects facts into cloud records when validation is available.</span>
+            </div>
+            <div class="mini-card">
+              <strong>Cloud uncertainty is not always a blocker.</strong>
+              <span>When local recording remains safe, field sales can continue and review happens behind the scenes.</span>
+            </div>
+            <div class="mini-card">
+              <strong>Evidence is not raw internals.</strong>
+              <span>Operational surfaces should show actors, quantities, statuses, and next steps without exposing secrets or raw backend text.</span>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/animejs@4.1.3/lib/anime.iife.min.js"></script>
+    <script>
+      const layers = [
+        {
+          title: "Browser Router And Protected App Shell",
+          shortLabel: "App shell",
+          kind: "shell",
+          step: "Boundary 01",
+          owns: [
+            "TanStack route composition, the public/login split, and the authenticated workspace shell.",
+            "Store-scoped navigation into Operations, Products, Services, Cash Controls, POS, Reviews, and Orders.",
+            "Browser-safe error normalization before operators see command failures."
+          ],
+          refuses: [
+            "It does not become command authority just because a route is visible.",
+            "Shell-only files should not be imported upward by lower feature modules."
+          ],
+          handoff: "Route intent hands work to feature views, hooks, and Convex command boundaries after auth and store context are known.",
+          anchors: ["src/main.tsx", "src/routes/_authed.tsx", "src/routeTree.gen.ts", "src/lib/errors/runCommand.ts"]
+        },
+        {
+          title: "POS Route-Scoped App-Session Continuity",
+          shortLabel: "POS route",
+          kind: "shell",
+          step: "Boundary 02",
+          owns: [
+            "Recoverable POS hub continuity when a provisioned terminal waits for app-session validation.",
+            "Support-safe posture such as waiting for network or stale validation.",
+            "Keeping non-POS routes on the normal signed-out redirect path."
+          ],
+          refuses: [
+            "A recovery assertion is not a reusable app credential.",
+            "POS route recovery does not authorize a sale, drawer action, staff action, or manager approval."
+          ],
+          handoff: "A mounted POS shell still has to pass terminal, staff, drawer, and command checks before sale work proceeds.",
+          anchors: ["src/routes/_authed.tsx", "usePosTerminalAppSessionRecovery.ts", "convex/pos/public/terminalAppSessions.ts"]
+        },
+        {
+          title: "Terminal And Staff Authority",
+          shortLabel: "Identity",
+          kind: "authority",
+          step: "Boundary 03",
+          owns: [
+            "Terminal integrity for the provisioned checkout station and store scope.",
+            "Local staff authority snapshots with terminal-scoped verifiers.",
+            "Event-scoped sync proof evidence after an offline cashier signs in."
+          ],
+          refuses: [
+            "Online PIN hashes are not offline verifiers.",
+            "Cashier proof is not manager approval and does not clear terminal integrity blocks."
+          ],
+          handoff: "Verified local staff and terminal context become inputs to local command gateways and later sync acceptance.",
+          anchors: ["staffProfiles.ts", "staffCredentials.ts", "CashierAuthDialog.tsx", "posLocalStore.ts"]
+        },
+        {
+          title: "Drawer Lifecycle And Local Command Invariants",
+          shortLabel: "Command gate",
+          kind: "authority",
+          step: "Boundary 04",
+          owns: [
+            "Register-session open, close, reopen, payment, and cart completion preconditions.",
+            "Sale blocker policy that separates hard local blockers from cloud-validation uncertainty.",
+            "Drawer authority checks before local sale commands mutate the register timeline."
+          ],
+          refuses: [
+            "Cloud uncertainty alone should not stop a locally safe field sale.",
+            "A locally closed drawer is not reusable until a permitted reopen event is recorded."
+          ],
+          handoff: "Accepted commands append durable POS events first, then the cashier can continue while upload catches up.",
+          anchors: ["saleBlockerPolicy.ts", "localCommandGateway.ts", "POSRegisterView.tsx", "useRegisterViewModel.ts"]
+        },
+        {
+          title: "Local POS Event Ledger",
+          shortLabel: "Event log",
+          kind: "local",
+          step: "Boundary 05",
+          owns: [
+            "IndexedDB-backed terminal seed, catalog snapshot, register state, event log, and local-to-cloud mappings.",
+            "Terminal-scoped local receipt numbers and reload-surviving pending sale history.",
+            "Strict local sequence for checkout, closeout, correction, and uploadable lifecycle events."
+          ],
+          refuses: [
+            "It is not product-wide offline infrastructure.",
+            "It is not a replacement for Convex as the cloud source of truth after projection."
+          ],
+          handoff: "The ledger drains through the POS sync boundary in register-session order with idempotent local event ids.",
+          anchors: ["posLocalStore.ts", "registerReadModel.ts", "usePosLocalSyncRuntime.ts"]
+        },
+        {
+          title: "Sync Projection And Reconciliation",
+          shortLabel: "Projection",
+          kind: "local",
+          step: "Boundary 06",
+          owns: [
+            "Accepting each local event once and returning stable outcomes on retry.",
+            "Projecting accepted events into sessions, transactions, payments, inventory, cash controls, and traces.",
+            "Preserving completed local receipts while routing drift into review."
+          ],
+          refuses: [
+            "Projection must not silently rewrite customer-facing receipt totals.",
+            "Pending sync copy is separate from needs-review conflict copy."
+          ],
+          handoff: "Projected facts join normal Athena cloud records; drift creates manager-review work instead of hiding local history.",
+          anchors: ["ingestLocalEvents.ts", "projectLocalEvents.ts", "convex/pos/domain/types.ts", "registerSessionTracing.ts"]
+        },
+        {
+          title: "Convex Domain Commands And Public HTTP",
+          shortLabel: "Cloud",
+          kind: "cloud",
+          step: "Boundary 07",
+          owns: [
+            "Domain-owned commands for stock ops, service ops, staff credentials, store config, storefront operations, and POS sync.",
+            "Hono HTTP routes for core, customer-channel, money-movement, webhook, and health boundaries.",
+            "Shared command-result rails for expected operator-facing failures."
+          ],
+          refuses: [
+            "Browser code should not duplicate Convex command decisions.",
+            "Raw thrown server text must not become operator copy."
+          ],
+          handoff: "Cloud commands persist authoritative records and expose browser-safe results back to routed feature surfaces.",
+          anchors: ["convex/http.ts", "convex/schema.ts", "shared/commandResult.ts", "convex/storeFront"]
+        },
+        {
+          title: "Evidence, Review, And Operational Memory",
+          shortLabel: "Evidence",
+          kind: "evidence",
+          step: "Boundary 08",
+          owns: [
+            "Workflow traces, operational events, review queues, terminal health, daily operations, and support diagnostics.",
+            "Actor, quantity, register, terminal, receipt, store-day, and reconciliation context for later review.",
+            "Calm operational copy that says what happened and what needs attention."
+          ],
+          refuses: [
+            "Evidence surfaces should not expose reusable secrets, raw assertions, payment details, or backend error dumps.",
+            "Review counts must come from real sync review evidence, not merely cloud-validation uncertainty."
+          ],
+          handoff: "Operators and managers see the durable trail: who did what, where it landed, and what still needs review.",
+          anchors: ["convex/workflowTraces", "WorkflowTraceView.tsx", "src/components/operations", "src/components/pos/terminals"]
+        }
+      ];
+
+      const state = {
+        activeIndex: 0,
+        timer: null
+      };
+
+      const map = document.getElementById("layer-map");
+      const detail = document.getElementById("layer-detail");
+      const title = document.getElementById("current-title");
+      const progress = document.getElementById("progress-bar");
+      const playButton = document.getElementById("play-tour");
+
+      function supportsAnime() {
+        return window.anime && typeof window.anime.animate === "function";
+      }
+
+      function animateIn(targets, options) {
+        if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+          return;
+        }
+        if (supportsAnime()) {
+          window.anime.animate(targets, options);
+          return;
+        }
+        const list = Array.from(document.querySelectorAll(targets));
+        list.forEach((item, index) => {
+          item.style.transition = "opacity 420ms var(--ease), transform 420ms var(--ease)";
+          window.setTimeout(() => {
+            item.style.opacity = "1";
+            item.style.transform = "translateY(0)";
+          }, index * 70);
+        });
+      }
+
+      function renderMap() {
+        map.innerHTML = layers
+          .map((layer, index) => {
+            const statusClass =
+              index === state.activeIndex
+                ? "active"
+                : index < state.activeIndex
+                  ? "passed"
+                  : "";
+            return `
+              <button class="layer-card ${statusClass}" type="button" data-layer-index="${index}" aria-pressed="${index === state.activeIndex}">
+                <span class="layer-meta">
+                  <span class="kind ${layer.kind}">${layer.kind}</span>
+                  <span class="step">${String(index + 1).padStart(2, "0")}</span>
+                </span>
+                <span class="step">${layer.step}</span>
+                <strong>${layer.shortLabel}</strong>
+              </button>
+            `;
+          })
+          .join("");
+
+        Array.from(map.querySelectorAll(".layer-card")).forEach((button) => {
+          button.addEventListener("click", () => {
+            setActiveLayer(Number(button.dataset.layerIndex));
+          });
+        });
+      }
+
+      function listItems(items) {
+        return items.map((item) => `<li>${item}</li>`).join("");
+      }
+
+      function renderDetail() {
+        const layer = layers[state.activeIndex];
+        title.textContent = layer.shortLabel;
+        progress.style.width = `${((state.activeIndex + 1) / layers.length) * 100}%`;
+        detail.innerHTML = `
+          <span class="pill">${layer.step}</span>
+          <h2>${layer.title}</h2>
+          <p class="handoff">${layer.handoff}</p>
+          <div class="detail-grid">
+            <section class="detail-box">
+              <h3>Owns</h3>
+              <ul>${listItems(layer.owns)}</ul>
+            </section>
+            <section class="detail-box">
+              <h3>Must not grant</h3>
+              <ul>${listItems(layer.refuses)}</ul>
+            </section>
+          </div>
+          <div class="anchors" aria-label="Code anchors">
+            ${layer.anchors.map((anchor) => `<span class="anchor">${anchor}</span>`).join("")}
+          </div>
+        `;
+
+        animateIn("#layer-detail", {
+          opacity: [0.72, 1],
+          translateY: [14, 0],
+          duration: 420,
+          ease: "outCubic"
+        });
+      }
+
+      function setActiveLayer(index) {
+        state.activeIndex = (index + layers.length) % layers.length;
+        renderMap();
+        renderDetail();
+        animateIn(".layer-card.active", {
+          scale: [0.96, 1.02, 1],
+          duration: 520,
+          ease: "outElastic(1, .75)"
+        });
+      }
+
+      document.getElementById("previous-layer").addEventListener("click", () => {
+        setActiveLayer(state.activeIndex - 1);
+      });
+
+      document.getElementById("next-layer").addEventListener("click", () => {
+        setActiveLayer(state.activeIndex + 1);
+      });
+
+      playButton.addEventListener("click", () => {
+        if (state.timer) {
+          window.clearInterval(state.timer);
+          state.timer = null;
+          playButton.textContent = "Play tour";
+          return;
+        }
+        playButton.textContent = "Pause tour";
+        state.timer = window.setInterval(() => {
+          setActiveLayer(state.activeIndex + 1);
+        }, 2800);
+      });
+
+      renderMap();
+      renderDetail();
+
+      animateIn("[data-animate]", {
+        opacity: [0, 1],
+        translateY: [18, 0],
+        delay: supportsAnime() ? window.anime.stagger(85) : 0,
+        duration: 720,
+        ease: "outCubic"
+      });
+    </script>
+  </body>
+</html>

@@ -160,6 +160,11 @@ async function createFixtureRepo() {
     rootDir
   );
   await write(
+    "packages/athena-webapp/public/athena-boundaries-walkthrough.html",
+    "<!doctype html><title>Athena Boundaries</title>\n",
+    rootDir
+  );
+  await write(
     "packages/athena-webapp/src/stories/Guidance/Introduction.stories.tsx",
     "export default {};\n",
     rootDir

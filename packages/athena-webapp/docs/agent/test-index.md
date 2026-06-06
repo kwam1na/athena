@@ -160,6 +160,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/components/add-product/ProductView.test.tsx`](../../src/components/add-product/ProductView.test.tsx)
 - [`src/components/analytics/analyticsWorkspaceEfficiency.test.ts`](../../src/components/analytics/analyticsWorkspaceEfficiency.test.ts)
 - [`src/components/app-sidebar.test.tsx`](../../src/components/app-sidebar.test.tsx)
+- [`src/components/architecture/AthenaBoundaryWalkthrough.test.tsx`](../../src/components/architecture/AthenaBoundaryWalkthrough.test.tsx)
 - [`src/components/auth/DefaultCatchBoundary.test.tsx`](../../src/components/auth/DefaultCatchBoundary.test.tsx)
 - [`src/components/auth/Login/InputOTP.test.tsx`](../../src/components/auth/Login/InputOTP.test.tsx)
 - [`src/components/auth/Login/LoginForm.test.tsx`](../../src/components/auth/Login/LoginForm.test.tsx)
