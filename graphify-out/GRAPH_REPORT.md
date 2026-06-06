@@ -5,7 +5,7 @@
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 6186 nodes · 6678 edges · 1762 communities detected
+- 6189 nodes · 6684 edges · 1762 communities detected
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
 - Token cost: 0 input · 0 output
 
@@ -1776,7 +1776,7 @@
 ## God Nodes (most connected - your core abstractions)
 1. `createJourneyEvent()` - 40 edges
 2. `buildDailyCloseSnapshotWithCtx()` - 28 edges
-3. `projectLocalRegisterReadModel()` - 24 edges
+3. `projectLocalRegisterReadModel()` - 26 edges
 4. `buildDailyOpeningSnapshotWithCtx()` - 17 edges
 5. `useRegisterViewModel()` - 17 edges
 6. `getStoreConfigV2()` - 17 edges
@@ -1817,11 +1817,11 @@ Nodes (47): assertNever(), buildSaleProjectedMessage(), calculateSalePayments(),
 
 ### Community 4 - "Community 4"
 Cohesion: 0.06
-Nodes (27): applyCloseoutCommandResult(), applyCommandResult(), buildDepositSubmissionKey(), formatCompactTextList(), formatRegisterHeaderName(), formatRegisterName(), formatReviewItemTimestamp(), formatReviewQueueSummary() (+19 more)
+Nodes (24): assertPosLocalStoreOk(), clearAcceptedTerminalIntegrityState(), clearRecoverableDrawerAuthorityForSyncedEvents(), clearSettledRecoverableDrawerAuthorityBlock(), clearSupersededRecoverableDrawerAuthorityBlocks(), collectAcceptedEventIdsWithLocalPrecursors(), collectReviewLocalEventIds(), collectRuntimeRelevantEvents() (+16 more)
 
 ### Community 5 - "Community 5"
 Cohesion: 0.06
-Nodes (25): assertPosLocalStoreOk(), clearAcceptedTerminalIntegrityState(), clearRecoverableDrawerAuthorityForSyncedEvents(), clearSettledRecoverableDrawerAuthorityBlock(), collectAcceptedEventIdsWithLocalPrecursors(), collectReviewLocalEventIds(), collectRuntimeRelevantEvents(), collectSyncedLocalEventIds() (+17 more)
+Nodes (27): applyCloseoutCommandResult(), applyCommandResult(), buildDepositSubmissionKey(), formatCompactTextList(), formatRegisterHeaderName(), formatRegisterName(), formatReviewItemTimestamp(), formatReviewQueueSummary() (+19 more)
 
 ### Community 6 - "Community 6"
 Cohesion: 0.1
@@ -1864,16 +1864,16 @@ Cohesion: 0.13
 Nodes (27): applyApprovedTransactionVoid(), buildCompleteTransactionResult(), buildVoidApprovalRequirement(), calculateCanonicalTransactionTotals(), calculateTotalPaid(), completedTransactionLabel(), completeTransaction(), createTransactionFromSessionHandler() (+19 more)
 
 ### Community 16 - "Community 16"
+Cohesion: 0.16
+Nodes (32): asRecord(), createMappingIndex(), errorFor(), errorMessage(), getCompletedSale(), getExpectedCashDelta(), getOrCreateSale(), getPhase() (+24 more)
+
+### Community 17 - "Community 17"
 Cohesion: 0.15
 Nodes (31): collectHarnessOnboardingErrors(), collectMarkdownLinkErrors(), collectMissingRequiredLinkErrors(), collectPackageGuideLinkErrors(), collectPackagesRouterLinkErrors(), collectReadmeLinkErrors(), collectReferencedPathErrors(), collectRuntimeScenarioDocSyncErrors() (+23 more)
 
-### Community 17 - "Community 17"
+### Community 18 - "Community 18"
 Cohesion: 0.12
 Nodes (28): asRegExp(), collectLatencyDiagnostics(), collectRuntimeSignalDiagnostics(), collectRuntimeSignalMatches(), consumeLines(), escapeRegExp(), formatAssertionDiagnostics(), formatError() (+20 more)
-
-### Community 18 - "Community 18"
-Cohesion: 0.18
-Nodes (30): asRecord(), createMappingIndex(), errorFor(), errorMessage(), getCompletedSale(), getExpectedCashDelta(), getOrCreateSale(), getPhase() (+22 more)
 
 ### Community 19 - "Community 19"
 Cohesion: 0.15
@@ -2688,8 +2688,8 @@ Cohesion: 0.53
 Nodes (3): handleUpdateFees(), parseDeliveryFeeInputs(), parseOptionalDeliveryFeeInput()
 
 ### Community 222 - "Community 222"
-Cohesion: 0.33
-Nodes (0):
+Cohesion: 0.47
+Nodes (3): onDrop(), removeImage(), unmarkForDeletion()
 
 ### Community 223 - "Community 223"
 Cohesion: 0.33
@@ -2708,64 +2708,64 @@ Cohesion: 0.33
 Nodes (0):
 
 ### Community 227 - "Community 227"
-Cohesion: 0.53
-Nodes (4): calculatePosChange(), calculatePosRemainingDue(), calculatePosTotalPaid(), roundPosAmount()
-
-### Community 228 - "Community 228"
 Cohesion: 0.33
 Nodes (0):
+
+### Community 228 - "Community 228"
+Cohesion: 0.53
+Nodes (4): calculatePosChange(), calculatePosRemainingDue(), calculatePosTotalPaid(), roundPosAmount()
 
 ### Community 229 - "Community 229"
 Cohesion: 0.33
 Nodes (0):
 
 ### Community 230 - "Community 230"
-Cohesion: 0.53
-Nodes (4): isBarcodeShapedSearchQuery(), matchesSkuSearchTerms(), normalizeIdentifier(), scoreSkuSearchTerms()
-
-### Community 231 - "Community 231"
-Cohesion: 0.6
-Nodes (5): isExcludedFromPosAppShellCache(), isPosAppShellNavigationRequest(), isPosAppShellRoutePath(), isPosAppShellStaticAssetRequest(), readHeader()
-
-### Community 232 - "Community 232"
 Cohesion: 0.33
 Nodes (0):
 
+### Community 231 - "Community 231"
+Cohesion: 0.53
+Nodes (4): isBarcodeShapedSearchQuery(), matchesSkuSearchTerms(), normalizeIdentifier(), scoreSkuSearchTerms()
+
+### Community 232 - "Community 232"
+Cohesion: 0.6
+Nodes (5): isExcludedFromPosAppShellCache(), isPosAppShellNavigationRequest(), isPosAppShellRoutePath(), isPosAppShellStaticAssetRequest(), readHeader()
+
 ### Community 233 - "Community 233"
-Cohesion: 0.4
-Nodes (2): onSubmit(), saveStoreChanges()
+Cohesion: 0.33
+Nodes (0):
 
 ### Community 234 - "Community 234"
 Cohesion: 0.4
 Nodes (2): onSubmit(), saveStoreChanges()
 
 ### Community 235 - "Community 235"
-Cohesion: 0.33
-Nodes (0):
+Cohesion: 0.4
+Nodes (2): onSubmit(), saveStoreChanges()
 
 ### Community 236 - "Community 236"
-Cohesion: 0.47
-Nodes (4): fetchPosTransaction(), getBaseUrl(), getPosTransactionByReceiptToken(), PosTransactionReceiptError
+Cohesion: 0.33
+Nodes (0):
 
 ### Community 237 - "Community 237"
 Cohesion: 0.47
-Nodes (3): getBaseUrl(), getPromoCodes(), redeemPromoCode()
+Nodes (4): fetchPosTransaction(), getBaseUrl(), getPosTransactionByReceiptToken(), PosTransactionReceiptError
 
 ### Community 238 - "Community 238"
+Cohesion: 0.47
+Nodes (3): getBaseUrl(), getPromoCodes(), redeemPromoCode()
+
+### Community 239 - "Community 239"
 Cohesion: 0.33
 Nodes (0):
 
-### Community 239 - "Community 239"
+### Community 240 - "Community 240"
 Cohesion: 0.4
 Nodes (2): handleConfirm(), handlePrimaryAction()
 
-### Community 240 - "Community 240"
+### Community 241 - "Community 241"
 Cohesion: 0.33
 Nodes (0):
-
-### Community 241 - "Community 241"
-Cohesion: 0.47
-Nodes (3): onDrop(), removeImage(), unmarkForDeletion()
 
 ### Community 242 - "Community 242"
 Cohesion: 0.53
@@ -2988,36 +2988,36 @@ Cohesion: 0.5
 Nodes (2): completePendingAuthSync(), sleep()
 
 ### Community 297 - "Community 297"
-Cohesion: 0.4
-Nodes (0):
+Cohesion: 0.5
+Nodes (3): createVersionChecker(), shouldAutoReloadForCurrentRoute(), shouldAutoReloadForPath()
 
 ### Community 298 - "Community 298"
-Cohesion: 0.7
-Nodes (4): getAllCategories(), getAllCategoriesWithSubcategories(), getBaseUrl(), getCategory()
+Cohesion: 0.4
+Nodes (0):
 
 ### Community 299 - "Community 299"
 Cohesion: 0.7
-Nodes (4): getBaseUrl(), getOrder(), getOrders(), updateOrdersOwner()
+Nodes (4): getAllCategories(), getAllCategoriesWithSubcategories(), getBaseUrl(), getCategory()
 
 ### Community 300 - "Community 300"
 Cohesion: 0.7
-Nodes (4): getActiveUser(), getBaseUrl(), getGuest(), updateUser()
+Nodes (4): getBaseUrl(), getOrder(), getOrders(), updateOrdersOwner()
 
 ### Community 301 - "Community 301"
-Cohesion: 0.4
-Nodes (0):
+Cohesion: 0.7
+Nodes (4): getActiveUser(), getBaseUrl(), getGuest(), updateUser()
 
 ### Community 302 - "Community 302"
 Cohesion: 0.4
 Nodes (0):
 
 ### Community 303 - "Community 303"
-Cohesion: 0.7
-Nodes (4): createStorefrontFailureEvent(), emitStorefrontFailure(), inferStorefrontJourneyFromRoute(), normalizeStorefrontError()
+Cohesion: 0.4
+Nodes (0):
 
 ### Community 304 - "Community 304"
-Cohesion: 0.5
-Nodes (3): createVersionChecker(), shouldAutoReloadForCurrentRoute(), shouldAutoReloadForPath()
+Cohesion: 0.7
+Nodes (4): createStorefrontFailureEvent(), emitStorefrontFailure(), inferStorefrontJourneyFromRoute(), normalizeStorefrontError()
 
 ### Community 305 - "Community 305"
 Cohesion: 0.4
