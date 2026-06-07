@@ -4,6 +4,7 @@ export const posTransactionItemSchema = v.object({
   transactionId: v.id("posTransaction"),
   productId: v.id("product"),
   productSkuId: v.id("productSku"),
+  pendingCheckoutItemId: v.optional(v.id("posPendingCheckoutItem")),
   productName: v.string(),
   productSku: v.string(), // human-readable SKU reference
   barcode: v.optional(v.string()),

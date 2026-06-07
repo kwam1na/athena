@@ -1,5 +1,6 @@
 import { v } from "convex/values";
-import { mutation, query } from "../_generated/server";
+import { mutation, query, type MutationCtx, type QueryCtx } from "../_generated/server";
+import type { Id } from "../_generated/dataModel";
 import {
   runRemoveSessionItemCommand,
   runUpsertSessionItemCommand,
@@ -7,6 +8,10 @@ import {
 import { collectSessionItemsFromPages } from "../pos/infrastructure/repositories/sessionCommandRepository";
 import { commandResultValidator } from "../lib/commandResultValidators";
 import { ok, userError } from "../../shared/commandResult";
+import {
+  requireAuthenticatedAthenaUserWithCtx,
+  requireOrganizationMemberRoleWithCtx,
+} from "../lib/athenaUserAuth";
 
 const SESSION_ITEMS_PAGE_SIZE = 200;
 
@@ -44,6 +49,37 @@ function userErrorFromSessionItemFailure(result: { status: string; message: stri
   }
 }
 
+async function requireSessionItemStoreAccess(
+  ctx: MutationCtx | QueryCtx,
+  sessionId: Id<"posSession">,
+) {
+  const session = await ctx.db.get("posSession", sessionId);
+  if (!session) {
+    return userError({
+      code: "not_found",
+      message: "POS session not found.",
+    });
+  }
+
+  const store = await ctx.db.get("store", session.storeId);
+  if (!store) {
+    return userError({
+      code: "not_found",
+      message: "Store not found.",
+    });
+  }
+
+  const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+  await requireOrganizationMemberRoleWithCtx(ctx, {
+    allowedRoles: ["full_admin", "pos_only"],
+    failureMessage: "You cannot change this POS sale.",
+    organizationId: store.organizationId,
+    userId: athenaUser._id,
+  });
+
+  return null;
+}
+
 // Get all items for a session
 export const getSessionItems = query({
   args: { sessionId: v.id("posSession") },
@@ -55,6 +91,7 @@ export const getSessionItems = query({
       storeId: v.id("store"),
       productId: v.id("product"),
       productSkuId: v.id("productSku"),
+      pendingCheckoutItemId: v.optional(v.id("posPendingCheckoutItem")),
       productSku: v.string(),
       barcode: v.optional(v.string()),
       productName: v.string(),
@@ -70,6 +107,14 @@ export const getSessionItems = query({
     })
   ),
   handler: async (ctx, args) => {
+    const accessError = await requireSessionItemStoreAccess(
+      ctx,
+      args.sessionId,
+    );
+    if (accessError) {
+      return [];
+    }
+
     const items = await collectSessionItemsFromPages((cursor) =>
       ctx.db
         .query("posSessionItem")
@@ -90,6 +135,7 @@ export const addOrUpdateItem = mutation({
     sessionId: v.id("posSession"),
     productId: v.id("product"),
     productSkuId: v.id("productSku"),
+    pendingCheckoutItemId: v.optional(v.id("posPendingCheckoutItem")),
     staffProfileId: v.id("staffProfile"),
     productSku: v.string(),
     barcode: v.optional(v.string()),
@@ -104,6 +150,14 @@ export const addOrUpdateItem = mutation({
   },
   returns: commandResultValidator(itemOperationDataValidator),
   handler: async (ctx, args) => {
+    const accessError = await requireSessionItemStoreAccess(
+      ctx,
+      args.sessionId,
+    );
+    if (accessError) {
+      return accessError;
+    }
+
     const result = await runUpsertSessionItemCommand(ctx, args);
 
     if (result.status === "ok") {
@@ -123,6 +177,14 @@ export const removeItem = mutation({
   },
   returns: commandResultValidator(operationDataValidator),
   handler: async (ctx, args) => {
+    const accessError = await requireSessionItemStoreAccess(
+      ctx,
+      args.sessionId,
+    );
+    if (accessError) {
+      return accessError;
+    }
+
     const result = await runRemoveSessionItemCommand(ctx, args);
 
     if (result.status === "ok") {

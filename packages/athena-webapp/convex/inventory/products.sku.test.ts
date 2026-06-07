@@ -339,7 +339,7 @@ describe("product archiving", () => {
 });
 
 describe("product catalog visibility", () => {
-  it("excludes archived products by default and returns only archived products when requested", async () => {
+  it("excludes non-live products and hidden SKUs by default while preserving explicit archived queries", async () => {
     const seed = {
       product: [
         {
@@ -360,6 +360,24 @@ describe("product catalog visibility", () => {
           storeId: "storezzzz",
           subcategoryId: "subcategory-1",
         },
+        {
+          _id: "product-draft",
+          availability: "draft",
+          categoryId: "category-1",
+          isVisible: false,
+          name: "Draft Product",
+          storeId: "storezzzz",
+          subcategoryId: "subcategory-1",
+        },
+        {
+          _id: "product-hidden-sku",
+          availability: "live",
+          categoryId: "category-1",
+          isVisible: true,
+          name: "Hidden SKU Product",
+          storeId: "storezzzz",
+          subcategoryId: "subcategory-1",
+        },
       ],
       productSku: [
         {
@@ -377,6 +395,26 @@ describe("product catalog visibility", () => {
           inventoryCount: 1,
           price: 1000,
           productId: "product-archived",
+          quantityAvailable: 1,
+          storeId: "storezzzz",
+        },
+        {
+          _id: "sku-draft",
+          images: ["draft.jpg"],
+          inventoryCount: 1,
+          isVisible: false,
+          price: 1000,
+          productId: "product-draft",
+          quantityAvailable: 1,
+          storeId: "storezzzz",
+        },
+        {
+          _id: "sku-hidden",
+          images: ["hidden.jpg"],
+          inventoryCount: 1,
+          isVisible: false,
+          price: 1000,
+          productId: "product-hidden-sku",
           quantityAvailable: 1,
           storeId: "storezzzz",
         },

@@ -2,13 +2,22 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   adjustTransactionItems,
+  completeTransaction,
+  correctTransactionCustomer,
   correctTransactionPaymentMethod,
+  createTransactionFromSession,
   getCompletedTransactions,
+  getRecentTransactionsWithCustomers,
+  getTodaySummary,
+  getTransaction,
   getTransactionById,
+  getTransactionsByStore,
+  updateInventory,
   voidTransaction,
 } from "./transactions";
 import type { Id } from "../../_generated/dataModel";
 import * as athenaUserAuth from "../../lib/athenaUserAuth";
+import * as correctionCommands from "../application/commands/correctTransaction";
 import * as itemAdjustmentCommands from "../application/commands/adjustTransactionItems";
 import * as completeTransactionCommands from "../application/commands/completeTransaction";
 import * as transactionQueries from "../application/queries/getTransactions";
@@ -29,6 +38,11 @@ vi.mock("../application/queries/getTransactions", () => ({
 
 vi.mock("../application/commands/adjustTransactionItems", () => ({
   adjustTransactionItems: vi.fn(),
+}));
+
+vi.mock("../application/commands/correctTransaction", () => ({
+  correctTransactionCustomer: vi.fn(),
+  correctTransactionPaymentMethod: vi.fn(),
 }));
 
 vi.mock("../application/commands/completeTransaction", () => ({
@@ -160,6 +174,340 @@ describe("POS public transaction query validators", () => {
         },
       },
     });
+  });
+});
+
+describe("POS public transaction read and correction authorization", () => {
+  beforeEach(() => {
+    vi.mocked(athenaUserAuth.requireAuthenticatedAthenaUserWithCtx).mockResolvedValue({
+      _id: "user-1",
+    } as never);
+  });
+
+  function createTransactionAuthCtx(options?: {
+    customerStoreId?: string;
+    staffStoreId?: string;
+  }) {
+    return {
+      db: {
+        get: vi.fn(async (tableName: string, id: string) => {
+          if (tableName === "store" && id === "store-1") {
+            return { _id: "store-1", organizationId: "org-1" };
+          }
+          if (tableName === "staffProfile" && id === "staff-1") {
+            return {
+              _id: "staff-1",
+              status: "active",
+              storeId: options?.staffStoreId ?? "store-1",
+            };
+          }
+          if (tableName === "customerProfile" && id === "customer-1") {
+            return {
+              _id: "customer-1",
+              fullName: "Akos Customer",
+              storeId: options?.customerStoreId ?? "store-1",
+            };
+          }
+          return null;
+        }),
+      },
+    };
+  }
+
+  it("requires store membership before returning completed transactions", async () => {
+    vi.mocked(transactionQueries.getCompletedTransactions).mockResolvedValue([
+      {
+        _id: "txn-1",
+        transactionNumber: "SALE-1",
+      },
+    ] as never);
+    const ctx = createTransactionAuthCtx();
+
+    await getHandler(getCompletedTransactions)(ctx as never, {
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(athenaUserAuth.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
+      ctx,
+      {
+        allowedRoles: ["full_admin", "pos_only"],
+        failureMessage: "You cannot view POS transactions for this store.",
+        organizationId: "org-1",
+        userId: "user-1",
+      },
+    );
+    expect(transactionQueries.getCompletedTransactions).toHaveBeenCalled();
+  });
+
+  it.each([
+    [
+      "getTransactionsByStore",
+      getTransactionsByStore,
+      transactionQueries.getTransactionsByStore,
+      { storeId: "store-1" },
+    ],
+    [
+      "getRecentTransactionsWithCustomers",
+      getRecentTransactionsWithCustomers,
+      transactionQueries.getRecentTransactionsWithCustomers,
+      { storeId: "store-1" },
+    ],
+    ["getTodaySummary", getTodaySummary, transactionQueries.getTodaySummary, { storeId: "store-1" }],
+  ])("does not run %s when store authorization fails", async (_label, definition, queryMock, args) => {
+    vi.mocked(transactionQueries.getTransaction).mockResolvedValue({
+      _id: "txn-1",
+      storeId: "store-1",
+    } as never);
+    vi.mocked(
+      athenaUserAuth.requireOrganizationMemberRoleWithCtx,
+    ).mockRejectedValueOnce(new Error("denied"));
+
+    await expect(
+      getHandler(definition)(createTransactionAuthCtx() as never, args),
+    ).rejects.toThrow("denied");
+
+    expect(queryMock).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining(args),
+    );
+  });
+
+  it("derives the actor and validates staff/store before correcting transaction customer", async () => {
+    vi.mocked(transactionQueries.getTransaction).mockResolvedValue({
+      _id: "txn-1",
+      storeId: "store-1",
+    } as never);
+    vi.mocked(correctionCommands.correctTransactionCustomer).mockResolvedValue({
+      transactionId: "txn-1",
+      customerProfileId: "customer-1",
+    } as never);
+    const ctx = createTransactionAuthCtx();
+
+    await expect(
+      getHandler(correctTransactionCustomer)(ctx as never, {
+        actorStaffProfileId: "staff-1" as Id<"staffProfile">,
+        actorUserId: "forged-user" as Id<"athenaUser">,
+        customerProfileId: "customer-1" as Id<"customerProfile">,
+        reason: "Wrong customer",
+        transactionId: "txn-1" as Id<"posTransaction">,
+      }),
+    ).resolves.toMatchObject({ kind: "ok" });
+
+    expect(correctionCommands.correctTransactionCustomer).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({
+        actorUserId: "user-1",
+        customerProfileId: "customer-1",
+        transactionId: "txn-1",
+      }),
+    );
+  });
+
+  it("derives the actor and validates staff/store before correcting transaction payment method", async () => {
+    vi.mocked(transactionQueries.getTransaction).mockResolvedValue({
+      _id: "txn-1",
+      storeId: "store-1",
+    } as never);
+    vi.mocked(correctionCommands.correctTransactionPaymentMethod).mockResolvedValue({
+      paymentMethod: "card",
+      previousPaymentMethod: "cash",
+      transactionId: "txn-1",
+    } as never);
+    const ctx = createTransactionAuthCtx();
+
+    await expect(
+      getHandler(correctTransactionPaymentMethod)(ctx as never, {
+        actorStaffProfileId: "staff-1" as Id<"staffProfile">,
+        actorUserId: "forged-user" as Id<"athenaUser">,
+        paymentMethod: "card",
+        reason: "Wrong payment method",
+        transactionId: "txn-1" as Id<"posTransaction">,
+      }),
+    ).resolves.toMatchObject({ kind: "ok" });
+
+    expect(correctionCommands.correctTransactionPaymentMethod).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({
+        actorUserId: "user-1",
+        paymentMethod: "card",
+        transactionId: "txn-1",
+      }),
+    );
+  });
+
+  it("rejects cross-store customer correction before invoking the command", async () => {
+    vi.mocked(transactionQueries.getTransaction).mockResolvedValue({
+      _id: "txn-1",
+      storeId: "store-1",
+    } as never);
+
+    await expect(
+      getHandler(correctTransactionCustomer)(
+        createTransactionAuthCtx({ customerStoreId: "store-2" }) as never,
+        {
+          actorStaffProfileId: "staff-1" as Id<"staffProfile">,
+          customerProfileId: "customer-1" as Id<"customerProfile">,
+          reason: "Wrong customer",
+          transactionId: "txn-1" as Id<"posTransaction">,
+        },
+      ),
+    ).resolves.toMatchObject({
+      kind: "user_error",
+      error: {
+        code: "precondition_failed",
+      },
+    });
+
+    expect(correctionCommands.correctTransactionCustomer).not.toHaveBeenCalled();
+  });
+});
+
+describe("legacy POS public checkout mutations", () => {
+  beforeEach(() => {
+    vi.mocked(athenaUserAuth.requireAuthenticatedAthenaUserWithCtx).mockResolvedValue({
+      _id: "user-1",
+    } as never);
+  });
+
+  function createCtx() {
+    return {
+      db: {
+        get: vi.fn(async (tableName: string, id: string) => {
+          if (tableName === "store" && id === "store-1") {
+            return { _id: "store-1", organizationId: "org-1" };
+          }
+          if (tableName === "productSku" && id === "sku-1") {
+            return { _id: "sku-1", storeId: "store-1" };
+          }
+          return null;
+        }),
+      },
+    };
+  }
+
+  it("limits direct completeTransaction to full admins before invoking the command", async () => {
+    vi.mocked(completeTransactionCommands.completeTransaction).mockResolvedValue({
+      kind: "ok",
+      data: {
+        transactionId: "txn-1",
+        transactionItems: [],
+        transactionNumber: "POS-001",
+      },
+    } as never);
+    const ctx = createCtx();
+
+    await expect(
+      getHandler(completeTransaction)(ctx as never, {
+        storeId: "store-1" as Id<"store">,
+        items: [],
+        payments: [{ method: "cash", amount: 0 }],
+        subtotal: 0,
+        tax: 0,
+        total: 0,
+        registerSessionId: "register-1" as Id<"registerSession">,
+        staffProfileId: "staff-1" as Id<"staffProfile">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+      }),
+    ).resolves.toMatchObject({ kind: "ok" });
+
+    expect(
+      athenaUserAuth.requireOrganizationMemberRoleWithCtx,
+    ).toHaveBeenCalledWith(ctx, {
+      allowedRoles: ["full_admin"],
+      failureMessage: "You cannot complete this POS sale.",
+      organizationId: "org-1",
+      userId: "user-1",
+    });
+    expect(completeTransactionCommands.completeTransaction).toHaveBeenCalled();
+  });
+
+  it("does not complete a direct transaction without register staff and terminal context", async () => {
+    const ctx = createCtx();
+
+    await expect(
+      getHandler(completeTransaction)(ctx as never, {
+        storeId: "store-1" as Id<"store">,
+        items: [],
+        payments: [{ method: "cash", amount: 0 }],
+        subtotal: 0,
+        tax: 0,
+        total: 0,
+      }),
+    ).resolves.toMatchObject({
+      kind: "user_error",
+      error: {
+        code: "validation_failed",
+      },
+    });
+
+    expect(completeTransactionCommands.completeTransaction).not.toHaveBeenCalled();
+  });
+
+  it("does not complete a direct transaction when authorization fails", async () => {
+    vi.mocked(
+      athenaUserAuth.requireOrganizationMemberRoleWithCtx,
+    ).mockRejectedValueOnce(new Error("You cannot complete this POS sale."));
+    const ctx = createCtx();
+
+    await expect(
+      getHandler(completeTransaction)(ctx as never, {
+        storeId: "store-1" as Id<"store">,
+        items: [],
+        payments: [{ method: "cash", amount: 0 }],
+        subtotal: 0,
+        tax: 0,
+        total: 0,
+      }),
+    ).rejects.toThrow("You cannot complete this POS sale.");
+
+    expect(completeTransactionCommands.completeTransaction).not.toHaveBeenCalled();
+  });
+
+  it("authorizes direct inventory updates by SKU store before invoking the command", async () => {
+    vi.mocked(completeTransactionCommands.updateInventory).mockResolvedValue({
+      kind: "ok",
+      data: { productSkuId: "sku-1" },
+    } as never);
+    const ctx = createCtx();
+
+    await getHandler(updateInventory)(ctx as never, {
+      skuId: "sku-1" as Id<"productSku">,
+      quantityToSubtract: 2,
+    });
+
+    expect(
+      athenaUserAuth.requireOrganizationMemberRoleWithCtx,
+    ).toHaveBeenCalledWith(ctx, {
+      allowedRoles: ["full_admin", "pos_only"],
+      failureMessage: "You cannot update POS inventory for this store.",
+      organizationId: "org-1",
+      userId: "user-1",
+    });
+    expect(completeTransactionCommands.updateInventory).toHaveBeenCalledWith(
+      ctx,
+      {
+        skuId: "sku-1",
+        quantityToSubtract: 2,
+      },
+    );
+  });
+
+  it("does not update inventory when SKU-store authorization fails", async () => {
+    vi.mocked(
+      athenaUserAuth.requireOrganizationMemberRoleWithCtx,
+    ).mockRejectedValueOnce(
+      new Error("You cannot update POS inventory for this store."),
+    );
+    const ctx = createCtx();
+
+    await expect(
+      getHandler(updateInventory)(ctx as never, {
+        skuId: "sku-1" as Id<"productSku">,
+        quantityToSubtract: 2,
+      }),
+    ).rejects.toThrow("You cannot update POS inventory for this store.");
+
+    expect(completeTransactionCommands.updateInventory).not.toHaveBeenCalled();
   });
 });
 
@@ -412,6 +760,101 @@ describe("voidTransaction public mutation", () => {
 
     expect(ctx.db.patch).not.toHaveBeenCalled();
     expect(completeTransactionCommands.voidTransaction).not.toHaveBeenCalled();
+  });
+});
+
+describe("createTransactionFromSession public mutation", () => {
+  function createAuthorizedSessionCompletionCtx(overrides?: {
+    session?: Record<string, unknown> | null;
+    store?: Record<string, unknown> | null;
+  }) {
+    vi.mocked(athenaUserAuth.requireAuthenticatedAthenaUserWithCtx).mockResolvedValue({
+      _id: "user-1",
+    } as never);
+    vi.mocked(
+      completeTransactionCommands.createTransactionFromSessionHandler,
+    ).mockResolvedValue({
+      kind: "success",
+      transactionId: "txn-1",
+      transactionItems: ["item-1"],
+      transactionNumber: "SALE-1",
+    } as never);
+
+    const session = {
+      _id: "session-1",
+      storeId: "store-1",
+      ...overrides?.session,
+    };
+    const store = {
+      _id: "store-1",
+      organizationId: "org-1",
+      ...overrides?.store,
+    };
+
+    return {
+      db: {
+        get: vi.fn(async (tableName: string, id: string) => {
+          if (tableName === "posSession" && id === "session-1") {
+            return overrides?.session === null ? null : session;
+          }
+          if (tableName === "store" && id === "store-1") {
+            return overrides?.store === null ? null : store;
+          }
+          return null;
+        }),
+      },
+    };
+  }
+
+  it("requires authenticated store access before completing a POS session", async () => {
+    const ctx = createAuthorizedSessionCompletionCtx();
+
+    await expect(
+      getHandler(createTransactionFromSession)(ctx as never, {
+        payments: [{ amount: 1000, method: "cash" }],
+        sessionId: "session-1" as Id<"posSession">,
+        staffProfileId: "staff-1" as Id<"staffProfile">,
+      }),
+    ).resolves.toMatchObject({
+      kind: "success",
+      transactionId: "txn-1",
+    });
+
+    expect(athenaUserAuth.requireAuthenticatedAthenaUserWithCtx).toHaveBeenCalledWith(
+      ctx,
+    );
+    expect(
+      athenaUserAuth.requireOrganizationMemberRoleWithCtx,
+    ).toHaveBeenCalledWith(ctx, {
+      allowedRoles: ["full_admin", "pos_only"],
+      failureMessage: "You cannot complete this POS sale.",
+      organizationId: "org-1",
+      userId: "user-1",
+    });
+    expect(
+      completeTransactionCommands.createTransactionFromSessionHandler,
+    ).toHaveBeenCalledWith(ctx, expect.objectContaining({ sessionId: "session-1" }));
+  });
+
+  it("does not complete a POS session when store authorization fails", async () => {
+    vi.mocked(
+      athenaUserAuth.requireOrganizationMemberRoleWithCtx,
+    ).mockRejectedValueOnce(new Error("You cannot complete this POS sale."));
+
+    await expect(
+      getHandler(createTransactionFromSession)(
+        createAuthorizedSessionCompletionCtx() as never,
+        {
+          payments: [{ amount: 1000, method: "cash" }],
+          sessionId: "session-1" as Id<"posSession">,
+          staffProfileId: "staff-1" as Id<"staffProfile">,
+        },
+      ),
+    ).rejects.toThrow("You cannot complete this POS sale.");
+
+    expect(
+      completeTransactionCommands.createTransactionFromSessionHandler,
+    ).not.toHaveBeenCalled();
   });
 });
 

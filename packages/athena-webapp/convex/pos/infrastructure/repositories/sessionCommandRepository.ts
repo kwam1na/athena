@@ -36,6 +36,9 @@ export interface SessionCommandRepository {
   getSessionItemById(
     itemId: Id<"posSessionItem">,
   ): Promise<Doc<"posSessionItem"> | null>;
+  getPendingCheckoutItem(
+    pendingCheckoutItemId: Id<"posPendingCheckoutItem">,
+  ): Promise<Doc<"posPendingCheckoutItem"> | null>;
   createSession(
     input: Omit<Doc<"posSession">, "_id" | "_creationTime">,
   ): Promise<Id<"posSession">>;
@@ -127,6 +130,9 @@ export function createSessionCommandRepository(
     },
     getSessionItemById(itemId) {
       return ctx.db.get("posSessionItem", itemId);
+    },
+    getPendingCheckoutItem(pendingCheckoutItemId) {
+      return ctx.db.get("posPendingCheckoutItem", pendingCheckoutItemId);
     },
     createSession(input) {
       return ctx.db.insert("posSession", input);

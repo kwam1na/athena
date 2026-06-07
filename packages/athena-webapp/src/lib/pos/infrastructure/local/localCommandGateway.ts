@@ -3,6 +3,7 @@ import type {
   PosOpenDrawerInput,
 } from "@/lib/pos/application/dto";
 import { ok, userError, type CommandResult } from "~/shared/commandResult";
+import type { PosLocalSyncPendingCheckoutItemDefinedPayload } from "~/shared/posLocalSyncContract";
 
 import { readProjectedLocalRegisterModel } from "./localRegisterReader";
 import { deriveLocalSaleBlocker } from "./saleBlockerPolicy";
@@ -74,6 +75,9 @@ export function createLocalCommandGateway(
   appendServiceLine(input: AppendLocalServiceLineInput): Promise<boolean>;
   clearCart(input: ClearLocalCartInput): Promise<boolean>;
   completeTransaction(input: CompleteLocalTransactionInput): Promise<boolean>;
+  definePendingCheckoutItem(
+    input: DefineLocalPendingCheckoutItemInput,
+  ): Promise<boolean>;
   openDrawer(input: LocalOpenDrawerInput): Promise<LocalOpenDrawerResult>;
   reopenRegister(input: ReopenLocalRegisterInput): Promise<boolean>;
   seedRegisterSession(input: SeedLocalRegisterSessionInput): Promise<boolean>;
@@ -285,6 +289,25 @@ export function createLocalCommandGateway(
         localRegisterSessionId: input.localRegisterSessionId,
         localPosSessionId: input.localPosSessionId,
         staffProfileId: input.staffProfileId,
+        validationMetadata: input.validationMetadata,
+        payload: input.payload,
+      });
+    },
+
+    async definePendingCheckoutItem(input: DefineLocalPendingCheckoutItemInput) {
+      if (!(await canAppendSaleAffectingEvent(input))) return false;
+      return appendBoolean({
+        type: "pending_checkout_item.defined",
+        terminalId: input.terminalId,
+        storeId: input.storeId,
+        registerNumber: input.registerNumber,
+        localRegisterSessionId: input.localRegisterSessionId,
+        localPosSessionId: input.localPosSessionId,
+        staffProfileId: input.staffProfileId,
+        staffProofToken: resolveStaffProofToken(
+          options.staffProofToken,
+          input.staffProfileId,
+        ),
         validationMetadata: input.validationMetadata,
         payload: input.payload,
       });
@@ -752,6 +775,10 @@ type LocalSaleCommandContext = LocalCommandContext & {
 
 type AppendLocalCartItemInput = LocalSaleCommandContext & {
   payload: unknown;
+};
+
+type DefineLocalPendingCheckoutItemInput = LocalSaleCommandContext & {
+  payload: PosLocalSyncPendingCheckoutItemDefinedPayload;
 };
 
 type AppendLocalServiceLineInput = LocalSaleCommandContext & {

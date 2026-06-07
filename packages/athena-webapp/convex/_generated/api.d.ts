@@ -153,6 +153,7 @@ import type * as pos_application_commands_adjustTransactionItems from "../pos/ap
 import type * as pos_application_commands_assignCustomer from "../pos/application/commands/assignCustomer.js";
 import type * as pos_application_commands_completeTransaction from "../pos/application/commands/completeTransaction.js";
 import type * as pos_application_commands_correctTransaction from "../pos/application/commands/correctTransaction.js";
+import type * as pos_application_commands_createOrReusePendingCheckoutItem from "../pos/application/commands/createOrReusePendingCheckoutItem.js";
 import type * as pos_application_commands_expenseSessionCommands from "../pos/application/commands/expenseSessionCommands.js";
 import type * as pos_application_commands_expenseSessionTracing from "../pos/application/commands/expenseSessionTracing.js";
 import type * as pos_application_commands_posSessionTracing from "../pos/application/commands/posSessionTracing.js";
@@ -252,6 +253,7 @@ import type * as schemas_pos_posLocalSyncConflict from "../schemas/pos/posLocalS
 import type * as schemas_pos_posLocalSyncCursor from "../schemas/pos/posLocalSyncCursor.js";
 import type * as schemas_pos_posLocalSyncEvent from "../schemas/pos/posLocalSyncEvent.js";
 import type * as schemas_pos_posLocalSyncMapping from "../schemas/pos/posLocalSyncMapping.js";
+import type * as schemas_pos_posPendingCheckoutItem from "../schemas/pos/posPendingCheckoutItem.js";
 import type * as schemas_pos_posRecoveryCredential from "../schemas/pos/posRecoveryCredential.js";
 import type * as schemas_pos_posSession from "../schemas/pos/posSession.js";
 import type * as schemas_pos_posSessionItem from "../schemas/pos/posSessionItem.js";
@@ -498,6 +500,7 @@ declare const fullApi: ApiFromModules<{
   "pos/application/commands/assignCustomer": typeof pos_application_commands_assignCustomer;
   "pos/application/commands/completeTransaction": typeof pos_application_commands_completeTransaction;
   "pos/application/commands/correctTransaction": typeof pos_application_commands_correctTransaction;
+  "pos/application/commands/createOrReusePendingCheckoutItem": typeof pos_application_commands_createOrReusePendingCheckoutItem;
   "pos/application/commands/expenseSessionCommands": typeof pos_application_commands_expenseSessionCommands;
   "pos/application/commands/expenseSessionTracing": typeof pos_application_commands_expenseSessionTracing;
   "pos/application/commands/posSessionTracing": typeof pos_application_commands_posSessionTracing;
@@ -597,6 +600,7 @@ declare const fullApi: ApiFromModules<{
   "schemas/pos/posLocalSyncCursor": typeof schemas_pos_posLocalSyncCursor;
   "schemas/pos/posLocalSyncEvent": typeof schemas_pos_posLocalSyncEvent;
   "schemas/pos/posLocalSyncMapping": typeof schemas_pos_posLocalSyncMapping;
+  "schemas/pos/posPendingCheckoutItem": typeof schemas_pos_posPendingCheckoutItem;
   "schemas/pos/posRecoveryCredential": typeof schemas_pos_posRecoveryCredential;
   "schemas/pos/posSession": typeof schemas_pos_posSession;
   "schemas/pos/posSessionItem": typeof schemas_pos_posSessionItem;

@@ -73,6 +73,9 @@ const localSyncResultValidator = commandResultValidator(
   }),
 );
 
+const MAX_LOCAL_SYNC_EVENTS_PER_REQUEST = 250;
+const MAX_PENDING_CHECKOUT_DEFINITIONS_PER_REQUEST = 50;
+
 const posLocalSyncEventBaseValidator = {
   localEventId: v.string(),
   localRegisterSessionId: v.string(),
@@ -119,6 +122,7 @@ const posLocalSyncUploadEventValidator = v.union(
           localTransactionItemId: v.optional(v.string()),
           productId: v.string(),
           productSkuId: v.string(),
+          pendingCheckoutItemId: v.optional(v.string()),
           productName: v.string(),
           productSku: v.string(),
           barcode: v.optional(v.string()),
@@ -166,6 +170,58 @@ const posLocalSyncUploadEventValidator = v.union(
   }),
   v.object({
     ...posLocalSyncEventBaseValidator,
+    eventType: v.literal("pending_checkout_item_defined"),
+    payload: v.object({
+      localPendingCheckoutItemId: v.string(),
+      name: v.string(),
+      lookupCode: v.optional(v.string()),
+      searchContext: v.optional(
+        v.object({
+          query: v.optional(v.string()),
+          source: v.optional(
+            v.union(
+              v.literal("barcode"),
+              v.literal("lookup_code"),
+              v.literal("manual"),
+              v.literal("catalog_search"),
+              v.literal("unknown"),
+            ),
+          ),
+          matched: v.optional(
+            v.union(
+              v.literal("existing_product"),
+              v.literal("pending_checkout_item"),
+              v.literal("none"),
+              v.literal("unknown"),
+            ),
+          ),
+        }),
+      ),
+      price: v.number(),
+      quantitySold: v.number(),
+      localMetadata: v.optional(
+        v.object({
+          schema: v.literal("pos_pending_checkout_item_local_metadata_v1"),
+          source: v.optional(
+            v.union(
+              v.literal("offline_search"),
+              v.literal("online_search"),
+              v.literal("manual_entry"),
+              v.literal("unknown"),
+            ),
+          ),
+          reusedExistingPendingItem: v.optional(v.boolean()),
+          createdOffline: v.optional(v.boolean()),
+          appSessionValidation: v.optional(
+            v.union(v.literal("supported"), v.literal("unverified")),
+          ),
+          cloudValidation: v.optional(v.literal("uncertain")),
+        }),
+      ),
+    }),
+  }),
+  v.object({
+    ...posLocalSyncEventBaseValidator,
     eventType: v.literal("register_closed"),
     payload: v.object({
       countedCash: v.optional(v.number()),
@@ -199,6 +255,25 @@ export const ingestLocalEvents = mutation({
   },
   returns: localSyncResultValidator,
   handler: async (ctx, args) => {
+    if (args.events.length > MAX_LOCAL_SYNC_EVENTS_PER_REQUEST) {
+      return userError({
+        code: "validation_failed",
+        message: `Sync uploads can include at most ${MAX_LOCAL_SYNC_EVENTS_PER_REQUEST} events.`,
+      });
+    }
+
+    const pendingDefinitionCount = args.events.filter(
+      (event) => event.eventType === "pending_checkout_item_defined",
+    ).length;
+    if (
+      pendingDefinitionCount > MAX_PENDING_CHECKOUT_DEFINITIONS_PER_REQUEST
+    ) {
+      return userError({
+        code: "validation_failed",
+        message: `Sync uploads can include at most ${MAX_PENDING_CHECKOUT_DEFINITIONS_PER_REQUEST} pending checkout items.`,
+      });
+    }
+
     const store = await ctx.db.get("store", args.storeId);
     if (!store) {
       return userError({

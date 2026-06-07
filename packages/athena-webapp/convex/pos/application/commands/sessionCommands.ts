@@ -73,6 +73,7 @@ export interface UpsertSessionItemArgs {
   sessionId: Id<"posSession">;
   productId: Id<"product">;
   productSkuId: Id<"productSku">;
+  pendingCheckoutItemId?: Id<"posPendingCheckoutItem">;
   staffProfileId: Id<"staffProfile">;
   productSku: string;
   barcode?: string;
@@ -137,6 +138,48 @@ type SessionCommandDependencies = {
   inventory: PosInventoryHoldGateway;
   tracing?: PosSessionTraceRecorder;
 };
+
+function pendingCheckoutItemMatchesLine(
+  pendingItem: Doc<"posPendingCheckoutItem"> | null,
+  args: {
+    productId: Id<"product">;
+    productSkuId: Id<"productSku">;
+    storeId: Id<"store">;
+  },
+) {
+  return (
+    pendingItem?.storeId === args.storeId &&
+    (pendingItem.status === "pending_review" || pendingItem.status === "flagged") &&
+    pendingItem.provisionalProductId === args.productId &&
+    pendingItem.provisionalProductSkuId === args.productSkuId
+  );
+}
+
+async function validatePendingCheckoutLine(
+  dependencies: SessionCommandDependencies,
+  args: {
+    pendingCheckoutItemId?: Id<"posPendingCheckoutItem">;
+    productId: Id<"product">;
+    productSkuId: Id<"productSku">;
+    storeId: Id<"store">;
+  },
+): Promise<PosSessionCommandOutcome<{ isPendingCheckoutLine: boolean }>> {
+  if (!args.pendingCheckoutItemId) {
+    return success({ isPendingCheckoutLine: false });
+  }
+
+  const pendingItem = await dependencies.repository.getPendingCheckoutItem(
+    args.pendingCheckoutItemId,
+  );
+  if (!pendingCheckoutItemMatchesLine(pendingItem, args)) {
+    return failure(
+      "validationFailed",
+      "This pending checkout item no longer matches the sale line. Add it again before continuing.",
+    );
+  }
+
+  return success({ isPendingCheckoutLine: true });
+}
 
 export function createPosSessionCommandService(
   dependencies: SessionCommandDependencies,
@@ -507,36 +550,61 @@ export function createPosSessionCommandService(
         productSkuId: args.productSkuId,
       });
       const previousQuantity = existingItem?.quantity;
+      if (
+        existingItem?.pendingCheckoutItemId &&
+        existingItem.pendingCheckoutItemId !== args.pendingCheckoutItemId
+      ) {
+        return failure(
+          "validationFailed",
+          "This pending checkout item no longer matches the sale line. Add it again before continuing.",
+        );
+      }
+      const pendingValidation = await validatePendingCheckoutLine(
+        dependencies,
+        {
+          pendingCheckoutItemId: args.pendingCheckoutItemId,
+          productId: args.productId,
+          productSkuId: args.productSkuId,
+          storeId: validation.data.storeId,
+        },
+      );
+      if (pendingValidation.status !== "ok") {
+        return pendingValidation;
+      }
+      const isPendingCheckoutLine =
+        pendingValidation.data.isPendingCheckoutLine;
 
       let itemId: Id<"posSessionItem">;
       const expiresAt = dependencies.calculateExpiration(now);
       if (existingItem) {
-        const adjustResult = await dependencies.inventory.adjustHold({
-          storeId: validation.data.storeId,
-          sessionId: args.sessionId,
-          skuId: args.productSkuId,
-          oldQuantity: existingItem.quantity,
-          newQuantity: args.quantity,
-          expiresAt,
-          now,
-          activityContext: {
-            actorStaffProfileId: args.staffProfileId,
-            posSessionItemId: existingItem._id,
-            registerSessionId: validation.data.registerSessionId,
-            terminalId: validation.data.terminalId,
-            workflowTraceId: validation.data.workflowTraceId,
-            metadata: {
-              productName: args.productName,
-              previousQuantity: existingItem.quantity,
-              newQuantity: args.quantity,
+        if (!isPendingCheckoutLine && !existingItem.pendingCheckoutItemId) {
+          const adjustResult = await dependencies.inventory.adjustHold({
+            storeId: validation.data.storeId,
+            sessionId: args.sessionId,
+            skuId: args.productSkuId,
+            oldQuantity: existingItem.quantity,
+            newQuantity: args.quantity,
+            expiresAt,
+            now,
+            activityContext: {
+              actorStaffProfileId: args.staffProfileId,
+              posSessionItemId: existingItem._id,
+              registerSessionId: validation.data.registerSessionId,
+              terminalId: validation.data.terminalId,
+              workflowTraceId: validation.data.workflowTraceId,
+              metadata: {
+                productName: args.productName,
+                previousQuantity: existingItem.quantity,
+                newQuantity: args.quantity,
+              },
             },
-          },
-        });
-        if (!adjustResult.success) {
-          return failure(
-            "inventoryUnavailable",
-            adjustResult.message || "Failed to adjust inventory",
-          );
+          });
+          if (!adjustResult.success) {
+            return failure(
+              "inventoryUnavailable",
+              adjustResult.message || "Failed to adjust inventory",
+            );
+          }
         }
 
         await dependencies.repository.patchSessionItem(existingItem._id, {
@@ -544,32 +612,35 @@ export function createPosSessionCommandService(
           price: args.price,
           barcode: args.barcode,
           color: args.color,
+          pendingCheckoutItemId: args.pendingCheckoutItemId,
           updatedAt: now,
         });
         itemId = existingItem._id;
       } else {
-        const holdResult = await dependencies.inventory.acquireHold({
-          storeId: validation.data.storeId,
-          sessionId: args.sessionId,
-          skuId: args.productSkuId,
-          quantity: args.quantity,
-          expiresAt,
-          now,
-          activityContext: {
-            actorStaffProfileId: args.staffProfileId,
-            registerSessionId: validation.data.registerSessionId,
-            terminalId: validation.data.terminalId,
-            workflowTraceId: validation.data.workflowTraceId,
-            metadata: {
-              productName: args.productName,
+        if (!isPendingCheckoutLine) {
+          const holdResult = await dependencies.inventory.acquireHold({
+            storeId: validation.data.storeId,
+            sessionId: args.sessionId,
+            skuId: args.productSkuId,
+            quantity: args.quantity,
+            expiresAt,
+            now,
+            activityContext: {
+              actorStaffProfileId: args.staffProfileId,
+              registerSessionId: validation.data.registerSessionId,
+              terminalId: validation.data.terminalId,
+              workflowTraceId: validation.data.workflowTraceId,
+              metadata: {
+                productName: args.productName,
+              },
             },
-          },
-        });
-        if (!holdResult.success) {
-          return failure(
-            "inventoryUnavailable",
-            holdResult.message || "Failed to acquire inventory hold",
-          );
+          });
+          if (!holdResult.success) {
+            return failure(
+              "inventoryUnavailable",
+              holdResult.message || "Failed to acquire inventory hold",
+            );
+          }
         }
 
         itemId = await dependencies.repository.createSessionItem({
@@ -577,6 +648,7 @@ export function createPosSessionCommandService(
           storeId: validation.data.storeId,
           productId: args.productId,
           productSkuId: args.productSkuId,
+          pendingCheckoutItemId: args.pendingCheckoutItemId,
           productSku: args.productSku,
           barcode: args.barcode,
           productName: args.productName,

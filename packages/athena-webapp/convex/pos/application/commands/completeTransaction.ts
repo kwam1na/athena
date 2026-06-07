@@ -53,6 +53,10 @@ import {
   recordInventoryMovementWithDispositionWithCtx,
 } from "../../../operations/inventoryMovements";
 import { recordSkuActivityEventWithCtx } from "../../../operations/skuActivity";
+import {
+  recordPendingCheckoutItemEvidenceCorrection,
+  recordPendingCheckoutItemSaleEvidence,
+} from "./createOrReusePendingCheckoutItem";
 
 type PosPaymentInput = {
   method: string;
@@ -75,6 +79,123 @@ type TransactionTotals = {
   tax: number;
   total: number;
 };
+
+function hasReadableDb(ctx: MutationCtx): ctx is MutationCtx & {
+  db: { get: MutationCtx["db"]["get"] };
+} {
+  return typeof (ctx as { db?: { get?: unknown } }).db?.get === "function";
+}
+
+async function validateDirectTransactionStoreReferences(
+  ctx: MutationCtx,
+  args: {
+    storeId: Id<"store">;
+    customerProfileId?: Id<"customerProfile">;
+    registerSessionId?: Id<"registerSession">;
+    staffProfileId?: Id<"staffProfile">;
+    terminalId?: Id<"posTerminal">;
+    skus: Array<NonNullable<Awaited<ReturnType<typeof getProductSkuById>>>>;
+  },
+): Promise<CommandResult<never> | null> {
+  for (const sku of args.skus) {
+    if ("storeId" in sku && sku.storeId && sku.storeId !== args.storeId) {
+      return userError({
+        code: "precondition_failed",
+        message: "Product SKU is not available for this store.",
+      });
+    }
+  }
+
+  if (!hasReadableDb(ctx)) {
+    return null;
+  }
+
+  for (const sku of args.skus) {
+    const product = await ctx.db.get("product", sku.productId);
+    if (!product || product.storeId !== args.storeId) {
+      return userError({
+        code: "precondition_failed",
+        message: "Product SKU is not available for this store.",
+      });
+    }
+  }
+
+  if (args.staffProfileId) {
+    const staffProfile = await ctx.db.get("staffProfile", args.staffProfileId);
+    if (
+      !staffProfile ||
+      staffProfile.storeId !== args.storeId ||
+      staffProfile.status !== "active"
+    ) {
+      return userError({
+        code: "precondition_failed",
+        message: "Staff profile is not active for this store.",
+      });
+    }
+  }
+
+  if (args.customerProfileId) {
+    const customerProfile = await ctx.db.get(
+      "customerProfile",
+      args.customerProfileId,
+    );
+    if (!customerProfile || customerProfile.storeId !== args.storeId) {
+      return userError({
+        code: "precondition_failed",
+        message: "Customer profile is not available for this store.",
+      });
+    }
+  }
+
+  if (args.terminalId) {
+    const terminal = await ctx.db.get("posTerminal", args.terminalId);
+    if (
+      !terminal ||
+      terminal.storeId !== args.storeId ||
+      terminal.status !== "active"
+    ) {
+      return userError({
+        code: "precondition_failed",
+        message: "POS terminal is not active for this store.",
+      });
+    }
+  }
+
+  if (args.registerSessionId) {
+    const registerSession = await ctx.db.get(
+      "registerSession",
+      args.registerSessionId,
+    );
+    if (
+      !registerSession ||
+      registerSession.storeId !== args.storeId ||
+      !isPosUsableRegisterSessionStatus(registerSession.status)
+    ) {
+      return userError({
+        code: "precondition_failed",
+        message: "Register session is not open for this store.",
+      });
+    }
+    if (args.terminalId && registerSession.terminalId !== args.terminalId) {
+      return userError({
+        code: "precondition_failed",
+        message: "Register session does not match this terminal.",
+      });
+    }
+    if (
+      args.staffProfileId &&
+      registerSession.openedByStaffProfileId &&
+      registerSession.openedByStaffProfileId !== args.staffProfileId
+    ) {
+      return userError({
+        code: "precondition_failed",
+        message: "Register session does not match this staff member.",
+      });
+    }
+  }
+
+  return null;
+}
 
 export function buildCompleteTransactionResult(input: {
   transactionId: Id<"posTransaction"> | null;
@@ -477,6 +598,10 @@ export async function completeTransaction(
   }
 
   const skuQuantityMap = new Map<Id<"productSku">, number>();
+  const skusById = new Map<
+    Id<"productSku">,
+    NonNullable<Awaited<ReturnType<typeof getProductSkuById>>>
+  >();
 
   for (const item of args.items) {
     skuQuantityMap.set(
@@ -493,6 +618,7 @@ export async function completeTransaction(
         message: `Product SKU ${skuId} not found.`,
       });
     }
+    skusById.set(skuId, sku);
 
     if (sku.quantityAvailable < totalQuantity) {
       const itemName =
@@ -520,6 +646,21 @@ export async function completeTransaction(
           `Insufficient inventory for ${capitalizeWords(args.items.find((item) => item.skuId === skuId)?.name || "Unknown Product")} (${sku.sku}).`,
       });
     }
+  }
+
+  const referenceValidation = await validateDirectTransactionStoreReferences(
+    ctx,
+    {
+      customerProfileId: args.customerProfileId,
+      registerSessionId: args.registerSessionId,
+      staffProfileId: args.staffProfileId,
+      storeId: args.storeId,
+      terminalId: args.terminalId,
+      skus: [...skusById.values()],
+    },
+  );
+  if (referenceValidation) {
+    return referenceValidation;
   }
 
   if (args.payments.length === 0) {
@@ -1139,6 +1280,10 @@ async function applyApprovedTransactionVoid(
   >();
 
   for (const { item, sku } of args.items) {
+    if (item.pendingCheckoutItemId) {
+      continue;
+    }
+
     const existing = voidInventoryBySku.get(item.productSkuId);
     if (existing) {
       existing.quantity += item.quantity;
@@ -1183,6 +1328,36 @@ async function applyApprovedTransactionVoid(
         inventoryCount: entry.sku.inventoryCount + entry.quantity,
       });
     }
+  }
+
+  const pendingVoidCorrections = new Map<
+    Id<"posPendingCheckoutItem">,
+    { pendingCheckoutItemId: Id<"posPendingCheckoutItem">; quantityDelta: number }
+  >();
+  for (const { item } of args.items) {
+    if (!item.pendingCheckoutItemId) {
+      continue;
+    }
+
+    const existing = pendingVoidCorrections.get(item.pendingCheckoutItemId);
+    pendingVoidCorrections.set(item.pendingCheckoutItemId, {
+      pendingCheckoutItemId: item.pendingCheckoutItemId,
+      quantityDelta: (existing?.quantityDelta ?? 0) - item.quantity,
+    });
+  }
+
+  for (const correction of pendingVoidCorrections.values()) {
+    await recordPendingCheckoutItemEvidenceCorrection(ctx, {
+      actorStaffProfileId: args.requesterStaffProfileId,
+      actorUserId: args.requesterUserId,
+      pendingCheckoutItemId: correction.pendingCheckoutItemId,
+      posTransactionId: args.transaction._id,
+      quantityDelta: correction.quantityDelta,
+      reason: "transaction_void",
+      storeId: args.transaction.storeId,
+      timestamp: Date.now(),
+      transactionCountDelta: -1,
+    });
   }
 
   const paymentAllocationIds = paymentAllocations
@@ -1505,6 +1680,28 @@ export async function createTransactionFromSessionHandler(
 
   const skuQuantityMap = new Map<Id<"productSku">, number>();
   for (const item of items) {
+    if (item.pendingCheckoutItemId) {
+      const pendingItem = await ctx.db.get(
+        "posPendingCheckoutItem",
+        item.pendingCheckoutItemId,
+      );
+      if (
+        !pendingItem ||
+        pendingItem.storeId !== session.storeId ||
+        (pendingItem.status !== "pending_review" &&
+          pendingItem.status !== "flagged") ||
+        pendingItem.provisionalProductId !== item.productId ||
+        pendingItem.provisionalProductSkuId !== item.productSkuId
+      ) {
+        return userError({
+          code: "conflict",
+          message:
+            "This pending checkout item no longer matches the sale line. Add it again before completing the sale.",
+        });
+      }
+      continue;
+    }
+
     skuQuantityMap.set(
       item.productSkuId,
       (skuQuantityMap.get(item.productSkuId) || 0) + item.quantity,
@@ -1657,10 +1854,12 @@ export async function createTransactionFromSessionHandler(
 
   const consumedHoldQuantities = await consumeInventoryHoldsForSession(ctx.db, {
     sessionId: args.sessionId,
-    items: items.map((item) => ({
-      skuId: item.productSkuId,
-      quantity: item.quantity,
-    })),
+    items: items
+      .filter((item) => !item.pendingCheckoutItemId)
+      .map((item) => ({
+        skuId: item.productSkuId,
+        quantity: item.quantity,
+      })),
     now: completedAt,
     activityContext: {
       actorStaffProfileId: args.staffProfileId,
@@ -1690,6 +1889,7 @@ export async function createTransactionFromSessionHandler(
         transactionId,
         productId: item.productId,
         productSkuId: item.productSkuId,
+        pendingCheckoutItemId: item.pendingCheckoutItemId,
         productName: item.productName,
         productSku: item.productSku ?? "",
         barcode: item.barcode,
@@ -1704,25 +1904,40 @@ export async function createTransactionFromSessionHandler(
       const quantityAvailableToSubtract =
         consumedHoldQuantity >= item.quantity ? item.quantity : 0;
 
-      await patchProductSku(ctx, item.productSkuId, {
-        quantityAvailable: Math.max(
-          0,
-          sku.quantityAvailable - quantityAvailableToSubtract,
-        ),
-        inventoryCount: Math.max(0, sku.inventoryCount - item.quantity),
-      });
-      await recordPosSaleInventoryMovement(ctx, {
-        storeId: session.storeId,
-        organizationId: store?.organizationId,
-        productId: item.productId,
-        productSkuId: item.productSkuId,
-        quantity: item.quantity,
-        posTransactionId: transactionId,
-        registerSessionId: resolvedRegisterSessionId.data,
-        staffProfileId: session.staffProfileId,
-        customerProfileId: session.customerProfileId,
-        transactionNumber,
-      });
+      if (!item.pendingCheckoutItemId) {
+        await patchProductSku(ctx, item.productSkuId, {
+          quantityAvailable: Math.max(
+            0,
+            sku.quantityAvailable - quantityAvailableToSubtract,
+          ),
+          inventoryCount: Math.max(0, sku.inventoryCount - item.quantity),
+        });
+        await recordPosSaleInventoryMovement(ctx, {
+          storeId: session.storeId,
+          organizationId: store?.organizationId,
+          productId: item.productId,
+          productSkuId: item.productSkuId,
+          quantity: item.quantity,
+          posTransactionId: transactionId,
+          registerSessionId: resolvedRegisterSessionId.data,
+          staffProfileId: session.staffProfileId,
+          customerProfileId: session.customerProfileId,
+          transactionNumber,
+        });
+      } else {
+        await recordPendingCheckoutItemSaleEvidence(ctx, {
+          actorStaffProfileId: session.staffProfileId,
+          pendingCheckoutItemId: item.pendingCheckoutItemId,
+          posTransactionId: transactionId,
+          price: item.price,
+          quantitySold: item.quantity,
+          registerSessionId: resolvedRegisterSessionId.data,
+          source: "online",
+          storeId: session.storeId,
+          terminalId: session.terminalId,
+          timestamp: Date.now(),
+        });
+      }
 
       return transactionItemId;
     }),

@@ -99,6 +99,18 @@ function getRegisterCatalogPrice(sku: Doc<"productSku">) {
   return sku.netPrice ?? sku.price;
 }
 
+export function isTrustedRegisterCatalogSku(args: {
+  product: Doc<"product">;
+  sku: Doc<"productSku">;
+}) {
+  return (
+    args.product.availability !== "archived" &&
+    args.product.availability !== "draft" &&
+    args.product.isVisible !== false &&
+    args.sku.isVisible !== false
+  );
+}
+
 async function listScopedRegisterCatalogSkus(
   ctx: QueryCtx,
   args: {
@@ -121,7 +133,7 @@ async function listScopedRegisterCatalogSkus(
     if (
       !product ||
       product.storeId !== args.storeId ||
-      product.availability === "archived"
+      !isTrustedRegisterCatalogSku({ product, sku })
     ) {
       continue;
     }

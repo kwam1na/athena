@@ -32,12 +32,21 @@ type SessionItemRecord = {
   storeId: string;
   productId: string;
   productSkuId: string;
+  pendingCheckoutItemId?: string;
   productSku: string;
   productName: string;
   price: number;
   quantity: number;
   createdAt: number;
   updatedAt: number;
+};
+
+type PendingCheckoutItemRecord = {
+  _id: string;
+  storeId: string;
+  status: "pending_review" | "approved" | "rejected" | "flagged";
+  provisionalProductId: string;
+  provisionalProductSkuId: string;
 };
 
 type InventoryCall =
@@ -79,6 +88,15 @@ describe("createPosSessionCommandService", () => {
           terminalId: "terminal-1",
           registerNumber: "1",
         }),
+      ],
+      pendingCheckoutItems: [
+        {
+          _id: "pending-item-1",
+          storeId: "store-1",
+          status: "pending_review",
+          provisionalProductId: "product-pending-1",
+          provisionalProductSkuId: "sku-pending-1",
+        },
       ],
     });
     const traceCalls: TraceCall[] = [];
@@ -140,6 +158,15 @@ describe("createPosSessionCommandService", () => {
           terminalId: "terminal-1",
           registerNumber: "1",
         }),
+      ],
+      pendingCheckoutItems: [
+        {
+          _id: "pending-item-1",
+          storeId: "store-1",
+          status: "pending_review",
+          provisionalProductId: "product-pending-1",
+          provisionalProductSkuId: "sku-pending-1",
+        },
       ],
     });
 
@@ -539,6 +566,15 @@ describe("createPosSessionCommandService", () => {
           terminalId: "terminal-1",
           registerNumber: "1",
         }),
+      ],
+      pendingCheckoutItems: [
+        {
+          _id: "pending-item-1",
+          storeId: "store-1",
+          status: "pending_review",
+          provisionalProductId: "product-pending-1",
+          provisionalProductSkuId: "sku-pending-1",
+        },
       ],
     });
 
@@ -1115,6 +1151,237 @@ describe("createPosSessionCommandService", () => {
         previousQuantity: undefined,
       },
     ]);
+  });
+
+  it.each(["pending_review", "flagged"] as const)(
+    "adds a %s pending checkout cart line without acquiring trusted inventory holds",
+    async (status) => {
+    const commandService = await loadCommandService();
+    const repository = createFakeRepository({
+      sessions: [
+        buildSession({
+          _id: "session-5",
+          sessionNumber: "SES-005",
+          storeId: "store-1",
+          terminalId: "terminal-1",
+          staffProfileId: "cashier-1",
+          status: "active",
+          registerNumber: "1",
+          registerSessionId: "drawer-1",
+          expiresAt: 8_000,
+          updatedAt: 500,
+        }),
+      ],
+      registerSessions: [
+        buildRegisterSession({
+          _id: "drawer-1",
+          storeId: "store-1",
+          status: "open",
+          terminalId: "terminal-1",
+          registerNumber: "1",
+        }),
+      ],
+      pendingCheckoutItems: [
+        {
+          _id: "pending-item-1",
+          storeId: "store-1",
+          status,
+          provisionalProductId: "product-pending-1",
+          provisionalProductSkuId: "sku-pending-1",
+        },
+      ],
+    });
+    const inventoryCalls: InventoryCall[] = [];
+
+    const result = await commandService(
+      createDependencies({
+        repository,
+        inventoryCalls,
+        now: 1_000,
+        nextExpiration: 61_000,
+      }),
+    ).upsertSessionItem({
+      sessionId: "session-5",
+      staffProfileId: "cashier-1",
+      productId: "product-pending-1",
+      productSkuId: "sku-pending-1",
+      pendingCheckoutItemId: "pending-item-1",
+      productSku: "PENDING-1",
+      productName: "Missing bundle",
+      price: 15,
+      quantity: 2,
+    });
+
+    expect(result).toEqual({
+      status: "ok",
+      data: {
+        itemId: "item-1",
+        expiresAt: 61_000,
+      },
+    });
+    expect(inventoryCalls).toEqual([]);
+    expect(repository.items).toContainEqual(
+      expect.objectContaining({
+        _id: "item-1",
+        pendingCheckoutItemId: "pending-item-1",
+        productSkuId: "sku-pending-1",
+        quantity: 2,
+      }),
+    );
+    },
+  );
+
+  it("rejects pending checkout IDs that do not belong to the submitted sale line", async () => {
+    const commandService = await loadCommandService();
+    const repository = createFakeRepository({
+      sessions: [
+        buildSession({
+          _id: "session-5",
+          sessionNumber: "SES-005",
+          storeId: "store-1",
+          terminalId: "terminal-1",
+          staffProfileId: "cashier-1",
+          status: "active",
+          registerNumber: "1",
+          registerSessionId: "drawer-1",
+          expiresAt: 8_000,
+          updatedAt: 500,
+        }),
+      ],
+      registerSessions: [
+        buildRegisterSession({
+          _id: "drawer-1",
+          storeId: "store-1",
+          status: "open",
+          terminalId: "terminal-1",
+          registerNumber: "1",
+        }),
+      ],
+      pendingCheckoutItems: [
+        {
+          _id: "pending-item-1",
+          storeId: "store-1",
+          status: "pending_review",
+          provisionalProductId: "other-product",
+          provisionalProductSkuId: "other-sku",
+        },
+      ],
+    });
+    const inventoryCalls: InventoryCall[] = [];
+
+    const result = await commandService(
+      createDependencies({
+        repository,
+        inventoryCalls,
+        now: 1_000,
+        nextExpiration: 61_000,
+      }),
+    ).upsertSessionItem({
+      sessionId: "session-5",
+      staffProfileId: "cashier-1",
+      productId: "product-pending-1",
+      productSkuId: "sku-pending-1",
+      pendingCheckoutItemId: "pending-item-1",
+      productSku: "PENDING-1",
+      productName: "Missing bundle",
+      price: 15,
+      quantity: 2,
+    });
+
+    expect(result).toEqual({
+      status: "validationFailed",
+      message:
+        "This pending checkout item no longer matches the sale line. Add it again before continuing.",
+    });
+    expect(inventoryCalls).toEqual([]);
+    expect(repository.items).toEqual([]);
+  });
+
+  it("does not let a cart update clear an existing pending checkout marker", async () => {
+    const commandService = await loadCommandService();
+    const repository = createFakeRepository({
+      sessions: [
+        buildSession({
+          _id: "session-5",
+          sessionNumber: "SES-005",
+          storeId: "store-1",
+          terminalId: "terminal-1",
+          staffProfileId: "cashier-1",
+          status: "active",
+          registerNumber: "1",
+          registerSessionId: "drawer-1",
+          expiresAt: 8_000,
+          updatedAt: 500,
+        }),
+      ],
+      registerSessions: [
+        buildRegisterSession({
+          _id: "drawer-1",
+          storeId: "store-1",
+          status: "open",
+          terminalId: "terminal-1",
+          registerNumber: "1",
+        }),
+      ],
+      items: [
+        {
+          _id: "item-1",
+          sessionId: "session-5",
+          storeId: "store-1",
+          productId: "product-pending-1",
+          productSkuId: "sku-pending-1",
+          pendingCheckoutItemId: "pending-item-1",
+          productSku: "PENDING-1",
+          productName: "Missing bundle",
+          price: 15,
+          quantity: 1,
+          createdAt: 100,
+          updatedAt: 100,
+        },
+      ],
+      pendingCheckoutItems: [
+        {
+          _id: "pending-item-1",
+          storeId: "store-1",
+          status: "pending_review",
+          provisionalProductId: "product-pending-1",
+          provisionalProductSkuId: "sku-pending-1",
+        },
+      ],
+    });
+    const inventoryCalls: InventoryCall[] = [];
+
+    const result = await commandService(
+      createDependencies({
+        repository,
+        inventoryCalls,
+        now: 1_000,
+        nextExpiration: 61_000,
+      }),
+    ).upsertSessionItem({
+      sessionId: "session-5",
+      staffProfileId: "cashier-1",
+      productId: "product-pending-1",
+      productSkuId: "sku-pending-1",
+      productSku: "PENDING-1",
+      productName: "Missing bundle",
+      price: 15,
+      quantity: 2,
+    });
+
+    expect(result).toEqual({
+      status: "validationFailed",
+      message:
+        "This pending checkout item no longer matches the sale line. Add it again before continuing.",
+    });
+    expect(inventoryCalls).toEqual([]);
+    expect(repository.itemPatches).toEqual([]);
+    expect(repository.items[0]).toEqual(
+      expect.objectContaining({
+        pendingCheckoutItemId: "pending-item-1",
+        quantity: 1,
+      }),
+    );
   });
 
   it("does not create a cart line, patch the session, or trace when inventory acquire fails", async () => {
@@ -2252,11 +2519,13 @@ function createDependencies(options: {
 function createFakeRepository(seed?: {
   sessions?: SessionRecord[];
   items?: SessionItemRecord[];
+  pendingCheckoutItems?: PendingCheckoutItemRecord[];
   registerSessions?: RegisterSessionRecord[];
 }) {
   const repository = {
     sessions: [...(seed?.sessions ?? [])],
     items: [...(seed?.items ?? [])],
+    pendingCheckoutItems: [...(seed?.pendingCheckoutItems ?? [])],
     registerSessions: [...(seed?.registerSessions ?? [])],
     sessionPatches: [] as Array<{
       sessionId: string;
@@ -2352,6 +2621,13 @@ function createFakeRepository(seed?: {
     async getSessionItemById(itemId: string) {
       return repository.getItem(itemId);
     },
+    async getPendingCheckoutItem(pendingCheckoutItemId: string) {
+      return (
+        repository.pendingCheckoutItems.find(
+          (item) => item._id === pendingCheckoutItemId,
+        ) ?? null
+      );
+    },
     async createSession(input: Omit<SessionRecord, "_id">) {
       const sessionId = `session-${repository.sessions.length + 1}`;
       repository.sessions.push({ _id: sessionId, ...input });
@@ -2443,6 +2719,7 @@ function createCommandService(
     staffProfileId: string;
     productId: string;
     productSkuId: string;
+    pendingCheckoutItemId?: string;
     productSku: string;
     productName: string;
     price: number;

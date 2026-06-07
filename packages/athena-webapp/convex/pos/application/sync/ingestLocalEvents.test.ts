@@ -98,6 +98,83 @@ describe("createLocalSyncIngestionService", () => {
     });
   });
 
+  it("accepts pending checkout item definition events and returns the local mapping", async () => {
+    const repository = createFakeSyncRepository();
+    const service = createLocalSyncIngestionService({
+      repository,
+      projectionRepository: repository,
+      now: () => 100,
+    });
+
+    const result = await service.ingestBatch(
+      buildBatch({
+        submittedByUserId: "athena-user-1" as never,
+        events: [buildPendingCheckoutItemDefinedEvent({ sequence: 1 })],
+      }),
+    );
+
+    expect(result.kind).toBe("ok");
+    if (result.kind !== "ok") throw new Error("Expected ok result");
+    expect(result.data.accepted).toEqual([
+      expect.objectContaining({
+        localEventId: "event-pending-item-1",
+        sequence: 1,
+        status: "projected",
+      }),
+    ]);
+    expect(result.data.mappings).toEqual([
+      expect.objectContaining({
+        localIdKind: "pendingCheckoutItem",
+        localId: "local-pending-item-1",
+        cloudTable: "posPendingCheckoutItem",
+        cloudId: "pending-checkout-item-1",
+      }),
+    ]);
+    expect(repository.createdPendingCheckoutItems).toEqual([
+      expect.objectContaining({
+        name: "Loose wave bundle",
+        lookupCode: "999888777666",
+        quantitySold: 2,
+        source: "offline_sync",
+      }),
+    ]);
+  });
+
+  it("rejects malformed pending checkout item definitions before projection", async () => {
+    const repository = createFakeSyncRepository();
+    const service = createLocalSyncIngestionService({
+      repository,
+      projectionRepository: repository,
+      now: () => 100,
+    });
+
+    const result = await service.ingestBatch(
+      buildBatch({
+        events: [
+          buildPendingCheckoutItemDefinedEvent({
+            sequence: 1,
+            payload: {
+              localPendingCheckoutItemId: "local-pending-item-1",
+              name: "",
+              price: 45,
+              quantitySold: 2,
+            },
+          }),
+        ],
+      }),
+    );
+
+    expect(result.kind).toBe("ok");
+    if (result.kind !== "ok") throw new Error("Expected ok result");
+    expect(result.data.accepted).toEqual([
+      expect.objectContaining({
+        localEventId: "event-pending-item-1",
+        status: "rejected",
+      }),
+    ]);
+    expect(repository.createdPendingCheckoutItems).toEqual([]);
+  });
+
   it("rejects malformed sale clear payloads", async () => {
     const repository = createFakeSyncRepository();
     const service = createLocalSyncIngestionService({
@@ -2983,6 +3060,40 @@ function buildSaleCompletedEvent(
   };
 }
 
+function buildPendingCheckoutItemDefinedEvent(
+  overrides: Partial<PosLocalSyncEventInput> & { sequence: number },
+): PosLocalSyncEventInput {
+  const { sequence, ...rest } = overrides;
+  return {
+    localEventId: `event-pending-item-${sequence}`,
+    localRegisterSessionId: "local-register-1",
+    sequence,
+    eventType: "pending_checkout_item_defined",
+    occurredAt: 15,
+    staffProfileId: "staff-1" as never,
+    staffProofToken: "proof-token-1",
+    payload: {
+      localPendingCheckoutItemId: "local-pending-item-1",
+      name: "Loose wave bundle",
+      lookupCode: "999888777666",
+      searchContext: {
+        query: "loose wave",
+        source: "barcode",
+        matched: "none",
+      },
+      price: 45,
+      quantitySold: 2,
+      localMetadata: {
+        schema: "pos_pending_checkout_item_local_metadata_v1",
+        source: "offline_search",
+        createdOffline: true,
+        appSessionValidation: "unverified",
+      },
+    },
+    ...rest,
+  };
+}
+
 function buildServiceLine(
   overrides: Partial<NonNullable<PosLocalSalePayload["serviceLines"]>[number]> = {},
 ): NonNullable<PosLocalSalePayload["serviceLines"]>[number] {
@@ -3064,6 +3175,7 @@ function createFakeSyncRepository(
   }> = {},
 ): LocalSyncRepository & {
   conflicts: LocalSyncConflictRecord[];
+  createdPendingCheckoutItems: unknown[];
   createdPaymentAllocations: unknown[];
 	  createdRegisterSessions: unknown[];
 	  createdTransactions: unknown[];
@@ -3080,6 +3192,7 @@ function createFakeSyncRepository(
   const events: LocalSyncEventRecord[] = [];
   const mappings: LocalSyncMappingRecord[] = [];
   const conflicts: LocalSyncConflictRecord[] = [];
+  const createdPendingCheckoutItems: unknown[] = [];
   const roleChecks: Array<{
     allowedRoles: string[];
     staffProfileId: string;
@@ -3118,6 +3231,7 @@ function createFakeSyncRepository(
 
   return {
     conflicts,
+    createdPendingCheckoutItems,
     createdPaymentAllocations,
     createdRegisterSessions,
     createdTransactions,
@@ -3199,6 +3313,33 @@ function createFakeSyncRepository(
             quantityAvailable: 10,
             inventoryCount: 10,
             images: [],
+          } as never)
+        : null;
+    },
+    async getPendingCheckoutItem(pendingCheckoutItemId) {
+      const created = createdPendingCheckoutItems.find(
+        (item): item is { _id: string } & Record<string, unknown> =>
+          typeof item === "object" &&
+          item !== null &&
+          "_id" in item &&
+          item._id === pendingCheckoutItemId,
+      );
+      if (created) {
+        return {
+          ...created,
+          storeId: "store-1",
+          status: "pending_review",
+          provisionalProductId: "product-1",
+          provisionalProductSkuId: "sku-1",
+        } as never;
+      }
+      return pendingCheckoutItemId === "pending-checkout-item-1"
+        ? ({
+            _id: "pending-checkout-item-1",
+            storeId: "store-1",
+            status: "pending_review",
+            provisionalProductId: "product-1",
+            provisionalProductSkuId: "sku-1",
           } as never)
         : null;
     },
@@ -3440,6 +3581,25 @@ function createFakeSyncRepository(
     async createPosSessionItem() {
       return `pos-session-item-${nextId++}` as never;
     },
+    async createOrReusePendingCheckoutItem(input) {
+      const id = `pending-checkout-item-${createdPendingCheckoutItems.length + 1}`;
+      createdPendingCheckoutItems.push({
+        _id: id,
+        ...input,
+        provisionalProductId: "product-1",
+        provisionalProductSkuId: "sku-1",
+        status: "pending_review",
+        storeId: "store-1",
+      });
+      return {
+        pendingCheckoutItemId: id,
+        productId: "product-1",
+        productSkuId: "sku-1",
+      } as never;
+    },
+    async recordPendingCheckoutItemSaleEvidence(input) {
+      return this.getPendingCheckoutItem(input.pendingCheckoutItemId);
+    },
     async createServiceWorkItem() {
       return `service-work-item-${nextId++}` as never;
     },
@@ -3461,8 +3621,11 @@ function createFakeSyncRepository(
     async createTransactionServiceLine() {
       return `transaction-service-line-${nextId++}` as never;
     },
-    async patchProductSku() {},
-    async createPaymentAllocation(input) {
+	    async patchProductSku() {},
+	    async recordSaleInventoryMovement() {
+	      return "inserted";
+	    },
+	    async createPaymentAllocation(input) {
       const id = `payment-allocation-${createdPaymentAllocations.length + 1}`;
       createdPaymentAllocations.push({ _id: id, ...input });
       return id as never;

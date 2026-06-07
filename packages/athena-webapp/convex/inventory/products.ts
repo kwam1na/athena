@@ -213,8 +213,13 @@ export const getAll = query({
         if (product.availability !== requestedAvailability) {
           return false;
         }
-      } else if (product.availability === "archived") {
-        return false;
+      } else {
+        if (product.availability !== "live") {
+          return false;
+        }
+        if (product.isVisible === false) {
+          return false;
+        }
       }
 
       if (
@@ -242,6 +247,9 @@ export const getAll = query({
 
     // Filter by color and length in memory
     const skus = allSkus.filter((sku) => {
+      if (args.isVisible !== false && sku.isVisible === false) {
+        return false;
+      }
       if (args.color && args.length) {
         const colorMatch = sku.color ? args.color.includes(sku.color) : false;
         const lengthMatch = sku.length && args.length.includes(sku.length);

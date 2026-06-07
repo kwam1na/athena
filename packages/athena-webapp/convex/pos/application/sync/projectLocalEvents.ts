@@ -114,6 +114,11 @@ type PersistedSale = {
   transactionMapping: LocalSyncMappingRecord;
 };
 
+type SaleInventoryValidation = {
+  conflict: LocalSyncConflictRecord | null;
+  stockMutationAllowed: boolean;
+};
+
 type PersistedServiceLine = {
   line: NonNullable<PosLocalSalePayload["serviceLines"]>[number];
   lineKey: string;
@@ -153,6 +158,7 @@ const PERMISSION_DRIFT_SUMMARY =
 
 const POS_SYNC_ALLOWED_ROLES_BY_EVENT = {
   register_opened: ["cashier", "manager"],
+  pending_checkout_item_defined: ["cashier", "manager"],
   sale_completed: ["cashier", "manager"],
   sale_cleared: ["cashier", "manager"],
   register_closed: ["cashier", "manager"],
@@ -179,6 +185,13 @@ export async function projectLocalSyncEvent(
     return projectRegisterOpened(
       repository,
       args as ProjectEventArgsFor<"register_opened">,
+    );
+  }
+
+  if (args.event.eventType === "pending_checkout_item_defined") {
+    return projectPendingCheckoutItemDefined(
+      repository,
+      args as ProjectEventArgsFor<"pending_checkout_item_defined">,
     );
   }
 
@@ -505,6 +518,92 @@ async function projectRegisterOpened(
   return { status: "projected", mappings: [mapping], conflicts: [] };
 }
 
+async function projectPendingCheckoutItemDefined(
+  repository: SyncProjectionRepository,
+  args: ProjectEventArgsFor<"pending_checkout_item_defined">,
+): Promise<ProjectionResult> {
+  const payload = args.event.payload;
+  const existing = await findMappingForTerminal(repository, args, {
+    localIdKind: "pendingCheckoutItem",
+    localId: payload.localPendingCheckoutItemId,
+  });
+  if (existing) {
+    if (existing.localEventId !== args.event.localEventId) {
+      const conflict = await createConflict(repository, args, {
+        conflictType: "duplicate_local_id",
+        summary:
+          "Local pending checkout item id was reused by different synced history.",
+        details: {
+          localPendingCheckoutItemId: payload.localPendingCheckoutItemId,
+          originalLocalEventId: existing.localEventId,
+        },
+      });
+      return conflictResult(conflict);
+    }
+
+    return { status: "projected", mappings: [existing], conflicts: [] };
+  }
+
+  const registerSession = await repository.getRegisterSessionByLocalId({
+    storeId: args.storeId,
+    terminalId: args.terminalId,
+    localRegisterSessionId: args.event.localRegisterSessionId,
+  });
+  if (!registerSession) {
+    const conflict = await createConflict(repository, args, {
+      conflictType: "permission",
+      summary: "Register session mapping is missing for synced POS history.",
+      details: {
+        localPendingCheckoutItemId: payload.localPendingCheckoutItemId,
+        localRegisterSessionId: args.event.localRegisterSessionId,
+      },
+    });
+    return conflictResult(conflict);
+  }
+
+  let pendingItem: Awaited<
+    ReturnType<SyncProjectionRepository["createOrReusePendingCheckoutItem"]>
+  >;
+  try {
+    pendingItem = await repository.createOrReusePendingCheckoutItem({
+      storeId: args.storeId,
+      createdByUserId: args.submittedByUserId,
+      createdByStaffProfileId: args.event.staffProfileId,
+      name: payload.name,
+      lookupCode: payload.lookupCode,
+      price: payload.price,
+      quantitySold: payload.quantitySold,
+      registerSessionId: registerSession._id,
+      terminalId: args.terminalId,
+      localEventId: args.event.localEventId,
+      source: "offline_sync",
+      timestamp: args.event.occurredAt,
+    });
+  } catch (error) {
+    const conflict = await createConflict(repository, args, {
+      conflictType: "inventory",
+      summary:
+        error instanceof Error
+          ? error.message
+          : "Pending checkout item could not be created.",
+      details: {
+        localPendingCheckoutItemId: payload.localPendingCheckoutItemId,
+        lookupCode: payload.lookupCode,
+        blocksProjection: true,
+      },
+    });
+    return conflictResult(conflict);
+  }
+  const mapping = await createMapping(repository, args, {
+    localIdKind: "pendingCheckoutItem",
+    localId: payload.localPendingCheckoutItemId,
+    cloudTable: "posPendingCheckoutItem",
+    cloudId: pendingItem.pendingCheckoutItemId,
+  });
+
+  return { status: "projected", mappings: [mapping], conflicts: [] };
+}
+
 async function projectSaleCompleted(
   repository: SyncProjectionRepository,
   args: SaleCompletedArgs,
@@ -531,7 +630,7 @@ async function projectSaleCompleted(
     return sessionResolution;
   }
 
-  const inventoryConflict = await validateSaleInventory(
+  const inventoryValidation = await validateSaleInventory(
     repository,
     args,
     validation.payload,
@@ -552,12 +651,15 @@ async function projectSaleCompleted(
     saleSession,
     session: sessionResolution,
   });
-  const itemMappings = await persistSaleItemsAndInventory(repository, args, {
-    catalogItemsByLocalId: validation.catalogValidation.itemsByLocalId,
-    payload: validation.payload,
-    sale,
-    saleSession,
-  });
+	  const itemMappings = await persistSaleItemsAndInventory(repository, args, {
+	    catalogItemsByLocalId: validation.catalogValidation.itemsByLocalId,
+	    inventoryValidation,
+	    payload: validation.payload,
+	    sale,
+	    saleSession,
+	    session: sessionResolution,
+	    store: validation.store,
+	  });
   const serviceProjection = await persistSaleServiceLines(repository, args, {
     payload: validation.payload,
     payments,
@@ -592,7 +694,7 @@ async function projectSaleCompleted(
     ...(validation.catalogValidation.conflict
       ? [validation.catalogValidation.conflict]
       : []),
-    ...(inventoryConflict ? [inventoryConflict] : []),
+	    ...(inventoryValidation.conflict ? [inventoryValidation.conflict] : []),
     ...(payments.paymentConflict ? [payments.paymentConflict] : []),
   ];
 
@@ -623,7 +725,7 @@ async function resolveExistingSaleProjection(
     return null;
   }
 
-  if (existingTransaction.localEventId !== args.event.localEventId) {
+	  if (existingTransaction.localEventId !== args.event.localEventId) {
     const conflict = await createConflict(repository, args, {
       conflictType: "duplicate_local_id",
       summary: "Local transaction id was reused by a different synced sale.",
@@ -633,14 +735,22 @@ async function resolveExistingSaleProjection(
       },
     });
     return { status: "conflicted", mappings: [], conflicts: [conflict] };
-  }
+	  }
 
-  return {
-    status: "projected",
-    mappings: await collectExistingSaleMappings(repository, args),
-    conflicts: [],
-  };
-}
+	  const existingConflicts = (
+	    await repository.listConflictsForEvent({
+	      localEventId: args.event.localEventId,
+	      storeId: args.storeId,
+	      terminalId: args.terminalId,
+	    })
+	  ).filter((conflict) => conflict.status === "needs_review");
+
+	  return {
+	    status: existingConflicts.length > 0 ? "conflicted" : "projected",
+	    mappings: await collectExistingSaleMappings(repository, args),
+	    conflicts: existingConflicts,
+	  };
+	}
 
 async function validateSaleCompletedInputs(
   repository: SyncProjectionRepository,
@@ -1183,27 +1293,43 @@ async function persistSaleRecord(
 async function persistSaleItemsAndInventory(
   repository: SyncProjectionRepository,
   args: SaleCompletedArgs,
-  input: {
-    catalogItemsByLocalId: Map<string, CanonicalSaleItem>;
-    payload: PosLocalSalePayload;
-    sale: PersistedSale;
-    saleSession: PersistedSaleSession;
-  },
-): Promise<LocalSyncMappingRecord[]> {
-  const { catalogItemsByLocalId, payload, sale, saleSession } = input;
-  const itemMappings: LocalSyncMappingRecord[] = [];
-  const consumedHoldQuantities = saleSession.reusedExistingSession
-    ? await repository.consumeInventoryHoldsForSession({
-        sessionId: saleSession.posSessionId,
-        items: payload.items.map((item) => ({
-          productSkuId: item.productSkuId,
+	  input: {
+	    catalogItemsByLocalId: Map<string, CanonicalSaleItem>;
+	    inventoryValidation: SaleInventoryValidation;
+	    payload: PosLocalSalePayload;
+	    sale: PersistedSale;
+	    saleSession: PersistedSaleSession;
+	    session: SaleSessionResolution;
+	    store: StoreRecord;
+	  },
+	): Promise<LocalSyncMappingRecord[]> {
+	  const { catalogItemsByLocalId, inventoryValidation, payload, sale, saleSession } =
+	    input;
+	  const itemMappings: LocalSyncMappingRecord[] = [];
+	  const consumedHoldQuantities =
+	    inventoryValidation.stockMutationAllowed && saleSession.reusedExistingSession
+	    ? await repository.consumeInventoryHoldsForSession({
+	        sessionId: saleSession.posSessionId,
+        items: trustedInventorySaleItems(payload).map((item) => ({
+          productSkuId: item.productSkuId as Id<"productSku">,
           quantity: item.quantity,
         })),
         now: args.event.occurredAt,
       })
     : new Map<Id<"productSku">, number>();
+  const pendingEvidenceByItemId = new Map<
+    Id<"posPendingCheckoutItem">,
+    {
+      lookupCode?: string;
+      pendingCheckoutItemId: Id<"posPendingCheckoutItem">;
+      price: number;
+      quantitySold: number;
+    }
+  >();
 
   for (const item of payload.items) {
+    const productId = item.productId as Id<"product">;
+    const productSkuId = item.productSkuId as Id<"productSku">;
     const canonicalItem = catalogItemsByLocalId.get(
       item.localTransactionItemId ?? item.productSkuId,
     );
@@ -1211,8 +1337,11 @@ async function persistSaleItemsAndInventory(
       await repository.createPosSessionItem({
         sessionId: saleSession.posSessionId,
         storeId: args.storeId,
-        productId: item.productId,
-        productSkuId: item.productSkuId,
+        productId,
+        productSkuId,
+        pendingCheckoutItemId: item.pendingCheckoutItemId as
+          | Id<"posPendingCheckoutItem">
+          | undefined,
         productSku: canonicalItem?.productSku ?? item.productSku,
         productName: canonicalItem?.productName ?? item.productName,
         barcode: canonicalItem?.barcode,
@@ -1225,8 +1354,11 @@ async function persistSaleItemsAndInventory(
     }
     const transactionItemId = await repository.createTransactionItem({
       transactionId: sale.transactionId,
-      productId: item.productId,
-      productSkuId: item.productSkuId,
+      productId,
+      productSkuId,
+      pendingCheckoutItemId: item.pendingCheckoutItemId as
+        | Id<"posPendingCheckoutItem">
+        | undefined,
       productName: canonicalItem?.productName ?? item.productName,
       productSku: canonicalItem?.productSku ?? item.productSku,
       barcode: canonicalItem?.barcode,
@@ -1235,6 +1367,20 @@ async function persistSaleItemsAndInventory(
       totalPrice: item.quantity * item.unitPrice,
       image: canonicalItem?.image,
     });
+
+    if (item.pendingCheckoutItemId) {
+      const pendingCheckoutItemId =
+        item.pendingCheckoutItemId as Id<"posPendingCheckoutItem">;
+      const existingEvidence = pendingEvidenceByItemId.get(
+        pendingCheckoutItemId,
+      );
+      pendingEvidenceByItemId.set(pendingCheckoutItemId, {
+        lookupCode: existingEvidence?.lookupCode ?? canonicalItem?.barcode,
+        pendingCheckoutItemId,
+        price: existingEvidence?.price ?? item.unitPrice,
+        quantitySold: (existingEvidence?.quantitySold ?? 0) + item.quantity,
+      });
+    }
 
     if (item.localTransactionItemId) {
       itemMappings.push(
@@ -1248,20 +1394,55 @@ async function persistSaleItemsAndInventory(
     }
   }
 
-  for (const [productSkuId, requestedQuantity] of collectSaleSkuQuantities(
-    payload,
-  )) {
-    const sku = await repository.getProductSku(productSkuId);
-    if (!sku) continue;
-
-    await repository.patchProductSku(productSkuId, {
-      inventoryCount: Math.max(0, sku.inventoryCount - requestedQuantity),
-      quantityAvailable: Math.max(
-        0,
-        sku.quantityAvailable - requestedQuantity,
-      ),
+  for (const evidence of pendingEvidenceByItemId.values()) {
+    await repository.recordPendingCheckoutItemSaleEvidence({
+      actorStaffProfileId: args.event.staffProfileId,
+      actorUserId: args.submittedByUserId,
+      localEventId: args.event.localEventId,
+      lookupCode: evidence.lookupCode,
+      pendingCheckoutItemId: evidence.pendingCheckoutItemId,
+      posTransactionId: sale.transactionId,
+      price: evidence.price,
+      quantitySold: evidence.quantitySold,
+      registerSessionId: sale.registerSessionId,
+      source: "offline_sync",
+      storeId: args.storeId,
+      terminalId: args.terminalId,
+      timestamp: args.event.occurredAt,
     });
   }
+
+	  if (!inventoryValidation.stockMutationAllowed) {
+	    return itemMappings;
+	  }
+
+	  for (const [productSkuId, requestedQuantity] of collectSaleSkuQuantities(payload)) {
+	    const sku = await repository.getProductSku(productSkuId);
+	    if (!sku) continue;
+
+	    const movementDisposition = await repository.recordSaleInventoryMovement({
+	      customerProfileId: input.session.existingPosSession?.customerProfileId,
+	      organizationId: input.store?.organizationId,
+	      posTransactionId: sale.transactionId,
+	      productId: sku.productId,
+	      productSkuId,
+	      quantity: requestedQuantity,
+	      registerSessionId: sale.registerSessionId,
+	      staffProfileId: args.event.staffProfileId,
+	      storeId: args.storeId,
+	      transactionNumber: payload.receiptNumber,
+	    });
+
+	    if (movementDisposition === "inserted") {
+	      await repository.patchProductSku(productSkuId, {
+	        inventoryCount: Math.max(0, sku.inventoryCount - requestedQuantity),
+	        quantityAvailable: Math.max(
+	          0,
+	          sku.quantityAvailable - requestedQuantity,
+	        ),
+	      });
+	    }
+	  }
 
   return itemMappings;
 }
@@ -1766,52 +1947,59 @@ async function validateSaleInventory(
       sku.inventoryCount < requestedQuantity ||
       quantityAvailableAfterHolds < requestedQuantity
     ) {
-      return createConflict(repository, args, {
-        conflictType: "inventory",
-        summary: INVENTORY_CONFLICT_SUMMARY,
-        details: {
+	      const conflict = await createConflict(repository, args, {
+	        conflictType: "inventory",
+	        summary: INVENTORY_CONFLICT_SUMMARY,
+	        details: {
           localTransactionId: payload.localTransactionId,
           productSkuId,
           requestedQuantity,
           activeHeldQuantity: heldQuantity,
           availableInventoryCount: sku?.inventoryCount ?? null,
           quantityAvailable: sku?.quantityAvailable ?? null,
-          quantityAvailableAfterHolds,
-        },
-      });
-    }
+	          quantityAvailableAfterHolds,
+	        },
+	      });
+	      return { conflict, stockMutationAllowed: false };
+	    }
 
     if (existingSessionHoldQuantities) {
       const heldForSession =
         existingSessionHoldQuantities.get(productSkuId) ?? 0;
       if (heldForSession < requestedQuantity) {
-        return createConflict(repository, args, {
-          conflictType: "inventory",
-          summary: INVENTORY_CONFLICT_SUMMARY,
-          details: {
+	        const conflict = await createConflict(repository, args, {
+	          conflictType: "inventory",
+	          summary: INVENTORY_CONFLICT_SUMMARY,
+	          details: {
             localTransactionId: payload.localTransactionId,
             productSkuId,
             requestedQuantity,
             heldForSession,
-            reason: "existing_pos_session_hold_expired",
-          },
-        });
-      }
-    }
-  }
+	            reason: "existing_pos_session_hold_expired",
+	          },
+	        });
+	        return { conflict, stockMutationAllowed: false };
+	      }
+	    }
+	  }
 
-  return null;
-}
+	  return { conflict: null, stockMutationAllowed: true };
+	}
 
 function collectSaleSkuQuantities(payload: PosLocalSalePayload) {
   const quantities = new Map<Id<"productSku">, number>();
-  for (const item of payload.items) {
+  for (const item of trustedInventorySaleItems(payload)) {
+    const productSkuId = item.productSkuId as Id<"productSku">;
     quantities.set(
-      item.productSkuId,
-      (quantities.get(item.productSkuId) ?? 0) + item.quantity,
+      productSkuId,
+      (quantities.get(productSkuId) ?? 0) + item.quantity,
     );
   }
   return quantities;
+}
+
+function trustedInventorySaleItems(payload: PosLocalSalePayload) {
+  return payload.items.filter((item) => !item.pendingCheckoutItemId);
 }
 
 async function validateSaleCustomerReference(
@@ -1884,9 +2072,90 @@ async function validateSaleCatalogReferences(
   const serviceLinesByLocalId = new Map<string, CanonicalServiceLine>();
   let priceConflict: LocalSyncConflictRecord | null = null;
   for (const item of payload.items) {
+    if (item.pendingCheckoutItemId) {
+      const cloudPendingId =
+        repository.normalizeCloudId(
+          "posPendingCheckoutItem",
+          item.pendingCheckoutItemId,
+        ) ??
+        (
+          await findMappingForTerminal(repository, args, {
+            localIdKind: "pendingCheckoutItem",
+            localId: item.pendingCheckoutItemId,
+          })
+        )?.cloudId;
+
+      if (!cloudPendingId) {
+        return {
+          conflict: await createConflict(repository, args, {
+            conflictType: "inventory",
+            summary: "Pending checkout item reference has not synced yet.",
+            details: {
+              localTransactionId: payload.localTransactionId,
+              pendingCheckoutItemId: item.pendingCheckoutItemId,
+              blocksProjection: true,
+            },
+          }),
+          itemsByLocalId,
+          serviceLinesByLocalId,
+        };
+      }
+
+      item.pendingCheckoutItemId = cloudPendingId as Id<"posPendingCheckoutItem">;
+      const pendingItem = await repository.getPendingCheckoutItem(
+        item.pendingCheckoutItemId as Id<"posPendingCheckoutItem">,
+      );
+      if (
+        !pendingItem ||
+        pendingItem.storeId !== args.storeId ||
+        !pendingItem.provisionalProductId ||
+        !pendingItem.provisionalProductSkuId
+      ) {
+        return {
+          conflict: await createConflict(repository, args, {
+            conflictType: "inventory",
+            summary: "Pending checkout item reference does not match this sale line.",
+            details: {
+              localTransactionId: payload.localTransactionId,
+              pendingCheckoutItemId: item.pendingCheckoutItemId,
+              productId: item.productId,
+              productSkuId: item.productSkuId,
+              blocksProjection: true,
+            },
+          }),
+          itemsByLocalId,
+          serviceLinesByLocalId,
+        };
+      }
+
+      item.productId = pendingItem.provisionalProductId;
+      item.productSkuId = pendingItem.provisionalProductSkuId;
+
+      if (
+        pendingItem.status !== "pending_review" &&
+        pendingItem.status !== "flagged"
+      ) {
+        return {
+          conflict: await createConflict(repository, args, {
+            conflictType: "inventory",
+            summary: "Pending checkout item reference does not match this sale line.",
+            details: {
+              localTransactionId: payload.localTransactionId,
+              pendingCheckoutItemId: item.pendingCheckoutItemId,
+              productId: item.productId,
+              productSkuId: item.productSkuId,
+              blocksProjection: false,
+            },
+          }),
+          itemsByLocalId,
+          serviceLinesByLocalId,
+        };
+      }
+    }
+
     const [product, sku] = await Promise.all([
-      repository.getProduct(item.productId),
-      repository.getProductSku(item.productSkuId),
+      repository.getProduct(item.productId as Id<"product">),
+      repository.getProductSku(item.productSkuId as Id<"productSku">),
     ]);
 
     if (

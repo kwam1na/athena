@@ -1508,6 +1508,10 @@ function POSRegisterViewContent({
       canSearchProducts={terminalCanSearchProducts}
       canSearchServices={terminalCanSearchServices}
       canQuickAddProduct={viewModel.productEntry.canQuickAddProduct}
+      canAddPendingCheckoutItem={
+        viewModel.productEntry.canAddPendingCheckoutItem
+      }
+      pendingCheckoutContext={viewModel.productEntry.pendingCheckoutContext}
       onQuickAddOpenChange={setIsEmptyStateQuickAddActive}
       forceQuickAddHost={forceQuickAddHost}
       serviceEntry={productEntryServiceEntry}

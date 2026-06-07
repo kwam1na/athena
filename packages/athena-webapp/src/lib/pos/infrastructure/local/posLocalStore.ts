@@ -9,6 +9,11 @@ import type {
 } from "@/lib/pos/application/dto";
 import type { PosTerminalLoginMode } from "~/shared/posTerminalLoginMode";
 import type { PosTerminalTransactionCapability } from "~/shared/posTerminalCapability";
+import type {
+  PosLocalSyncPendingCheckoutItemDefinedPayload,
+  PosLocalSyncPendingCheckoutItemLocalMetadata,
+  PosLocalSyncPendingCheckoutItemSearchContext,
+} from "../../../../../shared/posLocalSyncContract";
 
 export const POS_LOCAL_STORE_SCHEMA_VERSION = 8;
 
@@ -24,6 +29,7 @@ export type PosLocalEventType =
   | "session.payments_updated"
   | "cart.cleared"
   | "cart.item_added"
+  | "pending_checkout_item.defined"
   | "cart.service_added"
   | "cart.service_removed"
   | "transaction.completed"
@@ -54,6 +60,7 @@ export interface PosLocalEventValidationMetadata {
 export function canUploadPosLocalEventType(type: PosLocalEventType): boolean {
   return (
     type === "register.opened" ||
+    type === "pending_checkout_item.defined" ||
     type === "transaction.completed" ||
     type === "cart.cleared" ||
     type === "register.closeout_started" ||
@@ -421,7 +428,7 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
         ? { staffProofToken: input.staffProofToken }
         : {}),
       ...(validationMetadata ? { validationMetadata } : {}),
-      payload: input.payload,
+      payload: normalizeLocalEventPayload(input),
       createdAt: clock(),
       sync: { status: input.initialSyncStatus ?? getInitialSyncStatus(input.type) },
     };
@@ -1634,6 +1641,149 @@ function normalizeEventValidationMetadata(
       ? { uploadDeferredUntil: metadata.uploadDeferredUntil }
       : {}),
   };
+}
+
+function normalizeLocalEventPayload(input: PosLocalAppendEventInput) {
+  if (input.type === "pending_checkout_item.defined") {
+    return normalizePendingCheckoutItemDefinedPayload(input.payload);
+  }
+
+  return input.payload;
+}
+
+function normalizePendingCheckoutItemDefinedPayload(
+  value: unknown,
+): PosLocalSyncPendingCheckoutItemDefinedPayload {
+  const payload = asRecord(value);
+  const lookupCode = trimmedStringToOptional(payload.lookupCode);
+  const searchContext = normalizePendingCheckoutItemSearchContext(
+    payload.searchContext,
+  );
+  const localMetadata = normalizePendingCheckoutItemLocalMetadata(
+    payload.localMetadata,
+  );
+
+  return {
+    localPendingCheckoutItemId: stringOrEmpty(
+      payload.localPendingCheckoutItemId,
+    ),
+    name: stringOrEmpty(payload.name),
+    ...(lookupCode ? { lookupCode } : {}),
+    ...(searchContext ? { searchContext } : {}),
+    price: numberOrZero(payload.price),
+    quantitySold: numberOrZero(payload.quantitySold),
+    ...(localMetadata ? { localMetadata } : {}),
+  };
+}
+
+function normalizePendingCheckoutItemSearchContext(
+  value: unknown,
+): PosLocalSyncPendingCheckoutItemSearchContext | undefined {
+  const context = asRecord(value);
+  const query = trimmedStringToOptional(context.query);
+  const source = pendingCheckoutSearchSourceOrUndefined(context.source);
+  const matched = pendingCheckoutSearchMatchOrUndefined(context.matched);
+
+  if (!query && !source && !matched) return undefined;
+
+  return {
+    ...(query ? { query } : {}),
+    ...(source ? { source } : {}),
+    ...(matched ? { matched } : {}),
+  };
+}
+
+function normalizePendingCheckoutItemLocalMetadata(
+  value: unknown,
+): PosLocalSyncPendingCheckoutItemLocalMetadata | undefined {
+  const metadata = asRecord(value);
+  const source = pendingCheckoutMetadataSourceOrUndefined(metadata.source);
+  const appSessionValidation = pendingCheckoutAppSessionValidationOrUndefined(
+    metadata.appSessionValidation,
+  );
+  const cloudValidation =
+    metadata.cloudValidation === "uncertain" ? metadata.cloudValidation : undefined;
+  const reusedExistingPendingItem =
+    typeof metadata.reusedExistingPendingItem === "boolean"
+      ? metadata.reusedExistingPendingItem
+      : undefined;
+  const createdOffline =
+    typeof metadata.createdOffline === "boolean"
+      ? metadata.createdOffline
+      : undefined;
+
+  if (
+    !source &&
+    reusedExistingPendingItem === undefined &&
+    createdOffline === undefined &&
+    !appSessionValidation &&
+    !cloudValidation
+  ) {
+    return undefined;
+  }
+
+  return {
+    schema: "pos_pending_checkout_item_local_metadata_v1",
+    ...(source ? { source } : {}),
+    ...(reusedExistingPendingItem !== undefined
+      ? { reusedExistingPendingItem }
+      : {}),
+    ...(createdOffline !== undefined ? { createdOffline } : {}),
+    ...(appSessionValidation ? { appSessionValidation } : {}),
+    ...(cloudValidation ? { cloudValidation } : {}),
+  };
+}
+
+function pendingCheckoutSearchSourceOrUndefined(value: unknown) {
+  return value === "barcode" ||
+    value === "lookup_code" ||
+    value === "manual" ||
+    value === "catalog_search" ||
+    value === "unknown"
+    ? value
+    : undefined;
+}
+
+function pendingCheckoutSearchMatchOrUndefined(value: unknown) {
+  return value === "existing_product" ||
+    value === "pending_checkout_item" ||
+    value === "none" ||
+    value === "unknown"
+    ? value
+    : undefined;
+}
+
+function pendingCheckoutMetadataSourceOrUndefined(value: unknown) {
+  return value === "offline_search" ||
+    value === "online_search" ||
+    value === "manual_entry" ||
+    value === "unknown"
+    ? value
+    : undefined;
+}
+
+function pendingCheckoutAppSessionValidationOrUndefined(value: unknown) {
+  return value === "supported" || value === "unverified" ? value : undefined;
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function stringOrEmpty(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function trimmedStringToOptional(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : undefined;
+}
+
+function numberOrZero(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 
 function matchesCashierPresenceScope(

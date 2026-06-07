@@ -8,7 +8,12 @@ import {
   buildServiceCaseLineItem,
 } from "../../../serviceOps/serviceCases";
 import { summarizePaymentAllocations } from "../../../operations/paymentAllocations";
+import { recordInventoryMovementWithDispositionWithCtx } from "../../../operations/inventoryMovements";
 import { createPosSessionTraceRecorder } from "../../application/commands/posSessionTracing";
+import {
+  createOrReusePendingCheckoutItem,
+  recordPendingCheckoutItemSaleEvidence,
+} from "../../application/commands/createOrReusePendingCheckoutItem";
 import {
   consumeInventoryHoldsForSession as consumeInventoryHoldsForSessionHelper,
   readActiveInventoryHoldQuantitiesForSession,
@@ -80,6 +85,9 @@ export function createConvexLocalSyncRepository(
     },
     getProductSku(productSkuId) {
       return ctx.db.get("productSku", productSkuId);
+    },
+    getPendingCheckoutItem(pendingCheckoutItemId) {
+      return ctx.db.get("posPendingCheckoutItem", pendingCheckoutItemId);
     },
     getServiceCatalog(serviceCatalogId) {
       return ctx.db.get("serviceCatalog", serviceCatalogId);
@@ -437,6 +445,12 @@ export function createConvexLocalSyncRepository(
     async createPosSessionItem(input) {
       return ctx.db.insert("posSessionItem", input);
     },
+    async createOrReusePendingCheckoutItem(input) {
+      return createOrReusePendingCheckoutItem(ctx, input);
+    },
+    async recordPendingCheckoutItemSaleEvidence(input) {
+      return recordPendingCheckoutItemSaleEvidence(ctx, input);
+    },
     async createServiceWorkItem(input) {
       return ctx.db.insert(
         "operationalWorkItem",
@@ -525,10 +539,29 @@ export function createConvexLocalSyncRepository(
     async createTransactionServiceLine(input) {
       return ctx.db.insert("posTransactionServiceLine", input);
     },
-    async patchProductSku(productSkuId, patch) {
-      await ctx.db.patch("productSku", productSkuId, patch);
-    },
-    async createPaymentAllocation(input) {
+	    async patchProductSku(productSkuId, patch) {
+	      await ctx.db.patch("productSku", productSkuId, patch);
+	    },
+	    async recordSaleInventoryMovement(input) {
+	      const result = await recordInventoryMovementWithDispositionWithCtx(ctx, {
+	        actorStaffProfileId: input.staffProfileId,
+	        customerProfileId: input.customerProfileId,
+	        movementType: "sale",
+	        notes: `POS sale ${input.transactionNumber}`,
+	        organizationId: input.organizationId,
+	        posTransactionId: input.posTransactionId,
+	        productId: input.productId,
+	        productSkuId: input.productSkuId,
+	        quantityDelta: -input.quantity,
+	        reasonCode: "pos_sale",
+	        registerSessionId: input.registerSessionId,
+	        sourceId: input.posTransactionId,
+	        sourceType: "posTransaction",
+	        storeId: input.storeId,
+	      });
+	      return result.disposition;
+	    },
+	    async createPaymentAllocation(input) {
       return ctx.db.insert("paymentAllocation", input);
     },
     async createOperationalEvent(input) {

@@ -31,6 +31,18 @@ type CatalogResult = {
   areProcessingFeesAbsorbed: boolean;
 };
 
+function isTrustedCatalogResult(args: {
+  product: NonNullable<Awaited<ReturnType<typeof getProductById>>>;
+  sku: Doc<"productSku">;
+}) {
+  return (
+    args.product.availability !== "archived" &&
+    args.product.availability !== "draft" &&
+    args.product.isVisible !== false &&
+    args.sku.isVisible !== false
+  );
+}
+
 async function mapSkuToCatalogResult(
   ctx: QueryCtx,
   args: {
@@ -41,7 +53,7 @@ async function mapSkuToCatalogResult(
 ): Promise<CatalogResult | null> {
   if (
     !args.product ||
-    args.product.availability === "archived" ||
+    !isTrustedCatalogResult({ product: args.product, sku: args.sku }) ||
     !args.sku.netPrice
   ) {
     return null;
@@ -89,7 +101,12 @@ export async function searchProducts(
   if (isConvexProductId(query)) {
     const product = await getProductById(ctx, query as Id<"product">);
 
-    if (product?.storeId === args.storeId && product.availability !== "archived") {
+    if (
+      product?.storeId === args.storeId &&
+      product.availability !== "archived" &&
+      product.availability !== "draft" &&
+      product.isVisible !== false
+    ) {
       const productSkus = await listProductSkusByProductId(ctx, product._id);
       const categoryName =
         (await getCategoryById(ctx, product.categoryId))?.name || "";
@@ -148,7 +165,12 @@ export async function lookupByBarcode(
       ? await getProductById(ctx, args.barcode as Id<"product">)
       : null;
 
-    if (product?.storeId === args.storeId && product.availability !== "archived") {
+    if (
+      product?.storeId === args.storeId &&
+      product.availability !== "archived" &&
+      product.availability !== "draft" &&
+      product.isVisible !== false
+    ) {
       const allSkus = await listProductSkusByProductId(ctx, product._id);
       const categoryName =
         (await getCategoryById(ctx, product.categoryId))?.name || "";
@@ -171,7 +193,12 @@ export async function lookupByBarcode(
   }
 
   const product = await getProductById(ctx, sku.productId);
-  if (!product || product.availability === "archived") {
+  if (
+    !product ||
+    product.availability === "archived" ||
+    product.availability === "draft" ||
+    product.isVisible === false
+  ) {
     return null;
   }
 

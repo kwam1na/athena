@@ -1,7 +1,10 @@
 import {
   useConvexBarcodeLookup,
+  useConvexPendingCheckoutItemForSale,
+  useConvexPendingCheckoutItemsForReview,
   useConvexQuickAddCatalogItem,
   useConvexProductIdLookup,
+  useConvexResolvePendingCheckoutItemReview,
   useConvexProductSearch,
   useConvexRegisterCatalog,
 } from "@/lib/pos/infrastructure/convex/catalogGateway";
@@ -36,3 +39,13 @@ export function usePOSRegisterCatalog(storeId: Id<"store"> | undefined) {
 export const usePOSTransactionComplete = () => useConvexDirectTransactionMutation();
 
 export const usePOSQuickAddProductSku = () => useConvexQuickAddCatalogItem();
+
+export const usePOSPendingCheckoutItemForSale = () =>
+  useConvexPendingCheckoutItemForSale();
+
+export const usePOSPendingCheckoutItemsForReview = (
+  storeId: Id<"store"> | undefined,
+) => useConvexPendingCheckoutItemsForReview({ storeId });
+
+export const usePOSResolvePendingCheckoutItemReview = () =>
+  useConvexResolvePendingCheckoutItemReview();

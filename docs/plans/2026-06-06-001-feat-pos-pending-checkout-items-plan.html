@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Plan: POS pending checkout items</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f7f4;
+      --surface: #ffffff;
+      --ink: #1f2933;
+      --muted: #5b6472;
+      --line: #d9ddd6;
+      --accent: #176b5d;
+      --accent-soft: #e3f2ee;
+      --warn: #8a5a00;
+      --warn-soft: #fff5d6;
+      --code: #f1f3f2;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.55;
+    }
+    main {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 40px 24px 64px;
+    }
+    header {
+      border-bottom: 1px solid var(--line);
+      margin-bottom: 28px;
+      padding-bottom: 20px;
+    }
+    h1 {
+      margin: 0 0 10px;
+      font-size: 2rem;
+      line-height: 1.15;
+      letter-spacing: 0;
+    }
+    h2 {
+      margin: 32px 0 12px;
+      font-size: 1.2rem;
+      letter-spacing: 0;
+    }
+    h3 {
+      margin: 22px 0 8px;
+      font-size: 1rem;
+      letter-spacing: 0;
+    }
+    p { margin: 0 0 12px; }
+    a { color: var(--accent); }
+    code {
+      background: var(--code);
+      border-radius: 4px;
+      padding: 0.12rem 0.28rem;
+      font-size: 0.92em;
+    }
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+    .pill {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--surface);
+      padding: 4px 10px;
+    }
+    nav {
+      display: grid;
+      gap: 8px;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      margin: 20px 0 28px;
+    }
+    nav a {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      color: var(--ink);
+      padding: 10px 12px;
+      text-decoration: none;
+    }
+    section {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      margin: 16px 0;
+      padding: 20px;
+    }
+    ul { margin: 8px 0 0 1.25rem; padding: 0; }
+    li { margin: 6px 0; }
+    .callout {
+      background: var(--accent-soft);
+      border: 1px solid #b7d8d0;
+      border-radius: 6px;
+      padding: 12px;
+    }
+    .warning {
+      background: var(--warn-soft);
+      border: 1px solid #eed48d;
+      border-radius: 6px;
+      color: #3f300b;
+      padding: 12px;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin-top: 10px;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: #f2f4f1; }
+    .units {
+      display: grid;
+      gap: 12px;
+    }
+    article {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 14px;
+      background: #fcfcfb;
+    }
+    article h3 { margin-top: 0; }
+    .flow {
+      display: grid;
+      gap: 8px;
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+      margin-top: 12px;
+    }
+    .flow div {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fcfcfb;
+      padding: 10px;
+    }
+    @media (max-width: 640px) {
+      main { padding: 24px 14px 40px; }
+      h1 { font-size: 1.6rem; }
+      section { padding: 16px; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Plan: POS pending checkout items</h1>
+      <div class="meta">
+        <span class="pill">type: feat</span>
+        <span class="pill">status: active</span>
+        <span class="pill">date: 2026-06-06</span>
+        <span class="pill">source: <a href="2026-06-06-001-feat-pos-pending-checkout-items-plan.md">markdown plan</a></span>
+      </div>
+    </header>
+
+    <nav aria-label="Plan sections">
+      <a href="#summary">Summary</a>
+      <a href="#requirements">Requirements</a>
+      <a href="#decisions">Decisions</a>
+      <a href="#design">Design Flow</a>
+      <a href="#units">Implementation Units</a>
+      <a href="#risks">Risks</a>
+    </nav>
+
+    <section id="summary">
+      <h2>Summary</h2>
+      <p>Add a low-friction POS recovery path for products that are not yet in the catalog. Cashiers can add or reuse a pending checkout item for the current sale online or offline, while Athena keeps permanent catalog truth behind owner review.</p>
+      <div class="callout">
+        <strong>Core trust boundary:</strong> cashiers record sale evidence; owners decide catalog truth. Quantity means quantity sold in the current transaction, not available inventory.
+      </div>
+    </section>
+
+    <section id="requirements">
+      <h2>Requirements</h2>
+      <ul>
+        <li>Cashiers can add missing items to sales without manager approval in normal cases.</li>
+        <li>Cashier-entered quantity never creates trusted available inventory.</li>
+        <li>Pending items can be reused in later sales while still pending review.</li>
+        <li>Reuse accumulates review evidence across transactions, cashiers, quantities, prices, and timestamps.</li>
+        <li>Owner/admin review can approve, attach, edit and approve, reject, or flag follow-up.</li>
+        <li>Audit events plainly identify who sold what, at what price, in what quantity, and in which sale context.</li>
+        <li>Provisioned terminals can add or reuse pending checkout items offline and sync review evidence later.</li>
+      </ul>
+    </section>
+
+    <section id="decisions">
+      <h2>Key Decisions</h2>
+      <ul>
+        <li><strong>Distinct pending checkout domain:</strong> do not overload true quick-add catalog creation.</li>
+        <li><strong>Reuse quick-add UX:</strong> keep the cashier recovery motion familiar and compact.</li>
+        <li><strong>Structured pending record plus work item:</strong> one pending case can collect evidence from many sales.</li>
+        <li><strong>Hidden provisional SKU anchors:</strong> satisfy current POS item references without creating trusted stock.</li>
+        <li><strong>Operational events as audit rail:</strong> creation, reuse, sale linkage, and review decisions are timeline-visible.</li>
+        <li><strong>Narrow hard stops:</strong> unsafe states block; risk signals raise priority instead of stopping ordinary sales.</li>
+        <li><strong>Confirm weak matches:</strong> exact barcode reuse can be direct, but name-only reuse should require cashier selection to avoid false merges.</li>
+        <li><strong>Offline local events:</strong> offline pending checkout uses terminal-local IDs, append-only POS events, and idempotent sync mapping into cloud review cases.</li>
+      </ul>
+    </section>
+
+    <section id="design">
+      <h2>Design Flow</h2>
+      <div class="flow" aria-label="Pending checkout flow">
+        <div>1. Cashier scans or searches item.</div>
+        <div>2. Approved catalog match adds normally.</div>
+        <div>3. No match opens pending checkout recovery.</div>
+        <div>4. Existing pending match is reused, or a new pending case is created locally or in the cloud.</div>
+        <div>5. Sale-line quantity is added to the cart.</div>
+        <div>6. Completed offline sale stays local until sync can mint/reuse the cloud pending case.</div>
+        <div>7. Completed sale records pending metadata and audit evidence.</div>
+        <div>8. Owner approves, attaches, edits, rejects, or flags follow-up.</div>
+      </div>
+    </section>
+
+    <section id="units">
+      <h2>Implementation Units</h2>
+      <div class="units">
+        <article>
+          <h3>U1. Model pending checkout review state</h3>
+          <p>Add <code>posPendingCheckoutItem</code>, pending references on POS session/transaction items, and hidden compatibility status on product/SKU records.</p>
+        </article>
+        <article>
+          <h3>U2. Add pending checkout command and audit boundary</h3>
+          <p>Create or reuse pending cases by barcode/name, create hidden provisional anchors, open review work items, and record operational events.</p>
+        </article>
+        <article>
+          <h3>U3. Reuse quick-add POS UX</h3>
+          <p>Adapt the quick-add dialog/search-not-found flow for sale-scoped pending checkout items and pending-review copy.</p>
+        </article>
+        <article>
+          <h3>U4. Preserve online sale facts without trusted inventory mutation</h3>
+          <p>Carry pending metadata through online cart/session/transaction completion and bypass trusted stock decrement for pending lines.</p>
+        </article>
+        <article>
+          <h3>U7. Support offline pending checkout creation and sync</h3>
+          <p>Record local pending checkout events with terminal-local IDs, complete sales offline, then sync and map them into cloud pending review cases.</p>
+        </article>
+        <article>
+          <h3>U5. Add owner review and resolution actions</h3>
+          <p>Surface pending cases in Operations Queue and support approve, attach, edit and approve, reject, and follow-up actions.</p>
+        </article>
+        <article>
+          <h3>U6. Harden policy, copy, and regression coverage</h3>
+          <p>Keep the flow low-friction while making risk signals visible and preserving existing quick-add/catalog behavior.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="risks">
+      <h2>Risks</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Risk</th>
+            <th>Mitigation</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Pending provisional SKUs leak into normal catalog or storefront views.</td>
+            <td>Keep records hidden with explicit pending status and add search/projection tests.</td>
+          </tr>
+          <tr>
+            <td>Cashier quantity is treated as trusted stock.</td>
+            <td>Carry pending metadata through transaction boundaries and test zero-stock pending sale completion.</td>
+          </tr>
+          <tr>
+            <td>Repeated use creates duplicate review cases or false name-only merges.</td>
+            <td>Reuse exact barcode matches directly; present name-only matches as suggestions with duplicate and false-merge tests.</td>
+          </tr>
+          <tr>
+            <td>The workflow becomes too restrictive.</td>
+            <td>Hard stops remain rare; most risk signals affect review priority rather than checkout.</td>
+          </tr>
+          <tr>
+            <td>Offline local creation creates mapping complexity.</td>
+            <td>Use append-only local POS events with terminal-local IDs and idempotent local-to-cloud sync mappings.</td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="warning">Offline conflict policy: if sync later discovers duplicate, rejected, or conflicting pending evidence, preserve the completed sale and route the uncertainty to review instead of rewriting the receipt.</p>
+    </section>
+  </main>
+</body>
+</html>

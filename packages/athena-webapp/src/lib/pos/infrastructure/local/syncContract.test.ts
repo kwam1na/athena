@@ -10,6 +10,7 @@ describe("syncContract", () => {
   it("keeps scheduler selection and upload conversion on the same syncable event set", () => {
     const syncableEvents = [
       buildLocalEvent({ type: "register.opened" }),
+      buildLocalEvent({ type: "pending_checkout_item.defined" }),
       buildLocalEvent({ type: "transaction.completed" }),
       buildLocalEvent({ type: "cart.cleared" }),
       buildLocalEvent({ type: "register.closeout_started" }),
@@ -24,6 +25,7 @@ describe("syncContract", () => {
     const prooflessUploadEvent = buildLocalEvent({ staffProofToken: undefined });
 
     expect(syncableEvents.map(isSyncablePosLocalEvent)).toEqual([
+      true,
       true,
       true,
       true,
@@ -130,6 +132,77 @@ describe("syncContract", () => {
         },
       }),
     ]);
+  });
+
+  it("maps pending checkout item definitions to deterministic redacted upload events", () => {
+    const event = buildLocalEvent({
+      localEventId: "event-pending-item",
+      sequence: 2,
+      uploadSequence: 2,
+      type: "pending_checkout_item.defined",
+      payload: {
+        localPendingCheckoutItemId: "local-pending-item-1",
+        name: "Bundle Wig",
+        lookupCode: "  999888777666  ",
+        searchContext: {
+          query: " bundle wig ",
+          source: "barcode",
+          matched: "none",
+          customerEmail: "customer@example.com",
+        },
+        price: 45,
+        quantitySold: 2,
+        localMetadata: {
+          source: "offline_search",
+          reusedExistingPendingItem: true,
+          createdOffline: true,
+          appSessionValidation: "unverified",
+          rawTerminalProof: "raw-terminal-proof",
+          paymentToken: "payment-token",
+        },
+      },
+    });
+
+    const uploadEvents = buildPosLocalSyncUploadEvents([event], [event]);
+
+    expect(uploadEvents).toEqual([
+      {
+        localEventId: "event-pending-item",
+        localRegisterSessionId: "local-register-1",
+        sequence: 2,
+        eventType: "pending_checkout_item_defined",
+        occurredAt: 1,
+        staffProfileId: "staff-1",
+        staffProofToken: "proof-token-1",
+        payload: {
+          localPendingCheckoutItemId: "local-pending-item-1",
+          name: "Bundle Wig",
+          lookupCode: "999888777666",
+          searchContext: {
+            query: "bundle wig",
+            source: "barcode",
+            matched: "none",
+          },
+          price: 45,
+          quantitySold: 2,
+          localMetadata: {
+            schema: "pos_pending_checkout_item_local_metadata_v1",
+            source: "offline_search",
+            reusedExistingPendingItem: true,
+            createdOffline: true,
+            appSessionValidation: "unverified",
+          },
+        },
+      },
+    ]);
+
+    const serialized = JSON.stringify(uploadEvents);
+    expect(serialized).toBe(
+      '[{"localEventId":"event-pending-item","localRegisterSessionId":"local-register-1","eventType":"pending_checkout_item_defined","occurredAt":1,"staffProfileId":"staff-1","staffProofToken":"proof-token-1","payload":{"localPendingCheckoutItemId":"local-pending-item-1","name":"Bundle Wig","lookupCode":"999888777666","searchContext":{"query":"bundle wig","source":"barcode","matched":"none"},"price":45,"quantitySold":2,"localMetadata":{"schema":"pos_pending_checkout_item_local_metadata_v1","source":"offline_search","reusedExistingPendingItem":true,"createdOffline":true,"appSessionValidation":"unverified"}},"sequence":2}]',
+    );
+    expect(serialized).not.toContain("customer@example.com");
+    expect(serialized).not.toContain("raw-terminal-proof");
+    expect(serialized).not.toContain("payment-token");
   });
 
   it("counts uploaded sale clear events when sequencing later uploads", () => {
@@ -883,6 +956,7 @@ function buildLocalEvent(
 function isUploadSequenceEventType(type: PosLocalEventRecord["type"]) {
   return (
     type === "register.opened" ||
+    type === "pending_checkout_item.defined" ||
     type === "cart.cleared" ||
     type === "transaction.completed" ||
     type === "register.closeout_started" ||

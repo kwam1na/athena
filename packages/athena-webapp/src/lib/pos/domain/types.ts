@@ -43,6 +43,7 @@ export interface PosProductCartLineInput {
   color?: string;
   productId?: Id<"product">;
   skuId?: Id<"productSku">;
+  pendingCheckoutItemId?: Id<"posPendingCheckoutItem">;
   areProcessingFeesAbsorbed?: boolean;
 }
 

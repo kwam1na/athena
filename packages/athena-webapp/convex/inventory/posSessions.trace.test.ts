@@ -6,6 +6,8 @@ const mocks = vi.hoisted(() => ({
   readActiveInventoryHoldDetailsForSession: vi.fn(),
   recordOperationalEventWithCtx: vi.fn(),
   recordRegisterSessionSale: vi.fn(),
+  requireAuthenticatedAthenaUserWithCtx: vi.fn(),
+  requireOrganizationMemberRoleWithCtx: vi.fn(),
   requireStoreFullAdminAccess: vi.fn(),
   releaseActiveInventoryHoldsForSession: vi.fn(),
   releaseInventoryHoldsBatch: vi.fn(),
@@ -34,6 +36,13 @@ vi.mock("../operations/operationalEvents", () => ({
 
 vi.mock("../stockOps/access", () => ({
   requireStoreFullAdminAccess: mocks.requireStoreFullAdminAccess,
+}));
+
+vi.mock("../lib/athenaUserAuth", () => ({
+  requireAuthenticatedAthenaUserWithCtx:
+    mocks.requireAuthenticatedAthenaUserWithCtx,
+  requireOrganizationMemberRoleWithCtx:
+    mocks.requireOrganizationMemberRoleWithCtx,
 }));
 
 vi.mock("../pos/application/commands/posSessionTracing", () => ({
@@ -226,6 +235,13 @@ function createMutationCtx(seed?: {
 
       if (tableName === "productSku") {
         return productSkus.find((sku) => sku._id === id) ?? null;
+      }
+
+      if (tableName === "store" && id === "store-1") {
+        return {
+          _id: "store-1",
+          organizationId: "org-1",
+        };
       }
 
       if (tableName === "customerProfile") {
@@ -434,6 +450,10 @@ describe("pos session lifecycle trace handlers", () => {
     mocks.requireStoreFullAdminAccess.mockRejectedValue(
       new Error("Authentication required."),
     );
+    mocks.requireAuthenticatedAthenaUserWithCtx.mockResolvedValue({
+      _id: "user-1",
+    });
+    mocks.requireOrganizationMemberRoleWithCtx.mockResolvedValue(undefined);
     mocks.releaseActiveInventoryHoldsForSession.mockResolvedValue({
       releasedHoldCount: 0,
       releasedQuantity: 0,
@@ -1054,6 +1074,13 @@ describe("pos session lifecycle trace handlers", () => {
         },
       }),
     );
+    expect(mocks.requireAuthenticatedAthenaUserWithCtx).toHaveBeenCalledWith(ctx);
+    expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(ctx, {
+      allowedRoles: ["full_admin", "pos_only"],
+      failureMessage: "You cannot complete this POS sale.",
+      organizationId: "org-1",
+      userId: "user-1",
+    });
     expect(mocks.traceRecord).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
@@ -1077,6 +1104,37 @@ describe("pos session lifecycle trace handlers", () => {
     expect(ctx.db.patch).toHaveBeenCalledWith("posSession", "session-1", {
       workflowTraceId: "pos_session:ses-001",
     });
+  });
+
+  it("does not complete a session when store authorization fails", async () => {
+    mocks.requireOrganizationMemberRoleWithCtx.mockRejectedValueOnce(
+      new Error("You cannot complete this POS sale."),
+    );
+    const ctx = createMutationCtx({
+      sessions: [
+        buildSession({
+          _id: "session-1",
+          registerSessionId: "drawer-1",
+          subtotal: 100,
+          tax: 15,
+          total: 115,
+        }),
+      ],
+    });
+
+    await expect(
+      getHandler(completeSession)(ctx as never, {
+        sessionId: "session-1",
+        staffProfileId: "cashier-1",
+        payments: [{ method: "cash", amount: 115, timestamp: 1_000 }],
+        subtotal: 100,
+        tax: 15,
+        total: 115,
+      }),
+    ).rejects.toThrow("You cannot complete this POS sale.");
+
+    expect(mocks.createTransactionFromSessionHandler).not.toHaveBeenCalled();
+    expect(mocks.traceRecord).not.toHaveBeenCalled();
   });
 
   it("refuses to complete a session for a different cashier before transaction side effects", async () => {

@@ -211,6 +211,80 @@ describe("POS local sync public mutation", () => {
     });
   });
 
+  it("exposes pending checkout definition and sale-line fields in the public args validator", () => {
+    const argsValidator = JSON.stringify((ingestLocalEvents as any).exportArgs());
+
+    expect(argsValidator).toContain("pending_checkout_item_defined");
+    expect(argsValidator).toContain("localPendingCheckoutItemId");
+    expect(argsValidator).toContain("pendingCheckoutItemId");
+    expect(argsValidator).toContain(
+      "pos_pending_checkout_item_local_metadata_v1",
+    );
+    expect(argsValidator).toContain("cloudValidation");
+  });
+
+  it("rejects sync batches that exceed the event cap before ingestion", async () => {
+    const ctx = buildCtx();
+    const events = Array.from({ length: 251 }, (_unused, index) => ({
+      ...buildEvent(),
+      localEventId: `event-${index + 1}`,
+      sequence: index + 1,
+    }));
+
+    const result = await getHandler(ingestLocalEvents)(ctx as never, {
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      syncSecretHash: "sync-secret-1",
+      events,
+    });
+
+    expect(result).toEqual({
+      kind: "user_error",
+      error: {
+        code: "validation_failed",
+        message: "Sync uploads can include at most 250 events.",
+      },
+    });
+    expect(mocks.ingestLocalEventsWithCtx).not.toHaveBeenCalled();
+  });
+
+  it("rejects sync batches with too many pending checkout definitions", async () => {
+    const ctx = buildCtx();
+    const events = Array.from({ length: 51 }, (_unused, index) => ({
+      localEventId: `event-pending-${index + 1}`,
+      localRegisterSessionId: "local-register-1",
+      sequence: index + 1,
+      eventType: "pending_checkout_item_defined",
+      occurredAt: 124 + index,
+      staffProfileId: "staff-1",
+      staffProofToken: "proof-token-1",
+      payload: {
+        localPendingCheckoutItemId: `local-pending-${index + 1}`,
+        name: "Unknown gel",
+        lookupCode: `9999999999${String(index).padStart(2, "0")}`,
+        price: 2500,
+        quantitySold: 1,
+      },
+    }));
+
+    const result = await getHandler(ingestLocalEvents)(ctx as never, {
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      syncSecretHash: "sync-secret-1",
+      events,
+    });
+
+    expect(result).toEqual({
+      kind: "user_error",
+      error: {
+        code: "validation_failed",
+        message:
+          "Sync uploads can include at most 50 pending checkout items.",
+      },
+    });
+    expect(mocks.ingestLocalEventsWithCtx).not.toHaveBeenCalled();
+  });
+
   it("accepts sync from an authorized store member even when they did not register the terminal", async () => {
     const ctx = buildCtx({ terminalRegisteredByUserId: "athena-admin-1" });
 
@@ -389,6 +463,120 @@ describe("POS local sync public mutation", () => {
                   localServiceLineId: "local-service-line-1",
                   serviceCatalogId: "service-catalog-1",
                   totalPrice: 75,
+                }),
+              ],
+            }),
+          }),
+        ],
+      }),
+    );
+  });
+
+  it("accepts pending checkout definitions at the public sync boundary", async () => {
+    const ctx = buildCtx();
+    const event = {
+      localEventId: "event-pending-1",
+      localRegisterSessionId: "local-register-1",
+      sequence: 2,
+      eventType: "pending_checkout_item_defined",
+      occurredAt: 124,
+      staffProfileId: "staff-1",
+      staffProofToken: "proof-token-1",
+      payload: {
+        localPendingCheckoutItemId: "local-pending-1",
+        name: "Unknown gel",
+        lookupCode: "999999999999",
+        searchContext: {
+          query: "999999999999",
+          exactLookupCode: "999999999999",
+          attemptedAt: 123,
+        },
+        price: 2500,
+        quantitySold: 2,
+        localMetadata: {
+          schema: "pos_pending_checkout_item_local_metadata_v1",
+          createdOffline: true,
+          appSessionValidation: "unverified",
+          cloudValidation: "uncertain",
+        },
+      },
+    };
+
+    await getHandler(ingestLocalEvents)(ctx as never, {
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      syncSecretHash: "sync-secret-1",
+      events: [event],
+    });
+
+    expect(mocks.ingestLocalEventsWithCtx).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({
+        events: [
+          expect.objectContaining({
+            eventType: "pending_checkout_item_defined",
+            payload: expect.objectContaining({
+              localPendingCheckoutItemId: "local-pending-1",
+              searchContext: expect.objectContaining({
+                exactLookupCode: "999999999999",
+              }),
+              localMetadata: expect.objectContaining({
+                createdOffline: true,
+                cloudValidation: "uncertain",
+              }),
+            }),
+          }),
+        ],
+      }),
+    );
+  });
+
+  it("accepts pending checkout sale items at the public sync boundary", async () => {
+    const ctx = buildCtx();
+    const event = buildSaleCompletedEvent({
+      items: [
+        {
+          localTransactionItemId: "local-pending-sale-item-1",
+          productId: "local-pending-product-1",
+          productSkuId: "local-pending-sku-1",
+          pendingCheckoutItemId: "local-pending-1",
+          productName: "Unknown gel",
+          productSku: "PENDING-1",
+          barcode: "999999999999",
+          quantity: 2,
+          unitPrice: 2500,
+        },
+      ],
+      totals: { subtotal: 5000, tax: 0, total: 5000 },
+      payments: [
+        {
+          localPaymentId: "local-payment-1",
+          method: "cash",
+          amount: 5000,
+          timestamp: 124,
+        },
+      ],
+    });
+
+    await getHandler(ingestLocalEvents)(ctx as never, {
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      syncSecretHash: "sync-secret-1",
+      events: [event],
+    });
+
+    expect(mocks.ingestLocalEventsWithCtx).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({
+        events: [
+          expect.objectContaining({
+            eventType: "sale_completed",
+            payload: expect.objectContaining({
+              items: [
+                expect.objectContaining({
+                  productId: "local-pending-product-1",
+                  productSkuId: "local-pending-sku-1",
+                  pendingCheckoutItemId: "local-pending-1",
                 }),
               ],
             }),
