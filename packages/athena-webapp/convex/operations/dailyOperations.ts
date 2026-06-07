@@ -580,15 +580,34 @@ async function mapOperationalTimelineEvent(
             to: "/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug",
           }
         : undefined;
+    const registerNumber =
+      typeof metadata.registerNumber === "string"
+        ? metadata.registerNumber
+        : undefined;
+    const registerLabel =
+      event.subjectType === "register_session"
+        ? event.subjectLabel ?? formatRegisterSessionLabel(registerNumber)
+        : undefined;
+    const registerLink =
+      event.subjectType === "register_session"
+        ? {
+            label: registerLabel ?? "Register session",
+            params: {
+              sessionId: event.subjectId,
+            },
+            to: "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId",
+          }
+        : undefined;
 
     return {
       createdAt: event.createdAt,
       id: event._id,
       message: event.message,
       productLink,
+      registerLink,
       subject: {
         id: event.subjectId,
-        label: event.subjectLabel,
+        label: event.subjectLabel ?? registerLabel,
         type: event.subjectType,
       },
       transactionLink,

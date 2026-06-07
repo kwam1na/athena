@@ -622,8 +622,13 @@ export const recordRegisterSessionTransaction = internalMutation({
     ),
     changeGiven: v.optional(v.number()),
     idempotencyKey: v.optional(v.string()),
+    paymentCount: v.optional(v.number()),
+    paymentMethodLabels: v.optional(v.array(v.string())),
     registerNumber: v.optional(v.string()),
+    saleTotal: v.optional(v.number()),
     terminalId: v.id("posTerminal"),
+    transactionId: v.optional(v.id("posTransaction")),
+    transactionNumber: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const session = await ctx.db.get("registerSession", args.registerSessionId);
@@ -671,7 +676,10 @@ export const recordRegisterSessionTransaction = internalMutation({
       payments: args.payments,
     });
 
-    if (amount > 0) {
+    if (
+      amount > 0 ||
+      (args.adjustmentKind === "sale" && args.saleTotal !== undefined)
+    ) {
       const occurredAt = Date.now();
       const traceResult = await recordRegisterSessionTraceBestEffort(ctx, {
         stage:
@@ -679,6 +687,13 @@ export const recordRegisterSessionTransaction = internalMutation({
         session: updatedSession,
         occurredAt,
         amount,
+        cashDelta: args.adjustmentKind === "sale" ? amount : undefined,
+        paymentCount: args.paymentCount,
+        paymentMethodLabels: args.paymentMethodLabels,
+        saleTotal: args.saleTotal,
+        syncOrigin: args.adjustmentKind === "sale" ? "online" : undefined,
+        transactionId: args.transactionId,
+        transactionNumber: args.transactionNumber,
       });
 
       await persistRegisterSessionWorkflowTraceIdBestEffort(ctx, {

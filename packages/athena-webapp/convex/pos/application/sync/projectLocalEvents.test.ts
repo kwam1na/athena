@@ -763,6 +763,51 @@ describe("projectLocalSyncEvent", () => {
     ]);
   });
 
+  it("records non-cash projected sale trace evidence without increasing expected cash", async () => {
+    const repository = createProjectionRepository();
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: buildSaleCompletedEvent({
+        payload: {
+          ...buildSaleCompletedEvent().payload,
+          payments: [
+            {
+              localPaymentId: "local-payment-card",
+              method: "card",
+              amount: 25,
+              timestamp: 21,
+            },
+          ],
+        },
+      }),
+      syncEventId: "sync-event-1",
+      now: 100,
+    });
+
+    expect(result.status).toBe("projected");
+    expect(repository.registerSessionPatches).not.toContainEqual({
+      registerSessionId: "register-session-1",
+      patch: expect.objectContaining({
+        expectedCash: expect.any(Number),
+      }),
+    });
+    expect(repository.recordedRegisterSessionTraces).toEqual([
+      expect.objectContaining({
+        amount: 0,
+        cashDelta: 0,
+        paymentCount: 1,
+        paymentMethodLabels: ["card"],
+        saleTotal: 25,
+        stage: "sale_recorded",
+        syncOrigin: "local_sync",
+        transactionId: "transaction-1",
+        transactionNumber: "LR-001",
+      }),
+    ]);
+  });
+
   it("projects service-only sales without product inventory movement or retail allocations", async () => {
     const repository = createProjectionRepository();
 
@@ -1147,7 +1192,14 @@ describe("projectLocalSyncEvent", () => {
       expect.objectContaining({
         actorStaffProfileId: "staff-2",
         amount: 25,
+        cashDelta: 25,
+        paymentCount: 1,
+        paymentMethodLabels: ["cash"],
+        saleTotal: 25,
         stage: "sale_recorded",
+        syncOrigin: "local_sync",
+        transactionId: "transaction-1",
+        transactionNumber: "000222",
       }),
     ]);
   });
@@ -2678,7 +2730,7 @@ describe("projectLocalSyncEvent", () => {
     ]);
   });
 
-  it("conflicts register opens when the terminal already has an open drawer", async () => {
+  it("maps duplicate register opens to the terminal's existing active drawer", async () => {
     const repository = createProjectionRepository({
       blockingRegisterSession: {
         _id: "register-session-open",
@@ -2709,11 +2761,14 @@ describe("projectLocalSyncEvent", () => {
       now: 100,
     });
 
-    expect(result.status).toBe("conflicted");
-    expect(result.conflicts).toEqual([
+    expect(result.status).toBe("projected");
+    expect(result.conflicts).toEqual([]);
+    expect(result.mappings).toEqual([
       expect.objectContaining({
-        conflictType: "permission",
-        summary: "A register session is already open for this terminal.",
+        localIdKind: "registerSession",
+        localId: "local-register-2",
+        cloudTable: "registerSession",
+        cloudId: "register-session-open",
       }),
     ]);
   });
@@ -3004,6 +3059,27 @@ describe("projectLocalSyncEvent", () => {
         }),
       }),
     ]);
+    expect(repository.createdOperationalEvents).toEqual([
+      expect.objectContaining({
+        actorStaffProfileId: "staff-1",
+        createdAt: 30,
+        eventType: "register_session_closed",
+        message: "Register 1 closeout recorded with an exact cash match.",
+        metadata: expect.objectContaining({
+          countedCash: 100,
+          expectedCash: 100,
+          localEventId: "event-register-closed-1",
+          registerNumber: "1",
+          syncOrigin: "local_sync",
+          variance: 0,
+        }),
+        organizationId: "org-1",
+        registerSessionId: "register-session-1",
+        storeId: "store-1",
+        subjectId: "register-session-1",
+        subjectType: "register_session",
+      }),
+    ]);
     expect(reopen.conflicts).toEqual([
       expect.objectContaining({
         summary: "Staff access changed before this POS history synced.",
@@ -3041,6 +3117,48 @@ describe("projectLocalSyncEvent", () => {
         conflictType: "permission",
         summary:
           "Register closeout variance requires manager review before synced closeout can be applied.",
+      }),
+    ]);
+  });
+
+  it("formats manager-reviewed closeout variance in projected operational evidence", async () => {
+    const repository = createProjectionRepository();
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: {
+        localEventId: "event-register-closed-1",
+        localRegisterSessionId: "local-register-1",
+        sequence: 3,
+        eventType: "register_closed",
+        occurredAt: 30,
+        staffProfileId: "staff-1" as never,
+        staffProofToken: "proof-token-1",
+        payload: {
+          countedCash: 90,
+          notes: "Short drawer",
+        },
+      },
+      syncEventId: "sync-event-1",
+      now: 100,
+      options: {
+        allowRegisterCloseoutVarianceProjection: true,
+      },
+    });
+
+    expect(result.status).toBe("projected");
+    expect(repository.createdOperationalEvents).toEqual([
+      expect.objectContaining({
+        eventType: "register_session_closed",
+        message:
+          "Register 1 closeout recorded with a cash variance of GH₵-0.1.",
+        metadata: expect.objectContaining({
+          countedCash: 90,
+          expectedCash: 100,
+          registerNumber: "1",
+          variance: -10,
+        }),
       }),
     ]);
   });

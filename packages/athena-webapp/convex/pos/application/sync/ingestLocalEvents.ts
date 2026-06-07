@@ -99,7 +99,7 @@ type IngestionDependencies = {
 const TERMINAL_NOT_PROVISIONED_MESSAGE =
   "This terminal is not provisioned for POS sync.";
 const TERMINAL_INGESTION_PROJECTION_OPTIONS = {
-  trustStoredStaffProof: false,
+  trustStoredStaffProof: true,
 } as const;
 
 export function createLocalSyncIngestionService(
@@ -186,32 +186,32 @@ export function createLocalSyncIngestionService(
                 });
               }
 
-	              if (existing.status === "conflicted") {
-	                const acceptedAt = existing.acceptedAt ?? dependencies.now();
-	                const projection = await projectLocalSyncEvent(
-	                  dependencies.projectionRepository,
-	                  {
+              if (existing.status === "conflicted") {
+                const acceptedAt = existing.acceptedAt ?? dependencies.now();
+                const projection = await projectLocalSyncEvent(
+                  dependencies.projectionRepository,
+                  {
                     storeId: batch.storeId,
                     terminalId: batch.terminalId,
                     event: retryParseResult.event,
                     syncEventId: existing._id,
                     submittedByUserId: batch.submittedByUserId,
                     now: acceptedAt,
-	                    options: TERMINAL_INGESTION_PROJECTION_OPTIONS,
-	                  },
-	                );
-	                if (
-	                  projection.status === "projected" &&
-	                  projection.conflicts.length === 0
-	                ) {
-	                  await dependencies.repository.resolveConflictsForEvent({
-	                    storeId: batch.storeId,
-	                    terminalId: batch.terminalId,
-	                    localEventId: existing.localEventId,
-	                    resolvedAt: dependencies.now(),
-	                  });
-	                }
-	                await dependencies.repository.patchEvent(existing._id, {
+                    options: TERMINAL_INGESTION_PROJECTION_OPTIONS,
+                  },
+                );
+                if (
+                  projection.status === "projected" &&
+                  projection.conflicts.length === 0
+                ) {
+                  await dependencies.repository.resolveConflictsForEvent({
+                    storeId: batch.storeId,
+                    terminalId: batch.terminalId,
+                    localEventId: existing.localEventId,
+                    resolvedAt: dependencies.now(),
+                  });
+                }
+                await dependencies.repository.patchEvent(existing._id, {
                   status: projection.status,
                   projectedAt: dependencies.now(),
                   submittedAt: batch.submittedAt,

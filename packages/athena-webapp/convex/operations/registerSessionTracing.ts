@@ -58,11 +58,16 @@ type RegisterSessionTraceArgs = {
   actorUserId?: Id<"athenaUser">;
   countedCash?: number;
   correctedOpeningFloat?: number;
+  cashDelta?: number;
   previousOpeningFloat?: number;
+  paymentCount?: number;
+  paymentMethodLabels?: string[];
   registerSessionExpectedCashDelta?: number;
   reason?: string;
+  saleTotal?: number;
   settlementDirection?: "collect" | "refund" | "none";
   settlementMethod?: string;
+  syncOrigin?: "online" | "local_sync";
   transactionId?: Id<"posTransaction">;
   transactionNumber?: string;
   variance?: number;
@@ -207,14 +212,19 @@ function buildTraceEvent(args: {
         : undefined,
       countedCash: args.input.countedCash ?? args.input.session.countedCash,
       correctedOpeningFloat: args.input.correctedOpeningFloat,
+      cashDelta: args.input.cashDelta,
       expectedCash: args.input.session.expectedCash,
+      paymentCount: args.input.paymentCount,
+      paymentMethodLabels: args.input.paymentMethodLabels,
       previousOpeningFloat: args.input.previousOpeningFloat,
       registerSessionExpectedCashDelta:
         args.input.registerSessionExpectedCashDelta,
       reason: args.input.reason,
       registerStatus: args.input.session.status,
+      saleTotal: args.input.saleTotal,
       settlementDirection: args.input.settlementDirection,
       settlementMethod: args.input.settlementMethod,
+      syncOrigin: args.input.syncOrigin,
       transactionId: args.input.transactionId
         ? String(args.input.transactionId)
         : undefined,
@@ -248,6 +258,25 @@ function buildTraceEvent(args: {
         subjectRefs,
       };
     case "sale_recorded":
+      if (args.input.saleTotal !== undefined) {
+        const tenderSummary = args.input.paymentMethodLabels?.join(", ");
+        const cashDelta = args.input.cashDelta ?? args.input.amount ?? 0;
+        const cashImpact =
+          cashDelta > 0
+            ? ` Cash impact: ${displayTraceAmount(cashDelta, args.currency)}.`
+            : " No cash drawer impact.";
+
+        return {
+          kind: "system_action" as const,
+          step: "register_session_sale_recorded",
+          status: "info" as const,
+          message: `Recorded ${formatTransactionLabel(args.input)} sale of ${displayTraceAmount(args.input.saleTotal, args.currency)}${tenderSummary ? ` paid by ${tenderSummary}` : ""}.${cashImpact}`,
+          occurredAt,
+          details,
+          subjectRefs,
+        };
+      }
+
       return {
         kind: "system_action" as const,
         step: "register_session_sale_recorded",

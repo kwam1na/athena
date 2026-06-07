@@ -133,6 +133,53 @@ describe("recordRegisterSessionTraceBestEffort", () => {
     );
   });
 
+  it("records completed sale evidence separately from cash drawer impact", async () => {
+    vi.mocked(createWorkflowTraceWithCtx).mockResolvedValue("trace-1" as never);
+    vi.mocked(registerWorkflowTraceLookupWithCtx).mockResolvedValue(
+      "lookup-1" as never,
+    );
+    vi.mocked(appendWorkflowTraceEventWithCtx).mockResolvedValue(
+      "event-1" as never,
+    );
+    const { ctx } = buildCtx();
+
+    await recordRegisterSessionTraceBestEffort(ctx, {
+      stage: "sale_recorded",
+      session: buildSession(),
+      occurredAt: 222,
+      amount: 0,
+      cashDelta: 0,
+      paymentCount: 1,
+      paymentMethodLabels: ["card"],
+      saleTotal: 12_345,
+      syncOrigin: "local_sync",
+      transactionId: "transaction-1" as Id<"posTransaction">,
+      transactionNumber: "R-001",
+    });
+
+    expect(appendWorkflowTraceEventWithCtx).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        details: expect.objectContaining({
+          amount: 0,
+          cashDelta: 0,
+          paymentCount: 1,
+          paymentMethodLabels: ["card"],
+          saleTotal: 12_345,
+          syncOrigin: "local_sync",
+          transactionId: "transaction-1",
+          transactionNumber: "R-001",
+        }),
+        message: `Recorded transaction #R-001 sale of ${formatStoredTraceAmount("GHS", 12_345)} paid by card. No cash drawer impact.`,
+        occurredAt: 222,
+        step: "register_session_sale_recorded",
+        subjectRefs: expect.objectContaining({
+          posTransactionId: "transaction-1",
+        }),
+      }),
+    );
+  });
+
   it("uses the register session store currency when formatting trace money", async () => {
     vi.mocked(createWorkflowTraceWithCtx).mockResolvedValue("trace-1" as never);
     vi.mocked(registerWorkflowTraceLookupWithCtx).mockResolvedValue(

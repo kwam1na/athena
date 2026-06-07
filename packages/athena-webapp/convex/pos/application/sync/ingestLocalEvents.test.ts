@@ -422,7 +422,7 @@ describe("createLocalSyncIngestionService", () => {
     ]);
   });
 
-  it("conflicts proofless offline register opens and completed sales for active terminal staff", async () => {
+  it("projects proofless offline register opens and completed sales for active terminal staff", async () => {
     const repository = createFakeSyncRepository({
       existingRegisterSession: null,
     });
@@ -448,25 +448,33 @@ describe("createLocalSyncIngestionService", () => {
       {
         localEventId: "event-register-opened-1",
         sequence: 1,
-        status: "conflicted",
+        status: "projected",
       },
       {
         localEventId: "event-sale-completed-2",
         sequence: 2,
-        status: "conflicted",
+        status: "projected",
       },
     ]);
-    expect(result.data.conflicts).toEqual([
-      expect.objectContaining({ conflictType: "permission" }),
-      expect.objectContaining({ conflictType: "permission" }),
-    ]);
+    expect(result.data.conflicts).toEqual([]);
     expect(repository.events).toEqual([
       expect.not.objectContaining({ staffProofTokenHash: expect.any(String) }),
       expect.not.objectContaining({ staffProofTokenHash: expect.any(String) }),
     ]);
-    expect(repository.createdRegisterSessions).toEqual([]);
-    expect(repository.createdTransactions).toEqual([]);
-    expect(repository.createdPaymentAllocations).toHaveLength(0);
+    expect(repository.createdRegisterSessions).toEqual([
+      expect.objectContaining({
+        openedByStaffProfileId: "staff-1",
+        openingFloat: 100,
+      }),
+    ]);
+    expect(repository.createdTransactions).toEqual([
+      expect.objectContaining({
+        registerSessionId: "register-session-1",
+        staffProfileId: "staff-1",
+        total: 25,
+      }),
+    ]);
+    expect(repository.createdPaymentAllocations).toHaveLength(1);
   });
 
   it("holds an out-of-order event without projection side effects", async () => {

@@ -575,13 +575,10 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
           return true;
         },
         openQuickAddProduct: () => {
-          if (!productLookupEnabled || !canQuickAddProduct) {
-            if (!canAddPendingCheckoutItem) {
-              return false;
-            }
-          }
-
-          if (!productLookupEnabled) {
+          if (
+            !productLookupEnabled ||
+            (!canQuickAddProduct && !canAddPendingCheckoutItem)
+          ) {
             return false;
           }
 

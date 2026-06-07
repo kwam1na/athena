@@ -158,7 +158,10 @@ export function usePosLocalSyncRuntimeStatus(input: {
   const onRetrySync = input.onRetrySync;
   const source = input.source ?? "sync-runtime";
   const staffProfileId = input.staffProfileId;
-  const uploadSupport = getAppSessionUploadSupport(input.appSessionRecovery);
+  const uploadSupport = useMemo(
+    () => getAppSessionUploadSupport(input.appSessionRecovery),
+    [input.appSessionRecovery],
+  );
   const lastRuntimeStatusSignatureRef = useRef<string | null>(null);
   const requestRetry = useCallback(() => {
     setRefreshToken((current) => current + 1);
@@ -557,6 +560,12 @@ export function usePosLocalSyncRuntimeStatus(input: {
             locallySettledEventIds,
             syncedEventIds,
           );
+          await clearSupersededRecoverableDrawerAuthorityBlocks({
+            acceptedEvents: result.data.accepted,
+            events: latestEvents.value.events,
+            returnedMappings: result.data.mappings,
+            store,
+          });
           await clearRecoverableDrawerAuthorityForSyncedEvents({
             events: latestEvents.value.events,
             reviewEventIds: localReviewEventIds,
@@ -668,6 +677,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
     storeId,
     terminalId,
     refreshToken,
+    uploadSupport,
   ]);
 
   const runtimeStatusSyncDebug = useMemo<PosTerminalRuntimeSyncDebugInput>(
@@ -1342,6 +1352,135 @@ function isRecoverableDrawerAuthorityReason(
   reason: PosDrawerAuthorityState["reason"] | undefined,
 ) {
   return reason === "lifecycle_rejected" || reason === "authority_unknown";
+}
+
+async function clearSupersededRecoverableDrawerAuthorityBlocks(input: {
+  acceptedEvents: Array<{
+    localEventId: string;
+    status: string;
+  }>;
+  events: PosLocalEventRecord[];
+  returnedMappings: Array<{
+    cloudId: string;
+    localId: string;
+    localIdKind: string;
+  }>;
+  store: PosLocalRuntimeStore;
+}) {
+  const clearDrawerAuthorityState:
+    | PosLocalRuntimeStore["clearDrawerAuthorityState"]
+    | undefined = (
+    input.store as {
+      clearDrawerAuthorityState?: PosLocalRuntimeStore["clearDrawerAuthorityState"];
+    }
+  ).clearDrawerAuthorityState;
+  const readDrawerAuthorityState:
+    | PosLocalRuntimeStore["readDrawerAuthorityState"]
+    | undefined = (
+    input.store as {
+      readDrawerAuthorityState?: PosLocalRuntimeStore["readDrawerAuthorityState"];
+    }
+  ).readDrawerAuthorityState;
+  const listLocalCloudMappings:
+    | PosLocalRuntimeStore["listLocalCloudMappings"]
+    | undefined = (
+    input.store as {
+      listLocalCloudMappings?: PosLocalRuntimeStore["listLocalCloudMappings"];
+    }
+  ).listLocalCloudMappings;
+  if (
+    !clearDrawerAuthorityState ||
+    !readDrawerAuthorityState ||
+    !listLocalCloudMappings
+  ) {
+    return;
+  }
+
+  const acceptedProjectedEventIds = new Set(
+    input.acceptedEvents
+      .filter((event) => event.status === "projected")
+      .map((event) => event.localEventId),
+  );
+  const replacementDrawerOpenings = input.returnedMappings
+    .filter((mapping) => mapping.localIdKind === "registerSession")
+    .map((mapping) => {
+      const event = input.events.find(
+        (candidate) =>
+          candidate.type === "register.opened" &&
+          candidate.localRegisterSessionId === mapping.localId &&
+          acceptedProjectedEventIds.has(candidate.localEventId),
+      );
+      return event
+        ? {
+            cloudRegisterSessionId: mapping.cloudId,
+            event,
+          }
+        : null;
+    })
+    .filter((entry): entry is {
+      cloudRegisterSessionId: string;
+      event: PosLocalEventRecord;
+    } => Boolean(entry));
+  if (replacementDrawerOpenings.length === 0) {
+    return;
+  }
+
+  const mappings = await listLocalCloudMappings();
+  assertPosLocalStoreOk(mappings);
+
+  for (const replacement of replacementDrawerOpenings) {
+    const supersededRegisterSessionIds = mappings.value
+      .filter(
+        (mapping) =>
+          mapping.entity === "registerSession" &&
+          mapping.cloudId === replacement.cloudRegisterSessionId &&
+          mapping.localId !== replacement.event.localRegisterSessionId,
+      )
+      .map((mapping) => mapping.localId);
+    const uniqueSupersededRegisterSessionIds = [
+      ...new Set(supersededRegisterSessionIds),
+    ];
+
+    for (const localRegisterSessionId of uniqueSupersededRegisterSessionIds) {
+      const terminalIds = [
+        ...new Set(
+          input.events
+            .filter(
+              (event) =>
+                event.storeId === replacement.event.storeId &&
+                event.localRegisterSessionId === localRegisterSessionId,
+            )
+            .map((event) => event.terminalId),
+        ),
+      ];
+      for (const terminalId of terminalIds) {
+        const drawerAuthority: PosLocalStoreResult<PosDrawerAuthorityState | null> =
+          await readDrawerAuthorityState({
+          localRegisterSessionId,
+          storeId: replacement.event.storeId,
+          terminalId,
+        });
+        assertPosLocalStoreOk(drawerAuthority);
+        if (
+          drawerAuthority.value?.status !== "blocked" ||
+          !isRecoverableDrawerAuthorityReason(drawerAuthority.value.reason) ||
+          drawerAuthority.value.observedAt > replacement.event.createdAt ||
+          (drawerAuthority.value.cloudRegisterSessionId &&
+            drawerAuthority.value.cloudRegisterSessionId !==
+              replacement.cloudRegisterSessionId)
+        ) {
+          continue;
+        }
+
+        const result: PosLocalStoreResult<null> = await clearDrawerAuthorityState({
+          localRegisterSessionId,
+          storeId: replacement.event.storeId,
+          terminalId,
+        });
+        assertPosLocalStoreOk(result);
+      }
+    }
+  }
 }
 
 async function clearSettledRecoverableDrawerAuthorityBlock(input: {

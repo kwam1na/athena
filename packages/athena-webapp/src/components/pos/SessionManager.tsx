@@ -8,6 +8,7 @@ import {
 import { PlayCircle, Clock, Plus, Ban } from "lucide-react";
 
 import type { RegisterSessionPanelState } from "@/lib/pos/presentation/register/registerUiState";
+import { WorkflowTraceRouteLink } from "~/src/components/traces/WorkflowTraceRouteLink";
 
 import { HeldSessionsList } from "./session/HeldSessionsList";
 
@@ -38,16 +39,26 @@ export function SessionManager({ sessionPanel }: SessionManagerProps) {
       )}
 
       {sessionPanel.activeSessionNumber && (
-        <Button
-          variant="outline"
-          size="sm"
-          className="flex h-10 items-center gap-2 px-4"
-          onClick={() => void sessionPanel.onVoidCurrentSession()}
-          disabled={!sessionPanel.canClearSale}
-        >
-          <Ban className="h-4 w-4 text-destructive" />
-          Clear sale
-        </Button>
+        <>
+          {sessionPanel.activeSessionTraceId ? (
+            <WorkflowTraceRouteLink
+              traceId={sessionPanel.activeSessionTraceId}
+              className="px-2 text-xs font-medium text-muted-foreground hover:text-primary"
+            >
+              View trace
+            </WorkflowTraceRouteLink>
+          ) : null}
+          <Button
+            variant="outline"
+            size="sm"
+            className="flex h-10 items-center gap-2 px-4"
+            onClick={() => void sessionPanel.onVoidCurrentSession()}
+            disabled={!sessionPanel.canClearSale}
+          >
+            <Ban className="h-4 w-4 text-destructive" />
+            Clear sale
+          </Button>
+        </>
       )}
 
       {sessionPanel.heldSessions.length > 0 && (

@@ -568,8 +568,15 @@ export type SyncProjectionRepository = {
     amount?: number;
     actorStaffProfileId?: Id<"staffProfile">;
     actorUserId?: Id<"athenaUser">;
+    cashDelta?: number;
     countedCash?: number;
+    paymentCount?: number;
+    paymentMethodLabels?: string[];
     reason?: string;
+    saleTotal?: number;
+    syncOrigin?: "online" | "local_sync";
+    transactionId?: Id<"posTransaction">;
+    transactionNumber?: string;
     variance?: number;
   }): Promise<PosSyncWorkflowTraceResult>;
 };

@@ -440,6 +440,16 @@ async function projectRegisterOpened(
     registerNumber: terminalRegisterNumber,
   });
   if (blockingRegisterSession) {
+    if (isPosUsableRegisterSession(blockingRegisterSession)) {
+      const mapping = await createMapping(repository, args, {
+        localIdKind: "registerSession",
+        localId: args.event.localRegisterSessionId,
+        cloudTable: "registerSession",
+        cloudId: blockingRegisterSession._id,
+      });
+      return { status: "projected", mappings: [mapping], conflicts: [] };
+    }
+
     const conflict = await createConflict(repository, args, {
       conflictType: "permission",
       summary: "A register session is already open for this terminal.",
@@ -1715,11 +1725,15 @@ function recordSaleProjectedEvent(
       payload: input.payload,
     }),
     metadata: {
+      cashDelta: input.payments.expectedCashDelta,
       lineCount: getSaleLineCount(input.payload),
       localEventId: args.event.localEventId,
       localReceiptNumber: input.payload.localReceiptNumber,
+      paymentCount: input.payments.validPayments.length,
       paymentMethods: getPaymentMethodLabels(input.payments.validPayments),
       receiptNumber: input.payload.receiptNumber,
+      saleTotal: input.payload.totals.total,
+      syncOrigin: "local_sync",
       total: input.payload.totals.total,
       transactionNumber: input.payload.receiptNumber,
     },
@@ -1866,12 +1880,19 @@ async function recordSaleWorkflowEvidence(
 
   const registerSessionTraceResult =
     await repository.recordRegisterSessionWorkflowTrace?.({
-    stage: "sale_recorded",
-    session: input.session.registerSession,
-    occurredAt: args.event.occurredAt,
-    amount: input.payments.expectedCashDelta,
-    actorStaffProfileId: args.event.staffProfileId,
-  });
+      stage: "sale_recorded",
+      session: input.session.registerSession,
+      occurredAt: args.event.occurredAt,
+      amount: input.payments.expectedCashDelta,
+      cashDelta: input.payments.expectedCashDelta,
+      paymentCount: input.payments.transactionPayments.length,
+      paymentMethodLabels: getPaymentMethodLabels(input.payments.validPayments),
+      saleTotal: input.payload.totals.total,
+      syncOrigin: "local_sync",
+      transactionId: input.sale.transactionId,
+      transactionNumber: input.payload.receiptNumber,
+      actorStaffProfileId: args.event.staffProfileId,
+    });
   if (registerSessionTraceResult) {
     await persistRegisterSessionWorkflowTraceId(repository, {
       registerSessionId: input.session.registerSession._id,
@@ -2463,6 +2484,8 @@ async function projectRegisterClosed(
     return { status: "conflicted", mappings: [], conflicts: [conflict] };
   }
 
+  const store = await repository.getStore(args.storeId);
+
   await repository.patchRegisterSession(registerSession._id, {
     status: "closed",
     countedCash,
@@ -2507,6 +2530,28 @@ async function projectRegisterClosed(
       workflowTraceId: registerSession.workflowTraceId,
     });
   }
+  await repository.createOperationalEvent({
+    storeId: args.storeId,
+    organizationId: store?.organizationId,
+    eventType: "register_session_closed",
+    subjectType: "register_session",
+    subjectId: registerSession._id,
+    message:
+      variance === 0
+        ? `Register ${registerSession.registerNumber ?? registerSession._id} closeout recorded with an exact cash match.`
+        : `Register ${registerSession.registerNumber ?? registerSession._id} closeout recorded with a cash variance of ${formatSaleTotal(store?.currency, variance)}.`,
+    metadata: {
+      countedCash,
+      expectedCash: registerSession.expectedCash,
+      localEventId: args.event.localEventId,
+      registerNumber: registerSession.registerNumber,
+      syncOrigin: "local_sync",
+      variance,
+    },
+    createdAt: args.event.occurredAt,
+    actorStaffProfileId: args.event.staffProfileId,
+    registerSessionId: registerSession._id,
+  });
   const mapping = await createMapping(repository, args, {
     localIdKind: "closeout",
     localId: args.event.localEventId,
