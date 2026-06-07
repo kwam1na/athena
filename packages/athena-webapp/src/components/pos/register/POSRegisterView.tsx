@@ -1160,6 +1160,7 @@ function POSRegisterViewContent({
   const isLocallyClosedPendingSync =
     isPosWorkflow &&
     viewModel.syncStatus?.status === "locally_closed_pending_sync";
+  const isPosRegisterLocked = isPosWorkflow && isAwaitingCashierAuth;
   const shouldShowOnboarding =
     isPosWorkflow &&
     onboardingState.shouldShow &&
@@ -1246,6 +1247,7 @@ function POSRegisterViewContent({
     !shouldShowPaymentWorkspace &&
     !shouldShowOnboarding &&
     !isResolvingCashierPresence &&
+    !isPosRegisterLocked &&
     !isResolvingRegisterSetup;
   const shouldRenderCartSidebar =
     shouldRenderSaleSurface &&
@@ -1263,6 +1265,23 @@ function POSRegisterViewContent({
       shouldRenderCheckoutPanel ||
       isAwaitingCashierAuth) &&
     !isLocallyClosedPendingSync;
+  const workspaceSidebarCartItems = isPosRegisterLocked
+    ? []
+    : (viewModel.cart?.items ?? []);
+  const workspaceSidebarServiceItems = isPosRegisterLocked
+    ? []
+    : (viewModel.cart?.serviceItems ?? []);
+  const workspaceSidebarCheckout = isPosRegisterLocked
+    ? {
+        ...viewModel.checkout,
+        cartItems: [],
+        payments: [],
+        serviceLines: [],
+        subtotal: 0,
+        tax: 0,
+        total: 0,
+      }
+    : viewModel.checkout;
 
   useEffect(() => {
     const handleCmdK = (event: KeyboardEvent) => {
@@ -1654,6 +1673,7 @@ function POSRegisterViewContent({
           {isPosWorkflow &&
           shouldRenderSaleSurface &&
           !shouldShowOnboarding &&
+          !isPosRegisterLocked &&
           !isResolvingCashierPresence &&
           !isResolvingRegisterSetup ? (
             <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,0.48fr)]">
@@ -1813,8 +1833,8 @@ function POSRegisterViewContent({
                 <div className="scrollbar-hide flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain pr-1">
                   {shouldRenderCartSidebar ? (
                     <CartItems
-                      cartItems={viewModel.cart.items}
-                      serviceItems={viewModel.cart.serviceItems}
+                      cartItems={workspaceSidebarCartItems}
+                      serviceItems={workspaceSidebarServiceItems}
                       onUpdateQuantity={viewModel.cart.onUpdateQuantity}
                       onRemoveItem={viewModel.cart.onRemoveItem}
                       onUpdateServiceAmount={
@@ -1847,7 +1867,7 @@ function POSRegisterViewContent({
                     >
                       {isPosWorkflow ? (
                         <RegisterCheckoutPanel
-                          checkout={viewModel.checkout}
+                          checkout={workspaceSidebarCheckout}
                           onPaymentFlowChange={handlePaymentFlowChange}
                           onPaymentEntryStart={handlePaymentEntryStart}
                           onCompletionBlockAction={handleCompletionBlockAction}

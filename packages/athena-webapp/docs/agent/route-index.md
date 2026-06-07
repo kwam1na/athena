@@ -40,6 +40,7 @@ This route index enumerates the current files under `src/routes` so agents can o
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close-history.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close-history.tsx)
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close.tsx)
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/index.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/index.tsx)
+- [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/inventory-import.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/inventory-import.tsx)
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/open-work.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/open-work.tsx)
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/opening.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/opening.tsx)
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/sku-activity.test.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/operations/sku-activity.test.tsx)

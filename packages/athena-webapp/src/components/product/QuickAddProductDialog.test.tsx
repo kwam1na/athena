@@ -131,6 +131,27 @@ describe("QuickAddProductDialog", () => {
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
+  it("normalizes Convex-wrapped submit errors before showing inline copy", async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn(async () => {
+      throw new Error(
+        "[CONVEX M(pos/public/catalog:createOrReusePendingCheckoutItemForSale)] [Request ID: abc123] Server Error: An open register session is required to add this item. at requirePendingCheckoutSaleContext",
+      );
+    });
+    renderQuickAddDialog({ onSubmit });
+
+    await user.type(screen.getByLabelText(/selling price/i), "25");
+    await user.click(screen.getByRole("button", { name: /add product/i }));
+
+    expect(
+      await screen.findByText(
+        "Drawer closed. Open the drawer before adding this item.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/\[CONVEX M/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Request ID/i)).not.toBeInTheDocument();
+  });
+
   it("does not dismiss quick add when tapping outside the dialog", async () => {
     const onOpenChange = vi.fn();
     renderQuickAddDialog({ onOpenChange });

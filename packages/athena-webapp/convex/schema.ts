@@ -13,6 +13,7 @@ import {
   organizationMemberSchema,
   organizationSchema,
   inventoryHoldSchema,
+  inventoryImportReviewVersionSchema,
   productSchema,
   productSkuSchema,
   promoCodeItemSchema,
@@ -251,6 +252,9 @@ const schema = defineSchema({
       "status",
       "productSkuId",
     ]),
+  inventoryImportReviewVersion: defineTable(inventoryImportReviewVersionSchema)
+    .index("by_storeId_createdAt", ["storeId", "createdAt"])
+    .index("by_storeId_importKey", ["storeId", "importKey"]),
   inventoryMovement: defineTable(inventoryMovementSchema)
     .index("by_storeId", ["storeId"])
     .index("by_storeId_productSkuId", ["storeId", "productSkuId"])

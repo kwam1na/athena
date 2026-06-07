@@ -27,11 +27,13 @@ export type ManagerElevation = {
   expiresAt: number;
   staffProfileId: Id<"staffProfile">;
   startedAt: number;
+  terminalId: Id<"posTerminal">;
 };
 
 type ManagerElevationAuthenticationResult = StaffAuthenticationResult & {
   elevationId: Id<"managerElevation">;
   expiresAt: number;
+  terminalId: Id<"posTerminal">;
 };
 
 type ManagerElevationContextValue = {
@@ -107,6 +109,7 @@ export function ManagerElevationProvider({
       expiresAt: activeServerElevation.expiresAt,
       staffProfileId: activeServerElevation.managerStaffProfileId,
       startedAt: activeServerElevation.startedAt,
+      terminalId: activeServerElevation.terminalId,
     };
   }, [activeElevation, activeServerElevation]);
 
@@ -213,6 +216,7 @@ export function ManagerElevationProvider({
             expiresAt: elevation.expiresAt,
             staffProfileId: result.staffProfileId,
             startedAt: Date.now(),
+            terminalId: elevation.terminalId,
           });
           setDialogOpen(false);
         }}

@@ -10,6 +10,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { toOperatorMessage } from "@/lib/errors/operatorMessages";
 import { capitalizeWords, cn } from "@/lib/utils";
 import { parseDisplayAmountInput } from "@/lib/pos/displayAmounts";
 import {
@@ -99,12 +100,32 @@ type QuickAddProductDialogProps = {
   variantTitle?: string;
   description?: string;
   variantDescription?: string;
+  quantityLabel?: string;
   submitLabel?: string;
   multiVariantSubmitLabel?: string;
   submitErrorMessage?: string;
 };
 
 const QUICK_ADD_LOOKUP_CODE_MAX_LENGTH = 64;
+
+function formatQuickAddDialogError(error: unknown, fallback: string) {
+  if (!(error instanceof Error) || !error.message) {
+    return fallback;
+  }
+
+  const serverError = error.message.match(
+    /Server Error:\s*([\s\S]*?)(?:\s+at\s+|$)/,
+  )?.[1];
+  const message = serverError?.trim() || error.message;
+  const operatorMessage = toOperatorMessage(message);
+
+  if (/\[CONVEX|Request ID|Server Error:/i.test(operatorMessage)) {
+    return fallback;
+  }
+
+  return operatorMessage;
+}
+
 function validateQuickAddLookupCode(lookupCode: string) {
   const trimmedLookupCode = lookupCode.trim();
   if (!trimmedLookupCode) {
@@ -319,6 +340,7 @@ export function QuickAddProductDialog({
   variantTitle = "Quick add variant",
   description = "Add the details needed for this sale",
   variantDescription = "Add different variants for this product",
+  quantityLabel = "Available qty",
   submitLabel = "Add product",
   multiVariantSubmitLabel = "Add product variants",
   submitErrorMessage = "Could not quick add this product. Try again.",
@@ -543,11 +565,7 @@ export function QuickAddProductDialog({
       onOpenChange(false);
     } catch (error) {
       console.error("[Product] Quick add product failed", error);
-      setQuickAddError(
-        error instanceof Error && error.message
-          ? error.message
-          : submitErrorMessage,
-      );
+      setQuickAddError(formatQuickAddDialogError(error, submitErrorMessage));
     } finally {
       setIsQuickAddSaving(false);
     }
@@ -636,9 +654,10 @@ export function QuickAddProductDialog({
     } catch (error) {
       console.error("[Product] Attach barcode failed", error);
       setQuickAddError(
-        error instanceof Error && error.message
-          ? error.message
-          : "Could not attach this barcode. Try again.",
+        formatQuickAddDialogError(
+          error,
+          "Could not attach this barcode. Try again.",
+        ),
       );
     } finally {
       setIsAttachSaving(false);
@@ -910,7 +929,9 @@ export function QuickAddProductDialog({
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="quick-add-quantity">Available qty</Label>
+                      <Label htmlFor="quick-add-quantity">
+                        {quantityLabel}
+                      </Label>
                       <Input
                         id="quick-add-quantity"
                         inputMode="numeric"
@@ -986,7 +1007,7 @@ export function QuickAddProductDialog({
 
                         <div className="space-y-2">
                           <Label htmlFor={`${variant.id}-quantity`}>
-                            Available qty
+                            {quantityLabel}
                           </Label>
                           <Input
                             id={`${variant.id}-quantity`}

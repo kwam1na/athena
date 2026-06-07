@@ -97,6 +97,7 @@ describe("ManagerElevationProvider", () => {
           lastName: "Mensah",
         },
         staffProfileId: managerId,
+        terminalId,
       }),
     );
 
@@ -151,6 +152,7 @@ describe("ManagerElevationProvider", () => {
       elevationId,
       expiresAt: 456,
       staffProfileId: managerId,
+      terminalId,
     });
     expect(result.current.isManagerElevated).toBe(true);
 

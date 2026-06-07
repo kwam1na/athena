@@ -179,7 +179,7 @@ describe("createOrReusePendingCheckoutItem", () => {
       productSkuId: "productSku001",
       quantitySold: 2,
       reviewPriority: "normal",
-      sku: "PENDING-ZZZZ-1-1",
+      sku: "ZZZZ-1-1",
       status: "pending_review",
     });
 
@@ -211,7 +211,7 @@ describe("createOrReusePendingCheckoutItem", () => {
         inventoryCount: 0,
         isVisible: false,
         quantityAvailable: 0,
-        sku: "PENDING-ZZZZ-1-1",
+        sku: "ZZZZ-1-1",
       }),
     ]);
     expect(item.evidence).toMatchObject({
@@ -347,7 +347,7 @@ describe("createOrReusePendingCheckoutItem", () => {
       productSku: [
         {
           _id: "sku-pending",
-          sku: "PENDING-1",
+          sku: "ZZZZ-1-1",
           storeId: "storezzzz",
         },
       ],

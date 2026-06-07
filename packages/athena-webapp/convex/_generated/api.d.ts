@@ -78,6 +78,7 @@ import type * as inventory_athenaUser from "../inventory/athenaUser.js";
 import type * as inventory_auth from "../inventory/auth.js";
 import type * as inventory_bannerMessage from "../inventory/bannerMessage.js";
 import type * as inventory_bestSeller from "../inventory/bestSeller.js";
+import type * as inventory_catalogImport from "../inventory/catalogImport.js";
 import type * as inventory_categories from "../inventory/categories.js";
 import type * as inventory_colors from "../inventory/colors.js";
 import type * as inventory_complimentaryProduct from "../inventory/complimentaryProduct.js";
@@ -214,6 +215,7 @@ import type * as schemas_inventory_complimentaryProduct from "../schemas/invento
 import type * as schemas_inventory_featuredItem from "../schemas/inventory/featuredItem.js";
 import type * as schemas_inventory_index from "../schemas/inventory/index.js";
 import type * as schemas_inventory_inventoryHold from "../schemas/inventory/inventoryHold.js";
+import type * as schemas_inventory_inventoryImportReviewVersion from "../schemas/inventory/inventoryImportReviewVersion.js";
 import type * as schemas_inventory_inviteCode from "../schemas/inventory/inviteCode.js";
 import type * as schemas_inventory_organization from "../schemas/inventory/organization.js";
 import type * as schemas_inventory_organizationMember from "../schemas/inventory/organizationMember.js";
@@ -425,6 +427,7 @@ declare const fullApi: ApiFromModules<{
   "inventory/auth": typeof inventory_auth;
   "inventory/bannerMessage": typeof inventory_bannerMessage;
   "inventory/bestSeller": typeof inventory_bestSeller;
+  "inventory/catalogImport": typeof inventory_catalogImport;
   "inventory/categories": typeof inventory_categories;
   "inventory/colors": typeof inventory_colors;
   "inventory/complimentaryProduct": typeof inventory_complimentaryProduct;
@@ -561,6 +564,7 @@ declare const fullApi: ApiFromModules<{
   "schemas/inventory/featuredItem": typeof schemas_inventory_featuredItem;
   "schemas/inventory/index": typeof schemas_inventory_index;
   "schemas/inventory/inventoryHold": typeof schemas_inventory_inventoryHold;
+  "schemas/inventory/inventoryImportReviewVersion": typeof schemas_inventory_inventoryImportReviewVersion;
   "schemas/inventory/inviteCode": typeof schemas_inventory_inviteCode;
   "schemas/inventory/organization": typeof schemas_inventory_organization;
   "schemas/inventory/organizationMember": typeof schemas_inventory_organizationMember;

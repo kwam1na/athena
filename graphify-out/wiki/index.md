@@ -7,15 +7,15 @@ Graphify is the navigation layer for the repo graph. Use the entry docs below fo
 - [packages/AGENTS.md](../../packages/AGENTS.md) - package router plus the operational guides for each harnessed package
 
 ## Repo Summary
-- Code files discovered: 1840
-- Graph nodes: 6277
-- Graph edges: 6862
-- Communities: 1768
+- Code files discovered: 1848
+- Graph nodes: 6339
+- Graph edges: 6975
+- Communities: 1776
 
 ## Graph Hotspots
 - `DailyCloseView.tsx` (84 edges, Community 0) - [`packages/athena-webapp/src/components/operations/DailyCloseView.tsx`](../../packages/athena-webapp/src/components/operations/DailyCloseView.tsx)
-- `dailyClose.ts` (65 edges, Community 1) - [`packages/athena-webapp/convex/operations/dailyClose.ts`](../../packages/athena-webapp/convex/operations/dailyClose.ts)
-- `useRegisterViewModel.ts` (59 edges, Community 2) - [`packages/athena-webapp/src/lib/pos/presentation/register/useRegisterViewModel.ts`](../../packages/athena-webapp/src/lib/pos/presentation/register/useRegisterViewModel.ts)
+- `useRegisterViewModel.ts` (68 edges, Community 1) - [`packages/athena-webapp/src/lib/pos/presentation/register/useRegisterViewModel.ts`](../../packages/athena-webapp/src/lib/pos/presentation/register/useRegisterViewModel.ts)
+- `dailyClose.ts` (65 edges, Community 2) - [`packages/athena-webapp/convex/operations/dailyClose.ts`](../../packages/athena-webapp/convex/operations/dailyClose.ts)
 - `projectLocalEvents.ts` (51 edges, Community 3) - [`packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.ts`](../../packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.ts)
 - `usePosLocalSyncRuntime.ts` (47 edges, Community 5) - [`packages/athena-webapp/src/lib/pos/infrastructure/local/usePosLocalSyncRuntime.ts`](../../packages/athena-webapp/src/lib/pos/infrastructure/local/usePosLocalSyncRuntime.ts)
 - `harness-inferential-review.ts` (46 edges, Community 8) - [`scripts/harness-inferential-review.ts`](../../scripts/harness-inferential-review.ts)

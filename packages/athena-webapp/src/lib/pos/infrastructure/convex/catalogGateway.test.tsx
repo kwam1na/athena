@@ -461,6 +461,26 @@ describe("catalogGateway", () => {
     expect(catalogStoreMocks.writeRegisterAvailabilitySnapshot).not.toHaveBeenCalled();
   });
 
+  it("does not request trusted availability for local pending checkout SKUs", () => {
+    renderHook(() =>
+      useConvexRegisterCatalogAvailability({
+        storeId: "store-1" as Id<"store">,
+        productSkuIds: [
+          "local-pending-sku-1" as Id<"productSku">,
+          "sku-1" as Id<"productSku">,
+        ],
+      }),
+    );
+
+    expect(convexMocks.useQuery).toHaveBeenCalledWith(
+      expect.anything(),
+      {
+        storeId: "store-1",
+        productSkuIds: ["sku-1"],
+      },
+    );
+  });
+
   it("refreshes the full local availability snapshot even when no SKU availability is requested", async () => {
     fullAvailabilitySnapshotRows = [
       buildAvailabilityRow({

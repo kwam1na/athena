@@ -37,6 +37,10 @@ describe("toOperatorMessage", () => {
       "Drawer closed. Open the drawer before completing this sale.",
     ],
     [
+      "An open register session is required to add this item.",
+      "Drawer closed. Open the drawer before adding this item.",
+    ],
+    [
       "This sale is already assigned to a different cash drawer.",
       "Sale assigned to a different drawer. Open that drawer before continuing.",
     ],

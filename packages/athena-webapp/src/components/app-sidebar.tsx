@@ -238,6 +238,25 @@ export function AppSidebar() {
                       asChild
                     >
                       <Link
+                        to="/$orgUrlSlug/store/$storeUrlSlug/operations/inventory-import"
+                        params={(p) => ({
+                          ...p,
+                          orgUrlSlug: activeOrganization?.slug,
+                          storeUrlSlug: activeStore?.slug,
+                        })}
+                        className="flex items-center"
+                      >
+                        <p className="font-medium">Inventory import</p>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuSubItem>
+
+                  <SidebarMenuSubItem>
+                    <SidebarMenuButton
+                      disabled={!canAccessStoreDaySurfaces()}
+                      asChild
+                    >
+                      <Link
                         to="/$orgUrlSlug/store/$storeUrlSlug/operations/opening"
                         params={(p) => ({
                           ...p,
