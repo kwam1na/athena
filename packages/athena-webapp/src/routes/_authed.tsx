@@ -8,6 +8,7 @@ import {
 } from "@tanstack/react-router";
 import {
   type Dispatch,
+  type CSSProperties,
   type ReactNode,
   type SetStateAction,
   useEffect,
@@ -16,6 +17,7 @@ import {
 import {
   SidebarProvider,
   SidebarInset,
+  SidebarTrigger,
   useSidebar,
 } from "../components/ui/sidebar";
 import { AppSidebar } from "../components/app-sidebar";
@@ -380,14 +382,22 @@ function TopBar({ userEmail }: { userEmail: string }) {
     <header className="relative z-20 flex h-16 shrink-0 border-b border-border/70 bg-background">
       <div
         className={cn(
-          "flex h-full shrink-0 items-center px-layout-xl transition-[width] duration-200 ease-linear",
-          state === "expanded" && "border-r border-sidebar-border",
+          "flex h-full w-auto shrink-0 items-center gap-layout-xs px-layout-sm transition-[width] duration-200 ease-linear md:w-[var(--topbar-sidebar-width)] md:px-layout-xl",
+          state === "expanded" && "md:border-r md:border-sidebar-border",
         )}
-        style={{ width: sidebarColumnWidth }}
+        style={
+          {
+            "--topbar-sidebar-width": sidebarColumnWidth,
+          } as CSSProperties
+        }
       >
+        <SidebarTrigger
+          aria-label="Open navigation"
+          className="h-9 w-9 md:hidden"
+        />
         <AppHeader />
       </div>
-      <div className="flex min-w-0 flex-1 items-center justify-end px-layout-xl">
+      <div className="flex min-w-0 flex-1 items-center justify-end px-layout-sm md:px-layout-xl">
         <UserMenu userEmail={userEmail} />
       </div>
     </header>
@@ -611,7 +621,7 @@ export default function Layout() {
             >
               <AppSidebar />
               <SidebarInset className="h-full !min-h-0 overflow-hidden">
-                <main className="box-border flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-transparent p-8">
+                <main className="box-border flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-transparent p-layout-md md:p-8">
                   <AuthedComponent />
                 </main>
               </SidebarInset>

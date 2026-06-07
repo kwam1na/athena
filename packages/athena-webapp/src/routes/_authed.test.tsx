@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { ReactNode } from "react";
+import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import Layout from "./_authed";
@@ -89,7 +89,16 @@ vi.mock("../components/ui/sidebar", () => ({
     return <div data-testid="sidebar-provider">{children}</div>;
   },
   SidebarInset: ({ children }: { children: ReactNode }) => <>{children}</>,
-  SidebarTrigger: () => null,
+  SidebarTrigger: ({
+    children,
+    ...props
+  }: ButtonHTMLAttributes<HTMLButtonElement> & {
+    children?: ReactNode;
+  }) => (
+    <button data-testid="sidebar-trigger" type="button" {...props}>
+      {children}
+    </button>
+  ),
   useSidebar: () => ({ state: "expanded" }),
 }));
 
@@ -506,6 +515,9 @@ describe("Authed layout", () => {
 
     expect(screen.getByTestId("app-sidebar")).toBeInTheDocument();
     expect(screen.getByTestId("app-header")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Open navigation" }),
+    ).toBeInTheDocument();
     expect(screen.getByTestId("store-modal")).toBeInTheDocument();
     expect(screen.getByTestId("organization-modal")).toBeInTheDocument();
     expect(screen.getByTestId("authed-outlet")).toBeInTheDocument();
