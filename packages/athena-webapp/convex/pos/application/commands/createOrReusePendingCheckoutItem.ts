@@ -77,7 +77,7 @@ function generateSKU({
   const productCode = encodeBase36(productId, 3);
   const skuCode = encodeBase36(skuId, 3);
 
-  return `PENDING-${storeCode}-${productCode}-${skuCode}`;
+  return `${storeCode}-${productCode}-${skuCode}`;
 }
 
 function isTrustedCatalogProductSku(

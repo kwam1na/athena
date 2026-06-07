@@ -16,6 +16,11 @@ const quickAddProductSkuMock = vi.fn();
 const pendingCheckoutItemMock = vi.fn();
 const registerCatalogMock = vi.fn();
 
+type AddProductHandler = (
+  product: Product,
+  quantity?: number,
+) => boolean | Promise<boolean>;
+
 class ResizeObserverStub {
   observe() {}
   unobserve() {}
@@ -63,27 +68,8 @@ function buildQuickAddedProduct(): Product {
   };
 }
 
-function buildPendingCheckoutItem() {
-  return {
-    id: "pending-1",
-    pendingCheckoutItemId: "pending-1",
-    name: "Pending item",
-    lookupCode: "999999999999",
-    price: 2500,
-    productId: "product-pending-1",
-    productSkuId: "sku-pending-1",
-    quantitySold: 1,
-    reviewPriority: "normal",
-    sku: "PENDING-1",
-    status: "pending_review",
-  };
-}
-
 function renderProductEntry(input: {
-  onAddProduct: (
-    product: Product,
-    quantity?: number,
-  ) => boolean | Promise<boolean>;
+  onAddProduct: AddProductHandler;
   setProductSearchQuery: (query: string) => void;
   canAddPendingCheckoutItem?: boolean;
   canQuickAddProduct?: boolean;
@@ -187,7 +173,7 @@ describe("ProductEntry", () => {
   it("clears the active search before adding a newly quick-added product to the cart", async () => {
     const user = userEvent.setup();
     const quickAddedProduct = buildQuickAddedProduct();
-    const onAddProduct = vi.fn(async () => true);
+    const onAddProduct = vi.fn<AddProductHandler>(async () => true);
     const setProductSearchQuery = vi.fn();
     quickAddProductSkuMock.mockResolvedValueOnce(quickAddedProduct);
 
@@ -209,12 +195,10 @@ describe("ProductEntry", () => {
     );
   });
 
-  it("adds a cashier pending checkout item for owner review without trusted catalog quick-add", async () => {
+  it("adds a cashier pending checkout item locally for owner review without trusted catalog quick-add", async () => {
     const user = userEvent.setup();
-    const pendingItem = buildPendingCheckoutItem();
-    const onAddProduct = vi.fn(async () => true);
+    const onAddProduct = vi.fn<AddProductHandler>(async () => true);
     const setProductSearchQuery = vi.fn();
-    pendingCheckoutItemMock.mockResolvedValueOnce(pendingItem);
 
     renderProductEntry({
       canAddPendingCheckoutItem: true,
@@ -226,6 +210,7 @@ describe("ProductEntry", () => {
     await user.click(
       screen.getByRole("button", { name: /add item for review/i }),
     );
+    expect(screen.getByLabelText(/quantity sold/i)).toBeInTheDocument();
     await user.type(screen.getByLabelText(/product name/i), "Pending item");
     await user.type(screen.getByLabelText(/selling price/i), "25");
     await user.click(screen.getByRole("button", { name: /add product/i }));
@@ -234,38 +219,43 @@ describe("ProductEntry", () => {
       expect(onAddProduct).toHaveBeenCalledWith(
         expect.objectContaining({
           name: "Pending item",
-          pendingCheckoutItemId: "pending-1",
-          productId: "product-pending-1",
-          skuId: "sku-pending-1",
+          sku: expect.stringMatching(/^[A-Z0-9]{4}-[A-Z0-9]{3}-[A-Z0-9]{3}$/),
+          pendingCheckoutItemId: expect.stringMatching(
+            /^local-pending-checkout-item-/,
+          ),
+          productId: expect.stringMatching(/^local-pending-product-/),
+          skuId: expect.stringMatching(/^local-pending-sku-/),
+          pendingCheckoutItemLocalDefinition: expect.objectContaining({
+            name: "Pending item",
+            lookupCode: "999999999999",
+            price: 2500,
+            quantitySold: 1,
+            localMetadata: expect.objectContaining({
+              createdOffline: true,
+              cloudValidation: "uncertain",
+            }),
+          }),
           availabilityStatus: "available",
         }),
         1,
       ),
     );
-    expect(pendingCheckoutItemMock).toHaveBeenCalledWith({
-      storeId: "store-1",
-      createdByStaffProfileId: "staff-1",
-      name: "Pending item",
-      lookupCode: "999999999999",
-      price: 2500,
-      quantitySold: 1,
-      registerSessionId: "register-1",
-      terminalId: "terminal-1",
-    });
+    const addedProduct = onAddProduct.mock.calls[0]?.[0];
+    expect(addedProduct?.sku).not.toContain("PENDING");
+    expect(pendingCheckoutItemMock).not.toHaveBeenCalled();
     expect(quickAddProductSkuMock).not.toHaveBeenCalled();
     expect(setProductSearchQuery).toHaveBeenCalledWith("");
   });
 
   it("queues a cashier pending checkout item locally when offline", async () => {
     const user = userEvent.setup();
-    const onAddProduct = vi.fn(async () => true);
+    const onAddProduct = vi.fn<AddProductHandler>(async () => true);
     const setProductSearchQuery = vi.fn();
     const originalOnline = navigator.onLine;
     Object.defineProperty(navigator, "onLine", {
       configurable: true,
       value: false,
     });
-    pendingCheckoutItemMock.mockRejectedValueOnce(new Error("Failed to fetch"));
 
     try {
       renderProductEntry({
@@ -286,6 +276,9 @@ describe("ProductEntry", () => {
         expect(onAddProduct).toHaveBeenCalledWith(
           expect.objectContaining({
             name: "Offline item",
+            sku: expect.stringMatching(
+              /^[A-Z0-9]{4}-[A-Z0-9]{3}-[A-Z0-9]{3}$/,
+            ),
             pendingCheckoutItemId: expect.stringMatching(
               /^local-pending-checkout-item-/,
             ),
@@ -305,47 +298,11 @@ describe("ProductEntry", () => {
           1,
         ),
       );
+      const addedProduct = onAddProduct.mock.calls[0]?.[0];
+      expect(addedProduct?.sku).not.toContain("PENDING");
       expect(quickAddProductSkuMock).not.toHaveBeenCalled();
+      expect(pendingCheckoutItemMock).not.toHaveBeenCalled();
       expect(setProductSearchQuery).toHaveBeenCalledWith("");
-    } finally {
-      Object.defineProperty(navigator, "onLine", {
-        configurable: true,
-        value: originalOnline,
-      });
-    }
-  });
-
-  it("does not queue locally when the server says the pending item was already rejected", async () => {
-    const user = userEvent.setup();
-    const onAddProduct = vi.fn(async () => true);
-    const setProductSearchQuery = vi.fn();
-    const originalOnline = navigator.onLine;
-    Object.defineProperty(navigator, "onLine", {
-      configurable: true,
-      value: true,
-    });
-    pendingCheckoutItemMock.mockRejectedValueOnce(
-      new Error("This item was rejected in review. Ask a manager before selling it again."),
-    );
-
-    try {
-      renderProductEntry({
-        canAddPendingCheckoutItem: true,
-        canQuickAddProduct: false,
-        onAddProduct,
-        setProductSearchQuery,
-      });
-
-      await user.click(
-        screen.getByRole("button", { name: /add item for review/i }),
-      );
-      await user.type(screen.getByLabelText(/product name/i), "Rejected item");
-      await user.type(screen.getByLabelText(/selling price/i), "25");
-      await user.click(screen.getByRole("button", { name: /add product/i }));
-
-      await waitFor(() => expect(pendingCheckoutItemMock).toHaveBeenCalled());
-      expect(onAddProduct).not.toHaveBeenCalled();
-      expect(setProductSearchQuery).not.toHaveBeenCalledWith("");
     } finally {
       Object.defineProperty(navigator, "onLine", {
         configurable: true,
@@ -364,7 +321,7 @@ describe("ProductEntry", () => {
       price: 3000,
       skuId: "sku-2" as Product["skuId"],
     };
-    const onAddProduct = vi.fn(async () => true);
+    const onAddProduct = vi.fn<AddProductHandler>(async () => true);
     const setProductSearchQuery = vi.fn();
     quickAddProductSkuMock
       .mockResolvedValueOnce(quickAddedProduct)
@@ -418,7 +375,7 @@ describe("ProductEntry", () => {
       sku: "EXISTING-SKU",
       skuId: "sku-existing" as Product["skuId"],
     };
-    const onAddProduct = vi.fn(async () => true);
+    const onAddProduct = vi.fn<AddProductHandler>(async () => true);
     const setProductSearchQuery = vi.fn();
     quickAddProductSkuMock.mockResolvedValueOnce(attachedProduct);
     registerCatalogMock.mockReturnValue([

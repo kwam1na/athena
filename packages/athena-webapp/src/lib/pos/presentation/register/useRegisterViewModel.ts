@@ -890,6 +890,188 @@ function mapLocalCartItemToCartItem(item: PosLocalCartItemReadModel): CartItem {
   };
 }
 
+function normalizePendingCheckoutSearchText(value: string | null | undefined) {
+  return String(value ?? "").trim().toLowerCase();
+}
+
+function pendingCheckoutFieldsMatchSearch(
+  input: {
+    barcode?: string | null;
+    name?: string | null;
+    productId?: string | null;
+    sku?: string | null;
+    skuId?: string | null;
+  },
+  query: string,
+) {
+  const normalizedQuery = normalizePendingCheckoutSearchText(query);
+  if (!normalizedQuery) {
+    return false;
+  }
+
+  return [
+    input.name,
+    input.sku,
+    input.barcode,
+    input.productId,
+    input.skuId,
+    "pending checkout",
+  ].some((value) =>
+    normalizePendingCheckoutSearchText(value).includes(normalizedQuery),
+  );
+}
+
+function pendingCheckoutCartItemMatchesSearch(item: CartItem, query: string) {
+  return pendingCheckoutFieldsMatchSearch(
+    {
+      barcode: item.barcode,
+      name: item.name,
+      productId: item.productId?.toString(),
+      sku: item.sku,
+      skuId: item.skuId?.toString(),
+    },
+    query,
+  );
+}
+
+function mapPendingCheckoutCartItemToProduct(item: CartItem): Product {
+  return {
+    id: item.skuId?.toString() ?? item.id.toString(),
+    name: item.name,
+    sku: item.sku ?? "",
+    barcode: item.barcode ?? "",
+    price: item.price,
+    category: "Pending checkout",
+    description: "Pending owner review",
+    image: item.image ?? null,
+    inStock: true,
+    availabilityStatus: "available",
+    size: item.size,
+    length: item.length,
+    color: item.color,
+    productId: item.productId,
+    skuId: item.skuId,
+    pendingCheckoutItemId:
+      "pendingCheckoutItemId" in item
+        ? (item.pendingCheckoutItemId as
+            | Id<"posPendingCheckoutItem">
+            | undefined)
+        : undefined,
+    areProcessingFeesAbsorbed: item.areProcessingFeesAbsorbed,
+  };
+}
+
+function mapLocalPendingCheckoutEventsToProducts(
+  events: PosLocalEventRecord[],
+): Product[] {
+  const cartPayloadsByPendingCheckoutItemId = new Map<
+    string,
+    Record<string, unknown>
+  >();
+  const productsByPendingCheckoutItemId = new Map<string, Product>();
+
+  for (const event of events) {
+    if (event.type !== "cart.item_added") {
+      continue;
+    }
+    const payload = recordOrNull(event.payload);
+    const pendingCheckoutItemId = stringFromRecord(
+      payload,
+      "pendingCheckoutItemId",
+    );
+    if (!payload || !pendingCheckoutItemId) {
+      continue;
+    }
+    cartPayloadsByPendingCheckoutItemId.set(pendingCheckoutItemId, payload);
+  }
+
+  for (const event of events) {
+    if (event.type !== "pending_checkout_item.defined") {
+      continue;
+    }
+    const payload = recordOrNull(event.payload);
+    const pendingCheckoutItemId = stringFromRecord(
+      payload,
+      "localPendingCheckoutItemId",
+    );
+    const name = stringFromRecord(payload, "name");
+    const price = numberFromRecord(payload, "price");
+    if (!pendingCheckoutItemId || !name || price === undefined) {
+      continue;
+    }
+
+    const cartPayload =
+      cartPayloadsByPendingCheckoutItemId.get(pendingCheckoutItemId) ?? null;
+    const productSkuId =
+      stringFromRecord(cartPayload, "productSkuId") ??
+      `local-pending-sku-${pendingCheckoutItemId}`;
+    const productId =
+      stringFromRecord(cartPayload, "productId") ??
+      `local-pending-product-${pendingCheckoutItemId}`;
+
+    productsByPendingCheckoutItemId.set(pendingCheckoutItemId, {
+      id: productSkuId,
+      name,
+      sku:
+        stringFromRecord(cartPayload, "productSku") ??
+        formatLocalPendingCheckoutSku(pendingCheckoutItemId),
+      barcode:
+        stringFromRecord(payload, "lookupCode") ??
+        stringFromRecord(cartPayload, "barcode") ??
+        "",
+      price,
+      category: "Pending checkout",
+      description: "Pending owner review",
+      image: null,
+      inStock: true,
+      availabilityStatus: "available",
+      productId: productId as Id<"product">,
+      skuId: productSkuId as Id<"productSku">,
+      pendingCheckoutItemId:
+        pendingCheckoutItemId as Id<"posPendingCheckoutItem">,
+      quantityAvailable: undefined,
+    });
+  }
+
+  return [...productsByPendingCheckoutItemId.values()];
+}
+
+function formatLocalPendingCheckoutSku(localPendingCheckoutItemId: string) {
+  const code = localPendingCheckoutItemId
+    .replace(/[^a-z0-9]/gi, "")
+    .toUpperCase()
+    .slice(-10)
+    .padStart(10, "0");
+
+  return `${code.slice(0, 4)}-${code.slice(4, 7)}-${code.slice(7, 10)}`;
+}
+
+function recordOrNull(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === "object"
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function stringFromRecord(
+  record: Record<string, unknown> | null,
+  key: string,
+) {
+  const value = record?.[key];
+  return typeof value === "string" && value.trim().length > 0
+    ? value
+    : undefined;
+}
+
+function numberFromRecord(
+  record: Record<string, unknown> | null,
+  key: string,
+) {
+  const value = record?.[key];
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : undefined;
+}
+
 function mapLocalServiceLineToState(
   line: PosLocalServiceLineReadModel,
 ): RegisterServiceLineState {
@@ -2475,16 +2657,75 @@ export function useRegisterViewModel(): RegisterViewModel {
     registerMetadataSearchState,
     terminalCanTransactProducts,
   ]);
-  const registerSearchProducts = useMemo(
-    () =>
-      registerSearchState.results.map((row) =>
-        mapCatalogRowToProduct(
-          row,
-          localRegisterCatalogAvailabilityBySkuId.get(row.productSkuId),
-        ),
+  const registerSearchProducts = useMemo(() => {
+    const catalogProducts = registerSearchState.results.map((row) =>
+      mapCatalogRowToProduct(
+        row,
+        localRegisterCatalogAvailabilityBySkuId.get(row.productSkuId),
       ),
-    [localRegisterCatalogAvailabilityBySkuId, registerSearchState.results],
-  );
+    );
+    const catalogProductSkuIds = new Set(
+      catalogProducts.flatMap((product) =>
+        product.skuId ? [product.skuId.toString()] : [],
+      ),
+    );
+    const activePendingCheckoutProducts = activeCartItems
+      .filter(
+        (item) =>
+          "pendingCheckoutItemId" in item &&
+          Boolean(item.pendingCheckoutItemId) &&
+          item.skuId &&
+          !catalogProductSkuIds.has(item.skuId.toString()) &&
+          pendingCheckoutCartItemMatchesSearch(item, productSearchQuery),
+      )
+      .map(mapPendingCheckoutCartItemToProduct);
+    const activePendingCheckoutSkuIds = new Set(
+      activePendingCheckoutProducts.flatMap((product) =>
+        product.skuId ? [product.skuId.toString()] : [],
+      ),
+    );
+    const activePendingCheckoutItemIds = new Set(
+      activePendingCheckoutProducts.flatMap((product) =>
+        product.pendingCheckoutItemId
+          ? [product.pendingCheckoutItemId.toString()]
+          : [],
+      ),
+    );
+    const savedPendingCheckoutProducts = mapLocalPendingCheckoutEventsToProducts(
+      localRegisterReadModel?.sourceEvents ?? [],
+    ).filter(
+      (product) =>
+        product.skuId &&
+        product.pendingCheckoutItemId &&
+        !catalogProductSkuIds.has(product.skuId.toString()) &&
+        !activePendingCheckoutSkuIds.has(product.skuId.toString()) &&
+        !activePendingCheckoutItemIds.has(
+          product.pendingCheckoutItemId.toString(),
+        ) &&
+        pendingCheckoutFieldsMatchSearch(
+          {
+            barcode: product.barcode,
+            name: product.name,
+            productId: product.productId?.toString(),
+            sku: product.sku,
+            skuId: product.skuId?.toString(),
+          },
+          productSearchQuery,
+        ),
+    );
+
+    return [
+      ...activePendingCheckoutProducts,
+      ...savedPendingCheckoutProducts,
+      ...catalogProducts,
+    ];
+  }, [
+    activeCartItems,
+    localRegisterCatalogAvailabilityBySkuId,
+    localRegisterReadModel?.sourceEvents,
+    productSearchQuery,
+    registerSearchState.results,
+  ]);
   const exactSearchProduct = registerSearchState.exactMatch
     ? mapCatalogRowToProduct(
         registerSearchState.exactMatch,

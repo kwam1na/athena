@@ -22,6 +22,7 @@ import {
   listRegisterCatalogAvailability as readRegisterCatalogAvailability,
   listRegisterCatalogAvailabilitySnapshot as readRegisterCatalogAvailabilitySnapshot,
 } from "../application/queries/listRegisterCatalog";
+import { isPosUsableRegisterSessionStatus } from "../../../shared/registerSessionStatus";
 
 const catalogResultValidator = v.object({
   id: v.id("productSku"),
@@ -174,7 +175,7 @@ async function requirePendingCheckoutSaleContext(
   if (!registerSession || registerSession.storeId !== args.storeId) {
     throw new Error("An open register session is required to add this item.");
   }
-  if (registerSession.status !== "open") {
+  if (!isPosUsableRegisterSessionStatus(registerSession.status)) {
     throw new Error("An open register session is required to add this item.");
   }
   if (registerSession.terminalId !== args.terminalId) {

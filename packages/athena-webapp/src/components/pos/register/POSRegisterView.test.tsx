@@ -230,8 +230,24 @@ vi.mock("@/components/pos/ProductEntry", async () => {
 });
 
 vi.mock("@/components/pos/CartItems", () => ({
-  CartItems: ({ density }: { density?: string }) => (
-    <div data-testid={`cart-items-${density ?? "default"}`}>cart-items</div>
+  CartItems: ({
+    cartItems = [],
+    density,
+    serviceItems = [],
+  }: {
+    cartItems?: Array<{ quantity: number }>;
+    density?: string;
+    serviceItems?: Array<{ quantity: number }>;
+  }) => (
+    <div data-testid={`cart-items-${density ?? "default"}`}>
+      <span>cart-items</span>
+      <span>
+        {`cart-items-count-${cartItems.reduce(
+          (sum, item) => sum + item.quantity,
+          0,
+        ) + serviceItems.reduce((sum, item) => sum + item.quantity, 0)}`}
+      </span>
+    </div>
   ),
 }));
 
@@ -301,12 +317,18 @@ vi.mock("./RegisterCustomerPanel", () => ({
 
 vi.mock("./RegisterCheckoutPanel", () => ({
   RegisterCheckoutPanel: ({
+    checkout,
     onPaymentFlowChange,
     onPaymentEntryStart,
     onEditingPaymentChange,
     hideActiveSummaryCards,
     onPaymentsExpandedChange,
   }: {
+    checkout: {
+      cartItems?: Array<{ quantity: number }>;
+      serviceLines?: Array<{ quantity?: number }>;
+      total?: number;
+    };
     onPaymentFlowChange: (active: boolean) => void;
     onPaymentEntryStart: () => void;
     onEditingPaymentChange?: (editing: boolean) => void;
@@ -328,6 +350,15 @@ vi.mock("./RegisterCheckoutPanel", () => ({
         expand-payments
       </button>
       {hideActiveSummaryCards ? <div>hide-active-summary-cards</div> : null}
+      <div>
+        {`checkout-items-count-${
+          checkout.cartItems?.reduce(
+            (sum, item) => sum + item.quantity,
+            0,
+          ) ?? 0
+        }`}
+      </div>
+      <div>{`checkout-total-${checkout.total ?? 0}`}</div>
       <div>register-checkout-panel</div>
     </div>
   ),
@@ -1779,7 +1810,9 @@ describe("POSRegisterView", () => {
 
     expect(screen.queryByText("Onboarding")).not.toBeInTheDocument();
     expect(screen.getByText("cashier-auth-dialog")).toBeInTheDocument();
-    expect(screen.getByText("register-customer-panel")).toBeInTheDocument();
+    expect(
+      screen.queryByText("register-customer-panel"),
+    ).not.toBeInTheDocument();
     expect(screen.getByText("cart-items")).toBeInTheDocument();
     expect(screen.getByText("register-checkout-panel")).toBeInTheDocument();
   });
@@ -1896,7 +1929,7 @@ describe("POSRegisterView", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("renders cashier authentication in the product lookup space while keeping POS controls visible", async () => {
+  it("keeps the full POS rail while hiding main sale controls when cashier authentication is locked", async () => {
     mockUseRegisterViewModel.mockReturnValue({
       hasActiveStore: true,
       header: {
@@ -1916,10 +1949,29 @@ describe("POSRegisterView", () => {
         onBarcodeSubmit: vi.fn(),
       },
       cart: {
-        items: [],
+        items: [
+          {
+            id: "line-1",
+            name: "Hodor",
+            price: 550,
+            quantity: 1,
+          },
+        ],
       },
       checkout: {
+        cartItems: [
+          {
+            id: "line-1",
+            name: "Hodor",
+            price: 550,
+            quantity: 1,
+          },
+        ],
         isTransactionCompleted: false,
+        payments: [],
+        subtotal: 550,
+        tax: 0,
+        total: 550,
       },
       sessionPanel: null,
       cashierCard: null,
@@ -1934,10 +1986,19 @@ describe("POSRegisterView", () => {
     render(<POSRegisterView />);
 
     expect(screen.getByText("cashier-auth-dialog")).toBeInTheDocument();
-    expect(screen.getByText("register-customer-panel")).toBeInTheDocument();
+    expect(
+      screen.queryByText("register-customer-panel"),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText("product-entry")).not.toBeInTheDocument();
     expect(screen.getByText("cart-items")).toBeInTheDocument();
+    expect(screen.getByText("cart-items-count-0")).toBeInTheDocument();
     expect(screen.getByText("register-checkout-panel")).toBeInTheDocument();
+    expect(screen.getByText("checkout-items-count-0")).toBeInTheDocument();
+    expect(screen.getByText("checkout-total-0")).toBeInTheDocument();
+    expect(screen.getByTestId("register-workspace-sidebar")).toBeInTheDocument();
+    expect(screen.getByTestId("register-main-workspace")).not.toHaveClass(
+      "lg:col-span-2",
+    );
   });
 
   it("renders expense completion UI in expense workflow without POS checkout controls", async () => {

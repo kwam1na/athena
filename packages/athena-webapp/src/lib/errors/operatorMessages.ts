@@ -40,6 +40,10 @@ const OPERATOR_MESSAGE_REWRITES: Array<[RegExp, string]> = [
     "Drawer closed. Open the drawer before completing this sale.",
   ],
   [
+    /^An open register session is required to add this item\.?$/i,
+    "Drawer closed. Open the drawer before adding this item.",
+  ],
+  [
     /^This sale is already assigned to a different cash drawer\.?$/i,
     "Sale assigned to a different drawer. Open that drawer before continuing.",
   ],

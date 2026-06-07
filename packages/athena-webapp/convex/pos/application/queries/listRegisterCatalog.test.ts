@@ -20,7 +20,10 @@ type IndexedFilter = {
   matches: (value: unknown) => boolean;
 };
 
-function createRegisterCatalogCtx(seed: Partial<Record<TableName, Row[]>>) {
+function createRegisterCatalogCtx(
+  seed: Partial<Record<TableName, Row[]>>,
+  options: { asyncIteratorLimit?: number } = {},
+) {
   const tables: Record<TableName, Map<string, Row>> = {
     category: new Map(),
     color: new Map(),
@@ -45,12 +48,30 @@ function createRegisterCatalogCtx(seed: Partial<Record<TableName, Row[]>>) {
 
     return {
       async *[Symbol.asyncIterator]() {
-        for (const row of matches) {
+        for (const row of matches.slice(0, options.asyncIteratorLimit)) {
           yield row;
         }
       },
       collect: async () => matches,
       first: async () => matches[0] ?? null,
+      paginate: async ({
+        cursor,
+        numItems,
+      }: {
+        cursor: string | null;
+        numItems: number;
+      }) => {
+        const offset = cursor ? Number(cursor) : 0;
+        const page = matches.slice(offset, offset + numItems);
+        const nextOffset = offset + page.length;
+        const isDone = nextOffset >= matches.length;
+
+        return {
+          page,
+          isDone,
+          continueCursor: isDone ? "" : String(nextOffset),
+        };
+      },
       take: async (limit: number) => matches.slice(0, limit),
     };
   }
@@ -336,6 +357,53 @@ describe("listRegisterCatalog", () => {
 
     expect(rows[0]).not.toHaveProperty("inStock");
     expect(rows[0]).not.toHaveProperty("quantityAvailable");
+  });
+
+  it("does not drop sellable SKUs beyond the first query page", async () => {
+    const products = Array.from({ length: 505 }, (_, index) => ({
+      _id: `product-${index}`,
+      storeId: "store-a",
+      categoryId: "category-store-a",
+      description: "",
+      name: index === 504 ? "Club" : `Product ${index}`,
+    }));
+    const productSkus = products.map((product, index) => ({
+      _id: `sku-${index}`,
+      storeId: "store-a",
+      productId: product._id,
+      sku: `SKU-${index}`,
+      barcode: "",
+      images: [],
+      netPrice: 1000 + index,
+      price: 1100 + index,
+      quantityAvailable: 5,
+    }));
+    const { ctx } = createRegisterCatalogCtx(
+      {
+        category: [
+          {
+            _id: "category-store-a",
+            storeId: "store-a",
+            name: "General",
+            slug: "general",
+          },
+        ],
+        product: products,
+        productSku: productSkus,
+      },
+      { asyncIteratorLimit: 30 },
+    );
+
+    const rows = await listRegisterCatalog(ctx, {
+      storeId: "store-a" as Id<"store">,
+    });
+
+    expect(rows).toHaveLength(505);
+    expect(rows.at(-1)).toMatchObject({
+      productSkuId: "sku-504",
+      name: "Club",
+      price: 1504,
+    });
   });
 
   it("returns bounded store-scoped availability for requested SKU ids after active holds", async () => {

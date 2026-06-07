@@ -7715,7 +7715,7 @@ describe("useRegisterViewModel", () => {
           barcode: "999999999999",
           productId: "local-pending-product-1" as Id<"product">,
           skuId: "local-pending-sku-1" as Id<"productSku">,
-          sku: "PENDING-1",
+          sku: "6B92-8DE-3A1",
           category: "Pending checkout",
           description: "Pending owner review",
           image: null,
@@ -7769,6 +7769,241 @@ describe("useRegisterViewModel", () => {
       }),
       type: "cart.item_added",
     });
+  });
+
+  it("returns locally added pending checkout items in product search", async () => {
+    mockRegisterState = {
+      phase: "active",
+      terminal: { _id: "terminal-1", displayName: "Front Counter" },
+      cashier: { _id: "staff-1", firstName: "Ama", lastName: "Kusi" },
+      activeRegisterSession: {
+        _id: "drawer-1",
+        status: "open",
+        terminalId: "terminal-1",
+        registerNumber: "1",
+        openingFloat: 5_000,
+        expectedCash: 5_000,
+        openedAt: Date.now(),
+      },
+      activeSession: { _id: "session-1", sessionNumber: "POS-0001" },
+      activeSessionConflict: null,
+      resumableSession: null,
+    };
+    mockActiveSession = {
+      ...mockActiveSession!,
+      _id: "session-1" as Id<"posSession">,
+      cartItems: [],
+      registerSessionId: "drawer-1" as Id<"registerSession">,
+    };
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated({
+        activeRoles: ["cashier"],
+        staffProfileId: "staff-1" as Id<"staffProfile">,
+        staffProfile: {
+          firstName: "Ama",
+          lastName: "Kusi",
+        },
+        posLocalStaffProof: {
+          expiresAt: Date.now() + 60_000,
+          token: "staff-proof-token",
+        },
+      });
+    });
+
+    await act(async () => {
+      await result.current.productEntry.onAddProduct({
+        id: "local-pending-sku-1",
+        name: "Hodor",
+        price: 550,
+        barcode: "",
+        productId: "local-pending-product-1" as Id<"product">,
+        skuId: "local-pending-sku-1" as Id<"productSku">,
+        sku: "6B92-8DE-3A1",
+        category: "Pending checkout",
+        description: "Pending owner review",
+        image: null,
+        inStock: true,
+        availabilityStatus: "available",
+        pendingCheckoutItemId:
+          "local-pending-1" as Id<"posPendingCheckoutItem">,
+        pendingCheckoutItemLocalDefinition: {
+          localPendingCheckoutItemId: "local-pending-1",
+          name: "Hodor",
+          price: 550,
+          quantitySold: 1,
+          localMetadata: {
+            schema: "pos_pending_checkout_item_local_metadata_v1",
+            cloudValidation: "uncertain",
+            createdOffline: true,
+          },
+        },
+      });
+    });
+
+    act(() => {
+      result.current.productEntry.setProductSearchQuery("hodor");
+    });
+
+    expect(result.current.productEntry.searchResults).toEqual([
+      expect.objectContaining({
+        name: "Hodor",
+        pendingCheckoutItemId: "local-pending-1",
+        sku: "6B92-8DE-3A1",
+        skuId: "local-pending-sku-1",
+      }),
+    ]);
+  });
+
+  it("returns locally saved pending checkout items in product search for later transactions", async () => {
+    mockListLocalEvents.mockResolvedValue({
+      ok: true,
+      value: [
+        buildLocalEvent({
+          sequence: 1,
+          type: "register.opened",
+          payload: {
+            localRegisterSessionId: "drawer-1",
+            openingFloat: 5_000,
+            expectedCash: 5_000,
+          },
+        }),
+        buildLocalEvent({
+          sequence: 2,
+          type: "session.started",
+          localPosSessionId: "session-1",
+          payload: {
+            localPosSessionId: "session-1",
+            registerSessionId: "drawer-1",
+          },
+        }),
+        buildLocalEvent({
+          sequence: 3,
+          type: "pending_checkout_item.defined",
+          localPosSessionId: "session-1",
+          payload: {
+            localPendingCheckoutItemId: "local-pending-1",
+            name: "Hodor",
+            price: 550,
+            quantitySold: 1,
+            localMetadata: {
+              schema: "pos_pending_checkout_item_local_metadata_v1",
+              cloudValidation: "uncertain",
+              createdOffline: true,
+            },
+          },
+        }),
+        buildLocalEvent({
+          sequence: 4,
+          type: "cart.item_added",
+          localPosSessionId: "session-1",
+          payload: {
+            localItemId: "local-item-1",
+            productId: "local-pending-product-1",
+            productSkuId: "local-pending-sku-1",
+            pendingCheckoutItemId: "local-pending-1",
+            productName: "Hodor",
+            productSku: "6B92-8DE-3A1",
+            quantity: 1,
+            price: 550,
+          },
+        }),
+        buildLocalEvent({
+          sequence: 5,
+          type: "transaction.completed",
+          localPosSessionId: "session-1",
+          localTransactionId: "transaction-1",
+          payload: {
+            localTransactionId: "transaction-1",
+            receiptNumber: "LOCAL-1",
+            items: [
+              {
+                localItemId: "local-item-1",
+                productId: "local-pending-product-1",
+                productSkuId: "local-pending-sku-1",
+                pendingCheckoutItemId: "local-pending-1",
+                productName: "Hodor",
+                productSku: "6B92-8DE-3A1",
+                quantity: 1,
+                price: 550,
+              },
+            ],
+            payments: [{ id: "payment-1", method: "cash", amount: 550 }],
+            subtotal: 550,
+            tax: 0,
+            total: 550,
+          },
+        }),
+        buildLocalEvent({
+          sequence: 6,
+          type: "session.started",
+          localPosSessionId: "session-2",
+          payload: {
+            localPosSessionId: "session-2",
+            registerSessionId: "drawer-1",
+          },
+        }),
+      ],
+    });
+    mockRegisterState = {
+      phase: "active",
+      terminal: { _id: "terminal-1", displayName: "Front Counter" },
+      cashier: { _id: "staff-1", firstName: "Ama", lastName: "Kusi" },
+      activeRegisterSession: {
+        _id: "drawer-1",
+        status: "open",
+        terminalId: "terminal-1",
+        registerNumber: "1",
+        openingFloat: 5_000,
+        expectedCash: 5_000,
+        openedAt: Date.now(),
+      },
+      activeSession: { _id: "session-2", sessionNumber: "POS-0002" },
+      activeSessionConflict: null,
+      resumableSession: null,
+    };
+    mockActiveSession = {
+      ...mockActiveSession!,
+      _id: "session-2" as Id<"posSession">,
+      cartItems: [],
+      registerSessionId: "drawer-1" as Id<"registerSession">,
+    };
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated({
+        activeRoles: ["cashier"],
+        staffProfileId: "staff-1" as Id<"staffProfile">,
+        staffProfile: {
+          firstName: "Ama",
+          lastName: "Kusi",
+        },
+        posLocalStaffProof: {
+          expiresAt: Date.now() + 60_000,
+          token: "staff-proof-token",
+        },
+      });
+    });
+
+    act(() => {
+      result.current.productEntry.setProductSearchQuery("hodor");
+    });
+
+    await waitFor(() =>
+      expect(result.current.productEntry.searchResults).toEqual([
+        expect.objectContaining({
+          name: "Hodor",
+          pendingCheckoutItemId: "local-pending-1",
+          sku: "6B92-8DE-3A1",
+          skuId: "local-pending-sku-1",
+        }),
+      ]),
+    );
   });
 
   it("completes cloud-backed local cart changes with existing cloud cart lines", async () => {

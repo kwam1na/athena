@@ -319,13 +319,13 @@ describe("POS public catalog queries", () => {
     });
   });
 
-  it("validates and records active POS context for pending checkout creation", async () => {
+  it("accepts active register sessions for pending checkout creation", async () => {
     const ctx = buildCtx({
       registerSession: {
         _id: "register-1",
         openedByStaffProfileId: "staff-1",
         storeId: "store-1",
-        status: "open",
+        status: "active",
         terminalId: "terminal-1",
       },
       staffProfile: {

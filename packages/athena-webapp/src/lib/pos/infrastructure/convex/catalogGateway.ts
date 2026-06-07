@@ -31,6 +31,7 @@ import type { Id } from "~/convex/_generated/dataModel";
 
 const REGISTER_CATALOG_AVAILABILITY_LIMIT = 50;
 const REGISTER_AVAILABILITY_SNAPSHOT_WRITE_RETRY_DELAY_MS = 250;
+const LOCAL_PENDING_SKU_ID_PREFIX = "local-pending-sku-";
 
 type RegisterServiceCatalogSnapshotQuery = FunctionReference<
   "query",
@@ -276,7 +277,15 @@ export function useConvexRegisterCatalogAvailabilityState(
 ): RegisterCatalogAvailabilityGatewayState {
   const productSkuIdKey = (input.productSkuIds ?? []).join("\u0000");
   const requestedProductSkuIds = useMemo(
-    () => Array.from(new Set(input.productSkuIds ?? [])),
+    () =>
+      Array.from(
+        new Set(
+          (input.productSkuIds ?? []).filter(
+            (productSkuId) =>
+              !String(productSkuId).startsWith(LOCAL_PENDING_SKU_ID_PREFIX),
+          ),
+        ),
+      ),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- depend on the stable SKU-id key, not caller array identity.
     [productSkuIdKey],
   );
