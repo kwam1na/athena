@@ -865,13 +865,13 @@ function OperatingDatePicker({
           aria-label={`Change operating date, currently ${formatOperatingDateWithWeekday(
             operatingDate,
           )}`}
-          className="h-auto justify-start rounded-lg px-layout-md py-layout-sm text-sm font-normal text-muted-foreground shadow-surface"
+          className="h-auto w-full min-w-0 justify-start rounded-lg px-layout-md py-layout-sm text-sm font-normal text-muted-foreground shadow-surface sm:w-auto"
           disabled={disabled || !onChange}
           variant="outline"
         >
           <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
-          Operating date{" "}
-          <span className="font-medium text-foreground">
+          <span className="shrink-0">Operating date</span>
+          <span className="min-w-0 truncate font-medium text-foreground">
             {formatOperatingDateWithWeekday(operatingDate)}
           </span>
         </Button>
@@ -941,8 +941,8 @@ function WeekMetricsStrip({
             Seven days ending {formatOperatingDate(weekEndOperatingDate)}.
           </p>
         </div>
-        <div className="flex items-center gap-layout-sm">
-          <p className="flex items-baseline gap-2 text-sm text-muted-foreground">
+        <div className="flex flex-col gap-layout-sm sm:flex-row sm:items-center">
+          <p className="flex items-baseline justify-between gap-2 text-sm text-muted-foreground sm:justify-start">
             <span>Week sales</span>
             <span className="font-numeric text-base font-semibold tabular-nums text-foreground">
               <FinancialValue canView={hasFinancialDetailsAccess} label="Week sales">
@@ -950,7 +950,7 @@ function WeekMetricsStrip({
               </FinancialValue>
             </span>
           </p>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 self-start sm:self-auto">
             <Button
               asChild
               aria-label={`Previous week, seven days ending ${formatOperatingDate(
@@ -1008,11 +1008,11 @@ function WeekMetricsStrip({
         </div>
       </div>
       <div className="overflow-x-auto rounded-lg border border-border bg-surface-raised p-layout-sm shadow-surface">
-        <div className="grid min-w-[42rem] grid-cols-7 gap-layout-xs">
+        <div className="flex min-w-max snap-x gap-layout-xs md:grid md:min-w-[42rem] md:grid-cols-7">
           {metrics.map((metric) => {
             const isFutureDate = metric.operatingDate > currentOperatingDate;
             const cardClassName = cn(
-              "rounded-md border px-layout-sm py-layout-sm text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              "w-[10.5rem] shrink-0 snap-start rounded-md border px-layout-sm py-layout-sm text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:w-auto",
               metric.isSelected
                 ? "border-action-workflow-border bg-action-workflow-soft text-foreground ring-1 ring-inset ring-action-workflow-border"
                 : "border-transparent text-muted-foreground",
@@ -1146,7 +1146,7 @@ export function DailyOperationsViewContent({
 
   return (
     <View hideBorder hideHeaderBottomBorder scrollMode="page">
-      <FadeIn className="container mx-auto py-layout-xl">
+      <FadeIn className="container mx-auto w-full py-layout-lg md:py-layout-xl">
         <PageWorkspace>
           <PageLevelHeader
             eyebrow="Store Ops"
@@ -1217,7 +1217,7 @@ export function DailyOperationsViewContent({
                   </div>
                 </div>
 
-                <div className="grid gap-layout-sm md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
+                <div className="grid gap-layout-sm sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
                   <OperationsSummaryMetric
                     helper={formatEntityCount(
                       snapshot.closeSummary.transactionCount,
@@ -1457,7 +1457,7 @@ export function DailyOperationsViewContent({
 function DailyOperationsApiPendingView() {
   return (
     <View hideBorder hideHeaderBottomBorder scrollMode="page">
-      <FadeIn className="container mx-auto py-layout-xl">
+      <FadeIn className="container mx-auto w-full py-layout-lg md:py-layout-xl">
         <PageWorkspace>
           <PageLevelHeader
             eyebrow="Store Ops"
