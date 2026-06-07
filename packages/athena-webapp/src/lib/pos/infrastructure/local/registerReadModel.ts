@@ -35,6 +35,7 @@ export interface PosLocalCartItemReadModel {
   localItemId: string;
   productId: string;
   productSkuId: string;
+  pendingCheckoutItemId?: string;
   productSku: string;
   barcode?: string;
   productName: string;
@@ -693,6 +694,7 @@ function parseCartItemPayload(
     localItemId: stringField(payload, "localItemId") ?? fallbackLocalItemId,
     productId: stringField(payload, "productId") ?? "",
     productSkuId,
+    pendingCheckoutItemId: optionalString(payload.pendingCheckoutItemId),
     productSku: stringField(payload, "productSku") ?? "",
     barcode: optionalString(payload.barcode),
     productName: stringField(payload, "productName") ?? "",

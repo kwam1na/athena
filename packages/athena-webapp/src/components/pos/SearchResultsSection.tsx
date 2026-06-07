@@ -15,6 +15,7 @@ interface SearchResultsSectionProps {
   formatter: Intl.NumberFormat;
   onClearSearch: () => void;
   onQuickAddProduct?: (product?: Product) => void;
+  quickAddLabel?: string;
   quickAddQuery?: string;
   quickAddShortcutDisabled?: boolean;
   className?: string;
@@ -30,6 +31,7 @@ export function SearchResultsSection({
   formatter,
   onClearSearch,
   onQuickAddProduct,
+  quickAddLabel = "Quick add product",
   quickAddShortcutDisabled = false,
   className,
 }: SearchResultsSectionProps) {
@@ -130,7 +132,7 @@ export function SearchResultsSection({
               onClick={() => onQuickAddProduct?.()}
             >
               <PackagePlus className="mr-2 h-4 w-4" />
-              <span>Quick add product</span>
+              <span>{quickAddLabel}</span>
               <kbd
                 aria-hidden="true"
                 className="ml-1 rounded border border-current/20 bg-white/15 px-1.5 py-0.5 text-[10px] font-semibold leading-none"

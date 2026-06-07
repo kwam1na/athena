@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 
-import { mutation, query } from "../../_generated/server";
+import { mutation, query, type MutationCtx, type QueryCtx } from "../../_generated/server";
+import type { Id } from "../../_generated/dataModel";
 import { commandResultValidator } from "../../lib/commandResultValidators";
 import {
   requireAuthenticatedAthenaUserWithCtx,
@@ -32,6 +33,60 @@ import {
   getTransactionById as getTransactionByIdQuery,
   getTransactionsByStore as getTransactionsByStoreQuery,
 } from "../application/queries/getTransactions";
+
+async function requirePosTransactionStoreAccess(
+  ctx: MutationCtx | QueryCtx,
+  args: {
+    storeId: Id<"store">;
+    failureMessage: string;
+  },
+) {
+  const store = await ctx.db.get("store", args.storeId);
+  if (!store) {
+    return userError({
+      code: "not_found",
+      message: "Store not found.",
+    });
+  }
+
+  const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+  await requireOrganizationMemberRoleWithCtx(ctx, {
+    allowedRoles: ["full_admin", "pos_only"],
+    failureMessage: args.failureMessage,
+    organizationId: store.organizationId,
+    userId: athenaUser._id,
+  });
+
+  return { athenaUser, store };
+}
+
+async function requirePosTransactionAccess(
+  ctx: MutationCtx | QueryCtx,
+  args: {
+    transactionId: Id<"posTransaction">;
+    failureMessage: string;
+  },
+) {
+  const transaction = await getTransactionQuery(ctx, {
+    transactionId: args.transactionId,
+  });
+  if (!transaction) {
+    return userError({
+      code: "not_found",
+      message: "Transaction not found.",
+    });
+  }
+
+  const access = await requirePosTransactionStoreAccess(ctx, {
+    failureMessage: args.failureMessage,
+    storeId: transaction.storeId,
+  });
+  if ("kind" in access) {
+    return access;
+  }
+
+  return { ...access, transaction };
+}
 
 const paymentValidator = v.object({
   method: v.string(),
@@ -176,6 +231,7 @@ function mapCorrectionError(error: unknown): CommandResult<never> | null {
     message === "Only completed transactions can be adjusted." ||
     message === "Only single-payment transactions can be corrected." ||
     message === "Only same-amount payment method corrections are supported." ||
+    message === "Customer profile is not available for this store." ||
     message === "Payment allocation must be a same-amount single payment." ||
     message === "Manager approval proof is required." ||
     message === "Manager approval proof is invalid or expired." ||
@@ -216,7 +272,33 @@ export const updateInventory = mutation({
     skuId: v.id("productSku"),
     quantityToSubtract: v.number(),
   },
-  handler: async (ctx, args) => updateInventoryCommand(ctx, args),
+  handler: async (ctx, args) => {
+    const sku = await ctx.db.get("productSku", args.skuId);
+    if (!sku) {
+      return userError({
+        code: "not_found",
+        message: "SKU not found.",
+      });
+    }
+
+    const store = await ctx.db.get("store", sku.storeId);
+    if (!store) {
+      return userError({
+        code: "not_found",
+        message: "Store not found.",
+      });
+    }
+
+    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+    await requireOrganizationMemberRoleWithCtx(ctx, {
+      allowedRoles: ["full_admin", "pos_only"],
+      failureMessage: "You cannot update POS inventory for this store.",
+      organizationId: store.organizationId,
+      userId: athenaUser._id,
+    });
+
+    return updateInventoryCommand(ctx, args);
+  },
 });
 
 export const completeTransaction = mutation({
@@ -251,14 +333,50 @@ export const completeTransaction = mutation({
       transactionItems: v.array(v.id("posTransactionItem")),
     }),
   ),
-  handler: async (ctx, args) => completeTransactionCommand(ctx, args),
+  handler: async (ctx, args) => {
+    const store = await ctx.db.get("store", args.storeId);
+    if (!store) {
+      return userError({
+        code: "not_found",
+        message: "Store not found.",
+      });
+    }
+
+    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+    await requireOrganizationMemberRoleWithCtx(ctx, {
+      allowedRoles: ["full_admin"],
+      failureMessage: "You cannot complete this POS sale.",
+      organizationId: store.organizationId,
+      userId: athenaUser._id,
+    });
+
+    if (!args.staffProfileId || !args.terminalId || !args.registerSessionId) {
+      return userError({
+        code: "validation_failed",
+        message:
+          "Complete POS sales from an active register session with staff and terminal context.",
+      });
+    }
+
+    return completeTransactionCommand(ctx, args);
+  },
 });
 
 export const getTransaction = query({
   args: {
     transactionId: v.id("posTransaction"),
   },
-  handler: async (ctx, args) => getTransactionQuery(ctx, args),
+  handler: async (ctx, args) => {
+    const access = await requirePosTransactionAccess(ctx, {
+      transactionId: args.transactionId,
+      failureMessage: "You cannot view this transaction.",
+    });
+    if ("kind" in access) {
+      return null;
+    }
+
+    return access.transaction;
+  },
 });
 
 export const getTransactionsByStore = query({
@@ -266,7 +384,17 @@ export const getTransactionsByStore = query({
     storeId: v.id("store"),
     limit: v.optional(v.number()),
   },
-  handler: async (ctx, args) => getTransactionsByStoreQuery(ctx, args),
+  handler: async (ctx, args) => {
+    const access = await requirePosTransactionStoreAccess(ctx, {
+      storeId: args.storeId,
+      failureMessage: "You cannot view POS transactions for this store.",
+    });
+    if ("kind" in access) {
+      return [];
+    }
+
+    return getTransactionsByStoreQuery(ctx, args);
+  },
 });
 
 export const getCompletedTransactions = query({
@@ -300,7 +428,17 @@ export const getCompletedTransactions = query({
       servicePaymentTotal: v.number(),
     }),
   ),
-  handler: async (ctx, args) => getCompletedTransactionsQuery(ctx, args),
+  handler: async (ctx, args) => {
+    const access = await requirePosTransactionStoreAccess(ctx, {
+      storeId: args.storeId,
+      failureMessage: "You cannot view POS transactions for this store.",
+    });
+    if ("kind" in access) {
+      return [];
+    }
+
+    return getCompletedTransactionsQuery(ctx, args);
+  },
 });
 
 export const getTransactionById = query({
@@ -406,6 +544,7 @@ export const getTransactionById = query({
           _id: v.id("posTransactionItem"),
           productId: v.id("product"),
           productSkuId: v.id("productSku"),
+          pendingCheckoutItemId: v.optional(v.id("posPendingCheckoutItem")),
           productName: v.string(),
           productSku: v.string(),
           barcode: v.optional(v.string()),
@@ -576,7 +715,33 @@ export const createTransactionFromSession = mutation({
       transactionItems: v.array(v.id("posTransactionItem")),
     }),
   ),
-  handler: async (ctx, args) => createTransactionFromSessionHandler(ctx, args),
+  handler: async (ctx, args) => {
+    const session = await ctx.db.get("posSession", args.sessionId);
+    if (!session) {
+      return userError({
+        code: "not_found",
+        message: "POS session not found.",
+      });
+    }
+
+    const store = await ctx.db.get("store", session.storeId);
+    if (!store) {
+      return userError({
+        code: "not_found",
+        message: "Store not found.",
+      });
+    }
+
+    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+    await requireOrganizationMemberRoleWithCtx(ctx, {
+      allowedRoles: ["full_admin", "pos_only"],
+      failureMessage: "You cannot complete this POS sale.",
+      organizationId: store.organizationId,
+      userId: athenaUser._id,
+    });
+
+    return createTransactionFromSessionHandler(ctx, args);
+  },
 });
 
 export const correctTransactionCustomer = mutation({
@@ -611,7 +776,58 @@ export const correctTransactionCustomer = mutation({
     }
 
     try {
-      return ok(await correctTransactionCustomerCommand(ctx, args));
+      const access = await requirePosTransactionAccess(ctx, {
+        transactionId: args.transactionId,
+        failureMessage: "You cannot correct this transaction.",
+      });
+      if ("kind" in access) {
+        return access;
+      }
+
+      const staffProfile = await ctx.db.get(
+        "staffProfile",
+        args.actorStaffProfileId,
+      );
+      if (
+        !staffProfile ||
+        staffProfile.status !== "active" ||
+        staffProfile.storeId !== access.transaction.storeId
+      ) {
+        return userError({
+          code: "authentication_failed",
+          message:
+            "Customer correction staff profile is not active for this store.",
+        });
+      }
+
+      if (args.customerProfileId) {
+        const customerProfile = await ctx.db.get(
+          "customerProfile",
+          args.customerProfileId,
+        );
+        if (!customerProfile) {
+          return userError({
+            code: "not_found",
+            message: "Customer profile not found.",
+          });
+        }
+        if (
+          customerProfile.storeId &&
+          customerProfile.storeId !== access.transaction.storeId
+        ) {
+          return userError({
+            code: "precondition_failed",
+            message: "Customer profile is not available for this store.",
+          });
+        }
+      }
+
+      return ok(
+        await correctTransactionCustomerCommand(ctx, {
+          ...args,
+          actorUserId: access.athenaUser._id,
+        }),
+      );
     } catch (error) {
       const mappedError = mapCorrectionError(error);
       if (mappedError) {
@@ -642,7 +858,36 @@ export const correctTransactionPaymentMethod = mutation({
     }
 
     try {
-      const result = await correctTransactionPaymentMethodCommand(ctx, args);
+      const access = await requirePosTransactionAccess(ctx, {
+        transactionId: args.transactionId,
+        failureMessage: "You cannot correct this transaction.",
+      });
+      if ("kind" in access) {
+        return access;
+      }
+
+      if (args.actorStaffProfileId) {
+        const staffProfile = await ctx.db.get(
+          "staffProfile",
+          args.actorStaffProfileId,
+        );
+        if (
+          !staffProfile ||
+          staffProfile.status !== "active" ||
+          staffProfile.storeId !== access.transaction.storeId
+        ) {
+          return userError({
+            code: "authentication_failed",
+            message:
+              "Payment correction staff profile is not active for this store.",
+          });
+        }
+      }
+
+      const result = await correctTransactionPaymentMethodCommand(ctx, {
+        ...args,
+        actorUserId: access.athenaUser._id,
+      });
 
       if ("action" in result && result.action === "approval_required") {
         return approvalRequired(result.approval);
@@ -812,7 +1057,17 @@ export const getRecentTransactionsWithCustomers = query({
       hasCustomerLink: v.boolean(),
     }),
   ),
-  handler: async (ctx, args) => getRecentTransactionsWithCustomersQuery(ctx, args),
+  handler: async (ctx, args) => {
+    const access = await requirePosTransactionStoreAccess(ctx, {
+      storeId: args.storeId,
+      failureMessage: "You cannot view POS transactions for this store.",
+    });
+    if ("kind" in access) {
+      return [];
+    }
+
+    return getRecentTransactionsWithCustomersQuery(ctx, args);
+  },
 });
 
 export const getTodaySummary = query({
@@ -826,5 +1081,21 @@ export const getTodaySummary = query({
     averageTransaction: v.number(),
     date: v.string(),
   }),
-  handler: async (ctx, args) => getTodaySummaryQuery(ctx, args),
+  handler: async (ctx, args) => {
+    const access = await requirePosTransactionStoreAccess(ctx, {
+      storeId: args.storeId,
+      failureMessage: "You cannot view POS summaries for this store.",
+    });
+    if ("kind" in access) {
+      return {
+        averageTransaction: 0,
+        date: new Date().toISOString().split("T")[0],
+        totalItemsSold: 0,
+        totalSales: 0,
+        totalTransactions: 0,
+      };
+    }
+
+    return getTodaySummaryQuery(ctx, args);
+  },
 });

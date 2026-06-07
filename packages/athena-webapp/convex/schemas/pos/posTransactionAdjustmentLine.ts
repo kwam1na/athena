@@ -6,6 +6,7 @@ export const posTransactionAdjustmentLineSchema = v.object({
   transactionId: v.id("posTransaction"),
   lineType: v.union(v.literal("existing"), v.literal("added")),
   originalTransactionItemId: v.optional(v.id("posTransactionItem")),
+  pendingCheckoutItemId: v.optional(v.id("posPendingCheckoutItem")),
   productId: v.id("product"),
   productSkuId: v.id("productSku"),
   productName: v.string(),

@@ -47,6 +47,12 @@ export interface RegisterProductEntryState {
   isSearchLoading: boolean;
   isSearchReady: boolean;
   canQuickAddProduct: boolean;
+  canAddPendingCheckoutItem?: boolean;
+  pendingCheckoutContext?: {
+    createdByStaffProfileId: Id<"staffProfile">;
+    registerSessionId: Id<"registerSession">;
+    terminalId: Id<"posTerminal">;
+  };
 }
 
 export type RegisterLookupMode = "product" | "service";

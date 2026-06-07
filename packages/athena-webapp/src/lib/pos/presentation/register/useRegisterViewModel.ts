@@ -730,6 +730,7 @@ function mapProductToOptimisticCartItem(
     color: product.color,
     productId: product.productId,
     skuId: product.skuId,
+    pendingCheckoutItemId: product.pendingCheckoutItemId,
     areProcessingFeesAbsorbed: product.areProcessingFeesAbsorbed,
   };
 }
@@ -744,6 +745,7 @@ function buildLocalCartItemPayload(input: {
     localItemId,
     productId: product.productId,
     productSkuId: product.skuId,
+    pendingCheckoutItemId: product.pendingCheckoutItemId ?? null,
     productSku: product.sku || "",
     barcode: product.barcode || null,
     productName: product.name,
@@ -768,6 +770,10 @@ function buildLocalCartItemPayloadFromCartItem(input: {
     localItemId,
     productId: item.productId,
     productSkuId: item.skuId,
+    pendingCheckoutItemId:
+      "pendingCheckoutItemId" in item
+        ? (item.pendingCheckoutItemId ?? null)
+        : null,
     productSku: item.sku || "",
     barcode: item.barcode || null,
     productName: item.name,
@@ -826,6 +832,10 @@ function buildCompletedSalePayload(input: {
       localItemId: item.id.toString(),
       productId: item.productId,
       productSkuId: item.skuId,
+      pendingCheckoutItemId:
+        "pendingCheckoutItemId" in item
+          ? (item.pendingCheckoutItemId ?? null)
+          : null,
       productSku: item.sku || "",
       barcode: item.barcode || null,
       productName: item.name,
@@ -873,6 +883,9 @@ function mapLocalCartItemToCartItem(item: PosLocalCartItemReadModel): CartItem {
     color: item.color,
     productId: item.productId as Id<"product">,
     skuId: item.productSkuId as Id<"productSku">,
+    pendingCheckoutItemId: item.pendingCheckoutItemId as
+      | Id<"posPendingCheckoutItem">
+      | undefined,
     areProcessingFeesAbsorbed: item.areProcessingFeesAbsorbed,
   };
 }
@@ -4272,6 +4285,40 @@ export function useRegisterViewModel(): RegisterViewModel {
     ],
   );
 
+  const defineLocalPendingCheckoutItem = useCallback(
+    async (input: {
+      localPosSessionId: string;
+      product: Product;
+    }) => {
+      if (!input.product.pendingCheckoutItemLocalDefinition) {
+        return true;
+      }
+      if (!activeStoreId || !terminal?._id || !staffProfileId) {
+        return false;
+      }
+
+      return localCommandGateway.definePendingCheckoutItem({
+        terminalId: terminal._id,
+        storeId: activeStoreId,
+        registerNumber,
+        localRegisterSessionId: localEventRegisterSessionId ?? registerNumber,
+        localPosSessionId: input.localPosSessionId,
+        staffProfileId,
+        validationMetadata: localSaleValidationMetadata,
+        payload: input.product.pendingCheckoutItemLocalDefinition,
+      });
+    },
+    [
+      activeStoreId,
+      localCommandGateway,
+      localEventRegisterSessionId,
+      localSaleValidationMetadata,
+      registerNumber,
+      staffProfileId,
+      terminal?._id,
+    ],
+  );
+
   const handleAddService = useCallback(
     async (service: RegisterServiceSearchResult, amount?: number) => {
       if (checkoutMutationLockedRef.current) {
@@ -4660,14 +4707,21 @@ export function useRegisterViewModel(): RegisterViewModel {
           }));
         }
 
-        const savedLocally = await appendLocalCartItem({
+        const pendingDefinitionSaved = await defineLocalPendingCheckoutItem({
           localPosSessionId,
-          payload: buildLocalCartItemPayload({
-            localItemId,
-            product,
-            quantity: nextQuantity,
-          }),
+          product,
         });
+
+        const savedLocally =
+          pendingDefinitionSaved &&
+          (await appendLocalCartItem({
+            localPosSessionId,
+            payload: buildLocalCartItemPayload({
+              localItemId,
+              product,
+              quantity: nextQuantity,
+            }),
+          }));
 
         if (!savedLocally) {
           if (existingItem && !isExistingOptimisticProduct) {
@@ -4704,6 +4758,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       activeSessionHasBlockedRegisterBinding,
       enqueueCartMutation,
       appendLocalCartItem,
+      defineLocalPendingCheckoutItem,
       ensureLocalPosSessionId,
       noteLocalRegisterEventChanged,
       optimisticCartProducts,
@@ -6220,6 +6275,15 @@ export function useRegisterViewModel(): RegisterViewModel {
       isSearchLoading: isRegisterSearchLoading,
       isSearchReady: isRegisterCatalogReady,
       canQuickAddProduct: terminalCanTransactProducts && isCashierManager,
+      canAddPendingCheckoutItem: terminalCanTransactProducts,
+      pendingCheckoutContext:
+        staffProfileId && terminal?._id && activeRegisterSessionId
+          ? {
+              createdByStaffProfileId: staffProfileId,
+              registerSessionId: activeRegisterSessionId,
+              terminalId: terminal._id,
+            }
+          : undefined,
     },
     serviceEntry: terminalCanTransactServices
       ? {

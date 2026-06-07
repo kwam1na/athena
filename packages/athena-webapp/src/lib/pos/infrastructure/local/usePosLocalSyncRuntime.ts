@@ -108,6 +108,9 @@ type PosLocalRuntimeStore = ReturnType<typeof createPosLocalStore>;
 type IngestLocalEventsArgs = FunctionArgs<
   typeof api.pos.public.sync.ingestLocalEvents
 >;
+type IngestLocalEventsUploadArgs = Omit<IngestLocalEventsArgs, "events"> & {
+  events: PosLocalUploadEvent[];
+};
 
 export function usePosLocalSyncRuntimeStatus(input: {
   appSessionRecovery?: PosTerminalRuntimeAppSessionRecoveryInput | null;
@@ -448,7 +451,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
               storeId: syncSeed.storeId,
               syncSecretHash: syncSeed.syncSecretHash,
               terminalId: cloudTerminalId,
-            }),
+            }) as IngestLocalEventsArgs,
           );
           if (shouldStop()) {
             return { syncedEventIds: [] };
@@ -1555,7 +1558,7 @@ function toIngestLocalEventsArgs(input: {
   storeId: string;
   syncSecretHash: string;
   terminalId: string;
-}): IngestLocalEventsArgs {
+}): IngestLocalEventsUploadArgs {
   return {
     storeId: input.storeId as Id<"store">,
     terminalId: input.terminalId as Id<"posTerminal">,
@@ -1566,7 +1569,7 @@ function toIngestLocalEventsArgs(input: {
 
 function toIngestLocalEventArg(
   event: PosLocalUploadEvent,
-): IngestLocalEventsArgs["events"][number] {
+): IngestLocalEventsUploadArgs["events"][number] {
   return {
     ...event,
     staffProfileId: event.staffProfileId as Id<"staffProfile">,

@@ -18,6 +18,7 @@ export type PosLocalSyncConflictType =
 export type PosLocalSyncMappingKind =
   | "registerSession"
   | "posSession"
+  | "pendingCheckoutItem"
   | "transaction"
   | "transactionItem"
   | "payment"
@@ -35,8 +36,9 @@ export type PosLocalPaymentInput = {
 
 export type PosLocalSaleItemInput = {
   localTransactionItemId?: string;
-  productId: Id<"product">;
-  productSkuId: Id<"productSku">;
+  productId: Id<"product"> | string;
+  productSkuId: Id<"productSku"> | string;
+  pendingCheckoutItemId?: Id<"posPendingCheckoutItem"> | string;
   productName: string;
   productSku: string;
   barcode?: string;
@@ -58,6 +60,27 @@ export type PosLocalServiceLineInput = {
   totalPrice: number;
   catalogUpdatedAt?: number;
   customerProfileId?: Id<"customerProfile">;
+};
+
+export type PosLocalPendingCheckoutItemDefinedPayload = {
+  localPendingCheckoutItemId: string;
+  name: string;
+  lookupCode?: string;
+  searchContext?: {
+    query?: string;
+    source?: "barcode" | "lookup_code" | "manual" | "catalog_search" | "unknown";
+    matched?: "existing_product" | "pending_checkout_item" | "none" | "unknown";
+  };
+  price: number;
+  quantitySold: number;
+  localMetadata?: {
+    schema: "pos_pending_checkout_item_local_metadata_v1";
+    source?: "offline_search" | "online_search" | "manual_entry" | "unknown";
+    reusedExistingPendingItem?: boolean;
+    createdOffline?: boolean;
+    appSessionValidation?: "supported" | "unverified";
+    cloudValidation?: "uncertain";
+  };
 };
 
 export type PosLocalSalePayload = {
@@ -121,6 +144,10 @@ type ParsedPosLocalSyncEventBase<
 
 export type ParsedPosLocalSyncEventInput =
   | ParsedPosLocalSyncEventBase<"register_opened", PosLocalRegisterOpenedPayload>
+  | ParsedPosLocalSyncEventBase<
+      "pending_checkout_item_defined",
+      PosLocalPendingCheckoutItemDefinedPayload
+    >
   | ParsedPosLocalSyncEventBase<"sale_completed", PosLocalSalePayload>
   | ParsedPosLocalSyncEventBase<"sale_cleared", PosLocalSaleClearedPayload>
   | ParsedPosLocalSyncEventBase<"register_closed", PosLocalRegisterClosedPayload>
@@ -234,6 +261,9 @@ export type SyncProjectionRepository = {
   ): Promise<Doc<"customerProfile"> | null>;
   getProduct(productId: Id<"product">): Promise<Doc<"product"> | null>;
   getProductSku(productSkuId: Id<"productSku">): Promise<Doc<"productSku"> | null>;
+  getPendingCheckoutItem(
+    pendingCheckoutItemId: Id<"posPendingCheckoutItem">,
+  ): Promise<Doc<"posPendingCheckoutItem"> | null>;
   getServiceCatalog(
     serviceCatalogId: Id<"serviceCatalog">,
   ): Promise<Doc<"serviceCatalog"> | null>;
@@ -287,6 +317,11 @@ export type SyncProjectionRepository = {
   createConflict(
     input: Omit<LocalSyncConflictRecord, "_id">,
   ): Promise<LocalSyncConflictRecord>;
+  listConflictsForEvent(args: {
+    storeId: Id<"store">;
+    terminalId: Id<"posTerminal">;
+    localEventId: string;
+  }): Promise<LocalSyncConflictRecord[]>;
   createRegisterSession(input: {
     storeId: Id<"store">;
     organizationId?: Id<"organization">;
@@ -336,6 +371,7 @@ export type SyncProjectionRepository = {
     storeId: Id<"store">;
     productId: Id<"product">;
     productSkuId: Id<"productSku">;
+    pendingCheckoutItemId?: Id<"posPendingCheckoutItem">;
     productSku: string;
     productName: string;
     barcode?: string;
@@ -403,6 +439,7 @@ export type SyncProjectionRepository = {
     transactionId: Id<"posTransaction">;
     productId: Id<"product">;
     productSkuId: Id<"productSku">;
+    pendingCheckoutItemId?: Id<"posPendingCheckoutItem">;
     productName: string;
     productSku: string;
     barcode?: string;
@@ -411,6 +448,39 @@ export type SyncProjectionRepository = {
     totalPrice: number;
     image?: string;
   }): Promise<Id<"posTransactionItem">>;
+  recordPendingCheckoutItemSaleEvidence(input: {
+    pendingCheckoutItemId: Id<"posPendingCheckoutItem">;
+    storeId: Id<"store">;
+    actorUserId?: Id<"athenaUser">;
+    actorStaffProfileId?: Id<"staffProfile">;
+    lookupCode?: string;
+    price: number;
+    quantitySold: number;
+    posTransactionId?: Id<"posTransaction">;
+    registerSessionId?: Id<"registerSession">;
+    terminalId?: Id<"posTerminal">;
+    localEventId?: string;
+    source: "offline_sync";
+    timestamp: number;
+  }): Promise<Doc<"posPendingCheckoutItem"> | null>;
+  createOrReusePendingCheckoutItem(input: {
+    storeId: Id<"store">;
+    createdByUserId?: Id<"athenaUser">;
+    createdByStaffProfileId?: Id<"staffProfile">;
+    name: string;
+    lookupCode?: string;
+    price: number;
+    quantitySold: number;
+    registerSessionId?: Id<"registerSession">;
+    terminalId?: Id<"posTerminal">;
+    localEventId?: string;
+    source: "offline_sync";
+    timestamp: number;
+  }): Promise<{
+    pendingCheckoutItemId: Id<"posPendingCheckoutItem">;
+    productId: Id<"product">;
+    productSkuId: Id<"productSku">;
+  }>;
   createTransactionServiceLine(input: {
     transactionId: Id<"posTransaction">;
     serviceCaseId: Id<"serviceCase">;
@@ -427,11 +497,23 @@ export type SyncProjectionRepository = {
     totalPrice: number;
     notes?: string;
   }): Promise<Id<"posTransactionServiceLine">>;
-  patchProductSku(
-    productSkuId: Id<"productSku">,
-    patch: Partial<Omit<Doc<"productSku">, "_id" | "_creationTime">>,
-  ): Promise<void>;
-  patchPosSession(
+	  patchProductSku(
+	    productSkuId: Id<"productSku">,
+	    patch: Partial<Omit<Doc<"productSku">, "_id" | "_creationTime">>,
+	  ): Promise<void>;
+	  recordSaleInventoryMovement(input: {
+	    storeId: Id<"store">;
+	    organizationId?: Id<"organization">;
+	    productId: Id<"product">;
+	    productSkuId: Id<"productSku">;
+	    quantity: number;
+	    posTransactionId: Id<"posTransaction">;
+	    registerSessionId: Id<"registerSession">;
+	    staffProfileId: Id<"staffProfile">;
+	    customerProfileId?: Id<"customerProfile">;
+	    transactionNumber: string;
+	  }): Promise<"inserted" | "existing">;
+	  patchPosSession(
     posSessionId: Id<"posSession">,
     patch: Partial<Omit<Doc<"posSession">, "_id" | "_creationTime">>,
   ): Promise<void>;

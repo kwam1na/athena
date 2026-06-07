@@ -3,6 +3,7 @@ import { v } from "convex/values";
 export const posLocalSyncMappingKindValidator = v.union(
   v.literal("registerSession"),
   v.literal("posSession"),
+  v.literal("pendingCheckoutItem"),
   v.literal("transaction"),
   v.literal("transactionItem"),
   v.literal("payment"),

@@ -696,6 +696,7 @@ describe("posLocalStore", () => {
       "register.opened",
       "session.started",
       "cart.item_added",
+      "pending_checkout_item.defined",
       "transaction.completed",
       "register.closeout_started",
       "register.reopened",
@@ -720,7 +721,7 @@ describe("posLocalStore", () => {
     expect(events.ok).toBe(true);
     if (!events.ok) return;
     expect(events.value.map((event) => event.sequence)).toEqual([
-      1, 2, 3, 4, 5, 6,
+      1, 2, 3, 4, 5, 6, 7,
     ]);
     expect(events.value.map((event) => event.type)).toEqual(eventTypes);
     expect(events.value.map((event) => event.sync.status)).toEqual([
@@ -730,12 +731,73 @@ describe("posLocalStore", () => {
       "pending",
       "pending",
       "pending",
+      "pending",
     ]);
     expect(
       events.value.map(
         (event) => (event as { uploadSequence?: number }).uploadSequence,
       ),
-    ).toEqual([1, undefined, undefined, 2, 3, 4]);
+    ).toEqual([1, undefined, undefined, 2, 3, 4, 5]);
+  });
+
+  it("treats pending checkout item definitions as uploadable without storing unsafe local metadata", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+      clock: () => 1_700,
+      createLocalId: () => "local-event-1",
+    });
+
+    await expect(
+      store.appendEvent({
+        type: "pending_checkout_item.defined",
+        terminalId: "terminal-1",
+        storeId: "store-1",
+        localRegisterSessionId: "register-session-1",
+        localPosSessionId: "sale-1",
+        staffProfileId: "staff-1",
+        staffProofToken: "proof-token-1",
+        payload: {
+          localPendingCheckoutItemId: "local-pending-item-1",
+          name: "Bundle Wig",
+          lookupCode: "999888777666",
+          searchContext: {
+            query: "Bundle Wig",
+            source: "manual",
+          },
+          price: 45,
+          quantitySold: 2,
+          localMetadata: {
+            source: "offline_search",
+            reusedExistingPendingItem: false,
+            rawTerminalProof: "raw-terminal-proof",
+          },
+        },
+      }),
+    ).resolves.toEqual({
+      ok: true,
+      value: expect.objectContaining({
+        localEventId: "local-event-1",
+        sequence: 1,
+        uploadSequence: 1,
+        sync: { status: "pending" },
+        staffProofToken: "proof-token-1",
+      }),
+    });
+
+    const listed = await store.listEventsForUpload();
+    expect(listed).toEqual({
+      ok: true,
+      value: [
+        expect.objectContaining({
+          localEventId: "local-event-1",
+          uploadSequence: 1,
+          type: "pending_checkout_item.defined",
+        }),
+      ],
+    });
+    const serialized = JSON.stringify(listed.ok ? listed.value : []);
+    expect(serialized).toContain("local-pending-item-1");
+    expect(serialized).not.toContain("raw-terminal-proof");
   });
 
   it("allocates durable upload sequences per local register session without requiring staff proof", async () => {

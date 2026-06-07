@@ -16,6 +16,7 @@ import type {
   RegisterServiceSearchResult,
 } from "@/lib/pos/presentation/register/registerUiState";
 import {
+  usePOSPendingCheckoutItemForSale,
   usePOSQuickAddProductSku,
   usePOSRegisterCatalog,
 } from "@/hooks/usePOSProducts";
@@ -71,6 +72,12 @@ interface ProductEntryProps extends ProductSearchInputProps {
   canSearchProducts?: boolean;
   canSearchServices?: boolean;
   canQuickAddProduct?: boolean;
+  canAddPendingCheckoutItem?: boolean;
+  pendingCheckoutContext?: {
+    createdByStaffProfileId: Id<"staffProfile">;
+    registerSessionId: Id<"registerSession">;
+    terminalId: Id<"posTerminal">;
+  };
   showSearchInput?: boolean;
   containerClassName?: string;
   lookupPanelClassName?: string;
@@ -433,6 +440,8 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
       canSearchProducts = true,
       canSearchServices,
       showSearchInput = true,
+      canAddPendingCheckoutItem = false,
+      pendingCheckoutContext,
       containerClassName,
       lookupPanelClassName,
       resultsClassName,
@@ -445,6 +454,7 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
     const { activeStore } = useGetActiveStore();
     const { user } = useAuth();
     const quickAddProductSku = usePOSQuickAddProductSku();
+    const createPendingCheckoutItem = usePOSPendingCheckoutItemForSale();
     const registerCatalog = usePOSRegisterCatalog(activeStore?._id);
     const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
     const [quickAddInitialName, setQuickAddInitialName] = useState("");
@@ -478,6 +488,8 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
       (!shouldShowServiceResults ||
         searchResults.length > 0 ||
         isSearchLoading);
+    const isPendingCheckoutShortcut =
+      canAddPendingCheckoutItem && !canQuickAddProduct;
 
     // Handler to clear search after adding product
     const handleClearSearch = () => {
@@ -512,7 +524,10 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
 
     const handleOpenQuickAdd = useCallback(
       (selectedProduct?: Product) => {
-        if (!productLookupEnabled || !canQuickAddProduct) {
+        if (
+          !productLookupEnabled ||
+          (!canQuickAddProduct && !canAddPendingCheckoutItem)
+        ) {
           return;
         }
 
@@ -533,6 +548,7 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
       },
       [
         canQuickAddProduct,
+        canAddPendingCheckoutItem,
         inputIsUrlOrBarcode,
         onQuickAddOpenChange,
         productLookupEnabled,
@@ -560,6 +576,12 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
         },
         openQuickAddProduct: () => {
           if (!productLookupEnabled || !canQuickAddProduct) {
+            if (!canAddPendingCheckoutItem) {
+              return false;
+            }
+          }
+
+          if (!productLookupEnabled) {
             return false;
           }
 
@@ -567,7 +589,12 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
           return true;
         },
       }),
-      [canQuickAddProduct, handleOpenQuickAdd, productLookupEnabled],
+      [
+        canAddPendingCheckoutItem,
+        canQuickAddProduct,
+        handleOpenQuickAdd,
+        productLookupEnabled,
+      ],
     );
 
     const handleQuickAddOpenChange = (open: boolean) => {
@@ -590,6 +617,81 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
       }
 
       const [primaryVariant, ...extraVariants] = variants;
+      const isPendingCheckoutFlow =
+        canAddPendingCheckoutItem && !canQuickAddProduct && !isAddingVariant;
+
+      if (isPendingCheckoutFlow) {
+        let pendingItem: Awaited<ReturnType<typeof createPendingCheckoutItem>>;
+        try {
+          if (!pendingCheckoutContext) {
+            throw new Error(
+              "Active register context is still loading. Try again in a moment.",
+            );
+          }
+
+          pendingItem = await createPendingCheckoutItem({
+            storeId: activeStore._id,
+            createdByStaffProfileId:
+              pendingCheckoutContext.createdByStaffProfileId,
+            name,
+            lookupCode: primaryVariant.lookupCode,
+            price: primaryVariant.price,
+            quantitySold: primaryVariant.quantityAvailable,
+            registerSessionId: pendingCheckoutContext.registerSessionId,
+            terminalId: pendingCheckoutContext.terminalId,
+          });
+        } catch (error) {
+          if (!shouldQueuePendingCheckoutItemLocally(error)) {
+            throw error;
+          }
+
+          const localPendingProduct = buildLocalPendingCheckoutProduct({
+            lookupCode: primaryVariant.lookupCode,
+            name,
+            price: primaryVariant.price,
+            quantitySold: primaryVariant.quantityAvailable,
+          });
+          handleClearSearch();
+          const added = await onAddProduct(
+            localPendingProduct,
+            primaryVariant.quantityAvailable,
+          );
+          if (added === false) {
+            return false;
+          }
+
+          toast.success("Added to sale and queued for owner review");
+          return;
+        }
+
+        handleClearSearch();
+        const added = await onAddProduct(
+          {
+            id: pendingItem.productSkuId,
+            name: pendingItem.name,
+            barcode: pendingItem.lookupCode,
+            sku: pendingItem.sku,
+            price: pendingItem.price,
+            category: "Pending checkout",
+            description: "Pending owner review",
+            image: null,
+            inStock: true,
+            availabilityStatus: "available",
+            productId: pendingItem.productId,
+            skuId: pendingItem.productSkuId,
+            pendingCheckoutItemId: pendingItem.pendingCheckoutItemId,
+            quantityAvailable: undefined,
+          },
+          pendingItem.quantitySold,
+        );
+        if (added === false) {
+          return false;
+        }
+
+        toast.success("Added to sale and saved for owner review");
+        return;
+      }
+
       const createdProduct = await quickAddProductSku({
         storeId: activeStore._id,
         createdByUserId: user._id,
@@ -731,11 +833,18 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
                 formatter={formatter}
                 onClearSearch={handleClearSearch}
                 onQuickAddProduct={
-                  productLookupEnabled && isSearchReady && canQuickAddProduct
+                  productLookupEnabled &&
+                  isSearchReady &&
+                  (canQuickAddProduct || canAddPendingCheckoutItem)
                     ? handleOpenQuickAdd
                     : undefined
                 }
                 quickAddQuery={isSearchReady ? productSearchQuery : ""}
+                quickAddLabel={
+                  isPendingCheckoutShortcut
+                    ? "Add item for review"
+                    : "Quick add product"
+                }
                 quickAddShortcutDisabled={isQuickAddOpen}
                 className={resultsClassName}
               />
@@ -765,3 +874,73 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
 );
 
 ProductEntry.displayName = "ProductEntry";
+
+function buildLocalPendingCheckoutProduct(input: {
+  lookupCode?: string;
+  name: string;
+  price: number;
+  quantitySold: number;
+}): Product {
+  const localPendingCheckoutItemId = createLocalPendingCheckoutId(
+    "local-pending-checkout-item",
+  );
+  const localProductId = createLocalPendingCheckoutId("local-pending-product");
+  const localProductSkuId = createLocalPendingCheckoutId("local-pending-sku");
+  const lookupCode = input.lookupCode ?? "";
+
+  return {
+    id: localProductSkuId,
+    name: input.name,
+    barcode: lookupCode,
+    sku: `PENDING-${localPendingCheckoutItemId.slice(-8).toUpperCase()}`,
+    price: input.price,
+    category: "Pending checkout",
+    description: "Pending owner review",
+    image: null,
+    inStock: true,
+    availabilityStatus: "available",
+    productId: localProductId as Id<"product">,
+    skuId: localProductSkuId as Id<"productSku">,
+    pendingCheckoutItemId:
+      localPendingCheckoutItemId as Id<"posPendingCheckoutItem">,
+    pendingCheckoutItemLocalDefinition: {
+      localPendingCheckoutItemId,
+      name: input.name,
+      lookupCode: lookupCode || undefined,
+      price: input.price,
+      quantitySold: input.quantitySold,
+      localMetadata: {
+        schema: "pos_pending_checkout_item_local_metadata_v1",
+        createdOffline: true,
+        cloudValidation: "uncertain",
+      },
+    },
+    quantityAvailable: undefined,
+  };
+}
+
+function createLocalPendingCheckoutId(kind: string) {
+  const randomId =
+    globalThis.crypto?.randomUUID?.() ??
+    `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return `${kind}-${randomId}`;
+}
+
+function shouldQueuePendingCheckoutItemLocally(error: unknown) {
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    return true;
+  }
+
+  const message = error instanceof Error ? error.message : String(error);
+  if (
+    /already in the catalog|already reviewed|rejected in review|choose a valid|active register context|active staff context|active register terminal|open register session|does not match this terminal|sign in|permission|cannot/i.test(
+      message,
+    )
+  ) {
+    return false;
+  }
+
+  return /failed to fetch|network|offline|unavailable|timeout|load failed|convex/i.test(
+    message,
+  );
+}

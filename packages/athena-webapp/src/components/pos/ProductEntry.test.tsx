@@ -10,8 +10,10 @@ import type {
   RegisterServiceEntryState,
   RegisterServiceSearchResult,
 } from "@/lib/pos/presentation/register/registerUiState";
+import type { Id } from "~/convex/_generated/dataModel";
 
 const quickAddProductSkuMock = vi.fn();
+const pendingCheckoutItemMock = vi.fn();
 const registerCatalogMock = vi.fn();
 
 class ResizeObserverStub {
@@ -23,6 +25,7 @@ class ResizeObserverStub {
 globalThis.ResizeObserver = ResizeObserverStub;
 
 vi.mock("@/hooks/usePOSProducts", () => ({
+  usePOSPendingCheckoutItemForSale: () => pendingCheckoutItemMock,
   usePOSQuickAddProductSku: () => quickAddProductSkuMock,
   usePOSRegisterCatalog: () => registerCatalogMock(),
 }));
@@ -60,12 +63,30 @@ function buildQuickAddedProduct(): Product {
   };
 }
 
+function buildPendingCheckoutItem() {
+  return {
+    id: "pending-1",
+    pendingCheckoutItemId: "pending-1",
+    name: "Pending item",
+    lookupCode: "999999999999",
+    price: 2500,
+    productId: "product-pending-1",
+    productSkuId: "sku-pending-1",
+    quantitySold: 1,
+    reviewPriority: "normal",
+    sku: "PENDING-1",
+    status: "pending_review",
+  };
+}
+
 function renderProductEntry(input: {
   onAddProduct: (
     product: Product,
     quantity?: number,
   ) => boolean | Promise<boolean>;
   setProductSearchQuery: (query: string) => void;
+  canAddPendingCheckoutItem?: boolean;
+  canQuickAddProduct?: boolean;
 }) {
   function Harness() {
     const [productSearchQuery, setProductSearchQuery] =
@@ -73,7 +94,13 @@ function renderProductEntry(input: {
 
     return (
       <ProductEntry
-        canQuickAddProduct
+        canAddPendingCheckoutItem={input.canAddPendingCheckoutItem}
+        canQuickAddProduct={input.canQuickAddProduct ?? true}
+        pendingCheckoutContext={{
+          createdByStaffProfileId: "staff-1" as Id<"staffProfile">,
+          registerSessionId: "register-1" as Id<"registerSession">,
+          terminalId: "terminal-1" as Id<"posTerminal">,
+        }}
         isSearchLoading={false}
         isSearchReady
         onAddProduct={input.onAddProduct}
@@ -152,6 +179,7 @@ function renderProductEntryWithServices(input: {
 describe("ProductEntry", () => {
   beforeEach(() => {
     quickAddProductSkuMock.mockReset();
+    pendingCheckoutItemMock.mockReset();
     registerCatalogMock.mockReset();
     registerCatalogMock.mockReturnValue([]);
   });
@@ -179,6 +207,151 @@ describe("ProductEntry", () => {
     expect(setProductSearchQuery.mock.invocationCallOrder.at(-1)).toBeLessThan(
       onAddProduct.mock.invocationCallOrder[0],
     );
+  });
+
+  it("adds a cashier pending checkout item for owner review without trusted catalog quick-add", async () => {
+    const user = userEvent.setup();
+    const pendingItem = buildPendingCheckoutItem();
+    const onAddProduct = vi.fn(async () => true);
+    const setProductSearchQuery = vi.fn();
+    pendingCheckoutItemMock.mockResolvedValueOnce(pendingItem);
+
+    renderProductEntry({
+      canAddPendingCheckoutItem: true,
+      canQuickAddProduct: false,
+      onAddProduct,
+      setProductSearchQuery,
+    });
+
+    await user.click(
+      screen.getByRole("button", { name: /add item for review/i }),
+    );
+    await user.type(screen.getByLabelText(/product name/i), "Pending item");
+    await user.type(screen.getByLabelText(/selling price/i), "25");
+    await user.click(screen.getByRole("button", { name: /add product/i }));
+
+    await waitFor(() =>
+      expect(onAddProduct).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: "Pending item",
+          pendingCheckoutItemId: "pending-1",
+          productId: "product-pending-1",
+          skuId: "sku-pending-1",
+          availabilityStatus: "available",
+        }),
+        1,
+      ),
+    );
+    expect(pendingCheckoutItemMock).toHaveBeenCalledWith({
+      storeId: "store-1",
+      createdByStaffProfileId: "staff-1",
+      name: "Pending item",
+      lookupCode: "999999999999",
+      price: 2500,
+      quantitySold: 1,
+      registerSessionId: "register-1",
+      terminalId: "terminal-1",
+    });
+    expect(quickAddProductSkuMock).not.toHaveBeenCalled();
+    expect(setProductSearchQuery).toHaveBeenCalledWith("");
+  });
+
+  it("queues a cashier pending checkout item locally when offline", async () => {
+    const user = userEvent.setup();
+    const onAddProduct = vi.fn(async () => true);
+    const setProductSearchQuery = vi.fn();
+    const originalOnline = navigator.onLine;
+    Object.defineProperty(navigator, "onLine", {
+      configurable: true,
+      value: false,
+    });
+    pendingCheckoutItemMock.mockRejectedValueOnce(new Error("Failed to fetch"));
+
+    try {
+      renderProductEntry({
+        canAddPendingCheckoutItem: true,
+        canQuickAddProduct: false,
+        onAddProduct,
+        setProductSearchQuery,
+      });
+
+      await user.click(
+        screen.getByRole("button", { name: /add item for review/i }),
+      );
+      await user.type(screen.getByLabelText(/product name/i), "Offline item");
+      await user.type(screen.getByLabelText(/selling price/i), "25");
+      await user.click(screen.getByRole("button", { name: /add product/i }));
+
+      await waitFor(() =>
+        expect(onAddProduct).toHaveBeenCalledWith(
+          expect.objectContaining({
+            name: "Offline item",
+            pendingCheckoutItemId: expect.stringMatching(
+              /^local-pending-checkout-item-/,
+            ),
+            productId: expect.stringMatching(/^local-pending-product-/),
+            skuId: expect.stringMatching(/^local-pending-sku-/),
+            pendingCheckoutItemLocalDefinition: expect.objectContaining({
+              name: "Offline item",
+              lookupCode: "999999999999",
+              price: 2500,
+              quantitySold: 1,
+              localMetadata: expect.objectContaining({
+                createdOffline: true,
+                cloudValidation: "uncertain",
+              }),
+            }),
+          }),
+          1,
+        ),
+      );
+      expect(quickAddProductSkuMock).not.toHaveBeenCalled();
+      expect(setProductSearchQuery).toHaveBeenCalledWith("");
+    } finally {
+      Object.defineProperty(navigator, "onLine", {
+        configurable: true,
+        value: originalOnline,
+      });
+    }
+  });
+
+  it("does not queue locally when the server says the pending item was already rejected", async () => {
+    const user = userEvent.setup();
+    const onAddProduct = vi.fn(async () => true);
+    const setProductSearchQuery = vi.fn();
+    const originalOnline = navigator.onLine;
+    Object.defineProperty(navigator, "onLine", {
+      configurable: true,
+      value: true,
+    });
+    pendingCheckoutItemMock.mockRejectedValueOnce(
+      new Error("This item was rejected in review. Ask a manager before selling it again."),
+    );
+
+    try {
+      renderProductEntry({
+        canAddPendingCheckoutItem: true,
+        canQuickAddProduct: false,
+        onAddProduct,
+        setProductSearchQuery,
+      });
+
+      await user.click(
+        screen.getByRole("button", { name: /add item for review/i }),
+      );
+      await user.type(screen.getByLabelText(/product name/i), "Rejected item");
+      await user.type(screen.getByLabelText(/selling price/i), "25");
+      await user.click(screen.getByRole("button", { name: /add product/i }));
+
+      await waitFor(() => expect(pendingCheckoutItemMock).toHaveBeenCalled());
+      expect(onAddProduct).not.toHaveBeenCalled();
+      expect(setProductSearchQuery).not.toHaveBeenCalledWith("");
+    } finally {
+      Object.defineProperty(navigator, "onLine", {
+        configurable: true,
+        value: originalOnline,
+      });
+    }
   });
 
   it("creates additional SKU variants before adding the primary quick-add product to the cart", async () => {

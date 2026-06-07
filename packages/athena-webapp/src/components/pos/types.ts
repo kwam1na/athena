@@ -1,4 +1,5 @@
 import { Id } from "../../../convex/_generated/dataModel";
+import type { PosLocalSyncPendingCheckoutItemDefinedPayload } from "../../../shared/posLocalSyncContract";
 export type {
   PosCartLineInput as CartItem,
   PosProductCartLineInput as ProductCartItem,
@@ -46,6 +47,8 @@ export interface Product {
   color?: string;
   productId?: Id<"product">;
   skuId?: Id<"productSku">;
+  pendingCheckoutItemId?: Id<"posPendingCheckoutItem">;
+  pendingCheckoutItemLocalDefinition?: PosLocalSyncPendingCheckoutItemDefinedPayload;
   areProcessingFeesAbsorbed?: boolean;
 }
 

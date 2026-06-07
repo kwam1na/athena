@@ -573,6 +573,109 @@ export function useConvexQuickAddCatalogItem() {
   return useMutation(api.pos.public.catalog.quickAddSku);
 }
 
+export function useConvexPendingCheckoutItemForSale() {
+  return useMutation(
+    (
+      api.pos.public.catalog as unknown as {
+        createOrReusePendingCheckoutItemForSale: FunctionReference<
+          "mutation",
+          "public",
+          {
+            storeId: Id<"store">;
+            createdByStaffProfileId?: Id<"staffProfile">;
+            name: string;
+            lookupCode?: string;
+            price: number;
+            quantitySold: number;
+            registerSessionId?: Id<"registerSession">;
+            terminalId?: Id<"posTerminal">;
+            localEventId?: string;
+            source?: "online" | "offline_sync";
+            timestamp?: number;
+          },
+          {
+            id: Id<"posPendingCheckoutItem">;
+            pendingCheckoutItemId: Id<"posPendingCheckoutItem">;
+            name: string;
+            lookupCode: string;
+            price: number;
+            productId: Id<"product">;
+            productSkuId: Id<"productSku">;
+            quantitySold: number;
+            reviewPriority: "normal" | "elevated" | "high";
+            sku: string;
+            status:
+              | "pending_review"
+              | "approved"
+              | "linked_to_catalog"
+              | "rejected"
+              | "flagged";
+          }
+        >;
+      }
+    ).createOrReusePendingCheckoutItemForSale,
+  );
+}
+
+export type PendingCheckoutReviewItem = {
+  _id: Id<"posPendingCheckoutItem">;
+  name: string;
+  lookupCode?: string;
+  provisionalPrice: number;
+  status: "pending_review" | "approved" | "linked_to_catalog" | "rejected" | "flagged";
+  reviewPriority: "normal" | "elevated" | "high";
+  evidence: {
+    totalQuantitySold?: number;
+    transactionCount?: number;
+    observedPrices?: number[];
+    observedLookupCodes?: string[];
+    offlineSaleCount?: number;
+  };
+  createdAt: number;
+  updatedAt: number;
+  createdFrom: "online" | "offline_sync";
+};
+
+export function useConvexPendingCheckoutItemsForReview(input: {
+  storeId?: Id<"store">;
+}) {
+  return useQuery(
+    (
+      api.pos.public.catalog as unknown as {
+        listPendingCheckoutItemsForReview: FunctionReference<
+          "query",
+          "public",
+          { storeId: Id<"store"> },
+          PendingCheckoutReviewItem[]
+        >;
+      }
+    ).listPendingCheckoutItemsForReview,
+    input.storeId ? { storeId: input.storeId } : "skip",
+  );
+}
+
+export function useConvexResolvePendingCheckoutItemReview() {
+  return useMutation(
+    (
+      api.pos.public.catalog as unknown as {
+        resolvePendingCheckoutItemReview: FunctionReference<
+          "mutation",
+          "public",
+          {
+            storeId: Id<"store">;
+            pendingCheckoutItemId: Id<"posPendingCheckoutItem">;
+            status: "approved" | "linked_to_catalog" | "rejected" | "flagged";
+            note?: string;
+            approvedProductId?: Id<"product">;
+            approvedProductSkuId?: Id<"productSku">;
+          },
+          PendingCheckoutReviewItem
+        >;
+      }
+    ).resolvePendingCheckoutItemReview,
+  );
+}
+
 export const convexCatalogReader: PosCatalogReader = {
   useRegisterCatalog: useConvexRegisterCatalog,
   useRegisterServiceCatalog: useConvexRegisterServiceCatalog,

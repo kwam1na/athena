@@ -207,6 +207,59 @@ describe("createLocalCommandGateway", () => {
     });
   });
 
+  it("defines pending checkout items locally before upload", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+    });
+    await appendOpenDrawer(store);
+    await store.appendEvent({
+      type: "session.started",
+      terminalId: "terminal-1",
+      storeId: "store-1",
+      registerNumber: "1",
+      localRegisterSessionId: "drawer-1",
+      localPosSessionId: "session-1",
+      staffProfileId: "staff-1",
+      payload: { localPosSessionId: "session-1" },
+    });
+    const gateway = createLocalCommandGateway({
+      store,
+      staffProofToken: "proof-1",
+    });
+
+    await expect(
+      gateway.definePendingCheckoutItem({
+        ...saleCommandInput(),
+        payload: {
+          localPendingCheckoutItemId: "local-pending-1",
+          name: "Unknown gel",
+          lookupCode: "999999999999",
+          price: 2500,
+          quantitySold: 2,
+          localMetadata: {
+            schema: "pos_pending_checkout_item_local_metadata_v1",
+            createdOffline: true,
+            cloudValidation: "uncertain",
+          },
+        },
+      }),
+    ).resolves.toBe(true);
+
+    await expect(store.listEvents()).resolves.toMatchObject({
+      ok: true,
+      value: expect.arrayContaining([
+        expect.objectContaining({
+          type: "pending_checkout_item.defined",
+          staffProofToken: "proof-1",
+          payload: expect.objectContaining({
+            localPendingCheckoutItemId: "local-pending-1",
+            quantitySold: 2,
+          }),
+        }),
+      ]),
+    });
+  });
+
   it("persists app-session validation metadata on drawer lifecycle commands", async () => {
     const validationMetadata: PosLocalEventValidationMetadata = {
       flags: [

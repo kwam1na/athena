@@ -7663,6 +7663,114 @@ describe("useRegisterViewModel", () => {
     }
   });
 
+  it("records a pending checkout definition before the local cart line that uses it", async () => {
+    mockRegisterState = {
+      phase: "active",
+      terminal: { _id: "terminal-1", displayName: "Front Counter" },
+      cashier: { _id: "staff-1", firstName: "Ama", lastName: "Kusi" },
+      activeRegisterSession: {
+        _id: "drawer-1",
+        status: "open",
+        terminalId: "terminal-1",
+        registerNumber: "1",
+        openingFloat: 5_000,
+        expectedCash: 5_000,
+        openedAt: Date.now(),
+      },
+      activeSession: { _id: "session-1", sessionNumber: "POS-0001" },
+      activeSessionConflict: null,
+      resumableSession: null,
+    };
+    mockActiveSession = {
+      ...mockActiveSession!,
+      _id: "session-1" as Id<"posSession">,
+      cartItems: [],
+      registerSessionId: "drawer-1" as Id<"registerSession">,
+    };
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated({
+        activeRoles: ["cashier"],
+        staffProfileId: "staff-1" as Id<"staffProfile">,
+        staffProfile: {
+          firstName: "Ama",
+          lastName: "Kusi",
+        },
+        posLocalStaffProof: {
+          expiresAt: Date.now() + 60_000,
+          token: "staff-proof-token",
+        },
+      });
+    });
+
+    await act(async () => {
+      await result.current.productEntry.onAddProduct(
+        {
+          id: "local-pending-sku-1",
+          name: "Uncataloged item",
+          price: 12000,
+          barcode: "999999999999",
+          productId: "local-pending-product-1" as Id<"product">,
+          skuId: "local-pending-sku-1" as Id<"productSku">,
+          sku: "PENDING-1",
+          category: "Pending checkout",
+          description: "Pending owner review",
+          image: null,
+          inStock: true,
+          pendingCheckoutItemId:
+            "local-pending-1" as Id<"posPendingCheckoutItem">,
+          pendingCheckoutItemLocalDefinition: {
+            localPendingCheckoutItemId: "local-pending-1",
+            lookupCode: "999999999999",
+            name: "Uncataloged item",
+            price: 12000,
+            quantitySold: 2,
+            localMetadata: {
+              schema: "pos_pending_checkout_item_local_metadata_v1",
+              cloudValidation: "uncertain",
+              createdOffline: true,
+            },
+          },
+          quantityAvailable: undefined,
+        },
+        2,
+      );
+    });
+
+    const localEvents = mockAppendLocalEvent.mock.calls.map(
+      ([event]) => event,
+    );
+    const pendingDefinitionIndex = localEvents.findIndex(
+      (event) => event?.type === "pending_checkout_item.defined",
+    );
+    const cartItemIndex = localEvents.findIndex(
+      (event) => event?.type === "cart.item_added",
+    );
+
+    expect(pendingDefinitionIndex).toBeGreaterThanOrEqual(0);
+    expect(cartItemIndex).toBeGreaterThanOrEqual(0);
+    expect(pendingDefinitionIndex).toBeLessThan(cartItemIndex);
+    expect(localEvents[pendingDefinitionIndex]).toMatchObject({
+      localPosSessionId: "session-1",
+      payload: expect.objectContaining({
+        localPendingCheckoutItemId: "local-pending-1",
+        quantitySold: 2,
+      }),
+      type: "pending_checkout_item.defined",
+    });
+    expect(localEvents[cartItemIndex]).toMatchObject({
+      localPosSessionId: "session-1",
+      payload: expect.objectContaining({
+        pendingCheckoutItemId: "local-pending-1",
+        quantity: 2,
+      }),
+      type: "cart.item_added",
+    });
+  });
+
   it("completes cloud-backed local cart changes with existing cloud cart lines", async () => {
     const localEvents: Array<Record<string, unknown>> = [];
     mockAppendLocalEvent.mockImplementation(

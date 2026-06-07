@@ -34,6 +34,7 @@ export type TransactionAdjustmentPlannerItem = {
   transactionId: Id<"posTransaction">;
   productId: Id<"product">;
   productSkuId: Id<"productSku">;
+  pendingCheckoutItemId?: Id<"posPendingCheckoutItem">;
   productName: string;
   productSku: string;
   quantity: number;
@@ -92,6 +93,7 @@ export type TransactionAdjustmentCorrectedLine = {
   originalTransactionItemId?: Id<"posTransactionItem">;
   productId: Id<"product">;
   productSkuId: Id<"productSku">;
+  pendingCheckoutItemId?: Id<"posPendingCheckoutItem">;
   productName: string;
   productSku: string;
   originalQuantity: number;
@@ -403,6 +405,7 @@ export function planTransactionAdjustment(
         originalTransactionItemId: item._id,
         productId: item.productId,
         productSkuId: item.productSkuId,
+        pendingCheckoutItemId: item.pendingCheckoutItemId,
         productName: item.productName,
         productSku: item.productSku,
         originalQuantity: item.quantity,

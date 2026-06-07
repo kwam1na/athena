@@ -14,12 +14,327 @@ type ParsedSaleCompletedEvent = Extract<
   ParsedPosLocalSyncEventInput,
   { eventType: "sale_completed" }
 >;
+type ParsedPendingCheckoutItemDefinedEvent = Extract<
+  ParsedPosLocalSyncEventInput,
+  { eventType: "pending_checkout_item_defined" }
+>;
 type ParsedSaleClearedEvent = Extract<
   ParsedPosLocalSyncEventInput,
   { eventType: "sale_cleared" }
 >;
 
 describe("projectLocalSyncEvent", () => {
+  it("projects pending checkout item definitions through the reviewable pending item command", async () => {
+    const repository = createProjectionRepository();
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: buildPendingCheckoutItemDefinedEvent(),
+      syncEventId: "sync-event-1",
+      submittedByUserId: "athena-user-1" as never,
+      now: 100,
+    });
+
+    expect(result.status).toBe("projected");
+    expect(repository.createdPendingCheckoutItems).toEqual([
+      expect.objectContaining({
+        storeId: "store-1",
+        createdByUserId: "athena-user-1",
+        createdByStaffProfileId: "staff-1",
+        name: "Loose wave bundle",
+        lookupCode: "999888777666",
+        price: 45,
+        quantitySold: 2,
+        registerSessionId: "register-session-1",
+        terminalId: "terminal-1",
+        localEventId: "event-pending-item-1",
+        source: "offline_sync",
+        timestamp: 15,
+      }),
+    ]);
+    expect(result.mappings).toEqual([
+      expect.objectContaining({
+        localIdKind: "pendingCheckoutItem",
+        localId: "local-pending-item-1",
+        cloudTable: "posPendingCheckoutItem",
+        cloudId: "pending-checkout-item-1",
+      }),
+    ]);
+  });
+
+  it("reuses an existing local pending checkout item mapping without adding duplicate evidence", async () => {
+    const repository = createProjectionRepository();
+    const event = buildPendingCheckoutItemDefinedEvent();
+
+    await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event,
+      syncEventId: "sync-event-1",
+      submittedByUserId: "athena-user-1" as never,
+      now: 100,
+    });
+    const retry = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event,
+      syncEventId: "sync-event-1",
+      submittedByUserId: "athena-user-1" as never,
+      now: 100,
+    });
+
+    expect(retry.status).toBe("projected");
+    expect(retry.mappings).toEqual([
+      expect.objectContaining({
+        localIdKind: "pendingCheckoutItem",
+        localId: "local-pending-item-1",
+        cloudId: "pending-checkout-item-1",
+      }),
+    ]);
+    expect(repository.createdPendingCheckoutItems).toHaveLength(1);
+  });
+
+  it("resolves offline pending sale lines through the pending item mapping before validating provisional anchors", async () => {
+    const repository = createProjectionRepository({
+      existingPosSession: {
+        _id: "local-session-1",
+        registerSessionId: "register-session-1",
+        staffProfileId: "staff-1",
+        status: "active",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      },
+    });
+
+    const definition = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: buildPendingCheckoutItemDefinedEvent(),
+      syncEventId: "sync-event-1",
+      submittedByUserId: "athena-user-1" as never,
+      now: 100,
+    });
+    const sale = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: buildSaleCompletedEvent({
+        payload: {
+          ...buildSaleCompletedEvent().payload,
+          items: [
+            {
+              localTransactionItemId: "local-pending-sale-line-1",
+              pendingCheckoutItemId: "local-pending-item-1" as never,
+              productId: "local-provisional-product-1" as never,
+              productName: "Loose wave bundle",
+              productSku: "PENDING-LOCAL",
+              productSkuId: "local-provisional-sku-1" as never,
+              quantity: 1,
+              unitPrice: 25,
+            },
+          ],
+        },
+      }),
+      syncEventId: "sync-event-2",
+      submittedByUserId: "athena-user-1" as never,
+      now: 100,
+    });
+
+    expect(definition.status).toBe("projected");
+    expect(sale.status).toBe("projected");
+    expect(repository.createdTransactionItems).toEqual([
+      expect.objectContaining({
+        pendingCheckoutItemId: "pending-checkout-item-1",
+        productId: "product-1",
+        productSkuId: "sku-1",
+      }),
+    ]);
+  });
+
+  it("conflicts offline pending sale lines before the pending item definition has synced", async () => {
+    const repository = createProjectionRepository({
+      existingPosSession: {
+        _id: "local-session-1",
+        registerSessionId: "register-session-1",
+        staffProfileId: "staff-1",
+        status: "active",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      },
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: buildSaleCompletedEvent({
+        payload: {
+          ...buildSaleCompletedEvent().payload,
+          items: [
+            {
+              localTransactionItemId: "local-pending-sale-line-1",
+              pendingCheckoutItemId: "local-pending-item-1" as never,
+              productId: "local-provisional-product-1" as never,
+              productName: "Loose wave bundle",
+              productSku: "PENDING-LOCAL",
+              productSkuId: "local-provisional-sku-1" as never,
+              quantity: 1,
+              unitPrice: 25,
+            },
+          ],
+        },
+      }),
+      syncEventId: "sync-event-1",
+      submittedByUserId: "athena-user-1" as never,
+      now: 100,
+    });
+
+    expect(result.status).toBe("conflicted");
+    expect(repository.createdConflicts).toEqual([
+      expect.objectContaining({
+        conflictType: "inventory",
+        summary: "Pending checkout item reference has not synced yet.",
+        details: expect.objectContaining({
+          blocksProjection: true,
+          pendingCheckoutItemId: "local-pending-item-1",
+        }),
+      }),
+    ]);
+    expect(repository.createdTransactions).toEqual([]);
+    expect(repository.createdPaymentAllocations).toEqual([]);
+    expect(repository.recordedPendingCheckoutItemSaleEvidence).toEqual([]);
+  });
+
+  it("projects offline pending sale facts when the cloud pending item is no longer saleable", async () => {
+    const repository = createProjectionRepository({
+      existingPosSession: {
+        _id: "local-session-1",
+        registerSessionId: "register-session-1",
+        staffProfileId: "staff-1",
+        status: "active",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      },
+      pendingCheckoutItem: {
+        _id: "pending-checkout-item-1",
+        storeId: "store-1",
+        status: "approved",
+        provisionalProductId: "product-1",
+        provisionalProductSkuId: "sku-1",
+      },
+      validCloudIds: new Set(["pending-checkout-item-1"]),
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: buildSaleCompletedEvent({
+        payload: {
+          ...buildSaleCompletedEvent().payload,
+          items: [
+            {
+	              localTransactionItemId: "local-pending-sale-line-1",
+	              pendingCheckoutItemId: "pending-checkout-item-1" as never,
+	              productId: "local-pending-product-1" as never,
+	              productName: "Loose wave bundle",
+	              productSku: "PENDING-LOCAL",
+	              productSkuId: "local-pending-sku-1" as never,
+              quantity: 1,
+              unitPrice: 25,
+            },
+          ],
+        },
+      }),
+      syncEventId: "sync-event-1",
+      submittedByUserId: "athena-user-1" as never,
+      now: 100,
+    });
+
+    expect(result.status).toBe("conflicted");
+    expect(repository.createdConflicts).toEqual([
+      expect.objectContaining({
+        conflictType: "inventory",
+        summary: "Pending checkout item reference does not match this sale line.",
+        details: expect.objectContaining({
+          blocksProjection: false,
+          pendingCheckoutItemId: "pending-checkout-item-1",
+        }),
+      }),
+    ]);
+    expect(repository.createdTransactions).toHaveLength(1);
+    expect(repository.createdTransactionItems).toEqual([
+      expect.objectContaining({
+        pendingCheckoutItemId: "pending-checkout-item-1",
+        productId: "product-1",
+        productSkuId: "sku-1",
+      }),
+    ]);
+    expect(repository.createdPaymentAllocations).toHaveLength(1);
+    expect(repository.productPatches).toEqual([]);
+    expect(repository.recordedPendingCheckoutItemSaleEvidence).toEqual([
+      expect.objectContaining({
+        pendingCheckoutItemId: "pending-checkout-item-1",
+        quantitySold: 1,
+        source: "offline_sync",
+      }),
+    ]);
+  });
+
+  it("preserves pending checkout item sale lines without trusted stock movement", async () => {
+    const repository = createProjectionRepository({
+      existingPosSession: {
+        _id: "local-session-1",
+        registerSessionId: "register-session-1",
+        staffProfileId: "staff-1",
+        status: "active",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      },
+      validCloudIds: new Set(["pending-checkout-item-1"]),
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: buildSaleCompletedEvent({
+        payload: {
+          ...buildSaleCompletedEvent().payload,
+          items: [
+            {
+              localTransactionItemId: "local-pending-sale-line-1",
+              productId: "product-1" as never,
+              productSkuId: "sku-1" as never,
+              pendingCheckoutItemId: "pending-checkout-item-1" as never,
+              productName: "Loose wave bundle",
+              productSku: "PENDING-1",
+              quantity: 1,
+              unitPrice: 25,
+            },
+          ],
+        },
+      }),
+      syncEventId: "sync-event-1",
+      now: 100,
+    });
+
+    expect(result.status).toBe("projected");
+    expect(repository.consumedHoldRequests).toEqual([
+      {
+        sessionId: "local-session-1",
+        items: [],
+        now: 20,
+      },
+    ]);
+    expect(repository.productPatches).toEqual([]);
+    expect(repository.createdTransactionItems).toEqual([
+      expect.objectContaining({
+        pendingCheckoutItemId: "pending-checkout-item-1",
+        productId: "product-1",
+        productSkuId: "sku-1",
+        quantity: 1,
+      }),
+    ]);
+  });
+
   it("projects a completed local cash sale into transaction, payment, inventory, and trace-like records", async () => {
     const repository = createProjectionRepository();
 
@@ -88,15 +403,23 @@ describe("projectLocalSyncEvent", () => {
         },
       ]),
     );
-    expect(repository.productPatches).toEqual([
-      {
-        productSkuId: "sku-1",
+	    expect(repository.productPatches).toEqual([
+	      {
+	        productSkuId: "sku-1",
         patch: {
           inventoryCount: 9,
           quantityAvailable: 9,
         },
-      },
-    ]);
+	      },
+	    ]);
+	    expect(repository.recordedSaleInventoryMovements).toEqual([
+	      expect.objectContaining({
+	        posTransactionId: "transaction-1",
+	        productSkuId: "sku-1",
+	        quantity: 1,
+	        transactionNumber: "LR-001",
+	      }),
+	    ]);
     expect(repository.createdOperationalEvents).toEqual([
       expect.objectContaining({
         eventType: "pos_local_sync.sale_projected",
@@ -111,6 +434,124 @@ describe("projectLocalSyncEvent", () => {
           transactionNumber: "LR-001",
         }),
         posTransactionId: "transaction-1",
+      }),
+    ]);
+  });
+
+  it("aggregates duplicate pending checkout lines before recording sale evidence", async () => {
+    const repository = createProjectionRepository({
+      existingPosSession: {
+        _id: "local-session-1",
+        registerSessionId: "register-session-1",
+        staffProfileId: "staff-1",
+        status: "active",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      },
+      validCloudIds: new Set(["pending-checkout-item-1"]),
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: buildSaleCompletedEvent({
+        payload: {
+          ...buildSaleCompletedEvent().payload,
+          items: [
+            {
+              localTransactionItemId: "local-pending-sale-line-1",
+              pendingCheckoutItemId: "pending-checkout-item-1" as never,
+              productId: "product-1" as never,
+              productName: "Loose wave bundle",
+              productSku: "PENDING-1",
+              productSkuId: "sku-1" as never,
+              quantity: 1,
+              unitPrice: 25,
+            },
+            {
+              localTransactionItemId: "local-pending-sale-line-2",
+              pendingCheckoutItemId: "pending-checkout-item-1" as never,
+              productId: "product-1" as never,
+              productName: "Loose wave bundle",
+              productSku: "PENDING-1",
+              productSkuId: "sku-1" as never,
+              quantity: 2,
+              unitPrice: 25,
+            },
+          ],
+        },
+      }),
+      syncEventId: "sync-event-1",
+      now: 100,
+    });
+
+    expect(result.status).toBe("projected");
+    expect(repository.recordedPendingCheckoutItemSaleEvidence).toEqual([
+      expect.objectContaining({
+        pendingCheckoutItemId: "pending-checkout-item-1",
+        quantitySold: 3,
+      }),
+    ]);
+  });
+
+  it("records offline sale evidence for flagged pending checkout items", async () => {
+    const repository = createProjectionRepository({
+      existingPosSession: {
+        _id: "local-session-1",
+        registerSessionId: "register-session-1",
+        staffProfileId: "staff-1",
+        status: "active",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      },
+      pendingCheckoutItem: {
+        _id: "pending-checkout-item-1",
+        storeId: "store-1",
+        status: "flagged",
+        provisionalProductId: "product-1",
+        provisionalProductSkuId: "sku-1",
+      },
+      validCloudIds: new Set(["pending-checkout-item-1"]),
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: buildSaleCompletedEvent({
+        payload: {
+          ...buildSaleCompletedEvent().payload,
+          items: [
+            {
+              localTransactionItemId: "local-pending-sale-line-1",
+              pendingCheckoutItemId: "pending-checkout-item-1" as never,
+              productId: "product-1" as never,
+              productName: "Loose wave bundle",
+              productSku: "PENDING-1",
+              productSkuId: "sku-1" as never,
+              quantity: 2,
+              unitPrice: 25,
+            },
+          ],
+        },
+      }),
+      syncEventId: "sync-event-1",
+      now: 100,
+    });
+
+    expect(result.status).toBe("projected");
+    expect(repository.createdTransactionItems).toEqual([
+      expect.objectContaining({
+        pendingCheckoutItemId: "pending-checkout-item-1",
+        productId: "product-1",
+        productSkuId: "sku-1",
+      }),
+    ]);
+    expect(repository.productPatches).toEqual([]);
+    expect(repository.recordedPendingCheckoutItemSaleEvidence).toEqual([
+      expect.objectContaining({
+        pendingCheckoutItemId: "pending-checkout-item-1",
+        quantitySold: 2,
+        source: "offline_sync",
       }),
     ]);
   });
@@ -1212,21 +1653,9 @@ describe("projectLocalSyncEvent", () => {
     ]);
     expect(repository.createdTransactions).toHaveLength(1);
     expect(repository.createdPosSessionItems).toEqual([]);
-    expect(repository.consumedHoldRequests).toEqual([
-      expect.objectContaining({
-        sessionId: "pos-session-1",
-        items: [expect.objectContaining({ productSkuId: "sku-1", quantity: 2 })],
-      }),
-    ]);
-    expect(repository.productPatches).toEqual([
-      {
-        productSkuId: "sku-1",
-        patch: {
-          inventoryCount: 8,
-          quantityAvailable: 8,
-        },
-      },
-    ]);
+	    expect(repository.consumedHoldRequests).toEqual([]);
+	    expect(repository.productPatches).toEqual([]);
+	    expect(repository.recordedSaleInventoryMovements).toEqual([]);
   });
 
   it("conflicts cloud POS session ids that are not bound to the synced register session", async () => {
@@ -1351,23 +1780,32 @@ describe("projectLocalSyncEvent", () => {
       now: 100,
     });
 
-    expect(result.status).toBe("conflicted");
+	    expect(result.status).toBe("conflicted");
     expect(repository.createdTransactions).toHaveLength(1);
-    expect(repository.productPatches).toEqual([
-      {
-        productSkuId: "sku-1",
-        patch: {
-          inventoryCount: 0,
-          quantityAvailable: 0,
-        },
-      },
-    ]);
+    expect(repository.productPatches).toEqual([]);
+    expect(repository.recordedSaleInventoryMovements).toEqual([]);
     expect(result.conflicts).toEqual([
       expect.objectContaining({
         conflictType: "inventory",
+        status: "needs_review",
         summary: "Inventory needs manager review for a synced offline sale.",
       }),
     ]);
+    const retry = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: buildSaleCompletedEvent(),
+      syncEventId: "sync-event-1",
+      now: 100,
+    });
+    expect(retry.status).toBe("conflicted");
+    expect(retry.conflicts).toEqual([
+      expect.objectContaining({
+        conflictType: "inventory",
+        status: "needs_review",
+      }),
+    ]);
+    expect(repository.createdTransactions).toHaveLength(1);
   });
 
   it("creates a payment reconciliation conflict for malformed payment records", async () => {
@@ -1521,17 +1959,10 @@ describe("projectLocalSyncEvent", () => {
       now: 100,
     });
 
-    expect(result.status).toBe("conflicted");
-    expect(repository.createdTransactions).toHaveLength(1);
-    expect(repository.productPatches).toEqual([
-      {
-        productSkuId: "sku-1",
-        patch: {
-          inventoryCount: 9,
-          quantityAvailable: 9,
-        },
-      },
-    ]);
+	    expect(result.status).toBe("conflicted");
+	    expect(repository.createdTransactions).toHaveLength(1);
+	    expect(repository.productPatches).toEqual([]);
+	    expect(repository.recordedSaleInventoryMovements).toEqual([]);
     expect(result.conflicts).toEqual([
       expect.objectContaining({
         conflictType: "inventory",
@@ -1600,17 +2031,10 @@ describe("projectLocalSyncEvent", () => {
       now: 100,
     });
 
-    expect(result.status).toBe("conflicted");
-    expect(repository.createdTransactions).toHaveLength(1);
-    expect(repository.productPatches).toEqual([
-      {
-        productSkuId: "sku-1",
-        patch: {
-          inventoryCount: 0,
-          quantityAvailable: 0,
-        },
-      },
-    ]);
+	    expect(result.status).toBe("conflicted");
+	    expect(repository.createdTransactions).toHaveLength(1);
+	    expect(repository.productPatches).toEqual([]);
+	    expect(repository.recordedSaleInventoryMovements).toEqual([]);
     expect(result.conflicts).toEqual([
       expect.objectContaining({
         conflictType: "inventory",
@@ -3009,6 +3433,39 @@ function buildSaleCompletedEvent(
   };
 }
 
+function buildPendingCheckoutItemDefinedEvent(
+  overrides: Partial<ParsedPendingCheckoutItemDefinedEvent> = {},
+): ParsedPendingCheckoutItemDefinedEvent {
+  return {
+    localEventId: "event-pending-item-1",
+    localRegisterSessionId: "local-register-1",
+    sequence: 2,
+    eventType: "pending_checkout_item_defined",
+    occurredAt: 15,
+    staffProfileId: "staff-1" as never,
+    staffProofToken: "proof-token-1",
+    payload: {
+      localPendingCheckoutItemId: "local-pending-item-1",
+      name: "Loose wave bundle",
+      lookupCode: "999888777666",
+      searchContext: {
+        query: "loose wave",
+        source: "barcode",
+        matched: "none",
+      },
+      price: 45,
+      quantitySold: 2,
+      localMetadata: {
+        schema: "pos_pending_checkout_item_local_metadata_v1",
+        source: "offline_search",
+        createdOffline: true,
+        appSessionValidation: "unverified",
+      },
+    },
+    ...overrides,
+  };
+}
+
 function buildServiceLine(
   overrides: Partial<NonNullable<PosLocalSalePayload["serviceLines"]>[number]> = {},
 ): NonNullable<PosLocalSalePayload["serviceLines"]>[number] {
@@ -3099,16 +3556,28 @@ function createProjectionRepository(
       customerProfileId: string;
       status: string;
     } | null;
+    pendingCheckoutItem: {
+      _id: string;
+      storeId: string;
+      status:
+        | "pending_review"
+        | "flagged"
+        | "approved"
+        | "rejected"
+        | "linked_to_catalog";
+      provisionalProductId?: string;
+      provisionalProductSkuId?: string;
+    } | null;
     activeHeldQuantity: number;
     consumedHoldQuantities: Map<string, number>;
-	    existingPosSession: {
-	      _id: string;
-	      registerSessionId: string;
-	      staffProfileId?: string;
-        status?: string;
-	      storeId: string;
-	      terminalId: string;
-	      transactionId?: string;
+    existingPosSession: {
+      _id: string;
+      registerSessionId: string;
+      staffProfileId?: string;
+      status?: string;
+      storeId: string;
+      terminalId: string;
+      transactionId?: string;
     };
     staffProfile: {
       _id: string;
@@ -3139,6 +3608,7 @@ function createProjectionRepository(
   consumedHoldRequests: unknown[];
   releasedHoldRequests: unknown[];
   createdOperationalEvents: unknown[];
+  createdPendingCheckoutItems: unknown[];
   createdPaymentAllocations: unknown[];
   createdPosSessions: unknown[];
   createdPosSessionItems: unknown[];
@@ -3150,8 +3620,10 @@ function createProjectionRepository(
   createdTransactionServiceLines: unknown[];
   createdTransactions: unknown[];
   posSessionPatches: unknown[];
-  productPatches: unknown[];
-  recordedPosSessionTraces: unknown[];
+	  productPatches: unknown[];
+	  recordedPendingCheckoutItemSaleEvidence: unknown[];
+	  recordedSaleInventoryMovements: unknown[];
+	  recordedPosSessionTraces: unknown[];
   recordedRegisterSessionTraces: unknown[];
   registerSessionPatches: unknown[];
 } {
@@ -3172,6 +3644,7 @@ function createProjectionRepository(
   ];
   const createdConflicts: LocalSyncConflictRecord[] = [];
   const createdOperationalEvents: unknown[] = [];
+  const createdPendingCheckoutItems: unknown[] = [];
   const createdPaymentAllocations: unknown[] = [];
   const createdPosSessions: unknown[] = [];
   const createdPosSessionItems: unknown[] = [];
@@ -3182,9 +3655,11 @@ function createProjectionRepository(
   const createdTransactionItems: unknown[] = [];
   const createdTransactionServiceLines: unknown[] = [];
   const createdTransactions: unknown[] = [];
-  const posSessionPatches: unknown[] = [];
-  const productPatches: unknown[] = [];
-  const recordedPosSessionTraces: unknown[] = [];
+	  const posSessionPatches: unknown[] = [];
+	  const productPatches: unknown[] = [];
+	  const recordedPendingCheckoutItemSaleEvidence: unknown[] = [];
+	  const recordedSaleInventoryMovements: unknown[] = [];
+	  const recordedPosSessionTraces: unknown[] = [];
   const recordedRegisterSessionTraces: unknown[] = [];
   const registerSessionPatches: unknown[] = [];
   const consumedHoldRequests: unknown[] = [];
@@ -3238,6 +3713,7 @@ function createProjectionRepository(
   return {
     createdConflicts,
     createdOperationalEvents,
+    createdPendingCheckoutItems,
     createdPaymentAllocations,
     createdPosSessions,
     createdPosSessionItems,
@@ -3249,8 +3725,10 @@ function createProjectionRepository(
     createdTransactionServiceLines,
     createdTransactions,
     posSessionPatches,
-    productPatches,
-    recordedPosSessionTraces,
+	    productPatches,
+	    recordedPendingCheckoutItemSaleEvidence,
+	    recordedSaleInventoryMovements,
+	    recordedPosSessionTraces,
     recordedRegisterSessionTraces,
     registerSessionPatches,
     consumedHoldRequests,
@@ -3325,6 +3803,39 @@ function createProjectionRepository(
     },
     async getProductSku(productSkuId) {
       return productSkuId === "sku-1" ? (sku as never) : null;
+    },
+    async getPendingCheckoutItem(pendingCheckoutItemId) {
+      const created = createdPendingCheckoutItems.find(
+        (item): item is { _id: string } & Record<string, unknown> =>
+          typeof item === "object" &&
+          item !== null &&
+          "_id" in item &&
+          item._id === pendingCheckoutItemId,
+      );
+      if (created) {
+        return {
+          ...created,
+          storeId: "store-1",
+          status: "pending_review",
+          provisionalProductId: "product-1",
+          provisionalProductSkuId: "sku-1",
+        } as never;
+      }
+      if (overrides.pendingCheckoutItem !== undefined) {
+        return overrides.pendingCheckoutItem &&
+          pendingCheckoutItemId === overrides.pendingCheckoutItem._id
+          ? (overrides.pendingCheckoutItem as never)
+          : null;
+      }
+      return pendingCheckoutItemId === "pending-checkout-item-1"
+        ? ({
+            _id: "pending-checkout-item-1",
+            storeId: "store-1",
+            status: "pending_review",
+            provisionalProductId: "product-1",
+            provisionalProductSkuId: "sku-1",
+          } as never)
+        : null;
     },
     async getServiceCatalog(serviceCatalogId) {
       return serviceCatalog && serviceCatalogId === serviceCatalog._id
@@ -3403,14 +3914,22 @@ function createProjectionRepository(
       mappings.push(mapping);
       return mapping;
     },
-    async createConflict(input) {
-      const conflict = {
-        _id: `conflict-${nextId++}`,
-        ...input,
-      } satisfies LocalSyncConflictRecord;
-      createdConflicts.push(conflict);
-      return conflict;
-    },
+	    async createConflict(input) {
+	      const conflict = {
+	        _id: `conflict-${nextId++}`,
+	        ...input,
+	      } satisfies LocalSyncConflictRecord;
+	      createdConflicts.push(conflict);
+	      return conflict;
+	    },
+	    async listConflictsForEvent(args) {
+	      return createdConflicts.filter(
+	        (conflict) =>
+	          conflict.storeId === args.storeId &&
+	          conflict.terminalId === args.terminalId &&
+	          conflict.localEventId === args.localEventId,
+	      );
+	    },
     async createRegisterSession(input) {
       createdRegisterSessions.push(input);
       return "register-session-1" as never;
@@ -3475,6 +3994,37 @@ function createProjectionRepository(
       createdPosSessionItems.push(input);
       return `pos-session-item-${nextId++}` as never;
     },
+    async createOrReusePendingCheckoutItem(input) {
+      const id = `pending-checkout-item-${createdPendingCheckoutItems.length + 1}`;
+      createdPendingCheckoutItems.push({
+        _id: id,
+        ...input,
+        provisionalProductId: "product-1",
+        provisionalProductSkuId: "sku-1",
+        status: "pending_review",
+        storeId: "store-1",
+      });
+      return {
+        pendingCheckoutItemId: id,
+        productId: "product-1",
+        productSkuId: "sku-1",
+      } as never;
+    },
+    async recordPendingCheckoutItemSaleEvidence(input) {
+      recordedPendingCheckoutItemSaleEvidence.push(input);
+      const item = await this.getPendingCheckoutItem(input.pendingCheckoutItemId);
+      return item
+        ? ({
+            ...item,
+            evidence: {
+              ...(item.evidence as Record<string, unknown>),
+              lastPosTransactionId: input.posTransactionId,
+              totalQuantitySold: input.quantitySold,
+              transactionCount: 1,
+            },
+          } as never)
+        : null;
+    },
     async createServiceWorkItem(input) {
       const id = `service-work-item-${createdServiceWorkItems.length + 1}`;
       createdServiceWorkItems.push({ _id: id, ...input });
@@ -3505,10 +4055,14 @@ function createProjectionRepository(
       createdTransactionServiceLines.push({ _id: id, ...input });
       return id as never;
     },
-    async patchProductSku(productSkuId, patch) {
-      productPatches.push({ productSkuId, patch });
-    },
-    async createPaymentAllocation(input) {
+	    async patchProductSku(productSkuId, patch) {
+	      productPatches.push({ productSkuId, patch });
+	    },
+	    async recordSaleInventoryMovement(input) {
+	      recordedSaleInventoryMovements.push(input);
+	      return "inserted";
+	    },
+	    async createPaymentAllocation(input) {
       const id = `payment-allocation-${createdPaymentAllocations.length + 1}`;
       createdPaymentAllocations.push({ _id: id, ...input });
       return id as never;

@@ -99,7 +99,7 @@ type IngestionDependencies = {
 const TERMINAL_NOT_PROVISIONED_MESSAGE =
   "This terminal is not provisioned for POS sync.";
 const TERMINAL_INGESTION_PROJECTION_OPTIONS = {
-  trustStoredStaffProof: true,
+  trustStoredStaffProof: false,
 } as const;
 
 export function createLocalSyncIngestionService(
@@ -186,27 +186,32 @@ export function createLocalSyncIngestionService(
                 });
               }
 
-              if (existing.status === "conflicted") {
-                const acceptedAt = existing.acceptedAt ?? dependencies.now();
-                await dependencies.repository.resolveConflictsForEvent({
-                  storeId: batch.storeId,
-                  terminalId: batch.terminalId,
-                  localEventId: existing.localEventId,
-                  resolvedAt: dependencies.now(),
-                });
-                const projection = await projectLocalSyncEvent(
-                  dependencies.projectionRepository,
-                  {
+	              if (existing.status === "conflicted") {
+	                const acceptedAt = existing.acceptedAt ?? dependencies.now();
+	                const projection = await projectLocalSyncEvent(
+	                  dependencies.projectionRepository,
+	                  {
                     storeId: batch.storeId,
                     terminalId: batch.terminalId,
                     event: retryParseResult.event,
                     syncEventId: existing._id,
                     submittedByUserId: batch.submittedByUserId,
                     now: acceptedAt,
-                    options: TERMINAL_INGESTION_PROJECTION_OPTIONS,
-                  },
-                );
-                await dependencies.repository.patchEvent(existing._id, {
+	                    options: TERMINAL_INGESTION_PROJECTION_OPTIONS,
+	                  },
+	                );
+	                if (
+	                  projection.status === "projected" &&
+	                  projection.conflicts.length === 0
+	                ) {
+	                  await dependencies.repository.resolveConflictsForEvent({
+	                    storeId: batch.storeId,
+	                    terminalId: batch.terminalId,
+	                    localEventId: existing.localEventId,
+	                    resolvedAt: dependencies.now(),
+	                  });
+	                }
+	                await dependencies.repository.patchEvent(existing._id, {
                   status: projection.status,
                   projectedAt: dependencies.now(),
                   submittedAt: batch.submittedAt,
@@ -502,6 +507,17 @@ function parseLocalSyncEvent(
     };
   }
 
+  if (event.eventType === "pending_checkout_item_defined") {
+    return {
+      ok: true,
+      event: {
+        ...event,
+        eventType: "pending_checkout_item_defined",
+        payload: parsePendingCheckoutItemDefinedPayload(event.payload),
+      },
+    };
+  }
+
   if (event.eventType === "sale_completed") {
     return {
       ok: true,
@@ -583,6 +599,10 @@ function validateLocalSyncEventPayload(event: PosLocalSyncEventInput): string | 
     return validateRegisterOpenedPayload(event.payload);
   }
 
+  if (event.eventType === "pending_checkout_item_defined") {
+    return validatePendingCheckoutItemDefinedPayload(event.payload);
+  }
+
   if (event.eventType === "sale_completed") {
     return validateSaleCompletedPayload(event.payload);
   }
@@ -625,6 +645,7 @@ function validateLocalSyncEventReferences(
     }
 
     if (
+      !isNonEmptyString(item.pendingCheckoutItemId) &&
       isNonEmptyString(item.productId) &&
       !repository.normalizeCloudId("product", item.productId)
     ) {
@@ -632,10 +653,18 @@ function validateLocalSyncEventReferences(
     }
 
     if (
+      !isNonEmptyString(item.pendingCheckoutItemId) &&
       isNonEmptyString(item.productSkuId) &&
       !repository.normalizeCloudId("productSku", item.productSkuId)
     ) {
       return "POS sale product SKU reference is invalid.";
+    }
+
+    if (
+      "pendingCheckoutItemId" in item &&
+      !isOptionalNonEmptyString(item.pendingCheckoutItemId)
+    ) {
+      return "POS sale pending checkout item reference is invalid.";
     }
   }
 
@@ -704,6 +733,53 @@ function validateRegisterClosedPayload(payload: Record<string, unknown>) {
   return null;
 }
 
+function validatePendingCheckoutItemDefinedPayload(
+  payload: Record<string, unknown>,
+) {
+  if (
+    !isNonEmptyString(payload.localPendingCheckoutItemId) ||
+    !isNonEmptyString(payload.name)
+  ) {
+    return "POS pending checkout item is missing required local details.";
+  }
+
+  if (
+    !isOptionalNonEmptyString(payload.lookupCode) ||
+    !isNonNegativeFiniteNumber(payload.price) ||
+    !isPositiveInteger(payload.quantitySold)
+  ) {
+    return "POS pending checkout item details are invalid.";
+  }
+
+  if (
+    payload.searchContext !== undefined &&
+    (!isRecord(payload.searchContext) ||
+      !isOptionalString(payload.searchContext.query) ||
+      !isPendingCheckoutSearchSource(payload.searchContext.source) ||
+      !isPendingCheckoutSearchMatch(payload.searchContext.matched))
+  ) {
+    return "POS pending checkout item search context is invalid.";
+  }
+
+  if (
+    payload.localMetadata !== undefined &&
+    (!isRecord(payload.localMetadata) ||
+      payload.localMetadata.schema !==
+        "pos_pending_checkout_item_local_metadata_v1" ||
+      !isPendingCheckoutMetadataSource(payload.localMetadata.source) ||
+      !isOptionalBoolean(payload.localMetadata.reusedExistingPendingItem) ||
+      !isOptionalBoolean(payload.localMetadata.createdOffline) ||
+      !isPendingCheckoutAppSessionValidation(
+        payload.localMetadata.appSessionValidation,
+      ) ||
+      !isPendingCheckoutCloudValidation(payload.localMetadata.cloudValidation))
+  ) {
+    return "POS pending checkout item local metadata is invalid.";
+  }
+
+  return null;
+}
+
 function validateSaleCompletedPayload(payload: Record<string, unknown>) {
   if (
     !isNonEmptyString(payload.localPosSessionId) ||
@@ -744,6 +820,7 @@ function validateSaleCompletedPayload(payload: Record<string, unknown>) {
       !isNonEmptyString(item.productName) ||
       !isNonEmptyString(item.productId) ||
       !isNonEmptyString(item.productSkuId) ||
+      !isOptionalNonEmptyString(item.pendingCheckoutItemId) ||
       !isOptionalString(item.productSku) ||
       !isOptionalNonEmptyString(item.localTransactionItemId) ||
       !isPositiveInteger(item.quantity) ||
@@ -914,25 +991,36 @@ function parseSaleCompletedPayload(
       tax: totals.tax as number,
       total: totals.total as number,
     },
-    items: (payload.items as Record<string, unknown>[]).map((item) => ({
-      localTransactionItemId: optionalString(item.localTransactionItemId),
-      productId: requireNormalizedCloudId(
-        repository,
-        "product",
-        item.productId as string,
-      ),
-      productSkuId: requireNormalizedCloudId(
-        repository,
-        "productSku",
-        item.productSkuId as string,
-      ),
-      productName: item.productName as string,
-      productSku: optionalDisplayString(item.productSku),
-      barcode: optionalString(item.barcode),
-      quantity: item.quantity as number,
-      unitPrice: item.unitPrice as number,
-      image: optionalString(item.image),
-    })),
+    items: (payload.items as Record<string, unknown>[]).map((item) => {
+      const pendingCheckoutItemId = optionalString(item.pendingCheckoutItemId);
+
+      return {
+        localTransactionItemId: optionalString(item.localTransactionItemId),
+        productId: pendingCheckoutItemId
+          ? (item.productId as string)
+          : requireNormalizedCloudId(
+              repository,
+              "product",
+              item.productId as string,
+            ),
+        productSkuId: pendingCheckoutItemId
+          ? (item.productSkuId as string)
+          : requireNormalizedCloudId(
+              repository,
+              "productSku",
+              item.productSkuId as string,
+            ),
+        pendingCheckoutItemId: pendingCheckoutItemId as
+          | Id<"posPendingCheckoutItem">
+          | undefined,
+        productName: item.productName as string,
+        productSku: optionalDisplayString(item.productSku),
+        barcode: optionalString(item.barcode),
+        quantity: item.quantity as number,
+        unitPrice: item.unitPrice as number,
+        image: optionalString(item.image),
+      };
+    }),
     serviceLines: Array.isArray(payload.serviceLines)
       ? (payload.serviceLines as Record<string, unknown>[]).map((line) => {
           const existingServiceCaseId = optionalString(line.existingServiceCaseId);
@@ -975,6 +1063,59 @@ function parseSaleCompletedPayload(
   };
 }
 
+function parsePendingCheckoutItemDefinedPayload(
+  payload: Record<string, unknown>,
+) {
+  const searchContext = isRecord(payload.searchContext)
+    ? {
+        query: optionalString(payload.searchContext.query),
+        source: pendingCheckoutSearchSourceOrUndefined(
+          payload.searchContext.source,
+        ),
+        matched: pendingCheckoutSearchMatchOrUndefined(
+          payload.searchContext.matched,
+        ),
+      }
+    : undefined;
+  const localMetadata = isRecord(payload.localMetadata)
+    ? {
+        schema: "pos_pending_checkout_item_local_metadata_v1" as const,
+        source: pendingCheckoutMetadataSourceOrUndefined(
+          payload.localMetadata.source,
+        ),
+        reusedExistingPendingItem:
+          typeof payload.localMetadata.reusedExistingPendingItem === "boolean"
+            ? payload.localMetadata.reusedExistingPendingItem
+            : undefined,
+        createdOffline:
+          typeof payload.localMetadata.createdOffline === "boolean"
+            ? payload.localMetadata.createdOffline
+            : undefined,
+        appSessionValidation: pendingCheckoutAppSessionValidationOrUndefined(
+          payload.localMetadata.appSessionValidation,
+        ),
+        cloudValidation:
+          payload.localMetadata.cloudValidation === "uncertain"
+            ? "uncertain" as const
+            : undefined,
+      }
+    : undefined;
+
+  return {
+    localPendingCheckoutItemId: payload.localPendingCheckoutItemId as string,
+    name: payload.name as string,
+    lookupCode: optionalString(payload.lookupCode),
+    searchContext:
+      searchContext &&
+      (searchContext.query || searchContext.source || searchContext.matched)
+        ? searchContext
+        : undefined,
+    price: payload.price as number,
+    quantitySold: payload.quantitySold as number,
+    localMetadata,
+  };
+}
+
 function requireNormalizedCloudId<TableName extends TableNames>(
   repository: LocalSyncIngestionRepository,
   tableName: TableName,
@@ -1013,6 +1154,10 @@ function isOptionalString(value: unknown): value is string | undefined {
   return value === undefined || typeof value === "string";
 }
 
+function isOptionalBoolean(value: unknown): value is boolean | undefined {
+  return value === undefined || typeof value === "boolean";
+}
+
 function isNonNegativeFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value >= 0;
 }
@@ -1040,6 +1185,91 @@ function isServicePricingModel(value: unknown) {
     value === "starting_at" ||
     value === "quote_after_consultation"
   );
+}
+
+function isPendingCheckoutSearchSource(
+  value: unknown,
+): value is
+  | undefined
+  | "barcode"
+  | "lookup_code"
+  | "manual"
+  | "catalog_search"
+  | "unknown" {
+  return (
+    value === undefined ||
+    value === "barcode" ||
+    value === "lookup_code" ||
+    value === "manual" ||
+    value === "catalog_search" ||
+    value === "unknown"
+  );
+}
+
+function pendingCheckoutSearchSourceOrUndefined(value: unknown) {
+  return isPendingCheckoutSearchSource(value) ? value : undefined;
+}
+
+function isPendingCheckoutSearchMatch(
+  value: unknown,
+): value is
+  | undefined
+  | "existing_product"
+  | "pending_checkout_item"
+  | "none"
+  | "unknown" {
+  return (
+    value === undefined ||
+    value === "existing_product" ||
+    value === "pending_checkout_item" ||
+    value === "none" ||
+    value === "unknown"
+  );
+}
+
+function pendingCheckoutSearchMatchOrUndefined(value: unknown) {
+  return isPendingCheckoutSearchMatch(value) ? value : undefined;
+}
+
+function isPendingCheckoutMetadataSource(
+  value: unknown,
+): value is
+  | undefined
+  | "offline_search"
+  | "online_search"
+  | "manual_entry"
+  | "unknown" {
+  return (
+    value === undefined ||
+    value === "offline_search" ||
+    value === "online_search" ||
+    value === "manual_entry" ||
+    value === "unknown"
+  );
+}
+
+function pendingCheckoutMetadataSourceOrUndefined(value: unknown) {
+  return isPendingCheckoutMetadataSource(value) ? value : undefined;
+}
+
+function isPendingCheckoutAppSessionValidation(
+  value: unknown,
+): value is undefined | "supported" | "unverified" {
+  return (
+    value === undefined ||
+    value === "supported" ||
+    value === "unverified"
+  );
+}
+
+function pendingCheckoutAppSessionValidationOrUndefined(value: unknown) {
+  return isPendingCheckoutAppSessionValidation(value) ? value : undefined;
+}
+
+function isPendingCheckoutCloudValidation(
+  value: unknown,
+): value is undefined | "uncertain" {
+  return value === undefined || value === "uncertain";
 }
 
 function roundMoney(value: number) {

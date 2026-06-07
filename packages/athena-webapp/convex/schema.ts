@@ -62,6 +62,7 @@ import {
   posLocalSyncCursorSchema,
   posLocalSyncEventSchema,
   posLocalSyncMappingSchema,
+  posPendingCheckoutItemSchema,
   posLocalStaffProofSchema,
   posRecoveryCredentialSchema,
   posTerminalRuntimeStatusSchema,
@@ -376,6 +377,24 @@ const schema = defineSchema({
     .index("by_adjustmentId", ["adjustmentId"])
     .index("by_transactionId", ["transactionId"])
     .index("by_productSkuId", ["productSkuId"]),
+  posPendingCheckoutItem: defineTable(posPendingCheckoutItemSchema)
+    .index("by_storeId_status_updatedAt", ["storeId", "status", "updatedAt"])
+    .index("by_storeId_lookup_status", [
+      "storeId",
+      "normalizedLookupCode",
+      "status",
+    ])
+    .index("by_storeId_name_status", ["storeId", "normalizedName", "status"])
+    .index("by_storeId_priority_updatedAt", [
+      "storeId",
+      "reviewPriority",
+      "updatedAt",
+    ])
+    .index("by_storeId_provisionalProductSkuId", [
+      "storeId",
+      "provisionalProductSkuId",
+    ])
+    .index("by_operationalWorkItemId", ["operationalWorkItemId"]),
   posSession: defineTable(posSessionSchema)
     .index("by_storeId", ["storeId"])
     .index("by_status", ["status"])

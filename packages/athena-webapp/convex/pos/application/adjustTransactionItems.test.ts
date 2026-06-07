@@ -19,6 +19,22 @@ import {
 
 vi.mock("../../operations/approvalActions", () => ({
   APPROVAL_ACTIONS: {
+    registerSessionCloseoutModificationSubmit: {
+      key: "register.closeout.modification.submit",
+      label: "Submit closeout modification",
+    },
+    registerSessionCloseoutReopen: {
+      key: "register.closeout.reopen",
+      label: "Reopen register closeout",
+    },
+    registerSessionOpeningFloatCorrection: {
+      key: "register.opening_float.correct",
+      label: "Correct opening float",
+    },
+    registerSessionVarianceReview: {
+      key: "register.variance.review",
+      label: "Review register variance",
+    },
     transactionItemAdjustment: {
       key: "pos.transaction.adjust_items",
       label: "Adjust transaction items",
@@ -93,6 +109,20 @@ function createFakeCtx() {
     approvalRequest: new Map(),
     posTransactionAdjustment: new Map(),
     posTransactionAdjustmentLine: new Map(),
+    posPendingCheckoutItem: new Map([
+      [
+        "pending-1",
+        {
+          _id: "pending-1",
+          evidence: {
+            totalQuantitySold: 2,
+            transactionCount: 1,
+          },
+          storeId: "store-1",
+          status: "pending_review",
+        },
+      ],
+    ]),
     posTransaction: new Map([
       [
         "txn-1",
@@ -792,6 +822,48 @@ describe("adjustTransactionItems", () => {
 
     expect(recordInventoryMovementWithCtx).toHaveBeenCalled();
     expect(recordPaymentAllocationWithCtx).not.toHaveBeenCalled();
+  });
+
+  it("does not adjust trusted inventory when a pending checkout line is reduced", async () => {
+    const { ctx, tables } = createFakeCtx();
+    tables.posTransactionItem.set("item-1", {
+      ...tables.posTransactionItem.get("item-1")!,
+      pendingCheckoutItemId: "pending-1",
+    });
+    vi.mocked(consumeCommandApprovalProofWithCtx).mockResolvedValue({
+      kind: "ok",
+      data: {
+        approvalProofId: "proof-1" as Id<"approvalProof">,
+        approvedByStaffProfileId: "manager-1" as Id<"staffProfile">,
+      },
+    } as never);
+
+    await adjustTransactionItems(ctx as never, {
+      approvalProofId: "proof-1" as Id<"approvalProof">,
+      payload: basePayload(),
+      reason: "Correct pending checkout quantity",
+      transactionId: "txn-1" as Id<"posTransaction">,
+    });
+
+    expect(tables.productSku.get("sku-1")).toMatchObject({
+      inventoryCount: 10,
+      quantityAvailable: 10,
+    });
+    expect(tables.posPendingCheckoutItem.get("pending-1")?.evidence).toMatchObject({
+      totalQuantitySold: 1,
+      transactionCount: 1,
+    });
+    expect(recordInventoryMovementWithCtx).not.toHaveBeenCalled();
+    expect(recordOperationalEventWithCtx).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        eventType: "pos_pending_checkout_item_evidence_corrected",
+        metadata: expect.objectContaining({
+          quantityDelta: -1,
+          reason: "item_adjustment",
+        }),
+      }),
+    );
   });
 
   it("rejects stale approval payloads before consuming proof or writing effects", async () => {

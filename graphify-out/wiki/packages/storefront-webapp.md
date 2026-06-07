@@ -17,11 +17,11 @@ Landing page for packages/storefront-webapp. Use this page to orient around grap
 - [validation-map.json](../../../packages/storefront-webapp/docs/agent/validation-map.json)
 
 ## Graph Hotspots
-- `storefrontJourneyEvents.ts` (45 edges, Community 7) - [`packages/storefront-webapp/src/lib/storefrontJourneyEvents.ts`](../../../packages/storefront-webapp/src/lib/storefrontJourneyEvents.ts)
-- `createJourneyEvent()` (40 edges, Community 7) - [`packages/storefront-webapp/src/lib/storefrontJourneyEvents.ts`](../../../packages/storefront-webapp/src/lib/storefrontJourneyEvents.ts)
-- `getStoreConfigV2()` (17 edges, Community 38) - [`packages/storefront-webapp/src/lib/storeConfig.ts`](../../../packages/storefront-webapp/src/lib/storeConfig.ts)
-- `checkoutSession.ts` (14 edges, Community 61) - [`packages/storefront-webapp/src/api/checkoutSession.ts`](../../../packages/storefront-webapp/src/api/checkoutSession.ts)
-- `storeConfig.ts` (14 edges, Community 38) - [`packages/storefront-webapp/src/lib/storeConfig.ts`](../../../packages/storefront-webapp/src/lib/storeConfig.ts)
+- `storefrontJourneyEvents.ts` (45 edges, Community 9) - [`packages/storefront-webapp/src/lib/storefrontJourneyEvents.ts`](../../../packages/storefront-webapp/src/lib/storefrontJourneyEvents.ts)
+- `createJourneyEvent()` (40 edges, Community 9) - [`packages/storefront-webapp/src/lib/storefrontJourneyEvents.ts`](../../../packages/storefront-webapp/src/lib/storefrontJourneyEvents.ts)
+- `getStoreConfigV2()` (17 edges, Community 41) - [`packages/storefront-webapp/src/lib/storeConfig.ts`](../../../packages/storefront-webapp/src/lib/storeConfig.ts)
+- `checkoutSession.ts` (14 edges, Community 62) - [`packages/storefront-webapp/src/api/checkoutSession.ts`](../../../packages/storefront-webapp/src/api/checkoutSession.ts)
+- `storeConfig.ts` (14 edges, Community 41) - [`packages/storefront-webapp/src/lib/storeConfig.ts`](../../../packages/storefront-webapp/src/lib/storeConfig.ts)
 
 ## Navigation
 - [wiki index](../index.md) - back to the wiki index

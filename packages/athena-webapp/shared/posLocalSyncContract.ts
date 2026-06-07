@@ -1,5 +1,6 @@
 export const POS_LOCAL_SYNC_EVENT_TYPES = [
   "register_opened",
+  "pending_checkout_item_defined",
   "sale_completed",
   "register_closed",
   "register_reopened",
@@ -26,10 +27,36 @@ export type PosLocalSyncRegisterOpenedPayload = {
   notes?: string;
 };
 
+export type PosLocalSyncPendingCheckoutItemSearchContext = {
+  query?: string;
+  source?: "barcode" | "lookup_code" | "manual" | "catalog_search" | "unknown";
+  matched?: "existing_product" | "pending_checkout_item" | "none" | "unknown";
+};
+
+export type PosLocalSyncPendingCheckoutItemLocalMetadata = {
+  schema: "pos_pending_checkout_item_local_metadata_v1";
+  source?: "offline_search" | "online_search" | "manual_entry" | "unknown";
+  reusedExistingPendingItem?: boolean;
+  createdOffline?: boolean;
+  appSessionValidation?: "supported" | "unverified";
+  cloudValidation?: "uncertain";
+};
+
+export type PosLocalSyncPendingCheckoutItemDefinedPayload = {
+  localPendingCheckoutItemId: string;
+  name: string;
+  lookupCode?: string;
+  searchContext?: PosLocalSyncPendingCheckoutItemSearchContext;
+  price: number;
+  quantitySold: number;
+  localMetadata?: PosLocalSyncPendingCheckoutItemLocalMetadata;
+};
+
 export type PosLocalSyncSaleItemPayload = {
   localTransactionItemId?: string;
   productId: string;
   productSkuId: string;
+  pendingCheckoutItemId?: string;
   productName: string;
   productSku: string;
   barcode?: string;
@@ -98,6 +125,7 @@ export type PosLocalSyncRegisterReopenedPayload = {
 
 export type PosLocalSyncPayloadByEventType = {
   register_opened: PosLocalSyncRegisterOpenedPayload;
+  pending_checkout_item_defined: PosLocalSyncPendingCheckoutItemDefinedPayload;
   sale_completed: PosLocalSyncSaleCompletedPayload;
   sale_cleared: PosLocalSyncSaleClearedPayload;
   register_closed: PosLocalSyncRegisterClosedPayload;

@@ -29,6 +29,10 @@ import {
 } from "./pos";
 import { commandResultValidator } from "../lib/commandResultValidators";
 import { ok, userError } from "../../shared/commandResult";
+import {
+  requireAuthenticatedAthenaUserWithCtx,
+  requireOrganizationMemberRoleWithCtx,
+} from "../lib/athenaUserAuth";
 import { isPosUsableRegisterSessionStatus } from "../../shared/registerSessionStatus";
 import { recordOperationalEventWithCtx } from "../operations/operationalEvents";
 import { requireStoreFullAdminAccess } from "../stockOps/access";
@@ -1221,6 +1225,22 @@ export const completeSession = mutation({
         message: "This session is not associated with your cashier.",
       });
     }
+
+    const store = await ctx.db.get("store", session.storeId);
+    if (!store) {
+      return userError({
+        code: "not_found",
+        message: "Store not found.",
+      });
+    }
+
+    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+    await requireOrganizationMemberRoleWithCtx(ctx, {
+      allowedRoles: ["full_admin", "pos_only"],
+      failureMessage: "You cannot complete this POS sale.",
+      organizationId: store.organizationId,
+      userId: athenaUser._id,
+    });
 
     const transactionResult = await createTransactionFromSessionHandler(ctx, {
       sessionId: args.sessionId,

@@ -28,6 +28,7 @@ import type {
   TransactionAdjustmentSettlementDirection,
 } from "./transactionAdjustmentPlanner";
 import { planTransactionAdjustment } from "./transactionAdjustmentPlanner";
+import { recordPendingCheckoutItemEvidenceCorrection } from "./createOrReusePendingCheckoutItem";
 
 const ITEM_ADJUSTMENT_ACTION = APPROVAL_ACTIONS.transactionItemAdjustment;
 const ITEM_ADJUSTMENT_ACTION_KEY = ITEM_ADJUSTMENT_ACTION.key;
@@ -44,6 +45,7 @@ export type TransactionItemAdjustmentLinePayload = {
   inventoryDelta: number;
   originalQuantity: number;
   originalTransactionItemId?: Id<"posTransactionItem">;
+  pendingCheckoutItemId?: Id<"posPendingCheckoutItem">;
   productId: Id<"product">;
   productName: string;
   productSku: string;
@@ -461,6 +463,7 @@ async function createApprovalRequestForAdjustment(
             productName: line.productName,
             productSku: line.productSku,
             productSkuId: line.productSkuId,
+            pendingCheckoutItemId: line.pendingCheckoutItemId,
             unitPrice: line.unitPrice,
           })),
           originalTotal: args.plan.originalTotal,
@@ -661,6 +664,22 @@ async function applyInventoryDeltas(
   const movementIds: Array<Id<"inventoryMovement">> = [];
 
   for (const line of args.lines) {
+    if (line.pendingCheckoutItemId) {
+      if (line.quantityDelta !== 0) {
+        await recordPendingCheckoutItemEvidenceCorrection(ctx, {
+          actorStaffProfileId: args.actorStaffProfileId,
+          actorUserId: args.actorUserId,
+          pendingCheckoutItemId: line.pendingCheckoutItemId,
+          posTransactionId: args.transactionId,
+          quantityDelta: line.quantityDelta,
+          reason: "item_adjustment",
+          storeId: args.storeId,
+          timestamp: Date.now(),
+        });
+      }
+      continue;
+    }
+
     if (line.inventoryDelta === 0) {
       continue;
     }
@@ -893,6 +912,7 @@ async function applyApprovedAdjustment(
       productName: line.productName,
       productSku: line.productSku,
       productSkuId: line.productSkuId,
+      pendingCheckoutItemId: line.pendingCheckoutItemId,
       quantityDelta: line.quantityDelta,
       storeId: args.transaction.storeId,
       transactionId: args.transaction._id,
@@ -961,6 +981,7 @@ async function applyApprovedAdjustment(
         productName: line.productName,
         productSku: line.productSku,
         productSkuId: line.productSkuId,
+        pendingCheckoutItemId: line.pendingCheckoutItemId,
         quantityDelta: line.quantityDelta,
         unitPrice: line.unitPrice,
       })),

@@ -394,6 +394,13 @@ export async function correctTransactionCustomer(
   if (args.customerProfileId && ctx.db && !customerProfile) {
     throw new Error("Customer profile not found.");
   }
+  if (
+    customerProfile &&
+    customerProfile.storeId &&
+    customerProfile.storeId !== transaction.storeId
+  ) {
+    throw new Error("Customer profile is not available for this store.");
+  }
 
   await patchPosTransaction(ctx, args.transactionId, {
     customerProfileId: args.customerProfileId,
