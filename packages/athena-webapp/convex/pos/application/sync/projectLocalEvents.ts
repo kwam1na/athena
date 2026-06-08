@@ -2482,6 +2482,7 @@ async function projectRegisterClosed(
       details: {
         countedCash,
         expectedCash: registerSession.expectedCash,
+        notes: payload.notes,
         variance,
       },
     });

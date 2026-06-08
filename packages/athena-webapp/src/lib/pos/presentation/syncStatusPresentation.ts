@@ -13,6 +13,7 @@ export type PosReconciliationItem = {
   id?: string;
   localEventId?: string | null;
   countedCash?: number | null;
+  notes?: string | null;
   sequence?: number | null;
   status?: string | null;
   summary?: string | null;

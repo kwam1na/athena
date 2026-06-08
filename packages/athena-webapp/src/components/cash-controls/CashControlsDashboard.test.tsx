@@ -836,10 +836,12 @@ describe("CashControlsDashboardContent", () => {
                 status: "needs_review",
                 reconciliationItems: [
                   {
+                    countedCash: 17100,
                     localEventId: "event-register-closeout-1",
                     summary:
                       "Register closeout variance requires manager review before synced closeout can be applied.",
                     type: "permission",
+                    variance: -500,
                   },
                 ],
               },
@@ -860,10 +862,12 @@ describe("CashControlsDashboardContent", () => {
                 status: "needs_review",
                 reconciliationItems: [
                   {
+                    countedCash: 17100,
                     localEventId: "event-register-closeout-1",
                     summary:
                       "Register closeout variance requires manager review before synced closeout can be applied.",
                     type: "permission",
+                    variance: -500,
                   },
                 ],
               },
@@ -876,14 +880,25 @@ describe("CashControlsDashboardContent", () => {
       />,
     );
 
+    expect(screen.getByText("Needs action")).toBeInTheDocument();
+    expect(screen.queryByText("Live drawers")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Register 4")).toHaveLength(1);
     expect(screen.getAllByText("Closeout review pending").length).toBeGreaterThan(0);
     expect(screen.queryByText("Closeout review")).not.toBeInTheDocument();
     expect(screen.getAllByText("Review closeout").length).toBeGreaterThan(0);
+    expect(screen.getByText("Counted")).toBeInTheDocument();
+    expect(screen.getByText("Variance")).toBeInTheDocument();
+    expect(screen.getByText("GH₵-5")).toHaveClass("text-danger");
     expect(
-      screen.getAllByText(
+      screen.queryByText(
+        "Synced register closeout has a variance. Review it before this closeout can be applied.",
+      ),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(
         /Closeout variance review: Register closeout variance requires manager review before synced closeout can be applied./i,
-      ).length,
-    ).toBeGreaterThan(0);
+      ),
+    ).not.toBeInTheDocument();
   });
 
   it("keeps stale terminal health out of manager-review counts", () => {

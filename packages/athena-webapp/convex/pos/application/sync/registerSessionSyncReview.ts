@@ -12,6 +12,7 @@ export type RegisterSessionSyncConflict = {
   localEventId: string;
   localRegisterSessionId?: string;
   sequence: number;
+  sourceEventNotes?: string | null;
   status: string;
   storeId?: Id<"store">;
   summary?: string;
@@ -26,6 +27,7 @@ export type RegisterSessionLocalSyncStatus = {
     expectedCash?: number | null;
     id?: string;
     localEventId?: string | null;
+    notes?: string | null;
     sequence?: number | null;
     status?: string | null;
     summary?: string | null;
@@ -63,6 +65,15 @@ function numberDetail(
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
+function stringDetail(
+  details: Record<string, unknown> | undefined,
+  key: string,
+) {
+  const value = details?.[key];
+
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
 export function buildRegisterSessionLocalSyncStatus(
   conflicts: RegisterSessionSyncConflict[],
 ): RegisterSessionLocalSyncStatus | null {
@@ -78,6 +89,7 @@ export function buildRegisterSessionLocalSyncStatus(
       expectedCash: numberDetail(conflict.details, "expectedCash"),
       id: conflict._id,
       localEventId: conflict.localEventId,
+      notes: stringDetail(conflict.details, "notes") ?? conflict.sourceEventNotes,
       sequence: conflict.sequence,
       status: conflict.status,
       summary: conflict.summary,
@@ -154,6 +166,32 @@ export async function listOpenLocalSyncConflictsByRegisterSession(
       (conflict): conflict is Doc<"posLocalSyncConflict"> => conflict !== null,
     ),
   ];
+  const conflictsWithSourceEventNotes = await Promise.all(
+    conflicts.map(async (conflict) => {
+      if (stringDetail(conflict.details, "notes")) {
+        return conflict;
+      }
+
+      const { terminalId } = conflict;
+      if (!terminalId) {
+        return conflict;
+      }
+
+      const syncEvent = await ctx.db
+        .query("posLocalSyncEvent")
+        .withIndex("by_store_terminal_localEvent", (q) =>
+          q
+            .eq("storeId", conflict.storeId ?? storeId)
+            .eq("terminalId", terminalId)
+            .eq("localEventId", conflict.localEventId),
+        )
+        .unique();
+      const sourceEventNotes = stringDetail(syncEvent?.payload, "notes");
+
+      return sourceEventNotes ? { ...conflict, sourceEventNotes } : conflict;
+    }),
+  );
+  conflicts.splice(0, conflicts.length, ...conflictsWithSourceEventNotes);
   const includedConflictKeys = new Set(
     conflicts.map((conflict) =>
       [conflict.terminalId, conflict.localEventId].join(":"),

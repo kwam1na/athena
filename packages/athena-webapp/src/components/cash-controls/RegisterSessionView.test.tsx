@@ -377,11 +377,11 @@ describe("RegisterSessionViewContent", () => {
     ).toBeInTheDocument();
     expect(screen.getByTestId("register-session-page-header")).toHaveClass(
       "h-auto",
-      "min-h-14",
+      "min-h-16",
       "items-start",
       "border-b",
       "py-3",
-      "sm:h-[40px]",
+      "sm:py-4",
     );
     expect(screen.getByRole("link", { name: "View trace" })).not.toHaveClass(
       "w-full",
@@ -626,6 +626,7 @@ describe("RegisterSessionViewContent", () => {
                   expectedCash: 17600,
                   id: "sync_conflict_closeout",
                   localEventId: "event-register-closeout-1",
+                  notes: "Short drawer",
                   sequence: 7,
                   status: "needs_review",
                   summary:
@@ -649,9 +650,10 @@ describe("RegisterSessionViewContent", () => {
         "Synced closeout not applied yet; manager approval is required.",
       ),
     ).toBeInTheDocument();
-    expect(screen.getAllByText("GH₵161")).toHaveLength(2);
+    expect(screen.getAllByText("GH₵161")).toHaveLength(3);
     expect(screen.queryByText("Pending review")).not.toBeInTheDocument();
-    expect(screen.getAllByText("GH₵-15")).toHaveLength(2);
+    expect(screen.getAllByText("GH₵-15")).toHaveLength(3);
+    expect(screen.getAllByText("GH₵-15")[2]).toHaveClass("text-destructive");
     expect(screen.getByText("Closeout needs review")).toBeInTheDocument();
     expect(
       screen.getByText(
@@ -659,7 +661,19 @@ describe("RegisterSessionViewContent", () => {
       ),
     ).toBeInTheDocument();
     expect(screen.getByText("Closeout variance review")).toBeInTheDocument();
-    expect(screen.getByText("Variance: GH₵-15.")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Review the synced count before applying this closeout to the drawer.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText("Expected")).toHaveLength(2);
+    expect(screen.getAllByText("Counted")).toHaveLength(3);
+    expect(screen.getAllByText("Variance")).toHaveLength(3);
+    expect(
+      screen.getByText(
+        "Short drawer",
+      ),
+    ).toBeInTheDocument();
     expect(
       screen.queryByText(
         "Register closeout variance requires manager review before synced closeout can be applied.",
