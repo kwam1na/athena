@@ -57,9 +57,10 @@ const ProductDetailViewHeader = () => {
 
   return (
     <ComposedPageHeader
+      className="h-auto min-h-10 py-3"
       leadingContent={
-        <div className="flex items-center gap-3">
-          <p className="text-sm">
+        <div className="flex min-w-0 flex-wrap items-center gap-2 sm:gap-3">
+          <p className="min-w-0 truncate text-sm">
             {capitalizeWords(activeProduct?.name || "")}
           </p>
           {activeProduct && <ProductStatus product={activeProduct} />}
@@ -88,10 +89,10 @@ export const ProductDetailView = () => {
   return (
     <ProductProvider includeArchived>
       <View header={<ProductDetailViewHeader />}>
-        <div className="container mx-auto h-full w-full p-8 space-y-12">
+        <div className="container mx-auto h-full w-full space-y-8 p-4 sm:p-6 lg:space-y-12 lg:p-8">
           {activeProduct !== null && (
-            <div className="grid grid-cols-2 gap-16 min-h-[720px]">
-              <div className="space-y-8">
+            <div className="grid gap-8 lg:min-h-[720px] lg:grid-cols-2 lg:gap-16">
+              <div className="order-2 space-y-6 lg:order-1 lg:col-start-1 lg:row-start-1 lg:space-y-8">
                 <SKUSelector />
 
                 <DetailsView />
@@ -103,9 +104,11 @@ export const ProductDetailView = () => {
                 <BarcodeView />
               </div>
 
-              <div className="space-y-16">
+              <div className="order-1 lg:order-2 lg:col-start-2 lg:row-start-1">
                 <ImagesView />
+              </div>
 
+              <div className="order-3 space-y-10 lg:col-start-2 lg:row-start-2 lg:space-y-16">
                 <AnalyticsInsights />
 
                 <ProductOperationalTimeline />

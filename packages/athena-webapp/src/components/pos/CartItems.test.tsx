@@ -30,6 +30,32 @@ function buildServiceLine(
 }
 
 describe("CartItems service lines", () => {
+  it("lets comfortable mobile product names wrap instead of clipping", () => {
+    render(
+      <CartItems
+        cartItems={[
+          {
+            id: "item-1" as never,
+            barcode: "812429039192",
+            image: "https://example.com/product.jpg",
+            name: "Ebin Lace Bond Extreme Firm Hold Spray",
+            price: 2500,
+            quantity: 1,
+            sku: "KK38-W78-N4G",
+          },
+        ]}
+        readOnly
+      />,
+    );
+
+    const productName = screen.getByText(
+      "Ebin Lace Bond Extreme Firm Hold Spray",
+    );
+    expect(productName).toHaveClass("leading-5", "sm:line-clamp-2");
+    expect(productName).not.toHaveClass("truncate");
+    expect(screen.getByText("KK38-W78-N4G")).toHaveClass("break-all");
+  });
+
   it("renders service lines separately from product SKU metadata", () => {
     render(
       <CartItems

@@ -76,8 +76,8 @@ export function ImagesView() {
       className="w-full"
       header={null}
     >
-      <FadeIn className="space-y-8">
-        <div className="py-4 grid grid-cols-2 gap-2">
+      <FadeIn className="space-y-6 sm:space-y-8">
+        <div className="grid grid-cols-2 gap-2 py-2 sm:py-4">
           {activeProductVariant.images.map((image, i) => {
             return (
               <div className="relative">
@@ -102,7 +102,7 @@ export function ImagesView() {
           })}
 
           {activeProductVariant.images.length === 0 && (
-            <div className="w-80 h-80 border border-dashed rounded-lg flex items-center justify-center text-muted-foreground">
+            <div className="col-span-2 flex aspect-square w-full max-w-80 items-center justify-center rounded-lg border border-dashed text-muted-foreground">
               <AlertOctagon className="w-4 h-4 mr-2" />
               <p className="text-sm">Missing images</p>
             </div>
@@ -110,7 +110,7 @@ export function ImagesView() {
         </div>
 
         {hasFullAdminAccess && activeProduct && !isArchived && (
-          <div className="flex items-center gap-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
             <Link
               to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit"
               params={(prev) => ({
@@ -124,7 +124,10 @@ export function ImagesView() {
                 variant: activeProductVariant?.sku,
               }}
             >
-              <Button variant="outline" className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                className="flex w-full items-center gap-2 sm:w-auto"
+              >
                 Edit product
                 <PenIcon className="h-3.5 w-3.5" />
               </Button>
@@ -138,7 +141,7 @@ export function ImagesView() {
                   "_blank",
                 );
               }}
-              className="flex items-center gap-2"
+              className="flex w-full items-center gap-2 sm:w-auto"
             >
               View on store
               <EyeIcon className="h-3.5 w-3.5" />

@@ -138,9 +138,9 @@ export function ExpenseReportView() {
       }
     >
       <FadeIn className="h-full">
-        <div className="container mx-auto h-full min-h-0 p-6">
-          <div className="grid h-full min-h-0 gap-8 xl:grid-cols-[380px,minmax(0,1fr)]">
-            <div className="space-y-6">
+        <div className="container mx-auto h-full min-h-0 p-4 sm:p-6">
+          <div className="grid min-h-0 gap-6 xl:h-full xl:grid-cols-[380px,minmax(0,1fr)] xl:gap-8">
+            <div className="order-2 space-y-6 xl:order-1">
               <section className="overflow-hidden rounded-[1.5rem] border border-border/80 bg-surface-raised shadow-surface">
                 <div className="border-b border-border/70 bg-[linear-gradient(180deg,_hsl(var(--surface-raised)),_hsl(var(--surface)))] px-5 py-5">
                   <div className="flex items-start gap-4">
@@ -221,7 +221,7 @@ export function ExpenseReportView() {
             <CartItems
               cartItems={cartItems}
               readOnly
-              className="h-full min-h-0"
+              className="order-1 min-h-[22rem] xl:order-2 xl:h-full xl:min-h-0"
             />
           </div>
         </div>

@@ -18,8 +18,8 @@ export function AttributesView() {
 
   if (
     !color &&
-    !Boolean(activeProductVariant.length) &&
-    !Boolean(activeProductVariant.size)
+    !activeProductVariant.length &&
+    !activeProductVariant.size
   ) {
     return null;
   }
@@ -32,9 +32,9 @@ export function AttributesView() {
       lockDocumentScroll={false}
       className="w-full"
     >
-      <FadeIn className="py-4 grid grid-cols-3">
+      <FadeIn className="grid grid-cols-1 gap-6 py-4 sm:grid-cols-3">
         {color && (
-          <div className="space-y-4">
+          <div className="min-w-0 space-y-3 sm:space-y-4">
             <div className="flex items-center gap-2 text-muted-foreground">
               <Palette className="h-3.5 w-3.5" />
               <p className="text-sm">Color</p>
@@ -44,7 +44,7 @@ export function AttributesView() {
         )}
 
         {Boolean(activeProductVariant.length) && (
-          <div className="space-y-4">
+          <div className="min-w-0 space-y-3 sm:space-y-4">
             <div className="flex items-center gap-2 text-muted-foreground">
               <Ruler className="h-3.5 w-3.5" />
               <p className="text-sm text-muted-foreground">Length (inches)</p>
@@ -54,7 +54,7 @@ export function AttributesView() {
         )}
 
         {Boolean(activeProductVariant.size) && (
-          <div className="space-y-4">
+          <div className="min-w-0 space-y-3 sm:space-y-4">
             <div className="flex items-center gap-2 text-muted-foreground">
               <DraftingCompass className="h-3.5 w-3.5" />
               <p className="text-sm text-muted-foreground">Size</p>

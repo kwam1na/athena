@@ -60,10 +60,12 @@ vi.mock("../../common/PageHeader", () => ({
 vi.mock("../CartItems", () => ({
   CartItems: ({
     cartItems,
+    className,
   }: {
     cartItems: Array<{ id: string; name: string }>;
+    className?: string;
   }) => (
-    <div>
+    <div className={className} data-testid="expense-cart-items">
       {cartItems.map((item) => (
         <span key={item.id}>{item.name}</span>
       ))}
@@ -131,5 +133,17 @@ describe("ExpenseReportView", () => {
     expect(receiptHtml).toContain("Nicca");
     expect(receiptHtml).toContain("2 × GH₵65");
     expect(receiptHtml).toContain("GH₵130");
+  });
+
+  it("promotes expense report items before the summary rail on mobile", () => {
+    render(<ExpenseReportView />);
+
+    expect(screen.getByTestId("expense-cart-items")).toHaveClass(
+      "order-1",
+      "min-h-[22rem]",
+      "xl:order-2",
+      "xl:h-full",
+    );
+    expect(screen.getByTestId("expense-cart-items")).toHaveTextContent("Nicca");
   });
 });

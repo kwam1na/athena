@@ -343,12 +343,14 @@ vi.mock("../OrderSummary", () => ({
 vi.mock("../CartItems", () => ({
   CartItems: ({
     cartItems,
+    className,
     serviceItems = [],
   }: {
     cartItems: Array<{ name: string; price: number; quantity: number }>;
+    className?: string;
     serviceItems?: Array<{ name: string; price: number; quantity: number }>;
   }) => (
-    <div data-testid="cart-items">
+    <div className={className} data-testid="cart-items">
       {cartItems.map((item) => (
         <span key={item.name}>
           {item.name} qty {item.quantity} total {item.price * item.quantity}
@@ -647,6 +649,38 @@ describe("TransactionView", () => {
       "tokin service qty 2 total 800",
     );
     expect(screen.queryByText("Service lines")).not.toBeInTheDocument();
+  });
+
+  it("promotes transaction items before the detail rail on mobile", () => {
+    useParamsMock.mockReturnValue({ transactionId: "txn_mobile_items" });
+    useQueryMock.mockReturnValue({
+      ...baseTransaction,
+      _id: "txn_mobile_items",
+      items: [
+        {
+          _id: "item_1",
+          productId: "product_1",
+          productName: "Bacca",
+          productSku: "6N2Y-D3-4RC",
+          productSkuId: "sku_1",
+          quantity: 1,
+          totalPrice: 150,
+          unitPrice: 150,
+        },
+      ],
+    });
+
+    render(<TransactionView />);
+
+    expect(screen.getByTestId("cart-items")).toHaveClass(
+      "order-1",
+      "min-h-[22rem]",
+      "xl:order-2",
+      "xl:h-full",
+    );
+    expect(screen.getByTestId("cart-items")).toHaveTextContent(
+      "Bacca qty 1 total 150",
+    );
   });
 
   it("renders fallback customer info without an email and phone separator", () => {
