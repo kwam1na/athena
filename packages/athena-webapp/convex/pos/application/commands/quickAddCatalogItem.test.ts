@@ -150,10 +150,13 @@ describe("quickAddCatalogItem", () => {
     const result = await quickAddCatalogItem(ctx, {
       storeId: "storezzzz" as Id<"store">,
       createdByUserId: "user0001" as Id<"athenaUser">,
+      createdByStaffProfileId: "staff0001" as Id<"staffProfile">,
       name: "",
       lookupCode: "123456789012",
       price: 115000,
       quantityAvailable: 2.7,
+      registerSessionId: "register-session-1" as Id<"registerSession">,
+      terminalId: "terminal-1" as Id<"posTerminal">,
     });
 
     const product = Array.from(tables.product.values())[0];
@@ -182,19 +185,30 @@ describe("quickAddCatalogItem", () => {
     expect(Array.from(tables.operationalEvent.values())).toEqual([
       expect.objectContaining({
         actorUserId: "user0001",
+        actorStaffProfileId: "staff0001",
         eventType: "pos_quick_add_product_created",
         organizationId: "org0001",
+        registerSessionId: "register-session-1",
         storeId: "storezzzz",
         subjectId: sku._id,
         subjectLabel: "123456789012",
         subjectType: "product_sku",
+        terminalId: "terminal-1",
         message: "Kwamina Nuh quick added 123456789012 with quantity 2.",
         metadata: expect.objectContaining({
           barcode: "123456789012",
+          posTrace: {
+            actorStaffProfileId: "staff0001",
+            actorUserId: "user0001",
+            registerSessionId: "register-session-1",
+            terminalId: "terminal-1",
+          },
           productId: product._id,
           productSkuId: sku._id,
           quantityAvailable: 2,
+          registerSessionId: "register-session-1",
           sku: sku.sku,
+          terminalId: "terminal-1",
         }),
       }),
     ]);

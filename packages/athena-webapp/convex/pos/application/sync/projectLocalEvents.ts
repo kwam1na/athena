@@ -491,6 +491,8 @@ async function projectRegisterOpened(
     createdAt: args.event.occurredAt,
     actorStaffProfileId: args.event.staffProfileId,
     registerSessionId,
+    terminalId: args.terminalId,
+    localEventId: args.event.localEventId,
   });
   const traceResult = await repository.recordRegisterSessionWorkflowTrace?.({
     stage: "opened",
@@ -1739,7 +1741,9 @@ function recordSaleProjectedEvent(
     },
     createdAt: args.event.occurredAt,
     actorStaffProfileId: args.event.staffProfileId,
+    localEventId: args.event.localEventId,
     registerSessionId: input.session.registerSession._id,
+    terminalId: args.terminalId,
     posTransactionId: input.sale.transactionId,
   });
 }
@@ -2551,6 +2555,8 @@ async function projectRegisterClosed(
     createdAt: args.event.occurredAt,
     actorStaffProfileId: args.event.staffProfileId,
     registerSessionId: registerSession._id,
+    terminalId: args.terminalId,
+    localEventId: args.event.localEventId,
   });
   const mapping = await createMapping(repository, args, {
     localIdKind: "closeout",

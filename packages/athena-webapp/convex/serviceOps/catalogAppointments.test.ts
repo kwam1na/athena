@@ -1,8 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { Id } from "../_generated/dataModel";
 import {
   buildPosServiceCatalogRow,
   buildServiceCatalogItem,
+  listPosServiceCatalogSnapshotWithCtx,
   normalizeServiceCatalogNameKey,
 } from "./catalog";
 import {
@@ -11,6 +12,72 @@ import {
 } from "./appointments";
 
 describe("service catalog and appointment helpers", () => {
+  it("lists POS service catalog snapshot rows without requiring admin auth", async () => {
+    const storeId = "store_1" as Id<"store">;
+    const activeRows = [
+      {
+        _id: "catalog-fixed" as Id<"serviceCatalog">,
+        basePrice: 4_500,
+        createdAt: 900,
+        depositType: "flat" as const,
+        depositValue: 1_000,
+        durationMinutes: 90,
+        name: "Closure Repair",
+        pricingModel: "fixed" as const,
+        requiresManagerApproval: false,
+        serviceMode: "repair" as const,
+        slug: "closure-repair",
+        status: "active" as const,
+        storeId,
+        updatedAt: 1_000,
+      },
+    ];
+    const queryBuilder = {
+      eq: vi.fn(),
+    };
+    queryBuilder.eq.mockReturnValue(queryBuilder);
+    const collect = vi.fn(async () => activeRows);
+    const withIndex = vi.fn((_indexName, callback) => {
+      callback(queryBuilder);
+      return { collect };
+    });
+    const query = vi.fn(() => ({ withIndex }));
+    const get = vi.fn(async (tableName, id) => {
+      if (tableName === "store" && id === storeId) {
+        return {
+          _id: storeId,
+          organizationId: "org_1" as Id<"organization">,
+        };
+      }
+
+      return null;
+    });
+
+    const rows = await listPosServiceCatalogSnapshotWithCtx(
+      {
+        db: { get, query },
+      } as never,
+      { storeId },
+    );
+
+    expect(get).toHaveBeenCalledWith("store", storeId);
+    expect(query).toHaveBeenCalledWith("serviceCatalog");
+    expect(withIndex).toHaveBeenCalledWith(
+      "by_storeId_status",
+      expect.any(Function),
+    );
+    expect(queryBuilder.eq).toHaveBeenNthCalledWith(1, "storeId", storeId);
+    expect(queryBuilder.eq).toHaveBeenNthCalledWith(2, "status", "active");
+    expect(collect).toHaveBeenCalled();
+    expect(rows).toEqual([
+      expect.objectContaining({
+        name: "Closure Repair",
+        serviceCatalogId: "catalog-fixed",
+        status: "active",
+      }),
+    ]);
+  });
+
   it("normalizes service catalog names case-insensitively for uniqueness", () => {
     expect(normalizeServiceCatalogNameKey("Tokin")).toBe("tokin");
     expect(normalizeServiceCatalogNameKey("tokin")).toBe("tokin");

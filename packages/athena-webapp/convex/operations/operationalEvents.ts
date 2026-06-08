@@ -31,6 +31,8 @@ export type RecordOperationalEventArgs = {
   customerProfileId?: Id<"customerProfile">;
   workItemId?: Id<"operationalWorkItem">;
   registerSessionId?: Id<"registerSession">;
+  terminalId?: Id<"posTerminal">;
+  localEventId?: string;
   approvalRequestId?: Id<"approvalRequest">;
   inventoryMovementId?: Id<"inventoryMovement">;
   paymentAllocationId?: Id<"paymentAllocation">;
@@ -40,8 +42,10 @@ export type RecordOperationalEventArgs = {
 
 export function buildOperationalEvent(args: RecordOperationalEventArgs) {
   const { metadataDedupeKeys: _metadataDedupeKeys, ...eventArgs } = args;
+  const normalizedArgs = normalizeOperationalEventTraceFields(eventArgs);
+
   return {
-    ...eventArgs,
+    ...normalizedArgs,
     message:
       args.message ??
       buildOperationalEventMessage({
@@ -51,6 +55,95 @@ export function buildOperationalEvent(args: RecordOperationalEventArgs) {
       }),
     createdAt: Date.now(),
   };
+}
+
+export function normalizeOperationalEventTraceFields<
+  EventArgs extends Omit<RecordOperationalEventArgs, "metadataDedupeKeys">,
+>(args: EventArgs): EventArgs {
+  const traceMetadata = buildTraceMetadata(args);
+  if (!traceMetadata) return args;
+
+  const metadata = args.metadata ?? {};
+
+  return {
+    ...args,
+    metadata: {
+      ...metadata,
+      ...(traceMetadata.localEventId !== undefined &&
+      metadata.localEventId === undefined
+        ? { localEventId: traceMetadata.localEventId }
+        : {}),
+      ...(traceMetadata.posTransactionId !== undefined &&
+      metadata.posTransactionId === undefined
+        ? { posTransactionId: traceMetadata.posTransactionId }
+        : {}),
+      ...(traceMetadata.registerSessionId !== undefined &&
+      metadata.registerSessionId === undefined
+        ? { registerSessionId: traceMetadata.registerSessionId }
+        : {}),
+      ...(traceMetadata.terminalId !== undefined &&
+      metadata.terminalId === undefined
+        ? { terminalId: traceMetadata.terminalId }
+        : {}),
+      posTrace: {
+        ...(isRecord(metadata.posTrace) ? metadata.posTrace : {}),
+        ...traceMetadata,
+      },
+    },
+  } as EventArgs;
+}
+
+function buildTraceMetadata(
+  args: Omit<RecordOperationalEventArgs, "metadataDedupeKeys">
+) {
+  if (!shouldNormalizePosTrace(args)) return null;
+
+  const traceMetadata = {
+    actorStaffProfileId: args.actorStaffProfileId,
+    actorUserId: args.actorUserId,
+    localEventId: args.localEventId,
+    posTransactionId: args.posTransactionId,
+    registerSessionId: args.registerSessionId,
+    terminalId: args.terminalId,
+  };
+  const compactTraceMetadata = Object.fromEntries(
+    Object.entries(traceMetadata).filter(([, value]) => value !== undefined)
+  );
+
+  return Object.keys(compactTraceMetadata).length > 0
+    ? compactTraceMetadata
+    : null;
+}
+
+function shouldNormalizePosTrace(
+  args: Omit<RecordOperationalEventArgs, "metadataDedupeKeys">
+) {
+  if (
+    args.localEventId ||
+    args.posTransactionId ||
+    args.registerSessionId ||
+    args.terminalId
+  ) {
+    return true;
+  }
+
+  return (
+    args.eventType.startsWith("pos_") ||
+    args.eventType.startsWith("manager_elevation.") ||
+    [
+      "managerElevation",
+      "posRecoveryCredential",
+      "posTerminal",
+      "posTransaction",
+      "pos_transaction",
+      "registerSession",
+      "register_session",
+    ].includes(args.subjectType)
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 function matchesExistingEvent(
@@ -72,6 +165,8 @@ function matchesExistingEvent(
     paymentAllocationId?: Id<"paymentAllocation">;
     posTransactionId?: Id<"posTransaction">;
     registerSessionId?: Id<"registerSession">;
+    terminalId?: Id<"posTerminal">;
+    localEventId?: string;
     workItemId?: Id<"operationalWorkItem">;
     metadata?: Record<string, unknown>;
   },
@@ -96,6 +191,8 @@ function matchesExistingEvent(
     existingEvent.paymentAllocationId === args.paymentAllocationId &&
     existingEvent.posTransactionId === args.posTransactionId &&
     existingEvent.registerSessionId === args.registerSessionId &&
+    existingEvent.terminalId === args.terminalId &&
+    existingEvent.localEventId === args.localEventId &&
     existingEvent.workItemId === args.workItemId &&
     metadataDedupeKeysMatch(
       existingEvent.metadata,
@@ -234,6 +331,8 @@ export const recordOperationalEvent = internalMutation({
     customerProfileId: v.optional(v.id("customerProfile")),
     workItemId: v.optional(v.id("operationalWorkItem")),
     registerSessionId: v.optional(v.id("registerSession")),
+    terminalId: v.optional(v.id("posTerminal")),
+    localEventId: v.optional(v.string()),
     approvalRequestId: v.optional(v.id("approvalRequest")),
     inventoryMovementId: v.optional(v.id("inventoryMovement")),
     paymentAllocationId: v.optional(v.id("paymentAllocation")),

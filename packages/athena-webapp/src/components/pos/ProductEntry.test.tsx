@@ -210,7 +210,7 @@ describe("ProductEntry", () => {
     await user.click(
       screen.getByRole("button", { name: /add item for review/i }),
     );
-    expect(screen.getByLabelText(/quantity sold/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/quantity entered/i)).toBeInTheDocument();
     await user.type(screen.getByLabelText(/product name/i), "Pending item");
     await user.type(screen.getByLabelText(/selling price/i), "25");
     await user.click(screen.getByRole("button", { name: /add product/i }));
@@ -347,20 +347,26 @@ describe("ProductEntry", () => {
     expect(quickAddProductSkuMock).toHaveBeenNthCalledWith(1, {
       storeId: "store-1",
       createdByUserId: "user-1",
+      createdByStaffProfileId: "staff-1",
       name: "Quick item",
       lookupCode: "999999999999",
       price: 2500,
       quantityAvailable: 1,
       productId: undefined,
+      registerSessionId: "register-1",
+      terminalId: "terminal-1",
     });
     expect(quickAddProductSkuMock).toHaveBeenNthCalledWith(2, {
       storeId: "store-1",
       createdByUserId: "user-1",
+      createdByStaffProfileId: "staff-1",
       name: "Quick item",
       lookupCode: undefined,
       price: 3000,
       quantityAvailable: 1,
       productId: "product-1",
+      registerSessionId: "register-1",
+      terminalId: "terminal-1",
     });
     expect(onAddProduct).toHaveBeenCalledWith(quickAddedProduct);
   });
@@ -411,11 +417,14 @@ describe("ProductEntry", () => {
       expect(quickAddProductSkuMock).toHaveBeenCalledWith({
         storeId: "store-1",
         createdByUserId: "user-1",
+        createdByStaffProfileId: "staff-1",
         name: "",
         lookupCode: "999999999999",
         price: 0,
         quantityAvailable: 0,
         productSkuId: "sku-existing",
+        registerSessionId: "register-1",
+        terminalId: "terminal-1",
       }),
     );
     expect(setProductSearchQuery).toHaveBeenCalledWith("");

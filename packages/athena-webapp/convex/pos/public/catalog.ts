@@ -256,12 +256,15 @@ export const quickAddSku = mutation({
   args: {
     storeId: v.id("store"),
     createdByUserId: v.id("athenaUser"),
+    createdByStaffProfileId: v.optional(v.id("staffProfile")),
     name: v.string(),
     lookupCode: v.optional(v.string()),
     productId: v.optional(v.id("product")),
     productSkuId: v.optional(v.id("productSku")),
     price: v.number(),
     quantityAvailable: v.number(),
+    registerSessionId: v.optional(v.id("registerSession")),
+    terminalId: v.optional(v.id("posTerminal")),
   },
   returns: catalogResultValidator,
   handler: async (ctx, args) => {

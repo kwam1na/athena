@@ -586,7 +586,9 @@ const schema = defineSchema({
     .index("by_storeId_subject", ["storeId", "subjectType", "subjectId"])
     .index("by_customerProfileId", ["customerProfileId"])
     .index("by_workItemId", ["workItemId"])
-    .index("by_registerSessionId", ["registerSessionId"]),
+    .index("by_registerSessionId", ["registerSessionId"])
+    .index("by_terminalId", ["terminalId"])
+    .index("by_localEventId", ["localEventId"]),
   managerElevation: defineTable(managerElevationSchema)
     .index("by_storeId_terminalId_accountId", [
       "storeId",
