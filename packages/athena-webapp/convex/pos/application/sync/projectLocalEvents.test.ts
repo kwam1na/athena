@@ -3115,6 +3115,9 @@ describe("projectLocalSyncEvent", () => {
     expect(result.conflicts).toEqual([
       expect.objectContaining({
         conflictType: "permission",
+        details: expect.objectContaining({
+          notes: "Short drawer",
+        }),
         summary:
           "Register closeout variance requires manager review before synced closeout can be applied.",
       }),

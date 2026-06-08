@@ -462,18 +462,29 @@ function DrawerSessionCard({
   storeUrlSlug: string;
   variant?: "primary" | "standard";
 }) {
-  const variance = session.variance ?? 0;
-  const showVariance = variance !== 0;
-  const showCountedCash = variance !== 0 && session.countedCash !== undefined;
-  const showDeposited = session.totalDeposited > 0;
   const syncStatus = getSessionSyncStatus(session);
-  const showSyncBadge =
-    syncStatus.status !== "synced" && syncStatus.status !== "needs_review";
-  const showSyncDescription = syncStatus.status !== "synced";
-  const firstReconciliationItem = syncStatus.reconciliationItems[0];
+  const closeoutReviewItem = syncStatus.reconciliationItems.find(
+    isRegisterCloseoutReviewItem,
+  );
+  const variance =
+    typeof closeoutReviewItem?.variance === "number"
+      ? closeoutReviewItem.variance
+      : (session.variance ?? 0);
+  const showVariance = variance !== 0;
+  const countedCash =
+    typeof closeoutReviewItem?.countedCash === "number"
+      ? closeoutReviewItem.countedCash
+      : session.countedCash;
+  const showCountedCash = variance !== 0 && countedCash !== undefined;
+  const showDeposited = session.totalDeposited > 0;
   const isCloseoutSyncReview =
     syncStatus.status === "needs_review" &&
     syncStatus.reconciliationItems.some(isRegisterCloseoutReviewItem);
+  const showSyncBadge =
+    syncStatus.status !== "synced" && syncStatus.status !== "needs_review";
+  const showSyncDescription =
+    syncStatus.status !== "synced" && !isCloseoutSyncReview;
+  const firstReconciliationItem = syncStatus.reconciliationItems[0];
   const metricColumnCount =
     1 +
     (showDeposited ? 1 : 0) +
@@ -586,7 +597,7 @@ function DrawerSessionCard({
             </dt>
             <dd className="mt-1 font-numeric tabular-nums text-sm text-foreground">
               <CashControlsFinancialValue
-                amount={session.countedCash ?? 0}
+                amount={countedCash ?? 0}
                 canView={hasFinancialDetailsAccess}
                 currency={currency}
                 label="Counted cash"
@@ -630,7 +641,9 @@ function DrawerSessionCard({
           {syncStatus.description}
         </p>
       ) : null}
-      {syncStatus.status === "needs_review" && firstReconciliationItem ? (
+      {syncStatus.status === "needs_review" &&
+      firstReconciliationItem &&
+      !isCloseoutSyncReview ? (
         <p className="mt-layout-xs text-xs leading-5 text-danger">
           {formatPosReconciliationType(
             firstReconciliationItem.type,
@@ -1072,8 +1085,13 @@ function CashroomWorkflow({
       Boolean(session.pendingApprovalRequest) ||
       getSessionSyncStatus(session).status !== "synced",
   );
-  const liveDrawers = sessions.filter((session) =>
-    ["active", "open"].includes(session.status),
+  const needsAttentionIds = new Set(
+    needsAttention.map((session) => session._id),
+  );
+  const liveDrawers = sessions.filter(
+    (session) =>
+      ["active", "open"].includes(session.status) &&
+      !needsAttentionIds.has(session._id),
   );
   const closedSessions = sessions.filter(
     (session) => session.status === "closed",
@@ -1125,7 +1143,7 @@ function CashroomWorkflow({
             />
           ) : null}
           <div className="space-y-layout-3xl">
-            {hasNeedsAttention ? (
+            {hasNeedsAttention && hasLiveDrawers ? (
               <DrawerSessionLane
                 currency={currency}
                 emptyDescription="No live drawers are open right now"

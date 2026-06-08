@@ -731,10 +731,9 @@ function RegisterSessionSyncNotice({
       : []
     : reconciliationItems;
   const closeoutVariance = closeoutReviewItem?.variance ?? null;
-  const closeoutSummary =
-    typeof closeoutVariance === "number"
-      ? `Variance: ${formatCurrency(currency, closeoutVariance)}.`
-      : "Variance needs review.";
+  const closeoutNote = closeoutReviewItem?.notes?.trim();
+  const closeoutExpectedCash = closeoutReviewItem?.expectedCash;
+  const closeoutCountedCash = closeoutReviewItem?.countedCash;
   const canApproveSyncReview = !hasClosedRegisterSyncedCloseout;
   const shouldCombineReviewItems =
     syncStatus.status === "needs_review" &&
@@ -766,18 +765,26 @@ function RegisterSessionSyncNotice({
 
   return (
     <section
-      className={`rounded-lg border p-layout-md ${
-        syncStatus.tone === "danger"
-          ? "border-danger/25 bg-danger/10"
-          : "border-warning/30 bg-warning/10"
-      }`}
+      className={cn(
+        "rounded-lg border p-layout-md",
+        hasCloseoutReview
+          ? "border-amber-300/70 bg-amber-50/35"
+          : syncStatus.tone === "danger"
+            ? "border-danger/25 bg-danger/10"
+            : "border-warning/30 bg-warning/10",
+      )}
     >
-      <div className="flex flex-wrap items-start justify-between gap-layout-md">
+      <div className="grid gap-layout-md">
         <div className="max-w-3xl space-y-1">
           <p
-            className={`text-[11px] font-medium uppercase tracking-[0.18em] ${
-              syncStatus.tone === "danger" ? "text-danger" : "text-warning"
-            }`}
+            className={cn(
+              "text-[11px] font-medium uppercase tracking-[0.18em]",
+              hasCloseoutReview
+                ? "text-amber-800"
+                : syncStatus.tone === "danger"
+                  ? "text-danger"
+                  : "text-warning",
+            )}
           >
             {noticeLabel}
           </p>
@@ -857,24 +864,91 @@ function RegisterSessionSyncNotice({
 
                   return (
                     <article
-                      className="rounded-md border border-danger/15 bg-background/70 p-layout-sm"
+                      className={cn(
+                        "rounded-md border bg-background/80 p-layout-md",
+                        isCloseoutItem
+                          ? "border-amber-200/80"
+                          : "border-danger/15",
+                      )}
                       key={item.id ?? `${item.type ?? "review"}-${index}`}
                     >
-                      <div className="space-y-1">
-                        <p className="text-sm font-medium text-foreground">
-                          {isClosedRegisterSyncedCloseoutReviewItem(item)
-                            ? "Duplicate closeout"
-                            : formatPosReconciliationType(item.type, item)}
-                        </p>
-                        <p className="text-sm leading-6 text-muted-foreground">
-                          {isClosedRegisterSyncedCloseoutReviewItem(item)
-                            ? "The synced closeout is from local activity for a register that is already closed."
-                            : isCloseoutItem
-                              ? closeoutSummary
+                      {isCloseoutItem &&
+                      !isClosedRegisterSyncedCloseoutReviewItem(item) ? (
+                        <div className="space-y-layout-md">
+                          <div className="space-y-1">
+                            <p className="text-sm font-medium text-foreground">
+                              Closeout variance review
+                            </p>
+                            <p className="text-sm leading-6 text-muted-foreground">
+                              Review the synced count before applying this
+                              closeout to the drawer.
+                            </p>
+                          </div>
+                          <dl className="grid gap-layout-sm text-sm sm:grid-cols-3">
+                            {typeof closeoutExpectedCash === "number" ? (
+                              <div className="rounded-md border border-border/70 bg-muted/20 px-layout-sm py-layout-sm">
+                                <dt className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                                  Expected
+                                </dt>
+                                <dd className="mt-1 font-numeric tabular-nums text-foreground">
+                                  {formatCurrency(currency, closeoutExpectedCash)}
+                                </dd>
+                              </div>
+                            ) : null}
+                            {typeof closeoutCountedCash === "number" ? (
+                              <div className="rounded-md border border-border/70 bg-muted/20 px-layout-sm py-layout-sm">
+                                <dt className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                                  Counted
+                                </dt>
+                                <dd className="mt-1 font-numeric tabular-nums text-foreground">
+                                  {formatCurrency(currency, closeoutCountedCash)}
+                                </dd>
+                              </div>
+                            ) : null}
+                            <div className="rounded-md border border-border/70 bg-muted/20 px-layout-sm py-layout-sm">
+                              <dt className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                                Variance
+                              </dt>
+                              <dd
+                                className={cn(
+                                  "mt-1 font-numeric tabular-nums",
+                                  typeof closeoutVariance === "number"
+                                    ? getVarianceTone(closeoutVariance)
+                                    : "text-foreground",
+                                )}
+                              >
+                                {typeof closeoutVariance === "number"
+                                  ? formatCurrency(currency, closeoutVariance)
+                                  : "Needs review"}
+                              </dd>
+                            </div>
+                          </dl>
+                          {closeoutNote ? (
+                            <div className="space-y-2 border-t border-border/70 pt-layout-md">
+                              <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                                Notes
+                              </p>
+                              <p className="text-sm leading-6 text-muted-foreground">
+                                {closeoutNote}
+                              </p>
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <div className="space-y-1">
+                          <p className="text-sm font-medium text-foreground">
+                            {isClosedRegisterSyncedCloseoutReviewItem(item)
+                              ? "Duplicate closeout"
+                              : formatPosReconciliationType(item.type, item)}
+                          </p>
+                          <p className="text-sm leading-6 text-muted-foreground">
+                            {isClosedRegisterSyncedCloseoutReviewItem(item)
+                              ? "The synced closeout is from local activity for a register that is already closed."
                               : item.summary?.trim() ||
                                 "Review synced register activity before closeout is settled."}
-                        </p>
-                      </div>
+                          </p>
+                        </div>
+                      )}
                       {!isCloseoutItem &&
                       (item.localEventId ||
                         typeof item.sequence === "number" ||
@@ -920,7 +994,12 @@ function RegisterSessionSyncNotice({
             <p className="text-sm leading-6 text-destructive">{errorMessage}</p>
           ) : null}
         </div>
-        <div className="flex w-full flex-col gap-layout-sm sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+        <div
+          className={cn(
+            "flex w-full flex-col gap-layout-sm border-t pt-layout-md sm:flex-row sm:flex-wrap sm:items-center",
+            hasCloseoutReview ? "border-amber-200/70" : "border-border/70",
+          )}
+        >
           {syncStatus.status === "needs_review" &&
           hasOnlyRejectedReviewItems &&
           onReviewDecision ? (
@@ -961,19 +1040,19 @@ function RegisterSessionSyncNotice({
             <>
               {canApplySyncReview ? (
                 <LoadingButton
-                  className="w-full border-border bg-background text-foreground hover:bg-muted sm:w-auto"
+                  className="w-full sm:w-auto"
                   disabled={isResolving}
                   isLoading={Boolean(isResolving)}
                   onClick={() => onReviewDecision("approved")}
                   size="sm"
                   type="button"
-                  variant="outline"
+                  variant="workflow"
                 >
                   {approveLabel}
                 </LoadingButton>
               ) : null}
               <Button
-                className="w-full sm:w-auto"
+                className="w-full border-destructive/30 bg-background text-destructive hover:bg-destructive/10 hover:text-destructive sm:w-auto"
                 disabled={isResolving}
                 onClick={() => onReviewDecision("rejected")}
                 size="sm"
@@ -2235,13 +2314,13 @@ export function RegisterSessionViewContent({
     <View
       header={
         <ComposedPageHeader
-          className="h-auto min-h-14 items-start gap-3 border-b border-border bg-background px-4 py-3 sm:h-[40px] sm:items-center sm:border-0 sm:py-6"
+          className="h-auto min-h-16 items-start gap-3 border-b border-border bg-background px-4 py-3 sm:items-center sm:border-0 sm:py-4"
           leadingContent={
-            <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-              <div className="flex min-w-0 items-baseline gap-2">
-                <span className="min-w-0 truncate text-sm font-semibold text-foreground">
+            <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+              <div className="flex min-w-0 flex-col gap-0.5 sm:flex-row sm:items-baseline sm:gap-2">
+                <h1 className="min-w-0 truncate text-base font-semibold leading-5 text-foreground sm:text-sm">
                   {headerTitle}
-                </span>
+                </h1>
                 {headerTerminalName ? (
                   <span className="min-w-0 truncate text-xs text-muted-foreground sm:text-sm">
                     {headerTerminalName}
