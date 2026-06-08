@@ -408,7 +408,7 @@ function buildEventMessage(args: {
 }) {
   const action = args.reused ? "reused" : "added";
 
-  return `${args.actorLabel} ${action} pending checkout item ${args.itemName} for ${args.quantitySold} sold.`;
+  return `${args.actorLabel} ${action} pending checkout item ${args.itemName}. Quantity sold: ${args.quantitySold}.`;
 }
 
 function buildWorkItemPriority(
