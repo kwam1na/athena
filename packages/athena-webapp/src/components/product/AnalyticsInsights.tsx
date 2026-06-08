@@ -51,9 +51,9 @@ export const AnalyticsInsights = () => {
         <ChartNoAxesColumn className="w-4 h-4 text-muted-foreground" />
         <h3 className="font-medium text-muted-foreground">Analytics</h3>
       </div>
-      <div className="grid grid-cols-3 gap-4">
-        <div className="space-y-4">
-          <div className="flex flex-row items-center gap-4 space-y-0 pb-2">
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-3 sm:gap-4">
+        <div className="min-w-0 space-y-3 sm:space-y-4">
+          <div className="flex flex-row items-center gap-3 space-y-0 pb-1 sm:gap-4 sm:pb-2">
             <p className="text-sm text-muted-foreground">Total Views</p>
             <Eye className="h-4 w-4 text-muted-foreground" />
           </div>
@@ -62,8 +62,8 @@ export const AnalyticsInsights = () => {
           </div>
         </div>
 
-        <div className="space-y-4">
-          <div className="flex flex-row items-center gap-4 space-y-0 pb-2">
+        <div className="min-w-0 space-y-3 sm:space-y-4">
+          <div className="flex flex-row items-center gap-3 space-y-0 pb-1 sm:gap-4 sm:pb-2">
             <p className="text-sm text-muted-foreground">Unique Viewers</p>
             <Users className="h-4 w-4 text-muted-foreground" />
           </div>
@@ -72,8 +72,8 @@ export const AnalyticsInsights = () => {
           </div>
         </div>
 
-        <div className="space-y-4">
-          <div className="flex flex-row items-center gap-4 space-y-0 pb-2">
+        <div className="min-w-0 space-y-3 sm:space-y-4">
+          <div className="flex flex-row items-center gap-3 space-y-0 pb-1 sm:gap-4 sm:pb-2">
             <p className="text-sm text-muted-foreground">Last Viewed</p>
             <Clock className="h-4 w-4 text-muted-foreground" />
           </div>

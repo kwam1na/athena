@@ -41,8 +41,8 @@ export function DetailsView() {
       lockDocumentScroll={false}
       className="w-full"
     >
-      <FadeIn className="py-4 grid grid-cols-3">
-        <div className="space-y-4">
+      <FadeIn className="grid grid-cols-2 gap-x-4 gap-y-6 py-4 sm:grid-cols-4 lg:grid-cols-3">
+        <div className="min-w-0 space-y-3 sm:space-y-4">
           <p className="text-sm text-muted-foreground">Price</p>
           <div className="flex items-center gap-2">
             <p className="text-sm">
@@ -64,7 +64,7 @@ export function DetailsView() {
         </div>
 
         {Boolean(activeProductVariant.cost) && (
-          <div className="space-y-4">
+          <div className="min-w-0 space-y-3 sm:space-y-4">
             <p className="text-sm text-muted-foreground">Cost</p>
             <p className="text-sm">
               {formatter.format(activeProductVariant.cost || 0)}
@@ -72,7 +72,7 @@ export function DetailsView() {
           </div>
         )}
 
-        <div className="space-y-4">
+        <div className="min-w-0 space-y-3 sm:space-y-4">
           <p className="text-sm text-muted-foreground">Stock</p>
           <div className="flex items-center gap-2">
             <p className={`text-sm ${stockLabelColor}`}>
@@ -84,7 +84,7 @@ export function DetailsView() {
           </div>
         </div>
 
-        <div className="space-y-4">
+        <div className="min-w-0 space-y-3 sm:space-y-4">
           <p className="text-sm text-muted-foreground">Sellable</p>
           <p className="text-sm">{activeProductVariant.quantityAvailable}</p>
         </div>

@@ -30,7 +30,7 @@ export const SKUSelector = () => {
         setActiveProductVariant(selectedVariant);
       }
     }
-  }, [variant, productVariants]);
+  }, [variant, productVariants, setActiveProductVariant]);
 
   const handleVariantChange = (value: ProductVariant) => {
     const selectedVariant = productVariants.find((v) => v.id === value.id);
@@ -53,16 +53,18 @@ export const SKUSelector = () => {
   if (activeProduct === null) return null;
 
   return (
-    <FadeIn className="py-8 flex items-center gap-8">
-      <p className="text-xs">SKU</p>
+    <FadeIn className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:gap-8 lg:py-8">
+      <p className="text-xs text-muted-foreground sm:text-foreground">SKU</p>
 
       {productVariants.length > 0 && (
-        <GenericComboBox<ProductVariant>
-          activeItem={activeProductVariant}
-          items={comboBoxValues}
-          onValueChange={handleVariantChange}
-          equalityFn={variantEqualityFn}
-        />
+        <div className="w-full min-w-0 sm:w-auto">
+          <GenericComboBox<ProductVariant>
+            activeItem={activeProductVariant}
+            items={comboBoxValues}
+            onValueChange={handleVariantChange}
+            equalityFn={variantEqualityFn}
+          />
+        </div>
       )}
     </FadeIn>
   );

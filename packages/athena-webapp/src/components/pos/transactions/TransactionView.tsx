@@ -1421,9 +1421,9 @@ export function TransactionView() {
       {itemAdjustmentApprovalRunner.dialog}
       {voidApprovalRunner.dialog}
       <FadeIn className="h-full">
-        <div className="container mx-auto h-full min-h-0 px-6 pb-16 pt-6">
-          <div className="grid h-full min-h-0 gap-8 xl:grid-cols-[380px,minmax(0,1fr)]">
-            <div className="space-y-6 pb-16">
+        <div className="container mx-auto h-full min-h-0 px-4 pb-16 pt-4 sm:px-6 sm:pt-6">
+          <div className="grid min-h-0 gap-6 xl:h-full xl:grid-cols-[380px,minmax(0,1fr)] xl:gap-8">
+            <div className="order-2 space-y-6 pb-16 xl:order-1">
               <section className="overflow-hidden rounded-[calc(var(--radius)*1.35)] border border-border/80 bg-surface-raised shadow-surface">
                 <CardHeader className="space-y-4 pb-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
@@ -2425,7 +2425,7 @@ export function TransactionView() {
               cartItems={displayCartItems}
               serviceItems={displayServiceItems}
               readOnly
-              className="h-full min-h-0"
+              className="order-1 min-h-[22rem] xl:order-2 xl:h-full xl:min-h-0"
             />
           </div>
         </div>

@@ -43,24 +43,28 @@ export function BarcodeView() {
 
         <div
           ref={qrCodeRef}
-          className="flex flex-col items-center gap-4 p-6 bg-white rounded-lg border"
+          className="flex flex-col items-center gap-4 rounded-lg border bg-white p-4 sm:p-6"
           data-print-area
         >
-          <div className="bg-white p-4 rounded-lg">
-            <QRCode value={productUrl} size={240} />
+          <div className="rounded-lg bg-white p-2 sm:p-4">
+            <QRCode
+              className="h-auto w-full max-w-60"
+              value={productUrl}
+              size={240}
+            />
           </div>
 
           <div className="text-center space-y-2 w-full">
             <div>
               <p className="text-xs text-muted-foreground">SKU</p>
-              <p className="font-mono font-semibold text-2xl">
+              <p className="break-all font-mono text-lg font-semibold sm:text-2xl">
                 {activeProductVariant.sku}
               </p>
             </div>
 
             <div>
               <p className="text-xs text-muted-foreground">Barcode</p>
-              <p className="font-mono font-semibold text-2xl">
+              <p className="break-all font-mono text-lg font-semibold sm:text-2xl">
                 {activeProductVariant.barcode}
               </p>
             </div>

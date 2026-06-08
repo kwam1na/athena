@@ -11,7 +11,8 @@ type TableName =
   | "automationRun"
   | "operationalEvent"
   | "product"
-  | "productSku";
+  | "productSku"
+  | "posPendingCheckoutItem";
 type Row = Record<string, unknown> & { _id: string };
 
 function createCtx(seed: Partial<Record<TableName, Row[]>>) {
@@ -20,6 +21,7 @@ function createCtx(seed: Partial<Record<TableName, Row[]>>) {
     automationRun: new Map(),
     product: new Map(),
     productSku: new Map(),
+    posPendingCheckoutItem: new Map(),
   };
 
   for (const [table, rows] of Object.entries(seed) as Array<
@@ -142,6 +144,87 @@ describe("operational events", () => {
         label: "Vitamilk",
         sku: "SKU-001",
         type: "product_sku",
+      },
+    });
+  });
+
+  it("includes pending checkout item events anchored to a provisional product SKU", async () => {
+    const ctx = createCtx({
+      product: [
+        {
+          _id: "product-1",
+          storeId: "store-1",
+        },
+      ],
+      productSku: [
+        {
+          _id: "sku-1",
+          productId: "product-1",
+          sku: "PENDING-001",
+        },
+      ],
+      posPendingCheckoutItem: [
+        {
+          _id: "pending-1",
+          provisionalProductId: "product-1",
+          provisionalProductSkuId: "sku-1",
+          storeId: "store-1",
+        },
+        {
+          _id: "pending-other-store",
+          provisionalProductId: "product-1",
+          provisionalProductSkuId: "sku-1",
+          storeId: "store-2",
+        },
+      ],
+      operationalEvent: [
+        {
+          _id: "event-pending",
+          createdAt: 300,
+          eventType: "pos_pending_checkout_item_created",
+          message: "Cashier added pending checkout item Ebin lace bond.",
+          storeId: "store-1",
+          subjectId: "pending-1",
+          subjectLabel: "Ebin lace bond",
+          subjectType: "pos_pending_checkout_item",
+        },
+        {
+          _id: "event-sku",
+          createdAt: 200,
+          eventType: "product_sku_updated",
+          message: "SKU updated.",
+          storeId: "store-1",
+          subjectId: "sku-1",
+          subjectType: "product_sku",
+        },
+        {
+          _id: "event-other-store-pending",
+          createdAt: 400,
+          eventType: "pos_pending_checkout_item_created",
+          message: "Other store pending item.",
+          storeId: "store-2",
+          subjectId: "pending-other-store",
+          subjectType: "pos_pending_checkout_item",
+        },
+      ],
+    });
+
+    const result = await listProductOperationalTimelineWithCtx(ctx, {
+      productId: "product-1" as Id<"product">,
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(result.map((event) => event.id)).toEqual([
+      "event-pending",
+      "event-sku",
+    ]);
+    expect(result[0]).toMatchObject({
+      message: "Cashier added pending checkout item Ebin lace bond.",
+      subject: {
+        id: "pending-1",
+        label: "Ebin lace bond",
+        sku: "PENDING-001",
+        type: "pos_pending_checkout_item",
       },
     });
   });

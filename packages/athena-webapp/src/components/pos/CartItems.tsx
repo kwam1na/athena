@@ -376,23 +376,23 @@ export function CartItems({
               <div
                 key={item.id}
                 className={cn(
-                  "border bg-white rounded-lg",
+                  "rounded-lg border bg-white",
                   isCompact
                     ? "space-y-3 p-3"
-                    : "grid grid-cols-12 gap-2 p-8 items-center",
+                    : "space-y-4 p-4 sm:grid sm:grid-cols-12 sm:items-center sm:gap-3 sm:space-y-0 sm:p-6 lg:p-8",
                 )}
               >
                 {/* Product Image & Info Combined */}
                 <div
                   className={cn(
                     "flex items-start gap-4",
-                    !isCompact && "col-span-5",
+                    !isCompact && "sm:col-span-7 lg:col-span-5",
                   )}
                 >
-                  <div className="relative">
+                  <div className="relative shrink-0">
                     <div
                       className={cn(
-                        "bg-muted rounded flex items-center justify-center flex-shrink-0",
+                        "flex shrink-0 items-center justify-center rounded bg-muted",
                         isCompact ? "w-12 h-12" : "w-16 h-16",
                       )}
                     >
@@ -420,17 +420,17 @@ export function CartItems({
                       "flex min-w-0 flex-1",
                       isCompact
                         ? "items-start justify-between gap-3"
-                        : "block space-y-2",
+                        : "items-start justify-between gap-3 sm:block sm:space-y-2",
                     )}
                   >
-                    <div className="min-w-0 space-y-2">
-                      <h4 className="font-medium text-sm leading-tight truncate">
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <h4 className="text-sm font-medium leading-5 text-foreground sm:line-clamp-2 sm:leading-tight">
                         {capitalizeWords(item.name)}
                       </h4>
 
-                      <div className="flex items-center gap-1">
+                      <div className="flex min-w-0 flex-wrap items-center gap-x-1 gap-y-0.5">
                         {item.sku && (
-                          <p className="truncate text-xs text-muted-foreground">
+                          <p className="break-all text-xs leading-4 text-muted-foreground sm:truncate">
                             {item.sku}
                           </p>
                         )}
@@ -438,7 +438,7 @@ export function CartItems({
                           <p className="text-xs text-muted-foreground">•</p>
                         )}
                         {item.barcode && (
-                          <p className="truncate text-xs text-muted-foreground">
+                          <p className="break-all text-xs leading-4 text-muted-foreground sm:truncate">
                             {item.barcode}
                           </p>
                         )}
@@ -456,15 +456,15 @@ export function CartItems({
 
                       <p
                         className={cn(
-                          "text-sm font-medium",
-                          !isCompact && "pt-2",
+                          "text-sm font-medium text-foreground",
+                          !isCompact && "sm:pt-2",
                         )}
                       >
                         {formatStoredAmount(formatter, item.price)}
                       </p>
                     </div>
 
-                    {isCompact && (
+                    {(isCompact || !readOnly) && (
                       <p className="shrink-0 text-right text-sm font-semibold">
                         {formatStoredAmount(
                           formatter,
@@ -478,14 +478,18 @@ export function CartItems({
                 <div
                   className={cn(
                     "flex items-center",
-                    isCompact ? "justify-between pt-3" : "contents",
+                    isCompact
+                      ? "justify-between pt-3"
+                      : "justify-between gap-3 sm:contents",
                   )}
                 >
                   {/* Quantity Controls */}
                   <div
                     className={cn(
                       "flex items-center",
-                      isCompact ? "justify-start" : "col-span-4 justify-center",
+                      isCompact
+                        ? "justify-start"
+                        : "justify-start sm:col-span-3 sm:justify-center lg:col-span-4",
                     )}
                   >
                     {!readOnly && (
@@ -503,7 +507,8 @@ export function CartItems({
                     className={cn(
                       "text-right",
                       isCompact && "hidden",
-                      !isCompact && "col-span-2",
+                      !isCompact && "shrink-0 sm:col-span-1 lg:col-span-2",
+                      readOnly && !isCompact && "sm:col-span-4 lg:col-span-2",
                     )}
                   >
                     <p className="font-semibold text-sm">
@@ -518,7 +523,7 @@ export function CartItems({
                     <div
                       className={cn(
                         "flex justify-center",
-                        !isCompact && "col-span-1",
+                        !isCompact && "sm:col-span-1",
                       )}
                     >
                       <Button
