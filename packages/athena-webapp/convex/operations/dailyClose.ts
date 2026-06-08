@@ -20,6 +20,11 @@ import {
   APPROVAL_ACTIONS,
   consumeCommandApprovalProofWithCtx,
 } from "./approvalActions";
+import {
+  dailyOperationsEodPrepareAction,
+  getLatestDailyOperationsAutomationStatusWithCtx,
+  type DailyOperationsAutomationStatus,
+} from "./dailyOperationsAutomation";
 
 const DAILY_CLOSE_QUERY_LIMIT = 200;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -113,6 +118,7 @@ type DailyCloseSnapshot = {
   operatingDate: string;
   storeId: Id<"store">;
   organizationId: Id<"organization"> | null;
+  automationStatus?: DailyOperationsAutomationStatus | null;
   startAt: number;
   endAt: number;
   existingClose: Doc<"dailyClose"> | null;
@@ -1458,6 +1464,12 @@ export async function buildDailyCloseSnapshotWithCtx(
 ): Promise<DailyCloseSnapshot> {
   const range = resolveOperatingDateRange(args);
   const store = await getStore(ctx, args.storeId);
+  const automationStatus =
+    await getLatestDailyOperationsAutomationStatusWithCtx(ctx, {
+      action: dailyOperationsEodPrepareAction.action,
+      operatingDate: args.operatingDate,
+      storeId: args.storeId,
+    });
 
   if (!range) {
     const blocker: DailyCloseItem = {
@@ -1477,6 +1489,7 @@ export async function buildDailyCloseSnapshotWithCtx(
       operatingDate: args.operatingDate,
       storeId: args.storeId,
       organizationId: store?.organizationId ?? null,
+      automationStatus,
       startAt: 0,
       endAt: 0,
       existingClose: null,
@@ -1520,7 +1533,10 @@ export async function buildDailyCloseSnapshotWithCtx(
     });
 
     if (completedSnapshot) {
-      return completedSnapshot;
+      return {
+        ...completedSnapshot,
+        automationStatus,
+      };
     }
   }
 
@@ -2210,6 +2226,7 @@ export async function buildDailyCloseSnapshotWithCtx(
     operatingDate: args.operatingDate,
     storeId: args.storeId,
     organizationId: store?.organizationId ?? null,
+    automationStatus,
     startAt: range.startAt,
     endAt: range.endAt,
     existingClose,

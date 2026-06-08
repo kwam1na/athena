@@ -5,6 +5,7 @@ import { buildDailyOperationsSnapshotWithCtx } from "./dailyOperations";
 
 type TableName =
   | "approvalRequest"
+  | "automationRun"
   | "dailyClose"
   | "dailyOpening"
   | "expenseTransaction"
@@ -244,6 +245,98 @@ describe("daily operations overview read model", () => {
         status: "ready",
       },
     );
+  });
+
+  it("exposes latest Daily Operations automation runs as normalized UI status", async () => {
+    const snapshot = await buildDailyOperationsSnapshotWithCtx(
+      buildCtx({
+        automationRun: [
+          {
+            _id: "automation-opening-old",
+            action: "opening.auto_start",
+            createdAt: Date.UTC(2026, 4, 8, 7, 30),
+            domain: "daily_operations",
+            eventIds: [],
+            idempotencyKey:
+              "daily_operations:opening.auto_start:store-1:2026-05-08:old",
+            mutationBoundary: "daily_opening",
+            operatingDate: "2026-05-08",
+            outcome: "skipped",
+            policyMode: "dry_run",
+            policyVersion: "daily-operations-automation-v1",
+            snapshotCounts: {},
+            sourceSubjects: [],
+            storeId: "store-1",
+            triggerType: "scheduled",
+            updatedAt: Date.UTC(2026, 4, 8, 7, 30),
+          },
+          {
+            _id: "automation-opening",
+            action: "opening.auto_start",
+            appliedAt: Date.UTC(2026, 4, 8, 8),
+            createdAt: Date.UTC(2026, 4, 8, 8),
+            domain: "daily_operations",
+            eventIds: [],
+            idempotencyKey:
+              "daily_operations:opening.auto_start:store-1:2026-05-08",
+            mutationBoundary: "daily_opening",
+            operatingDate: "2026-05-08",
+            outcome: "applied",
+            policyMode: "enabled",
+            policyVersion: "daily-operations-automation-v1",
+            snapshotCounts: {},
+            sourceSubjects: [],
+            storeId: "store-1",
+            triggerType: "scheduled",
+            updatedAt: Date.UTC(2026, 4, 8, 8),
+          },
+          {
+            _id: "automation-close",
+            action: "eod.prepare",
+            createdAt: Date.UTC(2026, 4, 8, 19),
+            domain: "daily_operations",
+            eventIds: [],
+            idempotencyKey: "daily_operations:eod.prepare:store-1:2026-05-08",
+            mutationBoundary: "daily_close",
+            operatingDate: "2026-05-08",
+            outcome: "prepared",
+            policyMode: "enabled",
+            policyVersion: "daily-operations-automation-v1",
+            snapshotCounts: {},
+            sourceSubjects: [],
+            storeId: "store-1",
+            triggerType: "scheduled",
+            updatedAt: Date.UTC(2026, 4, 8, 19),
+          },
+        ],
+        dailyClose: [priorClose],
+        dailyOpening: [startedOpening],
+        store: [store],
+      }),
+      { operatingDate: "2026-05-08", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(snapshot.automationStatuses).toEqual([
+      {
+        id: "automation-close",
+        lane: "close",
+        occurredAt: Date.UTC(2026, 4, 8, 19),
+        outcome: "prepared",
+        sourceLink: {
+          search: { operatingDate: "2026-05-08" },
+          to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",
+        },
+      },
+      {
+        id: "automation-opening",
+        lane: "opening",
+        occurredAt: Date.UTC(2026, 4, 8, 8),
+        outcome: "applied",
+        sourceLink: {
+          to: "/$orgUrlSlug/store/$storeUrlSlug/operations/opening",
+        },
+      },
+    ]);
   });
 
   it("keeps Opening Handoff in review when prior EOD Review is missing", async () => {

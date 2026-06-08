@@ -153,6 +153,7 @@ const weekMetrics = [
 ] satisfies DailyOperationsSnapshot["weekMetrics"];
 
 const operatingSnapshot: DailyOperationsSnapshot = {
+  automationStatuses: [],
   attentionItems: [],
   closeSummary: {
     carriedOverCashTotal: 0,
@@ -390,6 +391,62 @@ const posSyncedSaleTimelineSnapshot: DailyOperationsSnapshot = {
         to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId",
       },
       type: "pos_local_sync.sale_projected",
+    },
+  ],
+};
+
+const automationSnapshot: DailyOperationsSnapshot = {
+  ...operatingSnapshot,
+  automationStatuses: [
+    {
+      id: "automation-opening",
+      lane: "opening",
+      outcome: "applied",
+      occurredAt: Date.UTC(2026, 4, 10, 8, 30),
+      sourceLink: {
+        to: "/$orgUrlSlug/store/$storeUrlSlug/operations/opening",
+      },
+    },
+    {
+      id: "automation-close",
+      lane: "close",
+      outcome: "prepared",
+      occurredAt: Date.UTC(2026, 4, 10, 18, 15),
+      sourceLink: {
+        search: {
+          operatingDate: "2026-05-10",
+        },
+        to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",
+      },
+    },
+  ],
+  operatingDate: "2026-05-10",
+};
+
+const staleSkippedAutomationSnapshot: DailyOperationsSnapshot = {
+  ...closedSnapshot,
+  automationStatuses: [
+    {
+      id: "automation-stale-skip",
+      lane: "close",
+      outcome: "skipped",
+      sourceLink: {
+        to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",
+      },
+    },
+  ],
+};
+
+const staleOpeningAutomationSnapshot: DailyOperationsSnapshot = {
+  ...operatingSnapshot,
+  automationStatuses: [
+    {
+      id: "automation-opening-dry-run",
+      lane: "opening",
+      outcome: "dry_run",
+      sourceLink: {
+        to: "/$orgUrlSlug/store/$storeUrlSlug/operations/opening",
+      },
     },
   ],
 };
@@ -680,6 +737,70 @@ describe("DailyOperationsViewContent", () => {
       screen.queryByRole("link", { name: "Open Open work workspace" }),
     ).not.toBeInTheDocument();
   });
+
+  it("shows normalized automation status for the current store day", () => {
+    renderContent(automationSnapshot);
+
+    expect(
+      screen.getByRole("heading", { name: "Athena automation" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Athena started Opening Handoff.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Athena prepared EOD Review for manager review."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Open Opening Handoff automation source" }),
+    ).toHaveAttribute("href", "/wigclub/store/osu/operations/opening?o=%252Fwigclub%252Fstore%252Fosu%252Foperations");
+    expect(
+      screen.getByRole("link", { name: "Open EOD Review automation source" }),
+    ).toHaveAttribute(
+      "href",
+      "/wigclub/store/osu/operations/daily-close?o=%252Fwigclub%252Fstore%252Fosu%252Foperations&operatingDate=2026-05-10",
+    );
+  });
+
+  it("keeps closed lifecycle state primary over stale skipped automation decisions", () => {
+    renderContent(staleSkippedAutomationSnapshot);
+
+    expect(screen.getByText("Closed store-day record")).toBeInTheDocument();
+    expect(screen.queryByText("Athena automation")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Athena checked EOD Review. No change was made."),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps opened lifecycle state primary over stale Opening automation decisions", () => {
+    renderContent(staleOpeningAutomationSnapshot);
+
+    expect(screen.queryByText("Athena automation")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        "Athena checked Opening Handoff in dry run. No workflow changes were made.",
+      ),
+    ).not.toBeInTheDocument();
+  });
+
+  it.each(["disabled", "dry_run", "failed", "eligible"] as const)(
+    "keeps closed lifecycle state primary over stale %s automation decisions",
+    (outcome) => {
+      renderContent({
+        ...closedSnapshot,
+        automationStatuses: [
+          {
+            id: `automation-stale-${outcome}`,
+            lane: "close",
+            outcome,
+            sourceLink: {
+              to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",
+            },
+          },
+        ],
+      });
+
+      expect(screen.getByText("Closed store-day record")).toBeInTheDocument();
+      expect(screen.queryByText("Athena automation")).not.toBeInTheDocument();
+    },
+  );
 
   it("incorporates workflow lane counts into the description", () => {
     renderContent({

@@ -116,6 +116,7 @@ const baseSummary = {
 };
 
 const readySnapshot: DailyCloseSnapshot = {
+  automationStatus: null,
   blockers: [],
   carryForwardItems: [],
   completedClose: null,
@@ -618,6 +619,46 @@ describe("DailyCloseViewContent", () => {
     ).toBeInTheDocument();
     expect(within(checklist as HTMLElement).queryByText("Clear")).toBeNull();
     expect(within(checklist as HTMLElement).queryByText("None")).toBeNull();
+  });
+
+  it("shows Athena preparation status without claiming EOD Review is complete", () => {
+    renderContent({
+      ...readySnapshot,
+      automationStatus: {
+        id: "automation-close-prepared",
+        outcome: "prepared",
+        occurredAt: Date.UTC(2026, 4, 7, 18, 15),
+      },
+      blockers: [],
+      reviewItems: [],
+    });
+
+    expect(
+      screen.getByText("Athena prepared EOD Review for manager review."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /complete EOD review/i })).toBeEnabled();
+    expect(screen.queryByText("EOD Review completed")).not.toBeInTheDocument();
+  });
+
+  it("keeps completed EOD Review primary over stale skipped automation decisions", () => {
+    renderContent({
+      ...readySnapshot,
+      automationStatus: {
+        id: "automation-close-skipped",
+        outcome: "skipped",
+      },
+      completedClose: {
+        completedAt: Date.UTC(2026, 4, 7, 22, 30),
+        completedByStaffName: "Ama Mensah",
+      },
+      status: "completed",
+    });
+
+    expect(screen.getByText("EOD Review completed")).toBeInTheDocument();
+    expect(screen.queryByText("Athena automation")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Athena checked EOD Review. No change was made."),
+    ).not.toBeInTheDocument();
   });
 
   it("does not claim zero payments for historical payment totals without counts", () => {

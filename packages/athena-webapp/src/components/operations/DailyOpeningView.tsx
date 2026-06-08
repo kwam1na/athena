@@ -9,6 +9,7 @@ import { useMutation, useQuery } from "convex/react";
 import {
   ArrowUpRight,
   Ban,
+  Bot,
   Check,
   CheckCircle2,
   ClipboardCheck,
@@ -67,6 +68,12 @@ const useExpectedDailyOpeningMutation = useMutation as unknown as (
 
 type DailyOpeningStatus = "blocked" | "needs_attention" | "ready" | "started";
 
+type DailyOpeningAutomationStatus = {
+  id: string;
+  occurredAt?: number | null;
+  outcome: "applied" | "prepared" | "skipped" | "failed" | "dry_run" | "disabled";
+};
+
 export type DailyOpeningItemLink = {
   href?: string;
   label?: string;
@@ -99,6 +106,7 @@ export type DailyOpeningItem = {
 };
 
 export type DailyOpeningSnapshot = {
+  automationStatus?: DailyOpeningAutomationStatus | null;
   blockers: DailyOpeningItem[];
   carryForwardItems: DailyOpeningItem[];
   endAt: number;
@@ -539,6 +547,70 @@ function DailyOpeningStatusTitle({
       ) : null}
       {title}
     </h2>
+  );
+}
+
+function getOpeningAutomationMessage(status: DailyOpeningAutomationStatus) {
+  if (status.outcome === "applied") {
+    return "Athena started Opening Handoff.";
+  }
+
+  if (status.outcome === "failed") {
+    return "Athena could not finish the Opening Handoff automation check. Review the handoff before starting the store day.";
+  }
+
+  if (status.outcome === "dry_run") {
+    return "Athena checked Opening Handoff in dry run. No workflow changes were made.";
+  }
+
+  if (status.outcome === "disabled") {
+    return "Opening Handoff automation is off for this store day.";
+  }
+
+  if (status.outcome === "prepared") {
+    return "Athena prepared Opening Handoff for review.";
+  }
+
+  return "Athena checked Opening Handoff. No change was made.";
+}
+
+function getVisibleOpeningAutomationStatus(
+  snapshot: DailyOpeningSnapshot,
+  status: DailyOpeningStatus,
+) {
+  const automationStatus = snapshot.automationStatus;
+
+  if (!automationStatus) return null;
+
+  if (status === "started" && automationStatus.outcome !== "applied") {
+    return null;
+  }
+
+  return automationStatus;
+}
+
+function OpeningAutomationStatusPanel({
+  automationStatus,
+}: {
+  automationStatus: DailyOpeningAutomationStatus | null;
+}) {
+  if (!automationStatus) return null;
+
+  return (
+    <section className="rounded-lg border border-border bg-surface-raised p-layout-md shadow-surface">
+      <h3 className="flex items-center gap-layout-xs text-base font-medium text-foreground">
+        <Bot aria-hidden="true" className="h-4 w-4" />
+        Athena automation
+      </h3>
+      <p className="mt-layout-sm text-sm leading-6 text-foreground">
+        {getOpeningAutomationMessage(automationStatus)}
+      </p>
+      {automationStatus.occurredAt ? (
+        <p className="mt-1 text-xs text-muted-foreground">
+          {formatTimestamp(automationStatus.occurredAt)}
+        </p>
+      ) : null}
+    </section>
   );
 }
 
@@ -1346,6 +1418,9 @@ export function DailyOpeningViewContent({
   const displaySnapshot = snapshot
     ? getDisplaySnapshot(snapshot, status)
     : null;
+  const automationStatus = snapshot
+    ? getVisibleOpeningAutomationStatus(snapshot, status)
+    : null;
   const buckets = displaySnapshot
     ? getVisibleBucketConfigs(displaySnapshot, status)
     : [];
@@ -1446,16 +1521,19 @@ export function DailyOpeningViewContent({
       showBackButton
       main={
         snapshot ? (
-          <BucketTabs
-            acknowledgedKeys={acknowledgedKeys}
-            buckets={buckets}
-            currency={currency}
-            onAcknowledgedKeysChange={setAcknowledgedKeys}
-            onValueChange={handleBucketValueChange}
-            orgUrlSlug={orgUrlSlug}
-            storeUrlSlug={storeUrlSlug}
-            value={selectedBucketValue}
-          />
+          <div className="space-y-layout-lg">
+            <OpeningAutomationStatusPanel automationStatus={automationStatus} />
+            <BucketTabs
+              acknowledgedKeys={acknowledgedKeys}
+              buckets={buckets}
+              currency={currency}
+              onAcknowledgedKeysChange={setAcknowledgedKeys}
+              onValueChange={handleBucketValueChange}
+              orgUrlSlug={orgUrlSlug}
+              storeUrlSlug={storeUrlSlug}
+              value={selectedBucketValue}
+            />
+          </div>
         ) : null
       }
       metrics={

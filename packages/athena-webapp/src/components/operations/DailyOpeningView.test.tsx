@@ -159,6 +159,7 @@ vi.mock("~/convex/_generated/api", () => ({
 }));
 
 const readySnapshot: DailyOpeningSnapshot = {
+  automationStatus: null,
   blockers: [],
   carryForwardItems: [],
   endAt: Date.UTC(2026, 4, 9, 4),
@@ -648,6 +649,46 @@ describe("DailyOpeningViewContent", () => {
     expect(screen.getByText("Morning handoff reviewed.")).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /start day/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows Athena auto-start attribution when Opening Handoff is started by automation", () => {
+    renderContent({
+      ...readySnapshot,
+      automationStatus: {
+        id: "automation-opening-started",
+        outcome: "applied",
+        occurredAt: Date.UTC(2026, 4, 8, 8, 30),
+      },
+      startedOpening: {
+        startedAt: Date.UTC(2026, 4, 8, 8, 30),
+      },
+      status: "started",
+    });
+
+    expect(screen.getByText("Store day started")).toBeInTheDocument();
+    expect(screen.getByText("Athena started Opening Handoff.")).toBeInTheDocument();
+    expect(screen.queryByText("Athena checked Opening Handoff. No change was made.")).not.toBeInTheDocument();
+  });
+
+  it("keeps started Opening Handoff primary over stale skipped automation decisions", () => {
+    renderContent({
+      ...readySnapshot,
+      automationStatus: {
+        id: "automation-opening-skipped",
+        outcome: "skipped",
+      },
+      startedOpening: {
+        startedAt: Date.UTC(2026, 4, 8, 8, 30),
+        startedByStaffName: "Kofi Mensah",
+      },
+      status: "started",
+    });
+
+    expect(screen.getByText("Store day started")).toBeInTheDocument();
+    expect(screen.queryByText("Athena automation")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Athena checked Opening Handoff. No change was made."),
     ).not.toBeInTheDocument();
   });
 

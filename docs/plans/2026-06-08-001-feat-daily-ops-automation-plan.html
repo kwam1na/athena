@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Plan: Add Athena Automation Foundation</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f7f4ef;
+        --paper: #fffdf9;
+        --ink: #1f2933;
+        --muted: #5f6b75;
+        --line: #d8d2c8;
+        --accent: #1f6f68;
+        --accent-soft: #e2f0ed;
+        --warn: #8a5a12;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        line-height: 1.55;
+      }
+      main {
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: 32px 20px 56px;
+      }
+      header {
+        border-bottom: 1px solid var(--line);
+        margin-bottom: 24px;
+        padding-bottom: 18px;
+      }
+      h1 {
+        font-size: 32px;
+        line-height: 1.15;
+        margin: 0 0 10px;
+        letter-spacing: 0;
+      }
+      h2 {
+        font-size: 20px;
+        margin: 30px 0 12px;
+        letter-spacing: 0;
+      }
+      h3 {
+        font-size: 16px;
+        margin: 22px 0 8px;
+        letter-spacing: 0;
+      }
+      p { margin: 0 0 12px; }
+      a { color: var(--accent); }
+      code {
+        background: #efe9df;
+        border-radius: 4px;
+        padding: 1px 4px;
+        font-size: 0.94em;
+      }
+      .meta {
+        color: var(--muted);
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px 16px;
+        font-size: 14px;
+      }
+      .summary {
+        background: var(--paper);
+        border: 1px solid var(--line);
+        border-left: 4px solid var(--accent);
+        border-radius: 8px;
+        margin: 22px 0;
+        padding: 18px;
+      }
+      nav {
+        background: var(--paper);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        margin: 20px 0 28px;
+        padding: 14px 18px;
+      }
+      nav ul, section ul {
+        margin: 8px 0 0;
+        padding-left: 22px;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 12px;
+      }
+      .card {
+        background: var(--paper);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 14px;
+      }
+      .decision {
+        background: var(--accent-soft);
+        border-color: #b8d8d2;
+      }
+      .warning {
+        background: #fff7e6;
+        border-color: #efd096;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        background: var(--paper);
+        border: 1px solid var(--line);
+      }
+      th, td {
+        border-bottom: 1px solid var(--line);
+        padding: 10px;
+        text-align: left;
+        vertical-align: top;
+      }
+      th { background: #eee7dc; }
+      .unit {
+        background: var(--paper);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        margin: 12px 0;
+        padding: 16px;
+      }
+      .unit h3 { margin-top: 0; }
+      .tag {
+        background: #eee7dc;
+        border-radius: 999px;
+        color: var(--muted);
+        display: inline-block;
+        font-size: 12px;
+        margin-right: 6px;
+        padding: 2px 8px;
+      }
+      footer {
+        border-top: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 13px;
+        margin-top: 36px;
+        padding-top: 16px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>feat: Add Athena Automation Foundation</h1>
+        <div class="meta">
+          <span>Type: feat</span>
+          <span>Status: active</span>
+          <span>Date: 2026-06-08</span>
+          <span>Source: <a href="2026-06-08-001-feat-daily-ops-automation-plan.md">markdown plan</a></span>
+        </div>
+      </header>
+
+      <section class="summary">
+        <h2>Summary</h2>
+        <p>Add a guarded automation foundation that lets Athena act as a first-class operational actor across product workflows. Daily Operations is the first implementation: clean Opening Handoffs can be auto-started, EOD Review can be prepared for human review, and the manager-approval boundary for EOD completion stays intact.</p>
+      </section>
+
+      <nav aria-label="Plan sections">
+        <strong>Contents</strong>
+        <ul>
+          <li><a href="#scope">Scope</a></li>
+          <li><a href="#decisions">Key Decisions</a></li>
+          <li><a href="#design">Design Shape</a></li>
+          <li><a href="#units">Implementation Units</a></li>
+          <li><a href="#risks">Risks</a></li>
+          <li><a href="#verification">Verification Strategy</a></li>
+        </ul>
+      </nav>
+
+      <section id="scope">
+        <h2>Scope</h2>
+        <div class="grid">
+          <article class="card">
+            <h3>In Scope</h3>
+            <ul>
+              <li>Reusable Athena automation actor identity.</li>
+              <li>Domain-neutral action registry, policy, idempotency, and run ledger.</li>
+              <li>Operational event attribution for automation decisions.</li>
+              <li>Clean Opening Handoff auto-start.</li>
+              <li>EOD Review preparation and routing.</li>
+              <li>Daily Operations visibility for decisions and skips.</li>
+            </ul>
+          </article>
+          <article class="card warning">
+            <h3>Out Of Scope</h3>
+            <ul>
+              <li>No silent EOD Review completion.</li>
+              <li>No auto-acknowledgement of variances, voids, or carry-forward work.</li>
+              <li>No drawer, register, payment, inventory, or approval-proof creation.</li>
+              <li>No Daily Operations-only foundation abstraction.</li>
+              <li>No global action-mode rollout by default.</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section id="decisions">
+        <h2>Key Decisions</h2>
+        <div class="grid">
+          <article class="card decision">
+            <h3>Explicit Automation Identity</h3>
+            <p>Athena is represented through automation metadata, not a fake staff profile.</p>
+          </article>
+          <article class="card decision">
+            <h3>Foundation First</h3>
+            <p>Shared automation primitives are built before Daily Operations consumes them.</p>
+          </article>
+          <article class="card decision">
+            <h3>Deterministic Policy</h3>
+            <p>Decisions come from store-day snapshots, policy mode, source subjects, and a versioned policy.</p>
+          </article>
+          <article class="card decision">
+            <h3>Opening First</h3>
+            <p>Opening has the safest mutation boundary because clean days require no human acknowledgement.</p>
+          </article>
+          <article class="card decision">
+            <h3>EOD Preparation</h3>
+            <p>EOD automation records readiness and review routing while preserving manager approval.</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="design">
+        <h2>Design Shape</h2>
+        <p>The automation foundation owns scheduling, registered actions, store-scoped policy, idempotency, durable run history, and Athena actor attribution. Daily Operations supplies the first domain adapter, which reads Opening and EOD snapshots, records automation decisions through the shared ledger, and applies only eligible clean Opening actions. EOD outcomes become prepared or review-needed evidence, not completed close records.</p>
+        <table>
+          <thead>
+            <tr>
+              <th>Layer</th>
+              <th>Automation Outcome</th>
+              <th>Boundary</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Automation foundation</td>
+              <td>Registers action, evaluates policy, records run, attributes Athena actor</td>
+              <td>Domain-neutral; no Daily Operations imports</td>
+            </tr>
+            <tr>
+              <td>Daily Operations adapter</td>
+              <td>Supplies Opening and EOD snapshots, source subjects, and action handlers</td>
+              <td>First implementation on top of foundation</td>
+            </tr>
+            <tr>
+              <td>Clean Opening</td>
+              <td>Athena starts Opening Handoff</td>
+              <td>Mutation allowed only in store-scoped action mode</td>
+            </tr>
+            <tr>
+              <td>Opening with review or carry-forward</td>
+              <td>Skipped with human-action reason</td>
+              <td>No mutation</td>
+            </tr>
+            <tr>
+              <td>EOD Review</td>
+              <td>Prepared blocker, review, or clean-ready evidence</td>
+              <td>No close completion in this plan</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="units">
+        <h2>Implementation Units</h2>
+        <article class="unit">
+          <h3>U1. Add Automation Foundation Primitives</h3>
+          <p><span class="tag">Backend</span><span class="tag">Foundation</span>Add domain-neutral action definitions, policy/run schemas, idempotency, index coverage, and optional automation actor metadata on operational events.</p>
+        </article>
+        <article class="unit">
+          <h3>U2. Build Shared Automation Evaluation And Execution Boundary</h3>
+          <p><span class="tag">Backend</span><span class="tag">Policy</span>Evaluate registered actions into disabled, dry-run, skipped, prepared, eligible, applied, or failed outcomes before domain handlers mutate state.</p>
+        </article>
+        <article class="unit">
+          <h3>U3. Add Daily Operations Automation Adapter</h3>
+          <p><span class="tag">Backend</span><span class="tag">Operations</span>Register Opening auto-start and EOD preparation as the first domain actions built on top of the foundation.</p>
+        </article>
+        <article class="unit">
+          <h3>U4. Surface Daily Operations Automation Status</h3>
+          <p><span class="tag">Frontend</span><span class="tag">Operations</span>Show what Athena did, prepared, skipped, or failed in the relevant Operations surfaces.</p>
+        </article>
+        <article class="unit">
+          <h3>U5. Document And Validate The Automation Boundary</h3>
+          <p><span class="tag">Docs</span><span class="tag">Validation</span>Add reusable solution guidance for the foundation and first Daily Operations implementation, then rebuild graphify after code changes.</p>
+        </article>
+      </section>
+
+      <section id="risks">
+        <h2>Risks</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Risk</th>
+              <th>Mitigation</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Athena appears to impersonate staff</td>
+              <td>Use explicit automation actor metadata and keep human actor fields unchanged.</td>
+            </tr>
+            <tr>
+              <td>Foundation becomes Daily Operations-only</td>
+              <td>Keep shared automation modules domain-neutral and add tests that action definitions/runs do not require Daily Operations imports.</td>
+            </tr>
+            <tr>
+              <td>Cron duplicates lifecycle records</td>
+              <td>Use store/date/action idempotency and event dedupe.</td>
+            </tr>
+            <tr>
+              <td>EOD automation weakens review discipline</td>
+              <td>Keep EOD preparation-only and test manager approval proof preservation.</td>
+            </tr>
+            <tr>
+              <td>Global rollout acts unexpectedly</td>
+              <td>Default to disabled/dry-run and require store-scoped action enablement.</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="verification">
+        <h2>Verification Strategy</h2>
+        <ul>
+          <li>Foundation tests cover action registry, automation policy, run ledger, idempotency, and event actor metadata without depending on Daily Operations modules.</li>
+          <li>Daily Operations adapter tests cover Opening action mode, dry-run mode, disabled mode, and EOD preparation mode.</li>
+          <li>Regression tests prove manual Opening still requires human actor authorization and EOD completion still requires manager approval proof.</li>
+          <li>Frontend tests cover Daily Operations, Opening, and EOD Review automation status copy and links.</li>
+          <li>Graphify is rebuilt after implementation changes.</li>
+        </ul>
+      </section>
+
+      <footer>
+        <p>Canonical plan: <a href="2026-06-08-001-feat-daily-ops-automation-plan.md">docs/plans/2026-06-08-001-feat-daily-ops-automation-plan.md</a></p>
+      </footer>
+    </main>
+  </body>
+</html>

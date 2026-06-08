@@ -13,6 +13,7 @@ import {
 type TableName =
   | "approvalProof"
   | "approvalRequest"
+  | "automationRun"
   | "dailyClose"
   | "expenseSession"
   | "expenseTransaction"
@@ -357,6 +358,46 @@ function completedDailyCloseRow(overrides: Partial<Row> = {}): Row {
 describe("end-of-day review backend foundation", () => {
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it("includes the latest EOD automation preparation status when present", async () => {
+    const { db } = createDb({
+      automationRun: [
+        {
+          _id: "automation-run-eod",
+          action: "eod.prepare",
+          createdAt: Date.UTC(2026, 4, 7, 20),
+          decisionReason: "EOD Review is ready for manager review.",
+          domain: "daily_operations",
+          idempotencyKey: "eod",
+          mutationBoundary: "daily_close_review",
+          operatingDate: "2026-05-07",
+          outcome: "prepared",
+          policyMode: "enabled",
+          policyVersion: "automation-foundation.v1",
+          snapshotCounts: {},
+          sourceSubjects: [{ id: "store-1:2026-05-07", type: "daily_close" }],
+          storeId: "store-1",
+          triggerType: "scheduled",
+          updatedAt: Date.UTC(2026, 4, 7, 20),
+        },
+      ],
+      store: [store],
+    });
+
+    const snapshot = await buildDailyCloseSnapshotWithCtx(
+      { db } as unknown as QueryCtx,
+      { operatingDate: "2026-05-07", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(snapshot.automationStatus).toEqual({
+      decisionReason: "EOD Review is ready for manager review.",
+      id: "automation-run-eod",
+      occurredAt: Date.UTC(2026, 4, 7, 20),
+      outcome: "prepared",
+      policyMode: "enabled",
+    });
+    expect(snapshot.completedClose).toBeNull();
   });
 
   it("classifies blockers, review items, carry-forward items, ready items, and summary totals", async () => {

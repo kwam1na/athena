@@ -11,6 +11,7 @@ import {
   ArrowUpRight,
   Archive,
   Ban,
+  Bot,
   Calendar as CalendarIcon,
   Check,
   ChevronLeft,
@@ -104,7 +105,29 @@ export type DailyOperationsLaneStatus =
   | "closed"
   | "unknown";
 
+type DailyOperationsAutomationOutcome =
+  | "applied"
+  | "prepared"
+  | "skipped"
+  | "failed"
+  | "dry_run"
+  | "disabled"
+  | "eligible";
+
+type DailyOperationsAutomationStatus = {
+  id: string;
+  lane: "opening" | "close";
+  occurredAt?: number | null;
+  outcome: DailyOperationsAutomationOutcome;
+  sourceLink?: {
+    params?: Record<string, string>;
+    search?: Record<string, string>;
+    to?: string;
+  };
+};
+
 export type DailyOperationsSnapshot = {
+  automationStatuses?: DailyOperationsAutomationStatus[];
   attentionItems: Array<{
     id: string;
     label: string;
@@ -738,6 +761,146 @@ function WorkflowAllClearPanel() {
   );
 }
 
+function getAutomationLaneLabel(lane: DailyOperationsAutomationStatus["lane"]) {
+  return lane === "opening" ? "Opening Handoff" : "EOD Review";
+}
+
+function getAutomationStatusMessage(status: DailyOperationsAutomationStatus) {
+  const label = getAutomationLaneLabel(status.lane);
+
+  if (status.outcome === "applied" && status.lane === "opening") {
+    return "Athena started Opening Handoff.";
+  }
+
+  if (status.outcome === "prepared" && status.lane === "close") {
+    return "Athena prepared EOD Review for manager review.";
+  }
+
+  if (status.outcome === "failed") {
+    return `Athena could not finish the ${label} automation check. Open the workflow to review.`;
+  }
+
+  if (status.outcome === "dry_run") {
+    return `Athena checked ${label} in dry run. No workflow changes were made.`;
+  }
+
+  if (status.outcome === "disabled") {
+    return `${label} automation is off for this store day.`;
+  }
+
+  if (status.outcome === "eligible") {
+    return `Athena found ${label} ready for automation. No workflow changes were made.`;
+  }
+
+  if (status.outcome === "prepared") {
+    return `Athena prepared ${label} for review.`;
+  }
+
+  if (status.outcome === "applied") {
+    return `Athena updated ${label}.`;
+  }
+
+  return `Athena checked ${label}. No change was made.`;
+}
+
+function getVisibleAutomationStatuses(snapshot: DailyOperationsSnapshot) {
+  const statuses = snapshot.automationStatuses ?? [];
+
+  return statuses.filter((status) => {
+    if (
+      status.lane === "opening" &&
+      snapshot.lifecycle.status !== "not_opened" &&
+      status.outcome !== "applied"
+    ) {
+      return false;
+    }
+
+    if (
+      status.lane === "close" &&
+      snapshot.lifecycle.status === "closed" &&
+      !["applied", "prepared"].includes(status.outcome)
+    ) {
+      return false;
+    }
+
+    return true;
+  });
+}
+
+function AutomationStatusPanel({
+  orgUrlSlug,
+  snapshot,
+  storeUrlSlug,
+}: {
+  orgUrlSlug: string;
+  snapshot: DailyOperationsSnapshot;
+  storeUrlSlug: string;
+}) {
+  const statuses = getVisibleAutomationStatuses(snapshot);
+
+  if (statuses.length === 0) return null;
+
+  return (
+    <section className="rounded-lg border border-border bg-surface-raised p-layout-md shadow-surface">
+      <h3 className="flex items-center gap-layout-xs text-base font-medium text-foreground">
+        <Bot aria-hidden="true" className="h-4 w-4" />
+        Athena automation
+      </h3>
+      <div className="mt-layout-sm space-y-layout-xs">
+        {statuses.map((status) => {
+          const label = getAutomationLaneLabel(status.lane);
+          const link = status.sourceLink;
+
+          return (
+            <article
+              className="flex flex-col gap-layout-xs rounded-md border border-border/70 bg-background/60 px-layout-md py-layout-sm sm:flex-row sm:items-start sm:justify-between"
+              key={status.id}
+            >
+              <div className="min-w-0">
+                <p className="text-sm text-foreground">
+                  {getAutomationStatusMessage(status)}
+                </p>
+                {status.occurredAt ? (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {formatEventTime(status.occurredAt)}
+                  </p>
+                ) : null}
+              </div>
+              {link?.to ? (
+                <Button
+                  asChild
+                  className="h-8 shrink-0 self-start px-2 text-xs"
+                  size="sm"
+                  variant="ghost"
+                >
+                  <Link
+                    aria-label={`Open ${label} automation source`}
+                    params={buildParams(
+                      orgUrlSlug,
+                      storeUrlSlug,
+                      link.params,
+                    )}
+                    search={
+                      {
+                        o: getOrigin(),
+                        ...(link.search ?? {}),
+                      } as never
+                    }
+                    to={link.to}
+                  >
+                    Open
+                    <ArrowUpRight aria-hidden="true" className="h-3.5 w-3.5" />
+                  </Link>
+                </Button>
+              ) : null}
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 function HistoricalWorkflowPanel({
   orgUrlSlug,
   snapshot,
@@ -1345,6 +1508,11 @@ export function DailyOperationsViewContent({
                     />
                   ) : (
                     <section className="space-y-layout-lg">
+                      <AutomationStatusPanel
+                        orgUrlSlug={orgUrlSlug}
+                        snapshot={snapshot}
+                        storeUrlSlug={storeUrlSlug}
+                      />
                       <div>
                         <h3 className="text-base font-medium text-foreground">
                           Workflow status
