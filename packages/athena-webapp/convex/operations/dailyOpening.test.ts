@@ -8,6 +8,7 @@ import {
 
 type TableName =
   | "approvalRequest"
+  | "automationRun"
   | "dailyClose"
   | "dailyOpening"
   | "operationalEvent"
@@ -237,6 +238,64 @@ describe("daily opening backend foundation", () => {
         type: "daily_close",
       },
     ]);
+  });
+
+  it("includes the latest Opening automation status when present", async () => {
+    const { db } = createDb({
+      automationRun: [
+        {
+          _id: "automation-run-old",
+          action: "opening.auto_start",
+          createdAt: 1,
+          domain: "daily_operations",
+          idempotencyKey: "old",
+          mutationBoundary: "daily_opening",
+          operatingDate: "2026-05-08",
+          outcome: "dry_run",
+          policyMode: "dry_run",
+          policyVersion: "automation-foundation.v1",
+          snapshotCounts: {},
+          sourceSubjects: [{ id: "daily-close-1", type: "daily_close" }],
+          storeId: "store-1",
+          triggerType: "scheduled",
+          updatedAt: 1,
+        },
+        {
+          _id: "automation-run-latest",
+          action: "opening.auto_start",
+          appliedAt: Date.UTC(2026, 4, 8, 8),
+          createdAt: 2,
+          decisionReason: "Opening Handoff was clean.",
+          domain: "daily_operations",
+          idempotencyKey: "latest",
+          mutationBoundary: "daily_opening",
+          operatingDate: "2026-05-08",
+          outcome: "applied",
+          policyMode: "enabled",
+          policyVersion: "automation-foundation.v1",
+          snapshotCounts: {},
+          sourceSubjects: [{ id: "daily-close-1", type: "daily_close" }],
+          storeId: "store-1",
+          triggerType: "scheduled",
+          updatedAt: 2,
+        },
+      ],
+      dailyClose: [completedDailyClose()],
+      store: [store],
+    });
+
+    const snapshot = await buildDailyOpeningSnapshotWithCtx(
+      { db } as unknown as QueryCtx,
+      { operatingDate: "2026-05-08", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(snapshot.automationStatus).toEqual({
+      decisionReason: "Opening Handoff was clean.",
+      id: "automation-run-latest",
+      occurredAt: Date.UTC(2026, 4, 8, 8),
+      outcome: "applied",
+      policyMode: "enabled",
+    });
   });
 
   it("does not treat a reopened prior close as clean", async () => {

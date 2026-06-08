@@ -10,6 +10,7 @@ import {
   ArrowUpRight,
   Banknote,
   Ban,
+  Bot,
   Calendar as CalendarIcon,
   Check,
   CheckCircle2,
@@ -88,6 +89,12 @@ const useExpectedDailyCloseMutation = useMutation as unknown as (
   mutation: unknown,
 ) => (args: Record<string, unknown>) => Promise<unknown>;
 
+type DailyCloseAutomationStatus = {
+  id: string;
+  occurredAt?: number | null;
+  outcome: "applied" | "prepared" | "skipped" | "failed" | "dry_run" | "disabled";
+};
+
 export type DailyCloseStatus =
   | "blocked"
   | "needs_review"
@@ -127,6 +134,7 @@ export type DailyCloseItem = {
 };
 
 export type DailyCloseSnapshot = {
+  automationStatus?: DailyCloseAutomationStatus | null;
   blockers: DailyCloseItem[];
   carryForwardItems: DailyCloseItem[];
   completedClose?: {
@@ -447,6 +455,70 @@ function DailyCloseStatusTitle({
       ) : null}
       {title}
     </h2>
+  );
+}
+
+function getDailyCloseAutomationMessage(status: DailyCloseAutomationStatus) {
+  if (status.outcome === "prepared") {
+    return "Athena prepared EOD Review for manager review.";
+  }
+
+  if (status.outcome === "failed") {
+    return "Athena could not finish the EOD Review automation check. Review the close before completing the store day.";
+  }
+
+  if (status.outcome === "dry_run") {
+    return "Athena checked EOD Review in dry run. No workflow changes were made.";
+  }
+
+  if (status.outcome === "disabled") {
+    return "EOD Review automation is off for this store day.";
+  }
+
+  if (status.outcome === "applied") {
+    return "Athena updated EOD Review.";
+  }
+
+  return "Athena checked EOD Review. No change was made.";
+}
+
+function getVisibleDailyCloseAutomationStatus(
+  snapshot: DailyCloseSnapshot,
+  status: DailyCloseStatus,
+) {
+  const automationStatus = snapshot.automationStatus;
+
+  if (!automationStatus) return null;
+
+  if (status === "completed" && automationStatus.outcome !== "applied") {
+    return null;
+  }
+
+  return automationStatus;
+}
+
+function DailyCloseAutomationStatusPanel({
+  automationStatus,
+}: {
+  automationStatus: DailyCloseAutomationStatus | null;
+}) {
+  if (!automationStatus) return null;
+
+  return (
+    <section className="rounded-lg border border-border bg-surface-raised p-layout-md shadow-surface">
+      <h3 className="flex items-center gap-layout-xs text-base font-medium text-foreground">
+        <Bot aria-hidden="true" className="h-4 w-4" />
+        Athena automation
+      </h3>
+      <p className="mt-layout-sm text-sm leading-6 text-foreground">
+        {getDailyCloseAutomationMessage(automationStatus)}
+      </p>
+      {automationStatus.occurredAt ? (
+        <p className="mt-1 text-xs text-muted-foreground">
+          {formatDailyCloseCompletedAt(automationStatus.occurredAt)}
+        </p>
+      ) : null}
+    </section>
   );
 }
 
@@ -2902,6 +2974,9 @@ export function DailyCloseViewContent({
   const status = displaySnapshot
     ? getDailyCloseStatus(displaySnapshot)
     : "ready";
+  const automationStatus = displaySnapshot
+    ? getVisibleDailyCloseAutomationStatus(displaySnapshot, status)
+    : null;
   const isBlocked = status === "blocked";
   const isCompleted = status === "completed";
   const canReopen = displaySnapshot
@@ -3077,19 +3152,24 @@ export function DailyCloseViewContent({
       isLoading={isLoadingSnapshot || !displaySnapshot}
       main={
         displaySnapshot ? (
-          <BucketTabs
-            buckets={buckets}
-            canViewFinancialDetails={hasFinancialDetailsAccess}
-            currency={currency}
-            onPageChange={handleBucketPageChange}
-            onSelectedIdsChange={setSelectedCarryForwardIds}
-            onValueChange={handleBucketValueChange}
-            orgUrlSlug={orgUrlSlug}
-            page={selectedBucketPage}
-            selectedIds={selectedIds}
-            storeUrlSlug={storeUrlSlug}
-            value={selectedBucketValue}
-          />
+          <div className="space-y-layout-lg">
+            <DailyCloseAutomationStatusPanel
+              automationStatus={automationStatus}
+            />
+            <BucketTabs
+              buckets={buckets}
+              canViewFinancialDetails={hasFinancialDetailsAccess}
+              currency={currency}
+              onPageChange={handleBucketPageChange}
+              onSelectedIdsChange={setSelectedCarryForwardIds}
+              onValueChange={handleBucketValueChange}
+              orgUrlSlug={orgUrlSlug}
+              page={selectedBucketPage}
+              selectedIds={selectedIds}
+              storeUrlSlug={storeUrlSlug}
+              value={selectedBucketValue}
+            />
+          </div>
         ) : null
       }
       metrics={

@@ -7,12 +7,17 @@ import {
   recordOperationalEventWithCtx,
 } from "./operationalEvents";
 
-type TableName = "operationalEvent" | "product" | "productSku";
+type TableName =
+  | "automationRun"
+  | "operationalEvent"
+  | "product"
+  | "productSku";
 type Row = Record<string, unknown> & { _id: string };
 
 function createCtx(seed: Partial<Record<TableName, Row[]>>) {
   const tables: Record<TableName, Map<string, Row>> = {
     operationalEvent: new Map(),
+    automationRun: new Map(),
     product: new Map(),
     productSku: new Map(),
   };
@@ -203,5 +208,51 @@ describe("operational events", () => {
       expect.objectContaining({ actorUserId: "user-2" }),
       expect.objectContaining({ actorStaffProfileId: "staff-1" }),
     ]);
+  });
+
+  it("records Athena-authored operational events without staff impersonation", async () => {
+    const ctx = createCtx({});
+    const baseEvent = {
+      actorType: "automation" as const,
+      automationDecisionReason: "Clean Opening snapshot.",
+      automationPolicyVersion: "daily-operations.v1",
+      automationRunId: "automation-run-1" as Id<"automationRun">,
+      eventType: "daily_opening_auto_started",
+      message: "Athena started Opening Handoff for 2026-06-08.",
+      metadata: {
+        operatingDate: "2026-06-08",
+      },
+      metadataDedupeKeys: ["operatingDate"],
+      storeId: "store-1" as Id<"store">,
+      subjectId: "daily-opening-1",
+      subjectType: "daily_opening",
+    };
+
+    await recordOperationalEventWithCtx(ctx as unknown as MutationCtx, baseEvent);
+    await recordOperationalEventWithCtx(ctx as unknown as MutationCtx, baseEvent);
+    await recordOperationalEventWithCtx(ctx as unknown as MutationCtx, {
+      ...baseEvent,
+      automationRunId: "automation-run-2" as Id<"automationRun">,
+    });
+
+    const events = await ctx.db
+      .query("operationalEvent")
+      .withIndex("by_storeId_subject", (q) =>
+        q
+          .eq("storeId", "store-1" as Id<"store">)
+          .eq("subjectType", "daily_opening")
+          .eq("subjectId", "daily-opening-1"),
+      )
+      .take(10);
+
+    expect(events).toHaveLength(2);
+    expect(events[0]).toMatchObject({
+      actorType: "automation",
+      automationDecisionReason: "Clean Opening snapshot.",
+      automationPolicyVersion: "daily-operations.v1",
+      automationRunId: "automation-run-1",
+    });
+    expect(events[0]).not.toHaveProperty("actorStaffProfileId");
+    expect(events[0]).not.toHaveProperty("actorUserId");
   });
 });

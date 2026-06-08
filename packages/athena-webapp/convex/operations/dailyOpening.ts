@@ -9,6 +9,11 @@ import { v } from "convex/values";
 import { commandResultValidator } from "../lib/commandResultValidators";
 import { recordOperationalEventWithCtx } from "./operationalEvents";
 import { getDailyCloseOpeningContextWithCtx } from "./dailyClose";
+import {
+  dailyOperationsOpeningAutoStartAction,
+  getLatestDailyOperationsAutomationStatusWithCtx,
+  type DailyOperationsAutomationStatus,
+} from "./dailyOperationsAutomation";
 import { requireStoreFullAdminAccess } from "../stockOps/access";
 import { ok, userError, type CommandResult } from "../../shared/commandResult";
 
@@ -62,6 +67,7 @@ type DailyOpeningSnapshot = {
   operatingDate: string;
   storeId: Id<"store">;
   organizationId: Id<"organization"> | null;
+  automationStatus?: DailyOperationsAutomationStatus | null;
   existingOpening: Doc<"dailyOpening"> | null;
   priorClose: Doc<"dailyClose"> | null;
   status: DailyOpeningReadinessStatus | "started";
@@ -81,7 +87,11 @@ type DailyOpeningSnapshot = {
 type StartStoreDayArgs = {
   acknowledgedItemKeys?: string[];
   actorStaffProfileId?: Id<"staffProfile">;
+  actorType?: "human" | "automation";
   actorUserId?: Id<"athenaUser">;
+  automationDecisionReason?: string;
+  automationPolicyVersion?: string;
+  automationRunId?: Id<"automationRun">;
   endAt?: number;
   notes?: string;
   operatingDate: string;
@@ -93,6 +103,7 @@ type StartStoreDayArgs = {
 type StartStoreDayResult = CommandResult<{
   action: "started" | "already_started";
   dailyOpening: Doc<"dailyOpening">;
+  operationalEventId?: Id<"operationalEvent">;
 }>;
 
 function trimOptional(value?: string | null) {
@@ -613,10 +624,18 @@ async function resolveOpeningActor(
   ctx: MutationCtx,
   args: {
     actorStaffProfileId?: Id<"staffProfile">;
+    actorType?: "human" | "automation";
     actorUserId?: Id<"athenaUser">;
     storeId: Id<"store">;
   },
 ) {
+  if (args.actorType === "automation") {
+    return ok({
+      actorStaffProfileId: undefined,
+      actorUserId: undefined,
+    });
+  }
+
   if (args.actorStaffProfileId) {
     const staffProfile = await ctx.db.get("staffProfile", args.actorStaffProfileId);
 
@@ -679,6 +698,12 @@ export async function buildDailyOpeningSnapshotWithCtx(
   const existingOpening = await getDailyOpeningForDate(ctx, args);
   const startedOpening = await hydrateStartedOpening(ctx, existingOpening);
   const operatingDateRange = resolveOperatingDateRange(args);
+  const automationStatus =
+    await getLatestDailyOperationsAutomationStatusWithCtx(ctx, {
+      action: dailyOperationsOpeningAutoStartAction.action,
+      operatingDate: args.operatingDate,
+      storeId: args.storeId,
+    });
 
   if (!isValidOperatingDate(args.operatingDate)) {
     const blocker = invalidOperatingDateItem(args.operatingDate);
@@ -688,6 +713,7 @@ export async function buildDailyOpeningSnapshotWithCtx(
       operatingDate: args.operatingDate,
       storeId: args.storeId,
       organizationId: store?.organizationId ?? null,
+      automationStatus,
       existingOpening,
       priorClose: null,
       status: "blocked",
@@ -767,6 +793,7 @@ export async function buildDailyOpeningSnapshotWithCtx(
     operatingDate: args.operatingDate,
     storeId: args.storeId,
     organizationId: store?.organizationId ?? null,
+    automationStatus,
     existingOpening,
     priorClose,
     status: existingOpening ? "started" : readiness.status,
@@ -855,6 +882,7 @@ export async function startStoreDayWithCtx(
   }
 
   const { actorStaffProfileId, actorUserId } = actorResult.data;
+  const actorType = args.actorType ?? "human";
   const now = Date.now();
   const dailyOpeningId = await ctx.db.insert("dailyOpening", {
     storeId: args.storeId,
@@ -876,6 +904,10 @@ export async function startStoreDayWithCtx(
     startedAt: now,
     actorUserId,
     actorStaffProfileId,
+    actorType,
+    automationDecisionReason: args.automationDecisionReason,
+    automationPolicyVersion: args.automationPolicyVersion,
+    automationRunId: args.automationRunId,
   });
 
   const dailyOpening = await ctx.db.get("dailyOpening", dailyOpeningId);
@@ -888,16 +920,26 @@ export async function startStoreDayWithCtx(
     });
   }
 
-  await recordOperationalEventWithCtx(ctx, {
+  const operationalEvent = await recordOperationalEventWithCtx(ctx, {
     storeId: args.storeId,
     organizationId: store.organizationId,
-    eventType: "daily_opening_acknowledged",
+    eventType:
+      actorType === "automation"
+        ? "daily_opening_auto_started"
+        : "daily_opening_acknowledged",
     subjectType: DAILY_OPENING_SUBJECT_TYPE,
     subjectId: dailyOpening._id,
     subjectLabel: `Opening ${args.operatingDate}`,
-    message: `Store day acknowledged for ${args.operatingDate}.`,
+    message:
+      actorType === "automation"
+        ? `Athena started Opening Handoff for ${args.operatingDate}.`
+        : `Store day acknowledged for ${args.operatingDate}.`,
     actorUserId,
     actorStaffProfileId,
+    actorType,
+    automationDecisionReason: args.automationDecisionReason,
+    automationPolicyVersion: args.automationPolicyVersion,
+    automationRunId: args.automationRunId,
     metadata: {
       acknowledgedItemKeys: args.acknowledgedItemKeys ?? [],
       endAt: dailyOpening.endAt,
@@ -911,6 +953,7 @@ export async function startStoreDayWithCtx(
   return ok({
     action: "started",
     dailyOpening,
+    operationalEventId: operationalEvent?._id,
   });
 }
 

@@ -114,6 +114,10 @@ import {
   stockAdjustmentBatchSchema,
   vendorSchema,
 } from "./schemas/stockOps";
+import {
+  automationPolicySchema,
+  automationRunSchema,
+} from "./schemas/automation";
 
 const schema = defineSchema({
   ...authTables,
@@ -137,6 +141,25 @@ const schema = defineSchema({
     ])
     .index("by_workItemId", ["workItemId"])
     .index("by_registerSessionId", ["registerSessionId"]),
+  automationPolicy: defineTable(automationPolicySchema)
+    .index("by_storeId_domain_action", ["storeId", "domain", "action"])
+    .index("by_domain_action_mode", ["domain", "action", "mode"])
+    .index("by_storeId_mode", ["storeId", "mode"]),
+  automationRun: defineTable(automationRunSchema)
+    .index("by_storeId_operatingDate_domain_action", [
+      "storeId",
+      "operatingDate",
+      "domain",
+      "action",
+    ])
+    .index("by_storeId_domain_action_outcome", [
+      "storeId",
+      "domain",
+      "action",
+      "outcome",
+    ])
+    .index("by_storeId_outcome", ["storeId", "outcome"])
+    .index("by_storeId_idempotencyKey", ["storeId", "idempotencyKey"]),
   approvalProof: defineTable(
     v.object({
       storeId: v.id("store"),

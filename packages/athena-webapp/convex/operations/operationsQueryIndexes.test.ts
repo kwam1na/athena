@@ -30,6 +30,41 @@ describe("operations query indexing", () => {
   it("defines additive schema indexes for the operations rails", () => {
     [
       {
+        table: "automationPolicy",
+        descriptor: "by_storeId_domain_action",
+        fields: ["storeId", "domain", "action"],
+      },
+      {
+        table: "automationPolicy",
+        descriptor: "by_storeId_mode",
+        fields: ["storeId", "mode"],
+      },
+      {
+        table: "automationPolicy",
+        descriptor: "by_domain_action_mode",
+        fields: ["domain", "action", "mode"],
+      },
+      {
+        table: "automationRun",
+        descriptor: "by_storeId_operatingDate_domain_action",
+        fields: ["storeId", "operatingDate", "domain", "action"],
+      },
+      {
+        table: "automationRun",
+        descriptor: "by_storeId_idempotencyKey",
+        fields: ["storeId", "idempotencyKey"],
+      },
+      {
+        table: "automationRun",
+        descriptor: "by_storeId_domain_action_outcome",
+        fields: ["storeId", "domain", "action", "outcome"],
+      },
+      {
+        table: "automationRun",
+        descriptor: "by_storeId_outcome",
+        fields: ["storeId", "outcome"],
+      },
+      {
         table: "customerProfile",
         descriptor: "by_storeId_email",
         fields: ["storeId", "email"],
@@ -214,9 +249,11 @@ describe("operations query indexing", () => {
     const skuActivitySource = getSource("./skuActivity.ts");
     const paymentAllocationsSource = getSource("./paymentAllocations.ts");
     const operationalEventsSource = getSource("./operationalEvents.ts");
+    const automationRunLedgerSource = getSource("../automation/runLedger.ts");
     const dailyOperationsSource = getSource("./dailyOperations.ts");
     const dailyCloseSource = getSource("./dailyClose.ts");
     const dailyOpeningSource = getSource("./dailyOpening.ts");
+    const runLedgerSource = getSource("../automation/runLedger.ts");
 
     expect(customerProfilesSource).toContain(
       '.withIndex("by_storeFrontUserId"',
@@ -248,6 +285,12 @@ describe("operations query indexing", () => {
     expect(operationalEventsSource).toContain(
       '.withIndex("by_storeId_subject"',
     );
+    expect(automationRunLedgerSource).toContain(
+      '.withIndex("by_storeId_operatingDate_domain_action"',
+    );
+    expect(automationRunLedgerSource).toContain(
+      '.withIndex("by_storeId_idempotencyKey"',
+    );
     expect(dailyOperationsSource).toContain(
       '.withIndex("by_storeId_createdAt"',
     );
@@ -264,6 +307,10 @@ describe("operations query indexing", () => {
     );
     expect(dailyOpeningSource).toContain(
       '.withIndex("by_storeId_status_operatingDate"',
+    );
+    expect(runLedgerSource).toContain('.withIndex("by_storeId_domain_action"');
+    expect(runLedgerSource).toContain(
+      '.withIndex("by_storeId_idempotencyKey"',
     );
 
     const cycleCountDraftsSource = getSource("../stockOps/cycleCountDrafts.ts");

@@ -24,6 +24,10 @@ export type RecordOperationalEventArgs = {
   metadataDedupeKeys?: string[];
   actorUserId?: Id<"athenaUser">;
   actorStaffProfileId?: Id<"staffProfile">;
+  actorType?: "human" | "automation";
+  automationRunId?: Id<"automationRun">;
+  automationPolicyVersion?: string;
+  automationDecisionReason?: string;
   customerProfileId?: Id<"customerProfile">;
   workItemId?: Id<"operationalWorkItem">;
   registerSessionId?: Id<"registerSession">;
@@ -58,6 +62,10 @@ function matchesExistingEvent(
     approvalRequestId?: Id<"approvalRequest">;
     actorStaffProfileId?: Id<"staffProfile">;
     actorUserId?: Id<"athenaUser">;
+    actorType?: "human" | "automation";
+    automationDecisionReason?: string;
+    automationPolicyVersion?: string;
+    automationRunId?: Id<"automationRun">;
     customerProfileId?: Id<"customerProfile">;
     inventoryMovementId?: Id<"inventoryMovement">;
     onlineOrderId?: Id<"onlineOrder">;
@@ -77,6 +85,11 @@ function matchesExistingEvent(
     existingEvent.approvalRequestId === args.approvalRequestId &&
     existingEvent.actorStaffProfileId === args.actorStaffProfileId &&
     existingEvent.actorUserId === args.actorUserId &&
+    existingEvent.actorType === args.actorType &&
+    existingEvent.automationRunId === args.automationRunId &&
+    existingEvent.automationPolicyVersion === args.automationPolicyVersion &&
+    existingEvent.automationDecisionReason ===
+      args.automationDecisionReason &&
     existingEvent.customerProfileId === args.customerProfileId &&
     existingEvent.inventoryMovementId === args.inventoryMovementId &&
     existingEvent.onlineOrderId === args.onlineOrderId &&
@@ -212,6 +225,12 @@ export const recordOperationalEvent = internalMutation({
     metadataDedupeKeys: v.optional(v.array(v.string())),
     actorUserId: v.optional(v.id("athenaUser")),
     actorStaffProfileId: v.optional(v.id("staffProfile")),
+    actorType: v.optional(
+      v.union(v.literal("human"), v.literal("automation")),
+    ),
+    automationRunId: v.optional(v.id("automationRun")),
+    automationPolicyVersion: v.optional(v.string()),
+    automationDecisionReason: v.optional(v.string()),
     customerProfileId: v.optional(v.id("customerProfile")),
     workItemId: v.optional(v.id("operationalWorkItem")),
     registerSessionId: v.optional(v.id("registerSession")),

@@ -13,6 +13,12 @@ export const operationalEventSchema = v.object({
   createdAt: v.number(),
   actorUserId: v.optional(v.id("athenaUser")),
   actorStaffProfileId: v.optional(v.id("staffProfile")),
+  actorType: v.optional(
+    v.union(v.literal("human"), v.literal("automation")),
+  ),
+  automationRunId: v.optional(v.id("automationRun")),
+  automationPolicyVersion: v.optional(v.string()),
+  automationDecisionReason: v.optional(v.string()),
   customerProfileId: v.optional(v.id("customerProfile")),
   workItemId: v.optional(v.id("operationalWorkItem")),
   registerSessionId: v.optional(v.id("registerSession")),

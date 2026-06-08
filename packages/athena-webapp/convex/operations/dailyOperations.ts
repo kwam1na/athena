@@ -9,6 +9,7 @@ import {
 import { buildDailyOpeningSnapshotWithCtx } from "./dailyOpening";
 import { toDisplayAmount } from "../lib/currency";
 import { currencyFormatter } from "../utils";
+import { listAutomationRunsForStoreDayActionWithCtx } from "../automation/runLedger";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_OPERATIONS_QUERY_LIMIT = 200;
@@ -97,6 +98,21 @@ type DailyOperationsTimelineEvent = {
   subject: SourceSubject;
   transactionLink?: LinkTarget;
   type: string;
+};
+
+type DailyOperationsAutomationStatus = {
+  id: string;
+  lane: "opening" | "close";
+  occurredAt?: number | null;
+  outcome:
+    | "applied"
+    | "prepared"
+    | "skipped"
+    | "failed"
+    | "dry_run"
+    | "disabled"
+    | "eligible";
+  sourceLink: LinkTarget;
 };
 
 type DailyOperationsCloseSummary = {
@@ -1020,6 +1036,86 @@ async function getDailyCloseRecordForDate(
   return dailyClose.find((close) => close.isCurrent) ?? dailyClose[0] ?? null;
 }
 
+function compareAutomationRuns(
+  left: Doc<"automationRun">,
+  right: Doc<"automationRun">,
+) {
+  return (
+    (right.updatedAt ?? right.createdAt) - (left.updatedAt ?? left.createdAt)
+  );
+}
+
+async function getLatestAutomationRunForAction(
+  ctx: Pick<QueryCtx, "db">,
+  args: {
+    action: string;
+    operatingDate: string;
+    storeId: Id<"store">;
+  },
+) {
+  const runs = await listAutomationRunsForStoreDayActionWithCtx(ctx, {
+    action: args.action,
+    domain: "daily_operations",
+    operatingDate: args.operatingDate,
+    storeId: args.storeId,
+  });
+
+  return runs.sort(compareAutomationRuns)[0] ?? null;
+}
+
+async function listDailyOperationsAutomationStatuses(
+  ctx: Pick<QueryCtx, "db">,
+  args: {
+    operatingDate: string;
+    storeId: Id<"store">;
+  },
+): Promise<DailyOperationsAutomationStatus[]> {
+  const [openingRun, closeRun] = await Promise.all([
+    getLatestAutomationRunForAction(ctx, {
+      action: "opening.auto_start",
+      operatingDate: args.operatingDate,
+      storeId: args.storeId,
+    }),
+    getLatestAutomationRunForAction(ctx, {
+      action: "eod.prepare",
+      operatingDate: args.operatingDate,
+      storeId: args.storeId,
+    }),
+  ]);
+  const statuses: DailyOperationsAutomationStatus[] = [];
+
+  if (openingRun) {
+    statuses.push({
+      id: openingRun._id,
+      lane: "opening",
+      occurredAt: openingRun.appliedAt ?? openingRun.updatedAt,
+      outcome: openingRun.outcome,
+      sourceLink: {
+        to: "/$orgUrlSlug/store/$storeUrlSlug/operations/opening",
+      },
+    });
+  }
+
+  if (closeRun) {
+    statuses.push({
+      id: closeRun._id,
+      lane: "close",
+      occurredAt: closeRun.appliedAt ?? closeRun.updatedAt,
+      outcome: closeRun.outcome,
+      sourceLink: {
+        search: {
+          operatingDate: args.operatingDate,
+        },
+        to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",
+      },
+    });
+  }
+
+  return statuses.sort((left, right) => {
+    return (right.occurredAt ?? 0) - (left.occurredAt ?? 0);
+  });
+}
+
 function getCloseItemCounts(items: SourceItem[]) {
   return {
     approvalCount: items.filter((item) => item.category === "approval").length,
@@ -1296,6 +1392,7 @@ export async function buildDailyOperationsSnapshotWithCtx(
     closeSnapshot,
     dailyCloseRecord,
     queueCounts,
+    automationStatuses,
     timeline,
     store,
     weekMetrics,
@@ -1305,6 +1402,7 @@ export async function buildDailyOperationsSnapshotWithCtx(
       buildDailyCloseSnapshotWithCtx(ctx, args),
       getDailyCloseRecordForDate(ctx, args),
       listOpenQueueSnapshot(ctx, args.storeId),
+      listDailyOperationsAutomationStatuses(ctx, args),
       listTimelineEvents(ctx, { ...range, storeId: args.storeId }),
       ctx.db.get("store", args.storeId),
       buildWeekMetrics(ctx, args),
@@ -1387,6 +1485,7 @@ export async function buildDailyOperationsSnapshotWithCtx(
   const closeBlockerCounts = getCloseItemCounts(closeBlockers);
 
   return {
+    automationStatuses,
     attentionItems,
     closeSummary: {
       carriedOverCashTotal: closeSnapshot.summary.carriedOverCashTotal,
