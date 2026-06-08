@@ -235,7 +235,7 @@ describe("createOrReusePendingCheckoutItem", () => {
         actorUserId: "user0001",
         eventType: "pos_pending_checkout_item_created",
         message:
-          "Ama Mensah added pending checkout item Loose wave bundle for 2 sold.",
+          "Ama Mensah added pending checkout item Loose wave bundle. Quantity sold: 2.",
         subjectId: item._id,
         subjectLabel: "Loose wave bundle",
         subjectType: "pos_pending_checkout_item",
@@ -304,6 +304,8 @@ describe("createOrReusePendingCheckoutItem", () => {
       }),
       expect.objectContaining({
         eventType: "pos_pending_checkout_item_reused",
+        message:
+          "Ama Mensah reused pending checkout item Mystery wig. Quantity sold: 3.",
         metadata: expect.objectContaining({
           quantitySold: 3,
           reviewPriority: "high",
