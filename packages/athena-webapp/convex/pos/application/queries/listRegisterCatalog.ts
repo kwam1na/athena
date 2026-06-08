@@ -31,7 +31,6 @@ type RegisterCatalogAvailabilityRow = {
 };
 
 export const REGISTER_CATALOG_AVAILABILITY_LIMIT = 50;
-const REGISTER_CATALOG_PAGE_SIZE = 500;
 
 async function readCategoryName(
   ctx: QueryCtx,
@@ -120,26 +119,12 @@ async function listScopedRegisterCatalogSkus(
 ) {
   const rows: Array<{ product: Doc<"product">; sku: Doc<"productSku"> }> = [];
   const productCache = new Map<Id<"product">, Doc<"product"> | null>();
-  const skus: Doc<"productSku">[] = [];
-  let cursor: string | null = null;
-
-  while (true) {
-    const page = await ctx.db
-      .query("productSku")
-      .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
-      .paginate({
-        cursor,
-        numItems: REGISTER_CATALOG_PAGE_SIZE,
-      });
-
-    skus.push(...page.page);
-
-    if (page.isDone) {
-      break;
-    }
-
-    cursor = page.continueCursor;
-  }
+  // Convex allows only one paginated query per function; this POS snapshot must read the store catalog in one query.
+  // eslint-disable-next-line @convex-dev/no-collect-in-query
+  const skus = await ctx.db
+    .query("productSku")
+    .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+    .collect();
 
   for (const sku of skus) {
     let product = productCache.get(sku.productId);

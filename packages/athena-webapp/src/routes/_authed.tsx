@@ -12,6 +12,7 @@ import {
   type ReactNode,
   type SetStateAction,
   useEffect,
+  useRef,
   useState,
 } from "react";
 import {
@@ -324,17 +325,18 @@ function UserMenu({ userEmail }: { userEmail: string }) {
       <DropdownMenuTrigger asChild>
         <button
           type="button"
+          aria-label={`Open account menu for ${userEmail}`}
           className="flex min-w-0 items-center gap-layout-xs rounded-md px-layout-xs py-layout-2xs text-sm text-foreground transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <UserCircle className="h-4 w-4 shrink-0 text-muted-foreground" />
-          <span className="max-w-[18rem] truncate font-medium">
+          <span className="hidden max-w-[18rem] truncate font-medium sm:block">
             {userEmail}
           </span>
           {activeElevation ? (
             <Badge
               variant="outline"
               size="sm"
-              className="max-w-fit shrink-0 border-action-workflow-border bg-action-workflow-soft text-action-workflow gap-1"
+              className="hidden max-w-fit shrink-0 gap-1 border-action-workflow-border bg-action-workflow-soft text-action-workflow md:inline-flex"
             >
               <ShieldCheck aria-hidden="true" className="h-3 w-3 shrink-0" />
               <span className="truncate">
@@ -404,6 +406,25 @@ function TopBar({ userEmail }: { userEmail: string }) {
   );
 }
 
+function MobileSidebarRouteDismiss({ routeKey }: { routeKey: string }) {
+  const { isMobile, setOpenMobile } = useSidebar();
+  const previousRouteKeyRef = useRef(routeKey);
+
+  useEffect(() => {
+    if (previousRouteKeyRef.current === routeKey) {
+      return;
+    }
+
+    previousRouteKeyRef.current = routeKey;
+
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+  }, [isMobile, routeKey, setOpenMobile]);
+
+  return null;
+}
+
 export default function Layout() {
   const [defaultOpen] = useState<boolean | null>(true);
   const [fullscreenOverride, setFullscreenOverride] = useState<
@@ -412,6 +433,12 @@ export default function Layout() {
   const navigate = useNavigate();
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
+  });
+  const routeKey = useRouterState({
+    select: (state) =>
+      "href" in state.location && typeof state.location.href === "string"
+        ? state.location.href
+        : state.location.pathname,
   });
   const { isLoading, user } = useAuth();
   const browserPathname = getBrowserPathname();
@@ -612,6 +639,7 @@ export default function Layout() {
             className="fixed inset-0 h-svh !min-h-0 flex-col overflow-hidden"
             defaultOpen={defaultOpen}
           >
+            <MobileSidebarRouteDismiss routeKey={routeKey} />
             {isFullscreenActive ? null : <TopBar userEmail={userEmail} />}
             <div
               className={cn(

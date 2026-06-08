@@ -64,13 +64,15 @@ describe("PageLevelHeader", () => {
     );
 
     expect(screen.getByText("Main work").parentElement).toHaveClass(
-      "space-y-layout-3xl",
+      "space-y-layout-xl",
+      "md:space-y-layout-3xl",
     );
     expect(screen.getByText("Side rail").parentElement).toHaveClass(
-      "gap-layout-lg",
+      "gap-layout-md",
+      "md:gap-layout-lg",
     );
     expect(
       screen.getByText("Main work").parentElement?.parentElement,
-    ).toHaveClass("gap-layout-2xl");
+    ).toHaveClass("gap-layout-xl", "lg:gap-layout-2xl");
   });
 });

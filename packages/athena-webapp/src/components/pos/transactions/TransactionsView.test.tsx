@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { TransactionsView } from "./TransactionsView";
@@ -8,6 +8,19 @@ const getActiveStoreMock = vi.fn();
 const useSearchMock = vi.fn();
 
 vi.mock("@tanstack/react-router", () => ({
+  Link: ({
+    children,
+    "aria-label": ariaLabel,
+    className,
+  }: {
+    children?: React.ReactNode;
+    "aria-label"?: string;
+    className?: string;
+  }) => (
+    <a aria-label={ariaLabel} className={className} href="#">
+      {children}
+    </a>
+  ),
   useSearch: () => useSearchMock(),
 }));
 
@@ -173,7 +186,51 @@ describe("TransactionsView", () => {
     render(<TransactionsView />);
 
     expect(screen.getByText("POS-VOID")).toBeInTheDocument();
-    expect(screen.getByText("Voided")).toBeInTheDocument();
+    expect(screen.getAllByText("Voided").length).toBeGreaterThan(0);
+  });
+
+  it("renders completed transactions as scan-friendly mobile cards", () => {
+    getActiveStoreMock.mockReturnValue({
+      activeStore: {
+        _id: "store-1",
+        currency: "GHS",
+      },
+    });
+    useQueryMock.mockReturnValue([
+      {
+        _id: "txn-mobile",
+        transactionNumber: "POS-MOBILE",
+        total: 1000,
+        paymentMethod: "cash",
+        paymentMethods: ["cash"],
+        cashierName: "Ada L.",
+        customerName: "Walk-in",
+        itemCount: 1,
+        completedAt: Date.now(),
+        hasTrace: false,
+        sessionTraceId: null,
+      },
+    ]);
+
+    render(<TransactionsView />);
+
+    const card = screen.getByRole("link", {
+      name: "Open transaction #POS-MOBILE",
+    });
+
+    expect(card).toHaveClass("rounded-lg", "p-layout-md");
+    expect(within(card).getByText("#POS-MOBILE")).toBeInTheDocument();
+    expect(within(card).getByText("1 item - Walk-in")).toBeInTheDocument();
+    expect(within(card).getByText("Payment")).toHaveClass(
+      "text-xs",
+      "tracking-[0.12em]",
+    );
+    expect(within(card).getByText("Cash")).toHaveClass("text-sm");
+    expect(within(card).getByText("Cashier")).toHaveClass(
+      "text-xs",
+      "tracking-[0.12em]",
+    );
+    expect(within(card).getByText("Ada L.")).toHaveClass("text-sm");
   });
 
   it("includes service lines in completed transaction item counts", () => {
@@ -203,7 +260,7 @@ describe("TransactionsView", () => {
     render(<TransactionsView />);
 
     expect(screen.getByText("POS-SERVICE-COUNT")).toBeInTheDocument();
-    expect(screen.getByText("3 items")).toBeInTheDocument();
+    expect(screen.getAllByText("3 items").length).toBeGreaterThan(0);
   });
 
   it("passes the register session filter to the completed transactions query", () => {

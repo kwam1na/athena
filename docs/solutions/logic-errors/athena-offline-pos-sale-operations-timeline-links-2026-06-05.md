@@ -40,7 +40,7 @@ Build the operator-facing sale summary when the local event is projected. Store
 receipt number, line count, payment methods, and total in the timeline event
 metadata, and use a calm sentence such as:
 
-`Offline POS sale #R-100 synced: 2 sale lines, GHS 120.00, cash and card.`
+`Sale #R-100 synced: 2 sale lines, GHS 120.00, cash and card.`
 
 Expose a transaction link from the daily operations read model when the event
 subject is a POS transaction. Keep product links server-derived as well, and

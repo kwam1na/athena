@@ -11,6 +11,9 @@ type TableName =
   | "operationalEvent"
   | "operationalWorkItem"
   | "paymentAllocation"
+  | "posLocalSyncConflict"
+  | "posLocalSyncEvent"
+  | "posLocalSyncMapping"
   | "posSession"
   | "posTerminal"
   | "posTransactionAdjustment"
@@ -898,6 +901,10 @@ describe("daily operations overview read model", () => {
     ]);
     expect(
       snapshot.timeline.find((event) => event.id === "event-pos-sale-synced")
+        ?.message,
+    ).toBe("Sale #946956 synced: 3 sale lines, GH₵1,039, cash.");
+    expect(
+      snapshot.timeline.find((event) => event.id === "event-pos-sale-synced")
         ?.transactionLink,
     ).toEqual({
       label: "#946956",
@@ -970,6 +977,109 @@ describe("daily operations overview read model", () => {
         type: "register_session",
       },
       type: "register_session_closed",
+    });
+  });
+
+  it("surfaces pending synced register count submissions for the operating day", async () => {
+    const snapshot = await buildDailyOperationsSnapshotWithCtx(
+      buildCtx({
+        dailyClose: [priorClose],
+        dailyOpening: [startedOpening],
+        posLocalSyncConflict: [
+          {
+            _id: "conflict-register-count",
+            conflictType: "permission",
+            createdAt: Date.UTC(2026, 4, 8, 20, 46),
+            details: {
+              countedCash: 232_500,
+              expectedCash: 190_500,
+              variance: 42_000,
+            },
+            localEventId: "local-closeout-event",
+            localRegisterSessionId: "local-register-1",
+            sequence: 8,
+            status: "needs_review",
+            storeId: "store-1",
+            summary:
+              "Register closeout variance requires manager review before synced closeout can be applied.",
+            terminalId: "terminal-1",
+          },
+        ],
+        posLocalSyncEvent: [
+          {
+            _id: "sync-register-count",
+            acceptedAt: Date.UTC(2026, 4, 8, 20, 46),
+            eventType: "register_closed",
+            localEventId: "local-closeout-event",
+            localRegisterSessionId: "local-register-1",
+            occurredAt: Date.UTC(2026, 4, 8, 20, 45),
+            payload: {
+              countedCash: 232_500,
+            },
+            sequence: 8,
+            staffProfileId: "staff-pos",
+            status: "conflicted",
+            storeId: "store-1",
+            submittedAt: Date.UTC(2026, 4, 8, 20, 46),
+            terminalId: "terminal-1",
+          },
+        ],
+        posLocalSyncMapping: [
+          {
+            _id: "mapping-register-1",
+            cloudId: "register-1",
+            cloudTable: "registerSession",
+            createdAt: Date.UTC(2026, 4, 8, 8),
+            localEventId: "local-open-event",
+            localId: "local-register-1",
+            localIdKind: "registerSession",
+            localRegisterSessionId: "local-register-1",
+            storeId: "store-1",
+            terminalId: "terminal-1",
+          },
+        ],
+        registerSession: [
+          {
+            _id: "register-1",
+            expectedCash: 190_500,
+            openedAt: Date.UTC(2026, 4, 8, 8),
+            openingFloat: 16_000,
+            organizationId: "org-1",
+            registerNumber: "1",
+            status: "active",
+            storeId: "store-1",
+          },
+        ],
+        staffProfile: [
+          {
+            _id: "staff-pos",
+            fullName: "P OS",
+            organizationId: "org-1",
+            storeId: "store-1",
+          },
+        ],
+        store: [store],
+      }),
+      { operatingDate: "2026-05-08", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(snapshot.timeline[0]).toMatchObject({
+      id: "pos_local_sync_register_count:sync-register-count",
+      message:
+        "P OS submitted Register 1 count of GH₵2,325. Variance GH₵420 needs manager review.",
+      registerLink: {
+        label: "Register 1",
+        params: {
+          sessionId: "register-1",
+        },
+        to: "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId",
+      },
+      subject: {
+        id: "register-1",
+        label: "Register 1",
+        type: "register_session",
+      },
+      type: "register_session_count_submitted",
     });
   });
 

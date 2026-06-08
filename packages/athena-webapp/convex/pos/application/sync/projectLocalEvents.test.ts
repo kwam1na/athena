@@ -424,7 +424,7 @@ describe("projectLocalSyncEvent", () => {
       expect.objectContaining({
         eventType: "pos_local_sync.sale_projected",
         message:
-          "Offline POS sale #LR-001 synced: 1 sale line, GH₵0.25, cash.",
+          "Sale #LR-001 synced: 1 sale line, GH₵0.25, cash.",
         metadata: expect.objectContaining({
           lineCount: 1,
           localReceiptNumber: "LR-001",
@@ -679,7 +679,7 @@ describe("projectLocalSyncEvent", () => {
       expect.objectContaining({
         eventType: "pos_local_sync.sale_projected",
         message:
-          "Offline POS sale #LR-001 synced: 2 sale lines, GH₵1, cash and card.",
+          "Sale #LR-001 synced: 2 sale lines, GH₵1, cash and card.",
         metadata: expect.objectContaining({
           lineCount: 2,
           paymentMethods: ["cash", "card"],
@@ -755,7 +755,7 @@ describe("projectLocalSyncEvent", () => {
       expect.objectContaining({
         eventType: "pos_local_sync.sale_projected",
         message:
-          "Offline POS sale #LR-001 synced: 1 sale line, GH₵0.25, cash, card, and mobile money.",
+          "Sale #LR-001 synced: 1 sale line, GH₵0.25, cash, card, and mobile money.",
         metadata: expect.objectContaining({
           paymentMethods: ["cash", "card", "mobile money"],
         }),

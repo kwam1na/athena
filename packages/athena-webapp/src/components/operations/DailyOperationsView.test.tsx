@@ -377,8 +377,7 @@ const posSyncedSaleTimelineSnapshot: DailyOperationsSnapshot = {
     {
       createdAt: Date.UTC(2026, 4, 8, 18),
       id: "event-pos-sale-synced",
-      message:
-        "Offline POS sale 946956 synced: 3 sale lines, GH₵1,039, cash.",
+      message: "Sale 946956 synced: 3 sale lines, GH₵1,039, cash.",
       subject: {
         id: "txn-946956",
         type: "posTransaction",
@@ -1012,7 +1011,7 @@ describe("DailyOperationsViewContent", () => {
       screen.getByText((content, node) => {
         return (
           node?.textContent ===
-          "Offline POS sale #946956 synced: 3 sale lines, GH₵1,039, cash."
+          "Sale #946956 synced: 3 sale lines, GH₵1,039, cash."
         );
       }),
     ).toBeInTheDocument();

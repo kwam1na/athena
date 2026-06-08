@@ -22,7 +22,7 @@ type IndexedFilter = {
 
 function createRegisterCatalogCtx(
   seed: Partial<Record<TableName, Row[]>>,
-  options: { asyncIteratorLimit?: number } = {},
+  options: { asyncIteratorLimit?: number; failOnPaginate?: boolean } = {},
 ) {
   const tables: Record<TableName, Map<string, Row>> = {
     category: new Map(),
@@ -61,6 +61,9 @@ function createRegisterCatalogCtx(
         cursor: string | null;
         numItems: number;
       }) => {
+        if (options.failOnPaginate) {
+          throw new Error("paginate should not be used in this query");
+        }
         const offset = cursor ? Number(cursor) : 0;
         const page = matches.slice(offset, offset + numItems);
         const nextOffset = offset + page.length;
@@ -359,7 +362,7 @@ describe("listRegisterCatalog", () => {
     expect(rows[0]).not.toHaveProperty("quantityAvailable");
   });
 
-  it("does not drop sellable SKUs beyond the first query page", async () => {
+  it("does not rely on pagination for large register catalog snapshots", async () => {
     const products = Array.from({ length: 505 }, (_, index) => ({
       _id: `product-${index}`,
       storeId: "store-a",
@@ -391,7 +394,7 @@ describe("listRegisterCatalog", () => {
         product: products,
         productSku: productSkus,
       },
-      { asyncIteratorLimit: 30 },
+      { asyncIteratorLimit: 30, failOnPaginate: true },
     );
 
     const rows = await listRegisterCatalog(ctx, {

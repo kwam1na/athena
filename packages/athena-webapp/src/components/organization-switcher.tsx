@@ -12,17 +12,13 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Icons } from "./ui/icons";
-import { OverlayModal } from "./ui/modals/overlay-modal";
 import { useNavigate, useParams } from "@tanstack/react-router";
+import type { ComponentPropsWithoutRef } from "react";
 import { useEffect, useState } from "react";
-import { useOrganizationModal } from "@/hooks/useOrganizationModal";
-import { Organization } from "~/types";
+import type { Organization } from "~/types";
 import { useGetStores } from "../hooks/useGetActiveStore";
 
-type PopoverTriggerProps = React.ComponentPropsWithoutRef<
-  typeof PopoverTrigger
->;
+type PopoverTriggerProps = ComponentPropsWithoutRef<typeof PopoverTrigger>;
 
 interface OrganizationSwitcherProps extends PopoverTriggerProps {
   items: Organization[];
@@ -38,9 +34,6 @@ export default function OrganizationSwitcher({
   className,
   items = [],
 }: OrganizationSwitcherProps) {
-  const organizationModal = useOrganizationModal();
-
-  const [isSwitching, setIsSwitching] = useState(false);
   const [selectedOrganization, setSelectedOrganization] =
     useState<OrganizationSelectItem | null>(null);
   const [open, setOpen] = useState(false);
@@ -86,7 +79,7 @@ export default function OrganizationSwitcher({
         });
       }
     }
-  }, [selectedOrganization, stores]);
+  }, [navigate, selectedOrganization, stores]);
 
   const onOrganizationSelect = async (organization: OrganizationSelectItem) => {
     setSelectedOrganization(organization);
@@ -95,20 +88,6 @@ export default function OrganizationSwitcher({
 
   return (
     <>
-      <OverlayModal
-        isOpen={isSwitching}
-        title={""}
-        description={""}
-        onClose={() => console.log("nay")}
-        withoutHeader={true}
-      >
-        <div className="flex justify-center items-center">
-          <Icons.spinner className="mr-2 h-4 w-4 text-muted-foreground animate-spin" />
-          <p className="text-sm text-center text-muted-foreground">
-            Switching organizations..
-          </p>
-        </div>
-      </OverlayModal>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button
@@ -117,10 +96,12 @@ export default function OrganizationSwitcher({
             role="combobox"
             aria-expanded={open}
             aria-label="Select an organization"
-            className={cn("justify-between", className)}
+            className={cn("min-w-0 justify-between", className)}
           >
             <Building2 className="mr-2 h-4 w-4" />
-            {currentOrganization?.label}
+            <span className="min-w-0 truncate">
+              {currentOrganization?.label}
+            </span>
             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
