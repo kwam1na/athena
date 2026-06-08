@@ -63,13 +63,15 @@ vi.mock("@/hooks/useProtectedAdminPageState", () => protectedPageMocks);
 
 vi.mock("../common/PageHeader", () => ({
   ComposedPageHeader: ({
+    className,
     leadingContent,
     trailingContent,
   }: {
+    className?: string;
     leadingContent: React.ReactNode;
     trailingContent?: React.ReactNode;
   }) => (
-    <div>
+    <div className={className} data-testid="register-session-page-header">
       <div>{leadingContent}</div>
       <div>{trailingContent}</div>
     </div>
@@ -346,11 +348,19 @@ describe("RegisterSessionViewContent", () => {
     expect(screen.getByText("Counted")).toBeInTheDocument();
     expect(screen.getAllByText("$171").length).toBeGreaterThan(0);
     expect(screen.getByText("Linked transactions")).toBeInTheDocument();
-    const transactionRow = screen.getByRole("link", {
+    const transactionRow = screen.getAllByRole("link", {
       name: "Open transaction #TXN-0031",
-    });
+    })[0];
     expect(transactionRow).toBeInTheDocument();
-    expect(screen.getByText(/3 items - Esi Boateng/i)).toBeInTheDocument();
+    const transactionDetails = within(transactionRow);
+    expect(transactionDetails.getByText("Payment")).toHaveClass(
+      "text-xs",
+      "tracking-[0.12em]",
+    );
+    expect(transactionDetails.getByText("Cash")).toHaveClass("text-sm");
+    expect(screen.getAllByText(/3 items - Esi Boateng/i).length).toBeGreaterThan(
+      0,
+    );
     expect(screen.getAllByText("Ama M.").length).toBeGreaterThan(0);
     expect(screen.getByText("Variance review required.")).toBeInTheDocument();
     expect(screen.getByText("Closeout workflow")).toBeInTheDocument();
@@ -361,10 +371,21 @@ describe("RegisterSessionViewContent", () => {
     );
     expect(screen.getByText("Deposit history")).toBeInTheDocument();
     expect(screen.getByText("Record cash deposit")).toBeInTheDocument();
-    expect(screen.getByText("BANK-339")).toBeInTheDocument();
+    expect(screen.getAllByText("BANK-339").length).toBeGreaterThan(0);
     expect(
       screen.getByRole("link", { name: "View trace" }),
     ).toBeInTheDocument();
+    expect(screen.getByTestId("register-session-page-header")).toHaveClass(
+      "h-auto",
+      "min-h-14",
+      "items-start",
+      "border-b",
+      "py-3",
+      "sm:h-[40px]",
+    );
+    expect(screen.getByRole("link", { name: "View trace" })).not.toHaveClass(
+      "w-full",
+    );
   });
 
   it("shows locally closed pending-sync sessions as pending reconciliation", () => {
@@ -2285,10 +2306,10 @@ describe("RegisterSessionViewContent", () => {
       />,
     );
 
-    expect(screen.getByText("Voided")).toBeInTheDocument();
+    expect(screen.getAllByText("Voided").length).toBeGreaterThan(0);
 
     await user.click(
-      screen.getByRole("link", { name: "Open transaction #TXN-0031" }),
+      screen.getAllByRole("link", { name: "Open transaction #TXN-0031" })[0],
     );
 
     expect(routerMocks.navigate).toHaveBeenCalledWith({
@@ -2332,8 +2353,8 @@ describe("RegisterSessionViewContent", () => {
     );
 
     expect(screen.getByText("6 sales")).toBeInTheDocument();
-    expect(screen.getByText("#TXN-0001")).toBeInTheDocument();
-    expect(screen.getByText("#TXN-0005")).toBeInTheDocument();
+    expect(screen.getAllByText("#TXN-0001").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("#TXN-0005").length).toBeGreaterThan(0);
     expect(screen.queryByText("#TXN-0006")).not.toBeInTheDocument();
     expect(
       screen.getByText("Showing latest 5 of 6 linked sales."),

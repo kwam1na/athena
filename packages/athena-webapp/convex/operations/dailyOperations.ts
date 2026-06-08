@@ -7,12 +7,19 @@ import {
   listAppliedTransactionAdjustmentsForDay,
 } from "./dailyClose";
 import { buildDailyOpeningSnapshotWithCtx } from "./dailyOpening";
+import { toDisplayAmount } from "../lib/currency";
+import { currencyFormatter } from "../utils";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_OPERATIONS_QUERY_LIMIT = 200;
 const MAX_OPERATIONS_LOOKAHEAD_LIMIT = MAX_OPERATIONS_QUERY_LIMIT + 1;
 const OPEN_WORK_ITEM_STATUSES = ["open", "in_progress"] as const;
 const TIMELINE_REGISTER_SESSION_STATUSES = ["closed", "closing"] as const;
+const TIMELINE_PENDING_REGISTER_COUNT_STATUSES = [
+  "accepted",
+  "conflicted",
+  "held",
+] as const;
 
 type LinkTarget = {
   label?: string;
@@ -476,9 +483,14 @@ async function listTimelineEvents(
     .order("desc")
     .take(MAX_OPERATIONS_QUERY_LIMIT);
   const registerSessionsPromise = listTimelineRegisterSessions(ctx, args.storeId);
-  const [events, registerSessions] = await Promise.all([
+  const pendingRegisterCountsPromise = listPendingRegisterCountTimelineEvents(
+    ctx,
+    args,
+  );
+  const [events, registerSessions, pendingRegisterCountEvents] = await Promise.all([
     eventsPromise,
     registerSessionsPromise,
+    pendingRegisterCountsPromise,
   ]);
   const operationalCloseoutKeys = new Set(
     events
@@ -501,9 +513,142 @@ async function listTimelineEvents(
   return [
     ...operationalTimelineEvents,
     ...registerCloseoutTimelineEvents,
+    ...pendingRegisterCountEvents,
   ]
     .sort(compareDailyOperationsTimelineEvents)
     .slice(0, MAX_OPERATIONS_QUERY_LIMIT);
+}
+
+async function listPendingRegisterCountTimelineEvents(
+  ctx: Pick<QueryCtx, "db">,
+  args: {
+    endAt: number;
+    startAt: number;
+    storeId: Id<"store">;
+  },
+): Promise<DailyOperationsTimelineEvent[]> {
+  if (!args.startAt || !args.endAt) return [];
+
+  const [store, eventBatches] = await Promise.all([
+    ctx.db.get("store", args.storeId),
+    Promise.all(
+      TIMELINE_PENDING_REGISTER_COUNT_STATUSES.map((status) =>
+        ctx.db
+          .query("posLocalSyncEvent")
+          .withIndex("by_store_status", (q) =>
+            q.eq("storeId", args.storeId).eq("status", status),
+          )
+          .order("desc")
+          .take(MAX_OPERATIONS_QUERY_LIMIT),
+      ),
+    ),
+  ]);
+  const eventsById = new Map<Id<"posLocalSyncEvent">, Doc<"posLocalSyncEvent">>();
+
+  for (const event of eventBatches.flat()) {
+    if (
+      event.eventType !== "register_closed" ||
+      event.occurredAt < args.startAt ||
+      event.occurredAt >= args.endAt
+    ) {
+      continue;
+    }
+
+    eventsById.set(event._id, event);
+  }
+
+  const events = await Promise.all(
+    [...eventsById.values()].map((event) =>
+      mapPendingRegisterCountTimelineEvent(ctx, {
+        currency: store?.currency ?? "GHS",
+        event,
+        storeId: args.storeId,
+      }),
+    ),
+  );
+
+  return events.filter(
+    (event): event is DailyOperationsTimelineEvent => event !== null,
+  );
+}
+
+async function mapPendingRegisterCountTimelineEvent(
+  ctx: Pick<QueryCtx, "db">,
+  args: {
+    currency: string;
+    event: Doc<"posLocalSyncEvent">;
+    storeId: Id<"store">;
+  },
+): Promise<DailyOperationsTimelineEvent | null> {
+  const mapping = await ctx.db
+    .query("posLocalSyncMapping")
+    .withIndex("by_store_terminal_local", (q) =>
+      q
+        .eq("storeId", args.storeId)
+        .eq("terminalId", args.event.terminalId)
+        .eq("localRegisterSessionId", args.event.localRegisterSessionId)
+        .eq("localIdKind", "registerSession")
+        .eq("localId", args.event.localRegisterSessionId),
+    )
+    .first();
+
+  if (!mapping || mapping.cloudTable !== "registerSession") return null;
+
+  const registerSession = await ctx.db.get(
+    "registerSession",
+    mapping.cloudId as Id<"registerSession">,
+  );
+
+  if (!registerSession) return null;
+
+  const [staffProfile, conflict] = await Promise.all([
+    ctx.db.get("staffProfile", args.event.staffProfileId),
+    ctx.db
+      .query("posLocalSyncConflict")
+      .withIndex("by_store_terminal_localEvent", (q) =>
+        q
+          .eq("storeId", args.storeId)
+          .eq("terminalId", args.event.terminalId)
+          .eq("localEventId", args.event.localEventId),
+      )
+      .first(),
+  ]);
+  const registerLabel = formatRegisterSessionLabel(
+    registerSession.registerNumber,
+  );
+  const countedCash = numberFromRecord(args.event.payload, "countedCash");
+  const expectedCash =
+    numberFromRecord(conflict?.details, "expectedCash") ??
+    registerSession.expectedCash;
+  const variance =
+    numberFromRecord(conflict?.details, "variance") ??
+    (typeof countedCash === "number" ? countedCash - expectedCash : undefined);
+
+  return {
+    createdAt: args.event.occurredAt,
+    id: `pos_local_sync_register_count:${args.event._id}`,
+    message: buildPendingRegisterCountTimelineMessage({
+      countedCash,
+      currency: args.currency,
+      registerLabel,
+      staffName: staffProfile?.fullName,
+      status: args.event.status,
+      variance,
+    }),
+    registerLink: {
+      label: registerLabel,
+      params: {
+        sessionId: registerSession._id,
+      },
+      to: "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId",
+    },
+    subject: {
+      id: registerSession._id,
+      label: registerLabel,
+      type: "register_session",
+    },
+    type: "register_session_count_submitted",
+  };
 }
 
 async function mapOperationalTimelineEvent(
@@ -602,7 +747,7 @@ async function mapOperationalTimelineEvent(
     return {
       createdAt: event.createdAt,
       id: event._id,
-      message: event.message,
+      message: normalizeTimelineEventMessage(event.message),
       productLink,
       registerLink,
       subject: {
@@ -613,6 +758,10 @@ async function mapOperationalTimelineEvent(
       transactionLink,
       type: event.eventType,
     };
+}
+
+function normalizeTimelineEventMessage(message: string) {
+  return message.replace(/^Offline POS sale\b/, "Sale");
 }
 
 async function listTimelineRegisterSessions(
@@ -707,6 +856,46 @@ function buildRegisterCloseoutTimelineMessage(args: {
   }
 
   return `${args.label} closeout recorded with an exact cash match.`;
+}
+
+function buildPendingRegisterCountTimelineMessage(args: {
+  countedCash?: number;
+  currency: string;
+  registerLabel: string;
+  staffName?: string;
+  status: Doc<"posLocalSyncEvent">["status"];
+  variance?: number;
+}) {
+  const actor = args.staffName?.trim() || "A POS operator";
+  const amount =
+    typeof args.countedCash === "number"
+      ? ` of ${formatTimelineAmount(args.currency, args.countedCash)}`
+      : "";
+  const reviewSuffix =
+    args.status === "conflicted" && typeof args.variance === "number"
+      ? ` Variance ${formatTimelineAmount(args.currency, args.variance)} needs manager review.`
+      : args.status === "held"
+        ? " Sync is waiting for review."
+        : " Sync is pending.";
+
+  return `${actor} submitted ${args.registerLabel} count${amount}.${reviewSuffix}`;
+}
+
+function formatTimelineAmount(currency: string, amount: number) {
+  const storeCurrency = currency.trim() || "GHS";
+
+  try {
+    return currencyFormatter(storeCurrency).format(toDisplayAmount(amount));
+  } catch {
+    return currencyFormatter("GHS").format(toDisplayAmount(amount));
+  }
+}
+
+function numberFromRecord(record: unknown, key: string) {
+  if (!record || typeof record !== "object") return undefined;
+
+  const value = (record as Record<string, unknown>)[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
 function formatRegisterSessionLabel(registerNumber?: string) {

@@ -16,6 +16,7 @@ const mocked = vi.hoisted(() => ({
   signOut: vi.fn().mockResolvedValue(undefined),
   startManagerElevation: vi.fn(),
   endManagerElevation: vi.fn(),
+  setOpenMobile: vi.fn(),
   useAuth: vi.fn(),
   useLocalPosEntryContext: vi.fn(),
   useManagerElevation: vi.fn(),
@@ -23,6 +24,7 @@ const mocked = vi.hoisted(() => ({
   usePosTerminalAppSessionRecovery: vi.fn(),
   readStoredPosAppAccountId: vi.fn(),
   SidebarProvider: vi.fn(),
+  useSidebar: vi.fn(),
   useRouterState: vi.fn(),
 }));
 
@@ -99,7 +101,7 @@ vi.mock("../components/ui/sidebar", () => ({
       {children}
     </button>
   ),
-  useSidebar: () => ({ state: "expanded" }),
+  useSidebar: mocked.useSidebar,
 }));
 
 vi.mock("../components/app-sidebar", () => ({
@@ -193,6 +195,7 @@ describe("Authed layout", () => {
     mocked.signOut.mockClear();
     mocked.startManagerElevation.mockReset();
     mocked.endManagerElevation.mockReset();
+    mocked.setOpenMobile.mockReset();
     mocked.useAuth.mockReset();
     mocked.useLocalPosEntryContext.mockReset();
     mocked.useLocalPosEntryContext.mockReturnValue({ status: "missing_seed" });
@@ -203,6 +206,12 @@ describe("Authed layout", () => {
     mocked.readStoredPosAppAccountId.mockReset();
     mocked.readStoredPosAppAccountId.mockReturnValue("stored-app-user-1");
     mocked.SidebarProvider.mockReset();
+    mocked.useSidebar.mockReset();
+    mocked.useSidebar.mockReturnValue({
+      isMobile: false,
+      setOpenMobile: mocked.setOpenMobile,
+      state: "expanded",
+    });
     mocked.useManagerElevation.mockReturnValue({
       activeElevation: null,
       endManagerElevation: mocked.endManagerElevation,
@@ -521,6 +530,69 @@ describe("Authed layout", () => {
     expect(screen.getByTestId("store-modal")).toBeInTheDocument();
     expect(screen.getByTestId("organization-modal")).toBeInTheDocument();
     expect(screen.getByTestId("authed-outlet")).toBeInTheDocument();
+  });
+
+  it("does not dismiss the mobile sidebar on the initial authed shell render", () => {
+    mocked.useAuth.mockReturnValue({
+      user: { _id: "user-1" },
+      isLoading: false,
+    });
+    mocked.useSidebar.mockReturnValue({
+      isMobile: true,
+      setOpenMobile: mocked.setOpenMobile,
+      state: "expanded",
+    });
+
+    render(<Layout />);
+
+    expect(mocked.setOpenMobile).not.toHaveBeenCalled();
+  });
+
+  it("dismisses the mobile sidebar after the route changes", () => {
+    mocked.useAuth.mockReturnValue({
+      user: { _id: "user-1" },
+      isLoading: false,
+    });
+    mocked.useSidebar.mockReturnValue({
+      isMobile: true,
+      setOpenMobile: mocked.setOpenMobile,
+      state: "expanded",
+    });
+    let pathname = "/wigclub/store/wigclub/products";
+    mocked.useRouterState.mockImplementation(({ select }) =>
+      select({ location: { pathname } }),
+    );
+
+    const { rerender } = render(<Layout />);
+    expect(mocked.setOpenMobile).not.toHaveBeenCalled();
+
+    pathname = "/wigclub/store/wigclub/operations";
+    rerender(<Layout />);
+
+    expect(mocked.setOpenMobile).toHaveBeenCalledWith(false);
+  });
+
+  it("leaves the desktop sidebar state alone after the route changes", () => {
+    mocked.useAuth.mockReturnValue({
+      user: { _id: "user-1" },
+      isLoading: false,
+    });
+    mocked.useSidebar.mockReturnValue({
+      isMobile: false,
+      setOpenMobile: mocked.setOpenMobile,
+      state: "expanded",
+    });
+    let pathname = "/wigclub/store/wigclub/products";
+    mocked.useRouterState.mockImplementation(({ select }) =>
+      select({ location: { pathname } }),
+    );
+
+    const { rerender } = render(<Layout />);
+
+    pathname = "/wigclub/store/wigclub/operations";
+    rerender(<Layout />);
+
+    expect(mocked.setOpenMobile).not.toHaveBeenCalled();
   });
 
   it("mounts the signed-in POS register through the POS-only shell when a terminal seed is ready", () => {

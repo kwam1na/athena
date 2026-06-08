@@ -879,6 +879,7 @@ describe("HARNESS_APP_REGISTRY", () => {
     expect(offlineRouteScenario?.touchedPaths).toEqual([
       "public/pos-app-shell-sw.js",
       "playwright.config.ts",
+      "playwright.prod.config.ts",
       "src/main.tsx",
       "src/offline",
       "src/routes/_authed.tsx",
@@ -891,6 +892,7 @@ describe("HARNESS_APP_REGISTRY", () => {
       "src/lib/pos/presentation/register",
       "src/tests/pos/offlineRouteAccess.spec.ts",
       "src/tests/pos/offlineSalesContinuity.spec.ts",
+      "src/tests/prod/posFlow.prod.spec.ts",
     ]);
     expect(offlineRouteScenario?.commands).toEqual([
       {
@@ -902,6 +904,11 @@ describe("HARNESS_APP_REGISTRY", () => {
         kind: "raw",
         command:
           "bun run --filter '@athena/webapp' test:e2e -- src/tests/pos/offlineRouteAccess.spec.ts src/tests/pos/offlineSalesContinuity.spec.ts",
+      },
+      {
+        kind: "raw",
+        command:
+          "bun run --filter '@athena/webapp' test:e2e:prod:pos",
       },
       {
         kind: "raw",

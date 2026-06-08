@@ -170,6 +170,7 @@ async function createFixtureRepo() {
   await write("packages/athena-webapp/tailwind.config.js", "export default {};\n", rootDir);
   await write("packages/athena-webapp/postcss.config.js", "export default {};\n", rootDir);
   await write("packages/athena-webapp/playwright.config.ts", "export default {};\n", rootDir);
+  await write("packages/athena-webapp/playwright.prod.config.ts", "export default {};\n", rootDir);
   await write(
     "packages/athena-webapp/src/design-system-build-config.test.ts",
     "export {};\n",
@@ -1097,6 +1098,11 @@ async function createFixtureRepo() {
   );
   await write(
     "packages/athena-webapp/src/tests/pos/offlineSalesContinuity.spec.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/src/tests/prod/posFlow.prod.spec.ts",
     "export {};\n",
     rootDir
   );

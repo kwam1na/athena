@@ -33,7 +33,7 @@ import {
   runCommand,
 } from "@/lib/errors/runCommand";
 import { getOrigin } from "@/lib/navigationUtils";
-import { capitalizeWords, currencyFormatter } from "@/lib/utils";
+import { capitalizeWords, cn, currencyFormatter } from "@/lib/utils";
 import {
   formatStoredCurrencyAmount,
   parseDisplayAmountInput,
@@ -920,12 +920,12 @@ function RegisterSessionSyncNotice({
             <p className="text-sm leading-6 text-destructive">{errorMessage}</p>
           ) : null}
         </div>
-        <div className="flex flex-wrap items-center justify-end gap-layout-sm">
+        <div className="flex w-full flex-col gap-layout-sm sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
           {syncStatus.status === "needs_review" &&
           hasOnlyRejectedReviewItems &&
           onReviewDecision ? (
             <LoadingButton
-              className="border-border bg-background text-foreground hover:bg-muted"
+              className="w-full border-border bg-background text-foreground hover:bg-muted sm:w-auto"
               disabled={isResolving}
               isLoading={Boolean(isResolving)}
               onClick={() => onReviewDecision("approved")}
@@ -941,7 +941,7 @@ function RegisterSessionSyncNotice({
             storeUrlSlug ? (
             <Button
               asChild
-              className="border-border bg-background text-foreground hover:bg-muted"
+              className="w-full border-border bg-background text-foreground hover:bg-muted sm:w-auto"
               size="sm"
               variant="outline"
             >
@@ -961,7 +961,7 @@ function RegisterSessionSyncNotice({
             <>
               {canApplySyncReview ? (
                 <LoadingButton
-                  className="border-border bg-background text-foreground hover:bg-muted"
+                  className="w-full border-border bg-background text-foreground hover:bg-muted sm:w-auto"
                   disabled={isResolving}
                   isLoading={Boolean(isResolving)}
                   onClick={() => onReviewDecision("approved")}
@@ -973,6 +973,7 @@ function RegisterSessionSyncNotice({
                 </LoadingButton>
               ) : null}
               <Button
+                className="w-full sm:w-auto"
                 disabled={isResolving}
                 onClick={() => onReviewDecision("rejected")}
                 size="sm"
@@ -1064,6 +1065,159 @@ function RegisterSessionSupportEvidence({
         </div>
       </dl>
     </section>
+  );
+}
+
+function RegisterSessionTransactionCard({
+  canOpenTransaction,
+  currency,
+  onOpen,
+  transaction,
+}: {
+  canOpenTransaction: boolean;
+  currency: string;
+  onOpen?: () => void;
+  transaction: RegisterSessionTransaction;
+}) {
+  const PaymentIcon = getPaymentMethodIcon({
+    hasMultiplePaymentMethods: transaction.hasMultiplePaymentMethods,
+    paymentMethod: transaction.paymentMethod,
+  });
+  const transactionLabel = `#${transaction.transactionNumber}`;
+  const isVoidedTransaction =
+    transaction.status === "void" || typeof transaction.voidedAt === "number";
+
+  return (
+    <article
+      aria-label={
+        canOpenTransaction ? `Open transaction ${transactionLabel}` : undefined
+      }
+      className={cn(
+        "rounded-lg border border-border/70 bg-background p-layout-md transition-colors",
+        canOpenTransaction &&
+          "cursor-pointer hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+      )}
+      onClick={canOpenTransaction ? onOpen : undefined}
+      onKeyDown={
+        canOpenTransaction
+          ? (event) => {
+              if (event.key !== "Enter" && event.key !== " ") {
+                return;
+              }
+
+              event.preventDefault();
+              onOpen?.();
+            }
+          : undefined
+      }
+      role={canOpenTransaction ? "link" : undefined}
+      tabIndex={canOpenTransaction ? 0 : undefined}
+    >
+      <div className="flex items-start justify-between gap-layout-md">
+        <div className="min-w-0 space-y-1">
+          <p className="inline-flex min-w-0 items-center gap-1 font-medium text-foreground">
+            <span className="truncate">{transactionLabel}</span>
+            {canOpenTransaction ? (
+              <ArrowUpRight className="h-3.5 w-3.5 shrink-0" />
+            ) : null}
+          </p>
+          <p className="text-xs leading-5 text-muted-foreground">
+            {transaction.itemCount}{" "}
+            {transaction.itemCount === 1 ? "item" : "items"}
+            {transaction.customerName ? ` - ${transaction.customerName}` : ""}
+          </p>
+        </div>
+        <div className="shrink-0 text-right">
+          <p className="font-numeric text-sm tabular-nums text-foreground">
+            {formatCurrency(currency, transaction.total)}
+          </p>
+          {isVoidedTransaction ? (
+            <span className="mt-1 inline-flex rounded-sm border border-destructive/30 bg-destructive/10 px-1.5 py-0.5 text-xs font-medium text-destructive">
+              Voided
+            </span>
+          ) : null}
+        </div>
+      </div>
+      <dl className="mt-layout-md grid gap-layout-sm border-t border-border/70 pt-layout-sm">
+        <div className="flex items-center justify-between gap-layout-sm">
+          <dt className="text-xs font-medium uppercase leading-5 tracking-[0.12em] text-muted-foreground">
+            Payment
+          </dt>
+          <dd className="inline-flex items-center gap-2 text-sm leading-5 text-foreground">
+            <PaymentIcon className="h-4 w-4 text-muted-foreground" />
+            {transaction.hasMultiplePaymentMethods
+              ? "Multiple"
+              : formatPaymentMethod(transaction.paymentMethod)}
+          </dd>
+        </div>
+        <div className="flex items-center justify-between gap-layout-sm">
+          <dt className="text-xs font-medium uppercase leading-5 tracking-[0.12em] text-muted-foreground">
+            Cashier
+          </dt>
+          <dd className="text-right text-sm leading-5 text-foreground">
+            {transaction.cashierName
+              ? formatStaffDisplayName({ fullName: transaction.cashierName })
+              : "N/A"}
+          </dd>
+        </div>
+        <div className="flex items-center justify-between gap-layout-sm">
+          <dt className="text-xs font-medium uppercase leading-5 tracking-[0.12em] text-muted-foreground">
+            Completed
+          </dt>
+          <dd className="text-right text-sm leading-5 text-foreground">
+            {formatTimestamp(transaction.completedAt)}
+          </dd>
+        </div>
+      </dl>
+    </article>
+  );
+}
+
+function RegisterSessionDepositCard({
+  currency,
+  deposit,
+}: {
+  currency: string;
+  deposit: RegisterSessionDeposit;
+}) {
+  return (
+    <article className="rounded-lg border border-border/70 bg-background p-layout-md">
+      <div className="flex items-start justify-between gap-layout-md">
+        <div className="min-w-0 space-y-1">
+          <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+            Recorded
+          </p>
+          <p className="text-sm leading-5 text-foreground">
+            {formatTimestamp(deposit.recordedAt)}
+          </p>
+        </div>
+        <p className="shrink-0 font-numeric text-sm tabular-nums text-foreground">
+          {formatCurrency(currency, deposit.amount)}
+        </p>
+      </div>
+      <dl className="mt-layout-md grid gap-layout-sm border-t border-border/70 pt-layout-sm text-xs text-muted-foreground">
+        <div className="flex items-center justify-between gap-layout-sm">
+          <dt className="font-medium uppercase tracking-[0.14em]">Reference</dt>
+          <dd className="min-w-0 truncate text-right text-foreground">
+            {deposit.reference ?? "N/A"}
+          </dd>
+        </div>
+        <div className="flex items-center justify-between gap-layout-sm">
+          <dt className="font-medium uppercase tracking-[0.14em]">By</dt>
+          <dd className="min-w-0 truncate text-right text-foreground">
+            {deposit.recordedByStaffName
+              ? formatStaffDisplayName({ fullName: deposit.recordedByStaffName })
+              : "N/A"}
+          </dd>
+        </div>
+        <div className="space-y-1">
+          <dt className="font-medium uppercase tracking-[0.14em]">Notes</dt>
+          <dd className="break-words text-foreground">
+            {deposit.notes ?? "N/A"}
+          </dd>
+        </div>
+      </dl>
+    </article>
   );
 }
 
@@ -2040,7 +2194,7 @@ export function RegisterSessionViewContent({
           </div>
         </div>
 
-        <label className="block w-[480px] space-y-2">
+        <label className="block w-full max-w-[480px] space-y-2">
           <span className="text-sm font-medium text-foreground">
             Manager notes
           </span>
@@ -2053,8 +2207,9 @@ export function RegisterSessionViewContent({
           />
         </label>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
           <LoadingButton
+            className="w-full sm:w-auto"
             disabled={Boolean(pendingCloseoutAction)}
             isLoading={pendingCloseoutAction === "approved"}
             onClick={() => void handleReviewCloseout("approved")}
@@ -2063,6 +2218,7 @@ export function RegisterSessionViewContent({
             Approve variance
           </LoadingButton>
           <LoadingButton
+            className="w-full sm:w-auto"
             disabled={Boolean(pendingCloseoutAction)}
             isLoading={pendingCloseoutAction === "rejected"}
             onClick={() => void handleReviewCloseout("rejected")}
@@ -2079,18 +2235,21 @@ export function RegisterSessionViewContent({
     <View
       header={
         <ComposedPageHeader
+          className="h-auto min-h-14 items-start gap-3 border-b border-border bg-background px-4 py-3 sm:h-[40px] sm:items-center sm:border-0 sm:py-6"
           leadingContent={
-            <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-              <span className="text-sm font-medium text-foreground">
-                {headerTitle}
-              </span>
-              {headerTerminalName ? (
-                <span className="text-sm text-muted-foreground">
-                  {headerTerminalName}
+            <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+              <div className="flex min-w-0 items-baseline gap-2">
+                <span className="min-w-0 truncate text-sm font-semibold text-foreground">
+                  {headerTitle}
                 </span>
-              ) : null}
+                {headerTerminalName ? (
+                  <span className="min-w-0 truncate text-xs text-muted-foreground sm:text-sm">
+                    {headerTerminalName}
+                  </span>
+                ) : null}
+              </div>
               {registerSession ? (
-                <>
+                <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                   <Badge
                     className="border-border bg-muted text-muted-foreground"
                     size="sm"
@@ -2109,23 +2268,25 @@ export function RegisterSessionViewContent({
                         : syncStatus.label}
                     </Badge>
                   ) : null}
-                </>
+                </div>
               ) : null}
             </div>
           }
           trailingContent={
-            <div className="flex flex-wrap items-center justify-end gap-2">
+            <div className="flex shrink-0 items-start justify-end">
               {registerSession?.workflowTraceId ? (
                 <Button
                   asChild
-                  className="border-border bg-surface text-muted-foreground hover:bg-muted"
+                  className="h-8 border-border bg-surface px-2.5 text-xs text-muted-foreground hover:bg-muted sm:h-9 sm:px-3 sm:text-sm"
                   size="sm"
                   variant="outline"
                 >
                   <WorkflowTraceRouteLink
+                    className="inline-flex items-center gap-1.5"
                     traceId={registerSession.workflowTraceId}
                   >
-                    View trace
+                    <span aria-hidden="true">Trace</span>
+                    <span className="sr-only">View trace</span>
                   </WorkflowTraceRouteLink>
                 </Button>
               ) : null}
@@ -2248,7 +2409,7 @@ export function RegisterSessionViewContent({
         storeId={(storeId ?? "missing-store") as Id<"store">}
       />
       <FadeIn>
-        <div className="container mx-auto space-y-6 p-6">
+        <div className="container mx-auto space-y-layout-md p-layout-md md:space-y-6 md:p-6">
           {registerSession ? (
             <RegisterSessionSyncNotice
               currency={currency}
@@ -2279,7 +2440,7 @@ export function RegisterSessionViewContent({
               </div>
             ) : (
               <div className="grid gap-0 xl:grid-cols-[380px_minmax(0,1fr)]">
-                <aside className="border-b border-border/80 bg-muted/20 px-layout-lg py-layout-lg xl:border-b-0 xl:border-r">
+                <aside className="border-b border-border/80 bg-muted/20 px-layout-md py-layout-md md:px-layout-lg md:py-layout-lg xl:border-b-0 xl:border-r">
                   <dl className="space-y-layout-md">
                     <div className="rounded-lg border border-border bg-surface-raised p-layout-md">
                       <dt className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
@@ -2289,7 +2450,7 @@ export function RegisterSessionViewContent({
                         <span className="block text-xs text-muted-foreground">
                           Expected cash
                         </span>
-                        <span className="block font-numeric tabular-nums text-3xl text-foreground">
+                        <span className="block font-numeric text-2xl tabular-nums text-foreground sm:text-3xl">
                           {formatCurrency(currency, displayedExpectedCash)}
                         </span>
                       </dd>
@@ -2434,7 +2595,7 @@ export function RegisterSessionViewContent({
                   ) : null}
                 </aside>
 
-                <div className="flex flex-col gap-layout-lg px-layout-lg py-layout-lg">
+                <div className="flex flex-col gap-layout-md px-layout-md py-layout-md md:gap-layout-lg md:px-layout-lg md:py-layout-lg">
                   {pendingCloseoutApprovalPanel}
 
                   {shouldShowProminentCorrectionPanel ? (
@@ -2563,8 +2724,9 @@ export function RegisterSessionViewContent({
                             </p>
                           ) : null}
 
-                          <div className="flex flex-wrap items-center gap-3">
+                          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
                             <LoadingButton
+                              className="w-full sm:w-auto"
                               disabled={isCorrectingOpeningFloat}
                               isLoading={isCorrectingOpeningFloat}
                               onClick={() =>
@@ -2575,6 +2737,7 @@ export function RegisterSessionViewContent({
                               Submit
                             </LoadingButton>
                             <Button
+                              className="w-full sm:w-auto"
                               disabled={isCorrectingOpeningFloat}
                               onClick={() => {
                                 setIsOpeningFloatCorrectionOpen(false);
@@ -2706,7 +2869,7 @@ export function RegisterSessionViewContent({
                   ) : null}
 
                   <div
-                    className={`order-2 flex flex-wrap items-start justify-between gap-layout-sm ${hasPendingCloseoutApproval ? "pt-4" : ""}`}
+                    className={`order-2 flex flex-col items-start gap-layout-sm sm:flex-row sm:justify-between ${hasPendingCloseoutApproval ? "pt-4" : ""}`}
                   >
                     <div className="space-y-1">
                       <h2 className="font-display text-2xl font-semibold text-foreground">
@@ -2736,7 +2899,43 @@ export function RegisterSessionViewContent({
                       />
                     </div>
                   ) : (
-                    <div className="order-2 overflow-hidden rounded-lg border border-border bg-surface-raised">
+                    <>
+                    <div className="order-2 space-y-layout-sm md:hidden">
+                      {previewTransactions.map((transaction) => {
+                        const canOpenTransaction = Boolean(
+                          orgUrlSlug && storeUrlSlug,
+                        );
+                        const transactionRoute = canOpenTransaction
+                          ? {
+                              params: {
+                                orgUrlSlug: orgUrlSlug!,
+                                storeUrlSlug: storeUrlSlug!,
+                                transactionId: transaction._id,
+                              },
+                              search: { o: getOrigin() },
+                              to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId" as const,
+                            }
+                          : null;
+                        const openTransaction = () => {
+                          if (!transactionRoute) {
+                            return;
+                          }
+
+                          navigate(transactionRoute);
+                        };
+
+                        return (
+                          <RegisterSessionTransactionCard
+                            canOpenTransaction={canOpenTransaction}
+                            currency={currency}
+                            key={transaction._id}
+                            onOpen={openTransaction}
+                            transaction={transaction}
+                          />
+                        );
+                      })}
+                    </div>
+                    <div className="order-2 hidden overflow-hidden rounded-lg border border-border bg-surface-raised md:block">
                       <Table>
                         <TableHeader>
                           <TableRow className="border-b border-border hover:bg-transparent">
@@ -2879,39 +3078,45 @@ export function RegisterSessionViewContent({
                           })}
                         </TableBody>
                       </Table>
-                      {hasAdditionalTransactions &&
-                      registerSession &&
-                      orgUrlSlug &&
-                      storeUrlSlug ? (
-                        <div className="flex flex-wrap items-center justify-between gap-layout-sm border-t border-border/70 px-4 py-3">
-                          <p className="text-sm text-muted-foreground">
-                            Showing latest {previewTransactions.length} of{" "}
-                            {transactions.length} linked sales.
-                          </p>
-                          <Button asChild size="sm" variant="outline">
-                            <Link
-                              params={{ orgUrlSlug, storeUrlSlug }}
-                              search={{
-                                o: getOrigin(),
-                                registerSessionId: registerSession._id,
-                              }}
-                              to="/$orgUrlSlug/store/$storeUrlSlug/pos/transactions"
-                            >
-                              View all linked transactions
-                              <ArrowUpRight className="h-3.5 w-3.5" />
-                            </Link>
-                          </Button>
-                        </div>
-                      ) : null}
                     </div>
+                    {hasAdditionalTransactions &&
+                    registerSession &&
+                    orgUrlSlug &&
+                    storeUrlSlug ? (
+                      <div className="order-2 flex flex-col gap-layout-sm rounded-lg border border-border/70 bg-surface-raised px-4 py-3 sm:flex-row sm:items-center sm:justify-between md:rounded-t-none md:border-t-0">
+                        <p className="text-sm text-muted-foreground">
+                          Showing latest {previewTransactions.length} of{" "}
+                          {transactions.length} linked sales.
+                        </p>
+                        <Button
+                          asChild
+                          className="w-full sm:w-auto"
+                          size="sm"
+                          variant="outline"
+                        >
+                          <Link
+                            params={{ orgUrlSlug, storeUrlSlug }}
+                            search={{
+                              o: getOrigin(),
+                              registerSessionId: registerSession._id,
+                            }}
+                            to="/$orgUrlSlug/store/$storeUrlSlug/pos/transactions"
+                          >
+                            View all linked transactions
+                            <ArrowUpRight className="h-3.5 w-3.5" />
+                          </Link>
+                        </Button>
+                      </div>
+                    ) : null}
+                    </>
                   )}
                 </div>
               </div>
             )}
           </section>
 
-          <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_418px]">
-            <section className="rounded-[calc(var(--radius)*1.25)] border border-border bg-surface px-layout-lg py-layout-lg shadow-surface">
+          <div className="grid gap-layout-md md:gap-6 xl:grid-cols-[minmax(0,1fr)_418px]">
+            <section className="rounded-[calc(var(--radius)*1.25)] border border-border bg-surface px-layout-md py-layout-md shadow-surface md:px-layout-lg md:py-layout-lg">
               <div className="space-y-layout-md">
                 <div className="space-y-1">
                   <h2 className="font-display text-2xl font-semibold text-foreground">
@@ -2929,7 +3134,17 @@ export function RegisterSessionViewContent({
                     title="No deposits recorded"
                   />
                 ) : (
-                  <div className="overflow-hidden rounded-lg border border-border bg-surface-raised">
+                  <>
+                  <div className="space-y-layout-sm md:hidden">
+                    {registerSessionSnapshot.deposits.map((deposit) => (
+                      <RegisterSessionDepositCard
+                        currency={currency}
+                        deposit={deposit}
+                        key={deposit._id}
+                      />
+                    ))}
+                  </div>
+                  <div className="hidden overflow-hidden rounded-lg border border-border bg-surface-raised md:block">
                     <Table>
                       <TableHeader>
                         <TableRow className="border-b border-border hover:bg-transparent">
@@ -2976,11 +3191,12 @@ export function RegisterSessionViewContent({
                       </TableBody>
                     </Table>
                   </div>
+                  </>
                 )}
               </div>
             </section>
 
-            <aside className="space-y-6 rounded-[calc(var(--radius)*1.25)] border border-border bg-surface px-layout-lg py-layout-lg shadow-surface">
+            <aside className="space-y-layout-md rounded-[calc(var(--radius)*1.25)] border border-border bg-surface px-layout-md py-layout-md shadow-surface md:space-y-6 md:px-layout-lg md:py-layout-lg">
               {!hasPendingCloseoutApproval ? (
                 <div className="space-y-4">
                   <div className="space-y-2">
@@ -3044,7 +3260,7 @@ export function RegisterSessionViewContent({
                           Closed
                         </Badge>
                       </div>
-                      <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
+                      <dl className="grid gap-3 text-sm sm:grid-cols-3">
                         <div className="space-y-1">
                           <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
                             Expected
@@ -3186,6 +3402,7 @@ export function RegisterSessionViewContent({
                       </label>
 
                       <LoadingButton
+                        className="w-full"
                         disabled={pendingCloseoutAction === "submit"}
                         isLoading={pendingCloseoutAction === "submit"}
                         onClick={() => void handleSubmitCloseout()}
@@ -3273,6 +3490,7 @@ export function RegisterSessionViewContent({
                   ) : null}
 
                   <LoadingButton
+                    className="w-full"
                     disabled={isRecordingDeposit}
                     isLoading={isRecordingDeposit}
                     onClick={() => void handleRecordDeposit()}

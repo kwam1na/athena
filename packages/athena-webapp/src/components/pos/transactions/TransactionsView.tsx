@@ -1,7 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
-import { useSearch } from "@tanstack/react-router";
+import { Link, useSearch } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
-import { Receipt } from "lucide-react";
+import {
+  ArrowUpRight,
+  Banknote,
+  CreditCardIcon,
+  Receipt,
+  Smartphone,
+  WalletCards,
+} from "lucide-react";
 
 import View from "../../View";
 import { FadeIn } from "../../common/FadeIn";
@@ -20,6 +27,8 @@ import {
 } from "./transactionColumns";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatStoredAmount } from "~/src/lib/pos/displayAmounts";
+import { getOrigin } from "~/src/lib/navigationUtils";
+import { getRelativeTime } from "~/src/lib/utils";
 import type { Id } from "~/convex/_generated/dataModel";
 
 function formatPaymentMethod(method: string | null) {
@@ -81,6 +90,116 @@ type CompletedTransaction = {
   voidedAt?: number | null;
   voidReason?: string | null;
 };
+
+function getPaymentMethodIcon({
+  paymentMethod,
+  hasMultipleMethods,
+}: {
+  paymentMethod: string;
+  hasMultipleMethods?: boolean;
+}) {
+  if (hasMultipleMethods) return <WalletCards className="h-4 w-4" />;
+
+  switch (paymentMethod) {
+    case "cash":
+      return <Banknote className="h-4 w-4" />;
+    case "card":
+      return <CreditCardIcon className="h-4 w-4" />;
+    case "mobile_money":
+      return <Smartphone className="h-4 w-4" />;
+    default:
+      return null;
+  }
+}
+
+function TransactionMobileCard({
+  transaction,
+}: {
+  transaction: CompletedTransactionRow;
+}) {
+  const isVoided = transaction.status === "void";
+  const itemLabel = `${transaction.itemCount} ${
+    transaction.itemCount === 1 ? "item" : "items"
+  }`;
+
+  return (
+    <Link
+      to="/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId"
+      params={(prev) => ({
+        ...prev,
+        orgUrlSlug: prev.orgUrlSlug!,
+        storeUrlSlug: prev.storeUrlSlug!,
+        transactionId: transaction._id,
+      })}
+      search={{ o: getOrigin() }}
+      aria-label={`Open transaction #${transaction.transactionNumber}`}
+      className="block rounded-lg border border-border/70 bg-surface-raised p-layout-md shadow-sm transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      <div className="flex items-start justify-between gap-layout-md">
+        <div className="min-w-0 space-y-1">
+          <p className="flex min-w-0 items-center gap-1 text-lg font-semibold leading-6 text-foreground">
+            <span className="truncate">#{transaction.transactionNumber}</span>
+            <ArrowUpRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+          </p>
+          <p className="text-xs leading-5 text-muted-foreground">
+            {transaction.customerName
+              ? `${itemLabel} - ${transaction.customerName}`
+              : itemLabel}
+          </p>
+        </div>
+        <div className="shrink-0 text-right">
+          <p
+            className={`text-lg font-semibold leading-6 text-foreground ${
+              isVoided ? "line-through" : ""
+            }`}
+          >
+            {transaction.formattedTotal}
+          </p>
+          {isVoided ? (
+            <span className="mt-1 inline-flex rounded-sm border border-destructive/30 bg-destructive/10 px-1.5 py-0.5 text-xs font-medium leading-4 text-destructive">
+              Voided
+            </span>
+          ) : null}
+        </div>
+      </div>
+
+      <dl className="mt-layout-md grid gap-layout-sm border-t border-border/70 pt-layout-sm">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-layout-sm">
+          <dt className="text-xs font-medium uppercase leading-5 tracking-[0.12em] text-muted-foreground">
+            Payment
+          </dt>
+          <dd className="flex min-w-0 items-center justify-end gap-2 text-right text-sm leading-5 text-foreground">
+            <span className="text-muted-foreground">
+              {getPaymentMethodIcon({
+                paymentMethod: transaction.paymentMethod,
+                hasMultipleMethods: transaction.hasMultiplePaymentMethods,
+              })}
+            </span>
+            <span className="truncate text-sm leading-5">
+              {transaction.paymentMethodLabel}
+            </span>
+          </dd>
+        </div>
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-layout-sm">
+          <dt className="text-xs font-medium uppercase leading-5 tracking-[0.12em] text-muted-foreground">
+            Cashier
+          </dt>
+          <dd className="min-w-0 truncate text-right text-sm leading-5 text-foreground">
+            {transaction.cashierName ?? "N/A"}
+          </dd>
+        </div>
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-layout-sm">
+          <dt className="text-xs font-medium uppercase leading-5 tracking-[0.12em] text-muted-foreground">
+            Completed
+          </dt>
+          <dd className="min-w-0 truncate text-right text-sm leading-5 text-foreground">
+            {getRelativeTime(transaction.completedAt)}
+          </dd>
+        </div>
+      </dl>
+    </Link>
+  );
+}
 
 export function TransactionsView() {
   const { activeStore } = useGetActiveStore();
@@ -218,51 +337,67 @@ export function TransactionsView() {
           />
 
           <section className="space-y-layout-md">
-          {activeFilterSummary ? (
-            <div className="rounded-md border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
-              Showing {activeFilterSummary}
-            </div>
-          ) : null}
+            {activeFilterSummary ? (
+              <div className="rounded-md border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+                Showing {activeFilterSummary}
+              </div>
+            ) : null}
 
-          <Tabs
-            value={filter}
-            onValueChange={(v) => setFilter(v as "today" | "fromDate" | "all")}
-          >
-            <TabsList>
-              <TabsTrigger value="today">Today</TabsTrigger>
-              {operatingDate && operatingDateStartAt !== null ? (
-                <TabsTrigger value="fromDate">
-                  From {formatOperatingDateFilterLabel(operatingDate)}
-                </TabsTrigger>
-              ) : null}
-              <TabsTrigger value="all">All Time</TabsTrigger>
-            </TabsList>
-          </Tabs>
+            <Tabs
+              value={filter}
+              onValueChange={(v) =>
+                setFilter(v as "today" | "fromDate" | "all")
+              }
+            >
+              <TabsList>
+                <TabsTrigger value="today">Today</TabsTrigger>
+                {operatingDate && operatingDateStartAt !== null ? (
+                  <TabsTrigger value="fromDate">
+                    From {formatOperatingDateFilterLabel(operatingDate)}
+                  </TabsTrigger>
+                ) : null}
+                <TabsTrigger value="all">All Time</TabsTrigger>
+              </TabsList>
+            </Tabs>
 
-          {hasTransactions ? (
-            <GenericDataTable
-              data={filteredData}
-              columns={transactionColumns}
-              tableId="pos-completed-transactions"
-            />
-          ) : (
-            <div className="flex items-center justify-center min-h-[50vh]">
-              <EmptyState
-                icon={<Receipt className="w-16 h-16 text-muted-foreground" />}
-                title={
-                  <p className="text-muted-foreground">
-                    {filter === "today"
-                      ? "No completed transactions today"
-                      : filter === "fromDate" && operatingDate
-                        ? `No completed transactions from ${formatOperatingDateFilterLabel(operatingDate)}`
-                      : registerSessionId
-                        ? `No transactions for ${registerFilterLabel}`
-                        : "No completed transactions"}
-                  </p>
-                }
-              />
-            </div>
-          )}
+            {hasTransactions ? (
+              <>
+                <div className="grid gap-layout-sm md:hidden">
+                  {filteredData.map((transaction) => (
+                    <TransactionMobileCard
+                      key={transaction._id}
+                      transaction={transaction}
+                    />
+                  ))}
+                </div>
+                <div className="hidden md:block">
+                  <GenericDataTable
+                    data={filteredData}
+                    columns={transactionColumns}
+                    tableId="pos-completed-transactions"
+                  />
+                </div>
+              </>
+            ) : (
+              <div className="flex min-h-[50vh] items-center justify-center">
+                <EmptyState
+                  icon={
+                    <Receipt className="h-16 w-16 text-muted-foreground" />
+                  }
+                  title={
+                    <p className="text-muted-foreground">
+                      {filter === "today"
+                        ? "No completed transactions today"
+                        : filter === "fromDate" && operatingDate
+                          ? `No completed transactions from ${formatOperatingDateFilterLabel(operatingDate)}`
+                          : registerSessionId
+                            ? `No transactions for ${registerFilterLabel}`
+                            : "No completed transactions"}
+                    </p>
+                  }
+                />
+              </div>
+            )}
           </section>
         </PageWorkspace>
       </FadeIn>

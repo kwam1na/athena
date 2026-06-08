@@ -1,14 +1,5 @@
-import {
-  Link,
-  useLoaderData,
-  useNavigate,
-  useParams,
-  useRouterState,
-} from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import OrganizationSwitcher from "./organization-switcher";
-import { StoreAccordion } from "./StoreAccordion";
-import { Button } from "./ui/button";
-import { ArrowLeftIcon, ChevronLeftIcon } from "@radix-ui/react-icons";
 import { useGetOrganizations } from "@/hooks/useGetOrganizations";
 import useGetActiveStore from "../hooks/useGetActiveStore";
 import { useQuery } from "convex/react";
@@ -17,57 +8,19 @@ import { useEffect } from "react";
 import { toast } from "sonner";
 import { currencyFormatter } from "../lib/utils";
 
-function SettingsHeader() {
-  const navigate = useNavigate();
-  const { storeUrlSlug, orgUrlSlug } = useParams({ strict: false });
-
-  const handleGoBack = () => {
-    if (storeUrlSlug) {
-      navigate({
-        to: "/$orgUrlSlug/store/$storeUrlSlug",
-        params: (prev) => {
-          return {
-            ...prev,
-            orgUrlSlug: prev.orgUrlSlug!,
-            storeUrlSlug,
-          };
-        },
-      });
-    } else {
-      navigate({
-        to: "/$orgUrlSlug/store",
-        params: (prev) => ({
-          ...prev,
-          orgUrlSlug: prev.orgUrlSlug!,
-        }),
-      });
-    }
-  };
-
-  return (
-    <div className="flex items-center gap-1 h-[56px] px-2">
-      <Button
-        variant="ghost"
-        className="h-8 px-2 lg:px-3"
-        onClick={handleGoBack}
-      >
-        <ChevronLeftIcon className="h-4 w-4" />
-      </Button>
-      <p className="text-sm">Settings</p>
-    </div>
-  );
-}
-
 export const AppHeader = () => {
   const organizations = useGetOrganizations();
 
   return (
-    <div className="flex items-center gap-2">
-      <Link to="/" className="flex items-center">
+    <div className="flex min-w-0 items-center gap-2">
+      <Link to="/" className="flex shrink-0 items-center">
         <p className="font-medium">athena</p>
       </Link>
-      <p className="text-muted-foreground">/</p>
-      <OrganizationSwitcher items={organizations || []} />
+      <p className="hidden text-muted-foreground sm:block">/</p>
+      <OrganizationSwitcher
+        className="max-w-[9.5rem] sm:max-w-[14rem]"
+        items={organizations || []}
+      />
     </div>
   );
 };
@@ -141,7 +94,7 @@ const Navbar = () => {
         duration: 4000,
       });
     }
-  }, [newOrder]);
+  }, [formatter, newOrder]);
 
   return (
     <section className={`px-8 border-b w-full flex-none space-y-4`}>

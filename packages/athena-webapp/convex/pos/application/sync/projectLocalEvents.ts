@@ -1757,7 +1757,7 @@ function buildSaleProjectedMessage(args: {
   const paymentLabel = getPaymentSummaryLabel(args.payments.validPayments);
 
   return [
-    `Offline POS sale${transactionLabel} synced: ${formatSaleLineCount(lineCount)}`,
+    `Sale${transactionLabel} synced: ${formatSaleLineCount(lineCount)}`,
     formatSaleTotal(args.currency, args.payload.totals.total),
     paymentLabel,
   ].join(", ") + ".";

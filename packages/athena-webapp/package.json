@@ -23,7 +23,8 @@
     "storybook:build": "storybook build --config-dir ../../.storybook-athena",
     "build-storybook": "bun run storybook:build",
     "test:e2e": "playwright test --config playwright.config.ts",
-    "test:e2e:headed": "playwright test --config playwright.config.ts --headed"
+    "test:e2e:headed": "playwright test --config playwright.config.ts --headed",
+    "test:e2e:prod:pos": "playwright test --config playwright.prod.config.ts"
   },
   "devDependencies": {
     "@convex-dev/eslint-plugin": "^1.2.2",

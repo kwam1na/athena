@@ -214,6 +214,63 @@ jobs:
       - name: Run repo coverage policy
         run: bun run test:coverage
 
+  athena-prod-pos-e2e:
+    name: Athena POS E2E against Production Backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: athena-prod-pos-e2e-${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install Playwright browser
+        run: bunx playwright install chromium
+
+      - name: Report POS recovery-code coverage mode
+        env:
+          ATHENA_PROD_POS_RECOVERY_CODE: ${{ secrets.ATHENA_PROD_POS_RECOVERY_CODE }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${ATHENA_PROD_POS_RECOVERY_CODE:-}" ]; then
+            echo "ATHENA_PROD_POS_RECOVERY_CODE is not configured; authenticated POS recovery submit coverage will be skipped."
+            exit 0
+          fi
+          echo "ATHENA_PROD_POS_RECOVERY_CODE is configured; authenticated POS recovery submit coverage will run."
+
+      - name: Run candidate POS E2E against production backend
+        env:
+          ATHENA_POS_E2E_RUN_LOCAL_BUILD: "1"
+          ATHENA_PROD_CONVEX_URL: https://colorless-cardinal-870.convex.cloud
+          ATHENA_PROD_CONVEX_SITE_URL: https://colorless-cardinal-870.convex.site
+          ATHENA_PROD_POS_RECOVERY_CODE: ${{ secrets.ATHENA_PROD_POS_RECOVERY_CODE }}
+          ATHENA_PROD_POS_STORE_ID: nn7byz68a3j4tfjvgdf9evpt3n78kk38
+          ATHENA_PROD_POS_HUB_PATH: /wigclub/store/wigclub/pos
+        run: bun run --filter '@athena/webapp' -- test:e2e:prod:pos
+
+      - name: Upload production POS E2E artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: athena-prod-pos-e2e-artifacts
+          path: |
+            packages/athena-webapp/playwright-report
+            /tmp/athena-webapp-prod-playwright-results
+          if-no-files-found: ignore
+
   storefront-webapp-validation-context:
     name: Storefront Webapp Validation Context
     needs: athena-webapp-validation

@@ -507,6 +507,7 @@
       "pathPrefixes": [
         "packages/athena-webapp/public/pos-app-shell-sw.js",
         "packages/athena-webapp/playwright.config.ts",
+        "packages/athena-webapp/playwright.prod.config.ts",
         "packages/athena-webapp/src/main.tsx",
         "packages/athena-webapp/src/offline",
         "packages/athena-webapp/src/routes/_authed.tsx",
@@ -518,7 +519,8 @@
         "packages/athena-webapp/src/lib/pos/infrastructure/local",
         "packages/athena-webapp/src/lib/pos/presentation/register",
         "packages/athena-webapp/src/tests/pos/offlineRouteAccess.spec.ts",
-        "packages/athena-webapp/src/tests/pos/offlineSalesContinuity.spec.ts"
+        "packages/athena-webapp/src/tests/pos/offlineSalesContinuity.spec.ts",
+        "packages/athena-webapp/src/tests/prod/posFlow.prod.spec.ts"
       ],
       "commands": [
         {
@@ -528,6 +530,10 @@
         {
           "kind": "raw",
           "command": "bun run --filter '@athena/webapp' test:e2e -- src/tests/pos/offlineRouteAccess.spec.ts src/tests/pos/offlineSalesContinuity.spec.ts"
+        },
+        {
+          "kind": "raw",
+          "command": "bun run --filter '@athena/webapp' test:e2e:prod:pos"
         },
         {
           "kind": "raw",

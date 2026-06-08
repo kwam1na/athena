@@ -7,20 +7,20 @@ Graphify is the navigation layer for the repo graph. Use the entry docs below fo
 - [packages/AGENTS.md](../../packages/AGENTS.md) - package router plus the operational guides for each harnessed package
 
 ## Repo Summary
-- Code files discovered: 1848
-- Graph nodes: 6339
-- Graph edges: 6975
-- Communities: 1776
+- Code files discovered: 1850
+- Graph nodes: 6352
+- Graph edges: 6992
+- Communities: 1778
 
 ## Graph Hotspots
 - `DailyCloseView.tsx` (84 edges, Community 0) - [`packages/athena-webapp/src/components/operations/DailyCloseView.tsx`](../../packages/athena-webapp/src/components/operations/DailyCloseView.tsx)
 - `useRegisterViewModel.ts` (68 edges, Community 1) - [`packages/athena-webapp/src/lib/pos/presentation/register/useRegisterViewModel.ts`](../../packages/athena-webapp/src/lib/pos/presentation/register/useRegisterViewModel.ts)
 - `dailyClose.ts` (65 edges, Community 2) - [`packages/athena-webapp/convex/operations/dailyClose.ts`](../../packages/athena-webapp/convex/operations/dailyClose.ts)
 - `projectLocalEvents.ts` (51 edges, Community 3) - [`packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.ts`](../../packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.ts)
-- `usePosLocalSyncRuntime.ts` (47 edges, Community 5) - [`packages/athena-webapp/src/lib/pos/infrastructure/local/usePosLocalSyncRuntime.ts`](../../packages/athena-webapp/src/lib/pos/infrastructure/local/usePosLocalSyncRuntime.ts)
+- `RegisterSessionView.tsx` (47 edges, Community 4) - [`packages/athena-webapp/src/components/cash-controls/RegisterSessionView.tsx`](../../packages/athena-webapp/src/components/cash-controls/RegisterSessionView.tsx)
+- `usePosLocalSyncRuntime.ts` (47 edges, Community 6) - [`packages/athena-webapp/src/lib/pos/infrastructure/local/usePosLocalSyncRuntime.ts`](../../packages/athena-webapp/src/lib/pos/infrastructure/local/usePosLocalSyncRuntime.ts)
 - `harness-inferential-review.ts` (46 edges, Community 8) - [`scripts/harness-inferential-review.ts`](../../scripts/harness-inferential-review.ts)
-- `ingestLocalEvents.ts` (46 edges, Community 6) - [`packages/athena-webapp/convex/pos/application/sync/ingestLocalEvents.ts`](../../packages/athena-webapp/convex/pos/application/sync/ingestLocalEvents.ts)
-- `posLocalStore.ts` (46 edges, Community 4) - [`packages/athena-webapp/src/lib/pos/infrastructure/local/posLocalStore.ts`](../../packages/athena-webapp/src/lib/pos/infrastructure/local/posLocalStore.ts)
+- `ingestLocalEvents.ts` (46 edges, Community 7) - [`packages/athena-webapp/convex/pos/application/sync/ingestLocalEvents.ts`](../../packages/athena-webapp/convex/pos/application/sync/ingestLocalEvents.ts)
 
 ## Registered Packages
 - [Athena Webapp](packages/athena-webapp.md)

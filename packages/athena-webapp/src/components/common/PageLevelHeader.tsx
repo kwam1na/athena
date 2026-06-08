@@ -35,11 +35,11 @@ export function PageLevelHeader({
         </p>
       ) : null}
       <div className="space-y-3">
-        <h1 className="font-display text-[clamp(2.75rem,4.6vw,4.75rem)] leading-[0.95] tracking-[-0.05em] text-foreground">
+        <h1 className="font-display text-4xl leading-tight tracking-normal text-foreground sm:text-[clamp(2.75rem,4.6vw,4.75rem)] sm:leading-[0.95] sm:tracking-[-0.05em]">
           {title}
         </h1>
         {description ? (
-          <p className="max-w-3xl text-base leading-7 text-muted-foreground md:text-lg">
+          <p className="max-w-3xl text-sm leading-6 text-muted-foreground md:text-lg md:leading-7">
             {description}
           </p>
         ) : null}
@@ -60,7 +60,9 @@ export function PageWorkspace({
   className,
 }: PageWorkspaceProps) {
   return (
-    <Component className={cn("min-w-0 space-y-layout-2xl", className)}>
+    <Component
+      className={cn("min-w-0 space-y-layout-xl md:space-y-layout-2xl", className)}
+    >
       {children}
     </Component>
   );
@@ -78,7 +80,7 @@ export function PageWorkspaceGrid({
   return (
     <div
       className={cn(
-        "grid gap-layout-2xl xl:grid-cols-[minmax(0,1fr)_320px]",
+        "grid gap-layout-xl lg:gap-layout-2xl xl:grid-cols-[minmax(0,1fr)_320px]",
         className,
       )}
     >
@@ -99,7 +101,9 @@ export function PageWorkspaceMain({
   className,
 }: PageWorkspaceStackProps) {
   return (
-    <Component className={cn("min-w-0 space-y-layout-3xl", className)}>
+    <Component
+      className={cn("min-w-0 space-y-layout-xl md:space-y-layout-3xl", className)}
+    >
       {children}
     </Component>
   );
@@ -111,7 +115,9 @@ export function PageWorkspaceRail({
   className,
 }: PageWorkspaceStackProps) {
   return (
-    <Component className={cn("flex flex-col gap-layout-lg", className)}>
+    <Component
+      className={cn("flex flex-col gap-layout-md md:gap-layout-lg", className)}
+    >
       {children}
     </Component>
   );
