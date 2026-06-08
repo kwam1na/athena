@@ -953,6 +953,21 @@ describe("daily operations overview read model", () => {
             subjectType: "product_sku",
           },
           {
+            _id: "event-pending-checkout-item",
+            createdAt: Date.UTC(2026, 4, 8, 13),
+            eventType: "pos_pending_checkout_item_created",
+            message:
+              "Ama Mensah added pending checkout item Loose wave bundle. Quantity entered: 2.",
+            metadata: {
+              provisionalProductId: "product-pending",
+              provisionalProductSkuId: "sku-pending",
+            },
+            storeId: "store-1",
+            subjectId: "pending-item-1",
+            subjectLabel: "Loose wave bundle",
+            subjectType: "pos_pending_checkout_item",
+          },
+          {
             _id: "event-pos-sale-synced",
             createdAt: Date.UTC(2026, 4, 8, 18),
             eventType: "pos_local_sync.sale_projected",
@@ -967,6 +982,23 @@ describe("daily operations overview read model", () => {
             subjectType: "posTransaction",
           },
           {
+            _id: "event-pending-checkout-item-reused",
+            createdAt: Date.UTC(2026, 4, 8, 17),
+            eventType: "pos_pending_checkout_item_reused",
+            message:
+              "Ama Mensah reused pending checkout item Loose wave bundle. Quantity entered: 2.",
+            metadata: {
+              posTransactionId: "txn-946956",
+              provisionalProductId: "product-pending",
+              provisionalProductSkuId: "sku-pending",
+              transactionCount: 1,
+            },
+            storeId: "store-1",
+            subjectId: "pending-item-1",
+            subjectLabel: "Loose wave bundle",
+            subjectType: "pos_pending_checkout_item",
+          },
+          {
             _id: "event-other-day",
             createdAt: Date.UTC(2026, 4, 9, 8),
             eventType: "daily_opening.started",
@@ -974,6 +1006,15 @@ describe("daily operations overview read model", () => {
             storeId: "store-1",
             subjectId: "opening-next",
             subjectType: "daily_opening",
+          },
+        ],
+        productSku: [
+          {
+            _id: "sku-pending",
+            productId: "product-pending",
+            productName: "Loose wave bundle",
+            sku: "ZZZZ-1-1",
+            storeId: "store-1",
           },
         ],
         store: [store],
@@ -989,9 +1030,13 @@ describe("daily operations overview read model", () => {
     expect(snapshot.timeline.map((event) => event.id)).toEqual([
       "event-2",
       "event-pos-sale-synced",
+      "event-pending-checkout-item",
       "event-quick-add",
       "event-1",
     ]);
+    expect(snapshot.timeline.map((event) => event.id)).not.toContain(
+      "event-pending-checkout-item-reused",
+    );
     expect(
       snapshot.timeline.find((event) => event.id === "event-pos-sale-synced")
         ?.message,
@@ -1016,6 +1061,20 @@ describe("daily operations overview read model", () => {
       },
       search: {
         variant: "VITAMILK-001",
+      },
+      to: "/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug",
+    });
+    expect(
+      snapshot.timeline.find(
+        (event) => event.id === "event-pending-checkout-item",
+      )?.productLink,
+    ).toEqual({
+      label: "Loose wave bundle",
+      params: {
+        productSlug: "product-pending",
+      },
+      search: {
+        variant: "ZZZZ-1-1",
       },
       to: "/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug",
     });

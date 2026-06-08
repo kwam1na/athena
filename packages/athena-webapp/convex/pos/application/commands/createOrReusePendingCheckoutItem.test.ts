@@ -235,7 +235,7 @@ describe("createOrReusePendingCheckoutItem", () => {
         actorUserId: "user0001",
         eventType: "pos_pending_checkout_item_created",
         message:
-          "Ama Mensah added pending checkout item Loose wave bundle. Quantity sold: 2.",
+          "Ama Mensah added pending checkout item Loose wave bundle. Quantity entered: 2.",
         subjectId: item._id,
         subjectLabel: "Loose wave bundle",
         subjectType: "pos_pending_checkout_item",
@@ -305,7 +305,7 @@ describe("createOrReusePendingCheckoutItem", () => {
       expect.objectContaining({
         eventType: "pos_pending_checkout_item_reused",
         message:
-          "Ama Mensah reused pending checkout item Mystery wig. Quantity sold: 3.",
+          "Ama Mensah reused pending checkout item Mystery wig. Quantity entered: 3.",
         metadata: expect.objectContaining({
           quantitySold: 3,
           reviewPriority: "high",
@@ -499,30 +499,37 @@ describe("createOrReusePendingCheckoutItem", () => {
 
     const result = await createOrReusePendingCheckoutItem(ctx, {
       createdByUserId: "user0001" as Id<"athenaUser">,
+      createdByStaffProfileId: "staff0001" as Id<"staffProfile">,
       lookupCode: "556677",
+      localEventId: "define-event-1",
       name: "Committed pending item",
       price: 30000,
       quantitySold: 2,
+      registerSessionId: "register-session-1" as Id<"registerSession">,
       storeId: "storezzzz" as Id<"store">,
+      terminalId: "terminal-1" as Id<"posTerminal">,
       timestamp: 1_000,
     });
 
     await recordPendingCheckoutItemSaleEvidence(ctx, {
+      actorStaffProfileId: "staff0001" as Id<"staffProfile">,
       actorUserId: "user0001" as Id<"athenaUser">,
       localEventId: "sale-event-1",
       pendingCheckoutItemId: result.pendingCheckoutItemId,
       posTransactionId: "txn001" as Id<"posTransaction">,
       price: 30000,
       quantitySold: 2,
+      registerSessionId: "register-session-1" as Id<"registerSession">,
       source: "offline_sync",
       storeId: "storezzzz" as Id<"store">,
+      terminalId: "terminal-1" as Id<"posTerminal">,
       timestamp: 2_000,
     });
 
     const item = Array.from(tables.posPendingCheckoutItem.values())[0];
     expect(item.evidence).toMatchObject({
       lastPosTransactionId: "txn001",
-      localEventIds: ["sale-event-1"],
+      localEventIds: ["define-event-1", "sale-event-1"],
       offlineSaleCount: 1,
       totalQuantitySold: 2,
       transactionCount: 1,
@@ -533,6 +540,34 @@ describe("createOrReusePendingCheckoutItem", () => {
         transactionCount: 1,
       }),
     });
+    expect(Array.from(tables.operationalEvent.values())).toEqual([
+      expect.objectContaining({
+        actorStaffProfileId: "staff0001",
+        actorUserId: "user0001",
+        eventType: "pos_pending_checkout_item_created",
+        registerSessionId: "register-session-1",
+        metadata: expect.objectContaining({
+          localEventId: "define-event-1",
+          registerSessionId: "register-session-1",
+          terminalId: "terminal-1",
+          transactionCount: 0,
+        }),
+      }),
+      expect.objectContaining({
+        actorStaffProfileId: "staff0001",
+        actorUserId: "user0001",
+        eventType: "pos_pending_checkout_item_reused",
+        posTransactionId: "txn001",
+        registerSessionId: "register-session-1",
+        metadata: expect.objectContaining({
+          localEventId: "sale-event-1",
+          posTransactionId: "txn001",
+          registerSessionId: "register-session-1",
+          terminalId: "terminal-1",
+          transactionCount: 1,
+        }),
+      }),
+    ]);
   });
 
   it("does not double-count sale evidence when an offline local event is replayed", async () => {

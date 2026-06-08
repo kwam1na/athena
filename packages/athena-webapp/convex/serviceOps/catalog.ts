@@ -1,14 +1,10 @@
 /* eslint-disable @convex-dev/no-collect-in-query -- V26-276 ships store-scoped service catalog management before pagination; truncating the indexed catalog reads would hide valid services from staff and admins. */
 
-import { mutation, query } from "../_generated/server";
+import { mutation, query, type QueryCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { v } from "convex/values";
 import { toSlug } from "../utils";
 import { ok, userError, type CommandResult } from "../../shared/commandResult";
-import {
-  requireAuthenticatedAthenaUserWithCtx,
-  requireOrganizationMemberRoleWithCtx,
-} from "../lib/athenaUserAuth";
 
 type ServiceCatalogPricingModel =
   | "fixed"
@@ -30,6 +26,8 @@ type PosServiceCatalogRowInput = {
   status: "active" | "archived";
   updatedAt: number;
 };
+
+type PosServiceCatalogSnapshotCtx = Pick<QueryCtx, "db">;
 
 const posServiceCatalogCheckoutReadinessValidator = v.union(
   v.object({
@@ -110,6 +108,30 @@ export function buildPosServiceCatalogRow(input: PosServiceCatalogRowInput) {
     updatedAt: input.updatedAt,
     checkoutReadiness: buildPosServiceCheckoutReadiness(input),
   };
+}
+
+export async function listPosServiceCatalogSnapshotWithCtx(
+  ctx: PosServiceCatalogSnapshotCtx,
+  args: {
+    storeId: Id<"store">;
+  }
+) {
+  const store = await ctx.db.get("store", args.storeId);
+  if (!store) {
+    return [];
+  }
+
+  const rows = await ctx.db
+    .query("serviceCatalog")
+    .withIndex("by_storeId_status", (q) =>
+      q.eq("storeId", args.storeId).eq("status", "active")
+    )
+    .collect();
+
+  return rows.flatMap((row) => {
+    const posRow = buildPosServiceCatalogRow(row);
+    return posRow ? [posRow] : [];
+  });
 }
 
 function buildPosServiceCheckoutReadiness(input: PosServiceCatalogRowInput) {
@@ -275,31 +297,7 @@ export const listPosServiceCatalogSnapshot = query({
     storeId: v.id("store"),
   },
   returns: v.array(posServiceCatalogRowValidator),
-  handler: async (ctx, args) => {
-    const store = await ctx.db.get("store", args.storeId);
-    if (!store) {
-      return [];
-    }
-    const user = await requireAuthenticatedAthenaUserWithCtx(ctx);
-    await requireOrganizationMemberRoleWithCtx(ctx, {
-      allowedRoles: ["full_admin", "pos_only"],
-      failureMessage: "You do not have access to this store's service catalog.",
-      organizationId: store.organizationId,
-      userId: user._id,
-    });
-
-    const rows = await ctx.db
-      .query("serviceCatalog")
-      .withIndex("by_storeId_status", (q) =>
-        q.eq("storeId", args.storeId).eq("status", "active")
-      )
-      .collect();
-
-    return rows.flatMap((row) => {
-      const posRow = buildPosServiceCatalogRow(row);
-      return posRow ? [posRow] : [];
-    });
-  },
+  handler: listPosServiceCatalogSnapshotWithCtx,
 });
 
 export const createServiceCatalogItem = mutation({

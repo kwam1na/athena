@@ -408,7 +408,7 @@ function buildEventMessage(args: {
 }) {
   const action = args.reused ? "reused" : "added";
 
-  return `${args.actorLabel} ${action} pending checkout item ${args.itemName}. Quantity sold: ${args.quantitySold}.`;
+  return `${args.actorLabel} ${action} pending checkout item ${args.itemName}. Quantity entered: ${args.quantitySold}.`;
 }
 
 function buildWorkItemPriority(
@@ -455,10 +455,15 @@ async function recordPendingCheckoutOperationalEvent(
   ctx: MutationCtx,
   args: {
     actorUserId?: Id<"athenaUser">;
+    actorStaffProfileId?: Id<"staffProfile">;
     item: Doc<"posPendingCheckoutItem">;
+    localEventId?: string;
+    posTransactionId?: Id<"posTransaction">;
     quantitySold: number;
+    registerSessionId?: Id<"registerSession">;
     reused: boolean;
     source: "online" | "offline_sync";
+    terminalId?: Id<"posTerminal">;
   },
 ) {
   const actor = args.actorUserId
@@ -470,6 +475,7 @@ async function recordPendingCheckoutOperationalEvent(
     : "pos_pending_checkout_item_created";
 
   await recordOperationalEventWithCtx(ctx, {
+    actorStaffProfileId: args.actorStaffProfileId,
     actorUserId: args.actorUserId,
     eventType,
     message: buildEventMessage({
@@ -480,20 +486,26 @@ async function recordPendingCheckoutOperationalEvent(
     }),
     metadata: {
       actorLabel,
+      localEventId: args.localEventId,
       lookupCode: args.item.lookupCode,
       pendingCheckoutItemId: args.item._id,
+      posTransactionId: args.posTransactionId,
       price: args.item.provisionalPrice,
       provisionalProductId: args.item.provisionalProductId,
       provisionalProductSkuId: args.item.provisionalProductSkuId,
       quantitySold: args.quantitySold,
+      registerSessionId: args.registerSessionId,
       reviewPriority: args.item.reviewPriority,
       source: args.source,
       status: args.item.status,
+      terminalId: args.terminalId,
       totalQuantitySold: args.item.evidence.totalQuantitySold,
       transactionCount: args.item.evidence.transactionCount,
     },
     metadataDedupeKeys: ["source", "transactionCount", "totalQuantitySold"],
     organizationId: args.item.organizationId,
+    posTransactionId: args.posTransactionId,
+    registerSessionId: args.registerSessionId,
     storeId: args.item.storeId,
     subjectId: String(args.item._id),
     subjectLabel: args.item.name,
@@ -563,11 +575,16 @@ export async function recordPendingCheckoutItemSaleEvidence(
   const updatedItem = (await ctx.db.get("posPendingCheckoutItem", item._id))!;
   await syncPendingCheckoutWorkItem(ctx, updatedItem);
   await recordPendingCheckoutOperationalEvent(ctx, {
+    actorStaffProfileId: args.actorStaffProfileId,
     actorUserId: args.actorUserId,
     item: updatedItem,
+    localEventId: args.localEventId,
+    posTransactionId: args.posTransactionId,
     quantitySold: Math.trunc(args.quantitySold),
+    registerSessionId: args.registerSessionId,
     reused: true,
     source: args.source,
+    terminalId: args.terminalId,
   });
 
   return updatedItem;
@@ -746,11 +763,15 @@ export async function createOrReusePendingCheckoutItem(
     const item = (await ctx.db.get("posPendingCheckoutItem", existing._id))!;
     await syncPendingCheckoutWorkItem(ctx, item);
     await recordPendingCheckoutOperationalEvent(ctx, {
+      actorStaffProfileId: args.createdByStaffProfileId,
       actorUserId: args.createdByUserId,
       item,
+      localEventId: args.localEventId,
       quantitySold,
+      registerSessionId: args.registerSessionId,
       reused: true,
       source,
+      terminalId: args.terminalId,
     });
 
     return {
@@ -842,11 +863,15 @@ export async function createOrReusePendingCheckoutItem(
     pendingCheckoutItemId,
   ))!;
   await recordPendingCheckoutOperationalEvent(ctx, {
+    actorStaffProfileId: args.createdByStaffProfileId,
     actorUserId: args.createdByUserId,
     item: itemWithWork,
+    localEventId: args.localEventId,
     quantitySold,
+    registerSessionId: args.registerSessionId,
     reused: false,
     source,
+    terminalId: args.terminalId,
   });
 
   return {

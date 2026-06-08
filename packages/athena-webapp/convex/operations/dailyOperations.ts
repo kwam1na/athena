@@ -527,7 +527,9 @@ async function listTimelineEvents(
     ]);
 
   return [
-    ...operationalTimelineEvents,
+    ...operationalTimelineEvents.filter(
+      (event): event is DailyOperationsTimelineEvent => event !== null,
+    ),
     ...registerCloseoutTimelineEvents,
     ...pendingRegisterCountEvents,
   ]
@@ -679,101 +681,132 @@ async function mapOperationalTimelineEvent(
     subjectLabel?: string;
     subjectType: string;
   },
-): Promise<DailyOperationsTimelineEvent> {
-    const metadata = event.metadata ?? {};
-    const productId =
-      typeof metadata.productId === "string" ? metadata.productId : undefined;
-    const productSkuId =
-      typeof metadata.productSkuId === "string"
-        ? (metadata.productSkuId as Id<"productSku">)
-        : undefined;
-    const productSku = productSkuId
-      ? await ctx.db.get("productSku", productSkuId)
-      : null;
-    const productName =
-      typeof metadata.productName === "string"
-        ? metadata.productName
-        : event.subjectLabel;
-    const productSkuLabel =
-      typeof metadata.productSkuLabel === "string"
-        ? metadata.productSkuLabel
-        : undefined;
-    const sku =
-      typeof metadata.sku === "string"
-        ? metadata.sku
-        : productSku?.sku ?? undefined;
-    const productLinkProductId = productId ?? productSku?.productId;
-    const productLinkLabel =
-      event.subjectType === "product_sku"
-        ? productName
-        : productSkuLabel ||
-          (productSku?.productName && sku
-            ? `${productSku.productName} (${sku})`
-            : productSku?.productName || productName);
-    const canLinkProduct =
-      event.subjectType === "product_sku" || productSkuId !== undefined;
-    const transactionNumber =
-      typeof metadata.transactionNumber === "string"
-        ? metadata.transactionNumber
-        : typeof metadata.receiptNumber === "string"
-          ? metadata.receiptNumber
-          : undefined;
-    const transactionLink =
-      event.subjectType === "posTransaction" && transactionNumber
-        ? {
-            label: `#${transactionNumber}`,
-            params: {
-              transactionId: event.subjectId,
-            },
-            to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId",
-          }
-        : undefined;
-    const productLink =
-      canLinkProduct && productLinkProductId && productLinkLabel
-        ? {
-            label: productLinkLabel,
-            params: {
-              productSlug: productLinkProductId,
-            },
-            search: {
-              ...(sku ? { variant: sku } : {}),
-            },
-            to: "/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug",
-          }
-        : undefined;
-    const registerNumber =
-      typeof metadata.registerNumber === "string"
-        ? metadata.registerNumber
-        : undefined;
-    const registerLabel =
-      event.subjectType === "register_session"
-        ? event.subjectLabel ?? formatRegisterSessionLabel(registerNumber)
-        : undefined;
-    const registerLink =
-      event.subjectType === "register_session"
-        ? {
-            label: registerLabel ?? "Register session",
-            params: {
-              sessionId: event.subjectId,
-            },
-            to: "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId",
-          }
-        : undefined;
+): Promise<DailyOperationsTimelineEvent | null> {
+  const metadata = event.metadata ?? {};
+  if (isSaleBackedPendingCheckoutReuseEvent(event.eventType, metadata)) {
+    return null;
+  }
 
-    return {
-      createdAt: event.createdAt,
-      id: event._id,
-      message: normalizeTimelineEventMessage(event.message),
-      productLink,
-      registerLink,
-      subject: {
-        id: event.subjectId,
-        label: event.subjectLabel ?? registerLabel,
-        type: event.subjectType,
-      },
-      transactionLink,
-      type: event.eventType,
-    };
+  const productId =
+    typeof metadata.productId === "string"
+      ? metadata.productId
+      : typeof metadata.provisionalProductId === "string"
+        ? metadata.provisionalProductId
+        : undefined;
+  const productSkuId =
+    typeof metadata.productSkuId === "string"
+      ? (metadata.productSkuId as Id<"productSku">)
+      : typeof metadata.provisionalProductSkuId === "string"
+        ? (metadata.provisionalProductSkuId as Id<"productSku">)
+        : undefined;
+  const productSku = productSkuId
+    ? await ctx.db.get("productSku", productSkuId)
+    : null;
+  const productName =
+    typeof metadata.productName === "string"
+      ? metadata.productName
+      : event.subjectLabel;
+  const productSkuLabel =
+    typeof metadata.productSkuLabel === "string"
+      ? metadata.productSkuLabel
+      : undefined;
+  const sku =
+    typeof metadata.sku === "string"
+      ? metadata.sku
+      : productSku?.sku ?? undefined;
+  const isPendingCheckoutItemEvent =
+    event.subjectType === "pos_pending_checkout_item" &&
+    productSkuId !== undefined;
+  const productLinkProductId = productId ?? productSku?.productId;
+  const productSkuDisplayLabel =
+    productSku?.productName && sku
+      ? `${productSku.productName} (${sku})`
+      : productSku?.productName || productName;
+  const productLinkLabel =
+    isPendingCheckoutItemEvent
+      ? productName
+      : event.subjectType === "product_sku"
+        ? productName
+        : productSkuLabel || productSkuDisplayLabel;
+  const canLinkProduct =
+    event.subjectType === "product_sku" ||
+    isPendingCheckoutItemEvent ||
+    productSkuId !== undefined;
+  const transactionNumber =
+    typeof metadata.transactionNumber === "string"
+      ? metadata.transactionNumber
+      : typeof metadata.receiptNumber === "string"
+        ? metadata.receiptNumber
+        : undefined;
+  const transactionLink =
+    event.subjectType === "posTransaction" && transactionNumber
+      ? {
+          label: `#${transactionNumber}`,
+          params: {
+            transactionId: event.subjectId,
+          },
+          to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId",
+        }
+      : undefined;
+  const productLink =
+    canLinkProduct && productLinkProductId && productLinkLabel
+      ? {
+          label: productLinkLabel,
+          params: {
+            productSlug: productLinkProductId,
+          },
+          search: {
+            ...(sku ? { variant: sku } : {}),
+          },
+          to: "/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug",
+        }
+      : undefined;
+  const registerNumber =
+    typeof metadata.registerNumber === "string"
+      ? metadata.registerNumber
+      : undefined;
+  const registerLabel =
+    event.subjectType === "register_session"
+      ? event.subjectLabel ?? formatRegisterSessionLabel(registerNumber)
+      : undefined;
+  const registerLink =
+    event.subjectType === "register_session"
+      ? {
+          label: registerLabel ?? "Register session",
+          params: {
+            sessionId: event.subjectId,
+          },
+          to: "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId",
+        }
+      : undefined;
+
+  return {
+    createdAt: event.createdAt,
+    id: event._id,
+    message: normalizeTimelineEventMessage(event.message),
+    productLink,
+    registerLink,
+    subject: {
+      id: event.subjectId,
+      label: event.subjectLabel ?? registerLabel,
+      type: event.subjectType,
+    },
+    transactionLink,
+    type: event.eventType,
+  };
+}
+
+function isSaleBackedPendingCheckoutReuseEvent(
+  eventType: string,
+  metadata: Record<string, unknown>,
+) {
+  if (eventType !== "pos_pending_checkout_item_reused") return false;
+
+  return (
+    typeof metadata.posTransactionId === "string" ||
+    (typeof metadata.transactionCount === "number" &&
+      metadata.transactionCount > 0)
+  );
 }
 
 function normalizeTimelineEventMessage(message: string) {

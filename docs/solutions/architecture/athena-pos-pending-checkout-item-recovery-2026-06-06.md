@@ -35,6 +35,9 @@ Split checkout recovery from trusted catalog management:
   transaction shape until the item is reviewed.
 - The server records operator-readable operational events for creation, reuse,
   and review decisions, including the actor and sold quantity evidence.
+- POS-authored operational events carry register session, terminal, staff, and
+  local-event trace metadata so Daily Operations can explain where the evidence
+  came from without trusting cashier-created catalog data.
 - Offline terminals record a `pending_checkout_item.defined` local event and sync
   it through the same idempotent POS local event projection as completed sales.
 
@@ -64,3 +67,8 @@ review priority and audit visibility while preserving normal cashier flow.
 - Exclude pending checkout lines from inventory validation, hold consumption,
   SKU decrement, and trusted stock reporting.
 - Keep owner/admin review routes behind `full_admin`.
+- Normalize POS trace fields at the operational-event boundary so quick-add,
+  pending checkout, offline sync, and sale-backed events dedupe on the same
+  register/session/terminal context.
+- Suppress sale-backed pending checkout reuse rows from the Daily Operations
+  timeline when the completed sale already provides the cashier-facing event.

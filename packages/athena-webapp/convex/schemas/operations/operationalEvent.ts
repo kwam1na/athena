@@ -22,6 +22,8 @@ export const operationalEventSchema = v.object({
   customerProfileId: v.optional(v.id("customerProfile")),
   workItemId: v.optional(v.id("operationalWorkItem")),
   registerSessionId: v.optional(v.id("registerSession")),
+  terminalId: v.optional(v.id("posTerminal")),
+  localEventId: v.optional(v.string()),
   approvalRequestId: v.optional(v.id("approvalRequest")),
   inventoryMovementId: v.optional(v.id("inventoryMovement")),
   paymentAllocationId: v.optional(v.id("paymentAllocation")),

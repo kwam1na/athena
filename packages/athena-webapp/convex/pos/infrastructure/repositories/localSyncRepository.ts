@@ -3,6 +3,7 @@ import type { MutationCtx } from "../../../_generated/server";
 import { isRegisterSessionConflictBlockingStatus } from "../../../../shared/registerSessionStatus";
 import { recordRegisterSessionTraceBestEffort } from "../../../operations/registerSessionTracing";
 import { buildOperationalWorkItem } from "../../../operations/operationalWorkItems";
+import { normalizeOperationalEventTraceFields } from "../../../operations/operationalEvents";
 import {
   buildServiceCase,
   buildServiceCaseLineItem,
@@ -565,7 +566,10 @@ export function createConvexLocalSyncRepository(
       return ctx.db.insert("paymentAllocation", input);
     },
     async createOperationalEvent(input) {
-      return ctx.db.insert("operationalEvent", input);
+      return ctx.db.insert(
+        "operationalEvent",
+        normalizeOperationalEventTraceFields(input),
+      );
     },
     recordPosSessionWorkflowTrace(input) {
       return createPosSessionTraceRecorder(ctx).record(input);

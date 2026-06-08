@@ -202,6 +202,7 @@ function buildQuickAddEventMessage(args: {
 async function recordQuickAddOperationalEvent(
   ctx: MutationCtx,
   args: {
+    actorStaffProfileId?: Id<"staffProfile">;
     actorUserId: Id<"athenaUser">;
     eventType:
       | "pos_quick_add_barcode_attached"
@@ -209,14 +210,17 @@ async function recordQuickAddOperationalEvent(
       | "pos_quick_add_variant_created";
     organizationId: Id<"organization">;
     product: Doc<"product">;
+    registerSessionId?: Id<"registerSession">;
     sku: Doc<"productSku">;
     storeId: Id<"store">;
+    terminalId?: Id<"posTerminal">;
   },
 ) {
   const actor = await ctx.db.get("athenaUser", args.actorUserId);
   const actorLabel = getActorLabel(actor, String(args.actorUserId));
 
   await recordOperationalEventWithCtx(ctx, {
+    actorStaffProfileId: args.actorStaffProfileId,
     actorUserId: args.actorUserId,
     eventType: args.eventType,
     message: buildQuickAddEventMessage({
@@ -237,10 +241,12 @@ async function recordQuickAddOperationalEvent(
       sku: args.sku.sku,
     },
     organizationId: args.organizationId,
+    registerSessionId: args.registerSessionId,
     storeId: args.storeId,
     subjectId: String(args.sku._id),
     subjectLabel: args.product.name,
     subjectType: "product_sku",
+    terminalId: args.terminalId,
   });
 }
 
@@ -249,12 +255,15 @@ export async function quickAddCatalogItem(
   args: {
     storeId: Id<"store">;
     createdByUserId: Id<"athenaUser">;
+    createdByStaffProfileId?: Id<"staffProfile">;
     name: string;
     lookupCode?: string;
     productId?: Id<"product">;
     productSkuId?: Id<"productSku">;
     price: number;
     quantityAvailable: number;
+    registerSessionId?: Id<"registerSession">;
+    terminalId?: Id<"posTerminal">;
   },
 ): Promise<CatalogResult> {
   const store = await ctx.db.get("store", args.storeId);
@@ -306,12 +315,15 @@ export async function quickAddCatalogItem(
     };
 
     await recordQuickAddOperationalEvent(ctx, {
+      actorStaffProfileId: args.createdByStaffProfileId,
       actorUserId: args.createdByUserId,
       eventType: "pos_quick_add_barcode_attached",
       organizationId: store.organizationId,
       product,
+      registerSessionId: args.registerSessionId,
       sku: attachedSku,
       storeId: args.storeId,
+      terminalId: args.terminalId,
     });
 
     return mapSkuToCatalogResult(ctx, {
@@ -396,14 +408,17 @@ export async function quickAddCatalogItem(
   const productSku = (await ctx.db.get("productSku", skuId))!;
 
   await recordQuickAddOperationalEvent(ctx, {
+    actorStaffProfileId: args.createdByStaffProfileId,
     actorUserId: args.createdByUserId,
     eventType: args.productId
       ? "pos_quick_add_variant_created"
       : "pos_quick_add_product_created",
     organizationId: store.organizationId,
     product,
+    registerSessionId: args.registerSessionId,
     sku: productSku,
     storeId: args.storeId,
+    terminalId: args.terminalId,
   });
 
   return mapSkuToCatalogResult(ctx, {

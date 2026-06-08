@@ -210,6 +210,59 @@ describe("operational events", () => {
     ]);
   });
 
+  it("normalizes POS trace fields into top-level fields and metadata", async () => {
+    const ctx = createCtx({});
+
+    await recordOperationalEventWithCtx(ctx as unknown as MutationCtx, {
+      actorStaffProfileId: "staff-1" as Id<"staffProfile">,
+      eventType: "pos_quick_add_product_created",
+      localEventId: "event-local-1",
+      message: "Quick add recorded.",
+      metadata: {
+        productSkuId: "sku-1",
+      },
+      posTransactionId: "transaction-1" as Id<"posTransaction">,
+      registerSessionId: "register-session-1" as Id<"registerSession">,
+      storeId: "store-1" as Id<"store">,
+      subjectId: "sku-1",
+      subjectType: "product_sku",
+      terminalId: "terminal-1" as Id<"posTerminal">,
+    });
+
+    const events = await ctx.db
+      .query("operationalEvent")
+      .withIndex("by_storeId_subject", (q) =>
+        q
+          .eq("storeId", "store-1" as Id<"store">)
+          .eq("subjectType", "product_sku")
+          .eq("subjectId", "sku-1"),
+      )
+      .take(10);
+
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      actorStaffProfileId: "staff-1",
+      localEventId: "event-local-1",
+      posTransactionId: "transaction-1",
+      registerSessionId: "register-session-1",
+      terminalId: "terminal-1",
+      metadata: {
+        localEventId: "event-local-1",
+        productSkuId: "sku-1",
+        posTrace: {
+          actorStaffProfileId: "staff-1",
+          localEventId: "event-local-1",
+          posTransactionId: "transaction-1",
+          registerSessionId: "register-session-1",
+          terminalId: "terminal-1",
+        },
+        posTransactionId: "transaction-1",
+        registerSessionId: "register-session-1",
+        terminalId: "terminal-1",
+      },
+    });
+  });
+
   it("records Athena-authored operational events without staff impersonation", async () => {
     const ctx = createCtx({});
     const baseEvent = {

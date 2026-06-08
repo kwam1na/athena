@@ -135,6 +135,16 @@ describe("operations query indexing", () => {
         fields: ["storeId", "createdAt"],
       },
       {
+        table: "operationalEvent",
+        descriptor: "by_terminalId",
+        fields: ["terminalId"],
+      },
+      {
+        table: "operationalEvent",
+        descriptor: "by_localEventId",
+        fields: ["localEventId"],
+      },
+      {
         table: "inventoryMovement",
         descriptor: "by_storeId_productSkuId",
         fields: ["storeId", "productSkuId"],

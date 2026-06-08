@@ -440,6 +440,7 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
       canSearchServices,
       showSearchInput = true,
       canAddPendingCheckoutItem = false,
+      pendingCheckoutContext,
       containerClassName,
       lookupPanelClassName,
       resultsClassName,
@@ -636,11 +637,14 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
       const createdProduct = await quickAddProductSku({
         storeId: activeStore._id,
         createdByUserId: user._id,
+        createdByStaffProfileId: pendingCheckoutContext?.createdByStaffProfileId,
         name,
         lookupCode: primaryVariant.lookupCode,
         price: primaryVariant.price,
         quantityAvailable: primaryVariant.quantityAvailable,
         productId: quickAddSourceProduct?.productId,
+        registerSessionId: pendingCheckoutContext?.registerSessionId,
+        terminalId: pendingCheckoutContext?.terminalId,
       });
 
       let productId = quickAddSourceProduct?.productId;
@@ -657,11 +661,15 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
           await quickAddProductSku({
             storeId: activeStore._id,
             createdByUserId: user._id,
+            createdByStaffProfileId:
+              pendingCheckoutContext?.createdByStaffProfileId,
             name,
             lookupCode: variant.lookupCode,
             price: variant.price,
             quantityAvailable: variant.quantityAvailable,
             productId,
+            registerSessionId: pendingCheckoutContext?.registerSessionId,
+            terminalId: pendingCheckoutContext?.terminalId,
           });
         }
       }
@@ -692,11 +700,14 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
       const attachedProduct = await quickAddProductSku({
         storeId: activeStore._id,
         createdByUserId: user._id,
+        createdByStaffProfileId: pendingCheckoutContext?.createdByStaffProfileId,
         name: "",
         lookupCode,
         price: 0,
         quantityAvailable: 0,
         productSkuId: productSkuId as Id<"productSku">,
+        registerSessionId: pendingCheckoutContext?.registerSessionId,
+        terminalId: pendingCheckoutContext?.terminalId,
       });
       const attachedQuantityAvailable =
         typeof attachedProduct.quantityAvailable === "number"
@@ -806,7 +817,7 @@ export const ProductEntry = forwardRef<ProductEntryHandle, ProductEntryProps>(
             initialLookupCode={quickAddInitialLookupCode}
             lockProductName={isAddingVariant}
             quantityLabel={
-              isPendingCheckoutShortcut ? "Quantity sold" : undefined
+              isPendingCheckoutShortcut ? "Quantity entered" : undefined
             }
             referenceVariant={quickAddSourceProduct}
             submitErrorMessage="Could not quick add this product. Try again."

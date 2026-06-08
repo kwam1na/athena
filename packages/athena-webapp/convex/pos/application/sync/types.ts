@@ -546,8 +546,11 @@ export type SyncProjectionRepository = {
     message: string;
     metadata?: Record<string, unknown>;
     createdAt: number;
+    actorUserId?: Id<"athenaUser">;
     actorStaffProfileId?: Id<"staffProfile">;
     registerSessionId?: Id<"registerSession">;
+    terminalId?: Id<"posTerminal">;
+    localEventId?: string;
     paymentAllocationId?: Id<"paymentAllocation">;
     posTransactionId?: Id<"posTransaction">;
   }): Promise<Id<"operationalEvent">>;
