@@ -30,9 +30,10 @@ Usage: scripts/deploy-vps.sh <command>
 Commands:
   status             Show remote services and active static versions.
   versions <app>     List deployed static versions for athena or storefront.
-  athena            Build and deploy the production Athena admin app.
+  athena            Build the production Athena admin app locally, then upload it.
+  athena-remote     Build and deploy the production Athena admin app on the VPS.
   storefront        Build and deploy the production storefront.
-  athena-local      Build the production Athena admin app locally, then upload it.
+  athena-local      Alias for athena.
   storefront-local  Build the production storefront locally, then upload it.
   valkey-proxy      Install and restart the Valkey proxy from the remote checkout.
   qa                Refresh both QA dev servers from the remote checkout.
@@ -801,6 +802,9 @@ case "$command" in
     check_git
     ;;
   athena)
+    deploy_athena_local
+    ;;
+  athena-remote)
     require_remote_source "$REMOTE_REPO" "$REMOTE_SOURCE_DIR" "$DEPLOY_REF"
     deploy_athena "$REMOTE_SOURCE_DIR" "$ATHENA_ROOT"
     ;;
@@ -836,7 +840,7 @@ case "$command" in
   full-prod)
     require_remote_source "$REMOTE_REPO" "$REMOTE_SOURCE_DIR" "$DEPLOY_REF"
     deploy_convex_prod
-    deploy_athena "$REMOTE_SOURCE_DIR" "$ATHENA_ROOT"
+    deploy_athena_local
     deploy_storefront "$REMOTE_SOURCE_DIR" "$ATHENA_ROOT"
     deploy_valkey_proxy "$REMOTE_SOURCE_DIR" "$ATHENA_ROOT"
     ;;
@@ -850,7 +854,7 @@ case "$command" in
   all)
     require_remote_source "$REMOTE_REPO" "$REMOTE_SOURCE_DIR" "$DEPLOY_REF"
     deploy_convex_prod
-    deploy_athena "$REMOTE_SOURCE_DIR" "$ATHENA_ROOT"
+    deploy_athena_local
     deploy_storefront "$REMOTE_SOURCE_DIR" "$ATHENA_ROOT"
     deploy_valkey_proxy "$REMOTE_SOURCE_DIR" "$ATHENA_ROOT"
     deploy_qa

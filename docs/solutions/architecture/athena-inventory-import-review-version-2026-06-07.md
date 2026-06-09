@@ -36,6 +36,19 @@ Split import review from import execution:
   values available in the saved review payload.
 - Let operators inspect all parsed rows with shared pagination and hide noisy
   preview columns, with legacy SKU and category hidden by default.
+- Move inventory comparison into a dedicated review route so the source import
+  screen stays focused on file loading and review-version persistence.
+- Preserve review filter and page state in the URL. Operators often leave review
+  rows to inspect an Athena product, then return to the same slice of work.
+- Match imported rows against Athena by strongest available evidence first:
+  barcode and SKU when present, exact normalized product names across duplicate
+  SKU rows, then close-name matches only when the best candidate is clear.
+- Treat close-name matches and exact identifier matches with different names as
+  review rows, not automatic matches. The operator still needs to decide whether
+  Athena or the import file owns the product name.
+- Let each review row capture separate source choices for product name, quantity,
+  and price. A row is ready for handoff only after every differing field has a
+  source decision, or the row is explicitly skipped.
 - Save the current export as an `inventoryImportReviewVersion` record that
   stores raw content, parsed row data, file metadata, notes, counts, and actor
   context.
@@ -66,8 +79,12 @@ a dedicated workflow with explicit review and confirmation steps.
   fields.
 - Store raw export content with parsed rows so later reviewers can compare the
   normalized preview against the source file.
+- Store row-level draft decisions with separate name, quantity, price, and action
+  fields. Do not flatten those decisions into notes only; notes are audit copy,
+  while structured fields are what later import execution should consume.
 - Use Convex indexes by store and creation time for latest-review lookup.
 - Preserve manager elevation terminal context when operations mutations require
   elevated access outside the POS terminal surface.
-- Add focused tests for import parsing, review-version save/load, and elevated
-  terminal propagation whenever the import workflow changes.
+- Add focused tests for import parsing, product matching, review URL state,
+  review-version save/load, row source decisions, and elevated terminal
+  propagation whenever the import workflow changes.

@@ -3,6 +3,7 @@ import type { Id } from "../_generated/dataModel";
 
 import {
   importInventoryRowsWithCtx,
+  listInventoryImportReviewSkuContextWithCtx,
   saveInventoryImportReviewVersionWithCtx,
 } from "./catalogImport";
 
@@ -80,6 +81,12 @@ function createMutationCtx(seed: Partial<Record<TableName, Row[]>> = {}) {
       },
       async collect() {
         return api.take(Number.MAX_SAFE_INTEGER);
+      },
+      async *[Symbol.asyncIterator]() {
+        // eslint-disable-next-line @convex-dev/no-collect-in-query -- test fake, not a Convex query
+        for (const row of await api.collect()) {
+          yield row;
+        }
       },
     };
 
@@ -295,6 +302,77 @@ describe("catalog import", () => {
     });
   });
 
+  it("lists Athena SKU context for the inventory import review overlay", async () => {
+    const { ctx } = createMutationCtx({
+      product: [
+        {
+          _id: "product-1",
+          availability: "live",
+          categoryId: "category-1",
+          createdByUserId: "user-1",
+          currency: "GHS",
+          inventoryCount: 7,
+          name: "Body Wave",
+          organizationId: "org-1",
+          quantityAvailable: 5,
+          slug: "body-wave",
+          storeId: "store-1",
+          subcategoryId: "subcategory-1",
+        },
+      ],
+      productSku: [
+        {
+          _id: "sku-1",
+          barcode: "123456789012",
+          images: [],
+          inventoryCount: 7,
+          netPrice: 45000,
+          price: 45900,
+          productId: "product-1",
+          productName: "Body Wave fallback",
+          quantityAvailable: 5,
+          sku: "BW-18",
+          storeId: "store-1",
+        },
+        {
+          _id: "sku-2",
+          barcode: "999",
+          images: [],
+          inventoryCount: 1,
+          price: 30000,
+          productId: "missing-product",
+          productName: "Fallback SKU",
+          quantityAvailable: 1,
+          sku: "FALLBACK-1",
+          storeId: "store-1",
+        },
+      ],
+    });
+
+    const rows = await listInventoryImportReviewSkuContextWithCtx(
+      ctx,
+      { storeId: "store-1" as Id<"store"> },
+      access,
+    );
+
+    expect(rows).toEqual([
+      expect.objectContaining({
+        barcode: "123456789012",
+        inventoryCount: 7,
+        price: 45000,
+        productAvailability: "live",
+        productName: "Body Wave",
+        productSkuId: "sku-1",
+        quantityAvailable: 5,
+        sku: "BW-18",
+      }),
+      expect.objectContaining({
+        productName: "Fallback SKU",
+        productSkuId: "sku-2",
+      }),
+    ]);
+  });
+
   it("saves import review versions as server snapshots", async () => {
     const { ctx, tables } = createMutationCtx({
       inventoryImportReviewVersion: [
@@ -320,6 +398,15 @@ describe("catalog import", () => {
       issueCount: 0,
       notes: "Review before apply.",
       rawContent: "product_name,sku,price,qty\nComb,COMB-1,25,4",
+      rowDecisions: [
+        {
+          priceSource: "athena",
+          productName: "Comb",
+          quantitySource: "import",
+          rowKey: "2:COMB-1::Comb",
+          rowNumber: 2,
+        },
+      ],
       rowCount: 1,
       sourceFormat: "csv",
       storeId: "store-1" as Id<"store">,
@@ -336,6 +423,13 @@ describe("catalog import", () => {
       importKey: "legacy-review-2",
       notes: "Review before apply.",
       rawContent: "product_name,sku,price,qty\nComb,COMB-1,25,4",
+      rowDecisions: [
+        expect.objectContaining({
+          priceSource: "athena",
+          quantitySource: "import",
+          rowKey: "2:COMB-1::Comb",
+        }),
+      ],
       storeId: "store-1",
       versionNumber: 2,
     });

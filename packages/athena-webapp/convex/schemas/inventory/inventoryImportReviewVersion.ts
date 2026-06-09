@@ -12,5 +12,20 @@ export const inventoryImportReviewVersionSchema = v.object({
   rowCount: v.number(),
   issueCount: v.number(),
   notes: v.optional(v.string()),
+  rowDecisions: v.optional(
+    v.array(
+      v.object({
+	        action: v.optional(
+	          v.union(v.literal("create_item"), v.literal("skip_row")),
+	        ),
+	        nameSource: v.optional(v.union(v.literal("import"), v.literal("athena"))),
+	        priceSource: v.optional(v.union(v.literal("import"), v.literal("athena"))),
+        productName: v.string(),
+        quantitySource: v.optional(v.union(v.literal("import"), v.literal("athena"))),
+        rowKey: v.string(),
+        rowNumber: v.number(),
+      }),
+    ),
+  ),
   createdAt: v.number(),
 });

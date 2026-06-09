@@ -12,7 +12,10 @@ import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
 } from "../lib/athenaUserAuth";
-import { getActiveManagerElevationWithCtx } from "../operations/managerElevations";
+import {
+  getActiveManagerElevationByIdWithCtx,
+  getActiveManagerElevationWithCtx,
+} from "../operations/managerElevations";
 import { recordOperationalEventWithCtx } from "../operations/operationalEvents";
 import { toSlug } from "../utils";
 import { ok, userError, type CommandResult } from "../../shared/commandResult";
@@ -55,6 +58,20 @@ const inventoryImportReviewVersionValidator = v.object({
   issueCount: v.number(),
   notes: v.optional(v.string()),
   rawContent: v.string(),
+  rowDecisions: v.optional(
+    v.array(
+      v.object({
+        action: v.optional(
+          v.union(v.literal("create_item"), v.literal("skip_row")),
+        ),
+        priceSource: v.optional(v.union(v.literal("import"), v.literal("athena"))),
+        productName: v.string(),
+        quantitySource: v.optional(v.union(v.literal("import"), v.literal("athena"))),
+        rowKey: v.string(),
+        rowNumber: v.number(),
+      }),
+    ),
+  ),
   rowCount: v.number(),
   sourceFormat: importSourceFormatValidator,
   versionNumber: v.number(),
@@ -110,10 +127,20 @@ export type InventoryImportReviewVersionSummary = {
   versionNumber: number;
 };
 
+export type InventoryImportReviewRowDecision = {
+  action?: "create_item" | "skip_row";
+  priceSource?: "import" | "athena";
+  productName: string;
+  quantitySource?: "import" | "athena";
+  rowKey: string;
+  rowNumber: number;
+};
+
 export async function importInventoryRowsWithCtx(
   ctx: MutationCtx,
   args: {
     importKey: string;
+    managerElevationId?: Id<"managerElevation">;
     notes?: string;
     rows: CatalogImportRow[];
     sourceFormat: "csv" | "json";
@@ -271,6 +298,7 @@ export async function importInventoryCommandWithCtx(
 export const importInventory = mutation({
   args: {
     importKey: v.string(),
+    managerElevationId: v.optional(v.id("managerElevation")),
     notes: v.optional(v.string()),
     rows: v.array(importRowValidator),
     sourceFormat: v.union(v.literal("csv"), v.literal("json")),
@@ -287,8 +315,10 @@ export async function saveInventoryImportReviewVersionWithCtx(
     fileName?: string;
     importKey: string;
     issueCount: number;
+    managerElevationId?: Id<"managerElevation">;
     notes?: string;
     rawContent: string;
+    rowDecisions?: InventoryImportReviewRowDecision[];
     rowCount: number;
     sourceFormat: "csv" | "json";
     storeId: Id<"store">;
@@ -312,6 +342,7 @@ export async function saveInventoryImportReviewVersionWithCtx(
   const createdAt = Date.now();
   const fileName = normalizeOptional(args.fileName);
   const notes = normalizeOptional(args.notes);
+  const rowDecisions = normalizeReviewRowDecisions(args.rowDecisions);
   const versionId = await ctx.db.insert("inventoryImportReviewVersion", {
     createdAt,
     createdByUserId: access.athenaUser._id,
@@ -321,6 +352,7 @@ export async function saveInventoryImportReviewVersionWithCtx(
     notes,
     organizationId: access.store.organizationId,
     rawContent,
+    rowDecisions,
     rowCount: args.rowCount,
     sourceFormat: args.sourceFormat,
     storeId: args.storeId,
@@ -336,6 +368,7 @@ export async function saveInventoryImportReviewVersionWithCtx(
       importKey: args.importKey,
       issueCount: args.issueCount,
       rowCount: args.rowCount,
+      rowDecisionCount: rowDecisions.length,
       sourceFormat: args.sourceFormat,
       versionId,
       versionNumber,
@@ -400,9 +433,24 @@ export const saveInventoryImportReviewVersion = mutation({
     issueCount: v.number(),
     notes: v.optional(v.string()),
     rawContent: v.string(),
+    rowDecisions: v.optional(
+      v.array(
+        v.object({
+          action: v.optional(
+            v.union(v.literal("create_item"), v.literal("skip_row")),
+          ),
+          priceSource: v.optional(v.union(v.literal("import"), v.literal("athena"))),
+          productName: v.string(),
+          quantitySource: v.optional(v.union(v.literal("import"), v.literal("athena"))),
+          rowKey: v.string(),
+          rowNumber: v.number(),
+        }),
+      ),
+    ),
     rowCount: v.number(),
     sourceFormat: importSourceFormatValidator,
     storeId: v.id("store"),
+    managerElevationId: v.optional(v.id("managerElevation")),
     terminalId: v.optional(v.id("posTerminal")),
   },
   returns: commandResultValidator(v.any()),
@@ -412,6 +460,7 @@ export const saveInventoryImportReviewVersion = mutation({
 export const getLatestInventoryImportReviewVersion = query({
   args: {
     storeId: v.id("store"),
+    managerElevationId: v.optional(v.id("managerElevation")),
     terminalId: v.optional(v.id("posTerminal")),
   },
   returns: v.union(inventoryImportReviewVersionValidator, v.null()),
@@ -433,6 +482,7 @@ export const getLatestInventoryImportReviewVersion = query({
       issueCount: version.issueCount,
       notes: version.notes,
       rawContent: version.rawContent,
+      rowDecisions: version.rowDecisions,
       rowCount: version.rowCount,
       sourceFormat: version.sourceFormat,
       versionNumber: version.versionNumber,
@@ -440,10 +490,82 @@ export const getLatestInventoryImportReviewVersion = query({
   },
 });
 
+export async function listInventoryImportReviewSkuContextWithCtx(
+  ctx: QueryCtx,
+  args: {
+    storeId: Id<"store">;
+    managerElevationId?: Id<"managerElevation">;
+    terminalId?: Id<"posTerminal">;
+  },
+  resolvedAccess?: ImportAccess,
+) {
+  if (!resolvedAccess) {
+    await requireInventoryImportAccess(ctx, args);
+  }
+
+  const productSkus = [];
+  for await (const productSku of ctx.db
+    .query("productSku")
+    .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))) {
+    productSkus.push(productSku);
+  }
+
+  const productIds = Array.from(new Set(productSkus.map((productSku) => productSku.productId)));
+  const products = await Promise.all(productIds.map((productId) => ctx.db.get("product", productId)));
+  const productById = new Map<Id<"product">, Doc<"product">>();
+  products.forEach((product) => {
+    if (product) {
+      productById.set(product._id, product);
+    }
+  });
+
+  return productSkus
+    .map((productSku) => {
+      const product = productById.get(productSku.productId);
+      return {
+        barcode: normalizeOptional(productSku.barcode),
+        inventoryCount: productSku.inventoryCount,
+        price: productSku.netPrice ?? productSku.price,
+        productAvailability: product?.availability,
+        productId: productSku.productId,
+        productName: product?.name ?? productSku.productName ?? productSku.sku ?? "Unnamed SKU",
+        productSkuId: productSku._id,
+        quantityAvailable: productSku.quantityAvailable,
+        sku: normalizeOptional(productSku.sku),
+      };
+    })
+    .sort((left, right) => left.productName.localeCompare(right.productName));
+}
+
+export const listInventoryImportReviewSkuContext = query({
+  args: {
+    storeId: v.id("store"),
+    managerElevationId: v.optional(v.id("managerElevation")),
+    terminalId: v.optional(v.id("posTerminal")),
+  },
+  returns: v.array(
+    v.object({
+      barcode: v.optional(v.string()),
+      inventoryCount: v.number(),
+      price: v.number(),
+      productAvailability: v.optional(v.string()),
+      productId: v.id("product"),
+      productName: v.string(),
+      productSkuId: v.id("productSku"),
+      quantityAvailable: v.number(),
+      sku: v.optional(v.string()),
+    }),
+  ),
+  async handler(ctx, args) {
+    return listInventoryImportReviewSkuContextWithCtx(ctx, args);
+  },
+});
+
 async function requireInventoryImportAccess(
   ctx: InventoryImportAccessCtx,
   args: {
     storeId: Id<"store">;
+    managerElevationId?: Id<"managerElevation">;
     terminalId?: Id<"posTerminal">;
   },
 ): Promise<ImportAccess> {
@@ -470,6 +592,19 @@ async function requireInventoryImportAccess(
       error.message !== "You do not have permission to import inventory."
     ) {
       throw error;
+    }
+  }
+
+  if (args.managerElevationId) {
+    const activeElevation = await getActiveManagerElevationByIdWithCtx(ctx, {
+      accountId: athenaUser._id,
+      elevationId: args.managerElevationId,
+      storeId: args.storeId,
+      terminalId: args.terminalId,
+    });
+
+    if (activeElevation) {
+      return { athenaUser, store };
     }
   }
 
@@ -747,6 +882,23 @@ function normalizeLabel(value?: string) {
 function normalizeOptional(value?: string) {
   const normalized = normalizeLabel(value);
   return normalized || undefined;
+}
+
+function normalizeReviewRowDecisions(
+  decisions?: InventoryImportReviewRowDecision[],
+): InventoryImportReviewRowDecision[] {
+  if (!decisions) return [];
+
+  return decisions
+    .map((decision) => ({
+      action: decision.action,
+      priceSource: decision.priceSource,
+      productName: normalizeLabel(decision.productName) ?? "",
+      quantitySource: decision.quantitySource,
+      rowKey: normalizeLabel(decision.rowKey) ?? "",
+      rowNumber: decision.rowNumber,
+    }))
+    .filter((decision) => decision.rowKey && decision.productName);
 }
 
 function isNonNegativeInteger(value: number) {

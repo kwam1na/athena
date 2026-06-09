@@ -25,8 +25,9 @@ describe("primitive sizing and token semantics", () => {
 
     const badge = screen.getByText("Alert");
 
-    expect(badge).toHaveClass("bg-destructive");
-    expect(badge).toHaveClass("text-destructive-foreground");
+    expect(badge).toHaveClass("border-destructive/20");
+    expect(badge).toHaveClass("bg-destructive/10");
+    expect(badge).toHaveClass("text-destructive");
     expect(badge).toHaveClass("h-6");
   });
 

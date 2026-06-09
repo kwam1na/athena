@@ -27,22 +27,29 @@ const PageHeader = ({
   );
 };
 
-export const NavigateBackButton = () => {
+export const NavigateBackButton = ({
+  label,
+  onNavigateBack,
+}: {
+  label?: string;
+  onNavigateBack?: () => void;
+} = {}) => {
   const { o } = useSearch({ strict: false });
   const navigateBack = useNavigateBack();
 
-  if (!o) {
+  if (!o && !onNavigateBack) {
     return null;
   }
 
   return (
     <Button
-      aria-label="Go back"
-      onClick={navigateBack}
+      aria-label={label ?? "Go back"}
+      onClick={onNavigateBack ?? navigateBack}
       variant="ghost"
       className="h-8 px-2 lg:px-3 "
     >
       <ArrowLeftIcon className="h-4 w-4" />
+      {label ? <span className="ml-2">{label}</span> : null}
     </Button>
   );
 };

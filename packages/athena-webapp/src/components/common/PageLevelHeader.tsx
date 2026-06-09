@@ -4,19 +4,23 @@ import { cn } from "@/lib/utils";
 import { NavigateBackButton } from "./PageHeader";
 
 type PageLevelHeaderProps = {
+  backButtonLabel?: string;
   eyebrow?: string;
   title: string;
   description?: ReactNode;
   className?: string;
+  onNavigateBack?: () => void;
   showBackButton?: boolean;
   showBottomBorder?: boolean;
 };
 
 export function PageLevelHeader({
+  backButtonLabel,
   eyebrow,
   title,
   description,
   className,
+  onNavigateBack,
   showBackButton = false,
   showBottomBorder = false,
 }: PageLevelHeaderProps) {
@@ -28,7 +32,9 @@ export function PageLevelHeader({
         className,
       )}
     >
-      {showBackButton ? <NavigateBackButton /> : null}
+      {showBackButton ? (
+        <NavigateBackButton label={backButtonLabel} onNavigateBack={onNavigateBack} />
+      ) : null}
       {eyebrow ? (
         <p className="text-xs font-semibold uppercase tracking-[0.28em] text-muted-foreground">
           {eyebrow}

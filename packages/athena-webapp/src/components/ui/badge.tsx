@@ -10,8 +10,7 @@ const badgeVariants = cva(
       variant: {
         default: "border-transparent bg-signal text-signal-foreground",
         secondary: "border-transparent bg-secondary text-secondary-foreground",
-        destructive:
-          "border-transparent bg-destructive text-destructive-foreground",
+        destructive: "border-destructive/20 bg-destructive/10 text-destructive",
         outline: "rounded-md border-border bg-surface text-foreground",
       },
       size: {
@@ -41,4 +40,4 @@ function Badge({ className, variant, size, ...props }: BadgeProps) {
   );
 }
 
-export { Badge, badgeVariants };
+export { Badge };
