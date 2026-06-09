@@ -162,6 +162,29 @@ export async function getActiveManagerElevationWithCtx(
   return activeElevations[0] ?? null;
 }
 
+export async function getActiveManagerElevationByIdWithCtx(
+  ctx: ManagerElevationCtx,
+  args: {
+    accountId: Id<"athenaUser">;
+    elevationId: Id<"managerElevation">;
+    storeId: Id<"store">;
+    terminalId?: Id<"posTerminal">;
+  },
+) {
+  const elevation = await ctx.db.get("managerElevation", args.elevationId);
+
+  if (
+    !elevation ||
+    elevation.accountId !== args.accountId ||
+    elevation.storeId !== args.storeId ||
+    (args.terminalId && elevation.terminalId !== args.terminalId)
+  ) {
+    return null;
+  }
+
+  return toActiveElevation(ctx, elevation);
+}
+
 export async function startManagerElevationWithCtx(
   ctx: MutationCtx,
   args: {

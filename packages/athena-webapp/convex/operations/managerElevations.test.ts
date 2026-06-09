@@ -3,6 +3,7 @@ import type { Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import {
   endManagerElevationWithCtx,
+  getActiveManagerElevationByIdWithCtx,
   getActiveManagerElevationWithCtx,
   MANAGER_ELEVATION_TTL_MS,
   startManagerElevationWithCtx,
@@ -281,6 +282,64 @@ describe("manager elevations", () => {
     await expect(
       getActiveManagerElevationWithCtx(ctx, {
         accountId: ACCOUNT_ID,
+        storeId: "store-2" as Id<"store">,
+        terminalId: TERMINAL_ID,
+      }),
+    ).resolves.toBeNull();
+  });
+
+  it("returns an active elevation by id only when it matches the account, store, and terminal", async () => {
+    const now = Date.now();
+    const { ctx } = createManagerElevationsCtx({
+      elevations: [
+        {
+          _id: "elevation-1",
+          accountId: ACCOUNT_ID,
+          createdAt: now - 1_000,
+          expiresAt: now + 60_000,
+          managerCredentialId: "credential-1",
+          managerStaffProfileId: "manager-1",
+          organizationId: ORGANIZATION_ID,
+          reason: "Review inventory import",
+          storeId: STORE_ID,
+          terminalId: TERMINAL_ID,
+        },
+      ],
+    });
+
+    await expect(
+      getActiveManagerElevationByIdWithCtx(ctx, {
+        accountId: ACCOUNT_ID,
+        elevationId: "elevation-1" as Id<"managerElevation">,
+        storeId: STORE_ID,
+        terminalId: TERMINAL_ID,
+      }),
+    ).resolves.toMatchObject({
+      accountId: ACCOUNT_ID,
+      elevationId: "elevation-1",
+      terminalId: TERMINAL_ID,
+    });
+
+    await expect(
+      getActiveManagerElevationByIdWithCtx(ctx, {
+        accountId: "user-2" as Id<"athenaUser">,
+        elevationId: "elevation-1" as Id<"managerElevation">,
+        storeId: STORE_ID,
+        terminalId: TERMINAL_ID,
+      }),
+    ).resolves.toBeNull();
+    await expect(
+      getActiveManagerElevationByIdWithCtx(ctx, {
+        accountId: ACCOUNT_ID,
+        elevationId: "elevation-1" as Id<"managerElevation">,
+        storeId: STORE_ID,
+        terminalId: "terminal-2" as Id<"posTerminal">,
+      }),
+    ).resolves.toBeNull();
+    await expect(
+      getActiveManagerElevationByIdWithCtx(ctx, {
+        accountId: ACCOUNT_ID,
+        elevationId: "elevation-1" as Id<"managerElevation">,
         storeId: "store-2" as Id<"store">,
         terminalId: TERMINAL_ID,
       }),

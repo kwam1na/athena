@@ -1,6 +1,22 @@
-import { useEffect, useMemo, useState, type ChangeEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+} from "react";
 import { useMutation, useQuery } from "convex/react";
-import { Columns3, FileJson, Save, UploadCloud } from "lucide-react";
+import {
+  ArrowRight,
+  ArrowUpRight,
+  Columns3,
+  FileJson,
+  Pencil,
+  Save,
+  UploadCloud,
+} from "lucide-react";
+import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { toast } from "sonner";
 
 import { api } from "~/convex/_generated/api";
@@ -12,6 +28,15 @@ import { useOptionalManagerElevation } from "@/contexts/ManagerElevationContext"
 import { runCommand } from "@/lib/errors/runCommand";
 import { presentCommandToast } from "@/lib/errors/presentCommandToast";
 import { formatStoredCurrencyAmount } from "@/lib/pos/displayAmounts";
+import { getOrigin } from "@/lib/navigationUtils";
+import {
+  createFuzzySearchEntry,
+  normalizeFuzzySearchText,
+  scoreFuzzySearchEntry,
+  tokenizeFuzzySearchText,
+  type FuzzySearchEntry,
+} from "@/lib/search/fuzzySearch";
+import { capitalizeWords, cn } from "@/lib/utils";
 import {
   parseInventoryImportContent,
   type InventoryImportRow,
@@ -44,7 +69,8 @@ import { LoadingButton } from "../ui/loading-button";
 import { Textarea } from "../ui/textarea";
 import { OperationsSummaryMetric } from "./OperationsSummaryMetric";
 
-const PREVIEW_PAGE_SIZE = 25;
+const IMPORT_TABLE_PAGE_SIZE = 10;
+const DRAFT_AUTOSAVE_DELAY_MS = 1200;
 
 const PREVIEW_COLUMNS = [
   {
@@ -93,7 +119,7 @@ type PreviewColumnId = (typeof PREVIEW_COLUMNS)[number]["id"];
 type PreviewColumnVisibility = Record<PreviewColumnId, boolean>;
 
 const DEFAULT_PREVIEW_COLUMN_VISIBILITY: PreviewColumnVisibility = {
-  barcode: true,
+  barcode: false,
   category: false,
   price: true,
   product: true,
@@ -101,16 +127,134 @@ const DEFAULT_PREVIEW_COLUMN_VISIBILITY: PreviewColumnVisibility = {
   sku: false,
 };
 
-export function InventoryImportView() {
+type InventoryOverlayFilter = "all" | "review" | "new" | "matched" | "decided";
+type ImportDraftSource = "import" | "athena";
+type ImportNewRowAction = "create_item" | "skip_row";
+type ImportRowDraftDecision = {
+  action?: ImportNewRowAction;
+  nameSource?: ImportDraftSource;
+  priceSource?: ImportDraftSource;
+  quantitySource?: ImportDraftSource;
+};
+type SavedImportRowDraftDecision = ImportRowDraftDecision & {
+  productName: string;
+  rowKey: string;
+  rowNumber: number;
+};
+
+type AthenaSkuContext = {
+  barcode?: string;
+  inventoryCount: number;
+  price: number;
+  productAvailability?: string;
+  productId: Id<"product">;
+  productName: string;
+  productSkuId: Id<"productSku">;
+  quantityAvailable: number;
+  sku?: string;
+};
+
+type InventoryOverlayRow = {
+  athenaMatch?: AthenaSkuContext;
+  athenaPrice?: number;
+  athenaQuantity?: number;
+  delta: number;
+  matchLabel: string;
+  matchType: "barcode" | "sku" | "name" | "closeName" | "none";
+  row: InventoryImportRow;
+  status: "matched" | "new" | "review";
+  statusLabel: string;
+};
+
+const OVERLAY_FILTERS: Array<{
+  label: string;
+  value: InventoryOverlayFilter;
+}> = [
+  { label: "All", value: "all" },
+  { label: "Matched", value: "matched" },
+  { label: "Needs review", value: "review" },
+  { label: "New items", value: "new" },
+  { label: "Decided", value: "decided" },
+];
+
+function parseInventoryOverlayFilter(value: unknown): InventoryOverlayFilter | null {
+  if (typeof value !== "string") return null;
+  return OVERLAY_FILTERS.some((filter) => filter.value === value)
+    ? (value as InventoryOverlayFilter)
+    : null;
+}
+
+function parseInventoryOverlayPage(value: unknown) {
+  const parsed = typeof value === "number" ? value : Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : 1;
+}
+
+const INVENTORY_IMPORT_ROUTE_DRAFT_STORAGE_KEY =
+  "athena:operations:inventory-import-route-draft";
+
+type InventoryImportRouteDraft = {
+  fileName: string;
+  notes: string;
+  rawContent: string;
+  storeId?: string;
+};
+
+function saveInventoryImportRouteDraft(draft: InventoryImportRouteDraft) {
+  if (typeof window === "undefined") return;
+
+  window.sessionStorage.setItem(
+    INVENTORY_IMPORT_ROUTE_DRAFT_STORAGE_KEY,
+    JSON.stringify(draft),
+  );
+}
+
+function readInventoryImportRouteDraft(storeId?: string): InventoryImportRouteDraft | null {
+  if (typeof window === "undefined") return null;
+
+  const rawDraft = window.sessionStorage.getItem(
+    INVENTORY_IMPORT_ROUTE_DRAFT_STORAGE_KEY,
+  );
+  if (!rawDraft) return null;
+
+  try {
+    const draft = JSON.parse(rawDraft) as Partial<InventoryImportRouteDraft>;
+    if (!draft.rawContent || (draft.storeId && draft.storeId !== storeId)) return null;
+
+    return {
+      fileName: draft.fileName ?? "",
+      notes: draft.notes ?? "",
+      rawContent: draft.rawContent,
+      storeId: draft.storeId,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function InventoryImportView({
+  mode = "import",
+}: {
+  mode?: "import" | "review";
+}) {
   const { activeStore } = useGetActiveStore();
   const terminal = useGetTerminal();
   const managerElevation = useOptionalManagerElevation();
   const adminState = useProtectedAdminPageState({ surface: "store_day" });
+  const navigate = useNavigate();
+  const search = useSearch({ strict: false }) as {
+    filter?: unknown;
+    page?: unknown;
+    review?: unknown;
+  };
+  const overlayFilterFromSearch = parseInventoryOverlayFilter(search.filter);
+  const overlayPageFromSearch = parseInventoryOverlayPage(search.page);
+  const isReviewRoute = mode === "review";
   const saveReviewVersion = useMutation(
     api.inventory.catalogImport.saveInventoryImportReviewVersion,
   );
   const activeManagerElevation = managerElevation?.activeElevation;
-  const effectiveTerminalId = terminal?._id ?? activeManagerElevation?.terminalId;
+  const effectiveManagerElevationId = activeManagerElevation?.elevationId;
+  const effectiveTerminalId = activeManagerElevation?.terminalId ?? terminal?._id;
   const hasManagerElevation = Boolean(managerElevation?.activeElevation);
   const canImportInventory =
     adminState.hasFullAdminAccess || (hasManagerElevation && Boolean(effectiveTerminalId));
@@ -118,22 +262,145 @@ export function InventoryImportView() {
     api.inventory.catalogImport.getLatestInventoryImportReviewVersion,
     activeStore?._id && canImportInventory
       ? {
+          managerElevationId: effectiveManagerElevationId,
           storeId: activeStore._id as Id<"store">,
           terminalId: effectiveTerminalId,
         }
       : "skip",
   );
+  const inventorySkuContextResult = useQuery(
+    api.inventory.catalogImport.listInventoryImportReviewSkuContext,
+    activeStore?._id && canImportInventory
+      ? {
+          managerElevationId: effectiveManagerElevationId,
+          storeId: activeStore._id as Id<"store">,
+          terminalId: effectiveTerminalId,
+        }
+      : "skip",
+  );
+  const inventorySkuContext = useMemo(
+    () => (Array.isArray(inventorySkuContextResult) ? inventorySkuContextResult : []),
+    [inventorySkuContextResult],
+  );
+  const isInventorySkuContextLoading =
+    inventorySkuContextResult === undefined && Boolean(activeStore?._id && canImportInventory);
   const [fileName, setFileName] = useState("");
   const [rawContent, setRawContent] = useState("");
   const [notes, setNotes] = useState("");
   const [isSavingReviewVersion, setIsSavingReviewVersion] = useState(false);
+  const [draftAutosaveStatus, setDraftAutosaveStatus] = useState<
+    "idle" | "pending" | "saving" | "saved" | "error"
+  >("idle");
+  const [isSourceExpanded, setIsSourceExpanded] = useState(true);
   const [lastSavedReviewVersion, setLastSavedReviewVersion] = useState<{
     createdAt: number;
     versionNumber: number;
   } | null>(null);
   const [previewPage, setPreviewPage] = useState(1);
+  const [overlayPage, setOverlayPage] = useState(() => overlayPageFromSearch);
+  const [overlayFilter, setOverlayFilterState] = useState<InventoryOverlayFilter>(
+    () => overlayFilterFromSearch ?? "all",
+  );
+  const [rowDraftDecisions, setRowDraftDecisions] = useState<
+    Record<string, ImportRowDraftDecision>
+  >({});
+  const [isReviewModeState, setIsReviewModeState] = useState(false);
   const [previewColumnVisibility, setPreviewColumnVisibility] =
     useState<PreviewColumnVisibility>(DEFAULT_PREVIEW_COLUMN_VISIBILITY);
+  const autoLoadedReviewVersionIdRef = useRef<string | null>(null);
+  const lastSavedDraftSignatureRef = useRef("");
+  const draftAutosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isHydratingReviewVersionRef = useRef(false);
+  const didRunSourceResetRef = useRef(false);
+
+  const updateReviewSearch = useCallback(
+    ({
+      filter,
+      page,
+      review,
+    }: {
+      filter?: InventoryOverlayFilter | null;
+      page?: number | null;
+      review?: boolean;
+    }) => {
+      void navigate({
+        replace: true,
+        search: ((current: Record<string, unknown>) => {
+          const nextSearch = { ...current };
+
+          if (review !== undefined) {
+            if (review) {
+              nextSearch.review = "1";
+            } else {
+              delete nextSearch.review;
+              delete nextSearch.filter;
+              delete nextSearch.page;
+            }
+          }
+
+          if (filter !== undefined) {
+            if (filter) {
+              nextSearch.filter = filter;
+            } else {
+              delete nextSearch.filter;
+            }
+          }
+
+          if (page !== undefined) {
+            if (page && page > 1) {
+              nextSearch.page = page;
+            } else {
+              delete nextSearch.page;
+            }
+          }
+
+          return nextSearch;
+        }) as never,
+      });
+    },
+    [navigate],
+  );
+
+  const setReviewMode = useCallback(
+    (nextReviewMode: boolean, nextFilter = overlayFilter) => {
+      setIsReviewModeState(nextReviewMode);
+      if (!nextReviewMode) {
+        void navigate({
+          params: ((params: {
+            orgUrlSlug?: string;
+            storeUrlSlug?: string;
+          }) => ({
+            ...params,
+            orgUrlSlug: params.orgUrlSlug!,
+            storeUrlSlug: params.storeUrlSlug!,
+          })) as never,
+          search: ((current: Record<string, unknown>) => {
+            const nextSearch = { ...current };
+            delete nextSearch.filter;
+            delete nextSearch.page;
+            delete nextSearch.review;
+            return nextSearch;
+          }) as never,
+          to: "/$orgUrlSlug/store/$storeUrlSlug/operations/inventory-import",
+        });
+        return;
+      }
+
+      updateReviewSearch({ filter: nextFilter, page: overlayPage });
+    },
+    [navigate, overlayFilter, overlayPage, updateReviewSearch],
+  );
+
+  const setOverlayFilter = useCallback(
+    (nextFilter: InventoryOverlayFilter) => {
+      setOverlayFilterState(nextFilter);
+      if (isReviewRoute || isReviewModeState) {
+        setOverlayPage(1);
+        updateReviewSearch({ filter: nextFilter, page: null });
+      }
+    },
+    [isReviewModeState, isReviewRoute, updateReviewSearch],
+  );
 
   const parseResult = useMemo<InventoryImportParseResult | null>(() => {
     if (!rawContent.trim()) return null;
@@ -150,16 +417,57 @@ export function InventoryImportView() {
   }, [activeStore?._id, rawContent]);
 
   const previewRowCount = parseResult?.rows.length ?? 0;
-  const previewPageCount = Math.max(1, Math.ceil(previewRowCount / PREVIEW_PAGE_SIZE));
+  const previewPageCount = Math.max(
+    1,
+    Math.ceil(previewRowCount / IMPORT_TABLE_PAGE_SIZE),
+  );
   const visiblePreviewPage = Math.min(previewPage, previewPageCount);
   const previewRows =
     parseResult?.rows.slice(
-      (visiblePreviewPage - 1) * PREVIEW_PAGE_SIZE,
-      visiblePreviewPage * PREVIEW_PAGE_SIZE,
+      (visiblePreviewPage - 1) * IMPORT_TABLE_PAGE_SIZE,
+      visiblePreviewPage * IMPORT_TABLE_PAGE_SIZE,
     ) ?? [];
   const visiblePreviewColumns = PREVIEW_COLUMNS.filter(
     (column) => previewColumnVisibility[column.id],
   );
+  const overlayRows = useMemo(
+    () => sortInventoryOverlayRows(buildInventoryOverlayRows(parseResult?.rows ?? [], inventorySkuContext)),
+    [inventorySkuContext, parseResult?.rows],
+  );
+  const overlaySummary = useMemo(() => summarizeOverlayRows(overlayRows), [overlayRows]);
+  const needsReviewMetricProps =
+    overlaySummary.review > 0
+      ? {
+          className: "border-action-workflow-border bg-action-workflow-soft/60",
+          labelClassName: "text-action-workflow",
+          valueClassName: "text-action-workflow",
+        }
+      : {};
+  const filteredOverlayRows = useMemo(
+    () =>
+      overlayRows.filter((row) => {
+        if (overlayFilter === "all") return true;
+        if (overlayFilter === "decided") {
+          return hasDraftDecisionValue(
+            rowDraftDecisions[getOverlayRowKey(row)] ?? {},
+          );
+        }
+        return row.status === overlayFilter;
+      }),
+    [overlayFilter, overlayRows, rowDraftDecisions],
+  );
+  const overlayPageCount = Math.max(
+    1,
+    Math.ceil(filteredOverlayRows.length / IMPORT_TABLE_PAGE_SIZE),
+  );
+  const visibleOverlayPage = Math.min(overlayPage, overlayPageCount);
+  const visibleOverlayRows = filteredOverlayRows.slice(
+    (visibleOverlayPage - 1) * IMPORT_TABLE_PAGE_SIZE,
+    visibleOverlayPage * IMPORT_TABLE_PAGE_SIZE,
+  );
+  const pendingImportActionCount = overlayRows.filter(
+    (row) => !isOverlayRowDecisionComplete(row, rowDraftDecisions[getOverlayRowKey(row)]),
+  ).length;
   const hasValidRows =
     Boolean(parseResult) &&
     parseResult!.rows.length > 0 &&
@@ -167,10 +475,98 @@ export function InventoryImportView() {
     Boolean(activeStore?._id);
   const hasReviewableContent =
     Boolean(parseResult) && Boolean(rawContent.trim()) && Boolean(activeStore?._id);
+  const savedDraftDecisionCount = Object.values(rowDraftDecisions).filter((decision) =>
+    hasDraftDecisionValue(decision),
+  ).length;
+  const canSaveImportHandoff = hasReviewableContent;
+  const shouldShowCollapsedSource =
+    Boolean(rawContent.trim()) && Boolean(parseResult) && !isSourceExpanded;
+  const isReviewMode = (isReviewRoute || isReviewModeState) && Boolean(parseResult);
 
   useEffect(() => {
+    if (isHydratingReviewVersionRef.current) {
+      isHydratingReviewVersionRef.current = false;
+      return;
+    }
+
+    if (!didRunSourceResetRef.current) {
+      didRunSourceResetRef.current = true;
+      return;
+    }
+
     setPreviewPage(1);
+    setOverlayPage(1);
+    setRowDraftDecisions({});
+    lastSavedDraftSignatureRef.current = "";
+    setDraftAutosaveStatus("idle");
   }, [fileName, rawContent]);
+
+  useEffect(() => {
+    setOverlayPage(1);
+  }, [overlayFilter]);
+
+  useEffect(() => {
+    if (!isReviewRoute || !parseResult) return;
+
+    if (overlayFilterFromSearch && overlayFilterFromSearch !== overlayFilter) {
+      setOverlayFilterState(overlayFilterFromSearch);
+    }
+    if (overlayPageFromSearch !== overlayPage) {
+      setOverlayPage(overlayPageFromSearch);
+    }
+  }, [
+    isReviewRoute,
+    overlayFilter,
+    overlayFilterFromSearch,
+    overlayPage,
+    overlayPageFromSearch,
+    parseResult,
+  ]);
+
+  useEffect(() => {
+    if (!isReviewRoute || rawContent.trim() || !activeStore?._id) return;
+
+    const draft = readInventoryImportRouteDraft(activeStore._id);
+    if (!draft) return;
+
+    isHydratingReviewVersionRef.current = true;
+    setFileName(draft.fileName);
+    setRawContent(draft.rawContent);
+    setNotes(draft.notes);
+    setIsSourceExpanded(false);
+  }, [activeStore?._id, isReviewRoute, rawContent]);
+
+  useEffect(() => {
+    if (
+      !latestReviewVersion ||
+      rawContent.trim() ||
+      autoLoadedReviewVersionIdRef.current === latestReviewVersion._id
+    ) {
+      return;
+    }
+
+    autoLoadedReviewVersionIdRef.current = latestReviewVersion._id;
+    isHydratingReviewVersionRef.current = true;
+    setFileName(
+      latestReviewVersion.fileName ||
+        `inventory-import-review-v${latestReviewVersion.versionNumber}.${latestReviewVersion.sourceFormat}`,
+    );
+    setRawContent(latestReviewVersion.rawContent);
+    setNotes(latestReviewVersion.notes ?? "");
+    const loadedDraftDecisions = mapSavedRowDraftDecisions(
+      latestReviewVersion.rowDecisions ?? [],
+    );
+    setRowDraftDecisions(loadedDraftDecisions);
+    lastSavedDraftSignatureRef.current = getDraftAutosaveSignature(
+      latestReviewVersion.rowDecisions ?? [],
+    );
+    setDraftAutosaveStatus("saved");
+    setIsSourceExpanded(false);
+    setLastSavedReviewVersion({
+      createdAt: latestReviewVersion.createdAt,
+      versionNumber: latestReviewVersion.versionNumber,
+    });
+  }, [latestReviewVersion, rawContent]);
 
   const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -179,56 +575,185 @@ export function InventoryImportView() {
     setFileName(file.name);
     setRawContent(await file.text());
     setLastSavedReviewVersion(null);
+    setIsSourceExpanded(false);
+    setReviewMode(false);
   };
 
-  const handleSaveReviewVersion = async () => {
+  const saveReviewDraft = useCallback(async (mode: "auto" | "manual" = "manual") => {
     if (!activeStore?._id || !parseResult || !rawContent.trim()) return;
 
+    const reviewNotes = buildReviewNotesWithImportActions({
+      notes,
+      rows: overlayRows,
+      rowDraftDecisions,
+    });
+    const rowDecisions = buildSavedRowDraftDecisions({
+      rows: overlayRows,
+      rowDraftDecisions,
+    });
+    const draftSignature = getDraftAutosaveSignature(rowDecisions);
+
     setIsSavingReviewVersion(true);
+    if (mode === "auto") setDraftAutosaveStatus("saving");
     try {
       const result = await runCommand(() =>
         saveReviewVersion({
           fileName: fileName || undefined,
           importKey: importKey || reviewVersionKey,
           issueCount: parseResult.errors.length,
-          notes: notes.trim() || undefined,
+          notes: reviewNotes || undefined,
           rawContent,
+          rowDecisions,
           rowCount: parseResult.rows.length,
           sourceFormat: parseResult.format,
           storeId: activeStore._id as Id<"store">,
+          managerElevationId: effectiveManagerElevationId,
           terminalId: effectiveTerminalId,
         })
       );
 
       if (result.kind === "ok") {
+        lastSavedDraftSignatureRef.current = draftSignature;
         setLastSavedReviewVersion({
           createdAt: result.data.createdAt,
           versionNumber: result.data.versionNumber,
         });
-        toast.success(`Review version ${result.data.versionNumber} saved`);
+        if (mode === "auto") {
+          setDraftAutosaveStatus("saved");
+        } else {
+          setDraftAutosaveStatus("saved");
+          toast.success(`Review version ${result.data.versionNumber} saved`);
+        }
         return;
       }
 
+      if (mode === "auto") setDraftAutosaveStatus("error");
       presentCommandToast(result);
     } finally {
       setIsSavingReviewVersion(false);
     }
+  }, [
+    activeStore?._id,
+    effectiveManagerElevationId,
+    effectiveTerminalId,
+    fileName,
+    importKey,
+    notes,
+    overlayRows,
+    parseResult,
+    rawContent,
+    reviewVersionKey,
+    rowDraftDecisions,
+    saveReviewVersion,
+  ]);
+
+  const handleSaveReviewVersion = () => {
+    void saveReviewDraft("manual");
   };
+
+  useEffect(() => {
+    if (draftAutosaveTimerRef.current) {
+      clearTimeout(draftAutosaveTimerRef.current);
+      draftAutosaveTimerRef.current = null;
+    }
+
+    const rowDecisions = buildSavedRowDraftDecisions({
+      rows: overlayRows,
+      rowDraftDecisions,
+    });
+    const draftSignature = getDraftAutosaveSignature(rowDecisions);
+
+    if (
+      !hasReviewableContent ||
+      rowDecisions.length === 0 ||
+      draftSignature === lastSavedDraftSignatureRef.current
+    ) {
+      return;
+    }
+
+    if (isSavingReviewVersion) {
+      setDraftAutosaveStatus("pending");
+      return;
+    }
+
+    setDraftAutosaveStatus("pending");
+    draftAutosaveTimerRef.current = setTimeout(() => {
+      draftAutosaveTimerRef.current = null;
+      void saveReviewDraft("auto");
+    }, DRAFT_AUTOSAVE_DELAY_MS);
+
+    return () => {
+      if (draftAutosaveTimerRef.current) {
+        clearTimeout(draftAutosaveTimerRef.current);
+        draftAutosaveTimerRef.current = null;
+      }
+    };
+  }, [
+    hasReviewableContent,
+    isSavingReviewVersion,
+    overlayRows,
+    rowDraftDecisions,
+    saveReviewDraft,
+  ]);
 
   const handleLoadLatestReviewVersion = () => {
     if (!latestReviewVersion) return;
 
+    isHydratingReviewVersionRef.current = true;
     setFileName(
       latestReviewVersion.fileName ||
         `inventory-import-review-v${latestReviewVersion.versionNumber}.${latestReviewVersion.sourceFormat}`,
     );
     setRawContent(latestReviewVersion.rawContent);
     setNotes(latestReviewVersion.notes ?? "");
+    const loadedDraftDecisions = mapSavedRowDraftDecisions(
+      latestReviewVersion.rowDecisions ?? [],
+    );
+    setRowDraftDecisions(loadedDraftDecisions);
+    lastSavedDraftSignatureRef.current = getDraftAutosaveSignature(
+      latestReviewVersion.rowDecisions ?? [],
+    );
+    setDraftAutosaveStatus("saved");
+    setIsSourceExpanded(false);
     setLastSavedReviewVersion({
       createdAt: latestReviewVersion.createdAt,
       versionNumber: latestReviewVersion.versionNumber,
     });
+    autoLoadedReviewVersionIdRef.current = latestReviewVersion._id;
+    setReviewMode(false);
     toast.success(`Review version ${latestReviewVersion.versionNumber} loaded`);
+  };
+
+  const handleEnterReviewMode = () => {
+    const nextFilter = overlayFilterFromSearch ?? getDefaultOverlayFilter(overlaySummary);
+    saveInventoryImportRouteDraft({
+      fileName,
+      notes,
+      rawContent,
+      storeId: activeStore?._id,
+    });
+    setOverlayFilterState(nextFilter);
+    setOverlayPage(1);
+    setIsReviewModeState(true);
+    void navigate({
+      params: ((params: {
+        orgUrlSlug?: string;
+        storeUrlSlug?: string;
+      }) => ({
+        ...params,
+        orgUrlSlug: params.orgUrlSlug!,
+        storeUrlSlug: params.storeUrlSlug!,
+      })) as never,
+      search: { filter: nextFilter },
+      to: "/$orgUrlSlug/store/$storeUrlSlug/operations/inventory-import/review",
+    });
+  };
+
+  const handleOverlayPageChange = (nextPage: number) => {
+    setOverlayPage(nextPage);
+    if (isReviewMode) {
+      updateReviewSearch({ page: nextPage });
+    }
   };
 
   if (adminState.isLoadingAccess) {
@@ -270,6 +795,299 @@ export function InventoryImportView() {
     );
   }
 
+  if (isReviewRoute && !parseResult) {
+    const isLoadingReviewImport = latestReviewVersion === undefined;
+
+    return (
+      <View hideBorder hideHeaderBottomBorder>
+        <PageWorkspace className="container mx-auto py-layout-2xl">
+          <PageLevelHeader
+            backButtonLabel="Back to import"
+            eyebrow="Operations"
+            title="Inventory review"
+            description="Compare the loaded import with Athena inventory before applying changes."
+            onNavigateBack={() => setReviewMode(false)}
+            showBackButton
+          />
+          <EmptyState
+            icon={<FileJson className="h-10 w-10" />}
+            title={isLoadingReviewImport ? "Loading inventory review" : "No import loaded"}
+            description={
+              isLoadingReviewImport
+                ? "Loading the latest saved import for review."
+                : "Return to the import screen and load a saved import before reviewing inventory."
+            }
+          />
+        </PageWorkspace>
+      </View>
+    );
+  }
+
+  if (isReviewMode && parseResult) {
+    return (
+      <View hideBorder hideHeaderBottomBorder>
+        <PageWorkspace className="container mx-auto py-layout-2xl">
+          <PageLevelHeader
+            backButtonLabel="Back to import"
+            eyebrow="Operations"
+            title="Inventory review"
+            description="Compare the loaded import with Athena inventory before applying changes."
+            onNavigateBack={() => setReviewMode(false)}
+            showBackButton
+          />
+
+          <section className="space-y-4 rounded-md border border-border bg-background p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold">Import review</h2>
+                <p className="text-sm text-muted-foreground">
+                  {overlayRows.length} import row{overlayRows.length === 1 ? "" : "s"} compared
+                  with Athena inventory
+                </p>
+              </div>
+            </div>
+
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              <OperationsSummaryMetric
+                label="Matched"
+                tone="quiet"
+                value={overlaySummary.matched}
+              />
+              <OperationsSummaryMetric
+                label="Needs review"
+                tone="quiet"
+                value={overlaySummary.review}
+                {...needsReviewMetricProps}
+              />
+              <OperationsSummaryMetric
+                label="New items"
+                tone="quiet"
+                value={overlaySummary.new}
+              />
+              <OperationsSummaryMetric
+                label="Net delta"
+                tone="quiet"
+                value={formatSignedQuantity(overlaySummary.netDelta)}
+              />
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {OVERLAY_FILTERS.map((filter) => {
+                const isSelected = overlayFilter === filter.value;
+                return (
+                  <Button
+                    aria-pressed={isSelected}
+                    className={cn(
+                      "h-8",
+                      isSelected &&
+                        "border-action-workflow-border bg-action-workflow-soft text-action-workflow hover:bg-action-workflow-soft/80",
+                    )}
+                    key={filter.value}
+                    onClick={() => setOverlayFilter(filter.value)}
+                    size="sm"
+                    type="button"
+                    variant="outline"
+                  >
+                    {filter.label}
+                  </Button>
+                );
+              })}
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3 border-y border-border bg-surface/60 px-3 py-3">
+              {overlaySummary.review > 0 ? (
+                <>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">Next action</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {formatCount(pendingImportActionCount, "row")} still need decisions.
+                      {savedDraftDecisionCount > 0
+                        ? ` ${formatCount(savedDraftDecisionCount, "row")} already have draft choices.`
+                        : ""}{" "}
+                      Save a draft any time and resume it later.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-end gap-2 sm:min-w-[28rem]">
+                    <Button
+                      onClick={() => setOverlayFilter("review")}
+                      type="button"
+                      variant="outline"
+                    >
+                      Show review rows
+                    </Button>
+                    <LoadingButton
+                      className="w-56 px-4"
+                      disabled={!canSaveImportHandoff || isSavingReviewVersion}
+                      isLoading={isSavingReviewVersion}
+                      onClick={handleSaveReviewVersion}
+                      type="button"
+                      variant="workflow"
+                    >
+                      <Save className="h-4 w-4" />
+                      Save for import handoff
+                    </LoadingButton>
+                    <DraftAutosaveStatus status={draftAutosaveStatus} />
+                  </div>
+                </>
+              ) : overlaySummary.new > 0 ? (
+                <>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">Next action</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {formatCount(pendingImportActionCount, "row")} still need decisions.
+                      {savedDraftDecisionCount > 0
+                        ? ` ${formatCount(savedDraftDecisionCount, "row")} already have draft choices.`
+                        : ""}{" "}
+                      Save a draft any time and resume it later.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-end gap-2 sm:min-w-[28rem]">
+                    <Button
+                      onClick={() => setOverlayFilter("new")}
+                      type="button"
+                      variant="outline"
+                    >
+                      Show new items
+                    </Button>
+                    <LoadingButton
+                      className="w-56 px-4"
+                      disabled={!canSaveImportHandoff || isSavingReviewVersion}
+                      isLoading={isSavingReviewVersion}
+                      onClick={handleSaveReviewVersion}
+                      type="button"
+                      variant="workflow"
+                    >
+                      <Save className="h-4 w-4" />
+                      Save for import handoff
+                    </LoadingButton>
+                    <DraftAutosaveStatus status={draftAutosaveStatus} />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">Next action</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Rows are ready for import handoff. Save this draft before applying
+                      catalog or stock changes.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-end gap-2 sm:min-w-[28rem]">
+                    <LoadingButton
+                      className="w-56 px-4"
+                      disabled={!canSaveImportHandoff || isSavingReviewVersion}
+                      isLoading={isSavingReviewVersion}
+                      onClick={handleSaveReviewVersion}
+                      type="button"
+                      variant="workflow"
+                    >
+                      <Save className="h-4 w-4" />
+                      Save for import handoff
+                    </LoadingButton>
+                    <DraftAutosaveStatus status={draftAutosaveStatus} />
+                  </div>
+                </>
+              )}
+            </div>
+
+            {visibleOverlayRows.length > 0 ? (
+              <div className="overflow-hidden rounded-md border border-border">
+                <div className="divide-y divide-border">
+                  {visibleOverlayRows.map((overlayRow) => (
+                    <article
+                      className="grid gap-4 p-4 lg:grid-cols-[minmax(11rem,15rem)_minmax(15rem,22rem)_minmax(18rem,1fr)_14rem] lg:items-start"
+                      key={`${overlayRow.row.rowNumber}-${overlayRow.row.sku ?? overlayRow.row.barcode ?? overlayRow.row.productName}`}
+                    >
+                      <InventoryReviewIdentity
+                        source="import"
+                        eyebrow="Import"
+                        name={overlayRow.row.productName}
+                        detail={
+                          [overlayRow.row.sku, overlayRow.row.barcode]
+                            .filter(Boolean)
+                            .join(" / ") || `Row ${overlayRow.row.rowNumber}`
+                        }
+                      />
+
+                      {overlayRow.athenaMatch ? (
+                        <InventoryReviewIdentity
+                          source="athena"
+                          eyebrow="Athena"
+                          name={overlayRow.athenaMatch.productName}
+                          detail={
+                            [overlayRow.athenaMatch.sku, overlayRow.athenaMatch.barcode]
+                              .filter(Boolean)
+                              .join(" / ") || "SKU details pending"
+                          }
+                          productId={overlayRow.athenaMatch.productId}
+                          sku={overlayRow.athenaMatch.sku}
+                        />
+                      ) : (
+                        <InventoryReviewIdentity
+                          source="athena"
+                          eyebrow="Athena"
+                          name="No Athena match"
+                          detail="Create or skip this import row"
+                          muted
+                        />
+                      )}
+
+                      <InventoryReviewChangeSummary row={overlayRow} />
+
+                      <div className="flex flex-wrap items-center gap-2 lg:justify-end lg:pt-3">
+                        <span
+                          className={cn(
+                            "text-xs font-medium",
+                            overlayRow.status === "review" && "text-destructive",
+                            overlayRow.status === "new" && "text-emerald-700",
+                            overlayRow.status === "matched" && "text-muted-foreground",
+                          )}
+                        >
+                          {overlayRow.statusLabel}
+                        </span>
+                        {overlayRow.athenaMatch ? (
+                          <span className="text-xs text-muted-foreground">
+                            {overlayRow.matchLabel}
+                          </span>
+                        ) : null}
+                        <ImportRowActionControl
+                          decision={rowDraftDecisions[getOverlayRowKey(overlayRow)]}
+                          row={overlayRow}
+                          onChange={(decision) =>
+                            setRowDraftDecisions((current) => ({
+                              ...current,
+                              [getOverlayRowKey(overlayRow)]: {
+                                ...current[getOverlayRowKey(overlayRow)],
+                                ...decision,
+                              },
+                            }))
+                          }
+                        />
+                      </div>
+                    </article>
+                  ))}
+                </div>
+                <ListPagination
+                  page={visibleOverlayPage}
+                  pageCount={overlayPageCount}
+                  pageSize={IMPORT_TABLE_PAGE_SIZE}
+                  totalItems={filteredOverlayRows.length}
+                  onPageChange={handleOverlayPageChange}
+                />
+              </div>
+            ) : (
+              <EmptyState
+                icon={<FileJson className="h-10 w-10" />}
+                title="No rows in this view"
+                description="Choose another review filter."
+              />
+            )}
+          </section>
+        </PageWorkspace>
+      </View>
+    );
+  }
+
   return (
     <View hideBorder hideHeaderBottomBorder>
       <PageWorkspace className="container mx-auto py-layout-2xl">
@@ -287,7 +1105,9 @@ export function InventoryImportView() {
                 <div>
                   <h2 className="text-lg font-semibold">Source file</h2>
                   <p className="text-sm text-muted-foreground">
-                    CSV and JSON exports are accepted.
+                    {shouldShowCollapsedSource
+                      ? "Loaded import is ready for review."
+                      : "CSV and JSON exports are accepted."}
                   </p>
                 </div>
                 {parseResult ? (
@@ -297,37 +1117,115 @@ export function InventoryImportView() {
                 ) : null}
               </div>
 
-              <div className="space-y-2">
-                <div className="space-y-2">
-                  <Label htmlFor="inventory-import-file">File</Label>
-                  <Input
-                    id="inventory-import-file"
-                    accept=".csv,.json,application/json,text/csv"
-                    type="file"
-                    onChange={handleFileChange}
+              {shouldShowCollapsedSource ? (
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-surface p-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">
+                      {fileName || "Loaded import"}
+                    </p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {parseResult?.rows.length ?? 0} row
+                      {(parseResult?.rows.length ?? 0) === 1 ? "" : "s"} -{" "}
+                      {parseResult?.errors.length ?? 0} issue
+                      {(parseResult?.errors.length ?? 0) === 1 ? "" : "s"}
+                    </p>
+                  </div>
+                  <Button
+                    onClick={() => {
+                      setReviewMode(false);
+                      setIsSourceExpanded(true);
+                    }}
+                    size="sm"
+                    type="button"
+                    variant="outline"
+                  >
+                    <Pencil className="mr-2 h-4 w-4" />
+                    Replace source
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="inventory-import-file">File</Label>
+                    <Input
+                      id="inventory-import-file"
+                      accept=".csv,.json,application/json,text/csv"
+                      type="file"
+                      onChange={handleFileChange}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="inventory-import-content">Raw export</Label>
+                    <Textarea
+                      id="inventory-import-content"
+                      className="min-h-52 font-mono text-xs"
+                      value={rawContent}
+                      onChange={(event) => {
+                        setFileName(fileName || "manual.csv");
+                        setRawContent(event.target.value);
+                        setLastSavedReviewVersion(null);
+                        setReviewMode(false);
+                      }}
+                    />
+                  </div>
+                </>
+              )}
+            </section>
+
+            {parseResult ? (
+              <section className="space-y-4 rounded-md border border-border bg-background p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h2 className="text-lg font-semibold">Inventory check</h2>
+                    <p className="text-sm text-muted-foreground">
+                      Compare the loaded file with current stock before applying changes.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                  <OperationsSummaryMetric
+                    label="Matched"
+                    tone="quiet"
+                    value={overlaySummary.matched}
+                  />
+                  <OperationsSummaryMetric
+                    label="Needs review"
+                    tone="quiet"
+                    value={overlaySummary.review}
+                    {...needsReviewMetricProps}
+                  />
+                  <OperationsSummaryMetric
+                    label="New items"
+                    tone="quiet"
+                    value={overlaySummary.new}
+                  />
+                  <OperationsSummaryMetric
+                    label="Net delta"
+                    tone="quiet"
+                    value={formatSignedQuantity(overlaySummary.netDelta)}
                   />
                 </div>
-              </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="inventory-import-content">Raw export</Label>
-                <Textarea
-                  id="inventory-import-content"
-                  className="min-h-52 font-mono text-xs"
-                  value={rawContent}
-                  onChange={(event) => {
-                    setFileName(fileName || "manual.csv");
-                    setRawContent(event.target.value);
-                    setLastSavedReviewVersion(null);
-                  }}
-                />
-              </div>
-            </section>
+                <div className="flex flex-wrap items-center justify-end gap-3 rounded-md border border-border bg-surface p-3">
+                  <Button
+                    disabled={!hasValidRows || isInventorySkuContextLoading}
+                    onClick={handleEnterReviewMode}
+                    type="button"
+                    variant="workflow"
+                  >
+                    Review inventory changes
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                </div>
+              </section>
+            ) : null}
 
             <section className="space-y-4 rounded-md border border-border bg-background p-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <h2 className="text-lg font-semibold">Preview</h2>
+                  <h2 className="text-lg font-semibold">Source preview</h2>
                   <p className="text-sm text-muted-foreground">
                     {parseResult
                       ? `${parseResult.rows.length} row${parseResult.rows.length === 1 ? "" : "s"} ready`
@@ -380,7 +1278,7 @@ export function InventoryImportView() {
               {previewRows.length > 0 ? (
                 <div className="overflow-hidden rounded-md border border-border">
                   <div className="overflow-x-auto">
-                    <table className="w-full min-w-[760px] text-left text-sm">
+                    <table className="w-full min-w-[560px] text-left text-sm">
                       <thead className="border-b bg-surface text-xs uppercase text-muted-foreground">
                         <tr>
                           {visiblePreviewColumns.map((column, index) => (
@@ -420,7 +1318,7 @@ export function InventoryImportView() {
                   <ListPagination
                     page={visiblePreviewPage}
                     pageCount={previewPageCount}
-                    pageSize={PREVIEW_PAGE_SIZE}
+                    pageSize={IMPORT_TABLE_PAGE_SIZE}
                     totalItems={previewRowCount}
                     onPageChange={setPreviewPage}
                   />
@@ -433,6 +1331,7 @@ export function InventoryImportView() {
                 />
               )}
             </section>
+
           </PageWorkspaceMain>
 
           <PageWorkspaceRail>
@@ -471,14 +1370,19 @@ export function InventoryImportView() {
                     value={parseResult?.errors.length ?? 0}
                   />
                   <OperationsSummaryMetric
+                    label="Review"
+                    tone="quiet"
+                    value={overlaySummary.review}
+                  />
+                  <OperationsSummaryMetric
+                    label="New"
+                    tone="quiet"
+                    value={overlaySummary.new}
+                  />
+                  <OperationsSummaryMetric
                     label="Format"
                     tone="quiet"
                     value={parseResult ? parseResult.format.toUpperCase() : "-"}
-                  />
-                  <OperationsSummaryMetric
-                    label="Store"
-                    tone="quiet"
-                    value={activeStore?.name ?? "-"}
                   />
                 </div>
               </div>
@@ -546,12 +1450,698 @@ export function InventoryImportView() {
   );
 }
 
+function ImportRowActionControl({
+  decision,
+  onChange,
+  row,
+}: {
+  decision?: ImportRowDraftDecision;
+  onChange: (decision: ImportRowDraftDecision) => void;
+  row: InventoryOverlayRow;
+}) {
+  if (row.status === "matched") {
+    return (
+      <Badge className="border-border bg-transparent text-muted-foreground" variant="secondary">
+        Ready
+      </Badge>
+    );
+  }
+
+  if (row.status === "new") {
+    return (
+      <div className="flex flex-wrap items-center gap-1.5 lg:justify-end">
+        <DraftChoiceButton
+          isSelected={decision?.action === "create_item"}
+          label="Create item"
+          onClick={() =>
+            onChange({
+              action: decision?.action === "create_item" ? undefined : "create_item",
+            })
+          }
+        />
+        <DraftChoiceButton
+          isSelected={decision?.action === "skip_row"}
+          label="Skip"
+          onClick={() =>
+            onChange({
+              action: decision?.action === "skip_row" ? undefined : "skip_row",
+            })
+          }
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid gap-2 text-xs lg:min-w-52">
+      {doesOverlayRowNeedNameDecision(row.row, row.athenaMatch) ? (
+        <DraftSourceControl
+          label="Name"
+          source={decision?.nameSource}
+          onChange={(nameSource) => onChange({ nameSource })}
+        />
+      ) : null}
+      {row.delta !== 0 ? (
+        <DraftSourceControl
+          label="Qty"
+          source={decision?.quantitySource}
+          onChange={(quantitySource) => onChange({ quantitySource })}
+        />
+      ) : null}
+      {row.athenaPrice !== undefined && row.row.price !== row.athenaPrice ? (
+        <DraftSourceControl
+          label="Price"
+          source={decision?.priceSource}
+          onChange={(priceSource) => onChange({ priceSource })}
+        />
+      ) : null}
+      <DraftChoiceButton
+        isSelected={decision?.action === "skip_row"}
+        label="Skip row"
+        onClick={() =>
+          onChange({
+            action: decision?.action === "skip_row" ? undefined : "skip_row",
+          })
+        }
+      />
+    </div>
+  );
+}
+
+function DraftSourceControl({
+  label,
+  onChange,
+  source,
+}: {
+  label: string;
+  onChange: (source: ImportDraftSource | undefined) => void;
+  source?: ImportDraftSource;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <span className="min-w-10 text-muted-foreground">{label}</span>
+      <DraftChoiceButton
+        isSelected={source === "import"}
+        label="Import"
+        onClick={() => onChange(source === "import" ? undefined : "import")}
+      />
+      <DraftChoiceButton
+        isSelected={source === "athena"}
+        label="Athena"
+        onClick={() => onChange(source === "athena" ? undefined : "athena")}
+      />
+    </div>
+  );
+}
+
+function DraftChoiceButton({
+  isSelected,
+  label,
+  onClick,
+}: {
+  isSelected: boolean;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <Button
+      aria-pressed={isSelected}
+      className={cn(
+        "h-7 px-2.5 text-xs",
+        isSelected &&
+          "border-action-workflow-border bg-action-workflow-soft text-action-workflow hover:bg-action-workflow-soft/80",
+      )}
+      onClick={onClick}
+      size="sm"
+      type="button"
+      variant="outline"
+    >
+      {label}
+    </Button>
+  );
+}
+
+function DraftAutosaveStatus({
+  status,
+}: {
+  status: "idle" | "pending" | "saving" | "saved" | "error";
+}) {
+  const label = getDraftAutosaveStatusLabel(status);
+
+  return (
+    <span
+      className={cn(
+        "inline-flex h-9 w-28 items-center justify-end text-right text-xs text-muted-foreground",
+        status === "idle" && "invisible",
+        status === "error" && "text-destructive",
+      )}
+      aria-hidden={status === "idle" ? "true" : undefined}
+    >
+      {label || "Draft status"}
+    </span>
+  );
+}
+
+function InventoryReviewIdentity({
+  detail,
+  eyebrow,
+  muted = false,
+  name,
+  productId,
+  sku,
+  source,
+}: {
+  detail: string;
+  eyebrow: string;
+  muted?: boolean;
+  name: string;
+  productId?: Id<"product">;
+  sku?: string;
+  source: "import" | "athena";
+}) {
+  const displayName = productId ? capitalizeWords(name) : name;
+  const content = (
+    <div className="min-w-0">
+      <p
+        className={cn(
+          "text-xs font-semibold uppercase",
+          source === "import" && "text-comparison-primary",
+          source === "athena" && "text-comparison-secondary",
+        )}
+      >
+        {eyebrow}
+      </p>
+      <p
+        className={cn(
+          "mt-1 text-sm font-medium leading-5",
+          muted && "text-muted-foreground",
+        )}
+      >
+        {productId ? (
+          <span className="inline-flex min-w-0 max-w-full items-center gap-1.5 overflow-hidden">
+            <span className="min-w-0 truncate">{displayName}</span>
+            <ArrowUpRight className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          </span>
+        ) : (
+          displayName
+        )}
+      </p>
+      <p
+        className={cn(
+          "mt-1 break-words text-xs leading-5",
+          "text-muted-foreground",
+          muted && "text-muted-foreground",
+        )}
+      >
+        {detail}
+      </p>
+    </div>
+  );
+
+  if (!productId) return content;
+
+  return (
+    <Link
+      className="min-w-0 rounded-sm outline-none transition-colors hover:text-action-workflow focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      params={(params) => ({
+        ...params,
+        orgUrlSlug: params.orgUrlSlug!,
+        productSlug: productId,
+        storeUrlSlug: params.storeUrlSlug!,
+      })}
+      search={{
+        o: getOrigin(),
+        variant: sku,
+      }}
+      to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug/edit"
+    >
+      {content}
+    </Link>
+  );
+}
+
+function InventoryReviewChangeSummary({
+  row,
+}: {
+  row: InventoryOverlayRow;
+}) {
+  const importPrice = formatStoredCurrencyAmount("GHS", row.row.price, {
+    revealMinorUnits: true,
+  });
+  const athenaPrice =
+    row.athenaPrice === undefined
+      ? "-"
+      : formatStoredCurrencyAmount("GHS", row.athenaPrice, {
+          revealMinorUnits: true,
+        });
+
+  return (
+    <p className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground lg:pt-4">
+      <span>
+        Qty{" "}
+        <span className="font-medium text-foreground">{row.row.quantity}</span>
+        {" import vs "}
+        <span className="font-medium text-foreground">{row.athenaQuantity ?? "-"}</span>
+        {" Athena"}
+        <span
+          className={cn(
+            "ml-2 font-medium",
+            row.delta > 0 && "text-emerald-700",
+            row.delta < 0 && "text-destructive",
+          )}
+        >
+          ({formatSignedQuantity(row.delta)})
+        </span>
+      </span>
+      <span>
+        Price{" "}
+        <span className="font-medium text-foreground">{importPrice}</span>
+        {" import vs "}
+        <span className="font-medium text-foreground">{athenaPrice}</span>
+        {" Athena"}
+      </span>
+    </p>
+  );
+}
+
 function hashString(value: string) {
   let hash = 0;
   for (let index = 0; index < value.length; index += 1) {
     hash = (hash * 31 + value.charCodeAt(index)) | 0;
   }
   return Math.abs(hash).toString(36);
+}
+
+function buildInventoryOverlayRows(
+  importRows: InventoryImportRow[],
+  athenaSkus: AthenaSkuContext[],
+): InventoryOverlayRow[] {
+  const barcodeMatches = new Map<string, AthenaSkuContext>();
+  const skuMatches = new Map<string, AthenaSkuContext>();
+  const productNameCandidates = new Map<string, AthenaSkuContext[]>();
+  const productNameFuzzyEntries: Array<FuzzySearchEntry<AthenaSkuContext>> = [];
+
+  athenaSkus.forEach((athenaSku) => {
+    const barcodeKey = normalizeOverlayIdentifierKey(athenaSku.barcode);
+    if (barcodeKey && !barcodeMatches.has(barcodeKey)) {
+      barcodeMatches.set(barcodeKey, athenaSku);
+    }
+
+    const skuKey = normalizeOverlayIdentifierKey(athenaSku.sku);
+    if (skuKey && !skuMatches.has(skuKey)) {
+      skuMatches.set(skuKey, athenaSku);
+    }
+
+    const nameKey = normalizeOverlayNameKey(athenaSku.productName);
+    if (nameKey) {
+      productNameCandidates.set(nameKey, [
+        ...(productNameCandidates.get(nameKey) ?? []),
+        athenaSku,
+      ]);
+      productNameFuzzyEntries.push(
+        createFuzzySearchEntry(athenaSku, {
+          productName: athenaSku.productName,
+        }),
+      );
+    }
+  });
+
+  return importRows.map((row) => {
+    const barcodeKey = normalizeOverlayIdentifierKey(row.barcode);
+    const skuKey = normalizeOverlayIdentifierKey(row.sku);
+    const nameKey = normalizeOverlayNameKey(row.productName);
+    const nameMatches = nameKey ? productNameCandidates.get(nameKey) ?? [] : [];
+    const barcodeMatch = barcodeKey ? barcodeMatches.get(barcodeKey) : undefined;
+    const skuMatch = skuKey ? skuMatches.get(skuKey) : undefined;
+    const nameMatch = selectBestExactNameMatch(nameMatches, row);
+    const closeNameMatch =
+      barcodeMatch || skuMatch || nameMatch
+        ? undefined
+        : findBestCloseNameMatch(row.productName, productNameFuzzyEntries);
+    const match = barcodeMatch ?? skuMatch ?? nameMatch ?? closeNameMatch;
+    const matchType = barcodeMatch
+      ? "barcode"
+      : skuMatch
+        ? "sku"
+        : nameMatch
+          ? "name"
+          : closeNameMatch
+            ? "closeName"
+            : "none";
+    const athenaQuantity = match?.quantityAvailable;
+    const delta = row.quantity - (athenaQuantity ?? 0);
+
+    if (!match) {
+      return {
+        delta,
+        matchLabel: "No Athena match",
+        matchType,
+        row,
+        status: "new",
+        statusLabel: "New item",
+      };
+    }
+
+    const priceChanged = row.price !== match.price;
+    const quantityChanged = delta !== 0;
+    const nameChanged = doesOverlayRowNeedNameDecision(row, match);
+    const archivedMatch = match.productAvailability === "archived";
+    const status =
+      priceChanged || quantityChanged || nameChanged || archivedMatch ? "review" : "matched";
+
+    return {
+      athenaMatch: match,
+      athenaPrice: match.price,
+      athenaQuantity,
+      delta,
+      matchLabel: getOverlayMatchLabel(matchType),
+      matchType,
+      row,
+      status,
+      statusLabel: getOverlayStatusLabel({
+        archivedMatch,
+        nameChanged,
+        priceChanged,
+        quantityChanged,
+      }),
+    };
+  });
+}
+
+function sortInventoryOverlayRows(rows: InventoryOverlayRow[]) {
+  return [...rows].sort((left, right) => {
+    const nameOrder = left.row.productName.localeCompare(right.row.productName, undefined, {
+      numeric: true,
+      sensitivity: "base",
+    });
+
+    if (nameOrder !== 0) return nameOrder;
+
+    return left.row.rowNumber - right.row.rowNumber;
+  });
+}
+
+function summarizeOverlayRows(rows: InventoryOverlayRow[]) {
+  return rows.reduce(
+    (summary, row) => ({
+      matched: summary.matched + (row.status === "matched" ? 1 : 0),
+      netDelta: summary.netDelta + row.delta,
+      new: summary.new + (row.status === "new" ? 1 : 0),
+      review: summary.review + (row.status === "review" ? 1 : 0),
+    }),
+    {
+      matched: 0,
+      netDelta: 0,
+      new: 0,
+      review: 0,
+    },
+  );
+}
+
+function getDefaultOverlayFilter(summary: ReturnType<typeof summarizeOverlayRows>): InventoryOverlayFilter {
+  if (summary.review > 0) return "review";
+  if (summary.new > 0) return "new";
+  return "all";
+}
+
+function normalizeOverlayIdentifierKey(value?: string | null) {
+  return value?.trim().toLocaleLowerCase().replace(/[^a-z0-9]+/g, "") ?? "";
+}
+
+function normalizeOverlayNameKey(value?: string | null) {
+  return normalizeFuzzySearchText(value);
+}
+
+function doesOverlayRowNeedNameDecision(
+  row: InventoryImportRow,
+  match?: AthenaSkuContext,
+) {
+  if (!match) return false;
+
+  return normalizeOverlayNameKey(row.productName) !== normalizeOverlayNameKey(match.productName);
+}
+
+function selectBestExactNameMatch(
+  matches: AthenaSkuContext[],
+  row: InventoryImportRow,
+) {
+  if (matches.length === 0) return undefined;
+  if (matches.length === 1) return matches[0];
+
+  return [...matches].sort((left, right) => {
+    const leftScore = scoreExactNameMatch(left, row);
+    const rightScore = scoreExactNameMatch(right, row);
+
+    if (rightScore !== leftScore) return rightScore - leftScore;
+
+    return getAthenaSkuStableSortKey(left).localeCompare(getAthenaSkuStableSortKey(right));
+  })[0];
+}
+
+function scoreExactNameMatch(match: AthenaSkuContext, row: InventoryImportRow) {
+  let score = 0;
+
+  if (match.productAvailability !== "archived") score += 100;
+  if (match.price === row.price) score += 40;
+  if (match.quantityAvailable === row.quantity) score += 30;
+
+  const priceDelta = Math.abs(match.price - row.price);
+  const quantityDelta = Math.abs(match.quantityAvailable - row.quantity);
+
+  score -= Math.min(priceDelta / 100, 20);
+  score -= Math.min(quantityDelta, 20);
+
+  return score;
+}
+
+function getAthenaSkuStableSortKey(match: AthenaSkuContext) {
+  return [match.productName, match.sku ?? "", match.productSkuId].join("|");
+}
+
+function findBestCloseNameMatch(
+  productName: string,
+  entries: Array<FuzzySearchEntry<AthenaSkuContext>>,
+) {
+  const queryTokens = [...tokenizeFuzzySearchText([productName])];
+
+  if (queryTokens.length === 0) return undefined;
+
+  const scored = entries
+    .map((entry, position) => ({
+      item: entry.item,
+      position,
+      score: scoreFuzzySearchEntry(entry, queryTokens, {
+        productName: 4,
+      }),
+    }))
+    .filter((entry) => entry.score > 0)
+    .sort((left, right) => {
+      if (right.score !== left.score) return right.score - left.score;
+      return left.position - right.position;
+    });
+
+  const best = scored[0];
+  const next = scored[1];
+  const minimumScore = Math.max(4 * queryTokens.length, queryTokens.length === 1 ? 5 : 0);
+
+  if (!best || best.score < minimumScore) return undefined;
+  if (next && best.score - next.score < 3) return undefined;
+
+  return best.item;
+}
+
+function getOverlayMatchLabel(matchType: InventoryOverlayRow["matchType"]) {
+  switch (matchType) {
+    case "barcode":
+      return "Barcode";
+    case "sku":
+      return "SKU";
+    case "name":
+      return "Name";
+    case "closeName":
+      return "Close name";
+    case "none":
+      return "No Athena match";
+  }
+}
+
+function getOverlayStatusLabel(args: {
+  archivedMatch: boolean;
+  nameChanged: boolean;
+  priceChanged: boolean;
+  quantityChanged: boolean;
+}) {
+  if (args.archivedMatch) return "Archived match";
+  if (args.priceChanged && args.quantityChanged) return "Qty and price";
+  if (args.nameChanged && args.quantityChanged) return "Name and count";
+  if (args.nameChanged && args.priceChanged) return "Name and price";
+  if (args.quantityChanged) return "Count differs";
+  if (args.priceChanged) return "Price differs";
+  if (args.nameChanged) return "Name differs";
+  return "Matched";
+}
+
+function getOverlayRowKey(row: InventoryOverlayRow) {
+  return [
+    row.row.rowNumber,
+    row.row.sku ?? "",
+    row.row.barcode ?? "",
+    row.row.productName,
+  ].join(":");
+}
+
+function getImportRowActionLabel(action: ImportNewRowAction) {
+  switch (action) {
+    case "create_item":
+      return "Create item";
+    case "skip_row":
+      return "Skip row";
+  }
+}
+
+function buildReviewNotesWithImportActions({
+  notes,
+  rows,
+  rowDraftDecisions,
+}: {
+  notes: string;
+  rows: InventoryOverlayRow[];
+  rowDraftDecisions: Record<string, ImportRowDraftDecision>;
+}) {
+  const trimmedNotes = notes.trim();
+  const decisions = rows
+    .map((row) => {
+      const decision = rowDraftDecisions[getOverlayRowKey(row)];
+      if (!decision || !hasDraftDecisionValue(decision)) return null;
+
+      return `Row ${row.row.rowNumber} ${row.row.productName}: ${formatDraftDecision(decision)}`;
+    })
+    .filter((decision): decision is string => Boolean(decision));
+
+  if (decisions.length === 0) return trimmedNotes;
+
+  return [trimmedNotes, "Import decisions:", ...decisions].filter(Boolean).join("\n");
+}
+
+function buildSavedRowDraftDecisions({
+  rows,
+  rowDraftDecisions,
+}: {
+  rows: InventoryOverlayRow[];
+  rowDraftDecisions: Record<string, ImportRowDraftDecision>;
+}): SavedImportRowDraftDecision[] {
+  return rows
+    .map((row) => {
+      const rowKey = getOverlayRowKey(row);
+      const decision = rowDraftDecisions[rowKey];
+      if (!decision || !hasDraftDecisionValue(decision)) return null;
+
+      return {
+        ...decision,
+        productName: row.row.productName,
+        rowKey,
+        rowNumber: row.row.rowNumber,
+      };
+    })
+    .filter((decision): decision is SavedImportRowDraftDecision => Boolean(decision));
+}
+
+function mapSavedRowDraftDecisions(
+  decisions: SavedImportRowDraftDecision[],
+): Record<string, ImportRowDraftDecision> {
+  return decisions.reduce<Record<string, ImportRowDraftDecision>>((mapped, decision) => {
+    mapped[decision.rowKey] = {
+      action: decision.action,
+      nameSource: decision.nameSource,
+      priceSource: decision.priceSource,
+      quantitySource: decision.quantitySource,
+    };
+    return mapped;
+  }, {});
+}
+
+function hasDraftDecisionValue(decision: ImportRowDraftDecision) {
+  return Boolean(
+    decision.action ||
+      decision.nameSource ||
+      decision.priceSource ||
+      decision.quantitySource,
+  );
+}
+
+function isOverlayRowDecisionComplete(
+  row: InventoryOverlayRow,
+  decision?: ImportRowDraftDecision,
+) {
+  if (row.status === "matched") return true;
+  if (!decision) return false;
+  if (decision.action === "skip_row") return true;
+  if (row.status === "new") return decision.action === "create_item";
+
+  const needsQuantity = row.delta !== 0;
+  const needsPrice = row.athenaPrice !== undefined && row.row.price !== row.athenaPrice;
+  const needsName = doesOverlayRowNeedNameDecision(row.row, row.athenaMatch);
+
+  return (
+    (!needsName || Boolean(decision.nameSource)) &&
+    (!needsQuantity || Boolean(decision.quantitySource)) &&
+    (!needsPrice || Boolean(decision.priceSource))
+  );
+}
+
+function formatDraftDecision(decision: ImportRowDraftDecision) {
+  const parts = [];
+  if (decision.action) parts.push(getImportRowActionLabel(decision.action));
+  if (decision.nameSource) parts.push(`Name from ${formatDraftSource(decision.nameSource)}`);
+  if (decision.quantitySource) parts.push(`Qty from ${formatDraftSource(decision.quantitySource)}`);
+  if (decision.priceSource) parts.push(`Price from ${formatDraftSource(decision.priceSource)}`);
+  return parts.join("; ");
+}
+
+function formatDraftSource(source: ImportDraftSource) {
+  return source === "import" ? "import" : "Athena";
+}
+
+function getDraftAutosaveSignature(decisions: SavedImportRowDraftDecision[]) {
+  return JSON.stringify(
+    decisions
+      .map((decision) => ({
+        action: decision.action,
+        nameSource: decision.nameSource,
+        priceSource: decision.priceSource,
+        quantitySource: decision.quantitySource,
+        rowKey: decision.rowKey,
+      }))
+      .sort((left, right) => left.rowKey.localeCompare(right.rowKey)),
+  );
+}
+
+function getDraftAutosaveStatusLabel(
+  status: "idle" | "pending" | "saving" | "saved" | "error",
+) {
+  switch (status) {
+    case "idle":
+      return "";
+    case "pending":
+      return "Autosave pending";
+    case "saving":
+      return "Saving draft";
+    case "saved":
+      return "Draft saved";
+    case "error":
+      return "Autosave failed";
+  }
+}
+
+function formatSignedQuantity(value: number) {
+  const formatted = Math.abs(value).toLocaleString();
+  if (value > 0) return `+${formatted}`;
+  if (value < 0) return `-${formatted}`;
+  return "0";
+}
+
+function formatCount(value: number, singular: string) {
+  return `${value} ${singular}${value === 1 ? "" : "s"}`;
 }
 
 function formatReviewVersionTime(timestamp: number) {

@@ -69,6 +69,8 @@ describe("VPS QA deploy contract", () => {
     expect(deployScript).toContain('"built_on": "local"');
     expect(deployScript).toContain("deploy_athena_local");
     expect(deployScript).toContain("deploy_storefront_local");
+    expect(deployScript).toMatch(/athena\)\s+deploy_athena_local/);
+    expect(deployScript).toContain("athena-remote");
     expect(interactiveScript).toContain("athena-webapp local build");
     expect(interactiveScript).toContain("storefront local build");
     expect(interactiveScript).toContain("full-deploy local builds");

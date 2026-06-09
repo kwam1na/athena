@@ -92,6 +92,18 @@ export default {
           DEFAULT: "hsl(var(--transaction-signal))",
           foreground: "hsl(var(--transaction-signal-foreground))",
         },
+        "comparison-primary": {
+          DEFAULT: "hsl(var(--comparison-primary))",
+          foreground: "hsl(var(--comparison-primary-foreground))",
+          soft: "hsl(var(--comparison-primary-soft))",
+          border: "hsl(var(--comparison-primary-border))",
+        },
+        "comparison-secondary": {
+          DEFAULT: "hsl(var(--comparison-secondary))",
+          foreground: "hsl(var(--comparison-secondary-foreground))",
+          soft: "hsl(var(--comparison-secondary-soft))",
+          border: "hsl(var(--comparison-secondary-border))",
+        },
         action: {
           commit: "hsl(var(--action-commit))",
           "commit-foreground": "hsl(var(--action-commit-foreground))",

@@ -175,6 +175,7 @@ scripts/deploy-vps.sh status
 scripts/deploy-vps.sh versions athena
 scripts/deploy-vps.sh versions storefront
 scripts/deploy-vps.sh athena
+scripts/deploy-vps.sh athena-remote
 scripts/deploy-vps.sh storefront
 scripts/deploy-vps.sh athena-local
 scripts/deploy-vps.sh storefront-local
@@ -185,6 +186,10 @@ scripts/deploy-vps.sh full-prod-local
 scripts/deploy-vps.sh all
 scripts/deploy-vps.sh check-git
 ```
+
+`athena` is the default production Athena deploy path and builds locally before
+uploading the static bundle. Use `athena-remote` only when you intentionally
+want the VPS checkout to build the Athena admin app.
 
 Convex production deploys still run from the local checkout through the same entrypoint:
 

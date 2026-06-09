@@ -26,17 +26,23 @@ function buildParams(
 }
 
 export function OperationsSummaryMetric({
+  className,
   helper,
   label,
+  labelClassName,
   link,
   tone = "default",
   value,
+  valueClassName,
 }: {
+  className?: string;
   helper?: string;
   label: string;
+  labelClassName?: string;
   link?: OperationsSummaryMetricLink;
   tone?: "default" | "quiet";
   value: ReactNode;
+  valueClassName?: string;
 }) {
   return (
     <div
@@ -45,6 +51,7 @@ export function OperationsSummaryMetric({
         tone === "quiet"
           ? "px-layout-md py-layout-md"
           : "px-layout-md py-layout-sm",
+        className,
       )}
     >
       <div className="flex items-start justify-between gap-layout-sm">
@@ -54,6 +61,7 @@ export function OperationsSummaryMetric({
             tone === "quiet"
               ? "text-[11px] tracking-[0.16em]"
               : "text-xs tracking-wide",
+            labelClassName,
           )}
         >
           {label}
@@ -82,6 +90,7 @@ export function OperationsSummaryMetric({
           tone === "quiet"
             ? "text-base font-medium leading-7"
             : "font-numeric text-2xl",
+          valueClassName,
         )}
       >
         {value}
