@@ -13,6 +13,7 @@ import {
   organizationMemberSchema,
   organizationSchema,
   inventoryHoldSchema,
+  inventoryImportProvisionalSkuSchema,
   inventoryImportReviewVersionSchema,
   productSchema,
   productSkuSchema,
@@ -278,6 +279,27 @@ const schema = defineSchema({
   inventoryImportReviewVersion: defineTable(inventoryImportReviewVersionSchema)
     .index("by_storeId_createdAt", ["storeId", "createdAt"])
     .index("by_storeId_importKey", ["storeId", "importKey"]),
+  inventoryImportProvisionalSku: defineTable(inventoryImportProvisionalSkuSchema)
+    .index("by_storeId_status", ["storeId", "status"])
+    .index("by_storeId_importKey", ["storeId", "importKey"])
+    .index("by_storeId_importKey_status", ["storeId", "importKey", "status"])
+    .index("by_storeId_productSkuId_status", [
+      "storeId",
+      "productSkuId",
+      "status",
+    ])
+    .index("by_storeId_importKey_rowKey", ["storeId", "importKey", "rowKey"])
+    .index("by_storeId_reviewVersionId", ["storeId", "reviewVersionId"])
+    .index("by_storeId_normalizedImportedBarcode_status", [
+      "storeId",
+      "normalizedImportedBarcode",
+      "status",
+    ])
+    .index("by_storeId_normalizedImportedSku_status", [
+      "storeId",
+      "normalizedImportedSku",
+      "status",
+    ]),
   inventoryMovement: defineTable(inventoryMovementSchema)
     .index("by_storeId", ["storeId"])
     .index("by_storeId_productSkuId", ["storeId", "productSkuId"])

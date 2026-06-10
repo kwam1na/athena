@@ -153,6 +153,21 @@ export function evaluateLocalPosReadiness(input: {
     );
   }
 
+  if (localReadiness?.status === "closed") {
+    return blocked(
+      "closed",
+      "Store day closed. Reopen the end of day review before entering POS.",
+    );
+  }
+
+  if (localReadiness?.status === "not_started") {
+    return blocked(
+      "not_started",
+      "Store day not started. Complete Opening Handoff before starting sales.",
+      { canStartLocally: !input.openingSnapshot },
+    );
+  }
+
   if (input.registerReadModel?.closeoutState?.status === "closed_locally") {
     return blocked(
       "local_closeout",
@@ -161,15 +176,6 @@ export function evaluateLocalPosReadiness(input: {
   }
 
   if (input.openingSnapshot?.status === "started" && !input.closeSnapshot) {
-    if (localReadiness?.status === "closed") {
-      return evaluateLocalPosReadiness({
-        entryContext: input.entryContext,
-        localReadiness,
-        operatingDate: input.operatingDate,
-        registerReadModel: input.registerReadModel,
-      });
-    }
-
     return {
       status: "loading",
     };
@@ -202,23 +208,6 @@ export function evaluateLocalPosReadiness(input: {
       "not_started",
       "Store day not started. Complete Opening Handoff before starting sales.",
       { canStartLocally: true },
-    );
-  }
-
-  if (localReadiness?.status === "closed") {
-    return blocked(
-      "closed",
-      "Store day closed. Reopen the end of day review before entering POS.",
-    );
-  }
-
-  if (
-    localReadiness?.status === "not_started"
-  ) {
-    return blocked(
-      "not_started",
-      "Store day not started. Complete Opening Handoff before starting sales.",
-      { canStartLocally: !input.openingSnapshot },
     );
   }
 

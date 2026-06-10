@@ -299,6 +299,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/lib/pos/infrastructure/terminal/usePosTerminalAppSessionRecovery.test.ts`](../../src/lib/pos/infrastructure/terminal/usePosTerminalAppSessionRecovery.test.ts)
 - [`src/lib/pos/presentation/expense/useExpenseRegisterViewModel.test.ts`](../../src/lib/pos/presentation/expense/useExpenseRegisterViewModel.test.ts)
 - [`src/lib/pos/presentation/register/catalogSearch.test.ts`](../../src/lib/pos/presentation/register/catalogSearch.test.ts)
+- [`src/lib/pos/presentation/register/catalogSearchPresentation.test.ts`](../../src/lib/pos/presentation/register/catalogSearchPresentation.test.ts)
 - [`src/lib/pos/presentation/register/useRegisterViewModel.test.ts`](../../src/lib/pos/presentation/register/useRegisterViewModel.test.ts)
 - [`src/lib/pos/presentation/syncStatusPresentation.test.ts`](../../src/lib/pos/presentation/syncStatusPresentation.test.ts)
 - [`src/lib/productUtils.test.ts`](../../src/lib/productUtils.test.ts)

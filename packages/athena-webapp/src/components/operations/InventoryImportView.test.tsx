@@ -11,6 +11,7 @@ const mockedHooks = vi.hoisted(() => ({
   latestReviewVersion: null as unknown,
   navigate: vi.fn(),
   saveReviewVersion: vi.fn(),
+  stageReviewRowsForPos: vi.fn(),
   search: {} as Record<string, unknown>,
   useMutation: vi.fn(),
   useQuery: vi.fn(),
@@ -100,13 +101,20 @@ describe("InventoryImportView", () => {
     window.scrollTo = vi.fn();
     window.sessionStorage.clear();
     mockedHooks.saveReviewVersion.mockReset();
+    mockedHooks.stageReviewRowsForPos.mockReset();
     mockedHooks.navigate.mockReset();
     mockedHooks.useMutation.mockReset();
     mockedHooks.useQuery.mockReset();
     mockedHooks.inventorySkuContext = [];
     mockedHooks.latestReviewVersion = null;
     mockedHooks.search = {};
-    mockedHooks.useMutation.mockReturnValue(mockedHooks.saveReviewVersion);
+    let mutationCallIndex = 0;
+    mockedHooks.useMutation.mockImplementation(() => {
+      mutationCallIndex += 1;
+      return mutationCallIndex % 2 === 1
+        ? mockedHooks.saveReviewVersion
+        : mockedHooks.stageReviewRowsForPos;
+    });
     let queryCallIndex = 0;
     mockedHooks.useQuery.mockImplementation(() => {
       queryCallIndex += 1;
@@ -286,6 +294,26 @@ describe("InventoryImportView", () => {
     expect(reviewOverlay.queryByText("New Clip")).not.toBeInTheDocument();
     expect(reviewOverlay.queryByText("Brush")).not.toBeInTheDocument();
 
+    await user.type(
+      screen.getByLabelText("Search import rows by product identifiers"),
+      "333",
+    );
+    expect(getLastNavigateSearch({ filter: "review", retained: "yes" })).toEqual({
+      filter: "review",
+      q: "333",
+      retained: "yes",
+    });
+
+    reviewOverlay = getReviewOverlaySection();
+    let reviewRows = Array.from(getReviewOverlayElement().querySelectorAll("article"));
+    expect(reviewRows.map((row) => row.textContent)).toEqual([
+      expect.stringContaining("New Clip"),
+    ]);
+    expect(
+      reviewOverlay.getByText(/1 match from other statuses included/),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Clear" }));
     await user.click(screen.getByRole("button", { name: "All" }));
     expect(getLastNavigateSearch({ retained: "yes" })).toEqual({
       filter: "all",
@@ -293,7 +321,7 @@ describe("InventoryImportView", () => {
     });
 
     reviewOverlay = getReviewOverlaySection();
-    const reviewRows = Array.from(getReviewOverlayElement().querySelectorAll("article"));
+    reviewRows = Array.from(getReviewOverlayElement().querySelectorAll("article"));
     expect(reviewRows.map((row) => row.textContent)).toEqual([
       expect.stringContaining("Brush"),
       expect.stringContaining("Comb"),
@@ -303,8 +331,30 @@ describe("InventoryImportView", () => {
     expect(reviewOverlay.getByText("New item")).toBeInTheDocument();
     expect(reviewOverlay.getByText("New Clip")).toBeInTheDocument();
 
+    await user.type(
+      screen.getByLabelText("Search import rows by product identifiers"),
+      "333",
+    );
+    expect(getLastNavigateSearch({ filter: "all", retained: "yes" })).toEqual({
+      filter: "all",
+      q: "333",
+      retained: "yes",
+    });
+
+    reviewOverlay = getReviewOverlaySection();
+    const identifierFilteredRows = Array.from(
+      getReviewOverlayElement().querySelectorAll("article"),
+    );
+    expect(identifierFilteredRows.map((row) => row.textContent)).toEqual([
+      expect.stringContaining("New Clip"),
+    ]);
+    expect(reviewOverlay.queryByText("Brush")).not.toBeInTheDocument();
+    expect(reviewOverlay.queryByText("Comb")).not.toBeInTheDocument();
+
     await user.click(screen.getByRole("button", { name: "Back to import" }));
-    expect(getLastNavigateSearch({ filter: "all", page: 2, retained: "yes" })).toEqual({
+    expect(
+      getLastNavigateSearch({ filter: "all", page: 2, q: "333", retained: "yes" }),
+    ).toEqual({
       retained: "yes",
     });
     expect(mockedHooks.navigate.mock.calls.at(-1)?.[0]).toEqual(
@@ -558,6 +608,89 @@ describe("InventoryImportView", () => {
               rowNumber: 3,
             }),
           ],
+        }),
+      );
+    });
+  });
+
+  it("stages reviewed rows for POS availability without applying final counts", async () => {
+    const user = userEvent.setup();
+    mockedHooks.inventorySkuContext = [
+      {
+        barcode: "111",
+        inventoryCount: 3,
+        price: 2500,
+        productAvailability: "live",
+        productId: "product-1",
+        productName: "Pocket Comb",
+        productSkuId: "sku-1",
+        quantityAvailable: 3,
+        sku: "COMB-1",
+      },
+    ];
+    mockedHooks.saveReviewVersion.mockResolvedValue(
+      ok({
+        _id: "review-version-7",
+        createdAt: Date.UTC(2026, 5, 7, 16),
+        fileName: "manual.csv",
+        importKey: "review-key",
+        issueCount: 0,
+        rowCount: 1,
+        sourceFormat: "csv",
+        versionNumber: 7,
+      }),
+    );
+    mockedHooks.stageReviewRowsForPos.mockResolvedValue(
+      ok({
+        alreadyStaged: false,
+        catalogIdentitiesCreated: 0,
+        provisionalRowsCreated: 1,
+        provisionalRowsUpdated: 0,
+        rowsSkipped: 0,
+        rowsStaged: 1,
+        trustedStockRowsUpdated: 0,
+      }),
+    );
+
+    render(<InventoryImportView />);
+
+    fireEvent.change(screen.getByLabelText("Raw export"), {
+      target: {
+        value: [
+          "product_name,sku,barcode,price,qty",
+          "Pocket Comb,COMB-1,111,25,3",
+        ].join("\n"),
+      },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Inventory check" })).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: "Review inventory changes" }));
+    await user.click(screen.getByRole("button", { name: "Make available in POS" }));
+
+    await waitFor(() => {
+      expect(mockedHooks.stageReviewRowsForPos).toHaveBeenCalledWith(
+        expect.objectContaining({
+          importKey: expect.any(String),
+          reviewVersionId: "review-version-7",
+          rows: [
+            expect.objectContaining({
+              barcode: "111",
+              price: 2500,
+              productId: "product-1",
+              productName: "Pocket Comb",
+              productSkuId: "sku-1",
+              quantity: 3,
+              rowKey: "2:COMB-1:111:Pocket Comb",
+              rowNumber: 2,
+              sku: "COMB-1",
+            }),
+          ],
+          sourceFormat: "csv",
+          storeId: "store-1",
+          terminalId: "terminal-1",
         }),
       );
     });

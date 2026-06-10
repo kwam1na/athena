@@ -606,6 +606,15 @@ describe("voidTransaction", () => {
 	        productSku: "PENDING-1",
 	        quantity: 1,
 	      },
+      {
+        _id: "txn-item-provisional-import",
+        inventoryImportProvisionalSkuId: "provisional-import-sku-1",
+        productId: "product-import-1",
+        productSkuId: "sku-import-1",
+        productName: "Imported bundle",
+        productSku: "IMPORT-1",
+        quantity: 2,
+      },
 	    ] as never);
     vi.mocked(getProductSkuById).mockImplementation(async (_ctx, skuId) => {
       if (skuId === "sku-pending-1") {
@@ -615,6 +624,16 @@ describe("voidTransaction", () => {
           productId: "product-pending-1",
           quantityAvailable: 0,
           sku: "PENDING-1",
+          storeId: "store-1",
+        } as never;
+      }
+      if (skuId === "sku-import-1") {
+        return {
+          _id: "sku-import-1",
+          inventoryCount: 0,
+          productId: "product-import-1",
+          quantityAvailable: 0,
+          sku: "IMPORT-1",
           storeId: "store-1",
         } as never;
       }
@@ -661,6 +680,11 @@ describe("voidTransaction", () => {
     expect(patchProductSku).not.toHaveBeenCalledWith(
       expect.anything(),
       "sku-pending-1",
+      expect.anything(),
+    );
+    expect(patchProductSku).not.toHaveBeenCalledWith(
+      expect.anything(),
+      "sku-import-1",
       expect.anything(),
     );
     expect(ctx.db.patch).toHaveBeenCalledWith(
@@ -1345,6 +1369,512 @@ describe("completeTransaction checkout side effects", () => {
         reasonCode: "pos_sale",
       }),
     );
+  });
+
+  it("completes active provisional import direct sales without trusted stock mutation", async () => {
+    const runMutation = vi.fn().mockResolvedValue(undefined);
+    const provisionalImportSku = {
+      _id: "provisional-import-sku-1",
+      storeId: "store-1",
+      status: "active",
+      posExposureStatus: "available",
+      productId: "product-import-1",
+      productSkuId: "sku-import-1",
+      saleEvidence: {
+        saleCount: 0,
+        totalQuantitySold: 0,
+      },
+    };
+    const dbPatch = vi.fn(
+      async (_tableName: string, _id: string, patch: object) => {
+        Object.assign(provisionalImportSku, patch);
+      },
+    );
+    const ctx = {
+      db: {
+        get: vi.fn(async (tableName: string, id: string) => {
+          if (tableName === "product" && id === "product-import-1") {
+            return { _id: "product-import-1", storeId: "store-1" };
+          }
+          if (
+            tableName === "inventoryImportProvisionalSku" &&
+            id === "provisional-import-sku-1"
+          ) {
+            return provisionalImportSku;
+          }
+          if (tableName === "staffProfile" && id === "staff-1") {
+            return { _id: "staff-1", status: "active", storeId: "store-1" };
+          }
+          if (tableName === "posTerminal" && id === "terminal-1") {
+            return { _id: "terminal-1", status: "active", storeId: "store-1" };
+          }
+          if (tableName === "registerSession" && id === "register-1") {
+            return {
+              _id: "register-1",
+              openedByStaffProfileId: "staff-1",
+              status: "open",
+              storeId: "store-1",
+              terminalId: "terminal-1",
+            };
+          }
+          return null;
+        }),
+        patch: dbPatch,
+      },
+      runMutation,
+    } as never;
+
+    vi.mocked(getStoreById).mockResolvedValue({
+      _id: "store-1",
+      organizationId: "org-1",
+    } as never);
+    vi.mocked(getProductSkuById).mockResolvedValue({
+      _id: "sku-import-1",
+      images: [],
+      inventoryCount: 0,
+      productId: "product-import-1",
+      quantityAvailable: 0,
+      sku: "LEGACY-1",
+      storeId: "store-1",
+    } as never);
+    vi.mocked(createPosTransaction).mockResolvedValue("txn-1" as never);
+    vi.mocked(recordRetailSalePaymentAllocations).mockResolvedValue(true);
+    vi.mocked(createPosTransactionItem).mockResolvedValue(
+      "txn-item-1" as never,
+    );
+
+    await expect(
+      completeTransaction(ctx, {
+        storeId: "store-1" as Id<"store">,
+        items: [
+          {
+            skuId: "sku-import-1" as Id<"productSku">,
+            inventoryImportProvisionalSkuId:
+              "provisional-import-sku-1" as Id<"inventoryImportProvisionalSku">,
+            quantity: 2,
+            price: 15,
+            name: "Imported bundle",
+            sku: "LEGACY-1",
+          },
+          {
+            skuId: "sku-import-1" as Id<"productSku">,
+            inventoryImportProvisionalSkuId:
+              "provisional-import-sku-1" as Id<"inventoryImportProvisionalSku">,
+            quantity: 3,
+            price: 15,
+            name: "Imported bundle",
+            sku: "LEGACY-1",
+          },
+        ],
+        payments: [{ method: "cash", amount: 75, timestamp: 1 }],
+        subtotal: 75,
+        tax: 0,
+        total: 75,
+        registerNumber: "1",
+        terminalId: "terminal-1" as Id<"posTerminal">,
+        staffProfileId: "staff-1" as Id<"staffProfile">,
+        registerSessionId: "register-1" as Id<"registerSession">,
+      }),
+    ).resolves.toMatchObject({
+      kind: "ok",
+      data: {
+        transactionId: "txn-1",
+      },
+    });
+
+    expect(validateInventoryAvailability).not.toHaveBeenCalled();
+    expect(createPosTransactionItem).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        inventoryImportProvisionalSkuId: "provisional-import-sku-1",
+        productId: "product-import-1",
+        productSkuId: "sku-import-1",
+        quantity: 2,
+      }),
+    );
+    expect(dbPatch).toHaveBeenCalledWith(
+      "inventoryImportProvisionalSku",
+      "provisional-import-sku-1",
+      expect.objectContaining({
+        saleEvidence: expect.objectContaining({
+          lastPosTransactionId: "txn-1",
+          lastRegisterSessionId: "register-1",
+          saleCount: 1,
+          totalQuantitySold: 5,
+        }),
+      }),
+    );
+    expect(patchProductSku).not.toHaveBeenCalled();
+    expect(recordInventoryMovementWithCtx).not.toHaveBeenCalled();
+  });
+
+  it("preserves distinct provisional import row evidence for direct sale lines sharing a trusted SKU", async () => {
+    const runMutation = vi.fn().mockResolvedValue(undefined);
+    const provisionalImportSkus = new Map(
+      [
+        {
+          _id: "provisional-import-sku-1",
+          storeId: "store-1",
+          status: "active",
+          posExposureStatus: "available",
+          productId: "product-import-1",
+          productSkuId: "sku-import-1",
+          saleEvidence: {
+            saleCount: 0,
+            totalQuantitySold: 0,
+          },
+        },
+        {
+          _id: "provisional-import-sku-2",
+          storeId: "store-1",
+          status: "active",
+          posExposureStatus: "available",
+          productId: "product-import-1",
+          productSkuId: "sku-import-1",
+          saleEvidence: {
+            saleCount: 0,
+            totalQuantitySold: 0,
+          },
+        },
+      ].map((sku) => [sku._id, sku]),
+    );
+    const dbPatch = vi.fn(async (_tableName: string, id: string, patch: object) => {
+      Object.assign(provisionalImportSkus.get(id)!, patch);
+    });
+    const ctx = {
+      db: {
+        get: vi.fn(async (tableName: string, id: string) => {
+          if (tableName === "product" && id === "product-import-1") {
+            return { _id: "product-import-1", storeId: "store-1" };
+          }
+          if (tableName === "inventoryImportProvisionalSku") {
+            return provisionalImportSkus.get(id) ?? null;
+          }
+          if (tableName === "staffProfile" && id === "staff-1") {
+            return { _id: "staff-1", status: "active", storeId: "store-1" };
+          }
+          if (tableName === "posTerminal" && id === "terminal-1") {
+            return { _id: "terminal-1", status: "active", storeId: "store-1" };
+          }
+          if (tableName === "registerSession" && id === "register-1") {
+            return {
+              _id: "register-1",
+              openedByStaffProfileId: "staff-1",
+              status: "open",
+              storeId: "store-1",
+              terminalId: "terminal-1",
+            };
+          }
+          return null;
+        }),
+        patch: dbPatch,
+      },
+      runMutation,
+    } as never;
+
+    vi.mocked(getStoreById).mockResolvedValue({
+      _id: "store-1",
+      organizationId: "org-1",
+    } as never);
+    vi.mocked(getProductSkuById).mockResolvedValue({
+      _id: "sku-import-1",
+      images: [],
+      inventoryCount: 0,
+      productId: "product-import-1",
+      quantityAvailable: 0,
+      sku: "LEGACY-1",
+      storeId: "store-1",
+    } as never);
+    vi.mocked(createPosTransaction).mockResolvedValue("txn-1" as never);
+    vi.mocked(recordRetailSalePaymentAllocations).mockResolvedValue(true);
+    vi.mocked(createPosTransactionItem)
+      .mockResolvedValueOnce("txn-item-1" as never)
+      .mockResolvedValueOnce("txn-item-2" as never);
+
+    await expect(
+      completeTransaction(ctx, {
+        storeId: "store-1" as Id<"store">,
+        items: [
+          {
+            skuId: "sku-import-1" as Id<"productSku">,
+            inventoryImportProvisionalSkuId:
+              "provisional-import-sku-1" as Id<"inventoryImportProvisionalSku">,
+            quantity: 2,
+            price: 15,
+            name: "Imported bundle",
+            sku: "LEGACY-1",
+          },
+          {
+            skuId: "sku-import-1" as Id<"productSku">,
+            inventoryImportProvisionalSkuId:
+              "provisional-import-sku-2" as Id<"inventoryImportProvisionalSku">,
+            quantity: 3,
+            price: 15,
+            name: "Imported bundle",
+            sku: "LEGACY-1",
+          },
+        ],
+        payments: [{ method: "cash", amount: 75, timestamp: 1 }],
+        subtotal: 75,
+        tax: 0,
+        total: 75,
+        registerNumber: "1",
+        terminalId: "terminal-1" as Id<"posTerminal">,
+        staffProfileId: "staff-1" as Id<"staffProfile">,
+        registerSessionId: "register-1" as Id<"registerSession">,
+      }),
+    ).resolves.toMatchObject({
+      kind: "ok",
+      data: {
+        transactionId: "txn-1",
+        transactionItems: ["txn-item-1", "txn-item-2"],
+      },
+    });
+
+    expect(validateInventoryAvailability).not.toHaveBeenCalled();
+    expect(createPosTransactionItem).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        inventoryImportProvisionalSkuId: "provisional-import-sku-1",
+        productSkuId: "sku-import-1",
+        quantity: 2,
+      }),
+    );
+    expect(createPosTransactionItem).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        inventoryImportProvisionalSkuId: "provisional-import-sku-2",
+        productSkuId: "sku-import-1",
+        quantity: 3,
+      }),
+    );
+    expect(dbPatch).toHaveBeenCalledWith(
+      "inventoryImportProvisionalSku",
+      "provisional-import-sku-1",
+      expect.objectContaining({
+        saleEvidence: expect.objectContaining({
+          lastPosTransactionId: "txn-1",
+          lastRegisterSessionId: "register-1",
+          saleCount: 1,
+          totalQuantitySold: 2,
+        }),
+      }),
+    );
+    expect(dbPatch).toHaveBeenCalledWith(
+      "inventoryImportProvisionalSku",
+      "provisional-import-sku-2",
+      expect.objectContaining({
+        saleEvidence: expect.objectContaining({
+          lastPosTransactionId: "txn-1",
+          lastRegisterSessionId: "register-1",
+          saleCount: 1,
+          totalQuantitySold: 3,
+        }),
+      }),
+    );
+    expect(patchProductSku).not.toHaveBeenCalled();
+    expect(recordInventoryMovementWithCtx).not.toHaveBeenCalled();
+  });
+
+  it("rejects hidden provisional import direct sale lines before stock bypass", async () => {
+    const ctx = {
+      db: {
+        get: vi.fn(async (tableName: string, id: string) => {
+          if (
+            tableName === "inventoryImportProvisionalSku" &&
+            id === "provisional-import-sku-1"
+          ) {
+            return {
+              _id: "provisional-import-sku-1",
+              storeId: "store-1",
+              status: "active",
+              posExposureStatus: "hidden",
+              productId: "product-import-1",
+              productSkuId: "sku-import-1",
+            };
+          }
+          return null;
+        }),
+        patch: vi.fn(),
+      },
+      runMutation: vi.fn(),
+    } as never;
+
+    vi.mocked(getProductSkuById).mockResolvedValue({
+      _id: "sku-import-1",
+      images: [],
+      inventoryCount: 0,
+      productId: "product-import-1",
+      quantityAvailable: 0,
+      sku: "LEGACY-1",
+      storeId: "store-1",
+    } as never);
+
+    await expect(
+      completeTransaction(ctx, {
+        storeId: "store-1" as Id<"store">,
+        items: [
+          {
+            skuId: "sku-import-1" as Id<"productSku">,
+            inventoryImportProvisionalSkuId:
+              "provisional-import-sku-1" as Id<"inventoryImportProvisionalSku">,
+            quantity: 2,
+            price: 15,
+            name: "Imported bundle",
+            sku: "LEGACY-1",
+          },
+        ],
+        payments: [{ method: "cash", amount: 30, timestamp: 1 }],
+        subtotal: 30,
+        tax: 0,
+        total: 30,
+      }),
+    ).resolves.toMatchObject({
+      kind: "user_error",
+      error: {
+        code: "precondition_failed",
+        message:
+          "This provisional import item is no longer active for this sale line. Refresh the register catalog before continuing.",
+      },
+    });
+
+    expect(validateInventoryAvailability).not.toHaveBeenCalled();
+    expect(createPosTransaction).not.toHaveBeenCalled();
+    expect(createPosTransactionItem).not.toHaveBeenCalled();
+    expect(patchProductSku).not.toHaveBeenCalled();
+    expect(recordInventoryMovementWithCtx).not.toHaveBeenCalled();
+  });
+
+  it("rejects mixed trusted and provisional direct sale lines for the same SKU", async () => {
+    const ctx = {
+      db: {
+        get: vi.fn(async (tableName: string, id: string) => {
+          if (
+            tableName === "inventoryImportProvisionalSku" &&
+            id === "provisional-import-sku-1"
+          ) {
+            return {
+              _id: "provisional-import-sku-1",
+              storeId: "store-1",
+              status: "active",
+              productId: "product-import-1",
+              productSkuId: "sku-import-1",
+            };
+          }
+          return null;
+        }),
+        patch: vi.fn(),
+      },
+      runMutation: vi.fn(),
+    } as never;
+
+    vi.mocked(getProductSkuById).mockResolvedValue({
+      _id: "sku-import-1",
+      images: [],
+      inventoryCount: 10,
+      productId: "product-import-1",
+      quantityAvailable: 10,
+      sku: "LEGACY-1",
+      storeId: "store-1",
+    } as never);
+
+    await expect(
+      completeTransaction(ctx, {
+        storeId: "store-1" as Id<"store">,
+        items: [
+          {
+            skuId: "sku-import-1" as Id<"productSku">,
+            inventoryImportProvisionalSkuId:
+              "provisional-import-sku-1" as Id<"inventoryImportProvisionalSku">,
+            quantity: 1,
+            price: 15,
+            name: "Imported bundle",
+            sku: "LEGACY-1",
+          },
+          {
+            skuId: "sku-import-1" as Id<"productSku">,
+            quantity: 3,
+            price: 15,
+            name: "Imported bundle",
+            sku: "LEGACY-1",
+          },
+        ],
+        payments: [{ method: "cash", amount: 60, timestamp: 1 }],
+        subtotal: 60,
+        tax: 0,
+        total: 60,
+      }),
+    ).resolves.toMatchObject({
+      kind: "user_error",
+      error: {
+        code: "validation_failed",
+      },
+    });
+
+    expectNoCompletionSideEffects();
+  });
+
+  it("rejects stale provisional import direct sale lines before durable sale writes", async () => {
+    const ctx = {
+      db: {
+        get: vi.fn(async (tableName: string, id: string) => {
+          if (
+            tableName === "inventoryImportProvisionalSku" &&
+            id === "provisional-import-sku-1"
+          ) {
+            return {
+              _id: "provisional-import-sku-1",
+              storeId: "store-1",
+              status: "closed",
+              productId: "product-import-1",
+              productSkuId: "sku-import-1",
+            };
+          }
+          return null;
+        }),
+        patch: vi.fn(),
+      },
+      runMutation: vi.fn(),
+    } as never;
+
+    vi.mocked(getProductSkuById).mockResolvedValue({
+      _id: "sku-import-1",
+      images: [],
+      inventoryCount: 0,
+      productId: "product-import-1",
+      quantityAvailable: 0,
+      sku: "LEGACY-1",
+      storeId: "store-1",
+    } as never);
+
+    await expect(
+      completeTransaction(ctx, {
+        storeId: "store-1" as Id<"store">,
+        items: [
+          {
+            skuId: "sku-import-1" as Id<"productSku">,
+            inventoryImportProvisionalSkuId:
+              "provisional-import-sku-1" as Id<"inventoryImportProvisionalSku">,
+            quantity: 1,
+            price: 15,
+            name: "Imported bundle",
+            sku: "LEGACY-1",
+          },
+        ],
+        payments: [{ method: "cash", amount: 15, timestamp: 1 }],
+        subtotal: 15,
+        tax: 0,
+        total: 15,
+      }),
+    ).resolves.toMatchObject({
+      kind: "user_error",
+      error: {
+        code: "precondition_failed",
+      },
+    });
+
+    expect(validateInventoryAvailability).not.toHaveBeenCalled();
+    expectNoCompletionSideEffects();
   });
 
   it("does not create side effects when payments are empty", async () => {
@@ -2132,6 +2662,532 @@ describe("completeTransaction trace ordering", () => {
     );
     expect(patchProductSku).not.toHaveBeenCalled();
     expect(recordInventoryMovementWithCtx).not.toHaveBeenCalled();
+  });
+
+  it("completes session checkout with active provisional import items without trusted stock mutation", async () => {
+    const runMutation = vi.fn().mockResolvedValue(undefined);
+    const provisionalImportSku = {
+      _id: "provisional-import-sku-1",
+      storeId: "store-1",
+      status: "active",
+      posExposureStatus: "available",
+      productId: "product-import-1",
+      productSkuId: "sku-import-1",
+      saleEvidence: {
+        saleCount: 1,
+        totalQuantitySold: 3,
+      },
+    };
+    const ctx = {
+      db: {
+        get: vi.fn(async (tableName: string, id: string) => {
+          if (
+            tableName === "inventoryImportProvisionalSku" &&
+            id === "provisional-import-sku-1"
+          ) {
+            return provisionalImportSku;
+          }
+
+          return null;
+        }),
+        patch: vi.fn(async (_tableName: string, _id: string, patch: object) => {
+          Object.assign(provisionalImportSku, patch);
+        }),
+      },
+      runMutation,
+    } as never;
+
+    vi.mocked(getStoreById).mockResolvedValue({
+      _id: "store-1",
+      organizationId: "org-1",
+    } as never);
+    vi.mocked(getPosSessionById).mockResolvedValue({
+      _id: "session-1",
+      storeId: "store-1",
+      customerProfileId: "profile-1",
+      staffProfileId: "staff-1",
+      registerNumber: "1",
+      registerSessionId: "register-1",
+      terminalId: "terminal-1",
+    } as never);
+    vi.mocked(getRegisterSessionById).mockResolvedValue({
+      _id: "register-1",
+      storeId: "store-1",
+      status: "open",
+      terminalId: "terminal-1",
+      registerNumber: "1",
+    } as never);
+    vi.mocked(listSessionItems).mockResolvedValue([
+      {
+        _id: "session-item-1",
+        sessionId: "session-1",
+        storeId: "store-1",
+        productId: "product-import-1",
+        productSkuId: "sku-import-1",
+        inventoryImportProvisionalSkuId: "provisional-import-sku-1",
+        productSku: "LEGACY-1",
+        productName: "Imported bundle",
+        price: 15,
+        quantity: 2,
+      },
+    ] as never);
+    vi.mocked(getProductSkuById).mockResolvedValue({
+      _id: "sku-import-1",
+      images: [],
+      inventoryCount: 0,
+      productId: "product-import-1",
+      quantityAvailable: 0,
+      sku: "LEGACY-1",
+    } as never);
+    vi.mocked(createPosTransaction).mockResolvedValue("txn-1" as never);
+    vi.mocked(recordRetailSalePaymentAllocations).mockResolvedValue(true);
+    vi.mocked(createPosTransactionItem).mockResolvedValue(
+      "txn-item-1" as never,
+    );
+    vi.mocked(patchPosSession).mockResolvedValue(undefined as never);
+
+    await expect(
+      createTransactionFromSessionHandler(ctx, {
+        sessionId: "session-1" as Id<"posSession">,
+        staffProfileId: "staff-1" as Id<"staffProfile">,
+        payments: [{ method: "cash", amount: 30, timestamp: 1 }],
+      }),
+    ).resolves.toMatchObject({
+      kind: "ok",
+      data: {
+        transactionId: "txn-1",
+      },
+    });
+
+    expect(validateInventoryAvailability).not.toHaveBeenCalled();
+    expect(consumeInventoryHoldsForSession).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        sessionId: "session-1",
+        items: [],
+      }),
+    );
+    expect(createPosTransactionItem).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        inventoryImportProvisionalSkuId: "provisional-import-sku-1",
+        productId: "product-import-1",
+        productSkuId: "sku-import-1",
+        quantity: 2,
+        totalPrice: 30,
+      }),
+    );
+    expect(
+      (ctx as unknown as { db: { patch: ReturnType<typeof vi.fn> } }).db.patch,
+    ).toHaveBeenCalledWith(
+      "inventoryImportProvisionalSku",
+      "provisional-import-sku-1",
+      expect.objectContaining({
+        saleEvidence: expect.objectContaining({
+          lastPosTransactionId: "txn-1",
+          lastRegisterSessionId: "register-1",
+          saleCount: 2,
+          totalQuantitySold: 5,
+        }),
+      }),
+    );
+    expect(patchProductSku).not.toHaveBeenCalled();
+    expect(recordInventoryMovementWithCtx).not.toHaveBeenCalled();
+  });
+
+  it("preserves distinct provisional import row evidence for session lines sharing a trusted SKU", async () => {
+    const runMutation = vi.fn().mockResolvedValue(undefined);
+    const provisionalImportSkus = new Map([
+      [
+        "provisional-import-sku-1",
+        {
+          _id: "provisional-import-sku-1",
+          storeId: "store-1",
+          status: "active",
+          posExposureStatus: "available",
+          productId: "product-import-1",
+          productSkuId: "sku-import-1",
+          saleEvidence: {
+            saleCount: 0,
+            totalQuantitySold: 0,
+          },
+        },
+      ],
+      [
+        "provisional-import-sku-2",
+        {
+          _id: "provisional-import-sku-2",
+          storeId: "store-1",
+          status: "active",
+          posExposureStatus: "available",
+          productId: "product-import-1",
+          productSkuId: "sku-import-1",
+          saleEvidence: {
+            saleCount: 1,
+            totalQuantitySold: 4,
+          },
+        },
+      ],
+    ]);
+    const ctx = {
+      db: {
+        get: vi.fn(async (tableName: string, id: string) => {
+          if (tableName === "inventoryImportProvisionalSku") {
+            return provisionalImportSkus.get(id) ?? null;
+          }
+
+          return null;
+        }),
+        patch: vi.fn(async (_tableName: string, id: string, patch: object) => {
+          Object.assign(provisionalImportSkus.get(id) ?? {}, patch);
+        }),
+      },
+      runMutation,
+    } as never;
+
+    vi.mocked(getStoreById).mockResolvedValue({
+      _id: "store-1",
+      organizationId: "org-1",
+    } as never);
+    vi.mocked(getPosSessionById).mockResolvedValue({
+      _id: "session-1",
+      storeId: "store-1",
+      customerProfileId: "profile-1",
+      staffProfileId: "staff-1",
+      registerNumber: "1",
+      registerSessionId: "register-1",
+      terminalId: "terminal-1",
+    } as never);
+    vi.mocked(getRegisterSessionById).mockResolvedValue({
+      _id: "register-1",
+      storeId: "store-1",
+      status: "open",
+      terminalId: "terminal-1",
+      registerNumber: "1",
+    } as never);
+    vi.mocked(listSessionItems).mockResolvedValue([
+      {
+        _id: "session-item-1",
+        sessionId: "session-1",
+        storeId: "store-1",
+        productId: "product-import-1",
+        productSkuId: "sku-import-1",
+        inventoryImportProvisionalSkuId: "provisional-import-sku-1",
+        productSku: "LEGACY-1",
+        productName: "Imported bundle A",
+        price: 15,
+        quantity: 2,
+      },
+      {
+        _id: "session-item-2",
+        sessionId: "session-1",
+        storeId: "store-1",
+        productId: "product-import-1",
+        productSkuId: "sku-import-1",
+        inventoryImportProvisionalSkuId: "provisional-import-sku-2",
+        productSku: "LEGACY-1",
+        productName: "Imported bundle B",
+        price: 20,
+        quantity: 1,
+      },
+    ] as never);
+    vi.mocked(getProductSkuById).mockResolvedValue({
+      _id: "sku-import-1",
+      images: [],
+      inventoryCount: 0,
+      productId: "product-import-1",
+      quantityAvailable: 0,
+      sku: "LEGACY-1",
+    } as never);
+    vi.mocked(createPosTransaction).mockResolvedValue("txn-1" as never);
+    vi.mocked(recordRetailSalePaymentAllocations).mockResolvedValue(true);
+    vi.mocked(createPosTransactionItem)
+      .mockResolvedValueOnce("txn-item-1" as never)
+      .mockResolvedValueOnce("txn-item-2" as never);
+    vi.mocked(patchPosSession).mockResolvedValue(undefined as never);
+
+    await expect(
+      createTransactionFromSessionHandler(ctx, {
+        sessionId: "session-1" as Id<"posSession">,
+        staffProfileId: "staff-1" as Id<"staffProfile">,
+        payments: [{ method: "cash", amount: 50, timestamp: 1 }],
+      }),
+    ).resolves.toMatchObject({
+      kind: "ok",
+      data: {
+        transactionId: "txn-1",
+      },
+    });
+
+    expect(createPosTransactionItem).toHaveBeenNthCalledWith(
+      1,
+      expect.anything(),
+      expect.objectContaining({
+        inventoryImportProvisionalSkuId: "provisional-import-sku-1",
+        quantity: 2,
+      }),
+    );
+    expect(createPosTransactionItem).toHaveBeenNthCalledWith(
+      2,
+      expect.anything(),
+      expect.objectContaining({
+        inventoryImportProvisionalSkuId: "provisional-import-sku-2",
+        quantity: 1,
+      }),
+    );
+    const db = (ctx as unknown as { db: { patch: ReturnType<typeof vi.fn> } })
+      .db;
+    expect(db.patch).toHaveBeenCalledWith(
+      "inventoryImportProvisionalSku",
+      "provisional-import-sku-1",
+      expect.objectContaining({
+        saleEvidence: expect.objectContaining({
+          saleCount: 1,
+          totalQuantitySold: 2,
+        }),
+      }),
+    );
+    expect(db.patch).toHaveBeenCalledWith(
+      "inventoryImportProvisionalSku",
+      "provisional-import-sku-2",
+      expect.objectContaining({
+        saleEvidence: expect.objectContaining({
+          saleCount: 2,
+          totalQuantitySold: 5,
+        }),
+      }),
+    );
+    expect(patchProductSku).not.toHaveBeenCalled();
+    expect(recordInventoryMovementWithCtx).not.toHaveBeenCalled();
+  });
+
+  it("rejects mixed trusted and provisional session sale lines for the same SKU before durable sale writes", async () => {
+    const ctx = {
+      db: {
+        get: vi.fn(async (tableName: string, id: string) => {
+          if (
+            tableName === "inventoryImportProvisionalSku" &&
+            id === "provisional-import-sku-1"
+          ) {
+            return {
+              _id: "provisional-import-sku-1",
+              storeId: "store-1",
+              status: "active",
+              posExposureStatus: "available",
+              productId: "product-import-1",
+              productSkuId: "sku-import-1",
+            };
+          }
+
+          return null;
+        }),
+        patch: vi.fn(),
+      },
+      runMutation: vi.fn(),
+    } as never;
+
+    vi.mocked(getPosSessionById).mockResolvedValue({
+      _id: "session-1",
+      storeId: "store-1",
+      staffProfileId: "staff-1",
+      registerNumber: "1",
+      registerSessionId: "register-1",
+      terminalId: "terminal-1",
+    } as never);
+    vi.mocked(getRegisterSessionById).mockResolvedValue({
+      _id: "register-1",
+      storeId: "store-1",
+      status: "open",
+      terminalId: "terminal-1",
+      registerNumber: "1",
+    } as never);
+    vi.mocked(listSessionItems).mockResolvedValue([
+      {
+        _id: "session-item-provisional",
+        sessionId: "session-1",
+        storeId: "store-1",
+        productId: "product-import-1",
+        productSkuId: "sku-import-1",
+        inventoryImportProvisionalSkuId: "provisional-import-sku-1",
+        productSku: "LEGACY-1",
+        productName: "Imported bundle",
+        price: 15,
+        quantity: 1,
+      },
+      {
+        _id: "session-item-trusted",
+        sessionId: "session-1",
+        storeId: "store-1",
+        productId: "product-import-1",
+        productSkuId: "sku-import-1",
+        productSku: "LEGACY-1",
+        productName: "Imported bundle",
+        price: 15,
+        quantity: 1,
+      },
+    ] as never);
+
+    await expect(
+      createTransactionFromSessionHandler(ctx, {
+        sessionId: "session-1" as Id<"posSession">,
+        staffProfileId: "staff-1" as Id<"staffProfile">,
+        payments: [{ method: "cash", amount: 30, timestamp: 1 }],
+      }),
+    ).resolves.toMatchObject({
+      kind: "user_error",
+      error: {
+        code: "validation_failed",
+      },
+    });
+
+    expect(validateInventoryAvailability).not.toHaveBeenCalled();
+    expect(consumeInventoryHoldsForSession).not.toHaveBeenCalled();
+    expectNoCompletionSideEffects();
+  });
+
+  it("rejects stale provisional import session sale lines before durable sale writes", async () => {
+    const ctx = {
+      db: {
+        get: vi.fn(async (tableName: string, id: string) => {
+          if (
+            tableName === "inventoryImportProvisionalSku" &&
+            id === "provisional-import-sku-1"
+          ) {
+            return {
+              _id: "provisional-import-sku-1",
+              storeId: "store-1",
+              status: "active",
+              productId: "product-import-1",
+              productSkuId: "sku-other",
+            };
+          }
+
+          return null;
+        }),
+        patch: vi.fn(),
+      },
+      runMutation: vi.fn(),
+    } as never;
+
+    vi.mocked(getPosSessionById).mockResolvedValue({
+      _id: "session-1",
+      storeId: "store-1",
+      staffProfileId: "staff-1",
+      registerNumber: "1",
+      registerSessionId: "register-1",
+      terminalId: "terminal-1",
+    } as never);
+    vi.mocked(getRegisterSessionById).mockResolvedValue({
+      _id: "register-1",
+      storeId: "store-1",
+      status: "open",
+      terminalId: "terminal-1",
+      registerNumber: "1",
+    } as never);
+    vi.mocked(listSessionItems).mockResolvedValue([
+      {
+        _id: "session-item-1",
+        sessionId: "session-1",
+        storeId: "store-1",
+        productId: "product-import-1",
+        productSkuId: "sku-import-1",
+        inventoryImportProvisionalSkuId: "provisional-import-sku-1",
+        productSku: "LEGACY-1",
+        productName: "Imported bundle",
+        price: 15,
+        quantity: 2,
+      },
+    ] as never);
+
+    await expect(
+      createTransactionFromSessionHandler(ctx, {
+        sessionId: "session-1" as Id<"posSession">,
+        staffProfileId: "staff-1" as Id<"staffProfile">,
+        payments: [{ method: "cash", amount: 30, timestamp: 1 }],
+      }),
+    ).resolves.toMatchObject({
+      kind: "user_error",
+      error: {
+        code: "conflict",
+      },
+    });
+
+    expect(validateInventoryAvailability).not.toHaveBeenCalled();
+    expect(consumeInventoryHoldsForSession).not.toHaveBeenCalled();
+    expectNoCompletionSideEffects();
+  });
+
+  it("rejects hidden provisional import session sale lines before durable sale writes", async () => {
+    const ctx = {
+      db: {
+        get: vi.fn(async (tableName: string, id: string) => {
+          if (
+            tableName === "inventoryImportProvisionalSku" &&
+            id === "provisional-import-sku-1"
+          ) {
+            return {
+              _id: "provisional-import-sku-1",
+              storeId: "store-1",
+              status: "active",
+              posExposureStatus: "hidden",
+              productId: "product-import-1",
+              productSkuId: "sku-import-1",
+            };
+          }
+
+          return null;
+        }),
+        patch: vi.fn(),
+      },
+      runMutation: vi.fn(),
+    } as never;
+
+    vi.mocked(getPosSessionById).mockResolvedValue({
+      _id: "session-1",
+      storeId: "store-1",
+      staffProfileId: "staff-1",
+      registerNumber: "1",
+      registerSessionId: "register-1",
+      terminalId: "terminal-1",
+    } as never);
+    vi.mocked(getRegisterSessionById).mockResolvedValue({
+      _id: "register-1",
+      storeId: "store-1",
+      status: "open",
+      terminalId: "terminal-1",
+      registerNumber: "1",
+    } as never);
+    vi.mocked(listSessionItems).mockResolvedValue([
+      {
+        _id: "session-item-1",
+        sessionId: "session-1",
+        storeId: "store-1",
+        productId: "product-import-1",
+        productSkuId: "sku-import-1",
+        inventoryImportProvisionalSkuId: "provisional-import-sku-1",
+        productSku: "LEGACY-1",
+        productName: "Imported bundle",
+        price: 15,
+        quantity: 2,
+      },
+    ] as never);
+
+    await expect(
+      createTransactionFromSessionHandler(ctx, {
+        sessionId: "session-1" as Id<"posSession">,
+        staffProfileId: "staff-1" as Id<"staffProfile">,
+        payments: [{ method: "cash", amount: 30, timestamp: 1 }],
+      }),
+    ).resolves.toMatchObject({
+      kind: "user_error",
+      error: {
+        code: "conflict",
+      },
+    });
+
+    expect(validateInventoryAvailability).not.toHaveBeenCalled();
+    expect(consumeInventoryHoldsForSession).not.toHaveBeenCalled();
+    expectNoCompletionSideEffects();
   });
 
   it.each([

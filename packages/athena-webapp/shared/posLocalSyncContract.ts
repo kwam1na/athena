@@ -57,6 +57,7 @@ export type PosLocalSyncSaleItemPayload = {
   productId: string;
   productSkuId: string;
   pendingCheckoutItemId?: string;
+  inventoryImportProvisionalSkuId?: string;
   productName: string;
   productSku: string;
   barcode?: string;

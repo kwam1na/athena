@@ -134,7 +134,7 @@ export interface PosRegisterBootstrapDto {
 }
 
 export interface PosCatalogItemDto {
-  id: Id<"productSku">;
+  id: Id<"productSku"> | Id<"inventoryImportProvisionalSku">;
   name: string;
   sku: string;
   barcode: string;
@@ -150,13 +150,20 @@ export interface PosCatalogItemDto {
   productId: Id<"product">;
   skuId: Id<"productSku">;
   areProcessingFeesAbsorbed: boolean;
+  availabilityPolicy?: PosRegisterCatalogAvailabilityPolicy;
+  inventoryImportProvisionalSkuId?: Id<"inventoryImportProvisionalSku">;
 }
 
+export type PosRegisterCatalogAvailabilityPolicy =
+  | "trusted_inventory"
+  | "active_provisional_import";
+
 export interface PosRegisterCatalogRowDto {
-  id: Id<"productSku">;
+  id: Id<"productSku"> | Id<"inventoryImportProvisionalSku">;
   productSkuId: Id<"productSku">;
   skuId: Id<"productSku">;
   productId: Id<"product">;
+  inventoryImportProvisionalSkuId?: Id<"inventoryImportProvisionalSku">;
   name: string;
   sku: string;
   barcode: string;
@@ -168,6 +175,7 @@ export interface PosRegisterCatalogRowDto {
   length: number | null;
   color: string;
   areProcessingFeesAbsorbed: boolean;
+  availabilityPolicy?: PosRegisterCatalogAvailabilityPolicy;
 }
 
 export interface PosRegisterCatalogInput {
@@ -227,8 +235,10 @@ export interface PosRegisterCatalogAvailabilityRowDto {
   availabilitySource?: "live" | "local";
   productSkuId: Id<"productSku">;
   skuId: Id<"productSku">;
+  inventoryImportProvisionalSkuId?: Id<"inventoryImportProvisionalSku">;
   inStock: boolean;
   quantityAvailable: number;
+  availabilityPolicy?: PosRegisterCatalogAvailabilityPolicy;
 }
 
 export interface PosRegisterCatalogAvailabilityInput {
@@ -296,6 +306,7 @@ export interface PosAddItemInput {
   sessionId: Id<"posSession">;
   productId: Id<"product">;
   productSkuId: Id<"productSku">;
+  inventoryImportProvisionalSkuId?: Id<"inventoryImportProvisionalSku">;
   staffProfileId: Id<"staffProfile">;
   productSku: string;
   barcode?: string;

@@ -12,6 +12,7 @@ type TableName =
   | "category"
   | "color"
   | "inventoryHold"
+  | "inventoryImportProvisionalSku"
   | "product"
   | "productSku";
 type Row = Record<string, unknown> & { _id: string };
@@ -28,6 +29,7 @@ function createRegisterCatalogCtx(
     category: new Map(),
     color: new Map(),
     inventoryHold: new Map(),
+    inventoryImportProvisionalSku: new Map(),
     product: new Map(),
     productSku: new Map(),
   };
@@ -35,7 +37,14 @@ function createRegisterCatalogCtx(
   for (const [table, rows] of Object.entries(seed) as Array<
     [TableName, Row[]]
   >) {
-    rows.forEach((row) => tables[table].set(row._id, row));
+    rows.forEach((row) =>
+      tables[table].set(row._id, {
+        ...(table === "inventoryImportProvisionalSku"
+          ? { posExposureStatus: "available" }
+          : {}),
+        ...row,
+      }),
+    );
   }
 
   function createIndexedQuery(
@@ -338,6 +347,7 @@ describe("listRegisterCatalog", () => {
         length: 18,
         color: "Natural black",
         areProcessingFeesAbsorbed: true,
+        availabilityPolicy: "trusted_inventory",
       },
       {
         id: "sku-out",
@@ -355,11 +365,246 @@ describe("listRegisterCatalog", () => {
         length: null,
         color: "",
         areProcessingFeesAbsorbed: false,
+        availabilityPolicy: "trusted_inventory",
       },
     ]);
 
     expect(rows[0]).not.toHaveProperty("inStock");
     expect(rows[0]).not.toHaveProperty("quantityAvailable");
+  });
+
+  it("surfaces active provisional import SKUs as sellable without trusted quantity", async () => {
+    const { ctx } = createRegisterCatalogCtx({
+      category: [
+        {
+          _id: "category-store-a",
+          storeId: "store-a",
+          name: "Imports",
+        },
+      ],
+      inventoryImportProvisionalSku: [
+        {
+          _id: "provisional-matched",
+          storeId: "store-a",
+          status: "active",
+          posExposureStatus: "available",
+          productId: "product-trusted",
+          productSkuId: "sku-trusted",
+          importedProductName: "Matched Imported Closure",
+          importedSku: "LEGACY-CLOSURE",
+          importedBarcode: "123PROV",
+          importedPrice: 83000,
+          importedQuantity: 8,
+          provisionalQuantitySold: 0,
+          provisionalTransactionCount: 0,
+        },
+        {
+          _id: "provisional-sku-1",
+          storeId: "store-a",
+          status: "active",
+          productId: "product-provisional",
+          productSkuId: "sku-provisional",
+          importedProductName: "Imported Closure",
+          importedSku: "LEGACY-CLOSURE",
+          importedBarcode: "123PROV",
+          importedPrice: 85000,
+          importedQuantity: 12,
+          provisionalQuantitySold: 0,
+          provisionalTransactionCount: 0,
+        },
+        {
+          _id: "provisional-finalized",
+          storeId: "store-a",
+          status: "finalized",
+          productId: "product-finalized",
+          productSkuId: "sku-finalized",
+          importedProductName: "Finalized Closure",
+          importedPrice: 85000,
+          importedQuantity: 12,
+        },
+        {
+          _id: "provisional-hidden",
+          storeId: "store-a",
+          status: "active",
+          posExposureStatus: "hidden",
+          productId: "product-hidden",
+          productSkuId: "sku-hidden",
+          importedProductName: "Hidden Closure",
+          importedPrice: 85000,
+          importedQuantity: 12,
+        },
+      ],
+      product: [
+        {
+          _id: "product-trusted",
+          storeId: "store-a",
+          categoryId: "category-store-a",
+          description: "Trusted catalog row",
+          name: "Imported Closure",
+          availability: "active",
+          isVisible: true,
+        },
+        {
+          _id: "product-provisional",
+          storeId: "store-a",
+          categoryId: "category-store-a",
+          description: "Review anchor",
+          name: "Hidden Review Anchor",
+          availability: "draft",
+          isVisible: false,
+        },
+        {
+          _id: "product-finalized",
+          storeId: "store-a",
+          categoryId: "category-store-a",
+          description: "Closed anchor",
+          name: "Closed Anchor",
+          availability: "draft",
+          isVisible: false,
+        },
+        {
+          _id: "product-hidden",
+          storeId: "store-a",
+          categoryId: "category-store-a",
+          description: "Hidden anchor",
+          name: "Hidden Anchor",
+          availability: "draft",
+          isVisible: false,
+        },
+      ],
+      productSku: [
+        {
+          _id: "sku-trusted",
+          storeId: "store-a",
+          productId: "product-trusted",
+          sku: "LEGACY-CLOSURE",
+          barcode: "123PROV",
+          images: [],
+          isVisible: true,
+          price: 85000,
+          quantityAvailable: 0,
+        },
+        {
+          _id: "sku-provisional",
+          storeId: "store-a",
+          productId: "product-provisional",
+          sku: "ANCHOR-CLOSURE",
+          barcode: "",
+          images: [],
+          isVisible: false,
+          price: 0,
+          quantityAvailable: 0,
+        },
+        {
+          _id: "sku-finalized",
+          storeId: "store-a",
+          productId: "product-finalized",
+          sku: "ANCHOR-FINALIZED",
+          barcode: "",
+          images: [],
+          isVisible: false,
+          price: 0,
+          quantityAvailable: 0,
+        },
+        {
+          _id: "sku-hidden",
+          storeId: "store-a",
+          productId: "product-hidden",
+          sku: "ANCHOR-HIDDEN",
+          barcode: "",
+          images: [],
+          isVisible: false,
+          price: 0,
+          quantityAvailable: 0,
+        },
+      ],
+    });
+
+    await expect(
+      listRegisterCatalog(ctx, {
+        storeId: "store-a" as Id<"store">,
+      }),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        productSkuId: "sku-trusted",
+        name: "Imported Closure",
+        sku: "LEGACY-CLOSURE",
+        barcode: "123PROV",
+        price: 85000,
+        availabilityPolicy: "trusted_inventory",
+      }),
+      expect.objectContaining({
+        id: "provisional-matched",
+        productSkuId: "sku-trusted",
+        inventoryImportProvisionalSkuId: "provisional-matched",
+        name: "Matched Imported Closure",
+        sku: "LEGACY-CLOSURE",
+        barcode: "123PROV",
+        price: 83000,
+        availabilityPolicy: "active_provisional_import",
+      }),
+      expect.objectContaining({
+        productSkuId: "sku-provisional",
+        inventoryImportProvisionalSkuId: "provisional-sku-1",
+        name: "Imported Closure",
+        sku: "LEGACY-CLOSURE",
+        barcode: "123PROV",
+        price: 85000,
+        availabilityPolicy: "active_provisional_import",
+      }),
+    ]);
+
+    await expect(
+      listRegisterCatalogAvailability(ctx, {
+        storeId: "store-a" as Id<"store">,
+        productSkuIds: ["sku-trusted", "sku-provisional"] as Array<
+          Id<"productSku">
+        >,
+      }),
+    ).resolves.toEqual([
+      {
+        productSkuId: "sku-trusted",
+        skuId: "sku-trusted",
+        inventoryImportProvisionalSkuId: "provisional-matched",
+        inStock: true,
+        quantityAvailable: 0,
+        availabilityPolicy: "active_provisional_import",
+      },
+      {
+        productSkuId: "sku-provisional",
+        skuId: "sku-provisional",
+        inventoryImportProvisionalSkuId: "provisional-sku-1",
+        inStock: true,
+        quantityAvailable: 0,
+        availabilityPolicy: "active_provisional_import",
+      },
+    ]);
+
+    await expect(
+      listRegisterCatalogAvailabilitySnapshot(ctx, {
+        storeId: "store-a" as Id<"store">,
+      }),
+    ).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          productSkuId: "sku-trusted",
+          availabilityPolicy: "trusted_inventory",
+          inStock: false,
+        }),
+        expect.objectContaining({
+          productSkuId: "sku-trusted",
+          inventoryImportProvisionalSkuId: "provisional-matched",
+          availabilityPolicy: "active_provisional_import",
+          inStock: true,
+        }),
+        expect.objectContaining({
+          productSkuId: "sku-provisional",
+          inventoryImportProvisionalSkuId: "provisional-sku-1",
+          availabilityPolicy: "active_provisional_import",
+          inStock: true,
+        }),
+      ]),
+    );
   });
 
   it("does not rely on pagination for large register catalog snapshots", async () => {
@@ -425,6 +670,18 @@ describe("listRegisterCatalog", () => {
           updatedAt: 1,
         },
       ],
+      inventoryImportProvisionalSku: [
+        {
+          _id: "provisional-sku-out",
+          storeId: "store-a",
+          status: "active",
+          productId: "product-out",
+          productSkuId: "sku-out",
+          importedProductName: "Out Wig",
+          importedPrice: 100,
+          importedQuantity: 10,
+        },
+      ],
       productSku: [
         {
           _id: "sku-live",
@@ -467,12 +724,15 @@ describe("listRegisterCatalog", () => {
         skuId: "sku-live",
         inStock: true,
         quantityAvailable: 1,
+        availabilityPolicy: "trusted_inventory",
       },
       {
         productSkuId: "sku-out",
         skuId: "sku-out",
-        inStock: false,
+        inventoryImportProvisionalSkuId: "provisional-sku-out",
+        inStock: true,
         quantityAvailable: 0,
+        availabilityPolicy: "active_provisional_import",
       },
     ]);
   });
@@ -500,6 +760,7 @@ describe("listRegisterCatalog", () => {
     expect(rows.at(-1)).toMatchObject({
       productSkuId: "sku-49",
       quantityAvailable: 1,
+      availabilityPolicy: "trusted_inventory",
     });
   });
 
@@ -536,6 +797,18 @@ describe("listRegisterCatalog", () => {
           expiresAt: Date.now() - 60_000,
           createdAt: 1,
           updatedAt: 1,
+        },
+      ],
+      inventoryImportProvisionalSku: [
+        {
+          _id: "provisional-sku-out",
+          storeId: "store-a",
+          status: "active",
+          productId: "product-out",
+          productSkuId: "sku-out",
+          importedProductName: "Out Wig",
+          importedPrice: 100,
+          importedQuantity: 10,
         },
       ],
       product: [
@@ -625,12 +898,22 @@ describe("listRegisterCatalog", () => {
         skuId: "sku-live",
         inStock: true,
         quantityAvailable: 2,
+        availabilityPolicy: "trusted_inventory",
       },
       {
         productSkuId: "sku-out",
         skuId: "sku-out",
         inStock: false,
         quantityAvailable: 0,
+        availabilityPolicy: "trusted_inventory",
+      },
+      {
+        productSkuId: "sku-out",
+        skuId: "sku-out",
+        inventoryImportProvisionalSkuId: "provisional-sku-out",
+        inStock: true,
+        quantityAvailable: 0,
+        availabilityPolicy: "active_provisional_import",
       },
     ]);
   });

@@ -42,6 +42,10 @@ describe("runGraphifyRebuild", () => {
     expect(GRAPHIFY_REBUILD_SNIPPET).toContain("'storybook-static'");
   });
 
+  it("skips generated validation artifacts during graph extraction", () => {
+    expect(GRAPHIFY_REBUILD_SNIPPET).toContain("'artifacts'");
+  });
+
   it("normalizes date-bearing report headers for stable freshness checks", () => {
     expect(GRAPHIFY_REBUILD_SNIPPET).toContain("import re");
     expect(GRAPHIFY_REBUILD_SNIPPET).toContain("report_lines[0] = re.sub(");

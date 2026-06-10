@@ -16,3 +16,4 @@ export * from "./redeemedPromoCode";
 export * from "./complimentaryProduct";
 export * from "./inventoryHold";
 export * from "./inventoryImportReviewVersion";
+export * from "./inventoryImportProvisionalSku";

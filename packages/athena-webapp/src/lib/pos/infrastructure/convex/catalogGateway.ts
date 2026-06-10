@@ -123,6 +123,7 @@ function mapProductByIdResult(
     productId: productData._id,
     skuId: sku._id,
     areProcessingFeesAbsorbed: productData.areProcessingFeesAbsorbed || false,
+    availabilityPolicy: "trusted_inventory",
   }));
 }
 
@@ -133,7 +134,7 @@ function signatureForAvailabilityRows(
   return `${storeId}|${rows
     .map(
       (row) =>
-        `${String(row.productSkuId)}:${row.quantityAvailable}:${row.inStock ? 1 : 0}`,
+        `${String(row.productSkuId)}:${row.quantityAvailable}:${row.inStock ? 1 : 0}:${row.availabilityPolicy}`,
     )
     .join("|")}`;
 }
@@ -478,7 +479,10 @@ export function useConvexRegisterCatalogAvailabilityState(
   if (liveRows !== undefined) {
     return {
       status: "ready",
-      rows: liveRows.map((row) => ({ ...row, availabilitySource: "live" })),
+      rows: liveRows.map((row: PosRegisterCatalogAvailabilityRowDto) => ({
+        ...row,
+        availabilitySource: "live",
+      })),
       source: "live",
     };
   }

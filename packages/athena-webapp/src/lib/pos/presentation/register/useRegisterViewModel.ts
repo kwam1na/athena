@@ -718,7 +718,7 @@ function mapProductToOptimisticCartItem(
   quantity: number,
 ): CartItem {
   return {
-    id: `optimistic:${product.skuId ?? product.id}` as Id<"posSessionItem">,
+    id: `optimistic:${product.id}` as Id<"posSessionItem">,
     name: product.name,
     barcode: product.barcode,
     sku: product.sku,
@@ -731,6 +731,7 @@ function mapProductToOptimisticCartItem(
     productId: product.productId,
     skuId: product.skuId,
     pendingCheckoutItemId: product.pendingCheckoutItemId,
+    inventoryImportProvisionalSkuId: product.inventoryImportProvisionalSkuId,
     areProcessingFeesAbsorbed: product.areProcessingFeesAbsorbed,
   };
 }
@@ -746,6 +747,8 @@ function buildLocalCartItemPayload(input: {
     productId: product.productId,
     productSkuId: product.skuId,
     pendingCheckoutItemId: product.pendingCheckoutItemId ?? null,
+    inventoryImportProvisionalSkuId:
+      product.inventoryImportProvisionalSkuId ?? null,
     productSku: product.sku || "",
     barcode: product.barcode || null,
     productName: product.name,
@@ -758,6 +761,46 @@ function buildLocalCartItemPayload(input: {
     color: product.color || null,
     areProcessingFeesAbsorbed: product.areProcessingFeesAbsorbed,
   };
+}
+
+function productCartSourceKey(product: {
+  pendingCheckoutItemId?: string | null;
+  inventoryImportProvisionalSkuId?: string | null;
+}) {
+  if (product.inventoryImportProvisionalSkuId) {
+    return `provisional_import:${product.inventoryImportProvisionalSkuId}`;
+  }
+  if (product.pendingCheckoutItemId) {
+    return `pending_checkout:${product.pendingCheckoutItemId}`;
+  }
+  return "trusted_inventory";
+}
+
+function cartLineSourceKey(item: {
+  pendingCheckoutItemId?: string | null;
+  inventoryImportProvisionalSkuId?: string | null;
+}) {
+  return productCartSourceKey(item);
+}
+
+function renderedCartLineSourceKey(item: CartItem) {
+  return productCartSourceKey({
+    inventoryImportProvisionalSkuId:
+      "inventoryImportProvisionalSkuId" in item
+        ? (item.inventoryImportProvisionalSkuId ?? null)
+        : null,
+    pendingCheckoutItemId:
+      "pendingCheckoutItemId" in item
+        ? (item.pendingCheckoutItemId ?? null)
+        : null,
+  });
+}
+
+function optimisticCartProductKeyFromCartItem(item: CartItem) {
+  const itemId = item.id.toString();
+  return itemId.startsWith("optimistic:")
+    ? itemId.slice("optimistic:".length)
+    : (item.skuId ?? itemId);
 }
 
 function buildLocalCartItemPayloadFromCartItem(input: {
@@ -773,6 +816,10 @@ function buildLocalCartItemPayloadFromCartItem(input: {
     pendingCheckoutItemId:
       "pendingCheckoutItemId" in item
         ? (item.pendingCheckoutItemId ?? null)
+        : null,
+    inventoryImportProvisionalSkuId:
+      "inventoryImportProvisionalSkuId" in item
+        ? (item.inventoryImportProvisionalSkuId ?? null)
         : null,
     productSku: item.sku || "",
     barcode: item.barcode || null,
@@ -836,6 +883,10 @@ function buildCompletedSalePayload(input: {
         "pendingCheckoutItemId" in item
           ? (item.pendingCheckoutItemId ?? null)
           : null,
+      inventoryImportProvisionalSkuId:
+        "inventoryImportProvisionalSkuId" in item
+          ? (item.inventoryImportProvisionalSkuId ?? null)
+          : null,
       productSku: item.sku || "",
       barcode: item.barcode || null,
       productName: item.name,
@@ -885,6 +936,9 @@ function mapLocalCartItemToCartItem(item: PosLocalCartItemReadModel): CartItem {
     skuId: item.productSkuId as Id<"productSku">,
     pendingCheckoutItemId: item.pendingCheckoutItemId as
       | Id<"posPendingCheckoutItem">
+      | undefined,
+    inventoryImportProvisionalSkuId: item.inventoryImportProvisionalSkuId as
+      | Id<"inventoryImportProvisionalSku">
       | undefined,
     areProcessingFeesAbsorbed: item.areProcessingFeesAbsorbed,
   };
@@ -1177,6 +1231,7 @@ function addLocalAvailabilityConsumption(
   item: PosLocalCartItemReadModel,
 ) {
   if (!item.productSkuId) return;
+  if (cartLineSourceKey(item) !== "trusted_inventory") return;
 
   quantities.set(
     item.productSkuId,
@@ -1244,6 +1299,7 @@ function addLocalAvailabilityDeltaConsumption(input: {
 }) {
   for (const item of input.items) {
     if (!item.productSkuId) continue;
+    if (cartLineSourceKey(item) !== "trusted_inventory") continue;
 
     const unsyncedQuantity = Math.max(
       0,
@@ -1742,8 +1798,10 @@ export function useRegisterViewModel(): RegisterViewModel {
       productSkuIds.add(item.productSkuId as Id<"productSku">);
     }
 
-    for (const productSkuId of Object.keys(optimisticCartProducts)) {
-      productSkuIds.add(productSkuId as Id<"productSku">);
+    for (const item of Object.values(optimisticCartProducts)) {
+      if (item.skuId) {
+        productSkuIds.add(item.skuId);
+      }
     }
 
     for (const row of registerMetadataSearchState.results) {
@@ -2563,7 +2621,10 @@ export function useRegisterViewModel(): RegisterViewModel {
       }
 
       const existingIndex = cartItems.findIndex(
-        (item) => item.skuId === optimisticProduct.skuId,
+        (item) =>
+          item.skuId === optimisticProduct.skuId &&
+          renderedCartLineSourceKey(item) ===
+            renderedCartLineSourceKey(optimisticProduct),
       );
       if (existingIndex >= 0) {
         const existingItem = cartItems[existingIndex];
@@ -2585,6 +2646,7 @@ export function useRegisterViewModel(): RegisterViewModel {
 
     for (const product of Object.values(optimisticCartProducts)) {
       if (!product.skuId) continue;
+      if (cartLineSourceKey(product) !== "trusted_inventory") continue;
 
       quantities.set(
         product.skuId,
@@ -2600,13 +2662,18 @@ export function useRegisterViewModel(): RegisterViewModel {
     for (const [productSkuId, availability] of registerCatalogAvailabilityBySkuId) {
       const quantityAvailable = Math.max(
         0,
-        Math.trunc(availability.quantityAvailable) -
-          (localAvailabilityConsumptionBySkuId.get(productSkuId) ?? 0),
+        availability.availabilityPolicy === "active_provisional_import"
+          ? 0
+          : Math.trunc(availability.quantityAvailable) -
+              (localAvailabilityConsumptionBySkuId.get(productSkuId) ?? 0),
       );
 
       adjusted.set(productSkuId, {
         ...availability,
-        inStock: availability.inStock && quantityAvailable > 0,
+        inStock:
+          availability.availabilityPolicy === "active_provisional_import"
+            ? availability.inStock
+            : availability.inStock && quantityAvailable > 0,
         quantityAvailable,
       });
     }
@@ -2648,7 +2715,8 @@ export function useRegisterViewModel(): RegisterViewModel {
       canAutoAdd: Boolean(
         registerMetadataSearchState.exactMatch &&
           exactAvailability &&
-          exactAvailability.quantityAvailable > 0,
+          (exactAvailability.availabilityPolicy === "active_provisional_import" ||
+            exactAvailability.quantityAvailable > 0),
       ),
     };
   }, [
@@ -4869,9 +4937,10 @@ export function useRegisterViewModel(): RegisterViewModel {
       }
 
       if (
-        availabilityStatus !== "available" ||
-        (typeof product.quantityAvailable === "number" &&
-          product.quantityAvailable <= 0)
+        product.availabilityPolicy !== "active_provisional_import" &&
+        (availabilityStatus !== "available" ||
+          (typeof product.quantityAvailable === "number" &&
+            product.quantityAvailable <= 0))
       ) {
         toast.error(POS_NO_TRUSTED_AVAILABILITY_REMAINING_MESSAGE);
         return false;
@@ -4901,26 +4970,57 @@ export function useRegisterViewModel(): RegisterViewModel {
           const isInStock =
             availability !== undefined ? availability.inStock : product.inStock;
 
-          if (quantityAvailable === undefined) {
-            toast.error(POS_AVAILABILITY_NOT_READY_MESSAGE);
-            return false;
-          }
-
           if (
-            !isInStock ||
-            quantityAvailable - localConsumption < requestedQuantity
+            product.availabilityPolicy !== "active_provisional_import" &&
+            availability?.availabilityPolicy !== "active_provisional_import"
           ) {
-            toast.error(POS_NO_TRUSTED_AVAILABILITY_REMAINING_MESSAGE);
-            return false;
+            if (quantityAvailable === undefined) {
+              toast.error(POS_AVAILABILITY_NOT_READY_MESSAGE);
+              return false;
+            }
+
+            if (
+              !isInStock ||
+              quantityAvailable - localConsumption < requestedQuantity
+            ) {
+              toast.error(POS_NO_TRUSTED_AVAILABILITY_REMAINING_MESSAGE);
+              return false;
+            }
           }
         }
 
+        const nextLineSourceKey = productCartSourceKey(product);
         const localSaleItem = queuedReadModel?.activeSale?.items.find(
-          (item) => item.productSkuId === productSkuId,
+          (item) =>
+            item.productSkuId === productSkuId &&
+            cartLineSourceKey(item) === nextLineSourceKey,
         );
         const existingItem = activeCartItems.find(
-          (item) => item.skuId === productSkuId,
+          (item) =>
+            item.skuId === productSkuId &&
+            cartLineSourceKey(item) === nextLineSourceKey,
         );
+        const conflictingItem =
+          queuedReadModel?.activeSale?.items.find(
+            (item) =>
+              item.productSkuId === productSkuId &&
+              cartLineSourceKey(item) !== nextLineSourceKey &&
+              (cartLineSourceKey(item) === "trusted_inventory" ||
+                nextLineSourceKey === "trusted_inventory"),
+          ) ??
+          activeCartItems.find(
+            (item) =>
+              item.skuId === productSkuId &&
+              cartLineSourceKey(item) !== nextLineSourceKey &&
+              (cartLineSourceKey(item) === "trusted_inventory" ||
+                nextLineSourceKey === "trusted_inventory"),
+          );
+        if (conflictingItem) {
+          toast.error(
+            "This item is already in the cart from a different inventory source. Remove it and add it again.",
+          );
+          return false;
+        }
         const nextQuantity =
           (localSaleItem?.quantity ?? existingItem?.quantity ?? 0) +
           requestedQuantity;
@@ -4928,8 +5028,9 @@ export function useRegisterViewModel(): RegisterViewModel {
           localSaleItem?.localItemId ??
           existingItem?.id.toString() ??
           createLocalFallbackId("local-item");
-        const optimisticProductKey = productSkuId;
-        const previousOptimisticProduct = optimisticCartProducts[productSkuId];
+        const optimisticProductKey = product.id.toString();
+        const previousOptimisticProduct =
+          optimisticCartProducts[optimisticProductKey];
         const isExistingOptimisticProduct = existingItem?.id
           .toString()
           .startsWith("optimistic:");
@@ -5083,10 +5184,17 @@ export function useRegisterViewModel(): RegisterViewModel {
             )
           : undefined;
         const currentQuantity = queuedLocalItem?.quantity ?? item.quantity;
+        const isProvisionalImportLine = Boolean(
+          ("inventoryImportProvisionalSkuId" in item
+            ? item.inventoryImportProvisionalSkuId
+            : undefined) ??
+            queuedLocalItem?.inventoryImportProvisionalSkuId,
+        );
 
         if (
           item.skuId &&
           quantity > currentQuantity &&
+          !isProvisionalImportLine &&
           registerCatalogSkuIds.has(item.skuId)
         ) {
           const requestedIncrease = quantity - currentQuantity;
@@ -5130,7 +5238,7 @@ export function useRegisterViewModel(): RegisterViewModel {
           noteLocalRegisterEventChanged();
           setOptimisticCartProducts((current) => {
             const next = { ...current };
-            delete next[item.skuId!];
+            delete next[optimisticCartProductKeyFromCartItem(item)];
             return next;
           });
           return;
@@ -5151,7 +5259,7 @@ export function useRegisterViewModel(): RegisterViewModel {
         noteLocalRegisterEventChanged();
         setOptimisticCartProducts((current) => ({
           ...current,
-          [item.skuId!]: {
+          [optimisticCartProductKeyFromCartItem(item)]: {
             ...item,
             quantity,
           },
@@ -5263,7 +5371,7 @@ export function useRegisterViewModel(): RegisterViewModel {
         noteLocalRegisterEventChanged();
         setOptimisticCartProducts((current) => {
           const next = { ...current };
-          delete next[item.skuId!];
+          delete next[optimisticCartProductKeyFromCartItem(item)];
           return next;
         });
         return;

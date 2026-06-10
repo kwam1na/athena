@@ -64,6 +64,7 @@ vi.mock("../infrastructure/repositories/catalogRepository", () => ({
 import {
   createOrReusePendingCheckoutItemForSale,
   listPendingCheckoutItemsForReview,
+  listRegisterCatalogSnapshot,
   listRegisterCatalogAvailability,
   listRegisterCatalogAvailabilitySnapshot,
   quickAddSku,
@@ -151,6 +152,75 @@ describe("POS public catalog queries", () => {
     );
   });
 
+  it("requires same-organization POS access before returning the full register catalog snapshot", async () => {
+    const readRegisterCatalog = await import(
+      "../application/queries/listRegisterCatalog"
+    );
+    vi.mocked(readRegisterCatalog.listRegisterCatalog).mockResolvedValue([
+      {
+        areProcessingFeesAbsorbed: false,
+        availabilityPolicy: "active_provisional_import",
+        barcode: "123456789012",
+        category: "Import",
+        color: "",
+        description: "",
+        id: "sku-1" as Id<"productSku">,
+        image: null,
+        inventoryImportProvisionalSkuId:
+          "provisional-1" as Id<"inventoryImportProvisionalSku">,
+        length: null,
+        name: "Legacy import",
+        price: 12000,
+        productId: "product-1" as Id<"product">,
+        productSkuId: "sku-1" as Id<"productSku">,
+        size: "",
+        sku: "LEGACY-1",
+        skuId: "sku-1" as Id<"productSku">,
+      },
+    ]);
+    const ctx = buildCtx();
+
+    const rows = await getHandler(listRegisterCatalogSnapshot)(ctx as never, {
+      storeId: "store-1",
+    });
+
+    expect(rows).toEqual([
+      expect.objectContaining({
+        availabilityPolicy: "active_provisional_import",
+        inventoryImportProvisionalSkuId: "provisional-1",
+      }),
+    ]);
+    expect(mocks.requireAuthenticatedAthenaUserWithCtx).toHaveBeenCalledWith(ctx);
+    expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(ctx, {
+      allowedRoles: ["full_admin", "pos_only"],
+      failureMessage:
+        "You cannot view register catalog availability for this store.",
+      organizationId: "org-1",
+      userId: "athena-user-1",
+    });
+    expect(readRegisterCatalog.listRegisterCatalog).toHaveBeenCalledWith(ctx, {
+      storeId: "store-1",
+    });
+  });
+
+  it("does not return the register catalog snapshot when the caller is unauthenticated", async () => {
+    const readRegisterCatalog = await import(
+      "../application/queries/listRegisterCatalog"
+    );
+    mocks.requireAuthenticatedAthenaUserWithCtx.mockRejectedValue(
+      new Error("Sign in again to continue."),
+    );
+    const ctx = buildCtx();
+
+    await expect(
+      getHandler(listRegisterCatalogSnapshot)(ctx as never, {
+        storeId: "store-1",
+      }),
+    ).rejects.toThrow("Sign in again to continue.");
+
+    expect(readRegisterCatalog.listRegisterCatalog).not.toHaveBeenCalled();
+  });
+
   it("requires same-organization POS access before returning bounded availability", async () => {
     mocks.listRegisterCatalogAvailabilitySnapshot.mockResolvedValue([]);
     const readRegisterCatalogAvailability = await import(
@@ -164,6 +234,7 @@ describe("POS public catalog queries", () => {
         skuId: "sku-1" as Id<"productSku">,
         inStock: true,
         quantityAvailable: 3,
+        availabilityPolicy: "trusted_inventory",
       },
     ]);
     const ctx = buildCtx();

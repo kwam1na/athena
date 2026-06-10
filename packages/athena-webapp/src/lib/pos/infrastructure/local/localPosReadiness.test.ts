@@ -174,6 +174,34 @@ describe("localPosReadiness", () => {
     });
   });
 
+  it("shows store-day start readiness before local drawer recovery", () => {
+    expect(
+      evaluateLocalPosReadiness({
+        entryContext,
+        operatingDate: "2026-05-14",
+        localReadiness: {
+          storeId: "store-1",
+          operatingDate: "2026-05-14",
+          status: "not_started",
+          source: "daily_opening",
+          updatedAt: 1_000,
+        },
+        registerReadModel: {
+          canSell: false,
+          closeoutState: {
+            status: "closed_locally",
+            localRegisterSessionId: "local-register-1",
+            updatedAt: 1_100,
+          },
+        } as PosLocalRegisterReadModel,
+      }),
+    ).toMatchObject({
+      status: "blocked",
+      reason: "not_started",
+      canStartLocally: true,
+    });
+  });
+
   it("treats unknown store-day readiness as blocked unless local register state proves selling is open", () => {
     expect(
       evaluateLocalPosReadiness({

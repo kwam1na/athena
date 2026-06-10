@@ -11,6 +11,7 @@ import type {
 import type { PosServiceMode } from "@/lib/pos/domain";
 
 export interface RegisterCatalogSearchRow {
+  id?: string;
   productId: string;
   productSkuId: string;
   name: string;
@@ -24,6 +25,8 @@ export interface RegisterCatalogSearchRow {
   color?: string | null;
   image?: string | null;
   areProcessingFeesAbsorbed?: boolean | null;
+  availabilityPolicy?: "trusted_inventory" | "active_provisional_import";
+  inventoryImportProvisionalSkuId?: string | null;
 }
 
 export type RegisterCatalogSearchResult =

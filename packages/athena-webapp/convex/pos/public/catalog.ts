@@ -41,13 +41,22 @@ const catalogResultValidator = v.object({
   productId: v.id("product"),
   skuId: v.id("productSku"),
   areProcessingFeesAbsorbed: v.boolean(),
+  availabilityPolicy: v.optional(
+    v.union(v.literal("trusted_inventory"), v.literal("active_provisional_import")),
+  ),
+  inventoryImportProvisionalSkuId: v.optional(
+    v.id("inventoryImportProvisionalSku"),
+  ),
 });
 
 const registerCatalogRowValidator = v.object({
-  id: v.id("productSku"),
+  id: v.union(v.id("productSku"), v.id("inventoryImportProvisionalSku")),
   productSkuId: v.id("productSku"),
   skuId: v.id("productSku"),
   productId: v.id("product"),
+  inventoryImportProvisionalSkuId: v.optional(
+    v.id("inventoryImportProvisionalSku"),
+  ),
   name: v.string(),
   sku: v.string(),
   barcode: v.string(),
@@ -59,13 +68,24 @@ const registerCatalogRowValidator = v.object({
   length: v.union(v.number(), v.null()),
   color: v.string(),
   areProcessingFeesAbsorbed: v.boolean(),
+  availabilityPolicy: v.union(
+    v.literal("trusted_inventory"),
+    v.literal("active_provisional_import"),
+  ),
 });
 
 const registerCatalogAvailabilityValidator = v.object({
   productSkuId: v.id("productSku"),
   skuId: v.id("productSku"),
+  inventoryImportProvisionalSkuId: v.optional(
+    v.id("inventoryImportProvisionalSku"),
+  ),
   inStock: v.boolean(),
   quantityAvailable: v.number(),
+  availabilityPolicy: v.union(
+    v.literal("trusted_inventory"),
+    v.literal("active_provisional_import"),
+  ),
 });
 
 const pendingCheckoutResultValidator = v.object({
@@ -205,7 +225,11 @@ export const listRegisterCatalogSnapshot = query({
     storeId: v.id("store"),
   },
   returns: v.array(registerCatalogRowValidator),
-  handler: async (ctx, args) => listRegisterCatalog(ctx, args),
+  handler: async (ctx, args) => {
+    await requireRegisterCatalogStoreAccess(ctx, args);
+
+    return listRegisterCatalog(ctx, args);
+  },
 });
 
 export const listRegisterCatalogAvailability = query({

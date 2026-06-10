@@ -36,6 +36,7 @@ export interface PosLocalCartItemReadModel {
   productId: string;
   productSkuId: string;
   pendingCheckoutItemId?: string;
+  inventoryImportProvisionalSkuId?: string;
   productSku: string;
   barcode?: string;
   productName: string;
@@ -703,6 +704,9 @@ function parseCartItemPayload(
     productId: stringField(payload, "productId") ?? "",
     productSkuId,
     pendingCheckoutItemId: optionalString(payload.pendingCheckoutItemId),
+    inventoryImportProvisionalSkuId: optionalString(
+      payload.inventoryImportProvisionalSkuId,
+    ),
     productSku: stringField(payload, "productSku") ?? "",
     barcode: optionalString(payload.barcode),
     productName: stringField(payload, "productName") ?? "",
@@ -817,18 +821,49 @@ function upsertCartItem(
 ) {
   if (item.quantity <= 0) {
     return items.filter(
-      (candidate) => candidate.productSkuId !== item.productSkuId,
+      (candidate) =>
+        candidate.productSkuId !== item.productSkuId ||
+        cartItemSourceKey(candidate) !== cartItemSourceKey(item),
     );
   }
 
   const index = items.findIndex(
-    (candidate) => candidate.productSkuId === item.productSkuId,
+    (candidate) =>
+      candidate.productSkuId === item.productSkuId &&
+      cartItemSourceKey(candidate) === cartItemSourceKey(item),
   );
-  if (index === -1) return [...items, item];
+  if (index === -1) {
+    const itemSourceKey = cartItemSourceKey(item);
+    const sameSkuItems = items.filter(
+      (candidate) => candidate.productSkuId === item.productSkuId,
+    );
+    const canAppendDistinctProvisionalImportRow =
+      itemSourceKey.startsWith("provisional_import:") &&
+      sameSkuItems.every((candidate) =>
+        cartItemSourceKey(candidate).startsWith("provisional_import:"),
+      );
+
+    return sameSkuItems.length === 0 || canAppendDistinctProvisionalImportRow
+      ? [...items, item]
+      : items;
+  }
 
   const next = [...items];
   next[index] = item;
   return next;
+}
+
+function cartItemSourceKey(item: {
+  pendingCheckoutItemId?: string;
+  inventoryImportProvisionalSkuId?: string;
+}) {
+  if (item.inventoryImportProvisionalSkuId) {
+    return `provisional_import:${item.inventoryImportProvisionalSkuId}`;
+  }
+  if (item.pendingCheckoutItemId) {
+    return `pending_checkout:${item.pendingCheckoutItemId}`;
+  }
+  return "trusted_inventory";
 }
 
 function upsertServiceLine(

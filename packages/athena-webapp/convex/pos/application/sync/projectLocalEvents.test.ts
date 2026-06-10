@@ -335,6 +335,466 @@ describe("projectLocalSyncEvent", () => {
     ]);
   });
 
+  it("preserves provisional import sale evidence without trusted stock movement", async () => {
+    const repository = createProjectionRepository({
+      sku: {
+        _id: "sku-1",
+        storeId: "store-1",
+        productId: "product-1",
+        sku: "IMP-CAP-1",
+        price: 25,
+        quantityAvailable: 0,
+        inventoryCount: 0,
+        images: [],
+      },
+      inventoryImportProvisionalSku: {
+        _id: "provisional-import-sku-1",
+        storeId: "store-1",
+        status: "active",
+        productId: "product-1",
+        productSkuId: "sku-1",
+        importedPrice: 25,
+        importedBarcode: "999888777666",
+      },
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: buildSaleCompletedEvent({
+        payload: {
+          ...buildSaleCompletedEvent().payload,
+          items: [
+            {
+              localTransactionItemId: "local-provisional-import-line-1",
+              productId: "product-1" as never,
+              productSkuId: "sku-1" as never,
+              inventoryImportProvisionalSkuId: "provisional-import-sku-1",
+              productName: "Imported Wig Cap",
+              productSku: "IMP-CAP-1",
+              quantity: 2,
+              unitPrice: 25,
+            },
+          ],
+          totals: {
+            subtotal: 50,
+            tax: 0,
+            total: 50,
+          },
+          payments: [
+            {
+              localPaymentId: "local-payment-1",
+              method: "cash",
+              amount: 50,
+              timestamp: 21,
+            },
+          ],
+        },
+      }),
+      syncEventId: "sync-event-1",
+      now: 100,
+    });
+
+    expect(result.status).toBe("projected");
+    expect(repository.consumedHoldRequests).toEqual([]);
+    expect(repository.productPatches).toEqual([]);
+    expect(repository.recordedSaleInventoryMovements).toEqual([]);
+    expect(repository.createdTransactionItems).toEqual([
+      expect.objectContaining({
+        inventoryImportProvisionalSkuId: "provisional-import-sku-1",
+        productId: "product-1",
+        productSkuId: "sku-1",
+        quantity: 2,
+      }),
+    ]);
+    expect(repository.createdPosSessionItems).toEqual([
+      expect.objectContaining({
+        inventoryImportProvisionalSkuId: "provisional-import-sku-1",
+        productId: "product-1",
+        productSkuId: "sku-1",
+        quantity: 2,
+      }),
+    ]);
+    expect(repository.recordedInventoryImportProvisionalSkuSaleEvidence).toEqual([
+      {
+        inventoryImportProvisionalSkuId: "provisional-import-sku-1",
+        posTransactionId: "transaction-1",
+        quantitySold: 2,
+        registerSessionId: "register-session-1",
+        timestamp: 20,
+      },
+    ]);
+  });
+
+  it("preserves distinct provisional import sale evidence for offline same-SKU rows", async () => {
+    const repository = createProjectionRepository({
+      sku: {
+        _id: "sku-1",
+        storeId: "store-1",
+        productId: "product-1",
+        sku: "IMP-CAP-1",
+        price: 25,
+        quantityAvailable: 0,
+        inventoryCount: 0,
+        images: [],
+      },
+      inventoryImportProvisionalSkus: [
+        {
+          _id: "provisional-import-sku-1",
+          storeId: "store-1",
+          status: "active",
+          productId: "product-1",
+          productSkuId: "sku-1",
+          importedPrice: 25,
+        },
+        {
+          _id: "provisional-import-sku-2",
+          storeId: "store-1",
+          status: "active",
+          productId: "product-1",
+          productSkuId: "sku-1",
+          importedPrice: 25,
+        },
+      ],
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: buildSaleCompletedEvent({
+        payload: {
+          ...buildSaleCompletedEvent().payload,
+          items: [
+            {
+              localTransactionItemId: "local-provisional-import-line-1",
+              productId: "product-1" as never,
+              productSkuId: "sku-1" as never,
+              inventoryImportProvisionalSkuId: "provisional-import-sku-1",
+              productName: "Imported Wig Cap",
+              productSku: "IMP-CAP-1",
+              quantity: 2,
+              unitPrice: 25,
+            },
+            {
+              localTransactionItemId: "local-provisional-import-line-2",
+              productId: "product-1" as never,
+              productSkuId: "sku-1" as never,
+              inventoryImportProvisionalSkuId: "provisional-import-sku-2",
+              productName: "Imported Wig Cap",
+              productSku: "IMP-CAP-1",
+              quantity: 3,
+              unitPrice: 25,
+            },
+          ],
+          totals: {
+            subtotal: 125,
+            tax: 0,
+            total: 125,
+          },
+          payments: [
+            {
+              localPaymentId: "local-payment-1",
+              method: "cash",
+              amount: 125,
+              timestamp: 21,
+            },
+          ],
+        },
+      }),
+      syncEventId: "sync-event-1",
+      now: 100,
+    });
+
+    expect(result.status).toBe("projected");
+    expect(repository.productPatches).toEqual([]);
+    expect(repository.recordedSaleInventoryMovements).toEqual([]);
+    expect(repository.createdTransactionItems).toEqual([
+      expect.objectContaining({
+        inventoryImportProvisionalSkuId: "provisional-import-sku-1",
+        productSkuId: "sku-1",
+        quantity: 2,
+      }),
+      expect.objectContaining({
+        inventoryImportProvisionalSkuId: "provisional-import-sku-2",
+        productSkuId: "sku-1",
+        quantity: 3,
+      }),
+    ]);
+    expect(repository.createdPosSessionItems).toEqual([
+      expect.objectContaining({
+        inventoryImportProvisionalSkuId: "provisional-import-sku-1",
+        productSkuId: "sku-1",
+        quantity: 2,
+      }),
+      expect.objectContaining({
+        inventoryImportProvisionalSkuId: "provisional-import-sku-2",
+        productSkuId: "sku-1",
+        quantity: 3,
+      }),
+    ]);
+    expect(repository.recordedInventoryImportProvisionalSkuSaleEvidence).toEqual([
+      {
+        inventoryImportProvisionalSkuId: "provisional-import-sku-1",
+        posTransactionId: "transaction-1",
+        quantitySold: 2,
+        registerSessionId: "register-session-1",
+        timestamp: 20,
+      },
+      {
+        inventoryImportProvisionalSkuId: "provisional-import-sku-2",
+        posTransactionId: "transaction-1",
+        quantitySold: 3,
+        registerSessionId: "register-session-1",
+        timestamp: 20,
+      },
+    ]);
+  });
+
+  it("blocks offline sale lines with both pending checkout and provisional import sources", async () => {
+    const repository = createProjectionRepository({
+      inventoryImportProvisionalSku: {
+        _id: "provisional-import-sku-1",
+        storeId: "store-1",
+        status: "active",
+        productId: "product-1",
+        productSkuId: "sku-1",
+        importedPrice: 25,
+      },
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: buildSaleCompletedEvent({
+        payload: {
+          ...buildSaleCompletedEvent().payload,
+          items: [
+            {
+              localTransactionItemId: "local-conflicting-line-1",
+              productId: "product-1" as never,
+              productSkuId: "sku-1" as never,
+              pendingCheckoutItemId: "pending-checkout-item-1" as never,
+              inventoryImportProvisionalSkuId: "provisional-import-sku-1",
+              productName: "Imported Wig Cap",
+              productSku: "IMP-CAP-1",
+              quantity: 2,
+              unitPrice: 25,
+            },
+          ],
+        },
+      }),
+      syncEventId: "sync-event-1",
+      now: 100,
+    });
+
+    expect(result.status).toBe("conflicted");
+    expect(result.conflicts).toEqual([
+      expect.objectContaining({
+        conflictType: "inventory",
+        details: expect.objectContaining({
+          blocksProjection: true,
+          localTransactionItemId: "local-conflicting-line-1",
+          pendingCheckoutItemId: "pending-checkout-item-1",
+          inventoryImportProvisionalSkuId: "provisional-import-sku-1",
+        }),
+      }),
+    ]);
+    expect(repository.createdTransactions).toEqual([]);
+    expect(repository.createdTransactionItems).toEqual([]);
+    expect(repository.recordedPendingCheckoutItemSaleEvidence).toEqual([]);
+    expect(repository.recordedInventoryImportProvisionalSkuSaleEvidence).toEqual([]);
+  });
+
+  it("blocks offline provisional import sale lines when the row is inactive", async () => {
+    const repository = createProjectionRepository({
+      sku: {
+        _id: "sku-1",
+        storeId: "store-1",
+        productId: "product-1",
+        sku: "IMP-CAP-1",
+        price: 25,
+        quantityAvailable: 0,
+        inventoryCount: 0,
+        images: [],
+      },
+      inventoryImportProvisionalSku: {
+        _id: "provisional-import-sku-1",
+        storeId: "store-1",
+        status: "closed",
+        productId: "product-1",
+        productSkuId: "sku-1",
+        importedPrice: 25,
+      },
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: buildSaleCompletedEvent({
+        payload: {
+          ...buildSaleCompletedEvent().payload,
+          items: [
+            {
+              localTransactionItemId: "local-provisional-import-line-1",
+              productId: "product-1" as never,
+              productSkuId: "sku-1" as never,
+              inventoryImportProvisionalSkuId: "provisional-import-sku-1",
+              productName: "Imported Wig Cap",
+              productSku: "IMP-CAP-1",
+              quantity: 2,
+              unitPrice: 25,
+            },
+          ],
+        },
+      }),
+      syncEventId: "sync-event-1",
+      now: 100,
+    });
+
+    expect(result.status).toBe("conflicted");
+    expect(result.conflicts).toEqual([
+      expect.objectContaining({
+          conflictType: "inventory",
+          details: expect.objectContaining({
+          blocksProjection: true,
+          inventoryImportProvisionalSkuId: "provisional-import-sku-1",
+        }),
+      }),
+    ]);
+    expect(repository.createdTransactions).toEqual([]);
+    expect(repository.consumedHoldRequests).toEqual([]);
+    expect(repository.productPatches).toEqual([]);
+    expect(repository.recordedSaleInventoryMovements).toEqual([]);
+    expect(repository.createdTransactionItems).toEqual([]);
+    expect(repository.recordedInventoryImportProvisionalSkuSaleEvidence).toEqual([]);
+  });
+
+  it("blocks offline provisional import sale lines when the row is hidden from POS", async () => {
+    const repository = createProjectionRepository({
+      sku: {
+        _id: "sku-1",
+        storeId: "store-1",
+        productId: "product-1",
+        sku: "IMP-CAP-1",
+        price: 25,
+        quantityAvailable: 0,
+        inventoryCount: 0,
+        images: [],
+      },
+      inventoryImportProvisionalSku: {
+        _id: "provisional-import-sku-1",
+        storeId: "store-1",
+        status: "active",
+        posExposureStatus: "hidden",
+        productId: "product-1",
+        productSkuId: "sku-1",
+        importedPrice: 25,
+      },
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: buildSaleCompletedEvent({
+        payload: {
+          ...buildSaleCompletedEvent().payload,
+          items: [
+            {
+              localTransactionItemId: "local-provisional-import-line-1",
+              productId: "product-1" as never,
+              productSkuId: "sku-1" as never,
+              inventoryImportProvisionalSkuId: "provisional-import-sku-1",
+              productName: "Imported Wig Cap",
+              productSku: "IMP-CAP-1",
+              quantity: 2,
+              unitPrice: 25,
+            },
+          ],
+        },
+      }),
+      syncEventId: "sync-event-1",
+      now: 100,
+    });
+
+    expect(result.status).toBe("conflicted");
+    expect(result.conflicts).toEqual([
+      expect.objectContaining({
+        conflictType: "inventory",
+        details: expect.objectContaining({
+          blocksProjection: true,
+          inventoryImportProvisionalSkuId: "provisional-import-sku-1",
+        }),
+      }),
+    ]);
+    expect(repository.createdTransactions).toEqual([]);
+    expect(repository.consumedHoldRequests).toEqual([]);
+    expect(repository.productPatches).toEqual([]);
+    expect(repository.recordedSaleInventoryMovements).toEqual([]);
+    expect(repository.createdTransactionItems).toEqual([]);
+    expect(repository.recordedInventoryImportProvisionalSkuSaleEvidence).toEqual([]);
+  });
+
+  it("blocks offline sales that mix trusted and provisional lines for the same SKU", async () => {
+    const repository = createProjectionRepository({
+      inventoryImportProvisionalSku: {
+        _id: "provisional-import-sku-1",
+        storeId: "store-1",
+        status: "active",
+        productId: "product-1",
+        productSkuId: "sku-1",
+        importedPrice: 25,
+      },
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: buildSaleCompletedEvent({
+        payload: {
+          ...buildSaleCompletedEvent().payload,
+          items: [
+            {
+              localTransactionItemId: "local-provisional-import-line-1",
+              productId: "product-1" as never,
+              productSkuId: "sku-1" as never,
+              inventoryImportProvisionalSkuId: "provisional-import-sku-1",
+              productName: "Imported Wig Cap",
+              productSku: "IMP-CAP-1",
+              quantity: 1,
+              unitPrice: 25,
+            },
+            {
+              localTransactionItemId: "local-trusted-line-1",
+              productId: "product-1" as never,
+              productSkuId: "sku-1" as never,
+              productName: "Imported Wig Cap",
+              productSku: "IMP-CAP-1",
+              quantity: 1,
+              unitPrice: 25,
+            },
+          ],
+        },
+      }),
+      syncEventId: "sync-event-1",
+      now: 100,
+    });
+
+    expect(result.status).toBe("conflicted");
+    expect(result.conflicts).toEqual([
+      expect.objectContaining({
+        conflictType: "inventory",
+        details: expect.objectContaining({
+          blocksProjection: true,
+          productSkuId: "sku-1",
+        }),
+      }),
+    ]);
+    expect(repository.createdTransactions).toEqual([]);
+    expect(repository.createdTransactionItems).toEqual([]);
+    expect(repository.recordedInventoryImportProvisionalSkuSaleEvidence).toEqual([]);
+    expect(repository.recordedSaleInventoryMovements).toEqual([]);
+  });
+
   it("projects a completed local cash sale into transaction, payment, inventory, and trace-like records", async () => {
     const repository = createProjectionRepository();
 
@@ -2217,6 +2677,65 @@ describe("projectLocalSyncEvent", () => {
     );
   });
 
+  it("projects provisional import offline sales using the imported provisional price", async () => {
+    const repository = createProjectionRepository({
+      inventoryImportProvisionalSku: {
+        _id: "provisional-import-sku-1",
+        storeId: "store-1",
+        status: "active",
+        posExposureStatus: "available",
+        productId: "product-1",
+        productSkuId: "sku-1",
+        importedPrice: 10,
+      },
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: buildSaleCompletedEvent({
+        payload: {
+          ...buildSaleCompletedEvent().payload,
+          totals: { subtotal: 10, tax: 0, total: 10 },
+          items: [
+            {
+              localTransactionItemId: "local-txn-item-1",
+              productId: "product-1" as never,
+              productSkuId: "sku-1" as never,
+              inventoryImportProvisionalSkuId: "provisional-import-sku-1",
+              productName: "Wig Cap",
+              productSku: "CAP-1",
+              quantity: 1,
+              unitPrice: 10,
+            },
+          ],
+          payments: [
+            {
+              localPaymentId: "local-payment-1",
+              method: "cash",
+              amount: 10,
+              timestamp: 21,
+            },
+          ],
+        },
+      }),
+      syncEventId: "sync-event-1",
+      now: 100,
+    });
+
+    expect(result.status).toBe("projected");
+    expect(result.conflicts).toEqual([]);
+    expect(repository.createdTransactionItems).toEqual([
+      expect.objectContaining({
+        inventoryImportProvisionalSkuId: "provisional-import-sku-1",
+        productSkuId: "sku-1",
+        unitPrice: 10,
+      }),
+    ]);
+    expect(repository.productPatches).toEqual([]);
+    expect(repository.recordedSaleInventoryMovements).toEqual([]);
+  });
+
   it("projects clear-only cloud-backed local sales into voided POS sessions", async () => {
     const repository = createProjectionRepository({
       existingPosSession: {
@@ -3689,6 +4208,26 @@ function createProjectionRepository(
       provisionalProductId?: string;
       provisionalProductSkuId?: string;
     } | null;
+    inventoryImportProvisionalSku: {
+      _id: string;
+      storeId: string;
+      status: "active" | "finalized" | "rejected" | "closed";
+      posExposureStatus?: "available" | "hidden";
+      productId: string;
+      productSkuId: string;
+      importedBarcode?: string;
+      importedPrice: number;
+    } | null;
+    inventoryImportProvisionalSkus: Array<{
+      _id: string;
+      storeId: string;
+      status: "active" | "finalized" | "rejected" | "closed";
+      posExposureStatus?: "available" | "hidden";
+      productId: string;
+      productSkuId: string;
+      importedBarcode?: string;
+      importedPrice: number;
+    }>;
     activeHeldQuantity: number;
     consumedHoldQuantities: Map<string, number>;
     existingPosSession: {
@@ -3743,6 +4282,7 @@ function createProjectionRepository(
   posSessionPatches: unknown[];
 	  productPatches: unknown[];
 	  recordedPendingCheckoutItemSaleEvidence: unknown[];
+	  recordedInventoryImportProvisionalSkuSaleEvidence: unknown[];
 	  recordedSaleInventoryMovements: unknown[];
 	  recordedPosSessionTraces: unknown[];
   recordedRegisterSessionTraces: unknown[];
@@ -3779,6 +4319,7 @@ function createProjectionRepository(
 	  const posSessionPatches: unknown[] = [];
 	  const productPatches: unknown[] = [];
 	  const recordedPendingCheckoutItemSaleEvidence: unknown[] = [];
+	  const recordedInventoryImportProvisionalSkuSaleEvidence: unknown[] = [];
 	  const recordedSaleInventoryMovements: unknown[] = [];
 	  const recordedPosSessionTraces: unknown[] = [];
   const recordedRegisterSessionTraces: unknown[] = [];
@@ -3848,6 +4389,7 @@ function createProjectionRepository(
     posSessionPatches,
 	    productPatches,
 	    recordedPendingCheckoutItemSaleEvidence,
+	    recordedInventoryImportProvisionalSkuSaleEvidence,
 	    recordedSaleInventoryMovements,
 	    recordedPosSessionTraces,
     recordedRegisterSessionTraces,
@@ -3957,6 +4499,30 @@ function createProjectionRepository(
             provisionalProductSkuId: "sku-1",
           } as never)
         : null;
+    },
+    async getInventoryImportProvisionalSku(inventoryImportProvisionalSkuId) {
+      if (overrides.inventoryImportProvisionalSkus) {
+        const provisionalSku = overrides.inventoryImportProvisionalSkus.find(
+          (row) => row._id === inventoryImportProvisionalSkuId,
+        );
+        return provisionalSku
+          ? ({
+              posExposureStatus: "available",
+              ...provisionalSku,
+            } as never)
+          : null;
+      }
+      if (overrides.inventoryImportProvisionalSku !== undefined) {
+        return overrides.inventoryImportProvisionalSku &&
+          inventoryImportProvisionalSkuId ===
+            overrides.inventoryImportProvisionalSku._id
+          ? ({
+              posExposureStatus: "available",
+              ...overrides.inventoryImportProvisionalSku,
+            } as never)
+          : null;
+      }
+      return null;
     },
     async getServiceCatalog(serviceCatalogId) {
       return serviceCatalog && serviceCatalogId === serviceCatalog._id
@@ -4145,6 +4711,9 @@ function createProjectionRepository(
             },
           } as never)
         : null;
+    },
+    async recordInventoryImportProvisionalSkuSaleEvidence(input) {
+      recordedInventoryImportProvisionalSkuSaleEvidence.push(input);
     },
     async createServiceWorkItem(input) {
       const id = `service-work-item-${createdServiceWorkItems.length + 1}`;

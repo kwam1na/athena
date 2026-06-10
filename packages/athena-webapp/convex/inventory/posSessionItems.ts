@@ -92,6 +92,9 @@ export const getSessionItems = query({
       productId: v.id("product"),
       productSkuId: v.id("productSku"),
       pendingCheckoutItemId: v.optional(v.id("posPendingCheckoutItem")),
+      inventoryImportProvisionalSkuId: v.optional(
+        v.id("inventoryImportProvisionalSku"),
+      ),
       productSku: v.string(),
       barcode: v.optional(v.string()),
       productName: v.string(),
@@ -136,6 +139,9 @@ export const addOrUpdateItem = mutation({
     productId: v.id("product"),
     productSkuId: v.id("productSku"),
     pendingCheckoutItemId: v.optional(v.id("posPendingCheckoutItem")),
+    inventoryImportProvisionalSkuId: v.optional(
+      v.id("inventoryImportProvisionalSku"),
+    ),
     staffProfileId: v.id("staffProfile"),
     productSku: v.string(),
     barcode: v.optional(v.string()),

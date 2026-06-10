@@ -48,6 +48,8 @@ export interface Product {
   productId?: Id<"product">;
   skuId?: Id<"productSku">;
   pendingCheckoutItemId?: Id<"posPendingCheckoutItem">;
+  inventoryImportProvisionalSkuId?: Id<"inventoryImportProvisionalSku">;
+  availabilityPolicy?: "trusted_inventory" | "active_provisional_import";
   pendingCheckoutItemLocalDefinition?: PosLocalSyncPendingCheckoutItemDefinedPayload;
   areProcessingFeesAbsorbed?: boolean;
 }

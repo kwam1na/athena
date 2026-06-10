@@ -44,6 +44,7 @@ export interface PosProductCartLineInput {
   productId?: Id<"product">;
   skuId?: Id<"productSku">;
   pendingCheckoutItemId?: Id<"posPendingCheckoutItem">;
+  inventoryImportProvisionalSkuId?: Id<"inventoryImportProvisionalSku">;
   areProcessingFeesAbsorbed?: boolean;
 }
 

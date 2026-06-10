@@ -43,6 +43,10 @@ import {
   type InventoryImportParseResult,
 } from "@/lib/inventory-import/inventoryImportParser";
 import {
+  matchesSkuSearchTerms,
+  normalizeSkuSearchQuery,
+} from "@/lib/stockOps/skuSearch";
+import {
   PageLevelHeader,
   PageWorkspace,
   PageWorkspaceGrid,
@@ -67,6 +71,7 @@ import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { LoadingButton } from "../ui/loading-button";
 import { Textarea } from "../ui/textarea";
+import { SkuSearchFilterBar } from "../stock-ops/SkuSearchFilterBar";
 import { OperationsSummaryMetric } from "./OperationsSummaryMetric";
 
 const IMPORT_TABLE_PAGE_SIZE = 10;
@@ -177,11 +182,20 @@ const OVERLAY_FILTERS: Array<{
   { label: "Decided", value: "decided" },
 ];
 
+const OVERLAY_FILTER_SELECT_OPTIONS = OVERLAY_FILTERS.map((filter) => ({
+  ...filter,
+  label: `Status: ${filter.label}`,
+}));
+
 function parseInventoryOverlayFilter(value: unknown): InventoryOverlayFilter | null {
   if (typeof value !== "string") return null;
   return OVERLAY_FILTERS.some((filter) => filter.value === value)
     ? (value as InventoryOverlayFilter)
     : null;
+}
+
+function parseInventoryOverlayQuery(value: unknown) {
+  return typeof value === "string" ? normalizeSkuSearchQuery(value) : "";
 }
 
 function parseInventoryOverlayPage(value: unknown) {
@@ -244,13 +258,18 @@ export function InventoryImportView({
   const search = useSearch({ strict: false }) as {
     filter?: unknown;
     page?: unknown;
+    q?: unknown;
     review?: unknown;
   };
   const overlayFilterFromSearch = parseInventoryOverlayFilter(search.filter);
+  const overlayQueryFromSearch = parseInventoryOverlayQuery(search.q);
   const overlayPageFromSearch = parseInventoryOverlayPage(search.page);
   const isReviewRoute = mode === "review";
   const saveReviewVersion = useMutation(
     api.inventory.catalogImport.saveInventoryImportReviewVersion,
+  );
+  const stageReviewRowsForPos = useMutation(
+    api.inventory.catalogImport.stageInventoryImportReviewRowsForPos,
   );
   const activeManagerElevation = managerElevation?.activeElevation;
   const effectiveManagerElevationId = activeManagerElevation?.elevationId;
@@ -288,11 +307,13 @@ export function InventoryImportView({
   const [rawContent, setRawContent] = useState("");
   const [notes, setNotes] = useState("");
   const [isSavingReviewVersion, setIsSavingReviewVersion] = useState(false);
+  const [isStagingReviewForPos, setIsStagingReviewForPos] = useState(false);
   const [draftAutosaveStatus, setDraftAutosaveStatus] = useState<
     "idle" | "pending" | "saving" | "saved" | "error"
   >("idle");
   const [isSourceExpanded, setIsSourceExpanded] = useState(true);
   const [lastSavedReviewVersion, setLastSavedReviewVersion] = useState<{
+    _id: Id<"inventoryImportReviewVersion">;
     createdAt: number;
     versionNumber: number;
   } | null>(null);
@@ -301,6 +322,7 @@ export function InventoryImportView({
   const [overlayFilter, setOverlayFilterState] = useState<InventoryOverlayFilter>(
     () => overlayFilterFromSearch ?? "all",
   );
+  const [overlayQuery, setOverlayQuery] = useState(() => overlayQueryFromSearch);
   const [rowDraftDecisions, setRowDraftDecisions] = useState<
     Record<string, ImportRowDraftDecision>
   >({});
@@ -317,10 +339,12 @@ export function InventoryImportView({
     ({
       filter,
       page,
+      query,
       review,
     }: {
       filter?: InventoryOverlayFilter | null;
       page?: number | null;
+      query?: string | null;
       review?: boolean;
     }) => {
       void navigate({
@@ -335,6 +359,7 @@ export function InventoryImportView({
               delete nextSearch.review;
               delete nextSearch.filter;
               delete nextSearch.page;
+              delete nextSearch.q;
             }
           }
 
@@ -351,6 +376,15 @@ export function InventoryImportView({
               nextSearch.page = page;
             } else {
               delete nextSearch.page;
+            }
+          }
+
+          if (query !== undefined) {
+            const nextQuery = normalizeSkuSearchQuery(query);
+            if (nextQuery) {
+              nextSearch.q = nextQuery;
+            } else {
+              delete nextSearch.q;
             }
           }
 
@@ -378,6 +412,7 @@ export function InventoryImportView({
             const nextSearch = { ...current };
             delete nextSearch.filter;
             delete nextSearch.page;
+            delete nextSearch.q;
             delete nextSearch.review;
             return nextSearch;
           }) as never,
@@ -386,9 +421,9 @@ export function InventoryImportView({
         return;
       }
 
-      updateReviewSearch({ filter: nextFilter, page: overlayPage });
+      updateReviewSearch({ filter: nextFilter, page: overlayPage, query: overlayQuery });
     },
-    [navigate, overlayFilter, overlayPage, updateReviewSearch],
+    [navigate, overlayFilter, overlayPage, overlayQuery, updateReviewSearch],
   );
 
   const setOverlayFilter = useCallback(
@@ -401,6 +436,26 @@ export function InventoryImportView({
     },
     [isReviewModeState, isReviewRoute, updateReviewSearch],
   );
+
+  const handleOverlayQueryChange = useCallback(
+    (nextQuery: string) => {
+      setOverlayQuery(nextQuery);
+      if (isReviewRoute || isReviewModeState) {
+        setOverlayPage(1);
+        updateReviewSearch({ page: null, query: nextQuery });
+      }
+    },
+    [isReviewModeState, isReviewRoute, updateReviewSearch],
+  );
+
+  const handleClearOverlayFilters = useCallback(() => {
+    setOverlayFilterState("all");
+    setOverlayQuery("");
+    setOverlayPage(1);
+    if (isReviewRoute || isReviewModeState) {
+      updateReviewSearch({ filter: "all", page: null, query: null });
+    }
+  }, [isReviewModeState, isReviewRoute, updateReviewSearch]);
 
   const parseResult = useMemo<InventoryImportParseResult | null>(() => {
     if (!rawContent.trim()) return null;
@@ -435,6 +490,7 @@ export function InventoryImportView({
     [inventorySkuContext, parseResult?.rows],
   );
   const overlaySummary = useMemo(() => summarizeOverlayRows(overlayRows), [overlayRows]);
+  const normalizedOverlayQuery = normalizeSkuSearchQuery(overlayQuery);
   const needsReviewMetricProps =
     overlaySummary.review > 0
       ? {
@@ -443,19 +499,51 @@ export function InventoryImportView({
           valueClassName: "text-action-workflow",
         }
       : {};
+  const matchesOverlayStatusFilter = useCallback(
+    (row: InventoryOverlayRow) =>
+      overlayFilter === "all" ||
+      (overlayFilter === "decided"
+        ? hasDraftDecisionValue(rowDraftDecisions[getOverlayRowKey(row)] ?? {})
+        : row.status === overlayFilter),
+    [overlayFilter, rowDraftDecisions],
+  );
+  const overlayRowsMatchingQuery = useMemo(
+    () =>
+      normalizedOverlayQuery
+        ? overlayRows.filter((row) =>
+            matchesInventoryOverlayRowSearch(row, normalizedOverlayQuery),
+          )
+        : overlayRows,
+    [normalizedOverlayQuery, overlayRows],
+  );
   const filteredOverlayRows = useMemo(
     () =>
-      overlayRows.filter((row) => {
-        if (overlayFilter === "all") return true;
-        if (overlayFilter === "decided") {
-          return hasDraftDecisionValue(
-            rowDraftDecisions[getOverlayRowKey(row)] ?? {},
-          );
-        }
-        return row.status === overlayFilter;
-      }),
-    [overlayFilter, overlayRows, rowDraftDecisions],
+      normalizedOverlayQuery
+        ? overlayRowsMatchingQuery
+        : overlayRows.filter(matchesOverlayStatusFilter),
+    [
+      matchesOverlayStatusFilter,
+      normalizedOverlayQuery,
+      overlayRows,
+      overlayRowsMatchingQuery,
+    ],
   );
+  const selectedStatusQueryHitCount = useMemo(
+    () =>
+      normalizedOverlayQuery
+        ? overlayRowsMatchingQuery.filter(matchesOverlayStatusFilter).length
+        : filteredOverlayRows.length,
+    [
+      filteredOverlayRows.length,
+      matchesOverlayStatusFilter,
+      normalizedOverlayQuery,
+      overlayRowsMatchingQuery,
+    ],
+  );
+  const crossStatusQueryHitCount =
+    normalizedOverlayQuery && overlayFilter !== "all"
+      ? filteredOverlayRows.length - selectedStatusQueryHitCount
+      : 0;
   const overlayPageCount = Math.max(
     1,
     Math.ceil(filteredOverlayRows.length / IMPORT_TABLE_PAGE_SIZE),
@@ -479,6 +567,7 @@ export function InventoryImportView({
     hasDraftDecisionValue(decision),
   ).length;
   const canSaveImportHandoff = hasReviewableContent;
+  const canStageReviewForPos = canSaveImportHandoff && pendingImportActionCount === 0;
   const shouldShowCollapsedSource =
     Boolean(rawContent.trim()) && Boolean(parseResult) && !isSourceExpanded;
   const isReviewMode = (isReviewRoute || isReviewModeState) && Boolean(parseResult);
@@ -496,6 +585,7 @@ export function InventoryImportView({
 
     setPreviewPage(1);
     setOverlayPage(1);
+    setOverlayQuery("");
     setRowDraftDecisions({});
     lastSavedDraftSignatureRef.current = "";
     setDraftAutosaveStatus("idle");
@@ -503,7 +593,7 @@ export function InventoryImportView({
 
   useEffect(() => {
     setOverlayPage(1);
-  }, [overlayFilter]);
+  }, [normalizedOverlayQuery, overlayFilter]);
 
   useEffect(() => {
     if (!isReviewRoute || !parseResult) return;
@@ -514,12 +604,17 @@ export function InventoryImportView({
     if (overlayPageFromSearch !== overlayPage) {
       setOverlayPage(overlayPageFromSearch);
     }
+    if (overlayQueryFromSearch !== overlayQuery) {
+      setOverlayQuery(overlayQueryFromSearch);
+    }
   }, [
     isReviewRoute,
     overlayFilter,
     overlayFilterFromSearch,
     overlayPage,
     overlayPageFromSearch,
+    overlayQuery,
+    overlayQueryFromSearch,
     parseResult,
   ]);
 
@@ -563,6 +658,7 @@ export function InventoryImportView({
     setDraftAutosaveStatus("saved");
     setIsSourceExpanded(false);
     setLastSavedReviewVersion({
+      _id: latestReviewVersion._id,
       createdAt: latestReviewVersion.createdAt,
       versionNumber: latestReviewVersion.versionNumber,
     });
@@ -615,6 +711,7 @@ export function InventoryImportView({
       if (result.kind === "ok") {
         lastSavedDraftSignatureRef.current = draftSignature;
         setLastSavedReviewVersion({
+          _id: result.data._id,
           createdAt: result.data.createdAt,
           versionNumber: result.data.versionNumber,
         });
@@ -624,11 +721,12 @@ export function InventoryImportView({
           setDraftAutosaveStatus("saved");
           toast.success(`Review version ${result.data.versionNumber} saved`);
         }
-        return;
+        return result.data;
       }
 
       if (mode === "auto") setDraftAutosaveStatus("error");
       presentCommandToast(result);
+      return null;
     } finally {
       setIsSavingReviewVersion(false);
     }
@@ -649,6 +747,52 @@ export function InventoryImportView({
 
   const handleSaveReviewVersion = () => {
     void saveReviewDraft("manual");
+  };
+
+  const handleStageReviewRowsForPos = async () => {
+    if (!activeStore?._id || !parseResult || !rawContent.trim()) return;
+
+    setIsStagingReviewForPos(true);
+    try {
+      const rowDecisions = buildSavedRowDraftDecisions({
+        rows: overlayRows,
+        rowDraftDecisions,
+      });
+      const draftSignature = getDraftAutosaveSignature(rowDecisions);
+      const savedVersion =
+        lastSavedReviewVersion?._id &&
+        draftSignature === lastSavedDraftSignatureRef.current
+          ? lastSavedReviewVersion
+          : await saveReviewDraft("manual");
+      if (!savedVersion?._id) return;
+
+      const result = await runCommand(() =>
+        stageReviewRowsForPos({
+          importKey: importKey || reviewVersionKey,
+          managerElevationId: effectiveManagerElevationId,
+          notes: notes.trim() || undefined,
+          reviewVersionId: savedVersion._id,
+          rows: buildProvisionalImportStageRows({
+            rows: overlayRows,
+            rowDraftDecisions,
+          }),
+          sourceFormat: parseResult.format,
+          storeId: activeStore._id as Id<"store">,
+          terminalId: effectiveTerminalId,
+        })
+      );
+
+      if (result.kind === "ok") {
+        toast.success(
+          `${formatCount(result.data.rowsStaged, "row")} available in POS pending final counts`,
+        );
+        return;
+      }
+
+      presentCommandToast(result);
+    } finally {
+      setIsStagingReviewForPos(false);
+    }
   };
 
   useEffect(() => {
@@ -716,6 +860,7 @@ export function InventoryImportView({
     setDraftAutosaveStatus("saved");
     setIsSourceExpanded(false);
     setLastSavedReviewVersion({
+      _id: latestReviewVersion._id,
       createdAt: latestReviewVersion.createdAt,
       versionNumber: latestReviewVersion.versionNumber,
     });
@@ -733,6 +878,7 @@ export function InventoryImportView({
       storeId: activeStore?._id,
     });
     setOverlayFilterState(nextFilter);
+    setOverlayQuery(overlayQueryFromSearch);
     setOverlayPage(1);
     setIsReviewModeState(true);
     void navigate({
@@ -744,7 +890,10 @@ export function InventoryImportView({
         orgUrlSlug: params.orgUrlSlug!,
         storeUrlSlug: params.storeUrlSlug!,
       })) as never,
-      search: { filter: nextFilter },
+      search: {
+        filter: nextFilter,
+        ...(overlayQueryFromSearch ? { q: overlayQueryFromSearch } : {}),
+      },
       to: "/$orgUrlSlug/store/$storeUrlSlug/operations/inventory-import/review",
     });
   };
@@ -871,28 +1020,57 @@ export function InventoryImportView({
               />
             </div>
 
-            <div className="flex flex-wrap gap-2">
-              {OVERLAY_FILTERS.map((filter) => {
-                const isSelected = overlayFilter === filter.value;
-                return (
-                  <Button
-                    aria-pressed={isSelected}
-                    className={cn(
-                      "h-8",
-                      isSelected &&
-                        "border-action-workflow-border bg-action-workflow-soft text-action-workflow hover:bg-action-workflow-soft/80",
-                    )}
-                    key={filter.value}
-                    onClick={() => setOverlayFilter(filter.value)}
-                    size="sm"
-                    type="button"
-                    variant="outline"
-                  >
-                    {filter.label}
-                  </Button>
-                );
-              })}
-            </div>
+            <SkuSearchFilterBar
+              ariaLabel="Inventory import review filters"
+              className="bg-surface/60"
+              filterId="inventory-import-review-status-filter"
+              filterLabel="Review status"
+              filterOptions={OVERLAY_FILTER_SELECT_OPTIONS}
+              filterTriggerClassName="w-[190px]"
+              filterValue={overlayFilter}
+              hasActiveFilters={overlayFilter !== "all" || Boolean(normalizedOverlayQuery)}
+              onClearFilters={handleClearOverlayFilters}
+              onFilterChange={setOverlayFilter}
+              onQueryChange={handleOverlayQueryChange}
+              query={overlayQuery}
+              searchId="inventory-import-review-search"
+              searchLabel="Search import rows by product identifiers"
+              searchPlaceholder="Search name, SKU, barcode, row, category, price, or qty"
+              secondaryFilters={
+                <div className="flex flex-wrap gap-2">
+                  {OVERLAY_FILTERS.map((filter) => {
+                    const isSelected = overlayFilter === filter.value;
+                    return (
+                      <Button
+                        aria-pressed={isSelected}
+                        className={cn(
+                          "h-8",
+                          isSelected &&
+                            "border-action-workflow-border bg-action-workflow-soft text-action-workflow hover:bg-action-workflow-soft/80",
+                        )}
+                        key={filter.value}
+                        onClick={() => setOverlayFilter(filter.value)}
+                        size="sm"
+                        type="button"
+                        variant="outline"
+                      >
+                        {filter.label}
+                      </Button>
+                    );
+                  })}
+                </div>
+              }
+              summary={
+                <>
+                  Showing {filteredOverlayRows.length} of {overlayRows.length} import rows.
+                  {normalizedOverlayQuery
+                    ? crossStatusQueryHitCount > 0
+                      ? ` ${formatCount(crossStatusQueryHitCount, "match")} from other statuses included.`
+                      : " Identifier filters are applied."
+                    : ""}
+                </>
+              }
+            />
 
             <div className="flex flex-wrap items-center justify-between gap-3 border-y border-border bg-surface/60 px-3 py-3">
               {overlaySummary.review > 0 ? (
@@ -968,8 +1146,8 @@ export function InventoryImportView({
                   <div className="min-w-0">
                     <p className="text-sm font-medium">Next action</p>
                     <p className="mt-1 text-sm text-muted-foreground">
-                      Rows are ready for import handoff. Save this draft before applying
-                      catalog or stock changes.
+                      Rows are ready for POS availability. Stage them without applying final
+                      counts.
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center justify-end gap-2 sm:min-w-[28rem]">
@@ -983,6 +1161,23 @@ export function InventoryImportView({
                     >
                       <Save className="h-4 w-4" />
                       Save for import handoff
+                    </LoadingButton>
+                    <LoadingButton
+                      className="w-56 px-4"
+                      disabled={
+                        !canStageReviewForPos ||
+                        isSavingReviewVersion ||
+                        isStagingReviewForPos ||
+                        draftAutosaveStatus === "pending" ||
+                        draftAutosaveStatus === "saving"
+                      }
+                      isLoading={isStagingReviewForPos}
+                      onClick={handleStageReviewRowsForPos}
+                      type="button"
+                      variant="workflow"
+                    >
+                      <UploadCloud className="h-4 w-4" />
+                      Make available in POS
                     </LoadingButton>
                     <DraftAutosaveStatus status={draftAutosaveStatus} />
                   </div>
@@ -1079,7 +1274,11 @@ export function InventoryImportView({
               <EmptyState
                 icon={<FileJson className="h-10 w-10" />}
                 title="No rows in this view"
-                description="Choose another review filter."
+                description={
+                  normalizedOverlayQuery
+                    ? "Clear search or choose another review filter."
+                    : "Choose another review filter."
+                }
               />
             )}
           </section>
@@ -1841,6 +2040,37 @@ function sortInventoryOverlayRows(rows: InventoryOverlayRow[]) {
   });
 }
 
+function matchesInventoryOverlayRowSearch(row: InventoryOverlayRow, query: string) {
+  return matchesSkuSearchTerms(
+    [
+      row.row.productName,
+      row.row.sku,
+      row.row.barcode,
+      row.row.category,
+      row.row.subcategory,
+      row.row.size,
+      row.row.color,
+      row.row.length,
+      row.row.weight,
+      row.row.status,
+      row.row.rowNumber,
+      row.row.price,
+      row.row.unitCost,
+      row.row.quantity,
+      row.athenaMatch?.productName,
+      row.athenaMatch?.sku,
+      row.athenaMatch?.barcode,
+      row.athenaMatch?.productAvailability,
+      row.athenaMatch?.inventoryCount,
+      row.athenaMatch?.price,
+      row.athenaMatch?.quantityAvailable,
+      row.matchLabel,
+      row.statusLabel,
+    ],
+    query,
+  );
+}
+
 function summarizeOverlayRows(rows: InventoryOverlayRow[]) {
   return rows.reduce(
     (summary, row) => ({
@@ -2044,6 +2274,30 @@ function buildSavedRowDraftDecisions({
       };
     })
     .filter((decision): decision is SavedImportRowDraftDecision => Boolean(decision));
+}
+
+function buildProvisionalImportStageRows({
+  rows,
+  rowDraftDecisions,
+}: {
+  rows: InventoryOverlayRow[];
+  rowDraftDecisions: Record<string, ImportRowDraftDecision>;
+}) {
+  return rows.map((row) => {
+    const rowKey = getOverlayRowKey(row);
+    const decision = rowDraftDecisions[rowKey] ?? {};
+
+    return {
+      ...row.row,
+      action: decision.action,
+      nameSource: decision.nameSource,
+      priceSource: decision.priceSource,
+      productId: row.athenaMatch?.productId,
+      productSkuId: row.athenaMatch?.productSkuId,
+      quantitySource: decision.quantitySource,
+      rowKey,
+    };
+  });
 }
 
 function mapSavedRowDraftDecisions(
