@@ -20,6 +20,8 @@ import {
 } from "./posSessionTracing";
 import { isPosUsableRegisterSessionStatus } from "../../../../shared/registerSessionStatus";
 
+type InventoryImportProvisionalSkuId = Id<"inventoryImportProvisionalSku">;
+
 type CommandFailureStatus =
   | "cashierMismatch"
   | "inventoryUnavailable"
@@ -31,6 +33,19 @@ type CommandFailureStatus =
 function normalizeRegisterNumber(value?: string): string | undefined {
   const normalized = value?.trim();
   return normalized && normalized.length > 0 ? normalized : undefined;
+}
+
+function sessionItemSourceKey(item: {
+  pendingCheckoutItemId?: Id<"posPendingCheckoutItem">;
+  inventoryImportProvisionalSkuId?: InventoryImportProvisionalSkuId;
+}) {
+  if (item.inventoryImportProvisionalSkuId) {
+    return `provisional_import:${item.inventoryImportProvisionalSkuId}`;
+  }
+  if (item.pendingCheckoutItemId) {
+    return `pending_checkout:${item.pendingCheckoutItemId}`;
+  }
+  return "trusted_inventory";
 }
 
 export type PosSessionCommandOutcome<TData> =
@@ -74,6 +89,7 @@ export interface UpsertSessionItemArgs {
   productId: Id<"product">;
   productSkuId: Id<"productSku">;
   pendingCheckoutItemId?: Id<"posPendingCheckoutItem">;
+  inventoryImportProvisionalSkuId?: InventoryImportProvisionalSkuId;
   staffProfileId: Id<"staffProfile">;
   productSku: string;
   barcode?: string;
@@ -179,6 +195,47 @@ async function validatePendingCheckoutLine(
   }
 
   return success({ isPendingCheckoutLine: true });
+}
+
+async function validateProvisionalImportLine(
+  dependencies: SessionCommandDependencies,
+  args: {
+    inventoryImportProvisionalSkuId?: InventoryImportProvisionalSkuId;
+    productId: Id<"product">;
+    productSkuId: Id<"productSku">;
+    storeId: Id<"store">;
+  },
+): Promise<
+  PosSessionCommandOutcome<{
+    inventoryImportProvisionalSkuId?: InventoryImportProvisionalSkuId;
+    isProvisionalImportLine: boolean;
+  }>
+> {
+  if (!args.inventoryImportProvisionalSkuId) {
+    return success({
+      isProvisionalImportLine: false,
+    });
+  }
+
+  const provisionalSku =
+    await dependencies.repository.getActiveProvisionalImportSkuForStoreSku({
+      storeId: args.storeId,
+      productId: args.productId,
+      productSkuId: args.productSkuId,
+      provisionalSkuId: args.inventoryImportProvisionalSkuId,
+    });
+
+  if (!provisionalSku) {
+    return failure(
+      "validationFailed",
+      "This provisional import item is no longer active for this sale line. Refresh the register catalog before continuing.",
+    );
+  }
+
+  return success({
+    inventoryImportProvisionalSkuId: provisionalSku._id,
+    isProvisionalImportLine: true,
+  });
 }
 
 export function createPosSessionCommandService(
@@ -545,20 +602,13 @@ export function createPosSessionCommandService(
         return drawerValidation;
       }
 
-      const existingItem = await dependencies.repository.findSessionItemBySku({
-        sessionId: args.sessionId,
-        productSkuId: args.productSkuId,
-      });
-      const previousQuantity = existingItem?.quantity;
-      if (
-        existingItem?.pendingCheckoutItemId &&
-        existingItem.pendingCheckoutItemId !== args.pendingCheckoutItemId
-      ) {
+      if (args.pendingCheckoutItemId && args.inventoryImportProvisionalSkuId) {
         return failure(
           "validationFailed",
-          "This pending checkout item no longer matches the sale line. Add it again before continuing.",
+          "This cart line has conflicting inventory sources. Remove the item and add it again before continuing.",
         );
       }
+
       const pendingValidation = await validatePendingCheckoutLine(
         dependencies,
         {
@@ -573,11 +623,61 @@ export function createPosSessionCommandService(
       }
       const isPendingCheckoutLine =
         pendingValidation.data.isPendingCheckoutLine;
+      const provisionalImportValidation = await validateProvisionalImportLine(
+        dependencies,
+        {
+          inventoryImportProvisionalSkuId:
+            args.inventoryImportProvisionalSkuId,
+          productId: args.productId,
+          productSkuId: args.productSkuId,
+          storeId: validation.data.storeId,
+        },
+      );
+      if (provisionalImportValidation.status !== "ok") {
+        return provisionalImportValidation;
+      }
+      const isProvisionalImportLine =
+        provisionalImportValidation.data.isProvisionalImportLine;
+      const nextLineSourceKey = sessionItemSourceKey({
+        inventoryImportProvisionalSkuId:
+          provisionalImportValidation.data.inventoryImportProvisionalSkuId,
+        pendingCheckoutItemId: args.pendingCheckoutItemId,
+      });
+      const sameSkuItems = (await dependencies.repository.listSessionItems(
+        args.sessionId,
+      )).filter((item) => item.productSkuId === args.productSkuId);
+      const existingItem = sameSkuItems.find(
+        (item) =>
+          sessionItemSourceKey(item) === nextLineSourceKey,
+      );
+      const conflictingSourceItem = sameSkuItems.find((item) => {
+        const existingSourceKey = sessionItemSourceKey(item);
+        if (existingSourceKey === nextLineSourceKey) return false;
+        return !(
+          existingSourceKey.startsWith("provisional_import:") &&
+          nextLineSourceKey.startsWith("provisional_import:")
+        );
+      });
+      if (conflictingSourceItem?.pendingCheckoutItemId) {
+        return failure(
+          "validationFailed",
+          "This pending checkout item no longer matches the sale line. Add it again before continuing.",
+        );
+      }
+      if (conflictingSourceItem) {
+        return failure(
+          "validationFailed",
+          "This cart line already uses a different inventory source. Remove the item and add it again before continuing.",
+        );
+      }
+      const previousQuantity = existingItem?.quantity;
 
       let itemId: Id<"posSessionItem">;
       const expiresAt = dependencies.calculateExpiration(now);
       if (existingItem) {
-        if (!isPendingCheckoutLine && !existingItem.pendingCheckoutItemId) {
+        const nextUsesTrustedHold =
+          !isPendingCheckoutLine && !isProvisionalImportLine;
+        if (nextUsesTrustedHold) {
           const adjustResult = await dependencies.inventory.adjustHold({
             storeId: validation.data.storeId,
             sessionId: args.sessionId,
@@ -613,11 +713,13 @@ export function createPosSessionCommandService(
           barcode: args.barcode,
           color: args.color,
           pendingCheckoutItemId: args.pendingCheckoutItemId,
+          inventoryImportProvisionalSkuId:
+            provisionalImportValidation.data.inventoryImportProvisionalSkuId,
           updatedAt: now,
         });
         itemId = existingItem._id;
       } else {
-        if (!isPendingCheckoutLine) {
+        if (!isPendingCheckoutLine && !isProvisionalImportLine) {
           const holdResult = await dependencies.inventory.acquireHold({
             storeId: validation.data.storeId,
             sessionId: args.sessionId,
@@ -649,6 +751,8 @@ export function createPosSessionCommandService(
           productId: args.productId,
           productSkuId: args.productSkuId,
           pendingCheckoutItemId: args.pendingCheckoutItemId,
+          inventoryImportProvisionalSkuId:
+            provisionalImportValidation.data.inventoryImportProvisionalSkuId,
           productSku: args.productSku,
           barcode: args.barcode,
           productName: args.productName,
@@ -724,27 +828,29 @@ export function createPosSessionCommandService(
         );
       }
 
-      const releaseResult = await dependencies.inventory.releaseHold({
-        sessionId: args.sessionId,
-        skuId: item.productSkuId,
-        quantity: item.quantity,
-        now,
-        activityContext: {
-          actorStaffProfileId: args.staffProfileId,
-          posSessionItemId: item._id,
-          registerSessionId: validation.data.registerSessionId,
-          terminalId: validation.data.terminalId,
-          workflowTraceId: validation.data.workflowTraceId,
-          metadata: {
-            productName: item.productName,
+      if (!item.pendingCheckoutItemId && !item.inventoryImportProvisionalSkuId) {
+        const releaseResult = await dependencies.inventory.releaseHold({
+          sessionId: args.sessionId,
+          skuId: item.productSkuId,
+          quantity: item.quantity,
+          now,
+          activityContext: {
+            actorStaffProfileId: args.staffProfileId,
+            posSessionItemId: item._id,
+            registerSessionId: validation.data.registerSessionId,
+            terminalId: validation.data.terminalId,
+            workflowTraceId: validation.data.workflowTraceId,
+            metadata: {
+              productName: item.productName,
+            },
           },
-        },
-      });
-      if (!releaseResult.success) {
-        return failure(
-          "inventoryUnavailable",
-          releaseResult.message || "Failed to release inventory hold",
-        );
+        });
+        if (!releaseResult.success) {
+          return failure(
+            "inventoryUnavailable",
+            releaseResult.message || "Failed to release inventory hold",
+          );
+        }
       }
 
       await dependencies.repository.deleteSessionItem(args.itemId);

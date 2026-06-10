@@ -1328,6 +1328,10 @@ async function persistSaleItemsAndInventory(
       quantitySold: number;
     }
   >();
+  const provisionalImportEvidenceById = new Map<
+    string,
+    { inventoryImportProvisionalSkuId: string; quantitySold: number }
+  >();
 
   for (const item of payload.items) {
     const productId = item.productId as Id<"product">;
@@ -1344,6 +1348,7 @@ async function persistSaleItemsAndInventory(
         pendingCheckoutItemId: item.pendingCheckoutItemId as
           | Id<"posPendingCheckoutItem">
           | undefined,
+        inventoryImportProvisionalSkuId: item.inventoryImportProvisionalSkuId,
         productSku: canonicalItem?.productSku ?? item.productSku,
         productName: canonicalItem?.productName ?? item.productName,
         barcode: canonicalItem?.barcode,
@@ -1361,6 +1366,7 @@ async function persistSaleItemsAndInventory(
       pendingCheckoutItemId: item.pendingCheckoutItemId as
         | Id<"posPendingCheckoutItem">
         | undefined,
+      inventoryImportProvisionalSkuId: item.inventoryImportProvisionalSkuId,
       productName: canonicalItem?.productName ?? item.productName,
       productSku: canonicalItem?.productSku ?? item.productSku,
       barcode: canonicalItem?.barcode,
@@ -1380,6 +1386,16 @@ async function persistSaleItemsAndInventory(
         lookupCode: existingEvidence?.lookupCode ?? canonicalItem?.barcode,
         pendingCheckoutItemId,
         price: existingEvidence?.price ?? item.unitPrice,
+        quantitySold: (existingEvidence?.quantitySold ?? 0) + item.quantity,
+      });
+    }
+
+    if (item.inventoryImportProvisionalSkuId) {
+      const existingEvidence = provisionalImportEvidenceById.get(
+        item.inventoryImportProvisionalSkuId,
+      );
+      provisionalImportEvidenceById.set(item.inventoryImportProvisionalSkuId, {
+        inventoryImportProvisionalSkuId: item.inventoryImportProvisionalSkuId,
         quantitySold: (existingEvidence?.quantitySold ?? 0) + item.quantity,
       });
     }
@@ -1410,6 +1426,16 @@ async function persistSaleItemsAndInventory(
       source: "offline_sync",
       storeId: args.storeId,
       terminalId: args.terminalId,
+      timestamp: args.event.occurredAt,
+    });
+  }
+
+  for (const evidence of provisionalImportEvidenceById.values()) {
+    await repository.recordInventoryImportProvisionalSkuSaleEvidence({
+      inventoryImportProvisionalSkuId: evidence.inventoryImportProvisionalSkuId,
+      posTransactionId: sale.transactionId,
+      quantitySold: evidence.quantitySold,
+      registerSessionId: sale.registerSessionId,
       timestamp: args.event.occurredAt,
     });
   }
@@ -2003,7 +2029,10 @@ function collectSaleSkuQuantities(payload: PosLocalSalePayload) {
 }
 
 function trustedInventorySaleItems(payload: PosLocalSalePayload) {
-  return payload.items.filter((item) => !item.pendingCheckoutItemId);
+  return payload.items.filter(
+    (item) =>
+      !item.pendingCheckoutItemId && !item.inventoryImportProvisionalSkuId,
+  );
 }
 
 async function validateSaleCustomerReference(
@@ -2074,7 +2103,55 @@ async function validateSaleCatalogReferences(
     }
   >();
   const serviceLinesByLocalId = new Map<string, CanonicalServiceLine>();
+  const provisionalImportSkusByLocalId = new Map<
+    string,
+    NonNullable<
+      Awaited<ReturnType<SyncProjectionRepository["getInventoryImportProvisionalSku"]>>
+    >
+  >();
   let priceConflict: LocalSyncConflictRecord | null = null;
+  const dualSourceItem = payload.items.find(
+    (item) => item.pendingCheckoutItemId && item.inventoryImportProvisionalSkuId,
+  );
+  if (dualSourceItem) {
+    return {
+      conflict: await createConflict(repository, args, {
+        conflictType: "inventory",
+        summary:
+          "Synced sale line has conflicting pending checkout and provisional import sources.",
+        details: {
+          localTransactionId: payload.localTransactionId,
+          localTransactionItemId: dualSourceItem.localTransactionItemId,
+          pendingCheckoutItemId: dualSourceItem.pendingCheckoutItemId,
+          inventoryImportProvisionalSkuId:
+            dualSourceItem.inventoryImportProvisionalSkuId,
+          productSkuId: dualSourceItem.productSkuId,
+          blocksProjection: true,
+        },
+      }),
+      itemsByLocalId,
+      serviceLinesByLocalId,
+    };
+  }
+
+  const mixedInventorySourceSkuId = findMixedTrustedAndProvisionalSkuId(payload);
+  if (mixedInventorySourceSkuId) {
+    return {
+      conflict: await createConflict(repository, args, {
+        conflictType: "inventory",
+        summary:
+          "Synced sale mixes provisional import and trusted inventory lines for the same SKU.",
+        details: {
+          localTransactionId: payload.localTransactionId,
+          productSkuId: mixedInventorySourceSkuId,
+          blocksProjection: true,
+        },
+      }),
+      itemsByLocalId,
+      serviceLinesByLocalId,
+    };
+  }
+
   for (const item of payload.items) {
     if (item.pendingCheckoutItemId) {
       const cloudPendingId =
@@ -2157,6 +2234,43 @@ async function validateSaleCatalogReferences(
       }
     }
 
+    if (item.inventoryImportProvisionalSkuId) {
+      const provisionalImportSku =
+        await repository.getInventoryImportProvisionalSku(
+          item.inventoryImportProvisionalSkuId,
+        );
+      if (
+        !provisionalImportSku ||
+        provisionalImportSku.storeId !== args.storeId ||
+        provisionalImportSku.status !== "active" ||
+        provisionalImportSku.posExposureStatus !== "available" ||
+        provisionalImportSku.productId !== item.productId ||
+        provisionalImportSku.productSkuId !== item.productSkuId
+      ) {
+        return {
+          conflict: await createConflict(repository, args, {
+            conflictType: "inventory",
+            summary:
+              "Provisional import row changed before this offline sale synced.",
+            details: {
+              localTransactionId: payload.localTransactionId,
+              inventoryImportProvisionalSkuId:
+                item.inventoryImportProvisionalSkuId,
+              productId: item.productId,
+              productSkuId: item.productSkuId,
+              blocksProjection: true,
+            },
+          }),
+          itemsByLocalId,
+          serviceLinesByLocalId,
+        };
+      }
+      provisionalImportSkusByLocalId.set(
+        item.localTransactionItemId ?? item.productSkuId,
+        provisionalImportSku,
+      );
+    }
+
     const [product, sku] = await Promise.all([
       repository.getProduct(item.productId as Id<"product">),
       repository.getProductSku(item.productSkuId as Id<"productSku">),
@@ -2189,10 +2303,12 @@ async function validateSaleCatalogReferences(
         serviceLinesByLocalId,
       };
     }
-    if (
-      roundMoney(item.unitPrice) !==
-      roundMoney(typeof sku.netPrice === "number" ? sku.netPrice : sku.price)
-    ) {
+    const expectedUnitPrice =
+      provisionalImportSkusByLocalId.get(
+        item.localTransactionItemId ?? item.productSkuId,
+      )?.importedPrice ??
+      (typeof sku.netPrice === "number" ? sku.netPrice : sku.price);
+    if (roundMoney(item.unitPrice) !== roundMoney(expectedUnitPrice)) {
       priceConflict ??= await createConflict(repository, args, {
         conflictType: "inventory",
         summary: "Product price changed before this offline sale synced.",
@@ -2201,8 +2317,7 @@ async function validateSaleCatalogReferences(
           productId: item.productId,
           productSkuId: item.productSkuId,
           submittedUnitPrice: item.unitPrice,
-          catalogUnitPrice:
-            typeof sku.netPrice === "number" ? sku.netPrice : sku.price,
+          catalogUnitPrice: expectedUnitPrice,
           blocksProjection: false,
         },
       });
@@ -2344,6 +2459,35 @@ async function validateSaleCatalogReferences(
   }
 
   return { conflict: priceConflict, itemsByLocalId, serviceLinesByLocalId };
+}
+
+function findMixedTrustedAndProvisionalSkuId(payload: PosLocalSalePayload) {
+  const sourcesBySkuId = new Map<
+    Id<"productSku">,
+    { hasProvisionalImport: boolean; hasTrustedInventory: boolean }
+  >();
+
+  for (const item of payload.items) {
+    const productSkuId = item.productSkuId as Id<"productSku">;
+    const source = sourcesBySkuId.get(productSkuId) ?? {
+      hasProvisionalImport: false,
+      hasTrustedInventory: false,
+    };
+    if (item.inventoryImportProvisionalSkuId) {
+      source.hasProvisionalImport = true;
+    } else if (!item.pendingCheckoutItemId) {
+      source.hasTrustedInventory = true;
+    }
+    sourcesBySkuId.set(productSkuId, source);
+  }
+
+  for (const [productSkuId, source] of sourcesBySkuId) {
+    if (source.hasProvisionalImport && source.hasTrustedInventory) {
+      return productSkuId;
+    }
+  }
+
+  return null;
 }
 
 async function validateSaleLocalIds(

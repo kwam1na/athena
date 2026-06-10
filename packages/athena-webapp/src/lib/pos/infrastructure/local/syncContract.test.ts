@@ -472,6 +472,52 @@ describe("syncContract", () => {
     ]);
   });
 
+  it("preserves provisional import row references in sale uploads", () => {
+    const events: PosLocalEventRecord[] = [
+      buildLocalEvent({
+        localEventId: "event-sale",
+        sequence: 1,
+        type: "transaction.completed",
+        payload: {
+          localPosSessionId: "local-session-1",
+          localTransactionId: "local-txn-1",
+          receiptNumber: "LOCAL-1-000001",
+          subtotal: 25,
+          tax: 0,
+          total: 25,
+          items: [
+            {
+              localItemId: "local-item-1",
+              productId: "product-1",
+              productSkuId: "sku-1",
+              inventoryImportProvisionalSkuId: "provisional-import-sku-1",
+              productName: "Imported Wig Cap",
+              productSku: "IMP-CAP-1",
+              quantity: 1,
+              price: 25,
+            },
+          ],
+          payments: [{ method: "cash", amount: 25, timestamp: 3 }],
+        },
+      }),
+    ];
+
+    expect(buildPosLocalSyncUploadEvents(events, events)).toEqual([
+      expect.objectContaining({
+        payload: expect.objectContaining({
+          items: [
+            expect.objectContaining({
+              localTransactionItemId: "local-item-1",
+              inventoryImportProvisionalSkuId: "provisional-import-sku-1",
+              productSkuId: "sku-1",
+              quantity: 1,
+            }),
+          ],
+        }),
+      }),
+    ]);
+  });
+
   it("embeds completed service lines in the sale upload event", () => {
     const events: PosLocalEventRecord[] = [
       buildLocalEvent({

@@ -220,6 +220,7 @@ import type * as schemas_inventory_complimentaryProduct from "../schemas/invento
 import type * as schemas_inventory_featuredItem from "../schemas/inventory/featuredItem.js";
 import type * as schemas_inventory_index from "../schemas/inventory/index.js";
 import type * as schemas_inventory_inventoryHold from "../schemas/inventory/inventoryHold.js";
+import type * as schemas_inventory_inventoryImportProvisionalSku from "../schemas/inventory/inventoryImportProvisionalSku.js";
 import type * as schemas_inventory_inventoryImportReviewVersion from "../schemas/inventory/inventoryImportReviewVersion.js";
 import type * as schemas_inventory_inviteCode from "../schemas/inventory/inviteCode.js";
 import type * as schemas_inventory_organization from "../schemas/inventory/organization.js";
@@ -574,6 +575,7 @@ declare const fullApi: ApiFromModules<{
   "schemas/inventory/featuredItem": typeof schemas_inventory_featuredItem;
   "schemas/inventory/index": typeof schemas_inventory_index;
   "schemas/inventory/inventoryHold": typeof schemas_inventory_inventoryHold;
+  "schemas/inventory/inventoryImportProvisionalSku": typeof schemas_inventory_inventoryImportProvisionalSku;
   "schemas/inventory/inventoryImportReviewVersion": typeof schemas_inventory_inventoryImportReviewVersion;
   "schemas/inventory/inviteCode": typeof schemas_inventory_inviteCode;
   "schemas/inventory/organization": typeof schemas_inventory_organization;

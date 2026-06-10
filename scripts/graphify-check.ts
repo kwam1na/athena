@@ -23,6 +23,7 @@ const SKIP_DIRS = new Set([
   "worktrees",
   "graphify-out",
   "__pycache__",
+  "artifacts",
   "coverage",
   "dist",
   "storybook-static",

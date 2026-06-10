@@ -1379,6 +1379,51 @@ describe("createLocalSyncIngestionService", () => {
     expect(repository.createdTransactions).toHaveLength(1);
   });
 
+  it("rejects malformed provisional import row ids before projection side effects", async () => {
+    const repository = createFakeSyncRepository();
+    const service = createLocalSyncIngestionService({
+      repository,
+      projectionRepository: repository,
+      now: () => 100,
+    });
+
+    const result = await service.ingestBatch(
+      buildBatch({
+        events: [
+          buildSaleCompletedEvent({ sequence: 1 }),
+          buildSaleCompletedEvent({
+            sequence: 2,
+            payload: {
+              ...buildSaleCompletedEvent({ sequence: 2 }).payload,
+              items: [
+                {
+                  localTransactionItemId: "local-txn-item-1",
+                  productId: "product-1" as never,
+                  productSkuId: "sku-1" as never,
+                  inventoryImportProvisionalSkuId: "",
+                  productName: "Wig Cap",
+                  productSku: "CAP-1",
+                  quantity: 1,
+                  unitPrice: 25,
+                },
+              ],
+            },
+          }),
+        ],
+      }),
+    );
+
+    expect(result.kind).toBe("ok");
+    if (result.kind !== "ok") throw new Error("Expected ok result");
+    expect(result.data.accepted.at(-1)).toEqual(
+      expect.objectContaining({
+        localEventId: "event-sale-completed-2",
+        status: "rejected",
+      }),
+    );
+    expect(repository.createdTransactions).toHaveLength(1);
+  });
+
   it("consumes a rejected expected sequence so later history can sync", async () => {
     const repository = createFakeSyncRepository();
     const service = createLocalSyncIngestionService({
@@ -3316,7 +3361,7 @@ function createFakeSyncRepository(
           } as never)
         : null;
     },
-    async getPendingCheckoutItem(pendingCheckoutItemId) {
+	    async getPendingCheckoutItem(pendingCheckoutItemId) {
       const created = createdPendingCheckoutItems.find(
         (item): item is { _id: string } & Record<string, unknown> =>
           typeof item === "object" &&
@@ -3333,7 +3378,7 @@ function createFakeSyncRepository(
           provisionalProductSkuId: "sku-1",
         } as never;
       }
-      return pendingCheckoutItemId === "pending-checkout-item-1"
+	      return pendingCheckoutItemId === "pending-checkout-item-1"
         ? ({
             _id: "pending-checkout-item-1",
             storeId: "store-1",
@@ -3341,9 +3386,15 @@ function createFakeSyncRepository(
             provisionalProductId: "product-1",
             provisionalProductSkuId: "sku-1",
           } as never)
-        : null;
+	        : null;
+	    },
+    async getInventoryImportProvisionalSku() {
+      return null;
     },
-    async getServiceCatalog(serviceCatalogId) {
+    async recordInventoryImportProvisionalSkuSaleEvidence() {
+      // No-op for ingestion tests that do not seed provisional import rows.
+    },
+	    async getServiceCatalog(serviceCatalogId) {
       return serviceCatalogId === "service-catalog-1"
         ? ({
             _id: "service-catalog-1",

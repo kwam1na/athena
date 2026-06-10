@@ -646,6 +646,7 @@ function validateLocalSyncEventReferences(
 
     if (
       !isNonEmptyString(item.pendingCheckoutItemId) &&
+      !isNonEmptyString(item.inventoryImportProvisionalSkuId) &&
       isNonEmptyString(item.productId) &&
       !repository.normalizeCloudId("product", item.productId)
     ) {
@@ -654,6 +655,7 @@ function validateLocalSyncEventReferences(
 
     if (
       !isNonEmptyString(item.pendingCheckoutItemId) &&
+      !isNonEmptyString(item.inventoryImportProvisionalSkuId) &&
       isNonEmptyString(item.productSkuId) &&
       !repository.normalizeCloudId("productSku", item.productSkuId)
     ) {
@@ -665,6 +667,13 @@ function validateLocalSyncEventReferences(
       !isOptionalNonEmptyString(item.pendingCheckoutItemId)
     ) {
       return "POS sale pending checkout item reference is invalid.";
+    }
+
+    if (
+      "inventoryImportProvisionalSkuId" in item &&
+      !isOptionalNonEmptyString(item.inventoryImportProvisionalSkuId)
+    ) {
+      return "POS sale provisional import row reference is invalid.";
     }
   }
 
@@ -993,17 +1002,20 @@ function parseSaleCompletedPayload(
     },
     items: (payload.items as Record<string, unknown>[]).map((item) => {
       const pendingCheckoutItemId = optionalString(item.pendingCheckoutItemId);
+      const inventoryImportProvisionalSkuId = optionalString(
+        item.inventoryImportProvisionalSkuId,
+      );
 
       return {
         localTransactionItemId: optionalString(item.localTransactionItemId),
-        productId: pendingCheckoutItemId
+        productId: pendingCheckoutItemId || inventoryImportProvisionalSkuId
           ? (item.productId as string)
           : requireNormalizedCloudId(
               repository,
               "product",
               item.productId as string,
             ),
-        productSkuId: pendingCheckoutItemId
+        productSkuId: pendingCheckoutItemId || inventoryImportProvisionalSkuId
           ? (item.productSkuId as string)
           : requireNormalizedCloudId(
               repository,
@@ -1013,6 +1025,7 @@ function parseSaleCompletedPayload(
         pendingCheckoutItemId: pendingCheckoutItemId as
           | Id<"posPendingCheckoutItem">
           | undefined,
+        inventoryImportProvisionalSkuId,
         productName: item.productName as string,
         productSku: optionalDisplayString(item.productSku),
         barcode: optionalString(item.barcode),

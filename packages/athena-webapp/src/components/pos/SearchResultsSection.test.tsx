@@ -202,6 +202,35 @@ describe("SearchResultsSection", () => {
     expect(onClearSearch).toHaveBeenCalled();
   });
 
+  it("allows provisional import results to be added while trusted counts are pending", async () => {
+    const user = userEvent.setup();
+    const product = buildProduct({
+      availabilityMessage: "Count pending",
+      availabilityPolicy: "active_provisional_import",
+      id: "sku-provisional",
+      inventoryImportProvisionalSkuId:
+        "provisional-1" as Product["inventoryImportProvisionalSkuId"],
+      name: "Imported wig",
+      quantityAvailable: 0,
+    });
+    const onAddProduct = vi.fn(async () => true);
+
+    renderSearchResults({
+      products: [product],
+      onAddProduct,
+    });
+
+    expect(screen.getByText("Count pending")).toBeInTheDocument();
+    const quantityInput = screen.getByRole("spinbutton", {
+      name: /quantity for imported wig/i,
+    });
+    await user.clear(quantityInput);
+    await user.type(quantityInput, "3");
+    await user.click(screen.getByRole("button", { name: /add 3/i }));
+
+    expect(onAddProduct).toHaveBeenCalledWith(product, 3);
+  });
+
   it("clamps result quantity entry to available stock", async () => {
     const user = userEvent.setup();
     const product = buildProduct({

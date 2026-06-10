@@ -39,6 +39,7 @@ export type PosLocalSaleItemInput = {
   productId: Id<"product"> | string;
   productSkuId: Id<"productSku"> | string;
   pendingCheckoutItemId?: Id<"posPendingCheckoutItem"> | string;
+  inventoryImportProvisionalSkuId?: string;
   productName: string;
   productSku: string;
   barcode?: string;
@@ -264,6 +265,18 @@ export type SyncProjectionRepository = {
   getPendingCheckoutItem(
     pendingCheckoutItemId: Id<"posPendingCheckoutItem">,
   ): Promise<Doc<"posPendingCheckoutItem"> | null>;
+  getInventoryImportProvisionalSku(
+    inventoryImportProvisionalSkuId: string,
+  ): Promise<{
+    _id: string;
+    storeId: Id<"store">;
+    status: "active" | "finalized" | "rejected" | "closed";
+    posExposureStatus?: "available" | "hidden";
+    productId: Id<"product">;
+    productSkuId: Id<"productSku">;
+    importedBarcode?: string;
+    importedPrice: number;
+  } | null>;
   getServiceCatalog(
     serviceCatalogId: Id<"serviceCatalog">,
   ): Promise<Doc<"serviceCatalog"> | null>;
@@ -372,6 +385,7 @@ export type SyncProjectionRepository = {
     productId: Id<"product">;
     productSkuId: Id<"productSku">;
     pendingCheckoutItemId?: Id<"posPendingCheckoutItem">;
+    inventoryImportProvisionalSkuId?: string;
     productSku: string;
     productName: string;
     barcode?: string;
@@ -440,6 +454,7 @@ export type SyncProjectionRepository = {
     productId: Id<"product">;
     productSkuId: Id<"productSku">;
     pendingCheckoutItemId?: Id<"posPendingCheckoutItem">;
+    inventoryImportProvisionalSkuId?: string;
     productName: string;
     productSku: string;
     barcode?: string;
@@ -463,6 +478,13 @@ export type SyncProjectionRepository = {
     source: "offline_sync";
     timestamp: number;
   }): Promise<Doc<"posPendingCheckoutItem"> | null>;
+  recordInventoryImportProvisionalSkuSaleEvidence(input: {
+    inventoryImportProvisionalSkuId: string;
+    quantitySold: number;
+    posTransactionId: Id<"posTransaction">;
+    registerSessionId?: Id<"registerSession">;
+    timestamp: number;
+  }): Promise<void>;
   createOrReusePendingCheckoutItem(input: {
     storeId: Id<"store">;
     createdByUserId?: Id<"athenaUser">;

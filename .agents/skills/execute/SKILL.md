@@ -72,7 +72,7 @@ Use this resolution order before asking the user for context:
 - Prefer the repo's PR-equivalent validation command when one exists; do not assume local `pre-push` hooks cover the full remote CI surface.
 - Default execution posture is `test-first` for new behavior and bug fixes, `characterization-first` for unclear legacy behavior, and `sensor-only` only for pure docs, generated artifacts, configuration, or mechanical changes with no behavior.
 - `auto_review_and_merge = on` unless the user opts out.
-- Merge target `main`; merge method `squash`; review loop cap `3`.
+- Merge target `main`; merge method `squash`; review loops run relevant reviewer subagents until unanimous approval with no numeric cap.
 - Merge is the default delivery posture. Do not stop at an open PR when auto-review and merge are on.
 - After merge, fast-forward the local root checkout to `origin/main`; do not leave the repo on a stale local `main`.
 - In Athena, merge or arm auto-merge with `bun run github:pr-merge -- <pr-number-or-url> --method squash --delete-branch` or `bun run github:pr-merge -- <pr-number-or-url> --auto --method squash` instead of raw `gh pr merge`. The helper uses GitHub APIs directly, so it does not try to check out or update local `main` and is safe when `main` is already checked out in the root worktree.
@@ -197,7 +197,7 @@ After opening the PR:
   - if both are true, do both
 - The follow-up issue should capture the failing remote check, the local validations that passed, the root cause, and the local command, harness mapping, or coverage addition needed so the failure is caught before CI next time.
 - Link that follow-up issue from the current Linear ticket and the PR comment trail when it materially affects the handoff.
-- Iterate up to `3` times by default, but continue autonomously if the next fix is still clear.
+- Keep looping relevant reviewer subagents until unanimous approval: every selected reviewer must report approval/no blocking findings, GitHub feedback must have no unresolved actionable blockers, and checks must be passing or auto-mergeable. There is no numeric iteration cap; stop only when the next fix is not clear, permissions/repo settings block progress, or genuine user input is required.
 - When local gates and review gates pass, mark the PR ready if needed and arm auto-merge with `bun run github:pr-merge -- <pr-number-or-url> --auto --method squash` unless the user explicitly asked you to wait through merge completion or repo settings reject auto-merge.
 - If auto-merge cannot be armed and all PR checks are already green, squash-merge into `main` with `bun run github:pr-merge -- <pr-number-or-url> --method squash --delete-branch`.
 - Treat the merge as incomplete until the remote merge is confirmed and the local root checkout fast-forwards to the merged `origin/main`.

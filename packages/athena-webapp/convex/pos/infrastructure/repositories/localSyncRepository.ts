@@ -90,6 +90,39 @@ export function createConvexLocalSyncRepository(
     getPendingCheckoutItem(pendingCheckoutItemId) {
       return ctx.db.get("posPendingCheckoutItem", pendingCheckoutItemId);
     },
+    async getInventoryImportProvisionalSku(inventoryImportProvisionalSkuId) {
+      const normalizeId = (
+        ctx.db as unknown as {
+          normalizeId?: (tableName: string, value: string) => unknown;
+        }
+      ).normalizeId;
+      const normalized =
+        typeof normalizeId === "function"
+          ? normalizeId.call(
+              ctx.db,
+              "inventoryImportProvisionalSku",
+              inventoryImportProvisionalSkuId,
+            )
+          : null;
+      if (typeof normalized !== "string") return null;
+
+      const db = ctx.db as unknown as {
+        get(
+          tableName: string,
+          id: string,
+        ): Promise<{
+          _id: string;
+          storeId: Id<"store">;
+          status: "active" | "finalized" | "rejected" | "closed";
+          posExposureStatus?: "available" | "hidden";
+          productId: Id<"product">;
+          productSkuId: Id<"productSku">;
+          importedBarcode?: string;
+          importedPrice: number;
+        } | null>;
+      };
+      return db.get("inventoryImportProvisionalSku", normalized);
+    },
     getServiceCatalog(serviceCatalogId) {
       return ctx.db.get("serviceCatalog", serviceCatalogId);
     },
@@ -444,13 +477,55 @@ export function createConvexLocalSyncRepository(
       await ctx.db.patch("posSession", posSessionId, patch);
     },
     async createPosSessionItem(input) {
-      return ctx.db.insert("posSessionItem", input);
+      return ctx.db.insert("posSessionItem", input as never);
     },
     async createOrReusePendingCheckoutItem(input) {
       return createOrReusePendingCheckoutItem(ctx, input);
     },
     async recordPendingCheckoutItemSaleEvidence(input) {
       return recordPendingCheckoutItemSaleEvidence(ctx, input);
+    },
+    async recordInventoryImportProvisionalSkuSaleEvidence(input) {
+      const db = ctx.db as unknown as {
+        get(tableName: string, id: string): Promise<{
+          saleEvidence?: {
+            saleCount?: number;
+            totalQuantitySold?: number;
+            lastSoldAt?: number;
+            lastPosTransactionId?: Id<"posTransaction">;
+            lastRegisterSessionId?: Id<"registerSession">;
+          };
+        } | null>;
+        patch(
+          tableName: string,
+          id: string,
+          patch: Record<string, unknown>,
+        ): Promise<void>;
+      };
+      const provisionalSku = await db.get(
+        "inventoryImportProvisionalSku",
+        input.inventoryImportProvisionalSkuId,
+      );
+      if (!provisionalSku) return;
+
+      const previousEvidence = provisionalSku.saleEvidence ?? {};
+      await db.patch(
+        "inventoryImportProvisionalSku",
+        input.inventoryImportProvisionalSkuId,
+        {
+          saleEvidence: {
+            saleCount: (previousEvidence.saleCount ?? 0) + 1,
+            totalQuantitySold:
+              (previousEvidence.totalQuantitySold ?? 0) + input.quantitySold,
+            lastSoldAt: input.timestamp,
+            lastPosTransactionId: input.posTransactionId,
+            ...(input.registerSessionId
+              ? { lastRegisterSessionId: input.registerSessionId }
+              : {}),
+          },
+          updatedAt: input.timestamp,
+        },
+      );
     },
     async createServiceWorkItem(input) {
       return ctx.db.insert(
@@ -535,7 +610,7 @@ export function createConvexLocalSyncRepository(
       });
     },
     async createTransactionItem(input) {
-      return ctx.db.insert("posTransactionItem", input);
+      return ctx.db.insert("posTransactionItem", input as never);
     },
     async createTransactionServiceLine(input) {
       return ctx.db.insert("posTransactionServiceLine", input);

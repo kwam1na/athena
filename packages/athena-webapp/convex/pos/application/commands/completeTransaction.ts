@@ -57,6 +57,9 @@ import {
   recordPendingCheckoutItemEvidenceCorrection,
   recordPendingCheckoutItemSaleEvidence,
 } from "./createOrReusePendingCheckoutItem";
+import { readActiveProvisionalImportSkuForStoreSku } from "../queries/listRegisterCatalog";
+
+type InventoryImportProvisionalSkuId = Id<"inventoryImportProvisionalSku">;
 
 type PosPaymentInput = {
   method: string;
@@ -66,12 +69,26 @@ type PosPaymentInput = {
 
 type DirectTransactionItemInput = {
   skuId: Id<"productSku">;
+  inventoryImportProvisionalSkuId?: InventoryImportProvisionalSkuId;
   quantity: number;
   price: number;
   name: string;
   barcode?: string;
   sku: string;
   image?: string;
+};
+
+type ActiveProvisionalImportSaleLine = {
+  _id: InventoryImportProvisionalSkuId;
+  productId: Id<"product">;
+  productSkuId: Id<"productSku">;
+  saleEvidence?: {
+    saleCount?: number;
+    totalQuantitySold?: number;
+    lastSoldAt?: number;
+    lastPosTransactionId?: Id<"posTransaction">;
+    lastRegisterSessionId?: Id<"registerSession">;
+  };
 };
 
 type TransactionTotals = {
@@ -333,6 +350,50 @@ async function recordPosSaleInventoryMovement(
     posTransactionId: args.posTransactionId,
     reasonCode: "pos_sale",
     notes: `POS sale ${args.transactionNumber}`,
+  });
+}
+
+async function recordProvisionalImportSkuSaleEvidence(
+  ctx: MutationCtx,
+  args: {
+    provisionalSku: ActiveProvisionalImportSaleLine;
+    posTransactionId: Id<"posTransaction">;
+    registerSessionId?: Id<"registerSession">;
+    quantitySold: number;
+    timestamp: number;
+  },
+) {
+  const db = ctx.db as unknown as {
+    patch(
+      table: "inventoryImportProvisionalSku",
+      id: InventoryImportProvisionalSkuId,
+      patch: {
+        saleEvidence: {
+          saleCount: number;
+          totalQuantitySold: number;
+          lastSoldAt: number;
+          lastPosTransactionId: Id<"posTransaction">;
+          lastRegisterSessionId?: Id<"registerSession">;
+        };
+        updatedAt: number;
+      },
+    ): Promise<void>;
+  };
+  const previousEvidence = args.provisionalSku.saleEvidence ?? {};
+  const saleEvidence = {
+    saleCount: (previousEvidence.saleCount ?? 0) + 1,
+    totalQuantitySold:
+      (previousEvidence.totalQuantitySold ?? 0) + args.quantitySold,
+    lastSoldAt: args.timestamp,
+    lastPosTransactionId: args.posTransactionId,
+    ...(args.registerSessionId
+      ? { lastRegisterSessionId: args.registerSessionId }
+      : {}),
+  };
+
+  await db.patch("inventoryImportProvisionalSku", args.provisionalSku._id, {
+    saleEvidence,
+    updatedAt: args.timestamp,
   });
 }
 
@@ -602,6 +663,10 @@ export async function completeTransaction(
     Id<"productSku">,
     NonNullable<Awaited<ReturnType<typeof getProductSkuById>>>
   >();
+  const provisionalImportLinesById = new Map<
+    InventoryImportProvisionalSkuId,
+    ActiveProvisionalImportSaleLine
+  >();
 
   for (const item of args.items) {
     skuQuantityMap.set(
@@ -619,6 +684,54 @@ export async function completeTransaction(
       });
     }
     skusById.set(skuId, sku);
+
+    const itemsForSku = args.items.filter((item) => item.skuId === skuId);
+    const hasProvisionalImportLine = itemsForSku.some(
+      (item) => item.inventoryImportProvisionalSkuId,
+    );
+    const hasTrustedInventoryLine = itemsForSku.some(
+      (item) => !item.inventoryImportProvisionalSkuId,
+    );
+    if (hasProvisionalImportLine && hasTrustedInventoryLine) {
+      return userError({
+        code: "validation_failed",
+        message:
+          "This sale mixes provisional import and trusted inventory lines for the same SKU. Remove the item and add it again before continuing.",
+      });
+    }
+
+    const submittedProvisionalSkuIds = Array.from(
+      new Set(
+        itemsForSku
+          .map((item) => item.inventoryImportProvisionalSkuId)
+          .filter(Boolean),
+      ),
+    ) as InventoryImportProvisionalSkuId[];
+    if (submittedProvisionalSkuIds.length > 0) {
+      for (const provisionalSkuId of submittedProvisionalSkuIds) {
+        const provisionalSku = await readActiveProvisionalImportSkuForStoreSku(
+          ctx,
+          {
+            storeId: args.storeId,
+            productId: sku.productId,
+            productSkuId: skuId,
+            provisionalSkuId,
+          },
+        );
+
+        if (!provisionalSku) {
+          return userError({
+            code: "precondition_failed",
+            message:
+              "This provisional import item is no longer active for this sale line. Refresh the register catalog before continuing.",
+          });
+        }
+
+        provisionalImportLinesById.set(provisionalSku._id, provisionalSku);
+      }
+
+      continue;
+    }
 
     if (sku.quantityAvailable < totalQuantity) {
       const itemName =
@@ -757,6 +870,25 @@ export async function completeTransaction(
     throw new Error(completionResult.message);
   }
 
+  const provisionalQuantitiesSold = new Map<
+    InventoryImportProvisionalSkuId,
+    {
+      provisionalSku: ActiveProvisionalImportSaleLine;
+      quantitySold: number;
+    }
+  >();
+  for (const item of args.items) {
+    const provisionalSku = item.inventoryImportProvisionalSkuId
+      ? provisionalImportLinesById.get(item.inventoryImportProvisionalSkuId)
+      : undefined;
+    if (!provisionalSku) continue;
+    const existing = provisionalQuantitiesSold.get(provisionalSku._id);
+    provisionalQuantitiesSold.set(provisionalSku._id, {
+      provisionalSku,
+      quantitySold: (existing?.quantitySold ?? 0) + item.quantity,
+    });
+  }
+
   const transactionItems = await Promise.all(
     args.items.map(async (item) => {
       const sku = await getProductSkuById(ctx, item.skuId);
@@ -767,10 +899,16 @@ export async function completeTransaction(
       }
 
       const image = item.image ?? sku.images?.[0];
+      const provisionalSku = item.inventoryImportProvisionalSkuId
+        ? provisionalImportLinesById.get(item.inventoryImportProvisionalSkuId)
+        : undefined;
       const transactionItemId = await createPosTransactionItem(ctx, {
         transactionId,
         productId: sku.productId,
         productSkuId: item.skuId,
+        ...(provisionalSku
+          ? { inventoryImportProvisionalSkuId: provisionalSku._id }
+          : {}),
         productName: item.name,
         productSku: item.sku,
         barcode: item.barcode,
@@ -780,26 +918,37 @@ export async function completeTransaction(
         totalPrice: item.price * item.quantity,
       });
 
-      await patchProductSku(ctx, item.skuId, {
-        quantityAvailable: sku.quantityAvailable - item.quantity,
-        inventoryCount: Math.max(0, sku.inventoryCount - item.quantity),
-      });
-      await recordPosSaleInventoryMovement(ctx, {
-        storeId: args.storeId,
-        organizationId: store?.organizationId,
-        productId: sku.productId,
-        productSkuId: item.skuId,
-        quantity: item.quantity,
-        posTransactionId: transactionId,
-        registerSessionId: args.registerSessionId,
-        staffProfileId: args.staffProfileId,
-        customerProfileId: args.customerProfileId,
-        transactionNumber,
-      });
+      if (!provisionalSku) {
+        await patchProductSku(ctx, item.skuId, {
+          quantityAvailable: sku.quantityAvailable - item.quantity,
+          inventoryCount: Math.max(0, sku.inventoryCount - item.quantity),
+        });
+        await recordPosSaleInventoryMovement(ctx, {
+          storeId: args.storeId,
+          organizationId: store?.organizationId,
+          productId: sku.productId,
+          productSkuId: item.skuId,
+          quantity: item.quantity,
+          posTransactionId: transactionId,
+          registerSessionId: args.registerSessionId,
+          staffProfileId: args.staffProfileId,
+          customerProfileId: args.customerProfileId,
+          transactionNumber,
+        });
+      }
 
       return transactionItemId;
     }),
   );
+  for (const evidence of provisionalQuantitiesSold.values()) {
+    await recordProvisionalImportSkuSaleEvidence(ctx, {
+      provisionalSku: evidence.provisionalSku,
+      posTransactionId: transactionId,
+      registerSessionId: args.registerSessionId,
+      quantitySold: evidence.quantitySold,
+      timestamp: completedAt,
+    });
+  }
 
   await recordCompletedSaleOperationalEvent(ctx, {
     completedAt,
@@ -1280,7 +1429,7 @@ async function applyApprovedTransactionVoid(
   >();
 
   for (const { item, sku } of args.items) {
-    if (item.pendingCheckoutItemId) {
+    if (item.pendingCheckoutItemId || item.inventoryImportProvisionalSkuId) {
       continue;
     }
 
@@ -1679,6 +1828,11 @@ export async function createTransactionFromSessionHandler(
   }
 
   const skuQuantityMap = new Map<Id<"productSku">, number>();
+  const provisionalImportLinesById = new Map<
+    InventoryImportProvisionalSkuId,
+    ActiveProvisionalImportSaleLine
+  >();
+  const provisionalImportSkuIdsBySkuId = new Set<Id<"productSku">>();
   for (const item of items) {
     if (item.pendingCheckoutItemId) {
       const pendingItem = await ctx.db.get(
@@ -1702,10 +1856,42 @@ export async function createTransactionFromSessionHandler(
       continue;
     }
 
+    if (item.inventoryImportProvisionalSkuId) {
+      const provisionalSku = await readActiveProvisionalImportSkuForStoreSku(ctx, {
+        storeId: session.storeId,
+        productId: item.productId,
+        productSkuId: item.productSkuId,
+        provisionalSkuId: item.inventoryImportProvisionalSkuId,
+      });
+      if (provisionalSku) {
+        provisionalImportLinesById.set(
+          item.inventoryImportProvisionalSkuId,
+          provisionalSku,
+        );
+        provisionalImportSkuIdsBySkuId.add(item.productSkuId);
+        continue;
+      }
+      return userError({
+        code: "conflict",
+        message:
+          "This provisional import item is no longer active for this sale line. Refresh the register catalog before completing the sale.",
+      });
+    }
+
     skuQuantityMap.set(
       item.productSkuId,
       (skuQuantityMap.get(item.productSkuId) || 0) + item.quantity,
     );
+  }
+
+  for (const skuId of skuQuantityMap.keys()) {
+    if (provisionalImportSkuIdsBySkuId.has(skuId)) {
+      return userError({
+        code: "validation_failed",
+        message:
+          "This sale mixes provisional import and trusted inventory lines for the same SKU. Remove the item and add it again before continuing.",
+      });
+    }
   }
 
   for (const [skuId, totalQuantity] of skuQuantityMap) {
@@ -1855,7 +2041,14 @@ export async function createTransactionFromSessionHandler(
   const consumedHoldQuantities = await consumeInventoryHoldsForSession(ctx.db, {
     sessionId: args.sessionId,
     items: items
-      .filter((item) => !item.pendingCheckoutItemId)
+      .filter(
+        (item) =>
+          !item.pendingCheckoutItemId &&
+          !(
+            item.inventoryImportProvisionalSkuId &&
+            provisionalImportLinesById.has(item.inventoryImportProvisionalSkuId)
+          ),
+      )
       .map((item) => ({
         skuId: item.productSkuId,
         quantity: item.quantity,
@@ -1875,6 +2068,25 @@ export async function createTransactionFromSessionHandler(
       recordSkuActivityEventWithCtx(ctx, event)) satisfies SkuActivityRecorder,
   });
 
+  const provisionalQuantitiesSold = new Map<
+    InventoryImportProvisionalSkuId,
+    {
+      provisionalSku: ActiveProvisionalImportSaleLine;
+      quantitySold: number;
+    }
+  >();
+  for (const item of items) {
+    const provisionalSku = item.inventoryImportProvisionalSkuId
+      ? provisionalImportLinesById.get(item.inventoryImportProvisionalSkuId)
+      : undefined;
+    if (!provisionalSku) continue;
+    const existing = provisionalQuantitiesSold.get(provisionalSku._id);
+    provisionalQuantitiesSold.set(provisionalSku._id, {
+      provisionalSku,
+      quantitySold: (existing?.quantitySold ?? 0) + item.quantity,
+    });
+  }
+
   const transactionItems = await Promise.all(
     items.map(async (item) => {
       const sku = await getProductSkuById(ctx, item.productSkuId);
@@ -1885,11 +2097,17 @@ export async function createTransactionFromSessionHandler(
       }
 
       const image = item.image ?? sku.images?.[0];
+      const provisionalSku = item.inventoryImportProvisionalSkuId
+        ? provisionalImportLinesById.get(item.inventoryImportProvisionalSkuId)
+        : undefined;
       const transactionItemId = await createPosTransactionItem(ctx, {
         transactionId,
         productId: item.productId,
         productSkuId: item.productSkuId,
         pendingCheckoutItemId: item.pendingCheckoutItemId,
+        ...(provisionalSku
+          ? { inventoryImportProvisionalSkuId: provisionalSku._id }
+          : {}),
         productName: item.productName,
         productSku: item.productSku ?? "",
         barcode: item.barcode,
@@ -1904,7 +2122,7 @@ export async function createTransactionFromSessionHandler(
       const quantityAvailableToSubtract =
         consumedHoldQuantity >= item.quantity ? item.quantity : 0;
 
-      if (!item.pendingCheckoutItemId) {
+      if (!provisionalSku && !item.pendingCheckoutItemId) {
         await patchProductSku(ctx, item.productSkuId, {
           quantityAvailable: Math.max(
             0,
@@ -1924,7 +2142,7 @@ export async function createTransactionFromSessionHandler(
           customerProfileId: session.customerProfileId,
           transactionNumber,
         });
-      } else {
+      } else if (item.pendingCheckoutItemId) {
         await recordPendingCheckoutItemSaleEvidence(ctx, {
           actorStaffProfileId: session.staffProfileId,
           pendingCheckoutItemId: item.pendingCheckoutItemId,
@@ -1942,6 +2160,15 @@ export async function createTransactionFromSessionHandler(
       return transactionItemId;
     }),
   );
+  for (const evidence of provisionalQuantitiesSold.values()) {
+    await recordProvisionalImportSkuSaleEvidence(ctx, {
+      provisionalSku: evidence.provisionalSku,
+      posTransactionId: transactionId,
+      registerSessionId: resolvedRegisterSessionId.data,
+      quantitySold: evidence.quantitySold,
+      timestamp: completedAt,
+    });
+  }
 
   await patchPosSession(ctx, args.sessionId, {
     transactionId,

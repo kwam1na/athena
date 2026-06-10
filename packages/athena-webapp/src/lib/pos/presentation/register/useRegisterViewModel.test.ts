@@ -143,6 +143,7 @@ let mockActiveSession:
         quantity: number;
         productId: Id<"product">;
         skuId: Id<"productSku">;
+        inventoryImportProvisionalSkuId?: Id<"inventoryImportProvisionalSku">;
       }>;
       payments?: Array<{
         method: "cash" | "card" | "mobile_money";
@@ -205,6 +206,8 @@ let mockRegisterCatalogRows: Array<{
   length: number | null;
   color: string;
   areProcessingFeesAbsorbed: boolean;
+  inventoryImportProvisionalSkuId?: Id<"inventoryImportProvisionalSku">;
+  availabilityPolicy?: "trusted_inventory" | "active_provisional_import";
 }>;
 let mockRegisterServiceCatalogRows: Array<{
   serviceCatalogId: Id<"serviceCatalog">;
@@ -221,6 +224,8 @@ let mockRegisterCatalogAvailabilityRows: Array<{
   skuId: Id<"productSku">;
   inStock: boolean;
   quantityAvailable: number;
+  inventoryImportProvisionalSkuId?: Id<"inventoryImportProvisionalSku">;
+  availabilityPolicy?: "trusted_inventory" | "active_provisional_import";
 }>;
 
 vi.mock("convex/react", () => ({
@@ -6242,17 +6247,9 @@ describe("useRegisterViewModel", () => {
         },
       ],
     });
-    mockAppendLocalEvent.mockImplementation(async (event) => {
-      if (event?.type === "cart.item_added") {
-        localEvents.push(
-          buildLocalEvent({
-            ...event,
-            sequence: localEvents.length + 1,
-          }),
-        );
-      }
-
-      return { ok: true, value: { localEventId: "local-event-1" } };
+    mockAppendLocalEvent.mockResolvedValue({
+      ok: true,
+      value: { localEventId: "local-event-1" },
     });
 
     const { useRegisterViewModel } = await import("./useRegisterViewModel");
@@ -6285,6 +6282,333 @@ describe("useRegisterViewModel", () => {
     expect(toast.error).toHaveBeenCalledWith(
       "No trusted availability remains for this item on this terminal.",
     );
+  });
+
+  it("does not recheck trusted availability when updating provisional import quantities", async () => {
+    mockRegisterCatalogRows = [
+      buildRegisterCatalogRow({
+        availabilityPolicy: "active_provisional_import",
+        inventoryImportProvisionalSkuId:
+          "provisional-import-sku-1" as Id<"inventoryImportProvisionalSku">,
+      }),
+    ];
+    mockRegisterCatalogAvailabilityRows = [
+      buildRegisterCatalogAvailabilityRow({
+        availabilityPolicy: "active_provisional_import",
+        inventoryImportProvisionalSkuId:
+          "provisional-import-sku-1" as Id<"inventoryImportProvisionalSku">,
+        quantityAvailable: 0,
+      }),
+    ];
+    const localEvents = [
+      buildLocalEvent({
+        sequence: 1,
+        type: "register.opened",
+        payload: {
+          localRegisterSessionId: "drawer-1",
+          openingFloat: 5_000,
+          expectedCash: 5_000,
+          status: "open",
+        },
+        sync: { status: "synced", cloudEventId: "cloud-event-1" },
+      }),
+      buildLocalEvent({
+        sequence: 2,
+        type: "session.started",
+        localPosSessionId: "session-1",
+        payload: { localPosSessionId: "session-1", status: "active" },
+        sync: { status: "synced", cloudEventId: "cloud-event-2" },
+      }),
+      buildLocalEvent({
+        sequence: 3,
+        type: "cart.item_added",
+        localPosSessionId: "session-1",
+        payload: {
+          localItemId: "item-1",
+          productId: "product-2",
+          productSkuId: "sku-2",
+          inventoryImportProvisionalSkuId: "provisional-import-sku-1",
+          productSku: "DW-18",
+          productName: "Deep Wave",
+          price: 100,
+          quantity: 1,
+        },
+        sync: { status: "synced", cloudEventId: "cloud-event-3" },
+      }),
+    ];
+    mockListLocalEvents.mockResolvedValue({
+      ok: true,
+      value: localEvents,
+    });
+    mockListLocalCloudMappings.mockResolvedValue({
+      ok: true,
+      value: [
+        {
+          entity: "posSession",
+          localId: "session-1",
+          cloudId: "session-1",
+          mappedAt: 1_100,
+        },
+      ],
+    });
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    await act(async () => {
+      await result.current.cart.onUpdateQuantity(
+        "item-1" as Id<"posSessionItem">,
+        3,
+      );
+    });
+
+    expect(toast.error).not.toHaveBeenCalledWith(
+      "No trusted availability remains for this item on this terminal.",
+    );
+    expect(mockAppendLocalEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "cart.item_added",
+        payload: expect.objectContaining({
+          inventoryImportProvisionalSkuId: "provisional-import-sku-1",
+          productSkuId: "sku-2",
+          quantity: 3,
+        }),
+      }),
+    );
+  });
+
+  it("adds distinct provisional import rows that share a trusted SKU", async () => {
+    mockRegisterCatalogRows = [
+      buildRegisterCatalogRow({
+        id: "provisional-import-sku-1" as Id<"productSku">,
+        availabilityPolicy: "active_provisional_import",
+        inventoryImportProvisionalSkuId:
+          "provisional-import-sku-1" as Id<"inventoryImportProvisionalSku">,
+      }),
+      buildRegisterCatalogRow({
+        id: "provisional-import-sku-2" as Id<"productSku">,
+        availabilityPolicy: "active_provisional_import",
+        inventoryImportProvisionalSkuId:
+          "provisional-import-sku-2" as Id<"inventoryImportProvisionalSku">,
+      }),
+    ];
+    mockRegisterCatalogAvailabilityRows = [
+      buildRegisterCatalogAvailabilityRow({
+        availabilityPolicy: "active_provisional_import",
+        inventoryImportProvisionalSkuId:
+          "provisional-import-sku-1" as Id<"inventoryImportProvisionalSku">,
+        quantityAvailable: 0,
+      }),
+    ];
+    const localEvents = [
+      buildLocalEvent({
+        sequence: 1,
+        type: "register.opened",
+        payload: {
+          localRegisterSessionId: "drawer-1",
+          openingFloat: 5_000,
+          expectedCash: 5_000,
+          status: "open",
+        },
+      }),
+      buildLocalEvent({
+        sequence: 2,
+        type: "session.started",
+        localPosSessionId: "session-1",
+        payload: { localPosSessionId: "session-1", status: "active" },
+      }),
+    ];
+    mockListLocalEvents.mockImplementation(async () => ({
+      ok: true,
+      value: [...localEvents],
+    }));
+    mockAppendLocalEvent.mockResolvedValue({
+      ok: true,
+      value: { localEventId: "local-event-1" },
+    });
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    const firstProduct = {
+      ...buildRegisterCatalogRow({
+        id: "provisional-import-sku-1" as Id<"productSku">,
+        availabilityPolicy: "active_provisional_import",
+        inventoryImportProvisionalSkuId:
+          "provisional-import-sku-1" as Id<"inventoryImportProvisionalSku">,
+      }),
+      availabilityStatus: "available" as const,
+      inStock: true,
+      quantityAvailable: 0,
+    };
+    const secondProduct = {
+      ...buildRegisterCatalogRow({
+        id: "provisional-import-sku-2" as Id<"productSku">,
+        availabilityPolicy: "active_provisional_import",
+        inventoryImportProvisionalSkuId:
+          "provisional-import-sku-2" as Id<"inventoryImportProvisionalSku">,
+      }),
+      availabilityStatus: "available" as const,
+      inStock: true,
+      quantityAvailable: 0,
+    };
+
+    let firstAdded = false;
+    let secondAdded = false;
+    await act(async () => {
+      firstAdded = await result.current.productEntry.onAddProduct(firstProduct);
+      secondAdded =
+        await result.current.productEntry.onAddProduct(secondProduct);
+    });
+
+    expect(firstAdded).toBe(true);
+    expect(secondAdded).toBe(true);
+    expect(toast.error).not.toHaveBeenCalledWith(
+      "This item is already in the cart from a different inventory source. Remove it and add it again.",
+    );
+    const cartEvents = mockAppendLocalEvent.mock.calls
+      .map(([event]) => event)
+      .filter((event) => event?.type === "cart.item_added");
+    expect(cartEvents).toHaveLength(2);
+    expect(cartEvents[0]?.payload).toEqual(
+      expect.objectContaining({
+        inventoryImportProvisionalSkuId: "provisional-import-sku-1",
+        productSkuId: "sku-2",
+        quantity: 1,
+      }),
+    );
+    expect(cartEvents[1]?.payload).toEqual(
+      expect.objectContaining({
+        inventoryImportProvisionalSkuId: "provisional-import-sku-2",
+        productSkuId: "sku-2",
+        quantity: 1,
+      }),
+    );
+    await waitFor(() =>
+      expect(result.current.cart.items).toEqual([
+        expect.objectContaining({
+          inventoryImportProvisionalSkuId: "provisional-import-sku-1",
+          quantity: 1,
+          skuId: "sku-2",
+        }),
+        expect.objectContaining({
+          inventoryImportProvisionalSkuId: "provisional-import-sku-2",
+          quantity: 1,
+          skuId: "sku-2",
+        }),
+      ]),
+    );
+    expect(mockUseConvexRegisterCatalogAvailability).toHaveBeenCalledWith(
+      expect.objectContaining({
+        productSkuIds: expect.arrayContaining(["sku-2"]),
+      }),
+    );
+    const latestAvailabilityInput =
+      mockUseConvexRegisterCatalogAvailability.mock.calls.at(-1)?.[0] as
+        | { productSkuIds?: string[] }
+        | undefined;
+    expect(latestAvailabilityInput?.productSkuIds).not.toContain(
+      "provisional-import-sku-1",
+    );
+    expect(latestAvailabilityInput?.productSkuIds).not.toContain(
+      "provisional-import-sku-2",
+    );
+  });
+
+  it("blocks adding a trusted cart line over a same-SKU provisional import row", async () => {
+    mockRegisterCatalogRows = [
+      buildRegisterCatalogRow({
+        availabilityPolicy: "active_provisional_import",
+        inventoryImportProvisionalSkuId:
+          "provisional-import-sku-1" as Id<"inventoryImportProvisionalSku">,
+      }),
+    ];
+    mockRegisterCatalogAvailabilityRows = [
+      buildRegisterCatalogAvailabilityRow({
+        availabilityPolicy: "active_provisional_import",
+        inventoryImportProvisionalSkuId:
+          "provisional-import-sku-1" as Id<"inventoryImportProvisionalSku">,
+        quantityAvailable: 0,
+      }),
+    ];
+    mockListLocalEvents.mockResolvedValue({
+      ok: true,
+      value: [
+        buildLocalEvent({
+          sequence: 1,
+          type: "register.opened",
+          payload: {
+            localRegisterSessionId: "drawer-1",
+            openingFloat: 5_000,
+            expectedCash: 5_000,
+            status: "open",
+          },
+        }),
+        buildLocalEvent({
+          sequence: 2,
+          type: "session.started",
+          localPosSessionId: "session-1",
+          payload: { localPosSessionId: "session-1", status: "active" },
+        }),
+        buildLocalEvent({
+          sequence: 3,
+          type: "cart.item_added",
+          localPosSessionId: "session-1",
+          payload: {
+            localItemId: "item-provisional-1",
+            productId: "product-2",
+            productSkuId: "sku-2",
+            inventoryImportProvisionalSkuId: "provisional-import-sku-1",
+            productSku: "DW-18",
+            productName: "Deep Wave",
+            price: 10_000,
+            quantity: 1,
+          },
+        }),
+      ],
+    });
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    const trustedProduct = {
+      ...buildRegisterCatalogRow(),
+      availabilityStatus: "available" as const,
+      inStock: true,
+      quantityAvailable: 5,
+    };
+    let added = true;
+    await act(async () => {
+      added = await result.current.productEntry.onAddProduct(trustedProduct);
+    });
+
+    expect(added).toBe(false);
+    expect(toast.error).toHaveBeenCalledWith(
+      "This item is already in the cart from a different inventory source. Remove it and add it again.",
+    );
+    expect(
+      mockAppendLocalEvent.mock.calls.filter(
+        ([event]) => event?.type === "cart.item_added",
+      ),
+    ).toHaveLength(0);
   });
 
   it("prioritizes cart item SKUs in the availability request before search results", async () => {
@@ -7620,7 +7944,7 @@ describe("useRegisterViewModel", () => {
     });
 
     await act(async () => {
-      await result.current.checkout.onAddPayment("cash", 100);
+      await result.current.checkout.onAddPayment("cash", 10_000);
     });
     await act(async () => {
       await result.current.checkout.onCompleteTransaction();
@@ -10093,6 +10417,115 @@ describe("useRegisterViewModel", () => {
     expect(mockRemoveItem).not.toHaveBeenCalled();
   });
 
+  it("updates and removes a just-added provisional optimistic row by row identity", async () => {
+    mockActiveSession = null;
+    const localEvents = [
+      buildLocalEvent({
+        sequence: 1,
+        type: "register.opened",
+        payload: {
+          localRegisterSessionId: "drawer-1",
+          openingFloat: 5_000,
+          expectedCash: 5_000,
+          status: "open",
+        },
+      }),
+      buildLocalEvent({
+        sequence: 2,
+        type: "session.started",
+        localPosSessionId: "session-1",
+        payload: { localPosSessionId: "session-1", status: "active" },
+      }),
+    ];
+    mockListLocalEvents.mockImplementation(async () => ({
+      ok: true,
+      value: [...localEvents],
+    }));
+    mockAppendLocalEvent.mockResolvedValue({
+      ok: true,
+      value: { localEventId: "local-event-1" },
+    });
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    await act(async () => {
+      await result.current.productEntry.onAddProduct({
+        id: "provisional-import-sku-1",
+        name: "Deep Wave",
+        price: 10_000,
+        barcode: "1234567890123",
+        productId: "product-2" as Id<"product">,
+        skuId: "sku-2" as Id<"productSku">,
+        sku: "DW-18",
+        category: "Hair",
+        description: "Deep wave bundle",
+        image: null,
+        inStock: true,
+        quantityAvailable: 0,
+        availabilityPolicy: "active_provisional_import",
+        inventoryImportProvisionalSkuId:
+          "provisional-import-sku-1" as Id<"inventoryImportProvisionalSku">,
+      });
+    });
+
+    await waitFor(() =>
+      expect(result.current.cart.items).toEqual([
+        expect.objectContaining({
+          id: "optimistic:provisional-import-sku-1",
+          inventoryImportProvisionalSkuId: "provisional-import-sku-1",
+          quantity: 1,
+          skuId: "sku-2",
+        }),
+      ]),
+    );
+
+    await act(async () => {
+      await result.current.cart.onUpdateQuantity(
+        "optimistic:provisional-import-sku-1" as Id<"posSessionItem">,
+        2,
+      );
+    });
+
+    expect(result.current.cart.items).toEqual([
+      expect.objectContaining({
+        id: "optimistic:provisional-import-sku-1",
+        inventoryImportProvisionalSkuId: "provisional-import-sku-1",
+        quantity: 2,
+        skuId: "sku-2",
+      }),
+    ]);
+
+    await act(async () => {
+      await result.current.cart.onRemoveItem(
+        "optimistic:provisional-import-sku-1" as Id<"posSessionItem">,
+      );
+    });
+
+    expect(result.current.cart.items).toEqual([]);
+    expect(
+      mockAppendLocalEvent.mock.calls.filter(
+        ([event]) => event?.type === "cart.item_added",
+      ),
+    ).toHaveLength(3);
+    expect(mockAppendLocalEvent.mock.calls.at(-1)?.[0]).toEqual(
+      expect.objectContaining({
+        type: "cart.item_added",
+        payload: expect.objectContaining({
+          inventoryImportProvisionalSkuId: "provisional-import-sku-1",
+          productSkuId: "sku-2",
+          quantity: 0,
+        }),
+      }),
+    );
+  });
+
   it("does not complete with an empty refreshed local cart after a pending removal settles", async () => {
     const pendingRemove = deferred<{
       ok: true;
@@ -10615,6 +11048,16 @@ describe("useRegisterViewModel", () => {
   });
 
   it("rejects payment edits that start while a local completion is in progress", async () => {
+    mockActiveSession = {
+      ...mockActiveSession!,
+      cartItems: [
+        {
+          ...mockActiveSession!.cartItems[0],
+          inventoryImportProvisionalSkuId:
+            "provisional-import-sku-1" as Id<"inventoryImportProvisionalSku">,
+        },
+      ],
+    };
     const pendingCompletion = deferred<{
       ok: true;
       value: { localEventId: string };
@@ -10661,8 +11104,22 @@ describe("useRegisterViewModel", () => {
     });
 
     expect(updated).toBe(false);
-    expect(mockAppendLocalEvent.mock.calls.map(([event]) => event.type)).toEqual(
-      ["session.payments_updated", "transaction.completed"],
+    expect(mockAppendLocalEvent.mock.calls.map(([event]) => event.type)).toEqual([
+      "session.payments_updated",
+      "transaction.completed",
+    ]);
+    expect(mockAppendLocalEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "transaction.completed",
+        payload: expect.objectContaining({
+          items: [
+            expect.objectContaining({
+              inventoryImportProvisionalSkuId: "provisional-import-sku-1",
+              productSkuId: "sku-1",
+            }),
+          ],
+        }),
+      }),
     );
   });
 

@@ -288,6 +288,135 @@ describe("projectLocalRegisterReadModel", () => {
     expect(model.activeSale?.total).toBe(0);
   });
 
+  it("does not replace a same-SKU cart line with a different inventory source", () => {
+    const model = projectLocalRegisterReadModel({
+      events: [
+        event({
+          sequence: 1,
+          type: "register.opened",
+          localRegisterSessionId: "local-register-1",
+          payload: { openingFloat: 100 },
+        }),
+        event({
+          sequence: 2,
+          type: "session.started",
+          localRegisterSessionId: "local-register-1",
+          localPosSessionId: "local-sale-1",
+          payload: { localPosSessionId: "local-sale-1", status: "active" },
+        }),
+        event({
+          sequence: 3,
+          type: "cart.item_added",
+          localRegisterSessionId: "local-register-1",
+          localPosSessionId: "local-sale-1",
+          payload: {
+            localItemId: "local-item-trusted",
+            productId: "product-1",
+            productSkuId: "sku-1",
+            productSku: "SKU-1",
+            productName: "Body Wave",
+            price: 75,
+            quantity: 1,
+          },
+        }),
+        event({
+          sequence: 4,
+          type: "cart.item_added",
+          localRegisterSessionId: "local-register-1",
+          localPosSessionId: "local-sale-1",
+          payload: {
+            localItemId: "local-item-provisional",
+            productId: "product-1",
+            productSkuId: "sku-1",
+            inventoryImportProvisionalSkuId: "provisional-sku-1",
+            productSku: "SKU-1",
+            productName: "Body Wave",
+            price: 75,
+            quantity: 2,
+          },
+        }),
+      ],
+    });
+
+    expect(model.activeSale?.items).toEqual([
+      expect.objectContaining({
+        localItemId: "local-item-trusted",
+        productSkuId: "sku-1",
+        quantity: 1,
+      }),
+    ]);
+    expect(model.activeSale?.items[0]?.inventoryImportProvisionalSkuId).toBe(
+      undefined,
+    );
+  });
+
+  it("keeps same-SKU cart lines separate by provisional import row", () => {
+    const model = projectLocalRegisterReadModel({
+      events: [
+        event({
+          sequence: 1,
+          type: "register.opened",
+          localRegisterSessionId: "local-register-1",
+          payload: { openingFloat: 100 },
+        }),
+        event({
+          sequence: 2,
+          type: "session.started",
+          localRegisterSessionId: "local-register-1",
+          localPosSessionId: "local-sale-1",
+          payload: { localPosSessionId: "local-sale-1", status: "active" },
+        }),
+        event({
+          sequence: 3,
+          type: "cart.item_added",
+          localRegisterSessionId: "local-register-1",
+          localPosSessionId: "local-sale-1",
+          payload: {
+            localItemId: "local-item-provisional-1",
+            productId: "product-1",
+            productSkuId: "sku-1",
+            inventoryImportProvisionalSkuId: "provisional-sku-1",
+            productSku: "SKU-1",
+            productName: "Body Wave",
+            price: 75,
+            quantity: 1,
+          },
+        }),
+        event({
+          sequence: 4,
+          type: "cart.item_added",
+          localRegisterSessionId: "local-register-1",
+          localPosSessionId: "local-sale-1",
+          payload: {
+            localItemId: "local-item-provisional-2",
+            productId: "product-1",
+            productSkuId: "sku-1",
+            inventoryImportProvisionalSkuId: "provisional-sku-2",
+            productSku: "SKU-1",
+            productName: "Body Wave",
+            price: 75,
+            quantity: 2,
+          },
+        }),
+      ],
+    });
+
+    expect(model.activeSale?.items).toEqual([
+      expect.objectContaining({
+        inventoryImportProvisionalSkuId: "provisional-sku-1",
+        localItemId: "local-item-provisional-1",
+        productSkuId: "sku-1",
+        quantity: 1,
+      }),
+      expect.objectContaining({
+        inventoryImportProvisionalSkuId: "provisional-sku-2",
+        localItemId: "local-item-provisional-2",
+        productSkuId: "sku-1",
+        quantity: 2,
+      }),
+    ]);
+  });
+
   it("replays local service draft adds and updates into active sale totals", () => {
     const model = projectLocalRegisterReadModel({
       events: [

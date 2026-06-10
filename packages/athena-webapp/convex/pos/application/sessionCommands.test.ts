@@ -33,6 +33,7 @@ type SessionItemRecord = {
   productId: string;
   productSkuId: string;
   pendingCheckoutItemId?: string;
+  inventoryImportProvisionalSkuId?: string;
   productSku: string;
   productName: string;
   price: number;
@@ -47,6 +48,15 @@ type PendingCheckoutItemRecord = {
   status: "pending_review" | "approved" | "rejected" | "flagged";
   provisionalProductId: string;
   provisionalProductSkuId: string;
+};
+
+type ProvisionalImportSkuRecord = {
+  _id: string;
+  storeId: string;
+  status: "active" | "finalized" | "rejected" | "closed";
+  posExposureStatus?: "available" | "hidden";
+  productId: string;
+  productSkuId: string;
 };
 
 type InventoryCall =
@@ -1297,6 +1307,537 @@ describe("createPosSessionCommandService", () => {
     expect(repository.items).toEqual([]);
   });
 
+  it("rejects cart lines with both pending checkout and provisional import sources", async () => {
+    const commandService = await loadCommandService();
+    const repository = createFakeRepository({
+      sessions: [
+        buildSession({
+          _id: "session-5",
+          sessionNumber: "SES-005",
+          storeId: "store-1",
+          terminalId: "terminal-1",
+          staffProfileId: "cashier-1",
+          status: "active",
+          registerNumber: "1",
+          registerSessionId: "drawer-1",
+          expiresAt: 8_000,
+          updatedAt: 500,
+        }),
+      ],
+      registerSessions: [
+        buildRegisterSession({
+          _id: "drawer-1",
+          storeId: "store-1",
+          status: "open",
+          terminalId: "terminal-1",
+          registerNumber: "1",
+        }),
+      ],
+    });
+    const inventoryCalls: InventoryCall[] = [];
+
+    const result = await commandService(
+      createDependencies({
+        repository,
+        inventoryCalls,
+        now: 1_000,
+        nextExpiration: 61_000,
+      }),
+    ).upsertSessionItem({
+      sessionId: "session-5",
+      staffProfileId: "cashier-1",
+      productId: "product-1",
+      productSkuId: "sku-1",
+      pendingCheckoutItemId: "pending-item-1",
+      inventoryImportProvisionalSkuId: "provisional-sku-1",
+      productSku: "SKU-1",
+      productName: "Conflicting bundle",
+      price: 15,
+      quantity: 2,
+    });
+
+    expect(result).toEqual({
+      status: "validationFailed",
+      message:
+        "This cart line has conflicting inventory sources. Remove the item and add it again before continuing.",
+    });
+    expect(inventoryCalls).toEqual([]);
+    expect(repository.items).toEqual([]);
+  });
+
+  it("adds an active provisional import cart line without acquiring trusted inventory holds", async () => {
+    const commandService = await loadCommandService();
+    const repository = createFakeRepository({
+      sessions: [
+        buildSession({
+          _id: "session-5",
+          sessionNumber: "SES-005",
+          storeId: "store-1",
+          terminalId: "terminal-1",
+          staffProfileId: "cashier-1",
+          status: "active",
+          registerNumber: "1",
+          registerSessionId: "drawer-1",
+          expiresAt: 8_000,
+          updatedAt: 500,
+        }),
+      ],
+      registerSessions: [
+        buildRegisterSession({
+          _id: "drawer-1",
+          storeId: "store-1",
+          status: "open",
+          terminalId: "terminal-1",
+          registerNumber: "1",
+        }),
+      ],
+      provisionalImportSkus: [
+        {
+          _id: "provisional-sku-1",
+          storeId: "store-1",
+          status: "active",
+          productId: "product-import-1",
+          productSkuId: "sku-import-1",
+        },
+      ],
+    });
+    const inventoryCalls: InventoryCall[] = [];
+
+    const result = await commandService(
+      createDependencies({
+        repository,
+        inventoryCalls,
+        now: 1_000,
+        nextExpiration: 61_000,
+      }),
+    ).upsertSessionItem({
+      sessionId: "session-5",
+      staffProfileId: "cashier-1",
+      productId: "product-import-1",
+      productSkuId: "sku-import-1",
+      inventoryImportProvisionalSkuId: "provisional-sku-1",
+      productSku: "LEGACY-1",
+      productName: "Imported bundle",
+      price: 15,
+      quantity: 2,
+    });
+
+    expect(result).toEqual({
+      status: "ok",
+      data: {
+        itemId: "item-1",
+        expiresAt: 61_000,
+      },
+    });
+    expect(inventoryCalls).toEqual([]);
+    expect(repository.items).toContainEqual(
+      expect.objectContaining({
+        _id: "item-1",
+        inventoryImportProvisionalSkuId: "provisional-sku-1",
+        productSkuId: "sku-import-1",
+        quantity: 2,
+      }),
+    );
+  });
+
+  it("rejects changing an existing trusted cart line into a provisional import line", async () => {
+    const commandService = await loadCommandService();
+    const repository = createFakeRepository({
+      sessions: [
+        buildSession({
+          _id: "session-5",
+          sessionNumber: "SES-005",
+          storeId: "store-1",
+          terminalId: "terminal-1",
+          staffProfileId: "cashier-1",
+          status: "active",
+          registerNumber: "1",
+          registerSessionId: "drawer-1",
+          expiresAt: 8_000,
+          updatedAt: 500,
+        }),
+      ],
+      registerSessions: [
+        buildRegisterSession({
+          _id: "drawer-1",
+          storeId: "store-1",
+          status: "open",
+          terminalId: "terminal-1",
+          registerNumber: "1",
+        }),
+      ],
+      items: [
+        buildItem({
+          _id: "item-1",
+          sessionId: "session-5",
+          storeId: "store-1",
+          productId: "product-import-1",
+          productSkuId: "sku-import-1",
+          productSku: "LEGACY-1",
+          productName: "Imported bundle",
+          price: 15,
+          quantity: 2,
+        }),
+      ],
+      provisionalImportSkus: [
+        {
+          _id: "provisional-sku-1",
+          storeId: "store-1",
+          status: "active",
+          productId: "product-import-1",
+          productSkuId: "sku-import-1",
+        },
+      ],
+    });
+    const inventoryCalls: InventoryCall[] = [];
+
+    const result = await commandService(
+      createDependencies({
+        repository,
+        inventoryCalls,
+        now: 1_000,
+        nextExpiration: 61_000,
+      }),
+    ).upsertSessionItem({
+      sessionId: "session-5",
+      staffProfileId: "cashier-1",
+      productId: "product-import-1",
+      productSkuId: "sku-import-1",
+      inventoryImportProvisionalSkuId: "provisional-sku-1",
+      productSku: "LEGACY-1",
+      productName: "Imported bundle",
+      price: 15,
+      quantity: 3,
+    });
+
+    expect(result).toEqual({
+      status: "validationFailed",
+      message:
+        "This cart line already uses a different inventory source. Remove the item and add it again before continuing.",
+    });
+    expect(inventoryCalls).toEqual([]);
+    expect(repository.items[0]).toEqual(
+      expect.objectContaining({
+        _id: "item-1",
+        quantity: 2,
+      }),
+    );
+    expect(repository.items[0]).not.toHaveProperty(
+      "inventoryImportProvisionalSkuId",
+    );
+  });
+
+  it("keeps trusted cart adds trusted when a provisional import row exists for the same SKU", async () => {
+    const commandService = await loadCommandService();
+    const repository = createFakeRepository({
+      sessions: [
+        buildSession({
+          _id: "session-5",
+          sessionNumber: "SES-005",
+          storeId: "store-1",
+          terminalId: "terminal-1",
+          staffProfileId: "cashier-1",
+          status: "active",
+          registerNumber: "1",
+          registerSessionId: "drawer-1",
+          expiresAt: 8_000,
+          updatedAt: 500,
+        }),
+      ],
+      registerSessions: [
+        buildRegisterSession({
+          _id: "drawer-1",
+          storeId: "store-1",
+          status: "open",
+          terminalId: "terminal-1",
+          registerNumber: "1",
+        }),
+      ],
+      provisionalImportSkus: [
+        {
+          _id: "provisional-sku-1",
+          storeId: "store-1",
+          status: "active",
+          productId: "product-import-1",
+          productSkuId: "sku-import-1",
+        },
+      ],
+    });
+    const inventoryCalls: InventoryCall[] = [];
+
+    const result = await commandService(
+      createDependencies({
+        repository,
+        inventoryCalls,
+        now: 1_000,
+        nextExpiration: 61_000,
+      }),
+    ).upsertSessionItem({
+      sessionId: "session-5",
+      staffProfileId: "cashier-1",
+      productId: "product-import-1",
+      productSkuId: "sku-import-1",
+      productSku: "LEGACY-1",
+      productName: "Imported bundle",
+      price: 15,
+      quantity: 3,
+    });
+
+    expect(result).toEqual({
+      status: "ok",
+      data: {
+        itemId: "item-1",
+        expiresAt: 61_000,
+      },
+    });
+    expect(inventoryCalls).toEqual([
+      { kind: "acquire", skuId: "sku-import-1", quantity: 3 },
+    ]);
+    expect(repository.items[0]).toEqual(
+      expect.objectContaining({
+        _id: "item-1",
+        inventoryImportProvisionalSkuId: undefined,
+        quantity: 3,
+      }),
+    );
+  });
+
+  it("adds a distinct provisional import cart line when another row reuses the same trusted SKU", async () => {
+    const commandService = await loadCommandService();
+    const repository = createFakeRepository({
+      sessions: [
+        buildSession({
+          _id: "session-5",
+          sessionNumber: "SES-005",
+          storeId: "store-1",
+          terminalId: "terminal-1",
+          staffProfileId: "cashier-1",
+          status: "active",
+          registerNumber: "1",
+          registerSessionId: "drawer-1",
+          expiresAt: 8_000,
+          updatedAt: 500,
+        }),
+      ],
+      registerSessions: [
+        buildRegisterSession({
+          _id: "drawer-1",
+          storeId: "store-1",
+          status: "open",
+          terminalId: "terminal-1",
+          registerNumber: "1",
+        }),
+      ],
+      items: [
+        buildItem({
+          _id: "item-1",
+          sessionId: "session-5",
+          storeId: "store-1",
+          productId: "product-import-1",
+          productSkuId: "sku-import-1",
+          inventoryImportProvisionalSkuId: "provisional-sku-1",
+          productSku: "LEGACY-1",
+          productName: "Imported bundle",
+          price: 15,
+          quantity: 2,
+        }),
+      ],
+      provisionalImportSkus: [
+        {
+          _id: "provisional-sku-1",
+          storeId: "store-1",
+          status: "active",
+          productId: "product-import-1",
+          productSkuId: "sku-import-1",
+        },
+        {
+          _id: "provisional-sku-2",
+          storeId: "store-1",
+          status: "active",
+          productId: "product-import-1",
+          productSkuId: "sku-import-1",
+        },
+      ],
+    });
+    const inventoryCalls: InventoryCall[] = [];
+
+    const result = await commandService(
+      createDependencies({
+        repository,
+        inventoryCalls,
+        now: 1_000,
+        nextExpiration: 61_000,
+      }),
+    ).upsertSessionItem({
+      sessionId: "session-5",
+      staffProfileId: "cashier-1",
+      productId: "product-import-1",
+      productSkuId: "sku-import-1",
+      inventoryImportProvisionalSkuId: "provisional-sku-2",
+      productSku: "LEGACY-1",
+      productName: "Imported bundle",
+      price: 15,
+      quantity: 3,
+    });
+
+    expect(result).toEqual({
+      status: "ok",
+      data: {
+        itemId: "item-2",
+        expiresAt: 61_000,
+      },
+    });
+    expect(inventoryCalls).toEqual([]);
+    expect(repository.items[0]).toEqual(
+      expect.objectContaining({
+        _id: "item-1",
+        inventoryImportProvisionalSkuId: "provisional-sku-1",
+        quantity: 2,
+      }),
+    );
+    expect(repository.items[1]).toEqual(
+      expect.objectContaining({
+        _id: "item-2",
+        inventoryImportProvisionalSkuId: "provisional-sku-2",
+        productSkuId: "sku-import-1",
+        quantity: 3,
+      }),
+    );
+  });
+
+  it("rejects inactive provisional import IDs before creating a cart line", async () => {
+    const commandService = await loadCommandService();
+    const repository = createFakeRepository({
+      sessions: [
+        buildSession({
+          _id: "session-5",
+          sessionNumber: "SES-005",
+          storeId: "store-1",
+          terminalId: "terminal-1",
+          staffProfileId: "cashier-1",
+          status: "active",
+          registerNumber: "1",
+          registerSessionId: "drawer-1",
+          expiresAt: 8_000,
+          updatedAt: 500,
+        }),
+      ],
+      registerSessions: [
+        buildRegisterSession({
+          _id: "drawer-1",
+          storeId: "store-1",
+          status: "open",
+          terminalId: "terminal-1",
+          registerNumber: "1",
+        }),
+      ],
+      provisionalImportSkus: [
+        {
+          _id: "provisional-sku-1",
+          storeId: "store-1",
+          status: "finalized",
+          productId: "product-import-1",
+          productSkuId: "sku-import-1",
+        },
+      ],
+    });
+    const inventoryCalls: InventoryCall[] = [];
+
+    const result = await commandService(
+      createDependencies({
+        repository,
+        inventoryCalls,
+        now: 1_000,
+        nextExpiration: 61_000,
+      }),
+    ).upsertSessionItem({
+      sessionId: "session-5",
+      staffProfileId: "cashier-1",
+      productId: "product-import-1",
+      productSkuId: "sku-import-1",
+      inventoryImportProvisionalSkuId: "provisional-sku-1",
+      productSku: "LEGACY-1",
+      productName: "Imported bundle",
+      price: 15,
+      quantity: 2,
+    });
+
+    expect(result).toEqual({
+      status: "validationFailed",
+      message:
+        "This provisional import item is no longer active for this sale line. Refresh the register catalog before continuing.",
+    });
+    expect(inventoryCalls).toEqual([]);
+    expect(repository.items).toEqual([]);
+  });
+
+  it("rejects hidden provisional import IDs before creating a cart line", async () => {
+    const commandService = await loadCommandService();
+    const repository = createFakeRepository({
+      sessions: [
+        buildSession({
+          _id: "session-5",
+          sessionNumber: "SES-005",
+          storeId: "store-1",
+          terminalId: "terminal-1",
+          staffProfileId: "cashier-1",
+          status: "active",
+          registerNumber: "1",
+          registerSessionId: "drawer-1",
+          expiresAt: 8_000,
+          updatedAt: 500,
+        }),
+      ],
+      registerSessions: [
+        buildRegisterSession({
+          _id: "drawer-1",
+          storeId: "store-1",
+          status: "open",
+          terminalId: "terminal-1",
+          registerNumber: "1",
+        }),
+      ],
+      provisionalImportSkus: [
+        {
+          _id: "provisional-sku-1",
+          storeId: "store-1",
+          status: "active",
+          posExposureStatus: "hidden",
+          productId: "product-import-1",
+          productSkuId: "sku-import-1",
+        },
+      ],
+    });
+    const inventoryCalls: InventoryCall[] = [];
+
+    const result = await commandService(
+      createDependencies({
+        repository,
+        inventoryCalls,
+        now: 1_000,
+        nextExpiration: 61_000,
+      }),
+    ).upsertSessionItem({
+      sessionId: "session-5",
+      staffProfileId: "cashier-1",
+      productId: "product-import-1",
+      productSkuId: "sku-import-1",
+      inventoryImportProvisionalSkuId: "provisional-sku-1",
+      productSku: "LEGACY-1",
+      productName: "Imported bundle",
+      price: 15,
+      quantity: 2,
+    });
+
+    expect(result).toEqual({
+      status: "validationFailed",
+      message:
+        "This provisional import item is no longer active for this sale line. Refresh the register catalog before continuing.",
+    });
+    expect(inventoryCalls).toEqual([]);
+    expect(repository.items).toEqual([]);
+  });
+
   it("does not let a cart update clear an existing pending checkout marker", async () => {
     const commandService = await loadCommandService();
     const repository = createFakeRepository({
@@ -2056,6 +2597,82 @@ describe("createPosSessionCommandService", () => {
     ]);
   });
 
+  it("removes a provisional import cart line without releasing a trusted hold", async () => {
+    const commandService = await loadCommandService();
+    const repository = createFakeRepository({
+      sessions: [
+        buildSession({
+          _id: "session-7",
+          sessionNumber: "SES-007",
+          storeId: "store-1",
+          terminalId: "terminal-1",
+          staffProfileId: "cashier-1",
+          status: "active",
+          registerNumber: "1",
+          registerSessionId: "drawer-1",
+          expiresAt: 8_000,
+          updatedAt: 500,
+        }),
+      ],
+      registerSessions: [
+        buildRegisterSession({
+          _id: "drawer-1",
+          storeId: "store-1",
+          status: "open",
+          terminalId: "terminal-1",
+          registerNumber: "1",
+        }),
+      ],
+      items: [
+        buildItem({
+          _id: "item-3",
+          sessionId: "session-7",
+          storeId: "store-1",
+          productId: "product-import-1",
+          productSkuId: "sku-import-1",
+          productSku: "LEGACY-1",
+          productName: "Imported bundle",
+          price: 15,
+          quantity: 3,
+          inventoryImportProvisionalSkuId: "provisional-sku-1",
+        }),
+      ],
+    });
+    const inventoryCalls: InventoryCall[] = [];
+    const traceCalls: TraceCall[] = [];
+
+    const result = await commandService(
+      createDependencies({
+        repository,
+        inventoryCalls,
+        traceCalls,
+        now: 1_000,
+        nextExpiration: 61_000,
+      }),
+    ).removeSessionItem({
+      sessionId: "session-7",
+      staffProfileId: "cashier-1",
+      itemId: "item-3",
+    });
+
+    expect(result).toEqual({
+      status: "ok",
+      data: {
+        expiresAt: 61_000,
+      },
+    });
+    expect(inventoryCalls).toEqual([]);
+    expect(repository.getItem("item-3")).toBeNull();
+    expect(repository.getSession("session-7")?.expiresAt).toBe(61_000);
+    expect(traceCalls).toEqual([
+      expect.objectContaining({
+        stage: "itemRemoved",
+        itemName: "Imported bundle",
+        quantity: 3,
+      }),
+    ]);
+  });
+
   it("does not delete a cart line, patch the session, or trace when inventory release fails", async () => {
     const commandService = await loadCommandService();
     const repository = createFakeRepository({
@@ -2520,12 +3137,17 @@ function createFakeRepository(seed?: {
   sessions?: SessionRecord[];
   items?: SessionItemRecord[];
   pendingCheckoutItems?: PendingCheckoutItemRecord[];
+  provisionalImportSkus?: ProvisionalImportSkuRecord[];
   registerSessions?: RegisterSessionRecord[];
 }) {
   const repository = {
     sessions: [...(seed?.sessions ?? [])],
     items: [...(seed?.items ?? [])],
     pendingCheckoutItems: [...(seed?.pendingCheckoutItems ?? [])],
+    provisionalImportSkus: (seed?.provisionalImportSkus ?? []).map((row) => ({
+      posExposureStatus: "available" as const,
+      ...row,
+    })),
     registerSessions: [...(seed?.registerSessions ?? [])],
     sessionPatches: [] as Array<{
       sessionId: string;
@@ -2628,6 +3250,24 @@ function createFakeRepository(seed?: {
         ) ?? null
       );
     },
+    async getActiveProvisionalImportSkuForStoreSku(args: {
+      storeId: string;
+      productId: string;
+      productSkuId: string;
+      provisionalSkuId?: string;
+    }) {
+      return (
+        repository.provisionalImportSkus.find(
+          (item) =>
+            item.storeId === args.storeId &&
+            item.status === "active" &&
+            item.posExposureStatus === "available" &&
+            item.productId === args.productId &&
+            item.productSkuId === args.productSkuId &&
+            (!args.provisionalSkuId || item._id === args.provisionalSkuId),
+        ) ?? null
+      );
+    },
     async createSession(input: Omit<SessionRecord, "_id">) {
       const sessionId = `session-${repository.sessions.length + 1}`;
       repository.sessions.push({ _id: sessionId, ...input });
@@ -2720,6 +3360,7 @@ function createCommandService(
     productId: string;
     productSkuId: string;
     pendingCheckoutItemId?: string;
+    inventoryImportProvisionalSkuId?: string;
     productSku: string;
     productName: string;
     price: number;

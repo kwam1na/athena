@@ -267,6 +267,9 @@ function toSaleItemPayload(value: unknown) {
     pendingCheckoutItemId: nullableStringToOptional(
       payload.pendingCheckoutItemId,
     ),
+    inventoryImportProvisionalSkuId: nullableStringToOptional(
+      payload.inventoryImportProvisionalSkuId,
+    ),
     productName: stringOrEmpty(payload.productName),
     productSku: stringOrEmpty(payload.productSku),
     barcode: nullableStringToOptional(payload.barcode),

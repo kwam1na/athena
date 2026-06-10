@@ -18,9 +18,9 @@ Landing page for packages/athena-webapp. Use this page to orient around graph ho
 
 ## Graph Hotspots
 - `DailyCloseView.tsx` (87 edges, Community 0) - [`packages/athena-webapp/src/components/operations/DailyCloseView.tsx`](../../../packages/athena-webapp/src/components/operations/DailyCloseView.tsx)
-- `useRegisterViewModel.ts` (68 edges, Community 1) - [`packages/athena-webapp/src/lib/pos/presentation/register/useRegisterViewModel.ts`](../../../packages/athena-webapp/src/lib/pos/presentation/register/useRegisterViewModel.ts)
+- `useRegisterViewModel.ts` (72 edges, Community 1) - [`packages/athena-webapp/src/lib/pos/presentation/register/useRegisterViewModel.ts`](../../../packages/athena-webapp/src/lib/pos/presentation/register/useRegisterViewModel.ts)
 - `dailyClose.ts` (65 edges, Community 2) - [`packages/athena-webapp/convex/operations/dailyClose.ts`](../../../packages/athena-webapp/convex/operations/dailyClose.ts)
-- `projectLocalEvents.ts` (51 edges, Community 3) - [`packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.ts`](../../../packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.ts)
+- `projectLocalEvents.ts` (52 edges, Community 3) - [`packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.ts`](../../../packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.ts)
 - `usePosLocalSyncRuntime.ts` (47 edges, Community 5) - [`packages/athena-webapp/src/lib/pos/infrastructure/local/usePosLocalSyncRuntime.ts`](../../../packages/athena-webapp/src/lib/pos/infrastructure/local/usePosLocalSyncRuntime.ts)
 
 ## Navigation

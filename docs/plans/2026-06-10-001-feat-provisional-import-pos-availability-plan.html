@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>feat: Add provisional import POS availability</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f8fafc;
+        --paper: #ffffff;
+        --ink: #111827;
+        --muted: #64748b;
+        --line: #dbe3ef;
+        --soft: #eef5ff;
+        --accent: #2454a6;
+        --warn: #8a4b00;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        line-height: 1.55;
+      }
+
+      main {
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: 40px 24px 64px;
+      }
+
+      header {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--paper);
+        padding: 28px;
+      }
+
+      h1, h2, h3 {
+        line-height: 1.2;
+        margin: 0;
+      }
+
+      h1 {
+        font-size: clamp(2rem, 4vw, 3.2rem);
+        letter-spacing: 0;
+      }
+
+      h2 {
+        margin-top: 34px;
+        border-top: 1px solid var(--line);
+        padding-top: 26px;
+        font-size: 1.35rem;
+      }
+
+      h3 {
+        margin-top: 22px;
+        font-size: 1rem;
+      }
+
+      p {
+        margin: 10px 0 0;
+      }
+
+      a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+
+      a:hover {
+        text-decoration: underline;
+      }
+
+      .meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 18px;
+      }
+
+      .pill {
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: var(--soft);
+        color: #1f3f73;
+        font-size: 0.82rem;
+        padding: 4px 10px;
+      }
+
+      nav {
+        display: grid;
+        gap: 8px;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        margin: 20px 0 0;
+      }
+
+      nav a {
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: var(--paper);
+        padding: 8px 10px;
+        font-size: 0.9rem;
+      }
+
+      section {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--paper);
+        margin-top: 18px;
+        padding: 24px;
+      }
+
+      ul {
+        padding-left: 22px;
+      }
+
+      li + li {
+        margin-top: 8px;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 14px;
+        font-size: 0.92rem;
+      }
+
+      th, td {
+        border: 1px solid var(--line);
+        padding: 10px;
+        text-align: left;
+        vertical-align: top;
+      }
+
+      th {
+        background: #f1f5f9;
+      }
+
+      code {
+        background: #f1f5f9;
+        border-radius: 4px;
+        padding: 2px 5px;
+        font-size: 0.9em;
+      }
+
+      .unit {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        margin-top: 16px;
+        padding: 16px;
+        background: #fbfdff;
+      }
+
+      .unit h3 {
+        margin-top: 0;
+      }
+
+      .callout {
+        border-left: 4px solid var(--accent);
+        background: var(--soft);
+        padding: 12px 14px;
+      }
+
+      .warning {
+        border-left-color: var(--warn);
+        background: #fff7ed;
+      }
+
+      @media (max-width: 720px) {
+        main {
+          padding: 24px 14px 48px;
+        }
+
+        header, section {
+          padding: 18px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>feat: Add provisional import POS availability</h1>
+        <p>Make imported legacy inventory searchable and sellable in POS before trusted Athena counts are finalized, without turning imported quantities into trusted stock.</p>
+        <div class="meta">
+          <span class="pill">Type: feat</span>
+          <span class="pill">Status: active</span>
+          <span class="pill">Date: 2026-06-10</span>
+          <span class="pill">Canonical markdown: <a href="2026-06-10-001-feat-provisional-import-pos-availability-plan.md">plan.md</a></span>
+        </div>
+        <nav aria-label="Plan sections">
+          <a href="#problem">Problem</a>
+          <a href="#requirements">Requirements</a>
+          <a href="#decisions">Key Decisions</a>
+          <a href="#design">Design Shape</a>
+          <a href="#units">Implementation Units</a>
+          <a href="#risks">Risks</a>
+        </nav>
+      </header>
+
+      <section id="problem">
+        <h2>Problem Frame</h2>
+        <p>The store needs old-system inventory available at checkout while operators finish validating Athena counts. Cashiers can physically see the product, so POS should not block on unfinalized quantity; however, imported quantities must stay outside trusted stock until finalization.</p>
+        <div class="callout warning">
+          <strong>Boundary:</strong> POS availability during import is a policy override, not a fake quantity. Do not inflate <code>productSku.quantityAvailable</code>.
+        </div>
+      </section>
+
+      <section id="requirements">
+        <h2>Requirements</h2>
+        <ul>
+          <li>Imported legacy products can be made available to POS lookup before final inventory counts are applied.</li>
+          <li>POS can add and sell active provisional-import SKUs regardless of <code>quantityAvailable</code> or active hold availability.</li>
+          <li>Provisional imported quantities remain separate from trusted <code>productSku.inventoryCount</code> and <code>productSku.quantityAvailable</code> until finalization.</li>
+          <li>POS sale lines preserve enough provisional import metadata to reconcile sold quantities during finalization.</li>
+          <li>Pending checkout items remain the fallback for products not present in Athena and not present in the provisional import.</li>
+          <li>Provisional import rows stay out of storefront and normal trusted catalog stock reporting until finalized.</li>
+          <li>Operators can see which import rows are POS-available, finalize them into trusted stock, or close/reject provisional rows.</li>
+          <li>Offline/local-first POS preserves completed sales and treats provisional-import stock uncertainty as reconciliation context.</li>
+        </ul>
+      </section>
+
+      <section id="decisions">
+        <h2>Key Technical Decisions</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Decision</th>
+              <th>Rationale</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Use a provisional import table</td>
+              <td>Imported counts, POS exposure status, sale evidence, and finalization state need a durable trust boundary outside normal SKU availability.</td>
+            </tr>
+            <tr>
+              <td>Create or link catalog identity early</td>
+              <td>POS needs searchable product/SKU/barcode/price identity while stock trust remains provisional.</td>
+            </tr>
+            <tr>
+              <td>Use availability policy, not fake count</td>
+              <td>Cashiers can sell active provisional imports without leaking fake high quantities into stock ops, dashboards, or storefront.</td>
+            </tr>
+            <tr>
+              <td>Extend pending-checkout bypass shape</td>
+              <td>Session commands and completion already skip holds/decrements for special sale-line classes after server validation.</td>
+            </tr>
+            <tr>
+              <td>Finalization reconciles provisional sales</td>
+              <td>Operators need imported quantity, provisional sold quantity, and final trusted quantity basis before normal enforcement resumes.</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="design">
+        <h2>Design Shape</h2>
+        <p>Saved import review rows are staged into <code>inventoryImportProvisionalSku</code> records. Active provisional rows join POS catalog metadata and bounded availability policy so POS can show "Count pending" and allow sale. Sale completion records provisional sale evidence without trusted stock decrement. Finalization applies trusted counts and returns the SKU to normal hold-aware enforcement.</p>
+        <table>
+          <thead>
+            <tr>
+              <th>State</th>
+              <th>POS searchable</th>
+              <th>POS count enforcement</th>
+              <th>Trusted inventory mutation</th>
+              <th>Storefront visible</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Review saved only</td>
+              <td>No</td>
+              <td>N/A</td>
+              <td>No</td>
+              <td>No</td>
+            </tr>
+            <tr>
+              <td>Provisional POS active</td>
+              <td>Yes</td>
+              <td>No</td>
+              <td>No, sale evidence only</td>
+              <td>No for import-created hidden identities</td>
+            </tr>
+            <tr>
+              <td>Finalized</td>
+              <td>Yes</td>
+              <td>Yes</td>
+              <td>Yes</td>
+              <td>Follows normal product visibility</td>
+            </tr>
+            <tr>
+              <td>Rejected/closed</td>
+              <td>No, unless linked to trusted SKU</td>
+              <td>Normal trusted SKU rules only</td>
+              <td>No provisional mutation</td>
+              <td>No provisional exposure</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="units">
+        <h2>Implementation Units</h2>
+
+        <article class="unit">
+          <h3>U1. Add provisional import inventory schema</h3>
+          <p>Add <code>inventoryImportProvisionalSku</code>, indexes, and optional POS sale-line references. This establishes the durable trust boundary.</p>
+        </article>
+
+        <article class="unit">
+          <h3>U2. Stage import review rows into provisional POS catalog identity</h3>
+          <p>Add a staging command and import review action that creates hidden provisional SKU anchors without applying trusted counts.</p>
+        </article>
+
+        <article class="unit">
+          <h3>U3. Expose provisional imports through POS catalog and availability policy</h3>
+          <p>Extend register catalog and availability DTOs so active provisional rows are searchable, sellable, and presented without fake numeric availability.</p>
+        </article>
+
+        <article class="unit">
+          <h3>U4. Skip POS hold and count enforcement for provisional import sale lines</h3>
+          <p>Validate provisional line references server-side, skip holds/decrements, and record sale evidence during completion.</p>
+        </article>
+
+        <article class="unit">
+          <h3>U5. Carry provisional import semantics through local-first POS sync</h3>
+          <p>Extend local sync payloads and projection so validated offline completed sales against provisional imports become reconciliation evidence.</p>
+        </article>
+
+        <article class="unit">
+          <h3>U6. Finalize provisional import counts with provisional sale reconciliation</h3>
+          <p>Let operators convert provisional rows to trusted counts while seeing imported quantity, sold quantity during the provisional window, and final count basis.</p>
+        </article>
+
+        <article class="unit">
+          <h3>U7. Update POS and operations presentation copy</h3>
+          <p>Show cashier-facing "Count pending" style copy and operator-facing provisional status/sold evidence without making cashiers adjudicate inventory truth.</p>
+        </article>
+
+        <article class="unit">
+          <h3>U8. Document the provisional import stock boundary</h3>
+          <p>Add a solution note and rebuild graphify after implementation so future work does not reintroduce fake inventory counts.</p>
+        </article>
+      </section>
+
+      <section id="risks">
+        <h2>Risks &amp; Mitigations</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Risk</th>
+              <th>Mitigation</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Provisional rows become storefront-visible</td>
+              <td>Keep POS inclusion in POS catalog queries, not general product visibility; test hidden/POS-only identity behavior.</td>
+            </tr>
+            <tr>
+              <td>Fake availability leaks into stock ops</td>
+              <td>Use provisional rows and availability policy metadata instead of inflated <code>quantityAvailable</code>.</td>
+            </tr>
+            <tr>
+              <td>Sale completion double-decrements after finalization</td>
+              <td>Persist provisional import references on sale lines and skip trusted mutation for those lines.</td>
+            </tr>
+            <tr>
+              <td>Offline sync arrives after provisional status changes</td>
+              <td>Preserve sale facts and route drift to review/conflict rails.</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+    </main>
+  </body>
+</html>

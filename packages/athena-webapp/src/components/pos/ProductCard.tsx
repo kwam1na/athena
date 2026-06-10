@@ -40,13 +40,18 @@ export function ProductCard({
   onAfterAdd,
 }: ProductCardProps) {
   const [quantityInput, setQuantityInput] = useState("1");
+  const isProvisionalImport =
+    product.availabilityPolicy === "active_provisional_import";
   const maxQuantity = useMemo(() => {
+    if (isProvisionalImport) {
+      return undefined;
+    }
     if (typeof product.quantityAvailable !== "number") {
       return undefined;
     }
 
     return Math.max(0, Math.trunc(product.quantityAvailable));
-  }, [product.quantityAvailable]);
+  }, [isProvisionalImport, product.quantityAvailable]);
   const selectedQuantity = normalizeQuantity(quantityInput, maxQuantity);
   const isAvailable =
     product.inStock && (maxQuantity === undefined || maxQuantity > 0);
@@ -150,6 +155,8 @@ export function ProductCard({
           <p className="text-xs text-muted-foreground">
             {product.availabilityMessage ? (
               product.availabilityMessage
+            ) : isProvisionalImport ? (
+              "Count pending"
             ) : (
               <>
                 <b>{product.quantityAvailable ?? 0}</b> available
