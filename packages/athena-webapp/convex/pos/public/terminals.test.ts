@@ -16,6 +16,8 @@ const mocks = vi.hoisted(() => ({
   requireAuthenticatedAthenaUserWithCtx: vi.fn(),
   requireOrganizationMemberRoleWithCtx: vi.fn(),
   resolveTerminalCloudRepairCommand: vi.fn(),
+  createRemoteAssistRepository: vi.fn(),
+  remoteAssistUpsertClient: vi.fn(),
   submitTerminalRuntimeStatusCommand: vi.fn(),
   updateTerminalCommand: vi.fn(),
   verifyTerminalRecoveryCommandsFromRuntime: vi.fn(),
@@ -61,6 +63,10 @@ vi.mock("../application/terminalRecovery/terminalCommandService", () => ({
 vi.mock("../infrastructure/repositories/terminalRecoveryRepository", () => ({
   createTerminalRecoveryCommandRepository:
     mocks.createTerminalRecoveryCommandRepository,
+}));
+
+vi.mock("../../remoteAssist/infrastructure/remoteAssistRepository", () => ({
+  createRemoteAssistRepository: mocks.createRemoteAssistRepository,
 }));
 
 import {
@@ -127,6 +133,9 @@ describe("POS terminal public mutations", () => {
     mocks.getTerminalHealthSummaryQuery.mockResolvedValue(null);
     mocks.createTerminalRecoveryCommandRepository.mockReturnValue({
       repository: true,
+    });
+    mocks.createRemoteAssistRepository.mockReturnValue({
+      upsertClient: mocks.remoteAssistUpsertClient,
     });
     mocks.issueTerminalRecoveryCommandService.mockResolvedValue({
       kind: "ok",
@@ -483,6 +492,111 @@ describe("POS terminal public mutations", () => {
         rawLocalEvents: expect.anything(),
       }),
     );
+  });
+
+  it("enrolls Remote Assist presence after a successful runtime check-in", async () => {
+    const ctx = buildCtx({
+      terminal: {
+        _id: "terminal-1",
+        storeId: "store-1",
+        status: "active",
+        registeredByUserId: "athena-user-2",
+        syncSecretHash: SYNC_SECRET_HASH,
+        displayName: "Front register",
+      },
+    });
+
+    await getHandler(submitTerminalRuntimeStatus)(ctx as never, {
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      syncSecretHash: "sync-secret-1",
+      status: buildRuntimeStatus({
+        browserInfo: {
+          language: "en-GB",
+          online: true,
+          platform: "macOS",
+          userAgent: "Athena POS",
+        },
+      }),
+    });
+
+    expect(mocks.remoteAssistUpsertClient).toHaveBeenCalledWith(
+      expect.objectContaining({
+        accessPolicy: "unattended_allowed",
+        adapterRef: {
+          id: "terminal-1",
+          kind: "pos_terminal",
+          label: "Front register",
+        },
+        browserSummary: {
+          online: "true",
+          platform: "macOS",
+        },
+        displayName: "Front register",
+        enrollmentStatus: "active",
+        organizationId: "org-1",
+        presenceStatus: "online",
+        runtimeIdentity: "terminal-1",
+        runtimeType: "pos_terminal",
+        storeId: "store-1",
+      }),
+    );
+  });
+
+  it("does not enroll Remote Assist presence after failed runtime status submission", async () => {
+    mocks.submitTerminalRuntimeStatusCommand.mockResolvedValue({
+      kind: "user_error",
+      error: {
+        code: "runtime_failed",
+        message: "Runtime status was not accepted.",
+      },
+    });
+    const ctx = buildCtx({
+      terminal: {
+        _id: "terminal-1",
+        storeId: "store-1",
+        status: "active",
+        registeredByUserId: "athena-user-2",
+        syncSecretHash: SYNC_SECRET_HASH,
+      },
+    });
+
+    await getHandler(submitTerminalRuntimeStatus)(ctx as never, {
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      syncSecretHash: "sync-secret-1",
+      status: buildRuntimeStatus(),
+    });
+
+    expect(mocks.remoteAssistUpsertClient).not.toHaveBeenCalled();
+  });
+
+  it("skips Remote Assist enrollment when the store is missing", async () => {
+    const ctx = buildCtx({
+      store: [
+        {
+          _id: "store-1",
+          organizationId: "org-1",
+        },
+        null,
+      ],
+      terminal: {
+        _id: "terminal-1",
+        storeId: "store-1",
+        status: "active",
+        registeredByUserId: "athena-user-2",
+        syncSecretHash: SYNC_SECRET_HASH,
+      },
+    });
+
+    await getHandler(submitTerminalRuntimeStatus)(ctx as never, {
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      syncSecretHash: "sync-secret-1",
+      status: buildRuntimeStatus(),
+    });
+
+    expect(mocks.remoteAssistUpsertClient).not.toHaveBeenCalled();
   });
 
   it("accepts only safe app-session recovery status in runtime check-ins", async () => {
@@ -1018,14 +1132,24 @@ function buildRuntimeStatus(extra: Record<string, unknown> = {}) {
 
 function buildCtx(
   overrides: {
+    store?: Record<string, unknown> | null | Array<Record<string, unknown> | null>;
     terminal?: Record<string, unknown> | null;
   } = {},
 ) {
+  let storeReadCount = 0;
   return {
     db: {
       get: vi.fn(async (tableName: string, id: string) => {
         if (tableName === "store" && id === "store-1") {
-          return {
+          if (Array.isArray(overrides.store)) {
+            const store = overrides.store[storeReadCount] ?? null;
+            storeReadCount += 1;
+            return store;
+          }
+
+          return Object.prototype.hasOwnProperty.call(overrides, "store")
+            ? overrides.store
+            : {
             _id: "store-1",
             organizationId: "org-1",
           };

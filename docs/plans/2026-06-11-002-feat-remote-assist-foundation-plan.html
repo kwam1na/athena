@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>feat: Add Athena Remote Assist Foundation</title>
+  <style>
+    :root { color-scheme: light; --bg: #f7f8fa; --panel: #ffffff; --ink: #1f2933; --muted: #64748b; --line: #d8dee8; --accent: #0f766e; --accent-soft: #e6f4f1; --warn: #9a3412; --warn-soft: #fff1e8; --code: #f1f5f9; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    main { max-width: 1120px; margin: 0 auto; padding: 32px 24px 56px; }
+    header { border-bottom: 1px solid var(--line); margin-bottom: 24px; padding-bottom: 18px; }
+    h1 { font-size: 2rem; line-height: 1.15; margin: 0 0 10px; letter-spacing: 0; }
+    h2 { border-top: 1px solid var(--line); font-size: 1.2rem; margin: 28px 0 12px; padding-top: 24px; }
+    h3 { font-size: 1rem; margin: 18px 0 8px; }
+    p { margin: 0 0 12px; }
+    ul { margin: 8px 0 16px 22px; padding: 0; }
+    li { margin: 5px 0; }
+    a { color: var(--accent); }
+    code { background: var(--code); border-radius: 4px; padding: 1px 4px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.92em; }
+    table { border-collapse: collapse; margin: 12px 0 18px; width: 100%; }
+    th, td { border: 1px solid var(--line); padding: 10px 12px; text-align: left; vertical-align: top; }
+    th { background: #eef2f7; font-weight: 600; }
+    .meta { color: var(--muted); display: flex; flex-wrap: wrap; gap: 10px; font-size: 0.94rem; }
+    .badge { background: var(--accent-soft); border: 1px solid #b7ded6; border-radius: 999px; color: #115e59; padding: 2px 9px; }
+    .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 18px; margin: 14px 0; }
+    .callout { background: var(--warn-soft); border: 1px solid #fed7aa; border-radius: 8px; color: var(--warn); padding: 14px 16px; }
+    .grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
+    .unit h3 { margin-top: 0; }
+    .small { color: var(--muted); font-size: 0.92rem; }
+    pre { background: #0f172a; border-radius: 8px; color: #e2e8f0; overflow-x: auto; padding: 14px; white-space: pre; }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>feat: Add Athena Remote Assist Foundation</h1>
+    <div class="meta">
+      <span class="badge">feat</span>
+      <span>Status: active</span>
+      <span>Date: 2026-06-11</span>
+      <span>Markdown: <a href="2026-06-11-002-feat-remote-assist-foundation-plan.md">2026-06-11-002-feat-remote-assist-foundation-plan.md</a></span>
+    </div>
+  </header>
+  <section class="panel">
+    <h2 style="border-top: 0; margin-top: 0; padding-top: 0;">Summary</h2>
+    <p>Add a generic Remote Assist foundation for remotely viewing and controlling enrolled Athena browser clients, then connect POS terminals as the first adapter. Unattended sessions use sanitized in-app co-browsing instead of permission-gated screen capture; attended sessions can optionally upgrade to browser screen share.</p>
+  </section>
+  <section>
+    <h2>Problem Frame</h2>
+    <p>Athena can already diagnose and remotely recover some POS terminal-health conditions, but support still cannot operate the affected browser session when a field terminal needs hands-on guidance. The first case is the M Supplies terminal, but the durable primitive is broader: an authenticated Athena browser client should be able to enroll as remote-assistable, accept an attended or unattended support session under policy, and provide bounded view/control without bypassing the business authority gates of the surface it is running.</p>
+  </section>
+  <section>
+    <h2>Core Requirements</h2>
+    <ul>
+      <li>Model remote-assistable Athena browser clients independently of POS terminals.</li>
+      <li>Support unattended-by-default policy for enrolled clients, with attended and disabled modes available.</li>
+      <li>Issue short-lived transport tokens only after role, policy, enrollment, presence, and runtime checks pass.</li>
+      <li>Provide unattended-safe in-app co-browsing plus bounded low-latency control messages through a provider-neutral adapter.</li>
+      <li>Mask or block sensitive inputs and secrets including PINs, recovery codes, payment credentials, sync secrets, and staff proof material.</li>
+      <li>Audit every session, policy decision, lifecycle event, and privileged recovery action.</li>
+      <li>Use POS terminals as the first adapter while preserving POS authority gates and runtime-check-in verification.</li>
+    </ul>
+  </section>
+  <section>
+    <h2>Scope Boundaries</h2>
+    <div class="callout">Remote Assist controls the Athena browser app session. It is not arbitrary desktop administration, does not expose devtools or local storage editing, and does not bypass drawer, staff, terminal-integrity, Cash Controls, Operations, sale, payment, inventory, or closeout authority.</div>
+    <ul>
+      <li>No direct browser IndexedDB/local storage mutation by support controls.</li>
+      <li>No screen-share-only unattended mode; browser capture requires local permission.</li>
+      <li>No custom realtime/media stack unless provider research proves it necessary.</li>
+      <li>No non-POS adapters in v1.</li>
+      <li>No fleet-wide automatic remediation in this first implementation.</li>
+    </ul>
+  </section>
+  <section>
+    <h2>Design Shape</h2>
+    <pre>Support user -> Remote Assist API -> Policy and audit -> Transport provider
+                                      |                      |
+                                      v                      v
+                              Enrolled browser client -> Runtime adapter
+                                                             |
+                                                             v
+                                                    POS terminal recovery</pre>
+    <p>The platform owns policy, sessions, audit, enrollment, co-browsing transport, optional attended screen-share upgrade, and provider tokens. The POS adapter contributes terminal identity, terminal-sensitive regions, Terminal Health launch, and existing recovery commands.</p>
+  </section>
+  <section>
+    <h2>Key Decisions</h2>
+    <ul>
+      <li>Build the foundation around generic remote-assistable Athena browser clients, not POS terminals.</li>
+      <li>Use sanitized in-app co-browsing for unattended default; use browser screen-share only as an attended upgrade.</li>
+      <li>Use a provider-neutral transport adapter and prefer a vetted realtime provider or rrweb-style event stream over hand-rolled signaling/media infrastructure.</li>
+      <li>Make unattended access a policy result for enrolled clients, not an unconditional support power.</li>
+      <li>Keep support control input bounded to application events and adapter-approved actions.</li>
+      <li>Keep sensitive-entry masking in the runtime adapter because each surface knows its own sensitive UI.</li>
+      <li>Keep POS terminal recovery verification based on existing terminal runtime check-ins.</li>
+    </ul>
+  </section>
+  <section>
+    <h2>Implementation Units</h2>
+    <div class="grid">
+      <article class="panel unit"><h3>U1. Remote Assist domain model</h3><p>Add schemas and repositories for clients, sessions, lifecycle events, capabilities, and redacted audit fields.</p></article>
+      <article class="panel unit"><h3>U2. Policy and session lifecycle</h3><p>Evaluate role, store/platform policy, enrollment, presence, mode, reason, and TTL before session start or claim.</p></article>
+      <article class="panel unit"><h3>U3. Provider-neutral co-browsing and transport adapter</h3><p>Define server/client room, token, sanitized DOM co-browsing, optional attended screen-share, and bounded control-message contracts around a vetted provider.</p></article>
+      <article class="panel unit"><h3>U4. Browser runtime shell</h3><p>Mount runtime presence, connected banner, attended approval, local disconnect, sensitive masking, and control gates.</p></article>
+      <article class="panel unit"><h3>U5. POS terminal adapter</h3><p>Enroll active terminals, mark POS-sensitive regions, launch from Terminal Health, and preserve recovery verification.</p></article>
+      <article class="panel unit"><h3>U6. Support UI</h3><p>Add Remote Assist session controls, status, reason capture, and audit snippets to Terminal Health detail.</p></article>
+      <article class="panel unit"><h3>U7. Audit, docs, validation</h3><p>Add structured audit coverage, harness mapping, a solution note, rollout controls, and operational docs.</p></article>
+    </div>
+  </section>
+  <section>
+    <h2>Validation Strategy</h2>
+    <ul>
+      <li>Convex schema, policy, session, transport adapter, and audit tests.</li>
+      <li>React runtime provider, sensitive-region, banner, attended approval, and support UI tests.</li>
+      <li>POS terminal adapter tests covering M Supplies-shaped recovery handoff and authority preservation.</li>
+      <li>Harness validation-map coverage for Remote Assist backend, runtime, transport, and Terminal Health surfaces.</li>
+      <li>Solution documentation for the generic browser-client foundation, provider-neutral transport, unattended co-browsing boundary, sensitive-control restrictions, and POS authority invariants.</li>
+      <li>Repo gates after implementation: focused package tests, Convex audit/lint, TypeScript, build, graphify rebuild, harness review, inferential review, and <code>bun run pr:athena</code>.</li>
+    </ul>
+  </section>
+  <section>
+    <h2>Risks</h2>
+    <table>
+      <thead><tr><th>Risk</th><th>Mitigation</th></tr></thead>
+      <tbody>
+        <tr><td>Remote control becomes an unsafe admin bypass.</td><td>Use explicit Remote Assist permission, bounded input events, sensitive masking, recovery command boundaries, and no direct storage mutation.</td></tr>
+        <tr><td>Provider lock-in leaks through app code.</td><td>Isolate provider SDK/API use behind transport adapter interfaces.</td></tr>
+        <tr><td>Browser screen capture blocks unattended sessions.</td><td>Make unattended mode use sanitized app-DOM co-browsing; reserve screen share for attended upgrade.</td></tr>
+        <tr><td>Unattended default creates trust concerns.</td><td>Require enrollment, visible banner, local disconnect, reason, TTL, policy override, and audit.</td></tr>
+        <tr><td>Sensitive values leak through stream or audit.</td><td>Mask sensitive UI, pause control during sensitive entry, reject secret-like audit payloads, and test PIN/proof/payment redaction.</td></tr>
+      </tbody>
+    </table>
+  </section>
+  <section>
+    <h2>References</h2>
+    <ul>
+      <li><a href="2026-06-11-001-feat-pos-remote-terminal-health-plan.md">POS Remote Terminal Health plan</a></li>
+      <li><a href="../solutions/architecture/athena-remote-assist-foundation-2026-06-11.md">Remote Assist foundation solution</a></li>
+      <li><a href="../solutions/architecture/athena-pos-remote-terminal-health-recovery-2026-06-11.md">POS remote terminal health recovery solution</a></li>
+      <li><a href="../solutions/architecture/athena-pos-terminal-health-visibility-2026-05-20.md">POS terminal health visibility solution</a></li>
+      <li><a href="../product-copy-tone.md">Product copy tone</a></li>
+      <li class="small">External references are listed in the markdown source.</li>
+    </ul>
+  </section>
+</main>
+</body>
+</html>
