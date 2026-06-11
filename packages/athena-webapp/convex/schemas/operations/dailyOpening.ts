@@ -12,6 +12,29 @@ const dailyOpeningSourceSubjectValidator = v.object({
   label: v.optional(v.string()),
 });
 
+const dailyOpeningReviewEvidenceValidator = v.object({
+  key: v.string(),
+  severity: v.union(
+    v.literal("blocker"),
+    v.literal("review"),
+    v.literal("carry_forward"),
+  ),
+  category: v.string(),
+  title: v.string(),
+  message: v.string(),
+  subject: dailyOpeningSourceSubjectValidator,
+  link: v.optional(
+    v.object({
+      href: v.optional(v.string()),
+      label: v.optional(v.string()),
+      params: v.optional(v.record(v.string(), v.string())),
+      search: v.optional(v.record(v.string(), v.string())),
+      to: v.optional(v.string()),
+    }),
+  ),
+  metadata: v.optional(v.any()),
+});
+
 export const dailyOpeningSchema = v.object({
   storeId: v.id("store"),
   organizationId: v.id("organization"),
@@ -42,4 +65,5 @@ export const dailyOpeningSchema = v.object({
   automationRunId: v.optional(v.id("automationRun")),
   automationPolicyVersion: v.optional(v.string()),
   automationDecisionReason: v.optional(v.string()),
+  managerReviewEvidence: v.optional(v.array(dailyOpeningReviewEvidenceValidator)),
 });

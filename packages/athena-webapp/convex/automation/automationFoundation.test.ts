@@ -6,7 +6,11 @@ import {
   registerAutomationActions,
 } from "./actionRegistry";
 import { evaluateAutomationActionWithCtx } from "./automationFoundation";
-import { recordAutomationRunWithCtx } from "./runLedger";
+import {
+  getOpeningAutoStartPolicyConfigWithCtx,
+  recordAutomationRunWithCtx,
+  upsertOpeningAutoStartPolicyConfigWithCtx,
+} from "./runLedger";
 
 type TableName = "automationPolicy" | "automationRun";
 type Row = Record<string, unknown> & { _id: string };
@@ -195,6 +199,99 @@ describe("automation foundation", () => {
       outcome: "dry_run",
       sourceSubjects: [{ type: "daily_close", id: "close-1" }],
     });
+  });
+
+  it("reads missing Opening auto-start policy config as disabled defaults", async () => {
+    const { db } = createDb();
+
+    const config = await getOpeningAutoStartPolicyConfigWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(config).toEqual({
+      configured: false,
+      mode: "disabled",
+      openingBlockerHandling: "skip",
+      openingLocalStartMinutes: 0,
+      paused: false,
+      policy: null,
+    });
+  });
+
+  it("upserts Opening auto-start policy config with local start and blocker handling", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 5, 8, 9));
+    const { db, inserts, patches } = createDb({
+      automationPolicy: [
+        {
+          _id: "policy-1",
+          action: "opening.auto_start",
+          createdAt: 1,
+          domain: "daily_operations",
+          mode: "dry_run",
+          openingBlockerHandling: "skip",
+          openingLocalStartMinutes: 480,
+          policyVersion: "daily-operations.v1",
+          storeId: "store-1",
+          updatedAt: 1,
+        },
+      ],
+    });
+
+    const updated = await upsertOpeningAutoStartPolicyConfigWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        mode: "enabled",
+        openingBlockerHandling: "manager_review",
+        openingLocalStartMinutes: 510,
+        operatingTimezoneOffsetMinutes: 0,
+        organizationId: "org-1" as Id<"organization">,
+        policyVersion: "daily-operations.v2",
+        storeId: "store-1" as Id<"store">,
+        updatedByUserId: "user-1" as Id<"athenaUser">,
+      },
+    );
+
+    expect(updated).toMatchObject({
+      _id: "policy-1",
+      mode: "enabled",
+      openingBlockerHandling: "manager_review",
+      openingLocalStartMinutes: 510,
+      operatingTimezoneOffsetMinutes: 0,
+      organizationId: "org-1",
+      policyVersion: "daily-operations.v2",
+      updatedAt: Date.UTC(2026, 5, 8, 9),
+      updatedByUserId: "user-1",
+    });
+    expect(inserts).toEqual([]);
+    expect(patches).toContainEqual(
+      expect.objectContaining({
+        id: "policy-1",
+        table: "automationPolicy",
+        value: expect.objectContaining({
+          openingBlockerHandling: "manager_review",
+          openingLocalStartMinutes: 510,
+        }),
+      }),
+    );
+  });
+
+  it("rejects invalid Opening local start minutes", async () => {
+    const { db } = createDb();
+
+    await expect(
+      upsertOpeningAutoStartPolicyConfigWithCtx(
+        { db } as unknown as MutationCtx,
+        {
+          mode: "enabled",
+          openingBlockerHandling: "manager_review",
+          openingLocalStartMinutes: 1_440,
+          storeId: "store-1" as Id<"store">,
+        },
+      ),
+    ).rejects.toThrow("Opening local start minutes must be within one local day.");
   });
 
   it("defaults store actions to disabled and does not call the handler", async () => {

@@ -6,6 +6,11 @@ export const automationPolicyModeValidator = v.union(
   v.literal("enabled"),
 );
 
+export const openingAutoStartBlockerHandlingValidator = v.union(
+  v.literal("skip"),
+  v.literal("manager_review"),
+);
+
 export const automationRunOutcomeValidator = v.union(
   v.literal("disabled"),
   v.literal("dry_run"),
@@ -29,6 +34,8 @@ export const automationPolicySchema = v.object({
   action: v.string(),
   mode: automationPolicyModeValidator,
   operatingTimezoneOffsetMinutes: v.optional(v.number()),
+  openingLocalStartMinutes: v.optional(v.number()),
+  openingBlockerHandling: v.optional(openingAutoStartBlockerHandlingValidator),
   paused: v.optional(v.boolean()),
   policyVersion: v.string(),
   rolloutNotes: v.optional(v.string()),

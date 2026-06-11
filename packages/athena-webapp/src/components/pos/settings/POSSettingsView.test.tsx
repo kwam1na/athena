@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   registerTerminalMutation: vi.fn(),
   rotateRecoveryCode: vi.fn(),
   revokeRecoveryCode: vi.fn(),
+  updateOpeningAutoStartPolicy: vi.fn(),
   unlockRecoveryCode: vi.fn(),
   useAuth: vi.fn(),
   useMutation: vi.fn(),
@@ -68,6 +69,12 @@ vi.mock("~/convex/_generated/api", () => ({
       posTerminal: {
         getTerminalByFingerprint: "getTerminalByFingerprint",
         registerTerminal: "registerTerminal",
+      },
+    },
+    operations: {
+      dailyOperationsAutomation: {
+        getOpeningAutoStartPolicy: "getOpeningAutoStartPolicy",
+        updateOpeningAutoStartPolicy: "updateOpeningAutoStartPolicy",
       },
     },
     pos: {
@@ -157,7 +164,14 @@ describe("registerAndProvisionPosTerminal", () => {
     });
     mocks.revokeRecoveryCode.mockResolvedValue({ status: "revoked" });
     mocks.unlockRecoveryCode.mockResolvedValue({ status: "active" });
+    mocks.updateOpeningAutoStartPolicy.mockResolvedValue({
+      mode: "enabled",
+      openingBlockerHandling: "start_with_manager_review",
+    });
     mocks.useMutation.mockImplementation((ref) => {
+      if (ref === "updateOpeningAutoStartPolicy") {
+        return mocks.updateOpeningAutoStartPolicy;
+      }
       if (ref === "rotateRecoveryCode") return mocks.rotateRecoveryCode;
       if (ref === "revokeRecoveryCode") return mocks.revokeRecoveryCode;
       if (ref === "unlockRecoveryCode") return mocks.unlockRecoveryCode;
@@ -181,6 +195,13 @@ describe("registerAndProvisionPosTerminal", () => {
             rotatedAt: 1,
             status: "active",
           }
+        : ref === "getOpeningAutoStartPolicy"
+          ? {
+              localStartMinutes: 510,
+              mode: "enabled",
+              openingBlockerHandling: "start_with_manager_review",
+              operatingTimezoneOffsetMinutes: -120,
+            }
         : null,
     );
     mocks.generateBrowserFingerprint.mockResolvedValue({
@@ -418,6 +439,93 @@ describe("registerAndProvisionPosTerminal", () => {
     );
   });
 
+  it("shows full admins the store-day automation policy", async () => {
+    render(<POSSettingsView />);
+
+    expect(await screen.findByText("Store day automation")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Athena can start the store day on schedule and keep opening review items for manager follow-up.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Enable store-day auto-start")).toBeChecked();
+    expect(screen.getByLabelText("Local start time")).toHaveValue("08:30");
+    expect(screen.getByLabelText("Store UTC offset")).toHaveValue(-120);
+    expect(
+      screen.getByText("Blockers stay available for manager review."),
+    ).toBeInTheDocument();
+    expect(mocks.useQuery).toHaveBeenCalledWith("getOpeningAutoStartPolicy", {
+      storeId: "store-1",
+    });
+  });
+
+  it("saves the store-day automation policy with local time and review handling", async () => {
+    const user = userEvent.setup();
+
+    render(<POSSettingsView />);
+
+    await user.click(await screen.findByLabelText("Enable store-day auto-start"));
+    await user.clear(screen.getByLabelText("Local start time"));
+    await user.type(screen.getByLabelText("Local start time"), "07:45");
+    await user.click(
+      screen.getByRole("button", { name: "Save store-day automation" }),
+    );
+
+    await waitFor(() =>
+      expect(mocks.updateOpeningAutoStartPolicy).toHaveBeenCalledWith({
+        localStartMinutes: 465,
+        mode: "disabled",
+        openingBlockerHandling: "start_with_manager_review",
+        operatingTimezoneOffsetMinutes: -120,
+        storeId: "store-1",
+      }),
+    );
+  });
+
+  it("saves enabled store-day automation from a disabled policy", async () => {
+    const user = userEvent.setup();
+    mocks.useQuery.mockImplementation((ref) =>
+      ref === "getRecoveryCodeStatus"
+        ? {
+            failedAttemptCount: 0,
+            lastUsedAt: undefined,
+            lockedUntil: undefined,
+            plaintextCode: "mintlamp42",
+            rotatedAt: 1,
+            status: "active",
+          }
+        : ref === "getOpeningAutoStartPolicy"
+          ? {
+              localStartMinutes: 480,
+              mode: "disabled",
+              openingBlockerHandling: "start_with_manager_review",
+              operatingTimezoneOffsetMinutes: 0,
+            }
+          : null,
+    );
+
+    render(<POSSettingsView />);
+
+    await user.click(await screen.findByLabelText("Enable store-day auto-start"));
+    await user.clear(screen.getByLabelText("Local start time"));
+    await user.type(screen.getByLabelText("Local start time"), "08:15");
+    await user.clear(screen.getByLabelText("Store UTC offset"));
+    await user.type(screen.getByLabelText("Store UTC offset"), "0");
+    await user.click(
+      screen.getByRole("button", { name: "Save store-day automation" }),
+    );
+
+    await waitFor(() =>
+      expect(mocks.updateOpeningAutoStartPolicy).toHaveBeenCalledWith({
+        localStartMinutes: 495,
+        mode: "enabled",
+        openingBlockerHandling: "start_with_manager_review",
+        operatingTimezoneOffsetMinutes: 0,
+        storeId: "store-1",
+      }),
+    );
+  });
+
   it("disables revoke for revoked POS recovery codes", async () => {
     mocks.useQuery.mockImplementation((ref) =>
       ref === "getRecoveryCodeStatus"
@@ -446,10 +554,38 @@ describe("registerAndProvisionPosTerminal", () => {
     await waitForFingerprintEffect();
 
     expect(screen.queryByText("POS recovery code")).not.toBeInTheDocument();
+    expect(screen.queryByText("Store day automation")).not.toBeInTheDocument();
     expect(mocks.useQuery).toHaveBeenCalledWith(
       "getRecoveryCodeStatus",
       "skip",
     );
+    expect(mocks.useQuery).toHaveBeenCalledWith(
+      "getOpeningAutoStartPolicy",
+      "skip",
+    );
+  });
+
+  it("shows a normalized error when store-day automation cannot save", async () => {
+    const user = userEvent.setup();
+    mocks.updateOpeningAutoStartPolicy.mockRejectedValue(
+      new Error("internal duplicate_policy stack"),
+    );
+
+    render(<POSSettingsView />);
+
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Save store-day automation",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(mocks.updateOpeningAutoStartPolicy).toHaveBeenCalled(),
+    );
+    expect(
+      await screen.findByText("Store-day automation settings were not saved."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/duplicate_policy/)).not.toBeInTheDocument();
   });
 
   it("hands off roster and support work to terminal health", async () => {

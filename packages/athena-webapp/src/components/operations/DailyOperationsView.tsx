@@ -119,6 +119,21 @@ type DailyOperationsAutomationStatus = {
   lane: "opening" | "close";
   occurredAt?: number | null;
   outcome: DailyOperationsAutomationOutcome;
+  reviewEvidence?: Array<{
+    id: string;
+    label: string;
+    message?: string | null;
+    source?: {
+      id: string;
+      label?: string;
+      type: string;
+    };
+    sourceLink?: {
+      params?: Record<string, string>;
+      search?: Record<string, string>;
+      to?: string;
+    };
+  }>;
   sourceLink?: {
     params?: Record<string, string>;
     search?: Record<string, string>;
@@ -768,6 +783,14 @@ function getAutomationLaneLabel(lane: DailyOperationsAutomationStatus["lane"]) {
 function getAutomationStatusMessage(status: DailyOperationsAutomationStatus) {
   const label = getAutomationLaneLabel(status.lane);
 
+  if (
+    status.outcome === "applied" &&
+    status.lane === "opening" &&
+    (status.reviewEvidence?.length ?? 0) > 0
+  ) {
+    return "Athena started the store day with manager review items.";
+  }
+
   if (status.outcome === "applied" && status.lane === "opening") {
     return "Athena started Opening Handoff.";
   }
@@ -896,6 +919,91 @@ function AutomationStatusPanel({
             </article>
           );
         })}
+      </div>
+    </section>
+  );
+}
+
+function AutomationReviewEvidencePanel({
+  orgUrlSlug,
+  snapshot,
+  storeUrlSlug,
+}: {
+  orgUrlSlug: string;
+  snapshot: DailyOperationsSnapshot;
+  storeUrlSlug: string;
+}) {
+  const evidenceItems = (snapshot.automationStatuses ?? []).flatMap((status) =>
+    status.lane === "opening" && status.outcome === "applied"
+      ? (status.reviewEvidence ?? [])
+      : [],
+  );
+
+  if (evidenceItems.length === 0) return null;
+
+  return (
+    <section className="rounded-lg border border-warning/30 bg-warning/10 p-layout-md shadow-surface">
+      <h3 className="flex items-center gap-layout-xs text-base font-medium text-foreground">
+        <CircleAlert aria-hidden="true" className="h-4 w-4" />
+        Opening review
+      </h3>
+      <p className="mt-layout-sm text-sm leading-6 text-foreground">
+        Athena started the store day with manager review items.
+      </p>
+      <p className="mt-1 text-sm leading-6 text-muted-foreground">
+        Review these items in the owning workflow. POS stays open through the
+        started store-day record.
+      </p>
+      <div className="mt-layout-md space-y-layout-xs">
+        {evidenceItems.map((item) => (
+          <article
+            className="flex flex-col gap-layout-xs rounded-md border border-border/70 bg-background/60 px-layout-md py-layout-sm sm:flex-row sm:items-start sm:justify-between"
+            key={item.id}
+          >
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-foreground">
+                {item.label}
+              </p>
+              {item.message ? (
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                  {item.message}
+                </p>
+              ) : null}
+              {item.source?.label ? (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {item.source.label}
+                </p>
+              ) : null}
+            </div>
+            {item.sourceLink?.to ? (
+              <Button
+                asChild
+                className="h-8 shrink-0 self-start px-2 text-xs"
+                size="sm"
+                variant="ghost"
+              >
+                <Link
+                  aria-label={`Open ${item.label} review source`}
+                  params={buildParams(
+                    orgUrlSlug,
+                    storeUrlSlug,
+                    item.sourceLink.params,
+                  )}
+                  search={
+                    {
+                      o: getOrigin(),
+                      ...(item.sourceLink.search ?? {}),
+                    } as never
+                  }
+                  to={item.sourceLink.to}
+                >
+                  Open
+                  <ArrowUpRight aria-hidden="true" className="h-3.5 w-3.5" />
+                </Link>
+              </Button>
+            ) : null}
+          </article>
+        ))}
       </div>
     </section>
   );
@@ -1509,6 +1617,11 @@ export function DailyOperationsViewContent({
                   ) : (
                     <section className="space-y-layout-lg">
                       <AutomationStatusPanel
+                        orgUrlSlug={orgUrlSlug}
+                        snapshot={snapshot}
+                        storeUrlSlug={storeUrlSlug}
+                      />
+                      <AutomationReviewEvidencePanel
                         orgUrlSlug={orgUrlSlug}
                         snapshot={snapshot}
                         storeUrlSlug={storeUrlSlug}

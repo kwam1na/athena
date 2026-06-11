@@ -12,6 +12,7 @@ import View from "../../View";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { useAuth } from "@/hooks/useAuth";
 import { api } from "~/convex/_generated/api";
+import type { Id } from "~/convex/_generated/dataModel";
 import {
   BrowserFingerprintResult,
   generateBrowserFingerprint,
@@ -57,6 +58,8 @@ type HealthLinkProps = {
 
 const HealthLink = Link as unknown as ComponentType<HealthLinkProps>;
 const POS_APP_SHELL_CACHE_PREFIX = "athena-pos-app-shell-";
+const DEFAULT_STORE_DAY_AUTO_START_MINUTES = 8 * 60;
+const DEFAULT_STORE_DAY_TIMEZONE_OFFSET_MINUTES = 0;
 const terminalCapabilityOptions: Array<{
   value: PosTerminalTransactionCapability;
   label: string;
@@ -356,6 +359,266 @@ function formatRecoveryTimestamp(value?: number | null) {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value));
+}
+
+type StoreDayAutomationPolicy = {
+  localStartMinutes?: number | null;
+  mode?: "disabled" | "dry_run" | "enabled" | null;
+  openingBlockerHandling?: "skip_when_blocked" | "start_with_manager_review" | null;
+  operatingTimezoneOffsetMinutes?: number | null;
+};
+
+function formatLocalStartTime(minutes?: number | null) {
+  const safeMinutes =
+    typeof minutes === "number" && minutes >= 0 && minutes < 24 * 60
+      ? minutes
+      : DEFAULT_STORE_DAY_AUTO_START_MINUTES;
+  const hours = Math.floor(safeMinutes / 60);
+  const remainder = safeMinutes % 60;
+
+  return `${String(hours).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
+}
+
+function parseLocalStartMinutes(value: string) {
+  const match = /^(\d{2}):(\d{2})$/.exec(value);
+
+  if (!match) return null;
+
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+
+  if (hours > 23 || minutes > 59) return null;
+
+  return hours * 60 + minutes;
+}
+
+function normalizeTimezoneOffsetMinutes(value?: number | null) {
+  return typeof value === "number" &&
+    Number.isInteger(value) &&
+    value >= -14 * 60 &&
+    value <= 14 * 60
+    ? value
+    : DEFAULT_STORE_DAY_TIMEZONE_OFFSET_MINUTES;
+}
+
+function StoreDayAutomationAdminPanel({
+  storeId,
+}: {
+  storeId?: Id<"store"> | null;
+}) {
+  const { hasFullAdminAccess, isLoading } = usePermissions();
+  const policy = useQuery(
+    api.operations.dailyOperationsAutomation.getOpeningAutoStartPolicy,
+    !isLoading && hasFullAdminAccess && storeId ? { storeId } : "skip",
+  ) as StoreDayAutomationPolicy | null | undefined;
+  const updateOpeningAutoStartPolicy = useMutation(
+    api.operations.dailyOperationsAutomation.updateOpeningAutoStartPolicy,
+  );
+  const [isEnabled, setIsEnabled] = useState(false);
+  const [localStartTime, setLocalStartTime] = useState(
+    formatLocalStartTime(DEFAULT_STORE_DAY_AUTO_START_MINUTES),
+  );
+  const [timezoneOffsetMinutes, setTimezoneOffsetMinutes] = useState(
+    DEFAULT_STORE_DAY_TIMEZONE_OFFSET_MINUTES,
+  );
+  const [isSaving, setIsSaving] = useState(false);
+  const [message, setMessage] = useState<{
+    kind: "error" | "success";
+    text: string;
+  } | null>(null);
+  const policyLocalStartMinutes = policy?.localStartMinutes;
+  const policyMode = policy?.mode;
+  const policyTimezoneOffsetMinutes = policy?.operatingTimezoneOffsetMinutes;
+
+  useEffect(() => {
+    if (
+      policyLocalStartMinutes == null &&
+      policyMode == null &&
+      policyTimezoneOffsetMinutes == null
+    ) {
+      return;
+    }
+
+    setIsEnabled(policyMode === "enabled");
+    setLocalStartTime(formatLocalStartTime(policyLocalStartMinutes));
+    setTimezoneOffsetMinutes(
+      normalizeTimezoneOffsetMinutes(policyTimezoneOffsetMinutes),
+    );
+  }, [policyLocalStartMinutes, policyMode, policyTimezoneOffsetMinutes]);
+
+  if (isLoading || !hasFullAdminAccess) {
+    return null;
+  }
+
+  const localStartMinutes = parseLocalStartMinutes(localStartTime);
+  const timezoneOffsetIsValid =
+    Number.isInteger(timezoneOffsetMinutes) &&
+    timezoneOffsetMinutes >= -14 * 60 &&
+    timezoneOffsetMinutes <= 14 * 60;
+  const canSave =
+    Boolean(storeId) &&
+    localStartMinutes !== null &&
+    timezoneOffsetIsValid &&
+    !isSaving;
+
+  const handleSave = async () => {
+    const parsedStartMinutes = parseLocalStartMinutes(localStartTime);
+
+    if (!storeId) {
+      setMessage({
+        kind: "error",
+        text: "Select a store before saving store-day automation.",
+      });
+      return;
+    }
+
+    if (parsedStartMinutes === null) {
+      setMessage({
+        kind: "error",
+        text: "Enter a valid local start time.",
+      });
+      return;
+    }
+
+    if (!timezoneOffsetIsValid) {
+      setMessage({
+        kind: "error",
+        text: "Enter a valid store UTC offset.",
+      });
+      return;
+    }
+
+    setIsSaving(true);
+    setMessage(null);
+    try {
+      await updateOpeningAutoStartPolicy({
+        localStartMinutes: parsedStartMinutes,
+        mode: isEnabled ? "enabled" : "disabled",
+        openingBlockerHandling: "start_with_manager_review",
+        operatingTimezoneOffsetMinutes: timezoneOffsetMinutes,
+        storeId,
+      });
+      setMessage({
+        kind: "success",
+        text: "Store-day automation settings saved.",
+      });
+      toast.success("Store-day automation settings saved.");
+    } catch (error) {
+      console.error(error);
+      setMessage({
+        kind: "error",
+        text: "Store-day automation settings were not saved.",
+      });
+      toast.error("Store-day automation settings were not saved.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <section className="grid gap-layout-xl border-b border-border py-layout-2xl lg:grid-cols-[17rem_minmax(0,1fr)]">
+      <div className="space-y-layout-sm">
+        <h2 className="text-2xl font-medium text-foreground">
+          Store day automation
+        </h2>
+        <p className="text-sm leading-6 text-muted-foreground">
+          Athena can start the store day on schedule and keep opening review
+          items for manager follow-up.
+        </p>
+      </div>
+
+      <div className="space-y-layout-lg">
+        <div className="flex flex-wrap gap-layout-xs">
+          <span className="inline-flex rounded-full border border-border bg-background px-layout-sm py-layout-2xs text-sm text-muted-foreground">
+            {isEnabled ? "Enabled" : "Disabled"}
+          </span>
+          <span className="inline-flex rounded-full border border-border bg-background px-layout-sm py-layout-2xs text-sm text-muted-foreground">
+            Blockers stay available for manager review.
+          </span>
+        </div>
+
+        <div className="grid gap-layout-md sm:grid-cols-[minmax(0,1fr)_12rem_12rem]">
+          <label className="flex min-h-[5rem] items-start gap-layout-sm rounded-md border border-border bg-background p-layout-sm text-sm">
+            <input
+              aria-label="Enable store-day auto-start"
+              checked={isEnabled}
+              className="mt-1 h-4 w-4 rounded border-border text-signal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              onChange={(event) => setIsEnabled(event.target.checked)}
+              type="checkbox"
+            />
+            <span>
+              <span className="block font-medium text-foreground">
+                Enable store-day auto-start
+              </span>
+              <span className="mt-1 block leading-5 text-muted-foreground">
+                Athena starts Opening Handoff at the saved local time. Review
+                items are not resolved by automation.
+              </span>
+            </span>
+          </label>
+
+          <div className="space-y-layout-xs">
+            <Label htmlFor="store-day-auto-start-time">Local start time</Label>
+            <Input
+              id="store-day-auto-start-time"
+              className="h-control-standard bg-background"
+              onChange={(event) => setLocalStartTime(event.target.value)}
+              type="time"
+              value={localStartTime}
+            />
+            <p className="text-xs text-muted-foreground">
+              Saved as store-local minutes for the scheduled automation check.
+            </p>
+          </div>
+
+          <div className="space-y-layout-xs">
+            <Label htmlFor="store-day-timezone-offset">
+              Store UTC offset
+            </Label>
+            <Input
+              id="store-day-timezone-offset"
+              className="h-control-standard bg-background"
+              max={14 * 60}
+              min={-14 * 60}
+              onChange={(event) =>
+                setTimezoneOffsetMinutes(Number(event.target.value))
+              }
+              step={15}
+              type="number"
+              value={timezoneOffsetMinutes}
+            />
+            <p className="text-xs text-muted-foreground">
+              Minutes from store local time to UTC. Accra is 0.
+            </p>
+          </div>
+        </div>
+
+        {message ? (
+          <div
+            className={
+              message.kind === "error"
+                ? "rounded-md border border-danger/20 bg-danger/10 px-layout-md py-layout-sm text-sm text-danger"
+                : "rounded-md border border-success/20 bg-success/10 px-layout-md py-layout-sm text-sm text-success"
+            }
+            role={message.kind === "error" ? "alert" : "status"}
+          >
+            {message.text}
+          </div>
+        ) : null}
+
+        <div className="border-t border-border pt-layout-md">
+          <LoadingButton
+            disabled={!canSave}
+            isLoading={isSaving}
+            onClick={handleSave}
+            variant="default"
+          >
+            Save store-day automation
+          </LoadingButton>
+        </div>
+      </div>
+    </section>
+  );
 }
 
 function POSRecoveryCodeAdminPanel({
@@ -1140,6 +1403,8 @@ export function POSSettingsView({
               offlineReadiness={offlineReadiness}
             />
           </section>
+
+          <StoreDayAutomationAdminPanel storeId={activeStore?._id ?? null} />
 
           <POSRecoveryCodeAdminPanel storeId={activeStore?._id ?? null} />
 
