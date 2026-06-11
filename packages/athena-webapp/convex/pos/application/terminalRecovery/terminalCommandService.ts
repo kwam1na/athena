@@ -27,6 +27,7 @@ const SECRET_LIKE_KEYS = [
   "payload",
 ] as const;
 const SECRET_LIKE_KEY_PATTERN = SECRET_LIKE_KEYS.join("|");
+const SECRET_LIKE_FIELD_PATTERN = String.raw`\b[A-Za-z0-9_-]*(?:${SECRET_LIKE_KEY_PATTERN})[A-Za-z0-9_-]*\b`;
 
 export type TerminalRecoveryCommandRepository = {
   getCommand(
@@ -210,11 +211,11 @@ function sanitizeAcknowledgementMessage(message: string | undefined) {
 
   const redacted = normalized
     .replace(
-      new RegExp(`\\b(${SECRET_LIKE_KEY_PATTERN})\\b\\s*[:=]\\s*\\S+`, "gi"),
+      new RegExp(`(${SECRET_LIKE_FIELD_PATTERN})\\s*[:=]\\s*\\S+`, "gi"),
       "$1=[redacted]",
     )
     .replace(
-      new RegExp(`\\b(${SECRET_LIKE_KEY_PATTERN})\\b\\s+\\S+`, "gi"),
+      new RegExp(`(${SECRET_LIKE_FIELD_PATTERN})\\s+\\S+`, "gi"),
       "$1 [redacted]",
     )
     .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [redacted]")
@@ -304,6 +305,7 @@ function runtimeMatchesExpectedEvidence(
   }
   if (
     expectedEvidence.localRegisterSessionId !== undefined &&
+    runtimeStatus.drawerAuthority !== undefined &&
     runtimeStatus.drawerAuthority?.localRegisterSessionId !==
       expectedEvidence.localRegisterSessionId
   ) {

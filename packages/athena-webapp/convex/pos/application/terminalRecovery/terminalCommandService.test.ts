@@ -111,7 +111,7 @@ describe("terminal command service", () => {
     const result = await acknowledgeTerminalRecoveryCommand(repository, {
       acknowledgedAt: now,
       commandId: "command-1" as Id<"posTerminalRecoveryCommand">,
-      message: `token=abc123 PIN 1234 payment=card customer Jane payload raw ${"a".repeat(40)} ${"details ".repeat(80)}`,
+      message: `staffProofToken=abc123 syncSecretHash=def456 paymentToken=ghi789 PIN 1234 payment=card customer Jane payload raw ${"a".repeat(40)} ${"details ".repeat(80)}`,
       result: "failed",
       storeId,
       terminalId,
@@ -123,7 +123,7 @@ describe("terminal command service", () => {
       expect.objectContaining({
         acknowledgement: expect.objectContaining({
           message: expect.stringMatching(
-            /^token=\[redacted\] PIN \[redacted\] payment=\[redacted\] customer \[redacted\] payload \[redacted\] \[redacted\]/,
+            /^staffProofToken=\[redacted\] syncSecretHash=\[redacted\] paymentToken=\[redacted\] PIN \[redacted\] payment=\[redacted\] customer \[redacted\] payload \[redacted\] \[redacted\]/,
           ),
         }),
       }),
@@ -302,6 +302,33 @@ describe("terminal command service", () => {
         drawerAuthority: undefined,
         receivedAt: now,
         terminalIntegrity: undefined,
+      }),
+      storeId,
+      terminalId,
+      verifiedAt: now,
+    });
+
+    expect(result.verifiedCommandIds).toEqual(["command-1"]);
+  });
+
+  it("verifies cleared drawer authority when runtime omits the healthy drawer section", async () => {
+    const repository = buildRepository({
+      commands: [
+        buildCommand({
+          expectedEvidence: {
+            drawerAuthorityStatus: "healthy",
+            localRegisterSessionId: "register-1",
+          },
+          status: "completed",
+          verificationStatus: "runtime_verification_ready",
+        }),
+      ],
+    });
+
+    const result = await verifyTerminalRecoveryCommandsFromRuntime(repository, {
+      runtimeStatus: buildRuntimeStatus({
+        drawerAuthority: undefined,
+        receivedAt: now,
       }),
       storeId,
       terminalId,
