@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import type { Response } from "@playwright/test";
 import { ConvexHttpClient } from "convex/browser";
 
 import { api } from "../../../convex/_generated/api";
@@ -7,10 +8,10 @@ import type { Id } from "../../../convex/_generated/dataModel";
 const prodConvexUrl =
   process.env.ATHENA_PROD_CONVEX_URL ||
   "https://colorless-cardinal-870.convex.cloud";
+const prodConvexAuthToken = process.env.ATHENA_PROD_CONVEX_AUTH_TOKEN;
 const prodStoreId = (process.env.ATHENA_PROD_POS_STORE_ID ||
   "nn7byz68a3j4tfjvgdf9evpt3n78kk38") as Id<"store">;
 const prodPosRecoveryCode = process.env.ATHENA_PROD_POS_RECOVERY_CODE;
-const prodConvexAuthToken = process.env.ATHENA_PROD_CONVEX_AUTH_TOKEN;
 const posHubPath =
   process.env.ATHENA_PROD_POS_HUB_PATH || "/wigclub/store/wigclub/pos";
 const posBasePath = posHubPath.replace(/\/$/, "");
@@ -29,6 +30,37 @@ const publicPosEntryRoutes = [
     expectedText: /checkout|register|drawer|terminal|sign in|recovery|POS/i,
   },
 ] as const;
+
+async function gotoProdRoute(
+  page: Page,
+  path: string,
+): Promise<Response | null> {
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      return await page.goto(path, {
+        waitUntil: "domcontentloaded",
+        timeout: 15_000,
+      });
+    } catch (error) {
+      lastError = error;
+
+      if (
+        !/net::ERR_ABORTED|Timeout .* exceeded|frame was detached|Navigation failed because page was closed/i.test(
+          error instanceof Error ? error.message : String(error),
+        ) ||
+        attempt === 3
+      ) {
+        throw error;
+      }
+
+      await page.waitForTimeout(1_000 * attempt);
+    }
+  }
+
+  throw lastError;
+}
 
 function collectProdRuntimeSignals(page: Page) {
   const pageErrors: Array<string> = [];
@@ -82,9 +114,7 @@ test.describe("production POS flow", () => {
 
     for (const route of publicPosEntryRoutes) {
       await test.step(route.label, async () => {
-        const response = await page.goto(route.path, {
-          waitUntil: "domcontentloaded",
-        });
+        const response = await gotoProdRoute(page, route.path);
 
         expect(response?.ok(), `${route.label} navigation`).toBe(true);
         await expect(page.locator("#app"), `${route.label} app root`).not.toBeEmpty({

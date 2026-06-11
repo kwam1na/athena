@@ -270,6 +270,16 @@ export type TerminalRuntimeStatusInput = {
     staffProfileId?: Id<"staffProfile">;
     expiresAt?: number;
   };
+  saleAuthority?: {
+    observedAt: number;
+    status: NonNullable<Doc<"posTerminalRuntimeStatus">["saleAuthority"]>["status"];
+    localPosSessionId?: string;
+    localRegisterSessionId?: string;
+    staffProfileId?: Id<"staffProfile">;
+    transactionMode?: NonNullable<
+      Doc<"posTerminalRuntimeStatus">["saleAuthority"]
+    >["transactionMode"];
+  };
   terminalIntegrity?: {
     observedAt: number;
     reason?: TerminalIntegrityReason;
@@ -420,6 +430,7 @@ export async function submitTerminalRuntimeStatus(
       staffProfileId: args.status.staffAuthority.staffProfileId,
       expiresAt: positiveTimestamp(args.status.staffAuthority.expiresAt),
     }),
+    saleAuthority: cleanSaleAuthority(args.status.saleAuthority),
     snapshots: omitUndefined({
       catalogAgeMs: nonNegativeInteger(args.status.snapshots.catalogAgeMs),
       serviceCatalogAgeMs: nonNegativeInteger(
@@ -442,6 +453,30 @@ export async function submitTerminalRuntimeStatus(
     terminalId: args.terminalId,
     reportedAt,
     receivedAt,
+  });
+}
+
+function cleanSaleAuthority(
+  saleAuthority: TerminalRuntimeStatusInput["saleAuthority"],
+) {
+  if (!saleAuthority) return undefined;
+
+  return omitUndefined({
+    observedAt: positiveTimestamp(saleAuthority.observedAt) ?? Date.now(),
+    status: saleAuthorityStatuses.has(saleAuthority.status)
+      ? saleAuthority.status
+      : "unknown",
+    localPosSessionId: cleanOptionalString(saleAuthority.localPosSessionId, 120),
+    localRegisterSessionId: cleanOptionalString(
+      saleAuthority.localRegisterSessionId,
+      120,
+    ),
+    staffProfileId: saleAuthority.staffProfileId,
+    transactionMode: saleAuthorityTransactionModes.has(
+      saleAuthority.transactionMode,
+    )
+      ? saleAuthority.transactionMode
+      : undefined,
   });
 }
 
@@ -537,6 +572,20 @@ const terminalIntegrityStatuses = new Set<TerminalIntegrityStatus>([
   "repairing",
   "requires_reprovision",
   "reset_required",
+]);
+
+const saleAuthorityStatuses = new Set([
+  "ready",
+  "missing",
+  "blocked",
+  "unknown",
+]);
+
+const saleAuthorityTransactionModes = new Set([
+  "products_and_services",
+  "products_only",
+  "services_only",
+  undefined,
 ]);
 
 const terminalIntegrityReasons = new Set<TerminalIntegrityReason | undefined>([

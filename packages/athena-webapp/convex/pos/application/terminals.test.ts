@@ -23,6 +23,10 @@ import {
   resolveTerminalRegisterSessionActionTarget,
   upsertLatestRuntimeStatus,
 } from "../infrastructure/repositories/terminalRepository";
+import {
+  getTerminalRecoverySourceEvent,
+  listTerminalRecoveryConflictsForRepair,
+} from "../infrastructure/repositories/terminalRecoveryRepository";
 
 const browserInfo = {
   userAgent: "tests/terminal-settings",
@@ -69,6 +73,11 @@ vi.mock("../infrastructure/repositories/terminalRepository", () => ({
   resolveTerminalRegisterSessionActionTarget: vi.fn(),
   upsertLatestRuntimeStatus: vi.fn(),
   deleteTerminalRecord: vi.fn(),
+}));
+
+vi.mock("../infrastructure/repositories/terminalRecoveryRepository", () => ({
+  getTerminalRecoverySourceEvent: vi.fn(),
+  listTerminalRecoveryConflictsForRepair: vi.fn(),
 }));
 
 describe("registerTerminal", () => {
@@ -499,6 +508,8 @@ describe("terminal health summaries", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     vi.mocked(resolveTerminalRegisterSessionActionTarget).mockResolvedValue(null);
+    vi.mocked(listTerminalRecoveryConflictsForRepair).mockResolvedValue([]);
+    vi.mocked(getTerminalRecoverySourceEvent).mockResolvedValue(null);
   });
 
   afterEach(() => {
@@ -1206,6 +1217,198 @@ describe("terminal health summaries", () => {
     expect(result).toBeNull();
     expect(vi.mocked(getLatestRuntimeStatusForTerminal)).not.toHaveBeenCalled();
   });
+
+  it("classifies healthy idle separately from able to transact now", async () => {
+    vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
+    vi.mocked(getLatestRuntimeStatusForTerminal).mockResolvedValue(
+      buildPersistedRuntimeStatus({
+        receivedAt: 220,
+        sync: {
+          ...buildRuntimeStatus().sync,
+          failedEventCount: 0,
+          pendingEventCount: 0,
+          reviewEventCount: 0,
+          status: "idle" as never,
+          uploadableEventCount: 0,
+        },
+      }),
+    );
+    vi.mocked(getTerminalSyncEvidence).mockResolvedValue({
+      latestEvent: null,
+      sampledEventCount: 0,
+      acceptedCount: 0,
+      projectedCount: 0,
+      conflictedCount: 0,
+      heldCount: 0,
+      rejectedCount: 0,
+      unresolvedConflictCount: 0,
+      unresolvedConflicts: [],
+    });
+
+    const healthyIdle = await getTerminalHealthSummary(
+      { db: null as never } as never,
+      {
+        storeId: "store-1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+        now: 220,
+      },
+    );
+    expect(healthyIdle?.recoveryPreview?.readiness).toBe("healthy_idle");
+
+    vi.mocked(getLatestRuntimeStatusForTerminal).mockResolvedValue(
+      buildPersistedRuntimeStatus({
+        receivedAt: 230,
+        saleAuthority: {
+          localPosSessionId: "local-pos-session-1",
+          localRegisterSessionId: "register-1",
+          observedAt: 230,
+          staffProfileId: "staff-1" as Id<"staffProfile">,
+          status: "ready",
+          transactionMode: "products_and_services",
+        },
+        sync: {
+          ...buildRuntimeStatus().sync,
+          failedEventCount: 0,
+          pendingEventCount: 0,
+          reviewEventCount: 0,
+          status: "idle" as never,
+          uploadableEventCount: 0,
+        },
+      }),
+    );
+
+    const ableToTransact = await getTerminalHealthSummary(
+      { db: null as never } as never,
+      {
+        storeId: "store-1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+        now: 230,
+      },
+    );
+    expect(ableToTransact?.recoveryPreview?.readiness).toBe(
+      "able_to_transact_now",
+    );
+  });
+
+  it("requires fresh runtime sale authority before reporting able to transact now", async () => {
+    vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
+    vi.mocked(getLatestRuntimeStatusForTerminal).mockResolvedValue(
+      buildPersistedRuntimeStatus({
+        receivedAt: 220 - 10 * 60 * 1000,
+        saleAuthority: {
+          localPosSessionId: "local-pos-session-1",
+          localRegisterSessionId: "register-1",
+          observedAt: 200,
+          status: "ready",
+        },
+        sync: {
+          ...buildRuntimeStatus().sync,
+          failedEventCount: 0,
+          pendingEventCount: 0,
+          reviewEventCount: 0,
+          status: "idle" as never,
+          uploadableEventCount: 0,
+        },
+      }),
+    );
+    vi.mocked(getTerminalSyncEvidence).mockResolvedValue({
+      latestEvent: {
+        localEventId: "register-opened",
+        localRegisterSessionId: "register-1",
+        sequence: 1,
+        eventType: "register_opened",
+        status: "projected",
+        occurredAt: 100,
+        submittedAt: 110,
+        projectedAt: 120,
+      },
+      sampledEventCount: 1,
+      acceptedCount: 0,
+      projectedCount: 1,
+      conflictedCount: 0,
+      heldCount: 0,
+      rejectedCount: 0,
+      unresolvedConflictCount: 0,
+      unresolvedConflicts: [],
+    });
+
+    const result = await getTerminalHealthSummary(
+      { db: null as never } as never,
+      {
+        storeId: "store-1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+        now: 220,
+      },
+    );
+
+    expect(result?.recoveryPreview?.runtimeFresh).toBe(false);
+    expect(result?.recoveryPreview?.readiness).toBe("healthy_idle");
+  });
+
+  it("returns cloud repair preview only for safe stale duplicate register-open conflicts", async () => {
+    const conflict = buildSyncConflict({
+      _id: "conflict-safe" as Id<"posLocalSyncConflict">,
+      createdAt: 220 - 20 * 60 * 1000,
+      details: { reason: "duplicate_register_opened" },
+      summary: "Duplicate register-open attempt for an already opened drawer.",
+    });
+    vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
+    vi.mocked(getLatestRuntimeStatusForTerminal).mockResolvedValue(
+      buildPersistedRuntimeStatus({
+        receivedAt: 220,
+        sync: {
+          ...buildRuntimeStatus().sync,
+          failedEventCount: 0,
+          pendingEventCount: 0,
+          reviewEventCount: 0,
+          status: "idle" as never,
+          uploadableEventCount: 0,
+        },
+      }),
+    );
+    vi.mocked(getTerminalSyncEvidence).mockResolvedValue({
+      latestEvent: {
+        localEventId: "event-1",
+        localRegisterSessionId: "register-1",
+        sequence: 1,
+        eventType: "register_opened",
+        status: "conflicted",
+        occurredAt: 100,
+        submittedAt: 110,
+      },
+      sampledEventCount: 1,
+      acceptedCount: 0,
+      projectedCount: 0,
+      conflictedCount: 1,
+      heldCount: 0,
+      rejectedCount: 0,
+      unresolvedConflictCount: 1,
+      unresolvedConflicts: [],
+    });
+    vi.mocked(listTerminalRecoveryConflictsForRepair).mockResolvedValue([
+      conflict,
+    ]);
+    vi.mocked(getTerminalRecoverySourceEvent).mockResolvedValue(
+      buildSyncEvent({ eventType: "register_opened", status: "conflicted" }),
+    );
+
+    const result = await getTerminalHealthSummary(
+      { db: null as never } as never,
+      {
+        storeId: "store-1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+        now: 220,
+      },
+    );
+
+    expect(result?.recoveryPreview).toMatchObject({
+      readiness: "needs_cloud_repair",
+      cloudRepair: {
+        safeConflictIds: ["conflict-safe"],
+        skippedConflictIds: [],
+      },
+    });
+  });
 });
 
 function buildRuntimeStatus() {
@@ -1271,6 +1474,7 @@ function buildPersistedRuntimeStatus(
     };
     drawerAuthority?: Doc<"posTerminalRuntimeStatus">["drawerAuthority"];
     receivedAt?: number;
+    saleAuthority?: Doc<"posTerminalRuntimeStatus">["saleAuthority"];
     terminalIntegrity?: Doc<"posTerminalRuntimeStatus">["terminalIntegrity"];
   } = {},
 ) {
@@ -1283,4 +1487,47 @@ function buildPersistedRuntimeStatus(
     ...buildRuntimeStatus(),
     ...overrides,
   };
+}
+
+function buildSyncConflict(
+  overrides: Partial<Doc<"posLocalSyncConflict">> = {},
+): Doc<"posLocalSyncConflict"> {
+  return {
+    _id: "conflict-1" as Id<"posLocalSyncConflict">,
+    _creationTime: overrides.sequence ?? 1,
+    storeId: "store-1" as Id<"store">,
+    terminalId: "terminal-1" as Id<"posTerminal">,
+    localRegisterSessionId: "register-1",
+    localEventId: "event-1",
+    sequence: 1,
+    conflictType: "duplicate_local_id",
+    status: "needs_review",
+    summary: "Duplicate register-open attempt.",
+    details: { reason: "duplicate_register_opened" },
+    createdAt: 100,
+    ...overrides,
+  } as Doc<"posLocalSyncConflict">;
+}
+
+function buildSyncEvent(
+  overrides: Partial<Doc<"posLocalSyncEvent">> = {},
+): Doc<"posLocalSyncEvent"> {
+  return {
+    _id: "event-1-id" as Id<"posLocalSyncEvent">,
+    _creationTime: overrides.sequence ?? 1,
+    storeId: "store-1" as Id<"store">,
+    terminalId: "terminal-1" as Id<"posTerminal">,
+    localRegisterSessionId: "register-1",
+    localEventId: "event-1",
+    eventType: "register_opened",
+    occurredAt: 100,
+    staffProfileId: "staff-1" as Id<"staffProfile">,
+    payload: {
+      openingFloat: 100,
+      registerNumber: "A1",
+    },
+    status: "conflicted",
+    submittedAt: 110,
+    ...overrides,
+  } as Doc<"posLocalSyncEvent">;
 }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import type { FunctionArgs } from "convex/server";
 
 import { api } from "~/convex/_generated/api";
@@ -46,6 +46,10 @@ import {
   type PosTerminalRuntimeStatusSource,
   type PosTerminalRuntimeSyncDebugInput,
 } from "./terminalRuntimeStatus";
+import {
+  executeTerminalRecoveryCommand,
+  type PosTerminalRecoveryCommandResult,
+} from "./terminalRecoveryCommands";
 
 export type PosLocalRuntimeSyncStatusSource = {
   copyDiagnostics?: PosTerminalRuntimeCopyDiagnostics;
@@ -73,9 +77,17 @@ export type PosLocalRuntimeSyncDebug = {
   checkInPublishStatus?:
     | "accepted"
     | "failed"
-    | "not_ready"
-    | "pending"
-    | "rejected";
+  | "not_ready"
+  | "pending"
+  | "rejected";
+  terminalRecoveryCommandAttemptedAt?: number;
+  terminalRecoveryCommandCompletedAt?: number;
+  terminalRecoveryCommandMessage?: string;
+  terminalRecoveryCommandStatus?:
+    | "completed"
+    | "failed"
+    | "ignored"
+    | "pending";
   appSessionUnverifiedEventCount?: number;
   cloudValidationUncertainEventCount?: number;
   deferredUploadEventCount?: number;
@@ -108,6 +120,9 @@ type PosLocalRuntimeStore = ReturnType<typeof createPosLocalStore>;
 type IngestLocalEventsArgs = FunctionArgs<
   typeof api.pos.public.sync.ingestLocalEvents
 >;
+type ListTerminalRecoveryCommandsArgs = FunctionArgs<
+  typeof api.pos.public.terminals.listTerminalRecoveryCommands
+>;
 type IngestLocalEventsUploadArgs = Omit<IngestLocalEventsArgs, "events"> & {
   events: PosLocalUploadEvent[];
 };
@@ -130,6 +145,12 @@ export function usePosLocalSyncRuntimeStatus(input: {
   const reportTerminalRuntimeStatus = useMutation(
     api.pos.public.terminals.reportTerminalRuntimeStatus,
   );
+  const claimTerminalRecoveryCommand = useMutation(
+    api.pos.public.terminals.claimTerminalRecoveryCommand,
+  );
+  const acknowledgeTerminalRecoveryCommand = useMutation(
+    api.pos.public.terminals.acknowledgeTerminalRecoveryCommand,
+  );
   const [events, setEvents] = useState<PosLocalEventRecord[]>([]);
   const [runtimeReadiness, setRuntimeReadiness] =
     useState<PosTerminalRuntimeReadiness>({
@@ -144,6 +165,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
   const [manualRetryToken, setManualRetryToken] = useState(0);
   const [runtimeStatusObservationToken, setRuntimeStatusObservationToken] =
     useState(0);
+  const [recoveryCommandRetryToken, setRecoveryCommandRetryToken] = useState(0);
   const [debug, setDebug] = useState<PosLocalRuntimeSyncDebug>({});
   const [isOnline, setIsOnline] = useState(() =>
     typeof navigator === "undefined" ? true : navigator.onLine,
@@ -163,6 +185,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
     [input.appSessionRecovery],
   );
   const lastRuntimeStatusSignatureRef = useRef<string | null>(null);
+  const observedRecoveryCommandIdsRef = useRef<Set<string>>(new Set());
   const requestRetry = useCallback(() => {
     setRefreshToken((current) => current + 1);
     setManualRetryToken((current) => current + 1);
@@ -749,6 +772,20 @@ export function usePosLocalSyncRuntimeStatus(input: {
     runtimeReadiness.terminalSeed?.cloudTerminalId ?? terminalId ?? null;
   const runtimeStatusSyncSecretHash =
     runtimeReadiness.terminalSeed?.syncSecretHash ?? null;
+  const recoveryCommandArgs = useMemo(() => {
+    if (!storeId || !runtimeStatusTerminalId || !runtimeStatusSyncSecretHash) {
+      return "skip" as const;
+    }
+    return {
+      storeId: storeId as Id<"store">,
+      syncSecretHash: runtimeStatusSyncSecretHash,
+      terminalId: runtimeStatusTerminalId as Id<"posTerminal">,
+    } satisfies ListTerminalRecoveryCommandsArgs;
+  }, [runtimeStatusSyncSecretHash, runtimeStatusTerminalId, storeId]);
+  const recoveryCommands = useQuery(
+    api.pos.public.terminals.listTerminalRecoveryCommands,
+    recoveryCommandArgs,
+  );
 
   useEffect(() => {
     const notReadyReason = getRuntimeCheckInNotReadyReason({
@@ -945,6 +982,153 @@ export function usePosLocalSyncRuntimeStatus(input: {
     runtimeStatusSyncSecretHash,
     runtimeStatusTerminalId,
     onLocalEventsChanged,
+    storeFactory,
+    storeId,
+  ]);
+
+  useEffect(() => {
+    if (
+      !runtimeReadiness.terminalSeed ||
+      !storeId ||
+      !runtimeStatusTerminalId ||
+      !runtimeStatusSyncSecretHash ||
+      !recoveryCommands ||
+      recoveryCommands.kind !== "ok" ||
+      recoveryCommands.data.length === 0
+    ) {
+      return;
+    }
+
+    const store =
+      storeFactory?.() ??
+      (typeof indexedDB === "undefined"
+        ? null
+        : createPosLocalStore({
+            adapter: createIndexedDbPosLocalStorageAdapter(),
+          }));
+    if (!store) return;
+
+    let isStale = false;
+    const command = recoveryCommands.data.find(
+      (candidate) => !observedRecoveryCommandIdsRef.current.has(candidate._id),
+    );
+    if (!command) return;
+    observedRecoveryCommandIdsRef.current.add(command._id);
+
+    const attemptedAt = Date.now();
+    setDebug((current) => ({
+      ...current,
+      terminalRecoveryCommandAttemptedAt: attemptedAt,
+      terminalRecoveryCommandCompletedAt: undefined,
+      terminalRecoveryCommandMessage: undefined,
+      terminalRecoveryCommandStatus: "pending",
+    }));
+
+    void claimTerminalRecoveryCommand({
+      commandId: command._id,
+      storeId: storeId as Id<"store">,
+      syncSecretHash: runtimeStatusSyncSecretHash,
+      terminalId: runtimeStatusTerminalId as Id<"posTerminal">,
+    }).then(async (claimResult) => {
+      if (claimResult.kind !== "ok") {
+        observedRecoveryCommandIdsRef.current.delete(command._id);
+        if (!isStale) {
+          setDebug((current) => ({
+            ...current,
+            terminalRecoveryCommandCompletedAt: Date.now(),
+            terminalRecoveryCommandMessage:
+              claimResult.kind === "user_error"
+                ? claimResult.error.message
+                : "Recovery command could not be claimed.",
+            terminalRecoveryCommandStatus: "failed",
+          }));
+          setRecoveryCommandRetryToken((current) => current + 1);
+        }
+        return;
+      }
+
+      const localResult = await executeTerminalRecoveryCommand({
+        command: claimResult.data,
+        onRetrySync: requestRetry,
+        store,
+        storeId,
+        terminalId: runtimeStatusTerminalId,
+        terminalSeed: runtimeReadiness.terminalSeed,
+      });
+
+      if (localResult.status === "ignored") {
+        observedRecoveryCommandIdsRef.current.delete(command._id);
+        if (!isStale) {
+          setDebug((current) => ({
+            ...current,
+            terminalRecoveryCommandCompletedAt: Date.now(),
+            terminalRecoveryCommandMessage: localResult.message,
+            terminalRecoveryCommandStatus: "ignored",
+          }));
+          setRecoveryCommandRetryToken((current) => current + 1);
+        }
+        return;
+      }
+
+      const ackResult = toTerminalRecoveryCommandAckResult(localResult);
+      const acknowledged = await acknowledgeTerminalRecoveryCommand({
+        commandId: claimResult.data._id,
+        message: localResult.message,
+        result: ackResult,
+        storeId: storeId as Id<"store">,
+        syncSecretHash: runtimeStatusSyncSecretHash,
+        terminalId: runtimeStatusTerminalId as Id<"posTerminal">,
+      });
+      if (acknowledged.kind !== "ok") {
+        observedRecoveryCommandIdsRef.current.delete(command._id);
+        if (!isStale) {
+          setRecoveryCommandRetryToken((current) => current + 1);
+        }
+      }
+      if (isStale) return;
+
+      setDebug((current) => ({
+        ...current,
+        terminalRecoveryCommandCompletedAt: Date.now(),
+        terminalRecoveryCommandMessage:
+          acknowledged.kind === "ok"
+            ? localResult.message
+            : acknowledged.kind === "user_error"
+              ? acknowledged.error.message
+              : "Recovery command acknowledgement failed.",
+        terminalRecoveryCommandStatus:
+          acknowledged.kind === "ok" ? localResult.status : "failed",
+      }));
+      setRefreshToken((current) => current + 1);
+      setRuntimeStatusObservationToken((current) => current + 1);
+      onLocalEventsChanged?.();
+    }).catch(() => {
+      observedRecoveryCommandIdsRef.current.delete(command._id);
+      if (isStale) return;
+
+      setDebug((current) => ({
+        ...current,
+        terminalRecoveryCommandCompletedAt: Date.now(),
+        terminalRecoveryCommandMessage:
+          "Recovery command could not reach the server.",
+        terminalRecoveryCommandStatus: "failed",
+      }));
+      setRecoveryCommandRetryToken((current) => current + 1);
+    });
+
+    return () => {
+      isStale = true;
+    };
+  }, [
+    acknowledgeTerminalRecoveryCommand,
+    claimTerminalRecoveryCommand,
+    onLocalEventsChanged,
+    recoveryCommandRetryToken,
+    recoveryCommands,
+    requestRetry,
+    runtimeReadiness.terminalSeed,
+    runtimeStatusSyncSecretHash,
+    runtimeStatusTerminalId,
     storeFactory,
     storeId,
   ]);
@@ -1214,6 +1398,16 @@ function isTerminalAuthorizationUserError(
     error?.code === "authorization_failed" &&
     error.metadata?.terminalAuthorizationFailure === true
   );
+}
+
+function toTerminalRecoveryCommandAckResult(
+  result: PosTerminalRecoveryCommandResult,
+) {
+  if (result.status === "completed") return "completed" as const;
+  if (result.reason === "precondition_failed") {
+    return "precondition_failed" as const;
+  }
+  return "failed" as const;
 }
 
 async function persistDrawerAuthorityBlockForReviewEvents(input: {

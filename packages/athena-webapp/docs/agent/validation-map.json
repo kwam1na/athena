@@ -553,13 +553,17 @@
         "packages/athena-webapp/convex/schemas/pos/posTerminalRuntimeStatus.ts",
         "packages/athena-webapp/convex/pos/application/commands/terminals.ts",
         "packages/athena-webapp/convex/pos/application/queries/terminals.ts",
+        "packages/athena-webapp/convex/pos/application/terminalRecovery",
         "packages/athena-webapp/convex/pos/infrastructure/repositories/terminalRepository.ts",
+        "packages/athena-webapp/convex/pos/infrastructure/repositories/terminalRecoveryRepository.ts",
         "packages/athena-webapp/convex/pos/public/terminals.ts",
+        "packages/athena-webapp/convex/schemas/pos/posTerminalRecovery.ts",
         "packages/athena-webapp/convex/inventory/posTerminal.ts",
         "packages/athena-webapp/src/components/pos/settings/POSSettingsView.tsx",
         "packages/athena-webapp/src/hooks/useGetTerminal.ts",
         "packages/athena-webapp/src/lib/pos/application/registerAndProvisionPosTerminal.ts",
         "packages/athena-webapp/src/lib/pos/infrastructure/terminal",
+        "packages/athena-webapp/src/lib/pos/infrastructure/local/terminalRecoveryCommands.ts",
         "packages/athena-webapp/src/lib/pos/infrastructure/local/terminalRuntimeStatus.ts",
         "packages/athena-webapp/src/lib/pos/infrastructure/local/usePosLocalSyncRuntime.ts",
         "packages/athena-webapp/src/lib/pos/presentation/syncStatusPresentation.ts",
@@ -572,7 +576,7 @@
       "commands": [
         {
           "kind": "raw",
-          "command": "bun run --filter '@athena/webapp' test -- convex/schemas/pos/posTerminal.test.ts convex/pos/application/terminals.test.ts convex/pos/infrastructure/repositories/terminalRepository.test.ts convex/pos/public/terminals.test.ts src/components/pos/settings/POSSettingsView.test.tsx src/hooks/useGetTerminal.test.ts src/lib/pos/infrastructure/local/terminalRuntimeStatus.test.ts src/lib/pos/infrastructure/local/usePosLocalSyncRuntime.test.ts src/lib/pos/presentation/syncStatusPresentation.test.ts src/components/pos/register/POSRegisterView.test.tsx src/components/pos/terminals/terminalHealthPresentation.test.ts src/components/pos/terminals/POSTerminalHealthView.test.tsx src/components/pos/terminals/POSTerminalDetailView.test.tsx 'src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/terminals.route.test.tsx' src/components/cash-controls/CashControlsDashboard.test.tsx src/components/cash-controls/RegisterSessionView.test.tsx"
+          "command": "bun run --filter '@athena/webapp' test -- convex/schemas/pos/posTerminal.test.ts convex/pos/application/terminals.test.ts convex/pos/application/terminalRecovery/cloudRepairPolicy.test.ts convex/pos/application/terminalRecovery/terminalCommandService.test.ts convex/pos/infrastructure/repositories/terminalRepository.test.ts convex/pos/infrastructure/repositories/terminalRecoveryRepository.test.ts convex/pos/public/terminals.test.ts src/components/pos/settings/POSSettingsView.test.tsx src/hooks/useGetTerminal.test.ts src/lib/pos/infrastructure/local/terminalRecoveryCommands.test.ts src/lib/pos/infrastructure/local/terminalRuntimeStatus.test.ts src/lib/pos/infrastructure/local/usePosLocalSyncRuntime.test.ts src/lib/pos/infrastructure/local/posLocalStore.test.ts src/lib/pos/infrastructure/local/localCommandGateway.test.ts src/lib/pos/infrastructure/local/registerReadModel.test.ts src/lib/pos/presentation/syncStatusPresentation.test.ts src/components/pos/register/POSRegisterView.test.tsx src/components/pos/terminals/terminalHealthPresentation.test.ts src/components/pos/terminals/POSTerminalHealthView.test.tsx src/components/pos/terminals/POSTerminalDetailView.test.tsx 'src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/terminals.route.test.tsx' src/components/cash-controls/CashControlsDashboard.test.tsx src/components/cash-controls/RegisterSessionView.test.tsx"
         },
         {
           "kind": "script",

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  buildTerminalRecoveryPresentation,
   classifyTerminalHealth,
   formatAge,
   formatTerminalTimestamp,
@@ -10,6 +11,168 @@ import {
 } from "./terminalHealthPresentation";
 
 describe("terminal health presentation", () => {
+  it("builds recovery readiness from the backend preview and keeps healthy idle distinct from able to transact", () => {
+    expect(
+      buildTerminalRecoveryPresentation({
+        recovery: {
+          readiness: {
+            status: "healthy_idle",
+            summary: "Healthy idle. Open a drawer and sign in before selling.",
+          },
+        },
+        runtimeStatus: null,
+        syncEvidence: {},
+        terminal: { status: "active" },
+      }).readiness,
+    ).toEqual(
+      expect.objectContaining({
+        description: "Healthy idle. Open a drawer and sign in before selling.",
+        label: "Healthy idle",
+      }),
+    );
+
+    expect(
+      buildTerminalRecoveryPresentation({
+        recovery: {
+          readiness: {
+            status: "able_to_transact_now",
+            summary: "Able to transact now. Drawer, cashier, and sale authority are active.",
+          },
+        },
+        runtimeStatus: null,
+        syncEvidence: {},
+        terminal: { status: "active" },
+      }).readiness,
+    ).toEqual(
+      expect.objectContaining({
+        description:
+          "Able to transact now. Drawer, cashier, and sale authority are active.",
+        label: "Able to transact now",
+      }),
+    );
+  });
+
+  it("groups recovery blockers and exposes buttons only for safe cloud or terminal command actions", () => {
+    const presentation = buildTerminalRecoveryPresentation({
+      recovery: {
+        blockers: [
+          {
+            action: {
+              kind: "cloud_repair",
+              label: "Resolve duplicate drawer attempts",
+              status: "available",
+            },
+            category: "cloud_repair",
+            id: "cloud-1",
+            summary:
+              "Duplicate drawer-open attempts can be resolved. No sales, payments, or inventory will be changed.",
+            title: "Duplicate drawer-open attempts",
+          },
+          {
+            action: {
+              kind: "terminal_command",
+              label: "Send terminal repair command",
+              status: "available",
+            },
+            category: "terminal_required",
+            id: "terminal-1",
+            summary:
+              "Terminal action required. This checkout station needs to run the repair before Athena can verify it.",
+            title: "Terminal repair required",
+          },
+          {
+            action: {
+              kind: "manual_review",
+              label: "Do not render this as a repair button",
+              status: "available",
+            },
+            category: "manual_review",
+            id: "manual-1",
+            summary:
+              "Payment or inventory review is required before support takes action.",
+            title: "Manual review required",
+          },
+        ],
+        readiness: { status: "needs_manual_review" },
+      },
+      runtimeStatus: null,
+      syncEvidence: {},
+      terminal: { status: "active" },
+    });
+
+    expect(presentation.groups.cloudRepair).toHaveLength(1);
+    expect(presentation.groups.terminalRequired).toHaveLength(1);
+    expect(presentation.groups.manualReview).toHaveLength(1);
+    expect(presentation.safeActions.map((action) => action.label)).toEqual([
+      "Resolve duplicate drawer attempts",
+      "Send terminal repair command",
+    ]);
+  });
+
+  it("normalizes duplicate register-open and authorization backend wording in derived recovery copy", () => {
+    const presentation = buildTerminalRecoveryPresentation({
+      attentionReasons: [
+        {
+          source: "cloud_sync",
+          summary:
+            "duplicate register_opened event failed: A register session is already open for this terminal.",
+          type: "cloud_conflict",
+        },
+        {
+          source: "terminal_runtime",
+          summary: "authorization_failed: stale terminal sync secret rejected",
+          type: "terminal_authorization_failed",
+        },
+        {
+          source: "cloud_sync",
+          summary: "sale_completed payment allocation requires manager review",
+          type: "cloud_conflict",
+        },
+      ],
+      health: "needs_attention",
+      runtimeStatus: {
+        receivedAt: Date.now(),
+        localStore: { available: true, terminalSeedReady: true },
+        staffAuthority: { status: "expired" },
+        sync: {
+          failedEventCount: 0,
+          pendingEventCount: 0,
+          reviewEventCount: 0,
+          status: "idle",
+          uploadableEventCount: 0,
+        },
+      },
+      syncEvidence: { unresolvedConflictCount: 2 },
+      terminal: { status: "active" },
+    });
+
+    const renderedCopy = JSON.stringify(presentation);
+
+    expect(presentation.groups.cloudRepair[0]?.summary).toBe(
+      "Duplicate drawer-open attempts can be resolved. No sales, payments, or inventory will be changed.",
+    );
+    expect(presentation.groups.terminalRequired).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          summary:
+            "Terminal authorization needs refresh. This checkout station must reconnect before Athena can verify it.",
+        }),
+        expect.objectContaining({
+          summary:
+            "Staff authority expired. Sign in again at this checkout station before selling.",
+        }),
+      ]),
+    );
+    expect(presentation.groups.manualReview[0]?.summary).toBe(
+      "Manual review required. Use the linked operations or cash-control review before support repairs this terminal.",
+    );
+    expect(presentation.safeActions.map((action) => action.kind)).toEqual([
+      "cloud_repair",
+      "terminal_command",
+    ]);
+    expect(renderedCopy).not.toMatch(/register_opened|already open|authorization_failed|sync secret/i);
+  });
+
   it("classifies missing check-ins, stale check-ins, pending sync, and review work", () => {
     vi.setSystemTime(new Date("2026-05-20T12:00:00.000Z"));
 

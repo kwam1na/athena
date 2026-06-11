@@ -176,16 +176,20 @@ describe("terminalRuntimeStatus", () => {
             payments: [{ amount: 10_000, method: "cash" }],
           },
           sequence: 2,
-          sync: { error: "credential 123456789012345678901234 failed", status: "failed" },
+          sync: {
+            error: "credential 123456789012345678901234 failed",
+            status: "failed",
+          },
           type: "transaction.completed",
           uploadSequence: 2,
         }),
       ],
-      localStoreFailureMessage: "verifier metadata could not be read",
+      localStoreFailureMessage:
+        "verifier metadata PIN 1234 rawPayload customer payload could not be read",
       source: "support-diagnostics",
       staffAuthorityStatus: "expired",
       syncDebug: {
-        lastFailure: "token abcdef1234567890abcdef1234567890 rejected",
+        lastFailure: "PIN 1234 rawPayload customer body rejected",
       },
       terminalSeed: {
         cloudTerminalId: "terminal-cloud-1",
@@ -219,7 +223,7 @@ describe("terminalRuntimeStatus", () => {
       expect.objectContaining({
         failures: {
           localStore: "verifier [redacted]",
-          sync: "token [redacted]",
+          sync: "PIN [redacted]",
         },
         labels: {
           drawerAuthority: "blocked",
@@ -267,6 +271,8 @@ describe("terminalRuntimeStatus", () => {
 
     const serialized = JSON.stringify(diagnostics);
     expect(serialized).not.toContain("payload");
+    expect(serialized).not.toContain("rawPayload");
+    expect(serialized).not.toContain("PIN 1234");
     expect(serialized).not.toContain("payments");
     expect(serialized).not.toContain("Customer Name");
     expect(serialized).not.toContain("sync-secret-hash");
@@ -315,6 +321,33 @@ describe("terminalRuntimeStatus", () => {
     );
   });
 
+  it("reports sale authority when the local terminal can transact now", () => {
+    const status = buildPosTerminalRuntimeStatus({
+      clock: () => 2_000,
+      events: [],
+      source: "register",
+      staffAuthorityStatus: "ready",
+      staffProfileId: "staff-1",
+      terminalSeed: {
+        cloudTerminalId: "terminal-cloud-1",
+        displayName: "Front register",
+        provisionedAt: 1_000,
+        schemaVersion: 5,
+        storeId: "store-1",
+        syncSecretHash: "sync-secret-hash",
+        terminalId: "local-terminal-1",
+      },
+    });
+
+    expect(status.saleAuthority).toEqual({
+      observedAt: 2_000,
+      staffProfileId: "staff-1",
+      status: "ready",
+      transactionMode: "products_and_services",
+    });
+    expect(JSON.stringify(status.saleAuthority)).not.toContain("sync-secret");
+  });
+
   it("reports uncertainty metadata as support-safe counts without exposing payload details", () => {
     const input = {
       clock: () => 2_000,
@@ -332,10 +365,7 @@ describe("terminalRuntimeStatus", () => {
           type: "transaction.completed",
           uploadSequence: 2,
           validationMetadata: {
-            flags: [
-              "app-session-unverified",
-              "cloud-validation-uncertain",
-            ],
+            flags: ["app-session-unverified", "cloud-validation-uncertain"],
             observedAt: 1_500,
             uploadDeferredUntil: "app-session-validated",
           },
@@ -424,31 +454,31 @@ describe("terminalRuntimeStatus", () => {
   }>)(
     "maps app-session recovery $expected to support-safe runtime status and copy diagnostics",
     ({ expected, recovery }) => {
-    const input = {
-      appSessionRecovery: recovery,
-      clock: () => 2_000,
-      events: [],
-      source: "register",
-    } satisfies PosTerminalRuntimeStatusInput;
+      const input = {
+        appSessionRecovery: recovery,
+        clock: () => 2_000,
+        events: [],
+        source: "register",
+      } satisfies PosTerminalRuntimeStatusInput;
 
-    const status = buildPosTerminalRuntimeStatus(input);
-    const diagnostics = buildPosTerminalRuntimeCopyDiagnostics(input);
+      const status = buildPosTerminalRuntimeStatus(input);
+      const diagnostics = buildPosTerminalRuntimeCopyDiagnostics(input);
 
-    expect(status.appSessionRecovery).toEqual({
-      status: expected,
-    });
-    expect(diagnostics.appSessionRecovery).toEqual({
-      status: expected,
-    });
-    expect(diagnostics.labels.appSessionRecovery).toBe(expected);
+      expect(status.appSessionRecovery).toEqual({
+        status: expected,
+      });
+      expect(diagnostics.appSessionRecovery).toEqual({
+        status: expected,
+      });
+      expect(diagnostics.labels.appSessionRecovery).toBe(expected);
 
-    const serialized = JSON.stringify({ diagnostics, status });
-    if (
-      recovery.reason === "app_account_not_pos_scoped" ||
-      recovery.reason === "terminal_revoked"
-    ) {
-      expect(serialized).not.toContain(recovery.reason);
-    }
+      const serialized = JSON.stringify({ diagnostics, status });
+      if (
+        recovery.reason === "app_account_not_pos_scoped" ||
+        recovery.reason === "terminal_revoked"
+      ) {
+        expect(serialized).not.toContain(recovery.reason);
+      }
     },
   );
 

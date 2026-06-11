@@ -87,6 +87,26 @@ export const posTerminalRuntimeStaffAuthorityValidator = v.object({
   expiresAt: v.optional(v.number()),
 });
 
+export const posTerminalRuntimeSaleAuthorityValidator = v.object({
+  observedAt: v.number(),
+  status: v.union(
+    v.literal("ready"),
+    v.literal("missing"),
+    v.literal("blocked"),
+    v.literal("unknown"),
+  ),
+  localPosSessionId: v.optional(v.string()),
+  localRegisterSessionId: v.optional(v.string()),
+  staffProfileId: v.optional(v.id("staffProfile")),
+  transactionMode: v.optional(
+    v.union(
+      v.literal("products_and_services"),
+      v.literal("products_only"),
+      v.literal("services_only"),
+    ),
+  ),
+});
+
 export const posTerminalRuntimeSnapshotsValidator = v.object({
   catalogAgeMs: v.optional(v.number()),
   serviceCatalogAgeMs: v.optional(v.number()),
@@ -144,6 +164,7 @@ export const posTerminalRuntimeStatusSchema = v.object({
   localStore: posTerminalRuntimeLocalStoreValidator,
   sync: posTerminalRuntimeSyncValidator,
   staffAuthority: posTerminalRuntimeStaffAuthorityValidator,
+  saleAuthority: v.optional(posTerminalRuntimeSaleAuthorityValidator),
   snapshots: posTerminalRuntimeSnapshotsValidator,
   terminalIntegrity: v.optional(posTerminalRuntimeTerminalIntegrityValidator),
   drawerAuthority: v.optional(posTerminalRuntimeDrawerAuthorityValidator),

@@ -986,6 +986,7 @@ async function createFixtureRepo() {
     "packages/athena-webapp/src/lib/pos/infrastructure/local/syncContract.ts",
     "packages/athena-webapp/src/lib/pos/infrastructure/local/syncScheduler.ts",
     "packages/athena-webapp/src/lib/pos/infrastructure/local/syncStatus.ts",
+    "packages/athena-webapp/src/lib/pos/infrastructure/local/terminalRecoveryCommands.ts",
     "packages/athena-webapp/src/lib/pos/infrastructure/local/terminalRuntimeStatus.ts",
     "packages/athena-webapp/src/lib/pos/infrastructure/local/usePosLocalSyncRuntime.ts",
     "packages/athena-webapp/src/lib/pos/infrastructure/local/registerReadModel.ts",
@@ -997,6 +998,7 @@ async function createFixtureRepo() {
     "packages/athena-webapp/src/lib/pos/infrastructure/local/syncContract.test.ts",
     "packages/athena-webapp/src/lib/pos/infrastructure/local/syncScheduler.test.ts",
     "packages/athena-webapp/src/lib/pos/infrastructure/local/syncStatus.test.ts",
+    "packages/athena-webapp/src/lib/pos/infrastructure/local/terminalRecoveryCommands.test.ts",
     "packages/athena-webapp/src/lib/pos/infrastructure/local/terminalRuntimeStatus.test.ts",
     "packages/athena-webapp/src/lib/pos/infrastructure/local/usePosLocalSyncRuntime.test.ts",
     "packages/athena-webapp/src/lib/pos/infrastructure/local/registerReadModel.test.ts",
@@ -1126,6 +1128,11 @@ async function createFixtureRepo() {
     rootDir
   );
   await write(
+    "packages/athena-webapp/convex/schemas/pos/posTerminalRecovery.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
     "packages/athena-webapp/convex/cashControls/closeouts.ts",
     "export {};\n",
     rootDir
@@ -1181,6 +1188,17 @@ async function createFixtureRepo() {
     "export {};\n",
     rootDir
   );
+  for (const terminalRecoveryPath of [
+    "packages/athena-webapp/convex/pos/application/terminalRecovery/cloudRepairPolicy.ts",
+    "packages/athena-webapp/convex/pos/application/terminalRecovery/cloudRepairPolicy.test.ts",
+    "packages/athena-webapp/convex/pos/application/terminalRecovery/resolveTerminalCloudRepair.ts",
+    "packages/athena-webapp/convex/pos/application/terminalRecovery/resolveTerminalCloudRepair.test.ts",
+    "packages/athena-webapp/convex/pos/application/terminalRecovery/terminalCommandService.ts",
+    "packages/athena-webapp/convex/pos/application/terminalRecovery/terminalCommandService.test.ts",
+    "packages/athena-webapp/convex/pos/application/terminalRecovery/types.ts",
+  ]) {
+    await write(terminalRecoveryPath, "export {};\n", rootDir);
+  }
   await write(
     "packages/athena-webapp/convex/pos/application/sync/ingestLocalEvents.ts",
     "export {};\n",
@@ -1233,6 +1251,16 @@ async function createFixtureRepo() {
   );
   await write(
     "packages/athena-webapp/convex/pos/infrastructure/repositories/terminalRepository.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/convex/pos/infrastructure/repositories/terminalRecoveryRepository.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/convex/pos/infrastructure/repositories/terminalRecoveryRepository.test.ts",
     "export {};\n",
     rootDir
   );

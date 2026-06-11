@@ -23,6 +23,7 @@ import {
   type PosOfflineReadinessSummary,
 } from "@/offline/posOfflineReadiness";
 import {
+  buildTerminalRecoveryPresentation,
   classifyTerminalHealth,
   formatRegisterNumber,
   formatTerminalTimestamp,
@@ -222,6 +223,7 @@ export function POSTerminalHealthViewContent({
                       getPrimaryTerminalAttentionReason(summary);
                     const offlineReadiness =
                       buildTerminalOfflineReadiness(summary);
+                    const recovery = buildTerminalRecoveryPresentation(summary);
 
                     return (
                       <article
@@ -269,7 +271,7 @@ export function POSTerminalHealthViewContent({
                           </Badge>
                         </div>
 
-                        <div className="mt-layout-md grid gap-layout-sm md:grid-cols-2 xl:grid-cols-4">
+                        <div className="mt-layout-md grid gap-layout-sm md:grid-cols-2 xl:grid-cols-5">
                           <div>
                             <p className="text-xs font-medium uppercase text-muted-foreground">
                               Sync
@@ -311,6 +313,17 @@ export function POSTerminalHealthViewContent({
                               null
                                 ? "No accepted sequence"
                                 : `Accepted through ${summary.syncEvidence.acceptedThroughSequence}`}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs font-medium uppercase text-muted-foreground">
+                              Recovery readiness
+                            </p>
+                            <p className="mt-1 text-sm text-foreground">
+                              {recovery.readiness.label}
+                            </p>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {recovery.readiness.description}
                             </p>
                           </div>
                         </div>

@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>feat: Add POS Remote Terminal Health Recovery</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f6f5f1;
+        --ink: #222321;
+        --muted: #646861;
+        --line: #d8d4ca;
+        --panel: #ffffff;
+        --accent: #185d74;
+        --accent-soft: #e4f0f3;
+        --warn: #8a5d13;
+        --warn-soft: #fbf0d8;
+        --danger: #9a3d36;
+        --danger-soft: #f7e4e1;
+        --ok: #316b45;
+        --ok-soft: #e3f0e8;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        line-height: 1.55;
+      }
+      main {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 40px 24px 64px;
+      }
+      header {
+        border-bottom: 1px solid var(--line);
+        margin-bottom: 28px;
+        padding-bottom: 22px;
+      }
+      h1, h2, h3 {
+        line-height: 1.15;
+        margin: 0 0 14px;
+      }
+      h1 { font-size: clamp(2rem, 4vw, 3.2rem); letter-spacing: 0; }
+      h2 { font-size: 1.45rem; margin-top: 34px; }
+      h3 { font-size: 1.05rem; margin-top: 22px; }
+      p { margin: 0 0 14px; }
+      ul { margin: 0 0 16px 1.2rem; padding: 0; }
+      li { margin: 7px 0; }
+      code, pre {
+        font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      }
+      code {
+        background: #ece8df;
+        border-radius: 4px;
+        padding: 1px 4px;
+      }
+      pre {
+        background: #242721;
+        border-radius: 8px;
+        color: #f6f5f1;
+        overflow-x: auto;
+        padding: 16px;
+        white-space: pre;
+      }
+      .meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 16px;
+      }
+      .pill {
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        color: var(--muted);
+        font-size: .88rem;
+        padding: 5px 10px;
+      }
+      .grid {
+        display: grid;
+        gap: 14px;
+      }
+      .grid.cols {
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      }
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 18px;
+      }
+      .panel h3 { margin-top: 0; }
+      .callout {
+        border-left: 4px solid var(--accent);
+        background: var(--accent-soft);
+        border-radius: 6px;
+        padding: 14px 16px;
+      }
+      .warning {
+        border-left-color: var(--warn);
+        background: var(--warn-soft);
+      }
+      .danger {
+        border-left-color: var(--danger);
+        background: var(--danger-soft);
+      }
+      .ok {
+        border-left-color: var(--ok);
+        background: var(--ok-soft);
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        overflow: hidden;
+      }
+      th, td {
+        border-bottom: 1px solid var(--line);
+        padding: 10px 12px;
+        text-align: left;
+        vertical-align: top;
+      }
+      th { background: #ece8df; }
+      tr:last-child td { border-bottom: 0; }
+      .small { color: var(--muted); font-size: .92rem; }
+      .unit {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        margin: 14px 0;
+        padding: 18px;
+      }
+      .unit h3 { margin-top: 0; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <p class="small">Implementation Plan - 2026-06-11</p>
+        <h1>feat: Add POS Remote Terminal Health Recovery</h1>
+        <p>Add a safe recovery flow that previews terminal blockers, resolves cloud-only stale evidence, queues browser-local repair commands, and verifies recovery through fresh runtime check-ins.</p>
+        <div class="meta">
+          <span class="pill">type: feat</span>
+          <span class="pill">status: active</span>
+          <span class="pill">surface: Athena POS</span>
+          <span class="pill">depth: standard</span>
+        </div>
+      </header>
+
+      <section class="callout">
+        <strong>Planning premise.</strong>
+        The terminal can be active and online but still unable to transact. The plan separates <code>Healthy idle</code> from <code>Able to transact now</code>, and keeps Convex cloud repair distinct from browser-local IndexedDB repair.
+      </section>
+
+      <h2>Problem Frame</h2>
+      <p>A production terminal audit showed the current gap: terminal health can expose stale terminal-integrity blocks, drawer-authority blocks, sync review items, expired staff authority, and missing open register context, but support has no safe remote workflow to decide which repairs are allowed and verify that the terminal is healthy afterward.</p>
+      <p>Convex can repair safe cloud evidence, such as stale duplicate drawer-open conflicts, but it cannot directly mutate browser-local authority state. Terminal seed, drawer authority, staff authority, snapshots, and local review state must be repaired by code running on the terminal and confirmed by a fresh runtime check-in.</p>
+
+      <h2>Readiness States</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>State</th>
+            <th>Meaning</th>
+            <th>Proof Required</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>Healthy idle</code></td>
+            <td>No blocking setup, sync, terminal-integrity, drawer-authority, local-store, or unsafe conflict evidence.</td>
+            <td>Fresh runtime status plus clean cloud evidence.</td>
+          </tr>
+          <tr>
+            <td><code>Able to transact now</code></td>
+            <td>Healthy idle plus active cashier/session/drawer context and matching transaction capability.</td>
+            <td>Fresh runtime report of active sale authority, not cloud rows alone.</td>
+          </tr>
+          <tr>
+            <td><code>Needs cloud repair</code></td>
+            <td>Cloud-only stale evidence can be resolved safely.</td>
+            <td>Policy allow-list and matching precondition snapshot.</td>
+          </tr>
+          <tr>
+            <td><code>Needs terminal action</code></td>
+            <td>Browser-local IndexedDB or runtime state must be repaired by the terminal.</td>
+            <td>Terminal-scoped command execution and fresh runtime verification.</td>
+          </tr>
+          <tr>
+            <td><code>Needs manual review</code></td>
+            <td>Evidence touches sale, payment, inventory, closeout, variance, or ambiguous authority facts.</td>
+            <td>Existing Cash Controls, Operations, POS Settings, or Open Work path.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2>Core Decisions</h2>
+      <div class="grid cols">
+        <div class="panel">
+          <h3>Preview first</h3>
+          <p>Support sees blockers, safe steps, terminal-required steps, manual-review blockers, and expected verification before taking action.</p>
+        </div>
+        <div class="panel">
+          <h3>Separate repair types</h3>
+          <p>Cloud repair resolves safe stale evidence. Browser repair changes local terminal state only after terminal-side precondition checks.</p>
+        </div>
+        <div class="panel">
+          <h3>Verify through runtime</h3>
+          <p>A command acknowledgement is not enough. Athena waits for a fresh runtime check-in showing the blocker cleared.</p>
+        </div>
+        <div class="panel">
+          <h3>Keep sale gates</h3>
+          <p>Local command gateway, terminal integrity, drawer authority, and staff authority remain the authority for sale-affecting commands.</p>
+        </div>
+      </div>
+
+      <h2>Flow</h2>
+      <pre>Terminal detail
+  -> Recovery preview
+    -> Cloud-safe repair
+    -> Terminal command queue
+      -> Browser runtime poller
+        -> IndexedDB authority and snapshots
+        -> Fresh runtime check-in
+          -> Healthy idle / Able to transact now
+    -> Manual review when facts are unsafe</pre>
+
+      <h2>Implementation Units</h2>
+
+      <div class="unit">
+        <h3>U1. Define recovery state, audit, and command contract</h3>
+        <p>Add backend records for recovery actions, terminal-scoped commands, acknowledgements, and verification state. Store non-secret payloads only.</p>
+        <p><strong>Primary files:</strong> <code>packages/athena-webapp/convex/schemas/pos/posTerminalRecovery.ts</code>, <code>packages/athena-webapp/convex/pos/application/terminalRecovery/types.ts</code>, <code>packages/athena-webapp/convex/pos/infrastructure/repositories/terminalRecoveryRepository.ts</code>.</p>
+      </div>
+
+      <div class="unit">
+        <h3>U2. Build terminal recovery preview and readiness classification</h3>
+        <p>Extend terminal health queries with recovery preview and explicit readiness classification, including healthy idle versus able to transact now.</p>
+        <p><strong>Primary files:</strong> <code>packages/athena-webapp/convex/pos/application/queries/terminals.ts</code>, <code>packages/athena-webapp/convex/pos/infrastructure/repositories/terminalRepository.ts</code>, <code>packages/athena-webapp/convex/pos/public/terminals.ts</code>.</p>
+      </div>
+
+      <div class="unit">
+        <h3>U3. Implement safe cloud repair for stale duplicate drawer-open conflicts</h3>
+        <p>Resolve only allow-listed stale duplicate register-open conflicts. Do not approve, project, delete, or rewrite sale, payment, inventory, closeout, or variance facts.</p>
+        <p><strong>Primary files:</strong> <code>packages/athena-webapp/convex/pos/application/terminalRecovery/cloudRepairPolicy.ts</code>, <code>packages/athena-webapp/convex/pos/application/terminalRecovery/resolveTerminalCloudRepair.ts</code>, <code>packages/athena-webapp/convex/schemas/pos/posLocalSyncConflict.ts</code>.</p>
+      </div>
+
+      <div class="unit">
+        <h3>U4. Add terminal command queue public functions</h3>
+        <p>Let support issue commands and let the matching terminal claim and acknowledge them. Commands are scoped, expiring, idempotent, and audited.</p>
+        <p><strong>Primary files:</strong> <code>packages/athena-webapp/convex/pos/application/terminalRecovery/terminalCommandService.ts</code>, <code>packages/athena-webapp/convex/pos/public/terminals.ts</code>.</p>
+      </div>
+
+      <div class="unit">
+        <h3>U5. Execute terminal commands in the browser runtime</h3>
+        <p>Poll for commands, run precondition checks, trigger existing sync/repair/refresh paths, and force a runtime status publish for verification.</p>
+        <p><strong>Primary files:</strong> <code>packages/athena-webapp/src/lib/pos/infrastructure/local/usePosLocalSyncRuntime.ts</code>, <code>packages/athena-webapp/src/lib/pos/infrastructure/local/terminalRecoveryCommands.ts</code>, <code>packages/athena-webapp/src/lib/pos/infrastructure/local/posLocalStore.ts</code>.</p>
+      </div>
+
+      <div class="unit">
+        <h3>U6. Add support recovery UI to terminal health detail</h3>
+        <p>Add an operational panel for readiness, blockers, safe actions, command status, verification status, and next action links.</p>
+        <p><strong>Primary files:</strong> <code>packages/athena-webapp/src/components/pos/terminals/POSTerminalDetailView.tsx</code>, <code>packages/athena-webapp/src/components/pos/terminals/terminalHealthPresentation.ts</code>, <code>packages/athena-webapp/src/components/pos/terminals/terminalHealthTypes.ts</code>.</p>
+      </div>
+
+      <div class="unit">
+        <h3>U7. Update validation map, solution notes, and end-to-end gates</h3>
+        <p>Keep harness coverage and institutional guidance aligned with the new terminal recovery boundary.</p>
+        <p><strong>Primary files:</strong> <code>scripts/harness-app-registry.ts</code>, <code>packages/athena-webapp/docs/agent/validation-map.json</code>, <code>docs/solutions/architecture/athena-pos-remote-terminal-health-recovery-2026-06-11.md</code>.</p>
+      </div>
+
+      <h2>Safety Rules</h2>
+      <div class="callout danger">
+        <p>Never auto-clear completed local sales, local event history, payment facts, inventory facts, closeout variance, manager-review items affecting cash/payment/inventory/completed-sale facts, staff proof tokens, or terminal sync secrets.</p>
+      </div>
+      <div class="callout ok">
+        <p>Automatic repair starts with stale duplicate drawer-open conflicts and terminal-local refresh actions that have explicit precondition checks and runtime verification.</p>
+      </div>
+
+      <h2>Validation</h2>
+      <ul>
+        <li><code>bun run --filter '@athena/webapp' test -- convex/schemas/pos/posTerminal.test.ts convex/pos/application/terminals.test.ts convex/pos/infrastructure/repositories/terminalRepository.test.ts convex/pos/public/terminals.test.ts src/components/pos/settings/POSSettingsView.test.tsx src/hooks/useGetTerminal.test.ts src/lib/pos/infrastructure/local/terminalRuntimeStatus.test.ts src/lib/pos/infrastructure/local/usePosLocalSyncRuntime.test.ts src/lib/pos/presentation/syncStatusPresentation.test.ts src/components/pos/register/POSRegisterView.test.tsx src/components/pos/terminals/terminalHealthPresentation.test.ts src/components/pos/terminals/POSTerminalHealthView.test.tsx src/components/pos/terminals/POSTerminalDetailView.test.tsx 'src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/terminals.route.test.tsx' src/components/cash-controls/CashControlsDashboard.test.tsx src/components/cash-controls/RegisterSessionView.test.tsx</code></li>
+        <li><code>bun run --filter '@athena/webapp' test -- src/lib/pos/infrastructure/local/posLocalStore.test.ts src/lib/pos/infrastructure/local/localCommandGateway.test.ts src/lib/pos/infrastructure/local/registerReadModel.test.ts</code></li>
+        <li><code>bun run --filter '@athena/webapp' audit:convex</code></li>
+        <li><code>bun run --filter '@athena/webapp' lint:convex:changed</code></li>
+        <li><code>bun run --filter '@athena/webapp' lint:frontend:changed</code></li>
+        <li><code>bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json</code></li>
+        <li><code>bun run --filter '@athena/webapp' build</code></li>
+        <li><code>bun run harness:review</code></li>
+      </ul>
+
+      <h2>Rollout</h2>
+      <ol>
+        <li>Ship preview and diagnostics first.</li>
+        <li>Enable safe duplicate drawer-open cloud repair.</li>
+        <li>Enable browser-local terminal command execution only after targeting, precondition, and runtime verification tests pass.</li>
+        <li>Monitor recovery audit rows, terminal runtime statuses, and unresolved conflict counts after release.</li>
+      </ol>
+    </main>
+  </body>
+</html>

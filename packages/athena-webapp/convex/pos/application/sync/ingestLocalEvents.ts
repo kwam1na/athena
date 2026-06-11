@@ -87,6 +87,9 @@ function toSyncResultConflict(
     ...(conflict.resolvedByStaffProfileId === undefined
       ? {}
       : { resolvedByStaffProfileId: conflict.resolvedByStaffProfileId }),
+    ...(conflict.resolvedByUserId === undefined
+      ? {}
+      : { resolvedByUserId: conflict.resolvedByUserId }),
   };
 }
 

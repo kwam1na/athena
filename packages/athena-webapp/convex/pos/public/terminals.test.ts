@@ -1,16 +1,24 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+  acknowledgeTerminalRecoveryCommandService: vi.fn(),
+  claimTerminalRecoveryCommandService: vi.fn(),
+  createTerminalRecoveryCommandRepository: vi.fn(),
   deleteTerminalCommand: vi.fn(),
   getTerminalHealthSummaryQuery: vi.fn(),
   getTerminalByFingerprintQuery: vi.fn(),
+  issueTerminalRecoveryCommandService: vi.fn(),
+  listClaimableTerminalRecoveryCommands: vi.fn(),
   listTerminalHealthSummariesQuery: vi.fn(),
   listTerminalsQuery: vi.fn(),
+  previewTerminalRecoveryQuery: vi.fn(),
   registerTerminalCommand: vi.fn(),
   requireAuthenticatedAthenaUserWithCtx: vi.fn(),
   requireOrganizationMemberRoleWithCtx: vi.fn(),
+  resolveTerminalCloudRepairCommand: vi.fn(),
   submitTerminalRuntimeStatusCommand: vi.fn(),
   updateTerminalCommand: vi.fn(),
+  verifyTerminalRecoveryCommandsFromRuntime: vi.fn(),
 }));
 
 vi.mock("../../lib/athenaUserAuth", () => ({
@@ -32,15 +40,41 @@ vi.mock("../application/queries/terminals", () => ({
   getTerminalHealthSummary: mocks.getTerminalHealthSummaryQuery,
   listTerminalHealthSummaries: mocks.listTerminalHealthSummariesQuery,
   listTerminals: mocks.listTerminalsQuery,
+  previewTerminalRecovery: mocks.previewTerminalRecoveryQuery,
+}));
+
+vi.mock("../application/terminalRecovery/resolveTerminalCloudRepair", () => ({
+  resolveTerminalCloudRepair: mocks.resolveTerminalCloudRepairCommand,
+}));
+
+vi.mock("../application/terminalRecovery/terminalCommandService", () => ({
+  acknowledgeTerminalRecoveryCommand:
+    mocks.acknowledgeTerminalRecoveryCommandService,
+  claimTerminalRecoveryCommand: mocks.claimTerminalRecoveryCommandService,
+  issueTerminalRecoveryCommand: mocks.issueTerminalRecoveryCommandService,
+  listClaimableTerminalRecoveryCommands:
+    mocks.listClaimableTerminalRecoveryCommands,
+  verifyTerminalRecoveryCommandsFromRuntime:
+    mocks.verifyTerminalRecoveryCommandsFromRuntime,
+}));
+
+vi.mock("../infrastructure/repositories/terminalRecoveryRepository", () => ({
+  createTerminalRecoveryCommandRepository:
+    mocks.createTerminalRecoveryCommandRepository,
 }));
 
 import {
   deleteTerminal,
   getTerminalByFingerprint,
   getTerminalHealthSummary,
+  issueTerminalRecoveryCommand,
+  listTerminalRecoveryCommands,
   listTerminalHealthSummaries,
   listTerminals,
+  claimTerminalRecoveryCommand,
+  acknowledgeTerminalRecoveryCommand,
   registerTerminal,
+  resolveTerminalCloudRepair,
   submitTerminalRuntimeStatus,
   updateTerminal,
 } from "./terminals";
@@ -91,6 +125,32 @@ describe("POS terminal public mutations", () => {
     mocks.getTerminalByFingerprintQuery.mockResolvedValue(null);
     mocks.listTerminalHealthSummariesQuery.mockResolvedValue([]);
     mocks.getTerminalHealthSummaryQuery.mockResolvedValue(null);
+    mocks.createTerminalRecoveryCommandRepository.mockReturnValue({
+      repository: true,
+    });
+    mocks.issueTerminalRecoveryCommandService.mockResolvedValue({
+      kind: "ok",
+      data: buildRecoveryCommand(),
+    });
+    mocks.listClaimableTerminalRecoveryCommands.mockResolvedValue([
+      buildRecoveryCommand(),
+    ]);
+    mocks.claimTerminalRecoveryCommandService.mockResolvedValue({
+      kind: "ok",
+      data: buildRecoveryCommand({ status: "claimed" }),
+    });
+    mocks.acknowledgeTerminalRecoveryCommandService.mockResolvedValue({
+      kind: "ok",
+      data: buildRecoveryCommand({ status: "completed" }),
+    });
+    mocks.resolveTerminalCloudRepairCommand.mockResolvedValue({
+      kind: "ok",
+      data: {
+        preconditionHash: "terminal-cloud-repair:hash",
+        resolvedConflictIds: ["conflict-1"],
+        skippedConflictIds: [],
+      },
+    });
     mocks.submitTerminalRuntimeStatusCommand.mockResolvedValue({
       kind: "ok",
       data: {
@@ -648,7 +708,269 @@ describe("POS terminal public mutations", () => {
       }),
     );
   });
+
+  it("requires full admin membership and actor attribution before cloud repair", async () => {
+    const ctx = buildCtx();
+
+    const result = await getHandler(resolveTerminalCloudRepair)(ctx as never, {
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      expectedPreconditionHash: "terminal-cloud-repair:hash",
+    });
+
+    expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({
+        allowedRoles: ["full_admin"],
+        organizationId: "org-1",
+        userId: "athena-user-1",
+      }),
+    );
+    expect(mocks.resolveTerminalCloudRepairCommand).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({
+        resolvedByUserId: "athena-user-1",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      }),
+    );
+    expect(result.kind).toBe("ok");
+  });
+
+  it("requires full admin membership before issuing terminal recovery commands", async () => {
+    const ctx = buildCtx();
+
+    const result = await getHandler(issueTerminalRecoveryCommand)(ctx as never, {
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      commandType: "repair_terminal_seed",
+      commandContext: {
+        expectedBlockerType: "terminal_seed",
+        reason: "Terminal setup data needs repair.",
+      },
+      expectedEvidence: {
+        terminalIntegrityStatus: "healthy",
+      },
+    });
+
+    expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({
+        allowedRoles: ["full_admin"],
+        organizationId: "org-1",
+        userId: "athena-user-1",
+      }),
+    );
+    expect(mocks.issueTerminalRecoveryCommandService).toHaveBeenCalledWith(
+      { repository: true },
+      expect.objectContaining({
+        commandType: "repair_terminal_seed",
+        issuedByUserId: "athena-user-1",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      }),
+    );
+    expect(result.kind).toBe("ok");
+  });
+
+  it.each([
+    {
+      action: "list",
+      handler: listTerminalRecoveryCommands,
+      service: mocks.listClaimableTerminalRecoveryCommands,
+    },
+    {
+      action: "claim",
+      handler: claimTerminalRecoveryCommand,
+      service: mocks.claimTerminalRecoveryCommandService,
+    },
+    {
+      action: "acknowledge",
+      handler: acknowledgeTerminalRecoveryCommand,
+      service: mocks.acknowledgeTerminalRecoveryCommandService,
+    },
+  ])(
+    "allows POS store members to $action recovery commands with the active sync secret",
+    async ({ handler, service }) => {
+      const ctx = buildCtx({
+        terminal: {
+          _id: "terminal-1",
+          storeId: "store-1",
+          status: "active",
+          registeredByUserId: "athena-user-2",
+          syncSecretHash: SYNC_SECRET_HASH,
+        },
+      });
+
+      const result = await getHandler(handler)(ctx as never, {
+        storeId: "store-1",
+        terminalId: "terminal-1",
+        syncSecretHash: "sync-secret-1",
+        commandId: "command-1",
+        result: "completed",
+        message: "Done.",
+      });
+
+      expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
+        ctx,
+        expect.objectContaining({
+          allowedRoles: ["full_admin", "pos_only"],
+          organizationId: "org-1",
+          userId: "athena-user-1",
+        }),
+      );
+      expect(service).toHaveBeenCalled();
+      expect(result.kind).toBe("ok");
+    },
+  );
+
+  it("rejects recovery command listing when the terminal sync secret is wrong", async () => {
+    const ctx = buildCtx({
+      terminal: {
+        _id: "terminal-1",
+        storeId: "store-1",
+        status: "active",
+        registeredByUserId: "athena-user-2",
+        syncSecretHash: SYNC_SECRET_HASH,
+      },
+    });
+
+    const result = await getHandler(listTerminalRecoveryCommands)(ctx as never, {
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      syncSecretHash: "wrong-secret",
+    });
+
+    expect(result).toEqual({
+      kind: "user_error",
+      error: {
+        code: "authorization_failed",
+        message: "You do not have access to list POS terminal recovery commands.",
+        metadata: { terminalAuthorizationFailure: true },
+      },
+    });
+    expect(mocks.listClaimableTerminalRecoveryCommands).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    {
+      action: "claim",
+      expectedMessage:
+        "You do not have access to claim POS terminal recovery commands.",
+      handler: claimTerminalRecoveryCommand,
+      service: mocks.claimTerminalRecoveryCommandService,
+    },
+    {
+      action: "acknowledge",
+      expectedMessage:
+        "You do not have access to acknowledge POS terminal recovery commands.",
+      handler: acknowledgeTerminalRecoveryCommand,
+      service: mocks.acknowledgeTerminalRecoveryCommandService,
+    },
+  ])(
+    "rejects $action recovery commands when the terminal sync secret is wrong",
+    async ({ expectedMessage, handler, service }) => {
+      const ctx = buildCtx({
+        terminal: {
+          _id: "terminal-1",
+          storeId: "store-1",
+          status: "active",
+          registeredByUserId: "athena-user-2",
+          syncSecretHash: SYNC_SECRET_HASH,
+        },
+      });
+
+      const result = await getHandler(handler)(ctx as never, {
+        storeId: "store-1",
+        terminalId: "terminal-1",
+        syncSecretHash: "wrong-secret",
+        commandId: "command-1",
+        result: "completed",
+      });
+
+      expect(result).toEqual({
+        kind: "user_error",
+        error: {
+          code: "authorization_failed",
+          message: expectedMessage,
+          metadata: { terminalAuthorizationFailure: true },
+        },
+      });
+      expect(service).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    {
+      action: "claim",
+      expectedMessage:
+        "You do not have access to claim POS terminal recovery commands.",
+      handler: claimTerminalRecoveryCommand,
+      service: mocks.claimTerminalRecoveryCommandService,
+    },
+    {
+      action: "acknowledge",
+      expectedMessage:
+        "You do not have access to acknowledge POS terminal recovery commands.",
+      handler: acknowledgeTerminalRecoveryCommand,
+      service: mocks.acknowledgeTerminalRecoveryCommandService,
+    },
+  ])(
+    "rejects $action recovery commands when the terminal is inactive",
+    async ({ expectedMessage, handler, service }) => {
+      const ctx = buildCtx({
+        terminal: {
+          _id: "terminal-1",
+          storeId: "store-1",
+          status: "revoked",
+          registeredByUserId: "athena-user-2",
+          syncSecretHash: SYNC_SECRET_HASH,
+        },
+      });
+
+      const result = await getHandler(handler)(ctx as never, {
+        storeId: "store-1",
+        terminalId: "terminal-1",
+        syncSecretHash: "sync-secret-1",
+        commandId: "command-1",
+        result: "completed",
+      });
+
+      expect(result).toEqual({
+        kind: "user_error",
+        error: {
+          code: "authorization_failed",
+          message: expectedMessage,
+          metadata: { terminalAuthorizationFailure: true },
+        },
+      });
+      expect(service).not.toHaveBeenCalled();
+    },
+  );
 });
+
+function buildRecoveryCommand(overrides: Record<string, unknown> = {}) {
+  return {
+    _id: "command-1",
+    _creationTime: 1,
+    storeId: "store-1",
+    terminalId: "terminal-1",
+    commandType: "repair_terminal_seed",
+    status: "pending",
+    verificationStatus: "waiting_for_acknowledgement",
+    commandContext: {
+      expectedBlockerType: "terminal_seed",
+      reason: "Terminal setup data needs repair.",
+    },
+    expectedEvidence: {
+      terminalIntegrityStatus: "healthy",
+    },
+    issuedByUserId: "athena-user-1",
+    issuedAt: 1,
+    expiresAt: 901,
+    ...overrides,
+  };
+}
 
 function buildRuntimeStatus(extra: Record<string, unknown> = {}) {
   return {

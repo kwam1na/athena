@@ -339,6 +339,53 @@ describe("POSTerminalHealthViewContent", () => {
       screen.queryByText(/assertion|token|secret|password|otp/i),
     ).not.toBeInTheDocument();
   });
+
+  it("shows recovery readiness so healthy idle is distinct from able to transact now", () => {
+    render(
+      <POSTerminalHealthViewContent
+        healthSummaries={[
+          {
+            ...baseSummary,
+            recovery: {
+              readiness: {
+                status: "healthy_idle",
+                summary: "Healthy idle. Open a drawer and sign in before selling.",
+              },
+            },
+          },
+          {
+            ...baseSummary,
+            recovery: {
+              readiness: {
+                status: "able_to_transact_now",
+                summary:
+                  "Able to transact now. Drawer, cashier, and sale authority are active.",
+              },
+            },
+            terminal: {
+              ...baseSummary.terminal,
+              _id: "terminal-2",
+              displayName: "Checkout two",
+            },
+          },
+        ]}
+        isLoading={false}
+        orgUrlSlug="acme"
+        storeUrlSlug="osu"
+      />,
+    );
+
+    expect(screen.getByText("Healthy idle")).toBeInTheDocument();
+    expect(
+      screen.getByText("Healthy idle. Open a drawer and sign in before selling."),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Able to transact now")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Able to transact now. Drawer, cashier, and sale authority are active.",
+      ),
+    ).toBeInTheDocument();
+  });
 });
 
 describe("POSTerminalHealthView", () => {

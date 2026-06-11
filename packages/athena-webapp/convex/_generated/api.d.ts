@@ -183,6 +183,10 @@ import type * as pos_application_sync_staffProof from "../pos/application/sync/s
 import type * as pos_application_sync_staffProofValidation from "../pos/application/sync/staffProofValidation.js";
 import type * as pos_application_sync_terminalSyncSecret from "../pos/application/sync/terminalSyncSecret.js";
 import type * as pos_application_sync_types from "../pos/application/sync/types.js";
+import type * as pos_application_terminalRecovery_cloudRepairPolicy from "../pos/application/terminalRecovery/cloudRepairPolicy.js";
+import type * as pos_application_terminalRecovery_resolveTerminalCloudRepair from "../pos/application/terminalRecovery/resolveTerminalCloudRepair.js";
+import type * as pos_application_terminalRecovery_terminalCommandService from "../pos/application/terminalRecovery/terminalCommandService.js";
+import type * as pos_application_terminalRecovery_types from "../pos/application/terminalRecovery/types.js";
 import type * as pos_domain_errors from "../pos/domain/errors.js";
 import type * as pos_domain_sessionRules from "../pos/domain/sessionRules.js";
 import type * as pos_domain_types from "../pos/domain/types.js";
@@ -196,6 +200,7 @@ import type * as pos_infrastructure_repositories_localSyncRepository from "../po
 import type * as pos_infrastructure_repositories_registerSessionRepository from "../pos/infrastructure/repositories/registerSessionRepository.js";
 import type * as pos_infrastructure_repositories_sessionCommandRepository from "../pos/infrastructure/repositories/sessionCommandRepository.js";
 import type * as pos_infrastructure_repositories_sessionRepository from "../pos/infrastructure/repositories/sessionRepository.js";
+import type * as pos_infrastructure_repositories_terminalRecoveryRepository from "../pos/infrastructure/repositories/terminalRecoveryRepository.js";
 import type * as pos_infrastructure_repositories_terminalRepository from "../pos/infrastructure/repositories/terminalRepository.js";
 import type * as pos_infrastructure_repositories_transactionRepository from "../pos/infrastructure/repositories/transactionRepository.js";
 import type * as pos_public_catalog from "../pos/public/catalog.js";
@@ -266,6 +271,7 @@ import type * as schemas_pos_posRecoveryCredential from "../schemas/pos/posRecov
 import type * as schemas_pos_posSession from "../schemas/pos/posSession.js";
 import type * as schemas_pos_posSessionItem from "../schemas/pos/posSessionItem.js";
 import type * as schemas_pos_posTerminal from "../schemas/pos/posTerminal.js";
+import type * as schemas_pos_posTerminalRecovery from "../schemas/pos/posTerminalRecovery.js";
 import type * as schemas_pos_posTerminalRuntimeStatus from "../schemas/pos/posTerminalRuntimeStatus.js";
 import type * as schemas_pos_posTransaction from "../schemas/pos/posTransaction.js";
 import type * as schemas_pos_posTransactionAdjustment from "../schemas/pos/posTransactionAdjustment.js";
@@ -538,6 +544,10 @@ declare const fullApi: ApiFromModules<{
   "pos/application/sync/staffProofValidation": typeof pos_application_sync_staffProofValidation;
   "pos/application/sync/terminalSyncSecret": typeof pos_application_sync_terminalSyncSecret;
   "pos/application/sync/types": typeof pos_application_sync_types;
+  "pos/application/terminalRecovery/cloudRepairPolicy": typeof pos_application_terminalRecovery_cloudRepairPolicy;
+  "pos/application/terminalRecovery/resolveTerminalCloudRepair": typeof pos_application_terminalRecovery_resolveTerminalCloudRepair;
+  "pos/application/terminalRecovery/terminalCommandService": typeof pos_application_terminalRecovery_terminalCommandService;
+  "pos/application/terminalRecovery/types": typeof pos_application_terminalRecovery_types;
   "pos/domain/errors": typeof pos_domain_errors;
   "pos/domain/sessionRules": typeof pos_domain_sessionRules;
   "pos/domain/types": typeof pos_domain_types;
@@ -551,6 +561,7 @@ declare const fullApi: ApiFromModules<{
   "pos/infrastructure/repositories/registerSessionRepository": typeof pos_infrastructure_repositories_registerSessionRepository;
   "pos/infrastructure/repositories/sessionCommandRepository": typeof pos_infrastructure_repositories_sessionCommandRepository;
   "pos/infrastructure/repositories/sessionRepository": typeof pos_infrastructure_repositories_sessionRepository;
+  "pos/infrastructure/repositories/terminalRecoveryRepository": typeof pos_infrastructure_repositories_terminalRecoveryRepository;
   "pos/infrastructure/repositories/terminalRepository": typeof pos_infrastructure_repositories_terminalRepository;
   "pos/infrastructure/repositories/transactionRepository": typeof pos_infrastructure_repositories_transactionRepository;
   "pos/public/catalog": typeof pos_public_catalog;
@@ -621,6 +632,7 @@ declare const fullApi: ApiFromModules<{
   "schemas/pos/posSession": typeof schemas_pos_posSession;
   "schemas/pos/posSessionItem": typeof schemas_pos_posSessionItem;
   "schemas/pos/posTerminal": typeof schemas_pos_posTerminal;
+  "schemas/pos/posTerminalRecovery": typeof schemas_pos_posTerminalRecovery;
   "schemas/pos/posTerminalRuntimeStatus": typeof schemas_pos_posTerminalRuntimeStatus;
   "schemas/pos/posTransaction": typeof schemas_pos_posTransaction;
   "schemas/pos/posTransactionAdjustment": typeof schemas_pos_posTransactionAdjustment;

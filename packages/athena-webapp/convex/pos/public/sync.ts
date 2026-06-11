@@ -45,6 +45,7 @@ const localSyncConflictValidator = v.object({
   createdAt: v.number(),
   resolvedAt: v.optional(v.number()),
   resolvedByStaffProfileId: v.optional(v.id("staffProfile")),
+  resolvedByUserId: v.optional(v.id("athenaUser")),
 });
 
 const localSyncResultValidator = commandResultValidator(
