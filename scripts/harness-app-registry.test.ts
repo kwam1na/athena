@@ -936,13 +936,17 @@ describe("HARNESS_APP_REGISTRY", () => {
       "convex/schemas/pos/posTerminalRuntimeStatus.ts",
       "convex/pos/application/commands/terminals.ts",
       "convex/pos/application/queries/terminals.ts",
+      "convex/pos/application/terminalRecovery",
       "convex/pos/infrastructure/repositories/terminalRepository.ts",
+      "convex/pos/infrastructure/repositories/terminalRecoveryRepository.ts",
       "convex/pos/public/terminals.ts",
+      "convex/schemas/pos/posTerminalRecovery.ts",
       "convex/inventory/posTerminal.ts",
       "src/components/pos/settings/POSSettingsView.tsx",
       "src/hooks/useGetTerminal.ts",
       "src/lib/pos/application/registerAndProvisionPosTerminal.ts",
       "src/lib/pos/infrastructure/terminal",
+      "src/lib/pos/infrastructure/local/terminalRecoveryCommands.ts",
       "src/lib/pos/infrastructure/local/terminalRuntimeStatus.ts",
       "src/lib/pos/infrastructure/local/usePosLocalSyncRuntime.ts",
       "src/lib/pos/presentation/syncStatusPresentation.ts",
@@ -956,7 +960,7 @@ describe("HARNESS_APP_REGISTRY", () => {
       {
         kind: "raw",
         command:
-          "bun run --filter '@athena/webapp' test -- convex/schemas/pos/posTerminal.test.ts convex/pos/application/terminals.test.ts convex/pos/infrastructure/repositories/terminalRepository.test.ts convex/pos/public/terminals.test.ts src/components/pos/settings/POSSettingsView.test.tsx src/hooks/useGetTerminal.test.ts src/lib/pos/infrastructure/local/terminalRuntimeStatus.test.ts src/lib/pos/infrastructure/local/usePosLocalSyncRuntime.test.ts src/lib/pos/presentation/syncStatusPresentation.test.ts src/components/pos/register/POSRegisterView.test.tsx src/components/pos/terminals/terminalHealthPresentation.test.ts src/components/pos/terminals/POSTerminalHealthView.test.tsx src/components/pos/terminals/POSTerminalDetailView.test.tsx 'src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/terminals.route.test.tsx' src/components/cash-controls/CashControlsDashboard.test.tsx src/components/cash-controls/RegisterSessionView.test.tsx",
+          "bun run --filter '@athena/webapp' test -- convex/schemas/pos/posTerminal.test.ts convex/pos/application/terminals.test.ts convex/pos/application/terminalRecovery/cloudRepairPolicy.test.ts convex/pos/application/terminalRecovery/terminalCommandService.test.ts convex/pos/infrastructure/repositories/terminalRepository.test.ts convex/pos/infrastructure/repositories/terminalRecoveryRepository.test.ts convex/pos/public/terminals.test.ts src/components/pos/settings/POSSettingsView.test.tsx src/hooks/useGetTerminal.test.ts src/lib/pos/infrastructure/local/terminalRecoveryCommands.test.ts src/lib/pos/infrastructure/local/terminalRuntimeStatus.test.ts src/lib/pos/infrastructure/local/usePosLocalSyncRuntime.test.ts src/lib/pos/infrastructure/local/posLocalStore.test.ts src/lib/pos/infrastructure/local/localCommandGateway.test.ts src/lib/pos/infrastructure/local/registerReadModel.test.ts src/lib/pos/presentation/syncStatusPresentation.test.ts src/components/pos/register/POSRegisterView.test.tsx src/components/pos/terminals/terminalHealthPresentation.test.ts src/components/pos/terminals/POSTerminalHealthView.test.tsx src/components/pos/terminals/POSTerminalDetailView.test.tsx 'src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/terminals.route.test.tsx' src/components/cash-controls/CashControlsDashboard.test.tsx src/components/cash-controls/RegisterSessionView.test.tsx",
       },
       { kind: "script", script: "audit:convex" },
       { kind: "script", script: "lint:convex:changed" },
@@ -968,7 +972,7 @@ describe("HARNESS_APP_REGISTRY", () => {
       { kind: "script", script: "build" },
     ]);
     expect(terminalHealthScenario?.note).toBe(
-      "Use this when POS terminal registration, terminal runtime status, browser-side health publisher/readout, terminal setup/detail UI, POS support diagnostics, or cash-controls terminal evidence changes. Stale or pending terminal check-ins are telemetry and should stay out of manager-review queues; unresolved local sync conflicts remain the source of needs-review copy."
+      "Use this when POS terminal registration, terminal runtime status, browser-side health publisher/readout, terminal recovery commands, terminal setup/detail UI, POS support diagnostics, or cash-controls terminal evidence changes. Stale or pending terminal check-ins are telemetry and should stay out of manager-review queues; unresolved local sync conflicts remain the source of needs-review copy. Browser-local terminal recovery must be verified by a fresh runtime check-in before support treats a terminal as healthy."
     );
     expect(terminalHealthScenario?.behaviorScenarios).toEqual([
       "athena-admin-shell-boot",

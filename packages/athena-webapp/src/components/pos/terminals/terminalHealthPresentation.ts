@@ -4,6 +4,10 @@ import type {
   TerminalSyncEvidence,
   TerminalRuntimeStatus,
   TerminalHealthAttentionReason,
+  TerminalRecoveryAction,
+  TerminalRecoveryBlocker,
+  TerminalRecoveryPreview,
+  TerminalRecoveryReadinessStatus,
 } from "./terminalHealthTypes";
 
 export type TerminalHealthClassification = {
@@ -12,9 +16,46 @@ export type TerminalHealthClassification = {
   toneClassName: string;
 };
 
+export type TerminalRecoveryPresentationBlocker = {
+  action?: TerminalRecoveryAction;
+  actionTarget?: TerminalHealthAttentionReason["actionTarget"];
+  detail?: string;
+  id: string;
+  status?: string;
+  summary: string;
+  title: string;
+};
+
+export type TerminalRecoveryReadinessPresentation = {
+  description: string;
+  label: string;
+  status: TerminalRecoveryReadinessStatus;
+  toneClassName: string;
+};
+
+export type TerminalRecoveryPresentation = {
+  commandStatus: {
+    label: string;
+    status: string;
+    verificationStatus: string;
+  };
+  groups: {
+    cloudRepair: TerminalRecoveryPresentationBlocker[];
+    manualReview: TerminalRecoveryPresentationBlocker[];
+    terminalRequired: TerminalRecoveryPresentationBlocker[];
+  };
+  readiness: TerminalRecoveryReadinessPresentation;
+  safeActions: TerminalRecoveryAction[];
+  verification: {
+    status: string;
+    summary: string;
+  };
+};
+
 type TerminalHealthClassificationInput = {
   attentionReasons?: TerminalHealthAttentionReason[];
   health?: "needs_attention" | "offline" | "online" | "stale" | "unknown" | string;
+  recovery?: TerminalRecoveryPreview | null;
   runtimeStatus:
     | (Omit<Partial<TerminalRuntimeStatus>, "localStore" | "sync"> & {
         localStore?: Partial<TerminalRuntimeStatus["localStore"]>;
@@ -26,6 +67,8 @@ type TerminalHealthClassificationInput = {
 };
 
 const STALE_CHECK_IN_MS = 30 * 60_000;
+const MANUAL_REVIEW_EVENT_PATTERN =
+  /\b(sale|payment|inventory|closeout|variance|transaction|cart|item)_?|\bpayment\b|\binventory\b|\bcloseout\b|\bvariance\b/i;
 
 export function formatTerminalTimestamp(timestamp?: number | null) {
   if (!timestamp) {
@@ -158,6 +201,30 @@ export function getPrimaryTerminalAttentionReason(
   summary: TerminalHealthClassificationInput,
 ) {
   return getTerminalAttentionReasons(summary)[0] ?? null;
+}
+
+export function getSupportSafeAttentionReasonSummary(
+  reason: TerminalHealthAttentionReason,
+) {
+  if (
+    reason.type === "terminal_authorization_failed" ||
+    /authorization_failed|sync secret/i.test(reason.summary)
+  ) {
+    return terminalRequiredSummary("terminal_authorization_failed");
+  }
+
+  if (reason.type === "drawer_authority_blocked") {
+    return terminalRequiredSummary("drawer_authority_blocked");
+  }
+
+  if (reason.type === "terminal_seed_missing") {
+    return terminalRequiredSummary("terminal_seed_missing");
+  }
+
+  return (
+    normalizeSupportCopy(reason.summary) ??
+    "Terminal support evidence needs review."
+  );
 }
 
 export function classifyTerminalHealth(
@@ -311,6 +378,303 @@ export function classifyTerminalHealth(
     label: "Healthy",
     toneClassName: "border-success/30 bg-success/10 text-success",
   };
+}
+
+export function buildTerminalRecoveryPresentation(
+  summary: TerminalHealthClassificationInput,
+): TerminalRecoveryPresentation {
+  const blockers =
+    summary.recovery?.blockers?.map((blocker, index) =>
+      normalizeBackendRecoveryBlocker(blocker, index),
+    ) ?? deriveRecoveryBlockers(summary);
+  const groups = {
+    cloudRepair: blockers.filter((blocker) => blocker.category === "cloud_repair"),
+    manualReview: blockers.filter((blocker) => blocker.category === "manual_review"),
+    terminalRequired: blockers.filter(
+      (blocker) => blocker.category === "terminal_required",
+    ),
+  };
+  const readiness = buildRecoveryReadiness(summary, groups);
+  const safeActions = blockers
+    .map((blocker) => blocker.action)
+    .filter((action): action is TerminalRecoveryAction =>
+      Boolean(
+        action &&
+          ["cloud_repair", "terminal_command"].includes(action.kind) &&
+          !["blocked", "completed", "expired", "failed", "verified"].includes(
+            action.status ?? "available",
+          ),
+      ),
+    );
+
+  return {
+    commandStatus: {
+      label: normalizeSupportCopy(summary.recovery?.commandStatus?.label) ?? "No command issued",
+      status: formatStatusLabel(summary.recovery?.commandStatus?.status ?? "idle"),
+      verificationStatus: formatStatusLabel(
+        summary.recovery?.commandStatus?.verificationStatus ??
+          summary.recovery?.verification?.status ??
+          "not_started",
+      ),
+    },
+    groups,
+    readiness,
+    safeActions,
+    verification: {
+      status: formatStatusLabel(summary.recovery?.verification?.status ?? "not_started"),
+      summary:
+        normalizeSupportCopy(summary.recovery?.verification?.summary) ??
+        "Athena has not received recovery verification from a fresh terminal check-in.",
+    },
+  };
+}
+
+type RecoveryBlockerWithCategory = TerminalRecoveryPresentationBlocker & {
+  category: "cloud_repair" | "manual_review" | "terminal_required";
+};
+
+function buildRecoveryReadiness(
+  summary: TerminalHealthClassificationInput,
+  groups: TerminalRecoveryPresentation["groups"],
+): TerminalRecoveryReadinessPresentation {
+  const explicitStatus = summary.recovery?.readiness?.status;
+  const status =
+    explicitStatus ??
+    (groups.manualReview.length > 0
+      ? "needs_manual_review"
+      : groups.cloudRepair.length > 0
+        ? "needs_cloud_repair"
+        : groups.terminalRequired.length > 0
+          ? "needs_terminal_action"
+          : "healthy_idle");
+
+  const fallback = getRecoveryReadinessFallback(status);
+
+  return {
+    description: normalizeSupportCopy(summary.recovery?.readiness?.summary) ?? fallback.description,
+    label: fallback.label,
+    status,
+    toneClassName: fallback.toneClassName,
+  };
+}
+
+function getRecoveryReadinessFallback(status: TerminalRecoveryReadinessStatus) {
+  switch (status) {
+    case "able_to_transact_now":
+      return {
+        description:
+          "Able to transact now. Drawer, cashier, and sale authority are active.",
+        label: "Able to transact now",
+        toneClassName: "border-success/30 bg-success/10 text-success",
+      };
+    case "healthy_idle":
+      return {
+        description: "Healthy idle. Open a drawer and sign in before selling.",
+        label: "Healthy idle",
+        toneClassName: "border-success/30 bg-success/10 text-success",
+      };
+    case "needs_cloud_repair":
+      return {
+        description:
+          "Cloud repair is available for stale terminal evidence. No sale, payment, or inventory facts will be changed.",
+        label: "Needs cloud repair",
+        toneClassName: "border-warning/30 bg-warning/15 text-warning",
+      };
+    case "needs_terminal_action":
+      return {
+        description:
+          "Terminal action required. This checkout station needs to run the repair before Athena can verify it.",
+        label: "Needs terminal action",
+        toneClassName: "border-warning/30 bg-warning/15 text-warning",
+      };
+    case "needs_manual_review":
+      return {
+        description:
+          "Manual review required. Use the linked operations or cash-control review before support repairs this terminal.",
+        label: "Needs manual review",
+        toneClassName: "border-danger/25 bg-danger/10 text-danger",
+      };
+    default:
+      return {
+        description: "Recovery status is not reported yet.",
+        label: formatStatusLabel(status),
+        toneClassName: "border-muted bg-muted/40 text-muted-foreground",
+      };
+  }
+}
+
+function normalizeBackendRecoveryBlocker(
+  blocker: TerminalRecoveryBlocker,
+  index: number,
+): RecoveryBlockerWithCategory {
+  const category = normalizeRecoveryCategory(blocker.category);
+  const safeAction =
+    blocker.action &&
+    ["cloud_repair", "terminal_command"].includes(blocker.action.kind)
+      ? {
+          ...blocker.action,
+          label: normalizeSupportCopy(blocker.action.label) ?? blocker.action.label,
+        }
+      : undefined;
+
+  return {
+    action: safeAction,
+    actionTarget: blocker.actionTarget,
+    category,
+    detail: normalizeSupportCopy(blocker.detail),
+    id: blocker.id ?? `${category}-${index}`,
+    status: blocker.status ?? blocker.action?.status,
+    summary: normalizeSupportCopy(blocker.summary) ?? defaultBlockerSummary(category),
+    title:
+      normalizeSupportCopy(blocker.title) ??
+      (category === "cloud_repair"
+        ? "Cloud repair"
+        : category === "terminal_required"
+          ? "Terminal action"
+          : "Manual review"),
+  };
+}
+
+function deriveRecoveryBlockers(
+  summary: TerminalHealthClassificationInput,
+): RecoveryBlockerWithCategory[] {
+  const blockers = (summary.attentionReasons ?? []).map((reason, index) =>
+    deriveRecoveryBlockerFromReason(reason, index),
+  );
+
+  if (summary.runtimeStatus?.staffAuthority?.status === "expired") {
+    blockers.push({
+      category: "terminal_required",
+      id: "staff-authority-expired",
+      status: "available",
+      summary:
+        "Staff authority expired. Sign in again at this checkout station before selling.",
+      title: "Staff authority expired",
+    });
+  } else if (summary.runtimeStatus?.staffAuthority?.status === "missing") {
+    blockers.push({
+      category: "terminal_required",
+      id: "staff-authority-missing",
+      status: "available",
+      summary:
+        "Staff authority missing. Sign in at this checkout station before selling.",
+      title: "Staff authority missing",
+    });
+  }
+
+  return blockers;
+}
+
+function deriveRecoveryBlockerFromReason(
+  reason: TerminalHealthAttentionReason,
+  index: number,
+): RecoveryBlockerWithCategory {
+  const normalizedSummary = normalizeSupportCopy(reason.summary);
+
+  if (reason.type === "cloud_conflict" && isSafeDuplicateDrawerOpen(reason.summary)) {
+    return {
+      action: {
+        kind: "cloud_repair",
+        label: "Resolve duplicate drawer attempts",
+        status: "available",
+      },
+      category: "cloud_repair",
+      id: `reason-cloud-repair-${index}`,
+      summary:
+        "Duplicate drawer-open attempts can be resolved. No sales, payments, or inventory will be changed.",
+      title: "Duplicate drawer-open attempts",
+    };
+  }
+
+  if (
+    reason.type === "terminal_seed_missing" ||
+    reason.type === "terminal_authorization_failed" ||
+    reason.type === "drawer_authority_blocked"
+  ) {
+    return {
+      action: {
+        kind: "terminal_command",
+        label:
+          reason.type === "drawer_authority_blocked"
+            ? "Send drawer repair command"
+            : "Send terminal repair command",
+        status: "available",
+      },
+      category: "terminal_required",
+      id: `reason-terminal-${index}`,
+      summary: terminalRequiredSummary(reason.type),
+      title:
+        reason.type === "drawer_authority_blocked"
+          ? "Drawer authority repair"
+          : "Terminal repair required",
+    };
+  }
+
+  return {
+    category: "manual_review",
+    id: `reason-manual-${index}`,
+    summary:
+      isUnsafeManualReviewReason(reason.summary) || !normalizedSummary
+        ? "Manual review required. Use the linked operations or cash-control review before support repairs this terminal."
+        : normalizedSummary,
+    title: "Manual review required",
+  };
+}
+
+function normalizeRecoveryCategory(
+  category: TerminalRecoveryBlocker["category"],
+): RecoveryBlockerWithCategory["category"] {
+  if (category === "cloud_repair" || category === "terminal_required") {
+    return category;
+  }
+
+  return "manual_review";
+}
+
+function defaultBlockerSummary(category: RecoveryBlockerWithCategory["category"]) {
+  if (category === "cloud_repair") {
+    return "Cloud repair is available for stale terminal evidence.";
+  }
+  if (category === "terminal_required") {
+    return "Terminal action required. This checkout station needs to run the repair before Athena can verify it.";
+  }
+  return "Manual review required. Use the linked operations or cash-control review before support repairs this terminal.";
+}
+
+function terminalRequiredSummary(reasonType: TerminalHealthAttentionReason["type"]) {
+  if (reasonType === "terminal_authorization_failed") {
+    return "Terminal authorization needs refresh. This checkout station must reconnect before Athena can verify it.";
+  }
+  if (reasonType === "drawer_authority_blocked") {
+    return "Drawer authority needs repair. This checkout station must run the repair before selling.";
+  }
+  return "Terminal setup data is not ready. This checkout station must repair setup before Athena can verify it.";
+}
+
+function isSafeDuplicateDrawerOpen(summary: string) {
+  return (
+    /\b(duplicate|already)\b/i.test(summary) &&
+    /\b(register|drawer)[ _-]?open/i.test(summary) &&
+    !MANUAL_REVIEW_EVENT_PATTERN.test(summary)
+  );
+}
+
+function isUnsafeManualReviewReason(summary: string) {
+  return MANUAL_REVIEW_EVENT_PATTERN.test(summary) || /authorization_failed|sync secret/i.test(summary);
+}
+
+function normalizeSupportCopy(value?: string | null) {
+  if (!value) return undefined;
+  if (isSafeDuplicateDrawerOpen(value)) {
+    return "Duplicate drawer-open attempts can be resolved. No sales, payments, or inventory will be changed.";
+  }
+  if (/authorization_failed|sync secret/i.test(value)) {
+    return "Terminal authorization needs refresh. This checkout station must reconnect before Athena can verify it.";
+  }
+  if (/A register session is already open/i.test(value)) {
+    return "Duplicate drawer-open attempts can be resolved. No sales, payments, or inventory will be changed.";
+  }
+  return value;
 }
 
 function isAppSessionLocalContinuation(

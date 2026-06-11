@@ -186,9 +186,82 @@ export type TerminalHealthAttentionReason = {
     | string;
 };
 
+export type TerminalRecoveryReadinessStatus =
+  | "able_to_transact_now"
+  | "healthy_idle"
+  | "needs_cloud_repair"
+  | "needs_manual_review"
+  | "needs_terminal_action"
+  | string;
+
+export type TerminalRecoveryActionKind =
+  | "cloud_repair"
+  | "manual_review"
+  | "terminal_command"
+  | string;
+
+export type TerminalRecoveryActionStatus =
+  | "available"
+  | "blocked"
+  | "completed"
+  | "expired"
+  | "failed"
+  | "pending"
+  | "claimed"
+  | "verified"
+  | "waiting_for_check_in"
+  | string;
+
+export type TerminalRecoveryAction = {
+  commandId?: string;
+  expectedVerification?: string;
+  kind: TerminalRecoveryActionKind;
+  label: string;
+  latestAcknowledgement?: string;
+  status?: TerminalRecoveryActionStatus;
+};
+
+export type TerminalRecoveryBlockerCategory =
+  | "cloud_repair"
+  | "manual_review"
+  | "terminal_required"
+  | string;
+
+export type TerminalRecoveryBlocker = {
+  action?: TerminalRecoveryAction | null;
+  actionTarget?: TerminalHealthAttentionActionTarget;
+  category: TerminalRecoveryBlockerCategory;
+  detail?: string;
+  id?: string;
+  status?: TerminalRecoveryActionStatus;
+  summary: string;
+  title?: string;
+};
+
+export type TerminalRecoveryPreview = {
+  blockers?: TerminalRecoveryBlocker[];
+  commandStatus?: {
+    commandId?: string;
+    label?: string;
+    latestAcknowledgement?: string;
+    status?: TerminalRecoveryActionStatus;
+    verificationStatus?: TerminalRecoveryActionStatus;
+  } | null;
+  readiness?: {
+    status: TerminalRecoveryReadinessStatus;
+    summary?: string;
+  } | null;
+  verification?: {
+    latestCheckInAt?: number;
+    status?: TerminalRecoveryActionStatus;
+    summary?: string;
+  } | null;
+};
+
 export type TerminalHealthSummary = {
   attentionReasons?: TerminalHealthAttentionReason[];
   health?: "needs_attention" | "offline" | "online" | "stale" | "unknown" | string;
+  recovery?: TerminalRecoveryPreview | null;
   runtimeStatus: TerminalRuntimeStatus | null;
   syncEvidence: TerminalSyncEvidence;
   terminal: TerminalRecord;

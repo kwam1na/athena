@@ -6,7 +6,9 @@ import {
   ArrowRight,
   CheckCircle2,
   Clock3,
+  Send,
   ShieldCheck,
+  Wrench,
 } from "lucide-react";
 
 import View from "@/components/View";
@@ -25,6 +27,7 @@ import { cn } from "@/lib/utils";
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
 import {
+  buildTerminalRecoveryPresentation,
   classifyTerminalHealth,
   formatRegisterNumber,
   formatStatusLabel,
@@ -33,7 +36,9 @@ import {
   getReviewEvidenceCount,
   getSnapshotAgeSummary,
   getStaffAuthorityLabel,
+  getSupportSafeAttentionReasonSummary,
   getTerminalAttentionReasons,
+  type TerminalRecoveryPresentationBlocker,
 } from "./terminalHealthPresentation";
 import type {
   TerminalHealthDetail,
@@ -470,7 +475,7 @@ function AttentionReasonsSection({
             <div className="flex flex-col gap-layout-sm md:flex-row md:items-start md:justify-between">
               <div className="min-w-0">
                 <p className="text-sm font-medium text-foreground">
-                  {reason.summary}
+                  {getSupportSafeAttentionReasonSummary(reason)}
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">
                   {reason.source === "cloud_sync"
@@ -578,6 +583,199 @@ function AttentionReasonAction({
   return null;
 }
 
+function RecoveryMetric({
+  label,
+  value,
+}: {
+  label: string;
+  value: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-md border border-border/80 bg-surface px-layout-md py-layout-sm">
+      <p className="text-xs font-medium uppercase text-muted-foreground">
+        {label}
+      </p>
+      <p className="mt-1 text-sm font-medium text-foreground">{value}</p>
+    </div>
+  );
+}
+
+function RecoveryBlockerGroup({
+  blockers,
+  emptyCopy,
+  orgUrlSlug,
+  storeUrlSlug,
+  title,
+}: {
+  blockers: TerminalRecoveryPresentationBlocker[];
+  emptyCopy: string;
+  orgUrlSlug?: string;
+  storeUrlSlug?: string;
+  title: string;
+}) {
+  return (
+    <div className="rounded-md border border-border/80 bg-surface">
+      <div className="border-b border-border/80 bg-surface-muted/40 px-layout-md py-layout-xs">
+        <h3 className="text-xs font-medium uppercase text-muted-foreground">
+          {title}
+        </h3>
+      </div>
+      <div className="divide-y divide-border/80">
+        {blockers.length === 0 ? (
+          <p className="px-layout-md py-layout-sm text-sm text-muted-foreground">
+            {emptyCopy}
+          </p>
+        ) : (
+          blockers.map((blocker) => (
+            <div
+              className="grid gap-layout-sm px-layout-md py-layout-sm md:grid-cols-[minmax(0,1fr)_auto] md:items-start"
+              key={blocker.id}
+            >
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-foreground">
+                  {blocker.title}
+                </p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {blocker.summary}
+                </p>
+                {blocker.detail ? (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {blocker.detail}
+                  </p>
+                ) : null}
+              </div>
+              <RecoveryBlockerAction
+                blocker={blocker}
+                orgUrlSlug={orgUrlSlug}
+                storeUrlSlug={storeUrlSlug}
+              />
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+function RecoveryBlockerAction({
+  blocker,
+  orgUrlSlug,
+  storeUrlSlug,
+}: {
+  blocker: TerminalRecoveryPresentationBlocker;
+  orgUrlSlug?: string;
+  storeUrlSlug?: string;
+}) {
+  const action = blocker.action;
+  if (action && ["cloud_repair", "terminal_command"].includes(action.kind)) {
+    return (
+      <Button disabled size="sm" variant="utility">
+        {action.kind === "terminal_command" ? (
+          <Send aria-hidden="true" />
+        ) : (
+          <Wrench aria-hidden="true" />
+        )}
+        {action.label}
+      </Button>
+    );
+  }
+
+  if (blocker.actionTarget) {
+    return (
+      <AttentionReasonAction
+        orgUrlSlug={orgUrlSlug}
+        reason={{
+          actionTarget: blocker.actionTarget,
+          source: "terminal_runtime",
+          summary: blocker.summary,
+          type: "manual_review",
+        }}
+        storeUrlSlug={storeUrlSlug}
+      />
+    );
+  }
+
+  return null;
+}
+
+function RecoveryPanel({
+  detail,
+  orgUrlSlug,
+  storeUrlSlug,
+}: {
+  detail: TerminalHealthDetail;
+  orgUrlSlug?: string;
+  storeUrlSlug?: string;
+}) {
+  const recovery = buildTerminalRecoveryPresentation(detail);
+
+  return (
+    <DetailPanel
+      icon={<Wrench className="h-4 w-4 text-muted-foreground" />}
+      title="Support recovery"
+    >
+      <div className="rounded-md border border-border/80 bg-surface px-layout-md py-layout-md">
+        <div className="flex flex-col gap-layout-sm md:flex-row md:items-start md:justify-between">
+          <div className="min-w-0">
+            <p className="text-xs font-medium uppercase text-muted-foreground">
+              Readiness
+            </p>
+            <p className="mt-1 text-base font-medium text-foreground">
+              {recovery.readiness.label}
+            </p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {recovery.readiness.description}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-layout-md grid gap-layout-sm md:grid-cols-3">
+        <RecoveryMetric
+          label="Command status"
+          value={`${recovery.commandStatus.label} / ${recovery.commandStatus.status}`}
+        />
+        <RecoveryMetric
+          label="Verification"
+          value={recovery.commandStatus.verificationStatus}
+        />
+        <RecoveryMetric
+          label="Available actions"
+          value={`${recovery.safeActions.length} safe action${recovery.safeActions.length === 1 ? "" : "s"}`}
+        />
+      </div>
+
+      <div className="mt-layout-md space-y-layout-sm">
+        <RecoveryBlockerGroup
+          blockers={recovery.groups.cloudRepair}
+          emptyCopy="No cloud-safe repair blockers are reported."
+          orgUrlSlug={orgUrlSlug}
+          storeUrlSlug={storeUrlSlug}
+          title="Cloud repair"
+        />
+        <RecoveryBlockerGroup
+          blockers={recovery.groups.terminalRequired}
+          emptyCopy="No terminal-required blockers are reported."
+          orgUrlSlug={orgUrlSlug}
+          storeUrlSlug={storeUrlSlug}
+          title="Terminal required"
+        />
+        <RecoveryBlockerGroup
+          blockers={recovery.groups.manualReview}
+          emptyCopy="No manual-review blockers are reported."
+          orgUrlSlug={orgUrlSlug}
+          storeUrlSlug={storeUrlSlug}
+          title="Manual review"
+        />
+      </div>
+
+      <p className="mt-layout-md text-sm text-muted-foreground">
+        {recovery.verification.summary}
+      </p>
+    </DetailPanel>
+  );
+}
+
 function SupportNotesSection({
   runtimeStatus,
 }: {
@@ -682,6 +880,11 @@ export function POSTerminalDetailViewContent({
             <TerminalContextRail detail={detail} runtimeStatus={runtimeStatus} />
 
             <main className="space-y-layout-lg">
+              <RecoveryPanel
+                detail={detail}
+                orgUrlSlug={orgUrlSlug}
+                storeUrlSlug={storeUrlSlug}
+              />
               <AttentionReasonsSection
                 detail={detail}
                 orgUrlSlug={orgUrlSlug}

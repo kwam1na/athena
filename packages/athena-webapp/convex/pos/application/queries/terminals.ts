@@ -10,6 +10,20 @@ import {
   resolveTerminalRegisterSessionActionTarget,
   type TerminalSyncEvidence,
 } from "../../infrastructure/repositories/terminalRepository";
+import {
+  getTerminalRecoverySourceEvent,
+  listTerminalRecoveryConflictsForRepair,
+} from "../../infrastructure/repositories/terminalRecoveryRepository";
+import {
+  buildTerminalCloudRepairPreview,
+  classifyTerminalCloudRepairConflict,
+} from "../terminalRecovery/cloudRepairPolicy";
+import type {
+  TerminalRecoveryCommandPayload,
+  TerminalRecoveryCommandType,
+  TerminalRecoveryExpectedEvidence,
+  TerminalRecoveryReadiness,
+} from "../terminalRecovery/types";
 
 const EMPTY_TERMINAL_SYNC_EVIDENCE: TerminalSyncEvidence = {
   latestEvent: null,
@@ -79,7 +93,34 @@ export type TerminalHealthSummary = {
     "_id" | "_creationTime" | "storeId" | "terminalId"
   > | null;
   attentionReasons: TerminalHealthAttentionReason[];
+  recoveryPreview: TerminalRecoveryPreview | null;
   syncEvidence: TerminalSyncEvidence;
+};
+
+export type TerminalRecoveryPreview = {
+  readiness: TerminalRecoveryReadiness;
+  runtimeFresh: boolean;
+  evidence: {
+    freshRuntimeRequiredForAbleToTransactNow: true;
+  };
+  cloudRepair: {
+    preconditionHash: string;
+    safeConflictIds: Array<Id<"posLocalSyncConflict">>;
+    skippedConflictIds: Array<Id<"posLocalSyncConflict">>;
+  };
+  terminalActions: Array<{
+    commandType: TerminalRecoveryCommandType;
+    expectedEvidence: TerminalRecoveryExpectedEvidence;
+    commandContext: TerminalRecoveryCommandPayload;
+    reason: string;
+  }>;
+  manualReview: Array<{
+    reason: string;
+    source:
+      | TerminalHealthAttentionReason["source"]
+      | "cloud_repair";
+    type: TerminalHealthAttentionReason["type"] | "unsafe_cloud_conflict";
+  }>;
 };
 
 export async function listTerminals(
@@ -180,6 +221,18 @@ async function buildTerminalHealthSummary(
       terminalId: args.terminal._id,
     },
   );
+  const recoveryPreview = args.includeSyncEvidence
+    ? await buildTerminalRecoveryPreview(ctx, {
+        attentionReasons: resolvedAttentionReasons,
+        now: args.now,
+        runtimeAgeMs,
+        runtimeStatus,
+        storeId: args.terminal.storeId,
+        syncEvidence,
+        terminalId: args.terminal._id,
+        terminalStatus: args.terminal.status,
+      })
+    : null;
 
   return {
     terminal: {
@@ -201,8 +254,269 @@ async function buildTerminalHealthSummary(
     runtimeAgeMs,
     runtimeStatus: runtimeStatus ? stripRuntimeStatusIdentity(runtimeStatus) : null,
     attentionReasons: resolvedAttentionReasons,
+    recoveryPreview,
     syncEvidence,
   };
+}
+
+export async function previewTerminalRecovery(
+  ctx: QueryCtx,
+  args: {
+    storeId: Id<"store">;
+    terminalId: Id<"posTerminal">;
+    now?: number;
+  },
+) {
+  const summary = await getTerminalHealthSummary(ctx, args);
+  return summary?.recoveryPreview ?? null;
+}
+
+async function buildTerminalRecoveryPreview(
+  ctx: QueryCtx,
+  args: {
+    attentionReasons: TerminalHealthAttentionReason[];
+    now: number;
+    runtimeAgeMs: number | null;
+    runtimeStatus: Doc<"posTerminalRuntimeStatus"> | null;
+    storeId: Id<"store">;
+    syncEvidence: TerminalSyncEvidence;
+    terminalId: Id<"posTerminal">;
+    terminalStatus: Doc<"posTerminal">["status"];
+  },
+): Promise<TerminalRecoveryPreview> {
+  const runtimeFresh =
+    !!args.runtimeStatus &&
+    args.runtimeAgeMs !== null &&
+    args.runtimeAgeMs <= 2 * 60 * 1000 &&
+    args.runtimeStatus.browserInfo?.online !== false;
+  const cloudRepair = await buildTerminalRecoveryCloudRepairPreview(ctx, args);
+  const terminalActions = buildTerminalRecoveryActions(args);
+  const manualReview = buildTerminalRecoveryManualReview({
+    attentionReasons: args.attentionReasons,
+    skippedConflictIds: cloudRepair.skippedConflictIds,
+  });
+  const healthyIdle =
+    args.terminalStatus === "active" &&
+    runtimeFresh &&
+    terminalActions.length === 0 &&
+    manualReview.length === 0 &&
+    cloudRepair.safeConflictIds.length === 0 &&
+    runtimeHasHealthyIdleEvidence(args.runtimeStatus, args.syncEvidence);
+  const ableToTransactNow =
+    healthyIdle && runtimeHasSaleAuthority(args.runtimeStatus);
+
+  return {
+    readiness: ableToTransactNow
+      ? "able_to_transact_now"
+      : manualReview.length > 0
+        ? "needs_manual_review"
+        : terminalActions.length > 0
+          ? "needs_terminal_action"
+          : cloudRepair.safeConflictIds.length > 0
+            ? "needs_cloud_repair"
+            : "healthy_idle",
+    runtimeFresh,
+    evidence: {
+      freshRuntimeRequiredForAbleToTransactNow: true,
+    },
+    cloudRepair,
+    terminalActions,
+    manualReview,
+  };
+}
+
+async function buildTerminalRecoveryCloudRepairPreview(
+  ctx: QueryCtx,
+  args: {
+    now: number;
+    storeId: Id<"store">;
+    terminalId: Id<"posTerminal">;
+  },
+) {
+  const conflicts = await listTerminalRecoveryConflictsForRepair(ctx, {
+    storeId: args.storeId,
+    terminalId: args.terminalId,
+  });
+  const classified = await Promise.all(
+    conflicts.map(async (conflict) =>
+      classifyTerminalCloudRepairConflict({
+        conflict,
+        now: args.now,
+        sourceEvent: await getTerminalRecoverySourceEvent(ctx, {
+          storeId: args.storeId,
+          terminalId: args.terminalId,
+          localEventId: conflict.localEventId,
+        }),
+        storeId: args.storeId,
+        terminalId: args.terminalId,
+      }),
+    ),
+  );
+  const preview = buildTerminalCloudRepairPreview({
+    classified,
+    storeId: args.storeId,
+    terminalId: args.terminalId,
+  });
+
+  return {
+    preconditionHash: preview.preconditionHash,
+    safeConflictIds: preview.safeConflictIds,
+    skippedConflictIds: preview.skipped.map((item) => item.conflictId),
+  };
+}
+
+function buildTerminalRecoveryActions(args: {
+  runtimeStatus: Doc<"posTerminalRuntimeStatus"> | null;
+}): TerminalRecoveryPreview["terminalActions"] {
+  const status = args.runtimeStatus;
+  if (!status) {
+    return [];
+  }
+
+  const actions: TerminalRecoveryPreview["terminalActions"] = [];
+  if (status.localStore.available === false || status.localStore.terminalSeedReady === false) {
+    actions.push({
+      commandType: "repair_terminal_seed",
+      expectedEvidence: {
+        localStoreAvailable: true,
+        terminalSeedReady: true,
+        terminalIntegrityStatus: "healthy",
+      },
+      commandContext: {
+        expectedBlockerType: "terminal_seed",
+        reason: "Terminal setup data needs repair.",
+      },
+      reason: "Terminal setup data needs repair before this checkout station can sell.",
+    });
+  }
+  if (status.terminalIntegrity && status.terminalIntegrity.status !== "healthy") {
+    actions.push({
+      commandType: "repair_terminal_seed",
+      expectedEvidence: {
+        terminalIntegrityStatus: "healthy",
+      },
+      commandContext: {
+        expectedBlockerType: status.terminalIntegrity.reason ?? "terminal_integrity",
+        reason: "Terminal integrity requires repair.",
+      },
+      reason: "Terminal integrity requires local repair.",
+    });
+  }
+  if (status.drawerAuthority?.status === "blocked") {
+    actions.push({
+      commandType: "clear_stale_drawer_authority",
+      expectedEvidence: {
+        drawerAuthorityStatus: "healthy",
+        localRegisterSessionId: status.drawerAuthority.localRegisterSessionId,
+      },
+      commandContext: {
+        cloudRegisterSessionId: status.drawerAuthority.cloudRegisterSessionId,
+        expectedBlockerType: status.drawerAuthority.reason ?? "drawer_authority",
+        localRegisterSessionId: status.drawerAuthority.localRegisterSessionId,
+        reason: "Drawer authority requires terminal-local repair.",
+      },
+      reason: "Drawer authority requires terminal-local repair.",
+    });
+  }
+  if (
+    status.staffAuthority.status === "expired" ||
+    status.staffAuthority.status === "missing"
+  ) {
+    actions.push({
+      commandType: "refresh_staff_authority",
+      expectedEvidence: {
+        staffAuthorityStatus: "ready",
+      },
+      commandContext: {
+        expectedBlockerType: "staff_authority",
+        reason: "Staff authority must be refreshed on this terminal.",
+      },
+      reason: "Staff authority must be refreshed on this terminal.",
+    });
+  }
+  if (status.sync.status === "failed" || status.sync.status === "unavailable") {
+    actions.push({
+      commandType: "retry_sync",
+      expectedEvidence: {
+        syncStatus: "idle",
+      },
+      commandContext: {
+        expectedBlockerType: "sync_runtime",
+        reason: "Local sync needs a terminal retry.",
+      },
+      reason: "Local sync needs a terminal retry.",
+    });
+  }
+  return dedupeTerminalActions(actions);
+}
+
+function buildTerminalRecoveryManualReview(args: {
+  attentionReasons: TerminalHealthAttentionReason[];
+  skippedConflictIds: Array<Id<"posLocalSyncConflict">>;
+}): TerminalRecoveryPreview["manualReview"] {
+  const manual: TerminalRecoveryPreview["manualReview"] = args.attentionReasons
+    .filter((reason) =>
+      reason.type === "cloud_held" ||
+      reason.type === "cloud_rejected" ||
+      reason.type === "local_review",
+    )
+    .map((reason) => ({
+      reason: reason.summary,
+      source: reason.source,
+      type: reason.type,
+    }));
+  for (const conflictId of args.skippedConflictIds) {
+    manual.push({
+      reason: `Cloud conflict ${conflictId} needs manual review before repair.`,
+      source: "cloud_repair" as const,
+      type: "unsafe_cloud_conflict" as const,
+    });
+  }
+  return manual;
+}
+
+function runtimeHasHealthyIdleEvidence(
+  status: Doc<"posTerminalRuntimeStatus"> | null,
+  syncEvidence: TerminalSyncEvidence,
+) {
+  return (
+    !!status &&
+    status.localStore.available &&
+    status.localStore.terminalSeedReady &&
+    status.sync.status !== "failed" &&
+    status.sync.status !== "needs_review" &&
+    status.sync.status !== "unavailable" &&
+    status.sync.failedEventCount === 0 &&
+    status.sync.reviewEventCount === 0 &&
+    (!status.terminalIntegrity || status.terminalIntegrity.status === "healthy") &&
+    (!status.drawerAuthority || status.drawerAuthority.status === "healthy") &&
+    (syncEvidence.unresolvedConflictCount ?? 0) === 0 &&
+    syncEvidence.conflictedCount === 0 &&
+    syncEvidence.heldCount === 0 &&
+    syncEvidence.rejectedCount === 0
+  );
+}
+
+function runtimeHasSaleAuthority(status: Doc<"posTerminalRuntimeStatus"> | null) {
+  return (
+    !!status &&
+    status.staffAuthority.status === "ready" &&
+    status.saleAuthority?.status === "ready"
+  );
+}
+
+function dedupeTerminalActions(
+  actions: TerminalRecoveryPreview["terminalActions"],
+) {
+  const seen = new Set<string>();
+  return actions.filter((action) => {
+    const key = `${action.commandType}:${action.commandContext.expectedBlockerType ?? ""}:${action.commandContext.localRegisterSessionId ?? ""}`;
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
 }
 
 async function resolveAttentionReasonActionTargets(

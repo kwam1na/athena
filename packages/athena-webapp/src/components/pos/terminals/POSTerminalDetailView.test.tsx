@@ -268,6 +268,123 @@ describe("POSTerminalDetailViewContent", () => {
     expect(screen.getByText("Upload failed")).toBeInTheDocument();
   });
 
+  it("renders the support recovery panel with safe cloud and terminal actions", () => {
+    render(
+      <POSTerminalDetailViewContent
+        detail={{
+          ...detail,
+          attentionReasons: [
+            {
+              source: "cloud_sync",
+              summary:
+                "duplicate register_opened event failed: A register session is already open for this terminal.",
+              type: "cloud_conflict",
+            },
+            {
+              source: "terminal_runtime",
+              summary: "authorization_failed: stale terminal sync secret rejected",
+              type: "terminal_authorization_failed",
+            },
+          ],
+          recovery: {
+            commandStatus: {
+              label: "Terminal repair command waiting for checkout station.",
+              status: "pending",
+              verificationStatus: "waiting_for_check_in",
+            },
+            readiness: {
+              status: "needs_cloud_repair",
+            },
+            verification: {
+              status: "waiting_for_check_in",
+              summary:
+                "Waiting for a fresh terminal check-in before marking recovery complete.",
+            },
+          },
+        }}
+        isLoading={false}
+        orgUrlSlug="wigclub"
+        storeUrlSlug="osu"
+      />,
+    );
+
+    expect(screen.getByText("Support recovery")).toBeInTheDocument();
+    expect(screen.getByText("Needs cloud repair")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Cloud repair is available for stale terminal evidence. No sale, payment, or inventory facts will be changed.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getAllByText(
+        "Duplicate drawer-open attempts can be resolved. No sales, payments, or inventory will be changed.",
+      ).length,
+    ).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText(
+        "Terminal authorization needs refresh. This checkout station must reconnect before Athena can verify it.",
+      ).length,
+    ).toBeGreaterThan(0);
+    expect(
+      screen.getByRole("button", { name: /resolve duplicate drawer attempts/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /send terminal repair command/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/pending/i)).toBeInTheDocument();
+    expect(screen.getAllByText("Waiting For Check In").length).toBeGreaterThan(0);
+    expect(
+      screen.queryByText(/register_opened|already open|authorization_failed|sync secret/i),
+    ).not.toBeInTheDocument();
+  });
+
+  it("does not render auto-repair buttons for manual payment or inventory review blockers", () => {
+    render(
+      <POSTerminalDetailViewContent
+        detail={{
+          ...detail,
+          attentionReasons: [],
+          recovery: {
+            blockers: [
+              {
+                action: {
+                  kind: "manual_review",
+                  label: "Repair payment conflict",
+                  status: "available",
+                },
+                actionTarget: { type: "open_work" },
+                category: "manual_review",
+                id: "payment-review",
+                summary:
+                  "Payment or inventory review is required before support takes action.",
+                title: "Manual review required",
+              },
+            ],
+            readiness: {
+              status: "needs_manual_review",
+            },
+          },
+        }}
+        isLoading={false}
+        orgUrlSlug="wigclub"
+        storeUrlSlug="osu"
+      />,
+    );
+
+    expect(screen.getByText("Needs manual review")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Payment or inventory review is required before support takes action.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /repair payment conflict/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /review open work/i }),
+    ).toHaveAttribute("href", "/wigclub/store/osu/operations/open-work");
+  });
+
   it("routes attention reasons to the available action surfaces", () => {
     render(
       <POSTerminalDetailViewContent

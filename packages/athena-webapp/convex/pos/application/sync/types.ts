@@ -218,6 +218,7 @@ export type LocalSyncConflictRecord = {
   createdAt: number;
   resolvedAt?: number;
   resolvedByStaffProfileId?: Id<"staffProfile">;
+  resolvedByUserId?: Id<"athenaUser">;
 };
 
 export type LocalSyncCursorRecord = {

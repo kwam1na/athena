@@ -2,15 +2,30 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+  acknowledgeTerminalRecoveryCommand: vi.fn(),
+  claimTerminalRecoveryCommand: vi.fn(),
   ingestLocalEvents: vi.fn(),
+  listTerminalRecoveryCommands: vi.fn(),
   reportTerminalRuntimeStatus: vi.fn(),
 }));
 
 vi.mock("convex/react", () => ({
-  useMutation: (mutation: string) =>
-    mutation === "reportTerminalRuntimeStatus"
-      ? mocks.reportTerminalRuntimeStatus
-      : mocks.ingestLocalEvents,
+  useMutation: (mutation: string) => {
+    if (mutation === "reportTerminalRuntimeStatus") {
+      return mocks.reportTerminalRuntimeStatus;
+    }
+    if (mutation === "claimTerminalRecoveryCommand") {
+      return mocks.claimTerminalRecoveryCommand;
+    }
+    if (mutation === "acknowledgeTerminalRecoveryCommand") {
+      return mocks.acknowledgeTerminalRecoveryCommand;
+    }
+    return mocks.ingestLocalEvents;
+  },
+  useQuery: (query: string, args: unknown) =>
+    query === "listTerminalRecoveryCommands"
+      ? mocks.listTerminalRecoveryCommands(args)
+      : undefined,
 }));
 
 vi.mock("~/convex/_generated/api", () => ({
@@ -18,7 +33,13 @@ vi.mock("~/convex/_generated/api", () => ({
     pos: {
       public: {
         sync: { ingestLocalEvents: "ingestLocalEvents" },
-        terminals: { reportTerminalRuntimeStatus: "reportTerminalRuntimeStatus" },
+        terminals: {
+          acknowledgeTerminalRecoveryCommand:
+            "acknowledgeTerminalRecoveryCommand",
+          claimTerminalRecoveryCommand: "claimTerminalRecoveryCommand",
+          listTerminalRecoveryCommands: "listTerminalRecoveryCommands",
+          reportTerminalRuntimeStatus: "reportTerminalRuntimeStatus",
+        },
       },
     },
   },
@@ -56,6 +77,18 @@ describe("usePosLocalSyncRuntimeStatus", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     mocks.reportTerminalRuntimeStatus.mockResolvedValue({
+      kind: "ok",
+      data: {},
+    });
+    mocks.listTerminalRecoveryCommands.mockReturnValue(undefined);
+    mocks.claimTerminalRecoveryCommand.mockResolvedValue({
+      kind: "user_error",
+      error: {
+        code: "not_found",
+        message: "No recovery command is available.",
+      },
+    });
+    mocks.acknowledgeTerminalRecoveryCommand.mockResolvedValue({
       kind: "ok",
       data: {},
     });
@@ -3744,6 +3777,80 @@ describe("usePosLocalSyncRuntimeStatus", () => {
     );
     expect(mocks.ingestLocalEvents).not.toHaveBeenCalled();
   });
+
+  it("claims, executes, and acknowledges recovery commands for the active terminal", async () => {
+    const retry = vi.fn();
+    const command = buildRecoveryCommand();
+    const commandResult = { kind: "ok", data: [command] };
+    mocks.listTerminalRecoveryCommands.mockImplementation((args) =>
+      args === "skip" ? undefined : commandResult,
+    );
+    mocks.claimTerminalRecoveryCommand.mockResolvedValue({
+      kind: "ok",
+      data: command,
+    });
+    const store = buildRecoveryCommandStore();
+
+    renderHook(() =>
+      usePosLocalSyncRuntimeStatus({
+        mode: "status-only",
+        onRetrySync: retry,
+        storeFactory: () => store as never,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(mocks.claimTerminalRecoveryCommand).toHaveBeenCalledWith({
+        commandId: "command-1",
+        storeId: "store-1",
+        syncSecretHash: "sync-secret-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+    await waitFor(() =>
+      expect(mocks.acknowledgeTerminalRecoveryCommand).toHaveBeenCalledWith({
+        commandId: "command-1",
+        message: undefined,
+        result: "completed",
+        storeId: "store-1",
+        syncSecretHash: "sync-secret-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+    expect(retry).toHaveBeenCalled();
+  });
+
+  it("does not acknowledge a claimed recovery command for another terminal", async () => {
+    const command = buildRecoveryCommand({ terminalId: "other-terminal" });
+    const commandResult = { kind: "ok", data: [command] };
+    mocks.listTerminalRecoveryCommands.mockImplementation((args) =>
+      args === "skip" ? undefined : commandResult,
+    );
+    mocks.claimTerminalRecoveryCommand.mockResolvedValue({
+      kind: "ok",
+      data: command,
+    });
+    const store = buildRecoveryCommandStore();
+
+    renderHook(() =>
+      usePosLocalSyncRuntimeStatus({
+        mode: "status-only",
+        storeFactory: () => store as never,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(mocks.claimTerminalRecoveryCommand).toHaveBeenCalled(),
+    );
+    await waitFor(() =>
+      expect(mocks.reportTerminalRuntimeStatus).toHaveBeenCalled(),
+    );
+    expect(mocks.acknowledgeTerminalRecoveryCommand).not.toHaveBeenCalled();
+  });
 });
 
 function buildLocalEvent(
@@ -3766,5 +3873,48 @@ function buildLocalEvent(
     type: "register.opened",
     uploadSequence: sequence,
     ...overrides,
+  };
+}
+
+function buildRecoveryCommand(overrides: Record<string, unknown> = {}) {
+  return {
+    _creationTime: 1,
+    _id: "command-1",
+    commandContext: {},
+    commandType: "retry_sync",
+    expectedEvidence: {},
+    expiresAt: Date.now() + 60_000,
+    issuedAt: 1,
+    issuedByUserId: "user-1",
+    status: "pending",
+    storeId: "store-1",
+    terminalId: "terminal-cloud-1",
+    verificationStatus: "waiting_for_acknowledgement",
+    ...overrides,
+  } as never;
+}
+
+function buildRecoveryCommandStore() {
+  return {
+    listEvents: vi.fn(async () => ({
+      ok: true,
+      value: [],
+    })),
+    markEventsSynced: vi.fn(async () => ({
+      ok: true,
+      value: [],
+    })),
+    readProvisionedTerminalSeed: vi.fn(async () => ({
+      ok: true,
+      value: {
+        cloudTerminalId: "terminal-cloud-1",
+        displayName: "Front",
+        provisionedAt: 1,
+        schemaVersion: 1,
+        syncSecretHash: "sync-secret-1",
+        storeId: "store-1",
+        terminalId: "local-terminal-1",
+      },
+    })),
   };
 }

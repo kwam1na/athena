@@ -20,13 +20,31 @@ import {
   getTerminalHealthSummary as getTerminalHealthSummaryQuery,
   listTerminalHealthSummaries as listTerminalHealthSummariesQuery,
   listTerminals as listTerminalsQuery,
+  previewTerminalRecovery as previewTerminalRecoveryQuery,
 } from "../application/queries/terminals";
 import { hashPosTerminalSyncSecret } from "../application/sync/terminalSyncSecret";
+import { resolveTerminalCloudRepair as resolveTerminalCloudRepairCommand } from "../application/terminalRecovery/resolveTerminalCloudRepair";
+import {
+  acknowledgeTerminalRecoveryCommand as acknowledgeTerminalRecoveryCommandService,
+  claimTerminalRecoveryCommand as claimTerminalRecoveryCommandService,
+  issueTerminalRecoveryCommand as issueTerminalRecoveryCommandService,
+  listClaimableTerminalRecoveryCommands,
+  verifyTerminalRecoveryCommandsFromRuntime,
+} from "../application/terminalRecovery/terminalCommandService";
+import { createTerminalRecoveryCommandRepository } from "../infrastructure/repositories/terminalRecoveryRepository";
+import {
+  posTerminalRecoveryCommandPayloadValidator,
+  posTerminalRecoveryCommandStatusValidator,
+  posTerminalRecoveryCommandTypeValidator,
+  posTerminalRecoveryExpectedEvidenceValidator,
+  posTerminalRecoveryVerificationStatusValidator,
+} from "../../schemas/pos/posTerminalRecovery";
 import {
   posTerminalRuntimeBrowserInfoValidator,
   posTerminalRuntimeAppSessionRecoveryValidator,
   posTerminalRuntimeDrawerAuthorityValidator,
   posTerminalRuntimeLocalStoreValidator,
+  posTerminalRuntimeSaleAuthorityValidator,
   posTerminalRuntimeSnapshotsValidator,
   posTerminalRuntimeStaffAuthorityValidator,
   posTerminalRuntimeStatusSourceValidator,
@@ -103,6 +121,7 @@ const runtimeStatusInputValidator = v.object({
   localStore: posTerminalRuntimeLocalStoreValidator,
   sync: posTerminalRuntimeSyncValidator,
   staffAuthority: posTerminalRuntimeStaffAuthorityValidator,
+  saleAuthority: v.optional(posTerminalRuntimeSaleAuthorityValidator),
   snapshots: posTerminalRuntimeSnapshotsValidator,
   terminalIntegrity: v.optional(posTerminalRuntimeTerminalIntegrityValidator),
   drawerAuthority: v.optional(posTerminalRuntimeDrawerAuthorityValidator),
@@ -265,7 +284,82 @@ const terminalHealthSummaryReturnValidator = v.object({
   runtimeAgeMs: v.union(v.number(), v.null()),
   runtimeStatus: v.union(runtimeStatusSnapshotReturnValidator, v.null()),
   attentionReasons: v.array(terminalHealthAttentionReasonReturnValidator),
+  recoveryPreview: v.union(
+    v.object({
+      readiness: v.union(
+        v.literal("healthy_idle"),
+        v.literal("able_to_transact_now"),
+        v.literal("needs_cloud_repair"),
+        v.literal("needs_terminal_action"),
+        v.literal("needs_manual_review"),
+      ),
+      runtimeFresh: v.boolean(),
+      evidence: v.object({
+        freshRuntimeRequiredForAbleToTransactNow: v.literal(true),
+      }),
+      cloudRepair: v.object({
+        preconditionHash: v.string(),
+        safeConflictIds: v.array(v.id("posLocalSyncConflict")),
+        skippedConflictIds: v.array(v.id("posLocalSyncConflict")),
+      }),
+      terminalActions: v.array(
+        v.object({
+          commandType: posTerminalRecoveryCommandTypeValidator,
+          expectedEvidence: posTerminalRecoveryExpectedEvidenceValidator,
+          commandContext: posTerminalRecoveryCommandPayloadValidator,
+          reason: v.string(),
+        }),
+      ),
+      manualReview: v.array(
+        v.object({
+          reason: v.string(),
+          source: v.union(
+            v.literal("cloud_sync"),
+            v.literal("local_runtime"),
+            v.literal("terminal_runtime"),
+            v.literal("cloud_repair"),
+          ),
+          type: v.string(),
+        }),
+      ),
+    }),
+    v.null(),
+  ),
   syncEvidence: terminalSyncEvidenceReturnValidator,
+});
+
+const terminalRecoveryCommandReturnValidator = v.object({
+  _id: v.id("posTerminalRecoveryCommand"),
+  _creationTime: v.number(),
+  storeId: v.id("store"),
+  terminalId: v.id("posTerminal"),
+  commandType: posTerminalRecoveryCommandTypeValidator,
+  status: posTerminalRecoveryCommandStatusValidator,
+  verificationStatus: posTerminalRecoveryVerificationStatusValidator,
+  commandContext: posTerminalRecoveryCommandPayloadValidator,
+  expectedEvidence: posTerminalRecoveryExpectedEvidenceValidator,
+  issuedByUserId: v.id("athenaUser"),
+  issuedAt: v.number(),
+  expiresAt: v.number(),
+  claimedAt: v.optional(v.number()),
+  acknowledgement: v.optional(
+    v.object({
+      acknowledgedAt: v.number(),
+      message: v.optional(v.string()),
+      result: v.union(
+        v.literal("completed"),
+        v.literal("failed"),
+        v.literal("precondition_failed"),
+      ),
+    }),
+  ),
+  verifiedAt: v.optional(v.number()),
+});
+
+const terminalCloudRepairResultValidator = v.object({
+  preconditionHash: v.string(),
+  resolvedConflictIds: v.array(v.id("posLocalSyncConflict")),
+  skippedConflictIds: v.array(v.id("posLocalSyncConflict")),
 });
 
 type TerminalRecord = {
@@ -323,6 +417,16 @@ function stripRuntimeStatusInput(
       staffProfileId: status.staffAuthority.staffProfileId,
       expiresAt: status.staffAuthority.expiresAt,
     },
+    saleAuthority: status.saleAuthority
+      ? {
+          observedAt: status.saleAuthority.observedAt,
+          status: status.saleAuthority.status,
+          localPosSessionId: status.saleAuthority.localPosSessionId,
+          localRegisterSessionId: status.saleAuthority.localRegisterSessionId,
+          staffProfileId: status.saleAuthority.staffProfileId,
+          transactionMode: status.saleAuthority.transactionMode,
+        }
+      : undefined,
     terminalIntegrity: status.terminalIntegrity
       ? {
           observedAt: status.terminalIntegrity.observedAt,
@@ -368,6 +472,30 @@ async function requireTerminalStoreAccess(
     organizationId: store.organizationId,
     userId: args.userId,
   });
+}
+
+async function requireActiveTerminalSyncSecret(
+  ctx: Pick<QueryCtx, "auth" | "db"> | Pick<MutationCtx, "auth" | "db">,
+  args: {
+    storeId: Id<"store">;
+    syncSecretHash: string;
+    terminalId: Id<"posTerminal">;
+  },
+) {
+  const terminal = await ctx.db.get("posTerminal", args.terminalId);
+  const submittedSyncSecretHash = await hashPosTerminalSyncSecret(
+    args.syncSecretHash,
+  );
+  if (
+    !terminal ||
+    terminal.storeId !== args.storeId ||
+    terminal.status !== "active" ||
+    !terminal.syncSecretHash ||
+    terminal.syncSecretHash !== submittedSyncSecretHash
+  ) {
+    return null;
+  }
+  return terminal;
 }
 
 export const listTerminals = query({
@@ -442,6 +570,24 @@ export const getTerminalHealthSummary = query({
   },
 });
 
+export const previewTerminalRecovery = query({
+  args: {
+    storeId: v.id("store"),
+    terminalId: v.id("posTerminal"),
+  },
+  returns: terminalHealthSummaryReturnValidator.fields.recoveryPreview,
+  handler: async (ctx, args) => {
+    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+    await requireTerminalStoreAccess(ctx, {
+      allowedRoles: ["full_admin", "pos_only"],
+      failureMessage: "You do not have access to view POS terminal recovery.",
+      storeId: args.storeId,
+      userId: athenaUser._id,
+    });
+    return previewTerminalRecoveryQuery(ctx, args);
+  },
+});
+
 export const listTerminalHealth = listTerminalHealthSummaries;
 export const getTerminalHealthDetail = getTerminalHealthSummary;
 
@@ -470,17 +616,12 @@ export const submitTerminalRuntimeStatus = mutation({
         message: "You do not have access to update this POS terminal status.",
       });
     }
-    const terminal = await ctx.db.get("posTerminal", args.terminalId);
-    const submittedSyncSecretHash = await hashPosTerminalSyncSecret(
-      args.syncSecretHash,
-    );
-    if (
-      !terminal ||
-      terminal.storeId !== args.storeId ||
-      terminal.status !== "active" ||
-      !terminal.syncSecretHash ||
-      terminal.syncSecretHash !== submittedSyncSecretHash
-    ) {
+    const terminal = await requireActiveTerminalSyncSecret(ctx, {
+      storeId: args.storeId,
+      syncSecretHash: args.syncSecretHash,
+      terminalId: args.terminalId,
+    });
+    if (!terminal) {
       return userError({
         code: "authorization_failed",
         message: "You do not have access to update this POS terminal status.",
@@ -488,11 +629,31 @@ export const submitTerminalRuntimeStatus = mutation({
       });
     }
 
-    return submitTerminalRuntimeStatusCommand(ctx, {
+    const safeStatus = stripRuntimeStatusInput(args.status);
+    const result = await submitTerminalRuntimeStatusCommand(ctx, {
       storeId: args.storeId,
       terminalId: args.terminalId,
-      status: stripRuntimeStatusInput(args.status),
+      status: safeStatus,
     });
+    if (result.kind === "ok") {
+      await verifyTerminalRecoveryCommandsFromRuntime(
+        createTerminalRecoveryCommandRepository(ctx),
+        {
+          runtimeStatus: {
+            _id: "runtime-status-current" as never,
+            _creationTime: result.data.receivedAt,
+            storeId: args.storeId,
+            terminalId: args.terminalId,
+            receivedAt: result.data.receivedAt,
+            ...safeStatus,
+          },
+          storeId: args.storeId,
+          terminalId: args.terminalId,
+          verifiedAt: result.data.receivedAt,
+        },
+      );
+    }
+    return result;
   },
 });
 
@@ -587,5 +748,215 @@ export const deleteTerminal = mutation({
       userId: athenaUser._id,
     });
     return deleteTerminalCommand(ctx, args);
+  },
+});
+
+export const resolveTerminalCloudRepair = mutation({
+  args: {
+    storeId: v.id("store"),
+    terminalId: v.id("posTerminal"),
+    expectedPreconditionHash: v.string(),
+  },
+  returns: commandResultValidator(terminalCloudRepairResultValidator),
+  handler: async (ctx, args) => {
+    try {
+      const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+      await requireTerminalStoreAccess(ctx, {
+        allowedRoles: ["full_admin"],
+        failureMessage: "You do not have access to repair POS terminal health.",
+        storeId: args.storeId,
+        userId: athenaUser._id,
+      });
+      const terminal = await ctx.db.get("posTerminal", args.terminalId);
+      if (!terminal || terminal.storeId !== args.storeId || terminal.status !== "active") {
+        return userError({
+          code: "precondition_failed",
+          message: "This terminal is not active for this store.",
+        });
+      }
+      return resolveTerminalCloudRepairCommand(ctx, {
+        expectedPreconditionHash: args.expectedPreconditionHash,
+        now: Date.now(),
+        resolvedByUserId: athenaUser._id,
+        storeId: args.storeId,
+        terminalId: args.terminalId,
+      });
+    } catch {
+      return userError({
+        code: "authorization_failed",
+        message: "You do not have access to repair POS terminal health.",
+      });
+    }
+  },
+});
+
+export const issueTerminalRecoveryCommand = mutation({
+  args: {
+    storeId: v.id("store"),
+    terminalId: v.id("posTerminal"),
+    commandType: posTerminalRecoveryCommandTypeValidator,
+    commandContext: posTerminalRecoveryCommandPayloadValidator,
+    expectedEvidence: posTerminalRecoveryExpectedEvidenceValidator,
+  },
+  returns: commandResultValidator(terminalRecoveryCommandReturnValidator),
+  handler: async (ctx, args) => {
+    try {
+      const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+      await requireTerminalStoreAccess(ctx, {
+        allowedRoles: ["full_admin"],
+        failureMessage:
+          "You do not have access to issue POS terminal recovery commands.",
+        storeId: args.storeId,
+        userId: athenaUser._id,
+      });
+      const terminal = await ctx.db.get("posTerminal", args.terminalId);
+      if (!terminal || terminal.storeId !== args.storeId || terminal.status !== "active") {
+        return userError({
+          code: "precondition_failed",
+          message: "This terminal is not active for this store.",
+        });
+      }
+      return issueTerminalRecoveryCommandService(
+        createTerminalRecoveryCommandRepository(ctx),
+        {
+          commandType: args.commandType,
+          expectedEvidence: args.expectedEvidence,
+          issuedAt: Date.now(),
+          issuedByUserId: athenaUser._id,
+          commandContext: args.commandContext,
+          storeId: args.storeId,
+          terminalId: args.terminalId,
+        },
+      );
+    } catch {
+      return userError({
+        code: "authorization_failed",
+        message:
+          "You do not have access to issue POS terminal recovery commands.",
+      });
+    }
+  },
+});
+
+export const listTerminalRecoveryCommands = query({
+  args: {
+    storeId: v.id("store"),
+    terminalId: v.id("posTerminal"),
+    syncSecretHash: v.string(),
+  },
+  returns: commandResultValidator(v.array(terminalRecoveryCommandReturnValidator)),
+  handler: async (ctx, args) => {
+    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+    await requireTerminalStoreAccess(ctx, {
+      allowedRoles: ["full_admin", "pos_only"],
+      failureMessage:
+        "You do not have access to list POS terminal recovery commands.",
+      storeId: args.storeId,
+      userId: athenaUser._id,
+    });
+    const terminal = await requireActiveTerminalSyncSecret(ctx, args);
+    if (!terminal) {
+      return userError({
+        code: "authorization_failed",
+        message:
+          "You do not have access to list POS terminal recovery commands.",
+        metadata: { terminalAuthorizationFailure: true },
+      });
+    }
+    return {
+      kind: "ok" as const,
+      data: await listClaimableTerminalRecoveryCommands(
+        createTerminalRecoveryCommandRepository(ctx),
+        {
+          now: Date.now(),
+          storeId: args.storeId,
+          terminalId: args.terminalId,
+        },
+      ),
+    };
+  },
+});
+
+export const claimTerminalRecoveryCommand = mutation({
+  args: {
+    storeId: v.id("store"),
+    terminalId: v.id("posTerminal"),
+    syncSecretHash: v.string(),
+    commandId: v.id("posTerminalRecoveryCommand"),
+  },
+  returns: commandResultValidator(terminalRecoveryCommandReturnValidator),
+  handler: async (ctx, args) => {
+    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+    await requireTerminalStoreAccess(ctx, {
+      allowedRoles: ["full_admin", "pos_only"],
+      failureMessage:
+        "You do not have access to claim POS terminal recovery commands.",
+      storeId: args.storeId,
+      userId: athenaUser._id,
+    });
+    const terminal = await requireActiveTerminalSyncSecret(ctx, args);
+    if (!terminal) {
+      return userError({
+        code: "authorization_failed",
+        message:
+          "You do not have access to claim POS terminal recovery commands.",
+        metadata: { terminalAuthorizationFailure: true },
+      });
+    }
+    return claimTerminalRecoveryCommandService(
+      createTerminalRecoveryCommandRepository(ctx),
+      {
+        claimedAt: Date.now(),
+        commandId: args.commandId,
+        storeId: args.storeId,
+        terminalId: args.terminalId,
+      },
+    );
+  },
+});
+
+export const acknowledgeTerminalRecoveryCommand = mutation({
+  args: {
+    storeId: v.id("store"),
+    terminalId: v.id("posTerminal"),
+    syncSecretHash: v.string(),
+    commandId: v.id("posTerminalRecoveryCommand"),
+    result: v.union(
+      v.literal("completed"),
+      v.literal("failed"),
+      v.literal("precondition_failed"),
+    ),
+    message: v.optional(v.string()),
+  },
+  returns: commandResultValidator(terminalRecoveryCommandReturnValidator),
+  handler: async (ctx, args) => {
+    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+    await requireTerminalStoreAccess(ctx, {
+      allowedRoles: ["full_admin", "pos_only"],
+      failureMessage:
+        "You do not have access to acknowledge POS terminal recovery commands.",
+      storeId: args.storeId,
+      userId: athenaUser._id,
+    });
+    const terminal = await requireActiveTerminalSyncSecret(ctx, args);
+    if (!terminal) {
+      return userError({
+        code: "authorization_failed",
+        message:
+          "You do not have access to acknowledge POS terminal recovery commands.",
+        metadata: { terminalAuthorizationFailure: true },
+      });
+    }
+    return acknowledgeTerminalRecoveryCommandService(
+      createTerminalRecoveryCommandRepository(ctx),
+      {
+        acknowledgedAt: Date.now(),
+        commandId: args.commandId,
+        message: args.message,
+        result: args.result,
+        storeId: args.storeId,
+        terminalId: args.terminalId,
+      },
+    );
   },
 });

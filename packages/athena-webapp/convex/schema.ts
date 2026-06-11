@@ -67,6 +67,7 @@ import {
   posPendingCheckoutItemSchema,
   posLocalStaffProofSchema,
   posRecoveryCredentialSchema,
+  posTerminalRecoveryCommandSchema,
   posTerminalRuntimeStatusSchema,
 } from "./schemas/pos";
 import { posSessionSchema } from "./schemas/pos/posSession";
@@ -382,6 +383,14 @@ const schema = defineSchema({
     .index("by_store_terminal", ["storeId", "terminalId"])
     .index("by_store_reportedAt", ["storeId", "reportedAt"])
     .index("by_terminal_receivedAt", ["terminalId", "receivedAt"]),
+  posTerminalRecoveryCommand: defineTable(posTerminalRecoveryCommandSchema)
+    .index("by_store_terminal_status", ["storeId", "terminalId", "status"])
+    .index("by_store_terminal_verification", [
+      "storeId",
+      "terminalId",
+      "verificationStatus",
+    ])
+    .index("by_terminal_expiresAt", ["terminalId", "expiresAt"]),
   posTransaction: defineTable(posTransactionSchema)
     .index("by_storeId", ["storeId"])
     .index("by_staffProfileId", ["staffProfileId"])

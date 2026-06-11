@@ -232,7 +232,8 @@ export function buildPosTerminalRuntimeStatus(
     ...(appSessionRecovery ? { appSessionRecovery } : {}),
     localStore: {
       available: !failureMessage,
-      schemaVersion: input.terminalSeed?.schemaVersion ?? POS_LOCAL_STORE_SCHEMA_VERSION,
+      schemaVersion:
+        input.terminalSeed?.schemaVersion ?? POS_LOCAL_STORE_SCHEMA_VERSION,
       terminalSeedReady: Boolean(input.terminalSeed),
       ...(failureMessage ? { failureMessage } : {}),
     },
@@ -248,6 +249,22 @@ export function buildPosTerminalRuntimeStatus(
         : {}),
       status: staffAuthorityStatus,
     },
+    ...(isSaleAuthorityReady({
+      failureMessage,
+      staffAuthorityStatus,
+      terminalSeed: input.terminalSeed,
+    })
+      ? {
+          saleAuthority: {
+            observedAt: now,
+            ...(input.staffProfileId
+              ? { staffProfileId: input.staffProfileId as Id<"staffProfile"> }
+              : {}),
+            status: "ready" as const,
+            transactionMode: "products_and_services" as const,
+          },
+        }
+      : {}),
     sync: {
       failedEventCount: sync.failedEventCount,
       localOnlyEventCount: sync.localOnlyEventCount,
@@ -268,8 +285,7 @@ export function buildPosTerminalRuntimeStatus(
         ? { oldestPendingEventAt: sync.oldestPendingEventAt }
         : {}),
     },
-    ...(input.terminalIntegrity &&
-    input.terminalIntegrity.status !== "healthy"
+    ...(input.terminalIntegrity && input.terminalIntegrity.status !== "healthy"
       ? {
           terminalIntegrity: {
             observedAt: input.terminalIntegrity.observedAt,
@@ -302,13 +318,27 @@ export function buildPosTerminalRuntimeStatus(
   };
 }
 
+function isSaleAuthorityReady(input: {
+  failureMessage?: string;
+  staffAuthorityStatus: PosTerminalRuntimeStaffAuthorityStatus;
+  terminalSeed?: PosProvisionedTerminalSeed | null;
+}) {
+  return Boolean(
+    !input.failureMessage &&
+      input.terminalSeed &&
+      input.staffAuthorityStatus === "ready",
+  );
+}
+
 export function buildPosTerminalRuntimeCopyDiagnostics(
   input: PosTerminalRuntimeStatusInput,
 ): PosTerminalRuntimeCopyDiagnostics {
   const now = input.clock?.() ?? Date.now();
   const sync = buildSyncMetrics(input);
   const validation = buildValidationMetadataMetrics(input.events);
-  const localStoreFailure = toSafeFailureMessage(input.localStoreFailureMessage);
+  const localStoreFailure = toSafeFailureMessage(
+    input.localStoreFailureMessage,
+  );
   const syncFailure = toSafeFailureMessage(input.syncDebug?.lastFailure);
   const staffAuthorityStatus = normalizeStaffAuthorityStatus(
     input.staffAuthorityStatus,
@@ -320,8 +350,7 @@ export function buildPosTerminalRuntimeCopyDiagnostics(
   return {
     ...(appSessionRecovery ? { appSessionRecovery } : {}),
     counts: {
-      appSessionUnverifiedEventCount:
-        validation.appSessionUnverifiedEventCount,
+      appSessionUnverifiedEventCount: validation.appSessionUnverifiedEventCount,
       cloudValidationUncertainEventCount:
         validation.cloudValidationUncertainEventCount,
       deferredUploadEventCount: validation.deferredUploadEventCount,
@@ -375,7 +404,9 @@ export function buildPosTerminalRuntimeCopyDiagnostics(
       ...(input.terminalSeed?.registerNumber
         ? { registerNumber: input.terminalSeed.registerNumber }
         : {}),
-      ...(input.terminalSeed?.storeId ? { storeId: input.terminalSeed.storeId } : {}),
+      ...(input.terminalSeed?.storeId
+        ? { storeId: input.terminalSeed.storeId }
+        : {}),
     },
     authority: {
       ...(input.drawerAuthority
@@ -415,7 +446,10 @@ export function buildPosTerminalRuntimeCopyDiagnostics(
     },
     timestamps: {
       ...(input.snapshots?.availabilityRefreshedAt
-        ? { availabilitySnapshotRefreshedAt: input.snapshots.availabilityRefreshedAt }
+        ? {
+            availabilitySnapshotRefreshedAt:
+              input.snapshots.availabilityRefreshedAt,
+          }
         : {}),
       ...(input.snapshots?.catalogRefreshedAt
         ? { catalogSnapshotRefreshedAt: input.snapshots.catalogRefreshedAt }
@@ -430,7 +464,10 @@ export function buildPosTerminalRuntimeCopyDiagnostics(
         ? { oldestPendingEventAt: sync.oldestPendingEventAt }
         : {}),
       ...(input.snapshots?.registerReadModelRefreshedAt
-        ? { registerReadModelRefreshedAt: input.snapshots.registerReadModelRefreshedAt }
+        ? {
+            registerReadModelRefreshedAt:
+              input.snapshots.registerReadModelRefreshedAt,
+          }
         : {}),
     },
   };
@@ -463,7 +500,8 @@ function buildSyncMetrics(
     (event) => event.sync.status !== "synced" && isSyncablePosLocalEvent(event),
   );
   const localOnlyEvents = input.events.filter(
-    (event) => event.sync.status !== "synced" && !isSyncablePosLocalEvent(event),
+    (event) =>
+      event.sync.status !== "synced" && !isSyncablePosLocalEvent(event),
   );
   const failedEventCount =
     input.syncDebug?.failedEventCount ??
@@ -592,7 +630,12 @@ function snapshotAges(
 ): PosTerminalRuntimeStatusPayload["snapshots"] {
   return {
     ...(snapshots?.availabilityRefreshedAt
-      ? { availabilityAgeMs: Math.max(0, now - snapshots.availabilityRefreshedAt) }
+      ? {
+          availabilityAgeMs: Math.max(
+            0,
+            now - snapshots.availabilityRefreshedAt,
+          ),
+        }
       : {}),
     ...(snapshots?.catalogRefreshedAt
       ? { catalogAgeMs: Math.max(0, now - snapshots.catalogRefreshedAt) }
@@ -635,7 +678,9 @@ function toDiagnosticsEvent(
     ...(event.staffProfileId ? { staffProfileId: event.staffProfileId } : {}),
     status: event.sync.status,
     type: event.type,
-    ...(event.sync.uploaded !== undefined ? { uploaded: event.sync.uploaded } : {}),
+    ...(event.sync.uploaded !== undefined
+      ? { uploaded: event.sync.uploaded }
+      : {}),
     ...(typeof event.uploadSequence === "number"
       ? { uploadSequence: event.uploadSequence }
       : {}),
@@ -674,7 +719,7 @@ function toSafeFailureMessage(message?: string | null) {
 
   return collapsed
     .replace(
-      /\b(staffProofToken|syncSecretHash|syncSecret|staff proof|sync secret|verifier|credential|credentials|token)\b(?:\s+[^.,;]*)?/gi,
+      /\b(staffProofToken|syncSecretHash|syncSecret|staff proof|sync secret|verifier|credential|credentials|token|PIN|pin|rawPayload|raw payload|payload)\b(?:\s+[^.,;]*)?/gi,
       (match) => `${match.split(/\s+/)[0]} [redacted]`,
     )
     .replace(/[A-Za-z0-9_-]{24,}/g, "[redacted]")
