@@ -699,6 +699,57 @@ describe("terminal health summaries", () => {
     );
   });
 
+  it("keeps local runtime review reasons on terminal-side guidance even when review evidence has a register session", async () => {
+    vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
+    vi.mocked(getLatestRuntimeStatusForTerminal).mockResolvedValue(
+      buildPersistedRuntimeStatus({
+        sync: {
+          ...buildRuntimeStatus().sync,
+          failedEventCount: 0,
+          reviewEventCount: 14,
+          status: "needs_review" as never,
+        },
+      }),
+    );
+    vi.mocked(getTerminalSyncEvidence).mockResolvedValue({
+      latestEvent: null,
+      latestReviewEvent: {
+        eventType: "register_opened",
+        localEventId: "local-review-1",
+        localRegisterSessionId: "local-register-1",
+        sequence: 1,
+        status: "conflicted",
+      },
+      sampledEventCount: 14,
+      acceptedCount: 0,
+      projectedCount: 0,
+      conflictedCount: 0,
+      heldCount: 0,
+      rejectedCount: 0,
+      acceptedThroughSequence: 0,
+      cursorUpdatedAt: 180,
+    });
+
+    const result = await getTerminalHealthSummary(
+      { db: null as never } as never,
+      {
+        storeId: "store-1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+        now: 220,
+      },
+    );
+
+    expect(resolveTerminalRegisterSessionActionTarget).not.toHaveBeenCalled();
+    expect(result?.attentionReasons).toEqual([
+      expect.objectContaining({
+        actionTarget: { type: "pos_register" },
+        count: 14,
+        source: "local_runtime",
+        type: "local_review",
+      }),
+    ]);
+  });
+
   it("returns runtime failure, availability, and setup reasons when terminal check-in reports them", async () => {
     vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
     vi.mocked(getLatestRuntimeStatusForTerminal).mockResolvedValue(
