@@ -10,6 +10,7 @@ const prodConvexUrl =
 const prodStoreId = (process.env.ATHENA_PROD_POS_STORE_ID ||
   "nn7byz68a3j4tfjvgdf9evpt3n78kk38") as Id<"store">;
 const prodPosRecoveryCode = process.env.ATHENA_PROD_POS_RECOVERY_CODE;
+const prodConvexAuthToken = process.env.ATHENA_PROD_CONVEX_AUTH_TOKEN;
 const posHubPath =
   process.env.ATHENA_PROD_POS_HUB_PATH || "/wigclub/store/wigclub/pos";
 const posBasePath = posHubPath.replace(/\/$/, "");
@@ -144,7 +145,13 @@ test.describe("production POS flow", () => {
   });
 
   test("serves the live register catalog snapshot used by POS prewarm", async () => {
+    test.skip(
+      !prodConvexAuthToken,
+      "ATHENA_PROD_CONVEX_AUTH_TOKEN is required for authenticated POS catalog snapshot.",
+    );
+
     const client = new ConvexHttpClient(prodConvexUrl);
+    client.setAuth(prodConvexAuthToken ?? "");
 
     const rows = await client.query(
       api.pos.public.catalog.listRegisterCatalogSnapshot,

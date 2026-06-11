@@ -602,7 +602,9 @@ export function createLocalCommandGateway(
       }
       if (
         model.value.activeSale?.localRegisterSessionId ===
-        localRegisterSessionId
+          localRegisterSessionId &&
+        model.value.activeSale.staffProfileId ===
+          input.staffProfileId?.toString()
       ) {
         return ok({
           localPosSessionId: model.value.activeSale.localPosSessionId,

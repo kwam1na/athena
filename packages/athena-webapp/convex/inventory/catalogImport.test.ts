@@ -453,7 +453,7 @@ describe("catalog import", () => {
           importKey: "legacy-review-1",
           issueCount: 0,
           organizationId: "org-1",
-          rawContent: "product_name,sku,price,qty\nBody Wave,BW-18,450,6",
+          rawContent: "product_name,sku,price,qty\nBody Wave,LEGACY-BODY-WAVE,450,6",
           rowCount: 1,
           sourceFormat: "csv",
           storeId: "store-1",
@@ -503,9 +503,9 @@ describe("catalog import", () => {
           productName: "Body Wave imported",
           productSkuId: "sku-1" as Id<"productSku">,
           quantity: 6,
-          rowKey: "2:BW-18:123456789012:Body Wave imported",
+          rowKey: "2:LEGACY-BODY-WAVE:123456789012:Body Wave imported",
           rowNumber: 2,
-          sku: "BW-18",
+          sku: "LEGACY-BODY-WAVE",
         },
       ],
       sourceFormat: "csv",
@@ -530,7 +530,7 @@ describe("catalog import", () => {
       importedSku: "BW-18",
       posExposureStatus: "available",
       reviewVersionId: "review-version-1",
-      rowKey: "2:BW-18:123456789012:Body Wave imported",
+      rowKey: "2:LEGACY-BODY-WAVE:123456789012:Body Wave imported",
       status: "active",
       storeId: "store-1",
     });
@@ -812,11 +812,12 @@ describe("catalog import", () => {
       price: 2500,
       productId: product._id,
       quantityAvailable: 0,
-      sku: "COMB-1",
     });
+    expect(sku.sku).toMatch(/^[A-Z0-9]+-[A-Z0-9]+-[A-Z0-9]+$/);
+    expect(sku.sku).not.toBe("COMB-1");
     expect(Array.from(tables.inventoryImportProvisionalSku.values())[0]).toMatchObject({
       importedQuantity: 4,
-      importedSku: "COMB-1",
+      importedSku: sku.sku,
       productId: product._id,
       productSkuId: sku._id,
       status: "active",

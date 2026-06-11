@@ -1,8 +1,9 @@
 import { useQuery } from "convex/react";
 import useGetActiveStore from "./useGetActiveStore";
 import { api } from "~/convex/_generated/api";
+import type { Product } from "~/types";
 
-type ProductAvailability = "archived" | "draft" | "live";
+export type ProductAvailability = "archived" | "draft" | "live";
 
 export const useGetProducts = ({
   subcategorySlug,
@@ -30,7 +31,9 @@ export const useGetProducts = ({
       : "skip"
   );
 
-  return products?.sort((a: any, b: any) => a.name.localeCompare(b.name));
+  return products?.sort((a: Product, b: Product) =>
+    a.name.localeCompare(b.name),
+  );
 };
 
 export const useGetArchivedProducts = () => {
@@ -53,5 +56,7 @@ export const useGetUnresolvedProducts = () => {
       : "skip"
   );
 
-  return products?.sort((a: any, b: any) => a.name.localeCompare(b.name));
+  return products?.sort((a: Product, b: Product) =>
+    a.name.localeCompare(b.name),
+  );
 };

@@ -202,6 +202,54 @@ describe("SearchResultsSection", () => {
     expect(onClearSearch).toHaveBeenCalled();
   });
 
+  it("emphasizes the product price without using action styling", () => {
+    renderSearchResults({
+      products: [
+        buildProduct({
+          id: "sku-priced",
+          name: "Eco Gel",
+          price: 9500,
+        }),
+      ],
+    });
+
+    const price = screen.getByText(/95\.00/);
+    expect(price).toHaveClass("text-xl", "font-semibold", "bg-muted/70");
+    expect(price).not.toHaveClass("bg-action-commit");
+  });
+
+  it("uses the soft commit treatment for product add actions", () => {
+    renderSearchResults({
+      products: [
+        buildProduct({
+          id: "sku-add-style",
+          name: "Eco Gel",
+        }),
+      ],
+    });
+
+    expect(screen.getByRole("button", { name: /^add$/i })).toHaveClass(
+      "bg-action-commit-soft",
+      "text-action-commit",
+    );
+  });
+
+  it("renders the SKU as plain metadata on the card surface", () => {
+    renderSearchResults({
+      products: [
+        buildProduct({
+          id: "sku-plain",
+          name: "Eco Gel",
+          sku: "6N2Y-G4V-WDG",
+        }),
+      ],
+    });
+
+    const sku = screen.getByText("6N2Y-G4V-WDG");
+    expect(sku).toHaveClass("font-mono", "text-xs", "text-muted-foreground");
+    expect(sku).not.toHaveClass("bg-muted", "rounded", "px-2", "py-1");
+  });
+
   it("allows provisional import results to be added while trusted counts are pending", async () => {
     const user = userEvent.setup();
     const product = buildProduct({
@@ -231,7 +279,58 @@ describe("SearchResultsSection", () => {
     expect(onAddProduct).toHaveBeenCalledWith(product, 3);
   });
 
-  it("clamps result quantity entry to available stock", async () => {
+  it("does not render legacy NULL metadata on provisional import results", () => {
+    renderSearchResults({
+      products: [
+        buildProduct({
+          availabilityMessage: "Count pending",
+          availabilityPolicy: "active_provisional_import",
+          category: "Legacy import",
+          color: "NULL",
+          id: "sku-provisional",
+          inventoryImportProvisionalSkuId:
+            "provisional-1" as Product["inventoryImportProvisionalSkuId"],
+          name: "Imported wig",
+          quantityAvailable: 0,
+          size: "NULL",
+        }),
+      ],
+    });
+
+    expect(screen.getByText("Legacy import")).toBeInTheDocument();
+    expect(screen.queryByText("NULL")).not.toBeInTheDocument();
+  });
+
+  it("shows count pending for pending checkout results", async () => {
+    const user = userEvent.setup();
+    const product = buildProduct({
+      id: "pending-checkout-1",
+      name: "Ligali",
+      pendingCheckoutItemId:
+        "pending-checkout-1" as Product["pendingCheckoutItemId"],
+      quantityAvailable: 0,
+    });
+    const onAddProduct = vi.fn(async () => true);
+
+    renderSearchResults({
+      products: [product],
+      onAddProduct,
+    });
+
+    expect(screen.getByText("Count pending")).toBeInTheDocument();
+    expect(screen.queryByText("0 available")).not.toBeInTheDocument();
+
+    const quantityInput = screen.getByRole("spinbutton", {
+      name: /quantity for ligali/i,
+    });
+    await user.clear(quantityInput);
+    await user.type(quantityInput, "3");
+    await user.click(screen.getByRole("button", { name: /add 3/i }));
+
+    expect(onAddProduct).toHaveBeenCalledWith(product, 3);
+  });
+
+  it("allows result quantity entry beyond trusted stock", async () => {
     const user = userEvent.setup();
     const product = buildProduct({
       id: "sku-limited",
@@ -250,8 +349,30 @@ describe("SearchResultsSection", () => {
     });
     await user.clear(quantityInput);
     await user.type(quantityInput, "99");
-    await user.click(screen.getByRole("button", { name: /add 4/i }));
+    await user.click(screen.getByRole("button", { name: /add 99/i }));
 
-    expect(onAddProduct).toHaveBeenCalledWith(product, 4);
+    expect(onAddProduct).toHaveBeenCalledWith(product, 99);
+  });
+
+  it("allows known zero-count results to be added for review", async () => {
+    const user = userEvent.setup();
+    const product = buildProduct({
+      availabilityStatus: "out_of_stock",
+      id: "sku-zero",
+      inStock: false,
+      name: "Count mismatch wig",
+      quantityAvailable: 0,
+    });
+    const onAddProduct = vi.fn(async () => true);
+
+    renderSearchResults({
+      products: [product],
+      onAddProduct,
+    });
+
+    expect(screen.getByText("0")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /^add$/i }));
+
+    expect(onAddProduct).toHaveBeenCalledWith(product, 1);
   });
 });

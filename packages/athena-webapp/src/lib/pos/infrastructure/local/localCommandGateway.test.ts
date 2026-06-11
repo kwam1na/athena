@@ -830,6 +830,69 @@ describe("createLocalCommandGateway", () => {
     });
   });
 
+  it("starts a separate active local sale when the signed-in staff changes", async () => {
+    let nextId = 1;
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+      clock: () => 10_000 + nextId,
+      createLocalId: (kind) => `local-event-${kind}-${nextId++}`,
+    });
+    const gateway = createLocalCommandGateway({
+      store,
+      clock: () => 20_000 + nextId,
+      createLocalId: (kind) => `${kind}-${nextId++}`,
+    });
+    await store.appendEvent({
+      type: "register.opened",
+      terminalId: "terminal-1",
+      storeId: "store-1",
+      registerNumber: "1",
+      localRegisterSessionId: "local-register-1",
+      staffProfileId: "staff-1",
+      payload: {
+        localRegisterSessionId: "local-register-1",
+        openingFloat: 100,
+      },
+    });
+    const first = await gateway.startSession({
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      staffProfileId: "staff-1" as never,
+      registerNumber: "1",
+      localRegisterSessionId: "local-register-1",
+    });
+    const second = await gateway.startSession({
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      staffProfileId: "staff-2" as never,
+      registerNumber: "1",
+      localRegisterSessionId: "local-register-1",
+    });
+
+    expect(first).toMatchObject({
+      kind: "ok",
+      data: { localPosSessionId: "local-pos-session-2" },
+    });
+    expect(second).toMatchObject({
+      kind: "ok",
+      data: { localPosSessionId: "local-pos-session-4" },
+    });
+    await expect(store.listEvents()).resolves.toMatchObject({
+      ok: true,
+      value: [
+        expect.objectContaining({ type: "register.opened" }),
+        expect.objectContaining({
+          type: "session.started",
+          staffProfileId: "staff-1",
+        }),
+        expect.objectContaining({
+          type: "session.started",
+          staffProfileId: "staff-2",
+        }),
+      ],
+    });
+  });
+
   it("uses the provisioned local terminal id when commands arrive with the cloud terminal id", async () => {
     let nextId = 1;
     const store = createPosLocalStore({

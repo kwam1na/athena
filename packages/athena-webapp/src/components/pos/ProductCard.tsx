@@ -5,7 +5,7 @@ import { Minus, Package, Plus, ShoppingCart } from "lucide-react";
 import { Product } from "./types";
 import { capitalizeWords } from "~/src/lib/utils";
 import { toDisplayAmount } from "~/convex/lib/currency";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 interface ProductCardProps {
   product: Product;
@@ -33,6 +33,15 @@ function normalizeQuantity(value: string | number, maxQuantity?: number) {
   return Math.min(quantity, maxQuantity);
 }
 
+function normalizeProductAttribute(value: string | null | undefined) {
+  const normalized = value?.trim();
+  if (!normalized || normalized.toLowerCase() === "null") {
+    return undefined;
+  }
+
+  return normalized;
+}
+
 export function ProductCard({
   product,
   onAddProduct,
@@ -42,19 +51,20 @@ export function ProductCard({
   const [quantityInput, setQuantityInput] = useState("1");
   const isProvisionalImport =
     product.availabilityPolicy === "active_provisional_import";
-  const maxQuantity = useMemo(() => {
-    if (isProvisionalImport) {
-      return undefined;
-    }
-    if (typeof product.quantityAvailable !== "number") {
-      return undefined;
-    }
-
-    return Math.max(0, Math.trunc(product.quantityAvailable));
-  }, [isProvisionalImport, product.quantityAvailable]);
+  const isPendingCheckoutItem = Boolean(product.pendingCheckoutItemId);
+  const usesPendingCount = isProvisionalImport || isPendingCheckoutItem;
+  const maxQuantity = undefined;
   const selectedQuantity = normalizeQuantity(quantityInput, maxQuantity);
+  const displayCategory = normalizeProductAttribute(product.category);
+  const displayColor = normalizeProductAttribute(product.color);
+  const displaySize = normalizeProductAttribute(product.size);
+  const hasKnownAvailability =
+    usesPendingCount ||
+    typeof product.quantityAvailable === "number" ||
+    product.availabilityStatus === "available" ||
+    product.availabilityStatus === "out_of_stock";
   const isAvailable =
-    product.inStock && (maxQuantity === undefined || maxQuantity > 0);
+    product.availabilityStatus !== "unknown" && hasKnownAvailability;
   const canDecreaseQuantity = selectedQuantity > 1;
   const canIncreaseQuantity =
     maxQuantity === undefined || selectedQuantity < maxQuantity;
@@ -104,7 +114,7 @@ export function ProductCard({
             {capitalizeWords(product.name)}
           </h4>
           <div className="flex items-center gap-2 flex-shrink-0">
-            <p className="px-4 font-numeric text-lg font-medium">
+            <p className="rounded-md bg-muted/70 px-3 py-1 font-numeric text-xl font-semibold tabular-nums text-foreground shadow-sm ring-1 ring-border/70">
               {formatter.format(toDisplayAmount(product.price))}
             </p>
           </div>
@@ -113,28 +123,28 @@ export function ProductCard({
         {/* SKU and Barcode */}
         <div className="flex items-center gap-2 mt-1">
           {product.sku && (
-            <span className="rounded bg-muted px-2 py-1 font-mono text-xs text-muted-foreground">
+            <span className="font-mono text-xs text-muted-foreground">
               {product.sku}
             </span>
           )}
           {product.barcode && (
-            <span className="rounded bg-muted px-2 py-1 font-mono text-xs text-muted-foreground">
+            <span className="font-mono text-xs text-muted-foreground">
               {product.barcode}
             </span>
           )}
         </div>
 
         {/* Category, Size, Length */}
-        {(product.size || product.length || product.category) && (
+        {(displaySize || product.length || displayCategory || displayColor) && (
           <div className="flex items-center gap-2 mt-2">
-            {product.color && (
+            {displayColor && (
               <Badge variant="outline" className="text-xs">
-                {capitalizeWords(product.color)}
+                {capitalizeWords(displayColor)}
               </Badge>
             )}
-            {product.category && (
+            {displayCategory && (
               <Badge variant="outline" className="text-xs">
-                {product.category}
+                {displayCategory}
               </Badge>
             )}
             {product.length && (
@@ -142,9 +152,9 @@ export function ProductCard({
                 {product.length}"
               </Badge>
             )}
-            {product.size && (
+            {displaySize && (
               <Badge variant="outline" className="text-xs">
-                {product.size}
+                {displaySize}
               </Badge>
             )}
           </div>
@@ -155,7 +165,7 @@ export function ProductCard({
           <p className="text-xs text-muted-foreground">
             {product.availabilityMessage ? (
               product.availabilityMessage
-            ) : isProvisionalImport ? (
+            ) : usesPendingCount ? (
               "Count pending"
             ) : (
               <>
@@ -214,6 +224,7 @@ export function ProductCard({
             <div className="ml-3 flex border-l border-border/80 pl-3">
               <Button
                 type="button"
+                variant="commit-soft"
                 size="sm"
                 className="h-11 px-4"
                 disabled={!isAvailable}

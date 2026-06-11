@@ -27,6 +27,13 @@ const REVIEW_VERSION_EVENT_TYPE = "inventory_import_review_version_saved";
 const PROVISIONAL_STAGE_EVENT_TYPE = "inventory_import_provisional_pos_staged";
 const PROVISIONAL_IMPORT_FINALIZATION_LIMIT = 5000;
 
+type ProvisionalImportIdentity = {
+  productId: Id<"product">;
+  productSkuId: Id<"productSku">;
+  sku?: string;
+  barcode?: string;
+};
+
 const importStatusValidator = v.union(
   v.literal("active"),
   v.literal("draft"),
@@ -623,10 +630,12 @@ export async function stageInventoryImportReviewRowsForPosWithCtx(
     const identity =
       submittedIdentity ??
       (existing?.productId && existing.productSkuId
-        ? {
+        ? await resolveExistingProvisionalImportIdentity(ctx, {
             productId: existing.productId,
             productSkuId: existing.productSkuId,
-          }
+            row,
+            storeId: args.storeId,
+          })
         : await resolveProvisionalImportIdentity(ctx, {
             access,
             row,
@@ -1144,10 +1153,7 @@ async function resolveSubmittedProvisionalImportIdentity(
     row: ProvisionalInventoryImportStageRow;
     storeId: Id<"store">;
   },
-): Promise<{
-  productId: Id<"product">;
-  productSkuId: Id<"productSku">;
-} | null> {
+): Promise<ProvisionalImportIdentity | null> {
   if (!args.row.productId && !args.row.productSkuId) return null;
   if (!args.row.productId || !args.row.productSkuId) {
     throw new Error(
@@ -1175,6 +1181,42 @@ async function resolveSubmittedProvisionalImportIdentity(
   return {
     productId: product._id,
     productSkuId: productSku._id,
+    sku: productSku.sku,
+    barcode: productSku.barcode,
+  };
+}
+
+async function resolveExistingProvisionalImportIdentity(
+  ctx: MutationCtx,
+  args: {
+    productId: Id<"product">;
+    productSkuId: Id<"productSku">;
+    row: ProvisionalInventoryImportStageRow;
+    storeId: Id<"store">;
+  },
+): Promise<ProvisionalImportIdentity> {
+  const [product, productSku] = await Promise.all([
+    ctx.db.get("product", args.productId),
+    ctx.db.get("productSku", args.productSkuId),
+  ]);
+
+  if (
+    !product ||
+    product.storeId !== args.storeId ||
+    !productSku ||
+    productSku.storeId !== args.storeId ||
+    productSku.productId !== product._id
+  ) {
+    throw new Error(
+      `Row ${args.row.rowNumber}: staged Athena product and SKU could not be verified for this store.`,
+    );
+  }
+
+  return {
+    productId: product._id,
+    productSkuId: productSku._id,
+    sku: productSku.sku,
+    barcode: productSku.barcode,
   };
 }
 
@@ -1186,10 +1228,7 @@ async function resolveProvisionalImportIdentity(
     storeId: Id<"store">;
     summary: ProvisionalInventoryImportStageSummary;
   },
-): Promise<{
-  productId?: Id<"product">;
-  productSkuId?: Id<"productSku">;
-}> {
+): Promise<ProvisionalImportIdentity> {
   const created = await findOrCreateProvisionalCatalogIdentity(ctx, {
     access: args.access,
     row: args.row,
@@ -1200,6 +1239,8 @@ async function resolveProvisionalImportIdentity(
   return {
     productId: created.product._id,
     productSkuId: created.productSku._id,
+    sku: created.productSku.sku,
+    barcode: created.productSku.barcode,
   };
 }
 
@@ -1255,7 +1296,17 @@ async function findOrCreateProvisionalCatalogIdentity(
   }
 
   const productSkuId = await ctx.db.insert("productSku", {
-    ...buildSkuInsert({ ...args.row, quantity: 0, status: "draft" }, product._id, args.storeId),
+    ...buildSkuInsert(
+      {
+        ...args.row,
+        barcode: args.row.barcode,
+        quantity: 0,
+        sku: undefined,
+        status: "draft",
+      },
+      product._id,
+      args.storeId,
+    ),
     attributes: {
       importedRowNumber: args.row.rowNumber,
       provisionalImportIdentity: true,
@@ -1265,6 +1316,14 @@ async function findOrCreateProvisionalCatalogIdentity(
     inventoryCount: 0,
     isVisible: false,
     quantityAvailable: 0,
+    sku: "TEMP_SKU",
+  });
+  await ctx.db.patch("productSku", productSkuId, {
+    sku: generateSKU({
+      productId: product._id,
+      skuId: productSkuId,
+      storeId: args.storeId,
+    }),
   });
   const productSku = await ctx.db.get("productSku", productSkuId);
   if (!productSku) {
@@ -1409,6 +1468,27 @@ function normalizeOptional(value?: string) {
   return normalized || undefined;
 }
 
+function generateSKU({
+  storeId,
+  productId,
+  skuId,
+}: {
+  storeId: string;
+  productId: string;
+  skuId: string;
+}) {
+  const encodeBase36 = (id: string, length: number) => {
+    const subset = id.substring(id.length - length);
+    return parseInt(subset, 36).toString(36).toUpperCase();
+  };
+
+  const storeCode = encodeBase36(storeId, 4);
+  const productCode = encodeBase36(productId, 3);
+  const skuCode = encodeBase36(skuId, 3);
+
+  return `${storeCode}-${productCode}-${skuCode}`;
+}
+
 function normalizeReviewRowDecisions(
   decisions?: InventoryImportReviewRowDecision[],
 ): InventoryImportReviewRowDecision[] {
@@ -1446,18 +1526,16 @@ function normalizeProvisionalStageRows(
 
 function buildProvisionalSkuPatch(args: {
   access: ImportAccess;
-  identity: {
-    productId?: Id<"product">;
-    productSkuId?: Id<"productSku">;
-  };
+  identity: ProvisionalImportIdentity;
   reviewVersion: Doc<"inventoryImportReviewVersion">;
   row: ProvisionalInventoryImportStageRow;
   sourceFormat: "csv" | "json";
   storeId: Id<"store">;
 }) {
   const now = Date.now();
-  const importedSku = normalizeOptional(args.row.sku);
-  const importedBarcode = normalizeOptional(args.row.barcode);
+  const importedSku = normalizeOptional(args.identity.sku);
+  const importedBarcode =
+    normalizeOptional(args.identity.barcode) ?? normalizeOptional(args.row.barcode);
 
   return {
     storeId: args.storeId,

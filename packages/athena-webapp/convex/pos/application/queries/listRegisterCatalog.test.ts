@@ -166,6 +166,18 @@ describe("listRegisterCatalog", () => {
           name: "Accessories",
           slug: "accessories",
         },
+        {
+          _id: "category-pos-quick-add",
+          storeId: "store-a",
+          name: "POS quick add",
+          slug: "pos-quick-add",
+        },
+        {
+          _id: "category-pos-pending-checkout",
+          storeId: "store-a",
+          name: "POS pending checkout",
+          slug: "pos-pending-checkout",
+        },
       ],
       color: [
         {
@@ -227,6 +239,24 @@ describe("listRegisterCatalog", () => {
           categoryId: "category-store-a",
           description: "Hidden product",
           name: "Hidden Product",
+          isVisible: false,
+        },
+        {
+          _id: "product-pos-quick-add",
+          storeId: "store-a",
+          categoryId: "category-pos-quick-add",
+          description: "Cashier recovery item",
+          name: "Quick Added Item",
+          availability: "live",
+          isVisible: false,
+        },
+        {
+          _id: "product-pos-pending-checkout",
+          storeId: "store-a",
+          categoryId: "category-pos-pending-checkout",
+          description: "Reviewable cashier item",
+          name: "Pending Checkout Item",
+          availability: "live",
           isVisible: false,
         },
         {
@@ -313,6 +343,26 @@ describe("listRegisterCatalog", () => {
           quantityAvailable: 3,
         },
         {
+          _id: "sku-pos-quick-add",
+          storeId: "store-a",
+          productId: "product-pos-quick-add",
+          sku: "QUICK-ADD",
+          barcode: "777",
+          images: [],
+          price: 1000,
+          quantityAvailable: 3,
+        },
+        {
+          _id: "sku-pos-pending-checkout",
+          storeId: "store-a",
+          productId: "product-pos-pending-checkout",
+          sku: "PENDING-CHECKOUT",
+          barcode: "111",
+          images: [],
+          price: 1000,
+          quantityAvailable: 3,
+        },
+        {
           _id: "sku-hidden",
           storeId: "store-a",
           productId: "product-hidden-sku",
@@ -367,13 +417,49 @@ describe("listRegisterCatalog", () => {
         areProcessingFeesAbsorbed: false,
         availabilityPolicy: "trusted_inventory",
       },
+      {
+        id: "sku-pos-quick-add",
+        productSkuId: "sku-pos-quick-add",
+        skuId: "sku-pos-quick-add",
+        productId: "product-pos-quick-add",
+        name: "Quick Added Item",
+        sku: "QUICK-ADD",
+        barcode: "777",
+        price: 1000,
+        category: "POS quick add",
+        description: "Cashier recovery item",
+        image: null,
+        size: "",
+        length: null,
+        color: "",
+        areProcessingFeesAbsorbed: false,
+        availabilityPolicy: "trusted_inventory",
+      },
+      {
+        id: "sku-pos-pending-checkout",
+        productSkuId: "sku-pos-pending-checkout",
+        skuId: "sku-pos-pending-checkout",
+        productId: "product-pos-pending-checkout",
+        name: "Pending Checkout Item",
+        sku: "PENDING-CHECKOUT",
+        barcode: "111",
+        price: 1000,
+        category: "POS pending checkout",
+        description: "Reviewable cashier item",
+        image: null,
+        size: "",
+        length: null,
+        color: "",
+        areProcessingFeesAbsorbed: false,
+        availabilityPolicy: "trusted_inventory",
+      },
     ]);
 
     expect(rows[0]).not.toHaveProperty("inStock");
     expect(rows[0]).not.toHaveProperty("quantityAvailable");
   });
 
-  it("surfaces active provisional import SKUs as sellable without trusted quantity", async () => {
+  it("surfaces active provisional import SKUs without shadowing trusted inventory", async () => {
     const { ctx } = createRegisterCatalogCtx({
       category: [
         {
@@ -477,18 +563,18 @@ describe("listRegisterCatalog", () => {
           _id: "sku-trusted",
           storeId: "store-a",
           productId: "product-trusted",
-          sku: "LEGACY-CLOSURE",
+          sku: "ATHENA-CLOSURE",
           barcode: "123PROV",
           images: [],
           isVisible: true,
           price: 85000,
-          quantityAvailable: 0,
+          quantityAvailable: 14,
         },
         {
           _id: "sku-provisional",
           storeId: "store-a",
           productId: "product-provisional",
-          sku: "ANCHOR-CLOSURE",
+          sku: "ATHENA-PROVISIONAL-CLOSURE",
           barcode: "",
           images: [],
           isVisible: false,
@@ -528,26 +614,16 @@ describe("listRegisterCatalog", () => {
       expect.objectContaining({
         productSkuId: "sku-trusted",
         name: "Imported Closure",
-        sku: "LEGACY-CLOSURE",
+        sku: "ATHENA-CLOSURE",
         barcode: "123PROV",
         price: 85000,
         availabilityPolicy: "trusted_inventory",
       }),
       expect.objectContaining({
-        id: "provisional-matched",
-        productSkuId: "sku-trusted",
-        inventoryImportProvisionalSkuId: "provisional-matched",
-        name: "Matched Imported Closure",
-        sku: "LEGACY-CLOSURE",
-        barcode: "123PROV",
-        price: 83000,
-        availabilityPolicy: "active_provisional_import",
-      }),
-      expect.objectContaining({
         productSkuId: "sku-provisional",
         inventoryImportProvisionalSkuId: "provisional-sku-1",
         name: "Imported Closure",
-        sku: "LEGACY-CLOSURE",
+        sku: "ATHENA-PROVISIONAL-CLOSURE",
         barcode: "123PROV",
         price: 85000,
         availabilityPolicy: "active_provisional_import",
@@ -565,10 +641,9 @@ describe("listRegisterCatalog", () => {
       {
         productSkuId: "sku-trusted",
         skuId: "sku-trusted",
-        inventoryImportProvisionalSkuId: "provisional-matched",
         inStock: true,
-        quantityAvailable: 0,
-        availabilityPolicy: "active_provisional_import",
+        quantityAvailable: 14,
+        availabilityPolicy: "trusted_inventory",
       },
       {
         productSkuId: "sku-provisional",
@@ -589,13 +664,8 @@ describe("listRegisterCatalog", () => {
         expect.objectContaining({
           productSkuId: "sku-trusted",
           availabilityPolicy: "trusted_inventory",
-          inStock: false,
-        }),
-        expect.objectContaining({
-          productSkuId: "sku-trusted",
-          inventoryImportProvisionalSkuId: "provisional-matched",
-          availabilityPolicy: "active_provisional_import",
           inStock: true,
+          quantityAvailable: 14,
         }),
         expect.objectContaining({
           productSkuId: "sku-provisional",

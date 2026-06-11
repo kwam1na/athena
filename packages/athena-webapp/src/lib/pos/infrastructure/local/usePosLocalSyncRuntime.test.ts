@@ -1026,14 +1026,7 @@ describe("usePosLocalSyncRuntimeStatus", () => {
       ),
     );
     expect(store.markEventsSynced).not.toHaveBeenCalled();
-    expect(store.writeDrawerAuthorityState).toHaveBeenCalledWith(
-      expect.objectContaining({
-        localRegisterSessionId: "register-1",
-        reason: "lifecycle_rejected",
-        status: "blocked",
-        storeId: "store-1",
-      }),
-    );
+    expect(store.writeDrawerAuthorityState).not.toHaveBeenCalled();
   });
 
   it("persists terminal integrity instead of marking events for review when sync authorization fails", async () => {
@@ -3505,6 +3498,122 @@ describe("usePosLocalSyncRuntimeStatus", () => {
         status: "needs_review",
       }),
     );
+  });
+
+  it("does not persist drawer authority blocks for sale inventory review conflicts", async () => {
+    mocks.ingestLocalEvents.mockResolvedValue({
+      kind: "ok",
+      data: {
+        accepted: [
+          {
+            localEventId: "event-sale-completed",
+            sequence: 3,
+            status: "conflicted",
+          },
+        ],
+        held: [],
+        mappings: [],
+        conflicts: [
+          {
+            _id: "conflict-1",
+            conflictType: "inventory_mismatch",
+            localEventId: "event-sale-completed",
+            status: "needs_review",
+            summary: "Inventory count mismatch for synced sale.",
+          },
+        ],
+        syncCursor: {
+          localRegisterSessionId: "register-1",
+          acceptedThroughSequence: 3,
+        },
+      },
+    });
+    const store = {
+      clearDrawerAuthorityState: vi.fn(async () => ({ ok: true, value: null })),
+      listEvents: vi.fn(async () => ({
+        ok: true,
+        value: [
+          buildLocalEvent({
+            localEventId: "event-open",
+            sequence: 1,
+            type: "register.opened",
+          }),
+          buildLocalEvent({
+            localEventId: "event-session",
+            localPosSessionId: "session-1",
+            payload: {
+              localPosSessionId: "session-1",
+              status: "active",
+            },
+            sequence: 2,
+            type: "session.started",
+          }),
+          buildLocalEvent({
+            localEventId: "event-sale-completed",
+            localPosSessionId: "session-1",
+            localTransactionId: "local-txn-1",
+            payload: {
+              localPosSessionId: "session-1",
+              localTransactionId: "local-txn-1",
+              receiptNumber: "LOCAL-1-000001",
+              subtotal: 25,
+              tax: 0,
+              total: 25,
+              payments: [{ method: "cash", amount: 25, timestamp: 2 }],
+            },
+            sequence: 3,
+            type: "transaction.completed",
+          }),
+        ],
+      })),
+      markEventsNeedsReview: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      markEventsSynced: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      readDrawerAuthorityState: vi.fn(async () => ({ ok: true, value: null })),
+      readProvisionedTerminalSeed: vi.fn(async () => ({
+        ok: true,
+        value: {
+          cloudTerminalId: "terminal-cloud-1",
+          displayName: "Front",
+          provisionedAt: 1,
+          schemaVersion: 1,
+          syncSecretHash: "sync-secret-1",
+          storeId: "store-1",
+          terminalId: "local-terminal-1",
+        },
+      })),
+      writeDrawerAuthorityState: vi.fn(async () => ({
+        ok: true,
+        value: null,
+      })),
+      writeLocalCloudMapping: vi.fn(async () => ({
+        ok: true,
+        value: {},
+      })),
+    };
+
+    renderHook(() =>
+      usePosLocalSyncRuntimeStatus({
+        mode: "drain-enabled",
+        storeFactory: () => store as never,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(store.markEventsNeedsReview).toHaveBeenCalledWith(
+        ["event-sale-completed", "event-session"],
+        "Cloud sync needs review before this local event can finish.",
+        { uploaded: true },
+      ),
+    );
+    expect(store.writeDrawerAuthorityState).not.toHaveBeenCalled();
   });
 
   it("does not present a reopened local closeout as pending reconciliation", () => {

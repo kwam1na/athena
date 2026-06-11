@@ -217,6 +217,7 @@ describe("POS local sync public mutation", () => {
     expect(argsValidator).toContain("pending_checkout_item_defined");
     expect(argsValidator).toContain("localPendingCheckoutItemId");
     expect(argsValidator).toContain("pendingCheckoutItemId");
+    expect(argsValidator).toContain("inventoryImportProvisionalSkuId");
     expect(argsValidator).toContain(
       "pos_pending_checkout_item_local_metadata_v1",
     );

@@ -58,6 +58,10 @@ type InventoryImportProvisionalSku = {
 
 export const REGISTER_CATALOG_AVAILABILITY_LIMIT = 50;
 const REGISTER_CATALOG_PROVISIONAL_IMPORT_LIMIT = 5_000;
+const POS_OPERATIONAL_CATEGORY_SLUGS = new Set([
+  "pos-pending-checkout",
+  "pos-quick-add",
+]);
 
 async function readCategoryName(
   ctx: QueryCtx,
@@ -113,8 +117,8 @@ function mapSkuToRegisterCatalogRow(args: {
       ? { inventoryImportProvisionalSkuId: args.provisionalSku._id }
       : {}),
     name: args.provisionalSku?.importedProductName ?? args.product.name,
-    sku: args.provisionalSku?.importedSku ?? args.sku.sku ?? "",
-    barcode: args.provisionalSku?.importedBarcode ?? args.sku.barcode ?? "",
+    sku: args.sku.sku || args.provisionalSku?.importedSku || "",
+    barcode: args.sku.barcode || args.provisionalSku?.importedBarcode || "",
     price: args.provisionalSku?.importedPrice ?? getRegisterCatalogPrice(args.sku),
     category: args.category,
     description: args.product.description ?? "",
@@ -136,11 +140,16 @@ function getRegisterCatalogPrice(sku: Doc<"productSku">) {
 export function isTrustedRegisterCatalogSku(args: {
   product: Doc<"product">;
   sku: Doc<"productSku">;
+  category?: Doc<"category"> | null;
 }) {
+  const isReservedPosOperationalProduct = args.category?.slug
+    ? POS_OPERATIONAL_CATEGORY_SLUGS.has(args.category.slug)
+    : false;
+
   return (
     args.product.availability !== "archived" &&
     args.product.availability !== "draft" &&
-    args.product.isVisible !== false &&
+    (args.product.isVisible !== false || isReservedPosOperationalProduct) &&
     args.sku.isVisible !== false
   );
 }
@@ -170,9 +179,17 @@ async function listScopedRegisterCatalogSkus(
 
     if (
       !product ||
-      product.storeId !== args.storeId ||
-      !isTrustedRegisterCatalogSku({ product, sku })
+      product.storeId !== args.storeId
     ) {
+      continue;
+    }
+
+    const category =
+      product.isVisible === false
+        ? await ctx.db.get("category", product.categoryId)
+        : null;
+
+    if (!isTrustedRegisterCatalogSku({ product, sku, category })) {
       continue;
     }
 
@@ -292,13 +309,15 @@ export async function listRegisterCatalog(
   const rows: RegisterCatalogRow[] = [];
   const categoryCache = new Map<Id<"category">, string>();
   const colorCache = new Map<Id<"color">, string>();
-  const trustedSkuIds = new Set<Id<"productSku">>();
+  const trustedAvailableSkuIds = new Set<Id<"productSku">>();
 
   for (const { product, sku } of await listScopedRegisterCatalogSkus(
     ctx,
     args,
   )) {
-    trustedSkuIds.add(sku._id);
+    if (sku.quantityAvailable > 0) {
+      trustedAvailableSkuIds.add(sku._id);
+    }
     rows.push(
       mapSkuToRegisterCatalogRow({
         product,
@@ -324,6 +343,7 @@ export async function listRegisterCatalog(
       product.storeId !== args.storeId ||
       sku.storeId !== args.storeId ||
       sku.productId !== product._id ||
+      trustedAvailableSkuIds.has(provisionalSku.productSkuId) ||
       provisionalSku.importedPrice <= 0
     ) {
       continue;
@@ -363,6 +383,22 @@ export async function listRegisterCatalogAvailability(
       continue;
     }
 
+    const availability = await validateInventoryAvailability(ctx.db, sku._id, 1, {
+      storeId: args.storeId,
+    });
+    const quantityAvailable = availability.available ?? 0;
+
+    if (quantityAvailable > 0) {
+      rows.push({
+        productSkuId: sku._id,
+        skuId: sku._id,
+        inStock: true,
+        quantityAvailable,
+        availabilityPolicy: "trusted_inventory",
+      });
+      continue;
+    }
+
     const provisionalSku = await readActiveProvisionalImportSkuForStoreSku(ctx, {
       storeId: args.storeId,
       productId: sku.productId,
@@ -379,11 +415,6 @@ export async function listRegisterCatalogAvailability(
       });
       continue;
     }
-
-    const availability = await validateInventoryAvailability(ctx.db, sku._id, 1, {
-      storeId: args.storeId,
-    });
-    const quantityAvailable = availability.available ?? 0;
 
     rows.push({
       productSkuId: sku._id,
@@ -428,8 +459,17 @@ export async function listRegisterCatalogAvailabilitySnapshot(
     };
   });
 
+  const trustedAvailableSkuIds = new Set(
+    trustedRows
+      .filter((row) => row.quantityAvailable > 0)
+      .map((row) => row.productSkuId),
+  );
   const provisionalRows: RegisterCatalogAvailabilityRow[] = [];
   for (const provisionalSku of activeProvisionalSkus) {
+    if (trustedAvailableSkuIds.has(provisionalSku.productSkuId)) {
+      continue;
+    }
+
     const sku = await ctx.db.get("productSku", provisionalSku.productSkuId);
     if (!sku || sku.storeId !== args.storeId) {
       continue;

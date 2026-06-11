@@ -68,6 +68,8 @@
     --comparison-secondary-border: 201 45% 82%;
     --action-commit: 338 62% 43%;
     --action-commit-foreground: 336 100% 98%;
+    --action-commit-soft: 338 72% 96%;
+    --action-commit-border: 338 42% 82%;
     --action-workflow: 232 42% 45%;
     --action-workflow-foreground: 232 100% 98%;
     --action-workflow-soft: 232 58% 96%;
@@ -159,6 +161,8 @@
     --comparison-secondary-border: 201 41% 36%;
     --action-commit: 336 72% 68%;
     --action-commit-foreground: 222 30% 12%;
+    --action-commit-soft: 336 24% 22%;
+    --action-commit-border: 336 38% 44%;
     --action-workflow: 235 64% 72%;
     --action-workflow-foreground: 222 30% 12%;
     --action-workflow-soft: 232 24% 22%;
