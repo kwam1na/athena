@@ -32,6 +32,8 @@ import {
   verifyTerminalRecoveryCommandsFromRuntime,
 } from "../application/terminalRecovery/terminalCommandService";
 import { createTerminalRecoveryCommandRepository } from "../infrastructure/repositories/terminalRecoveryRepository";
+import { buildPosRemoteAssistClientPresence } from "../../remoteAssist/application/posRuntimeAdapter";
+import { createRemoteAssistRepository } from "../../remoteAssist/infrastructure/remoteAssistRepository";
 import {
   posTerminalRecoveryCommandPayloadValidator,
   posTerminalRecoveryCommandStatusValidator,
@@ -636,6 +638,17 @@ export const submitTerminalRuntimeStatus = mutation({
       status: safeStatus,
     });
     if (result.kind === "ok") {
+      const store = await ctx.db.get("store", args.storeId);
+      if (store) {
+        await createRemoteAssistRepository(ctx).upsertClient(
+          buildPosRemoteAssistClientPresence({
+            receivedAt: result.data.receivedAt,
+            runtimeStatus: safeStatus,
+            store,
+            terminal,
+          }),
+        );
+      }
       await verifyTerminalRecoveryCommandsFromRuntime(
         createTerminalRecoveryCommandRepository(ctx),
         {

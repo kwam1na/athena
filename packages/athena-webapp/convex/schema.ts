@@ -120,6 +120,11 @@ import {
   automationPolicySchema,
   automationRunSchema,
 } from "./schemas/automation";
+import {
+  remoteAssistClientSchema,
+  remoteAssistSessionEventSchema,
+  remoteAssistSessionSchema,
+} from "./schemas/remoteAssist";
 
 const schema = defineSchema({
   ...authTables,
@@ -391,6 +396,27 @@ const schema = defineSchema({
       "verificationStatus",
     ])
     .index("by_terminal_expiresAt", ["terminalId", "expiresAt"]),
+  remoteAssistClient: defineTable(remoteAssistClientSchema)
+    .index("by_organization_runtime", [
+      "organizationId",
+      "runtimeType",
+      "runtimeIdentity",
+    ])
+    .index("by_store_runtime", ["storeId", "runtimeType", "runtimeIdentity"])
+    .index("by_organization_presence", [
+      "organizationId",
+      "presenceStatus",
+      "lastPresenceAt",
+    ]),
+  remoteAssistSession: defineTable(remoteAssistSessionSchema)
+    .index("by_client_status", ["clientId", "status"])
+    .index("by_client_status_expiresAt", ["clientId", "status", "expiresAt"])
+    .index("by_organization_status", ["organizationId", "status", "requestedAt"])
+    .index("by_expiresAt", ["expiresAt"]),
+  remoteAssistSessionEvent: defineTable(remoteAssistSessionEventSchema)
+    .index("by_session", ["sessionId", "occurredAt"])
+    .index("by_client", ["clientId", "occurredAt"])
+    .index("by_organization_event", ["organizationId", "eventType", "occurredAt"]),
   posTransaction: defineTable(posTransactionSchema)
     .index("by_storeId", ["storeId"])
     .index("by_staffProfileId", ["staffProfileId"])

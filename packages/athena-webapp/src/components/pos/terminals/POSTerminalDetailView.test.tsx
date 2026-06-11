@@ -285,6 +285,181 @@ describe("POSTerminalDetailViewContent", () => {
     expect(screen.getByText("Upload failed")).toBeInTheDocument();
   });
 
+  it("starts Remote Assist from an enrolled online terminal", async () => {
+    const onStartRemoteAssist = vi.fn(async () => ({
+      data: {
+        _id: "session-1",
+        effectiveMode: "unattended",
+        status: "connecting",
+      },
+      kind: "ok" as const,
+    }));
+
+    render(
+      <POSTerminalDetailViewContent
+        canStartRemoteAssist
+        detail={detail}
+        isLoading={false}
+        onStartRemoteAssist={onStartRemoteAssist}
+        remoteAssistClient={{
+          _id: "remote-client-1",
+          accessPolicy: "unattended_allowed",
+          displayName: "Front counter",
+          enrollmentStatus: "active",
+          lastPresenceAt: Date.now(),
+          presenceStatus: "online",
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Remote Assist")).toBeInTheDocument();
+    expect(screen.getByText("Ready for support session")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /start session/i }));
+
+    await waitFor(() => {
+      expect(onStartRemoteAssist).toHaveBeenCalledWith({
+        clientId: "remote-client-1",
+        reason: "M Supplies terminal recovery",
+      });
+    });
+    expect(mocks.toastSuccess).toHaveBeenCalledWith(
+      "Remote Assist session requested.",
+    );
+  });
+
+  it("shows approval-required Remote Assist responses", async () => {
+    const onStartRemoteAssist = vi.fn(async () => ({
+      approval: {
+        action: {
+          key: "remote_assist.start",
+          label: "Start Remote Assist",
+        },
+        copy: {
+          message: "Cashier approval is required before support can connect.",
+          title: "Approval required",
+        },
+        reason: "Local approval required",
+        requiredRole: "cashier" as const,
+        resolutionModes: [
+          {
+            approvalRequestId: "approval-1",
+            kind: "async_request" as const,
+            requestType: "remote_assist_attended_session",
+          },
+        ],
+        subject: {
+          id: "remote-client-1",
+          label: "Front counter",
+          type: "remote_assist_client",
+        },
+      },
+      kind: "approval_required" as const,
+    }));
+
+    render(
+      <POSTerminalDetailViewContent
+        canStartRemoteAssist
+        detail={detail}
+        isLoading={false}
+        onStartRemoteAssist={onStartRemoteAssist}
+        remoteAssistClient={{
+          _id: "remote-client-1",
+          accessPolicy: "unattended_allowed",
+          displayName: "Front counter",
+          enrollmentStatus: "active",
+          lastPresenceAt: Date.now(),
+          presenceStatus: "online",
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /start session/i }));
+
+    await waitFor(() => {
+      expect(mocks.toastError).toHaveBeenCalledWith(
+        "Cashier approval is required before support can connect.",
+      );
+    });
+  });
+
+  it("keeps Remote Assist unavailable until the runtime enrolls", () => {
+    render(
+      <POSTerminalDetailViewContent
+        canStartRemoteAssist
+        detail={detail}
+        isLoading={false}
+        remoteAssistClient={null}
+      />,
+    );
+
+    expect(screen.getByText("Waiting for runtime enrollment")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /start session/i })).toBeDisabled();
+  });
+
+  it("keeps Remote Assist unavailable when presence is stale", () => {
+    render(
+      <POSTerminalDetailViewContent
+        canStartRemoteAssist
+        detail={detail}
+        isLoading={false}
+        remoteAssistClient={{
+          _id: "remote-client-1",
+          accessPolicy: "unattended_allowed",
+          displayName: "Front counter",
+          enrollmentStatus: "active",
+          lastPresenceAt: Date.now() - 3 * 60_000,
+          presenceStatus: "online",
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Runtime not online")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /start session/i })).toBeDisabled();
+  });
+
+  it("keeps Remote Assist unavailable for users who cannot start support sessions", () => {
+    render(
+      <POSTerminalDetailViewContent
+        canStartRemoteAssist={false}
+        detail={detail}
+        isLoading={false}
+        remoteAssistClient={{
+          _id: "remote-client-1",
+          accessPolicy: "unattended_allowed",
+          displayName: "Front counter",
+          enrollmentStatus: "active",
+          lastPresenceAt: Date.now(),
+          presenceStatus: "online",
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Support permission required")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /start session/i })).toBeDisabled();
+  });
+
+  it("keeps attended-required Remote Assist unavailable until runtime approval exists", () => {
+    render(
+      <POSTerminalDetailViewContent
+        canStartRemoteAssist
+        detail={detail}
+        isLoading={false}
+        remoteAssistClient={{
+          _id: "remote-client-1",
+          accessPolicy: "attended_required",
+          displayName: "Front counter",
+          enrollmentStatus: "active",
+          lastPresenceAt: Date.now(),
+          presenceStatus: "online",
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Local approval required")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /start session/i })).toBeDisabled();
+  });
+
   it("renders the support recovery panel with safe cloud and terminal actions", () => {
     render(
       <POSTerminalDetailViewContent
