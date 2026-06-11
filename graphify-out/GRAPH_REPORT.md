@@ -5,7 +5,7 @@
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 6546 nodes · 7302 edges · 1802 communities detected
+- 6548 nodes · 7304 edges · 1802 communities detected
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
 - Token cost: 0 input · 0 output
 
@@ -2388,232 +2388,232 @@ Cohesion: 0.22
 Nodes (0):
 
 ### Community 137 - "Community 137"
+Cohesion: 0.22
+Nodes (0):
+
+### Community 138 - "Community 138"
 Cohesion: 0.25
 Nodes (2): buildUsername(), normalizeNameSegment()
 
-### Community 138 - "Community 138"
+### Community 139 - "Community 139"
 Cohesion: 0.39
 Nodes (6): handleDeliveryRestrictionToggle(), handlePickupRestrictionToggle(), handleSaveDeliveryRestriction(), handleSavePickupRestriction(), saveDeliveryRestriction(), savePickupRestriction()
 
-### Community 139 - "Community 139"
+### Community 140 - "Community 140"
 Cohesion: 0.44
 Nodes (1): Logger
 
-### Community 140 - "Community 140"
+### Community 141 - "Community 141"
 Cohesion: 0.36
 Nodes (7): assertValidPosCartLine(), calculatePosCartLineSubtotal(), calculatePosCartTotals(), calculatePosItemTotal(), getPosEffectivePrice(), isPosServiceCartLine(), roundPosAmount()
 
-### Community 141 - "Community 141"
+### Community 142 - "Community 142"
 Cohesion: 0.36
 Nodes (7): buildPosOfflineReadinessSummary(), buildSignal(), formatAge(), getSignalDescription(), getSignalStatus(), getSummaryDescription(), getSummaryTitle()
 
-### Community 142 - "Community 142"
+### Community 143 - "Community 143"
 Cohesion: 0.22
 Nodes (0):
 
-### Community 143 - "Community 143"
+### Community 144 - "Community 144"
 Cohesion: 0.22
 Nodes (2): ClusterRedis, StandaloneRedis
 
-### Community 144 - "Community 144"
+### Community 145 - "Community 145"
 Cohesion: 0.42
 Nodes (8): assertCoverageToolchainParity(), checkCoverageToolchainParity(), collectCoverageToolchainFailures(), declaredVersion(), formatFailureMessage(), installedVersion(), readManifest(), runFrozenInstall()
 
-### Community 145 - "Community 145"
+### Community 146 - "Community 146"
 Cohesion: 0.36
 Nodes (5): getAutomationPolicyWithCtx(), getAutomationRunByIdempotencyKeyWithCtx(), listAutomationPoliciesForStoreActionWithCtx(), listAutomationRunsByIdempotencyKeyWithCtx(), recordAutomationRunWithCtx()
 
-### Community 146 - "Community 146"
+### Community 147 - "Community 147"
 Cohesion: 0.46
 Nodes (7): deleteDirectoryInR2(), deleteFileInR2(), getR2(), listItemsInR2Directory(), readEnvValue(), resolveR2ConfigFromEnv(), uploadFileToR2()
 
-### Community 147 - "Community 147"
+### Community 148 - "Community 148"
 Cohesion: 0.25
 Nodes (0):
 
-### Community 148 - "Community 148"
+### Community 149 - "Community 149"
 Cohesion: 0.5
 Nodes (6): findAthenaUserByEmailWithCtx(), getAuthenticatedAthenaUserWithCtx(), getAuthenticatedUserRecord(), normalizeEmail(), requireAuthenticatedAthenaUserWithCtx(), syncAuthenticatedAthenaUserWithCtx()
 
-### Community 149 - "Community 149"
+### Community 150 - "Community 150"
 Cohesion: 0.43
 Nodes (6): buildMtnCollectionsLookupPrefixes(), isTargetEnvironment(), readScopedValue(), resolveConfigForPrefix(), resolveMtnCollectionsConfigFromEnv(), toEnvSegment()
 
-### Community 150 - "Community 150"
+### Community 151 - "Community 151"
 Cohesion: 0.46
 Nodes (7): recordApprovalAuditEventWithCtx(), recordApprovalDecisionRecordedAuditEventWithCtx(), recordApprovalProofConsumedAuditEventWithCtx(), recordApprovalRequiredAuditEventWithCtx(), recordApprovedCommandAppliedAuditEventWithCtx(), recordAsyncApprovalRequestCreatedAuditEventWithCtx(), recordManagerApprovalGrantedAuditEventWithCtx()
 
-### Community 151 - "Community 151"
+### Community 152 - "Community 152"
 Cohesion: 0.36
 Nodes (5): buildPaymentAllocation(), correctSameAmountSinglePaymentAllocationWithCtx(), findSameAmountSinglePaymentAllocation(), listPaymentAllocationsForTargetWithCtx(), recordPaymentAllocationWithCtx()
 
-### Community 152 - "Community 152"
+### Community 153 - "Community 153"
 Cohesion: 0.43
 Nodes (6): buildPosSessionTraceEvent(), buildPosSessionTraceRecord(), buildTraceSummary(), formatPaymentMethod(), recordPosSessionTraceBestEffort(), safeTraceWrite()
-
-### Community 153 - "Community 153"
-Cohesion: 0.25
-Nodes (0):
 
 ### Community 154 - "Community 154"
 Cohesion: 0.25
 Nodes (0):
 
 ### Community 155 - "Community 155"
+Cohesion: 0.25
+Nodes (0):
+
+### Community 156 - "Community 156"
 Cohesion: 0.39
 Nodes (6): buildOfferProductEmailItem(), createOffer(), formatOfferProductPrice(), getDiscountedOfferProductPrice(), isDuplicate(), updateStoreFrontActorEmail()
 
-### Community 156 - "Community 156"
+### Community 157 - "Community 157"
 Cohesion: 0.25
 Nodes (1): DataTableRowActions()
 
-### Community 157 - "Community 157"
+### Community 158 - "Community 158"
 Cohesion: 0.32
 Nodes (3): handleCreateCustomer(), handleSaveEdit(), showCommandError()
 
-### Community 158 - "Community 158"
+### Community 159 - "Community 159"
 Cohesion: 0.25
 Nodes (1): ResizeObserverStub
 
-### Community 159 - "Community 159"
+### Community 160 - "Community 160"
 Cohesion: 0.25
 Nodes (0):
-
-### Community 160 - "Community 160"
-Cohesion: 0.29
-Nodes (2): handleKeyDown(), isDebugShortcut()
 
 ### Community 161 - "Community 161"
-Cohesion: 0.25
-Nodes (0):
+Cohesion: 0.29
+Nodes (2): handleKeyDown(), isDebugShortcut()
 
 ### Community 162 - "Community 162"
 Cohesion: 0.25
 Nodes (0):
 
 ### Community 163 - "Community 163"
-Cohesion: 0.39
-Nodes (4): isMoneyOperation(), parseOperationValue(), useBulkOperations(), validateOperationValue()
-
-### Community 164 - "Community 164"
 Cohesion: 0.25
 Nodes (0):
+
+### Community 164 - "Community 164"
+Cohesion: 0.39
+Nodes (4): isMoneyOperation(), parseOperationValue(), useBulkOperations(), validateOperationValue()
 
 ### Community 165 - "Community 165"
 Cohesion: 0.25
 Nodes (0):
 
 ### Community 166 - "Community 166"
-Cohesion: 0.46
-Nodes (7): addItemToBag(), clearBag(), getActiveBag(), getBaseUrl(), removeItemFromBag(), updateBagItem(), updateBagOwner()
-
-### Community 167 - "Community 167"
-Cohesion: 0.43
-Nodes (6): buildQueryString(), getAllProducts(), getBaseUrl(), getBestSellers(), getFeatured(), getProduct()
-
-### Community 168 - "Community 168"
 Cohesion: 0.25
 Nodes (0):
 
+### Community 167 - "Community 167"
+Cohesion: 0.46
+Nodes (7): addItemToBag(), clearBag(), getActiveBag(), getBaseUrl(), removeItemFromBag(), updateBagItem(), updateBagOwner()
+
+### Community 168 - "Community 168"
+Cohesion: 0.43
+Nodes (6): buildQueryString(), getAllProducts(), getBaseUrl(), getBestSellers(), getFeatured(), getProduct()
+
 ### Community 169 - "Community 169"
+Cohesion: 0.25
+Nodes (0):
+
+### Community 170 - "Community 170"
 Cohesion: 0.43
 Nodes (7): createStorefrontObservabilityContext(), createStorefrontObservabilityPayload(), getOrCreateStorefrontObservabilitySessionId(), isBrowserAutomationContext(), isSyntheticMonitorOrigin(), resolveStorefrontAnalyticsOrigin(), trackStorefrontEvent()
 
-### Community 170 - "Community 170"
+### Community 171 - "Community 171"
 Cohesion: 0.39
 Nodes (5): createPackage(), installFixtureToolchain(), linkWorkspacePackage(), writeFixtureManifests(), writeJson()
 
-### Community 171 - "Community 171"
+### Community 172 - "Community 172"
 Cohesion: 0.52
 Nodes (5): getWhatsAppReceiptConfig(), getWhatsAppWebhookAppSecret(), getWhatsAppWebhookVerifyToken(), optionalEnv(), requiredEnv()
 
-### Community 172 - "Community 172"
+### Community 173 - "Community 173"
 Cohesion: 0.33
 Nodes (2): expenseSessionError(), mapExpenseSessionValidationError()
 
-### Community 173 - "Community 173"
+### Community 174 - "Community 174"
 Cohesion: 0.57
 Nodes (6): buildHeaders(), createCollectionsAccessToken(), encodeBasicAuth(), getRequestToPayStatus(), requestToPay(), toError()
 
-### Community 174 - "Community 174"
+### Community 175 - "Community 175"
 Cohesion: 0.33
 Nodes (2): completedDailyCloseRow(), completedDailyCloseSnapshot()
 
-### Community 175 - "Community 175"
+### Community 176 - "Community 176"
 Cohesion: 0.52
 Nodes (6): buildCustomerProfileDraft(), buildFullName(), findMatchingCustomerProfile(), normalizeLookupValue(), normalizePhoneNumber(), splitFullName()
 
-### Community 176 - "Community 176"
+### Community 177 - "Community 177"
 Cohesion: 0.33
 Nodes (2): buildOperationalWorkItem(), createOperationalWorkItemWithCtx()
 
-### Community 177 - "Community 177"
+### Community 178 - "Community 178"
 Cohesion: 0.48
 Nodes (5): buildExpenseSessionTraceEvent(), buildExpenseSessionTraceRecord(), buildTraceSummary(), recordExpenseSessionTraceBestEffort(), safeTraceWrite()
 
-### Community 178 - "Community 178"
+### Community 179 - "Community 179"
 Cohesion: 0.29
 Nodes (0):
-
-### Community 179 - "Community 179"
-Cohesion: 0.48
-Nodes (6): buildTerminalCloudRepairPreconditionHash(), buildTerminalCloudRepairPreview(), classifyTerminalCloudRepairConflict(), containsBusinessFacts(), isDuplicateRegisterOpenConflict(), skipped()
 
 ### Community 180 - "Community 180"
 Cohesion: 0.48
-Nodes (5): getActiveSessionForRegisterState(), listHeldSessionsForRegisterState(), querySessionsByStatus(), selectRegisterStateLookupStrategy(), summarizeRegisterStateSessions()
+Nodes (6): buildTerminalCloudRepairPreconditionHash(), buildTerminalCloudRepairPreview(), classifyTerminalCloudRepairConflict(), containsBusinessFacts(), isDuplicateRegisterOpenConflict(), skipped()
 
 ### Community 181 - "Community 181"
+Cohesion: 0.48
+Nodes (5): getActiveSessionForRegisterState(), listHeldSessionsForRegisterState(), querySessionsByStatus(), selectRegisterStateLookupStrategy(), summarizeRegisterStateSessions()
+
+### Community 182 - "Community 182"
 Cohesion: 0.52
 Nodes (6): blocked(), buildRecoveryAttemptId(), getOrganizationMemberForAccount(), recordRecoveryEvent(), validatePosAppAccount(), validateTerminalAppSessionRecoveryWithCtx()
 
-### Community 182 - "Community 182"
+### Community 183 - "Community 183"
 Cohesion: 0.43
 Nodes (5): buildPosServiceCatalogRow(), buildPosServiceCheckoutReadiness(), buildServiceCatalogItem(), normalizeServiceCatalogNameKey(), suggestedDepositAmount()
 
-### Community 183 - "Community 183"
+### Community 184 - "Community 184"
 Cohesion: 0.29
 Nodes (0):
 
-### Community 184 - "Community 184"
+### Community 185 - "Community 185"
 Cohesion: 0.33
 Nodes (2): getCustomerOperationalTimelineEvents(), resolveCustomerProfileIdForTimeline()
 
-### Community 185 - "Community 185"
+### Community 186 - "Community 186"
 Cohesion: 0.38
 Nodes (3): clearBagItems(), createOrderFromCheckoutSession(), generateOrderNumber()
 
-### Community 186 - "Community 186"
+### Community 187 - "Community 187"
 Cohesion: 0.57
 Nodes (5): getDeliveryAddress(), getLocationDetails(), getPickupLocation(), handleOrderStatusUpdate(), processOrderUpdateEmail()
 
-### Community 187 - "Community 187"
+### Community 188 - "Community 188"
 Cohesion: 0.33
 Nodes (2): appendTransition(), applyOnlineOrderUpdate()
 
-### Community 188 - "Community 188"
+### Community 189 - "Community 189"
 Cohesion: 0.38
 Nodes (3): createWorkflowTraceWithCtx(), getWorkflowTraceByIdWithCtx(), getWorkflowTraceByLookupWithCtx()
 
-### Community 189 - "Community 189"
+### Community 190 - "Community 190"
 Cohesion: 0.38
 Nodes (4): calculateCycleCountQuantityDelta(), hasHighStockAdjustmentVariance(), requiresStockAdjustmentApproval(), resolveStockAdjustmentQuantityDelta()
 
-### Community 190 - "Community 190"
+### Community 191 - "Community 191"
 Cohesion: 0.33
 Nodes (2): handlePinChange(), normalizeOtpCode()
 
-### Community 191 - "Community 191"
+### Community 192 - "Community 192"
 Cohesion: 0.33
 Nodes (2): handleKeypadPress(), setAmountFromTouch()
 
-### Community 192 - "Community 192"
+### Community 193 - "Community 193"
 Cohesion: 0.33
 Nodes (2): getLocalOperatingDate(), getLocalOperatingDateRange()
-
-### Community 193 - "Community 193"
-Cohesion: 0.29
-Nodes (0):
 
 ### Community 194 - "Community 194"
 Cohesion: 0.48
@@ -2640,16 +2640,16 @@ Cohesion: 0.29
 Nodes (0):
 
 ### Community 200 - "Community 200"
-Cohesion: 0.33
-Nodes (2): getProductName(), sortProduct()
-
-### Community 201 - "Community 201"
 Cohesion: 0.29
 Nodes (0):
 
-### Community 202 - "Community 202"
+### Community 201 - "Community 201"
 Cohesion: 0.52
 Nodes (6): addItemToSavedBag(), getActiveSavedBag(), getBaseUrl(), removeItemFromSavedBag(), updateSavedBagItem(), updateSavedBagOwner()
+
+### Community 202 - "Community 202"
+Cohesion: 0.33
+Nodes (2): getProductName(), sortProduct()
 
 ### Community 203 - "Community 203"
 Cohesion: 0.43
@@ -2780,8 +2780,8 @@ Cohesion: 0.53
 Nodes (3): handleUpdateFees(), parseDeliveryFeeInputs(), parseOptionalDeliveryFeeInput()
 
 ### Community 235 - "Community 235"
-Cohesion: 0.33
-Nodes (0):
+Cohesion: 0.47
+Nodes (3): onDrop(), removeImage(), unmarkForDeletion()
 
 ### Community 236 - "Community 236"
 Cohesion: 0.33
@@ -2800,12 +2800,12 @@ Cohesion: 0.33
 Nodes (0):
 
 ### Community 240 - "Community 240"
-Cohesion: 0.53
-Nodes (4): calculatePosChange(), calculatePosRemainingDue(), calculatePosTotalPaid(), roundPosAmount()
-
-### Community 241 - "Community 241"
 Cohesion: 0.33
 Nodes (0):
+
+### Community 241 - "Community 241"
+Cohesion: 0.53
+Nodes (4): calculatePosChange(), calculatePosRemainingDue(), calculatePosTotalPaid(), roundPosAmount()
 
 ### Community 242 - "Community 242"
 Cohesion: 0.33
@@ -2816,52 +2816,52 @@ Cohesion: 0.33
 Nodes (0):
 
 ### Community 244 - "Community 244"
-Cohesion: 0.53
-Nodes (4): isBarcodeShapedSearchQuery(), matchesSkuSearchTerms(), normalizeIdentifier(), scoreSkuSearchTerms()
-
-### Community 245 - "Community 245"
-Cohesion: 0.6
-Nodes (5): isExcludedFromPosAppShellCache(), isPosAppShellNavigationRequest(), isPosAppShellRoutePath(), isPosAppShellStaticAssetRequest(), readHeader()
-
-### Community 246 - "Community 246"
 Cohesion: 0.33
 Nodes (0):
 
+### Community 245 - "Community 245"
+Cohesion: 0.53
+Nodes (4): isBarcodeShapedSearchQuery(), matchesSkuSearchTerms(), normalizeIdentifier(), scoreSkuSearchTerms()
+
+### Community 246 - "Community 246"
+Cohesion: 0.6
+Nodes (5): isExcludedFromPosAppShellCache(), isPosAppShellNavigationRequest(), isPosAppShellRoutePath(), isPosAppShellStaticAssetRequest(), readHeader()
+
 ### Community 247 - "Community 247"
-Cohesion: 0.4
-Nodes (2): onSubmit(), saveStoreChanges()
+Cohesion: 0.33
+Nodes (0):
 
 ### Community 248 - "Community 248"
 Cohesion: 0.4
 Nodes (2): onSubmit(), saveStoreChanges()
 
 ### Community 249 - "Community 249"
-Cohesion: 0.33
-Nodes (0):
+Cohesion: 0.4
+Nodes (2): onSubmit(), saveStoreChanges()
 
 ### Community 250 - "Community 250"
-Cohesion: 0.47
-Nodes (4): fetchPosTransaction(), getBaseUrl(), getPosTransactionByReceiptToken(), PosTransactionReceiptError
+Cohesion: 0.33
+Nodes (0):
 
 ### Community 251 - "Community 251"
 Cohesion: 0.47
-Nodes (3): getBaseUrl(), getPromoCodes(), redeemPromoCode()
+Nodes (4): fetchPosTransaction(), getBaseUrl(), getPosTransactionByReceiptToken(), PosTransactionReceiptError
 
 ### Community 252 - "Community 252"
+Cohesion: 0.47
+Nodes (3): getBaseUrl(), getPromoCodes(), redeemPromoCode()
+
+### Community 253 - "Community 253"
 Cohesion: 0.33
 Nodes (0):
 
-### Community 253 - "Community 253"
+### Community 254 - "Community 254"
 Cohesion: 0.4
 Nodes (2): handleConfirm(), handlePrimaryAction()
 
-### Community 254 - "Community 254"
+### Community 255 - "Community 255"
 Cohesion: 0.33
 Nodes (0):
-
-### Community 255 - "Community 255"
-Cohesion: 0.47
-Nodes (3): onDrop(), removeImage(), unmarkForDeletion()
 
 ### Community 256 - "Community 256"
 Cohesion: 0.53

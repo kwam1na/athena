@@ -528,21 +528,21 @@ async function resolveAttentionReasonActionTargets(
     terminalId: Id<"posTerminal">;
   },
 ): Promise<TerminalHealthAttentionReason[]> {
-  const cloudRegisterSessionIdByReasonType =
+  const registerSessionIdByReasonType =
     args.attentionReasons.some((reason) => reason.source === "cloud_sync")
-      ? await resolveCloudRegisterSessionTargets(ctx, args)
+      ? await resolveRegisterSessionTargets(ctx, args)
       : new Map<TerminalHealthAttentionReason["type"], Id<"registerSession"> | null>();
 
   return args.attentionReasons.map((reason) => ({
     ...reason,
     actionTarget: getAttentionReasonActionTarget(reason, {
-      cloudRegisterSessionId:
-        cloudRegisterSessionIdByReasonType.get(reason.type) ?? null,
+      registerSessionId:
+        registerSessionIdByReasonType.get(reason.type) ?? null,
     }),
   }));
 }
 
-async function resolveCloudRegisterSessionTargets(
+async function resolveRegisterSessionTargets(
   ctx: QueryCtx,
   args: {
     attentionReasons: TerminalHealthAttentionReason[];
@@ -558,7 +558,7 @@ async function resolveCloudRegisterSessionTargets(
   );
   const entries = await Promise.all(
     [...uniqueTypes].map(async (type) => {
-      const localRegisterSessionId = getCloudReasonLocalRegisterSessionId(
+      const localRegisterSessionId = getReviewReasonLocalRegisterSessionId(
         type,
         args.syncEvidence,
       );
@@ -577,7 +577,7 @@ async function resolveCloudRegisterSessionTargets(
   return new Map(entries);
 }
 
-function getCloudReasonLocalRegisterSessionId(
+function getReviewReasonLocalRegisterSessionId(
   type: TerminalHealthAttentionReason["type"],
   syncEvidence: TerminalSyncEvidence,
 ) {
@@ -613,16 +613,16 @@ function getCloudReasonLocalRegisterSessionId(
 function getAttentionReasonActionTarget(
   reason: TerminalHealthAttentionReason,
   context: {
-    cloudRegisterSessionId: Id<"registerSession"> | null;
+    registerSessionId: Id<"registerSession"> | null;
   },
 ): TerminalHealthAttentionActionTarget {
   switch (reason.type) {
     case "cloud_conflict":
     case "cloud_held":
     case "cloud_rejected":
-      return context.cloudRegisterSessionId
+      return context.registerSessionId
         ? {
-            registerSessionId: context.cloudRegisterSessionId,
+            registerSessionId: context.registerSessionId,
             type: "cash_control_register_session",
           }
         : { type: "open_work" };

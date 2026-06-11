@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -17,7 +17,10 @@ const mocks = vi.hoisted(() => ({
     isLoadingStores: false,
   },
   canAccessPOS: vi.fn(() => true),
+  mutation: vi.fn(),
   useQuery: vi.fn(() => null),
+  toastSuccess: vi.fn(),
+  toastError: vi.fn(),
 }));
 
 vi.mock("@tanstack/react-router", () => ({
@@ -59,7 +62,15 @@ vi.mock("@tanstack/react-router", () => ({
 }));
 
 vi.mock("convex/react", () => ({
+  useMutation: () => mocks.mutation,
   useQuery: mocks.useQuery,
+}));
+
+vi.mock("sonner", () => ({
+  toast: {
+    error: mocks.toastError,
+    success: mocks.toastSuccess,
+  },
 }));
 
 vi.mock("@/hooks/useAuth", () => ({
@@ -233,6 +244,12 @@ describe("POSTerminalDetailViewContent", () => {
     mocks.activeStoreState.activeStore = { _id: "store-1" };
     mocks.activeStoreState.isLoadingStores = false;
     mocks.canAccessPOS.mockReturnValue(true);
+    mocks.mutation.mockResolvedValue({
+      data: { action: "resolved", resolvedCount: 1 },
+      kind: "ok",
+    });
+    mocks.toastError.mockClear();
+    mocks.toastSuccess.mockClear();
     mocks.useQuery.mockReturnValue(null);
     mocks.useQuery.mockClear();
   });
@@ -407,8 +424,10 @@ describe("POSTerminalDetailViewContent", () => {
     );
 
     expect(
-      screen.getByRole("link", { name: /^open register$/i }),
-    ).toHaveAttribute("href", "/wigclub/store/osu/pos/register");
+      screen.getByText(
+        "This needs a fresh check-in or terminal-side repair before support can clear it remotely.",
+      ),
+    ).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: /review register session/i }),
     ).toHaveAttribute(
@@ -416,8 +435,65 @@ describe("POSTerminalDetailViewContent", () => {
       "/wigclub/store/osu/cash-controls/registers/register-session-1",
     );
     expect(
-      screen.getByRole("link", { name: /open register setup/i }),
-    ).toHaveAttribute("href", "/wigclub/store/osu/pos/settings");
+      screen.getByText(
+        "Terminal setup repair must run from this checkout station or through a terminal repair command when available.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: /^open register$/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: /open register setup/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("resolves mapped register reviews inline from terminal health", async () => {
+    const onResolveRegisterSessionReview = vi.fn().mockResolvedValue({
+      data: { action: "resolved", resolvedCount: 1 },
+      kind: "ok",
+    });
+
+    render(
+      <POSTerminalDetailViewContent
+        detail={{
+          ...detail,
+          attentionReasons: [
+            {
+              actionTarget: {
+                registerSessionId: "register-session-1",
+                type: "cash_control_register_session",
+              },
+              count: 14,
+              latestEventSequence: 1,
+              latestEventStatus: "conflicted",
+              source: "cloud_sync",
+              summary: "14 cloud sync conflicts need review.",
+              type: "cloud_conflict",
+            },
+          ],
+        }}
+        isLoading={false}
+        onResolveRegisterSessionReview={onResolveRegisterSessionReview}
+        orgUrlSlug="wigclub"
+        storeUrlSlug="osu"
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /resolve eligible review/i }),
+    );
+
+    await waitFor(() =>
+      expect(onResolveRegisterSessionReview).toHaveBeenCalledWith({
+        registerSessionId: "register-session-1",
+      }),
+    );
+    expect(mocks.toastSuccess).toHaveBeenCalledWith(
+      "Eligible register review resolved",
+    );
+    expect(
+      screen.queryByRole("link", { name: /review register session/i }),
+    ).not.toBeInTheDocument();
   });
 
   it("does not render attention reasons for a healthy terminal", () => {
@@ -535,6 +611,10 @@ describe("POSTerminalDetailView", () => {
     mocks.activeStoreState.activeStore = { _id: "store-1" };
     mocks.activeStoreState.isLoadingStores = false;
     mocks.canAccessPOS.mockReturnValue(true);
+    mocks.mutation.mockResolvedValue({
+      data: { action: "resolved", resolvedCount: 1 },
+      kind: "ok",
+    });
     mocks.useQuery.mockReturnValue(null);
     mocks.useQuery.mockClear();
   });

@@ -69,6 +69,27 @@ The POS debug strip can show check-in publish status, reason, timestamps, and a
 short note. That copy is diagnostic. Operator-facing review copy should still
 come from shared sync review state and conflict evidence.
 
+## Inline Review Resolution Update
+
+Remote terminal health can own the control plane without becoming a second
+manager-review system. The terminal detail page may run the existing audited
+register-session sync review resolver inline when the attention reason is
+cloud/server review evidence and the backend has mapped that evidence to a real
+Cash Controls register session.
+
+Do not show that resolver for `local_runtime` review reasons. A terminal-local
+review counter can remain after the server-side register review has already
+settled. Routing that row through the register-session resolver produces an
+`already_resolved` result but does not make the terminal healthy, because the
+remaining evidence must come from the checkout browser retrying or reconciling
+its local review events and publishing a fresh terminal check-in.
+
+For terminal-local review, keep the page on terminal-side guidance or a
+terminal-command path. If a future command can safely ask the browser to retry
+uploaded review events, that command should report fresh runtime evidence back
+through terminal health instead of patching the local review count from the
+server.
+
 ## Regression Targets
 
 - `convex/pos/application/terminals.test.ts` should prove attention reasons
@@ -85,6 +106,9 @@ come from shared sync review state and conflict evidence.
 - `POSTerminalDetailView.test.tsx` and `POSRegisterView.test.tsx` should prove
   the support actions and debug fields render without exposing terminal secrets
   or raw backend conflict language.
+- Terminal detail tests should prove cloud/server review can resolve inline,
+  while local-runtime review remains terminal-side guidance even when review
+  evidence has a register-session id.
 
 ## Prevention
 
@@ -92,6 +116,8 @@ come from shared sync review state and conflict evidence.
 - Do not infer Cash Controls links from arbitrary local ids; require a
   `posLocalSyncMapping` register-session mapping or a normalized cloud
   `registerSession` id that belongs to the same store and terminal.
+- Do not show a register-session resolver for terminal-local review counters.
+  The server may already be settled while the browser still needs to check in.
 - Do not treat runtime check-in failures as cashier command failures.
 - Do not expose sync secrets, secret hashes, staff proof tokens, or raw local
   payload bodies in terminal health detail.

@@ -1,6 +1,7 @@
 import { Link, useParams } from "@tanstack/react-router";
-import { useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import type { FunctionReference } from "convex/server";
+import { useState } from "react";
 import {
   AlertTriangle,
   ArrowRight,
@@ -10,6 +11,7 @@ import {
   ShieldCheck,
   Wrench,
 } from "lucide-react";
+import { toast } from "sonner";
 
 import View from "@/components/View";
 import { FadeIn } from "@/components/common/FadeIn";
@@ -22,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
+import { runCommand } from "@/lib/errors/runCommand";
 import { getOrigin } from "@/lib/navigationUtils";
 import { cn } from "@/lib/utils";
 import { api } from "~/convex/_generated/api";
@@ -60,10 +63,35 @@ const posTerminalApi = api.inventory.posTerminal as unknown as {
 type POSTerminalDetailViewContentProps = {
   detail: TerminalHealthDetail | null;
   isLoading: boolean;
+  onResolveRegisterSessionReview?: (args: {
+    registerSessionId: Id<"registerSession"> | string;
+  }) => Promise<TerminalRegisterSessionReviewResult>;
   orgUrlSlug?: string;
   queryUnavailable?: boolean;
   storeUrlSlug?: string;
 };
+
+type TerminalRegisterSessionReviewResult =
+  | {
+      kind: "ok";
+      data?: {
+        action?: "already_resolved" | "resolved" | string;
+        projectedCount?: number;
+        resolvedCount?: number;
+      };
+    }
+  | {
+      kind: "user_error";
+      error: {
+        message: string;
+      };
+    }
+  | {
+      kind: "unexpected_error";
+      error: {
+        message: string;
+      };
+    };
 
 function DetailPanel({
   children,
@@ -448,10 +476,12 @@ function ConflictSection({
 
 function AttentionReasonsSection({
   detail,
+  onResolveRegisterSessionReview,
   orgUrlSlug,
   storeUrlSlug,
 }: {
   detail: TerminalHealthDetail;
+  onResolveRegisterSessionReview?: POSTerminalDetailViewContentProps["onResolveRegisterSessionReview"];
   orgUrlSlug?: string;
   storeUrlSlug?: string;
 }) {
@@ -489,6 +519,7 @@ function AttentionReasonsSection({
                 </p>
               </div>
               <AttentionReasonAction
+                onResolveRegisterSessionReview={onResolveRegisterSessionReview}
                 orgUrlSlug={orgUrlSlug}
                 reason={reason}
                 storeUrlSlug={storeUrlSlug}
@@ -502,21 +533,70 @@ function AttentionReasonsSection({
 }
 
 function AttentionReasonAction({
+  onResolveRegisterSessionReview,
   orgUrlSlug,
   reason,
   storeUrlSlug,
 }: {
+  onResolveRegisterSessionReview?: POSTerminalDetailViewContentProps["onResolveRegisterSessionReview"];
   orgUrlSlug?: string;
   reason: TerminalHealthAttentionReason;
   storeUrlSlug?: string;
 }) {
   const target = reason.actionTarget;
+  const [isResolving, setIsResolving] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
   if (!orgUrlSlug || !storeUrlSlug || !target) {
     return null;
   }
 
   if (target.type === "cash_control_register_session") {
+    const registerSessionId = target.registerSessionId;
+    const resolveRegisterSessionReview = onResolveRegisterSessionReview;
+
+    if (resolveRegisterSessionReview) {
+      const resolveReview = async () => {
+        setIsResolving(true);
+        setErrorMessage("");
+        const result = await resolveRegisterSessionReview({
+          registerSessionId,
+        });
+        setIsResolving(false);
+
+        if (result.kind === "ok") {
+          toast.success(
+            result.data?.action === "already_resolved"
+              ? "Register review already resolved"
+              : "Eligible register review resolved",
+          );
+          return;
+        }
+
+        setErrorMessage(result.error.message);
+        toast.error(result.error.message);
+      };
+
+      return (
+        <div className="grid justify-items-start gap-layout-xs">
+          <Button
+            disabled={isResolving}
+            onClick={() => {
+              void resolveReview();
+            }}
+            size="sm"
+            variant="utility"
+          >
+            <Wrench aria-hidden="true" />
+            {isResolving ? "Resolving..." : "Resolve eligible review"}
+          </Button>
+          {errorMessage ? (
+            <p className="max-w-sm text-xs text-danger">{errorMessage}</p>
+          ) : null}
+        </div>
+      );
+    }
+
     return (
       <Button asChild size="sm" variant="utility">
         <Link
@@ -552,31 +632,19 @@ function AttentionReasonAction({
 
   if (target.type === "pos_settings") {
     return (
-      <Button asChild size="sm" variant="utility">
-        <Link
-          params={{ orgUrlSlug, storeUrlSlug }}
-          search={{ o: getOrigin() }}
-          to="/$orgUrlSlug/store/$storeUrlSlug/pos/settings"
-        >
-          Open register setup
-          <ArrowRight aria-hidden="true" />
-        </Link>
-      </Button>
+      <p className="max-w-sm text-xs text-muted-foreground">
+        Terminal setup repair must run from this checkout station or through a
+        terminal repair command when available.
+      </p>
     );
   }
 
   if (target.type === "pos_register") {
     return (
-      <Button asChild size="sm" variant="utility">
-        <Link
-          params={{ orgUrlSlug, storeUrlSlug }}
-          search={{ o: getOrigin() }}
-          to="/$orgUrlSlug/store/$storeUrlSlug/pos/register"
-        >
-          Open register
-          <ArrowRight aria-hidden="true" />
-        </Link>
-      </Button>
+      <p className="max-w-sm text-xs text-muted-foreground">
+        This needs a fresh check-in or terminal-side repair before support can
+        clear it remotely.
+      </p>
     );
   }
 
@@ -603,12 +671,14 @@ function RecoveryMetric({
 function RecoveryBlockerGroup({
   blockers,
   emptyCopy,
+  onResolveRegisterSessionReview,
   orgUrlSlug,
   storeUrlSlug,
   title,
 }: {
   blockers: TerminalRecoveryPresentationBlocker[];
   emptyCopy: string;
+  onResolveRegisterSessionReview?: POSTerminalDetailViewContentProps["onResolveRegisterSessionReview"];
   orgUrlSlug?: string;
   storeUrlSlug?: string;
   title: string;
@@ -646,6 +716,7 @@ function RecoveryBlockerGroup({
               </div>
               <RecoveryBlockerAction
                 blocker={blocker}
+                onResolveRegisterSessionReview={onResolveRegisterSessionReview}
                 orgUrlSlug={orgUrlSlug}
                 storeUrlSlug={storeUrlSlug}
               />
@@ -659,10 +730,12 @@ function RecoveryBlockerGroup({
 
 function RecoveryBlockerAction({
   blocker,
+  onResolveRegisterSessionReview,
   orgUrlSlug,
   storeUrlSlug,
 }: {
   blocker: TerminalRecoveryPresentationBlocker;
+  onResolveRegisterSessionReview?: POSTerminalDetailViewContentProps["onResolveRegisterSessionReview"];
   orgUrlSlug?: string;
   storeUrlSlug?: string;
 }) {
@@ -683,6 +756,7 @@ function RecoveryBlockerAction({
   if (blocker.actionTarget) {
     return (
       <AttentionReasonAction
+        onResolveRegisterSessionReview={onResolveRegisterSessionReview}
         orgUrlSlug={orgUrlSlug}
         reason={{
           actionTarget: blocker.actionTarget,
@@ -700,10 +774,12 @@ function RecoveryBlockerAction({
 
 function RecoveryPanel({
   detail,
+  onResolveRegisterSessionReview,
   orgUrlSlug,
   storeUrlSlug,
 }: {
   detail: TerminalHealthDetail;
+  onResolveRegisterSessionReview?: POSTerminalDetailViewContentProps["onResolveRegisterSessionReview"];
   orgUrlSlug?: string;
   storeUrlSlug?: string;
 }) {
@@ -749,6 +825,7 @@ function RecoveryPanel({
         <RecoveryBlockerGroup
           blockers={recovery.groups.cloudRepair}
           emptyCopy="No cloud-safe repair blockers are reported."
+          onResolveRegisterSessionReview={onResolveRegisterSessionReview}
           orgUrlSlug={orgUrlSlug}
           storeUrlSlug={storeUrlSlug}
           title="Cloud repair"
@@ -756,6 +833,7 @@ function RecoveryPanel({
         <RecoveryBlockerGroup
           blockers={recovery.groups.terminalRequired}
           emptyCopy="No terminal-required blockers are reported."
+          onResolveRegisterSessionReview={onResolveRegisterSessionReview}
           orgUrlSlug={orgUrlSlug}
           storeUrlSlug={storeUrlSlug}
           title="Terminal required"
@@ -763,6 +841,7 @@ function RecoveryPanel({
         <RecoveryBlockerGroup
           blockers={recovery.groups.manualReview}
           emptyCopy="No manual-review blockers are reported."
+          onResolveRegisterSessionReview={onResolveRegisterSessionReview}
           orgUrlSlug={orgUrlSlug}
           storeUrlSlug={storeUrlSlug}
           title="Manual review"
@@ -817,6 +896,7 @@ function SupportNotesSection({
 export function POSTerminalDetailViewContent({
   detail,
   isLoading,
+  onResolveRegisterSessionReview,
   orgUrlSlug,
   queryUnavailable = false,
   storeUrlSlug,
@@ -882,11 +962,13 @@ export function POSTerminalDetailViewContent({
             <main className="space-y-layout-lg">
               <RecoveryPanel
                 detail={detail}
+                onResolveRegisterSessionReview={onResolveRegisterSessionReview}
                 orgUrlSlug={orgUrlSlug}
                 storeUrlSlug={storeUrlSlug}
               />
               <AttentionReasonsSection
                 detail={detail}
+                onResolveRegisterSessionReview={onResolveRegisterSessionReview}
                 orgUrlSlug={orgUrlSlug}
                 storeUrlSlug={storeUrlSlug}
               />
@@ -932,6 +1014,31 @@ export function POSTerminalDetailView() {
         }
       : "skip",
   ) as TerminalHealthDetail | null | undefined;
+  const resolveRegisterSessionSyncReview = useMutation(
+    api.cashControls.deposits.resolveRegisterSessionSyncReview,
+  );
+
+  async function onResolveRegisterSessionReview({
+    registerSessionId,
+  }: {
+    registerSessionId: Id<"registerSession"> | string;
+  }): Promise<TerminalRegisterSessionReviewResult> {
+    if (!activeStore?._id) {
+      return {
+        kind: "user_error",
+        error: {
+          message: "Select a store before resolving this register review.",
+        },
+      };
+    }
+
+    return runCommand(() =>
+      resolveRegisterSessionSyncReview({
+        registerSessionId: registerSessionId as Id<"registerSession">,
+        storeId: activeStore._id,
+      }),
+    ) as Promise<TerminalRegisterSessionReviewResult>;
+  }
 
   if (isLoadingAccess) {
     return null;
@@ -965,6 +1072,7 @@ export function POSTerminalDetailView() {
       <POSTerminalDetailViewContent
         detail={detail ?? null}
         isLoading={detail === undefined}
+        onResolveRegisterSessionReview={onResolveRegisterSessionReview}
         orgUrlSlug={params.orgUrlSlug}
         queryUnavailable={detail === null && !params.terminalId}
         storeUrlSlug={params.storeUrlSlug}
