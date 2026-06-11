@@ -165,6 +165,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
   const [manualRetryToken, setManualRetryToken] = useState(0);
   const [runtimeStatusObservationToken, setRuntimeStatusObservationToken] =
     useState(0);
+  const [recoveryCommandRetryToken, setRecoveryCommandRetryToken] = useState(0);
   const [debug, setDebug] = useState<PosLocalRuntimeSyncDebug>({});
   const [isOnline, setIsOnline] = useState(() =>
     typeof navigator === "undefined" ? true : navigator.onLine,
@@ -1041,6 +1042,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
                 : "Recovery command could not be claimed.",
             terminalRecoveryCommandStatus: "failed",
           }));
+          setRecoveryCommandRetryToken((current) => current + 1);
         }
         return;
       }
@@ -1063,6 +1065,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
             terminalRecoveryCommandMessage: localResult.message,
             terminalRecoveryCommandStatus: "ignored",
           }));
+          setRecoveryCommandRetryToken((current) => current + 1);
         }
         return;
       }
@@ -1078,6 +1081,9 @@ export function usePosLocalSyncRuntimeStatus(input: {
       });
       if (acknowledged.kind !== "ok") {
         observedRecoveryCommandIdsRef.current.delete(command._id);
+        if (!isStale) {
+          setRecoveryCommandRetryToken((current) => current + 1);
+        }
       }
       if (isStale) return;
 
@@ -1107,6 +1113,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
           "Recovery command could not reach the server.",
         terminalRecoveryCommandStatus: "failed",
       }));
+      setRecoveryCommandRetryToken((current) => current + 1);
     });
 
     return () => {
@@ -1116,6 +1123,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
     acknowledgeTerminalRecoveryCommand,
     claimTerminalRecoveryCommand,
     onLocalEventsChanged,
+    recoveryCommandRetryToken,
     recoveryCommands,
     requestRetry,
     runtimeReadiness.terminalSeed,

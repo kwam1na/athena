@@ -3822,6 +3822,47 @@ describe("usePosLocalSyncRuntimeStatus", () => {
     expect(retry).toHaveBeenCalled();
   });
 
+  it("reschedules a recovery command after a claim failure", async () => {
+    const command = buildRecoveryCommand();
+    const commandResult = { kind: "ok", data: [command] };
+    mocks.listTerminalRecoveryCommands.mockImplementation((args) =>
+      args === "skip" ? undefined : commandResult,
+    );
+    mocks.claimTerminalRecoveryCommand
+      .mockResolvedValueOnce({
+        kind: "user_error",
+        error: {
+          code: "precondition_failed",
+          message: "Claim failed.",
+        },
+      })
+      .mockResolvedValueOnce({
+        kind: "ok",
+        data: command,
+      });
+
+    renderHook(() =>
+      usePosLocalSyncRuntimeStatus({
+        mode: "status-only",
+        storeFactory: () => buildRecoveryCommandStore() as never,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(mocks.claimTerminalRecoveryCommand).toHaveBeenCalledTimes(2),
+    );
+    expect(mocks.acknowledgeTerminalRecoveryCommand).toHaveBeenCalledWith({
+      commandId: "command-1",
+      message: undefined,
+      result: "completed",
+      storeId: "store-1",
+      syncSecretHash: "sync-secret-1",
+      terminalId: "terminal-cloud-1",
+    });
+  });
+
   it("does not acknowledge a claimed recovery command for another terminal", async () => {
     const command = buildRecoveryCommand({ terminalId: "other-terminal" });
     const commandResult = { kind: "ok", data: [command] };

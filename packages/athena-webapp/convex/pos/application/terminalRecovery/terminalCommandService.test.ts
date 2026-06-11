@@ -111,7 +111,7 @@ describe("terminal command service", () => {
     const result = await acknowledgeTerminalRecoveryCommand(repository, {
       acknowledgedAt: now,
       commandId: "command-1" as Id<"posTerminalRecoveryCommand">,
-      message: `token=abc123 ${"details ".repeat(80)}`,
+      message: `token=abc123 PIN 1234 payment=card customer Jane payload raw ${"a".repeat(40)} ${"details ".repeat(80)}`,
       result: "failed",
       storeId,
       terminalId,
@@ -122,12 +122,91 @@ describe("terminal command service", () => {
       "command-1",
       expect.objectContaining({
         acknowledgement: expect.objectContaining({
-          message: expect.stringMatching(/^token=\[redacted\] details/),
+          message: expect.stringMatching(
+            /^token=\[redacted\] PIN \[redacted\] payment=\[redacted\] customer \[redacted\] payload \[redacted\] \[redacted\]/,
+          ),
         }),
       }),
     );
     const patch = vi.mocked(repository.patchCommand).mock.calls.at(-1)?.[1];
     expect(patch?.acknowledgement?.message).toHaveLength(240);
+  });
+
+  it("expires pending commands during listing and rejects expired claims", async () => {
+    const repository = buildRepository({
+      commands: [
+        buildCommand({
+          expiresAt: now - 1,
+        }),
+      ],
+    });
+
+    await expect(
+      listClaimableTerminalRecoveryCommands(repository, {
+        now,
+        storeId,
+        terminalId,
+      }),
+    ).resolves.toEqual([]);
+    expect(repository.patchCommand).toHaveBeenCalledWith("command-1", {
+      status: "expired",
+    });
+
+    await expect(
+      claimTerminalRecoveryCommand(repository, {
+        claimedAt: now,
+        commandId: "command-1" as Id<"posTerminalRecoveryCommand">,
+        storeId,
+        terminalId,
+      }),
+    ).resolves.toMatchObject({
+      error: {
+        code: "precondition_failed",
+      },
+      kind: "user_error",
+    });
+  });
+
+  it("rejects non-claimable and non-acknowledgeable command states", async () => {
+    const repository = buildRepository({
+      commands: [
+        buildCommand({
+          status: "completed",
+          verificationStatus: "verified",
+        }),
+      ],
+    });
+
+    await expect(
+      claimTerminalRecoveryCommand(repository, {
+        claimedAt: now,
+        commandId: "command-1" as Id<"posTerminalRecoveryCommand">,
+        storeId,
+        terminalId,
+      }),
+    ).resolves.toMatchObject({
+      error: {
+        code: "precondition_failed",
+        message: "This terminal recovery command is no longer claimable.",
+      },
+      kind: "user_error",
+    });
+
+    await expect(
+      acknowledgeTerminalRecoveryCommand(repository, {
+        acknowledgedAt: now,
+        commandId: "command-1" as Id<"posTerminalRecoveryCommand">,
+        result: "completed",
+        storeId,
+        terminalId,
+      }),
+    ).resolves.toMatchObject({
+      error: {
+        code: "precondition_failed",
+        message: "This terminal recovery command cannot be acknowledged.",
+      },
+      kind: "user_error",
+    });
   });
 
   it("does not let another terminal claim or acknowledge a command", async () => {

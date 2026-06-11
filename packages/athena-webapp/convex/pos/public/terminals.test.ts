@@ -851,6 +851,102 @@ describe("POS terminal public mutations", () => {
     });
     expect(mocks.listClaimableTerminalRecoveryCommands).not.toHaveBeenCalled();
   });
+
+  it.each([
+    {
+      action: "claim",
+      expectedMessage:
+        "You do not have access to claim POS terminal recovery commands.",
+      handler: claimTerminalRecoveryCommand,
+      service: mocks.claimTerminalRecoveryCommandService,
+    },
+    {
+      action: "acknowledge",
+      expectedMessage:
+        "You do not have access to acknowledge POS terminal recovery commands.",
+      handler: acknowledgeTerminalRecoveryCommand,
+      service: mocks.acknowledgeTerminalRecoveryCommandService,
+    },
+  ])(
+    "rejects $action recovery commands when the terminal sync secret is wrong",
+    async ({ expectedMessage, handler, service }) => {
+      const ctx = buildCtx({
+        terminal: {
+          _id: "terminal-1",
+          storeId: "store-1",
+          status: "active",
+          registeredByUserId: "athena-user-2",
+          syncSecretHash: SYNC_SECRET_HASH,
+        },
+      });
+
+      const result = await getHandler(handler)(ctx as never, {
+        storeId: "store-1",
+        terminalId: "terminal-1",
+        syncSecretHash: "wrong-secret",
+        commandId: "command-1",
+        result: "completed",
+      });
+
+      expect(result).toEqual({
+        kind: "user_error",
+        error: {
+          code: "authorization_failed",
+          message: expectedMessage,
+          metadata: { terminalAuthorizationFailure: true },
+        },
+      });
+      expect(service).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    {
+      action: "claim",
+      expectedMessage:
+        "You do not have access to claim POS terminal recovery commands.",
+      handler: claimTerminalRecoveryCommand,
+      service: mocks.claimTerminalRecoveryCommandService,
+    },
+    {
+      action: "acknowledge",
+      expectedMessage:
+        "You do not have access to acknowledge POS terminal recovery commands.",
+      handler: acknowledgeTerminalRecoveryCommand,
+      service: mocks.acknowledgeTerminalRecoveryCommandService,
+    },
+  ])(
+    "rejects $action recovery commands when the terminal is inactive",
+    async ({ expectedMessage, handler, service }) => {
+      const ctx = buildCtx({
+        terminal: {
+          _id: "terminal-1",
+          storeId: "store-1",
+          status: "revoked",
+          registeredByUserId: "athena-user-2",
+          syncSecretHash: SYNC_SECRET_HASH,
+        },
+      });
+
+      const result = await getHandler(handler)(ctx as never, {
+        storeId: "store-1",
+        terminalId: "terminal-1",
+        syncSecretHash: "sync-secret-1",
+        commandId: "command-1",
+        result: "completed",
+      });
+
+      expect(result).toEqual({
+        kind: "user_error",
+        error: {
+          code: "authorization_failed",
+          message: expectedMessage,
+          metadata: { terminalAuthorizationFailure: true },
+        },
+      });
+      expect(service).not.toHaveBeenCalled();
+    },
+  );
 });
 
 function buildRecoveryCommand(overrides: Record<string, unknown> = {}) {

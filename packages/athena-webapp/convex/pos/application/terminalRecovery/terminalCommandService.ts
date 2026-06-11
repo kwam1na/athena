@@ -21,10 +21,12 @@ const SECRET_LIKE_KEYS = [
   "pin",
   "verifier",
   "password",
+  "authorization",
   "payment",
   "customer",
   "payload",
 ] as const;
+const SECRET_LIKE_KEY_PATTERN = SECRET_LIKE_KEYS.join("|");
 
 export type TerminalRecoveryCommandRepository = {
   getCommand(
@@ -208,10 +210,15 @@ function sanitizeAcknowledgementMessage(message: string | undefined) {
 
   const redacted = normalized
     .replace(
-      /\b(secret|token|password|pin|verifier|authorization)\b\s*[:=]\s*\S+/gi,
+      new RegExp(`\\b(${SECRET_LIKE_KEY_PATTERN})\\b\\s*[:=]\\s*\\S+`, "gi"),
       "$1=[redacted]",
     )
-    .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [redacted]");
+    .replace(
+      new RegExp(`\\b(${SECRET_LIKE_KEY_PATTERN})\\b\\s+\\S+`, "gi"),
+      "$1 [redacted]",
+    )
+    .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [redacted]")
+    .replace(/\b[A-Za-z0-9._~+/=-]{32,}\b/g, "[redacted]");
 
   return redacted.length <= ACKNOWLEDGEMENT_MESSAGE_MAX_LENGTH
     ? redacted
