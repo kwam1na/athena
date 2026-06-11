@@ -11,6 +11,8 @@ const buttonVariants = cva(
       variant: {
         default:
           "bg-action-commit text-action-commit-foreground hover:bg-action-commit/90",
+        "commit-soft":
+          "border border-action-commit-border bg-action-commit-soft text-action-commit hover:bg-action-commit-soft/75",
         workflow:
           "bg-action-workflow text-action-workflow-foreground hover:bg-action-workflow/90",
         "workflow-soft":

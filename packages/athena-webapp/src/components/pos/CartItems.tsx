@@ -48,6 +48,27 @@ function normalizeCartQuantityInput(value: string | number) {
   return Math.max(1, Math.trunc(parsed));
 }
 
+function normalizeCartAttribute(value: string | number | null | undefined) {
+  const normalized = String(value ?? "").trim();
+  if (!normalized || normalized.toLowerCase() === "null") {
+    return undefined;
+  }
+
+  return normalized;
+}
+
+function formatCartAttributeParts(item: CartItem) {
+  const displaySize = normalizeCartAttribute(item.size);
+  const displayLength = normalizeCartAttribute(item.length);
+  const displayColor = normalizeCartAttribute(item.color);
+
+  return [
+    displayLength ? `${displayLength}"` : undefined,
+    displaySize,
+    displayColor ? capitalizeWords(displayColor) : undefined,
+  ].filter(Boolean);
+}
+
 function CartItemQuantityControl({
   isCompact,
   item,
@@ -372,7 +393,10 @@ export function CartItems({
               );
             })}
 
-            {cartItems.map((item) => (
+            {cartItems.map((item) => {
+              const attributeParts = formatCartAttributeParts(item);
+
+              return (
               <div
                 key={item.id}
                 className={cn(
@@ -444,13 +468,9 @@ export function CartItems({
                         )}
                       </div>
 
-                      {(item.size || item.length || item.color) && (
+                      {attributeParts.length > 0 && (
                         <p className="text-xs text-muted-foreground capitalize">
-                          {item.length && `${item.length}"`}
-                          {item.size && item.length && " • "}
-                          {item.size && `${item.size}`}
-                          {item.color && (item.size || item.length) && " • "}
-                          {item.color && capitalizeWords(item.color)}
+                          {attributeParts.join(" • ")}
                         </p>
                       )}
 
@@ -550,7 +570,8 @@ export function CartItems({
                   )}
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

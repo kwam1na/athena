@@ -236,6 +236,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/components/product/ProductStatus.test.tsx`](../../src/components/product/ProductStatus.test.tsx)
 - [`src/components/product/QuickAddProductDialog.test.tsx`](../../src/components/product/QuickAddProductDialog.test.tsx)
 - [`src/components/products/Products.test.tsx`](../../src/components/products/Products.test.tsx)
+- [`src/components/products/ProductsListView.test.ts`](../../src/components/products/ProductsListView.test.ts)
 - [`src/components/products/UnresolvedProducts.test.tsx`](../../src/components/products/UnresolvedProducts.test.tsx)
 - [`src/components/promo-codes/PromoCodeHeader.test.tsx`](../../src/components/promo-codes/PromoCodeHeader.test.tsx)
 - [`src/components/promo-codes/PromoCodesView.test.tsx`](../../src/components/promo-codes/PromoCodesView.test.tsx)

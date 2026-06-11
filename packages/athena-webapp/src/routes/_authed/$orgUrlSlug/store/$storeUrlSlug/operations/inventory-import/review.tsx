@@ -4,7 +4,9 @@ import { z } from "zod";
 import { InventoryImportView } from "~/src/components/operations/InventoryImportView";
 
 const inventoryImportReviewSearchSchema = z.object({
-  filter: z.enum(["all", "review", "new", "matched", "decided"]).optional(),
+  filter: z
+    .enum(["all", "review", "new", "matched", "needs_decision", "decided"])
+    .optional(),
   page: z.coerce.number().int().positive().optional(),
 });
 

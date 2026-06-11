@@ -32,7 +32,9 @@ const storeId = "store-1" as Id<"store">;
 describe("searchCatalog", () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    mocks.getCategoryById.mockResolvedValue({ name: "Retail" });
+    mocks.getCategoryById.mockImplementation(async (_ctx, categoryId) =>
+      categoryById[categoryId as keyof typeof categoryById] ?? null,
+    );
     mocks.getColorById.mockResolvedValue({ name: "Black" });
     mocks.isConvexProductId.mockReturnValue(false);
     mocks.findStoreSkuByBarcode.mockResolvedValue(null);
@@ -51,6 +53,14 @@ describe("searchCatalog", () => {
         sku: skuById["sku-hidden-product"],
       },
       {
+        product: productById["product-pos-quick-add"],
+        sku: skuById["sku-pos-quick-add"],
+      },
+      {
+        product: productById["product-pos-pending-checkout"],
+        sku: skuById["sku-pos-pending-checkout"],
+      },
+      {
         product: productById["product-hidden-sku"],
         sku: skuById["sku-hidden"],
       },
@@ -63,6 +73,16 @@ describe("searchCatalog", () => {
         id: "sku-live",
         productId: "product-live",
         skuId: "sku-live",
+      }),
+      expect.objectContaining({
+        id: "sku-pos-quick-add",
+        productId: "product-pos-quick-add",
+        skuId: "sku-pos-quick-add",
+      }),
+      expect.objectContaining({
+        id: "sku-pos-pending-checkout",
+        productId: "product-pos-pending-checkout",
+        skuId: "sku-pos-pending-checkout",
       }),
     ]);
   });
@@ -78,6 +98,38 @@ describe("searchCatalog", () => {
     await expect(
       lookupByBarcode(ctx, { storeId, barcode: "666" }),
     ).resolves.toBeNull();
+  });
+
+  it("includes hidden live products from the reserved POS quick-add category", async () => {
+    mocks.findStoreSkuByBarcode.mockResolvedValueOnce(
+      skuById["sku-pos-quick-add"],
+    );
+
+    await expect(
+      lookupByBarcode(ctx, { storeId, barcode: "777" }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        id: "sku-pos-quick-add",
+        category: "POS quick add",
+        productId: "product-pos-quick-add",
+      }),
+    );
+  });
+
+  it("includes hidden live products from the reserved POS pending-checkout category", async () => {
+    mocks.findStoreSkuByBarcode.mockResolvedValueOnce(
+      skuById["sku-pos-pending-checkout"],
+    );
+
+    await expect(
+      lookupByBarcode(ctx, { storeId, barcode: "888" }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        id: "sku-pos-pending-checkout",
+        category: "POS pending checkout",
+        productId: "product-pos-pending-checkout",
+      }),
+    );
   });
 
   it("excludes hidden SKUs from exact product-id lookup", async () => {
@@ -126,12 +178,48 @@ const productById = {
     description: "",
     isVisible: false,
   },
+  "product-pos-quick-add": {
+    _id: "product-pos-quick-add",
+    storeId,
+    categoryId: "category-pos-quick-add",
+    name: "Quick Added Item",
+    description: "",
+    availability: "live",
+    isVisible: false,
+  },
+  "product-pos-pending-checkout": {
+    _id: "product-pos-pending-checkout",
+    storeId,
+    categoryId: "category-pos-pending-checkout",
+    name: "Pending Checkout Item",
+    description: "",
+    availability: "live",
+    isVisible: false,
+  },
   "product-hidden-sku": {
     _id: "product-hidden-sku",
     storeId,
     categoryId: "category-1",
     name: "Hidden SKU Product",
     description: "",
+  },
+};
+
+const categoryById = {
+  "category-1": {
+    _id: "category-1",
+    name: "Retail",
+    slug: "retail",
+  },
+  "category-pos-quick-add": {
+    _id: "category-pos-quick-add",
+    name: "POS quick add",
+    slug: "pos-quick-add",
+  },
+  "category-pos-pending-checkout": {
+    _id: "category-pos-pending-checkout",
+    name: "POS pending checkout",
+    slug: "pos-pending-checkout",
   },
 };
 
@@ -165,6 +253,28 @@ const skuById = {
     sku: "HIDDEN-PRODUCT",
     barcode: "555",
     images: [],
+    price: 1000,
+    quantityAvailable: 1,
+  },
+  "sku-pos-quick-add": {
+    _id: "sku-pos-quick-add",
+    storeId,
+    productId: "product-pos-quick-add",
+    sku: "QUICK-ADD",
+    barcode: "777",
+    images: [],
+    netPrice: 1000,
+    price: 1000,
+    quantityAvailable: 1,
+  },
+  "sku-pos-pending-checkout": {
+    _id: "sku-pos-pending-checkout",
+    storeId,
+    productId: "product-pos-pending-checkout",
+    sku: "PENDING-CHECKOUT",
+    barcode: "888",
+    images: [],
+    netPrice: 1000,
     price: 1000,
     quantityAvailable: 1,
   },

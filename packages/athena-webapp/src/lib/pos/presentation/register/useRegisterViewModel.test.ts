@@ -1754,7 +1754,7 @@ describe("useRegisterViewModel", () => {
     );
   });
 
-  it("blocks starting a new sale over another staff member's non-empty local cart", async () => {
+  it("starts a separate sale when another staff member has a hidden non-empty local cart", async () => {
     mockRegisterState = {
       phase: "readyToStart",
       terminal: { _id: "terminal-1", displayName: "Front Counter" },
@@ -1853,7 +1853,7 @@ describe("useRegisterViewModel", () => {
 
     expect(result.current.cart.items).toEqual([]);
     expect(result.current.checkout.total).toBe(0);
-    expect(result.current.productEntry.disabled).toBe(true);
+    expect(result.current.productEntry.disabled).toBe(false);
     expect(
       mockAppendLocalEvent.mock.calls.filter(
         ([event]) => event.type === "session.started",
@@ -1864,7 +1864,7 @@ describe("useRegisterViewModel", () => {
       await result.current.sessionPanel?.onStartNewSession();
     });
 
-    expect(toast.error).toHaveBeenCalledWith(
+    expect(toast.error).not.toHaveBeenCalledWith(
       "This local sale belongs to another signed-in staff member.",
     );
     expect(
@@ -1872,11 +1872,12 @@ describe("useRegisterViewModel", () => {
         ([event]) => event.type === "cart.cleared",
       ),
     ).toHaveLength(0);
-    expect(
-      mockAppendLocalEvent.mock.calls.filter(
-        ([event]) => event.type === "session.started",
-      ),
-    ).toHaveLength(0);
+    expect(mockAppendLocalEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "session.started",
+        staffProfileId: "staff-2",
+      }),
+    );
   });
 
   it("replaces another staff member's empty local sale when starting a new sale", async () => {
@@ -1980,7 +1981,7 @@ describe("useRegisterViewModel", () => {
     );
   });
 
-  it("blocks adding a product over another staff member's non-empty local cart", async () => {
+  it("adds a product to a new separate sale when another staff member has a hidden non-empty local cart", async () => {
     mockRegisterState = {
       phase: "readyToStart",
       terminal: { _id: "terminal-1", displayName: "Front Counter" },
@@ -2070,7 +2071,7 @@ describe("useRegisterViewModel", () => {
       );
     });
 
-    let added = true;
+    let added = false;
     await act(async () => {
       added = await result.current.productEntry.onAddProduct({
         id: "sku-2",
@@ -2088,8 +2089,8 @@ describe("useRegisterViewModel", () => {
       });
     });
 
-    expect(added).toBe(false);
-    expect(toast.error).toHaveBeenCalledWith(
+    expect(added).toBe(true);
+    expect(toast.error).not.toHaveBeenCalledWith(
       "This local sale belongs to another signed-in staff member.",
     );
     expect(
@@ -2097,16 +2098,18 @@ describe("useRegisterViewModel", () => {
         ([event]) => event.type === "cart.cleared",
       ),
     ).toHaveLength(0);
-    expect(
-      mockAppendLocalEvent.mock.calls.filter(
-        ([event]) => event.type === "session.started",
-      ),
-    ).toHaveLength(0);
-    expect(
-      mockAppendLocalEvent.mock.calls.filter(
-        ([event]) => event.type === "cart.item_added",
-      ),
-    ).toHaveLength(0);
+    expect(mockAppendLocalEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "session.started",
+        staffProfileId: "staff-2",
+      }),
+    );
+    expect(mockAppendLocalEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "cart.item_added",
+        staffProfileId: "staff-2",
+      }),
+    );
   });
 
   it("replaces another staff member's empty local sale before adding a product", async () => {
@@ -5991,16 +5994,22 @@ describe("useRegisterViewModel", () => {
       );
     });
 
-    expect(added).toBe(false);
-    expect(mockAppendLocalEvent).not.toHaveBeenCalledWith(
-      expect.objectContaining({ type: "cart.item_added" }),
+    expect(added).toBe(true);
+    expect(mockAppendLocalEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "cart.item_added",
+        payload: expect.objectContaining({
+          productSkuId: "sku-1",
+          quantity: 2,
+        }),
+      }),
     );
-    expect(toast.error).toHaveBeenCalledWith(
+    expect(toast.error).not.toHaveBeenCalledWith(
       "No trusted availability remains for this item on this terminal.",
     );
   });
 
-  it("rechecks trusted availability inside the local add queue", async () => {
+  it("allows trusted count mismatches inside the local add queue", async () => {
     mockRegisterCatalogRows = [buildRegisterCatalogRow()];
     mockRegisterCatalogAvailabilityRows = [
       buildRegisterCatalogAvailabilityRow({
@@ -6058,12 +6067,17 @@ describe("useRegisterViewModel", () => {
       ]);
     });
 
-    expect(
-      mockAppendLocalEvent.mock.calls.filter(
-        ([event]) => event?.type === "cart.item_added",
-      ),
-    ).toHaveLength(1);
-    expect(toast.error).toHaveBeenCalledWith(
+    const cartItemAddedEvents = mockAppendLocalEvent.mock.calls
+      .map(([event]) => event)
+      .filter((event) => event?.type === "cart.item_added");
+    expect(cartItemAddedEvents.length).toBeGreaterThanOrEqual(2);
+    expect(cartItemAddedEvents.at(-1)?.payload).toEqual(
+      expect.objectContaining({
+        productSkuId: "sku-2",
+        quantity: 3,
+      }),
+    );
+    expect(toast.error).not.toHaveBeenCalledWith(
       "No trusted availability remains for this item on this terminal.",
     );
   });
@@ -6143,7 +6157,7 @@ describe("useRegisterViewModel", () => {
     );
   });
 
-  it("rejects requested product quantity beyond trusted availability", async () => {
+  it("adds requested product quantity beyond trusted availability", async () => {
     mockRegisterCatalogRows = [buildRegisterCatalogRow()];
     mockRegisterCatalogAvailabilityRows = [
       buildRegisterCatalogAvailabilityRow({
@@ -6175,21 +6189,27 @@ describe("useRegisterViewModel", () => {
       inStock: true,
       quantityAvailable: 2,
     };
-    let added = true;
+    let added = false;
     await act(async () => {
       added = await result.current.productEntry.onAddProduct(product, 3);
     });
 
-    expect(added).toBe(false);
-    expect(mockAppendLocalEvent).not.toHaveBeenCalledWith(
-      expect.objectContaining({ type: "cart.item_added" }),
+    expect(added).toBe(true);
+    expect(mockAppendLocalEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "cart.item_added",
+        payload: expect.objectContaining({
+          productSkuId: "sku-2",
+          quantity: 3,
+        }),
+      }),
     );
-    expect(toast.error).toHaveBeenCalledWith(
+    expect(toast.error).not.toHaveBeenCalledWith(
       "No trusted availability remains for this item on this terminal.",
     );
   });
 
-  it("rechecks trusted availability inside queued quantity updates", async () => {
+  it("allows trusted count mismatches inside queued quantity updates", async () => {
     mockRegisterCatalogRows = [buildRegisterCatalogRow()];
     mockRegisterCatalogAvailabilityRows = [
       buildRegisterCatalogAvailabilityRow({
@@ -6278,8 +6298,8 @@ describe("useRegisterViewModel", () => {
       mockAppendLocalEvent.mock.calls.filter(
         ([event]) => event?.type === "cart.item_added",
       ),
-    ).toHaveLength(1);
-    expect(toast.error).toHaveBeenCalledWith(
+    ).toHaveLength(2);
+    expect(toast.error).not.toHaveBeenCalledWith(
       "No trusted availability remains for this item on this terminal.",
     );
   });
@@ -6378,6 +6398,198 @@ describe("useRegisterViewModel", () => {
           inventoryImportProvisionalSkuId: "provisional-import-sku-1",
           productSkuId: "sku-2",
           quantity: 3,
+        }),
+      }),
+    );
+  });
+
+  it("updates a newly added provisional import line before the local projection refreshes", async () => {
+    mockActiveSession = {
+      ...mockActiveSession!,
+      cartItems: [],
+    };
+    mockRegisterCatalogRows = [
+      buildRegisterCatalogRow({
+        id: "provisional-import-sku-1" as Id<"productSku">,
+        availabilityPolicy: "active_provisional_import",
+        inventoryImportProvisionalSkuId:
+          "provisional-import-sku-1" as Id<"inventoryImportProvisionalSku">,
+      }),
+    ];
+    mockRegisterCatalogAvailabilityRows = [
+      buildRegisterCatalogAvailabilityRow({
+        availabilityPolicy: "active_provisional_import",
+        inventoryImportProvisionalSkuId:
+          "provisional-import-sku-1" as Id<"inventoryImportProvisionalSku">,
+        quantityAvailable: 0,
+      }),
+    ];
+    mockListLocalEvents.mockResolvedValue({ ok: true, value: [] });
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    await act(async () => {
+      await result.current.productEntry.onAddProduct({
+        id: "provisional-import-sku-1",
+        name: "Deep Wave",
+        price: 100,
+        barcode: "1234567890123",
+        productId: "product-2" as Id<"product">,
+        skuId: "sku-2" as Id<"productSku">,
+        sku: "DW-18",
+        category: "Hair",
+        description: "Deep wave bundle",
+        image: null,
+        inStock: true,
+        quantityAvailable: 0,
+        availabilityPolicy: "active_provisional_import",
+        inventoryImportProvisionalSkuId:
+          "provisional-import-sku-1" as Id<"inventoryImportProvisionalSku">,
+      });
+    });
+
+    expect(result.current.cart.items).toEqual([
+      expect.objectContaining({
+        id: "optimistic:provisional-import-sku-1",
+        inventoryImportProvisionalSkuId: "provisional-import-sku-1",
+        quantity: 1,
+      }),
+    ]);
+
+    await act(async () => {
+      await result.current.cart.onUpdateQuantity(
+        result.current.cart.items[0].id as Id<"posSessionItem">,
+        2,
+      );
+    });
+
+    expect(result.current.cart.items).toEqual([
+      expect.objectContaining({
+        inventoryImportProvisionalSkuId: "provisional-import-sku-1",
+        quantity: 2,
+      }),
+    ]);
+    expect(toast.error).not.toHaveBeenCalledWith(
+      "No trusted availability remains for this item on this terminal.",
+    );
+    expect(mockAppendLocalEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "cart.item_added",
+        payload: expect.objectContaining({
+          inventoryImportProvisionalSkuId: "provisional-import-sku-1",
+          productSkuId: "sku-2",
+          quantity: 2,
+        }),
+      }),
+    );
+  });
+
+  it("updates a newly added provisional import line after local projection refreshes", async () => {
+    mockActiveSession = {
+      ...mockActiveSession!,
+      cartItems: [],
+    };
+    mockRegisterCatalogRows = [
+      buildRegisterCatalogRow({
+        id: "provisional-import-sku-1" as Id<"productSku">,
+        availabilityPolicy: "active_provisional_import",
+        inventoryImportProvisionalSkuId:
+          "provisional-import-sku-1" as Id<"inventoryImportProvisionalSku">,
+      }),
+    ];
+    mockRegisterCatalogAvailabilityRows = [
+      buildRegisterCatalogAvailabilityRow({
+        availabilityPolicy: "active_provisional_import",
+        inventoryImportProvisionalSkuId:
+          "provisional-import-sku-1" as Id<"inventoryImportProvisionalSku">,
+        quantityAvailable: 0,
+      }),
+    ];
+
+    const localEvents: ReturnType<typeof buildLocalEvent>[] = [];
+    mockListLocalEvents.mockImplementation(async () => ({
+      ok: true,
+      value: localEvents,
+    }));
+    mockAppendLocalEvent.mockImplementation(async (event) => {
+      localEvents.push(
+        buildLocalEvent({
+          ...event,
+          sequence: localEvents.length + 1,
+        }),
+      );
+      return { ok: true, value: { localEventId: `event-${localEvents.length}` } };
+    });
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    await act(async () => {
+      await result.current.productEntry.onAddProduct({
+        id: "provisional-import-sku-1",
+        name: "Deep Wave",
+        price: 100,
+        barcode: "1234567890123",
+        productId: "product-2" as Id<"product">,
+        skuId: "sku-2" as Id<"productSku">,
+        sku: "DW-18",
+        category: "Hair",
+        description: "Deep wave bundle",
+        image: null,
+        inStock: true,
+        quantityAvailable: 0,
+        availabilityPolicy: "active_provisional_import",
+        inventoryImportProvisionalSkuId:
+          "provisional-import-sku-1" as Id<"inventoryImportProvisionalSku">,
+      });
+    });
+
+    await waitFor(() =>
+      expect(result.current.cart.items[0]).toEqual(
+        expect.objectContaining({
+          id: expect.stringMatching(/^local-item-/),
+          inventoryImportProvisionalSkuId: "provisional-import-sku-1",
+          quantity: 1,
+        }),
+      ),
+    );
+
+    await act(async () => {
+      await result.current.cart.onUpdateQuantity(
+        result.current.cart.items[0].id as Id<"posSessionItem">,
+        2,
+      );
+    });
+
+    expect(result.current.cart.items).toEqual([
+      expect.objectContaining({
+        inventoryImportProvisionalSkuId: "provisional-import-sku-1",
+        quantity: 2,
+      }),
+    ]);
+    expect(toast.error).not.toHaveBeenCalledWith(
+      "No trusted availability remains for this item on this terminal.",
+    );
+    expect(mockAppendLocalEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "cart.item_added",
+        payload: expect.objectContaining({
+          inventoryImportProvisionalSkuId: "provisional-import-sku-1",
+          productSkuId: "sku-2",
+          quantity: 2,
         }),
       }),
     );
@@ -10382,7 +10594,7 @@ describe("useRegisterViewModel", () => {
     );
   });
 
-  it("keeps cart item removals visible until the local write is durable", async () => {
+  it("hides explicit cart item removals while the local write is pending", async () => {
     const pendingAppend = deferred<{
       ok: true;
       value: { localEventId: string };
@@ -10405,8 +10617,8 @@ describe("useRegisterViewModel", () => {
       );
     });
 
-    expect(result.current.cart.items).toHaveLength(1);
-    expect(result.current.checkout.cartItems).toHaveLength(1);
+    expect(result.current.cart.items).toHaveLength(0);
+    expect(result.current.checkout.cartItems).toHaveLength(0);
 
     pendingAppend.resolve({ ok: true, value: { localEventId: "local-event-1" } });
     await act(async () => {
@@ -10646,7 +10858,7 @@ describe("useRegisterViewModel", () => {
     );
   });
 
-  it("keeps cart item removals visible when the local write fails", async () => {
+  it("restores explicit cart item removals when the local write fails", async () => {
     const pendingAppend = deferred<{
       ok: false;
       error: { message: string };
@@ -10669,7 +10881,8 @@ describe("useRegisterViewModel", () => {
       );
     });
 
-    expect(result.current.cart.items).toHaveLength(1);
+    expect(result.current.cart.items).toHaveLength(0);
+    expect(result.current.checkout.cartItems).toHaveLength(0);
 
     pendingAppend.resolve({
       ok: false,

@@ -107,6 +107,8 @@ export default {
         action: {
           commit: "hsl(var(--action-commit))",
           "commit-foreground": "hsl(var(--action-commit-foreground))",
+          "commit-soft": "hsl(var(--action-commit-soft))",
+          "commit-border": "hsl(var(--action-commit-border))",
           workflow: "hsl(var(--action-workflow))",
           "workflow-foreground": "hsl(var(--action-workflow-foreground))",
           "workflow-soft": "hsl(var(--action-workflow-soft))",

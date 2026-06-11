@@ -4,6 +4,7 @@ import {
   useProductsTableState,
 } from "./ProductsTableContext";
 import { useGetProducts } from "~/src/hooks/useGetProducts";
+import type { ProductAvailability } from "~/src/hooks/useGetProducts";
 import { useState, useMemo } from "react";
 import View from "../View";
 import { FadeIn } from "../common/FadeIn";
@@ -20,6 +21,19 @@ import {
   PageWorkspace,
   PageWorkspaceMain,
 } from "../common/PageLevelHeader";
+
+const POS_OPERATIONAL_CATEGORY_SLUGS = new Set([
+  "pos-pending-checkout",
+  "pos-quick-add",
+]);
+
+export function getCategoryProductAvailability(
+  categorySlug: string | undefined,
+): ProductAvailability | undefined {
+  return categorySlug && POS_OPERATIONAL_CATEGORY_SLUGS.has(categorySlug)
+    ? "live"
+    : undefined;
+}
 
 const ProductActionsToggleGroup = ({
   outOfStockProductsCount,
@@ -109,6 +123,7 @@ function Body() {
   const products = useGetProducts({
     subcategorySlug: subcategorySlug ?? undefined,
     categorySlug: categorySlug ?? undefined,
+    availability: getCategoryProductAvailability(categorySlug ?? undefined),
   });
 
   const [selectedProductActions, setSelectedProductActions] = useState<

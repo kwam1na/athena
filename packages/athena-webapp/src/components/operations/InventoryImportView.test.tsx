@@ -275,16 +275,23 @@ describe("InventoryImportView", () => {
     expect(screen.getByText("+12,347")).toBeInTheDocument();
     expect(screen.getByText("Next action")).toBeInTheDocument();
     expect(screen.getByText(/2 rows still need decisions/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Show review rows" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Show review rows" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save for import handoff" })).toBeInTheDocument();
     expect(
       screen
         .getAllByRole("button")
         .map((button) => button.textContent?.trim())
         .filter((label) =>
-          ["All", "Matched", "Needs review", "New items", "Decided"].includes(label ?? ""),
+          [
+            "All",
+            "Matched",
+            "Needs review",
+            "New items",
+            "Needs decision",
+            "Decided",
+          ].includes(label ?? ""),
         ),
-    ).toEqual(["All", "Matched", "Needs review", "New items", "Decided"]);
+    ).toEqual(["All", "Matched", "Needs review", "New items", "Needs decision", "Decided"]);
     expect(reviewOverlay.getAllByRole("button", { name: "Import" }).length).toBeGreaterThan(0);
     expect(reviewOverlay.getAllByRole("button", { name: "Athena" }).length).toBeGreaterThan(0);
     expect(reviewOverlay.getByText("Name and count")).toBeInTheDocument();
@@ -449,7 +456,7 @@ describe("InventoryImportView", () => {
 
     const importReview = getReviewOverlaySection();
     expect(screen.getByText(/2 rows still need decisions/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Show review rows" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Show review rows" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save for import handoff" })).toBeInTheDocument();
     expect(importReview.getByText("Close name")).toBeInTheDocument();
     expect(importReview.getByText("Name differs")).toBeInTheDocument();
@@ -564,6 +571,15 @@ describe("InventoryImportView", () => {
 
     await user.click(getReviewOverlaySection().getAllByRole("button", { name: "Import" })[0]);
     await user.click(getReviewOverlaySection().getAllByRole("button", { name: "Import" })[1]);
+    await user.click(screen.getByRole("button", { name: "Needs decision" }));
+
+    expect(getReviewOverlaySection().getByText("New Clip")).toBeInTheDocument();
+    expect(getReviewOverlaySection().queryByText("Comb")).not.toBeInTheDocument();
+    expect(screen.getByText(/1 row still need decisions/)).toBeInTheDocument();
+    expect(screen.getByText(/1 row ready/)).toBeInTheDocument();
+    expect(screen.queryByText(/already have draft choices/)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Show needs decision" })).toBeInTheDocument();
+
     await user.click(screen.getByRole("button", { name: "Decided" }));
 
     expect(getReviewOverlaySection().getAllByText("Comb").length).toBeGreaterThan(0);
@@ -585,7 +601,7 @@ describe("InventoryImportView", () => {
     await user.click(screen.getByRole("button", { name: "New items" }));
     await user.click(screen.getByRole("button", { name: "Create item" }));
 
-    await user.click(saveHandoffButton);
+    await user.click(screen.getByRole("button", { name: "Save for import handoff" }));
 
     await waitFor(() => {
       expect(mockedHooks.saveReviewVersion).toHaveBeenCalledWith(
@@ -611,6 +627,105 @@ describe("InventoryImportView", () => {
         }),
       );
     });
+  });
+
+  it("applies a new-item decision to every row in the active review filter", async () => {
+    const user = userEvent.setup();
+    mockedHooks.saveReviewVersion.mockResolvedValue(
+      ok({
+        _id: "review-version-bulk",
+        createdAt: Date.UTC(2026, 5, 7, 17),
+        fileName: "manual.csv",
+        importKey: "review-key",
+        issueCount: 0,
+        rowCount: 12,
+        sourceFormat: "csv",
+        versionNumber: 8,
+      }),
+    );
+
+    render(<InventoryImportView />);
+
+    fireEvent.change(screen.getByLabelText("Raw export"), {
+      target: {
+        value: [
+          "product_name,sku,price,qty",
+          ...Array.from(
+            { length: 12 },
+            (_, index) => `New Product ${index + 1},NEW-${index + 1},${index + 1},1`,
+          ),
+        ].join("\n"),
+      },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Inventory check" })).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: "Review inventory changes" }));
+    await user.click(screen.getByRole("button", { name: "Apply to 12" }));
+    await user.click(screen.getByRole("menuitem", { name: "Create 12 new items" }));
+    await user.click(screen.getByRole("button", { name: "Save for import handoff" }));
+
+    await waitFor(() => {
+      expect(mockedHooks.saveReviewVersion).toHaveBeenCalledWith(
+        expect.objectContaining({
+          rowDecisions: expect.arrayContaining([
+            expect.objectContaining({
+              action: "create_item",
+              productName: "New Product 1",
+              rowNumber: 2,
+            }),
+            expect.objectContaining({
+              action: "create_item",
+              productName: "New Product 12",
+              rowNumber: 13,
+            }),
+          ]),
+        }),
+      );
+    });
+    const savedRows = mockedHooks.saveReviewVersion.mock.calls.at(-1)?.[0]?.rowDecisions;
+    expect(savedRows).toHaveLength(12);
+  });
+
+  it("surfaces POS staging after review rows receive decisions", async () => {
+    const user = userEvent.setup();
+    mockedHooks.inventorySkuContext = [
+      {
+        barcode: "111",
+        inventoryCount: 3,
+        price: 2500,
+        productAvailability: "live",
+        productId: "product-1",
+        productName: "Comb",
+        productSkuId: "sku-1",
+        quantityAvailable: 3,
+        sku: "COMB-1",
+      },
+    ];
+
+    render(<InventoryImportView />);
+
+    fireEvent.change(screen.getByLabelText("Raw export"), {
+      target: {
+        value: ["product_name,sku,barcode,price,qty", "Comb,COMB-1,111,25,5"].join(
+          "\n",
+        ),
+      },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Inventory check" })).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: "Review inventory changes" }));
+    expect(screen.queryByRole("button", { name: "Make available in POS" })).not.toBeInTheDocument();
+
+    await user.click(getReviewOverlaySection().getByRole("button", { name: "Import" }));
+
+    expect(screen.getByText("Rows are ready for POS availability. Stage them without applying final counts.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Make available in POS" })).toBeInTheDocument();
   });
 
   it("stages reviewed rows for POS availability without applying final counts", async () => {
@@ -884,6 +999,45 @@ describe("InventoryImportView", () => {
     );
     expect(importReview.getByText("New Clip")).toBeInTheDocument();
     expect(importReview.queryByText("Comb")).not.toBeInTheDocument();
+  });
+
+  it("rehydrates saved row decisions by row number when the persisted row key drifts", async () => {
+    mockedHooks.search = { filter: "needs_decision" };
+    mockedHooks.latestReviewVersion = {
+      _id: "review-version-row-key-drift",
+      createdAt: Date.UTC(2026, 5, 7, 20),
+      fileName: "manual.csv",
+      importKey: "review-key",
+      issueCount: 0,
+      notes: undefined,
+      rawContent: [
+        "product_name,sku,price,qty",
+        "BLACK RUBBER BANDS SMALL,,5,45",
+      ].join("\n"),
+      rowCount: 1,
+      rowDecisions: [
+        {
+          action: "create_item",
+          productName: "BLACK RUBBER BANDS SMALL",
+          rowKey: "stale-display-derived-row-key",
+          rowNumber: 2,
+        },
+      ],
+      sourceFormat: "csv",
+      versionNumber: 9,
+    };
+
+    render(<InventoryImportView mode="review" />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Inventory review" })).toBeInTheDocument();
+    });
+
+    expect(
+      screen.getByText("Rows are ready for POS availability. Stage them without applying final counts."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Make available in POS" })).toBeInTheDocument();
+    expect(screen.getByText("No rows in this view")).toBeInTheDocument();
   });
 
   it("keeps reloads on the review route while the saved import loads", () => {

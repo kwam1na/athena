@@ -21,12 +21,17 @@ describe("Button", () => {
   it("renders semantic action variants", () => {
     render(
       <>
+        <Button variant="commit-soft">Add item</Button>
         <Button variant="workflow">Correct</Button>
         <Button variant="workflow-soft">Selected correction</Button>
         <Button variant="utility">View receipt</Button>
       </>
     );
 
+    expect(screen.getByRole("button", { name: "Add item" })).toHaveClass(
+      "bg-action-commit-soft",
+      "text-action-commit",
+    );
     expect(screen.getByRole("button", { name: "Correct" })).toHaveClass(
       "bg-action-workflow",
     );

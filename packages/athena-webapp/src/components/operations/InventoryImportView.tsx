@@ -12,6 +12,7 @@ import {
   ArrowUpRight,
   Columns3,
   FileJson,
+  ListChecks,
   Pencil,
   Save,
   UploadCloud,
@@ -63,6 +64,7 @@ import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
@@ -132,9 +134,21 @@ const DEFAULT_PREVIEW_COLUMN_VISIBILITY: PreviewColumnVisibility = {
   sku: false,
 };
 
-type InventoryOverlayFilter = "all" | "review" | "new" | "matched" | "decided";
+type InventoryOverlayFilter =
+  | "all"
+  | "review"
+  | "new"
+  | "matched"
+  | "needs_decision"
+  | "decided";
 type ImportDraftSource = "import" | "athena";
 type ImportNewRowAction = "create_item" | "skip_row";
+type BulkImportReviewDecisionAction =
+  | "create_new_items"
+  | "skip_rows"
+  | "use_import_values"
+  | "use_athena_values"
+  | "clear_choices";
 type ImportRowDraftDecision = {
   action?: ImportNewRowAction;
   nameSource?: ImportDraftSource;
@@ -179,6 +193,7 @@ const OVERLAY_FILTERS: Array<{
   { label: "Matched", value: "matched" },
   { label: "Needs review", value: "review" },
   { label: "New items", value: "new" },
+  { label: "Needs decision", value: "needs_decision" },
   { label: "Decided", value: "decided" },
 ];
 
@@ -500,11 +515,17 @@ export function InventoryImportView({
         }
       : {};
   const matchesOverlayStatusFilter = useCallback(
-    (row: InventoryOverlayRow) =>
-      overlayFilter === "all" ||
-      (overlayFilter === "decided"
-        ? hasDraftDecisionValue(rowDraftDecisions[getOverlayRowKey(row)] ?? {})
-        : row.status === overlayFilter),
+    (row: InventoryOverlayRow) => {
+      const decision = rowDraftDecisions[getOverlayDecisionKey(row)];
+
+      if (overlayFilter === "all") return true;
+      if (overlayFilter === "decided") return hasDraftDecisionValue(decision ?? {});
+      if (overlayFilter === "needs_decision") {
+        return !isOverlayRowDecisionComplete(row, decision);
+      }
+
+      return row.status === overlayFilter;
+    },
     [overlayFilter, rowDraftDecisions],
   );
   const overlayRowsMatchingQuery = useMemo(
@@ -553,9 +574,14 @@ export function InventoryImportView({
     (visibleOverlayPage - 1) * IMPORT_TABLE_PAGE_SIZE,
     visibleOverlayPage * IMPORT_TABLE_PAGE_SIZE,
   );
+  const bulkDecisionSummary = useMemo(
+    () => getBulkImportReviewDecisionSummary(filteredOverlayRows),
+    [filteredOverlayRows],
+  );
   const pendingImportActionCount = overlayRows.filter(
-    (row) => !isOverlayRowDecisionComplete(row, rowDraftDecisions[getOverlayRowKey(row)]),
+    (row) => !isOverlayRowDecisionComplete(row, rowDraftDecisions[getOverlayDecisionKey(row)]),
   ).length;
+  const completedImportActionCount = overlayRows.length - pendingImportActionCount;
   const hasValidRows =
     Boolean(parseResult) &&
     parseResult!.rows.length > 0 &&
@@ -563,9 +589,6 @@ export function InventoryImportView({
     Boolean(activeStore?._id);
   const hasReviewableContent =
     Boolean(parseResult) && Boolean(rawContent.trim()) && Boolean(activeStore?._id);
-  const savedDraftDecisionCount = Object.values(rowDraftDecisions).filter((decision) =>
-    hasDraftDecisionValue(decision),
-  ).length;
   const canSaveImportHandoff = hasReviewableContent;
   const canStageReviewForPos = canSaveImportHandoff && pendingImportActionCount === 0;
   const shouldShowCollapsedSource =
@@ -905,6 +928,16 @@ export function InventoryImportView({
     }
   };
 
+  const handleApplyBulkReviewDecision = (action: BulkImportReviewDecisionAction) => {
+    setRowDraftDecisions((current) =>
+      applyBulkImportReviewDecision({
+        action,
+        current,
+        rows: filteredOverlayRows,
+      }),
+    );
+  };
+
   if (adminState.isLoadingAccess) {
     return (
       <View hideBorder hideHeaderBottomBorder>
@@ -1073,75 +1106,7 @@ export function InventoryImportView({
             />
 
             <div className="flex flex-wrap items-center justify-between gap-3 border-y border-border bg-surface/60 px-3 py-3">
-              {overlaySummary.review > 0 ? (
-                <>
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium">Next action</p>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {formatCount(pendingImportActionCount, "row")} still need decisions.
-                      {savedDraftDecisionCount > 0
-                        ? ` ${formatCount(savedDraftDecisionCount, "row")} already have draft choices.`
-                        : ""}{" "}
-                      Save a draft any time and resume it later.
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap items-center justify-end gap-2 sm:min-w-[28rem]">
-                    <Button
-                      onClick={() => setOverlayFilter("review")}
-                      type="button"
-                      variant="outline"
-                    >
-                      Show review rows
-                    </Button>
-                    <LoadingButton
-                      className="w-56 px-4"
-                      disabled={!canSaveImportHandoff || isSavingReviewVersion}
-                      isLoading={isSavingReviewVersion}
-                      onClick={handleSaveReviewVersion}
-                      type="button"
-                      variant="workflow"
-                    >
-                      <Save className="h-4 w-4" />
-                      Save for import handoff
-                    </LoadingButton>
-                    <DraftAutosaveStatus status={draftAutosaveStatus} />
-                  </div>
-                </>
-              ) : overlaySummary.new > 0 ? (
-                <>
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium">Next action</p>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {formatCount(pendingImportActionCount, "row")} still need decisions.
-                      {savedDraftDecisionCount > 0
-                        ? ` ${formatCount(savedDraftDecisionCount, "row")} already have draft choices.`
-                        : ""}{" "}
-                      Save a draft any time and resume it later.
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap items-center justify-end gap-2 sm:min-w-[28rem]">
-                    <Button
-                      onClick={() => setOverlayFilter("new")}
-                      type="button"
-                      variant="outline"
-                    >
-                      Show new items
-                    </Button>
-                    <LoadingButton
-                      className="w-56 px-4"
-                      disabled={!canSaveImportHandoff || isSavingReviewVersion}
-                      isLoading={isSavingReviewVersion}
-                      onClick={handleSaveReviewVersion}
-                      type="button"
-                      variant="workflow"
-                    >
-                      <Save className="h-4 w-4" />
-                      Save for import handoff
-                    </LoadingButton>
-                    <DraftAutosaveStatus status={draftAutosaveStatus} />
-                  </div>
-                </>
-              ) : (
+              {pendingImportActionCount === 0 ? (
                 <>
                   <div className="min-w-0">
                     <p className="text-sm font-medium">Next action</p>
@@ -1182,7 +1147,83 @@ export function InventoryImportView({
                     <DraftAutosaveStatus status={draftAutosaveStatus} />
                   </div>
                 </>
-              )}
+              ) : overlaySummary.review > 0 ? (
+                <>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">Next action</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {formatCount(pendingImportActionCount, "row")} still need decisions.
+                      {completedImportActionCount > 0
+                        ? ` ${formatCount(completedImportActionCount, "row")} ready.`
+                        : ""}{" "}
+                      Save a draft any time and resume it later.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-end gap-2 sm:min-w-[28rem]">
+                    <BulkImportReviewDecisionMenu
+                      onApply={handleApplyBulkReviewDecision}
+                      summary={bulkDecisionSummary}
+                    />
+                    <Button
+                      onClick={() => setOverlayFilter("needs_decision")}
+                      type="button"
+                      variant="outline"
+                    >
+                      Show needs decision
+                    </Button>
+                    <LoadingButton
+                      className="w-56 px-4"
+                      disabled={!canSaveImportHandoff || isSavingReviewVersion}
+                      isLoading={isSavingReviewVersion}
+                      onClick={handleSaveReviewVersion}
+                      type="button"
+                      variant="workflow"
+                    >
+                      <Save className="h-4 w-4" />
+                      Save for import handoff
+                    </LoadingButton>
+                    <DraftAutosaveStatus status={draftAutosaveStatus} />
+                  </div>
+                </>
+              ) : overlaySummary.new > 0 ? (
+                <>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">Next action</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {formatCount(pendingImportActionCount, "row")} still need decisions.
+                      {completedImportActionCount > 0
+                        ? ` ${formatCount(completedImportActionCount, "row")} ready.`
+                        : ""}{" "}
+                      Save a draft any time and resume it later.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-end gap-2 sm:min-w-[28rem]">
+                    <BulkImportReviewDecisionMenu
+                      onApply={handleApplyBulkReviewDecision}
+                      summary={bulkDecisionSummary}
+                    />
+                    <Button
+                      onClick={() => setOverlayFilter("needs_decision")}
+                      type="button"
+                      variant="outline"
+                    >
+                      Show needs decision
+                    </Button>
+                    <LoadingButton
+                      className="w-56 px-4"
+                      disabled={!canSaveImportHandoff || isSavingReviewVersion}
+                      isLoading={isSavingReviewVersion}
+                      onClick={handleSaveReviewVersion}
+                      type="button"
+                      variant="workflow"
+                    >
+                      <Save className="h-4 w-4" />
+                      Save for import handoff
+                    </LoadingButton>
+                    <DraftAutosaveStatus status={draftAutosaveStatus} />
+                  </div>
+                </>
+              ) : null}
             </div>
 
             {visibleOverlayRows.length > 0 ? (
@@ -1246,13 +1287,13 @@ export function InventoryImportView({
                           </span>
                         ) : null}
                         <ImportRowActionControl
-                          decision={rowDraftDecisions[getOverlayRowKey(overlayRow)]}
+                          decision={rowDraftDecisions[getOverlayDecisionKey(overlayRow)]}
                           row={overlayRow}
                           onChange={(decision) =>
                             setRowDraftDecisions((current) => ({
                               ...current,
-                              [getOverlayRowKey(overlayRow)]: {
-                                ...current[getOverlayRowKey(overlayRow)],
+                              [getOverlayDecisionKey(overlayRow)]: {
+                                ...current[getOverlayDecisionKey(overlayRow)],
                                 ...decision,
                               },
                             }))
@@ -1724,6 +1765,56 @@ function ImportRowActionControl({
         }
       />
     </div>
+  );
+}
+
+function BulkImportReviewDecisionMenu({
+  onApply,
+  summary,
+}: {
+  onApply: (action: BulkImportReviewDecisionAction) => void;
+  summary: BulkImportReviewDecisionSummary;
+}) {
+  if (summary.actionableRows === 0) return null;
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button className="h-9 px-3" type="button" variant="outline">
+          <ListChecks className="h-4 w-4" />
+          Apply to {summary.actionableRows.toLocaleString()}
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-64">
+        <DropdownMenuLabel>Apply decision</DropdownMenuLabel>
+        <div className="px-2 pb-1 text-xs leading-5 text-muted-foreground">
+          Updates all decision rows in the current results.
+        </div>
+        <DropdownMenuSeparator />
+        {summary.newRows > 0 ? (
+          <DropdownMenuItem onSelect={() => onApply("create_new_items")}>
+            Create {formatCount(summary.newRows, "new item")}
+          </DropdownMenuItem>
+        ) : null}
+        {summary.reviewRows > 0 ? (
+          <>
+            <DropdownMenuItem onSelect={() => onApply("use_import_values")}>
+              Use import values for {formatCount(summary.reviewRows, "review row")}
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => onApply("use_athena_values")}>
+              Use Athena values for {formatCount(summary.reviewRows, "review row")}
+            </DropdownMenuItem>
+          </>
+        ) : null}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={() => onApply("skip_rows")}>
+          Skip {formatCount(summary.actionableRows, "row")}
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => onApply("clear_choices")}>
+          Clear choices for {formatCount(summary.actionableRows, "row")}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -2220,6 +2311,10 @@ function getOverlayRowKey(row: InventoryOverlayRow) {
   ].join(":");
 }
 
+function getOverlayDecisionKey(row: InventoryOverlayRow) {
+  return String(row.row.rowNumber);
+}
+
 function getImportRowActionLabel(action: ImportNewRowAction) {
   switch (action) {
     case "create_item":
@@ -2241,7 +2336,7 @@ function buildReviewNotesWithImportActions({
   const trimmedNotes = notes.trim();
   const decisions = rows
     .map((row) => {
-      const decision = rowDraftDecisions[getOverlayRowKey(row)];
+      const decision = rowDraftDecisions[getOverlayDecisionKey(row)];
       if (!decision || !hasDraftDecisionValue(decision)) return null;
 
       return `Row ${row.row.rowNumber} ${row.row.productName}: ${formatDraftDecision(decision)}`;
@@ -2263,7 +2358,7 @@ function buildSavedRowDraftDecisions({
   return rows
     .map((row) => {
       const rowKey = getOverlayRowKey(row);
-      const decision = rowDraftDecisions[rowKey];
+      const decision = rowDraftDecisions[getOverlayDecisionKey(row)];
       if (!decision || !hasDraftDecisionValue(decision)) return null;
 
       return {
@@ -2276,6 +2371,115 @@ function buildSavedRowDraftDecisions({
     .filter((decision): decision is SavedImportRowDraftDecision => Boolean(decision));
 }
 
+type BulkImportReviewDecisionSummary = {
+  actionableRows: number;
+  newRows: number;
+  reviewRows: number;
+};
+
+function getBulkImportReviewDecisionSummary(
+  rows: InventoryOverlayRow[],
+): BulkImportReviewDecisionSummary {
+  return rows.reduce<BulkImportReviewDecisionSummary>(
+    (summary, row) => {
+      if (row.status === "new") {
+        summary.actionableRows += 1;
+        summary.newRows += 1;
+      } else if (row.status === "review") {
+        summary.actionableRows += 1;
+        summary.reviewRows += 1;
+      }
+
+      return summary;
+    },
+    {
+      actionableRows: 0,
+      newRows: 0,
+      reviewRows: 0,
+    },
+  );
+}
+
+function applyBulkImportReviewDecision({
+  action,
+  current,
+  rows,
+}: {
+  action: BulkImportReviewDecisionAction;
+  current: Record<string, ImportRowDraftDecision>;
+  rows: InventoryOverlayRow[];
+}) {
+  const next = { ...current };
+
+  for (const row of rows) {
+    const key = getOverlayDecisionKey(row);
+    const patch = getBulkImportReviewDecisionPatch(row, action);
+
+    if (action === "clear_choices") {
+      if (patch) delete next[key];
+      continue;
+    }
+
+    if (!patch) continue;
+
+    next[key] = {
+      ...next[key],
+      ...patch,
+    };
+  }
+
+  return next;
+}
+
+function getBulkImportReviewDecisionPatch(
+  row: InventoryOverlayRow,
+  action: BulkImportReviewDecisionAction,
+): ImportRowDraftDecision | null {
+  if (row.status === "matched") return null;
+
+  if (action === "clear_choices") return {};
+
+  if (action === "skip_rows") {
+    return {
+      action: "skip_row",
+      nameSource: undefined,
+      priceSource: undefined,
+      quantitySource: undefined,
+    };
+  }
+
+  if (row.status === "new") {
+    return action === "create_new_items" ? { action: "create_item" } : null;
+  }
+
+  if (row.status !== "review") return null;
+
+  if (action === "use_import_values" || action === "use_athena_values") {
+    return buildBulkReviewSourcePatch(
+      row,
+      action === "use_import_values" ? "import" : "athena",
+    );
+  }
+
+  return null;
+}
+
+function buildBulkReviewSourcePatch(
+  row: InventoryOverlayRow,
+  source: ImportDraftSource,
+): ImportRowDraftDecision {
+  return {
+    action: undefined,
+    ...(doesOverlayRowNeedNameDecision(row.row, row.athenaMatch)
+      ? { nameSource: source }
+      : null),
+    ...(row.delta !== 0 ? { quantitySource: source } : null),
+    ...(row.athenaPrice !== undefined && row.row.price !== row.athenaPrice
+      ? { priceSource: source }
+      : null),
+  };
+}
+
 function buildProvisionalImportStageRows({
   rows,
   rowDraftDecisions,
@@ -2285,7 +2489,7 @@ function buildProvisionalImportStageRows({
 }) {
   return rows.map((row) => {
     const rowKey = getOverlayRowKey(row);
-    const decision = rowDraftDecisions[rowKey] ?? {};
+    const decision = rowDraftDecisions[getOverlayDecisionKey(row)] ?? {};
 
     return {
       ...row.row,
@@ -2304,7 +2508,7 @@ function mapSavedRowDraftDecisions(
   decisions: SavedImportRowDraftDecision[],
 ): Record<string, ImportRowDraftDecision> {
   return decisions.reduce<Record<string, ImportRowDraftDecision>>((mapped, decision) => {
-    mapped[decision.rowKey] = {
+    mapped[String(decision.rowNumber)] = {
       action: decision.action,
       nameSource: decision.nameSource,
       priceSource: decision.priceSource,

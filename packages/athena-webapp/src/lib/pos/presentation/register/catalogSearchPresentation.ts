@@ -13,9 +13,6 @@ export type RegisterCatalogAvailability = {
 export const POS_AVAILABILITY_NOT_READY_MESSAGE =
   "Availability not ready. Reconnect or refresh this terminal before selling this item.";
 
-export const POS_NO_TRUSTED_AVAILABILITY_REMAINING_MESSAGE =
-  "No trusted availability remains for this item on this terminal.";
-
 export function mapCatalogRowToProduct(
   row: RegisterCatalogSearchRow,
   availability: RegisterCatalogAvailability | undefined,

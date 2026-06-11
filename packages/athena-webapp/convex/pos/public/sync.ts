@@ -123,6 +123,7 @@ const posLocalSyncUploadEventValidator = v.union(
           productId: v.string(),
           productSkuId: v.string(),
           pendingCheckoutItemId: v.optional(v.string()),
+          inventoryImportProvisionalSkuId: v.optional(v.string()),
           productName: v.string(),
           productSku: v.string(),
           barcode: v.optional(v.string()),

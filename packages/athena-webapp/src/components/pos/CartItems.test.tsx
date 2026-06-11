@@ -80,6 +80,29 @@ describe("CartItems service lines", () => {
     expect(screen.getByText("BW-18")).toBeInTheDocument();
   });
 
+  it("does not render legacy NULL metadata on cart items", () => {
+    render(
+      <CartItems
+        cartItems={[
+          {
+            id: "item-1" as never,
+            barcode: "",
+            color: "NULL",
+            name: "Fluffy Bonnet",
+            price: 3000,
+            quantity: 3,
+            size: "NULL",
+            sku: "6N2Y-2Q6-3KF",
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("Fluffy Bonnet")).toBeInTheDocument();
+    expect(screen.getByText("6N2Y-2Q6-3KF")).toBeInTheDocument();
+    expect(screen.queryByText("NULL")).not.toBeInTheDocument();
+  });
+
   it("shows service totals without a quantity count", () => {
     render(
       <CartItems

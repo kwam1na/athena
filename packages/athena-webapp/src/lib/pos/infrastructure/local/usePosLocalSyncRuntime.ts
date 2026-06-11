@@ -1582,8 +1582,7 @@ function isDrawerAuthorityLifecycleEvent(event: PosLocalEventRecord) {
   return (
     event.type === "register.opened" ||
     event.type === "register.closeout_started" ||
-    event.type === "register.reopened" ||
-    event.type === "transaction.completed"
+    event.type === "register.reopened"
   );
 }
 
