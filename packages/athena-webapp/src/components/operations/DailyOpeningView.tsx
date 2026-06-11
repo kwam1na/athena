@@ -37,10 +37,7 @@ import {
   PageWorkspaceRail,
 } from "../common/PageLevelHeader";
 import { EmptyState } from "../states/empty/empty-state";
-import {
-  CommandApprovalDialog,
-  type CommandApprovalDialogProps,
-} from "./CommandApprovalDialog";
+import type { CommandApprovalDialogProps } from "./CommandApprovalDialog";
 import { NoPermissionView } from "../states/no-permission/NoPermissionView";
 import { ProtectedAdminSignInView } from "../states/signed-out/ProtectedAdminSignInView";
 import { Badge } from "../ui/badge";
@@ -72,6 +69,7 @@ type DailyOpeningAutomationStatus = {
   id: string;
   occurredAt?: number | null;
   outcome: "applied" | "prepared" | "skipped" | "failed" | "dry_run" | "disabled";
+  reviewEvidence?: DailyOpeningItem[];
 };
 
 export type DailyOpeningItemLink = {
@@ -129,6 +127,7 @@ export type DailyOpeningSnapshot = {
   startAt: number;
   startedOpening?: {
     notes?: string | null;
+    reviewEvidence?: DailyOpeningItem[];
     startedAt?: number | null;
     startedByStaffName?: string | null;
   } | null;
@@ -144,6 +143,7 @@ export type DailyOpeningSnapshot = {
 type StartDayArgs = {
   acknowledgedItemKeys: string[];
   actorStaffProfileId?: Id<"staffProfile">;
+  approvalProofId?: Id<"approvalProof">;
   endAt: number;
   notes: string;
   operatingDate: string;
@@ -610,6 +610,55 @@ function OpeningAutomationStatusPanel({
           {formatTimestamp(automationStatus.occurredAt)}
         </p>
       ) : null}
+    </section>
+  );
+}
+
+function getOpeningReviewEvidence(snapshot: DailyOpeningSnapshot) {
+  return (
+    snapshot.startedOpening?.reviewEvidence ??
+    snapshot.automationStatus?.reviewEvidence ??
+    []
+  );
+}
+
+function OpeningAutomationReviewPanel({
+  currency,
+  items,
+  orgUrlSlug,
+  storeUrlSlug,
+}: {
+  currency: string;
+  items: DailyOpeningItem[];
+  orgUrlSlug: string;
+  storeUrlSlug: string;
+}) {
+  if (items.length === 0) return null;
+
+  return (
+    <section className="rounded-lg border border-warning/30 bg-warning/10 p-layout-md shadow-surface">
+      <h3 className="flex items-center gap-layout-xs text-base font-medium text-foreground">
+        <ClipboardCheck aria-hidden="true" className="h-4 w-4" />
+        Opening review
+      </h3>
+      <p className="mt-layout-sm text-sm leading-6 text-foreground">
+        Athena started the store day with manager review items.
+      </p>
+      <p className="mt-1 text-sm leading-6 text-muted-foreground">
+        Review these items in the owning workflow. They were preserved from the
+        opening check and were not resolved by automation.
+      </p>
+      <div className="mt-layout-md space-y-layout-md">
+        {items.map((item) => (
+          <OpeningItemCard
+            currency={currency}
+            item={item}
+            key={getItemId(item)}
+            orgUrlSlug={orgUrlSlug}
+            storeUrlSlug={storeUrlSlug}
+          />
+        ))}
+      </div>
     </section>
   );
 }
@@ -1299,7 +1348,7 @@ function OpeningRail({
             />
             <LoadingButton
               className="w-full"
-              disabled={isBlocked || !acknowledgementComplete}
+              disabled={!acknowledgementComplete}
               isLoading={isStarting}
               onClick={onStartDay}
               type="button"
@@ -1335,7 +1384,6 @@ export function DailyOpeningViewContent({
   isLoadingAccess,
   isLoadingSnapshot,
   isStarting,
-  onAuthenticateForApproval,
   onStartDay,
   orgUrlSlug,
   snapshot,
@@ -1344,7 +1392,6 @@ export function DailyOpeningViewContent({
 }: DailyOpeningViewContentProps) {
   const [acknowledgedKeys, setAcknowledgedKeys] = useState<string[]>([]);
   const [notes, setNotes] = useState("");
-  const [isManagerApprovalOpen, setIsManagerApprovalOpen] = useState(false);
   const [commandMessage, setCommandMessage] = useState<{
     kind: "error" | "success";
     message: string;
@@ -1362,30 +1409,6 @@ export function DailyOpeningViewContent({
     ],
     [snapshot],
   );
-  const openingApproval = useMemo<ApprovalRequirement | null>(() => {
-    if (!snapshot || !storeId) return null;
-
-    return {
-      action: {
-        key: "operations.daily_opening.start_day",
-        label: "Start store day",
-      },
-      copy: {
-        title: "Manager approval required",
-        message: "Manager approval is required to start the store day.",
-        primaryActionLabel: "Start Day",
-      },
-      reason: "Manager approval is required to start the store day.",
-      requiredRole: "manager",
-      resolutionModes: [{ kind: "inline_manager_proof" }],
-      subject: {
-        id: `${storeId}:${snapshot.operatingDate}`,
-        label: `Opening ${formatOperatingDate(snapshot.operatingDate)}`,
-        type: "daily_opening",
-      },
-    };
-  }, [snapshot, storeId]);
-
   if (isLoadingAccess) {
     return null;
   }
@@ -1421,6 +1444,7 @@ export function DailyOpeningViewContent({
   const automationStatus = snapshot
     ? getVisibleOpeningAutomationStatus(snapshot, status)
     : null;
+  const reviewEvidence = snapshot ? getOpeningReviewEvidence(snapshot) : [];
   const buckets = displaySnapshot
     ? getVisibleBucketConfigs(displaySnapshot, status)
     : [];
@@ -1435,8 +1459,11 @@ export function DailyOpeningViewContent({
   const acknowledgedRequiredCount = requiredAcknowledgementKeys.filter((key) =>
     acknowledgedKeys.includes(key),
   ).length;
-  const submitStartDay = async (actorStaffProfileId?: Id<"staffProfile">) => {
-    if (!snapshot || isBlocked || isStarted) return;
+  const submitStartDay = async (approval?: {
+    approvalProofId: Id<"approvalProof">;
+    approvedByStaffProfileId: Id<"staffProfile">;
+  }) => {
+    if (!snapshot || isStarted) return;
 
     const acknowledgementComplete =
       acknowledgedRequiredCount >= requiredAcknowledgementKeys.length;
@@ -1447,7 +1474,12 @@ export function DailyOpeningViewContent({
 
     const result = await onStartDay({
       acknowledgedItemKeys: requiredAcknowledgementKeys,
-      ...(actorStaffProfileId ? { actorStaffProfileId } : {}),
+      ...(approval
+        ? {
+            actorStaffProfileId: approval.approvedByStaffProfileId,
+            approvalProofId: approval.approvalProofId,
+          }
+        : {}),
       endAt: snapshot.endAt,
       notes,
       operatingDate: snapshot.operatingDate,
@@ -1469,12 +1501,6 @@ export function DailyOpeningViewContent({
   };
 
   const handleStartDay = () => {
-    if (onAuthenticateForApproval && openingApproval) {
-      setCommandMessage(null);
-      setIsManagerApprovalOpen(true);
-      return;
-    }
-
     void submitStartDay();
   };
 
@@ -1499,21 +1525,7 @@ export function DailyOpeningViewContent({
           </div>
         ) : null
       }
-      afterGrid={
-        onAuthenticateForApproval && openingApproval ? (
-          <CommandApprovalDialog
-            approval={openingApproval}
-            onApproved={(result) => {
-              setIsManagerApprovalOpen(false);
-              void submitStartDay(result.approvedByStaffProfileId);
-            }}
-            onAuthenticateForApproval={onAuthenticateForApproval}
-            onDismiss={() => setIsManagerApprovalOpen(false)}
-            open={isManagerApprovalOpen}
-            storeId={storeId}
-          />
-        ) : null
-      }
+      afterGrid={null}
       description="Review prior close handoff, acknowledge carry-forward work, and confirm whether the store day can start."
       eyebrow="Store Ops"
       isLoading={isLoadingSnapshot || !snapshot}
@@ -1523,6 +1535,14 @@ export function DailyOpeningViewContent({
         snapshot ? (
           <div className="space-y-layout-lg">
             <OpeningAutomationStatusPanel automationStatus={automationStatus} />
+            {isStarted ? (
+              <OpeningAutomationReviewPanel
+                currency={currency}
+                items={reviewEvidence}
+                orgUrlSlug={orgUrlSlug}
+                storeUrlSlug={storeUrlSlug}
+              />
+            ) : null}
             <BucketTabs
               acknowledgedKeys={acknowledgedKeys}
               buckets={buckets}
@@ -1726,6 +1746,7 @@ function DailyOpeningConnectedView({
           startStoreDayMutation({
             acknowledgedItemKeys: args.acknowledgedItemKeys,
             actorStaffProfileId: args.actorStaffProfileId,
+            approvalProofId: args.approvalProofId,
             endAt: args.endAt,
             notes: args.notes || undefined,
             operatingDate: args.operatingDate,

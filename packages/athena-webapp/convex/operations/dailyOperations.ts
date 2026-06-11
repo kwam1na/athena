@@ -10,6 +10,7 @@ import { buildDailyOpeningSnapshotWithCtx } from "./dailyOpening";
 import { toDisplayAmount } from "../lib/currency";
 import { currencyFormatter } from "../utils";
 import { listAutomationRunsForStoreDayActionWithCtx } from "../automation/runLedger";
+import { requireStoreFullAdminAccess } from "../stockOps/access";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_OPERATIONS_QUERY_LIMIT = 200;
@@ -112,6 +113,13 @@ type DailyOperationsAutomationStatus = {
     | "dry_run"
     | "disabled"
     | "eligible";
+  reviewEvidence?: Array<{
+    id: string;
+    label: string;
+    message?: string | null;
+    source?: SourceSubject;
+    sourceLink?: LinkTarget;
+  }>;
   sourceLink: LinkTarget;
 };
 
@@ -1069,6 +1077,33 @@ async function getDailyCloseRecordForDate(
   return dailyClose.find((close) => close.isCurrent) ?? dailyClose[0] ?? null;
 }
 
+async function getDailyOpeningRecordForDate(
+  ctx: Pick<QueryCtx, "db">,
+  args: {
+    operatingDate: string;
+    storeId: Id<"store">;
+  },
+) {
+  return ctx.db
+    .query("dailyOpening")
+    .withIndex("by_storeId_operatingDate", (q) =>
+      q.eq("storeId", args.storeId).eq("operatingDate", args.operatingDate),
+    )
+    .first();
+}
+
+function reviewEvidenceForDailyOperations(
+  opening: Doc<"dailyOpening"> | null,
+): DailyOperationsAutomationStatus["reviewEvidence"] {
+  return (opening?.managerReviewEvidence ?? []).map((item) => ({
+    id: item.key,
+    label: item.title,
+    message: item.message,
+    source: item.subject,
+    sourceLink: item.link,
+  }));
+}
+
 function compareAutomationRuns(
   left: Doc<"automationRun">,
   right: Doc<"automationRun">,
@@ -1099,11 +1134,12 @@ async function getLatestAutomationRunForAction(
 async function listDailyOperationsAutomationStatuses(
   ctx: Pick<QueryCtx, "db">,
   args: {
+    includeManagerReviewEvidence?: boolean;
     operatingDate: string;
     storeId: Id<"store">;
   },
 ): Promise<DailyOperationsAutomationStatus[]> {
-  const [openingRun, closeRun] = await Promise.all([
+  const [openingRun, closeRun, openingRecord] = await Promise.all([
     getLatestAutomationRunForAction(ctx, {
       action: "opening.auto_start",
       operatingDate: args.operatingDate,
@@ -1114,15 +1150,23 @@ async function listDailyOperationsAutomationStatuses(
       operatingDate: args.operatingDate,
       storeId: args.storeId,
     }),
+    getDailyOpeningRecordForDate(ctx, args),
   ]);
   const statuses: DailyOperationsAutomationStatus[] = [];
 
   if (openingRun) {
+    const reviewEvidence = reviewEvidenceForDailyOperations(openingRecord);
+
     statuses.push({
       id: openingRun._id,
       lane: "opening",
       occurredAt: openingRun.appliedAt ?? openingRun.updatedAt,
       outcome: openingRun.outcome,
+      ...(args.includeManagerReviewEvidence &&
+      reviewEvidence &&
+      reviewEvidence.length > 0
+        ? { reviewEvidence }
+        : {}),
       sourceLink: {
         to: "/$orgUrlSlug/store/$storeUrlSlug/operations/opening",
       },
@@ -1412,6 +1456,7 @@ export async function buildDailyOperationsSnapshotWithCtx(
   ctx: Pick<QueryCtx, "db">,
   args: {
     endAt?: number;
+    includeManagerReviewEvidence?: boolean;
     operatingDate: string;
     operatingTimezoneOffsetMinutes?: number;
     startAt?: number;
@@ -1578,5 +1623,19 @@ export const getDailyOperationsSnapshot = query({
     storeId: v.id("store"),
     weekEndOperatingDate: v.optional(v.string()),
   },
-  handler: (ctx, args) => buildDailyOperationsSnapshotWithCtx(ctx, args),
+  handler: async (ctx, args) => {
+    let includeManagerReviewEvidence = false;
+
+    try {
+      await requireStoreFullAdminAccess(ctx, args.storeId);
+      includeManagerReviewEvidence = true;
+    } catch {
+      includeManagerReviewEvidence = false;
+    }
+
+    return buildDailyOperationsSnapshotWithCtx(ctx, {
+      ...args,
+      includeManagerReviewEvidence,
+    });
+  },
 });

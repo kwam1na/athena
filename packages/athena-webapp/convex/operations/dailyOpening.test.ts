@@ -8,6 +8,7 @@ import {
 
 type TableName =
   | "approvalRequest"
+  | "approvalProof"
   | "automationRun"
   | "dailyClose"
   | "dailyOpening"
@@ -160,11 +161,29 @@ const activeStaffProfile = {
   firstName: "Store",
   fullName: "Store Manager",
   lastName: "Manager",
+  linkedUserId: "user-1",
   organizationId: "org-1",
   status: "active",
   storeId: "store-1",
   updatedAt: Date.UTC(2026, 4, 1),
 };
+
+function openingApprovalProof(overrides: Partial<Row> = {}): Row {
+  return {
+    _id: "proof-1",
+    actionKey: "operations.daily_opening.start_day",
+    approvedByCredentialId: "credential-1",
+    approvedByStaffProfileId: "staff-1",
+    createdAt: Date.UTC(2026, 4, 8, 7, 55),
+    expiresAt: Date.UTC(2026, 4, 8, 8, 5),
+    organizationId: "org-1",
+    requiredRole: "manager",
+    storeId: "store-1",
+    subjectId: "store-1:2026-05-08",
+    subjectType: "daily_opening",
+    ...overrides,
+  };
+}
 
 function completedDailyClose(overrides: Partial<Row> = {}): Row {
   return {
@@ -491,6 +510,7 @@ describe("daily opening backend foundation", () => {
     vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 4, 8, 8));
 
     const { db, inserts, tables } = createDb({
+      approvalProof: [openingApprovalProof()],
       dailyClose: [
         completedDailyClose({
           carryForwardWorkItemIds: ["work-1"],
@@ -522,7 +542,11 @@ describe("daily opening backend foundation", () => {
 
     const blockedResult = await startStoreDayWithCtx(
       { db } as unknown as MutationCtx,
-      { operatingDate: "2026-05-08", storeId: "store-1" as Id<"store"> },
+      {
+        actorStaffProfileId: "staff-1" as Id<"staffProfile">,
+        operatingDate: "2026-05-08",
+        storeId: "store-1" as Id<"store">,
+      },
     );
 
     expect(blockedResult).toMatchObject({
@@ -597,7 +621,8 @@ describe("daily opening backend foundation", () => {
     });
   });
 
-  it("blocks opening when a prior close carry-forward reference is missing", async () => {
+  it("starts opening and records review evidence when a carry-forward reference is missing", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 4, 8, 8));
     const { db, inserts } = createDb({
       dailyClose: [
         completedDailyClose({
@@ -631,19 +656,35 @@ describe("daily opening backend foundation", () => {
       type: "operational_work_item",
     });
     expect(result).toMatchObject({
-      kind: "user_error",
-      error: {
-        code: "precondition_failed",
-        metadata: { blockerCount: 1 },
+      kind: "ok",
+      data: {
+        dailyOpening: {
+          managerReviewEvidence: [
+            expect.objectContaining({
+              key: "operational_work_item:work-missing:missing",
+              severity: "blocker",
+            }),
+          ],
+        },
       },
     });
-    expect(inserts).toEqual([]);
+    expect(inserts.map((insert) => insert.table)).toEqual([
+      "dailyOpening",
+      "operationalEvent",
+    ]);
+    expect(inserts[1].value).toMatchObject({
+      eventType: "daily_opening_acknowledged",
+      metadata: {
+        managerReviewEvidenceCount: 1,
+      },
+    });
   });
 
   it("requires acknowledgement when there is no prior completed EOD Review", async () => {
     vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 4, 8, 8));
 
     const { db, inserts } = createDb({
+      approvalProof: [openingApprovalProof()],
       staffProfile: [activeStaffProfile],
       store: [store],
     });
@@ -701,7 +742,8 @@ describe("daily opening backend foundation", () => {
     ]);
   });
 
-  it("rechecks command-time readiness so stale ready snapshots cannot start a blocked day", async () => {
+  it("rechecks command-time readiness and records blockers as review evidence", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 4, 8, 8));
     const { db, inserts, tables } = createDb({
       dailyClose: [completedDailyClose()],
       staffProfile: [activeStaffProfile],
@@ -726,18 +768,128 @@ describe("daily opening backend foundation", () => {
 
     const result = await startStoreDayWithCtx(
       { db } as unknown as MutationCtx,
-      { operatingDate: "2026-05-08", storeId: "store-1" as Id<"store"> },
+      {
+        actorStaffProfileId: "staff-1" as Id<"staffProfile">,
+        operatingDate: "2026-05-08",
+        storeId: "store-1" as Id<"store">,
+      },
     );
 
     expect(snapshot.status).toBe("ready");
     expect(result).toMatchObject({
-      kind: "user_error",
-      error: {
-        code: "precondition_failed",
-        metadata: { blockerCount: 1 },
+      kind: "ok",
+      data: {
+        dailyOpening: {
+          managerReviewEvidence: [
+            expect.objectContaining({
+              key: "approval_request:approval-1:pending",
+              severity: "blocker",
+            }),
+          ],
+        },
       },
     });
-    expect(inserts).toEqual([]);
+    expect(inserts.map((insert) => insert.table)).toEqual([
+      "dailyOpening",
+      "operationalEvent",
+    ]);
+  });
+
+  it("allows manual and automation blocked opening start with manager-review evidence", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 4, 8, 8));
+
+    const { db, inserts } = createDb({
+      approvalRequest: [
+        {
+          _id: "approval-1",
+          createdAt: Date.UTC(2026, 4, 8, 7),
+          reason: "Variance needs manager review.",
+          registerSessionId: "register-1",
+          requestType: "variance_review",
+          status: "pending",
+          storeId: "store-1",
+          subjectId: "register-1",
+          subjectType: "register_session",
+        },
+      ],
+      dailyClose: [completedDailyClose()],
+      staffProfile: [activeStaffProfile],
+      store: [store],
+    });
+
+    const manualResult = await startStoreDayWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        actorStaffProfileId: "staff-1" as Id<"staffProfile">,
+        operatingDate: "2026-05-08",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(manualResult).toMatchObject({
+      kind: "ok",
+      data: {
+        dailyOpening: {
+          actorStaffProfileId: "staff-1",
+          managerReviewEvidence: [
+            expect.objectContaining({
+              key: "approval_request:approval-1:pending",
+              severity: "blocker",
+            }),
+          ],
+        },
+      },
+    });
+    expect(inserts.map((insert) => insert.table)).toEqual([
+      "dailyOpening",
+      "operationalEvent",
+    ]);
+
+    const automationResult = await startStoreDayWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        actorType: "automation",
+        automationBlockerHandling: "manager_review",
+        automationDecisionReason:
+          "Opening Handoff started with manager review evidence from automation policy.",
+        automationPolicyVersion: "daily-operations.v1",
+        automationRunId: "automation-run-1" as Id<"automationRun">,
+        operatingDate: "2026-05-08",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(automationResult).toMatchObject({
+      kind: "ok",
+      data: {
+        action: "already_started",
+        dailyOpening: {
+          managerReviewEvidence: [
+            expect.objectContaining({
+              category: "approval",
+              key: "approval_request:approval-1:pending",
+              severity: "blocker",
+            }),
+          ],
+          readiness: {
+            blockerCount: 1,
+            status: "blocked",
+          },
+        },
+      },
+    });
+    expect(inserts[1].value).toMatchObject({
+      eventType: "daily_opening_acknowledged",
+      metadata: {
+        managerReviewEvidence: [
+          expect.objectContaining({
+            key: "approval_request:approval-1:pending",
+            severity: "blocker",
+          }),
+        ],
+        managerReviewEvidenceCount: 1,
+      },
+    });
   });
 
   it("returns an existing opening without duplicating the operational event", async () => {
@@ -848,10 +1000,82 @@ describe("daily opening backend foundation", () => {
     expect(inserts).toEqual([]);
   });
 
+  it("allows a staff-profile start without manager approval proof", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 4, 8, 8));
+    const { db, inserts } = createDb({
+      dailyClose: [completedDailyClose()],
+      staffProfile: [activeStaffProfile],
+      store: [store],
+    });
+
+    const result = await startStoreDayWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        actorStaffProfileId: "staff-1" as Id<"staffProfile">,
+        operatingDate: "2026-05-08",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(result).toMatchObject({
+      kind: "ok",
+      data: {
+        dailyOpening: {
+          actorStaffProfileId: "staff-1",
+          actorUserId: "user-1",
+        },
+      },
+    });
+    expect(inserts.map((insert) => insert.table)).toEqual([
+      "dailyOpening",
+      "operationalEvent",
+    ]);
+  });
+
+  it("accepts an optional manager approval proof without requiring it to match the starting staff profile", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 4, 8, 8));
+    const { db, inserts } = createDb({
+      approvalProof: [
+        openingApprovalProof({
+          approvedByStaffProfileId: "staff-other",
+        }),
+      ],
+      dailyClose: [completedDailyClose()],
+      staffProfile: [activeStaffProfile],
+      store: [store],
+    });
+
+    const result = await startStoreDayWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        actorStaffProfileId: "staff-1" as Id<"staffProfile">,
+        approvalProofId: "proof-1" as Id<"approvalProof">,
+        operatingDate: "2026-05-08",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(result).toMatchObject({
+      kind: "ok",
+      data: {
+        dailyOpening: {
+          actorStaffProfileId: "staff-1",
+          actorUserId: "user-1",
+        },
+      },
+    });
+    expect(inserts[2].value).toMatchObject({
+      actorStaffProfileId: "staff-1",
+      actorUserId: "user-1",
+      eventType: "daily_opening_acknowledged",
+    });
+  });
+
   it("does not mutate register-session state when acknowledging opening", async () => {
     vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 4, 8, 8));
 
     const { db, inserts, patches, tables } = createDb({
+      approvalProof: [openingApprovalProof()],
       dailyClose: [completedDailyClose()],
       staffProfile: [activeStaffProfile],
       registerSession: [
@@ -872,6 +1096,7 @@ describe("daily opening backend foundation", () => {
       {
         actorStaffProfileId: "staff-1" as Id<"staffProfile">,
         actorUserId: "user-1" as Id<"athenaUser">,
+        approvalProofId: "proof-1" as Id<"approvalProof">,
         operatingDate: "2026-05-08",
         storeId: "store-1" as Id<"store">,
       },
@@ -882,13 +1107,58 @@ describe("daily opening backend foundation", () => {
       data: { action: "started" },
     });
     expect(inserts.map((insert) => insert.table)).toEqual([
+      "operationalEvent",
       "dailyOpening",
       "operationalEvent",
     ]);
-    expect(patches).toEqual([]);
+    expect(patches).toContainEqual({
+      id: "proof-1",
+      table: "approvalProof",
+      value: { consumedAt: Date.UTC(2026, 4, 8, 8) },
+    });
+    expect(patches.some((patch) => patch.table === "registerSession")).toBe(
+      false,
+    );
     expect(tables.get("registerSession")?.get("register-1")).toMatchObject({
       openingFloat: 10000,
       status: "open",
+    });
+  });
+
+  it("derives approval-backed opening actor user from the approved staff profile", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 4, 8, 8));
+
+    const { db, inserts } = createDb({
+      approvalProof: [openingApprovalProof()],
+      dailyClose: [completedDailyClose()],
+      staffProfile: [activeStaffProfile],
+      store: [store],
+    });
+
+    const result = await startStoreDayWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        actorStaffProfileId: "staff-1" as Id<"staffProfile">,
+        actorUserId: "spoofed-user" as Id<"athenaUser">,
+        approvalProofId: "proof-1" as Id<"approvalProof">,
+        operatingDate: "2026-05-08",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(result).toMatchObject({
+      kind: "ok",
+      data: {
+        dailyOpening: {
+          actorStaffProfileId: "staff-1",
+          actorUserId: "user-1",
+        },
+      },
+    });
+    expect(inserts[2].value).toMatchObject({
+      actorStaffProfileId: "staff-1",
+      actorUserId: "user-1",
+      eventType: "daily_opening_acknowledged",
     });
   });
 });

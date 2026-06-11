@@ -1,20 +1,31 @@
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
-import { internalMutation } from "../_generated/server";
+import { internalMutation, mutation, query } from "../_generated/server";
 import { v } from "convex/values";
 import { defineAutomationAction } from "../automation/actionRegistry";
 import { evaluateAutomationActionWithCtx } from "../automation/automationFoundation";
-import { listAutomationRunsForStoreDayActionWithCtx } from "../automation/runLedger";
+import {
+  DEFAULT_OPENING_BLOCKER_HANDLING,
+  DEFAULT_OPENING_LOCAL_START_MINUTES,
+  getOpeningAutoStartPolicyConfigWithCtx,
+  listAutomationRunsForStoreDayActionWithCtx,
+  recordAutomationRunWithCtx,
+  upsertOpeningAutoStartPolicyConfigWithCtx,
+  type OpeningAutoStartBlockerHandling,
+} from "../automation/runLedger";
 import {
   buildDailyOpeningSnapshotWithCtx,
   startStoreDayWithCtx,
 } from "./dailyOpening";
 import { buildDailyCloseSnapshotWithCtx } from "./dailyClose";
+import { requireStoreFullAdminAccess } from "../stockOps/access";
 
 export const DAILY_OPERATIONS_AUTOMATION_DOMAIN = "daily_operations";
 const OPENING_AUTO_START_ACTION = "opening.auto_start";
 const EOD_PREPARE_ACTION = "eod.prepare";
 const AUTOMATION_POLICY_CRON_LIMIT = 500;
+const DAILY_OPERATIONS_POLICY_VERSION = "daily-operations.v1";
+const CONFIGURED_AUTOMATION_LOOKBACK_MS = 60 * 60 * 1000;
 
 export const dailyOperationsOpeningAutoStartAction = defineAutomationAction({
   action: OPENING_AUTO_START_ACTION,
@@ -54,6 +65,45 @@ export type DailyOperationsAutomationStatus = {
   policyMode: Doc<"automationRun">["policyMode"];
   decisionReason?: string;
 };
+
+type OpeningAutoStartApiBlockerHandling =
+  | "skip_when_blocked"
+  | "start_with_manager_review";
+
+function toApiOpeningBlockerHandling(
+  value: OpeningAutoStartBlockerHandling,
+): OpeningAutoStartApiBlockerHandling {
+  return value === "manager_review"
+    ? "start_with_manager_review"
+    : "skip_when_blocked";
+}
+
+function fromApiOpeningBlockerHandling(
+  value: OpeningAutoStartApiBlockerHandling,
+): OpeningAutoStartBlockerHandling {
+  return value === "start_with_manager_review" ? "manager_review" : "skip";
+}
+
+async function getOpeningAutoStartPolicyForApi(
+  ctx: QueryCtx,
+  args: { storeId: Id<"store"> },
+) {
+  await requireStoreFullAdminAccess(ctx, args.storeId);
+  const config = await getOpeningAutoStartPolicyConfigWithCtx(ctx, args);
+
+  return {
+    configured: config.configured,
+    localStartMinutes: config.openingLocalStartMinutes,
+    mode: config.mode,
+    openingBlockerHandling: toApiOpeningBlockerHandling(
+      config.openingBlockerHandling,
+    ),
+    operatingTimezoneOffsetMinutes:
+      config.policy?.operatingTimezoneOffsetMinutes ?? null,
+    paused: config.paused,
+    policyVersion: config.policy?.policyVersion ?? DAILY_OPERATIONS_POLICY_VERSION,
+  };
+}
 
 function summarizeAutomationRun(
   run: Doc<"automationRun"> | null | undefined,
@@ -121,6 +171,9 @@ function sourceSubjectsOrStoreDay(args: {
 
 function openingDecision(
   snapshot: Awaited<ReturnType<typeof buildDailyOpeningSnapshotWithCtx>>,
+  args: {
+    openingBlockerHandling?: OpeningAutoStartBlockerHandling;
+  } = {},
 ) {
   const snapshotCounts = {
     blockerCount: snapshot.readiness.blockerCount,
@@ -148,6 +201,16 @@ function openingDecision(
     snapshot.readiness.reviewCount > 0 ||
     snapshot.readiness.carryForwardCount > 0
   ) {
+    if (args.openingBlockerHandling === "manager_review") {
+      return {
+        decisionReason:
+          "Opening Handoff started with manager review evidence from automation policy.",
+        outcome: "eligible" as const,
+        snapshotCounts,
+        sourceSubjects,
+      };
+    }
+
     return {
       decisionReason:
         "Opening Handoff requires human review or carry-forward acknowledgement.",
@@ -214,7 +277,12 @@ export async function runDailyOpeningAutomationWithCtx(
   },
 ) {
   const snapshot = await buildDailyOpeningSnapshotWithCtx(ctx, args);
-  const decision = openingDecision(snapshot);
+  const policyConfig = await getOpeningAutoStartPolicyConfigWithCtx(ctx, {
+    storeId: args.storeId,
+  });
+  const openingBlockerHandling =
+    policyConfig.openingBlockerHandling ?? DEFAULT_OPENING_BLOCKER_HANDLING;
+  const decision = openingDecision(snapshot, { openingBlockerHandling });
 
   return evaluateAutomationActionWithCtx(ctx, {
     action: dailyOperationsOpeningAutoStartAction,
@@ -222,6 +290,10 @@ export async function runDailyOpeningAutomationWithCtx(
     apply: async ({ run }) => {
       const result = await startStoreDayWithCtx(ctx, {
         actorType: "automation",
+        automationBlockerHandling:
+          openingBlockerHandling === "manager_review"
+            ? "manager_review"
+            : undefined,
         automationDecisionReason: run.decisionReason,
         automationPolicyVersion: run.policyVersion,
         automationRunId: run._id,
@@ -300,18 +372,149 @@ function operatingDateForPolicy(args: {
   now: number;
   operatingTimezoneOffsetMinutes?: number;
 }) {
+  const localDate = localDateForPolicy(args);
+
+  return localDate ? localDate.toISOString().slice(0, 10) : null;
+}
+
+function localDateForPolicy(args: {
+  now: number;
+  operatingTimezoneOffsetMinutes?: number;
+}) {
   if (
     typeof args.operatingTimezoneOffsetMinutes !== "number" ||
-    !Number.isFinite(args.operatingTimezoneOffsetMinutes)
+    !Number.isInteger(args.operatingTimezoneOffsetMinutes) ||
+    args.operatingTimezoneOffsetMinutes < -14 * 60 ||
+    args.operatingTimezoneOffsetMinutes > 14 * 60
   ) {
     return null;
   }
 
-  return new Date(
+  const localDate = new Date(
     args.now - args.operatingTimezoneOffsetMinutes * 60_000,
-  )
-    .toISOString()
-    .slice(0, 10);
+  );
+
+  return Number.isFinite(localDate.getTime()) ? localDate : null;
+}
+
+function openingPolicyCronWindow(args: {
+  now: number;
+  policy: Doc<"automationPolicy">;
+}) {
+  const localDate = localDateForPolicy({
+    now: args.now,
+    operatingTimezoneOffsetMinutes: args.policy.operatingTimezoneOffsetMinutes,
+  });
+
+  if (!localDate) {
+    return null;
+  }
+
+  const localMinuteOfDay =
+    localDate.getUTCHours() * 60 + localDate.getUTCMinutes();
+  const openingLocalStartMinutes =
+    typeof args.policy.openingLocalStartMinutes === "number" &&
+    Number.isInteger(args.policy.openingLocalStartMinutes)
+      ? args.policy.openingLocalStartMinutes
+      : DEFAULT_OPENING_LOCAL_START_MINUTES;
+
+  if (localMinuteOfDay < openingLocalStartMinutes) {
+    const previousLocalDate = localDateForPolicy({
+      now: args.now - CONFIGURED_AUTOMATION_LOOKBACK_MS,
+      operatingTimezoneOffsetMinutes: args.policy.operatingTimezoneOffsetMinutes,
+    });
+    const previousOperatingDate = previousLocalDate
+      ?.toISOString()
+      .slice(0, 10);
+    const currentOperatingDate = localDate.toISOString().slice(0, 10);
+    const previousMinuteOfDay = previousLocalDate
+      ? previousLocalDate.getUTCHours() * 60 + previousLocalDate.getUTCMinutes()
+      : null;
+
+    if (
+      previousLocalDate &&
+      previousOperatingDate !== currentOperatingDate &&
+      previousMinuteOfDay !== null &&
+      previousMinuteOfDay < openingLocalStartMinutes
+    ) {
+      return {
+        operatingDate: previousOperatingDate,
+      };
+    }
+
+    return null;
+  }
+
+  return {
+    operatingDate: localDate.toISOString().slice(0, 10),
+  };
+}
+
+function automationErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Automation policy failed.";
+}
+
+async function recordConfiguredAutomationFailureWithCtx(
+  ctx: MutationCtx,
+  args: {
+    action: string;
+    error: unknown;
+    operatingDate: string;
+    policy: Doc<"automationPolicy">;
+  },
+) {
+  const run = await recordAutomationRunWithCtx(ctx, {
+    action: args.action,
+    decisionReason: "Configured automation policy failed before completion.",
+    domain: DAILY_OPERATIONS_AUTOMATION_DOMAIN,
+    error: {
+      code: "configured_automation_failed",
+      message: automationErrorMessage(args.error),
+    },
+    eventIds: [],
+    idempotencyKey: `${DAILY_OPERATIONS_AUTOMATION_DOMAIN}:${args.action}:${args.policy.storeId}:${args.operatingDate}:configured_failure`,
+    mutationBoundary:
+      args.action === OPENING_AUTO_START_ACTION
+        ? "daily_opening"
+        : "daily_close",
+    operatingDate: args.operatingDate,
+    organizationId: args.policy.organizationId,
+    outcome: "failed",
+    policyMode: args.policy.mode,
+    policyVersion: args.policy.policyVersion,
+    snapshotCounts: {},
+    sourceSubjects: [],
+    storeId: args.policy.storeId,
+    triggerType: "scheduled",
+  });
+
+  return {
+    action: "failed" as const,
+    run,
+  };
+}
+
+async function runConfiguredPolicySafely<T>(
+  ctx: MutationCtx,
+  args: {
+    action: string;
+    operatingDate: string | null;
+    policy: Doc<"automationPolicy">;
+    run: (operatingDate: string) => Promise<T>;
+  },
+) {
+  if (!args.operatingDate) return null;
+
+  try {
+    return await args.run(args.operatingDate);
+  } catch (error) {
+    return recordConfiguredAutomationFailureWithCtx(ctx, {
+      action: args.action,
+      error,
+      operatingDate: args.operatingDate,
+      policy: args.policy,
+    });
+  }
 }
 
 async function listConfiguredAutomationPolicies(
@@ -362,17 +565,29 @@ export async function runScheduledDailyOperationsAutomationWithCtx(
   ]);
   const openingResults = await Promise.all(
     openingPolicies.map((policy) =>
-      runDailyOpeningAutomationWithCtx(ctx, {
+      runConfiguredPolicySafely(ctx, {
+        action: OPENING_AUTO_START_ACTION,
         operatingDate: args.operatingDate,
-        storeId: policy.storeId,
+        policy,
+        run: (operatingDate) =>
+          runDailyOpeningAutomationWithCtx(ctx, {
+            operatingDate,
+            storeId: policy.storeId,
+          }),
       }),
     ),
   );
   const eodResults = await Promise.all(
     eodPolicies.map((policy) =>
-      prepareDailyCloseAutomationWithCtx(ctx, {
+      runConfiguredPolicySafely(ctx, {
+        action: EOD_PREPARE_ACTION,
         operatingDate: args.operatingDate,
-        storeId: policy.storeId,
+        policy,
+        run: (operatingDate) =>
+          prepareDailyCloseAutomationWithCtx(ctx, {
+            operatingDate,
+            storeId: policy.storeId,
+          }),
       }),
     ),
   );
@@ -396,17 +611,22 @@ export async function runConfiguredDailyOperationsAutomationWithCtx(
   ]);
   const openingResults = await Promise.all(
     openingPolicies.map((policy) => {
-      const operatingDate = operatingDateForPolicy({
+      const cronWindow = openingPolicyCronWindow({
         now,
-        operatingTimezoneOffsetMinutes: policy.operatingTimezoneOffsetMinutes,
+        policy,
       });
+      const operatingDate = cronWindow?.operatingDate ?? null;
 
-      return operatingDate
-        ? runDailyOpeningAutomationWithCtx(ctx, {
+      return runConfiguredPolicySafely(ctx, {
+        action: OPENING_AUTO_START_ACTION,
+        operatingDate,
+        policy,
+        run: (operatingDate) =>
+          runDailyOpeningAutomationWithCtx(ctx, {
             operatingDate,
             storeId: policy.storeId,
-          })
-        : null;
+          }),
+      });
     }),
   );
   const eodResults = await Promise.all(
@@ -416,12 +636,16 @@ export async function runConfiguredDailyOperationsAutomationWithCtx(
         operatingTimezoneOffsetMinutes: policy.operatingTimezoneOffsetMinutes,
       });
 
-      return operatingDate
-        ? prepareDailyCloseAutomationWithCtx(ctx, {
+      return runConfiguredPolicySafely(ctx, {
+        action: EOD_PREPARE_ACTION,
+        operatingDate,
+        policy,
+        run: (operatingDate) =>
+          prepareDailyCloseAutomationWithCtx(ctx, {
             operatingDate,
             storeId: policy.storeId,
-          })
-        : null;
+          }),
+      });
     }),
   );
 
@@ -442,4 +666,62 @@ export const runScheduledDailyOperationsAutomation = internalMutation({
 export const runConfiguredDailyOperationsAutomation = internalMutation({
   args: {},
   handler: (ctx) => runConfiguredDailyOperationsAutomationWithCtx(ctx),
+});
+
+export const getOpeningAutoStartPolicy = query({
+  args: {
+    storeId: v.id("store"),
+  },
+  handler: (ctx, args) => getOpeningAutoStartPolicyForApi(ctx, args),
+});
+
+export const updateOpeningAutoStartPolicy = mutation({
+  args: {
+    localStartMinutes: v.number(),
+    mode: v.union(
+      v.literal("disabled"),
+      v.literal("dry_run"),
+      v.literal("enabled"),
+    ),
+    openingBlockerHandling: v.union(
+      v.literal("skip_when_blocked"),
+      v.literal("start_with_manager_review"),
+    ),
+    operatingTimezoneOffsetMinutes: v.optional(v.number()),
+    storeId: v.id("store"),
+  },
+  handler: async (ctx, args) => {
+    const { athenaUser, store } = await requireStoreFullAdminAccess(
+      ctx,
+      args.storeId,
+    );
+    const policy = await upsertOpeningAutoStartPolicyConfigWithCtx(ctx, {
+      mode: args.mode,
+      openingBlockerHandling: fromApiOpeningBlockerHandling(
+        args.openingBlockerHandling,
+      ),
+      openingLocalStartMinutes: args.localStartMinutes,
+      operatingTimezoneOffsetMinutes: args.operatingTimezoneOffsetMinutes,
+      organizationId: store.organizationId,
+      policyVersion: DAILY_OPERATIONS_POLICY_VERSION,
+      storeId: args.storeId,
+      updatedByUserId: athenaUser._id,
+    });
+
+    return {
+      configured: true,
+      localStartMinutes:
+        policy.openingLocalStartMinutes ?? DEFAULT_OPENING_LOCAL_START_MINUTES,
+      mode: policy.mode,
+      openingBlockerHandling: toApiOpeningBlockerHandling(
+        policy.openingBlockerHandling === "manager_review"
+          ? "manager_review"
+          : "skip",
+      ),
+      operatingTimezoneOffsetMinutes:
+        policy.operatingTimezoneOffsetMinutes ?? null,
+      paused: Boolean(policy.paused),
+      policyVersion: policy.policyVersion,
+    };
+  },
 });

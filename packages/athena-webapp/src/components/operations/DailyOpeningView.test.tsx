@@ -342,7 +342,7 @@ describe("DailyOpeningViewContent", () => {
     expect(screen.getByRole("button", { name: /start day/i })).toBeEnabled();
   });
 
-  it("shows blockers, links to source workflows, and disables Start Day", () => {
+  it("shows blockers, links to source workflows, and keeps Start Day available", () => {
     renderContent(blockedSnapshot);
 
     expect(screen.getByText("Opening blocked")).toBeInTheDocument();
@@ -357,7 +357,7 @@ describe("DailyOpeningViewContent", () => {
     );
     expect(screen.getByText("Front counter terminal")).toBeInTheDocument();
     expect(screen.getByText("Register 1")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /start day/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /start day/i })).toBeEnabled();
   });
 
   it("hides stale blocker detail once the store day has started", () => {
@@ -569,7 +569,7 @@ describe("DailyOpeningViewContent", () => {
     ).toBeInTheDocument();
   });
 
-  it("presents manager approval before starting the store day", async () => {
+  it("starts the store day directly even when manager approval support is available", async () => {
     const user = userEvent.setup();
     const onAuthenticateForApproval = vi.fn(async () =>
       ok({
@@ -587,36 +587,16 @@ describe("DailyOpeningViewContent", () => {
 
     await user.click(screen.getByRole("button", { name: /start day/i }));
 
-    expect(
-      screen.getByRole("dialog", { name: /manager sign-in required/i }),
-    ).toBeInTheDocument();
-    expect(onStartDay).not.toHaveBeenCalled();
-
-    await user.click(screen.getByRole("button", { name: /confirm manager/i }));
-
     await waitFor(() => {
-      expect(onAuthenticateForApproval).toHaveBeenCalledWith({
-        actionKey: "operations.daily_opening.start_day",
-        pinHash: "pin-hash",
-        reason: "Manager approval is required to start the store day.",
-        requiredRole: "manager",
-        storeId: "store-1",
-        subject: {
-          id: "store-1:2026-05-08",
-          label: "Opening May 8, 2026",
-          type: "daily_opening",
-        },
-        username: "manager",
-      });
       expect(onStartDay).toHaveBeenCalledWith({
         acknowledgedItemKeys: [],
-        actorStaffProfileId: "staff-manager",
         endAt: readySnapshot.endAt,
         notes: "",
         operatingDate: "2026-05-08",
         startAt: readySnapshot.startAt,
       });
     });
+    expect(onAuthenticateForApproval).not.toHaveBeenCalled();
   });
 
   it("shows already-started state without offering a duplicate start", () => {
@@ -669,6 +649,65 @@ describe("DailyOpeningViewContent", () => {
     expect(screen.getByText("Store day started")).toBeInTheDocument();
     expect(screen.getByText("Athena started Opening Handoff.")).toBeInTheDocument();
     expect(screen.queryByText("Athena checked Opening Handoff. No change was made.")).not.toBeInTheDocument();
+  });
+
+  it("shows manager review evidence when automation starts Opening with review items", () => {
+    renderContent({
+      ...blockedSnapshot,
+      automationStatus: {
+        id: "automation-opening-started-with-review",
+        outcome: "applied",
+        occurredAt: Date.UTC(2026, 4, 8, 8, 30),
+        reviewEvidence: [
+          {
+            category: "register_session",
+            description:
+              "Close the carried-over register session in Cash Controls.",
+            id: "blocker-1",
+            link: {
+              label: "Open Cash Controls",
+              params: { sessionId: "session-1" },
+              to: "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId",
+            },
+            metadata: {
+              register: "Register 1",
+              terminal: "Front counter terminal",
+            },
+            statusLabel: "Needs manager review",
+            title: "Register session still needs closeout",
+          },
+          {
+            category: "prior_close",
+            description: "Manager accepted a small cash variance during close.",
+            id: "review-1",
+            statusLabel: "Review",
+            title: "Cash variance reviewed at close",
+          },
+        ],
+      },
+      startedOpening: {
+        startedAt: Date.UTC(2026, 4, 8, 8, 30),
+      },
+      status: "started",
+    });
+
+    expect(screen.getByText("Store day started")).toBeInTheDocument();
+    expect(
+      screen.getByText("Athena started the store day with manager review items."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Register session still needs closeout"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Cash variance reviewed at close"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /open cash controls/i }),
+    ).toHaveAttribute(
+      "href",
+      "/wigclub/store/osu/cash-controls/registers/session-1?o=%252F",
+    );
+    expect(screen.queryByRole("tab", { name: /blocked/i })).toBeNull();
   });
 
   it("keeps started Opening Handoff primary over stale skipped automation decisions", () => {

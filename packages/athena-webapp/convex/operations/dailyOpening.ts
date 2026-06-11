@@ -16,10 +16,12 @@ import {
 } from "./dailyOperationsAutomation";
 import { requireStoreFullAdminAccess } from "../stockOps/access";
 import { ok, userError, type CommandResult } from "../../shared/commandResult";
+import { consumeApprovalProofWithCtx } from "./approvalProofs";
 
 const DAILY_OPENING_QUERY_LIMIT = 200;
 const DAILY_OPENING_SUBJECT_TYPE = "daily_opening";
 const DAILY_CLOSE_SUBJECT_TYPE = "daily_close";
+const DAILY_OPENING_START_ACTION_KEY = "operations.daily_opening.start_day";
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_OPERATING_DATE_RANGE_MS = 36 * 60 * 60 * 1000;
 const TERMINAL_WORK_ITEM_STATUSES = new Set(["completed", "cancelled"]);
@@ -52,6 +54,13 @@ type DailyOpeningItem = {
     | Record<string, unknown>;
 };
 
+type DailyOpeningManagerReviewEvidence = Omit<
+  DailyOpeningItem,
+  "severity"
+> & {
+  severity: Exclude<DailyOpeningSeverity, "ready">;
+};
+
 type DailyOpeningReadinessStatus = "blocked" | "needs_attention" | "ready";
 
 type DailyOpeningReadiness = {
@@ -77,7 +86,10 @@ type DailyOpeningSnapshot = {
   readyItems: DailyOpeningItem[];
   readiness: DailyOpeningReadiness;
   startedOpening:
-    | (Doc<"dailyOpening"> & { startedByStaffName?: string | null })
+    | (Doc<"dailyOpening"> & {
+        reviewEvidence?: DailyOpeningManagerReviewEvidence[];
+        startedByStaffName?: string | null;
+      })
     | null;
   startAt: number;
   sourceSubjects: DailyOpeningItem["subject"][];
@@ -89,6 +101,8 @@ type StartStoreDayArgs = {
   actorStaffProfileId?: Id<"staffProfile">;
   actorType?: "human" | "automation";
   actorUserId?: Id<"athenaUser">;
+  approvalProofId?: Id<"approvalProof">;
+  automationBlockerHandling?: "manager_review";
   automationDecisionReason?: string;
   automationPolicyVersion?: string;
   automationRunId?: Id<"automationRun">;
@@ -238,6 +252,9 @@ function getStaffDisplayName(staffProfile: Doc<"staffProfile"> | null) {
 async function hydrateStartedOpening(
   ctx: Pick<QueryCtx, "db">,
   opening: Doc<"dailyOpening"> | null,
+  args: {
+    includeManagerReviewEvidence?: boolean;
+  } = {},
 ) {
   if (!opening) return null;
 
@@ -247,6 +264,9 @@ async function hydrateStartedOpening(
 
   return {
     ...opening,
+    reviewEvidence: args.includeManagerReviewEvidence
+      ? (opening.managerReviewEvidence ?? [])
+      : [],
     startedByStaffName: getStaffDisplayName(staffProfile),
   };
 }
@@ -604,6 +624,31 @@ function uniqueSourceSubjects(items: DailyOpeningItem[]) {
   return Array.from(subjects.values());
 }
 
+function managerReviewEvidenceFromSnapshot(
+  snapshot: DailyOpeningSnapshot,
+): DailyOpeningManagerReviewEvidence[] {
+  return [
+    ...snapshot.blockers,
+    ...snapshot.reviewItems,
+    ...snapshot.carryForwardItems,
+  ].flatMap((item) => {
+    if (item.severity === "ready") return [];
+
+    return [
+      {
+        category: item.category,
+        key: item.key,
+        link: item.link,
+        message: item.message,
+        metadata: item.metadata,
+        severity: item.severity,
+        subject: item.subject,
+        title: item.title,
+      },
+    ];
+  });
+}
+
 async function getMissingCarryForwardItems(
   ctx: Pick<QueryCtx, "db">,
   priorClose: Doc<"dailyClose">,
@@ -626,6 +671,8 @@ async function resolveOpeningActor(
     actorStaffProfileId?: Id<"staffProfile">;
     actorType?: "human" | "automation";
     actorUserId?: Id<"athenaUser">;
+    approvalProofId?: Id<"approvalProof">;
+    operatingDate: string;
     storeId: Id<"store">;
   },
 ) {
@@ -636,7 +683,31 @@ async function resolveOpeningActor(
     });
   }
 
-  if (args.actorStaffProfileId) {
+  if (args.actorStaffProfileId || args.approvalProofId) {
+    if (!args.actorStaffProfileId) {
+      return userError({
+        code: "authorization_failed",
+        message: "Active store staff profile is required to acknowledge Opening.",
+      });
+    }
+
+    if (args.approvalProofId) {
+      const approvalProof = await consumeApprovalProofWithCtx(ctx, {
+        actionKey: DAILY_OPENING_START_ACTION_KEY,
+        approvalProofId: args.approvalProofId,
+        requiredRole: "manager",
+        storeId: args.storeId,
+        subject: {
+          id: `${args.storeId}:${args.operatingDate}`,
+          type: DAILY_OPENING_SUBJECT_TYPE,
+        },
+      });
+
+      if (approvalProof.kind !== "ok") {
+        return approvalProof;
+      }
+    }
+
     const staffProfile = await ctx.db.get("staffProfile", args.actorStaffProfileId);
 
     if (
@@ -646,13 +717,13 @@ async function resolveOpeningActor(
     ) {
       return userError({
         code: "authorization_failed",
-        message: "Active staff access is required to acknowledge Opening.",
+        message: "Active store staff profile is required to acknowledge Opening.",
       });
     }
 
     return ok({
       actorStaffProfileId: staffProfile._id,
-      actorUserId: args.actorUserId,
+      actorUserId: staffProfile?.linkedUserId,
     });
   }
 
@@ -689,6 +760,7 @@ export async function buildDailyOpeningSnapshotWithCtx(
   ctx: Pick<QueryCtx, "db">,
   args: {
     endAt?: number;
+    includeManagerReviewEvidence?: boolean;
     operatingDate: string;
     startAt?: number;
     storeId: Id<"store">;
@@ -696,7 +768,9 @@ export async function buildDailyOpeningSnapshotWithCtx(
 ): Promise<DailyOpeningSnapshot> {
   const store = await getStore(ctx, args.storeId);
   const existingOpening = await getDailyOpeningForDate(ctx, args);
-  const startedOpening = await hydrateStartedOpening(ctx, existingOpening);
+  const startedOpening = await hydrateStartedOpening(ctx, existingOpening, {
+    includeManagerReviewEvidence: args.includeManagerReviewEvidence,
+  });
   const operatingDateRange = resolveOperatingDateRange(args);
   const automationStatus =
     await getLatestDailyOperationsAutomationStatusWithCtx(ctx, {
@@ -845,15 +919,20 @@ export async function startStoreDayWithCtx(
 
   const snapshot = await buildDailyOpeningSnapshotWithCtx(ctx, args);
 
-  if (snapshot.blockers.length > 0) {
+  if (!isValidOperatingDate(args.operatingDate)) {
     return userError({
       code: "precondition_failed",
-      message: "Opening cannot be acknowledged while blocker items remain.",
+      message: "Opening cannot start for an invalid operating date.",
       metadata: {
         blockerCount: snapshot.blockers.length,
       },
     });
   }
+
+  const routeOpeningReviewToManager =
+    snapshot.blockers.length > 0 ||
+    (args.actorType === "automation" &&
+      args.automationBlockerHandling === "manager_review");
 
   const acknowledgedItemKeys = new Set(args.acknowledgedItemKeys ?? []);
   const requiredAcknowledgementKeys = [
@@ -864,7 +943,7 @@ export async function startStoreDayWithCtx(
     (key) => !acknowledgedItemKeys.has(key),
   );
 
-  if (unacknowledgedItemKeys.length > 0) {
+  if (unacknowledgedItemKeys.length > 0 && !routeOpeningReviewToManager) {
     return userError({
       code: "precondition_failed",
       message:
@@ -883,6 +962,9 @@ export async function startStoreDayWithCtx(
 
   const { actorStaffProfileId, actorUserId } = actorResult.data;
   const actorType = args.actorType ?? "human";
+  const managerReviewEvidence = routeOpeningReviewToManager
+    ? managerReviewEvidenceFromSnapshot(snapshot)
+    : [];
   const now = Date.now();
   const dailyOpeningId = await ctx.db.insert("dailyOpening", {
     storeId: args.storeId,
@@ -908,6 +990,8 @@ export async function startStoreDayWithCtx(
     automationDecisionReason: args.automationDecisionReason,
     automationPolicyVersion: args.automationPolicyVersion,
     automationRunId: args.automationRunId,
+    managerReviewEvidence:
+      managerReviewEvidence.length > 0 ? managerReviewEvidence : undefined,
   });
 
   const dailyOpening = await ctx.db.get("dailyOpening", dailyOpeningId);
@@ -943,6 +1027,12 @@ export async function startStoreDayWithCtx(
     metadata: {
       acknowledgedItemKeys: args.acknowledgedItemKeys ?? [],
       endAt: dailyOpening.endAt,
+      ...(managerReviewEvidence.length > 0
+        ? {
+            managerReviewEvidence,
+            managerReviewEvidenceCount: managerReviewEvidence.length,
+          }
+        : {}),
       operatingDate: args.operatingDate,
       priorDailyCloseId: snapshot.priorClose?._id,
       readiness: dailyOpening.readiness,
@@ -964,7 +1054,21 @@ export const getDailyOpeningSnapshot = query({
     startAt: v.optional(v.number()),
     storeId: v.id("store"),
   },
-  handler: (ctx, args) => buildDailyOpeningSnapshotWithCtx(ctx, args),
+  handler: async (ctx, args) => {
+    let includeManagerReviewEvidence = false;
+
+    try {
+      await requireStoreFullAdminAccess(ctx, args.storeId);
+      includeManagerReviewEvidence = true;
+    } catch {
+      includeManagerReviewEvidence = false;
+    }
+
+    return buildDailyOpeningSnapshotWithCtx(ctx, {
+      ...args,
+      includeManagerReviewEvidence,
+    });
+  },
 });
 
 export const startStoreDay = mutation({
@@ -972,6 +1076,7 @@ export const startStoreDay = mutation({
     acknowledgedItemKeys: v.optional(v.array(v.string())),
     actorStaffProfileId: v.optional(v.id("staffProfile")),
     actorUserId: v.optional(v.id("athenaUser")),
+    approvalProofId: v.optional(v.id("approvalProof")),
     endAt: v.optional(v.number()),
     notes: v.optional(v.string()),
     operatingDate: v.string(),

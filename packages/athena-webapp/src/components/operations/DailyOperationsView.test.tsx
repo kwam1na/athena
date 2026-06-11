@@ -423,6 +423,48 @@ const automationSnapshot: DailyOperationsSnapshot = {
   operatingDate: "2026-05-10",
 };
 
+const automationReviewSnapshot: DailyOperationsSnapshot = {
+  ...operatingSnapshot,
+  automationStatuses: [
+    {
+      id: "automation-opening-review",
+      lane: "opening",
+      outcome: "applied",
+      occurredAt: Date.UTC(2026, 4, 10, 8, 30),
+      reviewEvidence: [
+        {
+          id: "register-session-review",
+          label: "Register session still needs closeout",
+          message:
+            "Close the carried-over register session in Cash Controls.",
+          source: {
+            id: "session-1",
+            label: "Register 1",
+            type: "register_session",
+          },
+          sourceLink: {
+            params: { sessionId: "session-1" },
+            to: "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId",
+          },
+        },
+        {
+          id: "cash-variance-review",
+          label: "Cash variance reviewed at close",
+          message: "Manager accepted a small cash variance during close.",
+          source: {
+            id: "close-1",
+            type: "daily_close",
+          },
+        },
+      ],
+      sourceLink: {
+        to: "/$orgUrlSlug/store/$storeUrlSlug/operations/opening",
+      },
+    },
+  ],
+  operatingDate: "2026-05-10",
+};
+
 const staleSkippedAutomationSnapshot: DailyOperationsSnapshot = {
   ...closedSnapshot,
   automationStatuses: [
@@ -756,6 +798,33 @@ describe("DailyOperationsViewContent", () => {
     ).toHaveAttribute(
       "href",
       "/wigclub/store/osu/operations/daily-close?o=%252Fwigclub%252Fstore%252Fosu%252Foperations&operatingDate=2026-05-10",
+    );
+  });
+
+  it("surfaces Opening auto-start review evidence for managers", () => {
+    renderContent(automationReviewSnapshot);
+
+    expect(
+      screen.getByRole("link", { name: "Start EOD Review" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getAllByText(
+        "Athena started the store day with manager review items.",
+      ).length,
+    ).toBeGreaterThan(0);
+    expect(
+      screen.getByText("Register session still needs closeout"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Cash variance reviewed at close"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", {
+        name: "Open Register session still needs closeout review source",
+      }),
+    ).toHaveAttribute(
+      "href",
+      "/wigclub/store/osu/cash-controls/registers/session-1?o=%252Fwigclub%252Fstore%252Fosu%252Foperations",
     );
   });
 

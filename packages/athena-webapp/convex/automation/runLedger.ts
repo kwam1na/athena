@@ -33,6 +33,64 @@ export type AutomationRunRecordInput = {
   };
 };
 
+export type OpeningAutoStartBlockerHandling = "skip" | "manager_review";
+
+export const OPENING_AUTO_START_POLICY_DOMAIN = "daily_operations";
+export const OPENING_AUTO_START_POLICY_ACTION = "opening.auto_start";
+export const DEFAULT_OPENING_LOCAL_START_MINUTES = 0;
+export const DEFAULT_OPENING_BLOCKER_HANDLING: OpeningAutoStartBlockerHandling =
+  "skip";
+
+export type OpeningAutoStartPolicyConfig = {
+  configured: boolean;
+  mode: AutomationPolicyMode;
+  openingBlockerHandling: OpeningAutoStartBlockerHandling;
+  openingLocalStartMinutes: number;
+  paused: boolean;
+  policy: Doc<"automationPolicy"> | null;
+};
+
+function normalizeOpeningLocalStartMinutes(value: unknown) {
+  return typeof value === "number" &&
+    Number.isInteger(value) &&
+    value >= 0 &&
+    value < 24 * 60
+    ? value
+    : DEFAULT_OPENING_LOCAL_START_MINUTES;
+}
+
+function normalizeOpeningBlockerHandling(
+  value: unknown,
+): OpeningAutoStartBlockerHandling {
+  return value === "manager_review" ? "manager_review" : "skip";
+}
+
+function assertValidOpeningLocalStartMinutes(value: number) {
+  if (!Number.isInteger(value) || value < 0 || value >= 24 * 60) {
+    throw new Error("Opening local start minutes must be within one local day.");
+  }
+}
+
+function assertValidOpeningBlockerHandling(
+  value: OpeningAutoStartBlockerHandling,
+) {
+  if (value !== "skip" && value !== "manager_review") {
+    throw new Error("Opening blocker handling is not supported.");
+  }
+}
+
+function assertValidOperatingTimezoneOffsetMinutes(value?: number) {
+  if (value === undefined) return;
+
+  if (
+    !Number.isInteger(value) ||
+    value < -14 * 60 ||
+    value > 14 * 60
+  ) {
+    throw new Error("Operating timezone offset must be within UTC-14 to UTC+14.");
+  }
+}
+
 export async function listAutomationPoliciesForStoreActionWithCtx(
   ctx: Pick<QueryCtx, "db">,
   args: {
@@ -63,6 +121,113 @@ export async function getAutomationPolicyWithCtx(
   const policies = await listAutomationPoliciesForStoreActionWithCtx(ctx, args);
 
   return policies[0] ?? null;
+}
+
+export async function getOpeningAutoStartPolicyConfigWithCtx(
+  ctx: Pick<QueryCtx, "db">,
+  args: {
+    storeId: Id<"store">;
+  },
+): Promise<OpeningAutoStartPolicyConfig> {
+  const policies = await listAutomationPoliciesForStoreActionWithCtx(ctx, {
+    action: OPENING_AUTO_START_POLICY_ACTION,
+    domain: OPENING_AUTO_START_POLICY_DOMAIN,
+    storeId: args.storeId,
+  });
+
+  if (policies.length > 1) {
+    throw new Error(
+      "Opening auto-start policy configuration is ambiguous for this store.",
+    );
+  }
+
+  const policy = policies[0] ?? null;
+
+  return {
+    configured: Boolean(policy),
+    mode: policy?.mode ?? "disabled",
+    openingBlockerHandling: normalizeOpeningBlockerHandling(
+      policy?.openingBlockerHandling,
+    ),
+    openingLocalStartMinutes: normalizeOpeningLocalStartMinutes(
+      policy?.openingLocalStartMinutes,
+    ),
+    paused: Boolean(policy?.paused),
+    policy,
+  };
+}
+
+export async function upsertOpeningAutoStartPolicyConfigWithCtx(
+  ctx: MutationCtx,
+  args: {
+    mode: AutomationPolicyMode;
+    openingBlockerHandling: OpeningAutoStartBlockerHandling;
+    openingLocalStartMinutes: number;
+    operatingTimezoneOffsetMinutes?: number;
+    organizationId?: Id<"organization">;
+    paused?: boolean;
+    policyVersion?: string;
+    rolloutNotes?: string;
+    storeId: Id<"store">;
+    updatedByUserId?: Id<"athenaUser">;
+  },
+) {
+  assertValidOpeningLocalStartMinutes(args.openingLocalStartMinutes);
+  assertValidOpeningBlockerHandling(args.openingBlockerHandling);
+  assertValidOperatingTimezoneOffsetMinutes(args.operatingTimezoneOffsetMinutes);
+
+  const policies = await listAutomationPoliciesForStoreActionWithCtx(ctx, {
+    action: OPENING_AUTO_START_POLICY_ACTION,
+    domain: OPENING_AUTO_START_POLICY_DOMAIN,
+    storeId: args.storeId,
+  });
+
+  if (policies.length > 1) {
+    throw new Error(
+      "Opening auto-start policy configuration is ambiguous for this store.",
+    );
+  }
+
+  const now = Date.now();
+  const patch = {
+    mode: args.mode,
+    operatingTimezoneOffsetMinutes: args.operatingTimezoneOffsetMinutes,
+    openingBlockerHandling: args.openingBlockerHandling,
+    openingLocalStartMinutes: args.openingLocalStartMinutes,
+    organizationId: args.organizationId,
+    paused: args.paused ?? false,
+    policyVersion: args.policyVersion ?? "daily-operations.v1",
+    rolloutNotes: args.rolloutNotes,
+    updatedAt: now,
+    updatedByUserId: args.updatedByUserId,
+  };
+  const existingPolicy = policies[0] ?? null;
+
+  if (existingPolicy) {
+    await ctx.db.patch("automationPolicy", existingPolicy._id, patch);
+    const updatedPolicy = await ctx.db.get("automationPolicy", existingPolicy._id);
+
+    if (!updatedPolicy) {
+      throw new Error("Opening auto-start policy could not be loaded.");
+    }
+
+    return updatedPolicy;
+  }
+
+  const policyId = await ctx.db.insert("automationPolicy", {
+    ...patch,
+    action: OPENING_AUTO_START_POLICY_ACTION,
+    createdAt: now,
+    domain: OPENING_AUTO_START_POLICY_DOMAIN,
+    storeId: args.storeId,
+  });
+  const policy = await ctx.db.get("automationPolicy", policyId);
+
+  if (!policy) {
+    throw new Error("Opening auto-start policy could not be loaded.");
+  }
+
+  return policy;
 }
 
 export async function listAutomationRunsByIdempotencyKeyWithCtx(

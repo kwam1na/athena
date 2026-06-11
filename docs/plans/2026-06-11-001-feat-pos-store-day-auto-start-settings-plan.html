@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Configure POS store-day auto-start with manager review</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f8f7f4;
+        --panel: #ffffff;
+        --ink: #202124;
+        --muted: #60646c;
+        --line: #d9d5cc;
+        --accent: #235d5b;
+        --accent-soft: #e2efec;
+        --warn: #8a5a10;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      main {
+        width: min(1120px, calc(100vw - 32px));
+        margin: 0 auto;
+        padding: 40px 0 64px;
+      }
+      header {
+        border-bottom: 1px solid var(--line);
+        padding-bottom: 24px;
+        margin-bottom: 28px;
+      }
+      h1, h2, h3 {
+        line-height: 1.2;
+        margin: 0;
+      }
+      h1 {
+        font-size: clamp(2rem, 4vw, 3.4rem);
+        max-width: 900px;
+      }
+      h2 {
+        font-size: 1.25rem;
+        margin-bottom: 12px;
+      }
+      h3 {
+        font-size: 1rem;
+        margin: 18px 0 8px;
+      }
+      p { margin: 0 0 12px; }
+      a { color: var(--accent); }
+      .meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 18px;
+      }
+      .tag {
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: var(--panel);
+        color: var(--muted);
+        padding: 3px 10px;
+        font-size: 0.82rem;
+      }
+      nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin: 20px 0 0;
+      }
+      nav a {
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: var(--panel);
+        padding: 6px 10px;
+        text-decoration: none;
+      }
+      section {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 22px;
+        margin: 16px 0;
+      }
+      ul, ol { padding-left: 20px; margin: 0; }
+      li + li { margin-top: 6px; }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 14px;
+      }
+      .callout {
+        border-left: 4px solid var(--accent);
+        background: var(--accent-soft);
+        padding: 12px 14px;
+        margin: 12px 0;
+      }
+      .unit {
+        border-top: 1px solid var(--line);
+        padding-top: 16px;
+        margin-top: 16px;
+      }
+      .unit:first-of-type {
+        border-top: 0;
+        padding-top: 0;
+        margin-top: 0;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 8px;
+      }
+      th, td {
+        border: 1px solid var(--line);
+        padding: 10px;
+        text-align: left;
+        vertical-align: top;
+      }
+      th { background: #f1eee8; }
+      code {
+        background: #f1eee8;
+        border-radius: 4px;
+        padding: 1px 4px;
+      }
+      .flow {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 10px;
+        margin-top: 12px;
+      }
+      .node {
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 10px;
+        background: #fbfaf8;
+        min-height: 74px;
+      }
+      .node strong { display: block; color: var(--accent); }
+      footer {
+        color: var(--muted);
+        margin-top: 24px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div class="meta">
+          <span class="tag">feat</span>
+          <span class="tag">active</span>
+          <span class="tag">2026-06-11</span>
+          <span class="tag">POS settings</span>
+          <span class="tag">Daily Operations automation</span>
+        </div>
+        <h1>Configure POS store-day auto-start with manager review</h1>
+        <p>Canonical source: <a href="2026-06-11-001-feat-pos-store-day-auto-start-settings-plan.md">2026-06-11-001-feat-pos-store-day-auto-start-settings-plan.md</a></p>
+        <nav aria-label="Plan sections">
+          <a href="#summary">Summary</a>
+          <a href="#decisions">Decisions</a>
+          <a href="#design">Design</a>
+          <a href="#units">Implementation Units</a>
+          <a href="#risks">Risks</a>
+          <a href="#verification">Verification</a>
+        </nav>
+      </header>
+
+      <section id="summary">
+        <h2>Summary</h2>
+        <p>Add a full-admin POS settings control for store-day auto-start. At the configured local time, Athena starts Opening Handoff even when blockers exist, then preserves those blockers as manager-review evidence so cashier POS access is not held closed.</p>
+        <div class="grid">
+          <div class="callout">
+            <strong>Cashier continuity</strong>
+            <p>POS unlocks through the normal started store-day record, not a cashier-side bypass.</p>
+          </div>
+          <div class="callout">
+            <strong>Manager review</strong>
+            <p>Opening blockers, review items, and carry-forward items remain visible after Athena starts the day.</p>
+          </div>
+          <div class="callout">
+            <strong>Strict manual path</strong>
+            <p>Human starts still reject hard blockers and require acknowledgements.</p>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Requirements</h2>
+        <ul>
+          <li>Full admins can configure Opening auto-start from POS settings.</li>
+          <li>The setting stores local start time and timezone offset for scheduled automation.</li>
+          <li>Configured automation starts the store day even when Opening has blockers.</li>
+          <li>Blocker and review evidence stays durable for manager follow-up.</li>
+          <li>Manual start-day and EOD rules stay unchanged.</li>
+        </ul>
+      </section>
+
+      <section id="decisions">
+        <h2>Key Decisions</h2>
+        <ul>
+          <li>Extend the existing <code>opening.auto_start</code> action instead of adding a new action.</li>
+          <li>Add explicit policy fields for local start time and blocker handling.</li>
+          <li>Persist review evidence at the automation opening boundary.</li>
+          <li>Place configuration in POS settings but gate it to full admins.</li>
+          <li>Keep drawer, register session, opening float, and Cash Controls ownership unchanged.</li>
+        </ul>
+      </section>
+
+      <section id="design">
+        <h2>Technical Flow</h2>
+        <div class="flow" aria-label="Auto-start flow">
+          <div class="node"><strong>POS Settings</strong>Full admin configures auto-start and local time.</div>
+          <div class="node"><strong>Policy</strong><code>opening.auto_start</code> stores mode, time, timezone, and blocker handling.</div>
+          <div class="node"><strong>Cron</strong>Hourly automation checks whether local start time has arrived.</div>
+          <div class="node"><strong>Opening Snapshot</strong>Athena reads current blockers, review items, and carry-forward work.</div>
+          <div class="node"><strong>Start</strong>Automation starts the store day when policy allows review-required starts.</div>
+          <div class="node"><strong>Evidence</strong>Automation run, opening record, and event preserve manager-review context.</div>
+        </div>
+      </section>
+
+      <section id="units">
+        <h2>Implementation Units</h2>
+        <article class="unit">
+          <h3>U1. Extend automation policy</h3>
+          <p>Add policy shape and helpers for Opening auto-start time and blocked-opening handling.</p>
+          <p><strong>Primary files:</strong> <code>convex/schemas/automation.ts</code>, <code>convex/automation/runLedger.ts</code>, <code>convex/operations/dailyOperationsAutomation.ts</code>.</p>
+        </article>
+        <article class="unit">
+          <h3>U2. Gate cron by local start time</h3>
+          <p>Run Opening automation only at or after the configured local minute while preserving idempotency.</p>
+          <p><strong>Primary tests:</strong> <code>convex/operations/dailyOperationsAutomation.test.ts</code>.</p>
+        </article>
+        <article class="unit">
+          <h3>U3. Start with manager-review evidence</h3>
+          <p>Add the automation-only start path that can create the store-day opening with blockers preserved for review.</p>
+          <p><strong>Primary files:</strong> <code>convex/operations/dailyOpening.ts</code>, <code>convex/schemas/operations/dailyOpening.ts</code>.</p>
+        </article>
+        <article class="unit">
+          <h3>U4. Expose POS settings control</h3>
+          <p>Add a full-admin Store day automation section to POS settings and save through a narrow backend-owned policy mutation.</p>
+          <p><strong>Primary files:</strong> <code>src/components/pos/settings/POSSettingsView.tsx</code>, <code>convex/automation/runLedger.ts</code>.</p>
+        </article>
+        <article class="unit">
+          <h3>U5. Surface review evidence</h3>
+          <p>Show managers what Athena carried into review after auto-start while keeping started state primary.</p>
+          <p><strong>Primary files:</strong> <code>src/components/operations/DailyOpeningView.tsx</code>, <code>src/components/operations/DailyOperationsView.tsx</code>.</p>
+        </article>
+        <article class="unit">
+          <h3>U6. Refresh learning and graph</h3>
+          <p>Add a solution note and rebuild graphify after code changes.</p>
+        </article>
+      </section>
+
+      <section id="risks">
+        <h2>Risks</h2>
+        <table>
+          <thead>
+            <tr><th>Risk</th><th>Mitigation</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Automation hides unresolved risk.</td><td>Persist exact review evidence and show it in manager operations views.</td></tr>
+            <tr><td>Wrong local operating date.</td><td>Keep timezone offset explicit and add UTC-boundary tests.</td></tr>
+            <tr><td>Manual path weakens.</td><td>Add regression coverage that human starts still reject blockers.</td></tr>
+            <tr><td>Repeated cron runs duplicate state.</td><td>Reuse idempotency per store, action, and operating date.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="verification">
+        <h2>Verification Strategy</h2>
+        <ul>
+          <li>Convex tests for policy read/upsert, local-time eligibility, blocked auto-start, and manual strictness.</li>
+          <li>POS settings tests for full-admin visibility, policy save payload, and error copy.</li>
+          <li>Operations UI tests for manager-review evidence and started-state presentation boundaries.</li>
+          <li>Graphify rebuild and a solution note after implementation.</li>
+        </ul>
+      </section>
+
+      <footer>
+        <p>Review artifact generated for browser-readable planning. The markdown plan remains canonical.</p>
+      </footer>
+    </main>
+  </body>
+</html>

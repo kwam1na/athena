@@ -2,11 +2,21 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import {
+  getOpeningAutoStartPolicy,
   prepareDailyCloseAutomationWithCtx,
   runConfiguredDailyOperationsAutomationWithCtx,
   runDailyOpeningAutomationWithCtx,
   runScheduledDailyOperationsAutomationWithCtx,
+  updateOpeningAutoStartPolicy,
 } from "./dailyOperationsAutomation";
+
+const accessMocks = vi.hoisted(() => ({
+  requireStoreFullAdminAccess: vi.fn(),
+}));
+
+vi.mock("../stockOps/access", () => ({
+  requireStoreFullAdminAccess: accessMocks.requireStoreFullAdminAccess,
+}));
 
 type TableName =
   | "approvalRequest"
@@ -203,6 +213,10 @@ function createDb(seed: Partial<Record<TableName, Row[]>> = {}) {
   return { db, inserts, patches, tables };
 }
 
+function getHandler(definition: unknown) {
+  return (definition as { _handler: Function })._handler;
+}
+
 const store = {
   _id: "store-1",
   createdByUserId: "user-1",
@@ -263,6 +277,122 @@ function completedDailyClose(overrides: Partial<Row> = {}): Row {
 describe("daily operations automation adapter", () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    accessMocks.requireStoreFullAdminAccess.mockReset();
+  });
+
+  it("requires full-admin access for Opening auto-start policy reads", async () => {
+    const { db } = createDb({ store: [store] });
+    accessMocks.requireStoreFullAdminAccess.mockRejectedValue(
+      new Error("Only full admins can access stock operations."),
+    );
+
+    await expect(
+      getHandler(getOpeningAutoStartPolicy)({ db } as unknown as MutationCtx, {
+        storeId: "store-1" as Id<"store">,
+      }),
+    ).rejects.toThrow("Only full admins can access stock operations.");
+  });
+
+  it("requires full-admin access for Opening auto-start policy writes", async () => {
+    const { db } = createDb({ store: [store] });
+    accessMocks.requireStoreFullAdminAccess.mockRejectedValue(
+      new Error("Only full admins can access stock operations."),
+    );
+
+    await expect(
+      getHandler(updateOpeningAutoStartPolicy)({ db } as unknown as MutationCtx, {
+        localStartMinutes: 480,
+        mode: "enabled",
+        openingBlockerHandling: "start_with_manager_review",
+        operatingTimezoneOffsetMinutes: 0,
+        storeId: "store-1" as Id<"store">,
+      }),
+    ).rejects.toThrow("Only full admins can access stock operations.");
+  });
+
+  it("maps Opening auto-start policy API values at the public handler boundary", async () => {
+    const { db, tables } = createDb({ store: [store] });
+    accessMocks.requireStoreFullAdminAccess.mockResolvedValue({
+      athenaUser: { _id: "user-1" },
+      store,
+    });
+
+    const updateResult = await getHandler(updateOpeningAutoStartPolicy)(
+      { db } as unknown as MutationCtx,
+      {
+        localStartMinutes: 465,
+        mode: "enabled",
+        openingBlockerHandling: "start_with_manager_review",
+        operatingTimezoneOffsetMinutes: 0,
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(updateResult).toMatchObject({
+      configured: true,
+      localStartMinutes: 465,
+      mode: "enabled",
+      openingBlockerHandling: "start_with_manager_review",
+      operatingTimezoneOffsetMinutes: 0,
+    });
+    expect(
+      Array.from(tables.get("automationPolicy")?.values() ?? []),
+    ).toContainEqual(
+      expect.objectContaining({
+        openingBlockerHandling: "manager_review",
+        openingLocalStartMinutes: 465,
+      }),
+    );
+
+    const skipResult = await getHandler(updateOpeningAutoStartPolicy)(
+      { db } as unknown as MutationCtx,
+      {
+        localStartMinutes: 510,
+        mode: "dry_run",
+        openingBlockerHandling: "skip_when_blocked",
+        operatingTimezoneOffsetMinutes: 0,
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(skipResult).toMatchObject({
+      configured: true,
+      localStartMinutes: 510,
+      mode: "dry_run",
+      openingBlockerHandling: "skip_when_blocked",
+    });
+    const readResult = await getHandler(getOpeningAutoStartPolicy)(
+      { db } as unknown as MutationCtx,
+      {
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(readResult).toMatchObject({
+      configured: true,
+      localStartMinutes: 510,
+      mode: "dry_run",
+      openingBlockerHandling: "skip_when_blocked",
+      operatingTimezoneOffsetMinutes: 0,
+    });
+  });
+
+  it("rejects invalid Opening auto-start timezone offsets at the API boundary", async () => {
+    const { db } = createDb({ store: [store] });
+    accessMocks.requireStoreFullAdminAccess.mockResolvedValue({
+      athenaUser: { _id: "user-1" },
+      store,
+    });
+
+    await expect(
+      getHandler(updateOpeningAutoStartPolicy)({ db } as unknown as MutationCtx, {
+        localStartMinutes: 480,
+        mode: "enabled",
+        openingBlockerHandling: "start_with_manager_review",
+        operatingTimezoneOffsetMinutes: 15 * 60,
+        storeId: "store-1" as Id<"store">,
+      }),
+    ).rejects.toThrow("Operating timezone offset must be within UTC-14 to UTC+14.");
   });
 
   it("auto-starts only clean Opening Handoff snapshots under enabled policy", async () => {
@@ -676,6 +806,259 @@ describe("daily operations automation adapter", () => {
         .map((insert) => insert.value)
         .filter((run) => run.action === "eod.prepare"),
     ).toHaveLength(1);
+  });
+
+  it("skips configured Opening cron before the policy local start time without recording a run", async () => {
+    const { db, inserts } = createDb({
+      automationPolicy: [
+        policy("opening.auto_start", "enabled", {
+          openingLocalStartMinutes: 480,
+          operatingTimezoneOffsetMinutes: 0,
+        }),
+      ],
+      dailyClose: [completedDailyClose()],
+      store: [store],
+    });
+
+    const result = await runConfiguredDailyOperationsAutomationWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        now: Date.UTC(2026, 5, 8, 7, 59),
+      },
+    );
+
+    expect(result.openingResults).toEqual([]);
+    expect(inserts.filter((insert) => insert.table === "automationRun")).toEqual(
+      [],
+    );
+  });
+
+  it("skips configured automation policies with invalid persisted timezone offsets", async () => {
+    const { db, inserts } = createDb({
+      automationPolicy: [
+        policy("opening.auto_start", "enabled", {
+          operatingTimezoneOffsetMinutes: 15 * 60,
+        }),
+      ],
+      dailyClose: [completedDailyClose()],
+      store: [store],
+    });
+
+    const result = await runConfiguredDailyOperationsAutomationWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        now: Date.UTC(2026, 5, 8, 8),
+      },
+    );
+
+    expect(result.openingResults).toEqual([]);
+    expect(inserts.filter((insert) => insert.table === "automationRun")).toEqual(
+      [],
+    );
+  });
+
+  it("catches up a late-day Opening start when the next hourly tick crosses midnight", async () => {
+    const { db, inserts } = createDb({
+      automationPolicy: [
+        policy("opening.auto_start", "enabled", {
+          openingLocalStartMinutes: 23 * 60 + 45,
+          operatingTimezoneOffsetMinutes: 0,
+        }),
+      ],
+      dailyClose: [completedDailyClose()],
+      store: [store],
+    });
+
+    const result = await runConfiguredDailyOperationsAutomationWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        now: Date.UTC(2026, 5, 9, 0, 0),
+      },
+    );
+
+    expect(result.openingResults).toHaveLength(1);
+    expect(inserts).toContainEqual(
+      expect.objectContaining({
+        table: "automationRun",
+        value: expect.objectContaining({
+          action: "opening.auto_start",
+          operatingDate: "2026-06-08",
+          outcome: "applied",
+        }),
+      }),
+    );
+  });
+
+  it("runs configured Opening cron at the first tick after the policy local start time", async () => {
+    const { db, inserts } = createDb({
+      automationPolicy: [
+        policy("opening.auto_start", "enabled", {
+          openingLocalStartMinutes: 480,
+          operatingTimezoneOffsetMinutes: 0,
+        }),
+      ],
+      dailyClose: [completedDailyClose()],
+      store: [store],
+    });
+
+    const result = await runConfiguredDailyOperationsAutomationWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        now: Date.UTC(2026, 5, 8, 8),
+      },
+    );
+
+    expect(result.openingResults).toHaveLength(1);
+    expect(inserts).toContainEqual(
+      expect.objectContaining({
+        table: "automationRun",
+        value: expect.objectContaining({
+          action: "opening.auto_start",
+          operatingDate: "2026-06-08",
+          outcome: "applied",
+        }),
+      }),
+    );
+  });
+
+  it("continues configured automation when one policy throws", async () => {
+    const store2 = {
+      ...store,
+      _id: "store-2",
+      name: "Airport",
+      slug: "airport",
+    };
+    const { db, inserts } = createDb({
+      automationPolicy: [
+        policy("opening.auto_start", "enabled", {
+          operatingTimezoneOffsetMinutes: 0,
+        }),
+        policy("opening.auto_start", "enabled", {
+          _id: "policy-opening-duplicate",
+          operatingTimezoneOffsetMinutes: 0,
+          storeId: "store-1",
+        }),
+        policy("opening.auto_start", "enabled", {
+          _id: "policy-opening-store-2",
+          operatingTimezoneOffsetMinutes: 0,
+          storeId: "store-2",
+        }),
+      ],
+      dailyClose: [
+        completedDailyClose(),
+        completedDailyClose({
+          _id: "daily-close-2",
+          storeId: "store-2",
+        }),
+      ],
+      store: [store, store2],
+    });
+
+    const result = await runConfiguredDailyOperationsAutomationWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        now: Date.UTC(2026, 5, 8, 8),
+      },
+    );
+
+    expect(result.openingResults).toHaveLength(2);
+    expect(
+      inserts
+        .filter((insert) => insert.table === "automationRun")
+        .map((insert) => insert.value),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          action: "opening.auto_start",
+          outcome: "failed",
+          storeId: "store-1",
+        }),
+        expect.objectContaining({
+          action: "opening.auto_start",
+          outcome: "applied",
+          storeId: "store-2",
+        }),
+      ]),
+    );
+  });
+
+  it("auto-starts Opening with blockers when policy routes blockers to manager review", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 5, 8, 8));
+    const { db, inserts } = createDb({
+      approvalRequest: [
+        {
+          _id: "approval-1",
+          createdAt: Date.UTC(2026, 5, 8, 7),
+          reason: "Cash variance needs review.",
+          registerSessionId: "register-1",
+          requestType: "variance_review",
+          status: "pending",
+          storeId: "store-1",
+          subjectId: "register-1",
+          subjectType: "register_session",
+        },
+      ],
+      automationPolicy: [
+        policy("opening.auto_start", "enabled", {
+          openingBlockerHandling: "manager_review",
+        }),
+      ],
+      dailyClose: [completedDailyClose()],
+      store: [store],
+    });
+
+    const result = await runDailyOpeningAutomationWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        operatingDate: "2026-06-08",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(result.run).toMatchObject({
+      decisionReason:
+        "Opening Handoff started with manager review evidence from automation policy.",
+      outcome: "applied",
+      snapshotCounts: {
+        blockerCount: 1,
+        carryForwardCount: 0,
+        readyCount: 1,
+        reviewCount: 0,
+      },
+    });
+    expect(inserts[1].value).toMatchObject({
+      actorType: "automation",
+      managerReviewEvidence: [
+        expect.objectContaining({
+          category: "approval",
+          key: "approval_request:approval-1:pending",
+          severity: "blocker",
+          subject: expect.objectContaining({
+            id: "approval-1",
+            type: "approval_request",
+          }),
+        }),
+      ],
+      readiness: {
+        blockerCount: 1,
+        carryForwardCount: 0,
+        readyCount: 1,
+        reviewCount: 0,
+        status: "blocked",
+      },
+    });
+    expect(inserts[2].value).toMatchObject({
+      eventType: "daily_opening_auto_started",
+      metadata: {
+        managerReviewEvidence: [
+          expect.objectContaining({
+            key: "approval_request:approval-1:pending",
+            severity: "blocker",
+          }),
+        ],
+        managerReviewEvidenceCount: 1,
+      },
+    });
   });
 
   it("records failed Opening automation when the start command rejects the apply", async () => {
