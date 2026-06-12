@@ -1,4 +1,4 @@
-import { useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import type { ComponentType, ReactNode } from "react";
 import View from "../View";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
@@ -34,6 +34,8 @@ import { usePosLocalSyncRuntimeStatus } from "@/lib/pos/infrastructure/local/use
 import { usePrewarmRegisterCatalogOfflineSnapshots } from "@/lib/pos/infrastructure/convex/catalogGateway";
 import type { Id } from "~/convex/_generated/dataModel";
 import { usePosTerminalAppSessionRecoveryRuntimeInput } from "@/lib/pos/infrastructure/terminal/posTerminalAppSessionRecoveryContext";
+import { RemoteAssistRuntimeShell } from "@/components/remote-assist/RemoteAssistRuntimeShell";
+import type { RemoteAssistRuntimeState } from "@/lib/remote-assist";
 
 type FeatureLinkProps = {
   children: ReactNode;
@@ -49,6 +51,13 @@ type FeatureLinkProps = {
 };
 
 const FeatureLink = Link as unknown as ComponentType<FeatureLinkProps>;
+
+type RemoteAssistSessionSummary = {
+  _id: Id<"remoteAssistSession"> | string;
+  effectiveMode: "attended" | "unattended" | string;
+  sensitiveModeActive: boolean;
+  status: string;
+};
 
 export default function PointOfSaleView() {
   const { activeStore } = useGetActiveStore();
@@ -80,6 +89,23 @@ export default function PointOfSaleView() {
     storeId: hubTerminalSeed?.storeId,
     terminalId: hubTerminalSeed?.cloudTerminalId ?? hubTerminalSeed?.terminalId,
   });
+  const remoteAssistRuntimeIdentity =
+    hubTerminalSeed?.cloudTerminalId ?? hubTerminalSeed?.terminalId;
+  const remoteAssistSession = useQuery(
+    api.pos.public.terminals.getRuntimeRemoteAssistSession,
+    hubTerminalSeed?.storeId &&
+      hubTerminalSeed?.syncSecretHash &&
+      remoteAssistRuntimeIdentity
+      ? {
+          storeId: hubTerminalSeed.storeId as Id<"store">,
+          syncSecretHash: hubTerminalSeed.syncSecretHash,
+          terminalId: remoteAssistRuntimeIdentity as Id<"posTerminal">,
+        }
+      : "skip",
+  ) as RemoteAssistSessionSummary | null | undefined;
+  const disconnectRemoteAssistSession = useMutation(
+    api.pos.public.terminals.disconnectRemoteAssistSession,
+  );
 
   // Get today's POS transaction summary
   const todaySummary = useQuery(
@@ -109,6 +135,9 @@ export default function PointOfSaleView() {
   const setupRequired =
     localEntryContext.status !== "loading" &&
     localEntryContext.status !== "ready";
+  const remoteAssistRuntimeState = getRemoteAssistRuntimeState(
+    remoteAssistSession,
+  );
 
   const posFeatures = [
     {
@@ -211,6 +240,22 @@ export default function PointOfSaleView() {
 
   return (
     <View hideBorder hideHeaderBottomBorder className="bg-background">
+      {remoteAssistRuntimeState &&
+      localEntryContext.status === "ready" &&
+      hubTerminalSeed &&
+      remoteAssistRuntimeIdentity ? (
+        <RemoteAssistRuntimeShell
+          onDisconnect={() => {
+            void disconnectRemoteAssistSession({
+              sessionId: remoteAssistSession!._id as Id<"remoteAssistSession">,
+              storeId: hubTerminalSeed.storeId as Id<"store">,
+              syncSecretHash: hubTerminalSeed.syncSecretHash,
+              terminalId: remoteAssistRuntimeIdentity as Id<"posTerminal">,
+            });
+          }}
+          state={remoteAssistRuntimeState}
+        />
+      ) : null}
       <FadeIn className="container mx-auto py-layout-xl">
         <PageWorkspace>
           <PageLevelHeader title="Point of Sale" />
@@ -383,4 +428,31 @@ export default function PointOfSaleView() {
       </FadeIn>
     </View>
   );
+}
+
+function getRemoteAssistRuntimeState(
+  session: RemoteAssistSessionSummary | null | undefined,
+): RemoteAssistRuntimeState | null {
+  if (!session || !["active", "connecting", "pending_attended_approval"].includes(session.status)) {
+    return null;
+  }
+  return {
+    controlEnabled:
+      session.status === "active" &&
+      session.effectiveMode === "unattended" &&
+      !session.sensitiveModeActive,
+    sessionId: session._id,
+    status:
+      session.status === "active"
+        ? "connected"
+        : session.status === "pending_attended_approval"
+          ? "blocked"
+          : "connecting",
+    supportAgentName: null,
+    viewerCount: session.status === "active" ? 1 : 0,
+    blockedReason:
+      session.status === "pending_attended_approval"
+        ? "Approval required"
+        : null,
+  };
 }

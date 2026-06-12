@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import PointOfSaleView from "./PointOfSaleView";
@@ -10,6 +10,7 @@ const useLocalPosEntryContextMock = vi.fn();
 const usePermissionsMock = vi.fn();
 const usePrewarmRegisterCatalogOfflineSnapshotsMock = vi.fn();
 const usePosLocalSyncRuntimeStatusMock = vi.fn();
+const useMutationMock = vi.fn();
 const useQueryMock = vi.fn();
 
 vi.mock("@tanstack/react-router", () => ({
@@ -37,6 +38,7 @@ vi.mock("@tanstack/react-router", () => ({
 }));
 
 vi.mock("convex/react", () => ({
+  useMutation: () => useMutationMock,
   useQuery: (...args: unknown[]) => useQueryMock(...args),
 }));
 
@@ -109,6 +111,7 @@ describe("PointOfSaleView", () => {
     });
     useGetActiveOrganizationMock.mockReturnValue({
       activeOrganization: {
+        _id: "org-1",
         slug: "acme",
       },
     });
@@ -129,6 +132,7 @@ describe("PointOfSaleView", () => {
       totalSales: 12_500,
       totalTransactions: 2,
     });
+    useMutationMock.mockResolvedValue(null);
     usePosLocalSyncRuntimeStatusMock.mockReturnValue(null);
   });
 
@@ -314,6 +318,53 @@ describe("PointOfSaleView", () => {
         terminalId: "terminal-cloud-1",
       }),
     );
+  });
+
+  it("shows a Remote Assist runtime banner and disconnects with terminal proof", () => {
+    useLocalPosEntryContextMock.mockReturnValue({
+      status: "ready",
+      orgUrlSlug: "acme",
+      storeUrlSlug: "downtown",
+      storeId: "store-1",
+      terminalSeed: {
+        terminalId: "local-terminal-1",
+        cloudTerminalId: "terminal-cloud-1",
+        syncSecretHash: "secret-hash",
+        storeId: "store-1",
+        displayName: "Front register",
+        provisionedAt: 1_700,
+        schemaVersion: 2,
+      },
+      source: "live",
+    });
+    useQueryMock
+      .mockReturnValueOnce({
+        _id: "remote-session-1",
+        effectiveMode: "unattended",
+        sensitiveModeActive: false,
+        status: "active",
+      })
+      .mockReturnValue({
+        totalItemsSold: 3,
+        totalSales: 12_500,
+        totalTransactions: 2,
+      });
+
+    render(<PointOfSaleView />);
+
+    expect(screen.getByLabelText("Remote assist runtime")).toBeInTheDocument();
+    expect(screen.getByText("Control on")).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /disconnect remote assist/i }),
+    );
+
+    expect(useMutationMock).toHaveBeenCalledWith({
+      sessionId: "remote-session-1",
+      storeId: "store-1",
+      syncSecretHash: "secret-hash",
+      terminalId: "terminal-cloud-1",
+    });
   });
 
   it("shows setup guidance instead of blanking when local POS authority is missing", () => {

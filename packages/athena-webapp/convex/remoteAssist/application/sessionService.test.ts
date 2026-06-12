@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   approveAttendedRemoteAssistSession,
   claimRemoteAssistSession,
+  disconnectRemoteAssistRuntimeSession,
   endRemoteAssistSession,
   startRemoteAssistSession,
   type RemoteAssistRepository,
@@ -53,7 +54,7 @@ describe("remote assist session service", () => {
     );
   });
 
-  it("reuses an active session for the same requester and client", async () => {
+  it("reuses an active session for the client", async () => {
     const repository = buildRepository({
       sessions: [
         buildSession({
@@ -74,6 +75,41 @@ describe("remote assist session service", () => {
       clientId: "client-1",
       now,
       reason: "M Supplies terminal recovery",
+      requestedMode: "unattended",
+    });
+
+    expect(result).toMatchObject({
+      data: {
+        _id: "session-existing",
+      },
+      kind: "ok",
+    });
+    expect(repository.insertSession).not.toHaveBeenCalled();
+    expect(repository.insertEvent).not.toHaveBeenCalled();
+  });
+
+  it("reuses an active client session requested by another support user", async () => {
+    const repository = buildRepository({
+      sessions: [
+        buildSession({
+          _id: "session-existing",
+          requestedByUserId: "user-1",
+          status: "active",
+        }),
+      ],
+    });
+
+    const result = await startRemoteAssistSession(repository, {
+      actor: {
+        organizationId: "org-1",
+        remoteAssistAllowed: true,
+        role: "support",
+        storeIds: ["store-1"],
+        userId: "user-2",
+      },
+      clientId: "client-1",
+      now,
+      reason: "Drawer repair support",
       requestedMode: "unattended",
     });
 
@@ -162,6 +198,59 @@ describe("remote assist session service", () => {
       },
       kind: "ok",
     });
+  });
+
+  it("records runtime-attributed disconnect events", async () => {
+    const repository = buildRepository({
+      session: buildSession({
+        status: "active",
+      }),
+    });
+
+    const result = await disconnectRemoteAssistRuntimeSession(repository, {
+      clientId: "client-1",
+      now,
+      sessionId: "session-1",
+    });
+
+    expect(result).toMatchObject({
+      data: {
+        status: "ended",
+        terminationReason: "Terminal disconnected Remote Assist.",
+      },
+      kind: "ok",
+    });
+    expect(repository.insertEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "runtime_disconnected",
+        participantRole: "runtime",
+        summary: "Terminal disconnected Remote Assist.",
+      }),
+    );
+  });
+
+  it("does not let another runtime disconnect a Remote Assist session", async () => {
+    const repository = buildRepository({
+      session: buildSession({
+        clientId: "client-1",
+        status: "active",
+      }),
+    });
+
+    const result = await disconnectRemoteAssistRuntimeSession(repository, {
+      clientId: "client-2",
+      now,
+      sessionId: "session-1",
+    });
+
+    expect(result).toMatchObject({
+      error: {
+        code: "authorization_failed",
+      },
+      kind: "user_error",
+    });
+    expect(repository.patchSession).not.toHaveBeenCalled();
+    expect(repository.insertEvent).not.toHaveBeenCalled();
   });
 
   it("requires local approval before an attended session can be claimed", async () => {
@@ -424,10 +513,12 @@ function buildRepository(overrides: {
     : buildSession();
   return {
     getClient: vi.fn(async () => overrides.client ?? buildClient()),
+    getCurrentSessionForClient: vi.fn(async () => overrides.sessions?.[0] ?? session),
     getSession: vi.fn(async () => session),
     insertEvent: vi.fn(async () => {}),
     insertSession: vi.fn(async (input) => {
       const insertedSession = {
+        _creationTime: 1,
         _id: "session-1",
         ...input,
       };
@@ -472,7 +563,6 @@ function buildClient(overrides: Partial<RemoteAssistClient> = {}): RemoteAssistC
 
 function buildSession(overrides: Partial<RemoteAssistSession> = {}): RemoteAssistSession {
   return {
-    _id: "session-1",
     clientId: "client-1",
     effectiveMode: "unattended",
     expiresAt: now + 1_000,
@@ -487,5 +577,7 @@ function buildSession(overrides: Partial<RemoteAssistSession> = {}): RemoteAssis
     transportProvider: "livekit",
     transportRoomId: "room-1",
     ...overrides,
+    _creationTime: overrides._creationTime ?? 1,
+    _id: overrides._id ?? "session-1",
   };
 }

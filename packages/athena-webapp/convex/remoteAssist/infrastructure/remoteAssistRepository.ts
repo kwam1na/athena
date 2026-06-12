@@ -20,6 +20,10 @@ export function createRemoteAssistRepository(
     clientId: string;
     now: number;
   }): Promise<RemoteAssistSession[]>;
+  getCurrentSessionForClient(args: {
+    clientId: string;
+    now: number;
+  }): Promise<RemoteAssistSession | null>;
   upsertClient(
     input: Omit<Doc<"remoteAssistClient">, "_id" | "_creationTime">,
   ): Promise<Doc<"remoteAssistClient">>;
@@ -49,6 +53,12 @@ export function createRemoteAssistRepository(
         );
       }
       return matches[0] ?? null;
+    },
+    async getCurrentSessionForClient(args) {
+      const sessions = await this.listReusableSessionsForClient(args);
+      return (
+        sessions.sort(compareRemoteAssistSessionForSupportView)[0] ?? null
+      );
     },
     async getSession(sessionId) {
       return toRemoteAssistSession(
@@ -163,6 +173,26 @@ export function createRemoteAssistRepository(
       return client;
     },
   };
+}
+
+function compareRemoteAssistSessionForSupportView(
+  left: RemoteAssistSession,
+  right: RemoteAssistSession,
+) {
+  const statusPriority: Record<RemoteAssistSession["status"], number> = {
+    active: 0,
+    connecting: 1,
+    pending_attended_approval: 2,
+    denied: 3,
+    ended: 4,
+    expired: 5,
+  };
+  const leftPriority = statusPriority[left.status] ?? 99;
+  const rightPriority = statusPriority[right.status] ?? 99;
+  if (leftPriority !== rightPriority) {
+    return leftPriority - rightPriority;
+  }
+  return right.requestedAt - left.requestedAt;
 }
 
 function toRemoteAssistClient(
