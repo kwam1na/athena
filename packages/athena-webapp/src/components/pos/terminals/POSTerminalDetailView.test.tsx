@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   },
   canAccessPOS: vi.fn(() => true),
   hasFullAdminAccess: true,
+  action: vi.fn(),
   mutation: vi.fn(),
   useQuery: vi.fn(() => null),
   toastSuccess: vi.fn(),
@@ -63,6 +64,7 @@ vi.mock("@tanstack/react-router", () => ({
 }));
 
 vi.mock("convex/react", () => ({
+  useAction: () => mocks.action,
   useMutation: () => mocks.mutation,
   useQuery: mocks.useQuery,
 }));
@@ -247,6 +249,10 @@ describe("POSTerminalDetailViewContent", () => {
     mocks.activeStoreState.isLoadingStores = false;
     mocks.canAccessPOS.mockReturnValue(true);
     mocks.hasFullAdminAccess = true;
+    mocks.action.mockResolvedValue({
+      data: null,
+      kind: "ok",
+    });
     mocks.mutation.mockResolvedValue({
       data: { action: "resolved", resolvedCount: 1 },
       kind: "ok",
@@ -865,6 +871,10 @@ describe("POSTerminalDetailView", () => {
     mocks.activeStoreState.activeStore = { _id: "store-1" };
     mocks.activeStoreState.isLoadingStores = false;
     mocks.canAccessPOS.mockReturnValue(true);
+    mocks.action.mockResolvedValue({
+      data: null,
+      kind: "ok",
+    });
     mocks.mutation.mockResolvedValue({
       data: { action: "resolved", resolvedCount: 1 },
       kind: "ok",

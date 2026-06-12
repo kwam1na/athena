@@ -10,7 +10,7 @@ symptoms:
   - "POS terminal recovery needs remote help but must not own the platform remote-assist abstraction"
   - "Unattended support cannot depend on browser screen-capture permission prompts"
 root_cause: remote_support_needed_a_browser_client_boundary_separate_from_pos_terminal_authority
-resolution_type: provider_neutral_remote_assist_foundation
+resolution_type: livekit_backed_remote_assist_foundation
 severity: high
 tags:
   - remote-assist
@@ -42,9 +42,14 @@ is safe for enrolled clients even when no local operator is present.
 - Runtime adapters own surface-specific identity, capability reporting,
   sensitive-region marking, safe local actions, and integration context.
 - POS terminals are the first adapter, not the owner of Remote Assist.
-- Transport is provider-neutral. LiveKit-style rooms/data packets, Twilio-style
-  room tokens/data tracks, or an rrweb-shaped DOM event stream can satisfy the
-  contract, but provider details stay behind an adapter.
+- LiveKit Cloud is the provider of record for live Remote Assist transport, but
+  it must be reached through Athena's provider-adapter boundary. New
+  implementation should add a LiveKit adapter behind the Remote Assist transport
+  contract rather than letting POS, Terminal Health, or session lifecycle code
+  call LiveKit SDKs directly.
+- Athena owns the co-browse representation. Use an rrweb-shaped sanitized DOM
+  event/frame model over the LiveKit data transport for unattended sessions;
+  rrweb is a capture/replay library shape, not the Remote Assist provider.
 - Unattended mode uses sanitized in-app co-browsing/session-replay data plus
   bounded control events. Attended mode may upgrade to browser screen share only
   after the local browser grants capture permission.
@@ -59,6 +64,10 @@ Model Remote Assist around a browser-client session contract:
 - Start sessions only after role, policy, enrollment, runtime presence, reason,
   TTL, and mode checks pass. Tokens must be short-lived and scoped to a session,
   client, provider room, and participant role.
+- Mint LiveKit room tokens from Athena server code only. Runtime participants
+  should receive publish rights for sanitized frames and state, while support
+  participants should receive subscribe rights plus narrowly scoped data-packet
+  publish rights for bounded control intents.
 - Stream an unattended-safe app representation rather than raw desktop access.
   A DOM/session-replay approach should redact or omit sensitive nodes before
   transport and should send compact input events instead of arbitrary commands.
@@ -92,7 +101,7 @@ Keep that handoff split by authority:
   the session, then show active state and an explicit end action.
 - The live assist transport contract should expose sanitized co-browse metadata
   and bounded Athena-surface control intents before any provider-specific
-  adapter is introduced.
+  adapter is introduced. The first provider-specific adapter should be LiveKit.
 
 Do not add a broad support-callable runtime claim mutation. That collapses the
 support and runtime authority boundary and makes it too easy to mark a browser
@@ -117,12 +126,61 @@ Preserve these POS gates:
 Support can inspect and guide a M Supplies-shaped terminal recovery, but a
 fresh runtime check-in remains the proof that terminal-local blockers cleared.
 
+## Provider Decision
+
+Use LiveKit Cloud for Remote Assist transport through the provider-adapter
+boundary.
+
+Why:
+
+- The existing Athena schema and session service already default session
+  transport to `livekit`, so this is an explicit product decision rather than a
+  new architectural direction. Persisting `livekit` is useful operationally: it
+  records which provider backed a session for support, audit, and migration.
+- LiveKit covers the transport primitives Athena needs: low-latency rooms,
+  short-lived role-scoped participant tokens, reliable data packets for session
+  state/control intents, lossy packets for high-frequency pointer/viewport
+  updates, and native screen-share tracks for attended upgrades.
+- Athena still keeps the sensitive part in-house: DOM capture shape, redaction,
+  sensitive-region handling, bounded control validation, POS authority checks,
+  and audit remain Athena-owned.
+- The provider adapter is the implementation boundary, not the persisted
+  provider identity. Code should depend on Athena transport operations such as
+  room creation, token minting, frame publish, control-intent publish, and
+  disconnect handling; only the LiveKit adapter maps those operations to LiveKit
+  rooms, grants, packets, and tracks.
+- Twilio Video is no longer the right default for this feature. Even with its
+  retirement reversal, it adds less value to Athena's unattended co-browse path
+  than LiveKit's room/data/media model and would force another provider branch
+  without solving POS-specific redaction.
+- Generic co-browsing SaaS should stay out of the first provider-backed slice.
+  It can be reconsidered only if LiveKit plus Athena-owned co-browse events
+  cannot meet support latency or reliability requirements without moving
+  sensitive policy outside Athena.
+
+Implementation implication: keep the public contract provider-neutral and route
+provider calls through a `LiveKitRemoteAssistTransport` implementation. Treat
+`livekit` as the only supported production transport provider for the next
+delivery slice. Use `provider_adapter` only as an escape hatch for future
+migration work or tests that intentionally exercise the generic boundary, not as
+the normal v1 session provider value.
+
+Do not couple Remote Assist to LiveKit outside the transport adapter:
+
+- POS and Terminal Health should consume Athena session state and transport
+  capabilities, not LiveKit room objects.
+- Convex public functions should mint scoped Athena transport credentials, not
+  expose raw provider credentials or grants.
+- Runtime and support clients should publish/subscribe through Athena Remote
+  Assist transport helpers so a future provider swap changes the adapter, not
+  POS authority or session lifecycle code.
+
 ## Validation
 
 Keep the validation map targeted to the whole foundation boundary:
 
 - Remote Assist schema, repository, policy, session lifecycle, public API, and
-  transport adapter contract tests.
+  LiveKit transport adapter contract tests.
 - Client runtime tests for enrollment/presence, session banner, local
   disconnect, bounded input, co-browsing event redaction, and sensitive-mode
   masking.

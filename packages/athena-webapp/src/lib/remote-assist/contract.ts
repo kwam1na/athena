@@ -29,7 +29,25 @@ export type RemoteAssistCoBrowseFrame = {
   route: string;
   sessionId: string;
   sensitiveRegions: Array<Pick<RemoteAssistSensitiveRegion, "id" | "label">>;
+  surface?: RemoteAssistSanitizedSurface;
   viewport: RemoteAssistViewport;
+};
+
+export type RemoteAssistSanitizedSurfaceControl = {
+  controlId: string;
+  label: string;
+  rect: RemoteAssistViewport & {
+    x: number;
+    y: number;
+  };
+  role: "button" | "link" | "input" | "select" | "control";
+};
+
+export type RemoteAssistSanitizedSurface = {
+  controls: RemoteAssistSanitizedSurfaceControl[];
+  focusedControlId?: string;
+  title: string;
+  visibleText: string[];
 };
 
 export type RemoteAssistControlIntent = {
@@ -62,6 +80,7 @@ export function buildRemoteAssistCoBrowseFrame(args: {
   route: string;
   sensitiveRegions?: RemoteAssistSensitiveRegion[];
   sessionId: string;
+  surface?: RemoteAssistSanitizedSurface;
   viewport: RemoteAssistViewport;
 }): RemoteAssistCoBrowseFrame {
   const sensitiveRegions = createSensitiveRegionSet(
@@ -80,6 +99,7 @@ export function buildRemoteAssistCoBrowseFrame(args: {
       id: region.id,
       label: region.label,
     })),
+    surface: args.surface,
     viewport: { ...args.viewport },
   };
 }

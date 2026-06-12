@@ -120,6 +120,34 @@ export type RemoteAssistSessionEvent = {
   metadata?: Record<string, unknown>;
 };
 
+export type RemoteAssistTransportParticipantRole = "support" | "runtime";
+
+export type RemoteAssistTransportCredential = {
+  expiresAt: number;
+  participantIdentity: string;
+  participantRole: RemoteAssistTransportParticipantRole;
+  provider: RemoteAssistTransportProvider;
+  roomId: string;
+  sessionId: string;
+  token: string;
+  topics: {
+    controlIntents: string;
+    controlResults: string;
+    runtimeFrames: string;
+    runtimeState: string;
+  };
+  url: string;
+};
+
+export type RemoteAssistTransportCredentialContext = Omit<
+  RemoteAssistTransportCredential,
+  "token" | "url"
+> & {
+  clientId: string;
+  organizationId: string;
+  storeId?: string;
+};
+
 const SECRET_LIKE_KEYS = [
   "authorization",
   "customer",
