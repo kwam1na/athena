@@ -314,18 +314,65 @@ describe("POSTerminalDetailViewContent", () => {
 
     expect(screen.getByText("Remote Assist")).toBeInTheDocument();
     expect(screen.getByText("Ready for support session")).toBeInTheDocument();
+    const startSessionButton = screen.getByRole("button", {
+      name: /start session/i,
+    });
+    expect(startSessionButton).toBeDisabled();
 
-    fireEvent.click(screen.getByRole("button", { name: /start session/i }));
+    fireEvent.change(screen.getByLabelText("Reason"), {
+      target: { value: "Drawer repair support" },
+    });
+    expect(startSessionButton).toBeEnabled();
+    fireEvent.click(startSessionButton);
 
     await waitFor(() => {
       expect(onStartRemoteAssist).toHaveBeenCalledWith({
         clientId: "remote-client-1",
-        reason: "M Supplies terminal recovery",
+        reason: "Drawer repair support",
       });
     });
     expect(mocks.toastSuccess).toHaveBeenCalledWith(
       "Remote Assist session requested.",
     );
+    expect(
+      await screen.findByText("Remote Assist session connecting"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Session requested")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /session requested/i }),
+    ).toBeDisabled();
+  });
+
+  it("restores an in-progress Remote Assist session from server state", () => {
+    render(
+      <POSTerminalDetailViewContent
+        canStartRemoteAssist
+        detail={detail}
+        isLoading={false}
+        remoteAssistClient={{
+          _id: "remote-client-1",
+          accessPolicy: "unattended_allowed",
+          displayName: "Front counter",
+          enrollmentStatus: "active",
+          lastPresenceAt: Date.now(),
+          presenceStatus: "online",
+        }}
+        remoteAssistSession={{
+          _id: "session-1",
+          effectiveMode: "unattended",
+          reason: "Drawer repair support",
+          status: "connecting",
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByText("Remote Assist session connecting"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Session requested")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /session requested/i }),
+    ).toBeDisabled();
   });
 
   it("shows approval-required Remote Assist responses", async () => {
@@ -374,6 +421,9 @@ describe("POSTerminalDetailViewContent", () => {
       />,
     );
 
+    fireEvent.change(screen.getByLabelText("Reason"), {
+      target: { value: "Support needs cashier approval" },
+    });
     fireEvent.click(screen.getByRole("button", { name: /start session/i }));
 
     await waitFor(() => {

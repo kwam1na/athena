@@ -4,16 +4,17 @@ import {
   useProductsTableState,
 } from "./ProductsTableContext";
 import { useGetProducts } from "~/src/hooks/useGetProducts";
-import type { ProductAvailability } from "~/src/hooks/useGetProducts";
 import { useState, useMemo } from "react";
+import { useGetCategories } from "~/src/hooks/useGetCategories";
 import View from "../View";
 import { FadeIn } from "../common/FadeIn";
 import StoreProducts from "./StoreProducts";
 import { capitalizeWords, slugToWords } from "~/src/lib/utils";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Eye, EyeOff } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "../ui/toggle-group";
 import { Button } from "../ui/button";
-import { useAction } from "convex/react";
+import { Switch } from "../ui/switch";
+import { useAction, useMutation } from "convex/react";
 import { api } from "~/convex/_generated/api";
 import { toast } from "sonner";
 import {
@@ -21,19 +22,7 @@ import {
   PageWorkspace,
   PageWorkspaceMain,
 } from "../common/PageLevelHeader";
-
-const POS_OPERATIONAL_CATEGORY_SLUGS = new Set([
-  "pos-pending-checkout",
-  "pos-quick-add",
-]);
-
-export function getCategoryProductAvailability(
-  categorySlug: string | undefined,
-): ProductAvailability | undefined {
-  return categorySlug && POS_OPERATIONAL_CATEGORY_SLUGS.has(categorySlug)
-    ? "live"
-    : undefined;
-}
+import { getCategoryProductQueryOptions } from "./ProductsListView.logic";
 
 const ProductActionsToggleGroup = ({
   outOfStockProductsCount,
@@ -62,19 +51,51 @@ const ProductActionsToggleGroup = ({
 };
 
 const CategoryWorkspaceActions = ({
+  categorySlug,
   outOfStockProductsCount,
   selectedProductActions,
   setSelectedProductActions,
   hasProducts,
 }: {
+  categorySlug: string;
   outOfStockProductsCount: number;
   selectedProductActions: string[];
   setSelectedProductActions: (actions: string[]) => void;
   hasProducts: boolean;
 }) => {
+  const categories = useGetCategories();
+  const updateCategory = useMutation(api.inventory.categories.update);
   const clearAllCache = useAction(api.inventory.productUtil.clearAllCache);
+  const category = categories?.find(({ slug }) => slug === categorySlug);
   const [isClearCacheMutationPending, setIsClearCacheMutationPending] =
     useState(false);
+  const [
+    isStorefrontVisibilityMutationPending,
+    setIsStorefrontVisibilityMutationPending,
+  ] = useState(false);
+
+  const isStorefrontVisible = category?.showOnStorefront !== false;
+
+  const handleStorefrontVisibilityChange = async (checked: boolean) => {
+    if (!category) return;
+
+    setIsStorefrontVisibilityMutationPending(true);
+    try {
+      await updateCategory({
+        id: category._id,
+        name: category.name,
+        slug: category.slug,
+        showOnStorefront: checked,
+      });
+      toast.success(
+        `${category.name} ${checked ? "shown on" : "hidden from"} storefront`,
+      );
+    } catch {
+      toast.error("Failed to update category visibility");
+    } finally {
+      setIsStorefrontVisibilityMutationPending(false);
+    }
+  };
 
   const handleClearCache = async () => {
     setIsClearCacheMutationPending(true);
@@ -89,8 +110,28 @@ const CategoryWorkspaceActions = ({
   };
 
   return (
-    <div className="flex flex-col gap-layout-sm sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex flex-wrap items-center gap-2">
+    <section
+      aria-label="Category controls"
+      className="rounded-md border bg-background px-3 py-2"
+    >
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        {category ? (
+          <div className="flex min-h-9 items-center gap-2 rounded-md border px-3">
+            {isStorefrontVisible ? (
+              <Eye className="h-4 w-4 text-muted-foreground" />
+            ) : (
+              <EyeOff className="h-4 w-4 text-muted-foreground" />
+            )}
+            <span className="text-sm text-muted-foreground">Storefront</span>
+            <Switch
+              aria-label="Show category on storefront"
+              checked={isStorefrontVisible}
+              disabled={isStorefrontVisibilityMutationPending}
+              onCheckedChange={handleStorefrontVisibilityChange}
+            />
+          </div>
+        ) : null}
+
         {outOfStockProductsCount > 0 && (
           <ProductActionsToggleGroup
             outOfStockProductsCount={outOfStockProductsCount}
@@ -98,20 +139,18 @@ const CategoryWorkspaceActions = ({
             setSelectedProductActions={setSelectedProductActions}
           />
         )}
-      </div>
 
-      <div className="flex flex-wrap items-center gap-2">
         {hasProducts && (
           <Button
             variant="ghost"
             onClick={handleClearCache}
             disabled={isClearCacheMutationPending}
           >
-            Clear Cache
+            Clear cache
           </Button>
         )}
       </div>
-    </div>
+    </section>
   );
 };
 
@@ -119,11 +158,14 @@ function Body() {
   const { categorySlug, o } = useSearch({ strict: false });
   const { productsTableState } = useProductsTableState();
   const { subcategorySlug } = productsTableState;
+  const categoryProductQueryOptions = getCategoryProductQueryOptions(
+    categorySlug ?? undefined,
+  );
 
   const products = useGetProducts({
     subcategorySlug: subcategorySlug ?? undefined,
     categorySlug: categorySlug ?? undefined,
-    availability: getCategoryProductAvailability(categorySlug ?? undefined),
+    ...categoryProductQueryOptions,
   });
 
   const [selectedProductActions, setSelectedProductActions] = useState<
@@ -156,10 +198,11 @@ function Body() {
           <PageWorkspaceMain>
             {categorySlug ? (
               <CategoryWorkspaceActions
+                categorySlug={categorySlug}
                 outOfStockProductsCount={outOfStockProducts?.length || 0}
                 selectedProductActions={selectedProductActions}
                 setSelectedProductActions={setSelectedProductActions}
-                hasProducts={filteredProducts.length != 0}
+                hasProducts={products?.length != 0}
               />
             ) : null}
             <StoreProducts products={filteredProducts} />

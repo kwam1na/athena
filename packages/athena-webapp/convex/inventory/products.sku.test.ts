@@ -439,6 +439,24 @@ describe("product catalog visibility", () => {
     expect(archivedProducts.map((product: Row) => product._id)).toEqual([
       "product-archived",
     ]);
+
+    const draftHiddenCtx = createProductsQueryCtx(seed).ctx;
+    const draftHiddenProducts = await getHandler(getAll)(draftHiddenCtx, {
+      storeId: "storezzzz" as Id<"store">,
+      availability: "draft",
+      isVisible: false,
+    });
+
+    expect(draftHiddenProducts).toEqual([
+      expect.objectContaining({
+        _id: "product-draft",
+        skus: [
+          expect.objectContaining({
+            _id: "sku-draft",
+          }),
+        ],
+      }),
+    ]);
   });
 });
 

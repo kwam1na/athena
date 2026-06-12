@@ -9,12 +9,22 @@ const categoryRoutes: HonoWithConvex<ActionCtx> = new Hono();
 const STOREFRONT_HIDDEN_CATEGORY_SLUGS = new Set(["pos-quick-add"]);
 const STOREFRONT_HIDDEN_SUBCATEGORY_SLUGS = new Set(["uncategorized"]);
 
-export function removeStorefrontHiddenCategories<T extends { slug?: string }>(
-  categories: T[],
-) {
+export function shouldShowCategoryOnStorefront(category: {
+  showOnStorefront?: boolean;
+  slug?: string;
+}) {
+  if (category.showOnStorefront === false) {
+    return false;
+  }
+
+  return !category.slug || !STOREFRONT_HIDDEN_CATEGORY_SLUGS.has(category.slug);
+}
+
+export function removeStorefrontHiddenCategories<
+  T extends { showOnStorefront?: boolean; slug?: string },
+>(categories: T[]) {
   return categories.filter(
-    (category) =>
-      !category.slug || !STOREFRONT_HIDDEN_CATEGORY_SLUGS.has(category.slug),
+    (category) => shouldShowCategoryOnStorefront(category),
   );
 }
 

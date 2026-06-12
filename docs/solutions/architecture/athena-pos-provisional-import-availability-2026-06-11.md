@@ -7,10 +7,11 @@ problem_type: provisional_import_pos_availability
 component: pos
 symptoms:
   - "Imported legacy inventory needs to be searchable in POS before final Athena counts are trusted"
+  - "Reserved operational categories such as legacy import or pending checkout look empty when staff views inherit storefront visibility filters"
   - "Trusted stock mismatches can block checkout even when field reality says the product is being sold"
   - "Inventory import review decisions can accidentally look like they mutate existing Athena SKUs"
-root_cause: provisional_inventory_was_modeled_like_final_trusted_stock
-resolution_type: provisional_catalog_projection_with_reviewable_stock_exceptions
+root_cause: provisional_inventory_and_reserved_categories_were_modeled_like_final_storefront_catalog
+resolution_type: provisional_catalog_projection_with_staff_visible_reserved_category_controls
 severity: high
 tags:
   - pos
@@ -53,6 +54,13 @@ inventory truth:
 - Let POS add known provisional items without enforcing `quantityAvailable`.
   Surface `Count pending` instead of `0 available` for provisional and pending
   checkout rows whose counts are not trusted yet.
+- Treat reserved operational categories as staff catalog views, not storefront
+  merchandising shelves. Catalog Ops and POS recovery surfaces should include
+  products in those categories even when the products or categories are hidden
+  from the storefront.
+- Keep storefront visibility as an explicit category control. Staff can hide or
+  reveal the category on the customer storefront without losing access to the
+  operational product list needed for cleanup.
 - Let trusted-stock mismatches complete the local sale. Cloud sync should mark
   the sale event for review with inventory mismatch evidence, not write drawer
   authority blocks or force the cashier into the drawer gate.
@@ -77,6 +85,9 @@ inventory truth:
 - Do not let provisional rows duplicate trusted catalog rows in search results.
   Deduplicate by product/SKU identity at the query boundary and cover both
   provisional-first and trusted-first ordering in tests.
+- Do not reuse customer storefront hidden filters for staff catalog operations.
+  Hidden storefront state is a merchandising decision; reserved-category cleanup
+  and pending-checkout recovery still need the full operational list.
 
 ## Validation
 
@@ -86,6 +97,8 @@ Use this focused slice when changing provisional import POS availability:
 - `convex/pos/application/queries/listRegisterCatalog.test.ts`
 - `convex/pos/application/queries/searchCatalog.test.ts`
 - `convex/pos/public/sync.test.ts`
+- `convex/http/domains/core/routes/storefrontHidden.test.ts`
+- `convex/inventory/products.sku.test.ts`
 - `src/components/operations/InventoryImportView.test.tsx`
 - `src/components/pos/SearchResultsSection.test.tsx`
 - `src/components/pos/CartItems.test.tsx`
