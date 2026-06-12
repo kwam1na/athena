@@ -22,6 +22,7 @@ import { NoPermissionView } from "@/components/states/no-permission/NoPermission
 import { ProtectedAdminSignInView } from "@/components/states/signed-out/ProtectedAdminSignInView";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { RemoteAssistSupportConsole } from "@/components/remote-assist/RemoteAssistSupportConsole";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -1104,6 +1105,21 @@ function RemoteAssistPanel({
             ) : null}
           </div>
         </div>
+      ) : null}
+
+      {session && isRemoteAssistSessionCurrent(session) ? (
+        <RemoteAssistSupportConsole
+          controlEnabled={
+            session.status === "active" &&
+            session.effectiveMode === "unattended" &&
+            !session.sensitiveModeActive
+          }
+          enabled={session.status === "active" || session.status === "connecting"}
+          onEndSession={() => {
+            void handleEndRemoteAssist();
+          }}
+          sessionId={session._id}
+        />
       ) : null}
 
       <div className="mt-layout-md grid gap-layout-sm">

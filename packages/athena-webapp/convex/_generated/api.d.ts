@@ -216,7 +216,12 @@ import type * as remoteAssist_application_posRuntimeAdapter from "../remoteAssis
 import type * as remoteAssist_application_sessionService from "../remoteAssist/application/sessionService.js";
 import type * as remoteAssist_application_types from "../remoteAssist/application/types.js";
 import type * as remoteAssist_infrastructure_remoteAssistRepository from "../remoteAssist/infrastructure/remoteAssistRepository.js";
+import type * as remoteAssist_infrastructure_transport_LiveKitRemoteAssistTransportProvider from "../remoteAssist/infrastructure/transport/LiveKitRemoteAssistTransportProvider.js";
+import type * as remoteAssist_infrastructure_transport_RemoteAssistTransportProvider from "../remoteAssist/infrastructure/transport/RemoteAssistTransportProvider.js";
+import type * as remoteAssist_infrastructure_transport_createRemoteAssistTransportProvider from "../remoteAssist/infrastructure/transport/createRemoteAssistTransportProvider.js";
 import type * as remoteAssist_public from "../remoteAssist/public.js";
+import type * as remoteAssist_transport from "../remoteAssist/transport.js";
+import type * as remoteAssist_transportInternal from "../remoteAssist/transportInternal.js";
 import type * as schemas_automation from "../schemas/automation.js";
 import type * as schemas_customerMessaging_customerMessageDelivery from "../schemas/customerMessaging/customerMessageDelivery.js";
 import type * as schemas_customerMessaging_index from "../schemas/customerMessaging/index.js";
@@ -586,7 +591,12 @@ declare const fullApi: ApiFromModules<{
   "remoteAssist/application/sessionService": typeof remoteAssist_application_sessionService;
   "remoteAssist/application/types": typeof remoteAssist_application_types;
   "remoteAssist/infrastructure/remoteAssistRepository": typeof remoteAssist_infrastructure_remoteAssistRepository;
+  "remoteAssist/infrastructure/transport/LiveKitRemoteAssistTransportProvider": typeof remoteAssist_infrastructure_transport_LiveKitRemoteAssistTransportProvider;
+  "remoteAssist/infrastructure/transport/RemoteAssistTransportProvider": typeof remoteAssist_infrastructure_transport_RemoteAssistTransportProvider;
+  "remoteAssist/infrastructure/transport/createRemoteAssistTransportProvider": typeof remoteAssist_infrastructure_transport_createRemoteAssistTransportProvider;
   "remoteAssist/public": typeof remoteAssist_public;
+  "remoteAssist/transport": typeof remoteAssist_transport;
+  "remoteAssist/transportInternal": typeof remoteAssist_transportInternal;
   "schemas/automation": typeof schemas_automation;
   "schemas/customerMessaging/customerMessageDelivery": typeof schemas_customerMessaging_customerMessageDelivery;
   "schemas/customerMessaging/index": typeof schemas_customerMessaging_index;

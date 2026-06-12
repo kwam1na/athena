@@ -35,7 +35,10 @@ import { usePrewarmRegisterCatalogOfflineSnapshots } from "@/lib/pos/infrastruct
 import type { Id } from "~/convex/_generated/dataModel";
 import { usePosTerminalAppSessionRecoveryRuntimeInput } from "@/lib/pos/infrastructure/terminal/posTerminalAppSessionRecoveryContext";
 import { RemoteAssistRuntimeShell } from "@/components/remote-assist/RemoteAssistRuntimeShell";
-import type { RemoteAssistRuntimeState } from "@/lib/remote-assist";
+import {
+  useRemoteAssistRuntimeTransport,
+  type RemoteAssistRuntimeState,
+} from "@/lib/remote-assist";
 
 type FeatureLinkProps = {
   children: ReactNode;
@@ -138,6 +141,19 @@ export default function PointOfSaleView() {
   const remoteAssistRuntimeState = getRemoteAssistRuntimeState(
     remoteAssistSession,
   );
+  const remoteAssistTransport = useRemoteAssistRuntimeTransport({
+    enabled: Boolean(
+      remoteAssistRuntimeState &&
+        localEntryContext.status === "ready" &&
+        hubTerminalSeed?.storeId &&
+        hubTerminalSeed.syncSecretHash &&
+        remoteAssistRuntimeIdentity,
+    ),
+    session: remoteAssistSession,
+    storeId: hubTerminalSeed?.storeId,
+    syncSecretHash: hubTerminalSeed?.syncSecretHash,
+    terminalId: remoteAssistRuntimeIdentity,
+  });
 
   const posFeatures = [
     {
@@ -253,7 +269,10 @@ export default function PointOfSaleView() {
               terminalId: remoteAssistRuntimeIdentity as Id<"posTerminal">,
             });
           }}
-          state={remoteAssistRuntimeState}
+          state={withRuntimeTransportState(
+            remoteAssistRuntimeState,
+            remoteAssistTransport.connectionState,
+          )}
         />
       ) : null}
       <FadeIn className="container mx-auto py-layout-xl">
@@ -430,6 +449,41 @@ export default function PointOfSaleView() {
   );
 }
 
+function withRuntimeTransportState(
+  state: RemoteAssistRuntimeState,
+  transportState: string,
+): RemoteAssistRuntimeState {
+  if (transportState === "connected") {
+    return {
+      ...state,
+      status: "connected",
+    };
+  }
+
+  if (transportState === "connecting") {
+    return {
+      ...state,
+      status: "connecting",
+    };
+  }
+
+  if (transportState === "reconnecting") {
+    return {
+      ...state,
+      status: "reconnecting",
+    };
+  }
+
+  if (transportState === "error") {
+    return {
+      ...state,
+      status: "error",
+    };
+  }
+
+  return state;
+}
+
 function getRemoteAssistRuntimeState(
   session: RemoteAssistSessionSummary | null | undefined,
 ): RemoteAssistRuntimeState | null {
@@ -449,7 +503,7 @@ function getRemoteAssistRuntimeState(
           ? "blocked"
           : "connecting",
     supportAgentName: null,
-    viewerCount: session.status === "active" ? 1 : 0,
+    viewerCount: 0,
     blockedReason:
       session.status === "pending_attended_approval"
         ? "Approval required"

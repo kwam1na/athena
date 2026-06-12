@@ -12,6 +12,7 @@ const usePrewarmRegisterCatalogOfflineSnapshotsMock = vi.fn();
 const usePosLocalSyncRuntimeStatusMock = vi.fn();
 const useMutationMock = vi.fn();
 const useQueryMock = vi.fn();
+const useActionMock = vi.fn();
 
 vi.mock("@tanstack/react-router", () => ({
   Link: ({
@@ -38,6 +39,7 @@ vi.mock("@tanstack/react-router", () => ({
 }));
 
 vi.mock("convex/react", () => ({
+  useAction: () => useActionMock,
   useMutation: () => useMutationMock,
   useQuery: (...args: unknown[]) => useQueryMock(...args),
 }));
@@ -102,6 +104,10 @@ vi.mock("../common/FadeIn", () => ({
 describe("PointOfSaleView", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    useActionMock.mockResolvedValue({
+      data: null,
+      kind: "ok",
+    });
     useGetActiveStoreMock.mockReturnValue({
       activeStore: {
         _id: "store-1",

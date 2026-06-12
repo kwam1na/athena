@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>feat: Add Remote Assist Live Transport</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #17202a;
+      --muted: #5f6b78;
+      --line: #d9e0e7;
+      --panel: #f7f9fb;
+      --accent: #0f766e;
+      --accent-soft: #dff3ef;
+      --warn: #8a4b0f;
+      --warn-soft: #fff4df;
+      --risk: #8f1d2c;
+      --risk-soft: #fee7ea;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: #ffffff;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.55;
+    }
+
+    header {
+      border-bottom: 1px solid var(--line);
+      background: #fbfcfd;
+    }
+
+    main,
+    .wrap {
+      width: min(1120px, calc(100% - 40px));
+      margin: 0 auto;
+    }
+
+    header .wrap {
+      padding: 34px 0 28px;
+    }
+
+    main {
+      padding: 28px 0 52px;
+    }
+
+    h1,
+    h2,
+    h3 {
+      margin: 0;
+      line-height: 1.2;
+      letter-spacing: 0;
+    }
+
+    h1 {
+      font-size: 2rem;
+      max-width: 860px;
+    }
+
+    h2 {
+      margin-top: 34px;
+      padding-top: 22px;
+      border-top: 1px solid var(--line);
+      font-size: 1.25rem;
+    }
+
+    h3 {
+      margin-top: 20px;
+      font-size: 1rem;
+    }
+
+    p {
+      margin: 10px 0;
+    }
+
+    a {
+      color: var(--accent);
+      text-decoration-thickness: 1px;
+    }
+
+    code {
+      padding: 0.12rem 0.28rem;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      background: #f3f6f8;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.92em;
+    }
+
+    ul {
+      margin: 10px 0 0 1.2rem;
+      padding: 0;
+    }
+
+    li {
+      margin: 6px 0;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+      font-size: 0.95rem;
+    }
+
+    th,
+    td {
+      border: 1px solid var(--line);
+      padding: 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: var(--panel);
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 18px;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    .pill {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 4px 10px;
+      background: #ffffff;
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: minmax(0, 1.5fr) minmax(280px, 0.8fr);
+      gap: 18px;
+      margin-top: 22px;
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+      background: var(--panel);
+    }
+
+    .callout {
+      border-left: 4px solid var(--accent);
+      background: var(--accent-soft);
+      padding: 12px 14px;
+      margin: 16px 0;
+    }
+
+    .warning {
+      border-left-color: var(--warn);
+      background: var(--warn-soft);
+    }
+
+    .risk {
+      border-left-color: var(--risk);
+      background: var(--risk-soft);
+    }
+
+    .unit-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 12px;
+      margin-top: 14px;
+    }
+
+    .unit {
+      background: #ffffff;
+    }
+
+    .unit h3 {
+      margin-top: 0;
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    nav {
+      margin-top: 22px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    nav a {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 6px 10px;
+      background: #ffffff;
+      text-decoration: none;
+      font-size: 0.92rem;
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .step {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      background: #ffffff;
+      min-height: 100px;
+    }
+
+    @media (max-width: 760px) {
+      main,
+      .wrap {
+        width: min(100% - 24px, 1120px);
+      }
+
+      h1 {
+        font-size: 1.6rem;
+      }
+
+      .summary {
+        grid-template-columns: 1fr;
+      }
+
+      table {
+        display: block;
+        overflow-x: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <h1>feat: Add Remote Assist Live Transport</h1>
+      <p class="muted">Canonical markdown: <a href="2026-06-12-002-feat-remote-assist-live-transport-plan.md">2026-06-12-002-feat-remote-assist-live-transport-plan.md</a></p>
+      <div class="meta">
+        <span class="pill">Date: 2026-06-12</span>
+        <span class="pill">Type: feat</span>
+        <span class="pill">Status: active</span>
+        <span class="pill">Origin: live-session plan</span>
+      </div>
+      <nav aria-label="Plan sections">
+        <a href="#summary">Summary</a>
+        <a href="#decisions">Decisions</a>
+        <a href="#units">Implementation Units</a>
+        <a href="#risks">Risks</a>
+        <a href="#validation">Validation</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section id="summary" class="summary">
+      <article class="panel">
+        <h2>Summary</h2>
+        <p>Complete Remote Assist by wiring a real provider-backed live transport into the provider-neutral Remote Assist contract. LiveKit is the production provider of record, while Athena remains authoritative for lifecycle, policy, audit, runtime proof, redaction, and bounded control.</p>
+        <p>The delivery turns current session orchestration into a usable support experience: Terminal Health opens a live viewer/control console, the POS runtime publishes sanitized co-browse frames, support sends bounded app-surface intents, and either side can end or disconnect safely.</p>
+      </article>
+      <aside class="panel">
+        <h2>Boundary</h2>
+        <div class="callout">
+          LiveKit is the transport provider, not the authority boundary. Convex owns session state and audit; runtime code owns redaction and final control enforcement.
+        </div>
+      </aside>
+    </section>
+
+    <section>
+      <h2>Requirements Digest</h2>
+      <ul>
+        <li>LiveKit is reached only through an Athena provider adapter.</li>
+        <li>Server-side code mints short-lived, role-scoped credentials.</li>
+        <li>Runtime co-browse data is sanitized before it leaves the browser.</li>
+        <li>Support sees a live viewer/control console in Terminal Health.</li>
+        <li>Control intents are bounded and validated at send and runtime-apply time.</li>
+        <li>Remote Assist does not grant POS terminal, drawer, staff, sale, payment, inventory, closeout, Cash Controls, or Operations authority.</li>
+      </ul>
+    </section>
+
+    <section id="decisions">
+      <h2>Key Decisions</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Decision</th>
+            <th>Rationale</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>LiveKit through adapter</td>
+            <td>Preserves provider-neutral Remote Assist domain and avoids SDK coupling in POS or Terminal Health.</td>
+          </tr>
+          <tr>
+            <td>Convex remains authoritative</td>
+            <td>Provider room membership is live transport state, not permission, lifecycle, or audit source of truth.</td>
+          </tr>
+          <tr>
+            <td>rrweb-shaped unattended co-browse</td>
+            <td>Unattended sessions cannot rely on browser screen-capture prompts and must redact before transport.</td>
+          </tr>
+          <tr>
+            <td>Data packets are non-durable</td>
+            <td>Control commands need app-level ids, runtime ack/reject, timeout handling, and Convex audit for important outcomes.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Delivery Flow</h2>
+      <div class="flow">
+        <div class="step"><strong>1. Start or hydrate</strong><br><span class="muted">Support opens Terminal Health and uses existing session state.</span></div>
+        <div class="step"><strong>2. Runtime proves identity</strong><br><span class="muted">POS check-in with sync-secret proof claims the session.</span></div>
+        <div class="step"><strong>3. Tokens issued</strong><br><span class="muted">Convex mints short-lived role-scoped transport credentials.</span></div>
+        <div class="step"><strong>4. Live co-browse</strong><br><span class="muted">Runtime publishes sanitized app frames over LiveKit.</span></div>
+        <div class="step"><strong>5. Bounded control</strong><br><span class="muted">Support sends safe intents; runtime validates and applies.</span></div>
+        <div class="step"><strong>6. End safely</strong><br><span class="muted">Support end or runtime disconnect updates Convex authority state.</span></div>
+      </div>
+    </section>
+
+    <section id="units">
+      <h2>Implementation Units</h2>
+      <div class="unit-grid">
+        <article class="panel unit">
+          <h3>U1. Provider adapter and credential issuance</h3>
+          <p>Add the Athena transport provider interface, LiveKit adapter, server-side room/token issuance, and token audit.</p>
+        </article>
+        <article class="panel unit">
+          <h3>U2. Transport lifecycle state and audit API</h3>
+          <p>Represent support/runtime joins, disconnects, provider failures, and rejected controls in Convex state and audit.</p>
+        </article>
+        <article class="panel unit">
+          <h3>U3. Runtime co-browse publisher</h3>
+          <p>Connect the POS runtime, record sanitized rrweb-shaped events, publish frames/state, and disconnect cleanly.</p>
+        </article>
+        <article class="panel unit">
+          <h3>U4. Terminal Health live support console</h3>
+          <p>Add the support-side viewer/control console with reconnect, end, freshness, and provider-error states.</p>
+        </article>
+        <article class="panel unit">
+          <h3>U5. Bounded control channel</h3>
+          <p>Send support control intents over transport and enforce runtime-side guardrails, idempotency, and rejection audit.</p>
+        </article>
+        <article class="panel unit">
+          <h3>U6. Browser validation harness and dev proof</h3>
+          <p>Prove support and POS runtime can complete live assist in dev, using fake transport tests plus real provider validation when configured.</p>
+        </article>
+        <article class="panel unit">
+          <h3>U7. Docs, operational notes, and generated artifacts</h3>
+          <p>Refresh solution docs, Convex/generated artifacts, validation map, graphify, and deployment notes.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="risks">
+      <h2>Risks</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Risk</th>
+            <th>Mitigation</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Provider SDK coupling leaks into POS or Terminal Health</td>
+            <td>Keep provider code behind adapter modules and test the public API through fake providers.</td>
+          </tr>
+          <tr>
+            <td>Co-browse stream leaks sensitive data</td>
+            <td>Redact before transport and cover PIN/payment/customer/sync-secret fixtures in tests.</td>
+          </tr>
+          <tr>
+            <td>Data packets are treated as durable commands</td>
+            <td>Use idempotency, runtime acknowledgements, timeouts, and Convex audit for important outcomes.</td>
+          </tr>
+          <tr>
+            <td>Support control bypasses POS authority</td>
+            <td>Runtime applies only bounded visible-surface input; POS authority tests remain part of validation.</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="callout risk">
+        Provider-backed browser validation is required before claiming delivery. Missing LiveKit credentials are an environment blocker, not a reason to claim fake-transport parity as full delivery.
+      </div>
+    </section>
+
+    <section id="validation">
+      <h2>Validation Strategy</h2>
+      <ul>
+        <li>Focused backend tests for session service, repository, public API, POS runtime claim, transport credential issuance, and control-rejection audit.</li>
+        <li>Focused frontend tests for runtime transport, recorder redaction, support console, viewer, control toolbar, runtime shell, Terminal Health integration, and POS authority invariants.</li>
+        <li>Browser proof with support Terminal Health and POS runtime contexts: start, claim, live frame, bounded control result, end, and runtime disconnect.</li>
+        <li>Generated artifact refresh for Convex API, harness validation docs, and graphify.</li>
+        <li>Final repository gate: <code>bun run pr:athena</code>.</li>
+        <li>Final delivery proof: in-app browser/computer-use validation in dev, then local-build production deploy.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Sources</h2>
+      <ul>
+        <li><a href="2026-06-12-001-feat-remote-assist-live-session-flow-plan.md">Origin live-session plan</a></li>
+        <li><a href="2026-06-11-002-feat-remote-assist-foundation-plan.md">Foundation plan</a></li>
+        <li><a href="../solutions/architecture/athena-remote-assist-foundation-2026-06-11.md">Remote Assist foundation solution</a></li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>
