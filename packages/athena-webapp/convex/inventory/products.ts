@@ -182,16 +182,18 @@ export const getAll = query({
     const storefrontHiddenSubcategoryIds = new Set<Id<"subcategory">>();
 
     if (args.excludeStorefrontHidden) {
-      const quickAddCategory = await ctx.db
+      const categories = await ctx.db
         .query("category")
-        .withIndex("by_storeId_slug", (q) =>
-          q.eq("storeId", args.storeId).eq("slug", "pos-quick-add")
-        )
-        .first();
+        .filter((q) => q.eq(q.field("storeId"), args.storeId))
+        .collect();
 
-      if (quickAddCategory) {
-        storefrontHiddenCategoryIds.add(quickAddCategory._id);
-      }
+      categories
+        .filter(
+          (category) =>
+            category.slug === "pos-quick-add" ||
+            category.showOnStorefront === false,
+        )
+        .forEach((category) => storefrontHiddenCategoryIds.add(category._id));
 
       const uncategorizedSubcategories = await ctx.db
         .query("subcategory")
@@ -577,6 +579,7 @@ export const getByIdOrSlug = query({
     let category: string | undefined;
     let subcategory: string | undefined;
     let categorySlug: string | undefined;
+    let categoryShowOnStorefront: boolean | undefined;
     let subcategorySlug: string | undefined;
 
     if (product) {
@@ -589,12 +592,15 @@ export const getByIdOrSlug = query({
       subcategory = productSubcategory?.name;
 
       categorySlug = productCategory?.slug;
+      categoryShowOnStorefront = productCategory?.showOnStorefront;
       subcategorySlug = productSubcategory?.slug;
     }
 
     if (
       args.filters?.excludeStorefrontHidden &&
-      (categorySlug === "pos-quick-add" || subcategorySlug === "uncategorized")
+      (categorySlug === "pos-quick-add" ||
+        categoryShowOnStorefront === false ||
+        subcategorySlug === "uncategorized")
     ) {
       return null;
     }

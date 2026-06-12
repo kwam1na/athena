@@ -9,10 +9,12 @@ export const useGetProducts = ({
   subcategorySlug,
   categorySlug,
   availability,
+  isVisible,
 }: {
   subcategorySlug?: string;
   categorySlug?: string;
   availability?: ProductAvailability;
+  isVisible?: boolean;
 } = {}) => {
   const { activeStore } = useGetActiveStore();
 
@@ -24,6 +26,7 @@ export const useGetProducts = ({
           subcategory: subcategorySlug ? [subcategorySlug] : undefined,
           category: categorySlug ? [categorySlug] : undefined,
           availability,
+          isVisible,
           filters: {
             isPriceZero: true,
           },

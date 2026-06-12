@@ -8,7 +8,7 @@ import {
   SelectValue,
 } from "../ui/select";
 import { Separator } from "../ui/separator";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { LoadingButton } from "../ui/loading-button";
 import { CheckCircledIcon, TrashIcon } from "@radix-ui/react-icons";
 import { toast } from "sonner";
@@ -16,13 +16,26 @@ import { Ban } from "lucide-react";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "~/convex/_generated/api";
-import { Category } from "~/types";
+import { Category, Subcategory } from "~/types";
 import { Id } from "~/convex/_generated/dataModel";
 import { toSlug } from "~/src/lib/utils";
 import { Checkbox } from "../ui/checkbox";
 import { presentUnexpectedErrorToast } from "~/src/lib/errors/presentUnexpectedErrorToast";
 
 export type CategoryManageOption = "category" | "subcategory";
+
+type CategoryOption = {
+  id: Id<"category">;
+  name: string;
+  slug: string;
+  showOnStorefront: boolean;
+};
+
+type SubcategoryOption = {
+  categoryId: Id<"category">;
+  id: Id<"subcategory">;
+  name: string;
+};
 
 function Sidebar({
   selected,
@@ -60,30 +73,29 @@ function CategoryManager() {
   const [name, setName] = useState<string | null>(null);
   const [categoryId, setCategoryId] = useState<Id<"category"> | null>(null);
 
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-
   const [categoryIdToRename, setCategoryIdToRename] =
     useState<Id<"category"> | null>(null);
 
   const [updatedName, setUpdatedName] = useState<string | null>(null);
+  const [storefrontCategoryId, setStorefrontCategoryId] =
+    useState<Id<"category"> | null>(null);
+  const [isStorefrontVisible, setIsStorefrontVisible] = useState(true);
 
   const [isCreateMutationPending, setIsCreateMutationPending] = useState(false);
   const [isUpdateMutationPending, setIsUpdateMutationPending] = useState(false);
   const [isDeleteMutationPending, setIsDeleteMutationPending] = useState(false);
+  const [
+    isStorefrontVisibilityMutationPending,
+    setIsStorefrontVisibilityMutationPending,
+  ] = useState(false);
 
-  const categories =
+  const categories: CategoryOption[] =
     categoriesData?.map((category: Category) => ({
       name: category.name,
+      slug: category.slug,
       id: category._id,
+      showOnStorefront: category.showOnStorefront !== false,
     })) || [];
-
-  useEffect(() => {
-    const idToUse = categoryId || categoryIdToRename;
-
-    const name = categories.find(({ id }) => id == idToUse?.toString())?.name;
-
-    if (name) setSelectedCategory(name);
-  }, [categoryId, categoryIdToRename]);
 
   const createCategory = useMutation(api.inventory.categories.create);
 
@@ -107,7 +119,7 @@ function CategoryManager() {
       toast(`Category '${name}' created`, {
         icon: <CheckCircledIcon className="w-4 h-4" />,
       });
-    } catch (e) {
+    } catch {
       presentUnexpectedErrorToast("Something went wrong", {
         icon: <Ban className="w-4 h-4" />,
       });
@@ -132,12 +144,45 @@ function CategoryManager() {
       toast(`Category updated to '${updatedName}'`, {
         icon: <CheckCircledIcon className="w-4 h-4" />,
       });
-    } catch (e) {
+    } catch {
       presentUnexpectedErrorToast("Something went wrong", {
         icon: <Ban className="w-4 h-4" />,
       });
     } finally {
       setIsUpdateMutationPending(false);
+    }
+  };
+
+  const updateStorefrontVisibility = async () => {
+    if (!storefrontCategoryId || !activeStore) {
+      throw new Error("Missing data to update category storefront visibility");
+    }
+
+    const category = categories.find(({ id }) => id === storefrontCategoryId);
+
+    try {
+      setIsStorefrontVisibilityMutationPending(true);
+      await updateCategory({
+        id: storefrontCategoryId,
+        name: category?.name,
+        slug: category?.slug,
+        showOnStorefront: isStorefrontVisible,
+      });
+
+      toast(
+        `${category?.name ?? "Category"} ${
+          isStorefrontVisible ? "shown on" : "hidden from"
+        } storefront`,
+        {
+          icon: <CheckCircledIcon className="w-4 h-4" />,
+        },
+      );
+    } catch {
+      presentUnexpectedErrorToast("Something went wrong", {
+        icon: <Ban className="w-4 h-4" />,
+      });
+    } finally {
+      setIsStorefrontVisibilityMutationPending(false);
     }
   };
 
@@ -153,7 +198,7 @@ function CategoryManager() {
       toast(`Category '${name}' created`, {
         icon: <CheckCircledIcon className="w-4 h-4" />,
       });
-    } catch (e) {
+    } catch {
       presentUnexpectedErrorToast("Something went wrong", {
         icon: <Ban className="w-4 h-4" />,
       });
@@ -209,7 +254,7 @@ function CategoryManager() {
                   <SelectValue placeholder="Select category" />
                 </SelectTrigger>
                 <SelectContent>
-                  {categories.map((category: any) => {
+                  {categories.map((category) => {
                     return (
                       <SelectItem key={category.id} value={category.id}>
                         {category.name}
@@ -245,6 +290,88 @@ function CategoryManager() {
       </div>
 
       <div className="space-y-2">
+        <p className="text-muted-foreground text-sm">
+          Storefront visibility
+        </p>
+        <Separator className="mt-2" />
+
+        <div className="grid gap-4 py-4">
+          <div className="flex gap-4 items-center">
+            <Label
+              className="text-muted-foreground w-[30%]"
+              htmlFor="storefront-category"
+            >
+              Category
+            </Label>
+
+            <div className="flex gap-4 w-full">
+              <Select
+                onValueChange={(value) => {
+                  const category = categories.find(({ id }) => id === value);
+                  setStorefrontCategoryId(value as Id<"category">);
+                  setIsStorefrontVisible(
+                    category?.showOnStorefront !== false,
+                  );
+                }}
+              >
+                <SelectTrigger
+                  id="storefront-category"
+                  aria-label="Select storefront category"
+                >
+                  <SelectValue placeholder="Select category" />
+                </SelectTrigger>
+                <SelectContent>
+                  {categories.map((category) => {
+                    return (
+                      <SelectItem key={category.id} value={category.id}>
+                        {category.name}
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="flex w-full items-center gap-4">
+            <Label
+              className="text-muted-foreground w-[30%]"
+              htmlFor="show-on-storefront"
+            >
+              Visibility
+            </Label>
+
+            <div className="flex w-full flex-wrap items-center gap-4">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="show-on-storefront"
+                  checked={isStorefrontVisible}
+                  onCheckedChange={(checked) =>
+                    setIsStorefrontVisible(checked === true)
+                  }
+                  className="h-4 w-4 text-primary border-gray-300 focus:ring-primary"
+                />
+                <label htmlFor="show-on-storefront" className="text-sm">
+                  Show on storefront
+                </label>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Hidden categories stay available in catalog ops.
+              </p>
+              <LoadingButton
+                disabled={!storefrontCategoryId}
+                isLoading={isStorefrontVisibilityMutationPending}
+                onClick={() => updateStorefrontVisibility()}
+                variant={"outline"}
+              >
+                Save visibility
+              </LoadingButton>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-2">
         <p className="text-muted-foreground text-sm">Delete category</p>
         <Separator className="mt-2" />
 
@@ -261,7 +388,7 @@ function CategoryManager() {
                 <SelectValue placeholder="Select category" />
               </SelectTrigger>
               <SelectContent>
-                {categories.map((category: any) => {
+                {categories.map((category) => {
                   return (
                     <SelectItem key={category.id} value={category.id}>
                       {category.name}
@@ -298,9 +425,6 @@ function SubcategoryManager() {
     activeStore ? { storeId: activeStore._id } : "skip"
   );
 
-  const [selectedSubcategory, setSelectedSubcategory] = useState<string | null>(
-    null
-  );
   const [name, setName] = useState<string | null>(null);
 
   const [subcategoryIdToRename, setSubcategoryIdToRename] =
@@ -322,9 +446,9 @@ function SubcategoryManager() {
 
   const [lockCategory, setLockCategory] = useState(false);
 
-  const subcategories =
+  const subcategories: SubcategoryOption[] =
     subcategoriesData
-      ?.map((subcategory: any) => ({
+      ?.map((subcategory: Subcategory) => ({
         name: subcategory.name,
         id: subcategory._id,
         categoryId: subcategory.categoryId,
@@ -332,30 +456,24 @@ function SubcategoryManager() {
       .filter((s) => s.categoryId == newCategoryId || !lockCategory)
       .sort((a, b) => a.name.localeCompare(b.name)) || [];
 
-  const subcategoriesFull =
+  const subcategoriesFull: SubcategoryOption[] =
     subcategoriesData
-      ?.map((subcategory: any) => ({
+      ?.map((subcategory: Subcategory) => ({
         name: subcategory.name,
         id: subcategory._id,
         categoryId: subcategory.categoryId,
       }))
       .sort((a, b) => a.name.localeCompare(b.name)) || [];
 
-  const categories =
+  const categories: CategoryOption[] =
     categoriesData
-      ?.map((category: any) => ({
+      ?.map((category: Category) => ({
         name: category.name,
+        slug: category.slug,
         id: category._id,
+        showOnStorefront: category.showOnStorefront !== false,
       }))
       .sort((a, b) => a.name.localeCompare(b.name)) || [];
-
-  useEffect(() => {
-    const idToUse = subcategoryId || subcategoryIdToRename;
-
-    const name = subcategories.find(({ id }) => id == idToUse)?.name;
-
-    if (name) setSelectedSubcategory(name);
-  }, [subcategoryId, subcategoryIdToRename]);
 
   const createSubcategory = useMutation(api.inventory.subcategories.create);
 
@@ -363,11 +481,11 @@ function SubcategoryManager() {
 
   const deleteSubcategory = useMutation(api.inventory.subcategories.remove);
 
-  const selectedSubcategoryToDelete: string = subcategoriesFull.find(
+  const selectedSubcategoryToDelete: string | undefined = subcategoriesFull.find(
     (s) => s.id === subcategoryId
   )?.name;
 
-  const selectedSubcategoryToRename: string = subcategories.find(
+  const selectedSubcategoryToRename: string | undefined = subcategories.find(
     (s) => s.id === subcategoryIdToRename
   )?.name;
 
@@ -388,7 +506,7 @@ function SubcategoryManager() {
       toast(`Category '${name}' created`, {
         icon: <CheckCircledIcon className="w-4 h-4" />,
       });
-    } catch (e) {
+    } catch {
       presentUnexpectedErrorToast("Something went wrong", {
         icon: <Ban className="w-4 h-4" />,
       });
@@ -416,7 +534,7 @@ function SubcategoryManager() {
       toast(`Subcategory updated`, {
         icon: <CheckCircledIcon className="w-4 h-4" />,
       });
-    } catch (e) {
+    } catch {
       presentUnexpectedErrorToast("Something went wrong", {
         icon: <Ban className="w-4 h-4" />,
       });
@@ -437,7 +555,7 @@ function SubcategoryManager() {
       toast(`Subcategory '${name}' created`, {
         icon: <CheckCircledIcon className="w-4 h-4" />,
       });
-    } catch (e) {
+    } catch {
       presentUnexpectedErrorToast("Something went wrong", {
         icon: <Ban className="w-4 h-4" />,
       });
@@ -475,7 +593,7 @@ function SubcategoryManager() {
                   <SelectValue placeholder="Select category" />
                 </SelectTrigger>
                 <SelectContent>
-                  {categories.map((category: any) => {
+                  {categories.map((category) => {
                     return (
                       <SelectItem key={category.id} value={category.id}>
                         {category.name}
@@ -507,7 +625,7 @@ function SubcategoryManager() {
               checked={lockCategory}
               onCheckedChange={(e) => {
                 setSubcategoryIdToRename(null);
-                setLockCategory(e as boolean);
+                setLockCategory(e === true);
               }}
               className="h-4 w-4 text-primary border-gray-300 focus:ring-primary"
             />
@@ -526,7 +644,7 @@ function SubcategoryManager() {
               <SelectValue placeholder="Select category" />
             </SelectTrigger>
             <SelectContent>
-              {categories.map((category: any) => {
+              {categories.map((category) => {
                 return (
                   <SelectItem key={category.id} value={category.id}>
                     {category.name}
@@ -545,7 +663,7 @@ function SubcategoryManager() {
               <SelectValue placeholder="Select subcategory" />
             </SelectTrigger>
             <SelectContent>
-              {subcategories.map((subcategory: any) => {
+              {subcategories.map((subcategory) => {
                 return (
                   <SelectItem
                     key={subcategory.id}
@@ -596,7 +714,7 @@ function SubcategoryManager() {
                 <SelectValue placeholder="Select subcategory" />
               </SelectTrigger>
               <SelectContent>
-                {subcategoriesFull.map((subcategory: any) => {
+                {subcategoriesFull.map((subcategory) => {
                   return (
                     <SelectItem
                       key={subcategory.id}

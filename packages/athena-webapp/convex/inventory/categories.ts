@@ -1,3 +1,4 @@
+/* eslint-disable @convex-dev/no-collect-in-query -- Admin category selectors and storefront navigation need full store-scoped category lists; category counts are bounded operational taxonomy. */
 import { mutation, query } from "../_generated/server";
 import { v } from "convex/values";
 import { categorySchema } from "../schemas/inventory";
@@ -67,7 +68,7 @@ export const getById = query({
     storeId: v.string(),
   },
   handler: async (ctx, args) => {
-    return await ctx.db.get(args.id);
+    return await ctx.db.get("category", args.id);
   },
 });
 
@@ -76,20 +77,39 @@ export const create = mutation({
   handler: async (ctx, args) => {
     const id = await ctx.db.insert(entity, args);
 
-    return await ctx.db.get(id);
+    return await ctx.db.get("category", id);
   },
 });
 
 export const update = mutation({
   args: {
     id: v.id(entity),
-    name: v.string(),
-    slug: v.string(),
+    name: v.optional(v.string()),
+    showOnStorefront: v.optional(v.boolean()),
+    slug: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await ctx.db.patch(args.id, { name: args.name, slug: args.slug });
+    const patch: Partial<{
+      name: string;
+      showOnStorefront: boolean;
+      slug: string;
+    }> = {};
 
-    return await ctx.db.get(args.id);
+    if (args.name !== undefined) {
+      patch.name = args.name;
+    }
+
+    if (args.slug !== undefined) {
+      patch.slug = args.slug;
+    }
+
+    if (args.showOnStorefront !== undefined) {
+      patch.showOnStorefront = args.showOnStorefront;
+    }
+
+    await ctx.db.patch("category", args.id, patch);
+
+    return await ctx.db.get("category", args.id);
   },
 });
 
@@ -98,7 +118,7 @@ export const remove = mutation({
     id: v.id(entity),
   },
   handler: async (ctx, args) => {
-    await ctx.db.delete(args.id);
+    await ctx.db.delete("category", args.id);
 
     return { message: "OK" };
   },

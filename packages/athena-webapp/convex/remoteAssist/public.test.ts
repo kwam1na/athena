@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   getClient: vi.fn(),
   getClientByRuntime: vi.fn(),
   getSession: vi.fn(),
+  listReusableSessionsForClient: vi.fn(),
   requireAuthenticatedAthenaUserWithCtx: vi.fn(),
   requireOrganizationMemberRoleWithCtx: vi.fn(),
   startRemoteAssistSession: vi.fn(),
@@ -47,7 +48,20 @@ describe("remote assist public API", () => {
       getClient: mocks.getClient,
       getClientByRuntime: mocks.getClientByRuntime,
       getSession: mocks.getSession,
+      listReusableSessionsForClient: mocks.listReusableSessionsForClient,
     });
+    mocks.listReusableSessionsForClient.mockResolvedValue([
+      buildSession({
+        _id: "connecting-session",
+        requestedAt: 20,
+        status: "connecting",
+      }),
+      buildSession({
+        _id: "active-session",
+        requestedAt: 10,
+        status: "active",
+      }),
+    ]);
     mocks.startRemoteAssistSession.mockResolvedValue({
       kind: "ok",
       data: buildSession({ status: "connecting" }),
@@ -66,6 +80,7 @@ describe("remote assist public API", () => {
 
   it("exposes only support-scoped session lifecycle mutations in v1", () => {
     expect(remoteAssistPublic).toHaveProperty("getClientByRuntime");
+    expect(remoteAssistPublic).toHaveProperty("getCurrentSessionByClient");
     expect(remoteAssistPublic).toHaveProperty("startSession");
     expect(remoteAssistPublic).toHaveProperty("endSupportSession");
   });
@@ -175,6 +190,46 @@ describe("remote assist public API", () => {
         transportRoomId: "room-1",
       }),
     );
+  });
+
+  it("returns the current reusable session for a support client view", async () => {
+    const ctx = {};
+
+    const result = await getHandler(remoteAssistPublic.getCurrentSessionByClient)(
+      ctx,
+      {
+        clientId: "client-1",
+      },
+    );
+
+    expect(result?._id).toBe("active-session");
+    expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({
+        allowedRoles: ["full_admin"],
+        organizationId: "org-1",
+        userId: "athena-user-1",
+      }),
+    );
+    expect(mocks.listReusableSessionsForClient).toHaveBeenCalledWith({
+      clientId: "client-1",
+      now: expect.any(Number),
+    });
+  });
+
+  it("returns null before authorizing a missing current-session client", async () => {
+    mocks.getClient.mockResolvedValue(null);
+
+    const result = await getHandler(remoteAssistPublic.getCurrentSessionByClient)(
+      {},
+      {
+        clientId: "client-1",
+      },
+    );
+
+    expect(result).toBeNull();
+    expect(mocks.requireOrganizationMemberRoleWithCtx).not.toHaveBeenCalled();
+    expect(mocks.listReusableSessionsForClient).not.toHaveBeenCalled();
   });
 
   it("returns not_found before authorizing a missing session end", async () => {

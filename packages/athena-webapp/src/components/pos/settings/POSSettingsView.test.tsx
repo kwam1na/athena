@@ -1,11 +1,11 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   ButtonHTMLAttributes,
   InputHTMLAttributes,
   LabelHTMLAttributes,
   ReactNode,
 } from "react";
-import { render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 const mocks = vi.hoisted(() => ({
@@ -42,24 +42,30 @@ vi.mock("@tanstack/react-router", () => ({
   Link: ({
     children,
     params,
+    search,
     to,
     ...props
   }: {
     children?: ReactNode;
-    params?: { orgUrlSlug: string; storeUrlSlug: string };
+    params?: { orgUrlSlug: string; storeUrlSlug: string; terminalId?: string };
+    search?: Record<string, string>;
     to?: string;
-  }) => (
-    <a
-      href={
-        to
-          ?.replace("$orgUrlSlug", params?.orgUrlSlug ?? "")
-          .replace("$storeUrlSlug", params?.storeUrlSlug ?? "") ?? "#"
-      }
-      {...props}
-    >
-      {children}
-    </a>
-  ),
+  }) => {
+    const path =
+      to
+        ?.replace("$orgUrlSlug", params?.orgUrlSlug ?? "")
+        .replace("$storeUrlSlug", params?.storeUrlSlug ?? "")
+        .replace("$terminalId", params?.terminalId ?? "") ?? "#";
+    const query = search
+      ? `?${new URLSearchParams(search).toString()}`
+      : "";
+
+    return (
+      <a href={`${path}${query}`} {...props}>
+        {children}
+      </a>
+    );
+  },
   useParams: () => ({ orgUrlSlug: "acme", storeUrlSlug: "downtown" }),
 }));
 
@@ -155,8 +161,17 @@ async function waitForFingerprintEffect() {
 }
 
 describe("registerAndProvisionPosTerminal", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
   beforeEach(() => {
     vi.restoreAllMocks();
+    window.history.replaceState(
+      null,
+      "",
+      "/acme/store/downtown/pos/settings?o=%2Facme%2Fstore%2Fdowntown%2Fpos",
+    );
     window.localStorage.clear();
     mocks.rotateRecoveryCode.mockResolvedValue({
       code: "abc123-def456",
@@ -449,8 +464,13 @@ describe("registerAndProvisionPosTerminal", () => {
       ),
     ).toBeInTheDocument();
     expect(screen.getByLabelText("Enable store-day auto-start")).toBeChecked();
-    expect(screen.getByLabelText("Local start time")).toHaveValue("08:30");
-    expect(screen.getByLabelText("Store UTC offset")).toHaveValue(-120);
+    expect(screen.getByRole("combobox", { name: "Store day start hour" }))
+      .toHaveTextContent("08");
+    expect(screen.getByRole("combobox", { name: "Store day start minute" }))
+      .toHaveTextContent("30");
+    expect(screen.getByRole("combobox", { name: "Store day start period" }))
+      .toHaveTextContent("AM");
+    expect(screen.queryByLabelText("Store UTC offset")).not.toBeInTheDocument();
     expect(
       screen.getByText("Blockers stay available for manager review."),
     ).toBeInTheDocument();
@@ -465,8 +485,14 @@ describe("registerAndProvisionPosTerminal", () => {
     render(<POSSettingsView />);
 
     await user.click(await screen.findByLabelText("Enable store-day auto-start"));
-    await user.clear(screen.getByLabelText("Local start time"));
-    await user.type(screen.getByLabelText("Local start time"), "07:45");
+    await user.click(
+      screen.getByRole("combobox", { name: "Store day start hour" }),
+    );
+    await user.click(await screen.findByRole("option", { name: "07" }));
+    await user.click(
+      screen.getByRole("combobox", { name: "Store day start minute" }),
+    );
+    await user.click(await screen.findByRole("option", { name: "45" }));
     await user.click(
       screen.getByRole("button", { name: "Save store-day automation" }),
     );
@@ -476,7 +502,7 @@ describe("registerAndProvisionPosTerminal", () => {
         localStartMinutes: 465,
         mode: "disabled",
         openingBlockerHandling: "start_with_manager_review",
-        operatingTimezoneOffsetMinutes: -120,
+        operatingTimezoneOffsetMinutes: 0,
         storeId: "store-1",
       }),
     );
@@ -507,10 +533,10 @@ describe("registerAndProvisionPosTerminal", () => {
     render(<POSSettingsView />);
 
     await user.click(await screen.findByLabelText("Enable store-day auto-start"));
-    await user.clear(screen.getByLabelText("Local start time"));
-    await user.type(screen.getByLabelText("Local start time"), "08:15");
-    await user.clear(screen.getByLabelText("Store UTC offset"));
-    await user.type(screen.getByLabelText("Store UTC offset"), "0");
+    await user.click(
+      screen.getByRole("combobox", { name: "Store day start minute" }),
+    );
+    await user.click(await screen.findByRole("option", { name: "15" }));
     await user.click(
       screen.getByRole("button", { name: "Save store-day automation" }),
     );
@@ -541,7 +567,9 @@ describe("registerAndProvisionPosTerminal", () => {
 
     render(<POSSettingsView />);
 
-    expect(await screen.findByRole("button", { name: /revoke/i })).toBeDisabled();
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /revoke/i })).toBeDisabled(),
+    );
   });
 
   it("hides recovery-code management from non-full-admin accounts", async () => {
@@ -567,6 +595,9 @@ describe("registerAndProvisionPosTerminal", () => {
 
   it("shows a normalized error when store-day automation cannot save", async () => {
     const user = userEvent.setup();
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
     mocks.updateOpeningAutoStartPolicy.mockRejectedValue(
       new Error("internal duplicate_policy stack"),
     );
@@ -574,7 +605,7 @@ describe("registerAndProvisionPosTerminal", () => {
     render(<POSSettingsView />);
 
     await user.click(
-      await screen.findByRole("button", {
+      screen.getByRole("button", {
         name: "Save store-day automation",
       }),
     );
@@ -585,14 +616,23 @@ describe("registerAndProvisionPosTerminal", () => {
     expect(
       await screen.findByText("Store-day automation settings were not saved."),
     ).toBeInTheDocument();
+    expect(consoleError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: "internal duplicate_policy stack",
+      }),
+    );
     expect(screen.queryByText(/duplicate_policy/)).not.toBeInTheDocument();
   });
 
   it("hands off roster and support work to terminal health", async () => {
     render(<POSSettingsView />);
 
-    expect(await screen.findByText("Terminal health")).toBeInTheDocument();
-    expect(screen.getByText("Offline diagnostics need attention")).toBeInTheDocument();
+    expect(screen.getByText("Terminal health")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(
+        screen.getByText("Offline diagnostics need attention"),
+      ).toBeInTheDocument(),
+    );
     expect(
       screen.getByText((_content, element) =>
         Boolean(element?.textContent?.trim() === "1 of 7 reporting"),
@@ -613,7 +653,55 @@ describe("registerAndProvisionPosTerminal", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: "Open terminal health" }),
-    ).toHaveAttribute("href", "/acme/store/downtown/pos/terminals");
+    ).toHaveAttribute(
+      "href",
+      "/acme/store/downtown/pos/terminals?o=%252Facme%252Fstore%252Fdowntown%252Fpos%252Fsettings%253Fo%253D%25252Facme%25252Fstore%25252Fdowntown%25252Fpos",
+    );
+  });
+
+  it("links terminal health to the current terminal and keeps settings as the origin", async () => {
+    mocks.useQuery.mockImplementation((ref) =>
+      ref === "getRecoveryCodeStatus"
+        ? {
+            failedAttemptCount: 0,
+            lastUsedAt: undefined,
+            lockedUntil: undefined,
+            plaintextCode: "mintlamp42",
+            rotatedAt: 1,
+            status: "active",
+          }
+        : ref === "getOpeningAutoStartPolicy"
+          ? {
+              localStartMinutes: 510,
+              mode: "enabled",
+              openingBlockerHandling: "start_with_manager_review",
+              operatingTimezoneOffsetMinutes: 0,
+            }
+          : ref === "getTerminalByFingerprint"
+            ? {
+                _id: "terminal-existing",
+                _creationTime: 1,
+                browserInfo: { userAgent: "test" },
+                displayName: "Front counter",
+                fingerprintHash: "fingerprint-1",
+                registeredAt: 1,
+                registeredByUserId: "user-1",
+                registerNumber: "3",
+                status: "active",
+                storeId: "store-1",
+              }
+            : null,
+    );
+
+    render(<POSSettingsView />);
+
+    expect(screen.getByText("Terminal health")).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Open terminal health" }),
+    ).toHaveAttribute(
+      "href",
+      "/acme/store/downtown/pos/terminals/terminal-existing?o=%252Facme%252Fstore%252Fdowntown%252Fpos%252Fsettings%253Fo%253D%25252Facme%25252Fstore%25252Fdowntown%25252Fpos",
+    );
   });
 
   it("shows when the current register is ready for offline checkout", async () => {

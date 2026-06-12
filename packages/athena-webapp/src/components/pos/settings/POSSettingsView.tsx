@@ -2,10 +2,18 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
 import type { ComponentType, ReactNode } from "react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LoadingButton } from "@/components/ui/loading-button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { FadeIn } from "../../common/FadeIn";
 import { PageLevelHeader, PageWorkspace } from "../../common/PageLevelHeader";
 import View from "../../View";
@@ -45,6 +53,7 @@ import {
 } from "~/shared/posTerminalLoginMode";
 import { usePosTerminalAppSessionRecoveryRuntimeInput } from "@/lib/pos/infrastructure/terminal/posTerminalAppSessionRecoveryContext";
 import type { PosTerminalRuntimeAppSessionRecoveryInput } from "@/lib/pos/infrastructure/local/terminalRuntimeStatus";
+import { getOrigin } from "@/lib/navigationUtils";
 
 type HealthLinkProps = {
   children: ReactNode;
@@ -52,7 +61,9 @@ type HealthLinkProps = {
   params: {
     orgUrlSlug: string;
     storeUrlSlug: string;
+    terminalId?: string;
   };
+  search?: { o: string };
   to: string;
 };
 
@@ -60,6 +71,13 @@ const HealthLink = Link as unknown as ComponentType<HealthLinkProps>;
 const POS_APP_SHELL_CACHE_PREFIX = "athena-pos-app-shell-";
 const DEFAULT_STORE_DAY_AUTO_START_MINUTES = 8 * 60;
 const DEFAULT_STORE_DAY_TIMEZONE_OFFSET_MINUTES = 0;
+const STORE_DAY_AUTOMATION_HOURS = Array.from({ length: 12 }, (_, index) =>
+  String(index + 1).padStart(2, "0"),
+);
+const STORE_DAY_AUTOMATION_MINUTES = Array.from({ length: 60 }, (_, index) =>
+  String(index).padStart(2, "0"),
+);
+type StoreDayAutomationPeriod = "AM" | "PM";
 const terminalCapabilityOptions: Array<{
   value: PosTerminalTransactionCapability;
   label: string;
@@ -379,6 +397,52 @@ function formatLocalStartTime(minutes?: number | null) {
   return `${String(hours).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
 }
 
+function getLocalStartTimeParts(value: string) {
+  const parsedMinutes = parseLocalStartMinutes(value);
+  const safeMinutes = parsedMinutes ?? DEFAULT_STORE_DAY_AUTO_START_MINUTES;
+  const hour24 = Math.floor(safeMinutes / 60);
+  const minute = safeMinutes % 60;
+  const period: StoreDayAutomationPeriod = hour24 >= 12 ? "PM" : "AM";
+  const hour12 = hour24 % 12 || 12;
+
+  return {
+    hour: String(hour12).padStart(2, "0"),
+    minute: String(minute).padStart(2, "0"),
+    period,
+  };
+}
+
+function formatLocalStartTimeFromParts(args: {
+  hour: string;
+  minute: string;
+  period: StoreDayAutomationPeriod;
+}) {
+  const hour12 = Number(args.hour);
+  const minute = Number(args.minute);
+
+  if (
+    !Number.isInteger(hour12) ||
+    hour12 < 1 ||
+    hour12 > 12 ||
+    !Number.isInteger(minute) ||
+    minute < 0 ||
+    minute > 59
+  ) {
+    return formatLocalStartTime(DEFAULT_STORE_DAY_AUTO_START_MINUTES);
+  }
+
+  const hour24 =
+    args.period === "PM"
+      ? hour12 === 12
+        ? 12
+        : hour12 + 12
+      : hour12 === 12
+        ? 0
+        : hour12;
+
+  return `${String(hour24).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
 function parseLocalStartMinutes(value: string) {
   const match = /^(\d{2}):(\d{2})$/.exec(value);
 
@@ -390,15 +454,6 @@ function parseLocalStartMinutes(value: string) {
   if (hours > 23 || minutes > 59) return null;
 
   return hours * 60 + minutes;
-}
-
-function normalizeTimezoneOffsetMinutes(value?: number | null) {
-  return typeof value === "number" &&
-    Number.isInteger(value) &&
-    value >= -14 * 60 &&
-    value <= 14 * 60
-    ? value
-    : DEFAULT_STORE_DAY_TIMEZONE_OFFSET_MINUTES;
 }
 
 function StoreDayAutomationAdminPanel({
@@ -418,9 +473,6 @@ function StoreDayAutomationAdminPanel({
   const [localStartTime, setLocalStartTime] = useState(
     formatLocalStartTime(DEFAULT_STORE_DAY_AUTO_START_MINUTES),
   );
-  const [timezoneOffsetMinutes, setTimezoneOffsetMinutes] = useState(
-    DEFAULT_STORE_DAY_TIMEZONE_OFFSET_MINUTES,
-  );
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<{
     kind: "error" | "success";
@@ -428,38 +480,36 @@ function StoreDayAutomationAdminPanel({
   } | null>(null);
   const policyLocalStartMinutes = policy?.localStartMinutes;
   const policyMode = policy?.mode;
-  const policyTimezoneOffsetMinutes = policy?.operatingTimezoneOffsetMinutes;
 
   useEffect(() => {
-    if (
-      policyLocalStartMinutes == null &&
-      policyMode == null &&
-      policyTimezoneOffsetMinutes == null
-    ) {
+    if (policyLocalStartMinutes == null && policyMode == null) {
       return;
     }
 
     setIsEnabled(policyMode === "enabled");
     setLocalStartTime(formatLocalStartTime(policyLocalStartMinutes));
-    setTimezoneOffsetMinutes(
-      normalizeTimezoneOffsetMinutes(policyTimezoneOffsetMinutes),
-    );
-  }, [policyLocalStartMinutes, policyMode, policyTimezoneOffsetMinutes]);
+  }, [policyLocalStartMinutes, policyMode]);
 
   if (isLoading || !hasFullAdminAccess) {
     return null;
   }
 
   const localStartMinutes = parseLocalStartMinutes(localStartTime);
-  const timezoneOffsetIsValid =
-    Number.isInteger(timezoneOffsetMinutes) &&
-    timezoneOffsetMinutes >= -14 * 60 &&
-    timezoneOffsetMinutes <= 14 * 60;
   const canSave =
-    Boolean(storeId) &&
-    localStartMinutes !== null &&
-    timezoneOffsetIsValid &&
-    !isSaving;
+    Boolean(storeId) && localStartMinutes !== null && !isSaving;
+  const localStartTimeParts = getLocalStartTimeParts(localStartTime);
+
+  const updateLocalStartTimePart = (
+    key: keyof typeof localStartTimeParts,
+    value: string,
+  ) => {
+    setLocalStartTime(
+      formatLocalStartTimeFromParts({
+        ...localStartTimeParts,
+        [key]: value,
+      }),
+    );
+  };
 
   const handleSave = async () => {
     const parsedStartMinutes = parseLocalStartMinutes(localStartTime);
@@ -480,14 +530,6 @@ function StoreDayAutomationAdminPanel({
       return;
     }
 
-    if (!timezoneOffsetIsValid) {
-      setMessage({
-        kind: "error",
-        text: "Enter a valid store UTC offset.",
-      });
-      return;
-    }
-
     setIsSaving(true);
     setMessage(null);
     try {
@@ -495,7 +537,7 @@ function StoreDayAutomationAdminPanel({
         localStartMinutes: parsedStartMinutes,
         mode: isEnabled ? "enabled" : "disabled",
         openingBlockerHandling: "start_with_manager_review",
-        operatingTimezoneOffsetMinutes: timezoneOffsetMinutes,
+        operatingTimezoneOffsetMinutes: DEFAULT_STORE_DAY_TIMEZONE_OFFSET_MINUTES,
         storeId,
       });
       setMessage({
@@ -537,14 +579,13 @@ function StoreDayAutomationAdminPanel({
           </span>
         </div>
 
-        <div className="grid gap-layout-md sm:grid-cols-[minmax(0,1fr)_12rem_12rem]">
+        <div className="grid gap-layout-md sm:grid-cols-[minmax(0,1fr)_12rem]">
           <label className="flex min-h-[5rem] items-start gap-layout-sm rounded-md border border-border bg-background p-layout-sm text-sm">
-            <input
+            <Checkbox
               aria-label="Enable store-day auto-start"
               checked={isEnabled}
-              className="mt-1 h-4 w-4 rounded border-border text-signal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              onChange={(event) => setIsEnabled(event.target.checked)}
-              type="checkbox"
+              className="mt-1"
+              onCheckedChange={(checked) => setIsEnabled(checked === true)}
             />
             <span>
               <span className="block font-medium text-foreground">
@@ -558,37 +599,73 @@ function StoreDayAutomationAdminPanel({
           </label>
 
           <div className="space-y-layout-xs">
-            <Label htmlFor="store-day-auto-start-time">Local start time</Label>
-            <Input
-              id="store-day-auto-start-time"
-              className="h-control-standard bg-background"
-              onChange={(event) => setLocalStartTime(event.target.value)}
-              type="time"
-              value={localStartTime}
-            />
+            <Label>Local start time</Label>
+            <div className="grid grid-cols-[1fr_1fr_1fr] gap-layout-2xs">
+              <Select
+                onValueChange={(value) =>
+                  updateLocalStartTimePart("hour", value)
+                }
+                value={localStartTimeParts.hour}
+              >
+                <SelectTrigger
+                  aria-label="Store day start hour"
+                  className="bg-background"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {STORE_DAY_AUTOMATION_HOURS.map((hour) => (
+                    <SelectItem key={hour} value={hour}>
+                      {hour}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select
+                onValueChange={(value) =>
+                  updateLocalStartTimePart("minute", value)
+                }
+                value={localStartTimeParts.minute}
+              >
+                <SelectTrigger
+                  aria-label="Store day start minute"
+                  className="bg-background"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {STORE_DAY_AUTOMATION_MINUTES.map((minute) => (
+                    <SelectItem key={minute} value={minute}>
+                      {minute}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select
+                onValueChange={(value) =>
+                  updateLocalStartTimePart(
+                    "period",
+                    value as StoreDayAutomationPeriod,
+                  )
+                }
+                value={localStartTimeParts.period}
+              >
+                <SelectTrigger
+                  aria-label="Store day start period"
+                  className="bg-background"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="AM">AM</SelectItem>
+                  <SelectItem value="PM">PM</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <p className="text-xs text-muted-foreground">
               Saved as store-local minutes for the scheduled automation check.
-            </p>
-          </div>
-
-          <div className="space-y-layout-xs">
-            <Label htmlFor="store-day-timezone-offset">
-              Store UTC offset
-            </Label>
-            <Input
-              id="store-day-timezone-offset"
-              className="h-control-standard bg-background"
-              max={14 * 60}
-              min={-14 * 60}
-              onChange={(event) =>
-                setTimezoneOffsetMinutes(Number(event.target.value))
-              }
-              step={15}
-              type="number"
-              value={timezoneOffsetMinutes}
-            />
-            <p className="text-xs text-muted-foreground">
-              Minutes from store local time to UTC. Accra is 0.
             </p>
           </div>
         </div>
@@ -1430,8 +1507,16 @@ export function POSSettingsView({
                   params={{
                     orgUrlSlug: routeParams.orgUrlSlug,
                     storeUrlSlug: routeParams.storeUrlSlug,
+                    ...(existingTerminal
+                      ? { terminalId: String(existingTerminal._id) }
+                      : {}),
                   }}
-                  to="/$orgUrlSlug/store/$storeUrlSlug/pos/terminals"
+                  search={{ o: getOrigin() }}
+                  to={
+                    existingTerminal
+                      ? "/$orgUrlSlug/store/$storeUrlSlug/pos/terminals/$terminalId"
+                      : "/$orgUrlSlug/store/$storeUrlSlug/pos/terminals"
+                  }
                 >
                   Open terminal health
                 </HealthLink>
