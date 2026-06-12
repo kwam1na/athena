@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
     isLoadingStores: false,
   },
   canAccessPOS: vi.fn(() => true),
+  hasFullAdminAccess: true,
   mutation: vi.fn(),
   useQuery: vi.fn(() => null),
   toastSuccess: vi.fn(),
@@ -84,6 +85,7 @@ vi.mock("@/hooks/useGetActiveStore", () => ({
 vi.mock("@/hooks/usePermissions", () => ({
   usePermissions: () => ({
     canAccessPOS: mocks.canAccessPOS,
+    hasFullAdminAccess: mocks.hasFullAdminAccess,
     isLoading: false,
   }),
 }));
@@ -244,6 +246,7 @@ describe("POSTerminalDetailViewContent", () => {
     mocks.activeStoreState.activeStore = { _id: "store-1" };
     mocks.activeStoreState.isLoadingStores = false;
     mocks.canAccessPOS.mockReturnValue(true);
+    mocks.hasFullAdminAccess = true;
     mocks.mutation.mockResolvedValue({
       data: { action: "resolved", resolvedCount: 1 },
       kind: "ok",
@@ -314,16 +317,11 @@ describe("POSTerminalDetailViewContent", () => {
 
     expect(screen.getByText("Remote Assist")).toBeInTheDocument();
     expect(screen.getByText("Ready for support session")).toBeInTheDocument();
-    const startSessionButton = screen.getByRole("button", {
-      name: /start session/i,
-    });
-    expect(startSessionButton).toBeDisabled();
 
     fireEvent.change(screen.getByLabelText("Reason"), {
       target: { value: "Drawer repair support" },
     });
-    expect(startSessionButton).toBeEnabled();
-    fireEvent.click(startSessionButton);
+    fireEvent.click(screen.getByRole("button", { name: /start session/i }));
 
     await waitFor(() => {
       expect(onStartRemoteAssist).toHaveBeenCalledWith({
@@ -334,21 +332,31 @@ describe("POSTerminalDetailViewContent", () => {
     expect(mocks.toastSuccess).toHaveBeenCalledWith(
       "Remote Assist session requested.",
     );
-    expect(
-      await screen.findByText("Remote Assist session connecting"),
-    ).toBeInTheDocument();
-    expect(screen.getByText("Session requested")).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /session requested/i }),
-    ).toBeDisabled();
   });
 
-  it("restores an in-progress Remote Assist session from server state", () => {
+  it("renders hydrated Remote Assist session state and ends the current session", async () => {
+    const onStartRemoteAssist = vi.fn();
+    const onEndRemoteAssist = vi.fn(async () => ({
+      data: {
+        _id: "session-1",
+        effectiveMode: "unattended",
+        endedAt: Date.now(),
+        expiresAt: Date.now() + 60_000,
+        reason: "Drawer repair support",
+        sensitiveModeActive: false,
+        status: "ended",
+        terminationReason: "Support ended the Remote Assist session.",
+      },
+      kind: "ok" as const,
+    }));
+
     render(
       <POSTerminalDetailViewContent
         canStartRemoteAssist
         detail={detail}
         isLoading={false}
+        onEndRemoteAssist={onEndRemoteAssist}
+        onStartRemoteAssist={onStartRemoteAssist}
         remoteAssistClient={{
           _id: "remote-client-1",
           accessPolicy: "unattended_allowed",
@@ -360,19 +368,40 @@ describe("POSTerminalDetailViewContent", () => {
         remoteAssistSession={{
           _id: "session-1",
           effectiveMode: "unattended",
+          expiresAt: Date.now() + 60_000,
           reason: "Drawer repair support",
-          status: "connecting",
+          sensitiveModeActive: false,
+          startedAt: Date.now(),
+          status: "active",
         }}
       />,
     );
 
     expect(
-      screen.getByText("Remote Assist session connecting"),
+      screen.getByText("Remote Assist session active"),
     ).toBeInTheDocument();
-    expect(screen.getByText("Session requested")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /session requested/i }),
-    ).toBeDisabled();
+      screen.getByText(/Support controls stay inside Athena/),
+    ).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Reason"), {
+      target: { value: "Another support request" },
+    });
+    const startButton = screen.getByRole("button", { name: /start session/i });
+    expect(startButton).toBeDisabled();
+    fireEvent.click(startButton);
+    expect(onStartRemoteAssist).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: /end session/i }));
+
+    await waitFor(() => {
+      expect(onEndRemoteAssist).toHaveBeenCalledWith({
+        reason: "Support ended the Remote Assist session.",
+        sessionId: "session-1",
+      });
+    });
+    expect(mocks.toastSuccess).toHaveBeenCalledWith(
+      "Remote Assist session ended.",
+    );
   });
 
   it("shows approval-required Remote Assist responses", async () => {
@@ -422,7 +451,7 @@ describe("POSTerminalDetailViewContent", () => {
     );
 
     fireEvent.change(screen.getByLabelText("Reason"), {
-      target: { value: "Support needs cashier approval" },
+      target: { value: "Drawer repair support" },
     });
     fireEvent.click(screen.getByRole("button", { name: /start session/i }));
 
@@ -864,5 +893,27 @@ describe("POSTerminalDetailView", () => {
 
     expect(screen.getByText("No permission")).toBeInTheDocument();
     expect(mocks.useQuery).toHaveBeenCalledWith(expect.anything(), "skip");
+  });
+
+  it("does not query full-admin Remote Assist session state for POS-only users", () => {
+    mocks.hasFullAdminAccess = false;
+    (mocks.activeStoreState as { activeStore: Record<string, unknown> }).activeStore = {
+      _id: "store-1",
+      organizationId: "org-1",
+    };
+    (mocks.useQuery as ReturnType<typeof vi.fn>)
+      .mockReturnValueOnce(detail)
+      .mockReturnValueOnce({
+        _id: "remote-client-1",
+        accessPolicy: "unattended_allowed",
+        displayName: "Front counter",
+        enrollmentStatus: "active",
+        lastPresenceAt: Date.now(),
+        presenceStatus: "online",
+      });
+
+    render(<POSTerminalDetailView />);
+
+    expect((mocks.useQuery.mock.calls as unknown[][])[2]?.[1]).toBe("skip");
   });
 });

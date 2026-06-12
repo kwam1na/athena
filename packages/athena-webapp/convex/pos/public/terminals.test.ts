@@ -17,6 +17,11 @@ const mocks = vi.hoisted(() => ({
   requireOrganizationMemberRoleWithCtx: vi.fn(),
   resolveTerminalCloudRepairCommand: vi.fn(),
   createRemoteAssistRepository: vi.fn(),
+  remoteAssistGetClientByRuntime: vi.fn(),
+  remoteAssistGetCurrentSessionForClient: vi.fn(),
+  remoteAssistGetSession: vi.fn(),
+  remoteAssistInsertEvent: vi.fn(),
+  remoteAssistPatchSession: vi.fn(),
   remoteAssistUpsertClient: vi.fn(),
   submitTerminalRuntimeStatusCommand: vi.fn(),
   updateTerminalCommand: vi.fn(),
@@ -73,12 +78,14 @@ import {
   deleteTerminal,
   getTerminalByFingerprint,
   getTerminalHealthSummary,
+  getRuntimeRemoteAssistSession,
   issueTerminalRecoveryCommand,
   listTerminalRecoveryCommands,
   listTerminalHealthSummaries,
   listTerminals,
   claimTerminalRecoveryCommand,
   acknowledgeTerminalRecoveryCommand,
+  disconnectRemoteAssistSession,
   registerTerminal,
   resolveTerminalCloudRepair,
   submitTerminalRuntimeStatus,
@@ -90,6 +97,51 @@ const SYNC_SECRET_HASH =
 
 function getHandler(definition: unknown) {
   return (definition as { _handler: Function })._handler;
+}
+
+function buildRemoteAssistClient(overrides: Record<string, unknown> = {}) {
+  return {
+    _creationTime: 1,
+    _id: "remote-client-1",
+    accessPolicy: "unattended_allowed",
+    capabilities: {
+      attendedScreenShare: true,
+      boundedControl: true,
+      sensitiveMasking: true,
+      unattendedCoBrowsing: true,
+    },
+    createdAt: 1,
+    displayName: "Front register",
+    enrollmentStatus: "active",
+    lastPresenceAt: 200,
+    organizationId: "org-1",
+    presenceStatus: "online",
+    runtimeIdentity: "terminal-1",
+    runtimeType: "pos_terminal",
+    storeId: "store-1",
+    updatedAt: 200,
+    ...overrides,
+  };
+}
+
+function buildRemoteAssistSession(overrides: Record<string, unknown> = {}) {
+  return {
+    _creationTime: 1,
+    _id: "remote-session-1",
+    clientId: "remote-client-1",
+    effectiveMode: "unattended",
+    expiresAt: 10_000,
+    organizationId: "org-1",
+    reason: "Drawer repair support",
+    requestedAt: 100,
+    requestedByUserId: "athena-user-1",
+    requestedMode: "unattended",
+    sensitiveModeActive: false,
+    status: "connecting",
+    storeId: "store-1",
+    transportProvider: "livekit",
+    ...overrides,
+  };
 }
 
 describe("POS terminal public mutations", () => {
@@ -135,8 +187,19 @@ describe("POS terminal public mutations", () => {
       repository: true,
     });
     mocks.createRemoteAssistRepository.mockReturnValue({
+      getClientByRuntime: mocks.remoteAssistGetClientByRuntime,
+      getCurrentSessionForClient: mocks.remoteAssistGetCurrentSessionForClient,
+      getSession: mocks.remoteAssistGetSession,
+      insertEvent: mocks.remoteAssistInsertEvent,
+      patchSession: mocks.remoteAssistPatchSession,
       upsertClient: mocks.remoteAssistUpsertClient,
     });
+    mocks.remoteAssistUpsertClient.mockResolvedValue(buildRemoteAssistClient());
+    mocks.remoteAssistGetClientByRuntime.mockResolvedValue(
+      buildRemoteAssistClient(),
+    );
+    mocks.remoteAssistGetCurrentSessionForClient.mockResolvedValue(null);
+    mocks.remoteAssistGetSession.mockResolvedValue(null);
     mocks.issueTerminalRecoveryCommandService.mockResolvedValue({
       kind: "ok",
       data: buildRecoveryCommand(),
@@ -543,6 +606,144 @@ describe("POS terminal public mutations", () => {
     );
   });
 
+  it("claims a connecting Remote Assist session after a successful runtime check-in", async () => {
+    const session = buildRemoteAssistSession({ status: "connecting" });
+    mocks.remoteAssistGetCurrentSessionForClient.mockResolvedValue(session);
+    mocks.remoteAssistGetSession.mockResolvedValue(session);
+    const ctx = buildCtx({
+      terminal: {
+        _id: "terminal-1",
+        storeId: "store-1",
+        status: "active",
+        registeredByUserId: "athena-user-2",
+        syncSecretHash: SYNC_SECRET_HASH,
+        displayName: "Front register",
+      },
+    });
+
+    await getHandler(submitTerminalRuntimeStatus)(ctx as never, {
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      syncSecretHash: "sync-secret-1",
+      status: buildRuntimeStatus(),
+    });
+
+    expect(mocks.remoteAssistGetCurrentSessionForClient).toHaveBeenCalledWith({
+      clientId: "remote-client-1",
+      now: 200,
+    });
+    expect(mocks.remoteAssistPatchSession).toHaveBeenCalledWith(
+      "remote-session-1",
+      {
+        startedAt: 200,
+        status: "active",
+      },
+    );
+    expect(mocks.remoteAssistInsertEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        clientId: "remote-client-1",
+        eventType: "runtime_claimed",
+        occurredAt: 200,
+        participantRole: "runtime",
+        sessionId: "remote-session-1",
+      }),
+    );
+  });
+
+  it("hydrates a runtime Remote Assist session with terminal proof", async () => {
+    mocks.remoteAssistGetCurrentSessionForClient.mockResolvedValue(
+      buildRemoteAssistSession({ status: "active" }),
+    );
+    const ctx = buildCtx({
+      terminal: {
+        _id: "terminal-1",
+        storeId: "store-1",
+        status: "active",
+        registeredByUserId: "athena-user-2",
+        syncSecretHash: SYNC_SECRET_HASH,
+      },
+    });
+
+    const result = await getHandler(getRuntimeRemoteAssistSession)(ctx as never, {
+      storeId: "store-1",
+      syncSecretHash: "sync-secret-1",
+      terminalId: "terminal-1",
+    });
+
+    expect(result).toEqual({
+      _id: "remote-session-1",
+      effectiveMode: "unattended",
+      sensitiveModeActive: false,
+      status: "active",
+    });
+    expect(mocks.remoteAssistGetCurrentSessionForClient).toHaveBeenCalledWith({
+      clientId: "remote-client-1",
+      now: expect.any(Number),
+    });
+  });
+
+  it("does not hydrate runtime Remote Assist without terminal proof", async () => {
+    const ctx = buildCtx({
+      terminal: {
+        _id: "terminal-1",
+        storeId: "store-1",
+        status: "active",
+        registeredByUserId: "athena-user-2",
+        syncSecretHash: SYNC_SECRET_HASH,
+      },
+    });
+
+    const result = await getHandler(getRuntimeRemoteAssistSession)(ctx as never, {
+      storeId: "store-1",
+      syncSecretHash: "wrong-secret",
+      terminalId: "terminal-1",
+    });
+
+    expect(result).toBeNull();
+    expect(mocks.remoteAssistGetCurrentSessionForClient).not.toHaveBeenCalled();
+  });
+
+  it("disconnects Remote Assist with runtime audit attribution", async () => {
+    const session = buildRemoteAssistSession({
+      expiresAt: Date.now() + 60_000,
+      status: "active",
+    });
+    mocks.remoteAssistGetSession.mockResolvedValue(session);
+    const ctx = buildCtx({
+      terminal: {
+        _id: "terminal-1",
+        storeId: "store-1",
+        status: "active",
+        registeredByUserId: "athena-user-2",
+        syncSecretHash: SYNC_SECRET_HASH,
+      },
+    });
+
+    const result = await getHandler(disconnectRemoteAssistSession)(ctx as never, {
+      storeId: "store-1",
+      syncSecretHash: "sync-secret-1",
+      terminalId: "terminal-1",
+      sessionId: "remote-session-1",
+    });
+
+    expect(result).toBeNull();
+    expect(mocks.remoteAssistPatchSession).toHaveBeenCalledWith(
+      "remote-session-1",
+      {
+        endedAt: expect.any(Number),
+        status: "ended",
+        terminationReason: "Terminal disconnected Remote Assist.",
+      },
+    );
+    expect(mocks.remoteAssistInsertEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: "runtime_disconnected",
+        participantRole: "runtime",
+        summary: "Terminal disconnected Remote Assist.",
+      }),
+    );
+  });
+
   it("does not enroll Remote Assist presence after failed runtime status submission", async () => {
     mocks.submitTerminalRuntimeStatusCommand.mockResolvedValue({
       kind: "user_error",
@@ -569,6 +770,7 @@ describe("POS terminal public mutations", () => {
     });
 
     expect(mocks.remoteAssistUpsertClient).not.toHaveBeenCalled();
+    expect(mocks.remoteAssistGetCurrentSessionForClient).not.toHaveBeenCalled();
   });
 
   it("skips Remote Assist enrollment when the store is missing", async () => {
@@ -597,6 +799,7 @@ describe("POS terminal public mutations", () => {
     });
 
     expect(mocks.remoteAssistUpsertClient).not.toHaveBeenCalled();
+    expect(mocks.remoteAssistGetCurrentSessionForClient).not.toHaveBeenCalled();
   });
 
   it("accepts only safe app-session recovery status in runtime check-ins", async () => {

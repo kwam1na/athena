@@ -19,9 +19,13 @@ import {
 
 export type RemoteAssistRepository = {
   getClient(clientId: string): Promise<RemoteAssistClient | null>;
+  getCurrentSessionForClient(args: {
+    clientId: string;
+    now: number;
+  }): Promise<RemoteAssistSession | null>;
   getSession(sessionId: string): Promise<RemoteAssistSession | null>;
   insertSession(
-    input: Omit<RemoteAssistSession, "_id">,
+    input: Omit<RemoteAssistSession, "_id" | "_creationTime">,
   ): Promise<RemoteAssistSession>;
   insertEvent(input: RemoteAssistSessionEvent): Promise<void>;
   listReusableSessionsForClient(args: {
@@ -84,7 +88,6 @@ export async function startRemoteAssistSession(
   const reusableSession = await findReusableRemoteAssistSession(repository, {
     clientId: client._id,
     now: args.now,
-    requestedByUserId: args.actor.userId,
   });
   if (reusableSession) {
     return ok(reusableSession);
@@ -106,7 +109,7 @@ export async function startRemoteAssistSession(
     sensitiveModeActive: false,
     requestedAt: args.now,
     expiresAt: args.now + REMOTE_ASSIST_SESSION_TTL_MS,
-  } satisfies Omit<RemoteAssistSession, "_id">;
+  } satisfies Omit<RemoteAssistSession, "_id" | "_creationTime">;
   const session = await repository.insertSession(sessionInput);
 
   await repository.insertEvent({
@@ -315,12 +318,57 @@ export async function endRemoteAssistSession(
   return ok({ ...session, ...patch });
 }
 
+export async function disconnectRemoteAssistRuntimeSession(
+  repository: RemoteAssistRepository,
+  args: {
+    clientId: string;
+    now: number;
+    sessionId: string;
+  },
+): Promise<CommandResult<RemoteAssistSession>> {
+  const session = await repository.getSession(args.sessionId);
+  if (!session) {
+    return userError({
+      code: "not_found",
+      message: "Remote Assist session was not found.",
+    });
+  }
+  if (session.clientId !== args.clientId) {
+    return userError({
+      code: "authorization_failed",
+      message: "This runtime cannot disconnect the Remote Assist session.",
+    });
+  }
+  if (session.status === "ended" || session.status === "expired") {
+    return ok(session);
+  }
+  const expired = session.expiresAt <= args.now;
+  const patch = {
+    status: expired ? ("expired" as const) : ("ended" as const),
+    endedAt: args.now,
+    terminationReason: expired
+      ? "Remote Assist session expired."
+      : "Terminal disconnected Remote Assist.",
+  };
+  await repository.patchSession(session._id, patch);
+  await repository.insertEvent({
+    organizationId: session.organizationId,
+    storeId: session.storeId,
+    clientId: session.clientId,
+    sessionId: session._id,
+    participantRole: "runtime",
+    eventType: expired ? "session_expired" : "runtime_disconnected",
+    occurredAt: args.now,
+    summary: patch.terminationReason,
+  });
+  return ok({ ...session, ...patch });
+}
+
 async function findReusableRemoteAssistSession(
   repository: RemoteAssistRepository,
   args: {
     clientId: string;
     now: number;
-    requestedByUserId: string;
   },
 ) {
   const sessions = await repository.listReusableSessionsForClient({
@@ -329,7 +377,6 @@ async function findReusableRemoteAssistSession(
   });
   return (
     sessions
-      .filter((session) => session.requestedByUserId === args.requestedByUserId)
       .filter((session) => session.expiresAt > args.now)
       .find((session) =>
         ["active", "connecting", "pending_attended_approval"].includes(

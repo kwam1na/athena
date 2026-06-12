@@ -72,6 +72,32 @@ Model Remote Assist around a browser-client session contract:
   and privileged adapter actions. Do not persist provider secrets, screen media,
   raw keystroke logs, PINs, proofs, sync secrets, or raw payload bodies.
 
+## Live Session Closeout
+
+The first Terminal Health implementation proved support request creation, but a
+support request alone is not a live Remote Assist session. The next boundary is
+the handoff between support-started session state and runtime-claimed session
+state.
+
+Keep that handoff split by authority:
+
+- Support can start, hydrate, and end a session through full-admin scoped
+  Remote Assist APIs.
+- POS runtimes claim unattended sessions only after the existing terminal
+  runtime status submission validates store, terminal, and sync-secret proof.
+- Terminal Health hydrates the current non-ended session by Remote Assist
+  client so a browser reload does not create a duplicate request or reset the
+  visible state.
+- The support panel should show `connecting` until the runtime check-in claims
+  the session, then show active state and an explicit end action.
+- The live assist transport contract should expose sanitized co-browse metadata
+  and bounded Athena-surface control intents before any provider-specific
+  adapter is introduced.
+
+Do not add a broad support-callable runtime claim mutation. That collapses the
+support and runtime authority boundary and makes it too easy to mark a browser
+joined without fresh runtime proof.
+
 ## POS Invariants
 
 Remote Assist can help support operate the visible Athena UI and trigger

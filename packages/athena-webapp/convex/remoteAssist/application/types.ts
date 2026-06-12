@@ -88,6 +88,7 @@ export type RemoteAssistClient = {
 
 export type RemoteAssistSession = {
   _id: string;
+  _creationTime: number;
   organizationId: string;
   storeId?: string;
   clientId: string;

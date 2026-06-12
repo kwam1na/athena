@@ -33,6 +33,10 @@ import {
 } from "../application/terminalRecovery/terminalCommandService";
 import { createTerminalRecoveryCommandRepository } from "../infrastructure/repositories/terminalRecoveryRepository";
 import { buildPosRemoteAssistClientPresence } from "../../remoteAssist/application/posRuntimeAdapter";
+import {
+  claimRemoteAssistSession,
+  disconnectRemoteAssistRuntimeSession,
+} from "../../remoteAssist/application/sessionService";
 import { createRemoteAssistRepository } from "../../remoteAssist/infrastructure/remoteAssistRepository";
 import {
   posTerminalRecoveryCommandPayloadValidator,
@@ -133,6 +137,20 @@ const runtimeStatusWriteResultValidator = v.object({
   terminalId: v.id("posTerminal"),
   reportedAt: v.number(),
   receivedAt: v.number(),
+});
+
+const terminalRemoteAssistSessionReturnValidator = v.object({
+  _id: v.id("remoteAssistSession"),
+  effectiveMode: v.union(v.literal("attended"), v.literal("unattended")),
+  sensitiveModeActive: v.boolean(),
+  status: v.union(
+    v.literal("pending_attended_approval"),
+    v.literal("connecting"),
+    v.literal("active"),
+    v.literal("ended"),
+    v.literal("expired"),
+    v.literal("denied"),
+  ),
 });
 
 const runtimeStatusSnapshotReturnValidator = v.object({
@@ -640,7 +658,8 @@ export const submitTerminalRuntimeStatus = mutation({
     if (result.kind === "ok") {
       const store = await ctx.db.get("store", args.storeId);
       if (store) {
-        await createRemoteAssistRepository(ctx).upsertClient(
+        const remoteAssistRepository = createRemoteAssistRepository(ctx);
+        const remoteAssistClient = await remoteAssistRepository.upsertClient(
           buildPosRemoteAssistClientPresence({
             receivedAt: result.data.receivedAt,
             runtimeStatus: safeStatus,
@@ -648,6 +667,18 @@ export const submitTerminalRuntimeStatus = mutation({
             terminal,
           }),
         );
+        const currentRemoteAssistSession =
+          await remoteAssistRepository.getCurrentSessionForClient({
+            clientId: remoteAssistClient._id,
+            now: result.data.receivedAt,
+          });
+        if (currentRemoteAssistSession?.status === "connecting") {
+          await claimRemoteAssistSession(remoteAssistRepository, {
+            clientId: remoteAssistClient._id,
+            now: result.data.receivedAt,
+            sessionId: currentRemoteAssistSession._id,
+          });
+        }
       }
       await verifyTerminalRecoveryCommandsFromRuntime(
         createTerminalRecoveryCommandRepository(ctx),
@@ -671,6 +702,91 @@ export const submitTerminalRuntimeStatus = mutation({
 });
 
 export const reportTerminalRuntimeStatus = submitTerminalRuntimeStatus;
+
+export const getRuntimeRemoteAssistSession = query({
+  args: {
+    storeId: v.id("store"),
+    syncSecretHash: v.string(),
+    terminalId: v.id("posTerminal"),
+  },
+  returns: v.union(terminalRemoteAssistSessionReturnValidator, v.null()),
+  handler: async (ctx, args) => {
+    const terminal = await requireActiveTerminalSyncSecret(ctx, {
+      storeId: args.storeId,
+      syncSecretHash: args.syncSecretHash,
+      terminalId: args.terminalId,
+    });
+    if (!terminal) {
+      return null;
+    }
+    const store = await ctx.db.get("store", args.storeId);
+    if (!store) {
+      return null;
+    }
+    const remoteAssistRepository = createRemoteAssistRepository(ctx);
+    const client = await remoteAssistRepository.getClientByRuntime({
+      organizationId: store.organizationId,
+      runtimeIdentity: args.terminalId,
+      runtimeType: "pos_terminal",
+    });
+    if (!client) {
+      return null;
+    }
+    const session = await remoteAssistRepository.getCurrentSessionForClient({
+      clientId: client._id,
+      now: Date.now(),
+    });
+    return session
+      ? {
+          _id: session._id as Id<"remoteAssistSession">,
+          effectiveMode: session.effectiveMode,
+          sensitiveModeActive: session.sensitiveModeActive,
+          status: session.status,
+        }
+      : null;
+  },
+});
+
+export const disconnectRemoteAssistSession = mutation({
+  args: {
+    sessionId: v.id("remoteAssistSession"),
+    storeId: v.id("store"),
+    syncSecretHash: v.string(),
+    terminalId: v.id("posTerminal"),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const terminal = await requireActiveTerminalSyncSecret(ctx, {
+      storeId: args.storeId,
+      syncSecretHash: args.syncSecretHash,
+      terminalId: args.terminalId,
+    });
+    if (!terminal) {
+      return null;
+    }
+    const store = await ctx.db.get("store", args.storeId);
+    if (!store) {
+      return null;
+    }
+    const remoteAssistRepository = createRemoteAssistRepository(ctx);
+    const client = await remoteAssistRepository.getClientByRuntime({
+      organizationId: store.organizationId,
+      runtimeIdentity: args.terminalId,
+      runtimeType: "pos_terminal",
+    });
+    const session = await remoteAssistRepository.getSession(args.sessionId);
+    if (!client || !session || session.clientId !== client._id) {
+      return null;
+    }
+
+    await disconnectRemoteAssistRuntimeSession(remoteAssistRepository, {
+      clientId: client._id,
+      now: Date.now(),
+      sessionId: args.sessionId,
+    });
+    return null;
+  },
+});
 
 export const registerTerminal = mutation({
   args: {

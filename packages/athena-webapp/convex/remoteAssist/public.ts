@@ -109,21 +109,18 @@ export const getCurrentSessionByClient = query({
     if (!client) {
       return null;
     }
-
     await requireOrganizationMemberRoleWithCtx(ctx, {
       allowedRoles: ["full_admin"],
-      failureMessage: "You do not have access to view Remote Assist sessions.",
+      failureMessage: "You do not have access to view this Remote Assist session.",
       organizationId: client.organizationId as Id<"organization">,
       userId: athenaUser._id,
     });
 
-    const sessions = await repository.listReusableSessionsForClient({
+    const session = await repository.getCurrentSessionForClient({
       clientId: args.clientId,
       now: Date.now(),
     });
-    return toRemoteAssistSessionReturn(
-      sessions.sort(compareRemoteAssistSessionForSupportView)[0] ?? null,
-    );
+    return session ? toRemoteAssistSessionReturn(session) : null;
   },
 });
 
@@ -176,50 +173,6 @@ export const startSession = mutation({
   },
 });
 
-function compareRemoteAssistSessionForSupportView(
-  a: {
-    requestedAt: number;
-    status: string;
-  },
-  b: {
-    requestedAt: number;
-    status: string;
-  },
-) {
-  return (
-    getRemoteAssistSessionStatusPriority(b.status) -
-      getRemoteAssistSessionStatusPriority(a.status) ||
-    b.requestedAt - a.requestedAt
-  );
-}
-
-function getRemoteAssistSessionStatusPriority(status: string) {
-  switch (status) {
-    case "active":
-      return 3;
-    case "connecting":
-      return 2;
-    case "pending_attended_approval":
-      return 1;
-    default:
-      return 0;
-  }
-}
-
-function toRemoteAssistSessionReturn(session: RemoteAssistSession | null) {
-  return session
-    ? {
-        ...session,
-        _creationTime: session.requestedAt,
-        _id: session._id as Id<"remoteAssistSession">,
-        clientId: session.clientId as Id<"remoteAssistClient">,
-        organizationId: session.organizationId as Id<"organization">,
-        requestedByUserId: session.requestedByUserId as Id<"athenaUser">,
-        storeId: session.storeId as Id<"store"> | undefined,
-      }
-    : null;
-}
-
 export const endSupportSession = mutation({
   args: {
     reason: v.string(),
@@ -253,3 +206,14 @@ export const endSupportSession = mutation({
     });
   },
 });
+
+function toRemoteAssistSessionReturn(session: RemoteAssistSession) {
+  return {
+    ...session,
+    _id: session._id as Id<"remoteAssistSession">,
+    clientId: session.clientId as Id<"remoteAssistClient">,
+    organizationId: session.organizationId as Id<"organization">,
+    requestedByUserId: session.requestedByUserId as Id<"athenaUser">,
+    storeId: session.storeId as Id<"store"> | undefined,
+  };
+}

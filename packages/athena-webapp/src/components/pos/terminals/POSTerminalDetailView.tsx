@@ -16,10 +16,7 @@ import { toast } from "sonner";
 
 import View from "@/components/View";
 import { FadeIn } from "@/components/common/FadeIn";
-import {
-  PageLevelHeader,
-  PageWorkspace,
-} from "@/components/common/PageLevelHeader";
+import { PageLevelHeader, PageWorkspace } from "@/components/common/PageLevelHeader";
 import { EmptyState } from "@/components/states/empty/empty-state";
 import { NoPermissionView } from "@/components/states/no-permission/NoPermissionView";
 import { ProtectedAdminSignInView } from "@/components/states/signed-out/ProtectedAdminSignInView";
@@ -67,11 +64,7 @@ const posTerminalApi = api.inventory.posTerminal as unknown as {
 
 type RemoteAssistClientSummary = {
   _id: Id<"remoteAssistClient"> | string;
-  accessPolicy:
-    | "attended_required"
-    | "disabled"
-    | "unattended_allowed"
-    | string;
+  accessPolicy: "attended_required" | "disabled" | "unattended_allowed" | string;
   displayName: string;
   enrollmentStatus: "active" | "disabled" | "revoked" | string;
   lastPresenceAt?: number;
@@ -81,7 +74,11 @@ type RemoteAssistClientSummary = {
 type RemoteAssistStartResult =
   | {
       kind: "ok";
-      data: RemoteAssistSessionSummary;
+      data: {
+        _id: Id<"remoteAssistSession"> | string;
+        effectiveMode: "attended" | "unattended" | string;
+        status: string;
+      };
     }
   | {
       kind: "user_error";
@@ -98,10 +95,27 @@ type RemoteAssistStartResult =
 type RemoteAssistSessionSummary = {
   _id: Id<"remoteAssistSession"> | string;
   effectiveMode: "attended" | "unattended" | string;
-  expiresAt?: number;
-  reason?: string;
+  endedAt?: number;
+  expiresAt: number;
+  reason: string;
+  sensitiveModeActive: boolean;
+  startedAt?: number;
   status: string;
+  terminationReason?: string;
 };
+
+type RemoteAssistEndResult =
+  | {
+      kind: "ok";
+      data: RemoteAssistSessionSummary;
+    }
+  | {
+      kind: "user_error";
+      error: {
+        code?: string;
+        message: string;
+      };
+    };
 
 const remoteAssistApi = api.remoteAssist.public;
 
@@ -118,6 +132,10 @@ type POSTerminalDetailViewContentProps = {
     clientId: Id<"remoteAssistClient"> | string;
     reason: string;
   }) => Promise<RemoteAssistStartResult>;
+  onEndRemoteAssist?: (args: {
+    reason: string;
+    sessionId: Id<"remoteAssistSession"> | string;
+  }) => Promise<RemoteAssistEndResult>;
   orgUrlSlug?: string;
   queryUnavailable?: boolean;
   remoteAssistClient?: RemoteAssistClientSummary | null;
@@ -167,12 +185,16 @@ function DetailPanel({
   );
 }
 
-function Field({ label, value }: { label: string; value: React.ReactNode }) {
+function Field({
+  label,
+  value,
+}: {
+  label: string;
+  value: React.ReactNode;
+}) {
   return (
     <div>
-      <p className="text-xs font-medium uppercase text-muted-foreground">
-        {label}
-      </p>
+      <p className="text-xs font-medium uppercase text-muted-foreground">{label}</p>
       <div className="mt-1 text-sm text-foreground">{value}</div>
     </div>
   );
@@ -250,11 +272,7 @@ function TerminalContextRail({
           />
           <RailField
             label="Source"
-            value={
-              runtimeStatus
-                ? formatStatusLabel(runtimeStatus.source)
-                : "No check-in"
-            }
+            value={runtimeStatus ? formatStatusLabel(runtimeStatus.source) : "No check-in"}
           />
           <RailField
             label="Browser online"
@@ -386,7 +404,10 @@ function SyncEvidenceSection({
             label="Cursor updated"
             value={formatTerminalTimestamp(syncEvidence.cursorUpdatedAt)}
           />
-          <Field label="Recent sample" value={`${sampledEventCount} sampled`} />
+          <Field
+            label="Recent sample"
+            value={`${sampledEventCount} sampled`}
+          />
         </div>
       </div>
 
@@ -474,8 +495,7 @@ function ConflictSection({
                 {conflict.summary}
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
-                Sequence {conflict.sequence} /{" "}
-                {formatStatusLabel(conflict.conflictType)}
+                Sequence {conflict.sequence} / {formatStatusLabel(conflict.conflictType)}
               </p>
             </div>
           ))
@@ -911,32 +931,25 @@ function RemoteAssistPanel({
   canStartRemoteAssist = false,
   client,
   detail,
-  currentSession,
+  onEndRemoteAssist,
   onStartRemoteAssist,
+  session,
 }: {
   canStartRemoteAssist?: boolean;
   client?: RemoteAssistClientSummary | null;
-  currentSession?: RemoteAssistSessionSummary | null;
   detail: TerminalHealthDetail;
+  onEndRemoteAssist?: POSTerminalDetailViewContentProps["onEndRemoteAssist"];
   onStartRemoteAssist?: POSTerminalDetailViewContentProps["onStartRemoteAssist"];
+  session?: RemoteAssistSessionSummary | null;
 }) {
   const [reason, setReason] = useState("");
+  const [isEnding, setIsEnding] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
-  const [requestedSession, setRequestedSession] =
-    useState<RemoteAssistSessionSummary | null>(null);
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const timerId = window.setInterval(() => setNow(Date.now()), 15_000);
     return () => window.clearInterval(timerId);
   }, []);
-  useEffect(() => {
-    setRequestedSession(null);
-  }, [client?._id]);
-  useEffect(() => {
-    if (currentSession) {
-      setRequestedSession(currentSession);
-    }
-  }, [currentSession]);
   const presenceFresh = isRemoteAssistPresenceFresh(client, now);
   const available =
     canStartRemoteAssist &&
@@ -944,13 +957,13 @@ function RemoteAssistPanel({
     client?.accessPolicy === "unattended_allowed" &&
     client?.presenceStatus === "online" &&
     presenceFresh;
-  const sessionInProgress =
-    requestedSession &&
-    !["ended", "expired"].includes(requestedSession.status);
   const availabilityCopy = getRemoteAssistAvailabilityCopy(
     client,
     presenceFresh,
     canStartRemoteAssist,
+  );
+  const hasCurrentSession = Boolean(
+    session && isRemoteAssistSessionCurrent(session),
   );
 
   async function handleStartRemoteAssist() {
@@ -961,10 +974,9 @@ function RemoteAssistPanel({
     try {
       const result = await onStartRemoteAssist({
         clientId: client._id,
-        reason,
+        reason: reason.trim(),
       });
       if (result.kind === "ok") {
-        setRequestedSession(result.data);
         toast.success("Remote Assist session requested.");
       } else if (result.kind === "approval_required") {
         toast.error(
@@ -978,6 +990,28 @@ function RemoteAssistPanel({
       toast.error("Remote Assist could not start right now.");
     } finally {
       setIsStarting(false);
+    }
+  }
+
+  async function handleEndRemoteAssist() {
+    if (!session || !onEndRemoteAssist || !isRemoteAssistSessionCurrent(session)) {
+      return;
+    }
+    setIsEnding(true);
+    try {
+      const result = await onEndRemoteAssist({
+        reason: "Support ended the Remote Assist session.",
+        sessionId: session._id,
+      });
+      if (result.kind === "ok") {
+        toast.success("Remote Assist session ended.");
+      } else {
+        toast.error(result.error.message);
+      }
+    } catch {
+      toast.error("Remote Assist could not end right now.");
+    } finally {
+      setIsEnding(false);
     }
   }
 
@@ -1000,8 +1034,7 @@ function RemoteAssistPanel({
             </p>
             {client?.lastPresenceAt ? (
               <p className="mt-2 text-xs text-muted-foreground">
-                Last Remote Assist presence{" "}
-                {formatTerminalTimestamp(client.lastPresenceAt)}.
+                Last Remote Assist presence {formatTerminalTimestamp(client.lastPresenceAt)}.
               </p>
             ) : null}
           </div>
@@ -1023,11 +1056,7 @@ function RemoteAssistPanel({
       <div className="mt-layout-md grid gap-layout-sm md:grid-cols-3">
         <RecoveryMetric
           label="Mode"
-          value={
-            client?.accessPolicy === "attended_required"
-              ? "Attended"
-              : "Unattended"
-          }
+          value={client?.accessPolicy === "attended_required" ? "Attended" : "Unattended"}
         />
         <RecoveryMetric
           label="Runtime"
@@ -1039,27 +1068,40 @@ function RemoteAssistPanel({
         />
       </div>
 
-      {requestedSession ? (
-        <div className="mt-layout-md rounded-md border border-blue-200 bg-blue-50 px-layout-md py-layout-md text-blue-950">
-          <div className="flex flex-col gap-layout-sm md:flex-row md:items-start md:justify-between">
+      {session ? (
+        <div
+          className={cn(
+            "mt-layout-md rounded-md border px-layout-md py-layout-md",
+            session.status === "active"
+              ? "border-success/25 bg-success/5"
+              : isRemoteAssistSessionCurrent(session)
+                ? "border-info/30 bg-info/10"
+                : "border-border/80 bg-surface",
+          )}
+        >
+          <div className="flex flex-col gap-layout-md lg:flex-row lg:items-start lg:justify-between">
             <div className="min-w-0">
-              <p className="text-xs font-medium uppercase text-blue-700">
+              <p className="text-xs font-medium uppercase text-muted-foreground">
                 Session
               </p>
-              <p className="mt-1 text-sm font-medium">
-                {getRemoteAssistSessionStatusLabel(requestedSession.status)}
+              <p className="mt-1 text-sm font-medium text-foreground">
+                {getRemoteAssistSessionStatusLabel(session.status)}
               </p>
-              <p className="mt-1 text-xs text-blue-800">
-                Support request accepted. The terminal runtime still needs to
-                join before live assist controls are available.
+              <p className="mt-1 text-xs text-muted-foreground">
+                {getRemoteAssistSessionStatusDescription(session)}
               </p>
             </div>
-            <Badge
-              className="w-fit rounded-md border-blue-300 bg-blue-100 text-blue-800"
-              variant="outline"
-            >
-              {formatRemoteAssistModeLabel(requestedSession.effectiveMode)}
-            </Badge>
+            {isRemoteAssistSessionCurrent(session) ? (
+              <Button
+                disabled={isEnding}
+                onClick={handleEndRemoteAssist}
+                size="sm"
+                type="button"
+                variant="outline"
+              >
+                {isEnding ? "Ending" : "End session"}
+              </Button>
+            ) : null}
           </div>
         </div>
       ) : null}
@@ -1075,57 +1117,26 @@ function RemoteAssistPanel({
           className="min-h-20 rounded-md border border-border bg-background px-layout-md py-layout-sm text-sm text-foreground outline-none ring-offset-background transition focus-visible:ring-2 focus-visible:ring-ring"
           id="remote-assist-reason"
           onChange={(event) => setReason(event.target.value)}
-          placeholder="Describe the support task for this session."
+          placeholder="Describe the support task for this terminal."
           value={reason}
         />
         <div className="flex flex-col gap-layout-xs sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs text-muted-foreground">
-            Remote Assist operates this Athena surface only; POS authority and
-            recovery gates still apply.
+            Remote Assist operates this Athena surface only; POS authority and recovery gates still apply.
           </p>
           <Button
-            disabled={
-              !available ||
-              !reason.trim() ||
-              isStarting ||
-              Boolean(sessionInProgress)
-            }
+            disabled={!available || !reason.trim() || isStarting || hasCurrentSession}
             onClick={handleStartRemoteAssist}
             type="button"
-            variant="workflow"
+            variant="default"
           >
             <MonitorUp aria-hidden="true" className="mr-2 h-4 w-4" />
-            {isStarting
-              ? "Starting"
-              : sessionInProgress
-                ? "Session requested"
-                : "Start session"}
+            {isStarting ? "Starting" : "Start session"}
           </Button>
         </div>
       </div>
     </DetailPanel>
   );
-}
-
-function getRemoteAssistSessionStatusLabel(status: string): string {
-  switch (status) {
-    case "active":
-      return "Remote Assist session active";
-    case "connecting":
-      return "Remote Assist session connecting";
-    case "pending_attended_approval":
-      return "Waiting for local approval";
-    case "ended":
-      return "Remote Assist session ended";
-    case "expired":
-      return "Remote Assist session expired";
-    default:
-      return "Remote Assist session requested";
-  }
-}
-
-function formatRemoteAssistModeLabel(mode: string): string {
-  return mode === "attended" ? "Attended" : "Unattended";
 }
 
 function SupportNotesSection({
@@ -1156,10 +1167,7 @@ function SupportNotesSection({
       ) : (
         <ul className="space-y-layout-xs text-sm text-foreground">
           {notes.map((note) => (
-            <li
-              className="rounded-md border border-border bg-background px-layout-md py-layout-sm"
-              key={note}
-            >
+            <li className="rounded-md border border-border bg-background px-layout-md py-layout-sm" key={note}>
               {note}
             </li>
           ))}
@@ -1177,8 +1185,7 @@ function getRemoteAssistAvailabilityCopy(
   if (!canStartRemoteAssist) {
     return {
       label: "Support permission required",
-      description:
-        "Only full admin support users can start Remote Assist sessions.",
+      description: "Only full admin support users can start Remote Assist sessions.",
     };
   }
   if (!client) {
@@ -1229,14 +1236,59 @@ function isRemoteAssistPresenceFresh(
 ) {
   return Boolean(
     client?.lastPresenceAt &&
-    now - client.lastPresenceAt <= REMOTE_ASSIST_PRESENCE_FRESHNESS_MS,
+      now - client.lastPresenceAt <= REMOTE_ASSIST_PRESENCE_FRESHNESS_MS,
   );
+}
+
+function isRemoteAssistSessionCurrent(session: RemoteAssistSessionSummary) {
+  return ["active", "connecting", "pending_attended_approval"].includes(
+    session.status,
+  );
+}
+
+function getRemoteAssistSessionStatusLabel(status: string) {
+  switch (status) {
+    case "active":
+      return "Remote Assist session active";
+    case "connecting":
+      return "Remote Assist session connecting";
+    case "pending_attended_approval":
+      return "Waiting for local approval";
+    case "ended":
+      return "Remote Assist session ended";
+    case "expired":
+      return "Remote Assist session expired";
+    case "denied":
+      return "Remote Assist session denied";
+    default:
+      return formatStatusLabel(status);
+  }
+}
+
+function getRemoteAssistSessionStatusDescription(
+  session: RemoteAssistSessionSummary,
+) {
+  switch (session.status) {
+    case "active":
+      return "The terminal runtime has joined. Support controls stay inside Athena and POS authority gates still apply.";
+    case "connecting":
+      return "Support request accepted. The terminal runtime still needs to join before live assist controls are available.";
+    case "pending_attended_approval":
+      return "A local operator must approve before support can connect.";
+    case "ended":
+      return session.terminationReason ?? "Support ended this Remote Assist session.";
+    case "expired":
+      return "This support request expired before it was completed.";
+    default:
+      return "Remote Assist session state is recorded for this terminal.";
+  }
 }
 
 export function POSTerminalDetailViewContent({
   canStartRemoteAssist = false,
   detail,
   isLoading,
+  onEndRemoteAssist,
   onResolveRegisterSessionReview,
   onStartRemoteAssist,
   orgUrlSlug,
@@ -1295,27 +1347,22 @@ export function POSTerminalDetailViewContent({
             <Badge className={classification.toneClassName} variant="outline">
               {classification.label}
             </Badge>
-            <Badge
-              className="border-border bg-surface-raised text-muted-foreground"
-              variant="outline"
-            >
+            <Badge className="border-border bg-surface-raised text-muted-foreground" variant="outline">
               {formatRegisterNumber(detail.terminal.registerNumber)}
             </Badge>
           </div>
 
           <div className="grid gap-layout-xl xl:grid-cols-[20rem_minmax(0,1fr)]">
-            <TerminalContextRail
-              detail={detail}
-              runtimeStatus={runtimeStatus}
-            />
+            <TerminalContextRail detail={detail} runtimeStatus={runtimeStatus} />
 
             <main className="space-y-layout-lg">
               <RemoteAssistPanel
                 canStartRemoteAssist={canStartRemoteAssist}
                 client={remoteAssistClient}
-                currentSession={remoteAssistSession}
                 detail={detail}
+                onEndRemoteAssist={onEndRemoteAssist}
                 onStartRemoteAssist={onStartRemoteAssist}
+                session={remoteAssistSession}
               />
               <RecoveryPanel
                 detail={detail}
@@ -1358,8 +1405,7 @@ export function POSTerminalDetailView() {
         terminalId?: string;
       }
     | undefined;
-  const isLoadingAccess =
-    isLoadingUser || isLoadingStores || isLoadingPermissions;
+  const isLoadingAccess = isLoadingUser || isLoadingStores || isLoadingPermissions;
   const canViewHealth = canAccessPOS();
   const canQuery = Boolean(
     activeStore?._id && user && canViewHealth && params?.terminalId,
@@ -1385,7 +1431,7 @@ export function POSTerminalDetailView() {
   ) as RemoteAssistClientSummary | null | undefined;
   const remoteAssistSession = useQuery(
     remoteAssistApi.getCurrentSessionByClient,
-    remoteAssistClient?._id
+    hasFullAdminAccess && remoteAssistClient?._id
       ? {
           clientId: remoteAssistClient._id as Id<"remoteAssistClient">,
         }
@@ -1395,6 +1441,7 @@ export function POSTerminalDetailView() {
     api.cashControls.deposits.resolveRegisterSessionSyncReview,
   );
   const startRemoteAssistSession = useMutation(remoteAssistApi.startSession);
+  const endRemoteAssistSession = useMutation(remoteAssistApi.endSupportSession);
 
   async function onResolveRegisterSessionReview({
     registerSessionId,
@@ -1436,6 +1483,19 @@ export function POSTerminalDetailView() {
     }) as Promise<RemoteAssistStartResult>;
   }
 
+  async function onEndRemoteAssist({
+    reason,
+    sessionId,
+  }: {
+    reason: string;
+    sessionId: Id<"remoteAssistSession"> | string;
+  }): Promise<RemoteAssistEndResult> {
+    return endRemoteAssistSession({
+      reason,
+      sessionId: sessionId as Id<"remoteAssistSession">,
+    }) as Promise<RemoteAssistEndResult>;
+  }
+
   if (isLoadingAccess) {
     return null;
   }
@@ -1465,18 +1525,19 @@ export function POSTerminalDetailView() {
   }
 
   return (
-    <POSTerminalDetailViewContent
-      detail={detail ?? null}
-      canStartRemoteAssist={hasFullAdminAccess}
-      isLoading={detail === undefined}
-      onResolveRegisterSessionReview={onResolveRegisterSessionReview}
-      onStartRemoteAssist={onStartRemoteAssist}
-      orgUrlSlug={params.orgUrlSlug}
-      queryUnavailable={detail === null && !params.terminalId}
-      remoteAssistClient={remoteAssistClient ?? null}
-      remoteAssistSession={remoteAssistSession ?? null}
-      storeUrlSlug={params.storeUrlSlug}
-    />
+      <POSTerminalDetailViewContent
+        detail={detail ?? null}
+        canStartRemoteAssist={hasFullAdminAccess}
+        isLoading={detail === undefined}
+        onResolveRegisterSessionReview={onResolveRegisterSessionReview}
+        onEndRemoteAssist={onEndRemoteAssist}
+        onStartRemoteAssist={onStartRemoteAssist}
+        orgUrlSlug={params.orgUrlSlug}
+        queryUnavailable={detail === null && !params.terminalId}
+        remoteAssistClient={remoteAssistClient ?? null}
+        remoteAssistSession={remoteAssistSession ?? null}
+        storeUrlSlug={params.storeUrlSlug}
+      />
   );
 }
 
