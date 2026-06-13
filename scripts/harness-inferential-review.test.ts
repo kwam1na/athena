@@ -18,7 +18,7 @@ async function write(relativePath: string, contents: string, rootDir: string) {
 
 async function createFixtureRepo() {
   const rootDir = await mkdtemp(
-    path.join(tmpdir(), "athena-harness-inferential-review-")
+    path.join(tmpdir(), "athena-harness-inferential-review-"),
   );
   tempRoots.push(rootDir);
 
@@ -32,9 +32,9 @@ async function createFixtureRepo() {
         },
       },
       null,
-      2
+      2,
     ),
-    rootDir
+    rootDir,
   );
 
   await write(
@@ -57,7 +57,7 @@ async function createFixtureRepo() {
       "      - name: Graphify check",
       "        run: bun run graphify:check",
     ].join("\n"),
-    rootDir
+    rootDir,
   );
 
   await write(
@@ -71,7 +71,7 @@ async function createFixtureRepo() {
       "- `bun run harness:inferential-review` is the inferential harness gate.",
       "- Inferential findings are blocking and exit non-zero with remediation guidance.",
     ].join("\n"),
-    rootDir
+    rootDir,
   );
 
   await write(
@@ -85,7 +85,7 @@ async function createFixtureRepo() {
       "- `bun run harness:inferential-review` is the inferential harness gate.",
       "- Inferential findings are blocking and exit non-zero with remediation guidance.",
     ].join("\n"),
-    rootDir
+    rootDir,
   );
 
   await write(
@@ -97,23 +97,23 @@ async function createFixtureRepo() {
       "  return harnessInferentialReviewStub;",
       "}",
     ].join("\n"),
-    rootDir
+    rootDir,
   );
 
   await write(
     "scripts/harness-inferential-review.test.ts",
     [
-      "import { describe, expect, it } from \"vitest\";",
+      'import { describe, expect, it } from "vitest";',
       "",
-      "import { runHarnessInferentialReviewStub } from \"./harness-inferential-review\";",
+      'import { runHarnessInferentialReviewStub } from "./harness-inferential-review";',
       "",
-      "describe(\"runHarnessInferentialReviewStub\", () => {",
-      "  it(\"returns the stubbed value\", () => {",
+      'describe("runHarnessInferentialReviewStub", () => {',
+      '  it("returns the stubbed value", () => {',
       "    expect(runHarnessInferentialReviewStub()).toBe(true);",
       "  });",
       "});",
     ].join("\n"),
-    rootDir
+    rootDir,
   );
 
   return rootDir;
@@ -121,9 +121,9 @@ async function createFixtureRepo() {
 
 afterEach(async () => {
   await Promise.all(
-    tempRoots.splice(0).map((rootDir) =>
-      rm(rootDir, { recursive: true, force: true })
-    )
+    tempRoots
+      .splice(0)
+      .map((rootDir) => rm(rootDir, { recursive: true, force: true })),
   );
 });
 
@@ -140,9 +140,9 @@ describe("runHarnessInferentialReview", () => {
           },
         },
         null,
-        2
+        2,
       ),
-      rootDir
+      rootDir,
     );
 
     const result = await runHarnessInferentialReview(rootDir, {
@@ -173,9 +173,9 @@ describe("runHarnessInferentialReview", () => {
           },
         },
         null,
-        2
+        2,
       ),
-      rootDir
+      rootDir,
     );
 
     const result = await runHarnessInferentialReview(rootDir, {
@@ -190,7 +190,7 @@ describe("runHarnessInferentialReview", () => {
         id: "missing-pr-athena-review-step",
         severity: "high",
         filePath: "package.json",
-      })
+      }),
     );
   });
 
@@ -205,9 +205,9 @@ describe("runHarnessInferentialReview", () => {
           },
         },
         null,
-        2
+        2,
       ),
-      rootDir
+      rootDir,
     );
 
     const result = await runHarnessInferentialReview(rootDir, {
@@ -222,14 +222,14 @@ describe("runHarnessInferentialReview", () => {
         id: "missing-pr-athena-review-step",
         severity: "high",
         filePath: "package.json",
-      })
+      }),
     );
     expect(result.machine.findings).toContainEqual(
       expect.objectContaining({
         id: "missing-pr-athena-inferential-step",
         severity: "high",
         filePath: "package.json",
-      })
+      }),
     );
   });
 
@@ -245,9 +245,9 @@ describe("runHarnessInferentialReview", () => {
           },
         },
         null,
-        2
+        2,
       ),
-      rootDir
+      rootDir,
     );
 
     const result = await runHarnessInferentialReview(rootDir, {
@@ -272,9 +272,41 @@ describe("runHarnessInferentialReview", () => {
           },
         },
         null,
-        2
+        2,
       ),
-      rootDir
+      rootDir,
+    );
+
+    const result = await runHarnessInferentialReview(rootDir, {
+      getChangedFiles: async () => ["package.json"],
+      nowIso: () => "2026-04-12T05:00:00.000Z",
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.machine.status).toBe("pass");
+    expect(result.machine.findings).toEqual([]);
+  });
+
+  it("accepts harness review and inferential review through pr:athena subcommands", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      "package.json",
+      JSON.stringify(
+        {
+          scripts: {
+            "pr:athena":
+              "bun run pr:athena:prepare && bun run pr:athena:validate && bun run pr:athena:record-proof",
+            "pr:athena:prepare": "bun run pre-commit:generated-artifacts",
+            "pr:athena:validate":
+              "bun run harness:check && bun run harness:review --base origin/main --repo-validation-provided-by pr:athena && bun run harness:inferential-review && bun run harness:audit && bun run graphify:check",
+            "pr:athena:record-proof":
+              "bun scripts/pre-push-validation-proof.ts record-pr-athena",
+          },
+        },
+        null,
+        2,
+      ),
+      rootDir,
     );
 
     const result = await runHarnessInferentialReview(rootDir, {
@@ -299,9 +331,9 @@ describe("runHarnessInferentialReview", () => {
           },
         },
         null,
-        2
+        2,
       ),
-      rootDir
+      rootDir,
     );
 
     const result = await runHarnessInferentialReview(rootDir, {
@@ -316,7 +348,7 @@ describe("runHarnessInferentialReview", () => {
         id: "missing-pr-athena-review-step",
         severity: "high",
         filePath: "package.json",
-      })
+      }),
     );
   });
 
@@ -336,7 +368,9 @@ describe("runHarnessInferentialReview", () => {
       severity: "medium",
       filePath: "scripts/harness-inferential-review.ts",
     });
-    expect(result.humanReport).toContain("Harness script changed without test update");
+    expect(result.humanReport).toContain(
+      "Harness script changed without test update",
+    );
   });
 
   it("fails when scripts/harness-app-registry.ts changes without scripts/harness-app-registry.test.ts", async () => {
@@ -354,9 +388,11 @@ describe("runHarnessInferentialReview", () => {
         id: "missing-harness-script-test-update-scripts-harness-app-registry-ts",
         severity: "medium",
         filePath: "scripts/harness-app-registry.ts",
-      })
+      }),
     );
-    expect(result.humanReport).toContain("scripts/harness-app-registry.test.ts");
+    expect(result.humanReport).toContain(
+      "scripts/harness-app-registry.test.ts",
+    );
   });
 
   it("fails when the PR workflow omits semantic shadow mode on inferential review", async () => {
@@ -379,7 +415,7 @@ describe("runHarnessInferentialReview", () => {
         "      - name: Graphify check",
         "        run: bun run graphify:check",
       ].join("\n"),
-      rootDir
+      rootDir,
     );
 
     const result = await runHarnessInferentialReview(rootDir, {
@@ -394,7 +430,7 @@ describe("runHarnessInferentialReview", () => {
         id: "missing-ci-shadow-semantic-mode",
         severity: "high",
         filePath: ".github/workflows/athena-pr-tests.yml",
-      })
+      }),
     );
   });
 
@@ -418,7 +454,7 @@ describe("runHarnessInferentialReview", () => {
         "      - name: Graphify check",
         "        run: bun run graphify:check",
       ].join("\n"),
-      rootDir
+      rootDir,
     );
 
     const result = await runHarnessInferentialReview(rootDir, {
@@ -433,7 +469,7 @@ describe("runHarnessInferentialReview", () => {
         id: "missing-ci-review-step",
         severity: "high",
         filePath: ".github/workflows/athena-pr-tests.yml",
-      })
+      }),
     );
   });
 
@@ -459,7 +495,7 @@ describe("runHarnessInferentialReview", () => {
         "      - name: Graphify check",
         "        run: bun run graphify:check",
       ].join("\n"),
-      rootDir
+      rootDir,
     );
 
     const result = await runHarnessInferentialReview(rootDir, {
@@ -494,7 +530,7 @@ describe("runHarnessInferentialReview", () => {
         "      - name: Graphify check",
         "        run: bun run graphify:check",
       ].join("\n"),
-      rootDir
+      rootDir,
     );
 
     const result = await runHarnessInferentialReview(rootDir, {
@@ -528,7 +564,7 @@ describe("runHarnessInferentialReview", () => {
         "      - name: Graphify check",
         "        run: bun run graphify:check",
       ].join("\n"),
-      rootDir
+      rootDir,
     );
 
     const result = await runHarnessInferentialReview(rootDir, {
@@ -543,7 +579,7 @@ describe("runHarnessInferentialReview", () => {
         id: "missing-ci-review-step",
         severity: "high",
         filePath: ".github/workflows/athena-pr-tests.yml",
-      })
+      }),
     );
   });
 
@@ -571,7 +607,7 @@ describe("runHarnessInferentialReview", () => {
         "      - name: Graphify check",
         "        run: bun run graphify:check",
       ].join("\n"),
-      rootDir
+      rootDir,
     );
 
     const result = await runHarnessInferentialReview(rootDir, {
@@ -586,7 +622,7 @@ describe("runHarnessInferentialReview", () => {
         id: "missing-ci-review-step",
         severity: "high",
         filePath: ".github/workflows/athena-pr-tests.yml",
-      })
+      }),
     );
   });
 
@@ -670,7 +706,9 @@ describe("runHarnessInferentialReview", () => {
       },
     ]);
     expect(result.humanReport).toContain("Provider/runtime failure");
-    expect(result.humanReport).toContain("Confirm provider configuration and connectivity");
+    expect(result.humanReport).toContain(
+      "Confirm provider configuration and connectivity",
+    );
   });
 
   it("records semantic shadow errors without making the command blocking", async () => {
@@ -709,7 +747,9 @@ describe("runHarnessInferentialReview", () => {
     expect(result.exitCode).toBe(0);
     expect(result.machine.status).toBe("skipped");
     expect(result.machine.summary).toContain("No harness-critical files");
-    expect(result.humanReport).toContain("No harness-critical files are in scope.");
+    expect(result.humanReport).toContain(
+      "No harness-critical files are in scope.",
+    );
   });
 
   it("writes machine-readable output with additive shadow data via the default artifact path", async () => {
@@ -735,7 +775,7 @@ describe("runHarnessInferentialReview", () => {
     });
 
     const saved = JSON.parse(
-      await readFile(path.join(rootDir, result.machineOutputPath), "utf8")
+      await readFile(path.join(rootDir, result.machineOutputPath), "utf8"),
     ) as {
       status: string;
       providerName: string;
@@ -769,10 +809,10 @@ describe("runHarnessInferentialReview", () => {
       await readFile(
         path.join(
           rootDir,
-          "artifacts/harness-inferential-review/history/2026-04-12T05-00-00-000Z.json"
+          "artifacts/harness-inferential-review/history/2026-04-12T05-00-00-000Z.json",
         ),
-        "utf8"
-      )
+        "utf8",
+      ),
     ) as {
       status: string;
       reviewMode?: string;
@@ -791,7 +831,11 @@ describe("runHarnessInferentialReview", () => {
 describe("parseHarnessInferentialReviewArgs", () => {
   it("accepts --persist-history", () => {
     expect(
-      parseHarnessInferentialReviewArgs(["--base", "origin/main", "--persist-history"])
+      parseHarnessInferentialReviewArgs([
+        "--base",
+        "origin/main",
+        "--persist-history",
+      ]),
     ).toMatchObject({
       baseRef: "origin/main",
       persistHistory: true,

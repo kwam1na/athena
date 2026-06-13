@@ -17,7 +17,7 @@ import {
 const ROOT_DIR = process.cwd();
 const BASE_REF = "origin/main";
 const GENERATED_HARNESS_DOC_PATHS = new Set(
-  HARNESS_APP_REGISTRY.flatMap((app) => app.harnessDocs.generatedDocs)
+  HARNESS_APP_REGISTRY.flatMap((app) => app.harnessDocs.generatedDocs),
 );
 const TRACKED_GRAPHIFY_ARTIFACT_PATHS = new Set(TRACKED_GRAPHIFY_ARTIFACTS);
 const REPAIRED_DOCS_COMMIT_BLOCKER =
@@ -41,7 +41,7 @@ type PrePushReviewOptions = {
   getChangedFiles?: (rootDir: string) => Promise<string[]>;
   getChangedFilesForRepairedTree?: (
     rootDir: string,
-    baseRef: string
+    baseRef: string,
   ) => Promise<string[]>;
   getLocalChangedFiles?: (rootDir: string) => Promise<string[]>;
   runGraphifyCheck?: (rootDir: string) => Promise<void>;
@@ -51,17 +51,20 @@ type PrePushReviewOptions = {
   runHarnessGenerate?: (rootDir: string) => Promise<void>;
   runHarnessImplementationTests?: (rootDir: string) => Promise<void>;
   runHarnessSelfReview?: (
-    rootDir: string
+    rootDir: string,
   ) => Promise<HarnessSelfReviewSummary | void>;
   runHarnessReview?: (
     rootDir: string,
     options: {
       baseRef: string;
-      getChangedFiles?: (rootDir: string, baseRef?: string) => Promise<string[]>;
-    }
+      getChangedFiles?: (
+        rootDir: string,
+        baseRef?: string,
+      ) => Promise<string[]>;
+    },
   ) => Promise<void>;
   evaluatePrePushValidationProof?: (
-    rootDir: string
+    rootDir: string,
   ) => Promise<PrePushValidationProofEvaluation>;
   validateHarnessDocs?: (rootDir: string) => Promise<string[]>;
   logger?: PrePushReviewLogger;
@@ -73,7 +76,10 @@ function normalizeRepoPath(repoPath: string) {
 
 export async function getChangedFilesVsOriginMain(
   rootDir: string,
-  spawn: (command: string[], options: { cwd: string; stdout: "pipe"; stderr: "pipe" }) => SpawnedProcess = Bun.spawn
+  spawn: (
+    command: string[],
+    options: { cwd: string; stdout: "pipe"; stderr: "pipe" },
+  ) => SpawnedProcess = Bun.spawn,
 ): Promise<string[]> {
   const refCheck = spawn(["git", "rev-parse", "--verify", BASE_REF], {
     cwd: rootDir,
@@ -83,27 +89,37 @@ export async function getChangedFilesVsOriginMain(
   const refExitCode = await refCheck.exited;
 
   if (refExitCode !== 0) {
-    console.warn(
-      `[pre-push] Warning: ${BASE_REF} not reachable. Skipping targeted validations.`
+    const stderr = await new Response(refCheck.stderr).text();
+    throw new Error(
+      [
+        `[pre-push] ${BASE_REF} is not reachable; cannot select targeted pre-push validations.`,
+        stderr.trim() || `git rev-parse --verify ${BASE_REF} failed`,
+        `Run \`git fetch origin ${BASE_REF.replace("origin/", "")}\` and retry.`,
+      ].join("\n"),
     );
-    return [];
   }
 
-  const proc = spawn(
-    ["git", "diff", "--name-only", `${BASE_REF}...HEAD`],
-    { cwd: rootDir, stdout: "pipe", stderr: "pipe" }
-  );
+  const proc = spawn(["git", "diff", "--name-only", `${BASE_REF}...HEAD`], {
+    cwd: rootDir,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
 
-  const [output, exitCode] = await Promise.all([
+  const [output, stderr, exitCode] = await Promise.all([
     new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
     proc.exited,
   ]);
 
   if (exitCode !== 0) {
-    console.warn(
-      `[pre-push] Warning: git diff failed. Skipping targeted validations.`
+    throw new Error(
+      [
+        `[pre-push] git diff against ${BASE_REF} failed; cannot select targeted pre-push validations.`,
+        stderr.trim() ||
+          output.trim() ||
+          `git diff --name-only ${BASE_REF}...HEAD failed`,
+      ].join("\n"),
     );
-    return [];
   }
 
   return output
@@ -125,7 +141,7 @@ export async function runArchitectureCheck(rootDir: string): Promise<void> {
 }
 
 export async function runHarnessSelfReview(
-  rootDir: string
+  rootDir: string,
 ): Promise<HarnessSelfReviewSummary> {
   return runStructuredHarnessSelfReview(rootDir, { baseRef: BASE_REF });
 }
@@ -134,7 +150,9 @@ export async function runHarnessGenerate(rootDir: string): Promise<void> {
   await writeGeneratedHarnessDocs(rootDir);
 }
 
-export async function runHarnessImplementationTests(rootDir: string): Promise<void> {
+export async function runHarnessImplementationTests(
+  rootDir: string,
+): Promise<void> {
   const proc = Bun.spawn(["bun", "run", "harness:test"], {
     cwd: rootDir,
     stdout: "inherit",
@@ -146,7 +164,9 @@ export async function runHarnessImplementationTests(rootDir: string): Promise<vo
   }
 }
 
-export async function runHarnessInferentialReview(rootDir: string): Promise<void> {
+export async function runHarnessInferentialReview(
+  rootDir: string,
+): Promise<void> {
   const proc = Bun.spawn(["bun", "run", "harness:inferential-review"], {
     cwd: rootDir,
     stdout: "inherit",
@@ -167,7 +187,9 @@ function collectRepairableHarnessDocErrors(errors: string[]) {
       continue;
     }
 
-    const missingFileMatch = error.match(/^Missing required harness file: (.+)$/);
+    const missingFileMatch = error.match(
+      /^Missing required harness file: (.+)$/,
+    );
     if (
       missingFileMatch?.[1] &&
       GENERATED_HARNESS_DOC_PATHS.has(missingFileMatch[1])
@@ -177,7 +199,7 @@ function collectRepairableHarnessDocErrors(errors: string[]) {
     }
 
     const generatedDocMatch = error.match(
-      /^(?:Broken markdown link in|Missing referenced path in) ([^:]+):/
+      /^(?:Broken markdown link in|Missing referenced path in) ([^:]+):/,
     );
     if (
       generatedDocMatch?.[1] &&
@@ -204,10 +226,11 @@ function isRepairableGraphifyDrift(error: unknown) {
 
 export async function runPrePushReview(
   rootDir: string,
-  options: PrePushReviewOptions = {}
+  options: PrePushReviewOptions = {},
 ) {
   const logger = options.logger ?? console;
-  const getChangedFiles = options.getChangedFiles ?? getChangedFilesVsOriginMain;
+  const getChangedFiles =
+    options.getChangedFiles ?? getChangedFilesVsOriginMain;
   const getChangedFilesForRepairedTree =
     options.getChangedFilesForRepairedTree ??
     ((nextRootDir: string, baseRef: string) =>
@@ -238,14 +261,14 @@ export async function runPrePushReview(
   const proofEvaluation = await evaluateValidationProof(rootDir);
   if (proofEvaluation.reusable) {
     logger.log(
-      `[pre-push] Reusing current pr:athena validation proof for tree ${proofEvaluation.proof.validatedTreeSha}.`
+      `[pre-push] Reusing current pr:athena validation proof for tree ${proofEvaluation.proof.validatedTreeSha}.`,
     );
     logger.log("[pre-push] All checks passed.");
     return;
   }
 
   logger.log(
-    `[pre-push] pr:athena proof not reusable: ${proofEvaluation.reason}. Running validation suite.`
+    `[pre-push] pr:athena proof not reusable: ${proofEvaluation.reason}. Running validation suite.`,
   );
 
   const loadChangedFiles = () => {
@@ -272,7 +295,7 @@ export async function runPrePushReview(
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         logger.warn(
-          `[pre-push] Warning: unable to diff repaired generated docs against ${BASE_REF}. Falling back to local working tree changes. (${message})`
+          `[pre-push] Warning: unable to diff repaired generated docs against ${BASE_REF}. Falling back to local working tree changes. (${message})`,
         );
         return getLocalChangedFiles(rootDir);
       }
@@ -283,9 +306,10 @@ export async function runPrePushReview(
 
   const getPendingGeneratedHarnessDocs = async () => {
     const localChangedFiles = await getLocalChangedFiles(rootDir);
-    const normalizedLocalChangedFiles = localChangedFiles.map(normalizeRepoPath);
-    const pendingGeneratedDocs = normalizedLocalChangedFiles.filter((filePath) =>
-      GENERATED_HARNESS_DOC_PATHS.has(filePath)
+    const normalizedLocalChangedFiles =
+      localChangedFiles.map(normalizeRepoPath);
+    const pendingGeneratedDocs = normalizedLocalChangedFiles.filter(
+      (filePath) => GENERATED_HARNESS_DOC_PATHS.has(filePath),
     );
 
     if (pendingGeneratedDocs.length > 0) {
@@ -297,9 +321,9 @@ export async function runPrePushReview(
 
   const getPendingGraphifyArtifacts = async () => {
     const localChangedFiles = await getLocalChangedFiles(rootDir);
-    return localChangedFiles.map(normalizeRepoPath).filter((filePath) =>
-      TRACKED_GRAPHIFY_ARTIFACT_PATHS.has(filePath)
-    );
+    return localChangedFiles
+      .map(normalizeRepoPath)
+      .filter((filePath) => TRACKED_GRAPHIFY_ARTIFACT_PATHS.has(filePath));
   };
 
   const maybeRepairGeneratedHarnessDocs = async (reason: string) => {
@@ -308,7 +332,7 @@ export async function runPrePushReview(
     }
 
     const repairableErrors = collectRepairableHarnessDocErrors(
-      await validateHarnessDocsStep(rootDir)
+      await validateHarnessDocsStep(rootDir),
     );
     if (repairableErrors.length === 0) {
       return false;
@@ -323,7 +347,7 @@ export async function runPrePushReview(
 
   const maybeRepairGraphifyArtifacts = async (
     reason: string,
-    error: unknown
+    error: unknown,
   ) => {
     if (repairedGraphifyArtifacts || !isRepairableGraphifyDrift(error)) {
       return false;
@@ -343,7 +367,7 @@ export async function runPrePushReview(
   } catch (error) {
     const repaired = await maybeRepairGraphifyArtifacts(
       "repairable graphify drift detected after graphify:check failed",
-      error
+      error,
     );
     if (!repaired) {
       throw error;
@@ -356,7 +380,7 @@ export async function runPrePushReview(
   let selfReviewResult = await runSelfReview(rootDir);
   if ((selfReviewResult?.blockers?.length ?? 0) > 0) {
     const repaired = await maybeRepairGeneratedHarnessDocs(
-      "repairable harness doc drift detected after harness:self-review"
+      "repairable harness doc drift detected after harness:self-review",
     );
     if (repaired) {
       selfReviewResult = await runSelfReview(rootDir);
@@ -364,7 +388,7 @@ export async function runPrePushReview(
   }
   if ((selfReviewResult?.blockers?.length ?? 0) > 0) {
     throw new Error(
-      formatBlockerList("harness:self-review", selfReviewResult.blockers ?? [])
+      formatBlockerList("harness:self-review", selfReviewResult.blockers ?? []),
     );
   }
 
@@ -378,10 +402,12 @@ export async function runPrePushReview(
 
   if (repoValidation.matchedFiles.length > 0) {
     logger.log(
-      "[pre-push] Step 4/6: harness:test skipped (repo harness validations run inside harness:review)"
+      "[pre-push] Step 4/6: harness:test skipped (repo harness validations run inside harness:review)",
     );
   } else {
-    logger.log("[pre-push] Step 4/6: harness:test skipped (no harness-owned changes)");
+    logger.log(
+      "[pre-push] Step 4/6: harness:test skipped (no harness-owned changes)",
+    );
   }
 
   // runHarnessReview internally runs harness:check first, then targeted per-surface scripts
@@ -393,7 +419,7 @@ export async function runPrePushReview(
     });
   } catch (error) {
     const repaired = await maybeRepairGeneratedHarnessDocs(
-      "repairable harness doc drift detected after harness:review failed"
+      "repairable harness doc drift detected after harness:review failed",
     );
     if (!repaired) {
       throw error;
@@ -406,11 +432,12 @@ export async function runPrePushReview(
   }
 
   const finalChangedFiles = await loadChangedFiles();
-  const finalRepoValidation = collectHarnessRepoValidationSelection(finalChangedFiles);
+  const finalRepoValidation =
+    collectHarnessRepoValidationSelection(finalChangedFiles);
 
   if (finalRepoValidation.matchedFiles.length > 0) {
     logger.log(
-      "[pre-push] Step 6/6: harness:inferential-review skipped (repo harness validations already ran in harness:review)"
+      "[pre-push] Step 6/6: harness:inferential-review skipped (repo harness validations already ran in harness:review)",
     );
   } else {
     logger.log("[pre-push] Step 6/6: harness:inferential-review");
@@ -421,7 +448,7 @@ export async function runPrePushReview(
 
   if (pendingGeneratedHarnessDocs.length > 0) {
     logger.log(
-      "\n[pre-push] Generated harness docs were repaired and revalidated locally."
+      "\n[pre-push] Generated harness docs were repaired and revalidated locally.",
     );
     throw new Error(REPAIRED_DOCS_COMMIT_BLOCKER);
   }
@@ -430,7 +457,7 @@ export async function runPrePushReview(
 
   if (repairedGraphifyArtifacts || pendingGraphifyArtifacts.length > 0) {
     logger.log(
-      "\n[pre-push] Tracked graphify artifacts were repaired and revalidated locally."
+      "\n[pre-push] Tracked graphify artifacts were repaired and revalidated locally.",
     );
     throw new Error(REPAIRED_GRAPHIFY_COMMIT_BLOCKER);
   }

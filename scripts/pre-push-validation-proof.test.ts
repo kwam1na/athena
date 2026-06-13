@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
+  assertPrAthenaProofReady,
   evaluatePrePushValidationProof,
   recordPrePushValidationProof,
 } from "./pre-push-validation-proof";
@@ -31,18 +32,30 @@ async function createFixtureRoot() {
         },
       },
       null,
-      2
-    )
+      2,
+    ),
   );
   await write(rootDir, ".husky/pre-push", "bun run pre-push:review\n");
-  await write(rootDir, "scripts/pre-push-review.ts", "export const prePush = true;\n");
+  await write(
+    rootDir,
+    "scripts/pre-push-review.ts",
+    "export const prePush = true;\n",
+  );
   await write(
     rootDir,
     "scripts/pre-push-validation-proof.ts",
-    "export const proof = true;\n"
+    "export const proof = true;\n",
   );
-  await write(rootDir, "scripts/harness-review.ts", "export const review = true;\n");
-  await write(rootDir, "scripts/harness-repo-validation.ts", "export const repo = true;\n");
+  await write(
+    rootDir,
+    "scripts/harness-review.ts",
+    "export const review = true;\n",
+  );
+  await write(
+    rootDir,
+    "scripts/harness-repo-validation.ts",
+    "export const repo = true;\n",
+  );
 
   return rootDir;
 }
@@ -55,6 +68,7 @@ function createSpawn(outputs: {
   status?: string;
   untrackedFiles?: string;
   unstagedDiffExitCode?: number;
+  unstagedFiles?: string;
   bunVersion?: string;
 }) {
   const next = {
@@ -65,13 +79,17 @@ function createSpawn(outputs: {
     status: "",
     untrackedFiles: "",
     unstagedDiffExitCode: 0,
+    unstagedFiles: "",
     bunVersion: "1.1.29",
     ...outputs,
   };
 
   return (command: string[]) => {
     let output = "";
-    if (command.join(" ") === "git rev-parse --git-path codex/pre-push-pr-athena-proof.json") {
+    if (
+      command.join(" ") ===
+      "git rev-parse --git-path codex/pre-push-pr-athena-proof.json"
+    ) {
       output = "proof.json";
     } else if (command.join(" ") === "git rev-parse --verify HEAD") {
       output = next.headSha;
@@ -85,7 +103,9 @@ function createSpawn(outputs: {
       command.join(" ") === "git status --porcelain --untracked-files=all"
     ) {
       output = next.status;
-    } else if (command.join(" ") === "git ls-files --others --exclude-standard") {
+    } else if (
+      command.join(" ") === "git ls-files --others --exclude-standard"
+    ) {
       output = next.untrackedFiles;
     } else if (command.join(" ") === "git diff --quiet") {
       return {
@@ -93,6 +113,8 @@ function createSpawn(outputs: {
         stdout: new Response("").body,
         stderr: new Response("").body,
       };
+    } else if (command.join(" ") === "git diff --name-only") {
+      output = next.unstagedFiles;
     } else if (command.join(" ") === "bun --version") {
       output = next.bunVersion;
     } else {
@@ -108,10 +130,86 @@ function createSpawn(outputs: {
 }
 
 afterEach(async () => {
-  await Promise.all(tempRoots.splice(0).map((rootDir) => rm(rootDir, { recursive: true })));
+  await Promise.all(
+    tempRoots.splice(0).map((rootDir) => rm(rootDir, { recursive: true })),
+  );
 });
 
 describe("pre-push validation proof", () => {
+  it("prepares a clean tree for pr:athena proof recording", async () => {
+    const rootDir = await createFixtureRoot();
+    const logs: string[] = [];
+
+    await expect(
+      assertPrAthenaProofReady(rootDir, {
+        spawn: createSpawn({}),
+        logger: {
+          log(message: string) {
+            logs.push(message);
+          },
+        },
+      }),
+    ).resolves.toMatchObject({
+      ready: true,
+      mode: "clean",
+      stagedFiles: [],
+    });
+    expect(logs).toContain(
+      "[pr:athena] Prepare complete: working tree is clean.",
+    );
+  });
+
+  it("prepares a staged-only tree for pr:athena staged-index proof recording", async () => {
+    const rootDir = await createFixtureRoot();
+
+    await expect(
+      assertPrAthenaProofReady(rootDir, {
+        spawn: createSpawn({
+          headTreeSha: "tree-before",
+          indexTreeSha: "tree-after",
+          status: "M  scripts/pre-push-review.ts",
+        }),
+        logger: { log() {} },
+      }),
+    ).resolves.toMatchObject({
+      ready: true,
+      mode: "staged-index",
+      stagedFiles: ["scripts/pre-push-review.ts"],
+    });
+  });
+
+  it("blocks pr:athena prepare when unstaged tracked files remain", async () => {
+    const rootDir = await createFixtureRoot();
+
+    await expect(
+      assertPrAthenaProofReady(rootDir, {
+        spawn: createSpawn({
+          status: " M scripts/pre-push-review.ts",
+          unstagedFiles: "scripts/pre-push-review.ts",
+        }),
+        logger: { log() {} },
+      }),
+    ).rejects.toThrow(
+      /Unstaged tracked files:\n  - scripts\/pre-push-review.ts/,
+    );
+  });
+
+  it("blocks pr:athena prepare when untracked files remain", async () => {
+    const rootDir = await createFixtureRoot();
+
+    await expect(
+      assertPrAthenaProofReady(rootDir, {
+        spawn: createSpawn({
+          status: "M  scripts/pre-push-review.ts\n?? tmp.txt",
+          untrackedFiles: "tmp.txt",
+        }),
+        logger: { log() {} },
+      }),
+    ).rejects.toThrow(
+      /Untracked files:\n  - tmp.txt\nStage intended new files explicitly/,
+    );
+  });
+
   it("records and reuses a clean same-head pr:athena proof", async () => {
     const rootDir = await createFixtureRoot();
     const spawn = createSpawn({});
@@ -123,7 +221,7 @@ describe("pre-push validation proof", () => {
     expect(recorded.recorded).toBe(true);
 
     await expect(
-      evaluatePrePushValidationProof(rootDir, { spawn })
+      evaluatePrePushValidationProof(rootDir, { spawn }),
     ).resolves.toMatchObject({
       reusable: true,
       proof: {
@@ -162,7 +260,7 @@ describe("pre-push validation proof", () => {
           headTreeSha: "tree-after",
           indexTreeSha: "tree-after",
         }),
-      })
+      }),
     ).resolves.toMatchObject({
       reusable: true,
       proof: {
@@ -185,7 +283,7 @@ describe("pre-push validation proof", () => {
           unstagedDiffExitCode: 1,
         }),
         logger: { log() {}, warn() {} },
-      })
+      }),
     ).resolves.toMatchObject({
       recorded: false,
       reason: "working tree has unstaged or untracked changes",
@@ -204,7 +302,7 @@ describe("pre-push validation proof", () => {
           untrackedFiles: "tmp.txt",
         }),
         logger: { log() {}, warn() {} },
-      })
+      }),
     ).resolves.toMatchObject({
       recorded: false,
       reason: "working tree has unstaged or untracked changes",
@@ -221,7 +319,7 @@ describe("pre-push validation proof", () => {
     await expect(
       evaluatePrePushValidationProof(rootDir, {
         spawn: createSpawn({ status: " M scripts/pre-push-review.ts" }),
-      })
+      }),
     ).resolves.toMatchObject({
       reusable: false,
       reason: "working tree is not clean",
@@ -247,7 +345,7 @@ describe("pre-push validation proof", () => {
           headTreeSha: "tree-other",
           indexTreeSha: "tree-other",
         }),
-      })
+      }),
     ).resolves.toMatchObject({
       reusable: false,
       reason: "HEAD tree changed since pr:athena recorded its proof",
@@ -264,7 +362,7 @@ describe("pre-push validation proof", () => {
     await expect(
       evaluatePrePushValidationProof(rootDir, {
         spawn: createSpawn({ baseSha: "base-b" }),
-      })
+      }),
     ).resolves.toMatchObject({
       reusable: false,
       reason: "origin/main changed since pr:athena recorded its proof",
@@ -281,13 +379,13 @@ describe("pre-push validation proof", () => {
     await write(
       rootDir,
       "scripts/harness-review.ts",
-      "export const review = 'changed';\n"
+      "export const review = 'changed';\n",
     );
 
     await expect(
       evaluatePrePushValidationProof(rootDir, {
         spawn: createSpawn({}),
-      })
+      }),
     ).resolves.toMatchObject({
       reusable: false,
       reason: "validation wiring changed since proof recording",

@@ -86,12 +86,12 @@ type InferentialReviewOptions = {
   baseRef?: string;
   getChangedFiles?: (rootDir: string, baseRef: string) => Promise<string[]>;
   runProvider?: (
-    input: InferentialProviderInput
+    input: InferentialProviderInput,
   ) => Promise<InferentialProviderResult>;
   semanticMode?: InferentialShadowMode;
   persistHistory?: boolean;
   runSemanticAnalysis?: (
-    input: InferentialProviderInput
+    input: InferentialProviderInput,
   ) => Promise<InferentialSemanticAnalysisResult>;
   machineOutputPath?: string;
   nowIso?: () => string;
@@ -111,7 +111,9 @@ function normalizeRepoPath(repoPath: string) {
 
 function sortUnique(entries: string[]) {
   return [
-    ...new Set(entries.map((entry) => normalizeRepoPath(entry).trim()).filter(Boolean)),
+    ...new Set(
+      entries.map((entry) => normalizeRepoPath(entry).trim()).filter(Boolean),
+    ),
   ].sort((left, right) => left.localeCompare(right));
 }
 
@@ -143,8 +145,8 @@ async function runCommand(
   command: string[],
   spawn: (
     command: string[],
-    options: { cwd: string; stdout: "pipe"; stderr: "pipe" }
-  ) => SpawnedProcess = Bun.spawn
+    options: { cwd: string; stdout: "pipe"; stderr: "pipe" },
+  ) => SpawnedProcess = Bun.spawn,
 ) {
   const process = spawn(command, {
     cwd: rootDir,
@@ -167,7 +169,7 @@ async function runCommand(
 
 export async function getChangedFilesForInferentialReview(
   rootDir: string,
-  baseRef: string
+  baseRef: string,
 ) {
   const refCheck = await runCommand(rootDir, [
     "git",
@@ -204,21 +206,21 @@ export async function getChangedFilesForInferentialReview(
   if (baseDiff.exitCode !== 0) {
     throw new Error(
       baseDiff.stderr.trim() ||
-        `Unable to compute changed files against ${baseRef}.`
+        `Unable to compute changed files against ${baseRef}.`,
     );
   }
 
   if (trackedDiff.exitCode !== 0) {
     throw new Error(
       trackedDiff.stderr.trim() ||
-        "Unable to compute tracked working-tree changes."
+        "Unable to compute tracked working-tree changes.",
     );
   }
 
   if (untrackedDiff.exitCode !== 0) {
     throw new Error(
       untrackedDiff.stderr.trim() ||
-        "Unable to compute untracked working-tree changes."
+        "Unable to compute untracked working-tree changes.",
     );
   }
 
@@ -260,7 +262,7 @@ function buildFinding(
   title: string,
   filePath: string,
   rationale: string,
-  remediation: string
+  remediation: string,
 ): InferentialFinding {
   return {
     id,
@@ -283,27 +285,47 @@ function escapeRegExp(value: string) {
 function buildShellCommandPattern(commandBody: string) {
   return new RegExp(
     `(?:^|&&|\\|\\||;)\\s*${commandBody}(?=\\s*(?:&&|\\|\\||;|$))`,
-    "i"
+    "i",
   );
 }
 
 function hasHarnessReviewCommand(value: string, baseRef: string) {
   const pattern = buildShellCommandPattern(
-    `bun\\s+run\\s+harness:review\\s+--base(?:\\s+|=)${escapeRegExp(baseRef)}(?:\\s+--repo-validation-provided-by\\s+pr:athena)?(?:\\s+--validation-provided-by\\s+athena-pr-tests)?`
+    `bun\\s+run\\s+harness:review\\s+--base(?:\\s+|=)${escapeRegExp(baseRef)}(?:\\s+--repo-validation-provided-by\\s+pr:athena)?(?:\\s+--validation-provided-by\\s+athena-pr-tests)?`,
   );
   return pattern.test(value);
 }
 
 function hasHarnessInferentialCommand(value: string) {
   return buildShellCommandPattern(
-    "bun\\s+run\\s+harness:inferential-review"
+    "bun\\s+run\\s+harness:inferential-review",
   ).test(value);
 }
 
-function extractWorkflowJobSection(
-  workflowContents: string,
-  jobName: string
+function expandPackageScriptChain(
+  scripts: Record<string, string> | undefined,
+  scriptName: string,
+  seen = new Set<string>(),
 ) {
+  const script = scripts?.[scriptName] ?? "";
+  if (!script || seen.has(scriptName)) {
+    return script;
+  }
+
+  seen.add(scriptName);
+  const childScripts = [...script.matchAll(/\bbun\s+run\s+([@\w:./-]+)/g)]
+    .map((match) => match[1])
+    .filter((name) => scripts?.[name]);
+
+  return [
+    script,
+    ...childScripts.map((name) =>
+      expandPackageScriptChain(scripts, name, seen),
+    ),
+  ].join(" && ");
+}
+
+function extractWorkflowJobSection(workflowContents: string, jobName: string) {
   const lines = workflowContents.split(/\r?\n/);
   let inJobsBlock = false;
   let insideTargetJob = false;
@@ -334,10 +356,7 @@ function extractWorkflowJobSection(
   return section.join("\n");
 }
 
-function extractWorkflowRunCommands(
-  workflowContents: string,
-  jobName: string
-) {
+function extractWorkflowRunCommands(workflowContents: string, jobName: string) {
   const jobSection = extractWorkflowJobSection(workflowContents, jobName);
   if (!jobSection) {
     return [];
@@ -355,7 +374,7 @@ function workflowJobHasEnvSetting(
   workflowContents: string,
   jobName: string,
   key: string,
-  value: string
+  value: string,
 ) {
   const jobSection = extractWorkflowJobSection(workflowContents, jobName);
   if (!jobSection) {
@@ -377,7 +396,11 @@ function slugifyForFindingId(value: string) {
 
 function isHarnessScriptSourceFile(filePath: string) {
   const normalized = normalizeRepoPath(filePath);
-  return normalized.startsWith("scripts/harness-") && normalized.endsWith(".ts") && !normalized.endsWith(".test.ts");
+  return (
+    normalized.startsWith("scripts/harness-") &&
+    normalized.endsWith(".ts") &&
+    !normalized.endsWith(".test.ts")
+  );
 }
 
 function toHarnessScriptTestPath(filePath: string) {
@@ -393,7 +416,7 @@ function createReducedSignalFinding(
   title: string,
   severity: InferentialSeverity,
   missingSignals: string[],
-  remediation: string
+  remediation: string,
 ): InferentialFinding {
   return buildFinding(
     `reduced-safety-signals-${slugifyForFindingId(filePath)}`,
@@ -401,13 +424,13 @@ function createReducedSignalFinding(
     title,
     filePath,
     `This file is missing safety or wiring signal(s): ${formatMissingSignals(missingSignals)}.`,
-    remediation
+    remediation,
   );
 }
 
 async function collectHarnessScriptTestUpdateFindings(
   rootDir: string,
-  changedFiles: string[]
+  changedFiles: string[],
 ) {
   const changedFileSet = new Set(sortUnique(changedFiles));
   const findings: InferentialFinding[] = [];
@@ -422,7 +445,9 @@ async function collectHarnessScriptTestUpdateFindings(
       continue;
     }
 
-    const testFileExists = await fileExists(path.join(rootDir, matchingTestFile));
+    const testFileExists = await fileExists(
+      path.join(rootDir, matchingTestFile),
+    );
     findings.push(
       buildFinding(
         `missing-harness-script-test-update-${slugifyForFindingId(changedFile)}`,
@@ -434,8 +459,8 @@ async function collectHarnessScriptTestUpdateFindings(
           : `This harness-critical script changed, but the expected sibling test file ${matchingTestFile} is missing.`,
         testFileExists
           ? `Update ${matchingTestFile} alongside the script change so the regression coverage stays deterministic.`
-          : `Create ${matchingTestFile} alongside the script change so the regression coverage stays deterministic.`
-      )
+          : `Create ${matchingTestFile} alongside the script change so the regression coverage stays deterministic.`,
+      ),
     );
   }
 
@@ -444,7 +469,7 @@ async function collectHarnessScriptTestUpdateFindings(
 
 async function collectHarnessSafetySignalFindings(
   rootDir: string,
-  changedFiles: string[]
+  changedFiles: string[],
 ) {
   const changedFileSet = new Set(sortUnique(changedFiles));
   const findings: InferentialFinding[] = [];
@@ -517,7 +542,7 @@ async function collectHarnessSafetySignalFindings(
     }
 
     const missingSignals = rule.requiredSignals.filter(
-      (signal) => !includesCaseInsensitive(contents, signal)
+      (signal) => !includesCaseInsensitive(contents, signal),
     );
 
     if (missingSignals.length === 0) {
@@ -530,8 +555,8 @@ async function collectHarnessSafetySignalFindings(
         rule.title,
         rule.severity,
         missingSignals,
-        rule.remediation
-      )
+        rule.remediation,
+      ),
     );
   }
 
@@ -539,16 +564,16 @@ async function collectHarnessSafetySignalFindings(
 }
 
 async function runDeterministicSemanticAnalysis(
-  input: InferentialProviderInput
+  input: InferentialProviderInput,
 ): Promise<InferentialDeterministicAnalysisResult> {
   const findings = [
     ...(await collectHarnessScriptTestUpdateFindings(
       input.rootDir,
-      input.changedFiles
+      input.changedFiles,
     )),
     ...(await collectHarnessSafetySignalFindings(
       input.rootDir,
-      input.changedFiles
+      input.changedFiles,
     )),
   ];
 
@@ -558,10 +583,12 @@ async function runDeterministicSemanticAnalysis(
 }
 
 function resolveSemanticMode(
-  optionMode?: InferentialShadowMode
+  optionMode?: InferentialShadowMode,
 ): InferentialShadowMode {
   const rawMode =
-    optionMode ?? process.env.HARNESS_INFERENTIAL_SEMANTIC_MODE ?? DEFAULT_SEMANTIC_MODE;
+    optionMode ??
+    process.env.HARNESS_INFERENTIAL_SEMANTIC_MODE ??
+    DEFAULT_SEMANTIC_MODE;
 
   return rawMode === "shadow" ? "shadow" : "off";
 }
@@ -590,7 +617,7 @@ async function buildSemanticPrompt(input: InferentialProviderInput) {
         `FILE: ${filePath}`,
         "CONTENT:",
         contents ? truncateForPrompt(contents) : "[missing]",
-      ].join("\n")
+      ].join("\n"),
     );
   }
 
@@ -599,7 +626,7 @@ async function buildSemanticPrompt(input: InferentialProviderInput) {
     "Return JSON only with this exact shape:",
     '{"summary":"string","findings":[{"id":"string","severity":"high|medium|low","title":"string","filePath":"string","rationale":"string","remediation":"string"}]}',
     "Only report likely semantic or operational issues that a deterministic rule might miss.",
-    "If there are no likely issues, return {\"summary\":\"No semantic issues detected.\",\"findings\":[]}.",
+    'If there are no likely issues, return {"summary":"No semantic issues detected.","findings":[]}.',
     `Base ref: ${input.baseRef}`,
     `Changed files (${input.changedFiles.length}): ${input.changedFiles.join(", ")}`,
     `Target files (${input.targetFiles.length}): ${input.targetFiles.join(", ")}`,
@@ -654,9 +681,7 @@ function extractJsonPayload(responseText: string) {
   throw new Error("Semantic provider response did not include JSON output.");
 }
 
-function normalizeSemanticFinding(
-  value: unknown
-): InferentialFinding | null {
+function normalizeSemanticFinding(value: unknown): InferentialFinding | null {
   if (typeof value !== "object" || value === null) {
     return null;
   }
@@ -727,7 +752,7 @@ function parseSemanticResponse(responseText: string) {
 }
 
 async function runAnthropicSemanticAnalysis(
-  input: InferentialProviderInput
+  input: InferentialProviderInput,
 ): Promise<InferentialSemanticAnalysisResult> {
   const model =
     process.env.HARNESS_INFERENTIAL_ANTHROPIC_MODEL?.trim() ||
@@ -766,7 +791,7 @@ async function runAnthropicSemanticAnalysis(
 }
 
 export async function runDeterministicInferentialProvider(
-  input: InferentialProviderInput
+  input: InferentialProviderInput,
 ): Promise<InferentialProviderResult> {
   const findings: InferentialFinding[] = [];
   const reviewBaseRef = "origin/main";
@@ -774,15 +799,15 @@ export async function runDeterministicInferentialProvider(
   const packageJsonPath = path.join(input.rootDir, "package.json");
   const workflowPath = path.join(
     input.rootDir,
-    ".github/workflows/athena-pr-tests.yml"
+    ".github/workflows/athena-pr-tests.yml",
   );
   const athenaTestingDocPath = path.join(
     input.rootDir,
-    "packages/athena-webapp/docs/agent/testing.md"
+    "packages/athena-webapp/docs/agent/testing.md",
   );
   const storefrontTestingDocPath = path.join(
     input.rootDir,
-    "packages/storefront-webapp/docs/agent/testing.md"
+    "packages/storefront-webapp/docs/agent/testing.md",
   );
 
   const packageJsonContents = await readUtf8OrNull(packageJsonPath);
@@ -794,8 +819,8 @@ export async function runDeterministicInferentialProvider(
         "Missing repo package.json",
         "package.json",
         "Inferential gate policy cannot verify pr:athena wiring without package.json.",
-        "Restore package.json and ensure pr:athena includes `bun run harness:inferential-review`."
-      )
+        "Restore package.json and ensure pr:athena includes `bun run harness:inferential-review`.",
+      ),
     );
   } else {
     let prAthenaScript = "";
@@ -804,7 +829,7 @@ export async function runDeterministicInferentialProvider(
       const parsed = JSON.parse(packageJsonContents) as {
         scripts?: Record<string, string>;
       };
-      prAthenaScript = parsed.scripts?.["pr:athena"] ?? "";
+      prAthenaScript = expandPackageScriptChain(parsed.scripts, "pr:athena");
     } catch {
       findings.push(
         buildFinding(
@@ -813,8 +838,8 @@ export async function runDeterministicInferentialProvider(
           "Invalid package.json format",
           "package.json",
           "Inferential gate policy could not parse package.json to inspect pr:athena wiring.",
-          "Fix package.json JSON syntax and ensure pr:athena includes `bun run harness:inferential-review`."
-        )
+          "Fix package.json JSON syntax and ensure pr:athena includes `bun run harness:inferential-review`.",
+        ),
       );
     }
 
@@ -826,8 +851,8 @@ export async function runDeterministicInferentialProvider(
           "pr:athena omits harness review",
           "package.json",
           "Athena preflight does not currently include the harness review gate.",
-          "Add `bun run harness:review --base origin/main` to the `pr:athena` script before final success output."
-        )
+          "Add `bun run harness:review --base origin/main` to the `pr:athena` script before final success output.",
+        ),
       );
     }
 
@@ -839,8 +864,8 @@ export async function runDeterministicInferentialProvider(
           "pr:athena omits inferential review",
           "package.json",
           "Athena preflight does not currently include the inferential review gate.",
-          "Add `bun run harness:inferential-review` to the `pr:athena` script before final success output."
-        )
+          "Add `bun run harness:inferential-review` to the `pr:athena` script before final success output.",
+        ),
       );
     }
   }
@@ -854,12 +879,12 @@ export async function runDeterministicInferentialProvider(
         "Missing Athena PR workflow",
         ".github/workflows/athena-pr-tests.yml",
         "Inferential gate policy cannot verify CI enforcement without the Athena PR workflow file.",
-        "Restore `.github/workflows/athena-pr-tests.yml` and add `run: bun run harness:inferential-review`."
-      )
+        "Restore `.github/workflows/athena-pr-tests.yml` and add `run: bun run harness:inferential-review`.",
+      ),
     );
   } else if (
     !extractWorkflowRunCommands(workflowContents, workflowJobName).some(
-      (command) => hasHarnessReviewCommand(command, reviewBaseRef)
+      (command) => hasHarnessReviewCommand(command, reviewBaseRef),
     )
   ) {
     findings.push(
@@ -869,15 +894,15 @@ export async function runDeterministicInferentialProvider(
         "CI omits harness review",
         ".github/workflows/athena-pr-tests.yml",
         "Athena PR workflow does not enforce the harness review gate as a blocking CI step.",
-        "Add a workflow step with `run: bun run harness:review --base origin/main` in the harness validation job."
-      )
+        "Add a workflow step with `run: bun run harness:review --base origin/main` in the harness validation job.",
+      ),
     );
   }
 
   if (
     workflowContents &&
     !extractWorkflowRunCommands(workflowContents, workflowJobName).some(
-      hasHarnessInferentialCommand
+      hasHarnessInferentialCommand,
     )
   ) {
     findings.push(
@@ -887,8 +912,8 @@ export async function runDeterministicInferentialProvider(
         "CI omits inferential review",
         ".github/workflows/athena-pr-tests.yml",
         "Athena PR workflow does not enforce inferential review as a blocking gate.",
-        "Add a workflow step with `run: bun run harness:inferential-review` in the harness validation job."
-      )
+        "Add a workflow step with `run: bun run harness:inferential-review` in the harness validation job.",
+      ),
     );
   }
 
@@ -898,7 +923,7 @@ export async function runDeterministicInferentialProvider(
       workflowContents,
       workflowJobName,
       "HARNESS_INFERENTIAL_SEMANTIC_MODE",
-      "shadow"
+      "shadow",
     )
   ) {
     findings.push(
@@ -908,8 +933,8 @@ export async function runDeterministicInferentialProvider(
         "CI inferential review is not running in semantic shadow mode",
         ".github/workflows/athena-pr-tests.yml",
         "Athena PR workflow still runs inferential review without the semantic shadow lane enabled, so PR CI cannot collect the new shadow telemetry.",
-        "Set `HARNESS_INFERENTIAL_SEMANTIC_MODE: shadow` on the inferential review workflow step while keeping deterministic inferential findings authoritative."
-      )
+        "Set `HARNESS_INFERENTIAL_SEMANTIC_MODE: shadow` on the inferential review workflow step while keeping deterministic inferential findings authoritative.",
+      ),
     );
   }
 
@@ -933,15 +958,15 @@ export async function runDeterministicInferentialProvider(
           "Missing testing guidance",
           testingDoc.filePath,
           "Inferential gate policy cannot verify agent-facing usage guidance when testing docs are absent.",
-          "Restore the testing doc and document inferential review usage plus failure remediation guidance."
-        )
+          "Restore the testing doc and document inferential review usage plus failure remediation guidance.",
+        ),
       );
       continue;
     }
 
     const hasCommand = includesCaseInsensitive(
       testingDoc.contents,
-      "`bun run harness:inferential-review`"
+      "`bun run harness:inferential-review`",
     );
     const hasFailureGuidance =
       includesCaseInsensitive(testingDoc.contents, "non-zero") &&
@@ -955,8 +980,8 @@ export async function runDeterministicInferentialProvider(
           "Inferential review docs guidance is incomplete",
           testingDoc.filePath,
           "Testing docs must show how to run inferential review and how to interpret blocking failures.",
-          "Document `bun run harness:inferential-review` and state that findings fail with non-zero exit plus remediation guidance."
-        )
+          "Document `bun run harness:inferential-review` and state that findings fail with non-zero exit plus remediation guidance.",
+        ),
       );
     }
   }
@@ -1023,7 +1048,7 @@ function buildHumanReport(output: InferentialMachineOutput) {
     lines.push("Findings:");
     for (const finding of output.findings) {
       lines.push(
-        `- [${finding.severity.toUpperCase()}] ${finding.title} (${finding.filePath})`
+        `- [${finding.severity.toUpperCase()}] ${finding.title} (${finding.filePath})`,
       );
       lines.push(`  Rationale: ${finding.rationale}`);
       lines.push(`  Remediation: ${finding.remediation}`);
@@ -1049,7 +1074,7 @@ function buildHumanReport(output: InferentialMachineOutput) {
     if (output.shadow.findings.length > 0) {
       for (const finding of output.shadow.findings) {
         lines.push(
-          `- [${finding.severity.toUpperCase()}] ${finding.title} (${finding.filePath})`
+          `- [${finding.severity.toUpperCase()}] ${finding.title} (${finding.filePath})`,
         );
         lines.push(`  Rationale: ${finding.rationale}`);
         lines.push(`  Remediation: ${finding.remediation}`);
@@ -1072,11 +1097,14 @@ function buildHumanReport(output: InferentialMachineOutput) {
 async function writeMachineOutput(
   rootDir: string,
   machineOutputPath: string,
-  output: InferentialMachineOutput
+  output: InferentialMachineOutput,
 ) {
   const absoluteOutputPath = path.join(rootDir, machineOutputPath);
   await mkdir(path.dirname(absoluteOutputPath), { recursive: true });
-  await writeFile(`${absoluteOutputPath}`, `${JSON.stringify(output, null, 2)}\n`);
+  await writeFile(
+    `${absoluteOutputPath}`,
+    `${JSON.stringify(output, null, 2)}\n`,
+  );
 }
 
 function toHistoryFileStamp(generatedAt: string) {
@@ -1086,13 +1114,13 @@ function toHistoryFileStamp(generatedAt: string) {
 async function writeHistorySnapshot(
   rootDir: string,
   machineOutputPath: string,
-  output: InferentialMachineOutput
+  output: InferentialMachineOutput,
 ) {
   const absoluteHistoryPath = path.join(
     rootDir,
     path.dirname(machineOutputPath),
     "history",
-    `${toHistoryFileStamp(output.generatedAt)}.json`
+    `${toHistoryFileStamp(output.generatedAt)}.json`,
   );
 
   await mkdir(path.dirname(absoluteHistoryPath), { recursive: true });
@@ -1152,7 +1180,7 @@ function createProviderFailure(
   changedFiles: string[],
   targetFiles: string[],
   generatedAt: string,
-  reviewMode: InferentialReviewMode
+  reviewMode: InferentialReviewMode,
 ): InferentialMachineOutput {
   return createOutput({
     status: "error",
@@ -1181,7 +1209,7 @@ function createRuntimeFailure(
   changedFiles: string[],
   targetFiles: string[],
   generatedAt: string,
-  reviewMode: InferentialReviewMode
+  reviewMode: InferentialReviewMode,
 ): InferentialMachineOutput {
   return createOutput({
     status: "error",
@@ -1206,7 +1234,7 @@ function createRuntimeFailure(
 
 export async function runHarnessInferentialReview(
   rootDir: string,
-  options: InferentialReviewOptions = {}
+  options: InferentialReviewOptions = {},
 ): Promise<HarnessInferentialReviewResult> {
   const baseRef = options.baseRef ?? DEFAULT_BASE_REF;
   const machineOutputPath =
@@ -1239,7 +1267,7 @@ export async function runHarnessInferentialReview(
       changedFiles,
       targetFiles,
       nowIso(),
-      reviewMode
+      reviewMode,
     );
     const humanReport = buildHumanReport(machine);
     await writeMachineOutput(rootDir, machineOutputPath, machine);
@@ -1254,7 +1282,8 @@ export async function runHarnessInferentialReview(
   if (targetFiles.length === 0) {
     machine = createOutput({
       status: "skipped",
-      summary: "No harness-critical files are in scope. Inferential review skipped.",
+      summary:
+        "No harness-critical files are in scope. Inferential review skipped.",
       baseRef,
       changedFiles,
       targetFiles,
@@ -1289,7 +1318,7 @@ export async function runHarnessInferentialReview(
       changedFiles,
       targetFiles,
       nowIso(),
-      reviewMode
+      reviewMode,
     );
   }
 
@@ -1331,7 +1360,7 @@ export async function runHarnessInferentialReview(
         changedFiles,
         targetFiles,
         nowIso(),
-        reviewMode
+        reviewMode,
       );
     }
   }
@@ -1391,7 +1420,7 @@ export async function runHarnessInferentialReview(
       changedFiles,
       targetFiles,
       nowIso(),
-      reviewMode
+      reviewMode,
     );
     const runtimeReport = buildHumanReport(machine);
     await writeMachineOutput(rootDir, machineOutputPath, machine);
@@ -1414,7 +1443,7 @@ export async function runHarnessInferentialReview(
         changedFiles,
         targetFiles,
         nowIso(),
-        reviewMode
+        reviewMode,
       );
       const runtimeReport = buildHumanReport(machine);
       await writeMachineOutput(rootDir, machineOutputPath, machine);
@@ -1452,7 +1481,9 @@ type ParsedCliArgs = {
   help: boolean;
 };
 
-export function parseHarnessInferentialReviewArgs(argv: string[]): ParsedCliArgs {
+export function parseHarnessInferentialReviewArgs(
+  argv: string[],
+): ParsedCliArgs {
   let baseRef = DEFAULT_BASE_REF;
   let persistHistory = false;
 
@@ -1480,7 +1511,7 @@ export function parseHarnessInferentialReviewArgs(argv: string[]): ParsedCliArgs
       const value = argv[index + 1];
       if (!value || value.startsWith("--")) {
         throw new Error(
-          "Missing value for --base. Usage: bun run harness:inferential-review --base origin/main"
+          "Missing value for --base. Usage: bun run harness:inferential-review --base origin/main",
         );
       }
       baseRef = value;
@@ -1492,7 +1523,7 @@ export function parseHarnessInferentialReviewArgs(argv: string[]): ParsedCliArgs
       const value = arg.slice("--base=".length).trim();
       if (!value) {
         throw new Error(
-          "Missing value for --base. Usage: bun run harness:inferential-review --base origin/main"
+          "Missing value for --base. Usage: bun run harness:inferential-review --base origin/main",
         );
       }
       baseRef = value;
@@ -1500,7 +1531,7 @@ export function parseHarnessInferentialReviewArgs(argv: string[]): ParsedCliArgs
     }
 
     throw new Error(
-      `Unknown argument: ${arg}. Usage: bun run harness:inferential-review [--base <ref>]`
+      `Unknown argument: ${arg}. Usage: bun run harness:inferential-review [--base <ref>]`,
     );
   }
 
@@ -1516,7 +1547,7 @@ if (import.meta.main) {
     const parsed = parseHarnessInferentialReviewArgs(Bun.argv.slice(2));
     if (parsed.help) {
       console.log(
-        "Usage: bun run harness:inferential-review [--base <ref>] [--persist-history]"
+        "Usage: bun run harness:inferential-review [--base <ref>] [--persist-history]",
       );
       process.exit(0);
     }

@@ -14,10 +14,11 @@ type SpawnedProcess = {
 
 type CommandRunner = (
   command: string[],
-  options: { cwd: string; stdout: "pipe"; stderr: "pipe" }
+  options: { cwd: string; stdout: "pipe"; stderr: "pipe" },
 ) => SpawnedProcess;
 
 type ProofLogger = Pick<Console, "log" | "warn">;
+type PrepareLogger = Pick<Console, "log">;
 
 export type PrePushValidationProof = {
   schemaVersion: typeof PRE_PUSH_VALIDATION_PROOF_SCHEMA_VERSION;
@@ -60,15 +61,15 @@ function normalizeRepoPath(repoPath: string) {
 }
 
 function sortUniquePaths(paths: string[]) {
-  return [...new Set(paths.map((entry) => normalizeRepoPath(entry)).filter(Boolean))].sort(
-    (left, right) => left.localeCompare(right)
-  );
+  return [
+    ...new Set(paths.map((entry) => normalizeRepoPath(entry)).filter(Boolean)),
+  ].sort((left, right) => left.localeCompare(right));
 }
 
 async function runCommand(
   rootDir: string,
   command: string[],
-  spawn: CommandRunner = Bun.spawn
+  spawn: CommandRunner = Bun.spawn,
 ) {
   const proc = spawn(command, {
     cwd: rootDir,
@@ -82,7 +83,9 @@ async function runCommand(
   ]);
 
   if (exitCode !== 0) {
-    throw new Error(stderr.trim() || stdout.trim() || `${command.join(" ")} failed`);
+    throw new Error(
+      stderr.trim() || stdout.trim() || `${command.join(" ")} failed`,
+    );
   }
 
   return stdout.trim();
@@ -91,7 +94,7 @@ async function runCommand(
 async function runExitCodeCommand(
   rootDir: string,
   command: string[],
-  spawn: CommandRunner = Bun.spawn
+  spawn: CommandRunner = Bun.spawn,
 ) {
   const proc = spawn(command, {
     cwd: rootDir,
@@ -107,10 +110,122 @@ async function runExitCodeCommand(
   return { stdout: stdout.trim(), stderr: stderr.trim(), exitCode };
 }
 
+function parsePorcelainPaths(status: string) {
+  return status
+    .split("\n")
+    .map((line) => line.trimEnd())
+    .filter(Boolean)
+    .map((line) => line.slice(3).trim())
+    .filter(Boolean);
+}
+
+function formatPathList(paths: string[]) {
+  return paths.map((repoPath) => `  - ${repoPath}`).join("\n");
+}
+
+async function collectUnstagedFiles(
+  rootDir: string,
+  spawn: CommandRunner = Bun.spawn,
+) {
+  const proc = spawn(["git", "diff", "--name-only"], {
+    cwd: rootDir,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+    proc.exited,
+  ]);
+
+  if (exitCode !== 0) {
+    throw new Error(
+      stderr.trim() || stdout.trim() || "git diff --name-only failed",
+    );
+  }
+
+  return stdout
+    .split("\n")
+    .map((line) => normalizeRepoPath(line.trim()))
+    .filter(Boolean);
+}
+
+async function collectUntrackedFiles(
+  rootDir: string,
+  spawn: CommandRunner = Bun.spawn,
+) {
+  const output = await runCommand(
+    rootDir,
+    ["git", "ls-files", "--others", "--exclude-standard"],
+    spawn,
+  );
+
+  return output
+    .split("\n")
+    .map((line) => normalizeRepoPath(line.trim()))
+    .filter(Boolean);
+}
+
+export async function assertPrAthenaProofReady(
+  rootDir: string,
+  options: ProofRuntimeOptions & { logger?: PrepareLogger } = {},
+) {
+  const spawn = options.spawn ?? Bun.spawn;
+  const [status, unstagedFiles, untrackedFiles] = await Promise.all([
+    runCommand(
+      rootDir,
+      ["git", "status", "--porcelain", "--untracked-files=all"],
+      spawn,
+    ),
+    collectUnstagedFiles(rootDir, spawn),
+    collectUntrackedFiles(rootDir, spawn),
+  ]);
+
+  if (unstagedFiles.length > 0 || untrackedFiles.length > 0) {
+    const sections = [
+      "pr:athena prepare blocked before heavy validation because the current tree cannot record a reusable pre-push proof.",
+    ];
+
+    if (unstagedFiles.length > 0) {
+      sections.push(
+        `Unstaged tracked files:\n${formatPathList(unstagedFiles)}`,
+      );
+    }
+
+    if (untrackedFiles.length > 0) {
+      sections.push(
+        [
+          "Untracked files:",
+          formatPathList(untrackedFiles),
+          "Stage intended new files explicitly, or remove unrelated files, then rerun `bun run pr:athena:prepare`.",
+        ].join("\n"),
+      );
+    } else {
+      sections.push(
+        "Stage intended tracked changes, or restore unrelated edits, then rerun `bun run pr:athena:prepare`.",
+      );
+    }
+
+    throw new Error(sections.join("\n\n"));
+  }
+
+  const stagedFiles = parsePorcelainPaths(status);
+  const logger = options.logger ?? console;
+  if (stagedFiles.length > 0) {
+    logger.log(
+      `[pr:athena] Prepare complete: ${stagedFiles.length} staged file(s) ready for staged-index proof.`,
+    );
+    return { ready: true as const, mode: "staged-index" as const, stagedFiles };
+  }
+
+  logger.log("[pr:athena] Prepare complete: working tree is clean.");
+  return { ready: true as const, mode: "clean" as const, stagedFiles };
+}
+
 async function collectFilesUnder(
   rootDir: string,
   relativeDir: string,
-  options: ProofRuntimeOptions
+  options: ProofRuntimeOptions,
 ) {
   const fsReaddir = options.readdir ?? readdir;
   const files: string[] = [];
@@ -145,7 +260,7 @@ async function collectFilesUnder(
 
 async function collectValidationFingerprintPaths(
   rootDir: string,
-  options: ProofRuntimeOptions = {}
+  options: ProofRuntimeOptions = {},
 ) {
   return sortUniquePaths([
     "package.json",
@@ -161,19 +276,24 @@ async function collectValidationFingerprintPaths(
     "scripts/coverage-toolchain-parity.ts",
     ...(await collectFilesUnder(rootDir, "scripts", options)).filter(
       (filePath) =>
-        /^scripts\/(?:harness-|graphify-|pre-commit-generated-artifacts)/.test(filePath)
+        /^scripts\/(?:harness-|graphify-|pre-commit-generated-artifacts)/.test(
+          filePath,
+        ),
     ),
   ]);
 }
 
 async function hashValidationWiring(
   rootDir: string,
-  options: ProofRuntimeOptions = {}
+  options: ProofRuntimeOptions = {},
 ) {
   const fsReadFile = options.readFile ?? readFile;
   const hasher = createHash("sha256");
 
-  for (const repoPath of await collectValidationFingerprintPaths(rootDir, options)) {
+  for (const repoPath of await collectValidationFingerprintPaths(
+    rootDir,
+    options,
+  )) {
     hasher.update(`${repoPath}\0`);
     try {
       const contents = await fsReadFile(path.join(rootDir, repoPath));
@@ -187,10 +307,13 @@ async function hashValidationWiring(
   return hasher.digest("hex");
 }
 
-async function readPrAthenaScript(rootDir: string, options: ProofRuntimeOptions = {}) {
+async function readPrAthenaScript(
+  rootDir: string,
+  options: ProofRuntimeOptions = {},
+) {
   const fsReadFile = options.readFile ?? readFile;
   const packageJson = JSON.parse(
-    await fsReadFile(path.join(rootDir, "package.json"), "utf8")
+    await fsReadFile(path.join(rootDir, "package.json"), "utf8"),
   ) as { scripts?: Record<string, string> };
 
   const prAthenaScript = packageJson.scripts?.["pr:athena"]?.trim();
@@ -204,7 +327,7 @@ async function readPrAthenaScript(rootDir: string, options: ProofRuntimeOptions 
 async function collectProofSnapshot(
   rootDir: string,
   options: ProofRuntimeOptions = {},
-  mode: ProofSnapshotMode = "evaluate"
+  mode: ProofSnapshotMode = "evaluate",
 ): Promise<ProofSnapshot> {
   const spawn = options.spawn ?? Bun.spawn;
   const [
@@ -219,23 +342,36 @@ async function collectProofSnapshot(
     prAthenaScript,
     validationFingerprint,
   ] = await Promise.all([
-    runCommand(rootDir, ["git", "rev-parse", "--git-path", PROOF_GIT_PATH], spawn),
+    runCommand(
+      rootDir,
+      ["git", "rev-parse", "--git-path", PROOF_GIT_PATH],
+      spawn,
+    ),
     runCommand(rootDir, ["git", "rev-parse", "--verify", "HEAD"], spawn),
     runCommand(rootDir, ["git", "rev-parse", "--verify", "HEAD^{tree}"], spawn),
     runCommand(rootDir, ["git", "write-tree"], spawn),
-    runCommand(rootDir, ["git", "rev-parse", "--verify", PR_ATHENA_PROOF_BASE_REF], spawn),
+    runCommand(
+      rootDir,
+      ["git", "rev-parse", "--verify", PR_ATHENA_PROOF_BASE_REF],
+      spawn,
+    ),
     runCommand(
       rootDir,
       ["git", "status", "--porcelain", "--untracked-files=all"],
-      spawn
+      spawn,
     ),
-    runCommand(rootDir, ["git", "ls-files", "--others", "--exclude-standard"], spawn),
+    runCommand(
+      rootDir,
+      ["git", "ls-files", "--others", "--exclude-standard"],
+      spawn,
+    ),
     runCommand(rootDir, ["bun", "--version"], spawn),
     readPrAthenaScript(rootDir, options),
     hashValidationWiring(rootDir, options),
   ]);
 
-  let recordedStatusMode: PrePushValidationProof["recordedStatusMode"] = "clean";
+  let recordedStatusMode: PrePushValidationProof["recordedStatusMode"] =
+    "clean";
   let validatedTreeSha = headTreeSha;
 
   if (status.trim()) {
@@ -246,11 +382,11 @@ async function collectProofSnapshot(
     const unstagedDiff = await runExitCodeCommand(
       rootDir,
       ["git", "diff", "--quiet"],
-      spawn
+      spawn,
     );
     if (unstagedDiff.exitCode > 1) {
       throw new Error(
-        unstagedDiff.stderr || unstagedDiff.stdout || "git diff --quiet failed"
+        unstagedDiff.stderr || unstagedDiff.stdout || "git diff --quiet failed",
       );
     }
 
@@ -302,7 +438,7 @@ function validateProofShape(value: unknown): value is PrePushValidationProof {
 
 export async function evaluatePrePushValidationProof(
   rootDir: string,
-  options: ProofRuntimeOptions = {}
+  options: ProofRuntimeOptions = {},
 ): Promise<PrePushValidationProofEvaluation> {
   let snapshot: ProofSnapshot;
   try {
@@ -333,11 +469,20 @@ export async function evaluatePrePushValidationProof(
   }
 
   const comparisons: Array<[keyof PrePushValidationProof, string]> = [
-    ["validatedTreeSha", "HEAD tree changed since pr:athena recorded its proof"],
-    ["baseSha", `${PR_ATHENA_PROOF_BASE_REF} changed since pr:athena recorded its proof`],
+    [
+      "validatedTreeSha",
+      "HEAD tree changed since pr:athena recorded its proof",
+    ],
+    [
+      "baseSha",
+      `${PR_ATHENA_PROOF_BASE_REF} changed since pr:athena recorded its proof`,
+    ],
     ["bunVersion", "Bun version changed since pr:athena recorded its proof"],
     ["prAthenaScript", "pr:athena command changed since proof recording"],
-    ["validationFingerprint", "validation wiring changed since proof recording"],
+    [
+      "validationFingerprint",
+      "validation wiring changed since proof recording",
+    ],
   ];
 
   for (const [field, reason] of comparisons) {
@@ -359,7 +504,7 @@ export async function evaluatePrePushValidationProof(
 
 export async function recordPrePushValidationProof(
   rootDir: string,
-  options: ProofRuntimeOptions & { logger?: ProofLogger } = {}
+  options: ProofRuntimeOptions & { logger?: ProofLogger } = {},
 ) {
   const logger = options.logger ?? console;
 
@@ -368,12 +513,14 @@ export async function recordPrePushValidationProof(
     const { proofPath, ...proof } = snapshot;
     await mkdir(path.dirname(proofPath), { recursive: true });
     await writeFile(proofPath, `${JSON.stringify(proof, null, 2)}\n`, "utf8");
-    logger.log(`[pr:athena] Recorded current pre-push validation proof at ${proofPath}.`);
+    logger.log(
+      `[pr:athena] Recorded current pre-push validation proof at ${proofPath}.`,
+    );
     return { recorded: true as const, proofPath, proof };
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
     logger.warn(
-      `[pr:athena] Did not record pre-push validation proof: ${reason}. pre-push will run normally.`
+      `[pr:athena] Did not record pre-push validation proof: ${reason}. pre-push will run normally.`,
     );
 
     try {
@@ -382,8 +529,8 @@ export async function recordPrePushValidationProof(
         await runCommand(
           rootDir,
           ["git", "rev-parse", "--git-path", PROOF_GIT_PATH],
-          options.spawn ?? Bun.spawn
-        )
+          options.spawn ?? Bun.spawn,
+        ),
       );
       await rm(proofPath, { force: true });
     } catch {
@@ -397,9 +544,14 @@ export async function recordPrePushValidationProof(
 if (import.meta.main) {
   const [command] = Bun.argv.slice(2);
 
+  if (command === "prepare-pr-athena") {
+    await assertPrAthenaProofReady(process.cwd());
+    process.exit(0);
+  }
+
   if (command !== "record-pr-athena") {
     console.error(
-      "Usage: bun scripts/pre-push-validation-proof.ts record-pr-athena"
+      "Usage: bun scripts/pre-push-validation-proof.ts <prepare-pr-athena|record-pr-athena>",
     );
     process.exit(1);
   }

@@ -8,8 +8,8 @@ Graphify is the navigation layer for the repo graph. Use the entry docs below fo
 
 ## Repo Summary
 - Code files discovered: 1931
-- Graph nodes: 6818
-- Graph edges: 7631
+- Graph nodes: 6824
+- Graph edges: 7644
 - Communities: 1858
 
 ## Graph Hotspots
@@ -18,9 +18,9 @@ Graphify is the navigation layer for the repo graph. Use the entry docs below fo
 - `dailyClose.ts` (65 edges, Community 2) - [`packages/athena-webapp/convex/operations/dailyClose.ts`](../../packages/athena-webapp/convex/operations/dailyClose.ts)
 - `projectLocalEvents.ts` (52 edges, Community 3) - [`packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.ts`](../../packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.ts)
 - `usePosLocalSyncRuntime.ts` (48 edges, Community 4) - [`packages/athena-webapp/src/lib/pos/infrastructure/local/usePosLocalSyncRuntime.ts`](../../packages/athena-webapp/src/lib/pos/infrastructure/local/usePosLocalSyncRuntime.ts)
-- `dailyOperations.ts` (46 edges, Community 6) - [`packages/athena-webapp/convex/operations/dailyOperations.ts`](../../packages/athena-webapp/convex/operations/dailyOperations.ts)
-- `harness-inferential-review.ts` (46 edges, Community 8) - [`scripts/harness-inferential-review.ts`](../../scripts/harness-inferential-review.ts)
-- `ingestLocalEvents.ts` (46 edges, Community 7) - [`packages/athena-webapp/convex/pos/application/sync/ingestLocalEvents.ts`](../../packages/athena-webapp/convex/pos/application/sync/ingestLocalEvents.ts)
+- `harness-inferential-review.ts` (47 edges, Community 6) - [`scripts/harness-inferential-review.ts`](../../scripts/harness-inferential-review.ts)
+- `dailyOperations.ts` (46 edges, Community 7) - [`packages/athena-webapp/convex/operations/dailyOperations.ts`](../../packages/athena-webapp/convex/operations/dailyOperations.ts)
+- `ingestLocalEvents.ts` (46 edges, Community 8) - [`packages/athena-webapp/convex/pos/application/sync/ingestLocalEvents.ts`](../../packages/athena-webapp/convex/pos/application/sync/ingestLocalEvents.ts)
 
 ## Registered Packages
 - [Athena Webapp](packages/athena-webapp.md)
