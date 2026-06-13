@@ -18,8 +18,7 @@ interface ProductCardProps {
 }
 
 function normalizeQuantity(value: string | number, maxQuantity?: number) {
-  const parsed =
-    typeof value === "number" ? value : Number.parseInt(value, 10);
+  const parsed = typeof value === "number" ? value : Number.parseInt(value, 10);
 
   if (!Number.isFinite(parsed)) {
     return 1;
@@ -51,7 +50,9 @@ export function ProductCard({
   const [quantityInput, setQuantityInput] = useState("1");
   const isProvisionalImport =
     product.availabilityPolicy === "active_provisional_import";
-  const isPendingCheckoutItem = Boolean(product.pendingCheckoutItemId);
+  const isPendingCheckoutItem =
+    product.availabilityPolicy === "pending_checkout" ||
+    Boolean(product.pendingCheckoutItemId);
   const usesPendingCount = isProvisionalImport || isPendingCheckoutItem;
   const maxQuantity = undefined;
   const selectedQuantity = normalizeQuantity(quantityInput, maxQuantity);

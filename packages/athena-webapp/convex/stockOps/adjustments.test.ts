@@ -78,6 +78,8 @@ function createInventorySnapshotQueryCtx() {
         },
       ],
     ]),
+    inventoryImportProvisionalSku: new Map<string, Record<string, unknown>>(),
+    posPendingCheckoutItem: new Map<string, Record<string, unknown>>(),
     product: new Map<string, Record<string, unknown>>([
       [
         "product-1",
@@ -144,6 +146,7 @@ function createInventorySnapshotQueryCtx() {
 
         return {
           collect: async () => filteredRecords(),
+          first: async () => filteredRecords()[0] ?? null,
           take: async (limit: number) => filteredRecords().slice(0, limit),
         };
       },
@@ -192,6 +195,8 @@ function createApprovalDecisionMutationCtx() {
       ],
     ]),
     inventoryMovement: new Map<string, Record<string, unknown>>(),
+    inventoryImportProvisionalSku: new Map<string, Record<string, unknown>>(),
+    posPendingCheckoutItem: new Map<string, Record<string, unknown>>(),
     operationalEvent: new Map<string, Record<string, unknown>>(),
     operationalWorkItem: new Map<string, Record<string, unknown>>([
       [
@@ -264,13 +269,13 @@ function createApprovalDecisionMutationCtx() {
   };
 
   const queryTable = (
-    table: "inventoryMovement" | "operationalEvent" | "skuActivityEvent"
+    table: "inventoryMovement" | "operationalEvent" | "skuActivityEvent",
   ) => ({
     withIndex(
       _index: string,
       applyIndex: (query: {
         eq: (field: string, value: unknown) => unknown;
-      }) => unknown
+      }) => unknown,
     ) {
       const filters: Array<[string, unknown]> = [];
       const query = {
@@ -285,12 +290,18 @@ function createApprovalDecisionMutationCtx() {
       return {
         collect: async () =>
           Array.from(tables[table].values()).filter((record) =>
-            filters.every(([field, value]) => record[field] === value)
+            filters.every(([field, value]) => record[field] === value),
           ),
         first: async () =>
           Array.from(tables[table].values()).find((record) =>
-            filters.every(([field, value]) => record[field] === value)
+            filters.every(([field, value]) => record[field] === value),
           ) ?? null,
+        take: async (limit: number) =>
+          Array.from(tables[table].values())
+            .filter((record) =>
+              filters.every(([field, value]) => record[field] === value),
+            )
+            .slice(0, limit),
       };
     },
   });
@@ -302,7 +313,7 @@ function createApprovalDecisionMutationCtx() {
       },
       async insert(
         table: "inventoryMovement" | "operationalEvent" | "skuActivityEvent",
-        value: Record<string, unknown>
+        value: Record<string, unknown>,
       ) {
         insertCounters[table] += 1;
         const id = `${table}-${insertCounters[table]}`;
@@ -312,7 +323,7 @@ function createApprovalDecisionMutationCtx() {
       async patch(
         table: keyof typeof tables,
         id: string,
-        value: Record<string, unknown>
+        value: Record<string, unknown>,
       ) {
         const existingRecord = tables[table].get(id);
 
@@ -323,7 +334,7 @@ function createApprovalDecisionMutationCtx() {
         tables[table].set(id, { ...existingRecord, ...value });
       },
       query(
-        table: "inventoryMovement" | "operationalEvent" | "skuActivityEvent"
+        table: "inventoryMovement" | "operationalEvent" | "skuActivityEvent",
       ) {
         return queryTable(table);
       },
@@ -341,14 +352,17 @@ function createSubmissionMutationCtx(args: {
   const tables = {
     approvalRequest: new Map<string, Record<string, unknown>>(),
     athenaUser: new Map<string, Record<string, unknown>>(
-      (args.athenaUsers ?? [
-        {
-          _id: "operator-1",
-          email: "operator@example.com",
-        },
-      ]).map((athenaUser) => [athenaUser._id, athenaUser])
+      (
+        args.athenaUsers ?? [
+          {
+            _id: "operator-1",
+            email: "operator@example.com",
+          },
+        ]
+      ).map((athenaUser) => [athenaUser._id, athenaUser]),
     ),
     inventoryMovement: new Map<string, Record<string, unknown>>(),
+    inventoryImportProvisionalSku: new Map<string, Record<string, unknown>>(),
     operationalEvent: new Map<string, Record<string, unknown>>(),
     operationalWorkItem: new Map<string, Record<string, unknown>>(),
     organizationMember: new Map<string, Record<string, unknown>>(
@@ -364,7 +378,7 @@ function createSubmissionMutationCtx(args: {
               },
             ],
           ]
-        : []
+        : [],
     ),
     productSku: new Map<string, Record<string, unknown>>([
       [
@@ -380,6 +394,7 @@ function createSubmissionMutationCtx(args: {
         },
       ],
     ]),
+    posPendingCheckoutItem: new Map<string, Record<string, unknown>>(),
     skuActivityEvent: new Map<string, Record<string, unknown>>(),
     stockAdjustmentBatch: new Map<string, Record<string, unknown>>(),
     store: new Map<string, Record<string, unknown>>([
@@ -423,15 +438,17 @@ function createSubmissionMutationCtx(args: {
   const indexedQuery = (
     table:
       | "inventoryMovement"
+      | "inventoryImportProvisionalSku"
       | "operationalEvent"
+      | "posPendingCheckoutItem"
       | "skuActivityEvent"
-      | "stockAdjustmentBatch"
+      | "stockAdjustmentBatch",
   ) => ({
     withIndex(
       _index: string,
       applyIndex: (query: {
         eq: (field: string, value: unknown) => unknown;
-      }) => unknown
+      }) => unknown,
     ) {
       const filters: Array<[string, unknown]> = [];
       const query = {
@@ -446,12 +463,18 @@ function createSubmissionMutationCtx(args: {
       return {
         collect: async () =>
           Array.from(tables[table].values()).filter((record) =>
-            filters.every(([field, value]) => record[field] === value)
+            filters.every(([field, value]) => record[field] === value),
           ),
         first: async () =>
           Array.from(tables[table].values()).find((record) =>
-            filters.every(([field, value]) => record[field] === value)
+            filters.every(([field, value]) => record[field] === value),
           ) ?? null,
+        take: async (limit: number) =>
+          Array.from(tables[table].values())
+            .filter((record) =>
+              filters.every(([field, value]) => record[field] === value),
+            )
+            .slice(0, limit),
       };
     },
   });
@@ -474,7 +497,7 @@ function createSubmissionMutationCtx(args: {
           | "operationalWorkItem"
           | "skuActivityEvent"
           | "stockAdjustmentBatch",
-        value: Record<string, unknown>
+        value: Record<string, unknown>,
       ) {
         insertCounters[table] += 1;
         const id = `${table}-${insertCounters[table]}`;
@@ -484,7 +507,7 @@ function createSubmissionMutationCtx(args: {
       async patch(
         table: keyof typeof tables,
         id: string,
-        value: Record<string, unknown>
+        value: Record<string, unknown>,
       ) {
         const existingRecord = tables[table].get(id);
 
@@ -508,7 +531,7 @@ function createSubmissionMutationCtx(args: {
                 and: (...conditions: unknown[]) => unknown;
                 eq: (left: unknown, right: unknown) => unknown;
                 field: (name: string) => string;
-              }) => unknown
+              }) => unknown,
             ) {
               const filters: Array<[string, unknown]> = [];
               const queryBuilder = {
@@ -526,8 +549,11 @@ function createSubmissionMutationCtx(args: {
 
               return {
                 first: async () =>
-                  Array.from(tables.organizationMember.values()).find((record) =>
-                    filters.every(([field, value]) => record[field] === value)
+                  Array.from(tables.organizationMember.values()).find(
+                    (record) =>
+                      filters.every(
+                        ([field, value]) => record[field] === value,
+                      ),
                   ) ?? null,
               };
             },
@@ -536,7 +562,9 @@ function createSubmissionMutationCtx(args: {
 
         if (
           table === "inventoryMovement" ||
+          table === "inventoryImportProvisionalSku" ||
           table === "operationalEvent" ||
+          table === "posPendingCheckoutItem" ||
           table === "skuActivityEvent" ||
           table === "stockAdjustmentBatch"
         ) {
@@ -632,19 +660,116 @@ describe("stock ops adjustments", () => {
     ]);
   });
 
+  it("marks active provisional legacy import SKUs as blocked for stock adjustments", async () => {
+    const { ctx, tables } = createInventorySnapshotQueryCtx();
+
+    tables.inventoryImportProvisionalSku.set("provisional-1", {
+      _id: "provisional-1",
+      productSkuId: "sku-1",
+      status: "active",
+      storeId: "store-1",
+    });
+
+    const rows = await listInventorySnapshotWithCtx(ctx, {
+      now: 1_000,
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(rows).toEqual([
+      expect.objectContaining({
+        _id: "sku-1",
+        stockAdjustmentBlockedMessage:
+          "Legacy import SKUs must be finalized before stock adjustments can update them.",
+        stockAdjustmentBlockedReason: "provisional_import",
+      }),
+    ]);
+  });
+
+  it("marks unresolved POS pending checkout SKUs as blocked for stock adjustments", async () => {
+    const { ctx, tables } = createInventorySnapshotQueryCtx();
+
+    tables.posPendingCheckoutItem.set("pending-checkout-1", {
+      _id: "pending-checkout-1",
+      provisionalProductSkuId: "sku-1",
+      status: "pending_review",
+      storeId: "store-1",
+    });
+
+    const rows = await listInventorySnapshotWithCtx(ctx, {
+      now: 1_000,
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(rows).toEqual([
+      expect.objectContaining({
+        _id: "sku-1",
+        stockAdjustmentBlockedMessage:
+          "POS pending checkout SKUs must be finalized before stock adjustments can update them.",
+        stockAdjustmentBlockedReason: "pos_pending_checkout",
+      }),
+    ]);
+  });
+
+  it("uses store-scoped blocker scans for full-store stock adjustment snapshots", async () => {
+    const { ctx, tables } = createInventorySnapshotQueryCtx();
+
+    for (let index = 2; index <= 60; index += 1) {
+      tables.productSku.set(`sku-${index}`, {
+        _id: `sku-${index}`,
+        images: [],
+        inventoryCount: 0,
+        netPrice: 1000,
+        price: 1000,
+        productId: "product-1",
+        quantityAvailable: 0,
+        sku: `SKU-${index}`,
+        storeId: "store-1",
+      });
+    }
+    tables.inventoryImportProvisionalSku.set("provisional-60", {
+      _id: "provisional-60",
+      productSkuId: "sku-60",
+      status: "active",
+      storeId: "store-1",
+    });
+    tables.posPendingCheckoutItem.set("pending-checkout-59", {
+      _id: "pending-checkout-59",
+      provisionalProductSkuId: "sku-59",
+      status: "pending_review",
+      storeId: "store-1",
+    });
+
+    const rows = await listInventorySnapshotWithCtx(ctx, {
+      now: 1_000,
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(rows).toHaveLength(60);
+    expect(rows.find((row) => row._id === "sku-59")).toMatchObject({
+      stockAdjustmentBlockedMessage:
+        "POS pending checkout SKUs must be finalized before stock adjustments can update them.",
+      stockAdjustmentBlockedReason: "pos_pending_checkout",
+    });
+    expect(rows.find((row) => row._id === "sku-60")).toMatchObject({
+      stockAdjustmentBlockedMessage:
+        "Legacy import SKUs must be finalized before stock adjustments can update them.",
+      stockAdjustmentBlockedReason: "provisional_import",
+    });
+  });
+
   it("calculates cycle-count deltas from the system quantity", () => {
     expect(
       calculateCycleCountQuantityDelta({
         countedQuantity: 3,
         systemQuantity: 8,
-      })
+      }),
     ).toBe(-5);
 
     expect(
       calculateCycleCountQuantityDelta({
         countedQuantity: 13,
         systemQuantity: 8,
-      })
+      }),
     ).toBe(5);
   });
 
@@ -657,21 +782,26 @@ describe("stock ops adjustments", () => {
         {
           productSkuId: "sku-1",
         },
-      ])
+      ]),
     ).toThrow("cannot include the same SKU twice");
   });
 
   it("requires valid reason codes for manual adjustments and cycle counts", () => {
-    expect(() => assertStockAdjustmentReasonCode("manual", "damage")).not.toThrow();
     expect(() =>
-      assertStockAdjustmentReasonCode("manual", "cycle_count_reconciliation")
+      assertStockAdjustmentReasonCode("manual", "damage"),
+    ).not.toThrow();
+    expect(() =>
+      assertStockAdjustmentReasonCode("manual", "cycle_count_reconciliation"),
     ).toThrow("Manual stock adjustments require a supported reason code.");
 
     expect(() =>
-      assertStockAdjustmentReasonCode("cycle_count", "cycle_count_reconciliation")
+      assertStockAdjustmentReasonCode(
+        "cycle_count",
+        "cycle_count_reconciliation",
+      ),
     ).not.toThrow();
     expect(() =>
-      assertStockAdjustmentReasonCode("cycle_count", "correction")
+      assertStockAdjustmentReasonCode("cycle_count", "correction"),
     ).toThrow("Cycle counts must reconcile with the cycle-count reason code.");
   });
 
@@ -690,19 +820,19 @@ describe("stock ops adjustments", () => {
       requiresStockAdjustmentApproval({
         adjustmentType: "manual",
         largestAbsoluteDelta: belowThreshold.largestAbsoluteDelta,
-      })
+      }),
     ).toBe(false);
     expect(
       requiresStockAdjustmentApproval({
         adjustmentType: "manual",
         largestAbsoluteDelta: atThreshold.largestAbsoluteDelta,
-      })
+      }),
     ).toBe(true);
     expect(
       requiresStockAdjustmentApproval({
         adjustmentType: "cycle_count",
         largestAbsoluteDelta: atThreshold.largestAbsoluteDelta,
-      })
+      }),
     ).toBe(false);
   });
 
@@ -712,7 +842,7 @@ describe("stock ops adjustments", () => {
         adjustmentType: "manual",
         quantityDelta: -2,
         systemQuantity: 8,
-      })
+      }),
     ).toBe(-2);
 
     expect(
@@ -720,25 +850,25 @@ describe("stock ops adjustments", () => {
         adjustmentType: "cycle_count",
         countedQuantity: 11,
         systemQuantity: 8,
-      })
+      }),
     ).toBe(3);
 
     expect(() =>
       resolveStockAdjustmentQuantityDelta({
         adjustmentType: "manual",
         systemQuantity: 8,
-      })
+      }),
     ).toThrow(
-      "Manual stock adjustments require a whole-unit delta for every selected SKU."
+      "Manual stock adjustments require a whole-unit delta for every selected SKU.",
     );
 
     expect(() =>
       resolveStockAdjustmentQuantityDelta({
         adjustmentType: "cycle_count",
         systemQuantity: 8,
-      })
+      }),
     ).toThrow(
-      "Cycle counts require an integer counted quantity for every selected SKU."
+      "Cycle counts require an integer counted quantity for every selected SKU.",
     );
   });
 
@@ -748,7 +878,7 @@ describe("stock ops adjustments", () => {
         { quantityDelta: -3 },
         { quantityDelta: 5 },
         { quantityDelta: -1 },
-      ])
+      ]),
     ).toEqual({
       largestAbsoluteDelta: 5,
       lineItemCount: 3,
@@ -760,7 +890,7 @@ describe("stock ops adjustments", () => {
     const source = getSource("./adjustments.ts");
 
     expect(source).toContain(
-      'withIndex("by_storeId_adjustmentType_submissionKey"'
+      'withIndex("by_storeId_adjustmentType_submissionKey"',
     );
     expect(source).toContain("buildApprovalRequest");
     expect(source).toContain("recordInventoryMovementWithCtx");
@@ -794,7 +924,7 @@ describe("stock ops adjustments", () => {
         reasonCode: "damage",
         storeId: "store-1" as Id<"store">,
         submissionKey: "submission-1",
-      })
+      }),
     ).rejects.toThrow("Sign in again to continue.");
   });
 
@@ -811,7 +941,7 @@ describe("stock ops adjustments", () => {
         reasonCode: "damage",
         storeId: "store-1" as Id<"store">,
         submissionKey: "submission-empty",
-      })
+      }),
     ).resolves.toMatchObject({
       kind: "user_error",
       error: {
@@ -839,7 +969,7 @@ describe("stock ops adjustments", () => {
         reasonCode: "damage",
         storeId: "store-1" as Id<"store">,
         submissionKey: "submission-auth",
-      })
+      }),
     ).resolves.toMatchObject({
       kind: "user_error",
       error: {
@@ -867,10 +997,86 @@ describe("stock ops adjustments", () => {
         reasonCode: "damage",
         storeId: "store-1" as Id<"store">,
         submissionKey: "submission-2",
-      })
+      }),
     ).rejects.toThrow(
-      "You do not have permission to adjust stock for this store."
+      "You do not have permission to adjust stock for this store.",
     );
+  });
+
+  it("rejects stock adjustments for active provisional legacy import SKUs", async () => {
+    const { ctx, tables } = createSubmissionMutationCtx({
+      authUserId: "auth-user-1",
+      membershipRole: "full_admin",
+    });
+
+    tables.inventoryImportProvisionalSku.set("provisional-1", {
+      _id: "provisional-1",
+      productSkuId: "sku-1",
+      status: "active",
+      storeId: "store-1",
+    });
+
+    await expect(
+      submitStockAdjustmentBatchWithCtx(ctx, {
+        adjustmentType: "manual",
+        lineItems: [
+          {
+            productSkuId: "sku-1" as Id<"productSku">,
+            quantityDelta: 1,
+          },
+        ],
+        reasonCode: "correction",
+        storeId: "store-1" as Id<"store">,
+        submissionKey: "legacy-import-block",
+      }),
+    ).rejects.toThrow(
+      "Legacy import SKUs must be finalized before stock adjustments can update them.",
+    );
+
+    expect(tables.productSku.get("sku-1")).toMatchObject({
+      inventoryCount: 8,
+      quantityAvailable: 6,
+    });
+    expect(tables.inventoryMovement.size).toBe(0);
+    expect(tables.stockAdjustmentBatch.size).toBe(0);
+  });
+
+  it("rejects stock adjustments for unresolved POS pending checkout SKUs", async () => {
+    const { ctx, tables } = createSubmissionMutationCtx({
+      authUserId: "auth-user-1",
+      membershipRole: "full_admin",
+    });
+
+    tables.posPendingCheckoutItem.set("pending-checkout-1", {
+      _id: "pending-checkout-1",
+      provisionalProductSkuId: "sku-1",
+      status: "flagged",
+      storeId: "store-1",
+    });
+
+    await expect(
+      submitStockAdjustmentBatchWithCtx(ctx, {
+        adjustmentType: "manual",
+        lineItems: [
+          {
+            productSkuId: "sku-1" as Id<"productSku">,
+            quantityDelta: 1,
+          },
+        ],
+        reasonCode: "correction",
+        storeId: "store-1" as Id<"store">,
+        submissionKey: "pos-pending-checkout-block",
+      }),
+    ).rejects.toThrow(
+      "POS pending checkout SKUs must be finalized before stock adjustments can update them.",
+    );
+
+    expect(tables.productSku.get("sku-1")).toMatchObject({
+      inventoryCount: 8,
+      quantityAvailable: 6,
+    });
+    expect(tables.inventoryMovement.size).toBe(0);
+    expect(tables.stockAdjustmentBatch.size).toBe(0);
   });
 
   it("returns an authorization user error when the operator lacks store membership", async () => {
@@ -891,7 +1097,7 @@ describe("stock ops adjustments", () => {
         reasonCode: "damage",
         storeId: "store-1" as Id<"store">,
         submissionKey: "submission-authz",
-      })
+      }),
     ).resolves.toMatchObject({
       kind: "user_error",
       error: {

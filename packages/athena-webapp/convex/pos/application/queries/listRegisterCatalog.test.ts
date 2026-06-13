@@ -13,6 +13,7 @@ type TableName =
   | "color"
   | "inventoryHold"
   | "inventoryImportProvisionalSku"
+  | "posPendingCheckoutItem"
   | "product"
   | "productSku";
 type Row = Record<string, unknown> & { _id: string };
@@ -30,6 +31,7 @@ function createRegisterCatalogCtx(
     color: new Map(),
     inventoryHold: new Map(),
     inventoryImportProvisionalSku: new Map(),
+    posPendingCheckoutItem: new Map(),
     product: new Map(),
     productSku: new Map(),
   };
@@ -47,10 +49,7 @@ function createRegisterCatalogCtx(
     );
   }
 
-  function createIndexedQuery(
-    table: TableName,
-    filters: IndexedFilter[],
-  ) {
+  function createIndexedQuery(table: TableName, filters: IndexedFilter[]) {
     const matches = Array.from(tables[table].values()).filter((row) =>
       filters.every((filter) => filter.matches(row[filter.field])),
     );
@@ -137,8 +136,7 @@ function createRegisterCatalogCtx(
                   filter.op === "eq"
                     ? (rowValue) => rowValue === filter.value
                     : (rowValue) =>
-                        typeof rowValue === "number" &&
-                        rowValue > filter.value,
+                        typeof rowValue === "number" && rowValue > filter.value,
               })),
             );
           },
@@ -256,7 +254,7 @@ describe("listRegisterCatalog", () => {
           categoryId: "category-pos-pending-checkout",
           description: "Reviewable cashier item",
           name: "Pending Checkout Item",
-          availability: "live",
+          availability: "draft",
           isVisible: false,
         },
         {
@@ -359,8 +357,9 @@ describe("listRegisterCatalog", () => {
           sku: "PENDING-CHECKOUT",
           barcode: "111",
           images: [],
+          isVisible: false,
           price: 1000,
-          quantityAvailable: 3,
+          quantityAvailable: 0,
         },
         {
           _id: "sku-hidden",
@@ -372,6 +371,15 @@ describe("listRegisterCatalog", () => {
           isVisible: false,
           price: 1000,
           quantityAvailable: 3,
+        },
+      ],
+      posPendingCheckoutItem: [
+        {
+          _id: "pending-checkout-1",
+          storeId: "store-a",
+          status: "pending_review",
+          provisionalProductSkuId: "sku-pos-pending-checkout",
+          provisionalPrice: 1000,
         },
       ],
     });
@@ -451,7 +459,8 @@ describe("listRegisterCatalog", () => {
         length: null,
         color: "",
         areProcessingFeesAbsorbed: false,
-        availabilityPolicy: "trusted_inventory",
+        availabilityPolicy: "pending_checkout",
+        pendingCheckoutItemId: "pending-checkout-1",
       },
     ]);
 
@@ -774,6 +783,22 @@ describe("listRegisterCatalog", () => {
           sku: "SKU-OTHER",
           quantityAvailable: 9,
         },
+        {
+          _id: "sku-pending-checkout",
+          storeId: "store-a",
+          productId: "product-pending-checkout",
+          sku: "PENDING-CHECKOUT",
+          quantityAvailable: 0,
+        },
+      ],
+      posPendingCheckoutItem: [
+        {
+          _id: "pending-checkout-1",
+          storeId: "store-a",
+          status: "pending_review",
+          provisionalProductSkuId: "sku-pending-checkout",
+          provisionalPrice: 100,
+        },
       ],
     });
 
@@ -782,6 +807,7 @@ describe("listRegisterCatalog", () => {
       productSkuIds: [
         "sku-live",
         "sku-out",
+        "sku-pending-checkout",
         "sku-live",
         "sku-other-store",
         "sku-missing",
@@ -804,6 +830,13 @@ describe("listRegisterCatalog", () => {
         quantityAvailable: 0,
         availabilityPolicy: "active_provisional_import",
       },
+      {
+        productSkuId: "sku-pending-checkout",
+        skuId: "sku-pending-checkout",
+        inStock: true,
+        quantityAvailable: 0,
+        availabilityPolicy: "pending_checkout",
+      },
     ]);
   });
 
@@ -821,9 +854,7 @@ describe("listRegisterCatalog", () => {
 
     const rows = await listRegisterCatalogAvailability(ctx, {
       storeId: "store-a" as Id<"store">,
-      productSkuIds: productSkus.map(
-        (sku) => sku._id as Id<"productSku">,
-      ),
+      productSkuIds: productSkus.map((sku) => sku._id as Id<"productSku">),
     });
 
     expect(rows).toHaveLength(50);
@@ -841,6 +872,12 @@ describe("listRegisterCatalog", () => {
           _id: "category-store-a",
           storeId: "store-a",
           name: "Wigs",
+        },
+        {
+          _id: "category-pos-pending-checkout",
+          storeId: "store-a",
+          name: "POS pending checkout",
+          slug: "pos-pending-checkout",
         },
       ],
       inventoryHold: [
@@ -913,6 +950,14 @@ describe("listRegisterCatalog", () => {
           categoryId: "category-store-a",
           name: "Other Store Wig",
         },
+        {
+          _id: "product-pending-checkout",
+          storeId: "store-a",
+          categoryId: "category-pos-pending-checkout",
+          name: "Pending Checkout Item",
+          availability: "draft",
+          isVisible: false,
+        },
       ],
       productSku: [
         {
@@ -955,6 +1000,25 @@ describe("listRegisterCatalog", () => {
           price: 100,
           quantityAvailable: 9,
         },
+        {
+          _id: "sku-pending-checkout",
+          storeId: "store-a",
+          productId: "product-pending-checkout",
+          sku: "PENDING-CHECKOUT",
+          images: [],
+          isVisible: false,
+          price: 100,
+          quantityAvailable: 0,
+        },
+      ],
+      posPendingCheckoutItem: [
+        {
+          _id: "pending-checkout-1",
+          storeId: "store-a",
+          status: "pending_review",
+          provisionalProductSkuId: "sku-pending-checkout",
+          provisionalPrice: 100,
+        },
       ],
     });
 
@@ -962,29 +1026,39 @@ describe("listRegisterCatalog", () => {
       storeId: "store-a" as Id<"store">,
     });
 
-    expect(rows).toEqual([
-      {
-        productSkuId: "sku-live",
-        skuId: "sku-live",
-        inStock: true,
-        quantityAvailable: 2,
-        availabilityPolicy: "trusted_inventory",
-      },
-      {
-        productSkuId: "sku-out",
-        skuId: "sku-out",
-        inStock: false,
-        quantityAvailable: 0,
-        availabilityPolicy: "trusted_inventory",
-      },
-      {
-        productSkuId: "sku-out",
-        skuId: "sku-out",
-        inventoryImportProvisionalSkuId: "provisional-sku-out",
-        inStock: true,
-        quantityAvailable: 0,
-        availabilityPolicy: "active_provisional_import",
-      },
-    ]);
+    expect(rows).toEqual(
+      expect.arrayContaining([
+        {
+          productSkuId: "sku-live",
+          skuId: "sku-live",
+          inStock: true,
+          quantityAvailable: 2,
+          availabilityPolicy: "trusted_inventory",
+        },
+        {
+          productSkuId: "sku-out",
+          skuId: "sku-out",
+          inStock: false,
+          quantityAvailable: 0,
+          availabilityPolicy: "trusted_inventory",
+        },
+        {
+          productSkuId: "sku-out",
+          skuId: "sku-out",
+          inventoryImportProvisionalSkuId: "provisional-sku-out",
+          inStock: true,
+          quantityAvailable: 0,
+          availabilityPolicy: "active_provisional_import",
+        },
+        {
+          productSkuId: "sku-pending-checkout",
+          skuId: "sku-pending-checkout",
+          inStock: true,
+          quantityAvailable: 0,
+          availabilityPolicy: "pending_checkout",
+        },
+      ]),
+    );
+    expect(rows).toHaveLength(4);
   });
 });

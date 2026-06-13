@@ -32,15 +32,17 @@ const storeId = "store-1" as Id<"store">;
 describe("searchCatalog", () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    mocks.getCategoryById.mockImplementation(async (_ctx, categoryId) =>
-      categoryById[categoryId as keyof typeof categoryById] ?? null,
+    mocks.getCategoryById.mockImplementation(
+      async (_ctx, categoryId) =>
+        categoryById[categoryId as keyof typeof categoryById] ?? null,
     );
     mocks.getColorById.mockResolvedValue({ name: "Black" });
     mocks.isConvexProductId.mockReturnValue(false);
     mocks.findStoreSkuByBarcode.mockResolvedValue(null);
     mocks.findStoreSkuBySku.mockResolvedValue(null);
-    mocks.getProductById.mockImplementation(async (_ctx, productId) =>
-      productById[productId as keyof typeof productById] ?? null,
+    mocks.getProductById.mockImplementation(
+      async (_ctx, productId) =>
+        productById[productId as keyof typeof productById] ?? null,
     );
   });
 
@@ -193,7 +195,7 @@ const productById = {
     categoryId: "category-pos-pending-checkout",
     name: "Pending Checkout Item",
     description: "",
-    availability: "live",
+    availability: "draft",
     isVisible: false,
   },
   "product-hidden-sku": {
@@ -274,9 +276,10 @@ const skuById = {
     sku: "PENDING-CHECKOUT",
     barcode: "888",
     images: [],
+    isVisible: false,
     netPrice: 1000,
     price: 1000,
-    quantityAvailable: 1,
+    quantityAvailable: 0,
   },
   "sku-hidden": {
     _id: "sku-hidden",

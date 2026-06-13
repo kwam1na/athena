@@ -4,7 +4,10 @@ import type { Id } from "~/convex/_generated/dataModel";
 
 export type RegisterCatalogAvailability = {
   availabilitySource?: "live" | "local";
-  availabilityPolicy?: "trusted_inventory" | "active_provisional_import";
+  availabilityPolicy?:
+    | "trusted_inventory"
+    | "active_provisional_import"
+    | "pending_checkout";
   inventoryImportProvisionalSkuId?: Id<"inventoryImportProvisionalSku">;
   inStock: boolean;
   quantityAvailable: number;
@@ -25,13 +28,16 @@ export function mapCatalogRowToProduct(
     row.availabilityPolicy ?? availability?.availabilityPolicy;
   const isProvisionalImport =
     availabilityPolicy === "active_provisional_import";
+  const isPendingCheckout = availabilityPolicy === "pending_checkout";
   const availabilityStatus = isProvisionalImport
     ? "available"
-    : quantityAvailable === undefined
-      ? "unknown"
-      : availability?.inStock && quantityAvailable > 0
-        ? "available"
-        : "out_of_stock";
+    : isPendingCheckout
+      ? "available"
+      : quantityAvailable === undefined
+        ? "unknown"
+        : availability?.inStock && quantityAvailable > 0
+          ? "available"
+          : "out_of_stock";
 
   return {
     id: row.id ?? row.productSkuId,
@@ -44,12 +50,13 @@ export function mapCatalogRowToProduct(
     image: row.image ?? null,
     inStock: availabilityStatus === "available",
     availabilityStatus,
-    availabilityMessage:
-      isProvisionalImport
-        ? "Count pending"
+    availabilityMessage: isProvisionalImport
+      ? "Count pending"
+      : isPendingCheckout
+        ? "Review pending"
         : availabilityStatus === "unknown"
-        ? POS_AVAILABILITY_NOT_READY_MESSAGE
-        : undefined,
+          ? POS_AVAILABILITY_NOT_READY_MESSAGE
+          : undefined,
     quantityAvailable,
     size: row.size ?? "",
     length:
@@ -61,16 +68,20 @@ export function mapCatalogRowToProduct(
     color: row.color ?? "",
     productId: row.productId as Id<"product">,
     skuId: row.productSkuId as Id<"productSku">,
-    inventoryImportProvisionalSkuId:
-      (row.inventoryImportProvisionalSkuId ??
-        availability?.inventoryImportProvisionalSkuId) as
-        | Id<"inventoryImportProvisionalSku">
-        | undefined,
+    inventoryImportProvisionalSkuId: (row.inventoryImportProvisionalSkuId ??
+      availability?.inventoryImportProvisionalSkuId) as
+      | Id<"inventoryImportProvisionalSku">
+      | undefined,
+    pendingCheckoutItemId: row.pendingCheckoutItemId as
+      | Id<"posPendingCheckoutItem">
+      | undefined,
     availabilityPolicy,
     areProcessingFeesAbsorbed: Boolean(row.areProcessingFeesAbsorbed),
   };
 }
 
 export function normalizeExactInput(value: string | undefined): string {
-  return String(value ?? "").trim().toLowerCase();
+  return String(value ?? "")
+    .trim()
+    .toLowerCase();
 }

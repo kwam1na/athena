@@ -16,6 +16,7 @@ import {
 import {
   Camera,
   ExternalLink,
+  Info,
   Package,
   PackagePlus,
   RotateCcw,
@@ -74,6 +75,12 @@ import {
 } from "../ui/select";
 import { Tabs, TabsList, TabsTrigger } from "../ui/tabs";
 import { Textarea } from "../ui/textarea";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "../ui/tooltip";
 
 export type InventorySnapshotItem = {
   _id: Id<"productSku">;
@@ -88,12 +95,22 @@ export type InventorySnapshotItem = {
   posReservedQuantity?: number;
   price?: number | null;
   productCategory?: string | null;
+  productCategoryId?: Id<"category"> | null;
+  productCategorySlug?: string | null;
   productId?: Id<"product"> | null;
   productName: string;
+  productSubcategory?: string | null;
+  productSubcategoryId?: Id<"subcategory"> | null;
+  productSubcategorySlug?: string | null;
   quantityAvailable: number;
   reservedQuantity?: number;
   size?: string | null;
   sku?: string | null;
+  stockAdjustmentBlockedMessage?: string | null;
+  stockAdjustmentBlockedReason?:
+    | "pos_pending_checkout"
+    | "provisional_import"
+    | null;
 };
 
 export type SubmitStockAdjustmentArgs = {
@@ -198,6 +215,7 @@ type StockAdjustmentWorkspaceContentProps = {
 type StockAdjustmentRow = {
   inputValue: string;
   inventoryItem: InventorySnapshotItem;
+  isBlocked: boolean;
   isEdited: boolean;
   quantityDelta: number;
   submittedLineItem: SubmitStockAdjustmentArgs["lineItems"][number] | null;
@@ -254,6 +272,10 @@ function getStockAdjustmentCategoryLabel(key: string) {
   return getCountScopeLabel(key);
 }
 
+function isStockAdjustmentBlocked(item: InventorySnapshotItem) {
+  return Boolean(item.stockAdjustmentBlockedReason);
+}
+
 function buildManualDrafts(inventoryItems: InventorySnapshotItem[]) {
   return Object.fromEntries(inventoryItems.map((item) => [item._id, ""]));
 }
@@ -285,6 +307,12 @@ function buildStockAdjustmentSubmissionKey(
 function trimOptional(value?: string | null) {
   const nextValue = value?.trim();
   return nextValue ? nextValue : undefined;
+}
+
+function cleanInventoryMetadataValue(value?: string | null) {
+  const nextValue = value?.trim();
+  if (!nextValue || nextValue.toLowerCase() === "null") return undefined;
+  return nextValue;
 }
 
 function pluralize(count: number, singular: string, plural = `${singular}s`) {
@@ -364,10 +392,15 @@ function formatReservationSourceSummary(args: {
 function getSkuDetailEntries(item: InventorySnapshotItem) {
   const reservationLabels = getReservationLabels(item);
   const operationalPrice = getInventoryItemOperationalPrice(item);
+  const sku = cleanInventoryMetadataValue(item.sku);
+  const barcode = cleanInventoryMetadataValue(item.barcode);
+  const productCategory = cleanInventoryMetadataValue(item.productCategory);
+  const size = cleanInventoryMetadataValue(item.size);
+  const colorName = cleanInventoryMetadataValue(item.colorName);
 
   return [
-    item.sku ? { label: "SKU", value: item.sku } : null,
-    item.barcode ? { label: "Barcode", value: item.barcode } : null,
+    sku ? { label: "SKU", value: sku } : null,
+    barcode ? { label: "Barcode", value: barcode } : null,
     typeof operationalPrice === "number"
       ? {
           label: "Price",
@@ -376,14 +409,12 @@ function getSkuDetailEntries(item: InventorySnapshotItem) {
           }),
         }
       : null,
-    item.productCategory
-      ? { label: "Category", value: item.productCategory }
-      : null,
-    item.size ? { label: "Size", value: item.size } : null,
+    productCategory ? { label: "Category", value: productCategory } : null,
+    size ? { label: "Size", value: size } : null,
     item.length !== null && item.length !== undefined
       ? { label: "Length", value: `${item.length}"` }
       : null,
-    item.colorName ? { label: "Color", value: item.colorName } : null,
+    colorName ? { label: "Color", value: colorName } : null,
     reservationLabels.length > 0
       ? {
           label: "Reserved",
@@ -420,11 +451,12 @@ function getStockAdjustmentSearchTerms(row: StockAdjustmentRow) {
   const item = row.inventoryItem;
   return [
     getInventoryItemDisplayName(item),
-    item.sku,
-    item.barcode,
-    item.colorName,
-    item.productCategory,
-    item.size,
+    cleanInventoryMetadataValue(item.sku),
+    cleanInventoryMetadataValue(item.barcode),
+    cleanInventoryMetadataValue(item.colorName),
+    cleanInventoryMetadataValue(item.productCategory),
+    cleanInventoryMetadataValue(item.productSubcategory),
+    cleanInventoryMetadataValue(item.size),
     item.length === null || item.length === undefined
       ? undefined
       : String(item.length),
@@ -1867,14 +1899,18 @@ export function StockAdjustmentWorkspaceContent({
   const rows: StockAdjustmentRow[] = useMemo(
     () =>
       inventoryItems.map((item) => {
+        const isBlocked = isStockAdjustmentBlocked(item);
+
         if (adjustmentType === "manual") {
           const rawDelta = manualDeltas[item._id] ?? "";
           const parsedDelta = rawDelta.trim() === "" ? 0 : Number(rawDelta);
-          const isEdited = Number.isInteger(parsedDelta) && parsedDelta !== 0;
+          const isEdited =
+            !isBlocked && Number.isInteger(parsedDelta) && parsedDelta !== 0;
 
           return {
             inputValue: rawDelta,
             inventoryItem: item,
+            isBlocked,
             isEdited,
             quantityDelta: isEdited ? parsedDelta : 0,
             submittedLineItem: isEdited
@@ -1898,6 +1934,7 @@ export function StockAdjustmentWorkspaceContent({
           ? parsedCount - baselineInventoryCount
           : 0;
         const isEdited =
+          !isBlocked &&
           Number.isInteger(parsedCount) &&
           parsedCount >= 0 &&
           parsedCount !== baselineInventoryCount;
@@ -1906,8 +1943,9 @@ export function StockAdjustmentWorkspaceContent({
           countedQuantity: parsedCount,
           inputValue: rawCount,
           inventoryItem: item,
+          isBlocked,
           isEdited,
-          quantityDelta,
+          quantityDelta: isEdited ? quantityDelta : 0,
           submittedLineItem: isEdited
             ? ({
                 countedQuantity: parsedCount,
@@ -1974,33 +2012,29 @@ export function StockAdjustmentWorkspaceContent({
         })),
     [inventoryItems],
   );
-  const queryAvailabilityFilteredRows = useMemo(
-    () => {
-      const scoredRows = rows
-        .map((row, position) => ({
-          position,
-          row,
-          score: scoreStockAdjustmentSearchRow(row, normalizedFilterQuery),
-        }))
-        .filter(
-          ({ row, score }) =>
-            score > 0 &&
-            rowMatchesAvailabilityFilter(row, filters.availability),
-        );
+  const queryAvailabilityFilteredRows = useMemo(() => {
+    const scoredRows = rows
+      .map((row, position) => ({
+        position,
+        row,
+        score: scoreStockAdjustmentSearchRow(row, normalizedFilterQuery),
+      }))
+      .filter(
+        ({ row, score }) =>
+          score > 0 && rowMatchesAvailabilityFilter(row, filters.availability),
+      );
 
-      if (!normalizedFilterQuery) {
-        return scoredRows.map(({ row }) => row);
-      }
+    if (!normalizedFilterQuery) {
+      return scoredRows.map(({ row }) => row);
+    }
 
-      return scoredRows
-        .sort((left, right) => {
-          if (right.score !== left.score) return right.score - left.score;
-          return left.position - right.position;
-        })
-        .map(({ row }) => row);
-    },
-    [filters.availability, normalizedFilterQuery, rows],
-  );
+    return scoredRows
+      .sort((left, right) => {
+        if (right.score !== left.score) return right.score - left.score;
+        return left.position - right.position;
+      })
+      .map(({ row }) => row);
+  }, [filters.availability, normalizedFilterQuery, rows]);
   const filteredRows = useMemo(
     () =>
       queryAvailabilityFilteredRows.filter((row) =>
@@ -2212,9 +2246,7 @@ export function StockAdjustmentWorkspaceContent({
   useEffect(() => {
     if (
       activeInventoryItemId &&
-      tableRows.some(
-        (row) => row.inventoryItem._id === activeInventoryItemId,
-      )
+      tableRows.some((row) => row.inventoryItem._id === activeInventoryItemId)
     ) {
       return;
     }
@@ -2234,10 +2266,38 @@ export function StockAdjustmentWorkspaceContent({
           const item = row.original.inventoryItem;
           const primaryLabel = getInventoryItemDisplayName(item);
           const detailEntries = getSkuDetailEntries(item);
+          const blockedMessage = item.stockAdjustmentBlockedMessage;
 
           return (
             <div className="min-w-0 space-y-1.5">
-              <p className="truncate text-sm font-medium">{primaryLabel}</p>
+              <div className="flex min-w-0 items-center gap-2">
+                <p className="truncate text-sm font-medium">{primaryLabel}</p>
+                {blockedMessage ? (
+                  <TooltipProvider delayDuration={0}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span
+                          aria-label={`Provisional item. ${blockedMessage}`}
+                          className="inline-flex shrink-0 items-center focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                          tabIndex={0}
+                        >
+                          <Badge
+                            className="gap-1 border-warning/30 bg-warning/15 px-1.5 text-[10px] font-medium text-warning"
+                            size="sm"
+                            variant="outline"
+                          >
+                            <Info className="h-3 w-3" aria-hidden="true" />
+                            Provisional
+                          </Badge>
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-64 text-xs leading-5">
+                        {blockedMessage}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                ) : null}
+              </div>
               {detailEntries.length > 0 ? (
                 <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
                   {detailEntries.map((entry) => (
@@ -2335,6 +2395,7 @@ export function StockAdjustmentWorkspaceContent({
         cell: ({ row }) => {
           const item = row.original.inventoryItem;
           const displayName = getInventoryItemDisplayName(item);
+          const isBlocked = row.original.isBlocked;
           const inputLabel =
             adjustmentType === "manual"
               ? "Adjustment delta"
@@ -2370,6 +2431,7 @@ export function StockAdjustmentWorkspaceContent({
               <Input
                 aria-label={`${inputLabel} for ${displayName}`}
                 className="h-10 w-36 text-right"
+                disabled={isBlocked}
                 inputMode="numeric"
                 min={adjustmentType === "manual" ? undefined : 0}
                 onFocus={() => handleSelectInventoryItem(item._id)}
@@ -2383,7 +2445,7 @@ export function StockAdjustmentWorkspaceContent({
               <Button
                 aria-label={`Restore original value for ${displayName}`}
                 className="h-10 w-10 shrink-0 text-muted-foreground"
-                disabled={!row.original.isEdited}
+                disabled={isBlocked || !row.original.isEdited}
                 onClick={(event) => {
                   event.stopPropagation();
                   handleSelectInventoryItem(item._id);
@@ -2730,11 +2792,25 @@ export function StockAdjustmentWorkspaceContent({
       await flushLocallyEditedCycleCountDraftLines();
     }
 
+    const firstBlockedRow = tableRows.find((row) => row.isBlocked);
+    const allRowsBlocked =
+      tableRows.length > 0 && tableRows.every((row) => row.isBlocked);
+
     if (
       adjustmentType === "manual"
         ? changedRows.length === 0
         : overallSummary.lineItemCount === 0 && changedRows.length === 0
     ) {
+      if (
+        allRowsBlocked &&
+        firstBlockedRow?.inventoryItem.stockAdjustmentBlockedMessage
+      ) {
+        toast.error(
+          firstBlockedRow.inventoryItem.stockAdjustmentBlockedMessage,
+        );
+        return;
+      }
+
       toast.error(
         adjustmentType === "manual"
           ? "Add at least one non-zero stock delta"
@@ -2891,8 +2967,8 @@ export function StockAdjustmentWorkspaceContent({
             filterValue={filters.availability}
             hasActiveFilters={Boolean(
               filters.query ||
-                filters.availability !== "all" ||
-                filters.category !== ALL_CATEGORY_FILTER_KEY,
+              filters.availability !== "all" ||
+              filters.category !== ALL_CATEGORY_FILTER_KEY,
             )}
             onClearFilters={handleClearFilters}
             onFilterChange={(availability) =>

@@ -225,6 +225,55 @@ describe("StockAdjustmentWorkspaceContent", () => {
     );
   });
 
+  it("prevents operators from adjusting provisional legacy import rows", async () => {
+    const user = userEvent.setup();
+
+    renderStockAdjustmentWorkspace({
+      inventoryItems: [
+        {
+          ...baseProps.inventoryItems[0],
+          productCategory: "Legacy import",
+          productName: "imported bonnet",
+          productSubcategory: "NULL",
+          size: "NULL",
+          stockAdjustmentBlockedMessage:
+            "Legacy import SKUs must be finalized before stock adjustments can update them.",
+          stockAdjustmentBlockedReason: "provisional_import",
+        },
+      ],
+    });
+
+    await user.click(screen.getByRole("tab", { name: /manual adjustment/i }));
+
+    const provisionalStatus = screen.getByLabelText(
+      /provisional item\. legacy import skus must be finalized/i,
+    );
+
+    expect(screen.getByText("Provisional")).toBeInTheDocument();
+    expect(screen.queryByText("NULL")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/^Legacy import SKUs must/),
+    ).not.toBeInTheDocument();
+    await user.hover(provisionalStatus);
+    expect(
+      await screen.findAllByText(
+        "Legacy import SKUs must be finalized before stock adjustments can update them.",
+      ),
+    ).not.toHaveLength(0);
+    expect(
+      screen.getByLabelText(/adjustment delta for .*imported bonnet/i),
+    ).toBeDisabled();
+
+    await user.click(
+      screen.getByRole("button", { name: /submit adjustment/i }),
+    );
+
+    expect(mockedHandlers.onSubmitBatch).not.toHaveBeenCalled();
+    expect(mockedToast.error).toHaveBeenCalledWith(
+      "Legacy import SKUs must be finalized before stock adjustments can update them.",
+    );
+  });
+
   it("submits cycle counts with counted quantities and filters unchanged lines", async () => {
     mockedHandlers.onSubmitBatch.mockResolvedValue(ok({ _id: "batch-1" }));
     vi.spyOn(Date, "now").mockReturnValue(1000);
@@ -332,7 +381,9 @@ describe("StockAdjustmentWorkspaceContent", () => {
     await user.type(dialog.getByLabelText(/search existing sku/i), "body");
     await user.click(dialog.getByRole("button", { name: /body wave bundle/i }));
     expect(
-      dialog.getByText('BW-24 - Price pending - Hair - dark brown - Medium - 24"'),
+      dialog.getByText(
+        'BW-24 - Price pending - Hair - dark brown - Medium - 24"',
+      ),
     ).toBeInTheDocument();
     await user.click(dialog.getByRole("button", { name: /attach barcode/i }));
 
@@ -493,7 +544,9 @@ describe("StockAdjustmentWorkspaceContent", () => {
       screen.getByText(/saved count: 5 SKUs across 3 categories/i),
     ).toBeInTheDocument();
     expect(screen.getByText(/current: hair, 2 SKUs/i)).toBeInTheDocument();
-    expect(screen.getByText(/categories: beverages, hair/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/categories: beverages, hair/i),
+    ).toBeInTheDocument();
     expect(screen.getByText("Count metrics")).toBeInTheDocument();
     expect(screen.getByText("All saved counts")).toBeInTheDocument();
     expect(screen.getByText("Active category")).toBeInTheDocument();
@@ -910,9 +963,7 @@ describe("StockAdjustmentWorkspaceContent", () => {
       }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(
-        /9 of 11 units are available to sell\. Select a SKU/i,
-      ),
+      screen.getByText(/9 of 11 units are available to sell\. Select a SKU/i),
     ).toBeInTheDocument();
     expect(screen.getAllByText("On hand").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Available").length).toBeGreaterThan(0);
@@ -1139,12 +1190,13 @@ describe("StockAdjustmentWorkspaceContent", () => {
       .getAllByRole("row")
       .map((row) => row.textContent ?? "");
 
-    expect(rowNames.findIndex((text) => text.includes("Melt Band")))
-      .toBeLessThan(
-        rowNames.findIndex((text) =>
-          text.includes("Brazilian Hair And Body Fragrance Mist"),
-        ),
-      );
+    expect(
+      rowNames.findIndex((text) => text.includes("Melt Band")),
+    ).toBeLessThan(
+      rowNames.findIndex((text) =>
+        text.includes("Brazilian Hair And Body Fragrance Mist"),
+      ),
+    );
   });
 
   it("shows matching SKUs from other categories when the active category has no results", async () => {
@@ -1184,9 +1236,7 @@ describe("StockAdjustmentWorkspaceContent", () => {
     expect(
       screen.getByText("No Hair matches. Showing 1 match in Makeup."),
     ).toBeInTheDocument();
-    expect(
-      screen.getByText("Matches are in Makeup."),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Matches are in Makeup.")).toBeInTheDocument();
     expect(within(table).getByText("Zara Lip Gloss")).toBeInTheDocument();
     expect(within(table).queryByText("Closure Wig")).not.toBeInTheDocument();
     expect(within(table).queryByText("No results.")).not.toBeInTheDocument();
@@ -1278,7 +1328,9 @@ describe("StockAdjustmentWorkspaceContent", () => {
 
     const table = screen.getByRole("table");
 
-    expect(within(table).queryByText("Sparkling Water")).not.toBeInTheDocument();
+    expect(
+      within(table).queryByText("Sparkling Water"),
+    ).not.toBeInTheDocument();
     expect(within(table).getByText("Vibes Closure")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /^clear$/i }));
@@ -1290,9 +1342,7 @@ describe("StockAdjustmentWorkspaceContent", () => {
       query: undefined,
       sku: "sku-beverage",
     });
-    expect(
-      screen.getByText("Showing 2 of 2 SKUs."),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Showing 2 of 2 SKUs.")).toBeInTheDocument();
     expect(within(table).getByText("Sparkling Water")).toBeInTheDocument();
     expect(within(table).getByText("Vibes Closure")).toBeInTheDocument();
   });

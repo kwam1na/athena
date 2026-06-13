@@ -25,8 +25,12 @@ export interface RegisterCatalogSearchRow {
   color?: string | null;
   image?: string | null;
   areProcessingFeesAbsorbed?: boolean | null;
-  availabilityPolicy?: "trusted_inventory" | "active_provisional_import";
+  availabilityPolicy?:
+    | "trusted_inventory"
+    | "active_provisional_import"
+    | "pending_checkout";
   inventoryImportProvisionalSkuId?: string | null;
+  pendingCheckoutItemId?: string | null;
 }
 
 export type RegisterCatalogSearchResult =
@@ -201,7 +205,10 @@ export function searchRegisterCatalog(
 export function buildRegisterServiceCatalogIndex(
   rows: readonly RegisterServiceCatalogSearchRow[],
 ): RegisterServiceCatalogIndex {
-  const byServiceCatalogId = new Map<string, RegisterServiceCatalogSearchRow[]>();
+  const byServiceCatalogId = new Map<
+    string,
+    RegisterServiceCatalogSearchRow[]
+  >();
   const indexedRows = rows.map((row) => {
     addKey(byServiceCatalogId, normalizeIdentifier(row.serviceCatalogId), row);
 
@@ -323,9 +330,13 @@ function extractIdentifierFromUrl(input: string): string | null {
     if (sku) return sku;
     if (productId) return productId;
 
-    const productPathMatch = url.pathname.match(/\/(?:shop\/)?product\/([^/?#]+)/);
+    const productPathMatch = url.pathname.match(
+      /\/(?:shop\/)?product\/([^/?#]+)/,
+    );
 
-    return productPathMatch?.[1] ? decodeURIComponent(productPathMatch[1]) : null;
+    return productPathMatch?.[1]
+      ? decodeURIComponent(productPathMatch[1])
+      : null;
   } catch {
     return null;
   }
@@ -365,7 +376,9 @@ function searchRegisterServiceCatalogByText(
 }
 
 function normalizeIdentifier(value: unknown): string {
-  return String(value ?? "").trim().toLowerCase();
+  return String(value ?? "")
+    .trim()
+    .toLowerCase();
 }
 
 function normalizeSearchText(value: unknown): string {
@@ -378,11 +391,7 @@ function normalizeSearchText(value: unknown): string {
     .replace(/\s+/g, " ");
 }
 
-function addKey<T>(
-  map: Map<string, T[]>,
-  key: string,
-  row: T,
-): void {
+function addKey<T>(map: Map<string, T[]>, key: string, row: T): void {
   if (!key) {
     return;
   }

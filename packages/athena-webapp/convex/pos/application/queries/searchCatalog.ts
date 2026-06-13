@@ -44,12 +44,14 @@ function isTrustedCatalogResult(args: {
   const isReservedPosOperationalProduct = args.category?.slug
     ? POS_OPERATIONAL_CATEGORY_SLUGS.has(args.category.slug)
     : false;
+  const isPendingCheckoutProduct =
+    args.category?.slug === "pos-pending-checkout";
 
   return (
     args.product.availability !== "archived" &&
-    args.product.availability !== "draft" &&
+    (args.product.availability !== "draft" || isPendingCheckoutProduct) &&
     (args.product.isVisible !== false || isReservedPosOperationalProduct) &&
-    args.sku.isVisible !== false
+    (args.sku.isVisible !== false || isPendingCheckoutProduct)
   );
 }
 
@@ -63,7 +65,8 @@ async function mapSkuToCatalogResult(
   },
 ): Promise<CatalogResult | null> {
   const category =
-    args.category ?? (args.product ? await getCategoryById(ctx, args.product.categoryId) : null);
+    args.category ??
+    (args.product ? await getCategoryById(ctx, args.product.categoryId) : null);
 
   if (
     !args.product ||
@@ -123,7 +126,8 @@ export async function searchProducts(
     if (
       product?.storeId === args.storeId &&
       product.availability !== "archived" &&
-      product.availability !== "draft" &&
+      (product.availability !== "draft" ||
+        category?.slug === "pos-pending-checkout") &&
       (product.isVisible !== false ||
         POS_OPERATIONAL_CATEGORY_SLUGS.has(category?.slug ?? ""))
     ) {
@@ -140,7 +144,9 @@ export async function searchProducts(
         ),
       );
 
-      return results.filter((result): result is CatalogResult => result !== null);
+      return results.filter(
+        (result): result is CatalogResult => result !== null,
+      );
     }
   }
 
@@ -192,7 +198,8 @@ export async function lookupByBarcode(
     if (
       product?.storeId === args.storeId &&
       product.availability !== "archived" &&
-      product.availability !== "draft" &&
+      (product.availability !== "draft" ||
+        category?.slug === "pos-pending-checkout") &&
       (product.isVisible !== false ||
         POS_OPERATIONAL_CATEGORY_SLUGS.has(category?.slug ?? ""))
     ) {
@@ -209,7 +216,9 @@ export async function lookupByBarcode(
         ),
       );
 
-      return results.filter((result): result is CatalogResult => result !== null);
+      return results.filter(
+        (result): result is CatalogResult => result !== null,
+      );
     }
   }
 
@@ -225,7 +234,8 @@ export async function lookupByBarcode(
   if (
     !product ||
     product.availability === "archived" ||
-    product.availability === "draft" ||
+    (product.availability === "draft" &&
+      category?.slug !== "pos-pending-checkout") ||
     (product.isVisible === false &&
       !POS_OPERATIONAL_CATEGORY_SLUGS.has(category?.slug ?? ""))
   ) {

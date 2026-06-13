@@ -58,6 +58,17 @@ inventory truth:
   merchandising shelves. Catalog Ops and POS recovery surfaces should include
   products in those categories even when the products or categories are hidden
   from the storefront.
+- Treat server-projected pending checkout anchors as reusable checkout evidence,
+  not trusted stock. Those anchors are intentionally draft, hidden products with
+  hidden zero-stock SKUs; register catalog predicates must still include them
+  when the product belongs to the reserved `POS pending checkout` category and
+  there is an active pending-review or flagged `posPendingCheckoutItem` for the
+  provisional SKU.
+- Carry a distinct pending-checkout availability policy through register
+  catalog rows, availability rows, local snapshot cache, and product-card
+  presentation. The row should be sellable as `Review pending` with
+  `quantityAvailable: 0`; it should not be rendered as trusted inventory or
+  blocked as out of stock.
 - Keep storefront visibility as an explicit category control. Staff can hide or
   reveal the category on the customer storefront without losing access to the
   operational product list needed for cleanup.
@@ -88,6 +99,14 @@ inventory truth:
 - Do not reuse customer storefront hidden filters for staff catalog operations.
   Hidden storefront state is a merchandising decision; reserved-category cleanup
   and pending-checkout recovery still need the full operational list.
+- Do not let a generic `draft` product filter run before the reserved pending
+  checkout exception. Ordinary draft products must stay out of POS, but pending
+  checkout anchors must remain searchable from other terminals after they are
+  projected to the server.
+- Do not fix only the fuzzy-search path. Cross-terminal pending checkout reuse
+  depends on the register snapshot, requested availability, full availability
+  snapshot, direct barcode/SKU lookup, and exact product-id lookup staying
+  aligned.
 
 ## Validation
 
