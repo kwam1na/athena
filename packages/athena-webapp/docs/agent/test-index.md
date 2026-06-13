@@ -328,6 +328,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/lib/security/localPinVerifier.test.ts`](../../src/lib/security/localPinVerifier.test.ts)
 - [`src/lib/stockOps/skuSearch.test.ts`](../../src/lib/stockOps/skuSearch.test.ts)
 - [`src/lib/storeConfig.test.ts`](../../src/lib/storeConfig.test.ts)
+- [`src/lib/theme.test.ts`](../../src/lib/theme.test.ts)
 - [`src/lib/traces/createWorkflowTraceId.test.ts`](../../src/lib/traces/createWorkflowTraceId.test.ts)
 - [`src/lib/utils.test.ts`](../../src/lib/utils.test.ts)
 - [`src/offline/posAppShellRoutes.test.ts`](../../src/offline/posAppShellRoutes.test.ts)

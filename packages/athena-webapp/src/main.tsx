@@ -9,6 +9,7 @@ import { useEffect } from "react";
 import { createVersionChecker } from "./utils/versionChecker";
 import { registerPosAppShellServiceWorker } from "./offline/registerPosAppShellServiceWorker";
 import { removeConvexAuthCodeParamFromUrl } from "./auth/convexAuthUrl";
+import { initializeAthenaTheme } from "./lib/theme";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -63,6 +64,7 @@ function App() {
 const rootElement = document.getElementById("app")!;
 
 if (!rootElement.innerHTML) {
+  initializeAthenaTheme();
   removeConvexAuthCodeParamFromUrl();
   registerPosAppShellServiceWorker();
   const root = ReactDOM.createRoot(rootElement);
