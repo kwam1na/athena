@@ -214,11 +214,54 @@ export type TerminalRecoveryActionStatus =
 
 export type TerminalRecoveryAction = {
   commandId?: string;
+  commandContext?: TerminalRecoveryCommandContext;
+  commandType?: TerminalRecoveryCommandType;
+  expectedEvidence?: TerminalRecoveryExpectedEvidence;
+  expectedPreconditionHash?: string;
   expectedVerification?: string;
   kind: TerminalRecoveryActionKind;
   label: string;
   latestAcknowledgement?: string;
   status?: TerminalRecoveryActionStatus;
+};
+
+export type TerminalRecoveryCommandType =
+  | "retry_sync"
+  | "repair_terminal_seed"
+  | "clear_stale_drawer_authority"
+  | "refresh_staff_authority"
+  | "refresh_snapshots"
+  | "report_diagnostics";
+
+export type TerminalRecoveryCommandContext = {
+  cloudRegisterSessionId?: string;
+  expectedBlockerType?: string;
+  expectedConflictIds?: Array<Id<"posLocalSyncConflict">>;
+  expectedTerminalSeedIdentity?: string;
+  localRegisterSessionId?: string;
+  reason?: string;
+};
+
+export type TerminalRecoveryExpectedEvidence = {
+  drawerAuthorityStatus?: "healthy" | "blocked";
+  localRegisterSessionId?: string;
+  localStoreAvailable?: boolean;
+  saleAuthorityStatus?: "ready" | "missing" | "blocked" | "unknown";
+  staffAuthorityStatus?: "ready" | "missing" | "expired" | "unknown";
+  syncStatus?:
+    | "failed"
+    | "idle"
+    | "needs_review"
+    | "pending"
+    | "syncing"
+    | "unavailable"
+    | "unknown";
+  terminalIntegrityStatus?:
+    | "healthy"
+    | "repairing"
+    | "requires_reprovision"
+    | "reset_required";
+  terminalSeedReady?: boolean;
 };
 
 export type TerminalRecoveryBlockerCategory =
@@ -240,6 +283,11 @@ export type TerminalRecoveryBlocker = {
 
 export type TerminalRecoveryPreview = {
   blockers?: TerminalRecoveryBlocker[];
+  cloudRepair?: {
+    preconditionHash: string;
+    safeConflictIds: string[];
+    skippedConflictIds: string[];
+  };
   commandStatus?: {
     commandId?: string;
     label?: string;
@@ -247,10 +295,27 @@ export type TerminalRecoveryPreview = {
     status?: TerminalRecoveryActionStatus;
     verificationStatus?: TerminalRecoveryActionStatus;
   } | null;
+  evidence?: {
+    freshRuntimeRequiredForAbleToTransactNow: true;
+  };
+  manualReview?: Array<{
+    reason: string;
+    source:
+      | "cloud_repair"
+      | TerminalHealthAttentionReason["source"];
+    type: "unsafe_cloud_conflict" | TerminalHealthAttentionReason["type"];
+  }>;
   readiness?: {
-    status: TerminalRecoveryReadinessStatus;
+    status?: TerminalRecoveryReadinessStatus;
     summary?: string;
-  } | null;
+  } | TerminalRecoveryReadinessStatus | null;
+  runtimeFresh?: boolean;
+  terminalActions?: Array<{
+    commandContext: TerminalRecoveryCommandContext;
+    commandType: TerminalRecoveryCommandType;
+    expectedEvidence: TerminalRecoveryExpectedEvidence;
+    reason: string;
+  }>;
   verification?: {
     latestCheckInAt?: number;
     status?: TerminalRecoveryActionStatus;

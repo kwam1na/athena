@@ -24,6 +24,7 @@ import {
   upsertLatestRuntimeStatus,
 } from "../infrastructure/repositories/terminalRepository";
 import {
+  createTerminalRecoveryCommandRepository,
   getTerminalRecoverySourceEvent,
   listTerminalRecoveryConflictsForRepair,
 } from "../infrastructure/repositories/terminalRecoveryRepository";
@@ -76,6 +77,7 @@ vi.mock("../infrastructure/repositories/terminalRepository", () => ({
 }));
 
 vi.mock("../infrastructure/repositories/terminalRecoveryRepository", () => ({
+  createTerminalRecoveryCommandRepository: vi.fn(),
   getTerminalRecoverySourceEvent: vi.fn(),
   listTerminalRecoveryConflictsForRepair: vi.fn(),
 }));
@@ -510,6 +512,9 @@ describe("terminal health summaries", () => {
     vi.mocked(resolveTerminalRegisterSessionActionTarget).mockResolvedValue(null);
     vi.mocked(listTerminalRecoveryConflictsForRepair).mockResolvedValue([]);
     vi.mocked(getTerminalRecoverySourceEvent).mockResolvedValue(null);
+    vi.mocked(createTerminalRecoveryCommandRepository).mockReturnValue({
+      listCommandsForTerminal: vi.fn().mockResolvedValue([]),
+    } as never);
   });
 
   afterEach(() => {

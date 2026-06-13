@@ -3822,6 +3822,57 @@ describe("usePosLocalSyncRuntimeStatus", () => {
     expect(retry).toHaveBeenCalled();
   });
 
+  it("acknowledges safe recovery precondition drift distinctly", async () => {
+    const command = buildRecoveryCommand({
+      commandContext: {
+        cloudRegisterSessionId: "register-cloud-1",
+        expectedBlockerType: "cloud_closed",
+        localRegisterSessionId: "register-local-1",
+      },
+      commandType: "clear_stale_drawer_authority",
+    });
+    const commandResult = { kind: "ok", data: [command] };
+    mocks.listTerminalRecoveryCommands.mockImplementation((args) =>
+      args === "skip" ? undefined : commandResult,
+    );
+    mocks.claimTerminalRecoveryCommand.mockResolvedValue({
+      kind: "ok",
+      data: command,
+    });
+    const store = {
+      ...buildRecoveryCommandStore(),
+      clearDrawerAuthorityState: vi.fn(async () => ({
+        ok: true,
+        value: null,
+      })),
+      readDrawerAuthorityState: vi.fn(async () => ({
+        ok: true,
+        value: null,
+      })),
+    };
+
+    renderHook(() =>
+      usePosLocalSyncRuntimeStatus({
+        mode: "status-only",
+        storeFactory: () => store as never,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(mocks.acknowledgeTerminalRecoveryCommand).toHaveBeenCalledWith({
+        commandId: "command-1",
+        message: undefined,
+        result: "precondition_failed",
+        storeId: "store-1",
+        syncSecretHash: "sync-secret-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+    expect(store.clearDrawerAuthorityState).not.toHaveBeenCalled();
+  });
+
   it("reschedules a recovery command after a claim failure", async () => {
     const command = buildRecoveryCommand();
     const commandResult = { kind: "ok", data: [command] };

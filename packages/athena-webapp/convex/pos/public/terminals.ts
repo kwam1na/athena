@@ -322,6 +322,16 @@ const terminalHealthSummaryReturnValidator = v.object({
         safeConflictIds: v.array(v.id("posLocalSyncConflict")),
         skippedConflictIds: v.array(v.id("posLocalSyncConflict")),
       }),
+      commandStatus: v.union(
+        v.object({
+          commandId: v.optional(v.id("posTerminalRecoveryCommand")),
+          label: v.string(),
+          latestAcknowledgement: v.optional(v.string()),
+          status: posTerminalRecoveryCommandStatusValidator,
+          verificationStatus: posTerminalRecoveryVerificationStatusValidator,
+        }),
+        v.null(),
+      ),
       terminalActions: v.array(
         v.object({
           commandType: posTerminalRecoveryCommandTypeValidator,
@@ -620,22 +630,6 @@ export const submitTerminalRuntimeStatus = mutation({
   },
   returns: commandResultValidator(runtimeStatusWriteResultValidator),
   handler: async (ctx, args) => {
-    let athenaUser;
-    try {
-      athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
-      await requireTerminalStoreAccess(ctx, {
-        allowedRoles: ["full_admin", "pos_only"],
-        failureMessage:
-          "You do not have access to update this POS terminal status.",
-        storeId: args.storeId,
-        userId: athenaUser._id,
-      });
-    } catch {
-      return userError({
-        code: "authorization_failed",
-        message: "You do not have access to update this POS terminal status.",
-      });
-    }
     const terminal = await requireActiveTerminalSyncSecret(ctx, {
       storeId: args.storeId,
       syncSecretHash: args.syncSecretHash,
@@ -975,14 +969,6 @@ export const listTerminalRecoveryCommands = query({
   },
   returns: commandResultValidator(v.array(terminalRecoveryCommandReturnValidator)),
   handler: async (ctx, args) => {
-    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
-    await requireTerminalStoreAccess(ctx, {
-      allowedRoles: ["full_admin", "pos_only"],
-      failureMessage:
-        "You do not have access to list POS terminal recovery commands.",
-      storeId: args.storeId,
-      userId: athenaUser._id,
-    });
     const terminal = await requireActiveTerminalSyncSecret(ctx, args);
     if (!terminal) {
       return userError({
@@ -1015,14 +1001,6 @@ export const claimTerminalRecoveryCommand = mutation({
   },
   returns: commandResultValidator(terminalRecoveryCommandReturnValidator),
   handler: async (ctx, args) => {
-    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
-    await requireTerminalStoreAccess(ctx, {
-      allowedRoles: ["full_admin", "pos_only"],
-      failureMessage:
-        "You do not have access to claim POS terminal recovery commands.",
-      storeId: args.storeId,
-      userId: athenaUser._id,
-    });
     const terminal = await requireActiveTerminalSyncSecret(ctx, args);
     if (!terminal) {
       return userError({
@@ -1059,14 +1037,6 @@ export const acknowledgeTerminalRecoveryCommand = mutation({
   },
   returns: commandResultValidator(terminalRecoveryCommandReturnValidator),
   handler: async (ctx, args) => {
-    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
-    await requireTerminalStoreAccess(ctx, {
-      allowedRoles: ["full_admin", "pos_only"],
-      failureMessage:
-        "You do not have access to acknowledge POS terminal recovery commands.",
-      storeId: args.storeId,
-      userId: athenaUser._id,
-    });
     const terminal = await requireActiveTerminalSyncSecret(ctx, args);
     if (!terminal) {
       return userError({

@@ -13,6 +13,7 @@ import {
 import {
   getTerminalRecoverySourceEvent,
   listTerminalRecoveryConflictsForRepair,
+  createTerminalRecoveryCommandRepository,
 } from "../../infrastructure/repositories/terminalRecoveryRepository";
 import {
   buildTerminalCloudRepairPreview,
@@ -108,6 +109,13 @@ export type TerminalRecoveryPreview = {
     safeConflictIds: Array<Id<"posLocalSyncConflict">>;
     skippedConflictIds: Array<Id<"posLocalSyncConflict">>;
   };
+  commandStatus: {
+    commandId?: Id<"posTerminalRecoveryCommand">;
+    label: string;
+    latestAcknowledgement?: string;
+    status: Doc<"posTerminalRecoveryCommand">["status"];
+    verificationStatus: Doc<"posTerminalRecoveryCommand">["verificationStatus"];
+  } | null;
   terminalActions: Array<{
     commandType: TerminalRecoveryCommandType;
     expectedEvidence: TerminalRecoveryExpectedEvidence;
@@ -291,6 +299,11 @@ async function buildTerminalRecoveryPreview(
     args.runtimeStatus.browserInfo?.online !== false;
   const cloudRepair = await buildTerminalRecoveryCloudRepairPreview(ctx, args);
   const terminalActions = buildTerminalRecoveryActions(args);
+  const commandStatus = await buildTerminalRecoveryCommandStatus(ctx, {
+    now: args.now,
+    storeId: args.storeId,
+    terminalId: args.terminalId,
+  });
   const manualReview = buildTerminalRecoveryManualReview({
     attentionReasons: args.attentionReasons,
     skippedConflictIds: cloudRepair.skippedConflictIds,
@@ -320,9 +333,75 @@ async function buildTerminalRecoveryPreview(
       freshRuntimeRequiredForAbleToTransactNow: true,
     },
     cloudRepair,
+    commandStatus,
     terminalActions,
     manualReview,
   };
+}
+
+async function buildTerminalRecoveryCommandStatus(
+  ctx: QueryCtx,
+  args: {
+    now: number;
+    storeId: Id<"store">;
+    terminalId: Id<"posTerminal">;
+  },
+): Promise<TerminalRecoveryPreview["commandStatus"]> {
+  const commands =
+    await createTerminalRecoveryCommandRepository(ctx).listCommandsForTerminal({
+      storeId: args.storeId,
+      terminalId: args.terminalId,
+    });
+  const latestCommand = commands
+    .filter(
+      (command) =>
+        command.storeId === args.storeId &&
+        command.terminalId === args.terminalId,
+    )
+    .sort((left, right) => right.issuedAt - left.issuedAt)
+    .at(0);
+  if (!latestCommand) {
+    return null;
+  }
+
+  return {
+    commandId: latestCommand._id,
+    label: getTerminalRecoveryCommandLabel(latestCommand.commandType),
+    latestAcknowledgement: latestCommand.acknowledgement?.message,
+    status: getTerminalRecoveryCommandStatusForPreview(latestCommand, args.now),
+    verificationStatus: latestCommand.verificationStatus,
+  };
+}
+
+function getTerminalRecoveryCommandStatusForPreview(
+  command: Doc<"posTerminalRecoveryCommand">,
+  now: number,
+) {
+  if (
+    command.expiresAt <= now &&
+    (command.status === "pending" || command.status === "claimed")
+  ) {
+    return "expired" as const;
+  }
+
+  return command.status;
+}
+
+function getTerminalRecoveryCommandLabel(commandType: TerminalRecoveryCommandType) {
+  switch (commandType) {
+    case "repair_terminal_seed":
+      return "Terminal setup repair";
+    case "clear_stale_drawer_authority":
+      return "Drawer authority repair";
+    case "refresh_staff_authority":
+      return "Staff authority refresh";
+    case "refresh_snapshots":
+      return "Snapshot refresh";
+    case "retry_sync":
+      return "Sync retry";
+    case "report_diagnostics":
+      return "Diagnostics request";
+  }
 }
 
 async function buildTerminalRecoveryCloudRepairPreview(

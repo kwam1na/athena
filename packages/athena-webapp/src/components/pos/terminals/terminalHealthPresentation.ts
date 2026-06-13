@@ -7,6 +7,7 @@ import type {
   TerminalRecoveryAction,
   TerminalRecoveryBlocker,
   TerminalRecoveryPreview,
+  TerminalRecoveryActionStatus,
   TerminalRecoveryReadinessStatus,
 } from "./terminalHealthTypes";
 
@@ -383,10 +384,7 @@ export function classifyTerminalHealth(
 export function buildTerminalRecoveryPresentation(
   summary: TerminalHealthClassificationInput,
 ): TerminalRecoveryPresentation {
-  const blockers =
-    summary.recovery?.blockers?.map((blocker, index) =>
-      normalizeBackendRecoveryBlocker(blocker, index),
-    ) ?? deriveRecoveryBlockers(summary);
+  const blockers = buildRecoveryBlockers(summary);
   const groups = {
     cloudRepair: blockers.filter((blocker) => blocker.category === "cloud_repair"),
     manualReview: blockers.filter((blocker) => blocker.category === "manual_review"),
@@ -398,13 +396,7 @@ export function buildTerminalRecoveryPresentation(
   const safeActions = blockers
     .map((blocker) => blocker.action)
     .filter((action): action is TerminalRecoveryAction =>
-      Boolean(
-        action &&
-          ["cloud_repair", "terminal_command"].includes(action.kind) &&
-          !["blocked", "completed", "expired", "failed", "verified"].includes(
-            action.status ?? "available",
-          ),
-      ),
+      Boolean(action && isRecoveryActionIssuable(action)),
     );
 
   return {
@@ -429,6 +421,117 @@ export function buildTerminalRecoveryPresentation(
   };
 }
 
+function buildRecoveryBlockers(
+  summary: TerminalHealthClassificationInput,
+): RecoveryBlockerWithCategory[] {
+  if (summary.recovery?.blockers) {
+    return summary.recovery.blockers.map((blocker, index) =>
+      normalizeBackendRecoveryBlocker(blocker, index),
+    );
+  }
+
+  if (summary.recovery) {
+    return buildRecoveryBlockersFromPreview(summary.recovery);
+  }
+
+  return deriveRecoveryBlockers(summary);
+}
+
+function buildRecoveryBlockersFromPreview(
+  preview: TerminalRecoveryPreview,
+): RecoveryBlockerWithCategory[] {
+  const blockers: RecoveryBlockerWithCategory[] = [];
+  const commandStatus = normalizeActionStatus(preview.commandStatus?.status);
+
+  if ((preview.cloudRepair?.safeConflictIds.length ?? 0) > 0) {
+    blockers.push({
+      action: {
+        expectedPreconditionHash: preview.cloudRepair?.preconditionHash,
+        kind: "cloud_repair",
+        label: "Resolve duplicate drawer attempts",
+        status: commandStatus ?? "available",
+      },
+      category: "cloud_repair",
+      detail: `${preview.cloudRepair?.safeConflictIds.length ?? 0} safe conflict${
+        preview.cloudRepair?.safeConflictIds.length === 1 ? "" : "s"
+      } matched.`,
+      id: "cloud-repair-preview",
+      status: commandStatus ?? "available",
+      summary:
+        "Duplicate drawer-open attempts can be resolved. No sales, payments, or inventory will be changed.",
+      title: "Duplicate drawer-open attempts",
+    });
+  }
+
+  preview.terminalActions?.forEach((action, index) => {
+    blockers.push({
+      action: {
+        commandContext: action.commandContext,
+        commandType: action.commandType,
+        expectedEvidence: action.expectedEvidence,
+        kind: "terminal_command",
+        label: getTerminalCommandActionLabel(action.commandType),
+        status: commandStatus ?? "available",
+      },
+      category: "terminal_required",
+      detail: getExpectedEvidenceSummary(action.expectedEvidence),
+      id: `terminal-action-${action.commandType}-${index}`,
+      status: commandStatus ?? "available",
+      summary: normalizeSupportCopy(action.reason) ?? terminalRequiredSummary("drawer_authority_blocked"),
+      title: getTerminalCommandTitle(action.commandType),
+    });
+  });
+
+  preview.manualReview?.forEach((item, index) => {
+    const normalizedReason = normalizeSupportCopy(item.reason);
+    blockers.push({
+      category: "manual_review",
+      id: `manual-review-${item.type}-${index}`,
+      summary:
+        isUnsafeManualReviewReason(item.reason) || !normalizedReason
+          ? "Manual review required. Use the linked operations or cash-control review before support repairs this terminal."
+          : normalizedReason,
+      title: "Manual review required",
+    });
+  });
+
+  return blockers;
+}
+
+export function isRecoveryActionIssuable(action: TerminalRecoveryAction) {
+  if (!["cloud_repair", "terminal_command"].includes(action.kind)) {
+    return false;
+  }
+
+  if (isRecoveryActionInFlightOrClosed(action.status)) {
+    return false;
+  }
+
+  if (action.kind === "cloud_repair") {
+    return Boolean(action.expectedPreconditionHash);
+  }
+
+  return Boolean(
+    action.commandType &&
+      action.commandContext &&
+      action.expectedEvidence,
+  );
+}
+
+export function isRecoveryActionInFlightOrClosed(
+  status?: TerminalRecoveryActionStatus | null,
+) {
+  return [
+    "blocked",
+    "claimed",
+    "completed",
+    "failed",
+    "pending",
+    "verified",
+    "waiting_for_check_in",
+  ].includes(status ?? "");
+}
+
 type RecoveryBlockerWithCategory = TerminalRecoveryPresentationBlocker & {
   category: "cloud_repair" | "manual_review" | "terminal_required";
 };
@@ -437,7 +540,9 @@ function buildRecoveryReadiness(
   summary: TerminalHealthClassificationInput,
   groups: TerminalRecoveryPresentation["groups"],
 ): TerminalRecoveryReadinessPresentation {
-  const explicitStatus = summary.recovery?.readiness?.status;
+  const readiness = summary.recovery?.readiness;
+  const explicitStatus =
+    typeof readiness === "string" ? readiness : readiness?.status;
   const status =
     explicitStatus ??
     (groups.manualReview.length > 0
@@ -451,7 +556,9 @@ function buildRecoveryReadiness(
   const fallback = getRecoveryReadinessFallback(status);
 
   return {
-    description: normalizeSupportCopy(summary.recovery?.readiness?.summary) ?? fallback.description,
+    description:
+      normalizeSupportCopy(typeof readiness === "string" ? undefined : readiness?.summary) ??
+      fallback.description,
     label: fallback.label,
     status,
     toneClassName: fallback.toneClassName,
@@ -514,6 +621,7 @@ function normalizeBackendRecoveryBlocker(
       ? {
           ...blocker.action,
           label: normalizeSupportCopy(blocker.action.label) ?? blocker.action.label,
+          status: normalizeActionStatus(blocker.action.status),
         }
       : undefined;
 
@@ -533,6 +641,81 @@ function normalizeBackendRecoveryBlocker(
           ? "Terminal action"
           : "Manual review"),
   };
+}
+
+function normalizeActionStatus(status?: TerminalRecoveryActionStatus) {
+  if (status === "runtime_verification_ready") {
+    return "waiting_for_check_in";
+  }
+  if (status === "precondition_failed" || status === "superseded") {
+    return "failed";
+  }
+  return status;
+}
+
+function getTerminalCommandActionLabel(
+  commandType: NonNullable<TerminalRecoveryAction["commandType"]>,
+) {
+  switch (commandType) {
+    case "repair_terminal_seed":
+      return "Send terminal setup repair";
+    case "clear_stale_drawer_authority":
+      return "Send drawer authority repair";
+    case "refresh_staff_authority":
+      return "Send staff authority refresh";
+    case "refresh_snapshots":
+      return "Send snapshot refresh";
+    case "retry_sync":
+      return "Send sync retry";
+    case "report_diagnostics":
+      return "Request diagnostics";
+  }
+}
+
+function getTerminalCommandTitle(
+  commandType: NonNullable<TerminalRecoveryAction["commandType"]>,
+) {
+  switch (commandType) {
+    case "repair_terminal_seed":
+      return "Terminal setup repair";
+    case "clear_stale_drawer_authority":
+      return "Drawer authority repair";
+    case "refresh_staff_authority":
+      return "Staff authority refresh";
+    case "refresh_snapshots":
+      return "Snapshot refresh";
+    case "retry_sync":
+      return "Sync retry";
+    case "report_diagnostics":
+      return "Diagnostics request";
+  }
+}
+
+function getExpectedEvidenceSummary(
+  evidence?: TerminalRecoveryAction["expectedEvidence"],
+) {
+  if (!evidence) {
+    return undefined;
+  }
+
+  const checks = [
+    evidence.terminalIntegrityStatus
+      ? `Terminal integrity ${formatStatusLabel(evidence.terminalIntegrityStatus)}`
+      : null,
+    evidence.drawerAuthorityStatus
+      ? `Drawer authority ${formatStatusLabel(evidence.drawerAuthorityStatus)}`
+      : null,
+    evidence.staffAuthorityStatus
+      ? `Staff authority ${formatStatusLabel(evidence.staffAuthorityStatus)}`
+      : null,
+    evidence.syncStatus ? `Sync ${formatStatusLabel(evidence.syncStatus)}` : null,
+    evidence.terminalSeedReady === true ? "Terminal seed ready" : null,
+    evidence.localStoreAvailable === true ? "Local store available" : null,
+  ].filter(Boolean);
+
+  return checks.length > 0
+    ? `Expected after check-in: ${checks.join(", ")}.`
+    : undefined;
 }
 
 function deriveRecoveryBlockers(

@@ -71,14 +71,37 @@ export async function issueTerminalRecoveryCommand(
     });
   }
 
+  const commandContext = pruneUndefined(args.commandContext);
+  const expectedEvidence = pruneUndefined(args.expectedEvidence);
+  const existingCommands = await repository.listCommandsForTerminal({
+    storeId: args.storeId,
+    terminalId: args.terminalId,
+  });
+  for (const command of existingCommands) {
+    if (!isEquivalentCommand(command, {
+      commandContext,
+      commandType: args.commandType,
+      expectedEvidence,
+    })) {
+      continue;
+    }
+    if (command.expiresAt <= args.issuedAt && isActiveCommand(command)) {
+      await repository.patchCommand(command._id, { status: "expired" });
+      continue;
+    }
+    if (isActiveCommand(command)) {
+      return ok(command);
+    }
+  }
+
   const input = {
     storeId: args.storeId,
     terminalId: args.terminalId,
     commandType: args.commandType,
     status: "pending" as const,
     verificationStatus: "waiting_for_acknowledgement" as const,
-    commandContext: pruneUndefined(args.commandContext),
-    expectedEvidence: pruneUndefined(args.expectedEvidence),
+    commandContext,
+    expectedEvidence,
     issuedByUserId: args.issuedByUserId,
     issuedAt: args.issuedAt,
     expiresAt: args.issuedAt + COMMAND_TTL_MS,
@@ -351,6 +374,31 @@ function notFound(): CommandResult<never> {
   });
 }
 
+function isEquivalentCommand(
+  command: Doc<"posTerminalRecoveryCommand">,
+  target: {
+    commandContext: TerminalRecoveryCommandPayload;
+    commandType: TerminalRecoveryCommandType;
+    expectedEvidence: TerminalRecoveryExpectedEvidence;
+  },
+) {
+  return (
+    command.commandType === target.commandType &&
+    stableStringify(command.commandContext) ===
+      stableStringify(target.commandContext) &&
+    stableStringify(command.expectedEvidence) ===
+      stableStringify(target.expectedEvidence)
+  );
+}
+
+function isActiveCommand(command: Doc<"posTerminalRecoveryCommand">) {
+  return (
+    command.status === "pending" ||
+    command.status === "claimed" ||
+    command.verificationStatus === "runtime_verification_ready"
+  );
+}
+
 function containsSecretLikeField(value: unknown): boolean {
   if (value === null || value === undefined) {
     return false;
@@ -374,4 +422,18 @@ function pruneUndefined<T extends Record<string, unknown>>(value: T): T {
   return Object.fromEntries(
     Object.entries(value).filter((entry) => entry[1] !== undefined),
   ) as T;
+}
+
+function stableStringify(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map(stableStringify).join(",")}]`;
+  }
+  if (value && typeof value === "object") {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .filter((entry) => entry[1] !== undefined)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, entry]) => `${JSON.stringify(key)}:${stableStringify(entry)}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
 }

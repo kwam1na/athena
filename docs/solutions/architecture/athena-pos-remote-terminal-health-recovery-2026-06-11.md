@@ -73,6 +73,37 @@ Add a terminal recovery layer on top of existing terminal health evidence:
   should explain safe cloud repair, terminal-required action, manual-review
   blockers, and verification state without exposing backend exception text.
 
+## Remote Command Operation
+
+Terminal Health recovery controls issue only the action metadata returned by the
+current recovery preview. Support does not type a command or edit payloads in the
+browser. Cloud repair uses the preview precondition hash. Terminal-local repair
+uses the preview command type, non-secret command context, and expected evidence.
+
+Generic command examples:
+
+- `repair_terminal_seed` may be queued when terminal setup data or terminal
+  integrity is blocked. Expected evidence should ask the next terminal check-in
+  to show terminal integrity healthy, and when relevant, terminal seed ready and
+  local store available.
+- `clear_stale_drawer_authority` may be queued when drawer authority is blocked
+  by a stale local/cloud register-session pair. The command context should name
+  the target local register-session id and cloud register-session id, and
+  expected evidence should require drawer authority healthy for that local
+  session.
+
+Command acknowledgement and verification are separate. A completed
+acknowledgement means the matching terminal ran the local helper and recorded the
+result. Recovery is not verified until a fresh runtime check-in matches the
+expected evidence. While a command is pending, claimed, completed, or waiting for
+verification, Terminal Health should disable duplicate unsafe clicks.
+
+Manual-review evidence remains outside remote terminal repair. Sale, payment,
+inventory, closeout, variance, manager-rejected, and unresolved business-fact
+items stay in Operations or Cash Controls. Remote terminal commands can clear
+safe terminal-local setup and authority blockers only when their preconditions
+still match.
+
 ## Validation
 
 When this boundary changes, validate the whole recovery loop:

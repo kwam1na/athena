@@ -593,14 +593,32 @@ describe("POSTerminalDetailViewContent", () => {
             },
           ],
           recovery: {
+            cloudRepair: {
+              preconditionHash: "terminal-cloud-repair:abc",
+              safeConflictIds: ["conflict-1"],
+              skippedConflictIds: [],
+            },
             commandStatus: {
               label: "Terminal repair command waiting for checkout station.",
-              status: "pending",
+              status: "available",
               verificationStatus: "waiting_for_check_in",
             },
             readiness: {
               status: "needs_cloud_repair",
             },
+            terminalActions: [
+              {
+                commandContext: {
+                  expectedBlockerType: "authorization_failed",
+                  reason: "Terminal integrity requires repair.",
+                },
+                commandType: "repair_terminal_seed",
+                expectedEvidence: {
+                  terminalIntegrityStatus: "healthy",
+                },
+                reason: "Terminal integrity requires local repair.",
+              },
+            ],
             verification: {
               status: "waiting_for_check_in",
               summary:
@@ -637,9 +655,13 @@ describe("POSTerminalDetailViewContent", () => {
       }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /send terminal repair command/i }),
+      screen.getByRole("button", { name: /send terminal setup repair/i }),
     ).toBeInTheDocument();
-    expect(screen.getByText(/pending/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Terminal repair command waiting for checkout station. / Available",
+      ),
+    ).toBeInTheDocument();
     expect(screen.getAllByText("Waiting For Check In").length).toBeGreaterThan(
       0,
     );
@@ -648,6 +670,210 @@ describe("POSTerminalDetailViewContent", () => {
         /register_opened|already open|authorization_failed|sync secret/i,
       ),
     ).not.toBeInTheDocument();
+  });
+
+  it("issues cloud and terminal recovery actions from displayed metadata", async () => {
+    const onResolveTerminalCloudRepair = vi.fn(async () => ({
+      data: { resolvedCount: 1 },
+      kind: "ok" as const,
+    }));
+    const onIssueTerminalRecoveryCommand = vi.fn(async () => ({
+      data: { _id: "command-1" },
+      kind: "ok" as const,
+    }));
+
+    render(
+      <POSTerminalDetailViewContent
+        detail={{
+          ...detail,
+          attentionReasons: [],
+          recovery: {
+            cloudRepair: {
+              preconditionHash: "terminal-cloud-repair:abc",
+              safeConflictIds: ["conflict-1"],
+              skippedConflictIds: [],
+            },
+            readiness: "needs_terminal_action",
+            terminalActions: [
+              {
+                commandContext: {
+                  expectedBlockerType: "authorization_failed",
+                  reason: "Terminal integrity requires repair.",
+                },
+                commandType: "repair_terminal_seed",
+                expectedEvidence: {
+                  terminalIntegrityStatus: "healthy",
+                },
+                reason: "Terminal integrity requires local repair.",
+              },
+              {
+                commandContext: {
+                  cloudRegisterSessionId: "cloud-session-1",
+                  expectedBlockerType: "cloud_closed",
+                  localRegisterSessionId: "local-session-1",
+                  reason: "Drawer authority requires terminal-local repair.",
+                },
+                commandType: "clear_stale_drawer_authority",
+                expectedEvidence: {
+                  drawerAuthorityStatus: "healthy",
+                  localRegisterSessionId: "local-session-1",
+                },
+                reason: "Drawer authority requires terminal-local repair.",
+              },
+            ],
+          },
+        }}
+        isLoading={false}
+        onIssueTerminalRecoveryCommand={onIssueTerminalRecoveryCommand}
+        onResolveTerminalCloudRepair={onResolveTerminalCloudRepair}
+        orgUrlSlug="wigclub"
+        storeUrlSlug="osu"
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: /resolve duplicate drawer attempts/i,
+      }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: /send terminal setup repair/i,
+      }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: /send drawer authority repair/i,
+      }),
+    );
+
+    await waitFor(() => {
+      expect(onResolveTerminalCloudRepair).toHaveBeenCalledWith({
+        action: expect.objectContaining({
+          expectedPreconditionHash: "terminal-cloud-repair:abc",
+          kind: "cloud_repair",
+        }),
+        terminalId: "terminal-1",
+      });
+      expect(onIssueTerminalRecoveryCommand).toHaveBeenCalledWith({
+        action: expect.objectContaining({
+          commandType: "repair_terminal_seed",
+          expectedEvidence: { terminalIntegrityStatus: "healthy" },
+          kind: "terminal_command",
+        }),
+        terminalId: "terminal-1",
+      });
+      expect(onIssueTerminalRecoveryCommand).toHaveBeenCalledWith({
+        action: expect.objectContaining({
+          commandContext: expect.objectContaining({
+            cloudRegisterSessionId: "cloud-session-1",
+            localRegisterSessionId: "local-session-1",
+          }),
+          commandType: "clear_stale_drawer_authority",
+          expectedEvidence: {
+            drawerAuthorityStatus: "healthy",
+            localRegisterSessionId: "local-session-1",
+          },
+          kind: "terminal_command",
+        }),
+        terminalId: "terminal-1",
+      });
+    });
+    expect(mocks.toastSuccess).toHaveBeenCalledWith("Cloud repair requested.");
+    expect(mocks.toastSuccess).toHaveBeenCalledWith("Terminal command queued.");
+  });
+
+  it("disables duplicate recovery command clicks while a command is pending", () => {
+    const onIssueTerminalRecoveryCommand = vi.fn();
+
+    render(
+      <POSTerminalDetailViewContent
+        detail={{
+          ...detail,
+          attentionReasons: [],
+          recovery: {
+            commandStatus: {
+              label: "Terminal command queued.",
+              status: "pending",
+              verificationStatus: "waiting_for_acknowledgement",
+            },
+            terminalActions: [
+              {
+                commandContext: {
+                  expectedBlockerType: "authorization_failed",
+                },
+                commandType: "repair_terminal_seed",
+                expectedEvidence: {
+                  terminalIntegrityStatus: "healthy",
+                },
+                reason: "Terminal integrity requires local repair.",
+              },
+            ],
+          },
+        }}
+        isLoading={false}
+        onIssueTerminalRecoveryCommand={onIssueTerminalRecoveryCommand}
+        orgUrlSlug="wigclub"
+        storeUrlSlug="osu"
+      />,
+    );
+
+    const commandButton = screen.getByRole("button", {
+      name: /send terminal setup repair/i,
+    });
+
+    expect(commandButton).toBeDisabled();
+    expect(
+      screen.getByText("Command is queued for this checkout station."),
+    ).toBeInTheDocument();
+    fireEvent.click(commandButton);
+    expect(onIssueTerminalRecoveryCommand).not.toHaveBeenCalled();
+  });
+
+  it("shows normalized recovery action failures", async () => {
+    const onResolveTerminalCloudRepair = vi.fn(async () => ({
+      error: {
+        message: "Terminal recovery evidence changed. Preview the repair again.",
+      },
+      kind: "user_error" as const,
+    }));
+
+    render(
+      <POSTerminalDetailViewContent
+        detail={{
+          ...detail,
+          attentionReasons: [],
+          recovery: {
+            cloudRepair: {
+              preconditionHash: "terminal-cloud-repair:abc",
+              safeConflictIds: ["conflict-1"],
+              skippedConflictIds: [],
+            },
+          },
+        }}
+        isLoading={false}
+        onResolveTerminalCloudRepair={onResolveTerminalCloudRepair}
+        orgUrlSlug="wigclub"
+        storeUrlSlug="osu"
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: /resolve duplicate drawer attempts/i,
+      }),
+    );
+
+    await waitFor(() => {
+      expect(mocks.toastError).toHaveBeenCalledWith(
+        "Terminal recovery evidence changed. Refresh terminal health before retrying.",
+      );
+    });
+    expect(
+      screen.getByText(
+        "Terminal recovery evidence changed. Refresh terminal health before retrying.",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("does not render auto-repair buttons for manual payment or inventory review blockers", () => {
