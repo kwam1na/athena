@@ -8,6 +8,7 @@ import {
 } from "@/lib/remote-assist";
 
 const RECENT_CONTROL_RESULT_LIMIT = 100;
+const CONTROL_SELECTOR = "[data-remote-assist-control]";
 const recentControlResultsBySession = new Map<
   string,
   Map<string, RemoteAssistControlResult>
@@ -18,9 +19,25 @@ export function applyRemoteAssistControlIntent(args: {
   intent: RemoteAssistControlIntent;
   window?: Window;
 }): RemoteAssistControlResult {
+  const prepared = prepareRemoteAssistControlIntent(args);
+  prepared.apply();
+  return prepared.result;
+}
+
+export function prepareRemoteAssistControlIntent(args: {
+  document?: Document;
+  intent: RemoteAssistControlIntent;
+  window?: Window;
+}): {
+  apply: () => void;
+  result: RemoteAssistControlResult;
+} {
   const cachedResult = getRecentControlResult(args.intent);
   if (cachedResult) {
-    return cachedResult;
+    return {
+      apply: () => undefined,
+      result: cachedResult,
+    };
   }
 
   const runtimeWindow = args.window ?? window;
@@ -36,17 +53,43 @@ export function applyRemoteAssistControlIntent(args: {
   });
 
   if (!result.accepted) {
-    return result;
+    return {
+      apply: () => undefined,
+      result,
+    };
   }
 
+  if (
+    result.event.type === "pointer" &&
+    !getRemoteAssistControlTarget(runtimeDocument, result.event)
+  ) {
+    return {
+      apply: () => undefined,
+      result: {
+        accepted: false,
+        idempotencyKey: args.intent.idempotencyKey,
+        reason: "invalid_event",
+        sessionId: args.intent.sessionId,
+      },
+    };
+  }
+
+  rememberControlResult(result);
+  return {
+    apply: () => applyAcceptedControlResult(runtimeDocument, result),
+    result,
+  };
+}
+
+function applyAcceptedControlResult(
+  runtimeDocument: Document,
+  result: Extract<RemoteAssistControlResult, { accepted: true }>,
+) {
   if (result.event.type === "pointer") {
     applyPointerEvent(runtimeDocument, result.event);
   } else {
     applyKeyEvent(runtimeDocument, result.event);
   }
-
-  rememberControlResult(result);
-  return result;
 }
 
 function getRecentControlResult(intent: RemoteAssistControlIntent) {
@@ -74,8 +117,8 @@ function applyPointerEvent(
   runtimeDocument: Document,
   event: Extract<RemoteAssistControlIntent["event"], { type: "pointer" }>,
 ) {
-  const target = runtimeDocument.elementFromPoint(event.x, event.y);
-  if (!(target instanceof HTMLElement)) {
+  const controlTarget = getRemoteAssistControlTarget(runtimeDocument, event);
+  if (!controlTarget) {
     return;
   }
 
@@ -85,7 +128,7 @@ function applyPointerEvent(
   if (!PointerEventCtor) {
     return;
   }
-  target.dispatchEvent(
+  controlTarget.dispatchEvent(
     new PointerEventCtor(`pointer${event.action}`, {
       bubbles: true,
       cancelable: true,
@@ -95,8 +138,18 @@ function applyPointerEvent(
   );
 
   if (event.action === "up") {
-    target.click();
+    controlTarget.click();
   }
+}
+
+function getRemoteAssistControlTarget(
+  runtimeDocument: Document,
+  event: Extract<RemoteAssistControlIntent["event"], { type: "pointer" }>,
+) {
+  const target = runtimeDocument.elementFromPoint(event.x, event.y);
+  return target instanceof HTMLElement
+    ? target.closest<HTMLElement>(CONTROL_SELECTOR)
+    : null;
 }
 
 function applyKeyEvent(

@@ -29,16 +29,14 @@ import { Monitor, Moon, ShieldCheck, Sun, UserCircle } from "lucide-react";
 import { AppHeader } from "@/components/Navbar";
 import { cn } from "@/lib/utils";
 import { useAuthActions } from "@convex-dev/auth/react";
-import {
-  LOGGED_IN_USER_ID_KEY,
-  POS_APP_ACCOUNT_ID_KEY,
-} from "@/lib/constants";
+import { LOGGED_IN_USER_ID_KEY, POS_APP_ACCOUNT_ID_KEY } from "@/lib/constants";
 import { Badge } from "@/components/ui/badge";
 import {
   ManagerElevationProvider,
   useManagerElevation,
 } from "../contexts/ManagerElevationContext";
 import { AppShellFullscreenContext } from "@/contexts/AppShellFullscreenContext";
+import { PosRemoteAssistRuntimeHost } from "@/components/remote-assist/PosRemoteAssistRuntimeHost";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -72,7 +70,9 @@ export const Route = createFileRoute("/_authed")({
 const POS_REGISTER_PATH_PATTERN =
   /^\/(?<orgUrlSlug>[^/]+)\/store\/(?<storeUrlSlug>[^/]+)\/pos\/register\/?$/;
 const POS_HUB_PATH_PATTERN =
-  /^\/(?<orgUrlSlug>[^/]+)\/store\/(?<storeUrlSlug>[^/]+)\/pos(?:\/(?<child>register|sessions|transactions|expense|expense-reports|terminals)(?:\/.*)?)?$/;
+  /^\/(?<orgUrlSlug>[^/]+)\/store\/(?<storeUrlSlug>[^/]+)\/pos(?:\/.*)?$/;
+const STORE_WORKSPACE_PATH_PATTERN =
+  /^\/(?<orgUrlSlug>[^/]+)\/store\/(?<storeUrlSlug>[^/]+)(?:\/.*)?$/;
 const POS_RECOVERY_SHELL_PENDING_STATUSES = new Set([
   "idle",
   "validating",
@@ -80,11 +80,22 @@ const POS_RECOVERY_SHELL_PENDING_STATUSES = new Set([
 ]);
 
 function getPosHubRouteParams(pathname?: string) {
+  return getRouteParamsForPattern(pathname, POS_HUB_PATH_PATTERN);
+}
+
+function getStoreWorkspaceRouteParams(pathname?: string) {
+  return getRouteParamsForPattern(pathname, STORE_WORKSPACE_PATH_PATTERN);
+}
+
+function getRouteParamsForPattern(
+  pathname: string | undefined,
+  pattern: RegExp,
+) {
   if (!pathname) {
     return null;
   }
 
-  const match = pathname.match(POS_HUB_PATH_PATTERN);
+  const match = pathname.match(pattern);
   const groups = match?.groups;
 
   if (!groups?.orgUrlSlug || !groups.storeUrlSlug) {
@@ -113,7 +124,10 @@ function getBrowserPathWithSearch() {
   return `${window.location.pathname}${window.location.search}`;
 }
 
-function getRedirectPathWithSearch(pathname: string, browserPathWithSearch: string) {
+function getRedirectPathWithSearch(
+  pathname: string,
+  browserPathWithSearch: string,
+) {
   if (typeof window === "undefined" || window.location.pathname !== pathname) {
     return pathname;
   }
@@ -133,7 +147,7 @@ function hasStoredLocalSession() {
   try {
     return Boolean(
       localStorage.getItem(LOGGED_IN_USER_ID_KEY) ||
-        localStorage.getItem(POS_APP_ACCOUNT_ID_KEY),
+      localStorage.getItem(POS_APP_ACCOUNT_ID_KEY),
     );
   } catch {
     return false;
@@ -282,9 +296,7 @@ function PosTerminalShell({
   return (
     <PermissionsProvider>
       <ManagerElevationProvider>
-        <AppShellFullscreenContext.Provider
-          value={{ setFullscreenOverride }}
-        >
+        <AppShellFullscreenContext.Provider value={{ setFullscreenOverride }}>
           <PosTerminalAppSessionRecoveryProvider
             value={appSessionRecovery ?? null}
           >
@@ -457,9 +469,9 @@ function MobileSidebarRouteDismiss({ routeKey }: { routeKey: string }) {
 
 export default function Layout() {
   const [defaultOpen] = useState<boolean | null>(true);
-  const [fullscreenOverride, setFullscreenOverride] = useState<
-    boolean | null
-  >(null);
+  const [fullscreenOverride, setFullscreenOverride] = useState<boolean | null>(
+    null,
+  );
   const navigate = useNavigate();
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
@@ -475,12 +487,18 @@ export default function Layout() {
   const browserPathWithSearch = getBrowserPathWithSearch();
   const routerPosHubParams = getPosHubRouteParams(pathname);
   const browserPosHubParams = getPosHubRouteParams(browserPathname);
-  const routeParams =
+  const posRouteParams =
     routerPosHubParams ??
     (isUnknownRouterPath(pathname) ? browserPosHubParams : null);
-  const routeWantsPos = Boolean(routeParams);
+  const routerStoreWorkspaceParams = getStoreWorkspaceRouteParams(pathname);
+  const browserStoreWorkspaceParams =
+    getStoreWorkspaceRouteParams(browserPathname);
+  const storeRouteParams =
+    routerStoreWorkspaceParams ??
+    (isUnknownRouterPath(pathname) ? browserStoreWorkspaceParams : null);
+  const routeWantsPos = Boolean(posRouteParams);
   const localPosEntryContext = useLocalPosEntryContext({
-    routeParams: routeParams ?? undefined,
+    routeParams: storeRouteParams ?? undefined,
   });
   const storedAppAccountId = readStoredPosAppAccountId();
   const isAppUserMissing = !isLoading && user === null;
@@ -510,7 +528,9 @@ export default function Layout() {
     routeWantsPos &&
     isAppUserMissing &&
     hasLocalPosRecoveryTarget &&
-    POS_RECOVERY_SHELL_PENDING_STATUSES.has(posTerminalAppSessionRecovery.status);
+    POS_RECOVERY_SHELL_PENDING_STATUSES.has(
+      posTerminalAppSessionRecovery.status,
+    );
   const isClassifyingPosAppSession =
     routeWantsPos &&
     isAppUserMissing &&
@@ -528,10 +548,7 @@ export default function Layout() {
         !isPendingPosAppSessionRecovery &&
         !isClassifyingPosAppSession));
   const canRenderRehydratingPosShell =
-    routeWantsPos &&
-    isLoading &&
-    isBrowserOffline() &&
-    hasStoredLocalSession();
+    routeWantsPos && isLoading && isBrowserOffline() && hasStoredLocalSession();
   const routeWantsFullscreen =
     isPosRegisterPath(pathname) ||
     (isUnknownRouterPath(pathname) && isPosRegisterPath(browserPathname));
@@ -547,6 +564,11 @@ export default function Layout() {
     canRenderSignedInPosRegisterShell;
   const shouldRenderPendingPosTerminalShell =
     isPendingPosAppSessionRecovery || isClassifyingPosAppSession;
+  const shouldMountRemoteAssistRuntime =
+    localPosEntryContext.status === "ready" &&
+    Boolean(localPosEntryContext.terminalSeed);
+  const posAppSessionRecoveryRuntimeInput =
+    toPosTerminalAppSessionRecoveryRuntimeInput(posTerminalAppSessionRecovery);
   const userEmail =
     user?.email ??
     (shouldRenderPosTerminalShell || shouldRenderPendingPosTerminalShell
@@ -630,12 +652,16 @@ export default function Layout() {
   ) {
     return (
       <PosTerminalShell
-        appSessionRecovery={toPosTerminalAppSessionRecoveryRuntimeInput(
-          posTerminalAppSessionRecovery,
-        )}
+        appSessionRecovery={posAppSessionRecoveryRuntimeInput}
         isFullscreenActive={isFullscreenActive}
         setFullscreenOverride={setFullscreenOverride}
       >
+        {shouldMountRemoteAssistRuntime ? (
+          <PosRemoteAssistRuntimeHost
+            appSessionRecovery={posAppSessionRecoveryRuntimeInput}
+            entryContext={localPosEntryContext}
+          />
+        ) : null}
         {isBlockedPosAppSession ? (
           <PosTerminalBlockedShell
             entryContext={localPosEntryContext}
@@ -662,9 +688,7 @@ export default function Layout() {
   return (
     <PermissionsProvider>
       <ManagerElevationProvider>
-        <AppShellFullscreenContext.Provider
-          value={{ setFullscreenOverride }}
-        >
+        <AppShellFullscreenContext.Provider value={{ setFullscreenOverride }}>
           <SidebarProvider
             className="fixed inset-0 h-svh !min-h-0 flex-col overflow-hidden"
             defaultOpen={defaultOpen}
@@ -680,6 +704,12 @@ export default function Layout() {
               <AppSidebar />
               <SidebarInset className="h-full !min-h-0 overflow-hidden">
                 <main className="box-border flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-transparent p-layout-md md:p-8">
+                  {shouldMountRemoteAssistRuntime ? (
+                    <PosRemoteAssistRuntimeHost
+                      appSessionRecovery={posAppSessionRecoveryRuntimeInput}
+                      entryContext={localPosEntryContext}
+                    />
+                  ) : null}
                   <AuthedComponent />
                 </main>
               </SidebarInset>

@@ -148,6 +148,8 @@ const detail: TerminalHealthDetail = {
   runtimeStatus: {
     _id: "status-1",
     _creationTime: 1,
+    appVersion: "gentle-lion-climbs (20260608193135)",
+    buildSha: "b463caa2d36dabcdef",
     browserInfo: { online: false, platform: "MacIntel" },
     localStore: {
       available: false,
@@ -274,6 +276,10 @@ describe("POSTerminalDetailViewContent", () => {
     expect(screen.getByRole("heading", { name: "Front counter" })).toBeInTheDocument();
     expect(screen.getAllByText("Register 1").length).toBeGreaterThan(0);
     expect(screen.getByText("Latest check-in")).toBeInTheDocument();
+    expect(screen.getByText("Athena webapp")).toBeInTheDocument();
+    expect(
+      screen.getByText("gentle-lion-climbs (20260608193135) / b463caa2d36d"),
+    ).toBeInTheDocument();
     expect(
       screen.getByText("Why this terminal needs attention"),
     ).toBeInTheDocument();

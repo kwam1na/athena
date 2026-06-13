@@ -125,17 +125,26 @@ export function createRemoteAssistRepository(
     },
     async patchSession(sessionId, patch) {
       const mutationCtx = ctx as MutationCtx;
+      const normalizedPatch = { ...patch } as Partial<Doc<"remoteAssistSession">>;
+      if ("clientId" in patch) {
+        normalizedPatch.clientId =
+          patch.clientId as Id<"remoteAssistClient"> | undefined;
+      }
+      if ("requestedByUserId" in patch) {
+        normalizedPatch.requestedByUserId =
+          patch.requestedByUserId as Id<"athenaUser"> | undefined;
+      }
+      if ("organizationId" in patch) {
+        normalizedPatch.organizationId =
+          patch.organizationId as Id<"organization"> | undefined;
+      }
+      if ("storeId" in patch) {
+        normalizedPatch.storeId = patch.storeId as Id<"store"> | undefined;
+      }
       await mutationCtx.db.patch(
         "remoteAssistSession",
         sessionId as Id<"remoteAssistSession">,
-        {
-          ...patch,
-          clientId: patch.clientId as Id<"remoteAssistClient"> | undefined,
-          requestedByUserId:
-            patch.requestedByUserId as Id<"athenaUser"> | undefined,
-          organizationId: patch.organizationId as Id<"organization"> | undefined,
-          storeId: patch.storeId as Id<"store"> | undefined,
-        },
+        normalizedPatch,
       );
     },
     async upsertClient(input) {

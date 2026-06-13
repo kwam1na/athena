@@ -56,6 +56,24 @@ describe("remote assist repository", () => {
       }),
     ).rejects.toThrow("Duplicate Remote Assist clients");
   });
+
+  it("patches only the requested session fields without clearing required ids", async () => {
+    const existing = buildClient();
+    const ctx = buildCtx(existing);
+    const repository = createRemoteAssistRepository(ctx as never);
+
+    await repository.patchSession("session-1", {
+      transportRoomId: "athena-remote-assist-session-1",
+    });
+
+    expect(ctx.db.patch).toHaveBeenCalledWith(
+      "remoteAssistSession",
+      "session-1",
+      {
+        transportRoomId: "athena-remote-assist-session-1",
+      },
+    );
+  });
 });
 
 function buildCtx(

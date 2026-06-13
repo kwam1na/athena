@@ -10,6 +10,7 @@ export default defineConfig(({ mode }) => ({
     allowedHosts: ["athena-qa.wigclub.store"],
   },
   build: {
+    chunkSizeWarningLimit: 550,
     rollupOptions: {
       treeshake: true,
       // plugins: [
@@ -31,11 +32,47 @@ export default defineConfig(({ mode }) => ({
             ) {
               return "react-vendor";
             }
+            if (
+              normalizedId.includes("/node_modules/livekit-client/") ||
+              normalizedId.includes("/node_modules/@livekit/")
+            ) {
+              return "livekit-vendor";
+            }
+            if (
+              normalizedId.includes("/node_modules/@react-email/") ||
+              normalizedId.includes("/node_modules/js-beautify/")
+            ) {
+              return "email-render-vendor";
+            }
+            if (normalizedId.includes("/node_modules/lodash/")) {
+              return "lodash-vendor";
+            }
+            if (
+              normalizedId.includes("/node_modules/@babel/runtime/") ||
+              normalizedId.includes("/node_modules/prop-types/") ||
+              normalizedId.includes("/node_modules/tiny-invariant/") ||
+              normalizedId.includes("/node_modules/tslib/")
+            ) {
+              return "shared-vendor";
+            }
             if (id.includes("@tanstack")) return "tanstack-vendor";
             if (id.includes("@radix-ui")) return "radix-vendor";
             if (id.includes("convex")) return "convex-vendor";
             if (id.includes("lucide-react")) return "icons-vendor";
-            if (id.includes("recharts")) return "charts-vendor";
+            if (
+              id.includes("recharts") ||
+              normalizedId.includes("/node_modules/clsx/") ||
+              normalizedId.includes("/node_modules/d3-") ||
+              normalizedId.includes("/node_modules/eventemitter3/") ||
+              normalizedId.includes("/node_modules/internmap/") ||
+              normalizedId.includes("/node_modules/react-is/") ||
+              normalizedId.includes("/node_modules/react-smooth/") ||
+              normalizedId.includes("/node_modules/recharts-scale/") ||
+              normalizedId.includes("/node_modules/victory-vendor/") ||
+              normalizedId.includes("/node_modules/decimal.js-light/")
+            ) {
+              return "charts-vendor";
+            }
             if (
               id.includes("react-hook-form") ||
               id.includes("@hookform") ||
@@ -68,7 +105,12 @@ export default defineConfig(({ mode }) => ({
             ) {
               return "ui-vendor";
             }
-            if (id.includes("zustand") || id.includes("immer")) {
+            if (
+              id.includes("zustand") ||
+              id.includes("immer") ||
+              normalizedId.includes("/node_modules/redux/") ||
+              normalizedId.includes("/node_modules/react-redux/")
+            ) {
               return "state-vendor";
             }
             if (id.includes("@auth/core") || id.includes("jose")) {

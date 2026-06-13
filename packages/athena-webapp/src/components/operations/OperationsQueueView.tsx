@@ -38,7 +38,7 @@ import {
 import { getOrigin } from "@/lib/navigationUtils";
 import type { CommandResult } from "~/shared/commandResult";
 import { currencyFormatter } from "~/shared/currencyFormatter";
-import { cn } from "@/lib/utils";
+import { capitalizeWords, cn, getRelativeTime } from "@/lib/utils";
 import { StockAdjustmentWorkspaceContent } from "./StockAdjustmentWorkspace";
 import type {
   CycleCountDraftSummary,
@@ -51,6 +51,10 @@ import type {
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
 import { LoadingButton } from "../ui/loading-button";
+import {
+  OperationReviewItemCard,
+  type OperationReviewMetadataEntry,
+} from "./OperationReviewItemCard";
 
 const operationsApi = api.operations;
 const stockOpsApi = api.stockOps;
@@ -63,10 +67,13 @@ type QueueWorkItem = {
   _id: Id<"operationalWorkItem">;
   approvalState: string;
   assignedStaffName?: string | null;
+  createdAt: number;
   customerName?: string | null;
+  dueAt?: number | null;
   priority: string;
   status: string;
   title: string;
+  type: string;
 };
 
 type QueueApprovalRequest = {
@@ -149,6 +156,73 @@ function getDefaultWorkflow(args: {
   if (args.approvalRequests.length > 0) return "approvals";
   if (args.workItems.length > 0) return "queue";
   return "stock";
+}
+
+function formatQueueWorkItemValue(value: string) {
+  return capitalizeWords(value.replace(/_/g, " "));
+}
+
+function QueueWorkItemCard({ item }: { item: QueueWorkItem }) {
+  const collapsedMetadataEntries: OperationReviewMetadataEntry[] = [
+    {
+      label: "Owner",
+      value: item.assignedStaffName ?? "Unassigned",
+    },
+    {
+      label: "Customer",
+      value: item.customerName ?? "No customer",
+    },
+    {
+      label: "Created",
+      value: getRelativeTime(item.createdAt),
+    },
+    {
+      label: "Due",
+      value: item.dueAt ? getRelativeTime(item.dueAt) : "Not scheduled",
+    },
+  ];
+  const metadataEntries: OperationReviewMetadataEntry[] = [
+    ...collapsedMetadataEntries,
+    {
+      label: "Status",
+      value: formatQueueWorkItemValue(item.status),
+    },
+    {
+      label: "Priority",
+      value: formatQueueWorkItemValue(item.priority),
+    },
+    {
+      label: "Approval",
+      value: formatQueueWorkItemValue(item.approvalState),
+    },
+  ];
+
+  return (
+    <OperationReviewItemCard
+      actionSlot={
+        <>
+          <Badge
+            className="border-border bg-surface text-muted-foreground shadow-sm"
+            variant="outline"
+          >
+            {formatQueueWorkItemValue(item.status)}
+          </Badge>
+          <Badge
+            className="border-warning/30 bg-warning/10 text-warning-foreground shadow-sm"
+            variant="outline"
+          >
+            {formatQueueWorkItemValue(item.priority)}
+          </Badge>
+        </>
+      }
+      collapsedMetadataEntries={collapsedMetadataEntries}
+      contextLabel={formatQueueWorkItemValue(item.type)}
+      description={null}
+      itemId={item._id}
+      metadataEntries={metadataEntries}
+      title={item.title}
+    />
+  );
 }
 
 function getApprovalRequestCopy(requestType: string) {
@@ -640,37 +714,7 @@ export function OperationsQueueViewContent({
                   <div className="p-layout-md">
                     <div className="space-y-layout-2xl">
                       {workItems.map((item) => (
-                        <article
-                          className="overflow-hidden rounded-lg border border-border bg-background"
-                          key={item._id}
-                        >
-                          <div className="flex flex-col gap-layout-sm px-layout-md py-layout-md md:flex-row md:items-start md:justify-between">
-                            <div className="min-w-0">
-                              <p className="font-medium text-foreground">
-                                {item.title}
-                              </p>
-                              <p className="mt-1 text-sm text-muted-foreground">
-                                {[item.customerName, item.assignedStaffName]
-                                  .filter(Boolean)
-                                  .join(" · ")}
-                              </p>
-                            </div>
-                            <div className="flex flex-wrap gap-2 md:justify-end">
-                              <Badge
-                                className="border-border bg-surface text-muted-foreground shadow-sm"
-                                variant="outline"
-                              >
-                                {item.status}
-                              </Badge>
-                              <Badge
-                                className="border-warning/30 bg-warning/10 text-warning-foreground shadow-sm"
-                                variant="outline"
-                              >
-                                {item.priority}
-                              </Badge>
-                            </div>
-                          </div>
-                        </article>
+                        <QueueWorkItemCard item={item} key={item._id} />
                       ))}
                     </div>
                   </div>

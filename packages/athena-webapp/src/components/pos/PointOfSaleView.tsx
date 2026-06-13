@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import type { ComponentType, ReactNode } from "react";
 import View from "../View";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
@@ -30,19 +30,16 @@ import { usePermissions } from "~/src/hooks/usePermissions";
 import { toDisplayAmount } from "~/convex/lib/currency";
 import { PageLevelHeader, PageWorkspace } from "../common/PageLevelHeader";
 import { useLocalPosEntryContext } from "@/lib/pos/infrastructure/local/localPosEntryContext";
-import { usePosLocalSyncRuntimeStatus } from "@/lib/pos/infrastructure/local/usePosLocalSyncRuntime";
 import { usePrewarmRegisterCatalogOfflineSnapshots } from "@/lib/pos/infrastructure/convex/catalogGateway";
 import type { Id } from "~/convex/_generated/dataModel";
-import { usePosTerminalAppSessionRecoveryRuntimeInput } from "@/lib/pos/infrastructure/terminal/posTerminalAppSessionRecoveryContext";
-import { RemoteAssistRuntimeShell } from "@/components/remote-assist/RemoteAssistRuntimeShell";
-import {
-  useRemoteAssistRuntimeTransport,
-  type RemoteAssistRuntimeState,
-} from "@/lib/remote-assist";
 
 type FeatureLinkProps = {
   children: ReactNode;
   className?: string;
+  "data-remote-assist-control"?: string;
+  "data-remote-assist-control-id"?: string;
+  "data-remote-assist-control-label"?: string;
+  "data-remote-assist-control-role"?: string;
   params: {
     orgUrlSlug: string;
     storeUrlSlug: string;
@@ -54,13 +51,6 @@ type FeatureLinkProps = {
 };
 
 const FeatureLink = Link as unknown as ComponentType<FeatureLinkProps>;
-
-type RemoteAssistSessionSummary = {
-  _id: Id<"remoteAssistSession"> | string;
-  effectiveMode: "attended" | "unattended" | string;
-  sensitiveModeActive: boolean;
-  status: string;
-};
 
 export default function PointOfSaleView() {
   const { activeStore } = useGetActiveStore();
@@ -82,34 +72,6 @@ export default function PointOfSaleView() {
       ? (localEntryContext.storeId as Id<"store">)
       : undefined);
   usePrewarmRegisterCatalogOfflineSnapshots({ storeId: snapshotStoreId });
-  const hubTerminalSeed =
-    localEntryContext.status === "ready" ? localEntryContext.terminalSeed : null;
-  const appSessionRecovery =
-    usePosTerminalAppSessionRecoveryRuntimeInput();
-  usePosLocalSyncRuntimeStatus({
-    appSessionRecovery,
-    mode: "drain-enabled",
-    storeId: hubTerminalSeed?.storeId,
-    terminalId: hubTerminalSeed?.cloudTerminalId ?? hubTerminalSeed?.terminalId,
-  });
-  const remoteAssistRuntimeIdentity =
-    hubTerminalSeed?.cloudTerminalId ?? hubTerminalSeed?.terminalId;
-  const remoteAssistSession = useQuery(
-    api.pos.public.terminals.getRuntimeRemoteAssistSession,
-    hubTerminalSeed?.storeId &&
-      hubTerminalSeed?.syncSecretHash &&
-      remoteAssistRuntimeIdentity
-      ? {
-          storeId: hubTerminalSeed.storeId as Id<"store">,
-          syncSecretHash: hubTerminalSeed.syncSecretHash,
-          terminalId: remoteAssistRuntimeIdentity as Id<"posTerminal">,
-        }
-      : "skip",
-  ) as RemoteAssistSessionSummary | null | undefined;
-  const disconnectRemoteAssistSession = useMutation(
-    api.pos.public.terminals.disconnectRemoteAssistSession,
-  );
-
   // Get today's POS transaction summary
   const todaySummary = useQuery(
     api.inventory.pos.getTodaySummary,
@@ -138,23 +100,6 @@ export default function PointOfSaleView() {
   const setupRequired =
     localEntryContext.status !== "loading" &&
     localEntryContext.status !== "ready";
-  const remoteAssistRuntimeState = getRemoteAssistRuntimeState(
-    remoteAssistSession,
-  );
-  const remoteAssistTransport = useRemoteAssistRuntimeTransport({
-    enabled: Boolean(
-      remoteAssistRuntimeState &&
-        localEntryContext.status === "ready" &&
-        hubTerminalSeed?.storeId &&
-        hubTerminalSeed.syncSecretHash &&
-        remoteAssistRuntimeIdentity,
-    ),
-    session: remoteAssistSession,
-    storeId: hubTerminalSeed?.storeId,
-    syncSecretHash: hubTerminalSeed?.syncSecretHash,
-    terminalId: remoteAssistRuntimeIdentity,
-  });
-
   const posFeatures = [
     {
       title: "POS",
@@ -256,25 +201,6 @@ export default function PointOfSaleView() {
 
   return (
     <View hideBorder hideHeaderBottomBorder className="bg-background">
-      {remoteAssistRuntimeState &&
-      localEntryContext.status === "ready" &&
-      hubTerminalSeed &&
-      remoteAssistRuntimeIdentity ? (
-        <RemoteAssistRuntimeShell
-          onDisconnect={() => {
-            void disconnectRemoteAssistSession({
-              sessionId: remoteAssistSession!._id as Id<"remoteAssistSession">,
-              storeId: hubTerminalSeed.storeId as Id<"store">,
-              syncSecretHash: hubTerminalSeed.syncSecretHash,
-              terminalId: remoteAssistRuntimeIdentity as Id<"posTerminal">,
-            });
-          }}
-          state={withRuntimeTransportState(
-            remoteAssistRuntimeState,
-            remoteAssistTransport.connectionState,
-          )}
-        />
-      ) : null}
       <FadeIn className="container mx-auto py-layout-xl">
         <PageWorkspace>
           <PageLevelHeader title="Point of Sale" />
@@ -333,6 +259,13 @@ export default function PointOfSaleView() {
                           o: getOrigin(),
                         }}
                         className="block h-full"
+                        data-remote-assist-control="pos-workspace-feature"
+                        data-remote-assist-control-id={`pos-workspace-${feature.title
+                          .toLowerCase()
+                          .replace(/[^a-z0-9]+/g, "-")
+                          .replace(/(^-|-$)/g, "")}`}
+                        data-remote-assist-control-label={feature.title}
+                        data-remote-assist-control-role="link"
                       >
                         <CardHeader className="pb-3">
                           <div className="flex items-center space-x-3">
@@ -447,66 +380,4 @@ export default function PointOfSaleView() {
       </FadeIn>
     </View>
   );
-}
-
-function withRuntimeTransportState(
-  state: RemoteAssistRuntimeState,
-  transportState: string,
-): RemoteAssistRuntimeState {
-  if (transportState === "connected") {
-    return {
-      ...state,
-      status: "connected",
-    };
-  }
-
-  if (transportState === "connecting") {
-    return {
-      ...state,
-      status: "connecting",
-    };
-  }
-
-  if (transportState === "reconnecting") {
-    return {
-      ...state,
-      status: "reconnecting",
-    };
-  }
-
-  if (transportState === "error") {
-    return {
-      ...state,
-      status: "error",
-    };
-  }
-
-  return state;
-}
-
-function getRemoteAssistRuntimeState(
-  session: RemoteAssistSessionSummary | null | undefined,
-): RemoteAssistRuntimeState | null {
-  if (!session || !["active", "connecting", "pending_attended_approval"].includes(session.status)) {
-    return null;
-  }
-  return {
-    controlEnabled:
-      session.status === "active" &&
-      session.effectiveMode === "unattended" &&
-      !session.sensitiveModeActive,
-    sessionId: session._id,
-    status:
-      session.status === "active"
-        ? "connected"
-        : session.status === "pending_attended_approval"
-          ? "blocked"
-          : "connecting",
-    supportAgentName: null,
-    viewerCount: 0,
-    blockedReason:
-      session.status === "pending_attended_approval"
-        ? "Approval required"
-        : null,
-  };
 }

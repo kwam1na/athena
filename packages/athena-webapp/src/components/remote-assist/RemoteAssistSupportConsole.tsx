@@ -7,7 +7,6 @@ import type { Id } from "~/convex/_generated/dataModel";
 import {
   useRemoteAssistSupportTransport,
 } from "@/lib/remote-assist/support/useRemoteAssistSupportTransport";
-import type { RemoteAssistControlResult } from "@/lib/remote-assist";
 
 export function RemoteAssistSupportConsole({
   controlEnabled,
@@ -72,26 +71,11 @@ export function RemoteAssistSupportConsole({
       <RemoteAssistLiveViewer
         canControl={canControl}
         frame={transport.latestFrame}
+        latestControlResult={transport.latestControlResult}
         onControl={(intent) => {
-          void transport.sendControlIntent(intent);
+          return transport.sendControlIntent(intent);
         }}
       />
-
-      {transport.latestControlResult ? (
-        <ControlResultSummary result={transport.latestControlResult} />
-      ) : null}
     </div>
-  );
-}
-
-function ControlResultSummary({
-  result,
-}: {
-  result: RemoteAssistControlResult;
-}) {
-  return (
-    <p className="text-xs text-muted-foreground">
-      Last control {result.accepted ? "accepted" : `blocked: ${result.reason}`}.
-    </p>
   );
 }

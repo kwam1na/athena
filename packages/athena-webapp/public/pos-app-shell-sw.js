@@ -1,4 +1,10 @@
 const POS_APP_SHELL_CACHE = "athena-pos-app-shell-v6";
+const POS_APP_SHELL_CACHE_PREFIX = "athena-pos-app-shell-";
+const LOCAL_DEV_HOSTNAMES = new Set(["localhost", "127.0.0.1", "[::1]"]);
+const LOCAL_DEV_PORTS = new Set(["5173"]);
+const IS_LOCAL_DEV =
+  LOCAL_DEV_HOSTNAMES.has(self.location.hostname) &&
+  LOCAL_DEV_PORTS.has(self.location.port);
 const STATIC_DESTINATIONS = new Set(["script", "style", "font", "image"]);
 const PRODUCTION_ASSET_PREFIX = "/assets/";
 const EXCLUDED_PREFIXES = ["/api", "/convex", "/_convex", "/auth", "/.well-known"];
@@ -22,6 +28,11 @@ self.addEventListener("install", (event) => {
 });
 
 self.addEventListener("activate", (event) => {
+  if (IS_LOCAL_DEV) {
+    event.waitUntil(unregisterLocalDevAppShell());
+    return;
+  }
+
   event.waitUntil(
     caches
       .keys()
@@ -37,6 +48,8 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("fetch", (event) => {
+  if (IS_LOCAL_DEV) return;
+
   const request = event.request;
   const url = new URL(request.url);
 
@@ -49,6 +62,17 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(cacheFirstAsset(request));
   }
 });
+
+async function unregisterLocalDevAppShell() {
+  const keys = await caches.keys();
+  await Promise.all(
+    keys
+      .filter((key) => key.startsWith(POS_APP_SHELL_CACHE_PREFIX))
+      .map((key) => caches.delete(key)),
+  );
+  await self.registration.unregister();
+  await self.clients.claim();
+}
 
 self.addEventListener("message", (event) => {
   const message = event.data;

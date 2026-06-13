@@ -5,6 +5,10 @@ import type { FunctionArgs } from "convex/server";
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
 import {
+  getInitialRuntimeBuildMetadata,
+  readRuntimeBuildMetadata,
+} from "@/lib/runtimeBuildMetadata";
+import {
   createIndexedDbPosLocalStorageAdapter,
   createPosLocalStore,
   type PosLocalCloudMapping,
@@ -165,6 +169,9 @@ export function usePosLocalSyncRuntimeStatus(input: {
   const [manualRetryToken, setManualRetryToken] = useState(0);
   const [runtimeStatusObservationToken, setRuntimeStatusObservationToken] =
     useState(0);
+  const [runtimeBuildMetadata, setRuntimeBuildMetadata] = useState(
+    getInitialRuntimeBuildMetadata,
+  );
   const [recoveryCommandRetryToken, setRecoveryCommandRetryToken] = useState(0);
   const [debug, setDebug] = useState<PosLocalRuntimeSyncDebug>({});
   const [isOnline, setIsOnline] = useState(() =>
@@ -191,6 +198,25 @@ export function usePosLocalSyncRuntimeStatus(input: {
     setManualRetryToken((current) => current + 1);
     onRetrySync?.();
   }, [onRetrySync]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void readRuntimeBuildMetadata().then((metadata) => {
+      if (cancelled || (!metadata.appVersion && !metadata.buildSha)) {
+        return;
+      }
+
+      setRuntimeBuildMetadata((current) => ({
+        ...current,
+        ...metadata,
+      }));
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const updateOnlineState = () => {
@@ -731,6 +757,8 @@ export function usePosLocalSyncRuntimeStatus(input: {
   const runtimeStatusInput = useMemo(
     () => ({
       appSessionRecovery: input.appSessionRecovery,
+      appVersion: runtimeBuildMetadata.appVersion,
+      buildSha: runtimeBuildMetadata.buildSha,
       browserInfo: getRuntimeBrowserInfo(isOnline),
       events,
       localStoreFailureMessage: readError,
@@ -750,6 +778,8 @@ export function usePosLocalSyncRuntimeStatus(input: {
       input.staffAuthorityStatus,
       isOnline,
       readError,
+      runtimeBuildMetadata.appVersion,
+      runtimeBuildMetadata.buildSha,
       runtimeReadiness.drawerAuthority,
       runtimeReadiness.snapshots,
       runtimeReadiness.staffAuthorityStatus,

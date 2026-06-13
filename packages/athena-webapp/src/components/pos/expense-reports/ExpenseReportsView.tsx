@@ -44,6 +44,10 @@ function ExpenseReportMobileCard({ report }: { report: ExpenseReportRow }) {
       search={{ o: getOrigin() }}
       aria-label={`Open expense report #${report.transactionNumber}`}
       className="block rounded-lg border border-border/70 bg-surface-raised p-layout-md shadow-sm transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      data-remote-assist-control="pos-expense-report"
+      data-remote-assist-control-id={`pos-expense-report-${report._id}`}
+      data-remote-assist-control-label={`Open expense report #${report.transactionNumber}`}
+      data-remote-assist-control-role="link"
     >
       <div className="flex items-start justify-between gap-layout-md">
         <div className="min-w-0 space-y-1">
@@ -138,8 +142,24 @@ export function ExpenseReportsView() {
               onValueChange={(v) => setFilter(v as "today" | "all")}
             >
               <TabsList>
-                <TabsTrigger value="today">Today</TabsTrigger>
-                <TabsTrigger value="all">All Time</TabsTrigger>
+                <TabsTrigger
+                  data-remote-assist-control="pos-expense-report-filter"
+                  data-remote-assist-control-id="pos-expense-reports-filter-today"
+                  data-remote-assist-control-label="Today"
+                  data-remote-assist-control-role="button"
+                  value="today"
+                >
+                  Today
+                </TabsTrigger>
+                <TabsTrigger
+                  data-remote-assist-control="pos-expense-report-filter"
+                  data-remote-assist-control-id="pos-expense-reports-filter-all"
+                  data-remote-assist-control-label="All Time"
+                  data-remote-assist-control-role="button"
+                  value="all"
+                >
+                  All Time
+                </TabsTrigger>
               </TabsList>
             </Tabs>
 

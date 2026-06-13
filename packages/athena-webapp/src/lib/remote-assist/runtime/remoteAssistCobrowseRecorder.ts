@@ -8,11 +8,14 @@ import {
 
 const MAX_VISIBLE_TEXT_ITEMS = 24;
 const MAX_CONTROL_TARGETS = 24;
+const CONTROL_ATTRIBUTE = "data-remote-assist-control";
 const CONTROL_ID_ATTRIBUTE = "data-remote-assist-control-id";
+const CONTROL_LABEL_ATTRIBUTE = "data-remote-assist-control-label";
+const CONTROL_ROLE_ATTRIBUTE = "data-remote-assist-control-role";
+const GENERIC_CONTROL_IDS = new Set(["sidebar-menu-button"]);
 const SENSITIVE_SELECTOR =
   "[data-remote-assist-sensitive], [data-sensitive], input[type='password'], input[type='tel'], input[type='email'], input[type='number'], textarea";
-const CONTROL_SELECTOR =
-  "button, a[href], input, select, textarea, [role='button'], [data-remote-assist-control]";
+const CONTROL_SELECTOR = `[${CONTROL_ATTRIBUTE}]`;
 
 export function captureRemoteAssistCoBrowseFrame(args: {
   document?: Document;
@@ -44,7 +47,9 @@ export function captureRemoteAssistCoBrowseFrame(args: {
 export function collectSensitiveRegions(
   runtimeDocument: Document,
 ): RemoteAssistSensitiveRegion[] {
-  return Array.from(runtimeDocument.querySelectorAll<HTMLElement>(SENSITIVE_SELECTOR))
+  return Array.from(
+    runtimeDocument.querySelectorAll<HTMLElement>(SENSITIVE_SELECTOR),
+  )
     .map((element, index) => {
       const rect = element.getBoundingClientRect();
       return {
@@ -67,7 +72,9 @@ export function collectSensitiveRegions(
     .filter((region) => region.rect.width > 0 && region.rect.height > 0);
 }
 
-function collectSanitizedSurface(runtimeDocument: Document): RemoteAssistSanitizedSurface {
+function collectSanitizedSurface(
+  runtimeDocument: Document,
+): RemoteAssistSanitizedSurface {
   const blockedElements = new Set<Element>(
     Array.from(runtimeDocument.querySelectorAll(SENSITIVE_SELECTOR)),
   );
@@ -75,30 +82,49 @@ function collectSanitizedSurface(runtimeDocument: Document): RemoteAssistSanitiz
   const controls = Array.from(
     runtimeDocument.querySelectorAll<HTMLElement>(CONTROL_SELECTOR),
   )
-    .filter((element) => isVisibleElement(element))
-    .filter((element) => !isInsideSensitiveElement(element, blockedElements))
-    .map((element, index) => {
+    .flatMap((element, order) => {
+      if (
+        !isVisibleElement(element) ||
+        isInsideSensitiveElement(element, blockedElements)
+      ) {
+        return [];
+      }
       const rect = element.getBoundingClientRect();
-      const controlId = ensureControlId(element, index);
-      return {
-        controlId,
-        label: maskTextForRemoteAssist(getElementLabel(element)),
-        rect: {
-          height: rect.height,
-          width: rect.width,
-          x: rect.x,
-          y: rect.y,
-        },
-        role: getElementRole(element),
-      };
+      const controlId = getControlId(element);
+      return controlId
+        ? [
+            {
+              control: {
+                controlId,
+                label: maskTextForRemoteAssist(getElementLabel(element)),
+                rect: {
+                  height: rect.height,
+                  width: rect.width,
+                  x: rect.x,
+                  y: rect.y,
+                },
+                role: getElementRole(element),
+              },
+              order,
+              priority: getControlPriority(element),
+            },
+          ]
+        : [];
     })
-    .filter((control) => control.rect.width > 0 && control.rect.height > 0)
-    .slice(0, MAX_CONTROL_TARGETS);
+    .filter(({ control }) => control.rect.width > 0 && control.rect.height > 0)
+    .sort(
+      (left, right) =>
+        left.priority - right.priority || left.order - right.order,
+    )
+    .slice(0, MAX_CONTROL_TARGETS)
+    .sort((left, right) => left.order - right.order)
+    .map(({ control }) => control);
 
   const activeElement = runtimeDocument.activeElement;
   const focusedControlId =
-    activeElement instanceof HTMLElement
-      ? activeElement.getAttribute(CONTROL_ID_ATTRIBUTE) ?? undefined
+    activeElement instanceof HTMLElement &&
+    activeElement.matches(CONTROL_SELECTOR)
+      ? (getControlId(activeElement) ?? undefined)
       : undefined;
 
   return {
@@ -126,7 +152,10 @@ function collectVisibleText(
     if (!parent || !value || value.length < 2) {
       continue;
     }
-    if (!isVisibleElement(parent) || isInsideSensitiveElement(parent, blockedElements)) {
+    if (
+      !isVisibleElement(parent) ||
+      isInsideSensitiveElement(parent, blockedElements)
+    ) {
       continue;
     }
     textItems.push(maskTextForRemoteAssist(value).slice(0, 120));
@@ -135,18 +164,50 @@ function collectVisibleText(
   return Array.from(new Set(textItems));
 }
 
-function ensureControlId(element: HTMLElement, index: number) {
-  const existing = element.getAttribute(CONTROL_ID_ATTRIBUTE);
-  if (existing) {
-    return existing;
+function getControlId(element: HTMLElement) {
+  const explicitControlId = normalizeAttributeValue(
+    element.getAttribute(CONTROL_ID_ATTRIBUTE),
+  );
+  if (explicitControlId) {
+    return explicitControlId;
   }
-  const controlId = `remote-assist-control-${index + 1}`;
-  element.setAttribute(CONTROL_ID_ATTRIBUTE, controlId);
-  return controlId;
+
+  const controlId = normalizeAttributeValue(
+    element.getAttribute(CONTROL_ATTRIBUTE),
+  );
+  if (controlId && !GENERIC_CONTROL_IDS.has(controlId)) {
+    return controlId;
+  }
+
+  const elementId = normalizeAttributeValue(element.id);
+  if (elementId) {
+    return elementId;
+  }
+
+  return buildGeneratedControlId(element);
+}
+
+function getControlPriority(element: HTMLElement) {
+  const controlId = normalizeAttributeValue(
+    element.getAttribute(CONTROL_ID_ATTRIBUTE),
+  );
+  if (controlId) {
+    return 0;
+  }
+
+  const control = normalizeAttributeValue(
+    element.getAttribute(CONTROL_ATTRIBUTE),
+  );
+  if (control && !GENERIC_CONTROL_IDS.has(control)) {
+    return 1;
+  }
+
+  return 2;
 }
 
 function getElementLabel(element: HTMLElement) {
   return (
+    element.getAttribute(CONTROL_LABEL_ATTRIBUTE) ||
     element.getAttribute("aria-label") ||
     element.getAttribute("title") ||
     element.textContent ||
@@ -162,6 +223,11 @@ function getElementLabel(element: HTMLElement) {
 function getElementRole(
   element: HTMLElement,
 ): RemoteAssistSanitizedSurface["controls"][number]["role"] {
+  const explicitRole = element.getAttribute(CONTROL_ROLE_ATTRIBUTE);
+  if (isRemoteAssistControlRole(explicitRole)) {
+    return explicitRole;
+  }
+
   const tagName = element.tagName.toLowerCase();
   if (tagName === "a") {
     return "link";
@@ -176,6 +242,58 @@ function getElementRole(
     return "button";
   }
   return "control";
+}
+
+function normalizeAttributeValue(value: string | null) {
+  const normalized = value?.trim();
+  if (!normalized || normalized === "true") {
+    return null;
+  }
+  return normalized;
+}
+
+function buildGeneratedControlId(element: HTMLElement) {
+  const role = getElementRole(element);
+  const label = getElementLabel(element);
+  const route =
+    element instanceof HTMLAnchorElement
+      ? sanitizeHrefForControlId(element.getAttribute("href"))
+      : null;
+  const slug = slugifyControlId([role, label, route].filter(Boolean).join("-"));
+
+  return slug ? `remote-assist-${slug}` : null;
+}
+
+function sanitizeHrefForControlId(href: string | null) {
+  if (!href) {
+    return null;
+  }
+  try {
+    const parsedHref = new URL(href, "https://athena.local");
+    return parsedHref.pathname;
+  } catch {
+    return href.split("?")[0]?.split("#")[0] ?? null;
+  }
+}
+
+function slugifyControlId(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 96);
+}
+
+function isRemoteAssistControlRole(
+  value: string | null,
+): value is RemoteAssistSanitizedSurface["controls"][number]["role"] {
+  return (
+    value === "button" ||
+    value === "control" ||
+    value === "input" ||
+    value === "link" ||
+    value === "select"
+  );
 }
 
 function isInsideSensitiveElement(

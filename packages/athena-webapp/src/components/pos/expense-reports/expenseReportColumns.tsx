@@ -35,6 +35,10 @@ export const expenseReportColumns: ColumnDef<ExpenseReportRow>[] = [
           })}
           search={{ o: getOrigin() }}
           className="flex items-center gap-2 text-foreground hover:text-primary"
+          data-remote-assist-control="pos-expense-report"
+          data-remote-assist-control-id={`pos-expense-report-${row.original._id}`}
+          data-remote-assist-control-label={`Open expense report #${row.original.transactionNumber}`}
+          data-remote-assist-control-role="link"
         >
           <span className="font-medium">{`#${row.getValue<string>("transactionNumber")}`}</span>
           <span className="text-muted-foreground text-sm">

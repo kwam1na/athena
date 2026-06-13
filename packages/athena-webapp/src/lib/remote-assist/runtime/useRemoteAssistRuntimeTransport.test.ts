@@ -16,6 +16,7 @@ vi.mock("convex/react", () => ({
 }));
 
 const credential: RemoteAssistTransportCredential = {
+  clientId: "client-1",
   expiresAt: 2_000,
   participantIdentity: "remote-assist:session-1:runtime:terminal-1",
   participantRole: "runtime",
@@ -147,7 +148,7 @@ describe("useRemoteAssistRuntimeTransport", () => {
 
   it("applies control intents only for active unattended sessions outside sensitive mode", async () => {
     const onClick = vi.fn();
-    document.body.innerHTML = `<button aria-label="Checkout">Checkout</button>`;
+    document.body.innerHTML = `<button aria-label="Checkout" data-remote-assist-control="checkout">Checkout</button>`;
     const button = document.querySelector("button")!;
     button.getBoundingClientRect = () =>
       ({
@@ -198,9 +199,81 @@ describe("useRemoteAssistRuntimeTransport", () => {
       });
     });
 
-    expect(onClick).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(onClick).toHaveBeenCalledTimes(1));
     expect(client.publish).toHaveBeenCalledWith(
       expect.objectContaining({ topic: "controlResults" }),
+    );
+  });
+
+  it("publishes control results before applying navigation-causing clicks", async () => {
+    const onClick = vi.fn();
+    document.body.innerHTML = `<a aria-label="Point of Sale" data-remote-assist-control="pos-home" href="/wigclub/store/wigclub/pos">Point of Sale</a>`;
+    const link = document.querySelector("a")!;
+    link.getBoundingClientRect = () =>
+      ({
+        bottom: 40,
+        height: 30,
+        left: 10,
+        right: 150,
+        toJSON: () => ({}),
+        top: 10,
+        width: 140,
+        x: 10,
+        y: 10,
+      }) as DOMRect;
+    link.addEventListener("click", (event) => {
+      event.preventDefault();
+      onClick();
+    });
+    document.elementFromPoint = vi.fn(() => link) as typeof document.elementFromPoint;
+    const client = createFakeClient();
+    client.publish.mockImplementation(async () => {
+      expect(onClick).not.toHaveBeenCalled();
+    });
+    const clientFactory = vi.fn(() => client);
+
+    renderHook(() =>
+      useRemoteAssistRuntimeTransport({
+        clientFactory,
+        enabled: true,
+        session: activeSession(),
+        storeId: "store-1",
+        syncSecretHash: "sync-hash",
+        terminalId: "terminal-1",
+      }),
+    );
+    await waitFor(() => expect(client.connect).toHaveBeenCalled());
+    client.publish.mockClear();
+
+    act(() => {
+      client.emitMessage({
+        payload: {
+          event: {
+            action: "up",
+            pointerId: "support-pointer",
+            type: "pointer",
+            x: 20,
+            y: 20,
+          },
+          idempotencyKey: "intent-navigation-1",
+          issuedAt: 1_000,
+          reason: "test",
+          sessionId: "session-1",
+          target: "athena_surface",
+        },
+        topic: "controlIntents",
+      });
+    });
+
+    await waitFor(() => expect(onClick).toHaveBeenCalledTimes(1));
+    expect(client.publish).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payload: expect.objectContaining({
+          accepted: true,
+          idempotencyKey: "intent-navigation-1",
+        }),
+        topic: "controlResults",
+      }),
     );
   });
 
@@ -219,7 +292,7 @@ describe("useRemoteAssistRuntimeTransport", () => {
         kind: "ok",
       });
       const onClick = vi.fn();
-      document.body.innerHTML = `<button aria-label="Checkout">Checkout</button>`;
+      document.body.innerHTML = `<button aria-label="Checkout" data-remote-assist-control="checkout">Checkout</button>`;
       const button = document.querySelector("button")!;
       button.addEventListener("click", onClick);
       document.elementFromPoint = vi.fn(() => button) as typeof document.elementFromPoint;
