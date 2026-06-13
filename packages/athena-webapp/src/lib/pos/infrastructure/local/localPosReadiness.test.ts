@@ -286,6 +286,54 @@ describe("localPosReadiness", () => {
       canStartLocally: true,
       message:
         "Store day not started. Complete Opening Handoff before starting sales.",
+      });
+  });
+
+  it("keeps live Opening Handoff review arrears locally startable after caching not-started readiness", () => {
+    expect(
+      evaluateLocalPosReadiness({
+        closeSnapshot: { status: "ready" },
+        entryContext,
+        localReadiness: {
+          storeId: "store-1",
+          operatingDate: "2026-05-14",
+          status: "not_started",
+          source: "daily_opening",
+          updatedAt: 1_000,
+        },
+        openingSnapshot: { status: "needs_attention" },
+        operatingDate: "2026-05-14",
+        registerReadModel,
+      }),
+    ).toEqual({
+      status: "blocked",
+      reason: "not_started",
+      canStartLocally: true,
+      message:
+        "Store day not started. Complete Opening Handoff before starting sales.",
+    });
+  });
+
+  it("does not let stale local not-started readiness override a started live Opening Handoff", () => {
+    expect(
+      evaluateLocalPosReadiness({
+        closeSnapshot: { status: "ready" },
+        entryContext,
+        localReadiness: {
+          storeId: "store-1",
+          operatingDate: "2026-05-14",
+          status: "not_started",
+          source: "daily_opening",
+          updatedAt: 1_000,
+        },
+        openingSnapshot: { status: "started" },
+        operatingDate: "2026-05-14",
+        registerReadModel,
+      }),
+    ).toEqual({
+      status: "ready",
+      source: "live",
+      storeDayStatus: "started",
     });
   });
 
