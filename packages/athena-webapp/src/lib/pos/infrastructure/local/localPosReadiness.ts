@@ -160,11 +160,19 @@ export function evaluateLocalPosReadiness(input: {
     );
   }
 
-  if (localReadiness?.status === "not_started") {
+  if (
+    localReadiness?.status === "not_started" &&
+    input.openingSnapshot?.status !== "started"
+  ) {
     return blocked(
       "not_started",
       "Store day not started. Complete Opening Handoff before starting sales.",
-      { canStartLocally: !input.openingSnapshot },
+      {
+        canStartLocally:
+          !input.openingSnapshot ||
+          input.openingSnapshot.status === "blocked" ||
+          input.openingSnapshot.status === "needs_attention",
+      },
     );
   }
 
