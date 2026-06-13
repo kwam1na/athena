@@ -41,7 +41,7 @@ export type PosTerminalRecoveryCommandResult = {
     | "terminal_mismatch"
     | "unsupported_command"
     | "unsafe_authority_state";
-  status: "completed" | "failed" | "ignored";
+  status: "completed" | "failed" | "ignored" | "precondition_failed";
   type: string;
 };
 
@@ -88,6 +88,10 @@ export type PosTerminalRecoveryCommandContext = {
 
 type RepairTerminalSeedPayload = {
   seed: PosProvisionedTerminalSeed;
+};
+
+type RepairTerminalSeedContext = {
+  expectedTerminalSeedIdentity?: string;
 };
 
 type ClearStaleDrawerAuthorityPreconditions = {
@@ -169,7 +173,14 @@ async function executeRepairTerminalSeed(
     return failed(context.command, "missing_payload");
   }
   if (!matchesSeedScope(seed, context)) {
-    return failed(context.command, "precondition_failed");
+    return preconditionFailed(context.command);
+  }
+  const repairContext = toRepairTerminalSeedContext(context.command.commandContext);
+  if (
+    repairContext?.expectedTerminalSeedIdentity &&
+    !terminalScopeIds(context).has(repairContext.expectedTerminalSeedIdentity)
+  ) {
+    return preconditionFailed(context.command);
   }
 
   const writeSeed =
@@ -199,9 +210,7 @@ async function executeRepairTerminalSeed(
 async function executeClearStaleDrawerAuthority(
   context: PosTerminalRecoveryCommandContext,
 ): Promise<PosTerminalRecoveryCommandResult> {
-  const preconditions = toClearDrawerAuthorityPreconditions(
-    context.command.preconditions ?? getCommandPayload(context.command),
-  );
+  const preconditions = toClearDrawerAuthorityPreconditions(context.command);
   if (!preconditions) {
     return failed(context.command, "missing_payload");
   }
@@ -226,10 +235,10 @@ async function executeClearStaleDrawerAuthority(
   }
 
   if (!drawerAuthority.value || drawerAuthority.value.status !== "blocked") {
-    return failed(context.command, "unsafe_authority_state");
+    return preconditionFailed(context.command, "unsafe_authority_state");
   }
   if (!matchesDrawerPreconditions(drawerAuthority.value, preconditions)) {
-    return failed(context.command, "precondition_failed");
+    return preconditionFailed(context.command);
   }
 
   const events = await context.store.listEvents();
@@ -246,7 +255,7 @@ async function executeClearStaleDrawerAuthority(
       terminalIds: terminalScopeIds(context),
     })
   ) {
-    return failed(context.command, "precondition_failed");
+    return preconditionFailed(context.command);
   }
 
   const clear = await clearDrawerAuthorityState({
@@ -420,7 +429,41 @@ function toRepairTerminalSeedPayload(
   return { seed: value.seed };
 }
 
+function toRepairTerminalSeedContext(
+  value: unknown,
+): RepairTerminalSeedContext | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+  if (
+    value.expectedTerminalSeedIdentity !== undefined &&
+    typeof value.expectedTerminalSeedIdentity !== "string"
+  ) {
+    return null;
+  }
+
+  return {
+    ...(typeof value.expectedTerminalSeedIdentity === "string"
+      ? { expectedTerminalSeedIdentity: value.expectedTerminalSeedIdentity }
+      : {}),
+  };
+}
+
 function toClearDrawerAuthorityPreconditions(
+  command: PosTerminalRecoveryCommand,
+): ClearStaleDrawerAuthorityPreconditions | null {
+  const value =
+    firstDrawerAuthorityPreconditions(command.preconditions) ??
+    firstDrawerAuthorityPreconditions(command.commandContext) ??
+    firstDrawerAuthorityPreconditions(command.payload);
+  if (!value) {
+    return null;
+  }
+
+  return value;
+}
+
+function firstDrawerAuthorityPreconditions(
   value: unknown,
 ): ClearStaleDrawerAuthorityPreconditions | null {
   if (!isRecord(value)) {
@@ -509,6 +552,18 @@ function failed(
   };
 }
 
+function preconditionFailed(
+  command: PosTerminalRecoveryCommand,
+  reason: "precondition_failed" | "unsafe_authority_state" = "precondition_failed",
+): PosTerminalRecoveryCommandResult {
+  return {
+    commandId: getCommandId(command),
+    reason,
+    status: "precondition_failed",
+    type: getCommandType(command) ?? "unknown_command",
+  };
+}
+
 function getCommandId(command: PosTerminalRecoveryCommand) {
   return command.commandId ?? command._id ?? "unknown-command";
 }
@@ -533,6 +588,7 @@ function redactDiagnostics(
 }
 
 function safeRecoveryMessage(value: unknown) {
+  const maxLength = 240;
   const message =
     value instanceof Error
       ? value.message
@@ -549,7 +605,8 @@ function safeRecoveryMessage(value: unknown) {
       /\b(staffProofToken|staff proof|proof-token|syncSecretHash|syncSecret|sync secret|verifier|PIN|pin|rawPayload|raw payload|payload)\b(?:\s*[:=]?\s*[^.,;]*)?/gi,
       "$1 [redacted]",
     )
-    .replace(/[A-Za-z0-9_-]{24,}/g, "[redacted]");
+    .replace(/[A-Za-z0-9_-]{24,}/g, "[redacted]")
+    .slice(0, maxLength);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

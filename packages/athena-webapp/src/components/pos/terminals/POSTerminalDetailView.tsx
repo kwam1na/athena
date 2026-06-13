@@ -47,11 +47,13 @@ import {
   getStaffAuthorityLabel,
   getSupportSafeAttentionReasonSummary,
   getTerminalAttentionReasons,
+  isRecoveryActionIssuable,
   type TerminalRecoveryPresentationBlocker,
 } from "./terminalHealthPresentation";
 import type {
   TerminalHealthDetail,
   TerminalHealthAttentionReason,
+  TerminalRecoveryAction,
   TerminalRuntimeStatus,
   TerminalSyncEvent,
   TerminalSyncEvidence,
@@ -132,6 +134,14 @@ const REMOTE_ASSIST_PRESENCE_FRESHNESS_MS = 2 * 60 * 1000;
 type POSTerminalDetailViewContentProps = {
   detail: TerminalHealthDetail | null;
   isLoading: boolean;
+  onIssueTerminalRecoveryCommand?: (args: {
+    action: TerminalRecoveryAction;
+    terminalId: Id<"posTerminal"> | string;
+  }) => Promise<TerminalRecoveryMutationResult>;
+  onResolveTerminalCloudRepair?: (args: {
+    action: TerminalRecoveryAction;
+    terminalId: Id<"posTerminal"> | string;
+  }) => Promise<TerminalRecoveryMutationResult>;
   onResolveRegisterSessionReview?: (args: {
     registerSessionId: Id<"registerSession"> | string;
   }) => Promise<TerminalRegisterSessionReviewResult>;
@@ -159,6 +169,24 @@ type TerminalRegisterSessionReviewResult =
         projectedCount?: number;
         resolvedCount?: number;
       };
+    }
+  | {
+      kind: "user_error";
+      error: {
+        message: string;
+      };
+    }
+  | {
+      kind: "unexpected_error";
+      error: {
+        message: string;
+      };
+    };
+
+type TerminalRecoveryMutationResult =
+  | {
+      kind: "ok";
+      data?: unknown;
     }
   | {
       kind: "user_error";
@@ -857,16 +885,22 @@ function RecoveryMetric({
 function RecoveryBlockerGroup({
   blockers,
   emptyCopy,
+  onIssueTerminalRecoveryCommand,
+  onResolveTerminalCloudRepair,
   onResolveRegisterSessionReview,
   orgUrlSlug,
   storeUrlSlug,
+  terminalId,
   title,
 }: {
   blockers: TerminalRecoveryPresentationBlocker[];
   emptyCopy: string;
+  onIssueTerminalRecoveryCommand?: POSTerminalDetailViewContentProps["onIssueTerminalRecoveryCommand"];
+  onResolveTerminalCloudRepair?: POSTerminalDetailViewContentProps["onResolveTerminalCloudRepair"];
   onResolveRegisterSessionReview?: POSTerminalDetailViewContentProps["onResolveRegisterSessionReview"];
   orgUrlSlug?: string;
   storeUrlSlug?: string;
+  terminalId: Id<"posTerminal"> | string;
   title: string;
 }) {
   return (
@@ -902,9 +936,12 @@ function RecoveryBlockerGroup({
               </div>
               <RecoveryBlockerAction
                 blocker={blocker}
+                onIssueTerminalRecoveryCommand={onIssueTerminalRecoveryCommand}
+                onResolveTerminalCloudRepair={onResolveTerminalCloudRepair}
                 onResolveRegisterSessionReview={onResolveRegisterSessionReview}
                 orgUrlSlug={orgUrlSlug}
                 storeUrlSlug={storeUrlSlug}
+                terminalId={terminalId}
               />
             </div>
           ))
@@ -916,26 +953,87 @@ function RecoveryBlockerGroup({
 
 function RecoveryBlockerAction({
   blocker,
+  onIssueTerminalRecoveryCommand,
+  onResolveTerminalCloudRepair,
   onResolveRegisterSessionReview,
   orgUrlSlug,
   storeUrlSlug,
+  terminalId,
 }: {
   blocker: TerminalRecoveryPresentationBlocker;
+  onIssueTerminalRecoveryCommand?: POSTerminalDetailViewContentProps["onIssueTerminalRecoveryCommand"];
+  onResolveTerminalCloudRepair?: POSTerminalDetailViewContentProps["onResolveTerminalCloudRepair"];
   onResolveRegisterSessionReview?: POSTerminalDetailViewContentProps["onResolveRegisterSessionReview"];
   orgUrlSlug?: string;
   storeUrlSlug?: string;
+  terminalId: Id<"posTerminal"> | string;
 }) {
   const action = blocker.action;
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+
   if (action && ["cloud_repair", "terminal_command"].includes(action.kind)) {
+    const canIssue = isRecoveryActionIssuable(action);
+    const handler =
+      action.kind === "cloud_repair"
+        ? onResolveTerminalCloudRepair
+        : onIssueTerminalRecoveryCommand;
+
+    const submitRecoveryAction = async () => {
+      if (!canIssue || !handler || isSubmitting) {
+        return;
+      }
+
+      setIsSubmitting(true);
+      setErrorMessage("");
+      const result = await handler({ action, terminalId });
+      setIsSubmitting(false);
+
+      if (result.kind === "ok") {
+        toast.success(
+          action.kind === "cloud_repair"
+            ? "Cloud repair requested."
+            : "Terminal command queued.",
+        );
+        return;
+      }
+
+      const message = normalizeRecoveryActionError(result.error.message);
+      setErrorMessage(message);
+      toast.error(message);
+    };
+
     return (
-      <Button disabled size="sm" variant="utility">
-        {action.kind === "terminal_command" ? (
-          <Send aria-hidden="true" />
-        ) : (
-          <Wrench aria-hidden="true" />
-        )}
-        {action.label}
-      </Button>
+      <div className="grid justify-items-start gap-layout-xs">
+        <Button
+          disabled={!canIssue || !handler || isSubmitting}
+          onClick={() => {
+            void submitRecoveryAction();
+          }}
+          size="sm"
+          variant="utility"
+        >
+          {action.kind === "terminal_command" ? (
+            <Send aria-hidden="true" />
+          ) : (
+            <Wrench aria-hidden="true" />
+          )}
+          {isSubmitting ? "Sending..." : action.label}
+        </Button>
+        {action.status && action.status !== "available" ? (
+          <p className="max-w-sm text-xs text-muted-foreground">
+            {getRecoveryActionStatusCopy(action.status)}
+          </p>
+        ) : null}
+        {action.latestAcknowledgement ? (
+          <p className="max-w-sm text-xs text-muted-foreground">
+            {action.latestAcknowledgement}
+          </p>
+        ) : null}
+        {errorMessage ? (
+          <p className="max-w-sm text-xs text-danger">{errorMessage}</p>
+        ) : null}
+      </div>
     );
   }
 
@@ -958,13 +1056,52 @@ function RecoveryBlockerAction({
   return null;
 }
 
+function getRecoveryActionStatusCopy(status: TerminalRecoveryAction["status"]) {
+  switch (status) {
+    case "pending":
+      return "Command is queued for this checkout station.";
+    case "claimed":
+      return "Command is running on this checkout station.";
+    case "completed":
+    case "waiting_for_check_in":
+      return "Command completed locally. Waiting for a fresh check-in before verification.";
+    case "verified":
+      return "Recovery verified by the latest terminal check-in.";
+    case "expired":
+      return "Command expired. Refresh terminal health before sending another command.";
+    case "failed":
+      return "Command did not complete. Refresh terminal health before retrying.";
+    case "blocked":
+      return "Recovery is blocked by current terminal evidence.";
+    default:
+      return formatStatusLabel(status);
+  }
+}
+
+function normalizeRecoveryActionError(message?: string) {
+  if (!message) {
+    return "Recovery action could not be sent. Refresh terminal health and try again.";
+  }
+  if (/authorization|access/i.test(message)) {
+    return "Support permission is required before sending this recovery action.";
+  }
+  if (/precondition|changed/i.test(message)) {
+    return "Terminal recovery evidence changed. Refresh terminal health before retrying.";
+  }
+  return message;
+}
+
 function RecoveryPanel({
   detail,
+  onIssueTerminalRecoveryCommand,
+  onResolveTerminalCloudRepair,
   onResolveRegisterSessionReview,
   orgUrlSlug,
   storeUrlSlug,
 }: {
   detail: TerminalHealthDetail;
+  onIssueTerminalRecoveryCommand?: POSTerminalDetailViewContentProps["onIssueTerminalRecoveryCommand"];
+  onResolveTerminalCloudRepair?: POSTerminalDetailViewContentProps["onResolveTerminalCloudRepair"];
   onResolveRegisterSessionReview?: POSTerminalDetailViewContentProps["onResolveRegisterSessionReview"];
   orgUrlSlug?: string;
   storeUrlSlug?: string;
@@ -1011,17 +1148,21 @@ function RecoveryPanel({
         <RecoveryBlockerGroup
           blockers={recovery.groups.cloudRepair}
           emptyCopy="No cloud-safe repair blockers are reported."
+          onResolveTerminalCloudRepair={onResolveTerminalCloudRepair}
           onResolveRegisterSessionReview={onResolveRegisterSessionReview}
           orgUrlSlug={orgUrlSlug}
           storeUrlSlug={storeUrlSlug}
+          terminalId={detail.terminal._id}
           title="Cloud repair"
         />
         <RecoveryBlockerGroup
           blockers={recovery.groups.terminalRequired}
           emptyCopy="No terminal-required blockers are reported."
+          onIssueTerminalRecoveryCommand={onIssueTerminalRecoveryCommand}
           onResolveRegisterSessionReview={onResolveRegisterSessionReview}
           orgUrlSlug={orgUrlSlug}
           storeUrlSlug={storeUrlSlug}
+          terminalId={detail.terminal._id}
           title="Terminal required"
         />
         <RecoveryBlockerGroup
@@ -1030,6 +1171,7 @@ function RecoveryPanel({
           onResolveRegisterSessionReview={onResolveRegisterSessionReview}
           orgUrlSlug={orgUrlSlug}
           storeUrlSlug={storeUrlSlug}
+          terminalId={detail.terminal._id}
           title="Manual review"
         />
       </div>
@@ -1438,6 +1580,8 @@ export function POSTerminalDetailViewContent({
   detail,
   isLoading,
   onEndRemoteAssist,
+  onIssueTerminalRecoveryCommand,
+  onResolveTerminalCloudRepair,
   onResolveRegisterSessionReview,
   onStartRemoteAssist,
   orgUrlSlug,
@@ -1521,6 +1665,8 @@ export function POSTerminalDetailViewContent({
               />
               <RecoveryPanel
                 detail={detail}
+                onIssueTerminalRecoveryCommand={onIssueTerminalRecoveryCommand}
+                onResolveTerminalCloudRepair={onResolveTerminalCloudRepair}
                 onResolveRegisterSessionReview={onResolveRegisterSessionReview}
                 orgUrlSlug={orgUrlSlug}
                 storeUrlSlug={storeUrlSlug}
@@ -1596,6 +1742,12 @@ export function POSTerminalDetailView() {
   const resolveRegisterSessionSyncReview = useMutation(
     api.cashControls.deposits.resolveRegisterSessionSyncReview,
   );
+  const resolveTerminalCloudRepair = useMutation(
+    api.pos.public.terminals.resolveTerminalCloudRepair,
+  );
+  const issueTerminalRecoveryCommand = useMutation(
+    api.pos.public.terminals.issueTerminalRecoveryCommand,
+  );
   const startRemoteAssistSession = useMutation(remoteAssistApi.startSession);
   const endRemoteAssistSession = useMutation(remoteAssistApi.endSupportSession);
 
@@ -1619,6 +1771,65 @@ export function POSTerminalDetailView() {
         storeId: activeStore._id,
       }),
     ) as Promise<TerminalRegisterSessionReviewResult>;
+  }
+
+  async function onResolveTerminalCloudRepair({
+    action,
+    terminalId,
+  }: {
+    action: TerminalRecoveryAction;
+    terminalId: Id<"posTerminal"> | string;
+  }): Promise<TerminalRecoveryMutationResult> {
+    if (!activeStore?._id || !action.expectedPreconditionHash) {
+      return {
+        kind: "user_error",
+        error: {
+          message:
+            "Terminal recovery evidence changed. Refresh terminal health before retrying.",
+        },
+      };
+    }
+
+    return runCommand(() =>
+      resolveTerminalCloudRepair({
+        expectedPreconditionHash: action.expectedPreconditionHash!,
+        storeId: activeStore._id,
+        terminalId: terminalId as Id<"posTerminal">,
+      }),
+    ) as Promise<TerminalRecoveryMutationResult>;
+  }
+
+  async function onIssueTerminalRecoveryCommand({
+    action,
+    terminalId,
+  }: {
+    action: TerminalRecoveryAction;
+    terminalId: Id<"posTerminal"> | string;
+  }): Promise<TerminalRecoveryMutationResult> {
+    if (
+      !activeStore?._id ||
+      !action.commandType ||
+      !action.commandContext ||
+      !action.expectedEvidence
+    ) {
+      return {
+        kind: "user_error",
+        error: {
+          message:
+            "Terminal recovery evidence changed. Refresh terminal health before retrying.",
+        },
+      };
+    }
+
+    return runCommand(() =>
+      issueTerminalRecoveryCommand({
+        commandContext: action.commandContext!,
+        commandType: action.commandType!,
+        expectedEvidence: action.expectedEvidence!,
+        storeId: activeStore._id,
+        terminalId: terminalId as Id<"posTerminal">,
+      }),
+    ) as Promise<TerminalRecoveryMutationResult>;
   }
 
   async function onStartRemoteAssist({
@@ -1685,6 +1896,12 @@ export function POSTerminalDetailView() {
       detail={detail ?? null}
       canStartRemoteAssist={hasFullAdminAccess}
       isLoading={detail === undefined}
+      onIssueTerminalRecoveryCommand={
+        hasFullAdminAccess ? onIssueTerminalRecoveryCommand : undefined
+      }
+      onResolveTerminalCloudRepair={
+        hasFullAdminAccess ? onResolveTerminalCloudRepair : undefined
+      }
       onResolveRegisterSessionReview={onResolveRegisterSessionReview}
       onEndRemoteAssist={onEndRemoteAssist}
       onStartRemoteAssist={onStartRemoteAssist}

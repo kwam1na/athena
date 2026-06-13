@@ -99,6 +99,240 @@ describe("terminal command service", () => {
     expect(repository.insertCommand).not.toHaveBeenCalled();
   });
 
+  it("returns an equivalent active command instead of inserting duplicate work", async () => {
+    const existingCommand = buildCommand({
+      commandType: "repair_terminal_seed",
+      commandContext: {
+        expectedBlockerType: "terminal_seed",
+        reason: "Terminal setup data needs repair.",
+      },
+      expectedEvidence: {
+        terminalIntegrityStatus: "healthy",
+      },
+      status: "claimed",
+    });
+    const repository = buildRepository({
+      commands: [existingCommand],
+    });
+
+    const result = await issueTerminalRecoveryCommand(repository, {
+      commandType: "repair_terminal_seed",
+      expectedEvidence: {
+        terminalIntegrityStatus: "healthy",
+      },
+      issuedAt: now,
+      issuedByUserId: "user-2" as Id<"athenaUser">,
+      commandContext: {
+        reason: "Terminal setup data needs repair.",
+        expectedBlockerType: "terminal_seed",
+      },
+      storeId,
+      terminalId,
+    });
+
+    expect(result).toEqual({
+      kind: "ok",
+      data: existingCommand,
+    });
+    expect(repository.insertCommand).not.toHaveBeenCalled();
+  });
+
+  it("returns an equivalent command waiting for runtime verification instead of inserting duplicate work", async () => {
+    const existingCommand = buildCommand({
+      commandType: "repair_terminal_seed",
+      commandContext: {
+        expectedBlockerType: "terminal_seed",
+        reason: "Terminal setup data needs repair.",
+      },
+      expectedEvidence: {
+        terminalIntegrityStatus: "healthy",
+      },
+      status: "completed",
+      verificationStatus: "runtime_verification_ready",
+    });
+    const repository = buildRepository({
+      commands: [existingCommand],
+    });
+
+    const result = await issueTerminalRecoveryCommand(repository, {
+      commandType: "repair_terminal_seed",
+      expectedEvidence: {
+        terminalIntegrityStatus: "healthy",
+      },
+      issuedAt: now,
+      issuedByUserId: "user-2" as Id<"athenaUser">,
+      commandContext: {
+        reason: "Terminal setup data needs repair.",
+        expectedBlockerType: "terminal_seed",
+      },
+      storeId,
+      terminalId,
+    });
+
+    expect(result).toEqual({
+      kind: "ok",
+      data: existingCommand,
+    });
+    expect(repository.insertCommand).not.toHaveBeenCalled();
+  });
+
+  it("replaces equivalent expired commands with fresh pending work", async () => {
+    const repository = buildRepository({
+      commands: [
+        buildCommand({
+          expiresAt: now - 1,
+          commandType: "clear_stale_drawer_authority",
+          commandContext: {
+            cloudRegisterSessionId: "cloud-register-1",
+            localRegisterSessionId: "local-register-1",
+            reason: "Stale drawer authority blocks sales.",
+          },
+          expectedEvidence: {
+            drawerAuthorityStatus: "healthy",
+            localRegisterSessionId: "local-register-1",
+          },
+        }),
+      ],
+    });
+
+    const result = await issueTerminalRecoveryCommand(repository, {
+      commandType: "clear_stale_drawer_authority",
+      expectedEvidence: {
+        drawerAuthorityStatus: "healthy",
+        localRegisterSessionId: "local-register-1",
+      },
+      issuedAt: now,
+      issuedByUserId: "user-2" as Id<"athenaUser">,
+      commandContext: {
+        localRegisterSessionId: "local-register-1",
+        cloudRegisterSessionId: "cloud-register-1",
+        reason: "Stale drawer authority blocks sales.",
+      },
+      storeId,
+      terminalId,
+    });
+
+    expect(repository.patchCommand).toHaveBeenCalledWith("command-1", {
+      status: "expired",
+    });
+    expect(repository.insertCommand).toHaveBeenCalledWith(
+      expect.objectContaining({
+        commandType: "clear_stale_drawer_authority",
+        status: "pending",
+      }),
+    );
+    expect(result).toMatchObject({
+      kind: "ok",
+      data: {
+        _id: "command-2",
+        status: "pending",
+      },
+    });
+  });
+
+  it("replaces equivalent expired claimed commands with fresh pending work", async () => {
+    const repository = buildRepository({
+      commands: [
+        buildCommand({
+          expiresAt: now - 1,
+          commandType: "repair_terminal_seed",
+          commandContext: {
+            expectedBlockerType: "terminal_seed",
+            reason: "Terminal setup data needs repair.",
+          },
+          expectedEvidence: {
+            terminalIntegrityStatus: "healthy",
+          },
+          status: "claimed",
+        }),
+      ],
+    });
+
+    const result = await issueTerminalRecoveryCommand(repository, {
+      commandType: "repair_terminal_seed",
+      expectedEvidence: {
+        terminalIntegrityStatus: "healthy",
+      },
+      issuedAt: now,
+      issuedByUserId: "user-2" as Id<"athenaUser">,
+      commandContext: {
+        expectedBlockerType: "terminal_seed",
+        reason: "Terminal setup data needs repair.",
+      },
+      storeId,
+      terminalId,
+    });
+
+    expect(repository.patchCommand).toHaveBeenCalledWith("command-1", {
+      status: "expired",
+    });
+    expect(repository.insertCommand).toHaveBeenCalledWith(
+      expect.objectContaining({
+        commandType: "repair_terminal_seed",
+        status: "pending",
+      }),
+    );
+    expect(result).toMatchObject({
+      kind: "ok",
+      data: {
+        _id: "command-2",
+        status: "pending",
+      },
+    });
+  });
+
+  it("replaces equivalent expired commands that were waiting for runtime verification", async () => {
+    const repository = buildRepository({
+      commands: [
+        buildCommand({
+          expiresAt: now - 1,
+          commandType: "repair_terminal_seed",
+          commandContext: {
+            expectedBlockerType: "terminal_seed",
+            reason: "Terminal setup data needs repair.",
+          },
+          expectedEvidence: {
+            terminalIntegrityStatus: "healthy",
+          },
+          status: "completed",
+          verificationStatus: "runtime_verification_ready",
+        }),
+      ],
+    });
+
+    const result = await issueTerminalRecoveryCommand(repository, {
+      commandType: "repair_terminal_seed",
+      expectedEvidence: {
+        terminalIntegrityStatus: "healthy",
+      },
+      issuedAt: now,
+      issuedByUserId: "user-2" as Id<"athenaUser">,
+      commandContext: {
+        expectedBlockerType: "terminal_seed",
+        reason: "Terminal setup data needs repair.",
+      },
+      storeId,
+      terminalId,
+    });
+
+    expect(repository.patchCommand).toHaveBeenCalledWith("command-1", {
+      status: "expired",
+    });
+    expect(repository.insertCommand).toHaveBeenCalledWith(
+      expect.objectContaining({
+        commandType: "repair_terminal_seed",
+        status: "pending",
+      }),
+    );
+    expect(result).toMatchObject({
+      kind: "ok",
+      data: {
+        _id: "command-2",
+        status: "pending",
+      },
+    });
+  });
+
   it("redacts and bounds acknowledgement messages before audit persistence", async () => {
     const repository = buildRepository({
       commands: [
@@ -349,8 +583,9 @@ function buildRepository(seed: {
     }),
     insertCommand: vi.fn(
       async (input: Omit<Doc<"posTerminalRecoveryCommand">, "_id" | "_creationTime">) => {
+        const commandId = `command-${commands.length + 1}` as Id<"posTerminalRecoveryCommand">;
         const command = {
-          _id: "command-1" as Id<"posTerminalRecoveryCommand">,
+          _id: commandId,
           _creationTime: input.issuedAt,
           ...input,
         };

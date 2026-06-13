@@ -81,9 +81,9 @@ export type PosLocalRuntimeSyncDebug = {
   checkInPublishStatus?:
     | "accepted"
     | "failed"
-  | "not_ready"
-  | "pending"
-  | "rejected";
+    | "not_ready"
+    | "pending"
+    | "rejected";
   terminalRecoveryCommandAttemptedAt?: number;
   terminalRecoveryCommandCompletedAt?: number;
   terminalRecoveryCommandMessage?: string;
@@ -91,7 +91,8 @@ export type PosLocalRuntimeSyncDebug = {
     | "completed"
     | "failed"
     | "ignored"
-    | "pending";
+    | "pending"
+    | "precondition_failed";
   appSessionUnverifiedEventCount?: number;
   cloudValidationUncertainEventCount?: number;
   deferredUploadEventCount?: number;
@@ -1434,7 +1435,7 @@ function toTerminalRecoveryCommandAckResult(
   result: PosTerminalRecoveryCommandResult,
 ) {
   if (result.status === "completed") return "completed" as const;
-  if (result.reason === "precondition_failed") {
+  if (result.status === "precondition_failed" || result.reason === "precondition_failed") {
     return "precondition_failed" as const;
   }
   return "failed" as const;

@@ -449,7 +449,10 @@ describe("POS terminal public mutations", () => {
     );
   });
 
-  it("accepts redacted runtime status from an authorized store member", async () => {
+  it("accepts redacted runtime status from active terminal proof without Athena user auth", async () => {
+    mocks.requireAuthenticatedAthenaUserWithCtx.mockRejectedValue(
+      new Error("not signed in"),
+    );
     const ctx = buildCtx({
       terminal: {
         _id: "terminal-1",
@@ -508,14 +511,7 @@ describe("POS terminal public mutations", () => {
         receivedAt: 200,
       },
     });
-    expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
-      ctx,
-      expect.objectContaining({
-        allowedRoles: ["full_admin", "pos_only"],
-        organizationId: "org-1",
-        userId: "athena-user-1",
-      }),
-    );
+    expect(mocks.requireOrganizationMemberRoleWithCtx).not.toHaveBeenCalled();
     expect(mocks.submitTerminalRuntimeStatusCommand).toHaveBeenCalledWith(
       ctx,
       expect.objectContaining({
@@ -775,13 +771,7 @@ describe("POS terminal public mutations", () => {
 
   it("skips Remote Assist enrollment when the store is missing", async () => {
     const ctx = buildCtx({
-      store: [
-        {
-          _id: "store-1",
-          organizationId: "org-1",
-        },
-        null,
-      ],
+      store: null,
       terminal: {
         _id: "terminal-1",
         storeId: "store-1",
@@ -915,11 +905,19 @@ describe("POS terminal public mutations", () => {
     expect(mocks.submitTerminalRuntimeStatusCommand).not.toHaveBeenCalled();
   });
 
-  it("does not inspect terminal credentials when runtime status store membership is denied", async () => {
-    mocks.requireOrganizationMemberRoleWithCtx.mockRejectedValue(
-      new Error("denied"),
+  it("does not require Athena user auth before inspecting terminal runtime proof", async () => {
+    mocks.requireAuthenticatedAthenaUserWithCtx.mockRejectedValue(
+      new Error("not signed in"),
     );
-    const ctx = buildCtx();
+    const ctx = buildCtx({
+      terminal: {
+        _id: "terminal-1",
+        storeId: "store-1",
+        status: "active",
+        registeredByUserId: "athena-user-2",
+        syncSecretHash: SYNC_SECRET_HASH,
+      },
+    });
 
     const result = await getHandler(submitTerminalRuntimeStatus)(ctx as never, {
       storeId: "store-1",
@@ -928,16 +926,10 @@ describe("POS terminal public mutations", () => {
       status: buildRuntimeStatus(),
     });
 
-    expect(result).toEqual({
-      kind: "user_error",
-      error: {
-        code: "authorization_failed",
-        message: "You do not have access to update this POS terminal status.",
-      },
-    });
-    expect(ctx.db.get).toHaveBeenCalledWith("store", "store-1");
-    expect(ctx.db.get).not.toHaveBeenCalledWith("posTerminal", "terminal-1");
-    expect(mocks.submitTerminalRuntimeStatusCommand).not.toHaveBeenCalled();
+    expect(result.kind).toBe("ok");
+    expect(mocks.requireOrganizationMemberRoleWithCtx).not.toHaveBeenCalled();
+    expect(ctx.db.get).toHaveBeenCalledWith("posTerminal", "terminal-1");
+    expect(mocks.submitTerminalRuntimeStatusCommand).toHaveBeenCalled();
   });
 
   it("requires store membership before listing terminal health summaries", async () => {
@@ -1107,8 +1099,11 @@ describe("POS terminal public mutations", () => {
       service: mocks.acknowledgeTerminalRecoveryCommandService,
     },
   ])(
-    "allows POS store members to $action recovery commands with the active sync secret",
+    "allows terminal runtime to $action recovery commands with only active sync-secret proof",
     async ({ handler, service }) => {
+      mocks.requireAuthenticatedAthenaUserWithCtx.mockRejectedValue(
+        new Error("not signed in"),
+      );
       const ctx = buildCtx({
         terminal: {
           _id: "terminal-1",
@@ -1128,18 +1123,41 @@ describe("POS terminal public mutations", () => {
         message: "Done.",
       });
 
-      expect(mocks.requireOrganizationMemberRoleWithCtx).toHaveBeenCalledWith(
-        ctx,
-        expect.objectContaining({
-          allowedRoles: ["full_admin", "pos_only"],
-          organizationId: "org-1",
-          userId: "athena-user-1",
-        }),
-      );
+      expect(mocks.requireOrganizationMemberRoleWithCtx).not.toHaveBeenCalled();
       expect(service).toHaveBeenCalled();
       expect(result.kind).toBe("ok");
     },
   );
+
+  it("does not let terminal runtime proof issue terminal recovery commands", async () => {
+    mocks.requireAuthenticatedAthenaUserWithCtx.mockRejectedValue(
+      new Error("not signed in"),
+    );
+    const ctx = buildCtx();
+
+    const result = await getHandler(issueTerminalRecoveryCommand)(ctx as never, {
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      commandType: "repair_terminal_seed",
+      commandContext: {
+        expectedBlockerType: "terminal_seed",
+        reason: "Terminal setup data needs repair.",
+      },
+      expectedEvidence: {
+        terminalIntegrityStatus: "healthy",
+      },
+    });
+
+    expect(result).toEqual({
+      kind: "user_error",
+      error: {
+        code: "authorization_failed",
+        message:
+          "You do not have access to issue POS terminal recovery commands.",
+      },
+    });
+    expect(mocks.issueTerminalRecoveryCommandService).not.toHaveBeenCalled();
+  });
 
   it("rejects recovery command listing when the terminal sync secret is wrong", async () => {
     const ctx = buildCtx({

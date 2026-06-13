@@ -155,6 +155,34 @@ describe("terminalRecoveryCommands", () => {
     expect(JSON.stringify(result)).not.toContain("sync-secret-secret");
   });
 
+  it("returns precondition_failed when terminal seed identity preconditions drift", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+    });
+
+    const result = await executeTerminalRecoveryCommand({
+      command: buildCommand({
+        commandContext: {
+          expectedBlockerType: "terminal_seed",
+          expectedTerminalSeedIdentity: "other-terminal",
+        },
+        commandType: "repair_terminal_seed",
+        type: undefined,
+      }),
+      store,
+      storeId: "store-1",
+      terminalId: "terminal-cloud-1",
+      terminalSeed: seed,
+    });
+
+    expect(result).toEqual({
+      commandId: "command-1",
+      reason: "precondition_failed",
+      status: "precondition_failed",
+      type: "repair_terminal_seed",
+    });
+  });
+
   it("leaves terminal integrity blocked when repaired seed persistence fails", async () => {
     const store = {
       writeProvisionedTerminalSeedAndClearTerminalIntegrity: vi.fn(
@@ -287,6 +315,60 @@ describe("terminalRecoveryCommands", () => {
     });
   });
 
+  it("accepts backend-shaped drawer authority command context without a secret payload", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+      createLocalId: () => "event-1",
+    });
+    await store.appendEvent({
+      initialSyncStatus: "synced",
+      localRegisterSessionId: "register-local-1",
+      payload: {},
+      storeId: "store-1",
+      terminalId: "local-terminal-1",
+      type: "register.opened",
+    });
+    await store.writeDrawerAuthorityState({
+      cloudRegisterSessionId: "register-cloud-1",
+      localRegisterSessionId: "register-local-1",
+      observedAt: 1_500,
+      reason: "cloud_closed",
+      status: "blocked",
+      storeId: "store-1",
+      terminalId: "local-terminal-1",
+    });
+
+    const result = await executeTerminalRecoveryCommand({
+      command: {
+        _id: "backend-command-1",
+        commandContext: {
+          cloudRegisterSessionId: "register-cloud-1",
+          expectedBlockerType: "cloud_closed",
+          localRegisterSessionId: "register-local-1",
+          reason: "Drawer authority requires terminal-local repair.",
+        },
+        commandType: "clear_stale_drawer_authority",
+        expectedEvidence: {
+          drawerAuthorityStatus: "healthy",
+          localRegisterSessionId: "register-local-1",
+        },
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      },
+      store,
+      storeId: "store-1",
+      terminalId: "terminal-cloud-1",
+      terminalSeed: seed,
+    });
+
+    expect(result).toMatchObject({
+      commandId: "backend-command-1",
+      status: "completed",
+      type: "clear_stale_drawer_authority",
+    });
+    expect(JSON.stringify(result)).not.toMatch(/syncSecret|payload|proof/i);
+  });
+
   it("fails closed and keeps drawer authority when preconditions drift", async () => {
     const store = createPosLocalStore({
       adapter: createMemoryPosLocalStorageAdapter(),
@@ -325,7 +407,7 @@ describe("terminalRecoveryCommands", () => {
 
     expect(result).toMatchObject({
       reason: "precondition_failed",
-      status: "failed",
+      status: "precondition_failed",
     });
     await expect(
       store.readDrawerAuthorityState({
@@ -336,6 +418,44 @@ describe("terminalRecoveryCommands", () => {
     ).resolves.toMatchObject({
       ok: true,
       value: expect.objectContaining({ status: "blocked" }),
+    });
+  });
+
+  it("returns precondition_failed when drawer authority is no longer blocked", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+    });
+    await store.writeDrawerAuthorityState({
+      cloudRegisterSessionId: "register-cloud-1",
+      localRegisterSessionId: "register-local-1",
+      observedAt: 1_500,
+      reason: "cloud_closed",
+      status: "healthy",
+      storeId: "store-1",
+      terminalId: "local-terminal-1",
+    });
+
+    const result = await executeTerminalRecoveryCommand({
+      command: buildCommand({
+        commandContext: {
+          cloudRegisterSessionId: "register-cloud-1",
+          expectedBlockerType: "cloud_closed",
+          localRegisterSessionId: "register-local-1",
+        },
+        commandType: "clear_stale_drawer_authority",
+        type: undefined,
+      }),
+      store,
+      storeId: "store-1",
+      terminalId: "terminal-cloud-1",
+      terminalSeed: seed,
+    });
+
+    expect(result).toEqual({
+      commandId: "command-1",
+      reason: "unsafe_authority_state",
+      status: "precondition_failed",
+      type: "clear_stale_drawer_authority",
     });
   });
 
@@ -474,5 +594,6 @@ describe("terminalRecoveryCommands", () => {
     expect(acknowledgement).not.toMatch(
       /proof-token|sync-secret|secret-value|verifier|rawPayload|1234/i,
     );
+    expect(acknowledgement.length).toBeLessThan(1_000);
   });
 });

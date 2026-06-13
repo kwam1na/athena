@@ -58,6 +58,7 @@ describe("terminal health presentation", () => {
         blockers: [
           {
             action: {
+              expectedPreconditionHash: "terminal-cloud-repair:hash",
               kind: "cloud_repair",
               label: "Resolve duplicate drawer attempts",
               status: "available",
@@ -70,6 +71,13 @@ describe("terminal health presentation", () => {
           },
           {
             action: {
+              commandContext: {
+                expectedBlockerType: "terminal_integrity",
+              },
+              commandType: "repair_terminal_seed",
+              expectedEvidence: {
+                terminalIntegrityStatus: "healthy",
+              },
               kind: "terminal_command",
               label: "Send terminal repair command",
               status: "available",
@@ -107,6 +115,157 @@ describe("terminal health presentation", () => {
       "Resolve duplicate drawer attempts",
       "Send terminal repair command",
     ]);
+  });
+
+  it("builds safe recovery actions from raw preview metadata", () => {
+    const presentation = buildTerminalRecoveryPresentation({
+      recovery: {
+        cloudRepair: {
+          preconditionHash: "terminal-cloud-repair:abc",
+          safeConflictIds: ["conflict-1"],
+          skippedConflictIds: [],
+        },
+        manualReview: [
+          {
+            reason: "sale_completed payment allocation requires manager review",
+            source: "cloud_sync",
+            type: "cloud_held",
+          },
+        ],
+        readiness: "needs_terminal_action",
+        terminalActions: [
+          {
+            commandContext: {
+              expectedBlockerType: "authorization_failed",
+              reason: "Terminal integrity requires repair.",
+            },
+            commandType: "repair_terminal_seed",
+            expectedEvidence: {
+              terminalIntegrityStatus: "healthy",
+            },
+            reason: "Terminal integrity requires local repair.",
+          },
+          {
+            commandContext: {
+              cloudRegisterSessionId: "cloud-session-1",
+              expectedBlockerType: "cloud_closed",
+              localRegisterSessionId: "local-session-1",
+              reason: "Drawer authority requires terminal-local repair.",
+            },
+            commandType: "clear_stale_drawer_authority",
+            expectedEvidence: {
+              drawerAuthorityStatus: "healthy",
+              localRegisterSessionId: "local-session-1",
+            },
+            reason: "Drawer authority requires terminal-local repair.",
+          },
+        ],
+      },
+      runtimeStatus: null,
+      syncEvidence: {},
+      terminal: { status: "active" },
+    });
+
+    expect(presentation.readiness.label).toBe("Needs terminal action");
+    expect(presentation.groups.cloudRepair[0]?.action).toEqual(
+      expect.objectContaining({
+        expectedPreconditionHash: "terminal-cloud-repair:abc",
+        kind: "cloud_repair",
+      }),
+    );
+    expect(presentation.groups.terminalRequired.map((blocker) => blocker.action)).toEqual([
+      expect.objectContaining({
+        commandType: "repair_terminal_seed",
+        expectedEvidence: { terminalIntegrityStatus: "healthy" },
+        kind: "terminal_command",
+      }),
+      expect.objectContaining({
+        commandContext: expect.objectContaining({
+          cloudRegisterSessionId: "cloud-session-1",
+          localRegisterSessionId: "local-session-1",
+        }),
+        commandType: "clear_stale_drawer_authority",
+        kind: "terminal_command",
+      }),
+    ]);
+    expect(presentation.groups.manualReview[0]?.summary).toBe(
+      "Manual review required. Use the linked operations or cash-control review before support repairs this terminal.",
+    );
+    expect(presentation.safeActions.map((action) => action.kind)).toEqual([
+      "cloud_repair",
+      "terminal_command",
+      "terminal_command",
+    ]);
+  });
+
+  it("suppresses duplicate recovery actions while command lifecycle is active", () => {
+    const presentation = buildTerminalRecoveryPresentation({
+      recovery: {
+        commandStatus: {
+          label: "Terminal command queued.",
+          status: "pending",
+          verificationStatus: "waiting_for_acknowledgement",
+        },
+        terminalActions: [
+          {
+            commandContext: {
+              expectedBlockerType: "authorization_failed",
+            },
+            commandType: "repair_terminal_seed",
+            expectedEvidence: {
+              terminalIntegrityStatus: "healthy",
+            },
+            reason: "Terminal integrity requires local repair.",
+          },
+        ],
+      },
+      runtimeStatus: null,
+      syncEvidence: {},
+      terminal: { status: "active" },
+    });
+
+    expect(presentation.safeActions).toEqual([]);
+    expect(presentation.groups.terminalRequired[0]?.action).toEqual(
+      expect.objectContaining({
+        status: "pending",
+      }),
+    );
+  });
+
+  it("allows recovery actions after the latest command expires", () => {
+    const presentation = buildTerminalRecoveryPresentation({
+      recovery: {
+        commandStatus: {
+          label: "Terminal command queued.",
+          status: "expired",
+          verificationStatus: "waiting_for_acknowledgement",
+        },
+        terminalActions: [
+          {
+            commandContext: {
+              expectedBlockerType: "authorization_failed",
+            },
+            commandType: "repair_terminal_seed",
+            expectedEvidence: {
+              terminalIntegrityStatus: "healthy",
+            },
+            reason: "Terminal integrity requires local repair.",
+          },
+        ],
+      },
+      runtimeStatus: null,
+      syncEvidence: {},
+      terminal: { status: "active" },
+    });
+
+    expect(presentation.safeActions.map((action) => action.status)).toEqual([
+      "expired",
+    ]);
+    expect(presentation.groups.terminalRequired[0]?.action).toEqual(
+      expect.objectContaining({
+        status: "expired",
+      }),
+    );
   });
 
   it("normalizes duplicate register-open and authorization backend wording in derived recovery copy", () => {
@@ -166,10 +325,7 @@ describe("terminal health presentation", () => {
     expect(presentation.groups.manualReview[0]?.summary).toBe(
       "Manual review required. Use the linked operations or cash-control review before support repairs this terminal.",
     );
-    expect(presentation.safeActions.map((action) => action.kind)).toEqual([
-      "cloud_repair",
-      "terminal_command",
-    ]);
+    expect(presentation.safeActions.map((action) => action.kind)).toEqual([]);
     expect(renderedCopy).not.toMatch(/register_opened|already open|authorization_failed|sync secret/i);
   });
 
