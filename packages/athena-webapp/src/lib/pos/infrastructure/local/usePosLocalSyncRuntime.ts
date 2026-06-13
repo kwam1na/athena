@@ -193,12 +193,22 @@ export function usePosLocalSyncRuntimeStatus(input: {
     [input.appSessionRecovery],
   );
   const lastRuntimeStatusSignatureRef = useRef<string | null>(null);
+  const runtimeStatusPublishInFlightRef = useRef(false);
+  const queuedRuntimeStatusSignatureRef = useRef<string | null>(null);
+  const isRuntimeStatusPublisherMountedRef = useRef(true);
   const observedRecoveryCommandIdsRef = useRef<Set<string>>(new Set());
   const requestRetry = useCallback(() => {
     setRefreshToken((current) => current + 1);
     setManualRetryToken((current) => current + 1);
     onRetrySync?.();
   }, [onRetrySync]);
+
+  useEffect(
+    () => () => {
+      isRuntimeStatusPublisherMountedRef.current = false;
+    },
+    [],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -857,7 +867,12 @@ export function usePosLocalSyncRuntimeStatus(input: {
       terminalId: checkInTerminalId,
     });
     if (signature === lastRuntimeStatusSignatureRef.current) return;
+    if (runtimeStatusPublishInFlightRef.current) {
+      queuedRuntimeStatusSignatureRef.current = signature;
+      return;
+    }
     lastRuntimeStatusSignatureRef.current = signature;
+    runtimeStatusPublishInFlightRef.current = true;
 
     const attemptedAt = Date.now();
     setDebug((current) =>
@@ -996,6 +1011,18 @@ export function usePosLocalSyncRuntimeStatus(input: {
             checkInPublishStatus: "failed",
           }),
         );
+      })
+      .finally(() => {
+        runtimeStatusPublishInFlightRef.current = false;
+        const queuedSignature = queuedRuntimeStatusSignatureRef.current;
+        queuedRuntimeStatusSignatureRef.current = null;
+        if (
+          queuedSignature &&
+          queuedSignature !== lastRuntimeStatusSignatureRef.current &&
+          isRuntimeStatusPublisherMountedRef.current
+        ) {
+          setRuntimeStatusObservationToken((current) => current + 1);
+        }
       });
 
     return () => {

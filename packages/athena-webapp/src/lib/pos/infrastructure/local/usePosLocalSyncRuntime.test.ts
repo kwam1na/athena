@@ -2964,6 +2964,89 @@ describe("usePosLocalSyncRuntimeStatus", () => {
     expect(mocks.reportTerminalRuntimeStatus).toHaveBeenCalledTimes(1);
   });
 
+  it("queues changed runtime check-ins while a previous publish is in flight", async () => {
+    const firstPublish = deferred<{
+      kind: "ok";
+      data: Record<string, never>;
+    }>();
+    const secondPublish = deferred<{
+      kind: "ok";
+      data: Record<string, never>;
+    }>();
+    mocks.reportTerminalRuntimeStatus
+      .mockReturnValueOnce(firstPublish.promise)
+      .mockReturnValueOnce(secondPublish.promise);
+    const store = {
+      listEvents: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      readProvisionedTerminalSeed: vi.fn(async () => ({
+        ok: true,
+        value: {
+          cloudTerminalId: "terminal-cloud-1",
+          displayName: "Front",
+          provisionedAt: 1,
+          schemaVersion: 1,
+          syncSecretHash: "sync-secret-1",
+          storeId: "store-1",
+          terminalId: "local-terminal-1",
+        },
+      })),
+    };
+
+    const storeFactory = () => store as never;
+    const { rerender } = renderHook(
+      ({ staffProfileId }) =>
+        usePosLocalSyncRuntimeStatus({
+          mode: "status-only",
+          staffProfileId,
+          storeFactory,
+          storeId: "store-1",
+          terminalId: "terminal-cloud-1",
+        }),
+      {
+        initialProps: { staffProfileId: "staff-1" },
+      },
+    );
+
+    await waitFor(() =>
+      expect(mocks.reportTerminalRuntimeStatus).toHaveBeenCalledTimes(1),
+    );
+
+    rerender({ staffProfileId: "staff-2" });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(mocks.reportTerminalRuntimeStatus).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      firstPublish.resolve({
+        kind: "ok",
+        data: {},
+      });
+    });
+
+    await waitFor(() =>
+      expect(mocks.reportTerminalRuntimeStatus).toHaveBeenCalledTimes(2),
+    );
+    expect(mocks.reportTerminalRuntimeStatus).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        status: expect.objectContaining({
+          staffAuthority: expect.objectContaining({
+            staffProfileId: "staff-2",
+          }),
+        }),
+      }),
+    );
+
+    await act(async () => {
+      secondPublish.resolve({
+        kind: "ok",
+        data: {},
+      });
+    });
+  });
+
   it("exposes missing check-in publish prerequisites in debug state", async () => {
     const store = {
       listEvents: vi.fn(async () => ({
