@@ -42,11 +42,16 @@ const catalogResultValidator = v.object({
   skuId: v.id("productSku"),
   areProcessingFeesAbsorbed: v.boolean(),
   availabilityPolicy: v.optional(
-    v.union(v.literal("trusted_inventory"), v.literal("active_provisional_import")),
+    v.union(
+      v.literal("trusted_inventory"),
+      v.literal("active_provisional_import"),
+      v.literal("pending_checkout"),
+    ),
   ),
   inventoryImportProvisionalSkuId: v.optional(
     v.id("inventoryImportProvisionalSku"),
   ),
+  pendingCheckoutItemId: v.optional(v.id("posPendingCheckoutItem")),
 });
 
 const registerCatalogRowValidator = v.object({
@@ -57,6 +62,7 @@ const registerCatalogRowValidator = v.object({
   inventoryImportProvisionalSkuId: v.optional(
     v.id("inventoryImportProvisionalSku"),
   ),
+  pendingCheckoutItemId: v.optional(v.id("posPendingCheckoutItem")),
   name: v.string(),
   sku: v.string(),
   barcode: v.string(),
@@ -71,6 +77,7 @@ const registerCatalogRowValidator = v.object({
   availabilityPolicy: v.union(
     v.literal("trusted_inventory"),
     v.literal("active_provisional_import"),
+    v.literal("pending_checkout"),
   ),
 });
 
@@ -85,6 +92,7 @@ const registerCatalogAvailabilityValidator = v.object({
   availabilityPolicy: v.union(
     v.literal("trusted_inventory"),
     v.literal("active_provisional_import"),
+    v.literal("pending_checkout"),
   ),
 });
 
@@ -149,7 +157,8 @@ async function requireRegisterCatalogStoreAccess(
   const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
   await requireOrganizationMemberRoleWithCtx(ctx, {
     allowedRoles: ["full_admin", "pos_only"],
-    failureMessage: "You cannot view register catalog availability for this store.",
+    failureMessage:
+      "You cannot view register catalog availability for this store.",
     organizationId: store.organizationId,
     userId: athenaUser._id,
   });
@@ -202,7 +211,9 @@ async function requirePendingCheckoutSaleContext(
     throw new Error("The register session does not match this terminal.");
   }
   if (registerSession.openedByStaffProfileId !== staffProfile._id) {
-    throw new Error("The active register session does not match this staff member.");
+    throw new Error(
+      "The active register session does not match this staff member.",
+    );
   }
 
   return {
@@ -333,8 +344,7 @@ export const createOrReusePendingCheckoutItemForSale = mutation({
     const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
     await requireOrganizationMemberRoleWithCtx(ctx, {
       allowedRoles: ["full_admin", "pos_only"],
-      failureMessage:
-        "You cannot add pending checkout items for this store.",
+      failureMessage: "You cannot add pending checkout items for this store.",
       organizationId: store.organizationId,
       userId: athenaUser._id,
     });
@@ -457,7 +467,9 @@ export const resolvePendingCheckoutItemReview = mutation({
           sku: approvedSku,
         })
       ) {
-        throw new Error("Choose a valid catalog product and SKU from this store.");
+        throw new Error(
+          "Choose a valid catalog product and SKU from this store.",
+        );
       }
     }
 

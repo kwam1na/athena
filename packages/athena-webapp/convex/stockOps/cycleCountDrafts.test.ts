@@ -28,8 +28,10 @@ function createCycleCountDraftCtx() {
     cycleCountDraft: new Map<string, Record<string, any>>(),
     cycleCountDraftLine: new Map<string, Record<string, any>>(),
     inventoryMovement: new Map<string, Record<string, any>>(),
+    inventoryImportProvisionalSku: new Map<string, Record<string, any>>(),
     operationalEvent: new Map<string, Record<string, any>>(),
     operationalWorkItem: new Map<string, Record<string, any>>(),
+    posPendingCheckoutItem: new Map<string, Record<string, any>>(),
     organizationMember: new Map<string, Record<string, any>>([
       [
         "membership-1",
@@ -94,6 +96,7 @@ function createCycleCountDraftCtx() {
         return {
           collect: async () => matches(),
           first: async () => matches()[0] ?? null,
+          take: async (limit: number) => matches().slice(0, limit),
         };
       },
     };
@@ -161,8 +164,11 @@ function createCycleCountDraftCtx() {
 
               return {
                 first: async () =>
-                  Array.from(tables.organizationMember.values()).find((record) =>
-                    filters.every(([field, value]) => record[field] === value),
+                  Array.from(tables.organizationMember.values()).find(
+                    (record) =>
+                      filters.every(
+                        ([field, value]) => record[field] === value,
+                      ),
                   ) ?? null,
               };
             },
@@ -254,10 +260,13 @@ describe("cycle count drafts", () => {
       quantityAvailable: 7,
     });
 
-    const refreshed = await refreshCycleCountDraftLineBaselineCommandWithCtx(ctx, {
-      productSkuId: "sku-1" as Id<"productSku">,
-      storeId: "store-1" as Id<"store">,
-    });
+    const refreshed = await refreshCycleCountDraftLineBaselineCommandWithCtx(
+      ctx,
+      {
+        productSkuId: "sku-1" as Id<"productSku">,
+        storeId: "store-1" as Id<"store">,
+      },
+    );
 
     expect(refreshed.kind).toBe("ok");
     expect(Array.from(tables.cycleCountDraftLine.values())[0]).toMatchObject({
@@ -267,7 +276,9 @@ describe("cycle count drafts", () => {
       isDirty: false,
       staleStatus: "current",
     });
-    expect(tables.cycleCountDraft.get(String(ensured.data.draft._id))).toMatchObject({
+    expect(
+      tables.cycleCountDraft.get(String(ensured.data.draft._id)),
+    ).toMatchObject({
       changedLineCount: 0,
       staleLineCount: 0,
     });
@@ -360,10 +371,14 @@ describe("cycle count drafts", () => {
       lineItemCount: 2,
       status: "applied",
     });
-    expect(tables.cycleCountDraft.get(String(hairDraft.data.draft._id))).toMatchObject({
+    expect(
+      tables.cycleCountDraft.get(String(hairDraft.data.draft._id)),
+    ).toMatchObject({
       status: "submitted",
     });
-    expect(tables.cycleCountDraft.get(String(beveragesDraft.data.draft._id))).toMatchObject({
+    expect(
+      tables.cycleCountDraft.get(String(beveragesDraft.data.draft._id)),
+    ).toMatchObject({
       status: "submitted",
     });
   });
@@ -419,7 +434,9 @@ describe("cycle count drafts", () => {
     });
 
     expect(discarded.kind).toBe("ok");
-    expect(tables.cycleCountDraft.get(String(ensured.data.draft._id))).toMatchObject({
+    expect(
+      tables.cycleCountDraft.get(String(ensured.data.draft._id)),
+    ).toMatchObject({
       status: "discarded",
     });
     expect(tables.productSku.get("sku-1")).toMatchObject({ inventoryCount: 8 });
@@ -461,7 +478,9 @@ describe("cycle count drafts", () => {
     expect(tables.productSku.get("sku-1")).toMatchObject({
       inventoryCount: 5,
     });
-    expect(tables.cycleCountDraft.get(String(ensured.data.draft._id))).toMatchObject({
+    expect(
+      tables.cycleCountDraft.get(String(ensured.data.draft._id)),
+    ).toMatchObject({
       status: "submitted",
     });
     expect(Array.from(tables.operationalEvent.values())).toEqual(

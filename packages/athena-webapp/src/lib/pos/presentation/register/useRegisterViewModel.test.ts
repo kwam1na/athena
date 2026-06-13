@@ -53,13 +53,11 @@ const mockReadTerminalIntegrityState = vi.fn();
 const mockWriteDrawerAuthorityState = vi.fn();
 const mockUsePosTerminalAppSessionRecoveryRuntimeInput = vi.fn();
 
-let mockActiveStore:
-  | {
-      _id: Id<"store">;
-      currency: string;
-      organizationId: Id<"organization">;
-    }
-  | null;
+let mockActiveStore: {
+  _id: Id<"store">;
+  currency: string;
+  organizationId: Id<"organization">;
+} | null;
 let mockTerminal:
   | {
       _id: Id<"posTerminal">;
@@ -207,7 +205,10 @@ let mockRegisterCatalogRows: Array<{
   color: string;
   areProcessingFeesAbsorbed: boolean;
   inventoryImportProvisionalSkuId?: Id<"inventoryImportProvisionalSku">;
-  availabilityPolicy?: "trusted_inventory" | "active_provisional_import";
+  availabilityPolicy?:
+    | "trusted_inventory"
+    | "active_provisional_import"
+    | "pending_checkout";
 }>;
 let mockRegisterServiceCatalogRows: Array<{
   serviceCatalogId: Id<"serviceCatalog">;
@@ -225,7 +226,10 @@ let mockRegisterCatalogAvailabilityRows: Array<{
   inStock: boolean;
   quantityAvailable: number;
   inventoryImportProvisionalSkuId?: Id<"inventoryImportProvisionalSku">;
-  availabilityPolicy?: "trusted_inventory" | "active_provisional_import";
+  availabilityPolicy?:
+    | "trusted_inventory"
+    | "active_provisional_import"
+    | "pending_checkout";
 }>;
 
 vi.mock("convex/react", () => ({
@@ -411,7 +415,10 @@ function buildRegisterCatalogAvailabilityRow(
 }
 
 function buildLocalEvent(
-  overrides: Partial<Record<string, unknown>> & { sequence: number; type: string },
+  overrides: Partial<Record<string, unknown>> & {
+    sequence: number;
+    type: string;
+  },
 ) {
   const { sequence, type, ...rest } = overrides;
 
@@ -487,7 +494,9 @@ function getTestOperatingDate(date = new Date()) {
   ].join("-");
 }
 
-function buildCashierPresence(overrides: Partial<Record<string, unknown>> = {}) {
+function buildCashierPresence(
+  overrides: Partial<Record<string, unknown>> = {},
+) {
   const expiresAt = Date.now() + 60_000;
   return {
     activeRoles: ["cashier"],
@@ -660,10 +669,12 @@ describe("useRegisterViewModel", () => {
       value: null,
     });
     mockWriteProvisionedTerminalSeedAndClearTerminalIntegrity.mockReset();
-    mockWriteProvisionedTerminalSeedAndClearTerminalIntegrity.mockResolvedValue({
-      ok: true,
-      value: null,
-    });
+    mockWriteProvisionedTerminalSeedAndClearTerminalIntegrity.mockResolvedValue(
+      {
+        ok: true,
+        value: null,
+      },
+    );
     mockGetStaffAuthorityReadiness.mockReset();
     mockGetStaffAuthorityReadiness.mockResolvedValue({
       ok: true,
@@ -1327,9 +1338,9 @@ describe("useRegisterViewModel", () => {
       ],
     });
 
-    const runtimeInput = mockUsePosLocalSyncRuntimeStatus.mock.calls.at(-1)?.[0] as
-      | { onLocalEventsChanged?: () => void }
-      | undefined;
+    const runtimeInput = mockUsePosLocalSyncRuntimeStatus.mock.calls.at(
+      -1,
+    )?.[0] as { onLocalEventsChanged?: () => void } | undefined;
     await act(async () => {
       runtimeInput?.onLocalEventsChanged?.();
     });
@@ -1415,8 +1426,12 @@ describe("useRegisterViewModel", () => {
     const { result } = renderHook(() => useRegisterViewModel());
 
     await act(async () => {
-      result.current.authDialog?.onAuthenticated(buildStaffAuthenticationResult());
-      result.current.authDialog?.onAuthenticated(buildStaffAuthenticationResult());
+      result.current.authDialog?.onAuthenticated(
+        buildStaffAuthenticationResult(),
+      );
+      result.current.authDialog?.onAuthenticated(
+        buildStaffAuthenticationResult(),
+      );
     });
 
     expect(
@@ -2300,7 +2315,9 @@ describe("useRegisterViewModel", () => {
     );
 
     await act(async () => {
-      result.current.authDialog?.onAuthenticated(buildStaffAuthenticationResult());
+      result.current.authDialog?.onAuthenticated(
+        buildStaffAuthenticationResult(),
+      );
     });
 
     expect(result.current.cart.items).toHaveLength(1);
@@ -2448,7 +2465,9 @@ describe("useRegisterViewModel", () => {
       "drawer-1",
     );
     expect(result.current.drawerGate?.onReopenRegister).toBeUndefined();
-    expect(result.current.drawerGate?.onCloseoutSecondaryAction).toBeUndefined();
+    expect(
+      result.current.drawerGate?.onCloseoutSecondaryAction,
+    ).toBeUndefined();
     expect(result.current.productEntry.disabled).toBe(true);
     expect(mockStartSession).not.toHaveBeenCalled();
   });
@@ -3244,9 +3263,7 @@ describe("useRegisterViewModel", () => {
       ),
     );
     expect(mockMarkLocalEventsSynced).not.toHaveBeenCalled();
-    expect(toast.success).toHaveBeenCalledWith(
-      "Register closed.",
-    );
+    expect(toast.success).toHaveBeenCalledWith("Register closed.");
   });
 
   it("keeps the POS drawer gate open when local closeout persistence fails", async () => {
@@ -3276,7 +3293,9 @@ describe("useRegisterViewModel", () => {
       input.type === "register.closeout_started"
         ? {
             ok: false,
-            error: { message: "POS local store could not write the local event." },
+            error: {
+              message: "POS local store could not write the local event.",
+            },
           }
         : { ok: true, value: { localEventId: "local-event-1" } },
     );
@@ -3914,7 +3933,9 @@ describe("useRegisterViewModel", () => {
       input.type === "register.reopened"
         ? {
             ok: false,
-            error: { message: "POS local store could not write the local event." },
+            error: {
+              message: "POS local store could not write the local event.",
+            },
           }
         : { ok: true, value: { localEventId: "local-event-1" } },
     );
@@ -4362,9 +4383,8 @@ describe("useRegisterViewModel", () => {
         },
       ],
     });
-    const { projectLocalRegisterReadModel } = await import(
-      "../../infrastructure/local/registerReadModel"
-    );
+    const { projectLocalRegisterReadModel } =
+      await import("../../infrastructure/local/registerReadModel");
     const replayed = projectLocalRegisterReadModel({
       events: (await mockListLocalEvents()).value,
       isOnline: true,
@@ -4411,9 +4431,9 @@ describe("useRegisterViewModel", () => {
       await result.current.sessionPanel?.onStartNewSession();
     });
 
-    expect(mockAppendLocalEvent.mock.calls.map(([event]) => event.type)).toEqual(
-      ["register.opened", "session.started"],
-    );
+    expect(
+      mockAppendLocalEvent.mock.calls.map(([event]) => event.type),
+    ).toEqual(["register.opened", "session.started"]);
     expect(mockAppendLocalEvent).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
@@ -5267,7 +5287,9 @@ describe("useRegisterViewModel", () => {
       await completePromise;
     });
 
-    expect(mockAppendLocalEvent.mock.calls.map(([event]) => event.type)).toEqual([
+    expect(
+      mockAppendLocalEvent.mock.calls.map(([event]) => event.type),
+    ).toEqual([
       "register.opened",
       "session.started",
       "cart.service_added",
@@ -6525,7 +6547,10 @@ describe("useRegisterViewModel", () => {
           sequence: localEvents.length + 1,
         }),
       );
-      return { ok: true, value: { localEventId: `event-${localEvents.length}` } };
+      return {
+        ok: true,
+        value: { localEventId: `event-${localEvents.length}` },
+      };
     });
 
     const { useRegisterViewModel } = await import("./useRegisterViewModel");
@@ -6908,9 +6933,10 @@ describe("useRegisterViewModel", () => {
       result.current.productEntry.setProductSearchQuery("searchable");
     });
     await waitFor(() => {
-      const latestInput = mockUseConvexRegisterCatalogAvailability.mock.calls.at(
-        -1,
-      )?.[0] as { productSkuIds?: Array<Id<"productSku">> } | undefined;
+      const latestInput =
+        mockUseConvexRegisterCatalogAvailability.mock.calls.at(-1)?.[0] as
+          | { productSkuIds?: Array<Id<"productSku">> }
+          | undefined;
       const cartSkuIndex =
         latestInput?.productSkuIds?.indexOf("sku-2" as Id<"productSku">) ?? -1;
       const searchSkuIndex =
@@ -7489,7 +7515,9 @@ describe("useRegisterViewModel", () => {
       input.type === "register.opened"
         ? {
             ok: false,
-            error: { message: "POS local store could not write the local event." },
+            error: {
+              message: "POS local store could not write the local event.",
+            },
           }
         : { ok: true, value: { localEventId: "local-event-1" } },
     );
@@ -8034,7 +8062,9 @@ describe("useRegisterViewModel", () => {
     };
     mockActiveSession = null;
     mockRegisterCatalogRows = [buildRegisterCatalogRow()];
-    mockRegisterCatalogAvailabilityRows = [buildRegisterCatalogAvailabilityRow()];
+    mockRegisterCatalogAvailabilityRows = [
+      buildRegisterCatalogAvailabilityRow(),
+    ];
 
     const { useRegisterViewModel } = await import("./useRegisterViewModel");
     const { result } = renderHook(() => useRegisterViewModel());
@@ -8118,7 +8148,9 @@ describe("useRegisterViewModel", () => {
       registerSessionId: "drawer-1" as Id<"registerSession">,
     };
     mockRegisterCatalogRows = [buildRegisterCatalogRow()];
-    mockRegisterCatalogAvailabilityRows = [buildRegisterCatalogAvailabilityRow()];
+    mockRegisterCatalogAvailabilityRows = [
+      buildRegisterCatalogAvailabilityRow(),
+    ];
 
     const { useRegisterViewModel } = await import("./useRegisterViewModel");
     const { result } = renderHook(() => useRegisterViewModel());
@@ -8162,9 +8194,7 @@ describe("useRegisterViewModel", () => {
       await result.current.checkout.onCompleteTransaction();
     });
 
-    const localEvents = mockAppendLocalEvent.mock.calls.map(
-      ([event]) => event,
-    );
+    const localEvents = mockAppendLocalEvent.mock.calls.map(([event]) => event);
     const eventTypes = localEvents.map((event) => event.type);
     expect(eventTypes).toEqual(
       expect.arrayContaining([
@@ -8276,9 +8306,7 @@ describe("useRegisterViewModel", () => {
       );
     });
 
-    const localEvents = mockAppendLocalEvent.mock.calls.map(
-      ([event]) => event,
-    );
+    const localEvents = mockAppendLocalEvent.mock.calls.map(([event]) => event);
     const pendingDefinitionIndex = localEvents.findIndex(
       (event) => event?.type === "pending_checkout_item.defined",
     );
@@ -8597,7 +8625,9 @@ describe("useRegisterViewModel", () => {
       registerSessionId: "drawer-1" as Id<"registerSession">,
     };
     mockRegisterCatalogRows = [buildRegisterCatalogRow()];
-    mockRegisterCatalogAvailabilityRows = [buildRegisterCatalogAvailabilityRow()];
+    mockRegisterCatalogAvailabilityRows = [
+      buildRegisterCatalogAvailabilityRow(),
+    ];
 
     const { useRegisterViewModel } = await import("./useRegisterViewModel");
     const { result } = renderHook(() => useRegisterViewModel());
@@ -8851,9 +8881,7 @@ describe("useRegisterViewModel", () => {
       ),
     );
     expect(mockMarkLocalEventsSynced).not.toHaveBeenCalled();
-    expect(toast.success).toHaveBeenCalledWith(
-      "Drawer open",
-    );
+    expect(toast.success).toHaveBeenCalledWith("Drawer open");
     await waitFor(() => expect(result.current.drawerGate).toBeNull());
     expect(result.current.productEntry.disabled).toBe(false);
     expect(result.current.syncStatus).toEqual(
@@ -8882,9 +8910,9 @@ describe("useRegisterViewModel", () => {
       ],
     });
 
-    const runtimeInput = mockUsePosLocalSyncRuntimeStatus.mock.calls.at(-1)?.[0] as
-      | { onLocalEventsChanged?: () => void }
-      | undefined;
+    const runtimeInput = mockUsePosLocalSyncRuntimeStatus.mock.calls.at(
+      -1,
+    )?.[0] as { onLocalEventsChanged?: () => void } | undefined;
     await act(async () => {
       runtimeInput?.onLocalEventsChanged?.();
     });
@@ -8992,7 +9020,9 @@ describe("useRegisterViewModel", () => {
     await act(async () => {
       await result.current.cart.onClearCart();
     });
-    expect(mockReleaseSessionInventoryHoldsAndDeleteItems).not.toHaveBeenCalled();
+    expect(
+      mockReleaseSessionInventoryHoldsAndDeleteItems,
+    ).not.toHaveBeenCalled();
     expect(result.current.cart.items).toEqual([]);
 
     await act(async () => {
@@ -9028,7 +9058,9 @@ describe("useRegisterViewModel", () => {
           type: "session.payments_updated",
           localPosSessionId: expect.stringMatching(/^local-pos-session-/),
           payload: expect.objectContaining({
-            payments: [expect.objectContaining({ method: "cash", amount: 200 })],
+            payments: [
+              expect.objectContaining({ method: "cash", amount: 200 }),
+            ],
             stage: "paymentAdded",
           }),
         }),
@@ -9043,9 +9075,7 @@ describe("useRegisterViewModel", () => {
     expect(completed).toBe(true);
     expect(mockUpdateSession).not.toHaveBeenCalled();
     expect(mockCompleteTransaction).not.toHaveBeenCalled();
-    expect(result.current.checkout.completedOrderNumber).toMatch(
-      /^\d{6}$/,
-    );
+    expect(result.current.checkout.completedOrderNumber).toMatch(/^\d{6}$/);
     expect(mockAppendLocalEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         type: "transaction.completed",
@@ -9800,7 +9830,9 @@ describe("useRegisterViewModel", () => {
         "staff-1" as Id<"staffProfile">,
       );
     });
-    await waitFor(() => expect(result.current.checkout.cartItems).toHaveLength(1));
+    await waitFor(() =>
+      expect(result.current.checkout.cartItems).toHaveLength(1),
+    );
 
     let addPaymentPromise: Promise<boolean> | undefined;
     await act(async () => {
@@ -9821,9 +9853,9 @@ describe("useRegisterViewModel", () => {
       await clearPromise;
     });
 
-    expect(mockAppendLocalEvent.mock.calls.map(([event]) => event.type)).toEqual(
-      ["session.payments_updated", "cart.cleared"],
-    );
+    expect(
+      mockAppendLocalEvent.mock.calls.map(([event]) => event.type),
+    ).toEqual(["session.payments_updated", "cart.cleared"]);
     expect(result.current.checkout.payments).toEqual([]);
     expect(result.current.checkout.cartItems).toEqual([]);
   });
@@ -10072,7 +10104,10 @@ describe("useRegisterViewModel", () => {
       ]),
     );
 
-    pendingAppend.resolve({ ok: true, value: { localEventId: "local-event-1" } });
+    pendingAppend.resolve({
+      ok: true,
+      value: { localEventId: "local-event-1" },
+    });
     await act(async () => {
       await addPromise;
     });
@@ -10136,7 +10171,10 @@ describe("useRegisterViewModel", () => {
     expect(result.current.cart.items[0].quantity).toBe(2);
     expect(result.current.checkout.cartItems[0].quantity).toBe(2);
 
-    pendingAppend.resolve({ ok: true, value: { localEventId: "local-event-1" } });
+    pendingAppend.resolve({
+      ok: true,
+      value: { localEventId: "local-event-1" },
+    });
     await act(async () => {
       await addPromise;
     });
@@ -10414,7 +10452,9 @@ describe("useRegisterViewModel", () => {
               quantity: 2,
             }),
           ]),
-          payments: [expect.objectContaining({ method: "cash", amount: 10_000 })],
+          payments: [
+            expect.objectContaining({ method: "cash", amount: 10_000 }),
+          ],
         }),
       }),
     );
@@ -10442,7 +10482,9 @@ describe("useRegisterViewModel", () => {
       input.type === "session.started"
         ? {
             ok: false,
-            error: { message: "POS local store could not write the local event." },
+            error: {
+              message: "POS local store could not write the local event.",
+            },
           }
         : { ok: true, value: { localEventId: "local-event-1" } },
     );
@@ -10620,7 +10662,10 @@ describe("useRegisterViewModel", () => {
     expect(result.current.cart.items).toHaveLength(0);
     expect(result.current.checkout.cartItems).toHaveLength(0);
 
-    pendingAppend.resolve({ ok: true, value: { localEventId: "local-event-1" } });
+    pendingAppend.resolve({
+      ok: true,
+      value: { localEventId: "local-event-1" },
+    });
     await act(async () => {
       await removePromise;
     });
@@ -10778,25 +10823,25 @@ describe("useRegisterViewModel", () => {
         sync: { status: "pending" },
       },
     ];
-    mockAppendLocalEvent.mockImplementation((input: Record<string, unknown>) => {
-      localEvents.push({
-        localEventId: `local-event-${localEvents.length + 1}`,
-        schemaVersion: 1,
-        sequence: localEvents.length + 1,
-        createdAt: 1_000 + localEvents.length + 1,
-        sync: { status: "pending" },
-        ...input,
-      });
-      if (
-        input.type === "cart.item_added"
-      ) {
-        return pendingRemove.promise;
-      }
-      return Promise.resolve({
-        ok: true,
-        value: { localEventId: `local-event-${localEvents.length}` },
-      });
-    });
+    mockAppendLocalEvent.mockImplementation(
+      (input: Record<string, unknown>) => {
+        localEvents.push({
+          localEventId: `local-event-${localEvents.length + 1}`,
+          schemaVersion: 1,
+          sequence: localEvents.length + 1,
+          createdAt: 1_000 + localEvents.length + 1,
+          sync: { status: "pending" },
+          ...input,
+        });
+        if (input.type === "cart.item_added") {
+          return pendingRemove.promise;
+        }
+        return Promise.resolve({
+          ok: true,
+          value: { localEventId: `local-event-${localEvents.length}` },
+        });
+      },
+    );
     mockListLocalEvents.mockImplementation(() =>
       Promise.resolve({ ok: true, value: localEvents }),
     );
@@ -10924,7 +10969,10 @@ describe("useRegisterViewModel", () => {
     expect(result.current.cart.items).toHaveLength(1);
     expect(result.current.checkout.cartItems).toHaveLength(1);
 
-    pendingAppend.resolve({ ok: true, value: { localEventId: "local-event-1" } });
+    pendingAppend.resolve({
+      ok: true,
+      value: { localEventId: "local-event-1" },
+    });
     await act(async () => {
       await clearPromise;
     });
@@ -11016,7 +11064,9 @@ describe("useRegisterViewModel", () => {
       input.type === "session.payments_updated"
         ? {
             ok: false,
-            error: { message: "POS local store could not write the local event." },
+            error: {
+              message: "POS local store could not write the local event.",
+            },
           }
         : { ok: true, value: { localEventId: "local-event-1" } },
     );
@@ -11140,7 +11190,9 @@ describe("useRegisterViewModel", () => {
       input.type === "session.payments_updated"
         ? {
             ok: false,
-            error: { message: "POS local store could not write the local event." },
+            error: {
+              message: "POS local store could not write the local event.",
+            },
           }
         : { ok: true, value: { localEventId: "local-event-1" } },
     );
@@ -11175,7 +11227,9 @@ describe("useRegisterViewModel", () => {
       input.type === "session.payments_updated"
         ? {
             ok: false,
-            error: { message: "POS local store could not write the local event." },
+            error: {
+              message: "POS local store could not write the local event.",
+            },
           }
         : { ok: true, value: { localEventId: "local-event-1" } },
     );
@@ -11317,10 +11371,9 @@ describe("useRegisterViewModel", () => {
     });
 
     expect(updated).toBe(false);
-    expect(mockAppendLocalEvent.mock.calls.map(([event]) => event.type)).toEqual([
-      "session.payments_updated",
-      "transaction.completed",
-    ]);
+    expect(
+      mockAppendLocalEvent.mock.calls.map(([event]) => event.type),
+    ).toEqual(["session.payments_updated", "transaction.completed"]);
     expect(mockAppendLocalEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         type: "transaction.completed",
@@ -11385,9 +11438,9 @@ describe("useRegisterViewModel", () => {
     });
 
     expect(addedDuringClear).toBe(false);
-    expect(mockAppendLocalEvent.mock.calls.map(([event]) => event.type)).toEqual(
-      ["session.payments_updated", "cart.cleared"],
-    );
+    expect(
+      mockAppendLocalEvent.mock.calls.map(([event]) => event.type),
+    ).toEqual(["session.payments_updated", "cart.cleared"]);
     expect(result.current.checkout.payments).toEqual([]);
     expect(result.current.checkout.cartItems).toEqual([]);
   });
@@ -11577,7 +11630,9 @@ describe("useRegisterViewModel", () => {
       await result.current.cart.onClearCart();
     });
 
-    expect(mockReleaseSessionInventoryHoldsAndDeleteItems).not.toHaveBeenCalled();
+    expect(
+      mockReleaseSessionInventoryHoldsAndDeleteItems,
+    ).not.toHaveBeenCalled();
     expect(mockAppendLocalEvent).not.toHaveBeenCalledWith(
       expect.objectContaining({ type: "cart.item_added" }),
     );
@@ -11680,7 +11735,9 @@ describe("useRegisterViewModel", () => {
             localReceiptNumber: expect.stringMatching(/^local-txn-/),
             receiptNumber: expect.stringMatching(/^\d{6}$/),
             items: [expect.objectContaining({ localItemId: "item-1" })],
-            payments: [expect.objectContaining({ method: "cash", amount: 120 })],
+            payments: [
+              expect.objectContaining({ method: "cash", amount: 120 }),
+            ],
           }),
         }),
       ),
@@ -11735,10 +11792,7 @@ describe("useRegisterViewModel", () => {
         expect.objectContaining({
           type: "transaction.completed",
           validationMetadata: expect.objectContaining({
-            flags: [
-              "app-session-unverified",
-              "cloud-validation-uncertain",
-            ],
+            flags: ["app-session-unverified", "cloud-validation-uncertain"],
             uploadDeferredUntil: "app-session-validated",
           }),
         }),
@@ -12024,7 +12078,9 @@ describe("useRegisterViewModel", () => {
       input.type === "transaction.completed"
         ? {
             ok: false,
-            error: { message: "POS local store could not write the local event." },
+            error: {
+              message: "POS local store could not write the local event.",
+            },
           }
         : { ok: true, value: { localEventId: "local-event-1" } },
     );

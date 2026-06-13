@@ -152,11 +152,13 @@ export interface PosCatalogItemDto {
   areProcessingFeesAbsorbed: boolean;
   availabilityPolicy?: PosRegisterCatalogAvailabilityPolicy;
   inventoryImportProvisionalSkuId?: Id<"inventoryImportProvisionalSku">;
+  pendingCheckoutItemId?: Id<"posPendingCheckoutItem">;
 }
 
 export type PosRegisterCatalogAvailabilityPolicy =
   | "trusted_inventory"
-  | "active_provisional_import";
+  | "active_provisional_import"
+  | "pending_checkout";
 
 export interface PosRegisterCatalogRowDto {
   id: Id<"productSku"> | Id<"inventoryImportProvisionalSku">;
@@ -176,6 +178,7 @@ export interface PosRegisterCatalogRowDto {
   color: string;
   areProcessingFeesAbsorbed: boolean;
   availabilityPolicy?: PosRegisterCatalogAvailabilityPolicy;
+  pendingCheckoutItemId?: Id<"posPendingCheckoutItem">;
 }
 
 export interface PosRegisterCatalogInput {

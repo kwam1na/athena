@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -10,6 +10,10 @@ import Products from "./Products";
 const quickAddProductSkuMock = vi.fn();
 const mockedProducts = vi.hoisted(() => ({
   allProducts: [] as Product[],
+  categories: [] as Array<{ _id: string; name: string; slug: string }>,
+  draftProducts: [] as Product[],
+  hiddenDraftProducts: [] as Product[],
+  hiddenLiveProducts: [] as Product[],
 }));
 
 class ResizeObserverStub {
@@ -28,16 +32,53 @@ vi.mock("@tanstack/react-router", () => ({
 }));
 
 vi.mock("~/src/hooks/useGetCategories", () => ({
-  useGetCategories: () => [],
+  useGetCategories: () => mockedProducts.categories,
 }));
 
 vi.mock("~/src/hooks/useGetProducts", () => ({
-  useGetProducts: () => mockedProducts.allProducts,
+  useGetProducts: (args?: { availability?: string; isVisible?: boolean }) => {
+    if (args?.availability === "draft" && args.isVisible === false) {
+      return mockedProducts.hiddenDraftProducts;
+    }
+    if (args?.availability === "live" && args.isVisible === false) {
+      return mockedProducts.hiddenLiveProducts;
+    }
+    if (args?.availability === "draft") {
+      return mockedProducts.draftProducts;
+    }
+
+    return mockedProducts.allProducts;
+  },
   useGetUnresolvedProducts: () => [],
 }));
 
 vi.mock("convex/react", () => ({
-  useQuery: () => ({ name: "Home Care" }),
+  useQuery: (_query: unknown, args: unknown) => {
+    if (
+      args &&
+      typeof args === "object" &&
+      "storeId" in args &&
+      !("id" in args)
+    ) {
+      return productsToInventoryItems([
+        ...mockedProducts.allProducts,
+        ...mockedProducts.draftProducts,
+        ...mockedProducts.hiddenLiveProducts,
+        ...mockedProducts.hiddenDraftProducts,
+      ]);
+    }
+
+    if (
+      args &&
+      typeof args === "object" &&
+      "id" in args &&
+      args.id === "subcategory-legacy"
+    ) {
+      return { name: "Imported accessories" };
+    }
+
+    return { name: "Home Care" };
+  },
 }));
 
 vi.mock("~/src/hooks/usePermissions", () => ({
@@ -70,6 +111,10 @@ describe("Products", () => {
   beforeEach(() => {
     quickAddProductSkuMock.mockReset();
     mockedProducts.allProducts = [];
+    mockedProducts.categories = [];
+    mockedProducts.draftProducts = [];
+    mockedProducts.hiddenDraftProducts = [];
+    mockedProducts.hiddenLiveProducts = [];
   });
 
   it("quick adds a product with variants from the products workspace", async () => {
@@ -87,19 +132,31 @@ describe("Products", () => {
     render(<Products />);
 
     await user.click(screen.getByRole("button", { name: /quick add/i }));
-    await user.type(screen.getByLabelText(/product name/i), "Restock item");
-    await user.type(screen.getByLabelText(/barcode/i), "123456789");
-    await user.type(screen.getByLabelText(/selling price/i), "45");
-    await user.click(screen.getByLabelText(/add multiple variants/i));
+    const dialog = screen.getByRole("dialog");
+    await user.type(
+      within(dialog).getByLabelText(/product name/i),
+      "Restock item",
+    );
+    await user.type(within(dialog).getByLabelText(/barcode/i), "123456789");
+    await user.type(within(dialog).getByLabelText(/selling price/i), "45");
+    await user.click(within(dialog).getByLabelText(/add multiple variants/i));
     await user.click(screen.getByRole("button", { name: /add variant/i }));
-    await user.type(screen.getAllByLabelText(/barcode/i)[1], "987654321");
-    await user.type(screen.getAllByLabelText(/selling price/i)[1], "50");
+    await user.type(
+      within(dialog).getAllByLabelText(/barcode/i)[1],
+      "987654321",
+    );
+    await user.type(
+      within(dialog).getAllByLabelText(/selling price/i)[1],
+      "50",
+    );
 
     await user.click(
       screen.getByRole("button", { name: /add product variants/i }),
     );
 
-    await waitFor(() => expect(quickAddProductSkuMock).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(quickAddProductSkuMock).toHaveBeenCalledTimes(2),
+    );
     expect(quickAddProductSkuMock).toHaveBeenNthCalledWith(1, {
       storeId: "store-1",
       createdByUserId: "user-1",
@@ -130,8 +187,11 @@ describe("Products", () => {
     );
     await user.click(screen.getByRole("button", { name: /quick add/i }));
 
-    expect(screen.getByLabelText(/product name/i)).toHaveValue("");
-    expect(screen.getByLabelText(/barcode/i)).toHaveValue("075724640412");
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByLabelText(/product name/i)).toHaveValue("");
+    expect(within(dialog).getByLabelText(/barcode/i)).toHaveValue(
+      "075724640412",
+    );
   });
 
   it("prefills quick add product name from a text product search", async () => {
@@ -145,10 +205,11 @@ describe("Products", () => {
     );
     await user.click(screen.getByRole("button", { name: /quick add/i }));
 
-    expect(screen.getByLabelText(/product name/i)).toHaveValue(
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByLabelText(/product name/i)).toHaveValue(
       "Mahogany Teakwood",
     );
-    expect(screen.getByLabelText(/barcode/i)).toHaveValue("");
+    expect(within(dialog).getByLabelText(/barcode/i)).toHaveValue("");
   });
 
   it("fuzzy matches product search across product and SKU fields", async () => {
@@ -239,4 +300,303 @@ describe("Products", () => {
     expect(screen.getByText("Closure Wig")).toBeInTheDocument();
     expect(screen.queryByText("Mahogany Teakwood")).not.toBeInTheDocument();
   });
+
+  it("uses the shared SKU filter bar for product search filters", async () => {
+    const user = userEvent.setup();
+    mockedProducts.categories = [
+      { _id: "category-1", name: "Hair", slug: "hair" },
+      { _id: "category-2", name: "Home Care", slug: "home-care" },
+    ];
+    mockedProducts.allProducts = [
+      makeProduct({
+        id: "product-1",
+        categoryId: "category-1",
+        categoryName: "Hair",
+        categorySlug: "hair",
+        inventoryCount: 8,
+        name: "Closure Wig",
+        sku: "CW-18",
+      }),
+      makeProduct({
+        id: "product-2",
+        categoryId: "category-2",
+        categoryName: "Home Care",
+        categorySlug: "home-care",
+        inventoryCount: 0,
+        name: "Mahogany Teakwood",
+        sku: "CANDLE-1",
+      }),
+    ];
+
+    render(<Products />);
+
+    expect(
+      screen.getByRole("textbox", {
+        name: /search products, skus, or barcodes/i,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("combobox", { name: /filter by availability/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Showing 2 of 2 products.")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /hair, 1 product/i }));
+
+    expect(screen.getByText("Closure Wig")).toBeInTheDocument();
+    expect(screen.queryByText("Mahogany Teakwood")).not.toBeInTheDocument();
+    expect(screen.getByText("Showing 1 of 2 products.")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /^clear$/i }));
+
+    expect(screen.queryByText("Search results")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Categories").length).toBeGreaterThan(1);
+  });
+
+  it("filters product search by availability", async () => {
+    const user = userEvent.setup();
+    mockedProducts.allProducts = [
+      makeProduct({
+        id: "product-1",
+        inventoryCount: 8,
+        name: "Closure Wig",
+        sku: "CW-18",
+      }),
+      makeProduct({
+        id: "product-2",
+        inventoryCount: 0,
+        name: "Mahogany Teakwood",
+        sku: "CANDLE-1",
+      }),
+    ];
+
+    render(<Products />);
+
+    await user.click(
+      screen.getByRole("combobox", { name: /filter by availability/i }),
+    );
+    await user.click(
+      await screen.findByRole("option", { name: "Out of stock" }),
+    );
+
+    expect(screen.getByText("Mahogany Teakwood")).toBeInTheDocument();
+    expect(screen.queryByText("Closure Wig")).not.toBeInTheDocument();
+    expect(screen.getByText("Showing 1 of 2 products.")).toBeInTheDocument();
+  });
+
+  it("searches draft products from the products workspace", async () => {
+    const user = userEvent.setup();
+    mockedProducts.categories = [
+      { _id: "category-legacy", name: "Legacy import", slug: "legacy-import" },
+      { _id: "category-books", name: "Books", slug: "books" },
+    ];
+    mockedProducts.draftProducts = [
+      makeProduct({
+        availability: "draft",
+        categoryId: "category-legacy",
+        categoryName: "Legacy import",
+        categorySlug: "legacy-import",
+        id: "product-legacy",
+        inventoryCount: 3,
+        isVisible: false,
+        name: "Imported Bonnet",
+        sku: "OLD-BONNET",
+      }),
+      makeProduct({
+        availability: "draft",
+        categoryId: "category-books",
+        categoryName: "Books",
+        categorySlug: "books",
+        id: "product-draft-book",
+        inventoryCount: 2,
+        name: "Draft Book",
+        sku: "BOOK-DRAFT",
+      }),
+    ];
+
+    render(<Products />);
+
+    await user.type(
+      screen.getByRole("textbox", {
+        name: /search products, skus, or barcodes/i,
+      }),
+      "bonnet",
+    );
+
+    expect(screen.getByText("Imported Bonnet")).toBeInTheDocument();
+    expect(screen.getByText("Showing 1 of 2 products.")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /legacy import, 1 product/i }),
+    ).toBeInTheDocument();
+
+    await user.clear(
+      screen.getByRole("textbox", {
+        name: /search products, skus, or barcodes/i,
+      }),
+    );
+    await user.type(
+      screen.getByRole("textbox", {
+        name: /search products, skus, or barcodes/i,
+      }),
+      "draft",
+    );
+
+    expect(screen.getByText("Draft Book")).toBeInTheDocument();
+  });
+
+  it("searches hidden SKUs for hidden draft products", async () => {
+    const user = userEvent.setup();
+    mockedProducts.categories = [
+      { _id: "category-legacy", name: "Legacy import", slug: "legacy-import" },
+    ];
+    mockedProducts.draftProducts = [
+      makeProduct({
+        availability: "draft",
+        categoryId: "category-legacy",
+        categoryName: "Legacy import",
+        categorySlug: "legacy-import",
+        id: "product-hidden-draft",
+        inventoryCount: 0,
+        isVisible: false,
+        name: "Imported Cubic Wig",
+        sku: "",
+        skus: [],
+        subcategoryId: "subcategory-legacy",
+        subcategoryName: "Imported accessories",
+        subcategorySlug: "imported-accessories",
+      }),
+    ];
+    mockedProducts.hiddenDraftProducts = [
+      makeProduct({
+        availability: "draft",
+        categoryId: "category-legacy",
+        categoryName: "Legacy import",
+        categorySlug: "legacy-import",
+        id: "product-hidden-draft",
+        inventoryCount: 4,
+        isVisible: false,
+        name: "Imported Cubic Wig",
+        sku: "CUBIC-LEGACY",
+        skuIsVisible: false,
+        subcategoryId: "subcategory-legacy",
+        subcategoryName: "Imported accessories",
+        subcategorySlug: "imported-accessories",
+      }),
+    ];
+
+    render(<Products />);
+
+    await user.type(
+      screen.getByRole("textbox", {
+        name: /search products, skus, or barcodes/i,
+      }),
+      "cubic",
+    );
+
+    expect(screen.getByText("Imported Cubic Wig")).toBeInTheDocument();
+    expect(screen.getByText("Imported accessories")).toBeInTheDocument();
+    expect(screen.getByText("Showing 1 of 1 product.")).toBeInTheDocument();
+  });
 });
+
+function makeProduct({
+  availability = "live",
+  categoryId = "category-1",
+  categoryName = "Hair",
+  categorySlug = "hair",
+  id,
+  inventoryCount,
+  isVisible = true,
+  name,
+  sku,
+  skuIsVisible = true,
+  skus,
+  subcategoryId = "subcategory-1",
+  subcategoryName = "Wigs",
+  subcategorySlug = "wigs",
+}: {
+  availability?: Product["availability"];
+  categoryId?: string;
+  categoryName?: string;
+  categorySlug?: string;
+  id: string;
+  inventoryCount: number;
+  isVisible?: boolean;
+  name: string;
+  sku: string;
+  skuIsVisible?: boolean;
+  skus?: Product["skus"];
+  subcategoryId?: string;
+  subcategoryName?: string;
+  subcategorySlug?: string;
+}): Product {
+  return {
+    _id: id as Id<"product">,
+    _creationTime: 1,
+    availability,
+    categoryId: categoryId as Id<"category">,
+    categoryName,
+    categorySlug,
+    createdByUserId: "user-1" as Id<"athenaUser">,
+    currency: "GHS",
+    inventoryCount,
+    isVisible,
+    name,
+    organizationId: "org-1" as Id<"organization">,
+    quantityAvailable: inventoryCount,
+    slug: name.toLowerCase().replace(/\s+/g, "-"),
+    skus: skus ?? [
+      {
+        _id: `${id}-sku` as Id<"productSku">,
+        _creationTime: 1,
+        barcode: "",
+        colorName: "",
+        images: [],
+        inventoryCount,
+        length: undefined,
+        price: 2500,
+        productCategory: categoryName,
+        productId: id as Id<"product">,
+        productName: name,
+        quantityAvailable: inventoryCount,
+        size: "",
+        sku,
+        isVisible: skuIsVisible,
+        storeId: "store-1" as Id<"store">,
+      },
+    ],
+    storeId: "store-1" as Id<"store">,
+    subcategoryId: subcategoryId as Id<"subcategory">,
+    subcategoryName,
+    subcategorySlug,
+  };
+}
+
+function productsToInventoryItems(products: Product[]) {
+  return products.flatMap((product) =>
+    product.skus.map((sku) => ({
+      _id: sku._id,
+      barcode: sku.barcode ?? null,
+      colorName: sku.colorName ?? null,
+      durableQuantityAvailable: sku.quantityAvailable,
+      imageUrl: sku.images[0] ?? null,
+      inventoryCount: sku.inventoryCount,
+      length: sku.length ?? null,
+      netPrice: sku.netPrice,
+      price: sku.price,
+      productCategory: product.categoryName ?? sku.productCategory ?? null,
+      productCategoryId: product.categoryId,
+      productCategorySlug: product.categorySlug ?? null,
+      productId: product._id,
+      productName: product.name,
+      productSubcategory: product.subcategoryName ?? null,
+      productSubcategoryId: product.subcategoryId,
+      productSubcategorySlug: product.subcategorySlug ?? null,
+      checkoutReservedQuantity: 0,
+      posReservedQuantity: 0,
+      quantityAvailable: sku.quantityAvailable,
+      reservedQuantity: 0,
+      size: sku.size ?? null,
+      sku: sku.sku ?? null,
+    })),
+  );
+}

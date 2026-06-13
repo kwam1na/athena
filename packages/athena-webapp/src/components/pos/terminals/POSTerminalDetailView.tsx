@@ -38,12 +38,12 @@ import type { Id } from "~/convex/_generated/dataModel";
 import {
   buildTerminalRecoveryPresentation,
   classifyTerminalHealth,
+  formatAge,
   formatRegisterNumber,
   formatStatusLabel,
   formatTerminalTimestamp,
   getRecentSyncEvents,
   getReviewEvidenceCount,
-  getSnapshotAgeSummary,
   getStaffAuthorityLabel,
   getSupportSafeAttentionReasonSummary,
   getTerminalAttentionReasons,
@@ -221,6 +221,97 @@ function RailField({
   );
 }
 
+function getStaffAuthorityTone(
+  status?: TerminalRuntimeStatus["staffAuthority"] | null,
+) {
+  switch (status?.status) {
+    case "ready":
+      return "success";
+    case "expired":
+    case "missing":
+      return "warning";
+    default:
+      return "neutral";
+  }
+}
+
+function RailSignalRow({
+  label,
+  tone = "neutral",
+  value,
+}: {
+  label: string;
+  tone?: "neutral" | "success" | "warning";
+  value: React.ReactNode;
+}) {
+  return (
+    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-layout-sm py-layout-xs">
+      <span className="min-w-0 truncate text-xs font-medium text-muted-foreground">
+        {label}
+      </span>
+      <span
+        className={cn(
+          "min-w-0 text-right text-xs font-medium leading-5",
+          tone === "success"
+            ? "text-success"
+            : tone === "warning"
+              ? "text-warning-foreground"
+              : "text-foreground",
+        )}
+      >
+        {value}
+      </span>
+    </div>
+  );
+}
+
+function SnapshotReadinessGroup({
+  runtimeStatus,
+}: {
+  runtimeStatus: TerminalRuntimeStatus | null;
+}) {
+  const snapshots = runtimeStatus?.snapshots;
+  const staffAuthorityTone = getStaffAuthorityTone(
+    runtimeStatus?.staffAuthority,
+  );
+
+  return (
+    <div className="space-y-layout-xs rounded-md border border-border/80 bg-surface px-layout-md py-layout-sm">
+      <div className="flex items-center justify-between gap-layout-sm">
+        <p className="text-xs font-medium uppercase text-muted-foreground">
+          Readiness evidence
+        </p>
+        <span className="text-xs text-muted-foreground">
+          {runtimeStatus ? "From latest check-in" : "Not reported"}
+        </span>
+      </div>
+      <div className="divide-y divide-border/70">
+        <RailSignalRow
+          label="Availability"
+          value={formatAge(snapshots?.availabilityAgeMs)}
+        />
+        <RailSignalRow
+          label="Catalog"
+          value={formatAge(snapshots?.catalogAgeMs)}
+        />
+        <RailSignalRow
+          label="Service catalog"
+          value={formatAge(snapshots?.serviceCatalogAgeMs)}
+        />
+        <RailSignalRow
+          label="Register model"
+          value={formatAge(snapshots?.registerReadModelAgeMs)}
+        />
+        <RailSignalRow
+          label="Staff authority"
+          tone={staffAuthorityTone}
+          value={getStaffAuthorityLabel(runtimeStatus?.staffAuthority)}
+        />
+      </div>
+    </div>
+  );
+}
+
 function RailSection({
   children,
   icon,
@@ -296,22 +387,19 @@ function TerminalContextRail({
                   : "Not reported"
             }
           />
-          <RailField
-            label="Snapshots"
-            value={getSnapshotAgeSummary(runtimeStatus?.snapshots)}
-          />
-          <RailField
-            label="Staff authority"
-            value={getStaffAuthorityLabel(runtimeStatus?.staffAuthority)}
-          />
+          <SnapshotReadinessGroup runtimeStatus={runtimeStatus} />
         </RailSection>
       </div>
     </aside>
   );
 }
 
-function formatRuntimeBuildVersion(runtimeStatus: TerminalRuntimeStatus | null) {
-  const appVersion = normalizeOptionalRuntimeMetadata(runtimeStatus?.appVersion);
+function formatRuntimeBuildVersion(
+  runtimeStatus: TerminalRuntimeStatus | null,
+) {
+  const appVersion = normalizeOptionalRuntimeMetadata(
+    runtimeStatus?.appVersion,
+  );
   const buildSha = normalizeOptionalRuntimeMetadata(runtimeStatus?.buildSha);
   const shortBuildSha = buildSha?.slice(0, 12);
 

@@ -13,6 +13,7 @@ type RegisterCatalogRow = {
   skuId: Id<"productSku">;
   productId: Id<"product">;
   inventoryImportProvisionalSkuId?: InventoryImportProvisionalSkuId;
+  pendingCheckoutItemId?: Id<"posPendingCheckoutItem">;
   name: string;
   sku: string;
   barcode: string;
@@ -29,7 +30,8 @@ type RegisterCatalogRow = {
 
 type RegisterCatalogAvailabilityPolicy =
   | "trusted_inventory"
-  | "active_provisional_import";
+  | "active_provisional_import"
+  | "pending_checkout";
 
 type RegisterCatalogAvailabilityRow = {
   productSkuId: Id<"productSku">;
@@ -55,6 +57,11 @@ type InventoryImportProvisionalSku = {
   provisionalQuantitySold?: number;
   provisionalTransactionCount?: number;
 };
+
+type PosPendingCheckoutItem = Pick<
+  Doc<"posPendingCheckoutItem">,
+  "_id" | "provisionalProductSkuId" | "provisionalPrice" | "status" | "storeId"
+>;
 
 export const REGISTER_CATALOG_AVAILABILITY_LIMIT = 50;
 const REGISTER_CATALOG_PROVISIONAL_IMPORT_LIMIT = 5_000;
@@ -106,6 +113,7 @@ function mapSkuToRegisterCatalogRow(args: {
   sku: Doc<"productSku">;
   category: string;
   color: string;
+  pendingCheckoutItem?: PosPendingCheckoutItem;
   provisionalSku?: InventoryImportProvisionalSku;
 }): RegisterCatalogRow {
   return {
@@ -116,10 +124,16 @@ function mapSkuToRegisterCatalogRow(args: {
     ...(args.provisionalSku
       ? { inventoryImportProvisionalSkuId: args.provisionalSku._id }
       : {}),
+    ...(args.pendingCheckoutItem
+      ? { pendingCheckoutItemId: args.pendingCheckoutItem._id }
+      : {}),
     name: args.provisionalSku?.importedProductName ?? args.product.name,
     sku: args.sku.sku || args.provisionalSku?.importedSku || "",
     barcode: args.sku.barcode || args.provisionalSku?.importedBarcode || "",
-    price: args.provisionalSku?.importedPrice ?? getRegisterCatalogPrice(args.sku),
+    price:
+      args.pendingCheckoutItem?.provisionalPrice ??
+      args.provisionalSku?.importedPrice ??
+      getRegisterCatalogPrice(args.sku),
     category: args.category,
     description: args.product.description ?? "",
     image: args.sku.images[0] ?? null,
@@ -127,9 +141,11 @@ function mapSkuToRegisterCatalogRow(args: {
     length: args.sku.length ?? null,
     color: args.color,
     areProcessingFeesAbsorbed: args.product.areProcessingFeesAbsorbed ?? false,
-    availabilityPolicy: args.provisionalSku
-      ? "active_provisional_import"
-      : "trusted_inventory",
+    availabilityPolicy: args.pendingCheckoutItem
+      ? "pending_checkout"
+      : args.provisionalSku
+        ? "active_provisional_import"
+        : "trusted_inventory",
   };
 }
 
@@ -145,12 +161,14 @@ export function isTrustedRegisterCatalogSku(args: {
   const isReservedPosOperationalProduct = args.category?.slug
     ? POS_OPERATIONAL_CATEGORY_SLUGS.has(args.category.slug)
     : false;
+  const isPendingCheckoutProduct =
+    args.category?.slug === "pos-pending-checkout";
 
   return (
     args.product.availability !== "archived" &&
-    args.product.availability !== "draft" &&
+    (args.product.availability !== "draft" || isPendingCheckoutProduct) &&
     (args.product.isVisible !== false || isReservedPosOperationalProduct) &&
-    args.sku.isVisible !== false
+    (args.sku.isVisible !== false || isPendingCheckoutProduct)
   );
 }
 
@@ -177,10 +195,7 @@ async function listScopedRegisterCatalogSkus(
       productCache.set(sku.productId, product);
     }
 
-    if (
-      !product ||
-      product.storeId !== args.storeId
-    ) {
+    if (!product || product.storeId !== args.storeId) {
       continue;
     }
 
@@ -296,6 +311,51 @@ export async function readActiveProvisionalImportSkuForStoreSku(
   return isActiveProvisionalImportSkuForStore(row, args) ? row : null;
 }
 
+async function queryActivePendingCheckoutItemsForStore(
+  ctx: QueryCtx,
+  args: {
+    storeId: Id<"store">;
+  },
+) {
+  const statuses: Array<Doc<"posPendingCheckoutItem">["status"]> = [
+    "pending_review",
+    "flagged",
+  ];
+  const rows = await Promise.all(
+    statuses.map((status) =>
+      ctx.db
+        .query("posPendingCheckoutItem")
+        .withIndex("by_storeId_status_updatedAt", (q) =>
+          q.eq("storeId", args.storeId).eq("status", status),
+        )
+        .take(5_000),
+    ),
+  );
+
+  return rows.flat();
+}
+
+async function readActivePendingCheckoutItemForStoreSku(
+  ctx: QueryCtx,
+  args: {
+    storeId: Id<"store">;
+    productSkuId: Id<"productSku">;
+  },
+): Promise<PosPendingCheckoutItem | null> {
+  const row = await ctx.db
+    .query("posPendingCheckoutItem")
+    .withIndex("by_storeId_provisionalProductSkuId", (q) =>
+      q
+        .eq("storeId", args.storeId)
+        .eq("provisionalProductSkuId", args.productSkuId),
+    )
+    .first();
+
+  return row?.status === "pending_review" || row?.status === "flagged"
+    ? row
+    : null;
+}
+
 type ProvisionalIndexBuilder<TField extends string> = {
   eq(field: TField, value: unknown): ProvisionalIndexBuilder<TField>;
 };
@@ -309,6 +369,14 @@ export async function listRegisterCatalog(
   const rows: RegisterCatalogRow[] = [];
   const categoryCache = new Map<Id<"category">, string>();
   const colorCache = new Map<Id<"color">, string>();
+  const pendingCheckoutItemsBySkuId = new Map(
+    (await queryActivePendingCheckoutItemsForStore(ctx, args)).flatMap(
+      (item) =>
+        item.provisionalProductSkuId
+          ? [[item.provisionalProductSkuId, item]]
+          : [],
+    ),
+  );
   const trustedAvailableSkuIds = new Set<Id<"productSku">>();
 
   for (const { product, sku } of await listScopedRegisterCatalogSkus(
@@ -322,8 +390,13 @@ export async function listRegisterCatalog(
       mapSkuToRegisterCatalogRow({
         product,
         sku,
-        category: await readCategoryName(ctx, categoryCache, product.categoryId),
+        category: await readCategoryName(
+          ctx,
+          categoryCache,
+          product.categoryId,
+        ),
         color: await readColorName(ctx, colorCache, sku.color),
+        pendingCheckoutItem: pendingCheckoutItemsBySkuId.get(sku._id),
       }),
     );
   }
@@ -353,7 +426,11 @@ export async function listRegisterCatalog(
       mapSkuToRegisterCatalogRow({
         product,
         sku,
-        category: await readCategoryName(ctx, categoryCache, product.categoryId),
+        category: await readCategoryName(
+          ctx,
+          categoryCache,
+          product.categoryId,
+        ),
         color: await readColorName(ctx, colorCache, sku.color),
         provisionalSku,
       }),
@@ -383,9 +460,14 @@ export async function listRegisterCatalogAvailability(
       continue;
     }
 
-    const availability = await validateInventoryAvailability(ctx.db, sku._id, 1, {
-      storeId: args.storeId,
-    });
+    const availability = await validateInventoryAvailability(
+      ctx.db,
+      sku._id,
+      1,
+      {
+        storeId: args.storeId,
+      },
+    );
     const quantityAvailable = availability.available ?? 0;
 
     if (quantityAvailable > 0) {
@@ -399,11 +481,14 @@ export async function listRegisterCatalogAvailability(
       continue;
     }
 
-    const provisionalSku = await readActiveProvisionalImportSkuForStoreSku(ctx, {
-      storeId: args.storeId,
-      productId: sku.productId,
-      productSkuId: sku._id,
-    });
+    const provisionalSku = await readActiveProvisionalImportSkuForStoreSku(
+      ctx,
+      {
+        storeId: args.storeId,
+        productId: sku.productId,
+        productSkuId: sku._id,
+      },
+    );
     if (provisionalSku) {
       rows.push({
         productSkuId: sku._id,
@@ -412,6 +497,24 @@ export async function listRegisterCatalogAvailability(
         inStock: true,
         quantityAvailable: 0,
         availabilityPolicy: "active_provisional_import",
+      });
+      continue;
+    }
+
+    const pendingCheckoutItem = await readActivePendingCheckoutItemForStoreSku(
+      ctx,
+      {
+        storeId: args.storeId,
+        productSkuId: sku._id,
+      },
+    );
+    if (pendingCheckoutItem) {
+      rows.push({
+        productSkuId: sku._id,
+        skuId: sku._id,
+        inStock: true,
+        quantityAvailable: 0,
+        availabilityPolicy: "pending_checkout",
       });
       continue;
     }
@@ -439,25 +542,46 @@ export async function listRegisterCatalogAvailabilitySnapshot(
     storeId: args.storeId,
     skuIds: catalogSkus.map(({ sku }) => sku._id),
   });
+  const pendingCheckoutItemsBySkuId = new Map(
+    (await queryActivePendingCheckoutItemsForStore(ctx, args)).flatMap(
+      (item) =>
+        item.provisionalProductSkuId
+          ? [[item.provisionalProductSkuId, item]]
+          : [],
+    ),
+  );
   const activeProvisionalSkus = await queryActiveProvisionalImportSkusForStore(
     ctx,
     args,
   );
 
-  const trustedRows = catalogSkus.map(({ sku }): RegisterCatalogAvailabilityRow => {
-    const quantityAvailable = Math.max(
-      0,
-      sku.quantityAvailable - (heldQuantities.get(sku._id) ?? 0),
-    );
+  const trustedRows = catalogSkus.map(
+    ({ sku }): RegisterCatalogAvailabilityRow => {
+      const pendingCheckoutItem = pendingCheckoutItemsBySkuId.get(sku._id);
+      if (pendingCheckoutItem) {
+        return {
+          productSkuId: sku._id,
+          skuId: sku._id,
+          inStock: true,
+          quantityAvailable: 0,
+          availabilityPolicy: "pending_checkout",
+        };
+      }
 
-    return {
-      productSkuId: sku._id,
-      skuId: sku._id,
-      inStock: quantityAvailable > 0,
-      quantityAvailable,
-      availabilityPolicy: "trusted_inventory",
-    };
-  });
+      const quantityAvailable = Math.max(
+        0,
+        sku.quantityAvailable - (heldQuantities.get(sku._id) ?? 0),
+      );
+
+      return {
+        productSkuId: sku._id,
+        skuId: sku._id,
+        inStock: quantityAvailable > 0,
+        quantityAvailable,
+        availabilityPolicy: "trusted_inventory",
+      };
+    },
+  );
 
   const trustedAvailableSkuIds = new Set(
     trustedRows

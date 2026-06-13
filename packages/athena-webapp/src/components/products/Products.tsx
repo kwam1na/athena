@@ -2,19 +2,10 @@ import { Link, useSearch } from "@tanstack/react-router";
 import { useGetCategories } from "~/src/hooks/useGetCategories";
 import { getOrigin } from "~/src/lib/navigationUtils";
 import { Button } from "../ui/button";
-import {
-  ArchiveIcon,
-  FolderTree,
-  PackageXIcon,
-  PlusIcon,
-  Search,
-} from "lucide-react";
-import {
-  useGetUnresolvedProducts,
-  useGetProducts,
-} from "~/src/hooks/useGetProducts";
+import { ArchiveIcon, FolderTree, PackageXIcon, PlusIcon } from "lucide-react";
+import { useGetUnresolvedProducts } from "~/src/hooks/useGetProducts";
 import { useState, useMemo } from "react";
-import { Input } from "../ui/input";
+import { useQuery } from "convex/react";
 import { GenericDataTable } from "../base/table/data-table";
 import { productColumns } from "./products-table/components/productColumns";
 import { EmptyState } from "../states/empty/empty-state";
@@ -40,40 +31,147 @@ import {
   normalizeSkuSearchQuery,
 } from "~/src/lib/stockOps/skuSearch";
 import type { Product } from "~/types";
+import type { Id } from "~/convex/_generated/dataModel";
+import { api } from "~/convex/_generated/api";
+import { SkuSearchFilterBar } from "../stock-ops/SkuSearchFilterBar";
+import type { InventorySnapshotItem } from "../operations/StockAdjustmentWorkspace";
+
+const ALL_CATEGORY_FILTER_KEY = "all";
+
+type ProductAvailabilityFilter = "all" | "available" | "out_of_stock";
+
+const PRODUCT_AVAILABILITY_FILTER_OPTIONS: Array<{
+  label: string;
+  value: ProductAvailabilityFilter;
+}> = [
+  { label: "All stock", value: "all" },
+  { label: "Available", value: "available" },
+  { label: "Out of stock", value: "out_of_stock" },
+];
 
 export default function Products() {
   const categories = useGetCategories();
   const unresolvedProducts = useGetUnresolvedProducts();
-  const allProducts = useGetProducts();
   const [searchValue, setSearchValue] = useState("");
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
   const [quickAddInitialName, setQuickAddInitialName] = useState("");
   const [quickAddInitialLookupCode, setQuickAddInitialLookupCode] =
     useState("");
+  const [availabilityFilter, setAvailabilityFilter] =
+    useState<ProductAvailabilityFilter>("all");
+  const [categoryFilter, setCategoryFilter] = useState(ALL_CATEGORY_FILTER_KEY);
   const { hasFullAdminAccess } = usePermissions();
   const { activeStore } = useGetActiveStore();
   const { user } = useAuth();
   const { o } = useSearch({ strict: false });
   const quickAddProductSku = usePOSQuickAddProductSku();
+  const inventoryItems = useQuery(
+    api.stockOps.adjustments.listInventorySnapshot,
+    activeStore?._id ? { storeId: activeStore._id } : "skip",
+  ) as InventorySnapshotItem[] | undefined;
 
+  const categorySlugById = useMemo(() => {
+    return new Map(
+      (categories ?? []).map((category) => [category._id, category.slug]),
+    );
+  }, [categories]);
+  const products = useMemo(
+    () =>
+      buildProductsFromInventorySnapshot(
+        inventoryItems ?? [],
+        categories ?? [],
+        activeStore?._id,
+      ),
+    [activeStore?._id, categories, inventoryItems],
+  );
   const filteredProducts = useMemo(() => {
-    if (!allProducts) return null;
-    if (!searchValue.trim()) return null;
+    if (!inventoryItems) return null;
 
     const normalizedQuery = normalizeSkuSearchQuery(searchValue);
 
-    return allProducts.filter((product) =>
-      productMatchesCatalogSearch(product, normalizedQuery),
-    );
-  }, [allProducts, searchValue]);
+    return products.filter((product) => {
+      if (!productMatchesAvailabilityFilter(product, availabilityFilter)) {
+        return false;
+      }
+
+      if (
+        !productMatchesCategoryFilter(product, categoryFilter, categorySlugById)
+      ) {
+        return false;
+      }
+
+      return productMatchesCatalogSearch(product, normalizedQuery);
+    });
+  }, [
+    availabilityFilter,
+    categoryFilter,
+    categorySlugById,
+    inventoryItems,
+    products,
+    searchValue,
+  ]);
 
   const hasSearchInput = searchValue.trim().length > 0;
-  const showSearchResults = hasSearchInput && filteredProducts !== null;
+  const hasActiveFilters =
+    hasSearchInput ||
+    availabilityFilter !== "all" ||
+    categoryFilter !== ALL_CATEGORY_FILTER_KEY;
+  const showSearchResults = hasActiveFilters && filteredProducts !== null;
   const unresolvedProductCount = unresolvedProducts?.length ?? 0;
   const categoryCount = categories?.length ?? 0;
-  const productCount = allProducts?.length ?? 0;
+  const productCount = products.length;
   const outOfStockProductCount =
-    allProducts?.filter((product) => product.inventoryCount === 0).length ?? 0;
+    products.filter((product) => product.inventoryCount === 0).length ?? 0;
+  const categoryFilterOptions = useMemo(() => {
+    const productCountsByCategory = new Map<string, number>();
+
+    for (const product of products) {
+      const categoryKey = getProductCategoryFilterKey(
+        product,
+        categorySlugById,
+      );
+
+      if (!categoryKey) continue;
+
+      productCountsByCategory.set(
+        categoryKey,
+        (productCountsByCategory.get(categoryKey) ?? 0) + 1,
+      );
+    }
+
+    const optionsByKey = new Map<
+      string,
+      { itemCount: number; key: string; label: string }
+    >();
+
+    for (const category of categories ?? []) {
+      const itemCount = productCountsByCategory.get(category.slug) ?? 0;
+
+      if (itemCount > 0) {
+        optionsByKey.set(category.slug, {
+          itemCount,
+          key: category.slug,
+          label: category.name,
+        });
+      }
+    }
+
+    for (const product of products) {
+      const key = getProductCategoryFilterKey(product, categorySlugById);
+
+      if (!key || optionsByKey.has(key)) continue;
+
+      optionsByKey.set(key, {
+        itemCount: productCountsByCategory.get(key) ?? 0,
+        key,
+        label: product.categoryName ?? key,
+      });
+    }
+
+    return [...optionsByKey.values()].sort((left, right) =>
+      left.label.localeCompare(right.label),
+    );
+  }, [categories, categorySlugById, products]);
 
   const handleQuickAddSubmit = async ({
     name,
@@ -125,6 +223,12 @@ export default function Products() {
     setIsQuickAddOpen(true);
   };
 
+  const handleClearFilters = () => {
+    setSearchValue("");
+    setAvailabilityFilter("all");
+    setCategoryFilter(ALL_CATEGORY_FILTER_KEY);
+  };
+
   return (
     <PageWorkspace>
       <PageLevelHeader
@@ -138,42 +242,104 @@ export default function Products() {
         <PageWorkspaceMain>
           <section className="min-w-0 overflow-hidden rounded-lg border border-border bg-surface-raised shadow-surface">
             <div className="min-w-0 space-y-layout-lg px-layout-md py-layout-md">
-              <div className="flex flex-col gap-layout-sm lg:flex-row lg:items-center lg:justify-between">
-                <div className="relative max-w-2xl flex-1">
-                  <Search
-                    aria-hidden
-                    className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-                  />
-                  <Input
-                    placeholder="Search products..."
-                    value={searchValue}
-                    onChange={(event) => setSearchValue(event.target.value)}
-                    className="pl-9"
-                  />
-                </div>
-                {hasFullAdminAccess ? (
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Button variant="ghost" onClick={handleOpenQuickAdd}>
-                      <PlusIcon className="h-4 w-4" />
-                      Quick add
-                    </Button>
-                    <Link
-                      to={"/$orgUrlSlug/store/$storeUrlSlug/products/new"}
-                      params={(prev) => ({
-                        ...prev,
-                        orgUrlSlug: prev.orgUrlSlug!,
-                        storeUrlSlug: prev.storeUrlSlug!,
-                      })}
-                      search={{ o: getOrigin() }}
-                    >
-                      <Button variant="ghost">
+              <SkuSearchFilterBar
+                action={
+                  hasFullAdminAccess ? (
+                    <>
+                      <Button
+                        variant="ghost"
+                        onClick={handleOpenQuickAdd}
+                        type="button"
+                      >
                         <PlusIcon className="h-4 w-4" />
-                        New Product
+                        Quick add
                       </Button>
-                    </Link>
+                      <Link
+                        to={"/$orgUrlSlug/store/$storeUrlSlug/products/new"}
+                        params={(prev) => ({
+                          ...prev,
+                          orgUrlSlug: prev.orgUrlSlug!,
+                          storeUrlSlug: prev.storeUrlSlug!,
+                        })}
+                        search={{ o: getOrigin() }}
+                      >
+                        <Button variant="ghost">
+                          <PlusIcon className="h-4 w-4" />
+                          New Product
+                        </Button>
+                      </Link>
+                    </>
+                  ) : null
+                }
+                ariaLabel="Product search and filters"
+                className="bg-background"
+                filterId="product-availability-filter"
+                filterLabel="Filter by availability"
+                filterOptions={PRODUCT_AVAILABILITY_FILTER_OPTIONS}
+                filterValue={availabilityFilter}
+                hasActiveFilters={hasActiveFilters}
+                onClearFilters={handleClearFilters}
+                onFilterChange={setAvailabilityFilter}
+                onQueryChange={setSearchValue}
+                query={searchValue}
+                searchId="product-sku-search"
+                searchLabel="Search products, SKUs, or barcodes"
+                searchPlaceholder="Search products, SKUs, or barcode"
+                secondaryFilters={
+                  <div
+                    aria-label="Filter by category"
+                    className="flex flex-col gap-2 sm:flex-row sm:items-center"
+                    role="group"
+                  >
+                    <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                      Categories
+                    </span>
+                    <div className="flex min-w-0 flex-wrap gap-1.5">
+                      {[
+                        {
+                          itemCount: products.length,
+                          key: ALL_CATEGORY_FILTER_KEY,
+                          label: "All categories",
+                        },
+                        ...categoryFilterOptions,
+                      ].map((category) => {
+                        const isSelected = categoryFilter === category.key;
+
+                        return (
+                          <button
+                            aria-label={`${category.label}, ${category.itemCount} ${category.itemCount === 1 ? "product" : "products"}`}
+                            aria-pressed={isSelected}
+                            className={cn(
+                              "rounded-md border px-2.5 py-1 text-xs font-medium transition-colors",
+                              isSelected
+                                ? "border-action-workflow-border bg-action-workflow-soft text-foreground"
+                                : "border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground",
+                            )}
+                            key={category.key}
+                            onClick={() =>
+                              setCategoryFilter(
+                                isSelected
+                                  ? ALL_CATEGORY_FILTER_KEY
+                                  : category.key,
+                              )
+                            }
+                            type="button"
+                          >
+                            {category.label}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
-                ) : null}
-              </div>
+                }
+                summary={
+                  <>
+                    Showing {filteredProducts?.length ?? products.length} of{" "}
+                    {products.length}{" "}
+                    {products.length === 1 ? "product" : "products"}.
+                  </>
+                }
+              />
 
               {showSearchResults ? (
                 <div className="min-w-0 overflow-hidden rounded-lg border border-border bg-background">
@@ -358,5 +524,111 @@ function productMatchesCatalogSearch(product: Product, query: string) {
       ]),
     ],
     query,
+  );
+}
+
+function productMatchesAvailabilityFilter(
+  product: Product,
+  filter: ProductAvailabilityFilter,
+) {
+  if (filter === "available") return product.inventoryCount > 0;
+  if (filter === "out_of_stock") return product.inventoryCount === 0;
+
+  return true;
+}
+
+function productMatchesCategoryFilter(
+  product: Product,
+  filter: string,
+  categorySlugById: Map<string, string>,
+) {
+  if (filter === ALL_CATEGORY_FILTER_KEY) return true;
+
+  return getProductCategoryFilterKey(product, categorySlugById) === filter;
+}
+
+function getProductCategoryFilterKey(
+  product: Product,
+  categorySlugById: Map<string, string>,
+) {
+  return (
+    product.categorySlug ??
+    categorySlugById.get(product.categoryId) ??
+    product.categoryName ??
+    product.categoryId
+  );
+}
+
+function buildProductsFromInventorySnapshot(
+  inventoryItems: InventorySnapshotItem[],
+  categories: Array<{ _id: Id<"category">; name: string; slug: string }>,
+  storeId: Id<"store"> | undefined,
+) {
+  const categoryByName = new Map(
+    categories.map((category) => [category.name, category]),
+  );
+  const productsById = new Map<Id<"product">, Product>();
+
+  for (const item of inventoryItems) {
+    const productId =
+      item.productId ?? (`inventory-product-${item._id}` as Id<"product">);
+    const category = item.productCategory
+      ? categoryByName.get(item.productCategory)
+      : undefined;
+    const existingProduct = productsById.get(productId);
+    const sku = {
+      _id: item._id,
+      _creationTime: 0,
+      barcode: item.barcode ?? undefined,
+      colorName: item.colorName ?? null,
+      images: item.imageUrl ? [item.imageUrl] : [],
+      inventoryCount: item.inventoryCount,
+      length: item.length ?? undefined,
+      netPrice: item.netPrice ?? undefined,
+      price: item.price ?? 0,
+      productCategory: item.productCategory ?? undefined,
+      productId,
+      productName: item.productName,
+      quantityAvailable: item.quantityAvailable,
+      size: item.size ?? undefined,
+      sku: item.sku ?? undefined,
+      storeId: storeId ?? ("" as Id<"store">),
+    };
+
+    if (existingProduct) {
+      existingProduct.inventoryCount =
+        (existingProduct.inventoryCount ?? 0) + item.inventoryCount;
+      existingProduct.quantityAvailable =
+        (existingProduct.quantityAvailable ?? 0) + item.quantityAvailable;
+      existingProduct.skus.push(sku);
+      continue;
+    }
+
+    productsById.set(productId, {
+      _id: productId,
+      _creationTime: 0,
+      availability: "live",
+      categoryId:
+        item.productCategoryId ?? category?._id ?? ("" as Id<"category">),
+      categoryName: item.productCategory ?? undefined,
+      categorySlug: item.productCategorySlug ?? category?.slug,
+      createdByUserId: "" as Id<"athenaUser">,
+      currency: "GHS",
+      inventoryCount: item.inventoryCount,
+      isVisible: true,
+      name: item.productName,
+      organizationId: "" as Id<"organization">,
+      quantityAvailable: item.quantityAvailable,
+      skus: [sku],
+      slug: String(productId),
+      storeId: storeId ?? ("" as Id<"store">),
+      subcategoryId: item.productSubcategoryId ?? ("" as Id<"subcategory">),
+      subcategoryName: item.productSubcategory ?? undefined,
+      subcategorySlug: item.productSubcategorySlug ?? undefined,
+    });
+  }
+
+  return [...productsById.values()].sort((left, right) =>
+    left.name.localeCompare(right.name),
   );
 }

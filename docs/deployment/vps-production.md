@@ -13,16 +13,16 @@ This runbook captures the production VPS shape for `wigclub.store` and the steps
 
 ## Hostname Routing
 
-| Hostname | VPS target |
-| --- | --- |
-| `wigclub.store` | nginx static storefront |
-| `www.wigclub.store` | nginx static storefront |
-| `athena.wigclub.store` | nginx static Athena admin app |
-| `qa.wigclub.store` | nginx reverse proxy to storefront Vite dev server on `127.0.0.1:5176` |
-| `athena-qa.wigclub.store` | nginx reverse proxy to Athena Vite dev server on `127.0.0.1:5175` |
-| `api.wigclub.store` | nginx reverse proxy to prod Convex HTTP |
-| `dev.wigclub.store` | nginx reverse proxy to dev Convex HTTP |
-| `cache.wigclub.store` | Cloudflare Tunnel to `http://localhost:3000` |
+| Hostname                  | VPS target                                                            |
+| ------------------------- | --------------------------------------------------------------------- |
+| `wigclub.store`           | nginx static storefront                                               |
+| `www.wigclub.store`       | nginx static storefront                                               |
+| `athena.wigclub.store`    | nginx static Athena admin app                                         |
+| `qa.wigclub.store`        | nginx reverse proxy to storefront Vite dev server on `127.0.0.1:5176` |
+| `athena-qa.wigclub.store` | nginx reverse proxy to Athena Vite dev server on `127.0.0.1:5175`     |
+| `api.wigclub.store`       | nginx reverse proxy to prod Convex HTTP                               |
+| `dev.wigclub.store`       | nginx reverse proxy to dev Convex HTTP                                |
+| `cache.wigclub.store`     | Cloudflare Tunnel to `http://localhost:3000`                          |
 
 Do not expose the cache proxy through the VPS public interface. The service has cache read, write, and invalidation endpoints, so the expected runtime boundary is loopback plus Cloudflare Tunnel.
 
@@ -56,14 +56,14 @@ Do not hand-maintain separate app files under `/etc/nginx/sites-enabled`. If the
 
 The generated server blocks are:
 
-| nginx server_name | Behavior |
-| --- | --- |
-| `wigclub.store www.wigclub.store` | Serves `/root/athena/storefront/current` with SPA fallback |
-| `athena.wigclub.store` | Serves `/root/athena/athena-webapp/current` with SPA fallback |
-| `qa.wigclub.store` | Proxies to the storefront QA Vite dev server at `127.0.0.1:5176`, including websocket upgrade headers |
-| `athena-qa.wigclub.store` | Proxies to the QA Vite dev server at `127.0.0.1:5175`, including websocket upgrade headers |
-| `api.wigclub.store` | Proxies to the production Convex HTTP site with CORS handling |
-| `dev.wigclub.store` | Proxies to the dev Convex HTTP site with CORS handling |
+| nginx server_name                 | Behavior                                                                                              |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `wigclub.store www.wigclub.store` | Serves `/root/athena/storefront/current` with SPA fallback                                            |
+| `athena.wigclub.store`            | Serves `/root/athena/athena-webapp/current` with SPA fallback                                         |
+| `qa.wigclub.store`                | Proxies to the storefront QA Vite dev server at `127.0.0.1:5176`, including websocket upgrade headers |
+| `athena-qa.wigclub.store`         | Proxies to the QA Vite dev server at `127.0.0.1:5175`, including websocket upgrade headers            |
+| `api.wigclub.store`               | Proxies to the production Convex HTTP site with CORS handling                                         |
+| `dev.wigclub.store`               | Proxies to the dev Convex HTTP site with CORS handling                                                |
 
 nginx only listens on local HTTP port `80`. Public TLS is terminated at Cloudflare and traffic reaches nginx through Cloudflare Tunnel. Do not add certificate files to nginx for the tunnel-based deployment unless intentionally moving away from Cloudflare Tunnel.
 
@@ -187,9 +187,11 @@ scripts/deploy-vps.sh all
 scripts/deploy-vps.sh check-git
 ```
 
-`athena` is the default production Athena deploy path and builds locally before
-uploading the static bundle. Use `athena-remote` only when you intentionally
-want the VPS checkout to build the Athena admin app.
+`athena`, `storefront`, `full-prod`, and `all` are local-build production deploy
+paths. They build static bundles from the local checkout before uploading them
+to the VPS. `full-prod-local` remains as an explicit alias for older runbooks.
+Use `athena-remote` only when you intentionally want the VPS checkout to build
+the Athena admin app.
 
 Convex production deploys still run from the local checkout through the same entrypoint:
 
@@ -264,11 +266,11 @@ curl -sS -I -H 'Host: wigclub.store' http://127.0.0.1/
 
 The production rollback workflow needs these GitHub environment or repository secrets:
 
-| Secret | Purpose |
-| --- | --- |
-| `ATHENA_VPS_HOST` | VPS hostname or IP address reachable from GitHub Actions |
-| `ATHENA_VPS_USER` | SSH user for the VPS; use `root` unless the VPS has a dedicated deploy user |
-| `ATHENA_VPS_SSH_PRIVATE_KEY` | Private key that can SSH to the VPS user |
+| Secret                       | Purpose                                                                     |
+| ---------------------------- | --------------------------------------------------------------------------- |
+| `ATHENA_VPS_HOST`            | VPS hostname or IP address reachable from GitHub Actions                    |
+| `ATHENA_VPS_USER`            | SSH user for the VPS; use `root` unless the VPS has a dedicated deploy user |
+| `ATHENA_VPS_SSH_PRIVATE_KEY` | Private key that can SSH to the VPS user                                    |
 
 ## QA Dev Server
 
@@ -317,16 +319,16 @@ Because this exposes Vite dev servers through public hostnames, protect `athena-
 
 Athena POS receipt messaging sends customer-safe storefront receipt links through the Meta WhatsApp Cloud API. Configure these server-side Convex environment variables per environment before operators use the WhatsApp receipt action:
 
-| Variable | Purpose |
-| --- | --- |
-| `WHATSAPP_ACCESS_TOKEN` | Meta Cloud API access token for the WhatsApp Business account |
-| `WHATSAPP_PHONE_NUMBER_ID` | Meta phone number id used in `/{phone-number-id}/messages` send requests |
-| `WHATSAPP_RECEIPT_TEMPLATE_NAME` | Approved utility template name for POS receipt links |
-| `WHATSAPP_TEMPLATE_LANGUAGE` | Template language code; defaults to `en_US` when omitted |
-| `WHATSAPP_GRAPH_API_VERSION` | Meta Graph API version; defaults to `v24.0` when omitted |
-| `WHATSAPP_WEBHOOK_VERIFY_TOKEN` | Verify token configured in the Meta app webhook callback |
-| `WHATSAPP_WEBHOOK_APP_SECRET` | Meta app secret used to verify `X-Hub-Signature-256` webhook POST callbacks |
-| `STOREFRONT_RECEIPT_BASE_URL` | Public storefront origin used to build `/shop/receipt/s/{token}` links |
+| Variable                         | Purpose                                                                     |
+| -------------------------------- | --------------------------------------------------------------------------- |
+| `WHATSAPP_ACCESS_TOKEN`          | Meta Cloud API access token for the WhatsApp Business account               |
+| `WHATSAPP_PHONE_NUMBER_ID`       | Meta phone number id used in `/{phone-number-id}/messages` send requests    |
+| `WHATSAPP_RECEIPT_TEMPLATE_NAME` | Approved utility template name for POS receipt links                        |
+| `WHATSAPP_TEMPLATE_LANGUAGE`     | Template language code; defaults to `en_US` when omitted                    |
+| `WHATSAPP_GRAPH_API_VERSION`     | Meta Graph API version; defaults to `v24.0` when omitted                    |
+| `WHATSAPP_WEBHOOK_VERIFY_TOKEN`  | Verify token configured in the Meta app webhook callback                    |
+| `WHATSAPP_WEBHOOK_APP_SECRET`    | Meta app secret used to verify `X-Hub-Signature-256` webhook POST callbacks |
+| `STOREFRONT_RECEIPT_BASE_URL`    | Public storefront origin used to build `/shop/receipt/s/{token}` links      |
 
 The receipt template body variables are store name, transaction number, and receipt link, in that order. Configure the Meta webhook callback to Athena's `/webhooks/whatsapp` endpoint so `sent`, `delivered`, `read`, and `failed` statuses can update the POS delivery history.
 
@@ -343,11 +345,11 @@ DEPLOY_REF="$GITHUB_SHA" REMOTE=athena-qa-vps scripts/deploy-vps.sh qa-storefron
 
 Configure these GitHub environment or repository secrets before relying on the workflow:
 
-| Secret | Purpose |
-| --- | --- |
-| `ATHENA_QA_HOST` | VPS hostname or IP address reachable from GitHub Actions |
-| `ATHENA_QA_USER` | SSH user for the VPS; use `root` unless the VPS has a dedicated deploy user |
-| `ATHENA_QA_SSH_PRIVATE_KEY` | Private key that can SSH to the VPS user |
+| Secret                      | Purpose                                                                     |
+| --------------------------- | --------------------------------------------------------------------------- |
+| `ATHENA_QA_HOST`            | VPS hostname or IP address reachable from GitHub Actions                    |
+| `ATHENA_QA_USER`            | SSH user for the VPS; use `root` unless the VPS has a dedicated deploy user |
+| `ATHENA_QA_SSH_PRIVATE_KEY` | Private key that can SSH to the VPS user                                    |
 
 The workflow targets the `qa` GitHub Environment. Keep that environment free of required reviewers if QA should deploy without human approval after every merge.
 

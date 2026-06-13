@@ -93,7 +93,9 @@ vi.mock("@/hooks/usePermissions", () => ({
 }));
 
 vi.mock("@/components/View", () => ({
-  default: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  default: ({ children }: { children?: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
 }));
 
 vi.mock("@/components/common/FadeIn", () => ({
@@ -101,11 +103,7 @@ vi.mock("@/components/common/FadeIn", () => ({
 }));
 
 vi.mock("@/components/common/PageLevelHeader", () => ({
-  PageLevelHeader: ({
-    title,
-  }: {
-    title: string;
-  }) => <h1>{title}</h1>,
+  PageLevelHeader: ({ title }: { title: string }) => <h1>{title}</h1>,
   PageWorkspace: ({ children }: { children?: React.ReactNode }) => (
     <div>{children}</div>
   ),
@@ -162,6 +160,7 @@ const detail: TerminalHealthDetail = {
       availabilityAgeMs: 90_000,
       catalogAgeMs: 180_000,
       registerReadModelAgeMs: 60_000,
+      serviceCatalogAgeMs: 240_000,
     },
     source: "support-diagnostics",
     staffAuthority: {
@@ -206,17 +205,16 @@ const detail: TerminalHealthDetail = {
   syncEvidence: {
     acceptedThroughSequence: 13,
     cursorUpdatedAt: Date.now() - 2 * 60_000,
-    latestEvent:
-      {
-        _id: "event-1",
-        eventType: "sale.completed",
-        localEventId: "local-1",
-        localRegisterSessionId: "local-session-1",
-        occurredAt: Date.now() - 5 * 60_000,
-        sequence: 14,
-        status: "held",
-        submittedAt: Date.now() - 4 * 60_000,
-      },
+    latestEvent: {
+      _id: "event-1",
+      eventType: "sale.completed",
+      localEventId: "local-1",
+      localRegisterSessionId: "local-session-1",
+      occurredAt: Date.now() - 5 * 60_000,
+      sequence: 14,
+      status: "held",
+      submittedAt: Date.now() - 4 * 60_000,
+    },
     unresolvedConflictCount: 1,
     unresolvedConflicts: [
       {
@@ -266,20 +264,28 @@ describe("POSTerminalDetailViewContent", () => {
   });
 
   it("renders identity, check-in, sync, conflict, and support notes", () => {
-    render(
-      <POSTerminalDetailViewContent
-        detail={detail}
-        isLoading={false}
-      />,
-    );
+    render(<POSTerminalDetailViewContent detail={detail} isLoading={false} />);
 
-    expect(screen.getByRole("heading", { name: "Front counter" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Front counter" }),
+    ).toBeInTheDocument();
     expect(screen.getAllByText("Register 1").length).toBeGreaterThan(0);
     expect(screen.getByText("Latest check-in")).toBeInTheDocument();
     expect(screen.getByText("Athena webapp")).toBeInTheDocument();
     expect(
       screen.getByText("gentle-lion-climbs (20260608193135) / b463caa2d36d"),
     ).toBeInTheDocument();
+    expect(screen.getByText("Readiness evidence")).toBeInTheDocument();
+    expect(screen.getAllByText("Availability").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Catalog").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Service catalog").length).toBeGreaterThan(0);
+    expect(screen.getByText("Register model")).toBeInTheDocument();
+    expect(
+      screen.getAllByText("Staff authority expired").length,
+    ).toBeGreaterThan(0);
+    expect(screen.getByText("2 minutes old")).toBeInTheDocument();
+    expect(screen.getByText("3 minutes old")).toBeInTheDocument();
+    expect(screen.getByText("4 minutes old")).toBeInTheDocument();
     expect(
       screen.getByText("Why this terminal needs attention"),
     ).toBeInTheDocument();
@@ -289,9 +295,15 @@ describe("POSTerminalDetailViewContent", () => {
     expect(
       screen.getByText("1 synced item is held before projection."),
     ).toBeInTheDocument();
-    expect(screen.getByText("Local runtime review / next upload #14")).toBeInTheDocument();
-    expect(screen.getAllByText("Cloud sync evidence").length).toBeGreaterThan(0);
-    expect(screen.getByText("Staff authority changed before sync.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Local runtime review / next upload #14"),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText("Cloud sync evidence").length).toBeGreaterThan(
+      0,
+    );
+    expect(
+      screen.getByText("Staff authority changed before sync."),
+    ).toBeInTheDocument();
     expect(screen.getByText("register.opened")).toBeInTheDocument();
     expect(screen.getByText("cart.item_added")).toBeInTheDocument();
     expect(screen.getByText("Uploaded")).toBeInTheDocument();
@@ -484,8 +496,12 @@ describe("POSTerminalDetailViewContent", () => {
       />,
     );
 
-    expect(screen.getByText("Waiting for runtime enrollment")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /start session/i })).toBeDisabled();
+    expect(
+      screen.getByText("Waiting for runtime enrollment"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /start session/i }),
+    ).toBeDisabled();
   });
 
   it("keeps Remote Assist unavailable when presence is stale", () => {
@@ -506,7 +522,9 @@ describe("POSTerminalDetailViewContent", () => {
     );
 
     expect(screen.getByText("Runtime not online")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /start session/i })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: /start session/i }),
+    ).toBeDisabled();
   });
 
   it("keeps Remote Assist unavailable for users who cannot start support sessions", () => {
@@ -527,7 +545,9 @@ describe("POSTerminalDetailViewContent", () => {
     );
 
     expect(screen.getByText("Support permission required")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /start session/i })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: /start session/i }),
+    ).toBeDisabled();
   });
 
   it("keeps attended-required Remote Assist unavailable until runtime approval exists", () => {
@@ -548,7 +568,9 @@ describe("POSTerminalDetailViewContent", () => {
     );
 
     expect(screen.getByText("Local approval required")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /start session/i })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: /start session/i }),
+    ).toBeDisabled();
   });
 
   it("renders the support recovery panel with safe cloud and terminal actions", () => {
@@ -565,7 +587,8 @@ describe("POSTerminalDetailViewContent", () => {
             },
             {
               source: "terminal_runtime",
-              summary: "authorization_failed: stale terminal sync secret rejected",
+              summary:
+                "authorization_failed: stale terminal sync secret rejected",
               type: "terminal_authorization_failed",
             },
           ],
@@ -609,15 +632,21 @@ describe("POSTerminalDetailViewContent", () => {
       ).length,
     ).toBeGreaterThan(0);
     expect(
-      screen.getByRole("button", { name: /resolve duplicate drawer attempts/i }),
+      screen.getByRole("button", {
+        name: /resolve duplicate drawer attempts/i,
+      }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /send terminal repair command/i }),
     ).toBeInTheDocument();
     expect(screen.getByText(/pending/i)).toBeInTheDocument();
-    expect(screen.getAllByText("Waiting For Check In").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Waiting For Check In").length).toBeGreaterThan(
+      0,
+    );
     expect(
-      screen.queryByText(/register_opened|already open|authorization_failed|sync secret/i),
+      screen.queryByText(
+        /register_opened|already open|authorization_failed|sync secret/i,
+      ),
     ).not.toBeInTheDocument();
   });
 
@@ -678,7 +707,8 @@ describe("POSTerminalDetailViewContent", () => {
             {
               actionTarget: { type: "pos_settings" },
               source: "terminal_runtime",
-              summary: "Terminal setup data is not ready on this checkout station.",
+              summary:
+                "Terminal setup data is not ready on this checkout station.",
               type: "terminal_seed_missing",
             },
           ],
@@ -810,10 +840,7 @@ describe("POSTerminalDetailViewContent", () => {
 
   it("renders no-data and query unavailable states", () => {
     const { rerender } = render(
-      <POSTerminalDetailViewContent
-        detail={null}
-        isLoading={false}
-      />,
+      <POSTerminalDetailViewContent detail={null} isLoading={false} />,
     );
 
     expect(screen.getByText("Terminal not found")).toBeInTheDocument();
@@ -913,7 +940,9 @@ describe("POSTerminalDetailView", () => {
 
   it("does not query full-admin Remote Assist session state for POS-only users", () => {
     mocks.hasFullAdminAccess = false;
-    (mocks.activeStoreState as { activeStore: Record<string, unknown> }).activeStore = {
+    (
+      mocks.activeStoreState as { activeStore: Record<string, unknown> }
+    ).activeStore = {
       _id: "store-1",
       organizationId: "org-1",
     };

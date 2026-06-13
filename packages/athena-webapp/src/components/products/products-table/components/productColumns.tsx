@@ -3,12 +3,14 @@ import { DataTableColumnHeader } from "~/src/components/base/table/data-table-co
 import { Link } from "@tanstack/react-router";
 import { Product } from "~/types";
 import { ProductStatus } from "../../../product/ProductStatus";
-import { useQuery } from "convex/react";
-import { api } from "~/convex/_generated/api";
 import { Badge } from "~/src/components/ui/badge";
 import { capitalizeWords } from "~/src/lib/utils";
 import { getOrigin } from "~/src/lib/navigationUtils";
 import { AlertOctagon } from "lucide-react";
+import {
+  ProductCategoryCell,
+  ProductSubcategoryCell,
+} from "./ProductTaxonomyCells";
 
 export const productColumns: ColumnDef<Product>[] = [
   {
@@ -20,11 +22,11 @@ export const productColumns: ColumnDef<Product>[] = [
       const sku = row.original.skus[0];
 
       const hasNoImages = row.original.skus.some(
-        (sku) => sku.images.length === 0
+        (sku) => sku.images.length === 0,
       );
 
       const someSkusHavePriceZero = row.original.skus.some(
-        (sku) => sku.price === 0
+        (sku) => sku.price === 0,
       );
 
       return (
@@ -90,75 +92,21 @@ export const productColumns: ColumnDef<Product>[] = [
 
       // Check if any SKU matches
       return row.original.skus.some((sku) =>
-        sku.sku?.toLowerCase().includes(searchValue)
+        sku.sku?.toLowerCase().includes(searchValue),
       );
     },
   },
   {
     accessorKey: "categoryId",
     header: ({ column }) => <DataTableColumnHeader column={column} title="" />,
-    cell: ({ row }) => {
-      const category = useQuery(api.inventory.categories.getById, {
-        id: row.original.categoryId,
-        storeId: row.original.storeId,
-      });
-
-      return (
-        <div className="flex space-x-2">
-          <Link
-            to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug"
-            params={(prev) => ({
-              ...prev,
-              orgUrlSlug: prev.orgUrlSlug!,
-              storeUrlSlug: prev.storeUrlSlug!,
-              productSlug: row.original._id,
-            })}
-            search={{ o: getOrigin() }}
-            className="flex items-center gap-8"
-          >
-            <div className="flex items-center gap-4">
-              <Badge variant="outline" className="bg-gray-100 text-gray-700">
-                <p className="text-xs">{category?.name}</p>
-              </Badge>
-            </div>
-          </Link>
-        </div>
-      );
-    },
+    cell: ({ row }) => <ProductCategoryCell product={row.original} />,
     enableSorting: false,
     enableHiding: true,
   },
   {
     accessorKey: "subcategoryId",
     header: ({ column }) => <DataTableColumnHeader column={column} title="" />,
-    cell: ({ row }) => {
-      const subcategory = useQuery(api.inventory.subcategories.getById, {
-        id: row.original.subcategoryId,
-        storeId: row.original.storeId,
-      });
-
-      return (
-        <div className="flex space-x-2">
-          <Link
-            to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug"
-            params={(prev) => ({
-              ...prev,
-              orgUrlSlug: prev.orgUrlSlug!,
-              storeUrlSlug: prev.storeUrlSlug!,
-              productSlug: row.original._id,
-            })}
-            search={{ o: getOrigin() }}
-            className="flex items-center gap-8"
-          >
-            <div className="flex items-center gap-4">
-              <Badge variant="outline" className="bg-gray-100 text-gray-700">
-                <p className="text-xs">{subcategory?.name}</p>
-              </Badge>
-            </div>
-          </Link>
-        </div>
-      );
-    },
+    cell: ({ row }) => <ProductSubcategoryCell product={row.original} />,
     enableSorting: false,
     enableHiding: true,
   },

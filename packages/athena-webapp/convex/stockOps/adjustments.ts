@@ -70,6 +70,22 @@ const TEMPORARY_DELETE_SCOPE_CONFIRMATION =
 const ACTIVE_STORE_HOLD_SUM_LIMIT = 5000;
 const ACTIVE_CHECKOUT_SESSION_SUM_LIMIT = 1000;
 const ACTIVE_CHECKOUT_ITEM_SUM_LIMIT = 5000;
+const STOCK_ADJUSTMENT_BLOCKER_POINT_LOOKUP_LIMIT = 50;
+const ACTIVE_PROVISIONAL_IMPORT_BLOCKER_SCAN_LIMIT = 1500;
+const ACTIVE_PENDING_CHECKOUT_BLOCKER_SCAN_LIMIT = 2000;
+const LEGACY_IMPORT_STOCK_ADJUSTMENT_BLOCK_MESSAGE =
+  "Legacy import SKUs must be finalized before stock adjustments can update them.";
+const POS_PENDING_CHECKOUT_STOCK_ADJUSTMENT_BLOCK_MESSAGE =
+  "POS pending checkout SKUs must be finalized before stock adjustments can update them.";
+
+type StockAdjustmentBlockedSkuReason =
+  | "provisional_import"
+  | "pos_pending_checkout";
+
+type StockAdjustmentBlockedSkuStatus = {
+  message: string;
+  reason: StockAdjustmentBlockedSkuReason;
+};
 
 function trimOptional(value?: string | null) {
   const nextValue = value?.trim();
@@ -85,7 +101,7 @@ async function listProductSkusForStockAdjustmentScopeWithCtx(
   args: {
     scopeKey: string;
     storeId: Id<"store">;
-  }
+  },
 ) {
   // eslint-disable-next-line @convex-dev/no-collect-in-query -- Temporary cleanup mutation intentionally scans the selected store scope once.
   const productSkus = await ctx.db
@@ -93,10 +109,10 @@ async function listProductSkusForStockAdjustmentScopeWithCtx(
     .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
     .collect();
   const productIds = Array.from(
-    new Set(productSkus.map((productSku) => productSku.productId))
+    new Set(productSkus.map((productSku) => productSku.productId)),
   );
   const products = await Promise.all(
-    productIds.map((productId) => ctx.db.get("product", productId))
+    productIds.map((productId) => ctx.db.get("product", productId)),
   );
   const productMap = new Map<
     Id<"product">,
@@ -108,10 +124,10 @@ async function listProductSkusForStockAdjustmentScopeWithCtx(
     }
   });
   const categoryIds = Array.from(
-    new Set(products.map((product) => product?.categoryId).filter(Boolean))
+    new Set(products.map((product) => product?.categoryId).filter(Boolean)),
   ) as Id<"category">[];
   const categories = await Promise.all(
-    categoryIds.map((categoryId) => ctx.db.get("category", categoryId))
+    categoryIds.map((categoryId) => ctx.db.get("category", categoryId)),
   );
   const categoryMap = new Map<
     Id<"category">,
@@ -138,14 +154,14 @@ async function listProductSkusForStockAdjustmentScopeWithCtx(
 }
 
 export function assertDistinctStockAdjustmentLineItems(
-  lineItems: Array<{ productSkuId: string }>
+  lineItems: Array<{ productSkuId: string }>,
 ) {
   const seenProductSkuIds = new Set<string>();
 
   lineItems.forEach((lineItem) => {
     if (seenProductSkuIds.has(lineItem.productSkuId)) {
       throw new Error(
-        "Stock adjustment batches cannot include the same SKU twice."
+        "Stock adjustment batches cannot include the same SKU twice.",
       );
     }
 
@@ -221,7 +237,7 @@ function assertNormalizedLineItem(
   } | null,
   storeId: Id<"store">,
   adjustmentType: StockAdjustmentType,
-  requestedLineItem: StockAdjustmentInputLineItem
+  requestedLineItem: StockAdjustmentInputLineItem,
 ): NormalizedStockAdjustmentLineItem {
   if (!productSku || productSku.storeId !== storeId) {
     throw new Error("Selected SKU could not be found for this store.");
@@ -236,7 +252,9 @@ function assertNormalizedLineItem(
   });
 
   if (!Number.isInteger(quantityDelta) || quantityDelta === 0) {
-    throw new Error("Stock adjustments must change inventory by at least one unit.");
+    throw new Error(
+      "Stock adjustments must change inventory by at least one unit.",
+    );
   }
 
   if (systemQuantity + quantityDelta < 0) {
@@ -268,7 +286,7 @@ async function applyStockAdjustmentBatchWithCtx(
     reasonCode: StockAdjustmentReasonCode;
     storeId: Id<"store">;
     workItemId?: Id<"operationalWorkItem">;
-  }
+  },
 ) {
   const sourceId = buildStockAdjustmentSourceId(String(args.batchId));
 
@@ -283,7 +301,7 @@ async function applyStockAdjustmentBatchWithCtx(
       inventoryCount: productSku.inventoryCount + lineItem.quantityDelta,
       quantityAvailable: Math.max(
         0,
-        productSku.quantityAvailable + lineItem.quantityDelta
+        productSku.quantityAvailable + lineItem.quantityDelta,
       ),
     });
 
@@ -305,8 +323,190 @@ async function applyStockAdjustmentBatchWithCtx(
   }
 }
 
+async function readActiveProvisionalImportSkuIdsWithCtx(
+  ctx: QueryCtx | MutationCtx,
+  args: {
+    productSkuIds: Id<"productSku">[];
+    storeId: Id<"store">;
+  },
+) {
+  const productSkuIds = Array.from(new Set(args.productSkuIds));
+
+  if (productSkuIds.length === 0) {
+    return new Set<Id<"productSku">>();
+  }
+
+  const productSkuIdSet = new Set(productSkuIds);
+
+  if (productSkuIds.length > STOCK_ADJUSTMENT_BLOCKER_POINT_LOOKUP_LIMIT) {
+    const rows = await ctx.db
+      .query("inventoryImportProvisionalSku")
+      .withIndex("by_storeId_status", (q) =>
+        q.eq("storeId", args.storeId).eq("status", "active"),
+      )
+      .take(ACTIVE_PROVISIONAL_IMPORT_BLOCKER_SCAN_LIMIT + 1);
+
+    if (rows.length > ACTIVE_PROVISIONAL_IMPORT_BLOCKER_SCAN_LIMIT) {
+      throw new Error(
+        "Stock operations has too many active legacy import SKUs to summarize. Finalize or archive stale import rows and retry.",
+      );
+    }
+
+    return new Set(
+      rows.flatMap((row) =>
+        row.productSkuId && productSkuIdSet.has(row.productSkuId)
+          ? [row.productSkuId as Id<"productSku">]
+          : [],
+      ),
+    );
+  }
+
+  const rows = await Promise.all(
+    productSkuIds.map((productSkuId) =>
+      ctx.db
+        .query("inventoryImportProvisionalSku")
+        .withIndex("by_storeId_productSkuId_status", (q) =>
+          q
+            .eq("storeId", args.storeId)
+            .eq("productSkuId", productSkuId)
+            .eq("status", "active"),
+        )
+        .first(),
+    ),
+  );
+
+  return new Set(
+    rows.flatMap((row) =>
+      row?.productSkuId ? [row.productSkuId as Id<"productSku">] : [],
+    ),
+  );
+}
+
+async function readActivePendingCheckoutSkuIdsWithCtx(
+  ctx: QueryCtx | MutationCtx,
+  args: {
+    productSkuIds: Id<"productSku">[];
+    storeId: Id<"store">;
+  },
+) {
+  const productSkuIds = Array.from(new Set(args.productSkuIds));
+
+  if (productSkuIds.length === 0) {
+    return new Set<Id<"productSku">>();
+  }
+
+  const productSkuIdSet = new Set(productSkuIds);
+
+  if (productSkuIds.length > STOCK_ADJUSTMENT_BLOCKER_POINT_LOOKUP_LIMIT) {
+    const [pendingReviewRows, flaggedRows] = await Promise.all([
+      ctx.db
+        .query("posPendingCheckoutItem")
+        .withIndex("by_storeId_status_updatedAt", (q) =>
+          q.eq("storeId", args.storeId).eq("status", "pending_review"),
+        )
+        .take(ACTIVE_PENDING_CHECKOUT_BLOCKER_SCAN_LIMIT + 1),
+      ctx.db
+        .query("posPendingCheckoutItem")
+        .withIndex("by_storeId_status_updatedAt", (q) =>
+          q.eq("storeId", args.storeId).eq("status", "flagged"),
+        )
+        .take(ACTIVE_PENDING_CHECKOUT_BLOCKER_SCAN_LIMIT + 1),
+    ]);
+
+    if (
+      pendingReviewRows.length > ACTIVE_PENDING_CHECKOUT_BLOCKER_SCAN_LIMIT ||
+      flaggedRows.length > ACTIVE_PENDING_CHECKOUT_BLOCKER_SCAN_LIMIT
+    ) {
+      throw new Error(
+        "Stock operations has too many unresolved POS pending checkout SKUs to summarize. Resolve stale pending checkout items and retry.",
+      );
+    }
+
+    return new Set(
+      [...pendingReviewRows, ...flaggedRows].flatMap((row) =>
+        row.provisionalProductSkuId &&
+        productSkuIdSet.has(row.provisionalProductSkuId)
+          ? [row.provisionalProductSkuId as Id<"productSku">]
+          : [],
+      ),
+    );
+  }
+
+  const rowsBySku = await Promise.all(
+    productSkuIds.map((productSkuId) =>
+      ctx.db
+        .query("posPendingCheckoutItem")
+        .withIndex("by_storeId_provisionalProductSkuId", (q) =>
+          q
+            .eq("storeId", args.storeId)
+            .eq("provisionalProductSkuId", productSkuId),
+        )
+        .take(20),
+    ),
+  );
+
+  return new Set(
+    rowsBySku.flatMap((rows) =>
+      rows.flatMap((row) =>
+        (row.status === "pending_review" || row.status === "flagged") &&
+        row.provisionalProductSkuId
+          ? [row.provisionalProductSkuId as Id<"productSku">]
+          : [],
+      ),
+    ),
+  );
+}
+
+async function readStockAdjustmentBlockedSkuStatusesWithCtx(
+  ctx: QueryCtx | MutationCtx,
+  args: {
+    productSkuIds: Id<"productSku">[];
+    storeId: Id<"store">;
+  },
+) {
+  const productSkuIds = Array.from(new Set(args.productSkuIds));
+  const blockedStatuses = new Map<
+    Id<"productSku">,
+    StockAdjustmentBlockedSkuStatus
+  >();
+
+  if (productSkuIds.length === 0) {
+    return blockedStatuses;
+  }
+
+  const [activeProvisionalImportSkuIds, activePendingCheckoutSkuIds] =
+    await Promise.all([
+      readActiveProvisionalImportSkuIdsWithCtx(ctx, {
+        productSkuIds,
+        storeId: args.storeId,
+      }),
+      readActivePendingCheckoutSkuIdsWithCtx(ctx, {
+        productSkuIds,
+        storeId: args.storeId,
+      }),
+    ]);
+
+  for (const productSkuId of activeProvisionalImportSkuIds) {
+    blockedStatuses.set(productSkuId, {
+      message: LEGACY_IMPORT_STOCK_ADJUSTMENT_BLOCK_MESSAGE,
+      reason: "provisional_import",
+    });
+  }
+
+  for (const productSkuId of activePendingCheckoutSkuIds) {
+    if (blockedStatuses.has(productSkuId)) continue;
+
+    blockedStatuses.set(productSkuId, {
+      message: POS_PENDING_CHECKOUT_STOCK_ADJUSTMENT_BLOCK_MESSAGE,
+      reason: "pos_pending_checkout",
+    });
+  }
+
+  return blockedStatuses;
+}
+
 function buildStockAdjustmentDecisionEventType(
-  decision: "approved" | "rejected" | "cancelled"
+  decision: "approved" | "rejected" | "cancelled",
 ) {
   return decision === "approved"
     ? "stock_adjustment_approved"
@@ -316,7 +516,7 @@ function buildStockAdjustmentDecisionEventType(
 }
 
 function buildResolvedStockAdjustmentStatus(
-  decision: "approved" | "rejected" | "cancelled"
+  decision: "approved" | "rejected" | "cancelled",
 ) {
   return decision === "approved" ? "applied" : decision;
 }
@@ -329,9 +529,12 @@ export async function resolveStockAdjustmentApprovalDecisionWithCtx(
     reviewedByStaffProfileId?: Id<"staffProfile">;
     reviewedByUserId?: Id<"athenaUser">;
     decisionNotes?: string;
-  }
+  },
 ) {
-  const approvalRequest = await ctx.db.get("approvalRequest", args.approvalRequestId);
+  const approvalRequest = await ctx.db.get(
+    "approvalRequest",
+    args.approvalRequestId,
+  );
 
   if (
     !approvalRequest ||
@@ -341,17 +544,20 @@ export async function resolveStockAdjustmentApprovalDecisionWithCtx(
     throw new Error("Inventory adjustment approval request not found.");
   }
 
-  const stockAdjustmentBatchId = approvalRequest.subjectId as Id<"stockAdjustmentBatch">;
+  const stockAdjustmentBatchId =
+    approvalRequest.subjectId as Id<"stockAdjustmentBatch">;
   const stockAdjustmentBatch = await ctx.db.get(
     "stockAdjustmentBatch",
-    stockAdjustmentBatchId
+    stockAdjustmentBatchId,
   );
 
   if (
     !stockAdjustmentBatch ||
     stockAdjustmentBatch.approvalRequestId !== args.approvalRequestId
   ) {
-    throw new Error("Stock adjustment batch not found for this approval request.");
+    throw new Error(
+      "Stock adjustment batch not found for this approval request.",
+    );
   }
 
   if (stockAdjustmentBatch.status !== "pending_approval") {
@@ -420,25 +626,28 @@ async function readActiveHeldQuantitiesForStockOpsSnapshot(
   args: {
     now: number;
     storeId: Id<"store">;
-  }
+  },
 ) {
   const holds = await ctx.db
     .query("inventoryHold")
     .withIndex("by_storeId_status_expiresAt", (q) =>
-      q.eq("storeId", args.storeId).eq("status", "active").gt("expiresAt", args.now)
+      q
+        .eq("storeId", args.storeId)
+        .eq("status", "active")
+        .gt("expiresAt", args.now),
     )
     .take(ACTIVE_STORE_HOLD_SUM_LIMIT + 1);
 
   if (holds.length > ACTIVE_STORE_HOLD_SUM_LIMIT) {
     throw new Error(
-      "Stock operations has too many active POS inventory holds to summarize. Expire stale POS sessions and retry."
+      "Stock operations has too many active POS inventory holds to summarize. Expire stale POS sessions and retry.",
     );
   }
 
   return holds.reduce((quantities, hold) => {
     quantities.set(
       hold.productSkuId,
-      (quantities.get(hold.productSkuId) ?? 0) + Math.max(0, hold.quantity)
+      (quantities.get(hold.productSkuId) ?? 0) + Math.max(0, hold.quantity),
     );
     return quantities;
   }, new Map<Id<"productSku">, number>());
@@ -449,23 +658,23 @@ async function readActiveCheckoutReservedQuantitiesForStockOpsSnapshot(
   args: {
     now: number;
     storeId: Id<"store">;
-  }
+  },
 ) {
   const activeSessionCandidates = await ctx.db
     .query("checkoutSession")
     .withIndex("by_storeId_hasCompletedCheckoutSession", (q) =>
-      q.eq("storeId", args.storeId).eq("hasCompletedCheckoutSession", false)
+      q.eq("storeId", args.storeId).eq("hasCompletedCheckoutSession", false),
     )
     .take(ACTIVE_CHECKOUT_SESSION_SUM_LIMIT + 1);
 
   if (activeSessionCandidates.length > ACTIVE_CHECKOUT_SESSION_SUM_LIMIT) {
     throw new Error(
-      "Stock operations has too many active checkout sessions to summarize. Expire stale checkout sessions and retry."
+      "Stock operations has too many active checkout sessions to summarize. Expire stale checkout sessions and retry.",
     );
   }
 
   const activeSessions = activeSessionCandidates.filter(
-    (session) => session.expiresAt > args.now
+    (session) => session.expiresAt > args.now,
   );
 
   const checkoutItemGroups = await Promise.all(
@@ -473,14 +682,14 @@ async function readActiveCheckoutReservedQuantitiesForStockOpsSnapshot(
       ctx.db
         .query("checkoutSessionItem")
         .withIndex("by_sessionId", (q) => q.eq("sesionId", session._id))
-        .take(ACTIVE_CHECKOUT_ITEM_SUM_LIMIT + 1)
-    )
+        .take(ACTIVE_CHECKOUT_ITEM_SUM_LIMIT + 1),
+    ),
   );
 
   for (const items of checkoutItemGroups) {
     if (items.length > ACTIVE_CHECKOUT_ITEM_SUM_LIMIT) {
       throw new Error(
-        "Stock operations has too many checkout items in one active session to summarize. Expire stale checkout sessions and retry."
+        "Stock operations has too many checkout items in one active session to summarize. Expire stale checkout sessions and retry.",
       );
     }
   }
@@ -490,7 +699,7 @@ async function readActiveCheckoutReservedQuantitiesForStockOpsSnapshot(
   return checkoutItems.reduce((quantities, item) => {
     quantities.set(
       item.productSkuId,
-      (quantities.get(item.productSkuId) ?? 0) + Math.max(0, item.quantity)
+      (quantities.get(item.productSkuId) ?? 0) + Math.max(0, item.quantity),
     );
     return quantities;
   }, new Map<Id<"productSku">, number>());
@@ -501,7 +710,7 @@ export async function listInventorySnapshotWithCtx(
   args: {
     now?: number;
     storeId: Id<"store">;
-  }
+  },
 ) {
   const now = args.now ?? Date.now();
   // eslint-disable-next-line @convex-dev/no-collect-in-query -- This workspace needs the full store SKU snapshot so operators can reconcile counts across the entire catalog in one pass.
@@ -509,10 +718,13 @@ export async function listInventorySnapshotWithCtx(
     .query("productSku")
     .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
     .collect();
-  const heldQuantities = await readActiveHeldQuantitiesForStockOpsSnapshot(ctx, {
-    now,
-    storeId: args.storeId,
-  });
+  const heldQuantities = await readActiveHeldQuantitiesForStockOpsSnapshot(
+    ctx,
+    {
+      now,
+      storeId: args.storeId,
+    },
+  );
   const checkoutReservedQuantities =
     await readActiveCheckoutReservedQuantitiesForStockOpsSnapshot(ctx, {
       now,
@@ -520,14 +732,21 @@ export async function listInventorySnapshotWithCtx(
     });
 
   const productIds = Array.from(
-    new Set(productSkus.map((productSku) => productSku.productId))
+    new Set(productSkus.map((productSku) => productSku.productId)),
   );
   const colorIds = Array.from(
-    new Set(productSkus.map((productSku) => productSku.color).filter(Boolean))
+    new Set(productSkus.map((productSku) => productSku.color).filter(Boolean)),
   ) as Id<"color">[];
+  const stockAdjustmentBlockedSkuStatuses =
+    await readStockAdjustmentBlockedSkuStatusesWithCtx(ctx, {
+      productSkuIds: productSkus.map((productSku) => productSku._id),
+      storeId: args.storeId,
+    });
 
   const [products, colors] = await Promise.all([
-    Promise.all(productIds.map((productId) => ctx.db.get("product", productId))),
+    Promise.all(
+      productIds.map((productId) => ctx.db.get("product", productId)),
+    ),
     Promise.all(colorIds.map((colorId) => ctx.db.get("color", colorId))),
   ]);
 
@@ -541,11 +760,21 @@ export async function listInventorySnapshotWithCtx(
     }
   });
   const categoryIds = Array.from(
-    new Set(products.map((product) => product?.categoryId).filter(Boolean))
+    new Set(products.map((product) => product?.categoryId).filter(Boolean)),
   ) as Id<"category">[];
-  const categories = await Promise.all(
-    categoryIds.map((categoryId) => ctx.db.get("category", categoryId))
-  );
+  const subcategoryIds = Array.from(
+    new Set(products.map((product) => product?.subcategoryId).filter(Boolean)),
+  ) as Id<"subcategory">[];
+  const [categories, subcategories] = await Promise.all([
+    Promise.all(
+      categoryIds.map((categoryId) => ctx.db.get("category", categoryId)),
+    ),
+    Promise.all(
+      subcategoryIds.map((subcategoryId) =>
+        ctx.db.get("subcategory", subcategoryId),
+      ),
+    ),
+  ]);
   const categoryMap = new Map<
     Id<"category">,
     NonNullable<(typeof categories)[number]>
@@ -553,6 +782,15 @@ export async function listInventorySnapshotWithCtx(
   categories.forEach((category) => {
     if (category) {
       categoryMap.set(category._id, category);
+    }
+  });
+  const subcategoryMap = new Map<
+    Id<"subcategory">,
+    NonNullable<(typeof subcategories)[number]>
+  >();
+  subcategories.forEach((subcategory) => {
+    if (subcategory) {
+      subcategoryMap.set(subcategory._id, subcategory);
     }
   });
   const colorMap = new Map<Id<"color">, NonNullable<(typeof colors)[number]>>();
@@ -569,47 +807,59 @@ export async function listInventorySnapshotWithCtx(
 
   const rows = await Promise.all(
     activeProductSkus.map(async (productSku) => {
-        const product = productMap.get(productSku.productId);
-        const category = product?.categoryId
-          ? categoryMap.get(product.categoryId)
-          : null;
-        const color = productSku.color ? colorMap.get(productSku.color) : null;
-        const posReservedQuantity = heldQuantities.get(productSku._id) ?? 0;
-        const checkoutReservedQuantity =
-          checkoutReservedQuantities.get(productSku._id) ?? 0;
-        const reservedQuantity =
-          posReservedQuantity + checkoutReservedQuantity;
-        const durableQuantityAvailable = productSku.quantityAvailable;
-        const quantityAvailable = Math.max(
-          0,
-          durableQuantityAvailable - posReservedQuantity
-        );
+      const product = productMap.get(productSku.productId);
+      const category = product?.categoryId
+        ? categoryMap.get(product.categoryId)
+        : null;
+      const subcategory = product?.subcategoryId
+        ? subcategoryMap.get(product.subcategoryId)
+        : null;
+      const color = productSku.color ? colorMap.get(productSku.color) : null;
+      const posReservedQuantity = heldQuantities.get(productSku._id) ?? 0;
+      const checkoutReservedQuantity =
+        checkoutReservedQuantities.get(productSku._id) ?? 0;
+      const reservedQuantity = posReservedQuantity + checkoutReservedQuantity;
+      const durableQuantityAvailable = productSku.quantityAvailable;
+      const quantityAvailable = Math.max(
+        0,
+        durableQuantityAvailable - posReservedQuantity,
+      );
+      const blockedStatus = stockAdjustmentBlockedSkuStatuses.get(
+        productSku._id,
+      );
 
-        return {
-          _id: productSku._id,
-          barcode: productSku.barcode ?? null,
-          colorName: color?.name ?? null,
-          durableQuantityAvailable,
-          imageUrl: productSku.images[0] ?? null,
-          inventoryCount: productSku.inventoryCount,
-          length: productSku.length ?? null,
-          netPrice: productSku.netPrice,
-          price: productSku.price,
-          productCategory: category?.name ?? null,
-          productId: productSku.productId,
-          productName:
-            product?.name ??
-            productSku.productName ??
-            productSku.sku ??
-            String(productSku._id),
-          checkoutReservedQuantity,
-          posReservedQuantity,
-          quantityAvailable,
-          reservedQuantity,
-          size: productSku.size ?? null,
-          sku: productSku.sku ?? null,
-        };
-      })
+      return {
+        _id: productSku._id,
+        barcode: productSku.barcode ?? null,
+        colorName: color?.name ?? null,
+        durableQuantityAvailable,
+        imageUrl: productSku.images[0] ?? null,
+        inventoryCount: productSku.inventoryCount,
+        length: productSku.length ?? null,
+        netPrice: productSku.netPrice,
+        price: productSku.price,
+        productCategoryId: product?.categoryId ?? null,
+        productCategory: category?.name ?? null,
+        productCategorySlug: category?.slug ?? null,
+        productId: productSku.productId,
+        productName:
+          product?.name ??
+          productSku.productName ??
+          productSku.sku ??
+          String(productSku._id),
+        productSubcategoryId: product?.subcategoryId ?? null,
+        productSubcategory: subcategory?.name ?? null,
+        productSubcategorySlug: subcategory?.slug ?? null,
+        stockAdjustmentBlockedReason: blockedStatus?.reason ?? null,
+        stockAdjustmentBlockedMessage: blockedStatus?.message ?? null,
+        checkoutReservedQuantity,
+        posReservedQuantity,
+        quantityAvailable,
+        reservedQuantity,
+        size: productSku.size ?? null,
+        sku: productSku.sku ?? null,
+      };
+    }),
   );
 
   return rows.sort((left, right) => {
@@ -638,7 +888,7 @@ export async function temporaryDeleteStockAdjustmentScopeSkusWithCtx(
     dryRun?: boolean;
     scopeKey: string;
     storeId: Id<"store">;
-  }
+  },
 ) {
   const store = await ctx.db.get("store", args.storeId);
 
@@ -661,10 +911,13 @@ export async function temporaryDeleteStockAdjustmentScopeSkusWithCtx(
     throw new Error("A stock cleanup scope key is required.");
   }
 
-  const candidateSkus = await listProductSkusForStockAdjustmentScopeWithCtx(ctx, {
-    scopeKey,
-    storeId: args.storeId,
-  });
+  const candidateSkus = await listProductSkusForStockAdjustmentScopeWithCtx(
+    ctx,
+    {
+      scopeKey,
+      storeId: args.storeId,
+    },
+  );
   const response = {
     deletedCount: 0,
     dryRun: args.dryRun ?? true,
@@ -678,12 +931,14 @@ export async function temporaryDeleteStockAdjustmentScopeSkusWithCtx(
 
   if (args.confirmation !== TEMPORARY_DELETE_SCOPE_CONFIRMATION) {
     throw new Error(
-      `Pass confirmation "${TEMPORARY_DELETE_SCOPE_CONFIRMATION}" to delete these SKUs.`
+      `Pass confirmation "${TEMPORARY_DELETE_SCOPE_CONFIRMATION}" to delete these SKUs.`,
     );
   }
 
   await Promise.all(
-    candidateSkus.map((productSku) => ctx.db.delete("productSku", productSku._id))
+    candidateSkus.map((productSku) =>
+      ctx.db.delete("productSku", productSku._id),
+    ),
   );
 
   return {
@@ -714,7 +969,7 @@ type SubmitStockAdjustmentBatchArgs = {
 
 export async function submitStockAdjustmentBatchWithCtx(
   ctx: MutationCtx,
-  args: SubmitStockAdjustmentBatchArgs
+  args: SubmitStockAdjustmentBatchArgs,
 ) {
   const submissionKey = trimOptional(args.submissionKey);
 
@@ -731,7 +986,7 @@ export async function submitStockAdjustmentBatchWithCtx(
   assertDistinctStockAdjustmentLineItems(
     args.lineItems.map((lineItem) => ({
       productSkuId: String(lineItem.productSkuId),
-    }))
+    })),
   );
 
   const store = await ctx.db.get("store", args.storeId);
@@ -743,7 +998,8 @@ export async function submitStockAdjustmentBatchWithCtx(
 
   await requireOrganizationMemberRoleWithCtx(ctx, {
     allowedRoles: ["full_admin", "pos_only"],
-    failureMessage: "You do not have permission to adjust stock for this store.",
+    failureMessage:
+      "You do not have permission to adjust stock for this store.",
     organizationId: store.organizationId,
     userId: createdByUser._id,
   });
@@ -754,7 +1010,7 @@ export async function submitStockAdjustmentBatchWithCtx(
       q
         .eq("storeId", args.storeId)
         .eq("adjustmentType", args.adjustmentType)
-        .eq("submissionKey", submissionKey)
+        .eq("submissionKey", submissionKey),
     )
     .first();
 
@@ -763,16 +1019,28 @@ export async function submitStockAdjustmentBatchWithCtx(
   }
 
   const productSkus = await Promise.all(
-    args.lineItems.map((lineItem) => ctx.db.get("productSku", lineItem.productSkuId))
+    args.lineItems.map((lineItem) =>
+      ctx.db.get("productSku", lineItem.productSkuId),
+    ),
   );
+  const stockAdjustmentBlockedSkuStatuses =
+    await readStockAdjustmentBlockedSkuStatusesWithCtx(ctx, {
+      productSkuIds: args.lineItems.map((lineItem) => lineItem.productSkuId),
+      storeId: args.storeId,
+    });
+
+  if (stockAdjustmentBlockedSkuStatuses.size > 0) {
+    const [firstBlockedStatus] = stockAdjustmentBlockedSkuStatuses.values();
+    throw new Error(firstBlockedStatus.message);
+  }
 
   const normalizedLineItems = args.lineItems.map((requestedLineItem, index) =>
     assertNormalizedLineItem(
       productSkus[index] ?? null,
       args.storeId,
       args.adjustmentType,
-      requestedLineItem
-    )
+      requestedLineItem,
+    ),
   );
 
   const summary = summarizeStockAdjustmentLineItems(normalizedLineItems);
@@ -855,7 +1123,7 @@ export async function submitStockAdjustmentBatchWithCtx(
           subjectId: String(stockAdjustmentBatchId),
           subjectType: "stock_adjustment_batch",
           workItemId,
-        })
+        }),
       );
 
       await ctx.db.patch("operationalWorkItem", workItemId, {
@@ -918,7 +1186,7 @@ export async function submitStockAdjustmentBatchWithCtx(
 }
 
 function mapSubmitStockAdjustmentBatchError(
-  error: unknown
+  error: unknown,
 ): CommandResult<never> | null {
   const message = error instanceof Error ? error.message : "";
 
@@ -929,7 +1197,9 @@ function mapSubmitStockAdjustmentBatchError(
     });
   }
 
-  if (message === "You do not have permission to adjust stock for this store.") {
+  if (
+    message === "You do not have permission to adjust stock for this store."
+  ) {
     return userError({
       code: "authorization_failed",
       message,
@@ -952,14 +1222,17 @@ function mapSubmitStockAdjustmentBatchError(
     message === "Stock adjustment batches require at least one line item." ||
     message === "Stock adjustment batches cannot include the same SKU twice." ||
     message === "Manual stock adjustments require a supported reason code." ||
-    message === "Cycle counts must reconcile with the cycle-count reason code." ||
+    message ===
+      "Cycle counts must reconcile with the cycle-count reason code." ||
     message ===
       "Manual stock adjustments require a whole-unit delta for every selected SKU." ||
     message ===
       "Cycle counts require an integer counted quantity for every selected SKU." ||
     message ===
       "Stock adjustments must change inventory by at least one unit." ||
-    message === "Stock adjustments cannot reduce inventory below zero."
+    message === "Stock adjustments cannot reduce inventory below zero." ||
+    message === LEGACY_IMPORT_STOCK_ADJUSTMENT_BLOCK_MESSAGE ||
+    message === POS_PENDING_CHECKOUT_STOCK_ADJUSTMENT_BLOCK_MESSAGE
   ) {
     return userError({
       code: "validation_failed",
@@ -972,7 +1245,7 @@ function mapSubmitStockAdjustmentBatchError(
 
 export async function submitStockAdjustmentBatchCommandWithCtx(
   ctx: MutationCtx,
-  args: SubmitStockAdjustmentBatchArgs
+  args: SubmitStockAdjustmentBatchArgs,
 ): Promise<CommandResult<any>> {
   try {
     return ok(await submitStockAdjustmentBatchWithCtx(ctx, args));
@@ -995,7 +1268,7 @@ export const submitStockAdjustmentBatch = mutation({
         countedQuantity: v.optional(v.number()),
         productSkuId: v.id("productSku"),
         quantityDelta: v.optional(v.number()),
-      })
+      }),
     ),
     notes: v.optional(v.string()),
     reasonCode: v.string(),

@@ -32,4 +32,34 @@ describe("mapCatalogRowToProduct", () => {
       availabilityStatus: "available",
     });
   });
+
+  it("marks pending checkout catalog rows available without trusted inventory", () => {
+    const product = mapCatalogRowToProduct(
+      {
+        id: "sku-pending-checkout",
+        productId: "product-pending-checkout",
+        productSkuId: "sku-pending-checkout",
+        pendingCheckoutItemId: "pending-checkout-1",
+        availabilityPolicy: "pending_checkout",
+        name: "Pending checkout item",
+        sku: "PENDING-CHECKOUT",
+        barcode: "123",
+        price: 20,
+      },
+      {
+        availabilityPolicy: "pending_checkout",
+        inStock: true,
+        quantityAvailable: 0,
+      },
+    );
+
+    expect(product).toMatchObject({
+      pendingCheckoutItemId: "pending-checkout-1",
+      availabilityPolicy: "pending_checkout",
+      availabilityStatus: "available",
+      availabilityMessage: "Review pending",
+      inStock: true,
+      quantityAvailable: 0,
+    });
+  });
 });
