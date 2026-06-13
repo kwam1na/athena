@@ -25,7 +25,7 @@ import { AppSidebar } from "../components/app-sidebar";
 import { useAuth } from "../hooks/useAuth";
 import { usePermissions } from "../hooks/usePermissions";
 import { PermissionsProvider } from "../contexts/PermissionsContext";
-import { ShieldCheck, UserCircle } from "lucide-react";
+import { Monitor, Moon, ShieldCheck, Sun, UserCircle } from "lucide-react";
 import { AppHeader } from "@/components/Navbar";
 import { cn } from "@/lib/utils";
 import { useAuthActions } from "@convex-dev/auth/react";
@@ -43,6 +43,10 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -59,6 +63,7 @@ import {
   toPosTerminalAppSessionRecoveryRuntimeInput,
 } from "@/lib/pos/infrastructure/terminal/posTerminalAppSessionRecoveryContext";
 import type { PosTerminalRuntimeAppSessionRecoveryInput } from "@/lib/pos/infrastructure/local/terminalRuntimeStatus";
+import { type AthenaThemeMode, useAthenaTheme } from "@/lib/theme";
 
 export const Route = createFileRoute("/_authed")({
   component: Layout,
@@ -306,6 +311,7 @@ function UserMenu({ userEmail }: { userEmail: string }) {
   const navigate = useNavigate();
   const { signOut } = useAuthActions();
   const { hasFullAdminAccess } = usePermissions();
+  const { mode, resolvedTheme, setThemeMode } = useAthenaTheme();
   const {
     activeElevation,
     endManagerElevation,
@@ -346,7 +352,31 @@ function UserMenu({ userEmail }: { userEmail: string }) {
           ) : null}
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-48">
+      <DropdownMenuContent align="end" className="w-64">
+        <DropdownMenuLabel className="flex flex-col gap-1">
+          <span>Appearance</span>
+          <span className="text-xs font-normal text-muted-foreground">
+            {resolvedTheme === "dark" ? "Dark mode active" : "Light mode active"}
+          </span>
+        </DropdownMenuLabel>
+        <DropdownMenuRadioGroup
+          value={mode}
+          onValueChange={(value) => setThemeMode(value as AthenaThemeMode)}
+        >
+          <DropdownMenuRadioItem className="gap-layout-xs" value="system">
+            <Monitor className="h-4 w-4 text-muted-foreground" />
+            System
+          </DropdownMenuRadioItem>
+          <DropdownMenuRadioItem className="gap-layout-xs" value="light">
+            <Sun className="h-4 w-4 text-muted-foreground" />
+            Light
+          </DropdownMenuRadioItem>
+          <DropdownMenuRadioItem className="gap-layout-xs" value="dark">
+            <Moon className="h-4 w-4 text-muted-foreground" />
+            Dark
+          </DropdownMenuRadioItem>
+        </DropdownMenuRadioGroup>
+        <DropdownMenuSeparator />
         {isManagerElevated ? (
           <DropdownMenuItem
             className="gap-layout-xs"

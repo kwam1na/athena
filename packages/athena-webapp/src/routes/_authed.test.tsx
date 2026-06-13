@@ -122,6 +122,22 @@ vi.mock("@/components/ui/dropdown-menu", () => ({
     children: ReactNode;
     onSelect?: () => void;
   }) => <button onClick={onSelect}>{children}</button>,
+  DropdownMenuLabel: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  DropdownMenuRadioGroup: ({
+    children,
+    onValueChange,
+  }: {
+    children: ReactNode;
+    onValueChange?: (value: string) => void;
+  }) => <div data-on-value-change={Boolean(onValueChange)}>{children}</div>,
+  DropdownMenuRadioItem: ({
+    children,
+    value,
+  }: {
+    children: ReactNode;
+    value: string;
+  }) => <button value={value}>{children}</button>,
+  DropdownMenuSeparator: () => <hr />,
   DropdownMenuTrigger: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }));
 
