@@ -25,7 +25,7 @@ const OPENING_AUTO_START_ACTION = "opening.auto_start";
 const EOD_PREPARE_ACTION = "eod.prepare";
 const AUTOMATION_POLICY_CRON_LIMIT = 500;
 const DAILY_OPERATIONS_POLICY_VERSION = "daily-operations.v1";
-const CONFIGURED_AUTOMATION_LOOKBACK_MS = 60 * 60 * 1000;
+const CONFIGURED_AUTOMATION_LOOKBACK_MS = 2 * 60 * 60 * 1000;
 
 export const dailyOperationsOpeningAutoStartAction = defineAutomationAction({
   action: OPENING_AUTO_START_ACTION,

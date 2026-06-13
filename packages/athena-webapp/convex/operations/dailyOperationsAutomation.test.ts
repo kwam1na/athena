@@ -889,6 +889,38 @@ describe("daily operations automation adapter", () => {
     );
   });
 
+  it("catches up a late-day Opening start when a quieter non-prod tick crosses midnight", async () => {
+    const { db, inserts } = createDb({
+      automationPolicy: [
+        policy("opening.auto_start", "enabled", {
+          openingLocalStartMinutes: 22 * 60 + 30,
+          operatingTimezoneOffsetMinutes: 0,
+        }),
+      ],
+      dailyClose: [completedDailyClose()],
+      store: [store],
+    });
+
+    const result = await runConfiguredDailyOperationsAutomationWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        now: Date.UTC(2026, 5, 9, 0, 0),
+      },
+    );
+
+    expect(result.openingResults).toHaveLength(1);
+    expect(inserts).toContainEqual(
+      expect.objectContaining({
+        table: "automationRun",
+        value: expect.objectContaining({
+          action: "opening.auto_start",
+          operatingDate: "2026-06-08",
+          outcome: "applied",
+        }),
+      }),
+    );
+  });
+
   it("runs configured Opening cron at the first tick after the policy local start time", async () => {
     const { db, inserts } = createDb({
       automationPolicy: [

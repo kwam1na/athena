@@ -9,6 +9,11 @@ describe("Convex cron registration", () => {
     expect(source).toContain(
       "internal.operations.dailyOperationsAutomation.runConfiguredDailyOperationsAutomation",
     );
+    expect(source).toContain('if (process.env.STAGE == "prod")');
+    expect(source).toContain("crons.hourly(");
+    expect(source).toContain("{ minuteUTC: 0 }");
+    expect(source).toContain("crons.cron(");
+    expect(source).toContain('"0 */2 * * *"');
     expect(source).not.toContain(
       "internal.operations.dailyOperationsAutomation.runScheduledDailyOperationsAutomation",
     );
