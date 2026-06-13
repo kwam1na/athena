@@ -45,11 +45,20 @@ crons.interval(
   {},
 );
 
-crons.interval(
-  "daily-operations-automation",
-  { minutes: process.env.STAGE == "prod" ? 60 : 1440 },
-  internal.operations.dailyOperationsAutomation.runConfiguredDailyOperationsAutomation,
-  {},
-);
+if (process.env.STAGE == "prod") {
+  crons.hourly(
+    "daily-operations-automation",
+    { minuteUTC: 0 },
+    internal.operations.dailyOperationsAutomation.runConfiguredDailyOperationsAutomation,
+    {},
+  );
+} else {
+  crons.cron(
+    "daily-operations-automation",
+    "0 */2 * * *",
+    internal.operations.dailyOperationsAutomation.runConfiguredDailyOperationsAutomation,
+    {},
+  );
+}
 
 export default crons;
