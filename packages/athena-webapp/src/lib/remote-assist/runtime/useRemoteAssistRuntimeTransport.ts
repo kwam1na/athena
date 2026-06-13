@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
 import {
-  applyRemoteAssistControlIntent,
+  prepareRemoteAssistControlIntent,
 } from "./applyRemoteAssistControlIntent";
 import { captureRemoteAssistCoBrowseFrame } from "./remoteAssistCobrowseRecorder";
 import {
@@ -118,13 +118,10 @@ export function useRemoteAssistRuntimeTransport(args: {
         if (message.topic !== "controlIntents" || !controlEnabled) {
           return;
         }
-        const result = applyRemoteAssistControlIntent({
+        const prepared = prepareRemoteAssistControlIntent({
           intent: message.payload,
         });
-        void client.publish({
-          payload: result,
-          topic: "controlResults",
-        });
+        void publishControlResultThenApply(client, prepared);
       });
 
       await client.connect(credentialResult.data as RemoteAssistTransportCredential);
@@ -190,6 +187,17 @@ export function useRemoteAssistRuntimeTransport(args: {
   return {
     connectionState,
   };
+}
+
+async function publishControlResultThenApply(
+  client: RemoteAssistLiveTransportClient,
+  prepared: ReturnType<typeof prepareRemoteAssistControlIntent>,
+) {
+  await client.publish({
+    payload: prepared.result,
+    topic: "controlResults",
+  });
+  prepared.apply();
 }
 
 function publishRuntimeState(

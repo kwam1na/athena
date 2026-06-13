@@ -5,6 +5,23 @@ import { useSearch } from "@tanstack/react-router";
 import { cn } from "~/src/lib/utils";
 import { FadeIn } from "./FadeIn";
 
+function getRemoteAssistBackControlProps({
+  disabled = false,
+  label = "Go back",
+}: {
+  disabled?: boolean;
+  label?: string;
+}) {
+  return disabled
+    ? {}
+    : {
+        "data-remote-assist-control": "page-header-back",
+        "data-remote-assist-control-id": "page-header-back",
+        "data-remote-assist-control-label": label,
+        "data-remote-assist-control-role": "button",
+      };
+}
+
 const PageHeader = ({
   children,
   width = "contained",
@@ -47,6 +64,7 @@ export const NavigateBackButton = ({
       onClick={onNavigateBack ?? navigateBack}
       variant="ghost"
       className="h-8 px-2 lg:px-3 "
+      {...getRemoteAssistBackControlProps({ label })}
     >
       <ArrowLeftIcon className="h-4 w-4" />
       {label ? <span className="ml-2">{label}</span> : null}
@@ -107,6 +125,7 @@ export const ComposedPageHeader = ({
             variant="ghost"
             className="h-8 px-2 lg:px-3 "
             disabled={disableBackButton}
+            {...getRemoteAssistBackControlProps({ disabled: disableBackButton })}
           >
             <ArrowLeftIcon className="h-4 w-4" />
           </Button>

@@ -11,6 +11,7 @@ import { createRemoteAssistTransportProvider } from "./infrastructure/transport/
 import { REMOTE_ASSIST_TRANSPORT_TOKEN_TTL_MS } from "./infrastructure/transport/RemoteAssistTransportProvider";
 
 const transportCredentialValidator = v.object({
+  clientId: v.id("remoteAssistClient"),
   expiresAt: v.number(),
   participantIdentity: v.string(),
   participantRole: v.union(v.literal("support"), v.literal("runtime")),
@@ -73,6 +74,7 @@ export const requestRuntimeCredential = action({
 });
 
 type TransportCredentialReturn = {
+  clientId: any;
   expiresAt: number;
   participantIdentity: string;
   participantRole: "support" | "runtime";
@@ -109,6 +111,7 @@ async function issueCredential(
     return {
       kind: "ok" as const,
       data: {
+        clientId: credential.clientId,
         expiresAt: credential.expiresAt,
         participantIdentity: credential.participantIdentity,
         participantRole: credential.participantRole,

@@ -17,6 +17,8 @@ describe("terminalRuntimeStatus", () => {
         platform: "MacIntel",
         userAgent: "Mozilla/5.0 Athena",
       },
+      appVersion: "gentle-lion-climbs (20260608193135)",
+      buildSha: "b463caa2d36dabcdef",
       clock: () => 2_000,
       events: [
         buildLocalEvent({
@@ -103,12 +105,14 @@ describe("terminalRuntimeStatus", () => {
     });
 
     expect(status).toEqual({
+      appVersion: "gentle-lion-climbs (20260608193135)",
       browserInfo: {
         language: "en-US",
         online: true,
         platform: "MacIntel",
         userAgent: "Mozilla/5.0 Athena",
       },
+      buildSha: "b463caa2d36dabcdef",
       localStore: {
         available: false,
         failureMessage: "syncSecretHash [redacted]",

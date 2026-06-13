@@ -4,10 +4,7 @@ import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import Layout from "./_authed";
-import {
-  LOGGED_IN_USER_ID_KEY,
-  POS_APP_ACCOUNT_ID_KEY,
-} from "@/lib/constants";
+import { LOGGED_IN_USER_ID_KEY, POS_APP_ACCOUNT_ID_KEY } from "@/lib/constants";
 import { useAppShellFullscreenMode } from "@/contexts/AppShellFullscreenContext";
 
 const mocked = vi.hoisted(() => ({
@@ -22,6 +19,14 @@ const mocked = vi.hoisted(() => ({
   useManagerElevation: vi.fn(),
   usePermissions: vi.fn(),
   usePosTerminalAppSessionRecovery: vi.fn(),
+  PosRemoteAssistRuntimeHost: vi.fn(
+    ({ entryContext }: { entryContext: unknown }) => (
+      <div
+        data-has-entry-context={String(Boolean(entryContext))}
+        data-testid="pos-remote-assist-host"
+      />
+    ),
+  ),
   readStoredPosAppAccountId: vi.fn(),
   SidebarProvider: vi.fn(),
   useSidebar: vi.fn(),
@@ -50,12 +55,15 @@ vi.mock("@/lib/pos/infrastructure/local/localPosEntryContext", () => ({
   useLocalPosEntryContext: mocked.useLocalPosEntryContext,
 }));
 
+vi.mock("@/components/remote-assist/PosRemoteAssistRuntimeHost", () => ({
+  PosRemoteAssistRuntimeHost: mocked.PosRemoteAssistRuntimeHost,
+}));
+
 vi.mock(
   "@/lib/pos/infrastructure/terminal/usePosTerminalAppSessionRecovery",
   () => ({
     readStoredPosAppAccountId: mocked.readStoredPosAppAccountId,
-    usePosTerminalAppSessionRecovery:
-      mocked.usePosTerminalAppSessionRecovery,
+    usePosTerminalAppSessionRecovery: mocked.usePosTerminalAppSessionRecovery,
   }),
 );
 
@@ -68,7 +76,9 @@ vi.mock("@convex-dev/auth/react", () => ({
 }));
 
 vi.mock("../contexts/PermissionsContext", () => ({
-  PermissionsProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
+  PermissionsProvider: ({ children }: { children: ReactNode }) => (
+    <>{children}</>
+  ),
 }));
 
 vi.mock("../contexts/ManagerElevationContext", () => ({
@@ -113,8 +123,12 @@ vi.mock("@/components/Navbar", () => ({
 }));
 
 vi.mock("@/components/ui/dropdown-menu", () => ({
-  DropdownMenu: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  DropdownMenuContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  DropdownMenu: ({ children }: { children: ReactNode }) => (
+    <div>{children}</div>
+  ),
+  DropdownMenuContent: ({ children }: { children: ReactNode }) => (
+    <div>{children}</div>
+  ),
   DropdownMenuItem: ({
     children,
     onSelect,
@@ -122,7 +136,9 @@ vi.mock("@/components/ui/dropdown-menu", () => ({
     children: ReactNode;
     onSelect?: () => void;
   }) => <button onClick={onSelect}>{children}</button>,
-  DropdownMenuLabel: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  DropdownMenuLabel: ({ children }: { children: ReactNode }) => (
+    <div>{children}</div>
+  ),
   DropdownMenuRadioGroup: ({
     children,
     onValueChange,
@@ -138,7 +154,9 @@ vi.mock("@/components/ui/dropdown-menu", () => ({
     value: string;
   }) => <button value={value}>{children}</button>,
   DropdownMenuSeparator: () => <hr />,
-  DropdownMenuTrigger: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  DropdownMenuTrigger: ({ children }: { children: ReactNode }) => (
+    <div>{children}</div>
+  ),
 }));
 
 vi.mock("@/components/ui/modals/organization-modal", () => ({
@@ -365,7 +383,9 @@ describe("Authed layout", () => {
     const { container } = render(<Layout />);
 
     expect(container).toBeEmptyDOMElement();
-    await waitFor(() => expect(mocked.navigate).toHaveBeenCalledWith({ to: "/login" }));
+    await waitFor(() =>
+      expect(mocked.navigate).toHaveBeenCalledWith({ to: "/login" }),
+    );
     expect(screen.queryByTestId("app-sidebar")).not.toBeInTheDocument();
   });
 
@@ -548,6 +568,56 @@ describe("Authed layout", () => {
     expect(screen.getByTestId("authed-outlet")).toBeInTheDocument();
   });
 
+  it("keeps the Remote Assist runtime mounted on non-POS store workspace routes when a terminal seed is ready", () => {
+    const localEntryContext = readyLocalPosEntryContext();
+    mocked.useAuth.mockReturnValue({
+      user: { _id: "user-1", email: "operator@example.com" },
+      isLoading: false,
+    });
+    mocked.useLocalPosEntryContext.mockReturnValue(localEntryContext);
+    mocked.useRouterState.mockImplementation(({ select }) =>
+      select({
+        location: {
+          pathname: "/wigclub/store/wigclub/operations/open-work",
+        },
+      }),
+    );
+
+    render(<Layout />);
+
+    expect(screen.getByTestId("pos-remote-assist-host")).toBeInTheDocument();
+    expect(mocked.PosRemoteAssistRuntimeHost).toHaveBeenCalledWith(
+      expect.objectContaining({
+        entryContext: localEntryContext,
+      }),
+      expect.anything(),
+    );
+    expect(mocked.useLocalPosEntryContext).toHaveBeenCalledWith({
+      routeParams: { orgUrlSlug: "wigclub", storeUrlSlug: "wigclub" },
+    });
+  });
+
+  it("does not mount the Remote Assist runtime on non-terminal browser sessions", () => {
+    mocked.useAuth.mockReturnValue({
+      user: { _id: "user-1", email: "operator@example.com" },
+      isLoading: false,
+    });
+    mocked.useLocalPosEntryContext.mockReturnValue({ status: "missing_seed" });
+    mocked.useRouterState.mockImplementation(({ select }) =>
+      select({
+        location: {
+          pathname: "/wigclub/store/wigclub/operations/open-work",
+        },
+      }),
+    );
+
+    render(<Layout />);
+
+    expect(
+      screen.queryByTestId("pos-remote-assist-host"),
+    ).not.toBeInTheDocument();
+  });
+
   it("does not dismiss the mobile sidebar on the initial authed shell render", () => {
     mocked.useAuth.mockReturnValue({
       user: { _id: "user-1" },
@@ -692,7 +762,9 @@ describe("Authed layout", () => {
         recoveryState(status),
       );
       mocked.useRouterState.mockImplementation(({ select }) =>
-        select({ location: { pathname: "/wigclub/store/wigclub/pos/register" } }),
+        select({
+          location: { pathname: "/wigclub/store/wigclub/pos/register" },
+        }),
       );
 
       render(<Layout />);
@@ -955,7 +1027,7 @@ describe("Authed layout", () => {
 
     await waitFor(() => expect(mocked.signOut).toHaveBeenCalled());
     expect(window.localStorage.removeItem).toHaveBeenCalledWith(
-      LOGGED_IN_USER_ID_KEY
+      LOGGED_IN_USER_ID_KEY,
     );
     expect(window.localStorage.removeItem).toHaveBeenCalledWith(
       POS_APP_ACCOUNT_ID_KEY,
@@ -1024,7 +1096,9 @@ describe("Authed layout", () => {
     expect(
       screen.queryByRole("button", { name: /start manager elevation/i }),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /sign out/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /sign out/i }),
+    ).toBeInTheDocument();
   });
 
   it("starts fullscreen when the POS register route becomes active", () => {

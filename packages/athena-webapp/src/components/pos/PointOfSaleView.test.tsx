@@ -1,35 +1,33 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import PointOfSaleView from "./PointOfSaleView";
-import { PosTerminalAppSessionRecoveryProvider } from "@/lib/pos/infrastructure/terminal/posTerminalAppSessionRecoveryContext";
 
 const useGetActiveOrganizationMock = vi.fn();
 const useGetActiveStoreMock = vi.fn();
 const useLocalPosEntryContextMock = vi.fn();
 const usePermissionsMock = vi.fn();
 const usePrewarmRegisterCatalogOfflineSnapshotsMock = vi.fn();
-const usePosLocalSyncRuntimeStatusMock = vi.fn();
-const useMutationMock = vi.fn();
 const useQueryMock = vi.fn();
-const useActionMock = vi.fn();
 
 vi.mock("@tanstack/react-router", () => ({
   Link: ({
     children,
     params,
     to,
+    ...props
   }: {
     children?: React.ReactNode;
     params?: { orgUrlSlug: string; storeUrlSlug: string };
     to?: string;
-  }) => (
+  } & Record<string, unknown>) => (
     <a
       href={
         to
           ?.replace("$orgUrlSlug", params?.orgUrlSlug ?? "")
           .replace("$storeUrlSlug", params?.storeUrlSlug ?? "") ?? "#"
       }
+      {...props}
     >
       {children}
     </a>
@@ -39,8 +37,6 @@ vi.mock("@tanstack/react-router", () => ({
 }));
 
 vi.mock("convex/react", () => ({
-  useAction: () => useActionMock,
-  useMutation: () => useMutationMock,
   useQuery: (...args: unknown[]) => useQueryMock(...args),
 }));
 
@@ -65,11 +61,6 @@ vi.mock("~/src/hooks/useGetTerminal", () => ({
 
 vi.mock("@/lib/pos/infrastructure/local/localPosEntryContext", () => ({
   useLocalPosEntryContext: () => useLocalPosEntryContextMock(),
-}));
-
-vi.mock("@/lib/pos/infrastructure/local/usePosLocalSyncRuntime", () => ({
-  usePosLocalSyncRuntimeStatus: (input: Record<string, unknown>) =>
-    usePosLocalSyncRuntimeStatusMock(input),
 }));
 
 vi.mock("@/lib/pos/infrastructure/convex/catalogGateway", () => ({
@@ -104,10 +95,6 @@ vi.mock("../common/FadeIn", () => ({
 describe("PointOfSaleView", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    useActionMock.mockResolvedValue({
-      data: null,
-      kind: "ok",
-    });
     useGetActiveStoreMock.mockReturnValue({
       activeStore: {
         _id: "store-1",
@@ -138,8 +125,6 @@ describe("PointOfSaleView", () => {
       totalSales: 12_500,
       totalTransactions: 2,
     });
-    useMutationMock.mockResolvedValue(null);
-    usePosLocalSyncRuntimeStatusMock.mockReturnValue(null);
   });
 
   it("renders the POS landing header as the page title", () => {
@@ -195,6 +180,18 @@ describe("PointOfSaleView", () => {
     const link = screen.getByRole("link", { name: /Terminal Health/i });
 
     expect(link).toHaveAttribute("href", "/acme/store/downtown/pos/terminals");
+    expect(link).toHaveAttribute(
+      "data-remote-assist-control",
+      "pos-workspace-feature",
+    );
+    expect(link).toHaveAttribute(
+      "data-remote-assist-control-id",
+      "pos-workspace-terminal-health",
+    );
+    expect(link).toHaveAttribute(
+      "data-remote-assist-control-label",
+      "Terminal Health",
+    );
     expect(
       screen.getByText(
         "Review checkout station sync, staff authority, and support signals",
@@ -251,126 +248,6 @@ describe("PointOfSaleView", () => {
       screen.queryByRole("link", { name: /Active Sessions/i }),
     ).not.toBeInTheDocument();
     expect(screen.getAllByText("--").length).toBeGreaterThan(0);
-  });
-
-  it("owns drain-enabled local sync when a provisioned terminal seed is present on the POS hub", () => {
-    useLocalPosEntryContextMock.mockReturnValue({
-      status: "ready",
-      orgUrlSlug: "acme",
-      storeUrlSlug: "downtown",
-      storeId: "store-1",
-      terminalSeed: {
-        terminalId: "local-terminal-1",
-        cloudTerminalId: "terminal-cloud-1",
-        syncSecretHash: "secret-hash",
-        storeId: "store-1",
-        displayName: "Front register",
-        provisionedAt: 1_700,
-        schemaVersion: 2,
-      },
-      source: "live",
-    });
-
-    render(<PointOfSaleView />);
-
-    expect(usePosLocalSyncRuntimeStatusMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        mode: "drain-enabled",
-        storeId: "store-1",
-        terminalId: "terminal-cloud-1",
-      }),
-    );
-  });
-
-  it("passes POS shell app-session recovery diagnostics into runtime status", () => {
-    useLocalPosEntryContextMock.mockReturnValue({
-      status: "ready",
-      orgUrlSlug: "acme",
-      storeUrlSlug: "downtown",
-      storeId: "store-1",
-      terminalSeed: {
-        terminalId: "local-terminal-1",
-        cloudTerminalId: "terminal-cloud-1",
-        syncSecretHash: "secret-hash",
-        storeId: "store-1",
-        displayName: "Front register",
-        provisionedAt: 1_700,
-        schemaVersion: 2,
-      },
-      source: "live",
-    });
-
-    render(
-      <PosTerminalAppSessionRecoveryProvider
-        value={{
-          assertion: "present",
-          reason: null,
-          status: "recoverable",
-        }}
-      >
-        <PointOfSaleView />
-      </PosTerminalAppSessionRecoveryProvider>,
-    );
-
-    expect(usePosLocalSyncRuntimeStatusMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        appSessionRecovery: {
-          assertion: "present",
-          reason: null,
-          status: "recoverable",
-        },
-        mode: "drain-enabled",
-        storeId: "store-1",
-        terminalId: "terminal-cloud-1",
-      }),
-    );
-  });
-
-  it("shows a Remote Assist runtime banner and disconnects with terminal proof", () => {
-    useLocalPosEntryContextMock.mockReturnValue({
-      status: "ready",
-      orgUrlSlug: "acme",
-      storeUrlSlug: "downtown",
-      storeId: "store-1",
-      terminalSeed: {
-        terminalId: "local-terminal-1",
-        cloudTerminalId: "terminal-cloud-1",
-        syncSecretHash: "secret-hash",
-        storeId: "store-1",
-        displayName: "Front register",
-        provisionedAt: 1_700,
-        schemaVersion: 2,
-      },
-      source: "live",
-    });
-    useQueryMock
-      .mockReturnValueOnce({
-        _id: "remote-session-1",
-        effectiveMode: "unattended",
-        sensitiveModeActive: false,
-        status: "active",
-      })
-      .mockReturnValue({
-        totalItemsSold: 3,
-        totalSales: 12_500,
-        totalTransactions: 2,
-      });
-
-    render(<PointOfSaleView />);
-
-    expect(screen.getByLabelText("Remote assist runtime")).toBeInTheDocument();
-    expect(screen.getByText("Control on")).toBeInTheDocument();
-
-    fireEvent.click(
-      screen.getByRole("button", { name: /disconnect remote assist/i }),
-    );
-
-    expect(useMutationMock).toHaveBeenCalledWith({
-      sessionId: "remote-session-1",
-      storeId: "store-1",
-      syncSecretHash: "secret-hash",
-      terminalId: "terminal-cloud-1",
-    });
   });
 
   it("shows setup guidance instead of blanking when local POS authority is missing", () => {

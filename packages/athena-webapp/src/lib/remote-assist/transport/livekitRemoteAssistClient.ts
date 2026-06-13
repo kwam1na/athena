@@ -79,9 +79,12 @@ class LiveKitRemoteAssistClient implements RemoteAssistLiveTransportClient {
       }),
     );
     await this.room.localParticipant.publishData(payload, {
+      ...getDataPublishRouting({
+        credential: this.credential,
+        message,
+      }),
       reliable: true,
       topic: this.credential.topics[message.topic],
-      destinationIdentities: [],
     });
   }
 
@@ -135,6 +138,42 @@ class LiveKitRemoteAssistClient implements RemoteAssistLiveTransportClient {
       handler(state);
     }
   }
+}
+
+function getDataPublishRouting(args: {
+  credential: RemoteAssistTransportCredential;
+  message: RemoteAssistTransportMessage;
+}) {
+  if (
+    args.credential.participantRole === "support" &&
+    args.message.topic === "controlIntents"
+  ) {
+    return {
+      destinationIdentities: [
+        buildParticipantIdentity({
+          clientId: args.credential.clientId,
+          participantRole: "runtime",
+          sessionId: args.credential.sessionId,
+        }),
+      ],
+    };
+  }
+  return {};
+}
+
+function buildParticipantIdentity(args: {
+  clientId: string;
+  participantRole: "runtime" | "support";
+  sessionId: string;
+}) {
+  return [
+    "remote-assist",
+    args.sessionId,
+    args.participantRole,
+    args.clientId,
+  ]
+    .join(":")
+    .replace(/[^A-Za-z0-9:_-]/g, "_");
 }
 
 function isAllowedSender(args: {

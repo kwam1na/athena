@@ -6,6 +6,7 @@ import type {
 } from "@/lib/remote-assist";
 
 export type RemoteAssistTransportCredential = {
+  clientId: string;
   expiresAt: number;
   participantIdentity: string;
   participantRole: "runtime" | "support";

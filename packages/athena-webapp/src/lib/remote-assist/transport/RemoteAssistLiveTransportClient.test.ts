@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { createRemoteAssistTransportClient } from "./createRemoteAssistTransportClient";
 import { parseRemoteAssistTransportMessage } from "./RemoteAssistLiveTransportClient";
 import { createLiveKitRemoteAssistClient } from "./livekitRemoteAssistClient";
 
@@ -38,6 +39,7 @@ vi.mock("livekit-client", () => ({
 }));
 
 const credential = {
+  clientId: "client-1",
   expiresAt: 2_000,
   participantIdentity: "remote-assist:session-1:runtime:client-1",
   participantRole: "runtime" as const,
@@ -62,6 +64,43 @@ describe("RemoteAssistLiveTransportClient", () => {
     liveKitMocks.off.mockClear();
     liveKitMocks.on.mockClear();
     liveKitMocks.publishData.mockClear();
+  });
+
+  it("targets support control intents to the runtime participant identity", async () => {
+    const client = createLiveKitRemoteAssistClient();
+    await client.connect({
+      ...credential,
+      participantIdentity: "remote-assist:session-1:support:user-1",
+      participantRole: "support",
+    });
+
+    await client.publish({
+      payload: {
+        event: {
+          action: "up",
+          pointerId: "support-pointer",
+          type: "pointer",
+          x: 10,
+          y: 10,
+        },
+        idempotencyKey: "intent-1",
+        issuedAt: 1_000,
+        reason: "test",
+        sessionId: "session-1",
+        target: "athena_surface",
+      },
+      topic: "controlIntents",
+    });
+
+    const publishCall = liveKitMocks.publishData.mock.calls[0] as unknown as [
+      Uint8Array,
+      Record<string, unknown>,
+    ];
+    expect(publishCall[1]).toEqual({
+      destinationIdentities: ["remote-assist:session-1:runtime:client-1"],
+      reliable: true,
+      topic: "remote-assist.control-intents",
+    });
   });
 
   it("parses known Remote Assist transport topics only", () => {
@@ -117,7 +156,6 @@ describe("RemoteAssistLiveTransportClient", () => {
     ];
     expect(ArrayBuffer.isView(publishCall[0])).toBe(true);
     expect(publishCall[1]).toEqual({
-      destinationIdentities: [],
       reliable: true,
       topic: "remote-assist.control-results",
     });
@@ -130,6 +168,21 @@ describe("RemoteAssistLiveTransportClient", () => {
       },
       topic: "controlResults",
     });
+  });
+
+  it("loads the LiveKit provider through the default transport factory", async () => {
+    const client = createRemoteAssistTransportClient();
+    const states: string[] = [];
+    client.subscribeToConnectionState((state) => states.push(state));
+
+    await client.connect(credential);
+
+    expect(liveKitMocks.connect).toHaveBeenCalledWith(
+      "wss://livekit.example.com",
+      "token-1",
+      { autoSubscribe: true },
+    );
+    expect(states).toEqual(["idle", "connecting", "connected"]);
   });
 
   it("dispatches only role-bound messages whose payload topic matches the LiveKit topic", async () => {

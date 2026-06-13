@@ -7,7 +7,10 @@ import { ConvexAuthProvider } from "@convex-dev/auth/react";
 import "./index.css";
 import { useEffect } from "react";
 import { createVersionChecker } from "./utils/versionChecker";
-import { registerPosAppShellServiceWorker } from "./offline/registerPosAppShellServiceWorker";
+import {
+  registerPosAppShellServiceWorker,
+  unregisterPosAppShellServiceWorkerForDev,
+} from "./offline/registerPosAppShellServiceWorker";
 import { removeConvexAuthCodeParamFromUrl } from "./auth/convexAuthUrl";
 import { initializeAthenaTheme } from "./lib/theme";
 
@@ -66,7 +69,11 @@ const rootElement = document.getElementById("app")!;
 if (!rootElement.innerHTML) {
   initializeAthenaTheme();
   removeConvexAuthCodeParamFromUrl();
-  registerPosAppShellServiceWorker();
+  if (import.meta.env.DEV) {
+    unregisterPosAppShellServiceWorkerForDev();
+  } else {
+    registerPosAppShellServiceWorker();
+  }
   const root = ReactDOM.createRoot(rootElement);
   root.render(<App />);
 }

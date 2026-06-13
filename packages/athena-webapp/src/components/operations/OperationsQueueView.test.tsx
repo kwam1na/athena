@@ -219,10 +219,13 @@ const baseProps = {
     _id: Id<"operationalWorkItem">;
     approvalState: string;
     assignedStaffName?: string | null;
+    createdAt: number;
     customerName?: string | null;
+    dueAt?: number | null;
     priority: string;
     status: string;
     title: string;
+    type: string;
   }[],
 };
 
@@ -321,10 +324,13 @@ describe("OperationsQueueViewContent", () => {
             _id: "work-item-1" as Id<"operationalWorkItem">,
             approvalState: "pending",
             assignedStaffName: "Adjoa Tetteh",
+            createdAt: Date.now() - 5 * 60 * 1000,
             customerName: "Ama Mensah",
+            dueAt: Date.now() + 2 * 60 * 60 * 1000,
             priority: "urgent",
             status: "intake_created",
             title: "Closure wig wash and style",
+            type: "service_intake",
           },
         ]}
         orgUrlSlug="wigclub"
@@ -354,10 +360,13 @@ describe("OperationsQueueViewContent", () => {
             _id: "work-item-1" as Id<"operationalWorkItem">,
             approvalState: "pending",
             assignedStaffName: "Adjoa Tetteh",
+            createdAt: Date.now() - 5 * 60 * 1000,
             customerName: "Ama Mensah",
+            dueAt: Date.now() + 2 * 60 * 60 * 1000,
             priority: "urgent",
             status: "intake_created",
             title: "Closure wig wash and style",
+            type: "service_intake",
           },
         ]}
         orgUrlSlug="wigclub"
@@ -366,7 +375,22 @@ describe("OperationsQueueViewContent", () => {
     );
 
     expect(screen.getByText("Closure wig wash and style")).toBeInTheDocument();
-    expect(screen.getByText("Ama Mensah · Adjoa Tetteh")).toBeInTheDocument();
+    expect(screen.getByText("Service Intake")).toBeInTheDocument();
+    expect(screen.getByText("Intake Created")).toBeInTheDocument();
+    expect(screen.getByText("Urgent")).toBeInTheDocument();
+    expect(screen.getByText("Owner")).toBeInTheDocument();
+    expect(screen.getByText("Adjoa Tetteh")).toHaveClass(
+      "font-medium",
+      "text-foreground",
+    );
+    expect(screen.getByText("Customer")).toBeInTheDocument();
+    expect(screen.getByText("Ama Mensah")).toHaveClass(
+      "font-medium",
+      "text-foreground",
+    );
+    expect(screen.getByText("Created")).toBeInTheDocument();
+    expect(screen.getByText("Due")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /show details/i })).toBeInTheDocument();
   });
 
   it("renders stock approval actions and routes decisions through the provided handler", async () => {

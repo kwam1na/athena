@@ -570,6 +570,7 @@ const SidebarMenuButton = React.forwardRef<
       size = "default",
       tooltip,
       className,
+      disabled,
       ...props
     },
     ref
@@ -581,9 +582,11 @@ const SidebarMenuButton = React.forwardRef<
       <Comp
         ref={ref}
         data-sidebar="menu-button"
+        data-remote-assist-control={disabled ? undefined : "sidebar-menu-button"}
         data-size={size}
         data-active={isActive}
         className={cn(sidebarMenuButtonVariants({ variant, size }), className)}
+        disabled={disabled}
         {...props}
       />
     );

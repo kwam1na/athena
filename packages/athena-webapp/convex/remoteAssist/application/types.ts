@@ -123,6 +123,7 @@ export type RemoteAssistSessionEvent = {
 export type RemoteAssistTransportParticipantRole = "support" | "runtime";
 
 export type RemoteAssistTransportCredential = {
+  clientId: string;
   expiresAt: number;
   participantIdentity: string;
   participantRole: RemoteAssistTransportParticipantRole;
@@ -143,7 +144,6 @@ export type RemoteAssistTransportCredentialContext = Omit<
   RemoteAssistTransportCredential,
   "token" | "url"
 > & {
-  clientId: string;
   organizationId: string;
   storeId?: string;
 };
