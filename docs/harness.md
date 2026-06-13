@@ -112,10 +112,14 @@ Freshness sensors catch stale generated artifacts.
   `graphify:rebuild`, then stages tracked source changes and generated outputs.
 - `pre-push:review` can attempt a narrow repair once, then blocks so the repaired
   files are reviewed and committed before push.
-- `pr:athena` records a git-private proof after the final graphify check only
-  when the branch head, `origin/main`, validation wiring, Bun version, and
-  working tree are clean and current. A later `pre-push:review` may reuse that
-  proof instead of rerunning the whole local suite.
+- `pr:athena:prepare` runs generated-artifact repair, stages tracked changes
+  only, then blocks before heavy validation if unstaged or untracked files would
+  prevent reusable proof recording.
+- `pr:athena:validate` runs the heavy local PR ladder without recording proof.
+- `pr:athena:record-proof` records a git-private proof only when the branch
+  head or staged index, `origin/main`, validation wiring, Bun version, and
+  working tree state can be reused safely. A later `pre-push:review` may reuse
+  that proof instead of rerunning the whole local suite.
 
 The important behavior is fail-closed repair. The harness may refresh files, but
 it does not silently push repaired evidence past review.
@@ -251,17 +255,32 @@ For merge-ready Athena work, the broad command is:
 bun run pr:athena
 ```
 
-That command repairs generated artifacts first, then runs the main repo ladder:
-Convex audits, architecture checks, coverage, harness tests, generated-doc
-checks, review sensors, audit, scorecard, and graphify freshness.
+That command composes three explicit phases:
 
-After the final `graphify:check`, `pr:athena` records a worktree-local proof for
-the current `HEAD` and `origin/main`. `pre-push:review` reuses that proof only
-when the pushed head, base SHA, clean working tree, Bun version, `pr:athena`
-script, and validation wiring fingerprint still match. Any dirty file,
-generated-artifact repair, rebase, advanced `origin/main`, changed hook, changed
-harness script, or missing proof makes pre-push run the full validation suite
-normally and prints the reason.
+```sh
+bun run pr:athena:prepare
+bun run pr:athena:validate
+bun run pr:athena:record-proof
+```
+
+`pr:athena:prepare` repairs generated artifacts and stages tracked changes, then
+stops before the heavy ladder if unstaged or untracked files remain. It does not
+stage new files automatically; stage intended new files explicitly and rerun the
+prepare step before spending the full validation cycle.
+
+`pr:athena:validate` runs the main repo ladder: Convex audits, architecture
+checks, coverage, harness tests, generated-doc checks, review sensors, audit,
+scorecard, and graphify freshness.
+
+After the final `graphify:check`, `pr:athena:record-proof` records a
+worktree-local proof for the current clean tree or staged index and
+`origin/main`. `pre-push:review` reuses that proof only when the pushed tree,
+base SHA, clean working tree, Bun version, `pr:athena` script, and validation
+wiring fingerprint still match. Any dirty file, generated-artifact repair,
+rebase, advanced `origin/main`, changed hook, changed harness script, or missing
+proof makes pre-push run the full validation suite normally and prints the
+reason. If `origin/main` or the base diff cannot be read, the hook blocks
+instead of treating the changed-file set as empty.
 
 For harness-only changes, useful focused commands are:
 

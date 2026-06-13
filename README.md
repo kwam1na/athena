@@ -210,15 +210,20 @@ Use `bun run harness:test -- --dry-run` to print the selected files without exec
 The repo pins Bun via `package.json` (`bun@1.1.29` today), and GitHub Actions reads that same repo-declared version so CI and local harness runs stay aligned.
 
 `pre-commit:generated-artifacts` automatically runs `bun run harness:generate` and `bun run graphify:rebuild`, then stages the tracked generated harness docs and graphify outputs before the commit is finalized, so the pushed ref includes refreshed generated artifacts.
-`bun run pr:athena` starts with that same generated-artifact repair step before the blocking harness checks, so deterministic generated-doc drift is repaired locally instead of failing as stale docs.
+`bun run pr:athena:prepare` starts with that same generated-artifact repair step, then blocks before the heavy validation ladder if unstaged or untracked files would prevent a reusable proof. Stage intended new files explicitly, or remove unrelated local files, before running the full gate.
+`bun run pr:athena:validate` runs the heavy validation ladder without recording proof, and `bun run pr:athena:record-proof` records the reusable pre-push proof for the current clean or staged-only tree.
+The default `bun run pr:athena` command composes those three steps in order.
 `pre-push:review` starts with `bun run graphify:check` before the rest of the local validation suite. If tracked graphify artifacts are stale, the hook runs `bun run graphify:rebuild` once, reruns `bun run graphify:check`, and then stops so you can review and commit the repaired graphify artifacts before pushing again.
 If `harness:self-review` or `harness:review` gets blocked by stale generated harness docs, the hook runs `bun run harness:generate` once, retries the blocked step on the repaired tree, and:
+
 - Blocks so you can review, commit, and push the repaired generated docs instead of sending a stale ref to CI.
 
-After a clean `bun run pr:athena`, the repo records a git-private proof for the
-current branch head and `origin/main`. `pre-push:review` reuses that proof only
-when the head, base, clean working tree, Bun version, command wiring, and
-validation fingerprint still match; otherwise it reruns and prints the reason.
+After a clean or staged-only `bun run pr:athena`, the repo records a git-private
+proof for the validated tree and `origin/main`. `pre-push:review` reuses that
+proof only when the pushed tree, base, clean working tree, Bun version, command
+wiring, and validation fingerprint still match; otherwise it reruns and prints
+the reason. If `origin/main` or the base diff cannot be read, the hook blocks
+instead of treating the changed-file set as empty.
 
 List runtime behavior scenarios with `bun run harness:behavior --list`.
 Bundled scenarios include:

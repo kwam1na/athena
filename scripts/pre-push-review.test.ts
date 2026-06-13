@@ -10,6 +10,12 @@ const ATHENA_GENERATED_DOC_PATHS = [
   "packages/athena-webapp/docs/agent/test-index.md",
   "packages/athena-webapp/docs/agent/key-folder-index.md",
 ] as const;
+const EXPIRED_PROOF_OPTIONS = {
+  evaluatePrePushValidationProof: async () => ({
+    reusable: false as const,
+    reason: "test proof disabled",
+  }),
+};
 
 describe("pre-push review wiring", () => {
   it("exports testable helpers for pre-push orchestration", () => {
@@ -36,11 +42,11 @@ describe("pre-push review wiring", () => {
         return {
           exited: Promise.resolve(0),
           stdout: new Response(
-            "packages/athena-webapp/src/main.tsx\npackages/storefront-webapp/src/router.tsx\n"
+            "packages/athena-webapp/src/main.tsx\npackages/storefront-webapp/src/router.tsx\n",
           ).body,
           stderr: new Response("").body,
         };
-      }
+      },
     );
 
     expect(files).toEqual([
@@ -53,23 +59,54 @@ describe("pre-push review wiring", () => {
     ]);
   });
 
-  it("falls back cleanly when origin/main is not reachable", async () => {
-    const files = await prePushReview.getChangedFilesVsOriginMain(
-      ROOT_DIR,
-      () => ({
+  it("fails closed when origin/main is not reachable", async () => {
+    await expect(
+      prePushReview.getChangedFilesVsOriginMain(ROOT_DIR, () => ({
         exited: Promise.resolve(1),
         stdout: new Response("").body,
         stderr: new Response("missing ref").body,
-      })
+      })),
+    ).rejects.toThrow(
+      "origin/main is not reachable; cannot select targeted pre-push validations",
+    );
+  });
+
+  it("fails closed when origin/main diff cannot be computed", async () => {
+    const commands: string[][] = [];
+
+    await expect(
+      prePushReview.getChangedFilesVsOriginMain(ROOT_DIR, (command) => {
+        commands.push(command);
+
+        if (command[1] === "rev-parse") {
+          return {
+            exited: Promise.resolve(0),
+            stdout: new Response("").body,
+            stderr: new Response("").body,
+          };
+        }
+
+        return {
+          exited: Promise.resolve(1),
+          stdout: new Response("").body,
+          stderr: new Response("bad revision").body,
+        };
+      }),
+    ).rejects.toThrow(
+      "git diff against origin/main failed; cannot select targeted pre-push validations",
     );
 
-    expect(files).toEqual([]);
+    expect(commands).toEqual([
+      ["git", "rev-parse", "--verify", "origin/main"],
+      ["git", "diff", "--name-only", "origin/main...HEAD"],
+    ]);
   });
 
   it("runs graphify check before self-review, architecture checks, harness review, and inferential review", async () => {
     const steps: string[] = [];
 
     await prePushReview.runPrePushReview(ROOT_DIR, {
+      ...EXPIRED_PROOF_OPTIONS,
       getChangedFiles: async () => {
         steps.push("changed-files");
         return ["packages/athena-webapp/src/main.tsx"];
@@ -153,7 +190,7 @@ describe("pre-push review wiring", () => {
 
     expect(steps).toEqual([]);
     expect(logs).toContain(
-      "[pre-push] Reusing current pr:athena validation proof for tree tree-sha."
+      "[pre-push] Reusing current pr:athena validation proof for tree tree-sha.",
     );
   });
 
@@ -161,6 +198,7 @@ describe("pre-push review wiring", () => {
     const steps: string[] = [];
 
     await prePushReview.runPrePushReview(ROOT_DIR, {
+      ...EXPIRED_PROOF_OPTIONS,
       getChangedFiles: async () => {
         steps.push("changed-files");
         return ["scripts/harness-check.test.ts"];
@@ -179,7 +217,10 @@ describe("pre-push review wiring", () => {
       },
       runHarnessReview: async (_rootDir, options) => {
         steps.push(`harness:review:${options.baseRef}`);
-        const files = await options.getChangedFiles?.(ROOT_DIR, options.baseRef);
+        const files = await options.getChangedFiles?.(
+          ROOT_DIR,
+          options.baseRef,
+        );
         steps.push(`files:${files?.join(",") ?? ""}`);
       },
       runHarnessInferentialReview: async () => {
@@ -207,6 +248,7 @@ describe("pre-push review wiring", () => {
     const steps: string[] = [];
 
     await prePushReview.runPrePushReview(ROOT_DIR, {
+      ...EXPIRED_PROOF_OPTIONS,
       getChangedFiles: async () => {
         steps.push("changed-files");
         return ["packages/athena-webapp/src/main.tsx"];
@@ -225,7 +267,10 @@ describe("pre-push review wiring", () => {
       },
       runHarnessReview: async (_rootDir, options) => {
         steps.push(`harness:review:${options.baseRef}`);
-        const files = await options.getChangedFiles?.(ROOT_DIR, options.baseRef);
+        const files = await options.getChangedFiles?.(
+          ROOT_DIR,
+          options.baseRef,
+        );
         steps.push(`files:${files?.join(",") ?? ""}`);
       },
       runHarnessInferentialReview: async () => {
@@ -250,10 +295,11 @@ describe("pre-push review wiring", () => {
     ]);
   });
 
-  it("preserves the non-blocking origin/main fallback when handing off to harness review", async () => {
+  it("preserves an injected empty changed-file set when handing off to harness review", async () => {
     const steps: string[] = [];
 
     await prePushReview.runPrePushReview(ROOT_DIR, {
+      ...EXPIRED_PROOF_OPTIONS,
       getChangedFiles: async () => {
         steps.push("changed-files-fallback");
         return [];
@@ -269,7 +315,10 @@ describe("pre-push review wiring", () => {
       },
       runHarnessReview: async (_rootDir, options) => {
         steps.push(`harness:review:${options.baseRef}`);
-        const files = await options.getChangedFiles?.(ROOT_DIR, options.baseRef);
+        const files = await options.getChangedFiles?.(
+          ROOT_DIR,
+          options.baseRef,
+        );
         steps.push(`files:${files?.join(",") ?? ""}`);
       },
       runHarnessInferentialReview: async () => {
@@ -301,6 +350,7 @@ describe("pre-push review wiring", () => {
 
     await expect(
       prePushReview.runPrePushReview(ROOT_DIR, {
+        ...EXPIRED_PROOF_OPTIONS,
         getChangedFiles: async () => {
           steps.push("changed-files");
           return ["packages/athena-webapp/src/main.tsx"];
@@ -316,7 +366,7 @@ describe("pre-push review wiring", () => {
                 "[graphify check] Graphify artifacts are stale:",
                 "- graphify-out/GRAPH_REPORT.md",
                 "Run `bun run graphify:rebuild` from repo root to refresh tracked graphify artifacts.",
-              ].join("\n")
+              ].join("\n"),
             );
           }
         },
@@ -342,9 +392,9 @@ describe("pre-push review wiring", () => {
           warn() {},
           error() {},
         },
-      } as any)
+      } as any),
     ).rejects.toThrow(
-      "Tracked graphify artifacts were auto-repaired locally. Review and commit the repaired files, then push again."
+      "Tracked graphify artifacts were auto-repaired locally. Review and commit the repaired files, then push again.",
     );
 
     expect(steps).toEqual([
@@ -364,6 +414,7 @@ describe("pre-push review wiring", () => {
 
     await expect(
       prePushReview.runPrePushReview(ROOT_DIR, {
+        ...EXPIRED_PROOF_OPTIONS,
         getChangedFiles: async () => {
           steps.push("changed-files");
           return ["packages/athena-webapp/src/main.tsx"];
@@ -390,9 +441,9 @@ describe("pre-push review wiring", () => {
           warn() {},
           error() {},
         },
-      } as any)
+      } as any),
     ).rejects.toThrow(
-      "Tracked graphify artifacts were auto-repaired locally. Review and commit the repaired files, then push again."
+      "Tracked graphify artifacts were auto-repaired locally. Review and commit the repaired files, then push again.",
     );
 
     expect(steps).toEqual([
@@ -415,16 +466,14 @@ describe("pre-push review wiring", () => {
 
       await expect(
         prePushReview.runPrePushReview(ROOT_DIR, {
+          ...EXPIRED_PROOF_OPTIONS,
           getChangedFiles: async () => {
             steps.push("changed-files:base");
             return ["packages/athena-webapp/src/main.tsx"];
           },
           getChangedFilesForRepairedTree: async () => {
             steps.push("changed-files:repaired");
-            return [
-              "packages/athena-webapp/src/main.tsx",
-              generatedDocPath,
-            ];
+            return ["packages/athena-webapp/src/main.tsx", generatedDocPath];
           },
           getLocalChangedFiles: async () =>
             generatedDocsPending ? [generatedDocPath] : [],
@@ -453,7 +502,7 @@ describe("pre-push review wiring", () => {
           },
           runHarnessReview: async (rootDir, options) => {
             reviewChangedFiles.push(
-              (await options.getChangedFiles?.(rootDir, options.baseRef)) ?? []
+              (await options.getChangedFiles?.(rootDir, options.baseRef)) ?? [],
             );
             steps.push(`harness:review:${options.baseRef}`);
           },
@@ -465,9 +514,9 @@ describe("pre-push review wiring", () => {
             warn() {},
             error() {},
           },
-        } as any)
+        } as any),
       ).rejects.toThrow(
-        "Generated harness docs were auto-repaired locally. Review and commit the repaired files, then push again."
+        "Generated harness docs were auto-repaired locally. Review and commit the repaired files, then push again.",
       );
 
       expect(steps).toEqual([
@@ -482,7 +531,7 @@ describe("pre-push review wiring", () => {
       expect(reviewChangedFiles).toEqual([
         ["packages/athena-webapp/src/main.tsx", generatedDocPath],
       ]);
-    }
+    },
   );
 
   it("blocks when harness:self-review reports non-repairable blockers", async () => {
@@ -490,6 +539,7 @@ describe("pre-push review wiring", () => {
 
     await expect(
       prePushReview.runPrePushReview(ROOT_DIR, {
+        ...EXPIRED_PROOF_OPTIONS,
         getChangedFiles: async () => {
           steps.push("changed-files");
           return [];
@@ -500,7 +550,9 @@ describe("pre-push review wiring", () => {
         runHarnessSelfReview: async () => {
           steps.push("harness:self-review");
           return {
-            blockers: ["Harness review coverage gap: packages/athena-webapp/src/unmapped.ts"],
+            blockers: [
+              "Harness review coverage gap: packages/athena-webapp/src/unmapped.ts",
+            ],
           };
         },
         validateHarnessDocs: async () => [],
@@ -521,7 +573,7 @@ describe("pre-push review wiring", () => {
           warn() {},
           error() {},
         },
-      } as any)
+      } as any),
     ).rejects.toThrow("harness:self-review blocked");
 
     expect(steps).toEqual(["graphify:check", "harness:self-review"]);
@@ -535,6 +587,7 @@ describe("pre-push review wiring", () => {
 
     await expect(
       prePushReview.runPrePushReview(ROOT_DIR, {
+        ...EXPIRED_PROOF_OPTIONS,
         getChangedFiles: async () => {
           steps.push("changed-files:base");
           return ["packages/athena-webapp/src/main.tsx"];
@@ -563,7 +616,7 @@ describe("pre-push review wiring", () => {
         runHarnessReview: async (rootDir, options) => {
           reviewRuns += 1;
           reviewChangedFiles.push(
-            (await options.getChangedFiles?.(rootDir, options.baseRef)) ?? []
+            (await options.getChangedFiles?.(rootDir, options.baseRef)) ?? [],
           );
           steps.push(`harness:review:${options.baseRef}:${reviewRuns}`);
           if (reviewRuns === 1) {
@@ -585,9 +638,9 @@ describe("pre-push review wiring", () => {
           warn() {},
           error() {},
         },
-      } as any)
+      } as any),
     ).rejects.toThrow(
-      "Generated harness docs were auto-repaired locally. Review and commit the repaired files, then push again."
+      "Generated harness docs were auto-repaired locally. Review and commit the repaired files, then push again.",
     );
 
     expect(steps).toEqual([
@@ -615,6 +668,7 @@ describe("pre-push review wiring", () => {
 
     await expect(
       prePushReview.runPrePushReview(ROOT_DIR, {
+        ...EXPIRED_PROOF_OPTIONS,
         getChangedFiles: async () => {
           steps.push("changed-files:base");
           return ["packages/athena-webapp/src/main.tsx"];
@@ -641,7 +695,7 @@ describe("pre-push review wiring", () => {
         },
         runHarnessReview: async (rootDir, options) => {
           reviewChangedFiles.push(
-            (await options.getChangedFiles?.(rootDir, options.baseRef)) ?? []
+            (await options.getChangedFiles?.(rootDir, options.baseRef)) ?? [],
           );
           steps.push(`harness:review:${options.baseRef}`);
         },
@@ -653,9 +707,9 @@ describe("pre-push review wiring", () => {
           warn() {},
           error() {},
         },
-      } as any)
+      } as any),
     ).rejects.toThrow(
-      "Generated harness docs were auto-repaired locally. Review and commit the repaired files, then push again."
+      "Generated harness docs were auto-repaired locally. Review and commit the repaired files, then push again.",
     );
 
     expect(steps).toEqual([
@@ -678,45 +732,46 @@ describe("pre-push review wiring", () => {
     const warnings: string[] = [];
     const reviewChangedFiles: string[][] = [];
 
-      await expect(
-        prePushReview.runPrePushReview(ROOT_DIR, {
-          getChangedFilesForRepairedTree: async () => {
-            throw new Error("Base ref check failed for origin/main: missing ref");
+    await expect(
+      prePushReview.runPrePushReview(ROOT_DIR, {
+        ...EXPIRED_PROOF_OPTIONS,
+        getChangedFilesForRepairedTree: async () => {
+          throw new Error("Base ref check failed for origin/main: missing ref");
+        },
+        getLocalChangedFiles: async () => {
+          steps.push("changed-files:local");
+          return ["packages/athena-webapp/docs/agent/test-index.md"];
+        },
+        runGraphifyCheck: async () => {
+          steps.push("graphify:check");
+        },
+        runHarnessSelfReview: async () => {
+          steps.push("harness:self-review");
+          return { blockers: [] };
+        },
+        runArchitectureCheck: async () => {
+          steps.push("architecture:check");
+        },
+        runHarnessReview: async (rootDir, options) => {
+          reviewChangedFiles.push(
+            (await options.getChangedFiles?.(rootDir, options.baseRef)) ?? [],
+          );
+          steps.push(`harness:review:${options.baseRef}`);
+        },
+        runHarnessInferentialReview: async () => {
+          steps.push("harness:inferential-review");
+        },
+        logger: {
+          log() {},
+          warn(message: string) {
+            warnings.push(message);
           },
-          getLocalChangedFiles: async () => {
-            steps.push("changed-files:local");
-            return ["packages/athena-webapp/docs/agent/test-index.md"];
-          },
-          runGraphifyCheck: async () => {
-            steps.push("graphify:check");
-          },
-          runHarnessSelfReview: async () => {
-            steps.push("harness:self-review");
-            return { blockers: [] };
-          },
-          runArchitectureCheck: async () => {
-            steps.push("architecture:check");
-          },
-          runHarnessReview: async (rootDir, options) => {
-            reviewChangedFiles.push(
-              (await options.getChangedFiles?.(rootDir, options.baseRef)) ?? []
-            );
-            steps.push(`harness:review:${options.baseRef}`);
-          },
-          runHarnessInferentialReview: async () => {
-            steps.push("harness:inferential-review");
-          },
-          logger: {
-            log() {},
-            warn(message: string) {
-              warnings.push(message);
-            },
-            error() {},
-          },
-        } as any)
-      ).rejects.toThrow(
-        "Generated harness docs were auto-repaired locally. Review and commit the repaired files, then push again."
-      );
+          error() {},
+        },
+      } as any),
+    ).rejects.toThrow(
+      "Generated harness docs were auto-repaired locally. Review and commit the repaired files, then push again.",
+    );
 
     expect(steps).toEqual([
       "graphify:check",
@@ -730,15 +785,14 @@ describe("pre-push review wiring", () => {
     expect(reviewChangedFiles).toEqual([
       ["packages/athena-webapp/docs/agent/test-index.md"],
     ]);
-    expect(warnings[0]).toContain(
-      "Falling back to local working tree changes"
-    );
+    expect(warnings[0]).toContain("Falling back to local working tree changes");
   });
 
   it("does not pass the base ref into default-style changed-file helpers", async () => {
     const observedSpawnTypes: string[] = [];
 
     await prePushReview.runPrePushReview(ROOT_DIR, {
+      ...EXPIRED_PROOF_OPTIONS,
       getChangedFiles: (async (_rootDir: string, spawn = Bun.spawn) => {
         observedSpawnTypes.push(typeof spawn);
         return [];
@@ -764,7 +818,7 @@ describe("pre-push review wiring", () => {
   it("keeps the husky pre-push hook pointed at the repo review script", async () => {
     const hookContents = await readFile(
       path.join(ROOT_DIR, ".husky/pre-push"),
-      "utf8"
+      "utf8",
     );
 
     expect(hookContents).toContain("bun run pre-push:review");
@@ -773,7 +827,7 @@ describe("pre-push review wiring", () => {
   it("keeps the husky pre-commit hook pointed at the generated-artifact repair script", async () => {
     const hookContents = await readFile(
       path.join(ROOT_DIR, ".husky/pre-commit"),
-      "utf8"
+      "utf8",
     );
 
     expect(hookContents).toContain("bun run pre-commit:generated-artifacts");
@@ -784,7 +838,7 @@ describe("repo harness ergonomics", () => {
   it("schedules a recurring harness drift check in GitHub Actions", async () => {
     const workflow = await readFile(
       path.join(ROOT_DIR, ".github/workflows/athena-pr-tests.yml"),
-      "utf8"
+      "utf8",
     );
 
     expect(workflow).toContain("schedule:");
@@ -794,9 +848,11 @@ describe("repo harness ergonomics", () => {
     expect(workflow).toContain("fetch-depth: 0");
     expect(workflow).toContain("run: bun run workflow:check");
     expect(workflow).toContain("run: bun run compound:check");
-    expect(workflow).toContain("run: bun run harness:self-review --base origin/main");
     expect(workflow).toContain(
-      "run: bun run harness:review --base origin/main --validation-provided-by athena-pr-tests"
+      "run: bun run harness:self-review --base origin/main",
+    );
+    expect(workflow).toContain(
+      "run: bun run harness:review --base origin/main --validation-provided-by athena-pr-tests",
     );
     expect(workflow).toContain("run: bun run harness:test");
     expect(workflow).toContain("name: Athena and Storefront Webapp Validation");
@@ -804,59 +860,83 @@ describe("repo harness ergonomics", () => {
     expect(workflow).toContain("athena-webapp-validation:");
     expect(workflow).toContain("storefront-webapp-validation-context:");
     expect(workflow).toContain("needs: athena-webapp-validation");
-    expect(workflow).toContain("Confirm consolidated storefront validation coverage");
+    expect(workflow).toContain(
+      "Confirm consolidated storefront validation coverage",
+    );
     expect(workflow).toContain("run: bun run test:coverage");
     expect(workflow).toContain("run: bun run --filter '@athena/webapp' build");
     expect(workflow).toContain(
-      "run: bun run --filter '@athena/storefront-webapp' build"
+      "run: bun run --filter '@athena/storefront-webapp' build",
     );
     expect(workflow).toContain(
-      "run: bun run --filter '@athena/webapp' lint:frontend:changed"
+      "run: bun run --filter '@athena/webapp' lint:frontend:changed",
     );
-    expect(workflow).not.toContain("run: bun run --filter '@athena/webapp' test");
+    expect(workflow).not.toContain(
+      "run: bun run --filter '@athena/webapp' test",
+    );
     expect(workflow).not.toContain("test-storefront-webapp:");
     expect(workflow).not.toContain("cargo install ripgrep");
     expect(workflow).toContain(
-      "run: python3 -m pip install -r .graphify-requirements.txt"
+      "run: python3 -m pip install -r .graphify-requirements.txt",
     );
     expect(workflow).toContain("run: bunx playwright install chromium");
     expect(workflow).toContain("run: bun run harness:audit");
     expect(workflow).toContain("HARNESS_INFERENTIAL_SEMANTIC_MODE: shadow");
     expect(workflow).toContain("run: bun run harness:inferential-review");
-    expect(workflow).toContain("run: bun run harness:inferential-review --persist-history");
-    expect(workflow).toContain("bun run harness:runtime-trends --persist-history");
+    expect(workflow).toContain(
+      "run: bun run harness:inferential-review --persist-history",
+    );
+    expect(workflow).toContain(
+      "bun run harness:runtime-trends --persist-history",
+    );
     expect(workflow).toContain("runtime_behavior_report_lines:");
     expect(workflow).toContain("actions/upload-artifact@v4");
     expect(workflow).toContain("run: bun run graphify:check");
   });
 
-  it("includes harness implementation, audit, and graphify checks in the local pr:athena command", async () => {
+  it("includes prepare, validate, and proof recording in the local pr:athena command chain", async () => {
     const packageJson = JSON.parse(
-      await readFile(path.join(ROOT_DIR, "package.json"), "utf8")
+      await readFile(path.join(ROOT_DIR, "package.json"), "utf8"),
     ) as {
       scripts?: Record<string, string>;
     };
 
-    expect(packageJson.scripts?.["pr:athena"]).toContain(
-      "bun run pre-commit:generated-artifacts"
+    expect(packageJson.scripts?.["pr:athena"]).toBe(
+      "bun run pr:athena:prepare && bun run pr:athena:validate && bun run pr:athena:record-proof",
     );
-    expect(packageJson.scripts?.["pr:athena"]).toContain("bun run compound:check");
-    expect(packageJson.scripts?.["pr:athena"]).toContain("bun run workflow:check");
-    expect(packageJson.scripts?.["pr:athena"]).toContain("bun run harness:test");
-    expect(packageJson.scripts?.["pr:athena"]).toContain(
-      "bun run harness:review --base origin/main --repo-validation-provided-by pr:athena"
+    expect(packageJson.scripts?.["pr:athena:prepare"]).toContain(
+      "bun run pre-commit:generated-artifacts",
     );
-    expect(packageJson.scripts?.["pr:athena"]).toContain(
-      "bun scripts/pre-push-validation-proof.ts record-pr-athena"
+    expect(packageJson.scripts?.["pr:athena:prepare"]).toContain(
+      "bun scripts/pre-push-validation-proof.ts prepare-pr-athena",
     );
-    expect(packageJson.scripts?.["pr:athena"]).toContain(
-      "bun run --filter '@athena/webapp' lint:frontend:changed"
+    expect(packageJson.scripts?.["pr:athena:validate"]).toContain(
+      "bun run compound:check",
     );
-    expect(packageJson.scripts?.["pr:athena"]).toContain("bun run harness:audit");
-    expect(packageJson.scripts?.["pr:athena"]).toContain(
-      "bun run harness:inferential-review"
+    expect(packageJson.scripts?.["pr:athena:validate"]).toContain(
+      "bun run workflow:check",
     );
-    expect(packageJson.scripts?.["pr:athena"]).toContain("bun run graphify:check");
+    expect(packageJson.scripts?.["pr:athena:validate"]).toContain(
+      "bun run harness:test",
+    );
+    expect(packageJson.scripts?.["pr:athena:validate"]).toContain(
+      "bun run harness:review --base origin/main --repo-validation-provided-by pr:athena",
+    );
+    expect(packageJson.scripts?.["pr:athena:record-proof"]).toBe(
+      "bun scripts/pre-push-validation-proof.ts record-pr-athena",
+    );
+    expect(packageJson.scripts?.["pr:athena:validate"]).toContain(
+      "bun run --filter '@athena/webapp' lint:frontend:changed",
+    );
+    expect(packageJson.scripts?.["pr:athena:validate"]).toContain(
+      "bun run harness:audit",
+    );
+    expect(packageJson.scripts?.["pr:athena:validate"]).toContain(
+      "bun run harness:inferential-review",
+    );
+    expect(packageJson.scripts?.["pr:athena:validate"]).toContain(
+      "bun run graphify:check",
+    );
   });
 
   it("documents harness implementation tests as a repo-level command", async () => {
@@ -873,20 +953,28 @@ describe("repo harness ergonomics", () => {
     const readme = await readFile(path.join(ROOT_DIR, "README.md"), "utf8");
 
     expect(readme).toContain(
-      "`pre-commit:generated-artifacts` automatically runs `bun run harness:generate` and `bun run graphify:rebuild`"
+      "`pre-commit:generated-artifacts` automatically runs `bun run harness:generate` and `bun run graphify:rebuild`",
     );
     expect(readme).toContain(
-      "`bun run pr:athena` starts with that same generated-artifact repair step"
+      "`bun run pr:athena:prepare` starts with that same generated-artifact repair step",
     );
     expect(readme).toContain(
-      "If `harness:self-review` or `harness:review` gets blocked by stale generated harness docs"
+      "`bun run pr:athena:validate` runs the heavy validation ladder",
     );
     expect(readme).toContain(
-      "Blocks so you can review, commit, and push the repaired generated docs instead of sending a stale ref to CI."
+      "`bun run pr:athena:record-proof` records the reusable pre-push proof",
     );
-    expect(readme).toContain("`pre-push:review` starts with `bun run graphify:check`");
     expect(readme).toContain(
-      "runs `bun run graphify:rebuild` once, reruns `bun run graphify:check`, and then stops"
+      "If `harness:self-review` or `harness:review` gets blocked by stale generated harness docs",
+    );
+    expect(readme).toContain(
+      "Blocks so you can review, commit, and push the repaired generated docs instead of sending a stale ref to CI.",
+    );
+    expect(readme).toContain(
+      "`pre-push:review` starts with `bun run graphify:check`",
+    );
+    expect(readme).toContain(
+      "runs `bun run graphify:rebuild` once, reruns `bun run graphify:check`, and then stops",
     );
     expect(readme).toContain("bun run graphify:check");
     expect(readme).toContain("bun run graphify:rebuild");
@@ -908,13 +996,13 @@ describe("repo harness ergonomics", () => {
 
   it("wires a repo-level pre-commit generated-artifact repair command", async () => {
     const packageJson = JSON.parse(
-      await readFile(path.join(ROOT_DIR, "package.json"), "utf8")
+      await readFile(path.join(ROOT_DIR, "package.json"), "utf8"),
     ) as {
       scripts?: Record<string, string>;
     };
 
     expect(packageJson.scripts?.["pre-commit:generated-artifacts"]).toBe(
-      "bun scripts/pre-commit-generated-artifacts.ts"
+      "bun scripts/pre-commit-generated-artifacts.ts",
     );
   });
 
@@ -925,7 +1013,7 @@ describe("repo harness ergonomics", () => {
     ]);
 
     expect(JSON.parse(packageJson).scripts?.prepare).toBe(
-      "sh scripts/configure-git-hooks.sh"
+      "sh scripts/configure-git-hooks.sh",
     );
     expect(configureHooksScript).toContain("git config core.hooksPath .husky");
   });
@@ -933,7 +1021,10 @@ describe("repo harness ergonomics", () => {
   it("pins Bun in package.json and keeps GitHub Actions aligned with that repo version", async () => {
     const [packageJsonText, workflow] = await Promise.all([
       readFile(path.join(ROOT_DIR, "package.json"), "utf8"),
-      readFile(path.join(ROOT_DIR, ".github/workflows/athena-pr-tests.yml"), "utf8"),
+      readFile(
+        path.join(ROOT_DIR, ".github/workflows/athena-pr-tests.yml"),
+        "utf8",
+      ),
     ]);
 
     expect(JSON.parse(packageJsonText)).toMatchObject({
