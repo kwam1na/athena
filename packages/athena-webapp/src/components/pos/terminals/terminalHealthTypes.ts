@@ -35,6 +35,10 @@ export type TerminalRuntimeStatus = {
       | "stale_assertion"
       | string;
   };
+  appShell?: {
+    observedAt: number;
+    ready: boolean;
+  };
   appVersion?: string;
   browserInfo?: {
     language?: string;
@@ -67,6 +71,13 @@ export type TerminalRuntimeStatus = {
     expiresAt?: number;
     staffProfileId?: Id<"staffProfile"> | string;
     status: "expired" | "missing" | "ready" | "unknown" | string;
+  };
+  drawerAuthority?: {
+    cloudRegisterSessionId?: string;
+    localRegisterSessionId: string;
+    observedAt: number;
+    reason?: string;
+    status: "blocked" | "healthy" | string;
   };
   storeId?: Id<"store"> | string;
   sync: {
@@ -104,6 +115,14 @@ export type TerminalRuntimeStatus = {
     uploadableEventCount: number;
   };
   terminalId?: Id<"posTerminal"> | string;
+  activeRegisterSession?: {
+    cloudRegisterSessionId?: string;
+    localRegisterSessionId: string;
+    observedAt: number;
+    openedAt?: number;
+    registerNumber?: string;
+    status: "open" | "active" | "closing" | "closed" | string;
+  };
 };
 
 export type TerminalSyncEvent = {
@@ -158,7 +177,11 @@ export type TerminalSyncEvidence = {
 };
 
 export type TerminalHealthAttentionActionTarget =
-  | { registerSessionId: Id<"registerSession"> | string; type: "cash_control_register_session" }
+  | {
+      automaticRepairEligible?: boolean;
+      registerSessionId: Id<"registerSession"> | string;
+      type: "cash_control_register_session";
+    }
   | { type: "open_work" }
   | { type: "pos_register" }
   | { type: "pos_settings" };
@@ -188,6 +211,7 @@ export type TerminalHealthAttentionReason = {
 
 export type TerminalRecoveryReadinessStatus =
   | "able_to_transact_now"
+  | "drawer_open"
   | "healthy_idle"
   | "needs_cloud_repair"
   | "needs_manual_review"
@@ -290,12 +314,14 @@ export type TerminalRecoveryPreview = {
   };
   commandStatus?: {
     commandId?: string;
+    commandType?: TerminalRecoveryCommandType;
     label?: string;
     latestAcknowledgement?: string;
     status?: TerminalRecoveryActionStatus;
     verificationStatus?: TerminalRecoveryActionStatus;
   } | null;
   evidence?: {
+    activeRegisterSession?: boolean;
     freshRuntimeRequiredForAbleToTransactNow: true;
   };
   manualReview?: Array<{
@@ -326,7 +352,12 @@ export type TerminalRecoveryPreview = {
 export type TerminalHealthSummary = {
   attentionReasons?: TerminalHealthAttentionReason[];
   health?: "needs_attention" | "offline" | "online" | "stale" | "unknown" | string;
+  registerSessionLink?: {
+    registerSessionId: Id<"registerSession"> | string;
+    status: "active" | "open" | string;
+  } | null;
   recovery?: TerminalRecoveryPreview | null;
+  recoveryPreview?: TerminalRecoveryPreview | null;
   runtimeStatus: TerminalRuntimeStatus | null;
   syncEvidence: TerminalSyncEvidence;
   terminal: TerminalRecord;

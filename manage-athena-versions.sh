@@ -135,7 +135,7 @@ fi
 # Handle deployment operations
 if [ "$OPERATION" = "deploy" ]; then
   # Select app to deploy
-  APP=$(printf "athena-webapp\nathena-webapp local build\nstorefront\nstorefront local build\nconvex\nfull-deploy\nfull-deploy local builds\nvalkey-proxy\nqa\nall" | fzf --prompt="Select app to deploy: ")
+  APP=$(printf "athena-webapp\nathena-webapp local build\nstorefront\nstorefront local build\nconvex\nconvex + athena local build\nconvex + storefront local build\nfull-deploy\nfull-deploy local builds\nvalkey-proxy\nqa\nall" | fzf --prompt="Select app to deploy: ")
   if [ -z "$APP" ]; then
     echo "No app selected. Aborting."
     exit 1
@@ -156,6 +156,12 @@ if [ "$OPERATION" = "deploy" ]; then
       ;;
     "convex")
       deploy_vps convex-prod
+      ;;
+    "convex + athena local build")
+      deploy_vps convex-athena-local
+      ;;
+    "convex + storefront local build")
+      deploy_vps convex-storefront-local
       ;;
     "full-deploy")
       deploy_vps full-prod

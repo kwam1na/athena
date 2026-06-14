@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { Doc, Id } from "../../../_generated/dataModel";
 import {
   getTerminalSyncEvidence,
+  hasActiveRegisterSessionForTerminal,
   resolveTerminalRegisterSessionActionTarget,
   upsertLatestRuntimeStatus,
 } from "./terminalRepository";
@@ -354,7 +355,62 @@ describe("terminalRepository sync evidence", () => {
       rejectedCount: 0,
     });
   });
+});
 
+describe("terminalRepository active register-session evidence", () => {
+  it("finds an active register session directly linked to the terminal", async () => {
+    const ctx = buildCtx({
+      registerSession: [
+        buildRegisterSession({
+          status: "open",
+        }),
+      ],
+    });
+
+    await expect(
+      hasActiveRegisterSessionForTerminal(ctx as never, {
+        storeId: "store-1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+      }),
+    ).resolves.toBe(true);
+  });
+
+  it("falls back to latest register-number evidence when the terminal latest session is closed", async () => {
+    const ctx = buildCtx({
+      registerSession: [
+        buildRegisterSession({
+          _creationTime: 30,
+          registerNumber: "7",
+          status: "closed",
+          terminalId: "terminal-1" as Id<"posTerminal">,
+        }),
+        buildRegisterSession({
+          _creationTime: 20,
+          registerNumber: "8",
+          status: "active",
+          terminalId: "terminal-1" as Id<"posTerminal">,
+        }),
+      ],
+    });
+
+    await expect(
+      hasActiveRegisterSessionForTerminal(ctx as never, {
+        registerNumber: "7",
+        storeId: "store-1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+      }),
+    ).resolves.toBe(false);
+    await expect(
+      hasActiveRegisterSessionForTerminal(ctx as never, {
+        registerNumber: "8",
+        storeId: "store-1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+      }),
+    ).resolves.toBe(true);
+  });
+});
+
+describe("terminalRepository register-session action targets", () => {
   it("resolves a local register session to its cloud register session mapping", async () => {
     const ctx = buildCtx({
       posLocalSyncMapping: [
@@ -535,6 +591,24 @@ function buildRuntimeStatus(
       status: "unknown",
     },
     snapshots: {},
+    ...overrides,
+  };
+}
+
+function buildRegisterSession(
+  overrides: Partial<Doc<"registerSession">> = {},
+): Doc<"registerSession"> {
+  return {
+    _id: "register-session-1" as Id<"registerSession">,
+    _creationTime: 1,
+    expectedCash: 100,
+    openedAt: 1,
+    openedByStaffProfileId: "staff-1" as Id<"staffProfile">,
+    openingFloat: 100,
+    registerNumber: "1",
+    status: "open",
+    storeId: "store-1" as Id<"store">,
+    terminalId: "terminal-1" as Id<"posTerminal">,
     ...overrides,
   };
 }

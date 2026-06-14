@@ -1,11 +1,13 @@
 import type { Doc, Id } from "../../../_generated/dataModel";
 import type { QueryCtx } from "../../../_generated/server";
+import { isPosUsableRegisterSessionStatus } from "../../../../shared/registerSessionStatus";
 
 import {
   getLatestRuntimeStatusForTerminal,
   getTerminalByFingerprint as getTerminalByFingerprintRecord,
   getTerminalById,
   getTerminalSyncEvidence,
+  hasActiveRegisterSessionForTerminal,
   listTerminalsForStore,
   resolveTerminalRegisterSessionActionTarget,
   type TerminalSyncEvidence,
@@ -72,7 +74,11 @@ export type TerminalHealthAttentionReason = {
 };
 
 export type TerminalHealthAttentionActionTarget =
-  | { type: "cash_control_register_session"; registerSessionId: Id<"registerSession"> }
+  | {
+      automaticRepairEligible?: boolean;
+      type: "cash_control_register_session";
+      registerSessionId: Id<"registerSession">;
+    }
   | { type: "open_work" }
   | { type: "pos_register" }
   | { type: "pos_settings" };
@@ -95,14 +101,24 @@ export type TerminalHealthSummary = {
   > | null;
   attentionReasons: TerminalHealthAttentionReason[];
   recoveryPreview: TerminalRecoveryPreview | null;
+  registerSessionLink: {
+    registerSessionId: Id<"registerSession">;
+    status: ActiveRegisterSessionLinkStatus;
+  } | null;
   syncEvidence: TerminalSyncEvidence;
 };
+
+type ActiveRegisterSessionLinkStatus = Extract<
+  Doc<"registerSession">["status"],
+  "active" | "open"
+>;
 
 export type TerminalRecoveryPreview = {
   readiness: TerminalRecoveryReadiness;
   runtimeFresh: boolean;
   evidence: {
     freshRuntimeRequiredForAbleToTransactNow: true;
+    activeRegisterSession: boolean;
   };
   cloudRepair: {
     preconditionHash: string;
@@ -111,6 +127,7 @@ export type TerminalRecoveryPreview = {
   };
   commandStatus: {
     commandId?: Id<"posTerminalRecoveryCommand">;
+    commandType: TerminalRecoveryCommandType;
     label: string;
     latestAcknowledgement?: string;
     status: Doc<"posTerminalRecoveryCommand">["status"];
@@ -161,7 +178,7 @@ export async function listTerminalHealthSummaries(
   return Promise.all(
     terminals.map((terminal) =>
       buildTerminalHealthSummary(ctx, {
-        includeSyncEvidence: false,
+        includeSyncEvidence: true,
         terminal,
         now: args.now ?? Date.now(),
       }),
@@ -192,6 +209,78 @@ export async function getTerminalHealthSummary(
 export const listTerminalHealth = listTerminalHealthSummaries;
 export const getTerminalHealthDetail = getTerminalHealthSummary;
 
+async function normalizeRuntimeStatusForSupport(
+  ctx: QueryCtx,
+  args: {
+    runtimeStatus: Doc<"posTerminalRuntimeStatus"> | null;
+    terminal: Doc<"posTerminal">;
+  },
+): Promise<Doc<"posTerminalRuntimeStatus"> | null> {
+  if (!args.runtimeStatus) {
+    return null;
+  }
+
+  if (
+    !(await isCleanlyClosedDrawerAuthority(ctx, {
+      runtimeStatus: args.runtimeStatus,
+      terminal: args.terminal,
+    }))
+  ) {
+    return args.runtimeStatus;
+  }
+
+  return {
+    ...args.runtimeStatus,
+    drawerAuthority: undefined,
+  };
+}
+
+async function isCleanlyClosedDrawerAuthority(
+  ctx: QueryCtx,
+  args: {
+    runtimeStatus: Doc<"posTerminalRuntimeStatus">;
+    terminal: Doc<"posTerminal">;
+  },
+) {
+  const drawerAuthority = args.runtimeStatus.drawerAuthority;
+  if (
+    drawerAuthority?.status !== "blocked" ||
+    drawerAuthority.reason !== "cloud_closed" ||
+    !drawerAuthority.cloudRegisterSessionId
+  ) {
+    return false;
+  }
+
+  const db = ctx.db as {
+    get?: (
+      tableName: "registerSession",
+      id: Id<"registerSession">,
+    ) => Promise<Doc<"registerSession"> | null>;
+    normalizeId?: (
+      tableName: "registerSession",
+      id: string,
+    ) => Id<"registerSession"> | null;
+  } | null;
+  if (!db || typeof db.get !== "function") {
+    return false;
+  }
+
+  const registerSessionId =
+    typeof db.normalizeId === "function"
+      ? db.normalizeId("registerSession", drawerAuthority.cloudRegisterSessionId)
+      : (drawerAuthority.cloudRegisterSessionId as Id<"registerSession">);
+  if (!registerSessionId) {
+    return false;
+  }
+
+  const registerSession = await db.get("registerSession", registerSessionId);
+  return (
+    registerSession?.storeId === args.terminal.storeId &&
+    registerSession.terminalId === args.terminal._id &&
+    registerSession.status === "closed"
+  );
+}
+
 async function buildTerminalHealthSummary(
   ctx: QueryCtx,
   args: {
@@ -200,7 +289,7 @@ async function buildTerminalHealthSummary(
     now: number;
   },
 ): Promise<TerminalHealthSummary> {
-  const [runtimeStatus, syncEvidence] = await Promise.all([
+  const [runtimeStatus, syncEvidence, registerSessionLink] = await Promise.all([
     getLatestRuntimeStatusForTerminal(ctx, {
       storeId: args.terminal.storeId,
       terminalId: args.terminal._id,
@@ -211,12 +300,20 @@ async function buildTerminalHealthSummary(
           terminalId: args.terminal._id,
         })
       : EMPTY_TERMINAL_SYNC_EVIDENCE,
+    getActiveRegisterSessionLink(ctx, {
+      storeId: args.terminal.storeId,
+      terminalId: args.terminal._id,
+    }),
   ]);
+  const supportRuntimeStatus = await normalizeRuntimeStatusForSupport(ctx, {
+    runtimeStatus,
+    terminal: args.terminal,
+  });
   const runtimeAgeMs = runtimeStatus
     ? Math.max(0, args.now - runtimeStatus.receivedAt)
     : null;
   const attentionReasons = deriveTerminalHealthAttentionReasons({
-    runtimeStatus,
+    runtimeStatus: supportRuntimeStatus,
     syncEvidence,
     terminalStatus: args.terminal.status,
   });
@@ -234,7 +331,8 @@ async function buildTerminalHealthSummary(
         attentionReasons: resolvedAttentionReasons,
         now: args.now,
         runtimeAgeMs,
-        runtimeStatus,
+        runtimeStatus: supportRuntimeStatus,
+        registerNumber: args.terminal.registerNumber,
         storeId: args.terminal.storeId,
         syncEvidence,
         terminalId: args.terminal._id,
@@ -255,16 +353,60 @@ async function buildTerminalHealthSummary(
     health: deriveTerminalHealth({
       attentionReasons: resolvedAttentionReasons,
       runtimeAgeMs,
-      runtimeStatus,
+      runtimeStatus: supportRuntimeStatus,
       syncEvidence,
       terminalStatus: args.terminal.status,
     }),
     runtimeAgeMs,
-    runtimeStatus: runtimeStatus ? stripRuntimeStatusIdentity(runtimeStatus) : null,
+    runtimeStatus: supportRuntimeStatus
+      ? stripRuntimeStatusIdentity(supportRuntimeStatus)
+      : null,
     attentionReasons: resolvedAttentionReasons,
     recoveryPreview,
+    registerSessionLink,
     syncEvidence,
   };
+}
+
+async function getActiveRegisterSessionLink(
+  ctx: QueryCtx,
+  args: {
+    storeId: Id<"store">;
+    terminalId: Id<"posTerminal">;
+  },
+): Promise<TerminalHealthSummary["registerSessionLink"]> {
+  if (!ctx.db || typeof ctx.db.query !== "function") {
+    return null;
+  }
+
+  const byTerminal = await ctx.db
+    .query("registerSession")
+    .withIndex("by_terminalId", (q) => q.eq("terminalId", args.terminalId))
+    .order("desc")
+    .take(20);
+  const activeSession = byTerminal
+    .filter(
+      (session) =>
+        session.storeId === args.storeId &&
+        session.terminalId === args.terminalId,
+    )
+    .filter(isActiveRegisterSessionLinkTarget)
+    .sort((left, right) => right.openedAt - left.openedAt)[0];
+
+  return activeSession
+    ? {
+        registerSessionId: activeSession._id,
+        status: activeSession.status,
+      }
+    : null;
+}
+
+function isActiveRegisterSessionLinkTarget(
+  session: Doc<"registerSession">,
+): session is Doc<"registerSession"> & {
+  status: ActiveRegisterSessionLinkStatus;
+} {
+  return isPosUsableRegisterSessionStatus(session.status);
 }
 
 export async function previewTerminalRecovery(
@@ -286,6 +428,7 @@ async function buildTerminalRecoveryPreview(
     now: number;
     runtimeAgeMs: number | null;
     runtimeStatus: Doc<"posTerminalRuntimeStatus"> | null;
+    registerNumber?: string | null;
     storeId: Id<"store">;
     syncEvidence: TerminalSyncEvidence;
     terminalId: Id<"posTerminal">;
@@ -299,6 +442,13 @@ async function buildTerminalRecoveryPreview(
     args.runtimeStatus.browserInfo?.online !== false;
   const cloudRepair = await buildTerminalRecoveryCloudRepairPreview(ctx, args);
   const terminalActions = buildTerminalRecoveryActions(args);
+  const activeRegisterSession =
+    runtimeHasActiveRegisterSession(args.runtimeStatus) ||
+    (await hasActiveRegisterSessionForTerminal(ctx, {
+      registerNumber: args.registerNumber,
+      storeId: args.storeId,
+      terminalId: args.terminalId,
+    }));
   const commandStatus = await buildTerminalRecoveryCommandStatus(ctx, {
     now: args.now,
     storeId: args.storeId,
@@ -316,7 +466,7 @@ async function buildTerminalRecoveryPreview(
     cloudRepair.safeConflictIds.length === 0 &&
     runtimeHasHealthyIdleEvidence(args.runtimeStatus, args.syncEvidence);
   const ableToTransactNow =
-    healthyIdle && runtimeHasSaleAuthority(args.runtimeStatus);
+    activeRegisterSession && healthyIdle && runtimeHasSaleAuthority(args.runtimeStatus);
 
   return {
     readiness: ableToTransactNow
@@ -327,9 +477,12 @@ async function buildTerminalRecoveryPreview(
           ? "needs_terminal_action"
           : cloudRepair.safeConflictIds.length > 0
             ? "needs_cloud_repair"
+            : activeRegisterSession
+              ? "drawer_open"
             : "healthy_idle",
     runtimeFresh,
     evidence: {
+      activeRegisterSession,
       freshRuntimeRequiredForAbleToTransactNow: true,
     },
     cloudRepair,
@@ -366,6 +519,7 @@ async function buildTerminalRecoveryCommandStatus(
 
   return {
     commandId: latestCommand._id,
+    commandType: latestCommand.commandType,
     label: getTerminalRecoveryCommandLabel(latestCommand.commandType),
     latestAcknowledgement: latestCommand.acknowledgement?.message,
     status: getTerminalRecoveryCommandStatusForPreview(latestCommand, args.now),
@@ -497,22 +651,6 @@ function buildTerminalRecoveryActions(args: {
       reason: "Drawer authority requires terminal-local repair.",
     });
   }
-  if (
-    status.staffAuthority.status === "expired" ||
-    status.staffAuthority.status === "missing"
-  ) {
-    actions.push({
-      commandType: "refresh_staff_authority",
-      expectedEvidence: {
-        staffAuthorityStatus: "ready",
-      },
-      commandContext: {
-        expectedBlockerType: "staff_authority",
-        reason: "Staff authority must be refreshed on this terminal.",
-      },
-      reason: "Staff authority must be refreshed on this terminal.",
-    });
-  }
   if (status.sync.status === "failed" || status.sync.status === "unavailable") {
     actions.push({
       commandType: "retry_sync",
@@ -524,6 +662,19 @@ function buildTerminalRecoveryActions(args: {
         reason: "Local sync needs a terminal retry.",
       },
       reason: "Local sync needs a terminal retry.",
+    });
+  }
+  if (status.sync.status === "needs_review" || status.sync.reviewEventCount > 0) {
+    actions.push({
+      commandType: "retry_sync",
+      expectedEvidence: {
+        syncStatus: "idle",
+      },
+      commandContext: {
+        expectedBlockerType: "local_review",
+        reason: "Local review items need a terminal sync retry.",
+      },
+      reason: "Local review items need a terminal sync retry.",
     });
   }
   return dedupeTerminalActions(actions);
@@ -546,7 +697,8 @@ function buildTerminalRecoveryManualReview(args: {
     }));
   for (const conflictId of args.skippedConflictIds) {
     manual.push({
-      reason: `Cloud conflict ${conflictId} needs manual review before repair.`,
+      reason:
+        "A cloud sync conflict needs manual review before support can repair this terminal.",
       source: "cloud_repair" as const,
       type: "unsafe_cloud_conflict" as const,
     });
@@ -562,6 +714,7 @@ function runtimeHasHealthyIdleEvidence(
     !!status &&
     status.localStore.available &&
     status.localStore.terminalSeedReady &&
+    status.staffAuthority.status === "ready" &&
     status.sync.status !== "failed" &&
     status.sync.status !== "needs_review" &&
     status.sync.status !== "unavailable" &&
@@ -581,6 +734,15 @@ function runtimeHasSaleAuthority(status: Doc<"posTerminalRuntimeStatus"> | null)
     !!status &&
     status.staffAuthority.status === "ready" &&
     status.saleAuthority?.status === "ready"
+  );
+}
+
+function runtimeHasActiveRegisterSession(
+  status: Doc<"posTerminalRuntimeStatus"> | null,
+) {
+  return (
+    status?.activeRegisterSession?.status === "open" ||
+    status?.activeRegisterSession?.status === "active"
   );
 }
 

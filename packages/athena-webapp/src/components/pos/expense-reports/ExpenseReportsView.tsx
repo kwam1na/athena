@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link } from "@tanstack/react-router";
+import { Link, useSearch } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 import { ArrowUpRight, Receipt } from "lucide-react";
 
@@ -26,6 +26,27 @@ const isToday = (timestamp: number) => {
   const today = new Date();
   return date.toDateString() === today.toDateString();
 };
+
+function getStartOfOperatingDate(operatingDate?: string) {
+  const match = operatingDate?.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+
+  const [, year, month, day] = match;
+  return new Date(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+  ).getTime();
+}
+
+function isOnOperatingDate(timestamp: number, operatingDateStartAt: number) {
+  const nextOperatingDateStartAt =
+    operatingDateStartAt + 24 * 60 * 60 * 1_000;
+
+  return (
+    timestamp >= operatingDateStartAt && timestamp < nextOperatingDateStartAt
+  );
+}
 
 function ExpenseReportMobileCard({ report }: { report: ExpenseReportRow }) {
   const itemLabel = `${report.itemCount} ${
@@ -98,7 +119,13 @@ function ExpenseReportMobileCard({ report }: { report: ExpenseReportRow }) {
 
 export function ExpenseReportsView() {
   const { activeStore } = useGetActiveStore();
-  const [filter, setFilter] = useState<"today" | "all">("today");
+  const { operatingDate } = useSearch({ strict: false }) as {
+    operatingDate?: string;
+  };
+  const operatingDateStartAt = getStartOfOperatingDate(operatingDate);
+  const [filter, setFilter] = useState<"today" | "operatingDate" | "all">(
+    operatingDateStartAt ? "operatingDate" : "today",
+  );
 
   const expenseTransactions = useQuery(
     api.inventory.expenseTransactions.getExpenseTransactions,
@@ -118,8 +145,14 @@ export function ExpenseReportsView() {
 
   const filteredData = useMemo(() => {
     if (filter === "all") return tableData;
+    if (filter === "operatingDate" && operatingDateStartAt !== null) {
+      return tableData.filter((t) =>
+        isOnOperatingDate(t.completedAt, operatingDateStartAt),
+      );
+    }
+
     return tableData.filter((t) => isToday(t.completedAt));
-  }, [tableData, filter]);
+  }, [tableData, filter, operatingDateStartAt]);
 
   if (!activeStore || !expenseTransactions || !formatter) return null;
 
@@ -139,9 +172,22 @@ export function ExpenseReportsView() {
           <section className="space-y-layout-md">
             <Tabs
               value={filter}
-              onValueChange={(v) => setFilter(v as "today" | "all")}
+              onValueChange={(v) =>
+                setFilter(v as "today" | "operatingDate" | "all")
+              }
             >
               <TabsList>
+                {operatingDateStartAt !== null ? (
+                  <TabsTrigger
+                    data-remote-assist-control="pos-expense-report-filter"
+                    data-remote-assist-control-id="pos-expense-reports-filter-operating-date"
+                    data-remote-assist-control-label="Selected day"
+                    data-remote-assist-control-role="button"
+                    value="operatingDate"
+                  >
+                    Selected day
+                  </TabsTrigger>
+                ) : null}
                 <TabsTrigger
                   data-remote-assist-control="pos-expense-report-filter"
                   data-remote-assist-control-id="pos-expense-reports-filter-today"
@@ -186,9 +232,11 @@ export function ExpenseReportsView() {
                   }
                   title={
                     <p className="text-muted-foreground">
-                      {filter === "today"
-                        ? "No expense reports today"
-                        : "No expense reports"}
+                      {filter === "all"
+                        ? "No expense reports"
+                        : filter === "operatingDate"
+                          ? "No expense reports for this day"
+                          : "No expense reports today"}
                     </p>
                   }
                 />

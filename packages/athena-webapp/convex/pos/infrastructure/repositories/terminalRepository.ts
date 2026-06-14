@@ -2,6 +2,7 @@ import type { Doc, Id } from "../../../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../../../_generated/server";
 
 import type { PosLocalSyncEventStatus } from "../../../../shared/posLocalSyncContract";
+import { isPosUsableRegisterSessionStatus } from "../../../../shared/registerSessionStatus";
 import type { PosTerminalSummary } from "../../domain/types";
 
 const MANAGER_REJECTED_SYNC_REVIEW_CODE = "manager_rejected";
@@ -285,6 +286,47 @@ export async function getTerminalSyncEvidence(
     acceptedThroughSequence: latestCursor?.acceptedThroughSequence,
     cursorUpdatedAt: latestCursor?.updatedAt,
   };
+}
+
+export async function hasActiveRegisterSessionForTerminal(
+  ctx: QueryCtx | MutationCtx,
+  args: {
+    registerNumber?: string | null;
+    storeId: Id<"store">;
+    terminalId: Id<"posTerminal">;
+  },
+) {
+  const latestByTerminal = await ctx.db
+    .query("registerSession")
+    .withIndex("by_terminalId", (q) => q.eq("terminalId", args.terminalId))
+    .order("desc")
+    .first();
+
+  if (
+    latestByTerminal?.storeId === args.storeId &&
+    latestByTerminal.terminalId === args.terminalId &&
+    isPosUsableRegisterSessionStatus(latestByTerminal.status)
+  ) {
+    return true;
+  }
+
+  const registerNumber = args.registerNumber?.trim();
+  if (!registerNumber) {
+    return false;
+  }
+
+  const latestByRegisterNumber = await ctx.db
+    .query("registerSession")
+    .withIndex("by_storeId_registerNumber", (q) =>
+      q.eq("storeId", args.storeId).eq("registerNumber", registerNumber),
+    )
+    .order("desc")
+    .first();
+
+  return (
+    latestByRegisterNumber?.terminalId === args.terminalId &&
+    isPosUsableRegisterSessionStatus(latestByRegisterNumber.status)
+  );
 }
 
 function isActionableTerminalReviewSyncEvent(event: Doc<"posLocalSyncEvent">) {

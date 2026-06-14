@@ -69,6 +69,8 @@ export type PosTerminalRuntimeStatusSource =
   ReportTerminalRuntimeStatusArgs["status"]["source"];
 export type PosTerminalRuntimeStatusPayload =
   ReportTerminalRuntimeStatusPayload & {
+    activeRegisterSession?: PosTerminalRuntimeActiveRegisterSessionDiagnostics;
+    appShell?: PosTerminalRuntimeAppShellDiagnostics;
     appSessionRecovery?: PosTerminalRuntimeAppSessionRecoveryDiagnostics;
   };
 export type PosTerminalRuntimeStatusSyncStatus =
@@ -99,7 +101,31 @@ export type PosTerminalRuntimeSnapshotReadiness = {
   serviceCatalogRefreshedAt?: number;
 };
 
+export type PosTerminalRuntimeActiveRegisterSessionInput = {
+  cloudRegisterSessionId?: string;
+  localRegisterSessionId: string;
+  openedAt?: number;
+  registerNumber?: string;
+  status: "open" | "active" | "closing" | "closed";
+};
+
+export type PosTerminalRuntimeActiveRegisterSessionDiagnostics =
+  PosTerminalRuntimeActiveRegisterSessionInput & {
+    observedAt: number;
+  };
+
+export type PosTerminalRuntimeAppShellInput = {
+  ready: boolean;
+};
+
+export type PosTerminalRuntimeAppShellDiagnostics =
+  PosTerminalRuntimeAppShellInput & {
+    observedAt: number;
+  };
+
 export type PosTerminalRuntimeStatusInput = {
+  activeRegisterSession?: PosTerminalRuntimeActiveRegisterSessionInput | null;
+  appShell?: PosTerminalRuntimeAppShellInput | null;
   appVersion?: string;
   appSessionRecovery?: PosTerminalRuntimeAppSessionRecoveryInput | null;
   browserInfo?: PosTerminalRuntimeBrowserInfo;
@@ -230,6 +256,36 @@ export function buildPosTerminalRuntimeStatus(
     ...(input.buildSha ? { buildSha: input.buildSha } : {}),
     ...(input.browserInfo ? { browserInfo: input.browserInfo } : {}),
     ...(appSessionRecovery ? { appSessionRecovery } : {}),
+    ...(input.appShell
+      ? {
+          appShell: {
+            observedAt: now,
+            ready: input.appShell.ready,
+          },
+        }
+      : {}),
+    ...(input.activeRegisterSession
+      ? {
+          activeRegisterSession: {
+            ...(input.activeRegisterSession.cloudRegisterSessionId
+              ? {
+                  cloudRegisterSessionId:
+                    input.activeRegisterSession.cloudRegisterSessionId,
+                }
+              : {}),
+            localRegisterSessionId:
+              input.activeRegisterSession.localRegisterSessionId,
+            observedAt: now,
+            ...(input.activeRegisterSession.openedAt
+              ? { openedAt: input.activeRegisterSession.openedAt }
+              : {}),
+            ...(input.activeRegisterSession.registerNumber
+              ? { registerNumber: input.activeRegisterSession.registerNumber }
+              : {}),
+            status: input.activeRegisterSession.status,
+          },
+        }
+      : {}),
     localStore: {
       available: !failureMessage,
       schemaVersion:

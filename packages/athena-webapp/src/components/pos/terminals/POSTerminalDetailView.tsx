@@ -263,6 +263,80 @@ function getStaffAuthorityTone(
   }
 }
 
+function getDrawerAuthorityTone(
+  runtimeStatus?: TerminalRuntimeStatus | null,
+) {
+  if (!runtimeStatus) {
+    return "neutral";
+  }
+
+  if (
+    !runtimeStatus.drawerAuthority ||
+    runtimeStatus.drawerAuthority.status === "healthy"
+  ) {
+    return "success";
+  }
+
+  if (runtimeStatus.drawerAuthority.status === "blocked") {
+    return "warning";
+  }
+
+  return "neutral";
+}
+
+function ReadyReadinessValue() {
+  return (
+    <span className="inline-flex items-center justify-end gap-1 text-success">
+      <CheckCircle2 className="h-3 w-3" aria-hidden="true" />
+      <span>Ready</span>
+    </span>
+  );
+}
+
+function ExpiredReadinessValue() {
+  return (
+    <span className="inline-flex items-center justify-end gap-1 text-warning-foreground">
+      <AlertTriangle className="h-3 w-3" aria-hidden="true" />
+      <span>Expired</span>
+    </span>
+  );
+}
+
+function DrawerAuthorityReadinessValue({
+  runtimeStatus,
+}: {
+  runtimeStatus?: TerminalRuntimeStatus | null;
+}) {
+  if (!runtimeStatus) {
+    return "Not reported";
+  }
+
+  if (
+    !runtimeStatus.drawerAuthority ||
+    runtimeStatus.drawerAuthority.status === "healthy"
+  ) {
+    return <ReadyReadinessValue />;
+  }
+
+  return formatStatusLabel(runtimeStatus.drawerAuthority.status);
+}
+
+function StaffAuthorityReadinessValue({
+  status,
+}: {
+  status?: TerminalRuntimeStatus["staffAuthority"] | null;
+}) {
+  if (status?.status === "ready") {
+    return <ReadyReadinessValue />;
+  }
+
+  if (status?.status === "expired") {
+    return <ExpiredReadinessValue />;
+  }
+
+  return getStaffAuthorityLabel(status);
+}
+
 function RailSignalRow({
   label,
   tone = "neutral",
@@ -302,6 +376,7 @@ function SnapshotReadinessGroup({
   const staffAuthorityTone = getStaffAuthorityTone(
     runtimeStatus?.staffAuthority,
   );
+  const drawerAuthorityTone = getDrawerAuthorityTone(runtimeStatus);
 
   return (
     <div className="space-y-layout-xs rounded-md border border-border/80 bg-surface px-layout-md py-layout-sm">
@@ -331,9 +406,20 @@ function SnapshotReadinessGroup({
           value={formatAge(snapshots?.registerReadModelAgeMs)}
         />
         <RailSignalRow
+          label="Drawer authority"
+          tone={drawerAuthorityTone}
+          value={
+            <DrawerAuthorityReadinessValue runtimeStatus={runtimeStatus} />
+          }
+        />
+        <RailSignalRow
           label="Staff authority"
           tone={staffAuthorityTone}
-          value={getStaffAuthorityLabel(runtimeStatus?.staffAuthority)}
+          value={
+            <StaffAuthorityReadinessValue
+              status={runtimeStatus?.staffAuthority}
+            />
+          }
         />
       </div>
     </div>
@@ -699,7 +785,9 @@ function AttentionReasonsSection({
   orgUrlSlug?: string;
   storeUrlSlug?: string;
 }) {
-  const reasons = getTerminalAttentionReasons(detail);
+  const reasons = getTerminalAttentionReasons(detail).filter(
+    (reason) => !isVerifiedTerminalCommandAttention(reason, detail),
+  );
 
   if (reasons.length === 0) {
     return null;
@@ -719,7 +807,8 @@ function AttentionReasonsSection({
             <div className="flex flex-col gap-layout-sm md:flex-row md:items-start md:justify-between">
               <div className="min-w-0">
                 <p className="text-sm font-medium text-foreground">
-                  {getSupportSafeAttentionReasonSummary(reason)}
+                  {getTerminalCommandAttentionTitle(reason, detail) ??
+                    getSupportSafeAttentionReasonSummary(reason)}
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">
                   {reason.source === "cloud_sync"
@@ -733,6 +822,7 @@ function AttentionReasonsSection({
                 </p>
               </div>
               <AttentionReasonAction
+                detail={detail}
                 onResolveRegisterSessionReview={onResolveRegisterSessionReview}
                 orgUrlSlug={orgUrlSlug}
                 reason={reason}
@@ -747,11 +837,13 @@ function AttentionReasonsSection({
 }
 
 function AttentionReasonAction({
+  detail,
   onResolveRegisterSessionReview,
   orgUrlSlug,
   reason,
   storeUrlSlug,
 }: {
+  detail?: TerminalHealthDetail;
   onResolveRegisterSessionReview?: POSTerminalDetailViewContentProps["onResolveRegisterSessionReview"];
   orgUrlSlug?: string;
   reason: TerminalHealthAttentionReason;
@@ -769,7 +861,7 @@ function AttentionReasonAction({
     const registerSessionId = target.registerSessionId;
     const resolveRegisterSessionReview = onResolveRegisterSessionReview;
 
-    if (resolveRegisterSessionReview) {
+    if (target.automaticRepairEligible && resolveRegisterSessionReview) {
       const resolveReview = async () => {
         setIsResolving(true);
         setErrorMessage("");
@@ -847,8 +939,8 @@ function AttentionReasonAction({
   if (target.type === "pos_settings") {
     return (
       <p className="max-w-sm text-xs text-muted-foreground">
-        Terminal setup repair must run from this checkout station or through a
-        terminal repair command when available.
+        {getTerminalCommandAttentionCopy(reason, detail) ??
+          "Terminal setup repair must run from this checkout station or through a terminal repair command when available."}
       </p>
     );
   }
@@ -856,12 +948,124 @@ function AttentionReasonAction({
   if (target.type === "pos_register") {
     return (
       <p className="max-w-sm text-xs text-muted-foreground">
-        This needs a fresh check-in or terminal-side repair before support can
-        clear it remotely.
+        {getTerminalCommandAttentionCopy(reason, detail) ??
+          "This needs a fresh check-in or terminal-side repair before support can clear it remotely."}
       </p>
     );
   }
 
+  return null;
+}
+
+function getTerminalCommandAttentionCopy(
+  reason: TerminalHealthAttentionReason,
+  detail?: TerminalHealthDetail,
+) {
+  const expectedCommandType = getAttentionReasonCommandType(reason);
+  const recovery = detail?.recovery ?? detail?.recoveryPreview ?? null;
+  const commandStatus = recovery?.commandStatus;
+  if (
+    !expectedCommandType ||
+    !commandStatus ||
+    !recovery?.terminalActions?.some(
+      (action) => action.commandType === expectedCommandType,
+    )
+  ) {
+    return null;
+  }
+
+  const commandName =
+    expectedCommandType === "clear_stale_drawer_authority"
+      ? "Drawer repair command"
+      : "Terminal setup repair command";
+
+  if (commandStatus.verificationStatus === "verified") {
+    return `${commandName} was completed and verified by terminal check-in. This row will clear when the terminal list receives the next check-in.`;
+  }
+  if (
+    commandStatus.status === "completed" ||
+    commandStatus.verificationStatus === "runtime_verification_ready"
+  ) {
+    return `${commandName} completed locally. Waiting for a fresh terminal check-in to clear this attention item.`;
+  }
+  if (commandStatus.status === "claimed") {
+    return `${commandName} is running on this checkout station.`;
+  }
+  if (commandStatus.status === "pending") {
+    return `${commandName} is queued for this checkout station.`;
+  }
+
+  return null;
+}
+
+function isVerifiedTerminalCommandAttention(
+  reason: TerminalHealthAttentionReason,
+  detail?: TerminalHealthDetail,
+) {
+  const expectedCommandType = getAttentionReasonCommandType(reason);
+  const recovery = detail?.recovery ?? detail?.recoveryPreview ?? null;
+  const commandStatus = recovery?.commandStatus;
+
+  return Boolean(
+    expectedCommandType &&
+      commandStatus?.verificationStatus === "verified" &&
+      recovery?.terminalActions?.some(
+        (action) => action.commandType === expectedCommandType,
+      ),
+  );
+}
+
+function getTerminalCommandAttentionTitle(
+  reason: TerminalHealthAttentionReason,
+  detail?: TerminalHealthDetail,
+) {
+  const expectedCommandType = getAttentionReasonCommandType(reason);
+  const recovery = detail?.recovery ?? detail?.recoveryPreview ?? null;
+  const commandStatus = recovery?.commandStatus;
+  if (
+    !expectedCommandType ||
+    !commandStatus ||
+    !recovery?.terminalActions?.some(
+      (action) => action.commandType === expectedCommandType,
+    )
+  ) {
+    return null;
+  }
+
+  const commandName =
+    expectedCommandType === "clear_stale_drawer_authority"
+      ? "Drawer repair command"
+      : "Terminal setup repair command";
+
+  if (commandStatus.verificationStatus === "verified") {
+    return `${commandName} verified; waiting for the next terminal check-in.`;
+  }
+  if (
+    commandStatus.status === "completed" ||
+    commandStatus.verificationStatus === "runtime_verification_ready"
+  ) {
+    return `${commandName} completed locally.`;
+  }
+  if (commandStatus.status === "claimed") {
+    return `${commandName} running.`;
+  }
+  if (commandStatus.status === "pending") {
+    return `${commandName} queued.`;
+  }
+
+  return null;
+}
+
+function getAttentionReasonCommandType(reason: TerminalHealthAttentionReason) {
+  if (reason.type === "drawer_authority_blocked") {
+    return "clear_stale_drawer_authority";
+  }
+  if (
+    reason.type === "terminal_seed_missing" ||
+    reason.type === "terminal_authorization_failed"
+  ) {
+    return "repair_terminal_seed";
+  }
   return null;
 }
 
@@ -880,6 +1084,113 @@ function RecoveryMetric({
       <p className="mt-1 text-sm font-medium text-foreground">{value}</p>
     </div>
   );
+}
+
+function RecoveryNextStep({
+  commandStatus,
+  safeActions,
+}: {
+  commandStatus: ReturnType<typeof buildTerminalRecoveryPresentation>["commandStatus"];
+  safeActions: TerminalRecoveryAction[];
+}) {
+  const nextAction = safeActions[0];
+  if (!nextAction || !shouldShowRecoveryNextStep(commandStatus)) {
+    return null;
+  }
+
+  return (
+    <p className="mt-layout-sm rounded-md border border-warning/30 bg-warning/10 px-layout-md py-layout-sm text-sm text-muted-foreground">
+      <span className="font-medium text-foreground">Next step:</span>{" "}
+      {getRecoveryNextStepCopy(nextAction)}
+    </p>
+  );
+}
+
+function shouldShowRecoveryNextStep(
+  commandStatus: ReturnType<typeof buildTerminalRecoveryPresentation>["commandStatus"],
+) {
+  return (
+    commandStatus.status === "Failed" ||
+    commandStatus.status === "Precondition Failed" ||
+    commandStatus.verificationStatus === "Verification Failed"
+  );
+}
+
+function getRecoveryNextStepCopy(action: TerminalRecoveryAction) {
+  if (action.commandType === "retry_sync") {
+    return "retry terminal sync, then use the next check-in to decide whether drawer repair still needs to run.";
+  }
+  if (action.commandType === "clear_stale_drawer_authority") {
+    return "send drawer authority repair from this checkout station.";
+  }
+  if (action.commandType === "repair_terminal_seed") {
+    return "send terminal setup repair from this checkout station.";
+  }
+  if (action.kind === "cloud_repair") {
+    return "resolve the safe cloud repair item.";
+  }
+  return `run ${action.label}.`;
+}
+
+function RecoveryCommandFailureReason({
+  commandStatus,
+  safeActions,
+}: {
+  commandStatus: ReturnType<typeof buildTerminalRecoveryPresentation>["commandStatus"];
+  safeActions: TerminalRecoveryAction[];
+}) {
+  const reason = getRecoveryCommandFailureReason(commandStatus, safeActions);
+  if (!reason) return null;
+
+  return (
+    <p className="mt-layout-xs px-layout-md text-sm text-muted-foreground">
+      <span className="font-medium text-foreground">Why:</span> {reason}
+    </p>
+  );
+}
+
+function getRecoveryCommandFailureReason(
+  commandStatus: ReturnType<typeof buildTerminalRecoveryPresentation>["commandStatus"],
+  safeActions: TerminalRecoveryAction[],
+) {
+  if (!shouldShowRecoveryNextStep(commandStatus)) {
+    return null;
+  }
+  if (commandStatus.latestAcknowledgement) {
+    return commandStatus.latestAcknowledgement;
+  }
+  if (commandStatus.commandType === "clear_stale_drawer_authority") {
+    if (safeActions.some((action) => action.commandType === "retry_sync")) {
+      return "Drawer repair expected the stale drawer block to still be present, but terminal sync evidence changed first.";
+    }
+    return "Drawer repair expected the stale drawer block to still be present, but the latest terminal evidence did not match.";
+  }
+
+  return "The command evidence changed before recovery could complete.";
+}
+
+function hasCurrentSupportRecoveryWork(
+  recovery: ReturnType<typeof buildTerminalRecoveryPresentation>,
+) {
+  return (
+    recovery.safeActions.length > 0 ||
+    recovery.groups.cloudRepair.length > 0 ||
+    recovery.groups.terminalRequired.length > 0 ||
+    recovery.groups.manualReview.length > 0 ||
+    isCurrentRecoveryCommand(recovery.commandStatus)
+  );
+}
+
+function isCurrentRecoveryCommand(
+  commandStatus: ReturnType<
+    typeof buildTerminalRecoveryPresentation
+  >["commandStatus"],
+) {
+  if (commandStatus.verificationStatus === "Verified") {
+    return false;
+  }
+
+  return ["Pending", "Claimed", "Completed"].includes(commandStatus.status);
 }
 
 function RecoveryBlockerGroup({
@@ -1022,7 +1333,7 @@ function RecoveryBlockerAction({
         </Button>
         {action.status && action.status !== "available" ? (
           <p className="max-w-sm text-xs text-muted-foreground">
-            {getRecoveryActionStatusCopy(action.status)}
+            {getRecoveryActionStatusCopy(action)}
           </p>
         ) : null}
         {action.latestAcknowledgement ? (
@@ -1056,8 +1367,8 @@ function RecoveryBlockerAction({
   return null;
 }
 
-function getRecoveryActionStatusCopy(status: TerminalRecoveryAction["status"]) {
-  switch (status) {
+function getRecoveryActionStatusCopy(action: TerminalRecoveryAction) {
+  switch (action.status) {
     case "pending":
       return "Command is queued for this checkout station.";
     case "claimed":
@@ -1070,11 +1381,14 @@ function getRecoveryActionStatusCopy(status: TerminalRecoveryAction["status"]) {
     case "expired":
       return "Command expired. Refresh terminal health before sending another command.";
     case "failed":
-      return "Command did not complete. Refresh terminal health before retrying.";
+      if (action.commandType === "clear_stale_drawer_authority") {
+        return "Command did not complete. Retry terminal sync before sending drawer repair again.";
+      }
+      return "Command did not complete. Run the next safe action before retrying.";
     case "blocked":
       return "Recovery is blocked by current terminal evidence.";
     default:
-      return formatStatusLabel(status);
+      return formatStatusLabel(action.status);
   }
 }
 
@@ -1107,6 +1421,14 @@ function RecoveryPanel({
   storeUrlSlug?: string;
 }) {
   const recovery = buildTerminalRecoveryPresentation(detail);
+  const hasCurrentRecoveryWork = hasCurrentSupportRecoveryWork(recovery);
+  const supportReadiness = hasCurrentRecoveryWork
+    ? recovery.readiness
+    : {
+        description:
+          "Current terminal evidence has no repair or review blockers.",
+        label: "No support action needed",
+      };
 
   return (
     <DetailPanel
@@ -1120,65 +1442,77 @@ function RecoveryPanel({
               Readiness
             </p>
             <p className="mt-1 text-base font-medium text-foreground">
-              {recovery.readiness.label}
+              {supportReadiness.label}
             </p>
             <p className="mt-1 text-sm text-muted-foreground">
-              {recovery.readiness.description}
+              {supportReadiness.description}
             </p>
           </div>
         </div>
       </div>
 
-      <div className="mt-layout-md grid gap-layout-sm md:grid-cols-3">
-        <RecoveryMetric
-          label="Command status"
-          value={`${recovery.commandStatus.label} / ${recovery.commandStatus.status}`}
-        />
-        <RecoveryMetric
-          label="Verification"
-          value={recovery.commandStatus.verificationStatus}
-        />
-        <RecoveryMetric
-          label="Available actions"
-          value={`${recovery.safeActions.length} safe action${recovery.safeActions.length === 1 ? "" : "s"}`}
-        />
-      </div>
+      {hasCurrentRecoveryWork ? (
+        <>
+          <div className="mt-layout-md grid gap-layout-sm md:grid-cols-3">
+            <RecoveryMetric
+              label="Command status"
+              value={`${recovery.commandStatus.label} / ${recovery.commandStatus.status}`}
+            />
+            <RecoveryMetric
+              label="Verification"
+              value={recovery.commandStatus.verificationStatus}
+            />
+            <RecoveryMetric
+              label="Available actions"
+              value={`${recovery.safeActions.length} safe action${recovery.safeActions.length === 1 ? "" : "s"}`}
+            />
+          </div>
+          <RecoveryNextStep
+            commandStatus={recovery.commandStatus}
+            safeActions={recovery.safeActions}
+          />
+          <RecoveryCommandFailureReason
+            commandStatus={recovery.commandStatus}
+            safeActions={recovery.safeActions}
+          />
 
-      <div className="mt-layout-md space-y-layout-sm">
-        <RecoveryBlockerGroup
-          blockers={recovery.groups.cloudRepair}
-          emptyCopy="No cloud-safe repair blockers are reported."
-          onResolveTerminalCloudRepair={onResolveTerminalCloudRepair}
-          onResolveRegisterSessionReview={onResolveRegisterSessionReview}
-          orgUrlSlug={orgUrlSlug}
-          storeUrlSlug={storeUrlSlug}
-          terminalId={detail.terminal._id}
-          title="Cloud repair"
-        />
-        <RecoveryBlockerGroup
-          blockers={recovery.groups.terminalRequired}
-          emptyCopy="No terminal-required blockers are reported."
-          onIssueTerminalRecoveryCommand={onIssueTerminalRecoveryCommand}
-          onResolveRegisterSessionReview={onResolveRegisterSessionReview}
-          orgUrlSlug={orgUrlSlug}
-          storeUrlSlug={storeUrlSlug}
-          terminalId={detail.terminal._id}
-          title="Terminal required"
-        />
-        <RecoveryBlockerGroup
-          blockers={recovery.groups.manualReview}
-          emptyCopy="No manual-review blockers are reported."
-          onResolveRegisterSessionReview={onResolveRegisterSessionReview}
-          orgUrlSlug={orgUrlSlug}
-          storeUrlSlug={storeUrlSlug}
-          terminalId={detail.terminal._id}
-          title="Manual review"
-        />
-      </div>
+          <div className="mt-layout-md space-y-layout-sm">
+            <RecoveryBlockerGroup
+              blockers={recovery.groups.cloudRepair}
+              emptyCopy="No cloud-safe repair blockers are reported."
+              onResolveTerminalCloudRepair={onResolveTerminalCloudRepair}
+              onResolveRegisterSessionReview={onResolveRegisterSessionReview}
+              orgUrlSlug={orgUrlSlug}
+              storeUrlSlug={storeUrlSlug}
+              terminalId={detail.terminal._id}
+              title="Cloud repair"
+            />
+            <RecoveryBlockerGroup
+              blockers={recovery.groups.terminalRequired}
+              emptyCopy="No terminal-required blockers are reported."
+              onIssueTerminalRecoveryCommand={onIssueTerminalRecoveryCommand}
+              onResolveRegisterSessionReview={onResolveRegisterSessionReview}
+              orgUrlSlug={orgUrlSlug}
+              storeUrlSlug={storeUrlSlug}
+              terminalId={detail.terminal._id}
+              title="Terminal required"
+            />
+            <RecoveryBlockerGroup
+              blockers={recovery.groups.manualReview}
+              emptyCopy="No manual-review blockers are reported."
+              onResolveRegisterSessionReview={onResolveRegisterSessionReview}
+              orgUrlSlug={orgUrlSlug}
+              storeUrlSlug={storeUrlSlug}
+              terminalId={detail.terminal._id}
+              title="Manual review"
+            />
+          </div>
 
-      <p className="mt-layout-md text-sm text-muted-foreground">
-        {recovery.verification.summary}
-      </p>
+          <p className="mt-layout-md text-sm text-muted-foreground">
+            {recovery.verification.summary}
+          </p>
+        </>
+      ) : null}
     </DetailPanel>
   );
 }

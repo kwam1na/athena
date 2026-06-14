@@ -280,9 +280,9 @@ describe("POSTerminalDetailViewContent", () => {
     expect(screen.getAllByText("Catalog").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Service catalog").length).toBeGreaterThan(0);
     expect(screen.getByText("Register model")).toBeInTheDocument();
-    expect(
-      screen.getAllByText("Staff authority expired").length,
-    ).toBeGreaterThan(0);
+    expect(screen.getByText("Drawer authority")).toBeInTheDocument();
+    expect(screen.getByText("Ready")).toBeInTheDocument();
+    expect(screen.getByText("Expired")).toBeInTheDocument();
     expect(screen.getByText("2 minutes old")).toBeInTheDocument();
     expect(screen.getByText("3 minutes old")).toBeInTheDocument();
     expect(screen.getByText("4 minutes old")).toBeInTheDocument();
@@ -310,6 +310,39 @@ describe("POSTerminalDetailViewContent", () => {
     expect(screen.getByText("Local only")).toBeInTheDocument();
     expect(screen.getByText("IndexedDB blocked")).toBeInTheDocument();
     expect(screen.getByText("Upload failed")).toBeInTheDocument();
+  });
+
+  it("renders ready staff authority as a compact checked state", () => {
+    render(
+      <POSTerminalDetailViewContent
+        detail={{
+          ...detail,
+          runtimeStatus: {
+            ...detail.runtimeStatus!,
+            staffAuthority: {
+              expiresAt: Date.now() + 60_000,
+              staffProfileId: "staff-1",
+              status: "ready",
+            },
+          },
+        }}
+        isLoading={false}
+      />,
+    );
+
+    const staffAuthorityLabel = screen.getByText("Staff authority");
+    expect(staffAuthorityLabel).toBeInTheDocument();
+    expect(screen.getAllByText("Ready").length).toBeGreaterThanOrEqual(2);
+    expect(
+      screen.queryByText("Staff authority ready"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("renders expired staff authority as a compact warning state", () => {
+    render(<POSTerminalDetailViewContent detail={detail} isLoading={false} />);
+
+    expect(screen.getByText("Staff authority")).toBeInTheDocument();
+    expect(screen.getByText("Expired")).toBeInTheDocument();
   });
 
   it("starts Remote Assist from an enrolled online terminal", async () => {
@@ -783,6 +816,133 @@ describe("POSTerminalDetailViewContent", () => {
     expect(mocks.toastSuccess).toHaveBeenCalledWith("Terminal command queued.");
   });
 
+  it("surfaces a next step when drawer repair verification fails and sync retry is available", () => {
+    render(
+      <POSTerminalDetailViewContent
+        detail={{
+          ...detail,
+          attentionReasons: [
+            {
+              actionTarget: { type: "pos_register" },
+              count: 66,
+              nextPendingUploadSequence: 1,
+              source: "local_runtime",
+              summary: "66 local review items are still on this terminal.",
+              type: "local_review",
+            },
+          ],
+          recovery: {
+            commandStatus: {
+              commandType: "clear_stale_drawer_authority",
+              label: "Drawer authority repair",
+              latestAcknowledgement:
+                "Drawer repair expected a blocked drawer authority record, but this terminal no longer reported that same block.",
+              status: "precondition_failed",
+              verificationStatus: "verification_failed",
+            },
+            readiness: "needs_manual_review",
+            terminalActions: [
+              {
+                commandContext: {
+                  cloudRegisterSessionId: "cloud-session-1",
+                  expectedBlockerType: "cloud_closed",
+                  localRegisterSessionId: "local-session-1",
+                  reason: "Drawer authority requires terminal-local repair.",
+                },
+                commandType: "clear_stale_drawer_authority",
+                expectedEvidence: {
+                  drawerAuthorityStatus: "healthy",
+                  localRegisterSessionId: "local-session-1",
+                },
+                reason: "Drawer authority requires terminal-local repair.",
+              },
+              {
+                commandContext: {
+                  expectedBlockerType: "local_review",
+                  reason: "Local review items need a terminal sync retry.",
+                },
+                commandType: "retry_sync",
+                expectedEvidence: {
+                  syncStatus: "idle",
+                },
+                reason: "Local review items need a terminal sync retry.",
+              },
+            ],
+          },
+        }}
+        isLoading={false}
+        orgUrlSlug="wigclub"
+        storeUrlSlug="osu"
+      />,
+    );
+
+    expect(
+      screen.getByText("Drawer authority repair / Precondition Failed"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Verification Failed")).toBeInTheDocument();
+    expect(screen.getByText("1 safe action")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "retry terminal sync, then use the next check-in to decide whether drawer repair still needs to run.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Drawer repair expected a blocked drawer authority record, but this terminal no longer reported that same block.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Command did not complete. Retry terminal sync before sending drawer repair again.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /retry terminal sync/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("does not foreground old failed recovery commands when no support work remains", () => {
+    render(
+      <POSTerminalDetailViewContent
+        detail={{
+          ...detail,
+          attentionReasons: [],
+          recovery: {
+            commandStatus: {
+              commandType: "clear_stale_drawer_authority",
+              label: "Drawer authority repair",
+              latestAcknowledgement:
+                "Drawer repair expected a blocked drawer authority record, but this terminal no longer reported that same block.",
+              status: "precondition_failed",
+              verificationStatus: "verification_failed",
+            },
+            readiness: "drawer_open",
+            terminalActions: [],
+          },
+        }}
+        isLoading={false}
+        orgUrlSlug="wigclub"
+        storeUrlSlug="osu"
+      />,
+    );
+
+    expect(screen.getByText("No support action needed")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Current terminal evidence has no repair or review blockers.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("Drawer authority repair / Precondition Failed"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Verification Failed")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        "Recovery verification did not match the latest terminal check-in.",
+      ),
+    ).not.toBeInTheDocument();
+  });
+
   it("disables duplicate recovery command clicks while a command is pending", () => {
     const onIssueTerminalRecoveryCommand = vi.fn();
 
@@ -828,6 +988,76 @@ describe("POSTerminalDetailViewContent", () => {
     ).toBeInTheDocument();
     fireEvent.click(commandButton);
     expect(onIssueTerminalRecoveryCommand).not.toHaveBeenCalled();
+  });
+
+  it("omits verified drawer command attention once support work is clear", () => {
+    render(
+      <POSTerminalDetailViewContent
+        detail={{
+          ...detail,
+          attentionReasons: [
+            {
+              actionTarget: { type: "pos_register" },
+              source: "terminal_runtime",
+              summary:
+                "Drawer authority needs repair. This checkout station must run the repair before selling.",
+              type: "drawer_authority_blocked",
+            },
+          ],
+          recovery: {
+            commandStatus: {
+              label: "Drawer authority repair",
+              status: "completed",
+              verificationStatus: "verified",
+            },
+            readiness: "needs_manual_review",
+            terminalActions: [
+              {
+                commandContext: {
+                  cloudRegisterSessionId: "cloud-session-1",
+                  expectedBlockerType: "cloud_closed",
+                  localRegisterSessionId: "local-session-1",
+                  reason: "Drawer authority requires terminal-local repair.",
+                },
+                commandType: "clear_stale_drawer_authority",
+                expectedEvidence: {
+                  drawerAuthorityStatus: "healthy",
+                  localRegisterSessionId: "local-session-1",
+                },
+                reason: "Drawer authority requires terminal-local repair.",
+              },
+            ],
+          },
+        }}
+        isLoading={false}
+        orgUrlSlug="wigclub"
+        storeUrlSlug="osu"
+      />,
+    );
+
+    expect(screen.getByText("No support action needed")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Drawer authority repair / Completed"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Verification")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Recovery was verified by the latest terminal check-in."),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        "Drawer repair command was completed and verified by terminal check-in. This row will clear when the terminal list receives the next check-in.",
+      ),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        "Drawer repair command verified; waiting for the next terminal check-in.",
+      ),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        "This needs a fresh check-in or terminal-side repair before support can clear it remotely.",
+      ),
+    ).not.toBeInTheDocument();
   });
 
   it("shows normalized recovery action failures", async () => {
@@ -969,7 +1199,7 @@ describe("POSTerminalDetailViewContent", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("resolves mapped register reviews inline from terminal health", async () => {
+  it("routes mapped register reviews to cash controls by default", () => {
     const onResolveRegisterSessionReview = vi.fn().mockResolvedValue({
       data: { action: "resolved", resolvedCount: 1 },
       kind: "ok",
@@ -982,6 +1212,51 @@ describe("POSTerminalDetailViewContent", () => {
           attentionReasons: [
             {
               actionTarget: {
+                registerSessionId: "register-session-1",
+                type: "cash_control_register_session",
+              },
+              count: 14,
+              latestEventSequence: 1,
+              latestEventStatus: "conflicted",
+              source: "cloud_sync",
+              summary: "14 cloud sync conflicts need review.",
+              type: "cloud_conflict",
+            },
+          ],
+        }}
+        isLoading={false}
+        onResolveRegisterSessionReview={onResolveRegisterSessionReview}
+        orgUrlSlug="wigclub"
+        storeUrlSlug="osu"
+      />,
+    );
+
+    expect(
+      screen.getByRole("link", { name: /review register session/i }),
+    ).toHaveAttribute(
+      "href",
+      "/wigclub/store/osu/cash-controls/registers/register-session-1",
+    );
+    expect(
+      screen.queryByRole("button", { name: /resolve eligible review/i }),
+    ).not.toBeInTheDocument();
+    expect(onResolveRegisterSessionReview).not.toHaveBeenCalled();
+  });
+
+  it("resolves explicitly eligible register reviews inline from terminal health", async () => {
+    const onResolveRegisterSessionReview = vi.fn().mockResolvedValue({
+      data: { action: "resolved", resolvedCount: 1 },
+      kind: "ok",
+    });
+
+    render(
+      <POSTerminalDetailViewContent
+        detail={{
+          ...detail,
+          attentionReasons: [
+            {
+              actionTarget: {
+                automaticRepairEligible: true,
                 registerSessionId: "register-session-1",
                 type: "cash_control_register_session",
               },

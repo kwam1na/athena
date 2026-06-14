@@ -243,6 +243,10 @@ export type TerminalRuntimeStatusInput = {
   appSessionRecovery?: {
     status: AppSessionRecoveryStatus;
   };
+  appShell?: {
+    observedAt: number;
+    ready: boolean;
+  };
   localStore: {
     available: boolean;
     schemaVersion?: number;
@@ -279,6 +283,16 @@ export type TerminalRuntimeStatusInput = {
     transactionMode?: NonNullable<
       Doc<"posTerminalRuntimeStatus">["saleAuthority"]
     >["transactionMode"];
+  };
+  activeRegisterSession?: {
+    cloudRegisterSessionId?: string;
+    localRegisterSessionId: string;
+    observedAt: number;
+    openedAt?: number;
+    registerNumber?: string;
+    status: NonNullable<
+      Doc<"posTerminalRuntimeStatus">["activeRegisterSession"]
+    >["status"];
   };
   terminalIntegrity?: {
     observedAt: number;
@@ -383,6 +397,7 @@ export async function submitTerminalRuntimeStatus(
     receivedAt,
     source: args.status.source,
     appSessionRecovery,
+    appShell: cleanAppShell(args.status.appShell),
     ...omitUndefined({
       appVersion: cleanOptionalString(args.status.appVersion, 80),
       buildSha: cleanOptionalString(args.status.buildSha, 80),
@@ -431,6 +446,9 @@ export async function submitTerminalRuntimeStatus(
       expiresAt: positiveTimestamp(args.status.staffAuthority.expiresAt),
     }),
     saleAuthority: cleanSaleAuthority(args.status.saleAuthority),
+    activeRegisterSession: cleanActiveRegisterSession(
+      args.status.activeRegisterSession,
+    ),
     snapshots: omitUndefined({
       catalogAgeMs: nonNegativeInteger(args.status.snapshots.catalogAgeMs),
       serviceCatalogAgeMs: nonNegativeInteger(
@@ -443,10 +461,8 @@ export async function submitTerminalRuntimeStatus(
         args.status.snapshots.registerReadModelAgeMs,
       ),
     }),
-    ...omitUndefined({
-      terminalIntegrity: cleanTerminalIntegrity(args.status.terminalIntegrity),
-      drawerAuthority: cleanDrawerAuthority(args.status.drawerAuthority),
-    }),
+    terminalIntegrity: cleanTerminalIntegrity(args.status.terminalIntegrity),
+    drawerAuthority: cleanDrawerAuthority(args.status.drawerAuthority),
   });
 
   return ok({
@@ -507,6 +523,15 @@ function cleanAppSessionRecovery(
     : undefined;
 }
 
+function cleanAppShell(appShell: TerminalRuntimeStatusInput["appShell"]) {
+  if (!appShell) return undefined;
+
+  return {
+    observedAt: positiveTimestamp(appShell.observedAt) ?? Date.now(),
+    ready: appShell.ready === true,
+  };
+}
+
 function cleanOptionalString(value: string | undefined, maxLength: number) {
   const trimmed = value?.trim();
   if (!trimmed) {
@@ -541,6 +566,32 @@ function cleanTerminalIntegrity(
     status: terminalIntegrityStatuses.has(terminalIntegrity.status)
       ? terminalIntegrity.status
       : "reset_required",
+  });
+}
+
+function cleanActiveRegisterSession(
+  activeRegisterSession: TerminalRuntimeStatusInput["activeRegisterSession"],
+) {
+  if (!activeRegisterSession) return undefined;
+
+  return omitUndefined({
+    cloudRegisterSessionId: cleanOptionalString(
+      activeRegisterSession.cloudRegisterSessionId,
+      120,
+    ),
+    localRegisterSessionId:
+      cleanOptionalString(activeRegisterSession.localRegisterSessionId, 120) ??
+      "unknown",
+    observedAt:
+      positiveTimestamp(activeRegisterSession.observedAt) ?? Date.now(),
+    openedAt: positiveTimestamp(activeRegisterSession.openedAt),
+    registerNumber: cleanOptionalString(
+      activeRegisterSession.registerNumber,
+      30,
+    ),
+    status: activeRegisterSessionStatuses.has(activeRegisterSession.status)
+      ? activeRegisterSession.status
+      : "open",
   });
 }
 
@@ -586,6 +637,13 @@ const saleAuthorityTransactionModes = new Set([
   "products_only",
   "services_only",
   undefined,
+]);
+
+const activeRegisterSessionStatuses = new Set([
+  "open",
+  "active",
+  "closing",
+  "closed",
 ]);
 
 const terminalIntegrityReasons = new Set<TerminalIntegrityReason | undefined>([

@@ -14,6 +14,7 @@ export type TerminalRecoveryCommandType =
 
 export type TerminalRecoveryReadiness =
   | "healthy_idle"
+  | "drawer_open"
   | "able_to_transact_now"
   | "needs_cloud_repair"
   | "needs_terminal_action"

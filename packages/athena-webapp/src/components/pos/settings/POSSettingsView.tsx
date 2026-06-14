@@ -37,6 +37,7 @@ import {
   type PosOfflineReadinessInput,
   type PosOfflineReadinessSummary,
 } from "@/offline/posOfflineReadiness";
+import { readPosAppShellReadiness } from "@/offline/posAppShellReadiness";
 import {
   createIndexedDbPosLocalStorageAdapter,
   createPosLocalStore,
@@ -68,7 +69,6 @@ type HealthLinkProps = {
 };
 
 const HealthLink = Link as unknown as ComponentType<HealthLinkProps>;
-const POS_APP_SHELL_CACHE_PREFIX = "athena-pos-app-shell-";
 const DEFAULT_STORE_DAY_AUTO_START_MINUTES = 8 * 60;
 const DEFAULT_STORE_DAY_TIMEZONE_OFFSET_MINUTES = 0;
 const STORE_DAY_AUTOMATION_HOURS = Array.from({ length: 12 }, (_, index) =>
@@ -892,45 +892,6 @@ function createDefaultLocalReadinessStore() {
   return createPosLocalStore({
     adapter: createIndexedDbPosLocalStorageAdapter(),
   });
-}
-
-async function readPosAppShellReadiness(input: {
-  orgUrlSlug?: string;
-  storeUrlSlug?: string;
-}): Promise<PosOfflineReadinessInput["appShell"]> {
-  if (typeof caches === "undefined") {
-    return { ready: false };
-  }
-
-  try {
-    const cacheNames = await caches.keys();
-    const shellCacheName = cacheNames.find((name) =>
-      name.startsWith(POS_APP_SHELL_CACHE_PREFIX),
-    );
-    if (!shellCacheName) {
-      return { ready: false };
-    }
-
-    const cache = await caches.open(shellCacheName);
-    const registerPath =
-      input.orgUrlSlug && input.storeUrlSlug
-        ? `/${input.orgUrlSlug}/store/${input.storeUrlSlug}/pos/register`
-        : null;
-    const cachedRegister =
-      registerPath && typeof window !== "undefined"
-        ? await cache.match(
-            new URL(registerPath, window.location.origin).toString(),
-            {
-              ignoreVary: true,
-            },
-          )
-        : null;
-    const cachedRoot = await cache.match("/", { ignoreVary: true });
-
-    return { ready: Boolean(cachedRegister || cachedRoot) };
-  } catch {
-    return { ready: false };
-  }
 }
 
 function signalFromSnapshot(

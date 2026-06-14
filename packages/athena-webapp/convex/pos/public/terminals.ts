@@ -46,8 +46,10 @@ import {
   posTerminalRecoveryVerificationStatusValidator,
 } from "../../schemas/pos/posTerminalRecovery";
 import {
-  posTerminalRuntimeBrowserInfoValidator,
+  posTerminalRuntimeActiveRegisterSessionValidator,
   posTerminalRuntimeAppSessionRecoveryValidator,
+  posTerminalRuntimeAppShellValidator,
+  posTerminalRuntimeBrowserInfoValidator,
   posTerminalRuntimeDrawerAuthorityValidator,
   posTerminalRuntimeLocalStoreValidator,
   posTerminalRuntimeSaleAuthorityValidator,
@@ -124,10 +126,14 @@ const runtimeStatusInputValidator = v.object({
   appSessionRecovery: v.optional(
     posTerminalRuntimeAppSessionRecoveryValidator,
   ),
+  appShell: v.optional(posTerminalRuntimeAppShellValidator),
   localStore: posTerminalRuntimeLocalStoreValidator,
   sync: posTerminalRuntimeSyncValidator,
   staffAuthority: posTerminalRuntimeStaffAuthorityValidator,
   saleAuthority: v.optional(posTerminalRuntimeSaleAuthorityValidator),
+  activeRegisterSession: v.optional(
+    posTerminalRuntimeActiveRegisterSessionValidator,
+  ),
   snapshots: posTerminalRuntimeSnapshotsValidator,
   terminalIntegrity: v.optional(posTerminalRuntimeTerminalIntegrityValidator),
   drawerAuthority: v.optional(posTerminalRuntimeDrawerAuthorityValidator),
@@ -238,6 +244,7 @@ const terminalSyncEvidenceReturnValidator = v.object({
 const terminalHealthActionTargetReturnValidator = v.union(
   v.object({
     type: v.literal("cash_control_register_session"),
+    automaticRepairEligible: v.optional(v.boolean()),
     registerSessionId: v.id("registerSession"),
   }),
   v.object({
@@ -308,6 +315,7 @@ const terminalHealthSummaryReturnValidator = v.object({
     v.object({
       readiness: v.union(
         v.literal("healthy_idle"),
+        v.literal("drawer_open"),
         v.literal("able_to_transact_now"),
         v.literal("needs_cloud_repair"),
         v.literal("needs_terminal_action"),
@@ -315,6 +323,7 @@ const terminalHealthSummaryReturnValidator = v.object({
       ),
       runtimeFresh: v.boolean(),
       evidence: v.object({
+        activeRegisterSession: v.boolean(),
         freshRuntimeRequiredForAbleToTransactNow: v.literal(true),
       }),
       cloudRepair: v.object({
@@ -325,6 +334,7 @@ const terminalHealthSummaryReturnValidator = v.object({
       commandStatus: v.union(
         v.object({
           commandId: v.optional(v.id("posTerminalRecoveryCommand")),
+          commandType: posTerminalRecoveryCommandTypeValidator,
           label: v.string(),
           latestAcknowledgement: v.optional(v.string()),
           status: posTerminalRecoveryCommandStatusValidator,
@@ -351,6 +361,16 @@ const terminalHealthSummaryReturnValidator = v.object({
           ),
           type: v.string(),
         }),
+      ),
+    }),
+    v.null(),
+  ),
+  registerSessionLink: v.union(
+    v.object({
+      registerSessionId: v.id("registerSession"),
+      status: v.union(
+        v.literal("open"),
+        v.literal("active"),
       ),
     }),
     v.null(),
@@ -422,6 +442,12 @@ function stripRuntimeStatusInput(
           status: status.appSessionRecovery.status,
         }
       : undefined,
+    appShell: status.appShell
+      ? {
+          observedAt: status.appShell.observedAt,
+          ready: status.appShell.ready,
+        }
+      : undefined,
     localStore: {
       available: status.localStore.available,
       schemaVersion: status.localStore.schemaVersion,
@@ -455,6 +481,18 @@ function stripRuntimeStatusInput(
           localRegisterSessionId: status.saleAuthority.localRegisterSessionId,
           staffProfileId: status.saleAuthority.staffProfileId,
           transactionMode: status.saleAuthority.transactionMode,
+        }
+      : undefined,
+    activeRegisterSession: status.activeRegisterSession
+      ? {
+          cloudRegisterSessionId:
+            status.activeRegisterSession.cloudRegisterSessionId,
+          localRegisterSessionId:
+            status.activeRegisterSession.localRegisterSessionId,
+          observedAt: status.activeRegisterSession.observedAt,
+          openedAt: status.activeRegisterSession.openedAt,
+          registerNumber: status.activeRegisterSession.registerNumber,
+          status: status.activeRegisterSession.status,
         }
       : undefined,
     terminalIntegrity: status.terminalIntegrity
@@ -541,8 +579,8 @@ export const listTerminals = query({
       storeId: args.storeId,
       userId: athenaUser._id,
     });
-	    const terminals = await listTerminalsQuery(ctx, args);
-	    return terminals.map(stripTerminalSyncSecret);
+    const terminals = await listTerminalsQuery(ctx, args);
+    return terminals.map(stripTerminalSyncSecret);
   },
 });
 
@@ -560,8 +598,8 @@ export const getTerminalByFingerprint = query({
       storeId: args.storeId,
       userId: athenaUser._id,
     });
-	    const terminal = await getTerminalByFingerprintQuery(ctx, args);
-	    return terminal ? stripTerminalSyncSecret(terminal) : null;
+    const terminal = await getTerminalByFingerprintQuery(ctx, args);
+    return terminal ? stripTerminalSyncSecret(terminal) : null;
   },
 });
 
@@ -847,8 +885,8 @@ export const updateTerminal = mutation({
       storeId: terminal.storeId,
       userId: athenaUser._id,
     });
-	    const updatedTerminal = await updateTerminalCommand(ctx, args);
-	    return stripTerminalSyncSecret(updatedTerminal);
+    const updatedTerminal = await updateTerminalCommand(ctx, args);
+    return stripTerminalSyncSecret(updatedTerminal);
   },
 });
 

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   Link,
   useNavigate,
@@ -166,6 +166,11 @@ export type DailyOperationsSnapshot = {
     expenseTotal: number;
     expenseTransactionCount: number;
     netCashVariance: number;
+    paymentTotals?: Array<{
+      amount: number;
+      method: string;
+      transactionCount?: number;
+    }>;
     registerVarianceCount: number;
     salesTotal: number;
     transactionCount: number;
@@ -423,6 +428,13 @@ function buildOperationsTransactionSearch({
   };
 }
 
+function buildOperationsExpenseSearch(operatingDate: string) {
+  return {
+    o: getOrigin(),
+    ...(operatingDate !== getLocalOperatingDate() ? { operatingDate } : {}),
+  };
+}
+
 function getDailyOperationsMetricLabels(operatingDate: string) {
   const isCurrentOperatingDate = operatingDate === getLocalOperatingDate();
 
@@ -594,6 +606,19 @@ function formatTodayCashTransactionCount(value: number) {
   return `${value} cash transactions`;
 }
 
+function formatPaymentCount(value?: number | null) {
+  if (value === undefined || value === null) return "Payment total";
+  if (value === 0) return "No payments";
+  if (value === 1) return "1 payment";
+  return `${value} payments`;
+}
+
+function formatPaymentMethodLabel(method: string) {
+  return method
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
 function formatCarriedOverRegisterCount(value: number) {
   if (value === 0) return "No registers from prior days";
   if (value === 1) return "1 register from a prior day";
@@ -604,6 +629,28 @@ function formatRegisterVarianceCount(value: number) {
   if (value === 0) return "No register variances";
   if (value === 1) return "1 register variance";
   return `${value} register variances`;
+}
+
+function getOtherPaymentTotals(summary: DailyOperationsSnapshot["closeSummary"]) {
+  return (summary.paymentTotals ?? [])
+    .filter((paymentTotal) => paymentTotal.method.toLowerCase() !== "cash")
+    .sort((left, right) => right.amount - left.amount);
+}
+
+function shouldShowExpenseMetric(summary: DailyOperationsSnapshot["closeSummary"]) {
+  if (summary.salesTotal <= 0) {
+    return true;
+  }
+
+  return summary.expenseTransactionCount > 0 || summary.expenseTotal !== 0;
+}
+
+function shouldShowVarianceMetric(summary: DailyOperationsSnapshot["closeSummary"]) {
+  if (summary.salesTotal <= 0) {
+    return true;
+  }
+
+  return summary.registerVarianceCount > 0 || summary.netCashVariance !== 0;
 }
 
 function formatMoney(currency: string, amount: number) {
@@ -1177,6 +1224,14 @@ function WeekMetricsStrip({
   orgUrlSlug: string;
   storeUrlSlug: string;
 }) {
+  const scrollSelectedDayIntoView = useCallback((element: HTMLElement | null) => {
+    element?.scrollIntoView({
+      behavior: "auto",
+      block: "nearest",
+      inline: "center",
+    });
+  }, [metrics]);
+
   if (metrics.length === 0) return null;
 
   const currentOperatingDate = getLocalOperatingDate();
@@ -1338,7 +1393,9 @@ function WeekMetricsStrip({
                   aria-disabled="true"
                   aria-label={`${formatOperatingDate(metric.operatingDate)} operations unavailable`}
                   className={cardClassName}
+                  data-week-metric-selected={metric.isSelected ? "true" : undefined}
                   key={metric.operatingDate}
+                  ref={metric.isSelected ? scrollSelectedDayIntoView : undefined}
                 >
                   {content}
                 </div>
@@ -1350,8 +1407,10 @@ function WeekMetricsStrip({
                 aria-current={metric.isSelected ? "date" : undefined}
                 aria-label={`View ${formatOperatingDate(metric.operatingDate)} operations`}
                 className={cardClassName}
+                data-week-metric-selected={metric.isSelected ? "true" : undefined}
                 key={metric.operatingDate}
                 params={buildParams(orgUrlSlug, storeUrlSlug)}
+                ref={metric.isSelected ? scrollSelectedDayIntoView : undefined}
                 search={buildDailyOperationsSearch({
                   operatingDate: metric.operatingDate,
                   weekEndOperatingDate,
@@ -1402,6 +1461,9 @@ export function DailyOperationsViewContent({
   const metricLabels = snapshot
     ? getDailyOperationsMetricLabels(snapshot.operatingDate)
     : undefined;
+  const otherPaymentTotals = snapshot
+    ? getOtherPaymentTotals(snapshot.closeSummary)
+    : [];
   const showPrimaryAction = snapshot
     ? shouldShowPrimaryAction(snapshot)
     : false;
@@ -1543,6 +1605,42 @@ export function DailyOperationsViewContent({
                       </FinancialValue>
                     }
                   />
+                  {otherPaymentTotals.map((paymentTotal) => {
+                    const paymentMethodLabel = formatPaymentMethodLabel(
+                      paymentTotal.method,
+                    );
+
+                    return (
+                      <OperationsSummaryMetric
+                        helper={formatPaymentCount(
+                          paymentTotal.transactionCount,
+                        )}
+                        key={paymentTotal.method}
+                        label={paymentMethodLabel}
+                        link={{
+                          ariaLabel: `Open ${paymentMethodLabel} transactions`,
+                          orgUrlSlug,
+                          search: buildOperationsTransactionSearch({
+                            operatingDate: snapshot.operatingDate,
+                            paymentMethod: paymentTotal.method,
+                          }),
+                          storeUrlSlug,
+                          to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions",
+                        }}
+                        value={
+                          <FinancialValue
+                            canView={hasFinancialDetailsAccess}
+                            label={paymentMethodLabel}
+                          >
+                            {formatMoney(
+                              snapshot.currency ?? currency,
+                              paymentTotal.amount,
+                            )}
+                          </FinancialValue>
+                        }
+                      />
+                    );
+                  })}
                   <OperationsSummaryMetric
                     helper={formatCarriedOverRegisterCount(
                       snapshot.closeSummary.carriedOverRegisterCount,
@@ -1560,41 +1658,54 @@ export function DailyOperationsViewContent({
                       </FinancialValue>
                     }
                   />
-                  <OperationsSummaryMetric
-                    helper={formatEntityCount(
-                      snapshot.closeSummary.expenseTransactionCount,
-                      "expense transaction",
-                    )}
-                    label="Expenses"
-                    value={
-                      <FinancialValue
-                        canView={hasFinancialDetailsAccess}
-                        label="Expenses"
-                      >
-                        {formatMoney(
-                          snapshot.currency ?? currency,
-                          snapshot.closeSummary.expenseTotal,
-                        )}
-                      </FinancialValue>
-                    }
-                  />
-                  <OperationsSummaryMetric
-                    helper={formatRegisterVarianceCount(
-                      snapshot.closeSummary.registerVarianceCount,
-                    )}
-                    label="Variance"
-                    value={
-                      <FinancialValue
-                        canView={hasFinancialDetailsAccess}
-                        label="Variance"
-                      >
-                        {formatMoney(
-                          snapshot.currency ?? currency,
-                          snapshot.closeSummary.netCashVariance,
-                        )}
-                      </FinancialValue>
-                    }
-                  />
+                  {shouldShowExpenseMetric(snapshot.closeSummary) ? (
+                    <OperationsSummaryMetric
+                      helper={formatEntityCount(
+                        snapshot.closeSummary.expenseTransactionCount,
+                        "expense transaction",
+                      )}
+                      label="Expenses"
+                      link={{
+                        ariaLabel: "Open expense reports",
+                        orgUrlSlug,
+                        search: buildOperationsExpenseSearch(
+                          snapshot.operatingDate,
+                        ),
+                        storeUrlSlug,
+                        to: "/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports",
+                      }}
+                      value={
+                        <FinancialValue
+                          canView={hasFinancialDetailsAccess}
+                          label="Expenses"
+                        >
+                          {formatMoney(
+                            snapshot.currency ?? currency,
+                            snapshot.closeSummary.expenseTotal,
+                          )}
+                        </FinancialValue>
+                      }
+                    />
+                  ) : null}
+                  {shouldShowVarianceMetric(snapshot.closeSummary) ? (
+                    <OperationsSummaryMetric
+                      helper={formatRegisterVarianceCount(
+                        snapshot.closeSummary.registerVarianceCount,
+                      )}
+                      label="Variance"
+                      value={
+                        <FinancialValue
+                          canView={hasFinancialDetailsAccess}
+                          label="Variance"
+                        >
+                          {formatMoney(
+                            snapshot.currency ?? currency,
+                            snapshot.closeSummary.netCashVariance,
+                          )}
+                        </FinancialValue>
+                      }
+                    />
+                  ) : null}
                 </div>
 
                 <WeekMetricsStrip

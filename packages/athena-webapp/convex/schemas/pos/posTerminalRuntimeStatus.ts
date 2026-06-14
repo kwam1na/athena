@@ -40,6 +40,11 @@ export const posTerminalRuntimeAppSessionRecoveryValidator = v.object({
   status: posTerminalRuntimeAppSessionRecoveryStatusValidator,
 });
 
+export const posTerminalRuntimeAppShellValidator = v.object({
+  observedAt: v.number(),
+  ready: v.boolean(),
+});
+
 export const posTerminalRuntimeBrowserInfoValidator = v.object({
   userAgent: v.optional(v.string()),
   platform: v.optional(v.string()),
@@ -107,6 +112,20 @@ export const posTerminalRuntimeSaleAuthorityValidator = v.object({
   ),
 });
 
+export const posTerminalRuntimeActiveRegisterSessionValidator = v.object({
+  cloudRegisterSessionId: v.optional(v.string()),
+  localRegisterSessionId: v.string(),
+  observedAt: v.number(),
+  openedAt: v.optional(v.number()),
+  registerNumber: v.optional(v.string()),
+  status: v.union(
+    v.literal("open"),
+    v.literal("active"),
+    v.literal("closing"),
+    v.literal("closed"),
+  ),
+});
+
 export const posTerminalRuntimeSnapshotsValidator = v.object({
   catalogAgeMs: v.optional(v.number()),
   serviceCatalogAgeMs: v.optional(v.number()),
@@ -161,10 +180,14 @@ export const posTerminalRuntimeStatusSchema = v.object({
   appSessionRecovery: v.optional(
     posTerminalRuntimeAppSessionRecoveryValidator,
   ),
+  appShell: v.optional(posTerminalRuntimeAppShellValidator),
   localStore: posTerminalRuntimeLocalStoreValidator,
   sync: posTerminalRuntimeSyncValidator,
   staffAuthority: posTerminalRuntimeStaffAuthorityValidator,
   saleAuthority: v.optional(posTerminalRuntimeSaleAuthorityValidator),
+  activeRegisterSession: v.optional(
+    posTerminalRuntimeActiveRegisterSessionValidator,
+  ),
   snapshots: posTerminalRuntimeSnapshotsValidator,
   terminalIntegrity: v.optional(posTerminalRuntimeTerminalIntegrityValidator),
   drawerAuthority: v.optional(posTerminalRuntimeDrawerAuthorityValidator),

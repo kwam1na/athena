@@ -8,12 +8,21 @@ export type PosSyncStatusKind =
 export type PosSyncStatusTone = "success" | "neutral" | "warning" | "danger";
 
 export type PosReconciliationItem = {
+  actionPolicy?: "apply_or_reject" | "override_or_reject" | "reject_only";
   createdAt?: number | null;
   expectedCash?: number | null;
   id?: string;
   localEventId?: string | null;
   countedCash?: number | null;
   notes?: string | null;
+  reviewKind?:
+    | "duplicate_register_closeout"
+    | "register_closeout_variance"
+    | "register_not_open_sale"
+    | "server_rejected"
+    | "service_customer_attribution"
+    | "staff_access"
+    | "unknown";
   sequence?: number | null;
   status?: string | null;
   summary?: string | null;
@@ -102,6 +111,13 @@ function normalizeStatus(status?: string | null): PosSyncStatusKind {
 }
 
 export function isRegisterCloseoutReviewItem(item: PosReconciliationItem) {
+  if (
+    item.reviewKind === "duplicate_register_closeout" ||
+    item.reviewKind === "register_closeout_variance"
+  ) {
+    return true;
+  }
+
   const localEventId = item.localEventId?.toLowerCase() ?? "";
   const summary = item.summary?.toLowerCase() ?? "";
 
