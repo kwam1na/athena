@@ -1,10 +1,11 @@
 import { render, screen, within } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ExpenseReportsView } from "./ExpenseReportsView";
 
 const getActiveStoreMock = vi.fn();
 const useQueryMock = vi.fn();
+const useSearchMock = vi.fn();
 
 vi.mock("@tanstack/react-router", () => ({
   Link: ({
@@ -34,6 +35,7 @@ vi.mock("@tanstack/react-router", () => ({
       </a>
     );
   },
+  useSearch: () => useSearchMock(),
 }));
 
 vi.mock("convex/react", () => ({
@@ -103,13 +105,20 @@ vi.mock("@/components/ui/tabs", () => ({
 
 describe("ExpenseReportsView", () => {
   beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 4, 10, 12));
     vi.clearAllMocks();
+    useSearchMock.mockReturnValue({});
     getActiveStoreMock.mockReturnValue({
       activeStore: {
         _id: "store-1",
         currency: "GHS",
       },
     });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("renders expense reports in the workspace frame with back navigation", () => {
@@ -185,5 +194,38 @@ describe("ExpenseReportsView", () => {
     expect(within(card).getByText("Restock drawer supplies.")).toHaveClass(
       "text-sm",
     );
+  });
+
+  it("opens operating-date links on the selected day report list", () => {
+    useSearchMock.mockReturnValue({ operatingDate: "2026-05-08" });
+    useQueryMock.mockReturnValue([
+      {
+        _id: "expense-selected",
+        transactionNumber: "EXP-SELECTED",
+        totalValue: 19800,
+        staffProfileName: "Ada L.",
+        itemCount: 2,
+        completedAt: new Date(2026, 4, 8, 10).getTime(),
+        notes: null,
+      },
+      {
+        _id: "expense-today",
+        transactionNumber: "EXP-TODAY",
+        totalValue: 4200,
+        staffProfileName: "Ada L.",
+        itemCount: 1,
+        completedAt: new Date(2026, 4, 10, 10).getTime(),
+        notes: null,
+      },
+    ]);
+
+    render(<ExpenseReportsView />);
+
+    expect(screen.getByRole("button", { name: "Selected day" })).toHaveAttribute(
+      "data-remote-assist-control-id",
+      "pos-expense-reports-filter-operating-date",
+    );
+    expect(screen.getByText("EXP-SELECTED")).toBeInTheDocument();
+    expect(screen.queryByText("EXP-TODAY")).not.toBeInTheDocument();
   });
 });

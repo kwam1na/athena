@@ -622,6 +622,11 @@ describe("DailyOpeningViewContent", () => {
         "Opening handoff is complete. The store day is ready to run.",
       ).length,
     ).toBeGreaterThan(0);
+    expect(
+      screen.getByRole("button", {
+        name: "Change operating date, currently Friday, May 8, 2026",
+      }),
+    ).toBeInTheDocument();
     expect(screen.getByText("Opening handoff complete")).toBeInTheDocument();
     expect(screen.getByText("Started by")).toBeInTheDocument();
     expect(screen.getByText("Kofi Mensah")).toBeInTheDocument();
@@ -641,6 +646,7 @@ describe("DailyOpeningViewContent", () => {
         occurredAt: Date.UTC(2026, 4, 8, 8, 30),
       },
       startedOpening: {
+        actorType: "automation",
         startedAt: Date.UTC(2026, 4, 8, 8, 30),
       },
       status: "started",
@@ -648,6 +654,9 @@ describe("DailyOpeningViewContent", () => {
 
     expect(screen.getByText("Store day started")).toBeInTheDocument();
     expect(screen.getByText("Athena started Opening Handoff.")).toBeInTheDocument();
+    expect(screen.getByText("Started by")).toBeInTheDocument();
+    expect(screen.getByText("Athena")).toBeInTheDocument();
+    expect(screen.queryByText("Staff unavailable")).not.toBeInTheDocument();
     expect(screen.queryByText("Athena checked Opening Handoff. No change was made.")).not.toBeInTheDocument();
   });
 
@@ -742,6 +751,7 @@ describe("DailyOpeningView", () => {
   beforeEach(() => {
     window.scrollTo = vi.fn();
     vi.clearAllMocks();
+    mockedRouter.search = {};
     mockedHooks.useProtectedAdminPageState.mockReturnValue({
       activeStore: {
         _id: "store-1",
@@ -769,5 +779,19 @@ describe("DailyOpeningView", () => {
       },
     );
     expect(screen.getByText("Opening Handoff")).toBeInTheDocument();
+  });
+
+  it("queries Opening Handoff for the route operating date", () => {
+    mockedRouter.search = { operatingDate: "2026-05-08" };
+
+    render(<DailyOpeningView />);
+
+    expect(mockedHooks.useQuery).toHaveBeenCalledWith(
+      mockedApi.getDailyOpeningSnapshot,
+      expect.objectContaining({
+        operatingDate: "2026-05-08",
+        storeId: "store-1",
+      }),
+    );
   });
 });

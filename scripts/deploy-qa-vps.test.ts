@@ -83,6 +83,8 @@ describe("VPS QA deploy contract", () => {
 
     expect(deployScript).toContain("athena-local");
     expect(deployScript).toContain("storefront-local");
+    expect(deployScript).toContain("convex-athena-local");
+    expect(deployScript).toContain("convex-storefront-local");
     expect(deployScript).toContain("full-prod-local");
     expect(deployScript).toContain("build_static_app_locally()");
     expect(deployScript).toContain("deploy_static_app_local()");
@@ -95,17 +97,29 @@ describe("VPS QA deploy contract", () => {
     expect(deployScript).toContain("deploy_storefront_local");
     expect(deployScript).toMatch(/athena\)\s+deploy_athena_local/);
     expect(deployScript).toMatch(
+      /convex-athena-local\)\s+deploy_convex_prod[\s\S]*deploy_athena_local[\s\S]*;;/,
+    );
+    expect(deployScript).toMatch(
+      /convex-storefront-local\)\s+deploy_convex_prod[\s\S]*deploy_storefront_local[\s\S]*;;/,
+    );
+    expect(deployScript).toMatch(
       /full-prod\)\s+require_remote_source[\s\S]*deploy_athena_local[\s\S]*deploy_storefront_local/,
     );
     expect(deployScript).toContain("athena-remote");
     expect(interactiveScript).toContain("athena-webapp local build");
     expect(interactiveScript).toContain("storefront local build");
+    expect(interactiveScript).toContain("convex + athena local build");
+    expect(interactiveScript).toContain("convex + storefront local build");
     expect(interactiveScript).toContain("full-deploy local builds");
     expect(interactiveScript).toContain("deploy_vps athena-local");
     expect(interactiveScript).toContain("deploy_vps storefront-local");
+    expect(interactiveScript).toContain("deploy_vps convex-athena-local");
+    expect(interactiveScript).toContain("deploy_vps convex-storefront-local");
     expect(interactiveScript).toContain("deploy_vps full-prod-local");
     expect(runbook).toContain("scripts/deploy-vps.sh athena-local");
     expect(runbook).toContain("scripts/deploy-vps.sh storefront-local");
+    expect(runbook).toContain("scripts/deploy-vps.sh convex-athena-local");
+    expect(runbook).toContain("scripts/deploy-vps.sh convex-storefront-local");
     expect(runbook).toContain("scripts/deploy-vps.sh full-prod-local");
   });
 

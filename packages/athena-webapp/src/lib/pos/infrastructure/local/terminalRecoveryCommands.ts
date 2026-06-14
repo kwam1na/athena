@@ -556,12 +556,29 @@ function preconditionFailed(
   command: PosTerminalRecoveryCommand,
   reason: "precondition_failed" | "unsafe_authority_state" = "precondition_failed",
 ): PosTerminalRecoveryCommandResult {
+  const commandType = getCommandType(command) ?? "unknown_command";
+
   return {
     commandId: getCommandId(command),
+    message: getPreconditionFailureMessage(commandType, reason),
     reason,
     status: "precondition_failed",
-    type: getCommandType(command) ?? "unknown_command",
+    type: commandType,
   };
+}
+
+function getPreconditionFailureMessage(
+  commandType: string,
+  reason: "precondition_failed" | "unsafe_authority_state",
+) {
+  if (
+    commandType === "clear_stale_drawer_authority" &&
+    reason === "unsafe_authority_state"
+  ) {
+    return "Drawer repair expected a blocked drawer authority record, but this terminal no longer reported that same block.";
+  }
+
+  return "Terminal evidence changed before this recovery command could run.";
 }
 
 function getCommandId(command: PosTerminalRecoveryCommand) {

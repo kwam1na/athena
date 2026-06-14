@@ -181,15 +181,20 @@ scripts/deploy-vps.sh athena-local
 scripts/deploy-vps.sh storefront-local
 scripts/deploy-vps.sh valkey-proxy
 scripts/deploy-vps.sh qa
+scripts/deploy-vps.sh convex-athena-local
+scripts/deploy-vps.sh convex-storefront-local
 scripts/deploy-vps.sh full-prod
 scripts/deploy-vps.sh full-prod-local
 scripts/deploy-vps.sh all
 scripts/deploy-vps.sh check-git
 ```
 
-`athena`, `storefront`, `full-prod`, and `all` are local-build production deploy
-paths. They build static bundles from the local checkout before uploading them
-to the VPS. `full-prod-local` remains as an explicit alias for older runbooks.
+`athena`, `storefront`, `convex-athena-local`, `convex-storefront-local`,
+`full-prod`, and `all` are local-build production deploy paths. They build
+static bundles from the local checkout before uploading them to the VPS. Use
+`convex-athena-local` or `convex-storefront-local` when a change needs Convex
+plus exactly one static app build, but does not need the Valkey proxy
+redeployed. `full-prod-local` remains as an explicit alias for older runbooks.
 Use `athena-remote` only when you intentionally want the VPS checkout to build
 the Athena admin app.
 

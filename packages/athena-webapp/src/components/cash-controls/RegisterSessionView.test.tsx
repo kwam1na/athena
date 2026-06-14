@@ -707,14 +707,105 @@ describe("RegisterSessionViewContent", () => {
     ).toBeInTheDocument();
   });
 
-  it("communicates synced closeouts that cannot be applied as reject-only", () => {
+  it("resolves only the displayed synced closeout review item", async () => {
+    const user = userEvent.setup();
+    const onAuthenticateStaff = vi.fn().mockResolvedValue(
+      ok({
+        activeRoles: ["manager"],
+        staffProfile: { fullName: "Ato Kofi" },
+        staffProfileId: "manager-1",
+      }),
+    );
+    const onResolveSyncReview = vi
+      .fn()
+      .mockResolvedValue(
+        ok({ action: "resolved", projectedCount: 0, resolvedCount: 1 }),
+      );
+
     render(
       <RegisterSessionViewContent
         currency="GHS"
         isLoading={false}
         onRecordDeposit={vi.fn()}
         {...closeoutHandlers}
-        onResolveSyncReview={vi.fn()}
+        onAuthenticateStaff={onAuthenticateStaff}
+        onResolveSyncReview={onResolveSyncReview}
+        registerSessionSnapshot={{
+          ...baseSnapshot,
+          registerSession: {
+            ...baseSnapshot.registerSession,
+            countedCash: undefined,
+            status: "active",
+            variance: undefined,
+            localSyncStatus: {
+              status: "needs_review",
+              reconciliationItems: [
+                {
+                  countedCash: 16100,
+                  expectedCash: 17600,
+                  id: "sync_conflict_closeout",
+                  localEventId: "event-register-closeout-1",
+                  sequence: 7,
+                  status: "needs_review",
+                  summary:
+                    "Register closeout variance requires manager review before synced closeout can be applied.",
+                  type: "permission",
+                  variance: -1500,
+                },
+                {
+                  id: "sync_conflict_sale",
+                  sequence: 8,
+                  status: "needs_review",
+                  summary: "Service line is missing customer attribution.",
+                  type: "permission",
+                },
+              ],
+            },
+          },
+        }}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: "Approve synced closeout" }),
+    );
+    await user.click(
+      screen.getByRole("button", {
+        name: "Confirm staff for Approve synced closeout",
+      }),
+    );
+
+    expect(onResolveSyncReview).toHaveBeenCalledWith({
+      actorStaffProfileId: "manager-1",
+      decision: "approved",
+      registerSessionId: "session-1",
+      reviewConflictIds: ["sync_conflict_closeout"],
+    });
+  });
+
+  it("communicates synced closeouts that cannot be applied as reject-only", async () => {
+    const user = userEvent.setup();
+    const onAuthenticateStaff = vi.fn().mockResolvedValue(
+      ok({
+        activeRoles: ["manager"],
+        staffProfile: { fullName: "Ato Kofi" },
+        staffProfileId: "manager-1",
+      }),
+    );
+    const onResolveSyncReview = vi
+      .fn()
+      .mockResolvedValue(
+        ok({ action: "rejected", projectedCount: 0, resolvedCount: 1 }),
+      );
+
+    render(
+      <RegisterSessionViewContent
+        currency="GHS"
+        isLoading={false}
+        onRecordDeposit={vi.fn()}
+        {...closeoutHandlers}
+        onAuthenticateStaff={onAuthenticateStaff}
+        onResolveSyncReview={onResolveSyncReview}
         registerSessionSnapshot={{
           ...baseSnapshot,
           registerSession: {
@@ -763,6 +854,68 @@ describe("RegisterSessionViewContent", () => {
     expect(
       screen.getByRole("button", { name: "Reject synced closeout" }),
     ).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: "Reject synced closeout" }),
+    );
+    await user.click(
+      screen.getByRole("button", {
+        name: "Confirm staff for Reject synced closeout",
+      }),
+    );
+
+    expect(onResolveSyncReview).toHaveBeenCalledWith({
+      actorStaffProfileId: "manager-1",
+      decision: "rejected",
+      registerSessionId: "session-1",
+      reviewConflictIds: ["sync_conflict_closed_closeout"],
+    });
+  });
+
+  it("does not keep rejected duplicate closeout evidence in the active review surface", () => {
+    render(
+      <RegisterSessionViewContent
+        currency="GHS"
+        isLoading={false}
+        onRecordDeposit={vi.fn()}
+        {...closeoutHandlers}
+        onResolveSyncReview={vi.fn()}
+        registerSessionSnapshot={{
+          ...baseSnapshot,
+          registerSession: {
+            ...baseSnapshot.registerSession,
+            status: "closed",
+            localSyncStatus: {
+              status: "needs_review",
+              reconciliationItems: [
+                {
+                  createdAt: new Date("2026-05-20T14:30:00.000Z").getTime(),
+                  id: "sync_conflict_closed_closeout",
+                  localEventId: "event-register-closed-1",
+                  reviewKind: "duplicate_register_closeout",
+                  sequence: 2,
+                  status: "rejected",
+                  summary:
+                    "Register session is not open for synced POS closeout.",
+                  type: "register_closeout",
+                },
+              ],
+            },
+          },
+        }}
+      />,
+    );
+
+    expect(
+      screen.queryByText("Synced closeout cannot be applied"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Duplicate closeout")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Reject synced closeout" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Closeout review pending"),
+    ).not.toBeInTheDocument();
   });
 
   it("combines synced register review items with safe event evidence", () => {

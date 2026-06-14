@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   ingestLocalEvents: vi.fn(),
   listTerminalRecoveryCommands: vi.fn(),
   reportTerminalRuntimeStatus: vi.fn(),
+  refreshTerminalStaffAuthority: vi.fn(),
 }));
 
 vi.mock("convex/react", () => ({
@@ -19,6 +20,9 @@ vi.mock("convex/react", () => ({
     }
     if (mutation === "acknowledgeTerminalRecoveryCommand") {
       return mocks.acknowledgeTerminalRecoveryCommand;
+    }
+    if (mutation === "refreshTerminalStaffAuthority") {
+      return mocks.refreshTerminalStaffAuthority;
     }
     return mocks.ingestLocalEvents;
   },
@@ -42,6 +46,11 @@ vi.mock("~/convex/_generated/api", () => ({
         },
       },
     },
+    operations: {
+      staffCredentials: {
+        refreshTerminalStaffAuthority: "refreshTerminalStaffAuthority",
+      },
+    },
   },
 }));
 
@@ -59,6 +68,7 @@ import {
   writeReturnedLocalCloudMappings,
 } from "./usePosLocalSyncRuntime";
 import type {
+  PosDrawerAuthorityState,
   PosLocalEventRecord,
   PosTerminalIntegrityState,
 } from "./posLocalStore";
@@ -91,6 +101,10 @@ describe("usePosLocalSyncRuntimeStatus", () => {
     mocks.acknowledgeTerminalRecoveryCommand.mockResolvedValue({
       kind: "ok",
       data: {},
+    });
+    mocks.refreshTerminalStaffAuthority.mockResolvedValue({
+      kind: "ok",
+      data: [],
     });
     Object.defineProperty(globalThis.navigator, "onLine", {
       configurable: true,
@@ -3905,6 +3919,193 @@ describe("usePosLocalSyncRuntimeStatus", () => {
     expect(retry).toHaveBeenCalled();
   });
 
+  it("refreshes drawer authority before publishing the post-recovery check-in", async () => {
+    let drawerAuthority: PosDrawerAuthorityState | null = {
+      cloudRegisterSessionId: "register-cloud-1",
+      localRegisterSessionId: "register-local-1",
+      observedAt: 10,
+      reason: "cloud_closed",
+      status: "blocked",
+      storeId: "store-1",
+      terminalId: "terminal-cloud-1",
+    };
+    const command = buildRecoveryCommand({
+      commandContext: {
+        blockerReason: "cloud_closed",
+        cloudRegisterSessionId: "register-cloud-1",
+        localEventSettlement: "settled",
+        localRegisterSessionId: "register-local-1",
+      },
+      commandType: "clear_stale_drawer_authority",
+    });
+    const commandResult = { kind: "ok", data: [command] };
+    mocks.listTerminalRecoveryCommands.mockImplementation((args) =>
+      args === "skip" ? undefined : commandResult,
+    );
+    mocks.claimTerminalRecoveryCommand.mockResolvedValue({
+      kind: "ok",
+      data: command,
+    });
+    const store = {
+      ...buildRecoveryCommandStore(),
+      clearDrawerAuthorityState: vi.fn(async () => {
+        drawerAuthority = null;
+        return { ok: true, value: null };
+      }),
+      listEvents: vi.fn(async () => ({
+        ok: true,
+        value: [
+          buildLocalEvent({
+            localEventId: "event-open",
+            localRegisterSessionId: "register-local-1",
+            sequence: 1,
+            sync: { status: "synced" },
+            terminalId: "terminal-cloud-1",
+            type: "register.opened",
+          }),
+        ],
+      })),
+      listLocalCloudMappings: vi.fn(async () => ({
+        ok: true,
+        value: [
+          {
+            cloudId: "register-cloud-1",
+            cloudTable: "posSession",
+            createdAt: 1,
+            localId: "register-local-1",
+            localIdKind: "registerSession",
+            storeId: "store-1",
+            terminalId: "terminal-cloud-1",
+          },
+        ],
+      })),
+      readDrawerAuthorityState: vi.fn(async () => ({
+        ok: true,
+        value: drawerAuthority,
+      })),
+    };
+
+    renderHook(() =>
+      usePosLocalSyncRuntimeStatus({
+        mode: "status-only",
+        storeFactory: () => store as never,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(mocks.acknowledgeTerminalRecoveryCommand).toHaveBeenCalledWith({
+        commandId: "command-1",
+        message: undefined,
+        result: "completed",
+        storeId: "store-1",
+        syncSecretHash: "sync-secret-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+    await waitFor(() =>
+      expect(mocks.reportTerminalRuntimeStatus).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: expect.not.objectContaining({
+            drawerAuthority: expect.objectContaining({ status: "blocked" }),
+          }),
+        }),
+      ),
+    );
+    expect(store.clearDrawerAuthorityState).toHaveBeenCalledWith({
+      localRegisterSessionId: "register-local-1",
+      storeId: "store-1",
+      terminalId: "terminal-cloud-1",
+    });
+  });
+
+  it("refreshes staff authority through the terminal recovery command path", async () => {
+    const command = buildRecoveryCommand({
+      commandType: "refresh_staff_authority",
+      expectedEvidence: {
+        staffAuthorityStatus: "ready",
+      },
+    });
+    const records = [
+      {
+        activeRoles: ["cashier"],
+        credentialId: "credential-1",
+        credentialVersion: 1,
+        displayName: "Ato K.",
+        expiresAt: Date.now() + 60_000,
+        issuedAt: Date.now(),
+        organizationId: "org-1",
+        refreshedAt: Date.now(),
+        staffProfileId: "staff-1",
+        status: "active",
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+        username: "ato",
+        verifier: {
+          algorithm: "PBKDF2-SHA256",
+          hash: "hash-1",
+          iterations: 120_000,
+          salt: "salt-1",
+          version: 1,
+        },
+      },
+    ];
+    mocks.listTerminalRecoveryCommands.mockImplementation((args) =>
+      args === "skip" ? undefined : { kind: "ok", data: [command] },
+    );
+    mocks.claimTerminalRecoveryCommand.mockResolvedValue({
+      kind: "ok",
+      data: command,
+    });
+    mocks.refreshTerminalStaffAuthority.mockResolvedValue({
+      kind: "ok",
+      data: records,
+    });
+    const store = {
+      ...buildRecoveryCommandStore(),
+      getStaffAuthorityReadiness: vi.fn(async () => ({
+        ok: true,
+        value: "ready",
+      })),
+      replaceStaffAuthoritySnapshot: vi.fn(async () => ({
+        ok: true,
+        value: records,
+      })),
+    };
+
+    renderHook(() =>
+      usePosLocalSyncRuntimeStatus({
+        mode: "status-only",
+        storeFactory: () => store as never,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(mocks.refreshTerminalStaffAuthority).toHaveBeenCalledWith({
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+    expect(store.replaceStaffAuthoritySnapshot).toHaveBeenCalledWith({
+      records,
+      storeId: "store-1",
+      terminalId: "terminal-cloud-1",
+    });
+    await waitFor(() =>
+      expect(mocks.acknowledgeTerminalRecoveryCommand).toHaveBeenCalledWith({
+        commandId: "command-1",
+        message: "Staff authority refreshed.",
+        result: "completed",
+        storeId: "store-1",
+        syncSecretHash: "sync-secret-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+  });
+
   it("acknowledges safe recovery precondition drift distinctly", async () => {
     const command = buildRecoveryCommand({
       commandContext: {
@@ -3946,7 +4147,8 @@ describe("usePosLocalSyncRuntimeStatus", () => {
     await waitFor(() =>
       expect(mocks.acknowledgeTerminalRecoveryCommand).toHaveBeenCalledWith({
         commandId: "command-1",
-        message: undefined,
+        message:
+          "Drawer repair expected a blocked drawer authority record, but this terminal no longer reported that same block.",
         result: "precondition_failed",
         storeId: "store-1",
         syncSecretHash: "sync-secret-1",

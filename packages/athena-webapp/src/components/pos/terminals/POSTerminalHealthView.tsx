@@ -1,7 +1,17 @@
 import { Link, useParams } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 import type { FunctionReference } from "convex/server";
-import { Activity, AlertTriangle, MonitorCheck } from "lucide-react";
+import type { ReactNode } from "react";
+import {
+  Activity,
+  AlertTriangle,
+  ArrowUpRight,
+  CheckCircle2,
+  CircleAlert,
+  CircleHelp,
+  Clock3,
+  MonitorCheck,
+} from "lucide-react";
 
 import View from "@/components/View";
 import { FadeIn } from "@/components/common/FadeIn";
@@ -18,21 +28,26 @@ import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
+import { cn } from "@/lib/utils";
 import {
   buildPosOfflineReadinessSummary,
+  type PosOfflineReadinessSignal,
   type PosOfflineReadinessSummary,
 } from "@/offline/posOfflineReadiness";
 import {
   buildTerminalRecoveryPresentation,
   classifyTerminalHealth,
+  formatAge,
   formatRegisterNumber,
   formatTerminalTimestamp,
   getReviewEvidenceCount,
-  getSnapshotAgeSummary,
   getStaffAuthorityLabel,
   getPrimaryTerminalAttentionReason,
 } from "./terminalHealthPresentation";
-import type { TerminalHealthSummary } from "./terminalHealthTypes";
+import type {
+  TerminalHealthSummary,
+  TerminalRuntimeStatus,
+} from "./terminalHealthTypes";
 import { getOrigin } from "~/src/lib/navigationUtils";
 
 const posTerminalApi = api.inventory.posTerminal as unknown as {
@@ -76,6 +91,16 @@ function OfflineReadinessDiagnostic({
 }: {
   readiness: PosOfflineReadinessSummary;
 }) {
+  const signalsNeedingAttention = readiness.signals.filter(
+    (signal) => signal.status === "needs_attention",
+  );
+  const unknownSignals = readiness.signals.filter(
+    (signal) => signal.status === "unknown",
+  );
+  const readySignals = readiness.signals.filter((signal) =>
+    ["local_continuation", "ready"].includes(signal.status),
+  );
+
   return (
     <div className="mt-layout-md border-t border-border pt-layout-md">
       <div className="flex flex-wrap items-start justify-between gap-layout-sm">
@@ -87,28 +112,238 @@ function OfflineReadinessDiagnostic({
             {readiness.description}
           </p>
         </div>
-        <span className="inline-flex rounded-full border border-border bg-background px-layout-sm py-layout-2xs text-sm text-muted-foreground">
+        <span className="inline-flex rounded-full border border-border px-layout-sm py-layout-2xs text-sm text-muted-foreground">
           {readiness.readyCount} of {readiness.signals.length} ready
         </span>
       </div>
 
-      <dl className="mt-layout-md grid gap-layout-sm md:grid-cols-2 xl:grid-cols-3">
-        {readiness.signals.map((signal) => (
-          <div
-            className="rounded-md border border-border bg-background px-layout-sm py-layout-xs"
-            key={signal.domain}
-          >
-            <dt className="text-xs font-medium uppercase text-muted-foreground">
-              {signal.label}
-            </dt>
-            <dd className="mt-layout-2xs text-sm text-foreground">
-              {signal.description}
-            </dd>
-          </div>
-        ))}
-      </dl>
+      {signalsNeedingAttention.length > 0 ? (
+        <ReadinessSignalList
+          className="mt-layout-md"
+          signals={signalsNeedingAttention}
+        />
+      ) : null}
+      {unknownSignals.length > 0 ? (
+        <ReadinessSignalList
+          className={
+            signalsNeedingAttention.length > 0
+              ? "mt-layout-sm"
+              : "mt-layout-md"
+          }
+          signals={unknownSignals}
+        />
+      ) : null}
+      {readySignals.length > 0 ? (
+        <ReadySignalSummary
+          className={
+            signalsNeedingAttention.length > 0 || unknownSignals.length > 0
+              ? "mt-layout-sm"
+              : "mt-layout-md"
+          }
+          signals={readySignals}
+        />
+      ) : null}
     </div>
   );
+}
+
+function ReadySignalSummary({
+  className,
+  signals,
+}: {
+  className?: string;
+  signals: PosOfflineReadinessSignal[];
+}) {
+  return (
+    <div
+      className={cn(
+        "flex flex-wrap items-center gap-x-layout-sm gap-y-layout-2xs text-sm text-muted-foreground",
+        className,
+      )}
+    >
+      <span className="inline-flex items-center gap-layout-xs font-medium text-foreground">
+        <CheckCircle2 aria-hidden="true" className="h-3.5 w-3.5 text-success" />
+        Ready signals
+      </span>
+      <span>{signals.map((signal) => signal.label).join(", ")}</span>
+    </div>
+  );
+}
+
+function ReadinessSignalList({
+  className,
+  signals,
+}: {
+  className?: string;
+  signals: PosOfflineReadinessSignal[];
+}) {
+  return (
+    <dl className={cn("divide-y divide-border", className)}>
+      {signals.map((signal) => (
+        <div
+          className="grid gap-layout-xs py-layout-xs text-sm md:grid-cols-[11rem_minmax(0,1fr)]"
+          key={signal.domain}
+        >
+          <dt className="flex items-center gap-layout-xs font-medium text-foreground">
+            <ReadinessSignalIcon signal={signal} />
+            <span>{signal.label}</span>
+          </dt>
+          <dd className="text-muted-foreground md:text-right">
+            {signal.description}
+          </dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function ReadinessSignalIcon({
+  signal,
+}: {
+  signal: PosOfflineReadinessSignal;
+}) {
+  if (signal.status === "ready" || signal.status === "local_continuation") {
+    return (
+      <CheckCircle2
+        aria-hidden="true"
+        className="h-3.5 w-3.5 text-success"
+      />
+    );
+  }
+
+  if (signal.status === "needs_attention") {
+    return (
+      <CircleAlert
+        aria-hidden="true"
+        className="h-3.5 w-3.5 text-warning"
+      />
+    );
+  }
+
+  return (
+    <CircleHelp
+      aria-hidden="true"
+      className="h-3.5 w-3.5 text-muted-foreground"
+    />
+  );
+}
+
+function TerminalFact({
+  label,
+  value,
+}: {
+  label: string;
+  value: ReactNode;
+}) {
+  return (
+    <div>
+      <dt className="text-xs font-medium uppercase text-muted-foreground">
+        {label}
+      </dt>
+      <dd className="mt-1 text-sm text-foreground">{value}</dd>
+    </div>
+  );
+}
+
+function RegisterSessionFactValue({
+  orgUrlSlug,
+  registerSessionLink,
+  runtimeStatus,
+  storeUrlSlug,
+}: {
+  orgUrlSlug: string;
+  registerSessionLink?: TerminalHealthSummary["registerSessionLink"];
+  runtimeStatus?: TerminalRuntimeStatus | null;
+  storeUrlSlug: string;
+}) {
+  const isLocalContinuation =
+    runtimeStatus?.appSessionRecovery?.status === "waiting_for_network";
+  const label = isLocalContinuation
+    ? "Local sale continuation"
+    : registerSessionLink
+      ? "Active in cash controls"
+      : "No active session";
+  const registerSessionId = registerSessionLink?.registerSessionId;
+
+  if (!registerSessionId || isLocalContinuation) {
+    return <>{label}</>;
+  }
+
+  return (
+    <Link
+      className="inline-flex items-center gap-layout-xs font-medium text-foreground underline-offset-4 hover:underline"
+      params={{
+        orgUrlSlug,
+        sessionId: String(registerSessionId),
+        storeUrlSlug,
+      }}
+      search={{ o: getOrigin() }}
+      to="/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId"
+    >
+      {label}
+      <ArrowUpRight aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
+    </Link>
+  );
+}
+
+function LocalDataFreshness({
+  snapshots,
+}: {
+  snapshots?: TerminalRuntimeStatus["snapshots"] | null;
+}) {
+  const rows = getLocalDataFreshnessRows(snapshots);
+
+  return (
+    <div className="space-y-layout-2xs">
+      {rows.map((row) => (
+        <div
+          className="flex flex-wrap items-baseline gap-x-layout-xs"
+          key={row.label}
+        >
+          <span className="text-foreground">{row.label}</span>
+          <span className="text-muted-foreground">{row.value}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function getLocalDataFreshnessRows(
+  snapshots?: TerminalRuntimeStatus["snapshots"] | null,
+) {
+  if (!snapshots) {
+    return [{ label: "Offline checkout", value: "Not reported" }];
+  }
+
+  const sellingDataAges = [
+    snapshots.availabilityAgeMs,
+    snapshots.catalogAgeMs,
+    snapshots.serviceCatalogAgeMs,
+  ].filter(
+    (age): age is number => typeof age === "number" && Number.isFinite(age),
+  );
+  const rows: Array<{ label: string; value: string }> = [];
+
+  if (sellingDataAges.length > 0) {
+    rows.push({
+      label: "Products and stock",
+      value: formatAge(Math.max(...sellingDataAges)),
+    });
+  }
+
+  if (
+    typeof snapshots.registerReadModelAgeMs === "number" &&
+    Number.isFinite(snapshots.registerReadModelAgeMs)
+  ) {
+    rows.push({
+      label: "Register details",
+      value: formatAge(snapshots.registerReadModelAgeMs),
+    });
+  }
+
+  return rows.length > 0
+    ? rows
+    : [{ label: "Offline checkout", value: "Not reported" }];
 }
 
 function buildTerminalOfflineReadiness(
@@ -122,7 +357,9 @@ function buildTerminalOfflineReadiness(
     appSession: appSessionRecovery
       ? getAppSessionReadinessInput(appSessionRecovery)
       : null,
-    appShell: null,
+    appShell: runtimeStatus?.appShell
+      ? { ready: runtimeStatus.appShell.ready }
+      : null,
     terminalSeed: runtimeStatus
       ? { ready: runtimeStatus.localStore.terminalSeedReady }
       : null,
@@ -176,6 +413,7 @@ export function POSTerminalHealthViewContent({
   const staleCount = healthRows.filter((row) =>
     ["No check-in", "Stale"].includes(row.classification.label),
   ).length;
+  const loadingMetricValue = isLoading ? "-" : null;
 
   return (
     <View hideBorder hideHeaderBottomBorder scrollMode="page">
@@ -199,10 +437,22 @@ export function POSTerminalHealthViewContent({
           ) : (
             <>
               <section className="grid gap-layout-sm sm:grid-cols-2 xl:grid-cols-4">
-                <CountMetric label="Terminals" value={healthRows.length} />
-                <CountMetric label="Pending sync" value={pendingCount} />
-                <CountMetric label="Needs review" value={reviewCount} />
-                <CountMetric label="Stale or missing" value={staleCount} />
+                <CountMetric
+                  label="Terminals"
+                  value={loadingMetricValue ?? healthRows.length}
+                />
+                <CountMetric
+                  label="Pending sync"
+                  value={loadingMetricValue ?? pendingCount}
+                />
+                <CountMetric
+                  label="Needs review"
+                  value={loadingMetricValue ?? reviewCount}
+                />
+                <CountMetric
+                  label="Stale or missing"
+                  value={loadingMetricValue ?? staleCount}
+                />
               </section>
 
               {isLoading ? null : healthRows.length === 0 ? (
@@ -224,6 +474,20 @@ export function POSTerminalHealthViewContent({
                     const offlineReadiness =
                       buildTerminalOfflineReadiness(summary);
                     const recovery = buildTerminalRecoveryPresentation(summary);
+                    const syncReviewCount =
+                      (runtimeStatus?.sync.reviewEventCount ?? 0) +
+                      getReviewEvidenceCount(summary.syncEvidence);
+                    const syncSummary = runtimeStatus
+                      ? `${runtimeStatus.sync.pendingEventCount} pending / ${syncReviewCount} review`
+                      : "No runtime sync check-in";
+                    const cloudCursorSummary =
+                      summary.syncEvidence.acceptedThroughSequence == null
+                        ? "No accepted sequence"
+                        : `Accepted through ${summary.syncEvidence.acceptedThroughSequence}`;
+	                    const operationalNote =
+	                      classification.label === "Healthy"
+	                        ? null
+	                        : (primaryReason?.summary ?? classification.description);
 
                     return (
                       <article
@@ -251,12 +515,6 @@ export function POSTerminalHealthViewContent({
                                 )}
                               </span>
                               <span>
-                                Last check-in{" "}
-                                {formatTerminalTimestamp(
-                                  runtimeStatus?.receivedAt,
-                                )}
-                              </span>
-                              <span>
                                 {getStaffAuthorityLabel(
                                   runtimeStatus?.staffAuthority,
                                 )}
@@ -271,61 +529,66 @@ export function POSTerminalHealthViewContent({
                           </Badge>
                         </div>
 
-                        <div className="mt-layout-md grid gap-layout-sm md:grid-cols-2 xl:grid-cols-5">
+                        <div className="mt-layout-md grid gap-layout-md border-t border-border pt-layout-md lg:grid-cols-[minmax(0,1.2fr)_minmax(26rem,0.8fr)]">
                           <div>
                             <p className="text-xs font-medium uppercase text-muted-foreground">
-                              Sync
+                              Sales readiness
                             </p>
-                            <p className="mt-1 text-sm text-foreground">
-                              {runtimeStatus
-                                ? `${runtimeStatus.sync.pendingEventCount} pending / ${runtimeStatus.sync.reviewEventCount + getReviewEvidenceCount(summary.syncEvidence)} review`
-                                : "No runtime sync check-in"}
-                            </p>
-                            <p className="mt-1 text-xs text-muted-foreground">
-                              {primaryReason?.summary ?? classification.description}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-xs font-medium uppercase text-muted-foreground">
-                              Snapshot age
-                            </p>
-                            <p className="mt-1 text-sm text-foreground">
-                              {getSnapshotAgeSummary(runtimeStatus?.snapshots)}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-xs font-medium uppercase text-muted-foreground">
-                              App-session posture
-                            </p>
-                            <p className="mt-1 text-sm text-foreground">
-                              {runtimeStatus?.appSessionRecovery?.status ===
-                              "waiting_for_network"
-                                ? "Local sale continuation"
-                                : "Register session evidence is shown in cash controls"}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-xs font-medium uppercase text-muted-foreground">
-                              Cloud cursor
-                            </p>
-                            <p className="mt-1 text-sm text-foreground">
-                              {summary.syncEvidence.acceptedThroughSequence ==
-                              null
-                                ? "No accepted sequence"
-                                : `Accepted through ${summary.syncEvidence.acceptedThroughSequence}`}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-xs font-medium uppercase text-muted-foreground">
-                              Recovery readiness
-                            </p>
-                            <p className="mt-1 text-sm text-foreground">
+                            <p className="mt-1 text-base font-medium text-foreground">
                               {recovery.readiness.label}
                             </p>
-                            <p className="mt-1 text-xs text-muted-foreground">
+                            <p className="mt-layout-2xs text-sm text-muted-foreground">
                               {recovery.readiness.description}
                             </p>
+                            {operationalNote ? (
+                              <p className="mt-layout-sm text-sm text-foreground">
+                                {operationalNote}
+                              </p>
+                            ) : null}
                           </div>
+
+                          <dl className="grid gap-x-layout-lg gap-y-layout-sm sm:grid-cols-2">
+                            <TerminalFact
+                              label="Last check-in"
+                              value={
+                                <span className="inline-flex items-center gap-layout-xs">
+                                  <Clock3
+                                    aria-hidden="true"
+                                    className="h-3.5 w-3.5 text-muted-foreground"
+                                  />
+                                  {formatTerminalTimestamp(
+                                    runtimeStatus?.receivedAt,
+                                  )}
+                                </span>
+                              }
+                            />
+                            <TerminalFact label="Sync" value={syncSummary} />
+                            <TerminalFact
+                              label="Offline checkout"
+                              value={
+                                <LocalDataFreshness
+                                  snapshots={runtimeStatus?.snapshots}
+                                />
+                              }
+                            />
+                            <TerminalFact
+                              label="Register session"
+                              value={
+                                <RegisterSessionFactValue
+                                  orgUrlSlug={orgUrlSlug}
+                                  registerSessionLink={
+                                    summary.registerSessionLink
+                                  }
+                                  runtimeStatus={runtimeStatus}
+                                  storeUrlSlug={storeUrlSlug}
+                                />
+                              }
+                            />
+                            <TerminalFact
+                              label="Cloud cursor"
+                              value={cloudCursorSummary}
+                            />
+                          </dl>
                         </div>
 
                         <OfflineReadinessDiagnostic

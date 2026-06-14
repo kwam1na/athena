@@ -10,6 +10,7 @@ import {
   ArrowUpRight,
   Ban,
   Bot,
+  Calendar as CalendarIcon,
   Check,
   CheckCircle2,
   ClipboardCheck,
@@ -42,9 +43,11 @@ import { NoPermissionView } from "../states/no-permission/NoPermissionView";
 import { ProtectedAdminSignInView } from "../states/signed-out/ProtectedAdminSignInView";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
+import { Calendar } from "../ui/calendar";
 import { Checkbox } from "../ui/checkbox";
 import { Label } from "../ui/label";
 import { LoadingButton } from "../ui/loading-button";
+import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 import { OperationReviewWorkspace } from "./OperationReviewWorkspace";
 import { OperationReviewItemCard } from "./OperationReviewItemCard";
@@ -126,6 +129,7 @@ export type DailyOpeningSnapshot = {
   reviewItems: DailyOpeningItem[];
   startAt: number;
   startedOpening?: {
+    actorType?: "human" | "automation";
     notes?: string | null;
     reviewEvidence?: DailyOpeningItem[];
     startedAt?: number | null;
@@ -161,6 +165,7 @@ type DailyOpeningViewContentProps = {
   isStarting: boolean;
   onStartDay: (args: StartDayArgs) => Promise<NormalizedCommandResult<unknown>>;
   onAuthenticateForApproval?: CommandApprovalDialogProps["onAuthenticateForApproval"];
+  onOperatingDateChange?: (date: Date) => void;
   orgUrlSlug: string;
   snapshot?: DailyOpeningSnapshot;
   storeId?: Id<"store">;
@@ -251,6 +256,37 @@ function getLocalOperatingDateRange(date = new Date()) {
     operatingDate: getLocalOperatingDate(date),
     startAt: localStart.getTime(),
   };
+}
+
+function getLocalDateFromOperatingDate(operatingDate: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(operatingDate);
+
+  if (!match) return undefined;
+
+  const [, year, month, day] = match;
+  const parsed = new Date(Number(year), Number(month) - 1, Number(day));
+
+  if (
+    parsed.getFullYear() !== Number(year) ||
+    parsed.getMonth() !== Number(month) - 1 ||
+    parsed.getDate() !== Number(day)
+  ) {
+    return undefined;
+  }
+
+  return parsed;
+}
+
+function getLocalOperatingDateRangeFromSearch(operatingDate?: unknown) {
+  if (typeof operatingDate === "string") {
+    const localDate = getLocalDateFromOperatingDate(operatingDate);
+
+    if (localDate) {
+      return getLocalOperatingDateRange(localDate);
+    }
+  }
+
+  return getLocalOperatingDateRange();
 }
 
 function formatOperatingDate(operatingDate?: string | null) {
@@ -620,6 +656,20 @@ function getOpeningReviewEvidence(snapshot: DailyOpeningSnapshot) {
     snapshot.automationStatus?.reviewEvidence ??
     []
   );
+}
+
+function getOpeningStartedByLabel(
+  startedOpening: NonNullable<DailyOpeningSnapshot["startedOpening"]>,
+) {
+  if (startedOpening.startedByStaffName) {
+    return startedOpening.startedByStaffName;
+  }
+
+  if (startedOpening.actorType === "automation") {
+    return "Athena";
+  }
+
+  return "Staff unavailable";
 }
 
 function OpeningAutomationReviewPanel({
@@ -1314,8 +1364,7 @@ function OpeningRail({
               <div className="flex items-start justify-between gap-layout-md">
                 <dt className="text-muted-foreground">Started by</dt>
                 <dd className="text-right font-medium text-foreground">
-                  {snapshot.startedOpening.startedByStaffName ??
-                    "Staff unavailable"}
+                  {getOpeningStartedByLabel(snapshot.startedOpening)}
                 </dd>
               </div>
               <div className="flex items-start justify-between gap-layout-md">
@@ -1377,6 +1426,63 @@ function OpeningRail({
   );
 }
 
+function OperatingDatePicker({
+  disabled = false,
+  latestSelectableDate: latestSelectableDateProp,
+  operatingDate,
+  onChange,
+}: {
+  disabled?: boolean;
+  latestSelectableDate?: Date;
+  operatingDate: string;
+  onChange?: (date: Date) => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const selectedDate = getLocalDateFromOperatingDate(operatingDate);
+  const latestSelectableDate = useMemo(() => {
+    if (latestSelectableDateProp) return latestSelectableDateProp;
+
+    const today = new Date();
+
+    return new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  }, [latestSelectableDateProp]);
+
+  return (
+    <Popover open={isOpen} onOpenChange={setIsOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          aria-label={`Change operating date, currently ${formatOperatingDateWithWeekday(
+            operatingDate,
+          )}`}
+          className="h-auto justify-start rounded-lg px-layout-md py-layout-sm text-sm font-normal text-muted-foreground shadow-surface"
+          disabled={disabled || !onChange}
+          variant="outline"
+        >
+          <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
+          Operating date{" "}
+          <span className="font-medium text-foreground">
+            {formatOperatingDateWithWeekday(operatingDate)}
+          </span>
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-auto p-0">
+        <Calendar
+          defaultMonth={selectedDate ?? undefined}
+          disabled={{ after: latestSelectableDate }}
+          mode="single"
+          onSelect={(date) => {
+            if (!date) return;
+
+            onChange?.(date);
+            setIsOpen(false);
+          }}
+          selected={selectedDate}
+        />
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 export function DailyOpeningViewContent({
   currency,
   hasFullAdminAccess,
@@ -1384,6 +1490,7 @@ export function DailyOpeningViewContent({
   isLoadingAccess,
   isLoadingSnapshot,
   isStarting,
+  onOperatingDateChange,
   onStartDay,
   orgUrlSlug,
   snapshot,
@@ -1517,12 +1624,10 @@ export function DailyOpeningViewContent({
     <OperationReviewWorkspace
       actions={
         snapshot ? (
-          <div className="rounded-lg border border-border bg-surface-raised px-layout-md py-layout-sm text-sm text-muted-foreground shadow-surface">
-            Operating date{" "}
-            <span className="font-medium text-foreground">
-              {formatOperatingDateWithWeekday(snapshot.operatingDate)}
-            </span>
-          </div>
+          <OperatingDatePicker
+            operatingDate={snapshot.operatingDate}
+            onChange={onOperatingDateChange}
+          />
         ) : null
       }
       afterGrid={null}
@@ -1676,7 +1781,14 @@ function DailyOpeningConnectedView({
       }
     | undefined;
   const [isStarting, setIsStarting] = useState(false);
-  const operatingDateRange = useMemo(() => getLocalOperatingDateRange(), []);
+  const navigate = useNavigate();
+  const search = useSearch({ strict: false }) as {
+    operatingDate?: unknown;
+  };
+  const operatingDateRange = useMemo(
+    () => getLocalOperatingDateRangeFromSearch(search.operatingDate),
+    [search.operatingDate],
+  );
   const snapshot = useExpectedDailyOpeningQuery(
     getDailyOpeningSnapshot,
     canQueryProtectedData
@@ -1759,6 +1871,18 @@ function DailyOpeningConnectedView({
     }
   };
 
+  const handleOperatingDateChange = (date: Date) => {
+    const nextRange = getLocalOperatingDateRange(date);
+
+    void navigate({
+      search: ((current: Record<string, unknown>) => ({
+        ...current,
+        operatingDate: nextRange.operatingDate,
+        tab: undefined,
+      })) as never,
+    });
+  };
+
   return (
     <DailyOpeningViewContent
       currency={activeStore?.currency || "USD"}
@@ -1768,6 +1892,7 @@ function DailyOpeningConnectedView({
       isLoadingSnapshot={snapshot === undefined}
       isStarting={isStarting}
       onAuthenticateForApproval={handleAuthenticateForApproval}
+      onOperatingDateChange={handleOperatingDateChange}
       onStartDay={handleStartDay}
       orgUrlSlug={params?.orgUrlSlug ?? ""}
       snapshot={snapshot}

@@ -21,7 +21,9 @@ import {
 } from "../pos/infrastructure/repositories/transactionRepository";
 import {
   buildRegisterSessionLocalSyncStatus,
+  classifyRegisterSessionSyncReview,
   listOpenLocalSyncConflictsByRegisterSession as listRegisterSessionSyncReviewConflicts,
+  STAFF_ACCESS_SYNC_REVIEW_SUMMARY,
   type RegisterSessionSyncConflict,
 } from "../pos/application/sync/registerSessionSyncReview";
 import { createConvexLocalSyncRepository } from "../pos/infrastructure/repositories/localSyncRepository";
@@ -43,14 +45,6 @@ const RECENT_DEPOSIT_LIMIT = 10;
 const SESSION_LIMIT = 100;
 const STAFF_ROLE_LOOKUP_LIMIT = 20;
 const TIMELINE_LIMIT = 200;
-const REGISTER_NOT_OPEN_SYNC_REVIEW_SUMMARY =
-  "Register was not open before this sale synced.";
-const STAFF_ACCESS_SYNC_REVIEW_SUMMARY =
-  "Staff access changed before this POS history synced.";
-const SERVICE_CUSTOMER_ATTRIBUTION_SYNC_REVIEW_SUMMARY =
-  "Service line is missing customer attribution.";
-const CLOSED_REGISTER_SYNCED_CLOSEOUT_SUMMARY =
-  "Register session is not open for synced POS closeout.";
 
 const userErrorValidator = v.object({
   code: v.union(
@@ -1104,6 +1098,7 @@ export const resolveRegisterSessionSyncReview = mutation({
     actorStaffProfileId: v.optional(v.id("staffProfile")),
     decision: v.optional(v.union(v.literal("approved"), v.literal("rejected"))),
     registerSessionId: v.id("registerSession"),
+    reviewConflictIds: v.optional(v.array(v.string())),
     storeId: v.id("store"),
   },
   returns: registerSessionSyncReviewResultValidator,
@@ -1154,7 +1149,26 @@ export const resolveRegisterSessionSyncReview = mutation({
       args.storeId,
       { includeRejectedEvidence: true },
     );
-    const conflicts = conflictsBySessionId.get(args.registerSessionId) ?? [];
+    const allConflicts = conflictsBySessionId.get(args.registerSessionId) ?? [];
+    const requestedConflictIds = new Set(args.reviewConflictIds ?? []);
+    const conflicts =
+      requestedConflictIds.size > 0
+        ? allConflicts.filter((conflict) =>
+            requestedConflictIds.has(conflict._id) ||
+            requestedConflictIds.has(conflict.localEventId),
+          )
+        : allConflicts;
+    if (
+      requestedConflictIds.size > 0 &&
+      allConflicts.length > 0 &&
+      conflicts.length === 0
+    ) {
+      return userError({
+        code: "precondition_failed",
+        message:
+          "This register review changed before the action completed. Refresh the register session and try again.",
+      });
+    }
     if (conflicts.length === 0) {
       return ok({
         action: "already_resolved",
@@ -1168,6 +1182,11 @@ export const resolveRegisterSessionSyncReview = mutation({
     const localSyncRepository = createConvexLocalSyncRepository(ctx);
     const projectedTransactionIds: string[] = [];
     const resolvedConflictIds = new Set<Id<"posLocalSyncConflict">>();
+    const conflictResolutionKeys: Array<{
+      localEventId: string;
+      storeId: Id<"store">;
+      terminalId: Id<"posTerminal">;
+    }> = [];
     const localEventIds: string[] = [];
     const originalStatuses: string[] = [];
     const sequences: number[] = [];
@@ -1197,6 +1216,11 @@ export const resolveRegisterSessionSyncReview = mutation({
       }
       const hasConflictRecord =
         !(conflict.status === "rejected" && conflict._id === syncEvent._id);
+      conflictResolutionKeys.push({
+        localEventId: syncEvent.localEventId,
+        storeId: args.storeId,
+        terminalId,
+      });
       localEventIds.push(syncEvent.localEventId);
       originalStatuses.push(syncEvent.status);
       sequences.push(syncEvent.sequence);
@@ -1226,27 +1250,26 @@ export const resolveRegisterSessionSyncReview = mutation({
       if (shouldApplyManagerOverride) {
         managerOverrideCount += 1;
       }
+      const review = classifyRegisterSessionSyncReview(conflict);
+      const matchesLocalRegisterSession =
+        !conflict.localRegisterSessionId ||
+        syncEvent.localRegisterSessionId === conflict.localRegisterSessionId;
       const shouldApplyProoflessStaffAccessEvent =
         isProoflessStaffAccessSyncReview(conflict) &&
         (syncEvent.eventType === "register_opened" ||
           syncEvent.eventType === "sale_completed");
       const shouldApplyReviewedSale =
         (syncEvent.eventType === "sale_completed" &&
-          (!conflict.localRegisterSessionId ||
-            syncEvent.localRegisterSessionId ===
-              conflict.localRegisterSessionId) &&
+          matchesLocalRegisterSession &&
           conflict.conflictType === "permission" &&
-          conflict.summary === REGISTER_NOT_OPEN_SYNC_REVIEW_SUMMARY) ||
+          review.reviewKind === "register_not_open_sale") ||
         (shouldApplyManagerOverride &&
           syncEvent.eventType === "sale_completed");
       const shouldApplyReviewedCloseout =
         (syncEvent.eventType === "register_closed" &&
-          (!conflict.localRegisterSessionId ||
-            syncEvent.localRegisterSessionId ===
-              conflict.localRegisterSessionId) &&
+          matchesLocalRegisterSession &&
           conflict.conflictType === "permission" &&
-          conflict.summary ===
-            "Register closeout variance requires manager review before synced closeout can be applied.") ||
+          review.reviewKind === "register_closeout_variance") ||
         (shouldApplyManagerOverride &&
           syncEvent.eventType === "register_closed");
 
@@ -1265,7 +1288,7 @@ export const resolveRegisterSessionSyncReview = mutation({
       ) {
         if (
           syncEvent.eventType === "register_closed" &&
-          conflict.summary === CLOSED_REGISTER_SYNCED_CLOSEOUT_SUMMARY
+          review.reviewKind === "duplicate_register_closeout"
         ) {
           return userError({
             code: "precondition_failed",
@@ -1274,7 +1297,7 @@ export const resolveRegisterSessionSyncReview = mutation({
           });
         }
 
-        if (conflict.summary === SERVICE_CUSTOMER_ATTRIBUTION_SYNC_REVIEW_SUMMARY) {
+        if (review.reviewKind === "service_customer_attribution") {
           return userError({
             code: "precondition_failed",
             message:
@@ -1368,6 +1391,26 @@ export const resolveRegisterSessionSyncReview = mutation({
           .map((mapping) => mapping.cloudId),
       );
     }
+
+    await Promise.all(
+      conflictResolutionKeys.map(async (key) => {
+        const matchingConflicts = await ctx.db
+          .query("posLocalSyncConflict")
+          .withIndex("by_store_terminal_localEvent", (q) =>
+            q
+              .eq("storeId", key.storeId)
+              .eq("terminalId", key.terminalId)
+              .eq("localEventId", key.localEventId),
+          )
+          .take(100);
+
+        for (const conflict of matchingConflicts) {
+          if (conflict.status === "needs_review") {
+            resolvedConflictIds.add(conflict._id);
+          }
+        }
+      }),
+    );
 
     await Promise.all(
       Array.from(resolvedConflictIds).map((conflictId) =>

@@ -463,6 +463,13 @@ describe("daily operations overview read model", () => {
       adjustmentRefundTotal: 7000,
       itemAdjustmentCount: 1,
       netCashMovementTotal: 43000,
+      paymentTotals: [
+        {
+          amount: 50000,
+          method: "cash",
+          transactionCount: 1,
+        },
+      ],
       salesTotal: 50000,
       transactionCount: 1,
     });

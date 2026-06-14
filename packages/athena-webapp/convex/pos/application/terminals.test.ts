@@ -17,6 +17,7 @@ import {
   getTerminalById,
   getTerminalByStoreIdAndRegisterNumber,
   getTerminalSyncEvidence,
+  hasActiveRegisterSessionForTerminal,
   listTerminalsForStore,
   patchTerminalRecord,
   registerTerminalRecord,
@@ -67,6 +68,7 @@ vi.mock("../infrastructure/repositories/terminalRepository", () => ({
   getTerminalByStoreIdAndRegisterNumber: vi.fn(),
   getLatestRuntimeStatusForTerminal: vi.fn(),
   getTerminalSyncEvidence: vi.fn(),
+  hasActiveRegisterSessionForTerminal: vi.fn(),
   listTerminalsForStore: vi.fn(),
   mapTerminalRecord: (terminal: typeof existingTerminal) => terminal,
   patchTerminalRecord: vi.fn(),
@@ -481,6 +483,30 @@ describe("submitTerminalRuntimeStatus", () => {
     );
   });
 
+  it("clears stale terminal diagnostics when runtime check-ins omit them", async () => {
+    vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
+    vi.mocked(upsertLatestRuntimeStatus).mockResolvedValue(
+      "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
+    );
+
+    await submitTerminalRuntimeStatus(
+      { db: null as never } as never,
+      {
+        storeId: "store-1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+        status: buildRuntimeStatus(),
+      },
+    );
+
+    expect(vi.mocked(upsertLatestRuntimeStatus)).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        drawerAuthority: undefined,
+        terminalIntegrity: undefined,
+      }),
+    );
+  });
+
   it("does not write for inactive or wrong-store terminals", async () => {
     vi.mocked(getTerminalById).mockResolvedValue({
       ...existingTerminal,
@@ -510,6 +536,7 @@ describe("terminal health summaries", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     vi.mocked(resolveTerminalRegisterSessionActionTarget).mockResolvedValue(null);
+    vi.mocked(hasActiveRegisterSessionForTerminal).mockResolvedValue(false);
     vi.mocked(listTerminalRecoveryConflictsForRepair).mockResolvedValue([]);
     vi.mocked(getTerminalRecoverySourceEvent).mockResolvedValue(null);
     vi.mocked(createTerminalRecoveryCommandRepository).mockReturnValue({
@@ -521,7 +548,7 @@ describe("terminal health summaries", () => {
     vi.clearAllMocks();
   });
 
-  it("joins registration metadata and latest runtime status without sampling sync evidence in the roster", async () => {
+  it("joins registration metadata, latest runtime status, and sync evidence in the roster", async () => {
     vi.mocked(listTerminalsForStore).mockResolvedValue([existingTerminal]);
     vi.mocked(getLatestRuntimeStatusForTerminal).mockResolvedValue(
       buildPersistedRuntimeStatus(),
@@ -569,24 +596,27 @@ describe("terminal health summaries", () => {
         runtimeStatus: expect.objectContaining({
           source: "sync-runtime",
         }),
-        syncEvidence: {
-          latestEvent: null,
-          latestReviewEvent: null,
-          latestReviewEventsByStatus: {
-            conflicted: null,
-            held: null,
-            rejected: null,
-          },
-          sampledEventCount: 0,
-          acceptedCount: 0,
-          projectedCount: 0,
-          conflictedCount: 0,
-          heldCount: 0,
-          rejectedCount: 0,
-        },
+        syncEvidence: expect.objectContaining({
+          acceptedThroughSequence: 7,
+          conflictedCount: 1,
+          cursorUpdatedAt: 160,
+          latestEvent: expect.objectContaining({
+            localEventId: "local-event-1",
+            sequence: 7,
+            status: "projected",
+          }),
+          projectedCount: 2,
+          sampledEventCount: 3,
+        }),
       }),
     ]);
-    expect(vi.mocked(getTerminalSyncEvidence)).not.toHaveBeenCalled();
+    expect(vi.mocked(getTerminalSyncEvidence)).toHaveBeenCalledWith(
+      expect.anything(),
+      {
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      },
+    );
   });
 
   it("carries support-safe app-session recovery status through terminal health", async () => {
@@ -598,6 +628,15 @@ describe("terminal health summaries", () => {
         },
       }),
     );
+    vi.mocked(getTerminalSyncEvidence).mockResolvedValue({
+      latestEvent: null,
+      sampledEventCount: 0,
+      acceptedCount: 0,
+      projectedCount: 0,
+      conflictedCount: 0,
+      heldCount: 0,
+      rejectedCount: 0,
+    });
 
     const result = await listTerminalHealthSummaries(
       { db: null as never } as never,
@@ -612,7 +651,7 @@ describe("terminal health summaries", () => {
     });
   });
 
-  it("loads sampled sync evidence only for terminal detail", async () => {
+  it("loads sampled sync evidence for terminal detail", async () => {
     vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
     vi.mocked(getLatestRuntimeStatusForTerminal).mockResolvedValue(
       buildPersistedRuntimeStatus(),
@@ -751,6 +790,16 @@ describe("terminal health summaries", () => {
         count: 14,
         source: "local_runtime",
         type: "local_review",
+      }),
+    ]);
+    expect(result?.recoveryPreview?.terminalActions).toEqual([
+      expect.objectContaining({
+        commandContext: expect.objectContaining({
+          expectedBlockerType: "local_review",
+        }),
+        commandType: "retry_sync",
+        expectedEvidence: { syncStatus: "idle" },
+        reason: "Local review items need a terminal sync retry.",
       }),
     ]);
   });
@@ -1311,6 +1360,7 @@ describe("terminal health summaries", () => {
     );
     expect(healthyIdle?.recoveryPreview?.readiness).toBe("healthy_idle");
 
+    vi.mocked(hasActiveRegisterSessionForTerminal).mockResolvedValue(true);
     vi.mocked(getLatestRuntimeStatusForTerminal).mockResolvedValue(
       buildPersistedRuntimeStatus({
         receivedAt: 230,

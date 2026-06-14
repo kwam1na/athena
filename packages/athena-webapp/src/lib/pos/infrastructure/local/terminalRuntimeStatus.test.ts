@@ -325,6 +325,20 @@ describe("terminalRuntimeStatus", () => {
     );
   });
 
+  it("reports app-shell readiness from the terminal runtime", () => {
+    const status = buildPosTerminalRuntimeStatus({
+      appShell: { ready: true },
+      clock: () => 2_000,
+      events: [],
+      source: "register",
+    });
+
+    expect(status.appShell).toEqual({
+      observedAt: 2_000,
+      ready: true,
+    });
+  });
+
   it("reports sale authority when the local terminal can transact now", () => {
     const status = buildPosTerminalRuntimeStatus({
       clock: () => 2_000,
@@ -350,6 +364,43 @@ describe("terminalRuntimeStatus", () => {
       transactionMode: "products_and_services",
     });
     expect(JSON.stringify(status.saleAuthority)).not.toContain("sync-secret");
+  });
+
+  it("reports support-safe active drawer evidence from the local register model", () => {
+    const status = buildPosTerminalRuntimeStatus({
+      activeRegisterSession: {
+        cloudRegisterSessionId: "cloud-register-1",
+        localRegisterSessionId: "local-register-1",
+        openedAt: 1_000,
+        registerNumber: "8",
+        status: "open",
+      },
+      clock: () => 2_000,
+      events: [],
+      source: "register",
+      staffAuthorityStatus: "ready",
+      terminalSeed: {
+        cloudTerminalId: "terminal-cloud-1",
+        displayName: "Front register",
+        provisionedAt: 1_000,
+        schemaVersion: 5,
+        storeId: "store-1",
+        syncSecretHash: "sync-secret-hash",
+        terminalId: "local-terminal-1",
+      },
+    });
+
+    expect(status.activeRegisterSession).toEqual({
+      cloudRegisterSessionId: "cloud-register-1",
+      localRegisterSessionId: "local-register-1",
+      observedAt: 2_000,
+      openedAt: 1_000,
+      registerNumber: "8",
+      status: "open",
+    });
+    expect(JSON.stringify(status.activeRegisterSession)).not.toContain(
+      "sync-secret",
+    );
   });
 
   it("reports uncertainty metadata as support-safe counts without exposing payload details", () => {

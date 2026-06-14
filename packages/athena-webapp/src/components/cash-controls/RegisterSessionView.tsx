@@ -221,6 +221,7 @@ type ResolveSyncReviewArgs = {
   actorStaffProfileId: string;
   decision: "approved" | "rejected";
   registerSessionId: string;
+  reviewConflictIds?: string[];
 };
 
 type ResolveSyncReviewResult = NormalizedCommandResult<{
@@ -315,6 +316,7 @@ type CloseoutStaffAuthIntent =
       kind: "sync_review";
       decision: "approved" | "rejected";
       registerSessionId: string;
+      reviewConflictIds?: string[];
     };
 
 type ReopenedCloseoutSubmitIntent = {
@@ -587,16 +589,30 @@ function formatReviewItemActivity(item: PosReconciliationItem) {
 }
 
 function isClosedRegisterSyncedCloseoutReviewItem(item: PosReconciliationItem) {
+  if (item.reviewKind === "duplicate_register_closeout") {
+    return true;
+  }
+
   const summary = item.summary?.trim().toLowerCase() ?? "";
 
   return summary.includes(CLOSED_REGISTER_SYNCED_CLOSEOUT_SUMMARY);
 }
 
+function isVisibleRegisterSyncReviewItem(item: PosReconciliationItem) {
+  return !(
+    item.status === "rejected" && isClosedRegisterSyncedCloseoutReviewItem(item)
+  );
+}
+
 function hasOnlyRejectedSyncReviewItems(syncStatus: PosSyncStatusPresentation) {
+  const visibleItems = syncStatus.reconciliationItems.filter(
+    isVisibleRegisterSyncReviewItem,
+  );
+
   return (
     syncStatus.status === "needs_review" &&
-    syncStatus.reconciliationItems.length > 0 &&
-    syncStatus.reconciliationItems.every((item) => item.status === "rejected")
+    visibleItems.length > 0 &&
+    visibleItems.every((item) => item.status === "rejected")
   );
 }
 
@@ -621,8 +637,10 @@ function getAutomaticStaffAccessSyncReviewSignature(
     unresolvedItems.length === 0 ||
     unresolvedItems.some(
       (item) =>
-        item.type !== "permission" ||
-        item.summary?.trim() !== STAFF_ACCESS_SYNC_REVIEW_SUMMARY,
+        item.reviewKind
+          ? item.reviewKind !== "staff_access"
+          : item.type !== "permission" ||
+            item.summary?.trim() !== STAFF_ACCESS_SYNC_REVIEW_SUMMARY,
     )
   ) {
     return null;
@@ -642,20 +660,23 @@ function isApprovableRegisterSyncReviewItem(item: PosReconciliationItem) {
     return true;
   }
 
-  if (isRegisterCloseoutReviewItem(item)) {
-    return true;
+  if (item.actionPolicy) {
+    return item.actionPolicy !== "reject_only";
   }
 
   return (
-    item.type === "permission" &&
-    (item.summary?.trim() === REGISTER_NOT_OPEN_SYNC_REVIEW_SUMMARY ||
-      item.summary?.trim() === STAFF_ACCESS_SYNC_REVIEW_SUMMARY)
+    (isRegisterCloseoutReviewItem(item) &&
+      !isClosedRegisterSyncedCloseoutReviewItem(item)) ||
+    (item.type === "permission" &&
+      (item.summary?.trim() === REGISTER_NOT_OPEN_SYNC_REVIEW_SUMMARY ||
+        item.summary?.trim() === STAFF_ACCESS_SYNC_REVIEW_SUMMARY))
   );
 }
 
 function hasServiceCustomerAttributionReview(items: PosReconciliationItem[]) {
   return items.some(
     (item) =>
+      item.reviewKind === "service_customer_attribution" ||
       item.summary?.trim() === SERVICE_CUSTOMER_ATTRIBUTION_SYNC_REVIEW_SUMMARY,
   );
 }
@@ -693,7 +714,13 @@ function RegisterSessionSyncNotice({
     return null;
   }
 
-  const reconciliationItems = syncStatus.reconciliationItems;
+  const reconciliationItems = syncStatus.reconciliationItems.filter(
+    isVisibleRegisterSyncReviewItem,
+  );
+  if (syncStatus.status === "needs_review" && reconciliationItems.length === 0) {
+    return null;
+  }
+
   const hasOnlyRejectedReviewItems =
     hasOnlyRejectedSyncReviewItems(syncStatus);
   const hasClosedRegisterSyncedCloseout = reconciliationItems.some(
@@ -1751,6 +1778,7 @@ export function RegisterSessionViewContent({
           actorStaffProfileId: result.staffProfileId,
           decision: intent.decision,
           registerSessionId: intent.registerSessionId,
+          reviewConflictIds: intent.reviewConflictIds,
         });
 
         if (commandResult.kind !== "ok") {
@@ -2031,11 +2059,14 @@ export function RegisterSessionViewContent({
       registerSession?.reconciliationItems ??
       [],
   });
+  const visibleSyncReviewItems = syncStatus.reconciliationItems.filter(
+    isVisibleRegisterSyncReviewItem,
+  );
   const isRegisterCloseoutSyncReview =
     syncStatus.status === "needs_review" &&
-    syncStatus.reconciliationItems.some(isRegisterCloseoutReviewItem);
+    visibleSyncReviewItems.some(isRegisterCloseoutReviewItem);
   const pendingCloseoutReviewItem = isRegisterCloseoutSyncReview
-    ? syncStatus.reconciliationItems.find(isRegisterCloseoutReviewItem)
+    ? visibleSyncReviewItems.find(isRegisterCloseoutReviewItem)
     : undefined;
   const displayedExpectedCash =
     typeof pendingCloseoutReviewItem?.expectedCash === "number"
@@ -2109,6 +2140,10 @@ export function RegisterSessionViewContent({
       kind: "sync_review",
       decision,
       registerSessionId: registerSession._id,
+      reviewConflictIds:
+        isRegisterCloseoutSyncReview && pendingCloseoutReviewItem?.id
+          ? [pendingCloseoutReviewItem.id]
+          : undefined,
     });
   }
   const sessionCode = registerSession
@@ -3757,6 +3792,7 @@ export function RegisterSessionView() {
         actorStaffProfileId: args.actorStaffProfileId as Id<"staffProfile">,
         decision: args.decision,
         registerSessionId: args.registerSessionId as Id<"registerSession">,
+        reviewConflictIds: args.reviewConflictIds,
         storeId: activeStore._id,
       }),
     );

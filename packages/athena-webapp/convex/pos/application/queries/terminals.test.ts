@@ -2,13 +2,57 @@ import { describe, expect, it } from "vitest";
 
 import type { Doc, Id } from "../../../_generated/dataModel";
 import type { QueryCtx } from "../../../_generated/server";
-import { getTerminalHealthSummary } from "./terminals";
+import {
+  getTerminalHealthSummary,
+  listTerminalHealthSummaries,
+} from "./terminals";
 
 const now = 2_000_000;
 const storeId = "store-1" as Id<"store">;
 const terminalId = "terminal-1" as Id<"posTerminal">;
 
 describe("terminal health queries", () => {
+  it("treats a closed cloud drawer authority as ready for the next drawer", async () => {
+    const ctx = buildQueryCtx({
+      posTerminal: [buildTerminal()],
+      posTerminalRuntimeStatus: [
+        buildRuntimeStatus({
+          drawerAuthority: {
+            cloudRegisterSessionId: "register-1",
+            localRegisterSessionId: "local-register-1",
+            observedAt: now - 2_000,
+            reason: "cloud_closed",
+            status: "blocked",
+          },
+          saleAuthority: {
+            observedAt: now - 1_000,
+            status: "ready",
+            transactionMode: "products_and_services",
+          },
+        }),
+      ],
+      registerSession: [
+        buildRegisterSession({
+          _id: "register-1" as Id<"registerSession">,
+        }),
+      ],
+    });
+
+    const summary = await getTerminalHealthSummary(ctx, {
+      now,
+      storeId,
+      terminalId,
+    });
+
+    expect(summary?.health).toBe("online");
+    expect(summary?.runtimeStatus?.drawerAuthority).toBeUndefined();
+    expect(summary?.attentionReasons.map((reason) => reason.type)).not.toContain(
+      "drawer_authority_blocked",
+    );
+    expect(summary?.recoveryPreview?.readiness).toBe("healthy_idle");
+    expect(summary?.recoveryPreview?.terminalActions).toEqual([]);
+  });
+
   it("includes latest terminal recovery command lifecycle metadata in the health preview", async () => {
     const ctx = buildQueryCtx({
       posTerminal: [
@@ -118,6 +162,7 @@ describe("terminal health queries", () => {
 
     expect(summary?.recoveryPreview?.commandStatus).toEqual({
       commandId: "command-latest",
+      commandType: "repair_terminal_seed",
       label: "Terminal setup repair",
       latestAcknowledgement: "Terminal setup repair completed locally.",
       status: "completed",
@@ -164,6 +209,258 @@ describe("terminal health queries", () => {
       }),
     );
   });
+
+  it("keeps expired staff authority out of support recovery actions", async () => {
+    const ctx = buildQueryCtx({
+      posTerminal: [buildTerminal()],
+      posTerminalRuntimeStatus: [
+        buildRuntimeStatus({
+          staffAuthority: {
+            status: "expired",
+          },
+        }),
+      ],
+    });
+
+    const summary = await getTerminalHealthSummary(ctx, {
+      now,
+      storeId,
+      terminalId,
+    });
+
+    expect(summary?.recoveryPreview?.readiness).toBe("healthy_idle");
+    expect(summary?.recoveryPreview?.terminalActions).toEqual([]);
+  });
+
+  it("includes recovery preview on terminal health roster summaries", async () => {
+    const ctx = buildQueryCtx({
+      posTerminal: [buildTerminal()],
+      posTerminalRuntimeStatus: [buildRuntimeStatus()],
+    });
+
+    const summaries = await listTerminalHealthSummaries(ctx, {
+      now,
+      storeId,
+    });
+
+    expect(summaries[0]?.recoveryPreview).toEqual(
+      expect.objectContaining({
+        evidence: expect.objectContaining({
+          activeRegisterSession: false,
+        }),
+        readiness: "healthy_idle",
+      }),
+    );
+  });
+
+  it("includes active register-session evidence in recovery preview", async () => {
+    const ctx = buildQueryCtx({
+      posTerminal: [buildTerminal()],
+      posTerminalRuntimeStatus: [buildRuntimeStatus()],
+      registerSession: [
+        buildRegisterSession({
+          status: "open",
+        }),
+      ],
+    });
+
+    const summary = await getTerminalHealthSummary(ctx, {
+      now,
+      storeId,
+      terminalId,
+    });
+
+    expect(summary?.recoveryPreview?.evidence).toEqual(
+      expect.objectContaining({
+        activeRegisterSession: true,
+      }),
+    );
+    expect(summary?.recoveryPreview?.readiness).toBe("drawer_open");
+  });
+
+  it("requires an active register session before reporting able to transact now", async () => {
+    const ctx = buildQueryCtx({
+      posTerminal: [buildTerminal()],
+      posTerminalRuntimeStatus: [
+        buildRuntimeStatus({
+          saleAuthority: {
+            observedAt: now - 1_000,
+            status: "ready",
+            transactionMode: "products_and_services",
+          },
+        }),
+      ],
+    });
+
+    const summary = await getTerminalHealthSummary(ctx, {
+      now,
+      storeId,
+      terminalId,
+    });
+
+    expect(summary?.recoveryPreview?.evidence).toEqual(
+      expect.objectContaining({
+        activeRegisterSession: false,
+      }),
+    );
+    expect(summary?.recoveryPreview?.readiness).toBe("healthy_idle");
+  });
+
+  it("reports able to transact now when the drawer is open and sale authority is ready", async () => {
+    const ctx = buildQueryCtx({
+      posTerminal: [buildTerminal()],
+      posTerminalRuntimeStatus: [
+        buildRuntimeStatus({
+          saleAuthority: {
+            observedAt: now - 1_000,
+            status: "ready",
+            transactionMode: "products_and_services",
+          },
+        }),
+      ],
+      registerSession: [
+        buildRegisterSession({
+          status: "active",
+        }),
+      ],
+    });
+
+    const summary = await getTerminalHealthSummary(ctx, {
+      now,
+      storeId,
+      terminalId,
+    });
+
+    expect(summary?.recoveryPreview?.evidence).toEqual(
+      expect.objectContaining({
+        activeRegisterSession: true,
+      }),
+    );
+    expect(summary?.recoveryPreview?.readiness).toBe("able_to_transact_now");
+  });
+
+  it("uses runtime active drawer evidence for recovery readiness", async () => {
+    const ctx = buildQueryCtx({
+      posTerminal: [buildTerminal()],
+      posTerminalRuntimeStatus: [
+        buildRuntimeStatus({
+          activeRegisterSession: {
+            localRegisterSessionId: "local-register-1",
+            observedAt: now - 1_000,
+            openedAt: now - 20_000,
+            registerNumber: "8",
+            status: "open",
+          },
+        }),
+      ],
+    });
+
+    const summary = await getTerminalHealthSummary(ctx, {
+      now,
+      storeId,
+      terminalId,
+    });
+
+    expect(summary?.recoveryPreview?.evidence).toEqual(
+      expect.objectContaining({
+        activeRegisterSession: true,
+      }),
+    );
+    expect(summary?.recoveryPreview?.readiness).toBe("drawer_open");
+  });
+
+  it("links terminal cards to the active register session for the terminal", async () => {
+    const ctx = buildQueryCtx({
+      posTerminal: [
+        buildTerminal({
+          registerNumber: "8",
+        }),
+      ],
+      posTerminalRuntimeStatus: [buildRuntimeStatus()],
+      registerSession: [
+        buildRegisterSession({
+          _id: "register-closed-latest" as Id<"registerSession">,
+          closedAt: now - 1_000,
+          openedAt: now - 20_000,
+          registerNumber: "8",
+          status: "closed",
+        }),
+        buildRegisterSession({
+          _id: "register-open" as Id<"registerSession">,
+          closeoutRecords: [],
+          closedAt: undefined,
+          openedAt: now - 100_000,
+          registerNumber: "8",
+          status: "open",
+        }),
+      ],
+    });
+
+    const summary = await getTerminalHealthSummary(ctx, {
+      now,
+      storeId,
+      terminalId,
+    });
+
+    expect(summary?.registerSessionLink).toEqual({
+      registerSessionId: "register-open",
+      status: "open",
+    });
+  });
+
+  it("does not link terminal cards to closed register sessions", async () => {
+    const ctx = buildQueryCtx({
+      posTerminal: [buildTerminal()],
+      posTerminalRuntimeStatus: [buildRuntimeStatus()],
+      registerSession: [
+        buildRegisterSession({
+          _id: "register-closed-older" as Id<"registerSession">,
+          closedAt: now - 30_000,
+        }),
+        buildRegisterSession({
+          _id: "register-closed-newer" as Id<"registerSession">,
+          closedAt: now - 1_000,
+        }),
+      ],
+    });
+
+    const summary = await getTerminalHealthSummary(ctx, {
+      now,
+      storeId,
+      terminalId,
+    });
+
+    expect(summary?.registerSessionLink).toBeNull();
+  });
+
+  it("does not link register-number matches that are not bound to the terminal", async () => {
+    const ctx = buildQueryCtx({
+      posTerminal: [
+        buildTerminal({
+          registerNumber: "8",
+        }),
+      ],
+      posTerminalRuntimeStatus: [buildRuntimeStatus()],
+      registerSession: [
+        buildRegisterSession({
+          _id: "register-open-other-terminal" as Id<"registerSession">,
+          closeoutRecords: [],
+          closedAt: undefined,
+          registerNumber: "8",
+          status: "open",
+          terminalId: undefined,
+        }),
+      ],
+    });
+
+    const summary = await getTerminalHealthSummary(ctx, {
+      now,
+      storeId,
+      terminalId,
+    });
+
+    expect(summary?.registerSessionLink).toBeNull();
+  });
 });
 
 type TestTable =
@@ -172,7 +469,8 @@ type TestTable =
   | "posLocalSyncEvent"
   | "posTerminal"
   | "posTerminalRecoveryCommand"
-  | "posTerminalRuntimeStatus";
+  | "posTerminalRuntimeStatus"
+  | "registerSession";
 
 function buildQueryCtx(
   records: Partial<Record<TestTable, Array<Record<string, unknown>>>>,
@@ -191,7 +489,9 @@ function buildQueryCtx(
   } as unknown as QueryCtx;
 }
 
-function buildTerminal(): Doc<"posTerminal"> {
+function buildTerminal(
+  overrides: Partial<Doc<"posTerminal">> = {},
+): Doc<"posTerminal"> {
   return {
     _id: terminalId,
     _creationTime: now - 50_000,
@@ -204,10 +504,13 @@ function buildTerminal(): Doc<"posTerminal"> {
     registeredByUserId: "user-1" as Id<"athenaUser">,
     status: "active",
     storeId,
+    ...overrides,
   };
 }
 
-function buildRuntimeStatus(): Doc<"posTerminalRuntimeStatus"> {
+function buildRuntimeStatus(
+  overrides: Partial<Doc<"posTerminalRuntimeStatus">> = {},
+): Doc<"posTerminalRuntimeStatus"> {
   return {
     _id: "runtime-1" as Id<"posTerminalRuntimeStatus">,
     _creationTime: now - 2_000,
@@ -243,6 +546,31 @@ function buildRuntimeStatus(): Doc<"posTerminalRuntimeStatus"> {
       observedAt: now - 1_000,
       status: "healthy",
     },
+    ...overrides,
+  };
+}
+
+function buildRegisterSession(
+  overrides: Partial<Doc<"registerSession">> = {},
+): Doc<"registerSession"> {
+  return {
+    _id: "register-1" as Id<"registerSession">,
+    _creationTime: now - 10_000,
+    closeoutRecords: [
+      {
+        expectedCash: 0,
+        occurredAt: now - 5_000,
+        type: "closed",
+      },
+    ],
+    closedAt: now - 5_000,
+    expectedCash: 0,
+    openedAt: now - 100_000,
+    openingFloat: 0,
+    status: "closed",
+    storeId,
+    terminalId,
+    ...overrides,
   };
 }
 

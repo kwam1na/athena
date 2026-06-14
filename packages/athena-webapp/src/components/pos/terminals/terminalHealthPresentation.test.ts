@@ -34,6 +34,28 @@ describe("terminal health presentation", () => {
     expect(
       buildTerminalRecoveryPresentation({
         recovery: {
+          evidence: {
+            activeRegisterSession: true,
+            freshRuntimeRequiredForAbleToTransactNow: true,
+          },
+          readiness: {
+            status: "drawer_open",
+          },
+        },
+        runtimeStatus: null,
+        syncEvidence: {},
+        terminal: { status: "active" },
+      }).readiness,
+    ).toEqual(
+      expect.objectContaining({
+        description: "Drawer is open. Sign in before selling.",
+        label: "Drawer open",
+      }),
+    );
+
+    expect(
+      buildTerminalRecoveryPresentation({
+        recovery: {
           readiness: {
             status: "able_to_transact_now",
             summary: "Able to transact now. Drawer, cashier, and sale authority are active.",
@@ -131,6 +153,12 @@ describe("terminal health presentation", () => {
             source: "cloud_sync",
             type: "cloud_held",
           },
+          {
+            reason:
+              "Cloud conflict xs76r9cjk0qw5nnwcera3jd1tn88jhpj needs manual review before repair.",
+            source: "cloud_repair",
+            type: "unsafe_cloud_conflict",
+          },
         ],
         readiness: "needs_terminal_action",
         terminalActions: [
@@ -191,11 +219,58 @@ describe("terminal health presentation", () => {
     expect(presentation.groups.manualReview[0]?.summary).toBe(
       "Manual review required. Use the linked operations or cash-control review before support repairs this terminal.",
     );
+    expect(presentation.groups.manualReview[1]?.summary).toBe(
+      "A cloud sync conflict needs manual review before support can repair this terminal.",
+    );
     expect(presentation.safeActions.map((action) => action.kind)).toEqual([
       "cloud_repair",
       "terminal_command",
       "terminal_command",
     ]);
+  });
+
+  it("uses the Convex recoveryPreview field for terminal command actions", () => {
+    const presentation = buildTerminalRecoveryPresentation({
+      recoveryPreview: {
+        readiness: "needs_manual_review",
+        terminalActions: [
+          {
+            commandContext: {
+              cloudRegisterSessionId: "cloud-session-1",
+              expectedBlockerType: "cloud_closed",
+              localRegisterSessionId: "local-session-1",
+              reason: "Drawer authority requires terminal-local repair.",
+            },
+            commandType: "clear_stale_drawer_authority",
+            expectedEvidence: {
+              drawerAuthorityStatus: "healthy",
+              localRegisterSessionId: "local-session-1",
+            },
+            reason: "Drawer authority requires terminal-local repair.",
+          },
+        ],
+      },
+      runtimeStatus: null,
+      syncEvidence: {},
+      terminal: { status: "active" },
+    });
+
+    expect(presentation.readiness.label).toBe("Needs manual review");
+    expect(presentation.groups.terminalRequired[0]?.action).toEqual(
+      expect.objectContaining({
+        commandContext: expect.objectContaining({
+          cloudRegisterSessionId: "cloud-session-1",
+          localRegisterSessionId: "local-session-1",
+        }),
+        commandType: "clear_stale_drawer_authority",
+        expectedEvidence: {
+          drawerAuthorityStatus: "healthy",
+          localRegisterSessionId: "local-session-1",
+        },
+        kind: "terminal_command",
+      }),
+    );
+    expect(presentation.safeActions).toHaveLength(1);
   });
 
   it("suppresses duplicate recovery actions while command lifecycle is active", () => {
@@ -228,6 +303,49 @@ describe("terminal health presentation", () => {
     expect(presentation.groups.terminalRequired[0]?.action).toEqual(
       expect.objectContaining({
         status: "pending",
+      }),
+    );
+  });
+
+  it("presents local review backlog recovery as a terminal sync retry", () => {
+    const presentation = buildTerminalRecoveryPresentation({
+      recovery: {
+        commandStatus: {
+          commandType: "clear_stale_drawer_authority",
+          label: "Drawer authority repair",
+          status: "completed",
+          verificationStatus: "verified",
+        },
+        terminalActions: [
+          {
+            commandContext: {
+              expectedBlockerType: "local_review",
+              reason: "Local review items need a terminal sync retry.",
+            },
+            commandType: "retry_sync",
+            expectedEvidence: {
+              syncStatus: "idle",
+            },
+            reason: "Local review items need a terminal sync retry.",
+          },
+        ],
+      },
+      runtimeStatus: null,
+      syncEvidence: {},
+      terminal: { status: "active" },
+    });
+
+    expect(presentation.groups.terminalRequired[0]).toEqual(
+      expect.objectContaining({
+        detail: "Expected after check-in: Sync Idle.",
+        summary: "Local review items need a terminal sync retry.",
+        title: "Terminal sync retry",
+      }),
+    );
+    expect(presentation.safeActions[0]).toEqual(
+      expect.objectContaining({
+        commandType: "retry_sync",
+        label: "Retry terminal sync",
       }),
     );
   });
@@ -266,6 +384,97 @@ describe("terminal health presentation", () => {
         status: "expired",
       }),
     );
+  });
+
+  it("hides terminal command blockers after recovery is verified", () => {
+    const presentation = buildTerminalRecoveryPresentation({
+      recovery: {
+        commandStatus: {
+          commandType: "clear_stale_drawer_authority",
+          label: "Drawer authority repair",
+          status: "completed",
+          verificationStatus: "verified",
+        },
+        terminalActions: [
+          {
+            commandContext: {
+              cloudRegisterSessionId: "cloud-session-1",
+              expectedBlockerType: "cloud_closed",
+              localRegisterSessionId: "local-session-1",
+            },
+            commandType: "clear_stale_drawer_authority",
+            expectedEvidence: {
+              drawerAuthorityStatus: "healthy",
+              localRegisterSessionId: "local-session-1",
+            },
+            reason: "Drawer authority requires terminal-local repair.",
+          },
+        ],
+      },
+      runtimeStatus: null,
+      syncEvidence: {},
+      terminal: { status: "active" },
+    });
+
+    expect(presentation.groups.terminalRequired).toEqual([]);
+    expect(presentation.safeActions).toEqual([]);
+    expect(presentation.verification.summary).toBe(
+      "Recovery was verified by the latest terminal check-in.",
+    );
+  });
+
+  it("does not preserve stale terminal-action readiness when visible blockers are clear", () => {
+    const presentation = buildTerminalRecoveryPresentation({
+      recovery: {
+        readiness: "needs_terminal_action",
+        terminalActions: [],
+      },
+      runtimeStatus: {
+        receivedAt: Date.now(),
+        localStore: { available: true, terminalSeedReady: true },
+        staffAuthority: { status: "ready" },
+        sync: {
+          failedEventCount: 0,
+          pendingEventCount: 0,
+          reviewEventCount: 0,
+          status: "idle",
+          uploadableEventCount: 0,
+        },
+      },
+      syncEvidence: {},
+      terminal: { status: "active" },
+    });
+
+    expect(presentation.groups.terminalRequired).toEqual([]);
+    expect(presentation.readiness.label).toBe("Healthy idle");
+    expect(presentation.safeActions).toEqual([]);
+  });
+
+  it("keeps staff authority expiry out of support recovery blockers", () => {
+    const presentation = buildTerminalRecoveryPresentation({
+      recovery: {
+        readiness: "needs_terminal_action",
+        terminalActions: [],
+      },
+      runtimeStatus: {
+        receivedAt: Date.now(),
+        localStore: { available: true, terminalSeedReady: true },
+        staffAuthority: { status: "expired" },
+        sync: {
+          failedEventCount: 0,
+          pendingEventCount: 0,
+          reviewEventCount: 0,
+          status: "idle",
+          uploadableEventCount: 0,
+        },
+      },
+      syncEvidence: {},
+      terminal: { status: "active" },
+    });
+
+    expect(presentation.groups.terminalRequired).toEqual([]);
+    expect(presentation.readiness.label).toBe("Healthy idle");
+    expect(presentation.safeActions).toEqual([]);
   });
 
   it("normalizes duplicate register-open and authorization backend wording in derived recovery copy", () => {
@@ -315,10 +524,6 @@ describe("terminal health presentation", () => {
         expect.objectContaining({
           summary:
             "Terminal authorization needs refresh. This checkout station must reconnect before Athena can verify it.",
-        }),
-        expect.objectContaining({
-          summary:
-            "Staff authority expired. Sign in again at this checkout station before selling.",
         }),
       ]),
     );
@@ -508,6 +713,107 @@ describe("terminal health presentation", () => {
       expect.objectContaining({
         description: "Terminal setup data is not ready on this checkout station.",
         label: "Setup needed",
+      }),
+    );
+  });
+
+  it("does not keep setup-needed classification after recovery clears terminal blockers", () => {
+    expect(
+      classifyTerminalHealth({
+        attentionReasons: [
+          {
+            source: "terminal_runtime",
+            summary: "Terminal setup data is not ready on this checkout station.",
+            type: "terminal_seed_missing",
+          },
+        ],
+        health: "needs_attention",
+        recovery: {
+          commandStatus: {
+            commandType: "repair_terminal_seed",
+            label: "Terminal setup repair",
+            status: "completed",
+            verificationStatus: "verified",
+          },
+          readiness: "needs_terminal_action",
+          terminalActions: [
+            {
+              commandContext: {
+                expectedBlockerType: "terminal_seed",
+              },
+              commandType: "repair_terminal_seed",
+              expectedEvidence: {
+                terminalIntegrityStatus: "healthy",
+              },
+              reason: "Terminal setup data needs repair.",
+            },
+          ],
+        },
+        runtimeStatus: {
+          receivedAt: Date.now(),
+          localStore: { available: true, terminalSeedReady: true },
+          staffAuthority: { status: "ready" },
+          sync: {
+            failedEventCount: 0,
+            pendingEventCount: 0,
+            reviewEventCount: 0,
+            status: "idle",
+            uploadableEventCount: 0,
+          },
+        },
+        syncEvidence: { unresolvedConflictCount: 0 },
+        terminal: { status: "active" },
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        label: "Healthy",
+      }),
+    );
+  });
+
+  it("does not classify a terminal as healthy when support recovery has a repair blocker", () => {
+    expect(
+      classifyTerminalHealth({
+        health: "online",
+        recovery: {
+          commandStatus: {
+            commandType: "clear_stale_drawer_authority",
+            label: "Drawer authority repair",
+            status: "precondition_failed",
+            verificationStatus: "verification_failed",
+          },
+          readiness: "needs_terminal_action",
+          terminalActions: [
+            {
+              commandContext: {
+                expectedBlockerType: "terminal_seed",
+              },
+              commandType: "repair_terminal_seed",
+              expectedEvidence: {
+                terminalIntegrityStatus: "healthy",
+              },
+              reason: "Terminal setup data needs repair.",
+            },
+          ],
+        },
+        runtimeStatus: {
+          receivedAt: Date.now(),
+          localStore: { available: true, terminalSeedReady: true },
+          staffAuthority: { status: "ready" },
+          sync: {
+            failedEventCount: 0,
+            pendingEventCount: 0,
+            reviewEventCount: 0,
+            status: "idle",
+            uploadableEventCount: 0,
+          },
+        },
+        syncEvidence: { unresolvedConflictCount: 0 },
+        terminal: { status: "active" },
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        label: "Needs terminal action",
       }),
     );
   });

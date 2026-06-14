@@ -27,7 +27,12 @@ vi.mock("@tanstack/react-router", () => ({
     to,
   }: {
     children?: React.ReactNode;
-    params?: { orgUrlSlug: string; storeUrlSlug: string; terminalId?: string };
+    params?: {
+      orgUrlSlug: string;
+      sessionId?: string;
+      storeUrlSlug: string;
+      terminalId?: string;
+    };
     to?: string;
   }) => (
     <a
@@ -35,6 +40,7 @@ vi.mock("@tanstack/react-router", () => ({
         to
           ?.replace("$orgUrlSlug", params?.orgUrlSlug ?? "")
           .replace("$storeUrlSlug", params?.storeUrlSlug ?? "")
+          .replace("$sessionId", params?.sessionId ?? "")
           .replace("$terminalId", params?.terminalId ?? "") ?? "#"
       }
     >
@@ -95,10 +101,26 @@ vi.mock("@/components/states/signed-out/ProtectedAdminSignInView", () => ({
 }));
 
 const baseSummary: TerminalHealthSummary = {
+  registerSessionLink: {
+    registerSessionId: "register-session-1",
+    status: "open",
+  },
   runtimeStatus: {
     _id: "status-1",
     _creationTime: 1,
+    appShell: {
+      observedAt: Date.now(),
+      ready: true,
+    },
     browserInfo: { online: true, platform: "MacIntel" },
+    activeRegisterSession: {
+      cloudRegisterSessionId: "register-session-1",
+      localRegisterSessionId: "local-register-session-1",
+      observedAt: Date.now(),
+      openedAt: Date.now(),
+      registerNumber: "1",
+      status: "open",
+    },
     localStore: { available: true, terminalSeedReady: true },
     receivedAt: Date.now(),
     reportedAt: Date.now(),
@@ -253,19 +275,22 @@ describe("POSTerminalHealthViewContent", () => {
     expect(screen.getByText("Review kiosk")).toBeInTheDocument();
     expect(screen.getAllByText("Staff authority ready").length).toBeGreaterThan(0);
     expect(
-      screen.getAllByText("Register session evidence is shown in cash controls").length,
+      screen.getAllByText("Active in cash controls").length,
     ).toBeGreaterThan(0);
+    expect(
+      screen.getAllByRole("link", { name: "Active in cash controls" })[0],
+    ).toHaveAttribute(
+      "href",
+      "/acme/store/osu/cash-controls/registers/register-session-1",
+    );
+    expect(screen.getAllByText("Offline checkout").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Products and stock").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Register details").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Offline diagnostics need attention").length).toBeGreaterThan(0);
     expect(
-      screen.getAllByText(
-        "Service catalog data is available locally. Last refreshed 3 minutes ago.",
-      ).length,
+      screen.getAllByText("Ready signals").length,
     ).toBeGreaterThan(0);
-    expect(
-      screen.getAllByText(
-        "App shell status has not reported to this page yet.",
-      ).length,
-    ).toBeGreaterThan(0);
+    expect(screen.getAllByText("App shell").length).toBeGreaterThan(0);
     expect(screen.getByRole("link", { name: /Front counter/i })).toHaveAttribute(
       "href",
       "/acme/store/osu/pos/terminals/terminal-1",
@@ -299,6 +324,24 @@ describe("POSTerminalHealthViewContent", () => {
     ).toBeInTheDocument();
   });
 
+  it("shows unknown metric values while terminal health is loading", () => {
+    render(
+      <POSTerminalHealthViewContent
+        healthSummaries={[]}
+        isLoading
+        orgUrlSlug="acme"
+        storeUrlSlug="osu"
+      />,
+    );
+
+    expect(screen.getByText("Terminals")).toBeInTheDocument();
+    expect(screen.getByText("Pending sync")).toBeInTheDocument();
+    expect(screen.getByText("Needs review")).toBeInTheDocument();
+    expect(screen.getByText("Stale or missing")).toBeInTheDocument();
+    expect(screen.getAllByText("-")).toHaveLength(4);
+    expect(screen.queryByText("No POS terminals registered")).not.toBeInTheDocument();
+  });
+
   it("shows redacted app-session reconciliation posture without marking cashier continuation as review", () => {
     render(
       <POSTerminalHealthViewContent
@@ -329,7 +372,7 @@ describe("POSTerminalHealthViewContent", () => {
 
     expect(screen.getByText("Local continuation")).toBeInTheDocument();
     expect(screen.getAllByText("Needs review")).toHaveLength(1);
-    expect(screen.getByText("App-session posture")).toBeInTheDocument();
+    expect(screen.getByText("Register session")).toBeInTheDocument();
     expect(
       screen.getByText(
         "App session unverified; local sales stay on this terminal until cloud validation returns.",
@@ -347,9 +390,12 @@ describe("POSTerminalHealthViewContent", () => {
           {
             ...baseSummary,
             recovery: {
+              evidence: {
+                activeRegisterSession: true,
+                freshRuntimeRequiredForAbleToTransactNow: true,
+              },
               readiness: {
-                status: "healthy_idle",
-                summary: "Healthy idle. Open a drawer and sign in before selling.",
+                status: "drawer_open",
               },
             },
           },
@@ -375,9 +421,9 @@ describe("POSTerminalHealthViewContent", () => {
       />,
     );
 
-    expect(screen.getByText("Healthy idle")).toBeInTheDocument();
+    expect(screen.getByText("Drawer open")).toBeInTheDocument();
     expect(
-      screen.getByText("Healthy idle. Open a drawer and sign in before selling."),
+      screen.getByText("Drawer is open. Sign in before selling."),
     ).toBeInTheDocument();
     expect(screen.getByText("Able to transact now")).toBeInTheDocument();
     expect(
@@ -385,6 +431,59 @@ describe("POSTerminalHealthViewContent", () => {
         "Able to transact now. Drawer, cashier, and sale authority are active.",
       ),
     ).toBeInTheDocument();
+  });
+
+  it("does not show stale setup notes when recovery cleared the terminal blocker", () => {
+    render(
+      <POSTerminalHealthViewContent
+        healthSummaries={[
+          {
+            ...baseSummary,
+            attentionReasons: [
+              {
+                source: "terminal_runtime",
+                summary:
+                  "Terminal setup needs repair before this checkout station can record new sales.",
+                type: "terminal_seed_missing",
+              },
+            ],
+            health: "needs_attention",
+            recovery: {
+              commandStatus: {
+                commandType: "repair_terminal_seed",
+                label: "Terminal setup repair",
+                status: "completed",
+                verificationStatus: "verified",
+              },
+              readiness: "needs_terminal_action",
+              terminalActions: [
+                {
+                  commandContext: {
+                    expectedBlockerType: "terminal_seed",
+                  },
+                  commandType: "repair_terminal_seed",
+                  expectedEvidence: {
+                    terminalIntegrityStatus: "healthy",
+                  },
+                  reason: "Terminal setup data needs repair.",
+                },
+              ],
+            },
+          },
+        ]}
+        isLoading={false}
+        orgUrlSlug="acme"
+        storeUrlSlug="osu"
+      />,
+    );
+
+    expect(screen.getByText("Healthy")).toBeInTheDocument();
+    expect(screen.getByText("Healthy idle")).toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        "Terminal setup needs repair before this checkout station can record new sales.",
+      ),
+    ).not.toBeInTheDocument();
   });
 });
 

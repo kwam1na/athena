@@ -337,6 +337,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/lib/theme.test.ts`](../../src/lib/theme.test.ts)
 - [`src/lib/traces/createWorkflowTraceId.test.ts`](../../src/lib/traces/createWorkflowTraceId.test.ts)
 - [`src/lib/utils.test.ts`](../../src/lib/utils.test.ts)
+- [`src/offline/posAppShellReadiness.test.ts`](../../src/offline/posAppShellReadiness.test.ts)
 - [`src/offline/posAppShellRoutes.test.ts`](../../src/offline/posAppShellRoutes.test.ts)
 - [`src/offline/posOfflineReadiness.test.ts`](../../src/offline/posOfflineReadiness.test.ts)
 - [`src/offline/registerPosAppShellServiceWorker.test.ts`](../../src/offline/registerPosAppShellServiceWorker.test.ts)

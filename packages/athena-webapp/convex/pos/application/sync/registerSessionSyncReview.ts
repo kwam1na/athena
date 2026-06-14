@@ -3,6 +3,30 @@ import type { QueryCtx } from "../../../_generated/server";
 
 const SYNC_CONFLICT_LIMIT = 500;
 const MANAGER_REJECTED_SYNC_REVIEW_CODE = "manager_rejected";
+export const REGISTER_NOT_OPEN_SYNC_REVIEW_SUMMARY =
+  "Register was not open before this sale synced.";
+export const STAFF_ACCESS_SYNC_REVIEW_SUMMARY =
+  "Staff access changed before this POS history synced.";
+export const SERVICE_CUSTOMER_ATTRIBUTION_SYNC_REVIEW_SUMMARY =
+  "Service line is missing customer attribution.";
+export const CLOSED_REGISTER_SYNCED_CLOSEOUT_SUMMARY =
+  "Register session is not open for synced POS closeout.";
+export const REGISTER_CLOSEOUT_VARIANCE_SYNC_REVIEW_SUMMARY =
+  "Register closeout variance requires manager review before synced closeout can be applied.";
+
+export type RegisterSessionSyncReviewActionPolicy =
+  | "apply_or_reject"
+  | "override_or_reject"
+  | "reject_only";
+
+export type RegisterSessionSyncReviewKind =
+  | "duplicate_register_closeout"
+  | "register_closeout_variance"
+  | "register_not_open_sale"
+  | "server_rejected"
+  | "service_customer_attribution"
+  | "staff_access"
+  | "unknown";
 
 export type RegisterSessionSyncConflict = {
   _id: string;
@@ -28,6 +52,8 @@ export type RegisterSessionLocalSyncStatus = {
     id?: string;
     localEventId?: string | null;
     notes?: string | null;
+    reviewKind?: RegisterSessionSyncReviewKind;
+    actionPolicy?: RegisterSessionSyncReviewActionPolicy;
     sequence?: number | null;
     status?: string | null;
     summary?: string | null;
@@ -37,23 +63,105 @@ export type RegisterSessionLocalSyncStatus = {
 };
 
 function getSyncConflictReconciliationType(
-  conflict: Pick<
-    RegisterSessionSyncConflict,
-    "conflictType" | "localEventId" | "summary"
-  >,
+  review: RegisterSessionSyncReviewClassification,
 ) {
-  const localEventId = conflict.localEventId?.toLowerCase() ?? "";
-  const summary = conflict.summary?.toLowerCase() ?? "";
-
   if (
-    localEventId.includes("register-closed") ||
-    localEventId.includes("register-closeout") ||
-    summary.includes("register closeout")
+    review.reviewKind === "duplicate_register_closeout" ||
+    review.reviewKind === "register_closeout_variance"
   ) {
     return "register_closeout";
   }
 
-  return conflict.conflictType ?? null;
+  if (review.reviewKind === "server_rejected") {
+    return "server_rejected";
+  }
+
+  return review.conflictType ?? null;
+}
+
+type RegisterSessionSyncReviewClassification = {
+  actionPolicy: RegisterSessionSyncReviewActionPolicy;
+  conflictType?: string;
+  reviewKind: RegisterSessionSyncReviewKind;
+};
+
+export function classifyRegisterSessionSyncReview(
+  conflict: Pick<
+    RegisterSessionSyncConflict,
+    "conflictType" | "details" | "localEventId" | "status" | "summary"
+  >,
+): RegisterSessionSyncReviewClassification {
+  const localEventId = conflict.localEventId?.toLowerCase() ?? "";
+  const summary = conflict.summary?.trim() ?? "";
+  const normalizedSummary = summary.toLowerCase();
+  const details = conflict.details ?? {};
+  const hasVarianceDetails =
+    typeof details.countedCash === "number" ||
+    typeof details.expectedCash === "number" ||
+    typeof details.variance === "number";
+
+  if (
+    conflict.status === "rejected" ||
+    conflict.conflictType === "server_rejected"
+  ) {
+    return {
+      actionPolicy: "override_or_reject",
+      conflictType: "server_rejected",
+      reviewKind: "server_rejected",
+    };
+  }
+
+  if (summary === CLOSED_REGISTER_SYNCED_CLOSEOUT_SUMMARY) {
+    return {
+      actionPolicy: "reject_only",
+      conflictType: conflict.conflictType,
+      reviewKind: "duplicate_register_closeout",
+    };
+  }
+
+  if (
+    summary === REGISTER_CLOSEOUT_VARIANCE_SYNC_REVIEW_SUMMARY ||
+    localEventId.includes("register-closed") ||
+    localEventId.includes("register-closeout") ||
+    normalizedSummary.includes("register closeout") ||
+    hasVarianceDetails
+  ) {
+    return {
+      actionPolicy: "apply_or_reject",
+      conflictType: conflict.conflictType,
+      reviewKind: "register_closeout_variance",
+    };
+  }
+
+  if (summary === REGISTER_NOT_OPEN_SYNC_REVIEW_SUMMARY) {
+    return {
+      actionPolicy: "apply_or_reject",
+      conflictType: conflict.conflictType,
+      reviewKind: "register_not_open_sale",
+    };
+  }
+
+  if (summary === STAFF_ACCESS_SYNC_REVIEW_SUMMARY) {
+    return {
+      actionPolicy: "apply_or_reject",
+      conflictType: conflict.conflictType,
+      reviewKind: "staff_access",
+    };
+  }
+
+  if (summary === SERVICE_CUSTOMER_ATTRIBUTION_SYNC_REVIEW_SUMMARY) {
+    return {
+      actionPolicy: "reject_only",
+      conflictType: conflict.conflictType,
+      reviewKind: "service_customer_attribution",
+    };
+  }
+
+  return {
+    actionPolicy: "reject_only",
+    conflictType: conflict.conflictType,
+    reviewKind: "unknown",
+  };
 }
 
 function numberDetail(
@@ -83,19 +191,26 @@ export function buildRegisterSessionLocalSyncStatus(
 
   return {
     status: "needs_review",
-    reconciliationItems: conflicts.map((conflict) => ({
-      createdAt: conflict.createdAt,
-      countedCash: numberDetail(conflict.details, "countedCash"),
-      expectedCash: numberDetail(conflict.details, "expectedCash"),
-      id: conflict._id,
-      localEventId: conflict.localEventId,
-      notes: stringDetail(conflict.details, "notes") ?? conflict.sourceEventNotes,
-      sequence: conflict.sequence,
-      status: conflict.status,
-      summary: conflict.summary,
-      type: getSyncConflictReconciliationType(conflict),
-      variance: numberDetail(conflict.details, "variance"),
-    })),
+    reconciliationItems: conflicts.map((conflict) => {
+      const review = classifyRegisterSessionSyncReview(conflict);
+
+      return {
+        actionPolicy: review.actionPolicy,
+        createdAt: conflict.createdAt,
+        countedCash: numberDetail(conflict.details, "countedCash"),
+        expectedCash: numberDetail(conflict.details, "expectedCash"),
+        id: conflict._id,
+        localEventId: conflict.localEventId,
+        notes:
+          stringDetail(conflict.details, "notes") ?? conflict.sourceEventNotes,
+        reviewKind: review.reviewKind,
+        sequence: conflict.sequence,
+        status: conflict.status,
+        summary: conflict.summary,
+        type: getSyncConflictReconciliationType(review),
+        variance: numberDetail(conflict.details, "variance"),
+      };
+    }),
   };
 }
 

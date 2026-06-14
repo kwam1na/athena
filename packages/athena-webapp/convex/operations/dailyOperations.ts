@@ -138,6 +138,11 @@ type DailyOperationsCloseSummary = {
   itemAdjustmentCount: number;
   netCashVariance: number;
   netCashMovementTotal: number;
+  paymentTotals: Array<{
+    amount: number;
+    method: string;
+    transactionCount?: number;
+  }>;
   registerVarianceCount: number;
   salesTotal: number;
   transactionCount: number;
@@ -238,6 +243,7 @@ function emptyCloseSummary(): DailyOperationsCloseSummary {
     itemAdjustmentCount: 0,
     netCashVariance: 0,
     netCashMovementTotal: 0,
+    paymentTotals: [],
     registerVarianceCount: 0,
     salesTotal: 0,
     transactionCount: 0,
@@ -1584,6 +1590,7 @@ export async function buildDailyOperationsSnapshotWithCtx(
       itemAdjustmentCount: closeSnapshot.summary.itemAdjustmentCount,
       netCashVariance: closeSnapshot.summary.netCashVariance,
       netCashMovementTotal: closeSnapshot.summary.netCashMovementTotal,
+      paymentTotals: closeSnapshot.summary.paymentTotals ?? [],
       registerVarianceCount: closeSnapshot.summary.registerVarianceCount,
       salesTotal: closeSnapshot.summary.salesTotal,
       transactionCount: closeSnapshot.summary.transactionCount,

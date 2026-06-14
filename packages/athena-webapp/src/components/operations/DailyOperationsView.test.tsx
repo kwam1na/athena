@@ -1,5 +1,13 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
-import type { AnchorHTMLAttributes, ReactNode } from "react";
+import {
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
+import React, {
+  type AnchorHTMLAttributes,
+  type ReactNode,
+} from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -21,18 +29,15 @@ const mockedApi = vi.hoisted(() => ({
 }));
 
 vi.mock("@tanstack/react-router", () => ({
-  Link: ({
-    children,
-    params,
-    search,
-    to,
-    ...props
-  }: AnchorHTMLAttributes<HTMLAnchorElement> & {
-    children: ReactNode;
-    params?: Record<string, string>;
-    search?: Record<string, string>;
-    to?: string;
-  }) => {
+  Link: React.forwardRef<
+    HTMLAnchorElement,
+    AnchorHTMLAttributes<HTMLAnchorElement> & {
+      children: ReactNode;
+      params?: Record<string, string>;
+      search?: Record<string, string>;
+      to?: string;
+    }
+  >(({ children, params, search, to, ...props }, ref) => {
     const path = to
       ? Object.entries(params ?? {}).reduce(
           (currentPath, [key, value]) =>
@@ -43,11 +48,11 @@ vi.mock("@tanstack/react-router", () => ({
     const searchParams = search ? `?${new URLSearchParams(search)}` : "";
 
     return (
-      <a href={`${path}${searchParams}`} {...props}>
+      <a ref={ref} href={`${path}${searchParams}`} {...props}>
         {children}
       </a>
     );
-  },
+  }),
   useParams: () => ({
     orgUrlSlug: "wigclub",
     storeUrlSlug: "osu",
@@ -163,6 +168,10 @@ const operatingSnapshot: DailyOperationsSnapshot = {
     expenseTotal: 19800,
     expenseTransactionCount: 1,
     netCashVariance: 0,
+    paymentTotals: [
+      { amount: 349100, method: "cash", transactionCount: 2 },
+      { amount: 1184000, method: "mobile_money", transactionCount: 2 },
+    ],
     registerVarianceCount: 0,
     salesTotal: 1533100,
     transactionCount: 3,
@@ -587,10 +596,15 @@ function renderContent(
 }
 
 describe("DailyOperationsViewContent", () => {
+  let scrollIntoViewMock: ReturnType<typeof vi.fn>;
+
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2026, 4, 10, 12));
     window.scrollTo = vi.fn();
+    scrollIntoViewMock = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoViewMock;
+    HTMLElement.prototype.scrollIntoView = scrollIntoViewMock;
     window.history.pushState({}, "", "/wigclub/store/osu/operations");
     mockedHooks.navigate.mockReset();
     mockedHooks.useSearch.mockReturnValue({});
@@ -624,14 +638,29 @@ describe("DailyOperationsViewContent", () => {
     );
     expect(screen.getByText("GH₵3,491")).toBeInTheDocument();
     expect(screen.getByText("2 cash transactions")).toBeInTheDocument();
+    expect(screen.getByText("Mobile Money")).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Open Mobile Money transactions" }),
+    ).toHaveAttribute(
+      "href",
+      "/wigclub/store/osu/pos/transactions?o=%252Fwigclub%252Fstore%252Fosu%252Foperations&operatingDate=2026-05-08&paymentMethod=mobile_money",
+    );
+    expect(screen.getByText("GH₵11,840")).toBeInTheDocument();
+    expect(screen.getByText("2 payments")).toBeInTheDocument();
     expect(screen.getByText("Carried-over cash")).toBeInTheDocument();
     expect(screen.getAllByText("GH₵0")).not.toHaveLength(0);
     expect(screen.getByText("No registers from prior days")).toBeInTheDocument();
     expect(screen.getByText("Expenses")).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Open expense reports" }),
+    ).toHaveAttribute(
+      "href",
+      "/wigclub/store/osu/pos/expense-reports?o=%252Fwigclub%252Fstore%252Fosu%252Foperations&operatingDate=2026-05-08",
+    );
     expect(screen.getByText("GH₵198")).toBeInTheDocument();
     expect(screen.getByText("1 expense transaction")).toBeInTheDocument();
-    expect(screen.getByText("Variance")).toBeInTheDocument();
-    expect(screen.getByText("No register variances")).toBeInTheDocument();
+    expect(screen.queryByText("Variance")).not.toBeInTheDocument();
+    expect(screen.queryByText("No register variances")).not.toBeInTheDocument();
     expect(
       screen.getByRole("heading", { name: "Week at a glance" }),
     ).toBeInTheDocument();
@@ -665,6 +694,11 @@ describe("DailyOperationsViewContent", () => {
     expect(
       screen.getByRole("link", { name: "View May 8, 2026 operations" }),
     ).toHaveAttribute("aria-current", "date");
+    expect(scrollIntoViewMock).toHaveBeenCalledWith({
+      behavior: "auto",
+      block: "nearest",
+      inline: "center",
+    });
     expect(
       screen.getByRole("button", {
         name: "Change operating date, currently Friday, May 8, 2026",
@@ -732,6 +766,18 @@ describe("DailyOperationsViewContent", () => {
     ).toHaveAttribute(
       "href",
       "/wigclub/store/osu/pos/transactions?o=%252Fwigclub%252Fstore%252Fosu%252Foperations&paymentMethod=cash",
+    );
+    expect(
+      screen.getByRole("link", { name: "Open Mobile Money transactions" }),
+    ).toHaveAttribute(
+      "href",
+      "/wigclub/store/osu/pos/transactions?o=%252Fwigclub%252Fstore%252Fosu%252Foperations&paymentMethod=mobile_money",
+    );
+    expect(
+      screen.getByRole("link", { name: "Open expense reports" }),
+    ).toHaveAttribute(
+      "href",
+      "/wigclub/store/osu/pos/expense-reports?o=%252Fwigclub%252Fstore%252Fosu%252Foperations",
     );
     expect(
       screen.getByRole("link", { name: "Start EOD Review" }),

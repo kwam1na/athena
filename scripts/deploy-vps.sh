@@ -40,6 +40,10 @@ Commands:
   qa-athena         Refresh the Athena admin QA dev server.
   qa-storefront     Refresh the storefront QA dev server.
   convex-prod       Deploy Convex from the local checkout.
+  convex-athena-local
+                    Deploy Convex plus a locally built Athena admin app.
+  convex-storefront-local
+                    Deploy Convex plus a locally built storefront.
   full-prod         Deploy Convex, locally built static apps, and Valkey proxy.
   full-prod-local   Alias for full-prod.
   all               Deploy full-prod with local builds and refresh QA.
@@ -836,6 +840,14 @@ case "$command" in
     ;;
   convex-prod)
     deploy_convex_prod
+    ;;
+  convex-athena-local)
+    deploy_convex_prod
+    deploy_athena_local
+    ;;
+  convex-storefront-local)
+    deploy_convex_prod
+    deploy_storefront_local
     ;;
   full-prod)
     require_remote_source "$REMOTE_REPO" "$REMOTE_SOURCE_DIR" "$DEPLOY_REF"

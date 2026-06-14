@@ -8,12 +8,15 @@ import {
   getInitialRuntimeBuildMetadata,
   readRuntimeBuildMetadata,
 } from "@/lib/runtimeBuildMetadata";
+import { readPosAppShellReadiness } from "@/offline/posAppShellReadiness";
+import { isLocalPinVerifierMetadata } from "@/lib/security/localPinVerifier";
 import {
   createIndexedDbPosLocalStorageAdapter,
   createPosLocalStore,
   type PosLocalCloudMapping,
   type PosDrawerAuthorityState,
   type PosLocalEventRecord,
+  type PosLocalStaffAuthorityRecord,
   type PosLocalStaffAuthorityReadiness,
   type PosLocalStoreResult,
   type PosTerminalIntegrityState,
@@ -35,6 +38,7 @@ import {
   readProjectedLocalRegisterModel,
   readScopedPosLocalEvents,
 } from "./localRegisterReader";
+import type { PosLocalCashDrawerReadModel } from "./registerReadModel";
 import {
   isPosLocalEventInTerminalScope,
   resolvePosLocalTerminalScope,
@@ -43,6 +47,8 @@ import {
   buildPosTerminalRuntimeCopyDiagnostics,
   buildPosTerminalRuntimeStatus,
   toReportablePosTerminalRuntimeStatus,
+  type PosTerminalRuntimeActiveRegisterSessionInput,
+  type PosTerminalRuntimeAppShellInput,
   type PosTerminalRuntimeAppSessionRecoveryInput,
   type PosTerminalRuntimeCopyDiagnostics,
   type PosTerminalRuntimeSnapshotReadiness,
@@ -156,9 +162,14 @@ export function usePosLocalSyncRuntimeStatus(input: {
   const acknowledgeTerminalRecoveryCommand = useMutation(
     api.pos.public.terminals.acknowledgeTerminalRecoveryCommand,
   );
+  const refreshTerminalStaffAuthority = useMutation(
+    api.operations.staffCredentials.refreshTerminalStaffAuthority,
+  );
   const [events, setEvents] = useState<PosLocalEventRecord[]>([]);
   const [runtimeReadiness, setRuntimeReadiness] =
     useState<PosTerminalRuntimeReadiness>({
+      activeRegisterSession: null,
+      appShell: null,
       drawerAuthority: null,
       snapshots: {},
       staffAuthorityStatus: "unknown",
@@ -283,6 +294,8 @@ export function usePosLocalSyncRuntimeStatus(input: {
         setEvents([]);
         setReadError(null);
         setRuntimeReadiness({
+          activeRegisterSession: null,
+          appShell: null,
           drawerAuthority: null,
           snapshots: {},
           staffAuthorityStatus: "unknown",
@@ -767,6 +780,8 @@ export function usePosLocalSyncRuntimeStatus(input: {
 
   const runtimeStatusInput = useMemo(
     () => ({
+      activeRegisterSession: runtimeReadiness.activeRegisterSession,
+      appShell: runtimeReadiness.appShell,
       appSessionRecovery: input.appSessionRecovery,
       appVersion: runtimeBuildMetadata.appVersion,
       buildSha: runtimeBuildMetadata.buildSha,
@@ -789,6 +804,8 @@ export function usePosLocalSyncRuntimeStatus(input: {
       input.staffAuthorityStatus,
       isOnline,
       readError,
+      runtimeReadiness.activeRegisterSession,
+      runtimeReadiness.appShell,
       runtimeBuildMetadata.appVersion,
       runtimeBuildMetadata.buildSha,
       runtimeReadiness.drawerAuthority,
@@ -1108,6 +1125,59 @@ export function usePosLocalSyncRuntimeStatus(input: {
       const localResult = await executeTerminalRecoveryCommand({
         command: claimResult.data,
         onRetrySync: requestRetry,
+        refreshStaffAuthority: async ({ storeId, terminalId }) => {
+          if (typeof store.replaceStaffAuthoritySnapshot !== "function") {
+            throw new Error("Local staff authority storage is unavailable.");
+          }
+
+          const result = await refreshTerminalStaffAuthority({
+            storeId: storeId as Id<"store">,
+            terminalId: terminalId as Id<"posTerminal">,
+          });
+          if (result.kind !== "ok") {
+            await store.replaceStaffAuthoritySnapshot({
+              records: [],
+              storeId,
+              terminalId,
+            });
+            throw new Error(
+              result.kind === "user_error"
+                ? result.error.message
+                : "Staff authority refresh failed.",
+            );
+          }
+
+          const records = result.data.flatMap((record) => {
+            if (record.status !== "active" && record.status !== "revoked") {
+              return [];
+            }
+            const verifier = record.verifier;
+            if (!isLocalPinVerifierMetadata(verifier)) {
+              return [];
+            }
+
+            const localRecord: PosLocalStaffAuthorityRecord = {
+              ...record,
+              status: record.status,
+              verifier,
+            };
+            return [localRecord];
+          });
+          const writeResult = await store.replaceStaffAuthoritySnapshot({
+            records,
+            storeId,
+            terminalId,
+          });
+          if (!writeResult.ok) {
+            throw new Error(writeResult.error.message);
+          }
+
+          return {
+            message: "Staff authority refreshed.",
+            refreshedAt: Date.now(),
+            status: "ready",
+          };
+        },
         store,
         storeId,
         terminalId: runtimeStatusTerminalId,
@@ -1144,6 +1214,18 @@ export function usePosLocalSyncRuntimeStatus(input: {
         }
       }
       if (isStale) return;
+
+      if (acknowledged.kind === "ok") {
+        const readiness = await refreshTerminalRuntimeReadiness({
+          store,
+          storeId,
+          terminalId: runtimeStatusTerminalId,
+          terminalSeed: runtimeReadiness.terminalSeed,
+        });
+        if (isStale) return;
+
+        setRuntimeReadiness(readiness);
+      }
 
       setDebug((current) => ({
         ...current,
@@ -1183,6 +1265,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
     onLocalEventsChanged,
     recoveryCommandRetryToken,
     recoveryCommands,
+    refreshTerminalStaffAuthority,
     requestRetry,
     runtimeReadiness.terminalSeed,
     runtimeStatusSyncSecretHash,
@@ -1236,6 +1319,8 @@ export function usePosLocalSyncRuntimeStatus(input: {
 }
 
 type PosTerminalRuntimeReadiness = {
+  activeRegisterSession: PosTerminalRuntimeActiveRegisterSessionInput | null;
+  appShell: PosTerminalRuntimeAppShellInput | null;
   drawerAuthority: PosDrawerAuthorityState | null;
   snapshots: PosTerminalRuntimeSnapshotReadiness;
   staffAuthorityStatus: PosLocalStaffAuthorityReadiness | "unknown";
@@ -1273,6 +1358,7 @@ async function refreshTerminalRuntimeReadiness(input: {
     availability,
     staffAuthority,
     terminalIntegrity,
+    appShell,
   ] = await Promise.all([
     store.readRegisterCatalogSnapshot
       ? store.readRegisterCatalogSnapshot({ storeId: input.storeId })
@@ -1295,6 +1381,7 @@ async function refreshTerminalRuntimeReadiness(input: {
           terminalId: input.terminalId,
         })
       : Promise.resolve({ ok: true as const, value: null }),
+    readPosAppShellReadiness(),
   ]);
   const localRegisterModel =
     input.terminalId && readDrawerAuthorityState
@@ -1331,6 +1418,13 @@ async function refreshTerminalRuntimeReadiness(input: {
   }
 
   return {
+    activeRegisterSession:
+      localRegisterModel.ok && localRegisterModel.value?.activeRegisterSession
+        ? toRuntimeActiveRegisterSession(
+            localRegisterModel.value.activeRegisterSession,
+          )
+        : null,
+    appShell,
     drawerAuthority: drawerAuthority.ok ? drawerAuthority.value : null,
     snapshots: {
       ...(catalog.ok && catalog.value
@@ -1346,6 +1440,20 @@ async function refreshTerminalRuntimeReadiness(input: {
     staffAuthorityStatus: staffAuthority.ok ? staffAuthority.value : "unknown",
     terminalIntegrity: terminalIntegrity.ok ? terminalIntegrity.value : null,
     terminalSeed: input.terminalSeed,
+  };
+}
+
+function toRuntimeActiveRegisterSession(
+  session: PosLocalCashDrawerReadModel,
+): PosTerminalRuntimeActiveRegisterSessionInput {
+  return {
+    ...(session.cloudRegisterSessionId
+      ? { cloudRegisterSessionId: session.cloudRegisterSessionId }
+      : {}),
+    localRegisterSessionId: session.localRegisterSessionId,
+    openedAt: session.openedAt,
+    ...(session.registerNumber ? { registerNumber: session.registerNumber } : {}),
+    status: session.status,
   };
 }
 

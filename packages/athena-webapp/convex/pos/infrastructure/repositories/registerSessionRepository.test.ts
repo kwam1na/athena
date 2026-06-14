@@ -50,12 +50,14 @@ describe("register session repository", () => {
       status: "needs_review",
       reconciliationItems: [
         {
+          actionPolicy: "apply_or_reject",
           createdAt: 1710000000000,
           countedCash: 4_500,
           expectedCash: 5_000,
           id: "sync-conflict-1",
           localEventId: "event-register-closed-1",
           notes: "Short drawer",
+          reviewKind: "register_closeout_variance",
           sequence: 3,
           status: "needs_review",
           summary:
@@ -64,12 +66,14 @@ describe("register session repository", () => {
           variance: -500,
         },
         {
+          actionPolicy: "apply_or_reject",
           createdAt: 1710000000001,
           countedCash: 4_700,
           expectedCash: 5_000,
           id: "sync-conflict-2",
           localEventId: "event-register-closed-2",
           notes: "Recovered from source event",
+          reviewKind: "register_closeout_variance",
           sequence: 4,
           status: "needs_review",
           summary:

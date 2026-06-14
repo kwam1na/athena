@@ -177,6 +177,7 @@ describe("terminalRecoveryCommands", () => {
 
     expect(result).toEqual({
       commandId: "command-1",
+      message: "Terminal evidence changed before this recovery command could run.",
       reason: "precondition_failed",
       status: "precondition_failed",
       type: "repair_terminal_seed",
@@ -453,6 +454,8 @@ describe("terminalRecoveryCommands", () => {
 
     expect(result).toEqual({
       commandId: "command-1",
+      message:
+        "Drawer repair expected a blocked drawer authority record, but this terminal no longer reported that same block.",
       reason: "unsafe_authority_state",
       status: "precondition_failed",
       type: "clear_stale_drawer_authority",

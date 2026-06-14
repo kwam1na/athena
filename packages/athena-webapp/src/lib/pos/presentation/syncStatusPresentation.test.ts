@@ -111,4 +111,21 @@ describe("formatPosReconciliationType", () => {
       }),
     ).toBe("Closeout variance review");
   });
+
+  it("detects closeout review items from review kind without parsing copy", () => {
+    expect(
+      isRegisterCloseoutReviewItem({
+        reviewKind: "register_closeout_variance",
+        summary: "Synced register closeout has a variance.",
+        type: "permission",
+      }),
+    ).toBe(true);
+    expect(
+      formatPosReconciliationType("permission", {
+        reviewKind: "duplicate_register_closeout",
+        summary: "This copy can change without changing the review category.",
+        type: "permission",
+      }),
+    ).toBe("Closeout variance review");
+  });
 });

@@ -1,5 +1,5 @@
 const POS_APP_SHELL_SERVICE_WORKER_URL = "/pos-app-shell-sw.js";
-const POS_APP_SHELL_CACHE_PREFIX = "athena-pos-app-shell-";
+export const POS_APP_SHELL_CACHE_PREFIX = "athena-pos-app-shell-";
 
 let registrationStarted = false;
 
