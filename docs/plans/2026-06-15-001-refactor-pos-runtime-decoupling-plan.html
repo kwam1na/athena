@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>refactor: Decouple the POS Runtime</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #172026;
+      --muted: #5d6972;
+      --line: #d7dee3;
+      --panel: #f7f9fa;
+      --accent: #176c5f;
+      --accent-soft: #e5f3ef;
+      --warn: #8a5a00;
+      --warn-soft: #fff4da;
+      --risk: #9f2f2f;
+      --risk-soft: #fae8e7;
+      --code: #0f2f2b;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--ink);
+      background: #ffffff;
+      line-height: 1.5;
+    }
+
+    main {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 32px 24px 56px;
+    }
+
+    header {
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 22px;
+      margin-bottom: 28px;
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: clamp(30px, 5vw, 48px);
+      line-height: 1.05;
+      letter-spacing: 0;
+    }
+
+    h2 {
+      margin: 34px 0 12px;
+      font-size: 22px;
+      line-height: 1.2;
+      letter-spacing: 0;
+    }
+
+    h3 {
+      margin: 24px 0 10px;
+      font-size: 17px;
+      line-height: 1.3;
+      letter-spacing: 0;
+    }
+
+    p, li {
+      font-size: 15px;
+    }
+
+    p {
+      margin: 0 0 14px;
+    }
+
+    ul {
+      margin: 10px 0 18px;
+      padding-left: 22px;
+    }
+
+    li + li {
+      margin-top: 6px;
+    }
+
+    code {
+      color: var(--code);
+      background: #eef4f2;
+      border: 1px solid #d9e7e2;
+      border-radius: 4px;
+      padding: 1px 4px;
+      font-size: 0.93em;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 14px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      padding: 4px 10px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--muted);
+      font-size: 13px;
+      background: #fff;
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+      gap: 18px;
+      margin: 20px 0 28px;
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 18px;
+    }
+
+    .panel h2:first-child,
+    .panel h3:first-child {
+      margin-top: 0;
+    }
+
+    .callout {
+      border-left: 4px solid var(--accent);
+      background: var(--accent-soft);
+      padding: 14px 16px;
+      margin: 18px 0;
+    }
+
+    .risk {
+      border-color: var(--risk);
+      background: var(--risk-soft);
+    }
+
+    .warn {
+      border-color: var(--warn);
+      background: var(--warn-soft);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 14px;
+    }
+
+    .unit {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px;
+      background: #ffffff;
+    }
+
+    .unit h3 {
+      margin-top: 0;
+    }
+
+    .deps {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+      background: #ffffff;
+      overflow-x: auto;
+    }
+
+    .deps svg {
+      min-width: 820px;
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+
+    .node {
+      fill: #ffffff;
+      stroke: #839199;
+      stroke-width: 1.5;
+    }
+
+    .node.primary {
+      fill: var(--accent-soft);
+      stroke: var(--accent);
+    }
+
+    .edge {
+      stroke: #839199;
+      stroke-width: 1.7;
+      fill: none;
+      marker-end: url(#arrow);
+    }
+
+    .label {
+      font-size: 13px;
+      fill: var(--ink);
+      text-anchor: middle;
+      dominant-baseline: middle;
+    }
+
+    .small {
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    @media (max-width: 760px) {
+      main {
+        padding: 24px 16px 42px;
+      }
+
+      .summary,
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>refactor: Decouple the POS Runtime</h1>
+      <p>Focused plan for splitting the current POS browser runtime and Terminal Health recovery paths while preserving cashier continuity and existing runtime contracts.</p>
+      <div class="meta">
+        <span class="pill">type: refactor</span>
+        <span class="pill">status: active</span>
+        <span class="pill">date: 2026-06-15</span>
+        <span class="pill">worktree: codex/pos-runtime-decoupling</span>
+      </div>
+    </header>
+
+    <section class="summary">
+      <div class="panel">
+        <h2>What changes</h2>
+        <p>The public runtime facade stays stable, while readiness sensing, sync draining, drawer-authority reconciliation, runtime status publication, recovery command execution, staff authority refresh, runtime-status side effects, and Terminal Health presentation move into explicit modules.</p>
+        <p>The plan also splits detail-only Terminal Health work out of roster rows without splitting the truth operators see.</p>
+      </div>
+      <div class="panel">
+        <h2>What stays fixed</h2>
+        <ul>
+          <li>Local-first POS sales continue through check-in and support failures.</li>
+          <li>Runtime check-ins stay latest-wins serialized.</li>
+          <li>Recovery commands verify through fresh runtime evidence.</li>
+          <li>Remote Assist presence does not grant POS authority.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section>
+      <h2>Core Boundary</h2>
+      <div class="callout">
+        <p><strong>Sales readiness, support recovery, and diagnostic evidence remain separate.</strong> Terminal Health should treat <code>TerminalRecoveryPreview</code> as the primary recovery source of truth, while raw fallback paths exist only for older or partial responses.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>Dependency Shape</h2>
+      <div class="deps" role="img" aria-label="Implementation dependency graph">
+        <svg viewBox="0 0 920 420" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <marker id="arrow" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L10,4 L0,8 Z" fill="#839199"></path>
+            </marker>
+          </defs>
+          <rect class="node primary" x="30" y="50" width="160" height="58" rx="8"></rect>
+          <text class="label" x="110" y="79">U1 Readiness</text>
+          <rect class="node" x="250" y="20" width="180" height="58" rx="8"></rect>
+          <text class="label" x="340" y="49">U2 Sync drain</text>
+          <rect class="node" x="250" y="112" width="180" height="58" rx="8"></rect>
+          <text class="label" x="340" y="141">U3 Publisher</text>
+          <rect class="node" x="490" y="92" width="190" height="58" rx="8"></rect>
+          <text class="label" x="585" y="121">U4 Commands + staff</text>
+          <rect class="node" x="490" y="188" width="190" height="58" rx="8"></rect>
+          <text class="label" x="585" y="217">U5 Server effects</text>
+          <rect class="node" x="730" y="188" width="160" height="58" rx="8"></rect>
+          <text class="label" x="810" y="217">U6 Health split</text>
+          <rect class="node" x="730" y="284" width="160" height="58" rx="8"></rect>
+          <text class="label" x="810" y="313">U7 Presentation</text>
+          <rect class="node primary" x="330" y="316" width="210" height="58" rx="8"></rect>
+          <text class="label" x="435" y="345">U8 Facade + validation</text>
+
+          <path class="edge" d="M190 74 C215 62 225 52 250 49"></path>
+          <path class="edge" d="M190 85 C220 110 225 135 250 141"></path>
+          <path class="edge" d="M430 141 C455 135 465 126 490 121"></path>
+          <path class="edge" d="M430 150 C470 178 465 207 490 217"></path>
+          <path class="edge" d="M680 217 L730 217"></path>
+          <path class="edge" d="M810 246 L810 284"></path>
+          <path class="edge" d="M110 108 C130 270 245 342 330 345"></path>
+          <path class="edge" d="M340 78 C330 178 350 273 390 316"></path>
+          <path class="edge" d="M340 170 C355 238 385 285 420 316"></path>
+          <path class="edge" d="M585 150 C565 222 520 278 470 316"></path>
+          <path class="edge" d="M730 313 C660 340 600 350 540 345"></path>
+        </svg>
+      </div>
+    </section>
+
+    <section>
+      <h2>Implementation Units</h2>
+      <div class="grid">
+        <article class="unit">
+          <h3>U1 Readiness sensing</h3>
+          <p>Extract local readiness observation from <code>usePosLocalSyncRuntime.ts</code> into <code>runtimeReadiness.ts</code>, without upload or publish side effects.</p>
+        </article>
+        <article class="unit">
+          <h3>U2 Sync drain coordinator</h3>
+          <p>Own upload scheduling, retry timing, status-only behavior, and append-triggered uploads behind a focused coordinator.</p>
+        </article>
+        <article class="unit">
+          <h3>U3 Runtime status publisher</h3>
+          <p>Preserve serialized latest-wins publication, payload signatures, and best-effort failure handling in a tested publisher module.</p>
+        </article>
+        <article class="unit">
+          <h3>U4 Commands + staff authority</h3>
+          <p>Extract recovery command orchestration and centralize redacted staff-authority refresh/write behavior by context.</p>
+        </article>
+        <article class="unit">
+          <h3>U5 Server side effects</h3>
+          <p>Name and test runtime-status side effects: command verification, Remote Assist presence, and session claims after accepted check-in.</p>
+        </article>
+        <article class="unit">
+          <h3>U6 Terminal Health split</h3>
+          <p>Make roster cheaper while sharing recovery/readiness classification rules with detail views.</p>
+        </article>
+        <article class="unit">
+          <h3>U7 Preview-first presentation</h3>
+          <p>Make <code>TerminalRecoveryPreview</code> primary in frontend presentation, with legacy fallback only when preview is absent.</p>
+        </article>
+        <article class="unit">
+          <h3>U8 Facade + validation</h3>
+          <p>Reassemble the facade, run focused tests, rebuild graph knowledge, and use <code>bun run pr:athena</code> as the final integration gate.</p>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <h2>Operator Contract</h2>
+      <div class="panel">
+        <p>Terminal Health list and detail must preserve the same terminal identity, runtime freshness, recovery readiness, current safe action category, latest command state, and local sync evidence classification.</p>
+        <p>Command acknowledgement remains an intermediate state: operators see that the terminal ran the helper, but the terminal is not called recovered until fresh runtime proof verifies the expected evidence.</p>
+        <p>Roster optimization is limited to avoiding detail-only command/action work in rows. List-visible recovery fields still include readiness, action category, duplicate-disable command state, verification state, and sync classification.</p>
+        <p>Post-status server side effects are isolated: accepted runtime status stays accepted, command verification still runs, and Remote Assist failures remain diagnostics.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>High-Risk Checks</h2>
+      <div class="callout risk">
+        <ul>
+          <li>Runtime check-in conflicts must not return.</li>
+          <li>Status-only pages must not start upload drains.</li>
+          <li>Command acknowledgement must not masquerade as verified health.</li>
+          <li>Roster optimization must not contradict detail recovery state.</li>
+          <li>Staff authority helper must classify refresh results before changing local clearing behavior.</li>
+          <li>Staff authority helper must not leak proof/PIN material or clear authority on generic failures.</li>
+          <li>Remote Assist runtime host drain ownership must stay explicit so extraction does not create duplicate or missing upload schedulers.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section>
+      <h2>Validation</h2>
+      <p>Focused coverage should center on runtime extraction tests, terminal command runtime tests, staff authority classifier/helper tests, drawer-authority reconciliation tests, Terminal Health server/presentation parity tests, Remote Assist side-effect tests, and existing facade/consumer tests.</p>
+      <div class="callout warn">
+        <p>After code changes, run <code>bun run graphify:rebuild</code>. Before merge or PR handoff, run <code>bun run pr:athena</code>.</p>
+      </div>
+      <p class="small">See the markdown plan for full file lists and scenario-level validation details.</p>
+    </section>
+  </main>
+</body>
+</html>

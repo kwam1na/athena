@@ -187,6 +187,7 @@ import type * as pos_application_terminalRecovery_cloudRepairPolicy from "../pos
 import type * as pos_application_terminalRecovery_resolveTerminalCloudRepair from "../pos/application/terminalRecovery/resolveTerminalCloudRepair.js";
 import type * as pos_application_terminalRecovery_terminalCommandService from "../pos/application/terminalRecovery/terminalCommandService.js";
 import type * as pos_application_terminalRecovery_types from "../pos/application/terminalRecovery/types.js";
+import type * as pos_application_terminalRuntime_postRuntimeStatusSideEffects from "../pos/application/terminalRuntime/postRuntimeStatusSideEffects.js";
 import type * as pos_domain_errors from "../pos/domain/errors.js";
 import type * as pos_domain_sessionRules from "../pos/domain/sessionRules.js";
 import type * as pos_domain_types from "../pos/domain/types.js";
@@ -562,6 +563,7 @@ declare const fullApi: ApiFromModules<{
   "pos/application/terminalRecovery/resolveTerminalCloudRepair": typeof pos_application_terminalRecovery_resolveTerminalCloudRepair;
   "pos/application/terminalRecovery/terminalCommandService": typeof pos_application_terminalRecovery_terminalCommandService;
   "pos/application/terminalRecovery/types": typeof pos_application_terminalRecovery_types;
+  "pos/application/terminalRuntime/postRuntimeStatusSideEffects": typeof pos_application_terminalRuntime_postRuntimeStatusSideEffects;
   "pos/domain/errors": typeof pos_domain_errors;
   "pos/domain/sessionRules": typeof pos_domain_sessionRules;
   "pos/domain/types": typeof pos_domain_types;

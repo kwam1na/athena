@@ -31,8 +31,8 @@ import {
 import {
   createIndexedDbPosLocalStorageAdapter,
   createPosLocalStore,
-  type PosLocalStaffAuthorityRecord,
 } from "@/lib/pos/infrastructure/local/posLocalStore";
+import { refreshAndStoreTerminalStaffAuthority } from "@/lib/pos/infrastructure/local/terminalStaffAuthorityRefresh";
 import { logger } from "@/lib/logger";
 
 type DailyOpeningSnapshot = {
@@ -147,52 +147,28 @@ export function POSRegisterOpeningGuard({
     }
 
     void (async () => {
-      let result: CommandResult<PosLocalStaffAuthorityRecord[]>;
-      try {
-        result = await (
-          refreshTerminalStaffAuthority as (args: {
-            storeId: Id<"store">;
-            terminalId: Id<"posTerminal">;
-          }) => Promise<CommandResult<PosLocalStaffAuthorityRecord[]>>
-        )({ storeId, terminalId });
-      } catch (error) {
-        logger.warn("[POS] Staff authority background refresh failed", {
-          message: error instanceof Error ? error.message : String(error),
-          storeId,
-          terminalId,
-        });
-        return;
-      }
-
-      if (result.kind !== "ok") {
-        logger.warn("[POS] Staff authority background refresh skipped", {
-          kind: result.kind,
-          storeId,
-          terminalId,
-        });
-        const clearResult = await localStore.replaceStaffAuthoritySnapshot({
-          records: [],
-          storeId,
-          terminalId,
-        });
-        if (!clearResult.ok) {
-          logger.warn("[POS] Staff authority snapshot could not be cleared", {
-            code: clearResult.error.code,
-            storeId,
-            terminalId,
-          });
-        }
-        return;
-      }
-
-      const writeResult = await localStore.replaceStaffAuthoritySnapshot({
-        records: result.data,
+      const result = await refreshAndStoreTerminalStaffAuthority({
+        localStore,
+        refreshTerminalStaffAuthority: refreshTerminalStaffAuthority as Parameters<
+          typeof refreshAndStoreTerminalStaffAuthority
+        >[0]["refreshTerminalStaffAuthority"],
         storeId,
         terminalId,
       });
-      if (!writeResult.ok) {
+
+      if (result.status === "preserved") {
+        logger.warn("[POS] Staff authority background refresh skipped", {
+          code: result.code,
+          message: result.message,
+          storeId,
+          terminalId,
+        });
+        return;
+      }
+
+      if (result.status === "write_failed") {
         logger.warn("[POS] Staff authority background refresh could not be stored", {
-          code: writeResult.error.code,
+          message: result.message,
           storeId,
           terminalId,
         });

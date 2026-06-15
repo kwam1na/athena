@@ -29,12 +29,10 @@ import {
   claimTerminalRecoveryCommand as claimTerminalRecoveryCommandService,
   issueTerminalRecoveryCommand as issueTerminalRecoveryCommandService,
   listClaimableTerminalRecoveryCommands,
-  verifyTerminalRecoveryCommandsFromRuntime,
 } from "../application/terminalRecovery/terminalCommandService";
+import { runAcceptedRuntimeStatusSideEffects } from "../application/terminalRuntime/postRuntimeStatusSideEffects";
 import { createTerminalRecoveryCommandRepository } from "../infrastructure/repositories/terminalRecoveryRepository";
-import { buildPosRemoteAssistClientPresence } from "../../remoteAssist/application/posRuntimeAdapter";
 import {
-  claimRemoteAssistSession,
   disconnectRemoteAssistRuntimeSession,
 } from "../../remoteAssist/application/sessionService";
 import { createRemoteAssistRepository } from "../../remoteAssist/infrastructure/remoteAssistRepository";
@@ -688,46 +686,14 @@ export const submitTerminalRuntimeStatus = mutation({
       status: safeStatus,
     });
     if (result.kind === "ok") {
-      const store = await ctx.db.get("store", args.storeId);
-      if (store) {
-        const remoteAssistRepository = createRemoteAssistRepository(ctx);
-        const remoteAssistClient = await remoteAssistRepository.upsertClient(
-          buildPosRemoteAssistClientPresence({
-            receivedAt: result.data.receivedAt,
-            runtimeStatus: safeStatus,
-            store,
-            terminal,
-          }),
-        );
-        const currentRemoteAssistSession =
-          await remoteAssistRepository.getCurrentSessionForClient({
-            clientId: remoteAssistClient._id,
-            now: result.data.receivedAt,
-          });
-        if (currentRemoteAssistSession?.status === "connecting") {
-          await claimRemoteAssistSession(remoteAssistRepository, {
-            clientId: remoteAssistClient._id,
-            now: result.data.receivedAt,
-            sessionId: currentRemoteAssistSession._id,
-          });
-        }
-      }
-      await verifyTerminalRecoveryCommandsFromRuntime(
-        createTerminalRecoveryCommandRepository(ctx),
-        {
-          runtimeStatus: {
-            _id: "runtime-status-current" as never,
-            _creationTime: result.data.receivedAt,
-            storeId: args.storeId,
-            terminalId: args.terminalId,
-            receivedAt: result.data.receivedAt,
-            ...safeStatus,
-          },
-          storeId: args.storeId,
-          terminalId: args.terminalId,
-          verifiedAt: result.data.receivedAt,
-        },
-      );
+      await runAcceptedRuntimeStatusSideEffects({
+        ctx,
+        receivedAt: result.data.receivedAt,
+        runtimeStatus: safeStatus,
+        storeId: args.storeId,
+        terminal,
+        terminalId: args.terminalId,
+      });
     }
     return result;
   },

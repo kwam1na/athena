@@ -295,7 +295,7 @@ describe("CashierAuthDialog", () => {
     expect(onAuthenticated).not.toHaveBeenCalled();
   });
 
-  it("clears local staff authority when an online refresh is refused", async () => {
+  it("preserves local staff authority when an online refresh is refused", async () => {
     const replaceStaffAuthoritySnapshot = vi.fn(async () => ({
       ok: true,
       value: [],
@@ -318,12 +318,12 @@ describe("CashierAuthDialog", () => {
     renderDialog({ refreshAuthorityMutation });
 
     await waitFor(() =>
-      expect(replaceStaffAuthoritySnapshot).toHaveBeenCalledWith({
-        records: [],
+      expect(refreshAuthorityMutation).toHaveBeenCalledWith({
         storeId,
         terminalId,
       }),
     );
+    expect(replaceStaffAuthoritySnapshot).not.toHaveBeenCalled();
   });
 
   it("uses expense session copy when signing into expense mode", () => {

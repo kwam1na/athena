@@ -489,7 +489,7 @@ function buildRecoveryBlockers(
   summary: TerminalHealthClassificationInput,
   recovery: TerminalRecoveryPreview | null | undefined = getTerminalRecoveryPreview(summary),
 ): RecoveryBlockerWithCategory[] {
-  if (recovery?.blockers) {
+  if (recovery?.blockers && !hasStructuredRecoveryPreview(recovery)) {
     return recovery.blockers.map((blocker, index) =>
       normalizeBackendRecoveryBlocker(blocker, index),
     );
@@ -503,7 +503,15 @@ function buildRecoveryBlockers(
 }
 
 function getTerminalRecoveryPreview(summary: TerminalHealthClassificationInput) {
-  return summary.recovery ?? summary.recoveryPreview ?? null;
+  return summary.recoveryPreview ?? summary.recovery ?? null;
+}
+
+function hasStructuredRecoveryPreview(recovery: TerminalRecoveryPreview) {
+  return Boolean(
+    (recovery.cloudRepair?.safeConflictIds.length ?? 0) > 0 ||
+      (recovery.terminalActions?.length ?? 0) > 0 ||
+      (recovery.manualReview?.length ?? 0) > 0,
+  );
 }
 
 function getRecoveryVerificationSummary(status?: TerminalRecoveryActionStatus | null) {

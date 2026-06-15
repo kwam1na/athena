@@ -273,6 +273,145 @@ describe("terminal health presentation", () => {
     expect(presentation.safeActions).toHaveLength(1);
   });
 
+  it("lets structured preview data win over legacy blockers in the same preview", () => {
+    const presentation = buildTerminalRecoveryPresentation({
+      recoveryPreview: {
+        blockers: [
+          {
+            category: "manual_review",
+            id: "raw-fallback-review",
+            summary: "Raw fallback review should not override the preview.",
+            title: "Raw fallback review",
+          },
+        ],
+        commandStatus: {
+          commandType: "retry_sync",
+          label: "Sync retry",
+          status: "pending",
+          verificationStatus: "waiting_for_acknowledgement",
+        },
+        readiness: "needs_terminal_action",
+        terminalActions: [
+          {
+            commandContext: {
+              expectedBlockerType: "local_review",
+              reason: "Local review items need a terminal sync retry.",
+            },
+            commandType: "retry_sync",
+            expectedEvidence: {
+              syncStatus: "idle",
+            },
+            reason: "Local review items need a terminal sync retry.",
+          },
+        ],
+      },
+      runtimeStatus: null,
+      syncEvidence: {},
+      terminal: { status: "active" },
+    });
+
+    expect(presentation.readiness.label).toBe("Needs terminal action");
+    expect(presentation.groups.manualReview).toEqual([]);
+    expect(presentation.groups.terminalRequired).toEqual([
+      expect.objectContaining({
+        action: expect.objectContaining({
+          commandType: "retry_sync",
+          status: "pending",
+        }),
+        summary: "Sync retry command is queued for this checkout station.",
+        title: "Terminal sync retry",
+      }),
+    ]);
+    expect(presentation.safeActions).toEqual([]);
+    expect(presentation.commandStatus).toEqual(
+      expect.objectContaining({
+        label: "Sync retry",
+        status: "Pending",
+        verificationStatus: "Waiting For Acknowledgement",
+      }),
+    );
+  });
+
+  it("keeps legacy blockers when preview only adds command lifecycle metadata", () => {
+    const presentation = buildTerminalRecoveryPresentation({
+      recoveryPreview: {
+        blockers: [
+          {
+            category: "manual_review",
+            id: "raw-fallback-review",
+            summary: "Payment allocation requires manager review.",
+            title: "Manual review required",
+          },
+        ],
+        commandStatus: {
+          commandType: "retry_sync",
+          label: "Sync retry",
+          status: "pending",
+          verificationStatus: "waiting_for_acknowledgement",
+        },
+        evidence: {
+          activeRegisterSession: true,
+          freshRuntimeRequiredForAbleToTransactNow: true,
+        },
+        readiness: "needs_manual_review",
+      },
+      runtimeStatus: null,
+      syncEvidence: {},
+      terminal: { status: "active" },
+    });
+
+    expect(presentation.readiness.label).toBe("Needs manual review");
+    expect(presentation.groups.manualReview).toEqual([
+      expect.objectContaining({
+        id: "raw-fallback-review",
+        summary: "Payment allocation requires manager review.",
+        title: "Manual review required",
+      }),
+    ]);
+    expect(presentation.commandStatus).toEqual(
+      expect.objectContaining({
+        label: "Sync retry",
+        status: "Pending",
+        verificationStatus: "Waiting For Acknowledgement",
+      }),
+    );
+  });
+
+  it("keeps legacy blockers when structured blocker fields are empty", () => {
+    const presentation = buildTerminalRecoveryPresentation({
+      recoveryPreview: {
+        blockers: [
+          {
+            category: "manual_review",
+            id: "raw-empty-structured-review",
+            summary: "A manager needs to review this terminal.",
+            title: "Manual review required",
+          },
+        ],
+        cloudRepair: {
+          preconditionHash: "terminal-cloud-repair:empty",
+          safeConflictIds: [],
+          skippedConflictIds: [],
+        },
+        manualReview: [],
+        readiness: "needs_manual_review",
+        terminalActions: [],
+      },
+      runtimeStatus: null,
+      syncEvidence: {},
+      terminal: { status: "active" },
+    });
+
+    expect(presentation.groups.manualReview).toEqual([
+      expect.objectContaining({
+        id: "raw-empty-structured-review",
+        summary: "A manager needs to review this terminal.",
+      }),
+    ]);
+    expect(presentation.groups.cloudRepair).toEqual([]);
+    expect(presentation.groups.terminalRequired).toEqual([]);
+  });
+
   it("suppresses duplicate recovery actions while command lifecycle is active", () => {
     const presentation = buildTerminalRecoveryPresentation({
       recovery: {
