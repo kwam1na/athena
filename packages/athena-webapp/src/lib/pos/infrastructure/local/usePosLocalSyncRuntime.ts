@@ -8,13 +8,11 @@ import {
   getInitialRuntimeBuildMetadata,
   readRuntimeBuildMetadata,
 } from "@/lib/runtimeBuildMetadata";
-import { readPosAppShellReadiness } from "@/offline/posAppShellReadiness";
 import { isLocalPinVerifierMetadata } from "@/lib/security/localPinVerifier";
 import {
   createIndexedDbPosLocalStorageAdapter,
   createPosLocalStore,
   type PosLocalCloudMapping,
-  type PosDrawerAuthorityState,
   type PosLocalEventRecord,
   type PosLocalStaffAuthorityRecord,
   type PosLocalStaffAuthorityReadiness,
@@ -23,9 +21,14 @@ import {
   type PosProvisionedTerminalSeed,
 } from "./posLocalStore";
 import {
+  clearRecoverableDrawerAuthorityForSyncedEvents,
+  clearSupersededRecoverableDrawerAuthorityBlocks,
+  isDrawerAuthorityLifecycleEvent,
+  persistDrawerAuthorityBlockForReviewEvents,
+} from "./drawerAuthorityReconciliation";
+import {
   buildPosLocalSyncUploadEvents,
   isSyncablePosLocalEvent,
-  isUploadDeferredByValidation,
   type PosLocalUploadEvent,
   type PosLocalSyncUploadSupport,
 } from "./syncContract";
@@ -35,23 +38,35 @@ import {
 } from "./syncScheduler";
 import { derivePosLocalSyncStatus } from "./syncStatus";
 import {
-  readProjectedLocalRegisterModel,
   readScopedPosLocalEvents,
 } from "./localRegisterReader";
-import type { PosLocalCashDrawerReadModel } from "./registerReadModel";
 import {
   isPosLocalEventInTerminalScope,
   resolvePosLocalTerminalScope,
 } from "./terminalScope";
 import {
+  emptyPosTerminalRuntimeReadiness,
+  refreshTerminalRuntimeReadiness,
+  type PosTerminalRuntimeReadiness,
+} from "./runtimeReadiness";
+import {
+  buildRuntimeSyncDebug,
+  getRuntimeUploadTrigger,
+  startStatusOnlyRuntimeTriggers,
+} from "./localSyncDrainCoordinator";
+import { refreshAndStoreTerminalStaffAuthority } from "./terminalStaffAuthorityRefresh";
+import {
+  getRuntimeBrowserInfo,
+  getRuntimeCheckInNotReadyReason,
+  getRuntimeStatusPublishSignature,
+  withRuntimeCheckInPublishDebug as withCheckInPublishDebug,
+} from "./runtimeStatusPublisher";
+import {
   buildPosTerminalRuntimeCopyDiagnostics,
   buildPosTerminalRuntimeStatus,
   toReportablePosTerminalRuntimeStatus,
-  type PosTerminalRuntimeActiveRegisterSessionInput,
-  type PosTerminalRuntimeAppShellInput,
   type PosTerminalRuntimeAppSessionRecoveryInput,
   type PosTerminalRuntimeCopyDiagnostics,
-  type PosTerminalRuntimeSnapshotReadiness,
   type PosTerminalRuntimeStatusPayload,
   type PosTerminalRuntimeStatusSource,
   type PosTerminalRuntimeSyncDebugInput,
@@ -60,6 +75,8 @@ import {
   executeTerminalRecoveryCommand,
   type PosTerminalRecoveryCommandResult,
 } from "./terminalRecoveryCommands";
+
+export { getRuntimeStatusSignature } from "./runtimeStatusPublisher";
 
 export type PosLocalRuntimeSyncStatusSource = {
   copyDiagnostics?: PosTerminalRuntimeCopyDiagnostics;
@@ -167,15 +184,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
   );
   const [events, setEvents] = useState<PosLocalEventRecord[]>([]);
   const [runtimeReadiness, setRuntimeReadiness] =
-    useState<PosTerminalRuntimeReadiness>({
-      activeRegisterSession: null,
-      appShell: null,
-      drawerAuthority: null,
-      snapshots: {},
-      staffAuthorityStatus: "unknown",
-      terminalIntegrity: null,
-      terminalSeed: null,
-    });
+    useState<PosTerminalRuntimeReadiness>(emptyPosTerminalRuntimeReadiness);
   const [readError, setReadError] = useState<string | null>(null);
   const [refreshToken, setRefreshToken] = useState(0);
   const [manualRetryToken, setManualRetryToken] = useState(0);
@@ -293,15 +302,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
       if (scope.terminalIds.size === 0 || !cloudTerminalId) {
         setEvents([]);
         setReadError(null);
-        setRuntimeReadiness({
-          activeRegisterSession: null,
-          appShell: null,
-          drawerAuthority: null,
-          snapshots: {},
-          staffAuthorityStatus: "unknown",
-          terminalIntegrity: null,
-          terminalSeed: null,
-        });
+        setRuntimeReadiness(emptyPosTerminalRuntimeReadiness());
         return;
       }
       setRuntimeReadiness((current) => ({
@@ -318,12 +319,12 @@ export function usePosLocalSyncRuntimeStatus(input: {
         setRuntimeReadiness(readiness);
         setRuntimeStatusObservationToken((current) => current + 1);
       });
-      const trigger: PosLocalSyncTrigger =
-        manualRetryToken !== lastManualRetryTokenRef.current
-          ? "manual-retry"
-          : eventAppendToken !== lastEventAppendTokenRef.current
-            ? "event-appended"
-            : "route-entry";
+      const trigger = getRuntimeUploadTrigger({
+        eventAppendToken,
+        lastEventAppendToken: lastEventAppendTokenRef.current,
+        lastManualRetryToken: lastManualRetryTokenRef.current,
+        manualRetryToken,
+      });
       const triggerPriority = trigger === "event-appended" ? "high" : "normal";
       lastManualRetryTokenRef.current = manualRetryToken;
       lastEventAppendTokenRef.current = eventAppendToken;
@@ -1130,46 +1131,36 @@ export function usePosLocalSyncRuntimeStatus(input: {
             throw new Error("Local staff authority storage is unavailable.");
           }
 
-          const result = await refreshTerminalStaffAuthority({
+          const result = await refreshAndStoreTerminalStaffAuthority({
+            localStore: store,
+            refreshTerminalStaffAuthority: refreshTerminalStaffAuthority as Parameters<
+              typeof refreshAndStoreTerminalStaffAuthority
+            >[0]["refreshTerminalStaffAuthority"],
             storeId: storeId as Id<"store">,
             terminalId: terminalId as Id<"posTerminal">,
+            mapRecords: (records) =>
+              records.flatMap((record) => {
+                if (record.status !== "active" && record.status !== "revoked") {
+                  return [];
+                }
+                const verifier = record.verifier;
+                if (!isLocalPinVerifierMetadata(verifier)) {
+                  return [];
+                }
+
+                const localRecord: PosLocalStaffAuthorityRecord = {
+                  ...record,
+                  status: record.status,
+                  verifier,
+                };
+                return [localRecord];
+              }),
           });
-          if (result.kind !== "ok") {
-            await store.replaceStaffAuthoritySnapshot({
-              records: [],
-              storeId,
-              terminalId,
-            });
-            throw new Error(
-              result.kind === "user_error"
-                ? result.error.message
-                : "Staff authority refresh failed.",
-            );
+          if (result.status === "preserved") {
+            throw new Error(result.message ?? "Staff authority refresh failed.");
           }
-
-          const records = result.data.flatMap((record) => {
-            if (record.status !== "active" && record.status !== "revoked") {
-              return [];
-            }
-            const verifier = record.verifier;
-            if (!isLocalPinVerifierMetadata(verifier)) {
-              return [];
-            }
-
-            const localRecord: PosLocalStaffAuthorityRecord = {
-              ...record,
-              status: record.status,
-              verifier,
-            };
-            return [localRecord];
-          });
-          const writeResult = await store.replaceStaffAuthoritySnapshot({
-            records,
-            storeId,
-            terminalId,
-          });
-          if (!writeResult.ok) {
-            throw new Error(writeResult.error.message);
+          if (result.status === "write_failed") {
+            throw new Error(result.message);
           }
 
           return {
@@ -1318,145 +1309,6 @@ export function usePosLocalSyncRuntimeStatus(input: {
   ]);
 }
 
-type PosTerminalRuntimeReadiness = {
-  activeRegisterSession: PosTerminalRuntimeActiveRegisterSessionInput | null;
-  appShell: PosTerminalRuntimeAppShellInput | null;
-  drawerAuthority: PosDrawerAuthorityState | null;
-  snapshots: PosTerminalRuntimeSnapshotReadiness;
-  staffAuthorityStatus: PosLocalStaffAuthorityReadiness | "unknown";
-  terminalIntegrity: PosTerminalIntegrityState | null;
-  terminalSeed: PosProvisionedTerminalSeed | null;
-};
-
-async function refreshTerminalRuntimeReadiness(input: {
-  store: PosLocalRuntimeStore;
-  storeId: string;
-  terminalId?: string | null;
-  terminalSeed: PosProvisionedTerminalSeed | null;
-}): Promise<PosTerminalRuntimeReadiness> {
-  const store = input.store as PosLocalRuntimeStore &
-    Partial<{
-      getStaffAuthorityReadiness: PosLocalRuntimeStore["getStaffAuthorityReadiness"];
-      readTerminalIntegrityState: PosLocalRuntimeStore["readTerminalIntegrityState"];
-      readRegisterAvailabilitySnapshot: PosLocalRuntimeStore["readRegisterAvailabilitySnapshot"];
-      readRegisterCatalogSnapshot: PosLocalRuntimeStore["readRegisterCatalogSnapshot"];
-      readRegisterServiceCatalogSnapshot: PosLocalRuntimeStore["readRegisterServiceCatalogSnapshot"];
-    }>;
-  const readDrawerAuthorityState = (
-    input.store as {
-      readDrawerAuthorityState?: PosLocalRuntimeStore["readDrawerAuthorityState"];
-    }
-  ).readDrawerAuthorityState;
-  const scope = resolvePosLocalTerminalScope({
-    storeId: input.storeId,
-    terminalId: input.terminalId,
-    terminalSeed: input.terminalSeed,
-  });
-  const [
-    catalog,
-    serviceCatalog,
-    availability,
-    staffAuthority,
-    terminalIntegrity,
-    appShell,
-  ] = await Promise.all([
-    store.readRegisterCatalogSnapshot
-      ? store.readRegisterCatalogSnapshot({ storeId: input.storeId })
-      : Promise.resolve({ ok: true as const, value: null }),
-    store.readRegisterServiceCatalogSnapshot
-      ? store.readRegisterServiceCatalogSnapshot({ storeId: input.storeId })
-      : Promise.resolve({ ok: true as const, value: null }),
-    store.readRegisterAvailabilitySnapshot
-      ? store.readRegisterAvailabilitySnapshot({ storeId: input.storeId })
-      : Promise.resolve({ ok: true as const, value: null }),
-    input.terminalId && store.getStaffAuthorityReadiness
-      ? store.getStaffAuthorityReadiness({
-          storeId: input.storeId,
-          terminalId: input.terminalId,
-        })
-      : Promise.resolve({ ok: true as const, value: "unknown" as const }),
-    input.terminalId && store.readTerminalIntegrityState
-      ? store.readTerminalIntegrityState({
-          storeId: input.storeId,
-          terminalId: input.terminalId,
-        })
-      : Promise.resolve({ ok: true as const, value: null }),
-    readPosAppShellReadiness(),
-  ]);
-  const localRegisterModel =
-    input.terminalId && readDrawerAuthorityState
-      ? await readProjectedLocalRegisterModel({
-          store,
-          storeId: input.storeId,
-          terminalId: input.terminalId,
-          isOnline:
-            typeof navigator === "undefined" ? true : navigator.onLine,
-        })
-      : ({ ok: true, value: null } as const);
-  const activeLocalRegisterSessionId =
-    localRegisterModel.ok
-      ? localRegisterModel.value?.activeRegisterSession?.localRegisterSessionId
-      : undefined;
-  let drawerAuthority =
-    activeLocalRegisterSessionId && readDrawerAuthorityState
-      ? await readLatestRuntimeDrawerAuthorityState({
-          localRegisterSessionId: activeLocalRegisterSessionId,
-          readDrawerAuthorityState,
-          storeId: input.storeId,
-          terminalIds: scope.terminalIds,
-        })
-      : ({ ok: true, value: null } as const);
-  if (drawerAuthority.ok && drawerAuthority.value && localRegisterModel.ok) {
-    const clearResult = await clearSettledRecoverableDrawerAuthorityBlock({
-      drawerAuthority: drawerAuthority.value,
-      events: localRegisterModel.value?.sourceEvents ?? [],
-      store: input.store,
-    });
-    if (clearResult.ok && clearResult.value) {
-      drawerAuthority = { ok: true, value: null };
-    }
-  }
-
-  return {
-    activeRegisterSession:
-      localRegisterModel.ok && localRegisterModel.value?.activeRegisterSession
-        ? toRuntimeActiveRegisterSession(
-            localRegisterModel.value.activeRegisterSession,
-          )
-        : null,
-    appShell,
-    drawerAuthority: drawerAuthority.ok ? drawerAuthority.value : null,
-    snapshots: {
-      ...(catalog.ok && catalog.value
-        ? { catalogRefreshedAt: catalog.value.refreshedAt }
-        : {}),
-      ...(serviceCatalog.ok && serviceCatalog.value
-        ? { serviceCatalogRefreshedAt: serviceCatalog.value.refreshedAt }
-        : {}),
-      ...(availability.ok && availability.value
-        ? { availabilityRefreshedAt: availability.value.refreshedAt }
-        : {}),
-    },
-    staffAuthorityStatus: staffAuthority.ok ? staffAuthority.value : "unknown",
-    terminalIntegrity: terminalIntegrity.ok ? terminalIntegrity.value : null,
-    terminalSeed: input.terminalSeed,
-  };
-}
-
-function toRuntimeActiveRegisterSession(
-  session: PosLocalCashDrawerReadModel,
-): PosTerminalRuntimeActiveRegisterSessionInput {
-  return {
-    ...(session.cloudRegisterSessionId
-      ? { cloudRegisterSessionId: session.cloudRegisterSessionId }
-      : {}),
-    localRegisterSessionId: session.localRegisterSessionId,
-    openedAt: session.openedAt,
-    ...(session.registerNumber ? { registerNumber: session.registerNumber } : {}),
-    status: session.status,
-  };
-}
-
 async function clearAcceptedTerminalIntegrityState(input: {
   checkInTerminalId: string;
   store: PosLocalRuntimeStore;
@@ -1576,481 +1428,6 @@ function toTerminalRecoveryCommandAckResult(
   return "failed" as const;
 }
 
-async function persistDrawerAuthorityBlockForReviewEvents(input: {
-  events: PosLocalEventRecord[];
-  reason: NonNullable<PosDrawerAuthorityState["reason"]>;
-  reviewEventIds: string[];
-  store: PosLocalRuntimeStore;
-}) {
-  const writeDrawerAuthorityState = (
-    input.store as {
-      writeDrawerAuthorityState?: PosLocalRuntimeStore["writeDrawerAuthorityState"];
-    }
-  ).writeDrawerAuthorityState;
-  if (
-    input.reviewEventIds.length === 0 ||
-    !writeDrawerAuthorityState
-  ) {
-    return;
-  }
-
-  const reviewEventIds = new Set(input.reviewEventIds);
-  const event = input.events.find(
-    (candidate) =>
-      reviewEventIds.has(candidate.localEventId) &&
-      isDrawerAuthorityLifecycleEvent(candidate) &&
-      candidate.localRegisterSessionId,
-  );
-  if (!event?.localRegisterSessionId) return;
-
-  const mappings = await input.store.listLocalCloudMappings?.();
-  if (mappings && !mappings.ok) return;
-  const cloudRegisterSessionId = mappings?.value.find(
-    (mapping) =>
-      mapping.entity === "registerSession" &&
-      mapping.localId === event.localRegisterSessionId,
-  )?.cloudId;
-
-  const result = await writeDrawerAuthorityState({
-    ...(cloudRegisterSessionId ? { cloudRegisterSessionId } : {}),
-    localRegisterSessionId: event.localRegisterSessionId,
-    message:
-      "Cloud sync needs review before this local drawer can continue.",
-    observedAt: Date.now(),
-    reason: input.reason,
-    registerNumber: event.registerNumber,
-    status: "blocked",
-    storeId: event.storeId,
-    terminalId: event.terminalId,
-  });
-  assertPosLocalStoreOk(result);
-}
-
-async function clearRecoverableDrawerAuthorityForSyncedEvents(input: {
-  events: PosLocalEventRecord[];
-  reviewEventIds: string[];
-  store: PosLocalRuntimeStore;
-  syncedEventIds: string[];
-}) {
-  const clearDrawerAuthorityState = (
-    input.store as {
-      clearDrawerAuthorityState?: PosLocalRuntimeStore["clearDrawerAuthorityState"];
-    }
-  ).clearDrawerAuthorityState;
-  const readDrawerAuthorityState = (
-    input.store as {
-      readDrawerAuthorityState?: PosLocalRuntimeStore["readDrawerAuthorityState"];
-    }
-  ).readDrawerAuthorityState;
-  if (
-    !clearDrawerAuthorityState ||
-    !readDrawerAuthorityState ||
-    input.syncedEventIds.length === 0
-  ) {
-    return;
-  }
-
-  const syncedEventIds = new Set(input.syncedEventIds);
-  const reviewEventIds = new Set(input.reviewEventIds);
-  const remainingReviewDrawers = new Set(
-    input.events
-      .filter(
-        (event) =>
-          ((event.sync.status === "needs_review" && event.sync.uploaded) ||
-            reviewEventIds.has(event.localEventId)) &&
-          !syncedEventIds.has(event.localEventId) &&
-          event.localRegisterSessionId &&
-          isDrawerAuthorityLifecycleEvent(event),
-      )
-      .map((event) =>
-        drawerAuthorityEventKey({
-          localRegisterSessionId: event.localRegisterSessionId!,
-          storeId: event.storeId,
-          terminalId: event.terminalId,
-        }),
-      ),
-  );
-  const cleared = new Set<string>();
-  for (const event of input.events) {
-    if (
-      !syncedEventIds.has(event.localEventId) ||
-      !event.localRegisterSessionId ||
-      !isDrawerAuthorityLifecycleEvent(event)
-    ) {
-      continue;
-    }
-
-    const key = drawerAuthorityEventKey({
-      localRegisterSessionId: event.localRegisterSessionId,
-      storeId: event.storeId,
-      terminalId: event.terminalId,
-    });
-    if (remainingReviewDrawers.has(key)) continue;
-    if (cleared.has(key)) continue;
-    cleared.add(key);
-
-    const drawerAuthority = await readDrawerAuthorityState({
-      localRegisterSessionId: event.localRegisterSessionId,
-      storeId: event.storeId,
-      terminalId: event.terminalId,
-    });
-    assertPosLocalStoreOk(drawerAuthority);
-    if (!isRecoverableDrawerAuthorityReason(drawerAuthority.value?.reason)) {
-      continue;
-    }
-
-    const result: PosLocalStoreResult<null> = await clearDrawerAuthorityState({
-      localRegisterSessionId: event.localRegisterSessionId,
-      storeId: event.storeId,
-      terminalId: event.terminalId,
-    });
-    assertPosLocalStoreOk(result);
-  }
-}
-
-function isRecoverableDrawerAuthorityReason(
-  reason: PosDrawerAuthorityState["reason"] | undefined,
-) {
-  return reason === "lifecycle_rejected" || reason === "authority_unknown";
-}
-
-async function clearSupersededRecoverableDrawerAuthorityBlocks(input: {
-  acceptedEvents: Array<{
-    localEventId: string;
-    status: string;
-  }>;
-  events: PosLocalEventRecord[];
-  returnedMappings: Array<{
-    cloudId: string;
-    localId: string;
-    localIdKind: string;
-  }>;
-  store: PosLocalRuntimeStore;
-}) {
-  const clearDrawerAuthorityState:
-    | PosLocalRuntimeStore["clearDrawerAuthorityState"]
-    | undefined = (
-    input.store as {
-      clearDrawerAuthorityState?: PosLocalRuntimeStore["clearDrawerAuthorityState"];
-    }
-  ).clearDrawerAuthorityState;
-  const readDrawerAuthorityState:
-    | PosLocalRuntimeStore["readDrawerAuthorityState"]
-    | undefined = (
-    input.store as {
-      readDrawerAuthorityState?: PosLocalRuntimeStore["readDrawerAuthorityState"];
-    }
-  ).readDrawerAuthorityState;
-  const listLocalCloudMappings:
-    | PosLocalRuntimeStore["listLocalCloudMappings"]
-    | undefined = (
-    input.store as {
-      listLocalCloudMappings?: PosLocalRuntimeStore["listLocalCloudMappings"];
-    }
-  ).listLocalCloudMappings;
-  if (
-    !clearDrawerAuthorityState ||
-    !readDrawerAuthorityState ||
-    !listLocalCloudMappings
-  ) {
-    return;
-  }
-
-  const acceptedProjectedEventIds = new Set(
-    input.acceptedEvents
-      .filter((event) => event.status === "projected")
-      .map((event) => event.localEventId),
-  );
-  const replacementDrawerOpenings = input.returnedMappings
-    .filter((mapping) => mapping.localIdKind === "registerSession")
-    .map((mapping) => {
-      const event = input.events.find(
-        (candidate) =>
-          candidate.type === "register.opened" &&
-          candidate.localRegisterSessionId === mapping.localId &&
-          acceptedProjectedEventIds.has(candidate.localEventId),
-      );
-      return event
-        ? {
-            cloudRegisterSessionId: mapping.cloudId,
-            event,
-          }
-        : null;
-    })
-    .filter((entry): entry is {
-      cloudRegisterSessionId: string;
-      event: PosLocalEventRecord;
-    } => Boolean(entry));
-  if (replacementDrawerOpenings.length === 0) {
-    return;
-  }
-
-  const mappings = await listLocalCloudMappings();
-  assertPosLocalStoreOk(mappings);
-
-  for (const replacement of replacementDrawerOpenings) {
-    const supersededRegisterSessionIds = mappings.value
-      .filter(
-        (mapping) =>
-          mapping.entity === "registerSession" &&
-          mapping.cloudId === replacement.cloudRegisterSessionId &&
-          mapping.localId !== replacement.event.localRegisterSessionId,
-      )
-      .map((mapping) => mapping.localId);
-    const uniqueSupersededRegisterSessionIds = [
-      ...new Set(supersededRegisterSessionIds),
-    ];
-
-    for (const localRegisterSessionId of uniqueSupersededRegisterSessionIds) {
-      const terminalIds = [
-        ...new Set(
-          input.events
-            .filter(
-              (event) =>
-                event.storeId === replacement.event.storeId &&
-                event.localRegisterSessionId === localRegisterSessionId,
-            )
-            .map((event) => event.terminalId),
-        ),
-      ];
-      for (const terminalId of terminalIds) {
-        const drawerAuthority: PosLocalStoreResult<PosDrawerAuthorityState | null> =
-          await readDrawerAuthorityState({
-          localRegisterSessionId,
-          storeId: replacement.event.storeId,
-          terminalId,
-        });
-        assertPosLocalStoreOk(drawerAuthority);
-        if (
-          drawerAuthority.value?.status !== "blocked" ||
-          !isRecoverableDrawerAuthorityReason(drawerAuthority.value.reason) ||
-          drawerAuthority.value.observedAt > replacement.event.createdAt ||
-          (drawerAuthority.value.cloudRegisterSessionId &&
-            drawerAuthority.value.cloudRegisterSessionId !==
-              replacement.cloudRegisterSessionId)
-        ) {
-          continue;
-        }
-
-        const result: PosLocalStoreResult<null> = await clearDrawerAuthorityState({
-          localRegisterSessionId,
-          storeId: replacement.event.storeId,
-          terminalId,
-        });
-        assertPosLocalStoreOk(result);
-      }
-    }
-  }
-}
-
-async function clearSettledRecoverableDrawerAuthorityBlock(input: {
-  drawerAuthority: PosDrawerAuthorityState;
-  events: PosLocalEventRecord[];
-  store: PosLocalRuntimeStore;
-}): Promise<PosLocalStoreResult<boolean>> {
-  const clearDrawerAuthorityState = (
-    input.store as {
-      clearDrawerAuthorityState?: PosLocalRuntimeStore["clearDrawerAuthorityState"];
-    }
-  ).clearDrawerAuthorityState;
-  if (
-    !clearDrawerAuthorityState ||
-    input.drawerAuthority.status !== "blocked" ||
-    !isRecoverableDrawerAuthorityReason(input.drawerAuthority.reason)
-  ) {
-    return { ok: true, value: false };
-  }
-
-  const drawerLifecycleEvents = input.events.filter(
-    (event) =>
-      event.localRegisterSessionId ===
-        input.drawerAuthority.localRegisterSessionId &&
-      event.storeId === input.drawerAuthority.storeId &&
-      event.terminalId === input.drawerAuthority.terminalId &&
-      isDrawerAuthorityLifecycleEvent(event),
-  );
-  if (drawerLifecycleEvents.length === 0) {
-    return { ok: true, value: false };
-  }
-
-  const hasUnsettledLifecycleEvent = drawerLifecycleEvents.some(
-    (event) => event.sync.status !== "synced",
-  );
-  if (hasUnsettledLifecycleEvent) {
-    return { ok: true, value: false };
-  }
-
-  const hasRemainingLifecycleReview = drawerLifecycleEvents.some(
-    (event) =>
-      event.sync.status === "needs_review" &&
-      event.sync.uploaded,
-  );
-  if (hasRemainingLifecycleReview) {
-    return { ok: true, value: false };
-  }
-
-  const result = await clearDrawerAuthorityState({
-    localRegisterSessionId: input.drawerAuthority.localRegisterSessionId,
-    storeId: input.drawerAuthority.storeId,
-    terminalId: input.drawerAuthority.terminalId,
-  });
-  if (!result.ok) return result;
-
-  return { ok: true, value: true };
-}
-
-async function readLatestRuntimeDrawerAuthorityState(input: {
-  localRegisterSessionId: string;
-  readDrawerAuthorityState: NonNullable<
-    PosLocalRuntimeStore["readDrawerAuthorityState"]
-  >;
-  storeId: string;
-  terminalIds: Set<string>;
-}): Promise<PosLocalStoreResult<PosDrawerAuthorityState | null>> {
-  if (input.terminalIds.size === 0) {
-    return { ok: true, value: null };
-  }
-
-  const states: PosDrawerAuthorityState[] = [];
-  for (const terminalId of input.terminalIds) {
-    const result = await input.readDrawerAuthorityState({
-      localRegisterSessionId: input.localRegisterSessionId,
-      storeId: input.storeId,
-      terminalId,
-    });
-    if (!result.ok) return result;
-    if (result.value) states.push(result.value);
-  }
-
-  return {
-    ok: true,
-    value:
-      states.sort((left, right) => right.observedAt - left.observedAt).at(0) ??
-      null,
-  };
-}
-
-function drawerAuthorityEventKey(input: {
-  localRegisterSessionId: string;
-  storeId: string;
-  terminalId: string;
-}) {
-  return `${input.storeId}:${input.terminalId}:${input.localRegisterSessionId}`;
-}
-
-function isDrawerAuthorityLifecycleEvent(event: PosLocalEventRecord) {
-  return (
-    event.type === "register.opened" ||
-    event.type === "register.closeout_started" ||
-    event.type === "register.reopened"
-  );
-}
-
-function getRuntimeBrowserInfo(isOnline: boolean) {
-  const navigatorRef = globalThis.navigator;
-  return {
-    language: navigatorRef?.language,
-    online: isOnline,
-    platform: navigatorRef?.platform,
-    userAgent: navigatorRef?.userAgent,
-  };
-}
-
-export function getRuntimeStatusSignature(input: {
-  runtimeStatus: PosTerminalRuntimeStatusPayload;
-  storeId: string;
-  terminalId: string;
-}) {
-  return JSON.stringify({
-    runtimeStatus: input.runtimeStatus,
-    storeId: input.storeId,
-    terminalId: input.terminalId,
-  });
-}
-
-export function getRuntimeStatusPublishSignature(input: {
-  observationToken: number;
-  runtimeStatus: PosTerminalRuntimeStatusPayload;
-  storeId: string;
-  terminalId: string;
-}) {
-  const stableStatus: Partial<PosTerminalRuntimeStatusPayload> = {
-    ...input.runtimeStatus,
-  };
-  delete stableStatus.reportedAt;
-  delete stableStatus.snapshots;
-
-  return JSON.stringify({
-    observationToken: input.observationToken,
-    runtimeStatus: stableStatus,
-    storeId: input.storeId,
-    terminalId: input.terminalId,
-  });
-}
-
-function startStatusOnlyRuntimeTriggers(refresh: () => void) {
-  const win = globalThis.window;
-  const doc = globalThis.document;
-  const interval = setInterval(refresh, 30_000);
-
-  const handleOnlineStateChange = () => refresh();
-  const handleVisibility = () => {
-    if (!doc || doc.visibilityState === "hidden") return;
-    refresh();
-  };
-
-  win?.addEventListener?.("online", handleOnlineStateChange);
-  win?.addEventListener?.("offline", handleOnlineStateChange);
-  doc?.addEventListener?.("visibilitychange", handleVisibility);
-
-  return () => {
-    clearInterval(interval);
-    win?.removeEventListener?.("online", handleOnlineStateChange);
-    win?.removeEventListener?.("offline", handleOnlineStateChange);
-    doc?.removeEventListener?.("visibilitychange", handleVisibility);
-  };
-}
-
-function getRuntimeCheckInNotReadyReason(input: {
-  storeId?: string | null;
-  syncSecretHash?: string | null;
-  terminalId?: string | null;
-}): PosLocalRuntimeSyncDebug["checkInPublishReason"] | null {
-  if (!input.storeId) return "missing_store";
-  if (!input.terminalId) return "missing_terminal";
-  if (!input.syncSecretHash) return "missing_sync_secret";
-  return null;
-}
-
-function withCheckInPublishDebug(
-  current: PosLocalRuntimeSyncDebug,
-  patch: Pick<
-    PosLocalRuntimeSyncDebug,
-    | "checkInPublishAttemptedAt"
-    | "checkInPublishCompletedAt"
-    | "checkInPublishMessage"
-    | "checkInPublishReason"
-    | "checkInPublishStatus"
-  >,
-) {
-  const next = {
-    ...current,
-    ...patch,
-  };
-
-  if (
-    current.checkInPublishAttemptedAt === next.checkInPublishAttemptedAt &&
-    current.checkInPublishCompletedAt === next.checkInPublishCompletedAt &&
-    current.checkInPublishMessage === next.checkInPublishMessage &&
-    current.checkInPublishReason === next.checkInPublishReason &&
-    current.checkInPublishStatus === next.checkInPublishStatus
-  ) {
-    return current;
-  }
-
-  return next;
-}
-
 function toIngestLocalEventsArgs(input: {
   events: PosLocalUploadEvent[];
   storeId: string;
@@ -2113,54 +1490,6 @@ async function readScopedPosLocalUploadEvents(input: {
   };
 }
 
-function buildRuntimeSyncDebug(
-  events: PosLocalEventRecord[],
-  mode: PosLocalSyncRuntimeMode,
-  uploadSupport: PosLocalSyncUploadSupport = {},
-): PosLocalRuntimeSyncDebug {
-  const pendingUploadCandidates = events.filter(isPendingUploadCandidate);
-  const pendingUploadableEvents = pendingUploadCandidates.filter(
-    (event) => isSyncablePosLocalEvent(event, uploadSupport),
-  );
-  const deferredUploadEvents = pendingUploadCandidates.filter((event) =>
-    isUploadDeferredByValidation(event, uploadSupport),
-  );
-  const nextPendingUploadableEvent = [...pendingUploadableEvents]
-    .sort(compareUploadableEventOrder)
-    .at(0);
-  const localOnlyEvents = pendingUploadCandidates.filter(
-    (event) => !isSyncablePosLocalEvent(event, uploadSupport),
-  );
-  const reviewEvents = events.filter(
-    (event) => event.sync.status === "needs_review",
-  );
-  const failedEvents = events.filter((event) => event.sync.status === "failed");
-  const oldestPendingEvent = [...events]
-    .filter((event) => event.sync.status !== "synced")
-    .sort((left, right) => left.createdAt - right.createdAt)
-    .at(0);
-
-  return {
-    appSessionUnverifiedEventCount: events.filter((event) =>
-      event.validationMetadata?.flags.includes("app-session-unverified"),
-    ).length,
-    cloudValidationUncertainEventCount: events.filter((event) =>
-      event.validationMetadata?.flags.includes("cloud-validation-uncertain"),
-    ).length,
-    deferredUploadEventCount: deferredUploadEvents.length,
-    failedEventCount: failedEvents.length,
-    localOnlyEventCount: localOnlyEvents.length,
-    mode,
-    oldestPendingEventAt: oldestPendingEvent?.createdAt,
-    oldestPendingEventId: oldestPendingEvent?.localEventId,
-    oldestPendingEventSequence: oldestPendingEvent?.sequence,
-    oldestPendingUploadSequence: oldestPendingEvent?.uploadSequence,
-    nextPendingUploadSequence: nextPendingUploadableEvent?.uploadSequence,
-    pendingUploadEventCount: pendingUploadableEvents.length,
-    reviewEventCount: reviewEvents.length,
-  };
-}
-
 function getAppSessionUploadSupport(
   recovery?: PosTerminalRuntimeAppSessionRecoveryInput | null,
 ): PosLocalSyncUploadSupport {
@@ -2174,28 +1503,6 @@ function getAppSessionUploadSupport(
         ? "supported"
         : "unverified",
   };
-}
-
-function compareUploadableEventOrder(
-  left: PosLocalEventRecord,
-  right: PosLocalEventRecord,
-) {
-  const leftUploadSequence = left.uploadSequence ?? Number.POSITIVE_INFINITY;
-  const rightUploadSequence = right.uploadSequence ?? Number.POSITIVE_INFINITY;
-  if (leftUploadSequence !== rightUploadSequence) {
-    return leftUploadSequence - rightUploadSequence;
-  }
-
-  return left.sequence - right.sequence;
-}
-
-function isPendingUploadCandidate(event: PosLocalEventRecord) {
-  return (
-    event.sync.status === "pending" ||
-    event.sync.status === "syncing" ||
-    event.sync.status === "failed" ||
-    (event.sync.status === "needs_review" && event.sync.uploaded)
-  );
 }
 
 export function collectServerSyncedLocalEventIds(

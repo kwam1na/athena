@@ -646,6 +646,58 @@ describe("POS terminal public mutations", () => {
     );
   });
 
+  it("keeps accepted runtime status accepted when Remote Assist presence fails", async () => {
+    const diagnosticSpy = vi
+      .spyOn(console, "warn")
+      .mockImplementation(() => undefined);
+    mocks.remoteAssistUpsertClient.mockRejectedValue(
+      new Error("Remote Assist repository unavailable"),
+    );
+    const ctx = buildCtx({
+      terminal: {
+        _id: "terminal-1",
+        storeId: "store-1",
+        status: "active",
+        registeredByUserId: "athena-user-2",
+        syncSecretHash: SYNC_SECRET_HASH,
+        displayName: "Front register",
+      },
+    });
+
+    try {
+      const result = await getHandler(submitTerminalRuntimeStatus)(
+        ctx as never,
+        {
+          storeId: "store-1",
+          terminalId: "terminal-1",
+          syncSecretHash: "sync-secret-1",
+          status: buildRuntimeStatus(),
+        },
+      );
+
+      expect(result).toEqual({
+        kind: "ok",
+        data: {
+          terminalId: "terminal-1",
+          reportedAt: 100,
+          receivedAt: 200,
+        },
+      });
+      expect(
+        mocks.verifyTerminalRecoveryCommandsFromRuntime,
+      ).toHaveBeenCalled();
+      expect(diagnosticSpy).toHaveBeenCalledWith(
+        "[pos-runtime] remote-assist-side-effect-failed",
+        expect.objectContaining({
+          storeId: "store-1",
+          terminalId: "terminal-1",
+        }),
+      );
+    } finally {
+      diagnosticSpy.mockRestore();
+    }
+  });
+
   it("hydrates a runtime Remote Assist session with terminal proof", async () => {
     mocks.remoteAssistGetCurrentSessionForClient.mockResolvedValue(
       buildRemoteAssistSession({ status: "active" }),

@@ -316,6 +316,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/lib/pos/infrastructure/local/syncStatus.test.ts`](../../src/lib/pos/infrastructure/local/syncStatus.test.ts)
 - [`src/lib/pos/infrastructure/local/terminalRecoveryCommands.test.ts`](../../src/lib/pos/infrastructure/local/terminalRecoveryCommands.test.ts)
 - [`src/lib/pos/infrastructure/local/terminalRuntimeStatus.test.ts`](../../src/lib/pos/infrastructure/local/terminalRuntimeStatus.test.ts)
+- [`src/lib/pos/infrastructure/local/terminalStaffAuthorityRefresh.test.ts`](../../src/lib/pos/infrastructure/local/terminalStaffAuthorityRefresh.test.ts)
 - [`src/lib/pos/infrastructure/local/usePosLocalSyncRuntime.test.ts`](../../src/lib/pos/infrastructure/local/usePosLocalSyncRuntime.test.ts)
 - [`src/lib/pos/infrastructure/terminal/usePosTerminalAppSessionRecovery.test.ts`](../../src/lib/pos/infrastructure/terminal/usePosTerminalAppSessionRecovery.test.ts)
 - [`src/lib/pos/presentation/expense/useExpenseRegisterViewModel.test.ts`](../../src/lib/pos/presentation/expense/useExpenseRegisterViewModel.test.ts)

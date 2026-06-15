@@ -253,6 +253,85 @@ describe("terminal health queries", () => {
     );
   });
 
+  it("keeps terminal health roster and detail recovery preview in parity", async () => {
+    const ctx = buildQueryCtx({
+      posTerminal: [buildTerminal()],
+      posTerminalRecoveryCommand: [
+        {
+          _id: "command-retry-sync" as Id<"posTerminalRecoveryCommand">,
+          _creationTime: now - 5_000,
+          commandContext: {
+            expectedBlockerType: "sync_runtime",
+            reason: "Local sync needs a terminal retry.",
+          },
+          commandType: "retry_sync",
+          expectedEvidence: {
+            syncStatus: "idle",
+          },
+          expiresAt: now + 10_000,
+          issuedAt: now - 5_000,
+          issuedByUserId: "user-1" as Id<"athenaUser">,
+          status: "pending",
+          storeId,
+          terminalId,
+          verificationStatus: "waiting_for_acknowledgement",
+        } satisfies Doc<"posTerminalRecoveryCommand">,
+      ],
+      posTerminalRuntimeStatus: [
+        buildRuntimeStatus({
+          sync: {
+            failedEventCount: 1,
+            lastFailureMessage: "Network unavailable.",
+            localOnlyEventCount: 0,
+            nextPendingUploadSequence: 45,
+            oldestPendingEventAt: now - 30_000,
+            pendingEventCount: 1,
+            reviewEventCount: 0,
+            status: "failed",
+            uploadableEventCount: 1,
+          },
+        }),
+      ],
+    });
+
+    const [rosterSummary] = await listTerminalHealthSummaries(ctx, {
+      now,
+      storeId,
+    });
+    const detailSummary = await getTerminalHealthSummary(ctx, {
+      now,
+      storeId,
+      terminalId,
+    });
+
+    expect(rosterSummary?.attentionReasons).toEqual([
+      expect.objectContaining({
+        nextPendingUploadSequence: 45,
+        source: "local_runtime",
+        type: "sync_failed",
+      }),
+    ]);
+    expect(rosterSummary?.recoveryPreview).toEqual(detailSummary?.recoveryPreview);
+    expect(rosterSummary?.recoveryPreview).toEqual(
+      expect.objectContaining({
+        commandStatus: expect.objectContaining({
+          commandType: "retry_sync",
+          status: "pending",
+          verificationStatus: "waiting_for_acknowledgement",
+        }),
+        readiness: "needs_terminal_action",
+        terminalActions: [
+          expect.objectContaining({
+            commandType: "retry_sync",
+            expectedEvidence: {
+              syncStatus: "idle",
+            },
+          }),
+        ],
+      }),
+    );
+  });
+
   it("includes active register-session evidence in recovery preview", async () => {
     const ctx = buildQueryCtx({
       posTerminal: [buildTerminal()],

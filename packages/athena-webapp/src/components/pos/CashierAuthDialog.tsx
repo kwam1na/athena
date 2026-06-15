@@ -13,6 +13,7 @@ import {
   createPosLocalStore,
   type PosLocalStaffAuthorityRecord,
 } from "@/lib/pos/infrastructure/local/posLocalStore";
+import { refreshAndStoreTerminalStaffAuthority } from "@/lib/pos/infrastructure/local/terminalStaffAuthorityRefresh";
 import {
   unwrapLocalStaffProofToken,
   verifyLocalPin,
@@ -143,88 +144,65 @@ export function CashierAuthDialog({
       return null;
     }
 
-    let result: CommandResult<PosLocalStaffAuthorityRecord[]>;
-    try {
-      result = await (
-        refreshTerminalStaffAuthority as (args: {
-          storeId: Id<"store">;
-          terminalId: Id<"posTerminal">;
-        }) => Promise<CommandResult<PosLocalStaffAuthorityRecord[]>>
-      )({ storeId, terminalId });
-    } catch (error) {
-      logger.warn("[POS] Staff authority refresh failed", {
-        message: error instanceof Error ? error.message : String(error),
-        storeId,
-        terminalId,
-      });
-      return null;
-    }
-
-    if (result.kind !== "ok") {
-      logger.warn("[POS] Staff authority refresh skipped", {
-        kind: result.kind,
-        storeId,
-        terminalId,
-      });
-      const clearResult = await localStore.replaceStaffAuthoritySnapshot({
-        records: [],
-        storeId,
-        terminalId,
-      });
-      if (!clearResult.ok) {
-        logger.warn("[POS] Staff authority snapshot could not be cleared", {
-          code: clearResult.error.code,
-          storeId,
-          terminalId,
-        });
-      }
-      return null;
-    }
-
-    const records = await Promise.all(
-      result.data.map(async (record) => {
-        if (
-          !unlock?.posLocalStaffProof ||
-          record.staffProfileId !== unlock.staffProfileId
-        ) {
-          return record;
-        }
-
-        const wrappedProof = await wrapLocalStaffProofToken(
-          record.verifier,
-          unlock.pin,
-          unlock.posLocalStaffProof,
-        );
-        if (!wrappedProof) {
-          logger.warn("[POS] Staff authority proof could not be wrapped", {
-            staffProfileId: record.staffProfileId,
-            storeId,
-            terminalId,
-          });
-          return record;
-        }
-
-        return {
-          ...record,
-          wrappedPosLocalStaffProof: wrappedProof,
-        };
-      }),
-    );
-
-    const writeResult = await localStore.replaceStaffAuthoritySnapshot({
-      records,
+    const refreshOutcome = await refreshAndStoreTerminalStaffAuthority({
+      localStore,
+      refreshTerminalStaffAuthority: refreshTerminalStaffAuthority as Parameters<
+        typeof refreshAndStoreTerminalStaffAuthority
+      >[0]["refreshTerminalStaffAuthority"],
       storeId,
       terminalId,
+      mapRecords: async (records) =>
+        Promise.all(
+          records.map(async (record) => {
+            if (
+              !unlock?.posLocalStaffProof ||
+              record.staffProfileId !== unlock.staffProfileId
+            ) {
+              return record;
+            }
+
+            const wrappedProof = await wrapLocalStaffProofToken(
+              record.verifier,
+              unlock.pin,
+              unlock.posLocalStaffProof,
+            );
+            if (!wrappedProof) {
+              logger.warn("[POS] Staff authority proof could not be wrapped", {
+                staffProfileId: record.staffProfileId,
+                storeId,
+                terminalId,
+              });
+              return record;
+            }
+
+            return {
+              ...record,
+              wrappedPosLocalStaffProof: wrappedProof,
+            };
+          }),
+        ),
     });
-    if (!writeResult.ok) {
-      logger.warn("[POS] Staff authority refresh could not be stored", {
-        code: writeResult.error.code,
+
+    if (refreshOutcome.status === "preserved") {
+      logger.warn("[POS] Staff authority refresh skipped", {
+        code: refreshOutcome.code,
+        message: refreshOutcome.message,
         storeId,
         terminalId,
       });
       return null;
     }
 
+    if (refreshOutcome.status === "write_failed") {
+      logger.warn("[POS] Staff authority refresh could not be stored", {
+        message: refreshOutcome.message,
+        storeId,
+        terminalId,
+      });
+      return null;
+    }
+
+    const records = refreshOutcome.records;
     return (
       records.find(
         (record) =>
