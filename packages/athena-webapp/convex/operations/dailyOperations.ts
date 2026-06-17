@@ -697,6 +697,9 @@ async function mapOperationalTimelineEvent(
   },
 ): Promise<DailyOperationsTimelineEvent | null> {
   const metadata = event.metadata ?? {};
+  if (isDailyOperationsTimelineAuditEvent(event)) {
+    return null;
+  }
   if (isSaleBackedPendingCheckoutReuseEvent(event.eventType, metadata)) {
     return null;
   }
@@ -808,6 +811,16 @@ async function mapOperationalTimelineEvent(
     transactionLink,
     type: event.eventType,
   };
+}
+
+function isDailyOperationsTimelineAuditEvent(event: {
+  eventType: string;
+  subjectType: string;
+}) {
+  return (
+    event.subjectType === "posRecoveryCredential" ||
+    event.eventType.startsWith("pos_recovery_code_")
+  );
 }
 
 function isSaleBackedPendingCheckoutReuseEvent(
