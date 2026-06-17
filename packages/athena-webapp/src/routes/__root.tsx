@@ -11,6 +11,7 @@ import { NotFoundView } from "@/components/states/not-found/NotFoundView";
 import { z } from "zod";
 import { useNavigationKeyboardShortcuts } from "@/hooks/use-navigation-keyboard-shortcuts";
 import { UpdateReadyBanner } from "@/components/app-update/UpdateReadyBanner";
+import { UpdateCommunicationPreferenceProvider } from "@/lib/app-update";
 
 const procurementModeSchema = z.preprocess(
   (value) => (value === "resolved" ? undefined : value),
@@ -86,8 +87,10 @@ function RootDocument({ children }: { children: React.ReactNode }) {
   return (
     <main>
       <Toaster expand />
-      <UpdateReadyBanner />
-      {children}
+      <UpdateCommunicationPreferenceProvider>
+        <UpdateReadyBanner />
+        {children}
+      </UpdateCommunicationPreferenceProvider>
       <ScrollRestoration />
     </main>
   );

@@ -9,6 +9,14 @@ export {
   useUpdateCoordinator,
   useUpdateCoordinatorSnapshot,
 } from "./UpdateCoordinatorProvider";
+export {
+  UpdateCommunicationPreferenceProvider,
+} from "./updateCommunicationPreference";
+export {
+  usePreferredUpdateCommunicationVariant,
+  useUpdateCommunicationPreference,
+} from "./useUpdateCommunicationPreference";
+export type { UpdateCommunicationVariant } from "./updateCommunicationPreferenceContext";
 export type {
   UpdateApplyBlockerPriority,
   UpdateCoordinatorSnapshot,

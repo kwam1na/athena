@@ -10,7 +10,7 @@ symptoms:
   - "POS continuity was the first visible risk, but other resumable work surfaces need the same protection"
   - "Static assets could be fetched behind the scenes without making refresh automatic"
 root_cause: version_detection_was_coupled_to_immediate_page_reload
-resolution_type: update_ready_coordinator_with_opt_in_apply_blockers
+resolution_type: update_ready_coordinator_with_opt_in_apply_blockers_and_surface_communication_preferences
 severity: high
 tags:
   - app-update
@@ -52,6 +52,13 @@ The root app wraps Athena in `UpdateCoordinatorProvider` and renders
 the update. It shows Refresh when no active blocker exists, and it shows the
 highest-priority blocker guidance when a surface has opted in.
 
+The coordinator should not encode presentation rules for individual routes.
+Surfaces that need a different communication shape opt in through
+`UpdateCommunicationPreferenceProvider`. The default remains the persistent
+banner. POS register surfaces opt in to persistent toast communication so the
+update notice does not shift the register shell or compete with the checkout
+workspace. Both modes use the same coordinator state and the same Refresh action.
+
 ## Apply Blockers
 
 Surfaces opt in through `useUpdateApplyBlocker` with:
@@ -71,6 +78,11 @@ local blocker for the same surface.
 POS registers a critical blocker only for active sale work, checkout mutations,
 drawer/register transitions, or local runtime save risk. An idle register does
 not defer refresh merely because it is the POS route.
+
+POS register routes also opt in to toast communication for update-ready notices.
+This is a surface preference, not a coordinator rule: adding another route that
+needs toast behavior should wrap that surface with the same preference provider
+instead of branching on route names inside the coordinator.
 
 Inventory Import registers while review work is not safely resumable, a save or
 stage command is active, or autosave has failed. Once import work is saved to
@@ -94,6 +106,7 @@ or the banner:
 
 - `src/lib/app-update/updateCoordinator.test.ts`
 - `src/lib/app-update/updateAssetStaging.test.ts`
+- `src/lib/app-update/useUpdateCommunicationPreference.ts`
 - `src/utils/versionChecker.test.ts`
 - `src/components/app-update/UpdateReadyBanner.test.tsx`
 - `src/offline/posAppShellRoutes.test.ts`
@@ -110,6 +123,8 @@ app-update module boundary.
 
 - Do not call `window.location.reload()` from detection code.
 - Do not make POS route presence itself an update blocker.
+- Do not hard-code route names in the update coordinator for banner versus toast
+  presentation; make the owning surface opt in through the preference provider.
 - Do not add a surface blocker unless the surface has active work, in-flight
   commands, or resumability risk.
 - Do not widen service-worker staging beyond static browser assets.

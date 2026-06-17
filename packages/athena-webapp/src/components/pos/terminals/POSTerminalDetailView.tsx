@@ -25,12 +25,22 @@ import { NoPermissionView } from "@/components/states/no-permission/NoPermission
 import { ProtectedAdminSignInView } from "@/components/states/signed-out/ProtectedAdminSignInView";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { RemoteAssistSupportConsole } from "@/components/remote-assist/RemoteAssistSupportConsole";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
 import { runCommand } from "@/lib/errors/runCommand";
 import { getOrigin } from "@/lib/navigationUtils";
+import {
+  readRuntimeBuildMetadata,
+  type AthenaWebappRuntimeBuildMetadata,
+} from "@/lib/runtimeBuildMetadata";
 import { cn } from "@/lib/utils";
 import type { ApprovalRequirement } from "~/shared/approvalPolicy";
 import { api } from "~/convex/_generated/api";
@@ -489,7 +499,7 @@ function TerminalContextRail({
           />
           <RailField
             label="Athena webapp"
-            value={formatRuntimeBuildVersion(runtimeStatus)}
+            value={<RuntimeBuildVersionStatus runtimeStatus={runtimeStatus} />}
           />
           <RailField
             label="Browser online"
@@ -508,13 +518,206 @@ function TerminalContextRail({
   );
 }
 
-function formatRuntimeBuildVersion(
-  runtimeStatus: TerminalRuntimeStatus | null,
-) {
-  const appVersion = normalizeOptionalRuntimeMetadata(
-    runtimeStatus?.appVersion,
+function RuntimeBuildVersionStatus({
+  runtimeStatus,
+}: {
+  runtimeStatus: TerminalRuntimeStatus | null;
+}) {
+  const [latestBuildMetadata, setLatestBuildMetadata] =
+    useState<AthenaWebappRuntimeBuildMetadata | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void readRuntimeBuildMetadata().then((metadata) => {
+      if (!cancelled) {
+        setLatestBuildMetadata(metadata);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const presentation = getRuntimeBuildVersionPresentation(
+    runtimeStatus,
+    latestBuildMetadata,
   );
+
+  if (presentation.status === "not_reported") {
+    return <span>{presentation.label}</span>;
+  }
+
+  return (
+    <TooltipProvider>
+      <Tooltip delayDuration={0}>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            className={cn(
+              "inline-flex max-w-full items-center text-left text-sm font-medium underline decoration-border decoration-dotted underline-offset-4 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+              presentation.status === "latest" && "text-success",
+              presentation.status === "stale" && "text-warning",
+              (presentation.status === "checking" ||
+                presentation.status === "unknown") &&
+                "text-foreground",
+            )}
+            aria-label={`Athena webapp ${presentation.label}. Version details.`}
+            title={presentation.tooltipLabel}
+          >
+            <span className="truncate">{presentation.label}</span>
+          </button>
+        </TooltipTrigger>
+        <TooltipContent className="w-72 p-layout-sm" align="start">
+          <div className="space-y-layout-xs">
+            <p className="text-sm font-medium text-popover-foreground">
+              Version details
+            </p>
+            <div className="grid gap-layout-2xs text-xs">
+              <VersionDetailRow
+                label="Terminal"
+                value={presentation.terminalVersion}
+              />
+              <VersionDetailRow
+                label="Latest"
+                value={presentation.latestVersion}
+              />
+            </div>
+          </div>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
+function VersionDetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="grid gap-1">
+      <span className="font-medium uppercase text-muted-foreground">
+        {label}
+      </span>
+      <span className="break-words text-popover-foreground">{value}</span>
+    </div>
+  );
+}
+
+function getRuntimeBuildVersionPresentation(
+  runtimeStatus: TerminalRuntimeStatus | null,
+  latestBuildMetadata: AthenaWebappRuntimeBuildMetadata | null,
+): {
+  label: string;
+  latestVersion: string;
+  status: "checking" | "latest" | "not_reported" | "stale" | "unknown";
+  terminalVersion: string;
+  tooltipLabel: string;
+} {
+  const terminalBuildMetadata = getTerminalBuildMetadata(runtimeStatus);
+  const terminalVersion = formatRuntimeBuildVersion(terminalBuildMetadata);
+
+  if (!terminalBuildMetadata.appVersion && !terminalBuildMetadata.buildSha) {
+    return {
+      label: "Not reported",
+      latestVersion: "Not reported",
+      status: "not_reported",
+      terminalVersion,
+      tooltipLabel:
+        "Terminal version not reported. Latest version not reported.",
+    };
+  }
+
+  if (latestBuildMetadata === null) {
+    return {
+      label: "Checking version",
+      latestVersion: "Checking latest version",
+      status: "checking",
+      terminalVersion,
+      tooltipLabel: `Terminal version: ${terminalVersion}. Latest version: checking.`,
+    };
+  }
+
+  const latestVersion = formatRuntimeBuildVersion(latestBuildMetadata);
+  const comparison = compareRuntimeBuildMetadata(
+    terminalBuildMetadata,
+    latestBuildMetadata,
+  );
+
+  if (comparison === "latest") {
+    return {
+      label: "Latest version",
+      latestVersion,
+      status: "latest",
+      terminalVersion,
+      tooltipLabel: `Terminal version: ${terminalVersion}. Latest version: ${latestVersion}.`,
+    };
+  }
+
+  if (comparison === "stale") {
+    return {
+      label: "Update available",
+      latestVersion,
+      status: "stale",
+      terminalVersion,
+      tooltipLabel: `Terminal version: ${terminalVersion}. Latest version: ${latestVersion}.`,
+    };
+  }
+
+  return {
+    label: "Version reported",
+    latestVersion,
+    status: "unknown",
+    terminalVersion,
+    tooltipLabel: `Terminal version: ${terminalVersion}. Latest version: ${latestVersion}.`,
+  };
+}
+
+function compareRuntimeBuildMetadata(
+  terminalBuildMetadata: AthenaWebappRuntimeBuildMetadata,
+  latestBuildMetadata: AthenaWebappRuntimeBuildMetadata,
+) {
+  if (
+    terminalBuildMetadata.appVersion &&
+    latestBuildMetadata.appVersion &&
+    terminalBuildMetadata.buildSha &&
+    latestBuildMetadata.buildSha
+  ) {
+    return terminalBuildMetadata.appVersion === latestBuildMetadata.appVersion &&
+      terminalBuildMetadata.buildSha === latestBuildMetadata.buildSha
+      ? "latest"
+      : "stale";
+  }
+
+  if (terminalBuildMetadata.buildSha && latestBuildMetadata.buildSha) {
+    return terminalBuildMetadata.buildSha === latestBuildMetadata.buildSha
+      ? "latest"
+      : "stale";
+  }
+
+  if (terminalBuildMetadata.appVersion && latestBuildMetadata.appVersion) {
+    return terminalBuildMetadata.appVersion === latestBuildMetadata.appVersion
+      ? "latest"
+      : "stale";
+  }
+
+  return "unknown";
+}
+
+function getTerminalBuildMetadata(
+  runtimeStatus: TerminalRuntimeStatus | null,
+): AthenaWebappRuntimeBuildMetadata {
+  const appVersion = normalizeOptionalRuntimeMetadata(runtimeStatus?.appVersion);
   const buildSha = normalizeOptionalRuntimeMetadata(runtimeStatus?.buildSha);
+
+  return {
+    ...(appVersion ? { appVersion } : {}),
+    ...(buildSha ? { buildSha } : {}),
+  };
+}
+
+function formatRuntimeBuildVersion({
+  appVersion,
+  buildSha,
+}: AthenaWebappRuntimeBuildMetadata) {
   const shortBuildSha = buildSha?.slice(0, 12);
 
   if (appVersion && shortBuildSha) {

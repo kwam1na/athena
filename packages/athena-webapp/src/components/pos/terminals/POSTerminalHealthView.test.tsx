@@ -5,6 +5,7 @@ import {
   POSTerminalHealthView,
   POSTerminalHealthViewContent,
 } from "./POSTerminalHealthView";
+import type { PosLocalEntryContext } from "@/lib/pos/infrastructure/local/localPosEntryContext";
 import type { TerminalHealthSummary } from "./terminalHealthTypes";
 
 const mocks = vi.hoisted(() => ({
@@ -17,7 +18,15 @@ const mocks = vi.hoisted(() => ({
     isLoadingStores: false,
   },
   canAccessPOS: vi.fn(() => true),
-  useQuery: vi.fn(() => []),
+  localPosEntryContext: {
+    status: "ready",
+    orgUrlSlug: "acme",
+    storeUrlSlug: "osu",
+    storeId: "store-1",
+    terminalSeed: null,
+    source: "live",
+  } as PosLocalEntryContext,
+  useQuery: vi.fn<() => TerminalHealthSummary[] | null | undefined>(() => []),
 }));
 
 vi.mock("@tanstack/react-router", () => ({
@@ -69,6 +78,10 @@ vi.mock("@/hooks/usePermissions", () => ({
     canAccessPOS: mocks.canAccessPOS,
     isLoading: false,
   }),
+}));
+
+vi.mock("@/lib/pos/infrastructure/local/localPosEntryContext", () => ({
+  useLocalPosEntryContext: () => mocks.localPosEntryContext,
 }));
 
 vi.mock("@/components/View", () => ({
@@ -173,6 +186,14 @@ describe("POSTerminalHealthViewContent", () => {
     mocks.activeStoreState.activeStore = { _id: "store-1" };
     mocks.activeStoreState.isLoadingStores = false;
     mocks.canAccessPOS.mockReturnValue(true);
+    mocks.localPosEntryContext = {
+      status: "ready",
+      orgUrlSlug: "acme",
+      storeUrlSlug: "osu",
+      storeId: "store-1",
+      terminalSeed: null,
+      source: "live",
+    };
     mocks.useQuery.mockReturnValue([]);
     mocks.useQuery.mockClear();
   });
@@ -322,6 +343,37 @@ describe("POSTerminalHealthViewContent", () => {
     expect(
       screen.getByText("Terminal health is not available right now"),
     ).toBeInTheDocument();
+  });
+
+  it("marks the terminal attached to the current browser", () => {
+    render(
+      <POSTerminalHealthViewContent
+        currentBrowserTerminalIds={["terminal-1"]}
+        healthSummaries={[
+          baseSummary,
+          {
+            ...baseSummary,
+            runtimeStatus: {
+              ...baseSummary.runtimeStatus!,
+              terminalId: "terminal-2",
+            },
+            terminal: {
+              ...baseSummary.terminal,
+              _id: "terminal-2",
+              displayName: "Back counter",
+              registerNumber: "2",
+            },
+          },
+        ]}
+        isLoading={false}
+        orgUrlSlug="acme"
+        storeUrlSlug="osu"
+      />,
+    );
+
+    expect(screen.getByText("This browser")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Front counter/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Back counter/i })).toBeInTheDocument();
   });
 
   it("shows unknown metric values while terminal health is loading", () => {
@@ -494,6 +546,14 @@ describe("POSTerminalHealthView", () => {
     mocks.activeStoreState.activeStore = { _id: "store-1" };
     mocks.activeStoreState.isLoadingStores = false;
     mocks.canAccessPOS.mockReturnValue(true);
+    mocks.localPosEntryContext = {
+      status: "ready",
+      orgUrlSlug: "acme",
+      storeUrlSlug: "osu",
+      storeId: "store-1",
+      terminalSeed: null,
+      source: "live",
+    };
     mocks.useQuery.mockReturnValue([]);
     mocks.useQuery.mockClear();
   });
@@ -518,5 +578,29 @@ describe("POSTerminalHealthView", () => {
 
     expect(screen.getByText("No permission")).toBeInTheDocument();
     expect(mocks.useQuery).toHaveBeenCalledWith(expect.anything(), "skip");
+  });
+
+  it("marks the browser terminal from the local POS seed", () => {
+    mocks.useQuery.mockReturnValue([baseSummary]);
+    mocks.localPosEntryContext = {
+      status: "ready",
+      orgUrlSlug: "acme",
+      storeUrlSlug: "osu",
+      storeId: "store-1",
+      terminalSeed: {
+        cloudTerminalId: "terminal-1",
+        displayName: "Front counter",
+        provisionedAt: Date.now(),
+        schemaVersion: 1,
+        storeId: "store-1",
+        syncSecretHash: "hash",
+        terminalId: "local-terminal-1",
+      },
+      source: "live",
+    };
+
+    render(<POSTerminalHealthView />);
+
+    expect(screen.getByText("This browser")).toBeInTheDocument();
   });
 });

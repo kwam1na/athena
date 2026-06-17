@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   POSTerminalDetailView,
@@ -243,6 +243,16 @@ const detail: TerminalHealthDetail = {
 
 describe("POSTerminalDetailViewContent", () => {
   beforeEach(() => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json({
+          fun_name: "gentle-lion-climbs",
+          git_sha: "b463caa2d36dabcdef",
+          version: "20260608193135",
+        }),
+      ),
+    );
     mocks.authState.isLoading = false;
     mocks.authState.user = { _id: "user-1" };
     mocks.activeStoreState.activeStore = { _id: "store-1" };
@@ -263,7 +273,11 @@ describe("POSTerminalDetailViewContent", () => {
     mocks.useQuery.mockClear();
   });
 
-  it("renders identity, check-in, sync, conflict, and support notes", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("renders identity, check-in, sync, conflict, and support notes", async () => {
     render(<POSTerminalDetailViewContent detail={detail} isLoading={false} />);
 
     expect(
@@ -273,8 +287,32 @@ describe("POSTerminalDetailViewContent", () => {
     expect(screen.getByText("Latest check-in")).toBeInTheDocument();
     expect(screen.getByText("Athena webapp")).toBeInTheDocument();
     expect(
-      screen.getByText("gentle-lion-climbs (20260608193135) / b463caa2d36d"),
+      await screen.findByRole("button", {
+        name: "Athena webapp Latest version. Version details.",
+      }),
     ).toBeInTheDocument();
+    expect(
+      screen.queryByText("gentle-lion-climbs (20260608193135) / b463caa2d36d"),
+    ).not.toBeInTheDocument();
+
+    expect(
+      screen
+        .getByRole("button", {
+          name: "Athena webapp Latest version. Version details.",
+        })
+        .getAttribute("title"),
+    ).toContain(
+      "Terminal version: gentle-lion-climbs (20260608193135) / b463caa2d36d.",
+    );
+    expect(
+      screen
+        .getByRole("button", {
+          name: "Athena webapp Latest version. Version details.",
+        })
+        .getAttribute("title"),
+    ).toContain(
+      "Latest version: gentle-lion-climbs (20260608193135) / b463caa2d36d.",
+    );
     expect(screen.getByText("Readiness evidence")).toBeInTheDocument();
     expect(screen.getAllByText("Availability").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Catalog").length).toBeGreaterThan(0);
@@ -310,6 +348,48 @@ describe("POSTerminalDetailViewContent", () => {
     expect(screen.getByText("Local only")).toBeInTheDocument();
     expect(screen.getByText("IndexedDB blocked")).toBeInTheDocument();
     expect(screen.getByText("Upload failed")).toBeInTheDocument();
+  });
+
+  it("shows when the terminal is not on the latest webapp version", async () => {
+    render(
+      <POSTerminalDetailViewContent
+        detail={{
+          ...detail,
+          runtimeStatus: {
+            ...detail.runtimeStatus!,
+            buildSha: "old-build-sha",
+          },
+        }}
+        isLoading={false}
+      />,
+    );
+
+    expect(
+      await screen.findByRole("button", {
+        name: "Athena webapp Update available. Version details.",
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it("treats a matching git sha with an older deploy version as not latest", async () => {
+    render(
+      <POSTerminalDetailViewContent
+        detail={{
+          ...detail,
+          runtimeStatus: {
+            ...detail.runtimeStatus!,
+            appVersion: "gentle-lion-climbs (20260607120000)",
+          },
+        }}
+        isLoading={false}
+      />,
+    );
+
+    expect(
+      await screen.findByRole("button", {
+        name: "Athena webapp Update available. Version details.",
+      }),
+    ).toBeInTheDocument();
   });
 
   it("renders ready staff authority as a compact checked state", () => {
