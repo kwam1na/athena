@@ -964,6 +964,67 @@ describe("syncContract", () => {
       }),
     ]);
   });
+
+  it("maps drawerless expense events without a local register session", () => {
+    const event = buildLocalEvent({
+      localEventId: "expense-event-1",
+      localRegisterSessionId: undefined,
+      sequence: 1,
+      type: "expense.completed",
+      payload: {
+        localExpenseSessionId: "local-expense-session-1",
+        localExpenseEventId: "local-expense-event-1",
+        notes: "Damaged stock",
+        subtotal: 25,
+        tax: 0,
+        total: 25,
+        items: [
+          {
+            localItemId: "local-expense-line-1",
+            productId: "product-1",
+            productSkuId: "sku-1",
+            productName: "Repair kit",
+            productSku: "KIT-1",
+            quantity: 1,
+            price: 25,
+          },
+        ],
+      },
+    });
+
+    expect(isSyncablePosLocalEvent(event)).toBe(true);
+    expect(buildPosLocalSyncUploadEvents([event], [event])).toEqual([
+      {
+        syncScope: "expense",
+        localEventId: "expense-event-1",
+        localExpenseSessionId: "local-expense-session-1",
+        sequence: 1,
+        eventType: "expense_recorded",
+        occurredAt: 1,
+        staffProfileId: "staff-1",
+        staffProofToken: "proof-token-1",
+        payload: {
+          localExpenseSessionId: "local-expense-session-1",
+          localExpenseEventId: "local-expense-event-1",
+          notes: "Damaged stock",
+          totals: { subtotal: 25, tax: 0, total: 25 },
+          items: [
+            {
+              localTransactionItemId: "local-expense-line-1",
+              productId: "product-1",
+              productSkuId: "sku-1",
+              productName: "Repair kit",
+              productSku: "KIT-1",
+              barcode: undefined,
+              quantity: 1,
+              unitPrice: 25,
+              image: undefined,
+            },
+          ],
+        },
+      },
+    ]);
+  });
 });
 
 function buildLocalEvent(
@@ -1006,6 +1067,7 @@ function isUploadSequenceEventType(type: PosLocalEventRecord["type"]) {
     type === "cart.cleared" ||
     type === "transaction.completed" ||
     type === "register.closeout_started" ||
-    type === "register.reopened"
+    type === "register.reopened" ||
+    type === "expense.completed"
   );
 }

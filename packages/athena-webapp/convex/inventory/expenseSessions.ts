@@ -27,8 +27,6 @@ import {
 const MAX_EXPENSE_SESSION_ITEMS = 200;
 const EXPENSE_SESSION_QUERY_CANDIDATE_LIMIT = 200;
 const ACTIVE_EXPENSE_SESSION_CANDIDATE_LIMIT = 100;
-const EXPENSE_SESSION_CLEANUP_BATCH_SIZE = 100;
-const EXPENSE_SESSION_RELEASE_STATUS_VALUES = ["active", "void"] as const;
 
 const expenseSessionOperationValidator = v.object({
   sessionId: v.id("expenseSession"),
@@ -160,28 +158,6 @@ async function recordExpenseSessionLifecycleTrace(
       workflowTraceId: traceResult.traceId,
     });
   }
-}
-
-async function listExpenseSessionsByStatusBefore(
-  ctx: MutationCtx,
-  expiresBefore: number,
-) {
-  const sessions = [];
-
-  for (const status of EXPENSE_SESSION_RELEASE_STATUS_VALUES) {
-    const expiredStatusSessions = await ctx.db
-      .query("expenseSession")
-      .withIndex("by_status_and_expiresAt", (q) =>
-        q.eq("status", status).lt("expiresAt", expiresBefore),
-      )
-      .take(EXPENSE_SESSION_CLEANUP_BATCH_SIZE);
-
-    sessions.push(...expiredStatusSessions);
-  }
-
-  return sessions
-    .sort((a, b) => a.expiresAt - b.expiresAt)
-    .slice(0, EXPENSE_SESSION_CLEANUP_BATCH_SIZE);
 }
 
 // Get expense sessions for a store (with filtering)
@@ -517,14 +493,7 @@ export const completeExpenseSession = mutation({
       return expenseSessionError("Session not found", "not_found");
     }
 
-    // Check if session has expired before completing
     const now = Date.now();
-    if (session.expiresAt && session.expiresAt < now) {
-      return expenseSessionError(
-        "This session has expired. Start a new one to proceed.",
-        "precondition_failed",
-      );
-    }
 
     if (session.status !== "active") {
       return expenseSessionError(
@@ -598,6 +567,13 @@ export const voidExpenseSession = mutation({
     // Calculate total quantities held per SKU
     const heldQuantities = new Map<Id<"productSku">, number>();
     for (const item of items) {
+      if (
+        item.inventoryHoldApplied === false ||
+        item.pendingCheckoutItemId ||
+        item.inventoryImportProvisionalSkuId
+      ) {
+        continue;
+      }
       const currentQty = heldQuantities.get(item.productSkuId) || 0;
       heldQuantities.set(item.productSkuId, currentQty + item.quantity);
     }
@@ -681,7 +657,6 @@ export const getActiveExpenseSession = query({
     v.null(),
   ),
   handler: async (ctx, args) => {
-    const now = Date.now();
     const activeSessions = await ctx.db
       .query("expenseSession")
       .withIndex("by_storeId_status_staffProfileId", (q) =>
@@ -693,13 +668,8 @@ export const getActiveExpenseSession = query({
       .order("desc")
       .take(ACTIVE_EXPENSE_SESSION_CANDIDATE_LIMIT);
 
-    // Filter out expired sessions
-    const nonExpiredSessions = activeSessions.filter(
-      (session) => !session.expiresAt || session.expiresAt >= now,
-    );
-
     // Filter by staff profile and/or register if provided
-    let filteredSessions = nonExpiredSessions;
+    let filteredSessions = activeSessions;
 
     if (args.staffProfileId) {
       filteredSessions = filteredSessions.filter(
@@ -733,7 +703,8 @@ export const getActiveExpenseSession = query({
   },
 });
 
-// Release inventory holds from expired expense sessions (called by cron job)
+// Legacy cron hook. Expense sessions no longer expire automatically; keep this
+// internal mutation as a no-op so old scheduler entries cannot clear carts.
 export const releaseExpenseSessionItems = internalMutation({
   args: {},
   returns: v.object({
@@ -741,87 +712,7 @@ export const releaseExpenseSessionItems = internalMutation({
     sessionIds: v.array(v.string()),
   }),
   handler: async (ctx) => {
-    const now = Date.now();
-
-    // Find all active and void sessions that have expired
-    const expiredSessions = await listExpenseSessionsByStatusBefore(ctx, now);
-
-    if (expiredSessions.length === 0) {
-      console.log("[Expense] No expired sessions found");
-      return { releasedCount: 0, sessionIds: [] };
-    }
-
-    console.log(
-      `[Expense] Found ${expiredSessions.length} expired sessions to process`,
-    );
-
-    const releasedSessionIds: string[] = [];
-
-    // Process each expired session
-    for (const session of expiredSessions) {
-      try {
-        // Query all items for this session
-        const items = await ctx.db
-          .query("expenseSessionItem")
-          .withIndex("by_sessionId", (q) => q.eq("sessionId", session._id))
-          .take(MAX_EXPENSE_SESSION_ITEMS);
-
-        // Calculate total quantities held per SKU
-        const heldQuantities = new Map<Id<"productSku">, number>();
-        for (const item of items) {
-          const currentQty = heldQuantities.get(item.productSkuId) || 0;
-          heldQuantities.set(item.productSkuId, currentQty + item.quantity);
-        }
-
-        // Use batch helper to release all inventory holds
-        const releaseItems = Array.from(heldQuantities.entries()).map(
-          ([skuId, quantity]) => ({
-            skuId,
-            quantity,
-          }),
-        );
-
-        await releaseLegacyExpenseQuantityPatchHolds(ctx.db, releaseItems);
-        console.log(
-          `[Expense] Released inventory holds for ${releaseItems.length} SKUs`,
-        );
-
-        // Mark session as expired
-        await ctx.db.patch("expenseSession", session._id, {
-          status: "expired",
-          updatedAt: now,
-        });
-
-        await recordExpenseSessionLifecycleTrace(ctx, {
-          session: {
-            ...session,
-            status: "expired",
-            updatedAt: now,
-          },
-          stage: "expired",
-          occurredAt: now,
-          itemCount: items.length,
-        });
-
-        releasedSessionIds.push(session._id);
-        console.log(
-          `[Expense] Released inventory holds for session ${session.sessionNumber}`,
-        );
-      } catch (error) {
-        console.error(
-          `[Expense] Error releasing session ${session._id}:`,
-          error,
-        );
-        // Continue processing other sessions even if one fails
-      }
-    }
-
-    console.log(
-      `[Expense] Successfully released ${releasedSessionIds.length} sessions`,
-    );
-    return {
-      releasedCount: releasedSessionIds.length,
-      sessionIds: releasedSessionIds,
-    };
+    void ctx;
+    return { releasedCount: 0, sessionIds: [] };
   },
 });

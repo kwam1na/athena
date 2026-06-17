@@ -32,12 +32,32 @@ type ExpenseSessionItemRecord = {
   storeId: string;
   productId: string;
   productSkuId: string;
+  pendingCheckoutItemId?: string;
+  inventoryImportProvisionalSkuId?: string;
+  inventoryHoldApplied?: boolean;
   productSku: string;
   productName: string;
   price: number;
   quantity: number;
   createdAt: number;
   updatedAt: number;
+};
+
+type PendingCheckoutItemRecord = {
+  _id: string;
+  storeId: string;
+  status: "pending_review" | "flagged" | "resolved";
+  provisionalProductId?: string;
+  provisionalProductSkuId?: string;
+};
+
+type ProvisionalImportSkuRecord = {
+  _id: string;
+  storeId: string;
+  status: "active" | "finalized" | "rejected" | "closed";
+  posExposureStatus: "available" | "hidden";
+  productId: string;
+  productSkuId: string;
 };
 
 type InventoryCall =
@@ -48,7 +68,14 @@ type InventoryCall =
       oldQuantity: number;
       newQuantity: number;
     }
-  | { kind: "release"; skuId: string; quantity: number };
+	  | { kind: "release"; skuId: string; quantity: number };
+
+type InventoryGatewayResult = {
+  success: boolean;
+  message?: string;
+  available?: number;
+  holdApplied?: boolean;
+};
 
 type TraceCall = {
   stage: string;
@@ -291,6 +318,10 @@ describe("createExpenseSessionCommandService", () => {
       createDependencies({
         repository,
         inventoryCalls,
+        inventoryAcquireResult: {
+          success: true,
+          holdApplied: true,
+        },
         now: 1_000,
         nextExpiration: 61_000,
       }),
@@ -331,6 +362,229 @@ describe("createExpenseSessionCommandService", () => {
           expiresAt: 61_000,
         },
       },
+    ]);
+  });
+
+  it("adds pending checkout expense lines without acquiring trusted inventory holds", async () => {
+    const commandService = await loadCommandService();
+    const inventoryCalls: InventoryCall[] = [];
+    const repository = createFakeRepository({
+      sessions: [
+        buildSession({
+          _id: "expense-session-1",
+          sessionNumber: "EXP-001",
+          storeId: "store-1",
+          terminalId: "terminal-1",
+          staffProfileId: "staff-1",
+          registerNumber: "1",
+          status: "active",
+          expiresAt: 10_000,
+          updatedAt: 900,
+          createdAt: 100,
+        }),
+      ],
+      pendingCheckoutItems: [
+        {
+          _id: "pending-checkout-1",
+          storeId: "store-1",
+          status: "pending_review",
+          provisionalProductId: "product-1",
+          provisionalProductSkuId: "sku-1",
+        },
+      ],
+    });
+
+    const result = await commandService(
+      createDependencies({
+        repository,
+        inventoryCalls,
+        now: 1_000,
+        nextExpiration: 61_000,
+      }),
+    ).upsertSessionItem({
+      sessionId: "expense-session-1",
+      staffProfileId: "staff-1",
+      productId: "product-1",
+      productSkuId: "sku-1",
+      pendingCheckoutItemId: "pending-checkout-1",
+      productSku: "SKU-1",
+      productName: "Pending item",
+      price: 100,
+      quantity: 1,
+    });
+
+    expect(result).toEqual({
+      status: "ok",
+      data: {
+        itemId: "item-1",
+        expiresAt: 61_000,
+      },
+    });
+    expect(inventoryCalls).toEqual([]);
+    expect(repository.items).toContainEqual(
+      expect.objectContaining({
+        pendingCheckoutItemId: "pending-checkout-1",
+        productSkuId: "sku-1",
+        quantity: 1,
+      }),
+    );
+  });
+
+  it("reuses an active expense session even when its compatibility timestamp is old", async () => {
+    const commandService = await loadCommandService();
+    const repository = createFakeRepository({
+      sessions: [
+        buildSession({
+          _id: "expense-session-1",
+          sessionNumber: "EXP-001",
+          storeId: "store-1",
+          terminalId: "terminal-1",
+          staffProfileId: "staff-1",
+          status: "active",
+          expiresAt: 500,
+          updatedAt: 400,
+          createdAt: 100,
+        }),
+      ],
+    });
+
+    const result = await commandService(
+      createDependencies({
+        repository,
+        now: 1_000,
+        nextExpiration: 61_000,
+      }),
+    ).startSession({
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      staffProfileId: "staff-1",
+    });
+
+    expect(result).toEqual({
+      status: "ok",
+      data: {
+        sessionId: "expense-session-1",
+        expiresAt: 500,
+      },
+    });
+    expect(repository.sessions).toHaveLength(1);
+  });
+
+  it("adds provisional import expense lines without acquiring trusted inventory holds", async () => {
+    const commandService = await loadCommandService();
+    const inventoryCalls: InventoryCall[] = [];
+    const repository = createFakeRepository({
+      sessions: [
+        buildSession({
+          _id: "expense-session-1",
+          sessionNumber: "EXP-001",
+          storeId: "store-1",
+          terminalId: "terminal-1",
+          staffProfileId: "staff-1",
+          registerNumber: "1",
+          status: "active",
+          expiresAt: 10_000,
+          updatedAt: 900,
+          createdAt: 100,
+        }),
+      ],
+      provisionalImportSkus: [
+        {
+          _id: "provisional-import-sku-1",
+          storeId: "store-1",
+          status: "active",
+          posExposureStatus: "available",
+          productId: "product-1",
+          productSkuId: "sku-1",
+        },
+      ],
+    });
+
+    const result = await commandService(
+      createDependencies({
+        repository,
+        inventoryCalls,
+        now: 1_000,
+        nextExpiration: 61_000,
+      }),
+    ).upsertSessionItem({
+      sessionId: "expense-session-1",
+      staffProfileId: "staff-1",
+      productId: "product-1",
+      productSkuId: "sku-1",
+      inventoryImportProvisionalSkuId: "provisional-import-sku-1",
+      productSku: "SKU-1",
+      productName: "Provisional import item",
+      price: 100,
+      quantity: 1,
+    });
+
+    expect(result).toEqual({
+      status: "ok",
+      data: {
+        itemId: "item-1",
+        expiresAt: 61_000,
+      },
+    });
+    expect(inventoryCalls).toEqual([]);
+    expect(repository.items).toContainEqual(
+      expect.objectContaining({
+        inventoryImportProvisionalSkuId: "provisional-import-sku-1",
+        productSkuId: "sku-1",
+        quantity: 1,
+      }),
+    );
+  });
+
+  it("rejects legacy trusted expense lines when a quantity hold cannot be acquired", async () => {
+    const commandService = await loadCommandService();
+    const inventoryCalls: InventoryCall[] = [];
+    const repository = createFakeRepository({
+      sessions: [
+        buildSession({
+          _id: "expense-session-1",
+          sessionNumber: "EXP-001",
+          storeId: "store-1",
+          terminalId: "terminal-1",
+          staffProfileId: "staff-1",
+          registerNumber: "1",
+          status: "active",
+          expiresAt: 10_000,
+          updatedAt: 900,
+          createdAt: 100,
+        }),
+      ],
+    });
+    const dependencies = createDependencies({
+      repository,
+      inventoryCalls,
+      inventoryAcquireResult: {
+        success: true,
+        holdApplied: false,
+        available: 0,
+      },
+      now: 1_000,
+      nextExpiration: 61_000,
+    });
+
+    const result = await commandService(dependencies).upsertSessionItem({
+      sessionId: "expense-session-1",
+      staffProfileId: "staff-1",
+      productId: "product-1",
+      productSkuId: "sku-1",
+      productSku: "SKU-1",
+      productName: "Physically held item",
+      price: 100,
+      quantity: 1,
+    });
+
+    expect(result).toEqual({
+      status: "inventoryUnavailable",
+      message: "Failed to acquire inventory hold",
+    });
+    expect(repository.items).toEqual([]);
+    expect(inventoryCalls).toEqual([
+      { kind: "acquire", skuId: "sku-1", quantity: 1 },
     ]);
   });
 
@@ -399,6 +653,52 @@ describe("createExpenseSessionCommandService", () => {
     ]);
     expect(repository.items).toHaveLength(0);
   });
+
+  it("resumes and updates held expense sessions even when their compatibility timestamp is old", async () => {
+    const commandService = await loadCommandService();
+    const repository = createFakeRepository({
+      sessions: [
+        buildSession({
+          _id: "expense-session-1",
+          sessionNumber: "EXP-001",
+          storeId: "store-1",
+          terminalId: "terminal-1",
+          staffProfileId: "staff-1",
+          status: "held",
+          expiresAt: 500,
+          updatedAt: 400,
+          createdAt: 100,
+        }),
+      ],
+    });
+
+    const result = await commandService(
+      createDependencies({
+        repository,
+        now: 1_000,
+        nextExpiration: 61_000,
+      }),
+    ).resumeSession({
+      sessionId: "expense-session-1",
+      staffProfileId: "staff-1",
+      terminalId: "terminal-1",
+    });
+
+    expect(result).toEqual({
+      status: "ok",
+      data: {
+        sessionId: "expense-session-1",
+        expiresAt: 61_000,
+      },
+    });
+    expect(repository.sessions[0]).toEqual(
+      expect.objectContaining({
+        status: "active",
+        resumedAt: 1_000,
+        expiresAt: 61_000,
+      }),
+    );
+  });
 });
 
 async function loadCommandService() {
@@ -426,6 +726,9 @@ function createDependencies(options: {
   now: number;
   nextExpiration: number;
   inventoryCalls?: InventoryCall[];
+  inventoryAcquireResult?: InventoryGatewayResult;
+  inventoryAdjustResult?: InventoryGatewayResult;
+  inventoryReleaseResult?: InventoryGatewayResult;
   traceCalls?: TraceCall[];
 }) {
   return {
@@ -435,7 +738,7 @@ function createDependencies(options: {
     inventory: {
       acquireHold: async (skuId: string, quantity: number) => {
         options.inventoryCalls?.push({ kind: "acquire", skuId, quantity });
-        return { success: true };
+        return options.inventoryAcquireResult ?? { success: true };
       },
       adjustHold: async (
         skuId: string,
@@ -448,11 +751,11 @@ function createDependencies(options: {
           oldQuantity,
           newQuantity,
         });
-        return { success: true };
+        return options.inventoryAdjustResult ?? { success: true };
       },
       releaseHold: async (skuId: string, quantity: number) => {
         options.inventoryCalls?.push({ kind: "release", skuId, quantity });
-        return { success: true };
+        return options.inventoryReleaseResult ?? { success: true };
       },
     },
     ...(options.traceCalls
@@ -493,11 +796,15 @@ function createFakeRepository(seed?: {
   sessions?: ExpenseSessionRecord[];
   items?: ExpenseSessionItemRecord[];
   registerSessions?: RegisterSessionRecord[];
+  pendingCheckoutItems?: PendingCheckoutItemRecord[];
+  provisionalImportSkus?: ProvisionalImportSkuRecord[];
 }) {
   const repository = {
     sessions: [...(seed?.sessions ?? [])],
     items: [...(seed?.items ?? [])],
     registerSessions: [...(seed?.registerSessions ?? [])],
+    pendingCheckoutItems: [...(seed?.pendingCheckoutItems ?? [])],
+    provisionalImportSkus: [...(seed?.provisionalImportSkus ?? [])],
     sessionPatches: [] as Array<{
       sessionId: string;
       patch: Partial<ExpenseSessionRecord>;
@@ -590,6 +897,32 @@ function createFakeRepository(seed?: {
     async getSessionItemById(itemId: string) {
       return repository.getItem(itemId);
     },
+    async getPendingCheckoutItem(pendingCheckoutItemId: string) {
+      return (
+        repository.pendingCheckoutItems.find(
+          (item) => item._id === pendingCheckoutItemId,
+        ) ?? null
+      );
+    },
+    async getActiveProvisionalImportSkuForStoreSku(args: {
+      storeId: string;
+      productId: string;
+      productSkuId: string;
+      provisionalSkuId?: string;
+    }) {
+      const provisionalSku =
+        repository.provisionalImportSkus.find(
+          (item) =>
+            item.storeId === args.storeId &&
+            item.status === "active" &&
+            item.posExposureStatus === "available" &&
+            item.productId === args.productId &&
+            item.productSkuId === args.productSkuId &&
+            (!args.provisionalSkuId || item._id === args.provisionalSkuId),
+        ) ?? null;
+
+      return provisionalSku ? { _id: provisionalSku._id } : null;
+    },
     async createSession(input: Omit<ExpenseSessionRecord, "_id">) {
       const sessionId = `expense-session-${repository.sessions.length + 1}`;
       repository.sessions.push({ _id: sessionId, ...input });
@@ -677,6 +1010,8 @@ function createCommandService(
     staffProfileId: string;
     productId: string;
     productSkuId: string;
+    pendingCheckoutItemId?: string;
+    inventoryImportProvisionalSkuId?: string;
     productSku: string;
     productName: string;
     price: number;

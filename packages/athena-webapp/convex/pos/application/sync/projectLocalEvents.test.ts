@@ -22,6 +22,10 @@ type ParsedSaleClearedEvent = Extract<
   ParsedPosLocalSyncEventInput,
   { eventType: "sale_cleared" }
 >;
+type ParsedExpenseRecordedEvent = Extract<
+  ParsedPosLocalSyncEventInput,
+  { eventType: "expense_recorded" }
+>;
 
 describe("projectLocalSyncEvent", () => {
   it("projects pending checkout item definitions through the reviewable pending item command", async () => {
@@ -4025,7 +4029,591 @@ describe("projectLocalSyncEvent", () => {
     ]);
     expect(repository.posSessionPatches).toHaveLength(1);
   });
+
+  it("projects trusted expense records and decrements trusted inventory once", async () => {
+    const repository = createProjectionRepository({
+      validCloudIds: new Set(["product-1", "sku-1"]),
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: buildExpenseRecordedEvent(),
+      syncEventId: "sync-event-expense-1",
+      submittedByUserId: "athena-user-1" as never,
+      now: 100,
+    });
+
+    expect(result.status).toBe("projected");
+    expect(result.mappings).toEqual([
+      expect.objectContaining({
+        localIdKind: "expenseSession",
+        localId: "local-expense-session-1",
+        cloudTable: "expenseSession",
+      }),
+      expect.objectContaining({
+        localIdKind: "expenseTransaction",
+        localId: "local-expense-event-1",
+        cloudTable: "expenseTransaction",
+      }),
+    ]);
+    expect(repository.createdExpenseTransactions).toEqual([
+      expect.objectContaining({
+        sessionId: "expense-session-1",
+        totalValue: 25,
+      }),
+    ]);
+    expect(repository.createdExpenseTransactionItems).toEqual([
+      expect.objectContaining({
+        inventoryHoldApplied: true,
+        productSkuId: "sku-1",
+      }),
+    ]);
+    expect(repository.productPatches).toEqual([
+      {
+        productSkuId: "sku-1",
+        patch: {
+          inventoryCount: 9,
+          quantityAvailable: 9,
+        },
+      },
+    ]);
+  });
+
+  it("projects trusted zero-stock expense records with review evidence and no stock decrement", async () => {
+    const repository = createProjectionRepository({
+      sku: {
+        _id: "sku-1",
+        storeId: "store-1",
+        productId: "product-1",
+        sku: "CAP-1",
+        price: 25,
+        quantityAvailable: 0,
+        inventoryCount: 0,
+        images: [],
+      },
+      validCloudIds: new Set(["product-1", "sku-1"]),
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: buildExpenseRecordedEvent(),
+      syncEventId: "sync-event-expense-1",
+      submittedByUserId: "athena-user-1" as never,
+      now: 100,
+    });
+
+    expect(result.status).toBe("projected");
+    expect(result.conflicts).toEqual([
+      expect.objectContaining({
+        conflictType: "inventory",
+        summary: "Inventory needs manager review for a synced expense.",
+        details: expect.objectContaining({
+          blocksProjection: false,
+          inventoryCount: 0,
+          requestedQuantity: 1,
+        }),
+      }),
+    ]);
+    expect(repository.createdExpenseTransactionItems).toEqual([
+      expect.objectContaining({
+        inventoryHoldApplied: false,
+      }),
+    ]);
+    expect(repository.productPatches).toEqual([]);
+  });
+
+  it("projects duplicate trusted expense SKU lines with one aggregate stock decrement", async () => {
+    const repository = createProjectionRepository({
+      sku: {
+        _id: "sku-1",
+        storeId: "store-1",
+        productId: "product-1",
+        sku: "CAP-1",
+        price: 25,
+        quantityAvailable: 10,
+        inventoryCount: 10,
+        images: [],
+      },
+      validCloudIds: new Set(["product-1", "sku-1"]),
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: buildExpenseRecordedEvent({
+        payload: {
+          ...buildExpenseRecordedEvent().payload,
+          totals: {
+            subtotal: 175,
+            tax: 0,
+            total: 175,
+          },
+          items: [
+            {
+              ...buildExpenseRecordedEvent().payload.items[0],
+              localTransactionItemId: "local-expense-line-1",
+              quantity: 3,
+            },
+            {
+              ...buildExpenseRecordedEvent().payload.items[0],
+              localTransactionItemId: "local-expense-line-2",
+              quantity: 4,
+            },
+          ],
+        },
+      }),
+      syncEventId: "sync-event-expense-1",
+      submittedByUserId: "athena-user-1" as never,
+      now: 100,
+    });
+
+    expect(result.status).toBe("projected");
+    expect(result.conflicts).toEqual([]);
+    expect(repository.createdExpenseTransactionItems).toEqual([
+      expect.objectContaining({
+        inventoryHoldApplied: true,
+        productSkuId: "sku-1",
+        quantity: 3,
+      }),
+      expect.objectContaining({
+        inventoryHoldApplied: true,
+        productSkuId: "sku-1",
+        quantity: 4,
+      }),
+    ]);
+    expect(repository.productPatches).toEqual([
+      {
+        productSkuId: "sku-1",
+        patch: {
+          inventoryCount: 3,
+          quantityAvailable: 3,
+        },
+      },
+    ]);
+  });
+
+  it("projects duplicate trusted expense SKU lines with aggregate review evidence when total exceeds stock", async () => {
+    const repository = createProjectionRepository({
+      sku: {
+        _id: "sku-1",
+        storeId: "store-1",
+        productId: "product-1",
+        sku: "CAP-1",
+        price: 25,
+        quantityAvailable: 5,
+        inventoryCount: 5,
+        images: [],
+      },
+      validCloudIds: new Set(["product-1", "sku-1"]),
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: buildExpenseRecordedEvent({
+        payload: {
+          ...buildExpenseRecordedEvent().payload,
+          totals: {
+            subtotal: 175,
+            tax: 0,
+            total: 175,
+          },
+          items: [
+            {
+              ...buildExpenseRecordedEvent().payload.items[0],
+              localTransactionItemId: "local-expense-line-1",
+              quantity: 3,
+            },
+            {
+              ...buildExpenseRecordedEvent().payload.items[0],
+              localTransactionItemId: "local-expense-line-2",
+              quantity: 4,
+            },
+          ],
+        },
+      }),
+      syncEventId: "sync-event-expense-1",
+      submittedByUserId: "athena-user-1" as never,
+      now: 100,
+    });
+
+    expect(result.status).toBe("projected");
+    expect(result.conflicts).toEqual([
+      expect.objectContaining({
+        conflictType: "inventory",
+        summary: "Inventory needs manager review for a synced expense.",
+        details: expect.objectContaining({
+          blocksProjection: false,
+          inventoryCount: 5,
+          requestedQuantity: 7,
+        }),
+      }),
+    ]);
+    expect(repository.createdExpenseTransactionItems).toEqual([
+      expect.objectContaining({
+        inventoryHoldApplied: false,
+        quantity: 3,
+      }),
+      expect.objectContaining({
+        inventoryHoldApplied: false,
+        quantity: 4,
+      }),
+    ]);
+    expect(repository.productPatches).toEqual([]);
+  });
+
+  it("projects trusted expense records with review evidence when available stock is already held", async () => {
+    const repository = createProjectionRepository({
+      sku: {
+        _id: "sku-1",
+        storeId: "store-1",
+        productId: "product-1",
+        sku: "CAP-1",
+        price: 25,
+        quantityAvailable: 2,
+        inventoryCount: 10,
+        images: [],
+      },
+      validCloudIds: new Set(["product-1", "sku-1"]),
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: buildExpenseRecordedEvent({
+        payload: {
+          ...buildExpenseRecordedEvent().payload,
+          totals: {
+            subtotal: 100,
+            tax: 0,
+            total: 100,
+          },
+          items: [
+            {
+              ...buildExpenseRecordedEvent().payload.items[0],
+              quantity: 4,
+            },
+          ],
+        },
+      }),
+      syncEventId: "sync-event-expense-1",
+      submittedByUserId: "athena-user-1" as never,
+      now: 100,
+    });
+
+    expect(result.status).toBe("projected");
+    expect(result.conflicts).toEqual([
+      expect.objectContaining({
+        conflictType: "inventory",
+        summary: "Inventory needs manager review for a synced expense.",
+        details: expect.objectContaining({
+          blocksProjection: false,
+          inventoryCount: 10,
+          quantityAvailable: 2,
+          requestedQuantity: 4,
+        }),
+      }),
+    ]);
+    expect(repository.createdExpenseTransactionItems).toEqual([
+      expect.objectContaining({
+        inventoryHoldApplied: false,
+        quantity: 4,
+      }),
+    ]);
+    expect(repository.productPatches).toEqual([]);
+  });
+
+  it("projects pending checkout expense records without trusted stock movement", async () => {
+    const repository = createProjectionRepository({
+      validCloudIds: new Set(["product-1", "sku-1", "pending-checkout-item-1"]),
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: buildExpenseRecordedEvent({
+        payload: {
+          ...buildExpenseRecordedEvent().payload,
+          items: [
+            {
+              ...buildExpenseRecordedEvent().payload.items[0],
+              localTransactionItemId: "local-expense-pending-line-1",
+              pendingCheckoutItemId: "pending-checkout-item-1" as never,
+            },
+          ],
+        },
+      }),
+      syncEventId: "sync-event-expense-1",
+      submittedByUserId: "athena-user-1" as never,
+      now: 100,
+    });
+
+    expect(result.status).toBe("projected");
+    expect(repository.createdExpenseSessionItems).toEqual([
+      expect.objectContaining({
+        pendingCheckoutItemId: "pending-checkout-item-1",
+        inventoryHoldApplied: false,
+      }),
+    ]);
+    expect(repository.createdExpenseTransactionItems).toEqual([
+      expect.objectContaining({
+        pendingCheckoutItemId: "pending-checkout-item-1",
+        inventoryHoldApplied: false,
+      }),
+    ]);
+    expect(repository.productPatches).toEqual([]);
+    expect(repository.mappings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          syncScope: "expense",
+          localExpenseSessionId: "local-expense-session-1",
+          localIdKind: "transactionItem",
+          localId: "local-expense-pending-line-1",
+          cloudTable: "expenseSessionItem",
+          cloudId: "expense-session-item-1",
+        }),
+      ]),
+    );
+  });
+
+  it("projects provisional import expense records without trusted stock movement", async () => {
+    const repository = createProjectionRepository({
+      inventoryImportProvisionalSkus: [
+        {
+          _id: "provisional-import-sku-1",
+          storeId: "store-1",
+          productId: "product-1",
+          productSkuId: "sku-1",
+          status: "active",
+          posExposureStatus: "available",
+          importedPrice: 25,
+        },
+      ],
+      validCloudIds: new Set(["product-1", "sku-1", "provisional-import-sku-1"]),
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: buildExpenseRecordedEvent({
+        payload: {
+          ...buildExpenseRecordedEvent().payload,
+          items: [
+            {
+              ...buildExpenseRecordedEvent().payload.items[0],
+              localTransactionItemId: "local-expense-provisional-line-1",
+              inventoryImportProvisionalSkuId:
+                "provisional-import-sku-1" as never,
+            },
+          ],
+        },
+      }),
+      syncEventId: "sync-event-expense-1",
+      submittedByUserId: "athena-user-1" as never,
+      now: 100,
+    });
+
+    expect(result.status).toBe("projected");
+    expect(repository.createdExpenseSessionItems).toEqual([
+      expect.objectContaining({
+        inventoryImportProvisionalSkuId: "provisional-import-sku-1",
+        inventoryHoldApplied: false,
+      }),
+    ]);
+    expect(repository.createdExpenseTransactionItems).toEqual([
+      expect.objectContaining({
+        inventoryImportProvisionalSkuId: "provisional-import-sku-1",
+        inventoryHoldApplied: false,
+      }),
+    ]);
+    expect(repository.productPatches).toEqual([]);
+  });
+
+  it("blocks expense records with both pending checkout and provisional import sources", async () => {
+    const repository = createProjectionRepository({
+      inventoryImportProvisionalSkus: [
+        {
+          _id: "provisional-import-sku-1",
+          storeId: "store-1",
+          productId: "product-1",
+          productSkuId: "sku-1",
+          status: "active",
+          posExposureStatus: "available",
+          importedPrice: 25,
+        },
+      ],
+      validCloudIds: new Set([
+        "product-1",
+        "sku-1",
+        "pending-checkout-item-1",
+        "provisional-import-sku-1",
+      ]),
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: buildExpenseRecordedEvent({
+        payload: {
+          ...buildExpenseRecordedEvent().payload,
+          items: [
+            {
+              ...buildExpenseRecordedEvent().payload.items[0],
+              localTransactionItemId: "local-expense-conflicting-line-1",
+              pendingCheckoutItemId: "pending-checkout-item-1" as never,
+              inventoryImportProvisionalSkuId:
+                "provisional-import-sku-1" as never,
+            },
+          ],
+        },
+      }),
+      syncEventId: "sync-event-expense-1",
+      submittedByUserId: "athena-user-1" as never,
+      now: 100,
+    });
+
+    expect(result.status).toBe("conflicted");
+    expect(result.conflicts).toEqual([
+      expect.objectContaining({
+        conflictType: "inventory",
+        summary:
+          "Synced expense line has conflicting pending checkout and provisional import sources.",
+        details: expect.objectContaining({
+          blocksProjection: true,
+          localExpenseEventId: "local-expense-event-1",
+          localTransactionItemId: "local-expense-conflicting-line-1",
+          pendingCheckoutItemId: "pending-checkout-item-1",
+          inventoryImportProvisionalSkuId: "provisional-import-sku-1",
+        }),
+      }),
+    ]);
+    expect(repository.createdExpenseSessions).toEqual([]);
+    expect(repository.createdExpenseTransactions).toEqual([]);
+    expect(repository.productPatches).toEqual([]);
+  });
+
+  it("blocks hidden provisional import expense records before side effects", async () => {
+    const repository = createProjectionRepository({
+      inventoryImportProvisionalSkus: [
+        {
+          _id: "provisional-import-sku-1",
+          storeId: "store-1",
+          productId: "product-1",
+          productSkuId: "sku-1",
+          status: "active",
+          posExposureStatus: "hidden",
+          importedPrice: 25,
+        },
+      ],
+      validCloudIds: new Set(["product-1", "sku-1", "provisional-import-sku-1"]),
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: buildExpenseRecordedEvent({
+        payload: {
+          ...buildExpenseRecordedEvent().payload,
+          items: [
+            {
+              ...buildExpenseRecordedEvent().payload.items[0],
+              inventoryImportProvisionalSkuId:
+                "provisional-import-sku-1" as never,
+            },
+          ],
+        },
+      }),
+      syncEventId: "sync-event-expense-1",
+      submittedByUserId: "athena-user-1" as never,
+      now: 100,
+    });
+
+    expect(result.status).toBe("conflicted");
+    expect(result.conflicts).toEqual([
+      expect.objectContaining({
+        details: expect.objectContaining({
+          blocksProjection: true,
+          inventoryImportProvisionalSkuId: "provisional-import-sku-1",
+        }),
+      }),
+    ]);
+    expect(repository.createdExpenseSessions).toEqual([]);
+    expect(repository.createdExpenseTransactions).toEqual([]);
+    expect(repository.productPatches).toEqual([]);
+  });
+
+  it("retries expense projections without duplicating sessions or transactions", async () => {
+    const repository = createProjectionRepository({
+      validCloudIds: new Set(["product-1", "sku-1"]),
+    });
+    const event = buildExpenseRecordedEvent();
+
+    const first = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event,
+      syncEventId: "sync-event-expense-1",
+      submittedByUserId: "athena-user-1" as never,
+      now: 100,
+    });
+    const retry = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event,
+      syncEventId: "sync-event-expense-1",
+      submittedByUserId: "athena-user-1" as never,
+      now: 200,
+    });
+
+    expect(first.status).toBe("projected");
+    expect(retry.status).toBe("projected");
+    expect(repository.createdExpenseSessions).toHaveLength(1);
+    expect(repository.createdExpenseTransactions).toHaveLength(1);
+    expect(retry.mappings).toEqual([
+      expect.objectContaining({ localIdKind: "expenseSession" }),
+      expect.objectContaining({ localIdKind: "expenseTransaction" }),
+    ]);
+  });
 });
+
+function buildExpenseRecordedEvent(
+  overrides: Partial<ParsedExpenseRecordedEvent> = {},
+): ParsedExpenseRecordedEvent {
+  return {
+    syncScope: "expense",
+    localEventId: "event-expense-recorded-1",
+    localExpenseSessionId: "local-expense-session-1",
+    sequence: 1,
+    eventType: "expense_recorded",
+    occurredAt: 20,
+    staffProfileId: "staff-1" as never,
+    staffProofToken: "proof-token-1",
+    payload: {
+      localExpenseSessionId: "local-expense-session-1",
+      localExpenseEventId: "local-expense-event-1",
+      notes: "Damaged stock",
+      totals: {
+        subtotal: 25,
+        tax: 0,
+        total: 25,
+      },
+      items: [
+        {
+          localTransactionItemId: "local-expense-line-1",
+          productId: "product-1",
+          productSkuId: "sku-1",
+          productName: "Repair kit",
+          productSku: "CAP-1",
+          quantity: 1,
+          unitPrice: 25,
+        },
+      ],
+    },
+    ...overrides,
+  };
+}
 
 function buildSaleCompletedEvent(
   overrides: Partial<ParsedSaleCompletedEvent> = {},
@@ -4270,6 +4858,10 @@ function createProjectionRepository(
   createdOperationalEvents: unknown[];
   createdPendingCheckoutItems: unknown[];
   createdPaymentAllocations: unknown[];
+  createdExpenseSessions: unknown[];
+  createdExpenseSessionItems: unknown[];
+  createdExpenseTransactions: unknown[];
+  createdExpenseTransactionItems: unknown[];
   createdPosSessions: unknown[];
   createdPosSessionItems: unknown[];
   createdRegisterSessions: unknown[];
@@ -4280,6 +4872,7 @@ function createProjectionRepository(
   createdTransactionServiceLines: unknown[];
   createdTransactions: unknown[];
   posSessionPatches: unknown[];
+  mappings: LocalSyncMappingRecord[];
 	  productPatches: unknown[];
 	  recordedPendingCheckoutItemSaleEvidence: unknown[];
 	  recordedInventoryImportProvisionalSkuSaleEvidence: unknown[];
@@ -4307,6 +4900,10 @@ function createProjectionRepository(
   const createdOperationalEvents: unknown[] = [];
   const createdPendingCheckoutItems: unknown[] = [];
   const createdPaymentAllocations: unknown[] = [];
+  const createdExpenseSessions: unknown[] = [];
+  const createdExpenseSessionItems: unknown[] = [];
+  const createdExpenseTransactions: unknown[] = [];
+  const createdExpenseTransactionItems: unknown[] = [];
   const createdPosSessions: unknown[] = [];
   const createdPosSessionItems: unknown[] = [];
   const createdRegisterSessions: unknown[] = [];
@@ -4377,6 +4974,10 @@ function createProjectionRepository(
     createdOperationalEvents,
     createdPendingCheckoutItems,
     createdPaymentAllocations,
+    createdExpenseSessions,
+    createdExpenseSessionItems,
+    createdExpenseTransactions,
+    createdExpenseTransactionItems,
     createdPosSessions,
     createdPosSessionItems,
     createdRegisterSessions,
@@ -4396,6 +4997,7 @@ function createProjectionRepository(
     registerSessionPatches,
     consumedHoldRequests,
     releasedHoldRequests,
+    mappings,
     async getTerminal(terminalId) {
       return terminalId === "terminal-1" ? (terminal as never) : null;
     },
@@ -4739,6 +5341,45 @@ function createProjectionRepository(
     async createTransactionItem(input) {
       createdTransactionItems.push(input);
       return `transaction-item-${nextId++}` as never;
+    },
+    async getExpenseSessionByLocalId(args) {
+      const mapping = mappings.find(
+        (candidate) =>
+          candidate.storeId === args.storeId &&
+          candidate.terminalId === args.terminalId &&
+          candidate.localIdKind === "expenseSession" &&
+          candidate.localId === args.localExpenseSessionId,
+      );
+      if (!mapping) return null;
+      return (
+        (createdExpenseSessions.find(
+          (candidate) =>
+            typeof candidate === "object" &&
+            candidate !== null &&
+            "_id" in candidate &&
+            candidate._id === mapping.cloudId,
+        ) as never) ?? null
+      );
+    },
+    async createExpenseSession(input) {
+      const id = `expense-session-${createdExpenseSessions.length + 1}`;
+      createdExpenseSessions.push({ _id: id, ...input });
+      return id as never;
+    },
+    async createExpenseSessionItem(input) {
+      const id = `expense-session-item-${createdExpenseSessionItems.length + 1}`;
+      createdExpenseSessionItems.push({ _id: id, ...input });
+      return id as never;
+    },
+    async createExpenseTransaction(input) {
+      const id = `expense-transaction-${createdExpenseTransactions.length + 1}`;
+      createdExpenseTransactions.push({ _id: id, ...input });
+      return id as never;
+    },
+    async createExpenseTransactionItem(input) {
+      const id = `expense-transaction-item-${createdExpenseTransactionItems.length + 1}`;
+      createdExpenseTransactionItems.push({ _id: id, ...input });
+      return id as never;
     },
     async createTransactionServiceLine(input) {
       const id = `transaction-service-line-${createdTransactionServiceLines.length + 1}`;

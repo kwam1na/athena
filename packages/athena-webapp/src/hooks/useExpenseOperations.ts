@@ -1,15 +1,12 @@
 import { useCallback } from "react";
-import { useMutation } from "convex/react";
-import { api } from "../../convex/_generated/api";
 import { useExpenseStore } from "../stores/expenseStore";
 import { Product } from "../components/pos/types";
 import type { CartItem } from "../components/pos/types";
 import { Id } from "../../convex/_generated/dataModel";
 import { validateProduct, validateQuantity } from "../lib/pos/validation";
-import { presentCommandToast } from "../lib/errors/presentCommandToast";
-import { runCommand } from "../lib/errors/runCommand";
 import { logger } from "../lib/logger";
 import { useSessionManagementExpense } from "./useSessionManagementExpense";
+import { useExpenseLocalRuntime } from "./useExpenseLocalRuntime";
 import {
   POS_MESSAGES,
   showValidationError,
@@ -38,7 +35,44 @@ function mapProductToExpenseCartItem(
     color: product.color,
     productId: product.productId!,
     skuId: product.skuId!,
+    pendingCheckoutItemId: product.pendingCheckoutItemId,
+    inventoryImportProvisionalSkuId: product.inventoryImportProvisionalSkuId,
   };
+}
+
+function expenseLineSourceKey(item: {
+  pendingCheckoutItemId?: string;
+  inventoryImportProvisionalSkuId?: string;
+}) {
+  if (item.inventoryImportProvisionalSkuId) {
+    return `provisional_import:${item.inventoryImportProvisionalSkuId}`;
+  }
+  if (item.pendingCheckoutItemId) {
+    return `pending_checkout:${item.pendingCheckoutItemId}`;
+  }
+  return "trusted_inventory";
+}
+
+function expenseCartItemSourceKey(item: CartItem) {
+  return expenseLineSourceKey({
+    pendingCheckoutItemId:
+      "pendingCheckoutItemId" in item ? item.pendingCheckoutItemId : undefined,
+    inventoryImportProvisionalSkuId:
+      "inventoryImportProvisionalSkuId" in item
+        ? item.inventoryImportProvisionalSkuId
+        : undefined,
+  });
+}
+
+function expenseLineMatchesProduct(item: CartItem, product: Product) {
+  return (
+    item.skuId === product.skuId &&
+    expenseCartItemSourceKey(item) === expenseLineSourceKey(product)
+  );
+}
+
+function createOptimisticExpenseItemId(product: Product) {
+  return `optimistic:${product.skuId}:${expenseLineSourceKey(product)}` as Id<"expenseSessionItem">;
 }
 
 /**
@@ -53,14 +87,11 @@ export const useExpenseOperations = () => {
   const currentStaffProfileId = store.cashier.id as unknown as
     | Id<"staffProfile">
     | null;
-
-  // Convex mutations
-  const addOrUpdateItemMutation = useMutation(
-    api.inventory.expenseSessionItems.addOrUpdateExpenseItem
-  );
-  const removeItemMutation = useMutation(
-    api.inventory.expenseSessionItems.removeExpenseItem
-  );
+  const { expenseLocalGateway } = useExpenseLocalRuntime({
+    staffProfileId: currentStaffProfileId,
+    storeId: store.storeId,
+    terminalId: store.terminalId,
+  });
 
   /**
    * Ensures we have an active expense session, creating one if needed
@@ -110,6 +141,20 @@ export const useExpenseOperations = () => {
     return sessionId;
   }, [createSession, store]);
 
+  const getCommandScope = useCallback(() => {
+    if (!store.storeId || !store.terminalId) {
+      throw new Error("Terminal details missing");
+    }
+    if (!currentStaffProfileId) {
+      throw new Error("Staff profile missing");
+    }
+    return {
+      storeId: store.storeId,
+      terminalId: store.terminalId,
+      staffProfileId: currentStaffProfileId,
+    };
+  }, [currentStaffProfileId, store.storeId, store.terminalId]);
+
   /**
    * Adds a product to the expense cart
    */
@@ -143,9 +188,9 @@ export const useExpenseOperations = () => {
         // Ensure we have a session
         const sessionId = await ensureSession();
 
-        // Check if item already exists in cart by SKU ID
+        // Check if item already exists in cart by SKU ID and source key.
         const existingItem = store.cart.items.find(
-          (item) => item.skuId === product.skuId
+          (item) => expenseLineMatchesProduct(item, product)
         );
         const newQuantity = existingItem ? existingItem.quantity + 1 : 1;
         const isUpdate = !!existingItem;
@@ -157,14 +202,10 @@ export const useExpenseOperations = () => {
           newQuantity,
         });
 
-        // Call server mutation to add/update item with inventory hold
-        if (!currentStaffProfileId) {
-          throw new Error("Staff profile missing");
-        }
+        const commandScope = getCommandScope();
 
         const previousCartItems = cloneCartItems(store.cart.items);
-        const optimisticItemId =
-          `optimistic:${product.skuId}` as Id<"expenseSessionItem">;
+        const optimisticItemId = createOptimisticExpenseItemId(product);
 
         if (existingItem) {
           store.updateCartQuantity(
@@ -179,12 +220,16 @@ export const useExpenseOperations = () => {
         store.setSessionUpdating(true);
 
         try {
-          const result = await runCommand(() =>
-            addOrUpdateItemMutation({
-              sessionId: sessionId as Id<"expenseSession">,
-              staffProfileId: currentStaffProfileId,
+          const savedLocally = await (existingItem
+            ? expenseLocalGateway.updateItem({
+              ...commandScope,
+              localExpenseSessionId: sessionId as string,
+              localItemId: existingItem.id as string,
               productId: product.productId!,
               productSkuId: product.skuId!,
+              pendingCheckoutItemId: product.pendingCheckoutItemId,
+              inventoryImportProvisionalSkuId:
+                product.inventoryImportProvisionalSkuId,
               productSku: product.sku || "",
               barcode: product.barcode || undefined,
               productName: product.name,
@@ -193,37 +238,44 @@ export const useExpenseOperations = () => {
               image: product.image || undefined,
               size: product.size || undefined,
               length: product.length || undefined,
-            }),
-          );
+              color: product.color,
+            })
+            : expenseLocalGateway.addItem({
+              ...commandScope,
+              localExpenseSessionId: sessionId as string,
+              localItemId: optimisticItemId as string,
+              productId: product.productId!,
+              productSkuId: product.skuId!,
+              pendingCheckoutItemId: product.pendingCheckoutItemId,
+              inventoryImportProvisionalSkuId:
+                product.inventoryImportProvisionalSkuId,
+              productSku: product.sku || "",
+              barcode: product.barcode || undefined,
+              productName: product.name,
+              price: product.price,
+              quantity: newQuantity,
+              image: product.image || undefined,
+              size: product.size || undefined,
+              length: product.length || undefined,
+              color: product.color,
+            })).catch((error) => {
+              logger.error("[Expense] Failed to save cart item locally", {
+                error:
+                  error instanceof Error ? error : new Error(String(error)),
+              });
+              return false;
+            });
 
-          if (result.kind !== "ok") {
+          if (!savedLocally) {
             store.replaceCartItems(previousCartItems);
-            presentCommandToast(result);
             return false;
           }
 
-          if (!existingItem) {
-            const currentOptimisticItem = useExpenseStore
-              .getState()
-              .cart.items.find((item) => item.id === optimisticItemId);
-
-            store.removeFromCart(optimisticItemId);
-            store.addToCart(
-              mapProductToExpenseCartItem(
-                product,
-                result.data.itemId as Id<"expenseSessionItem">,
-                currentOptimisticItem?.quantity ?? newQuantity,
-              ),
-            );
-          }
-          store.setSessionExpiresAt(result.data.expiresAt);
-
           logger.info("[Expense] Product added to cart successfully", {
             productName: product.name,
-            itemId: result.data.itemId,
+            itemId: existingItem?.id ?? optimisticItemId,
             quantity: newQuantity,
             wasUpdate: isUpdate,
-            sessionExpiresAt: result.data.expiresAt,
           });
           return true;
         } finally {
@@ -237,7 +289,7 @@ export const useExpenseOperations = () => {
         throw error;
       }
     },
-    [store, ensureSession, addOrUpdateItemMutation, currentStaffProfileId]
+    [store, ensureSession, expenseLocalGateway, getCommandScope]
   );
 
   /**
@@ -327,9 +379,15 @@ export const useExpenseOperations = () => {
         return;
       }
 
-      if (!currentStaffProfileId) {
-        logger.error("[Expense] No staff profile for item removal");
+      if (!store.storeId || !store.terminalId || !currentStaffProfileId) {
+        logger.error("[Expense] Missing command scope for item removal");
         showNoActiveSessionError("remove items");
+        return;
+      }
+
+      if (!item.skuId) {
+        logger.error("[Expense] Item missing SKU for removal", { itemId });
+        showValidationError([POS_MESSAGES.cart.itemNotFound]);
         return;
       }
 
@@ -343,31 +401,37 @@ export const useExpenseOperations = () => {
       store.setSessionUpdating(true);
 
       try {
-        const result = await runCommand(() =>
-          removeItemMutation({
-            sessionId: sessionId as Id<"expenseSession">,
-            staffProfileId: currentStaffProfileId,
-            itemId,
-          }),
-        );
+        const savedLocally = await expenseLocalGateway.removeItem({
+          terminalId: store.terminalId,
+          storeId: store.storeId,
+          staffProfileId: currentStaffProfileId,
+          localExpenseSessionId: sessionId as string,
+          localItemId: itemId as string,
+          productSkuId: item.skuId,
+          pendingCheckoutItemId: item.pendingCheckoutItemId,
+          inventoryImportProvisionalSkuId:
+            item.inventoryImportProvisionalSkuId,
+        }).catch((error) => {
+          logger.error("[Expense] Failed to remove cart item locally", {
+            error: error instanceof Error ? error : new Error(String(error)),
+          });
+          return false;
+        });
 
-        if (result.kind !== "ok") {
+        if (!savedLocally) {
           store.replaceCartItems(previousCartItems);
-          presentCommandToast(result);
           return;
         }
 
-        store.setSessionExpiresAt(result.data.expiresAt);
         logger.info("[Expense] Item removed successfully", {
           itemName: item.name,
           itemId,
-          sessionExpiresAt: result.data.expiresAt,
         });
       } finally {
         store.setSessionUpdating(false);
       }
     },
-    [store, removeItemMutation, currentStaffProfileId]
+    [store, expenseLocalGateway, currentStaffProfileId]
   );
 
   /**
@@ -412,8 +476,8 @@ export const useExpenseOperations = () => {
         return;
       }
 
-      if (!currentStaffProfileId) {
-        logger.error("[Expense] No staff profile for quantity update");
+      if (!store.storeId || !store.terminalId || !currentStaffProfileId) {
+        logger.error("[Expense] Missing command scope for quantity update");
         showNoActiveSessionError("update quantities");
         return;
       }
@@ -439,52 +503,90 @@ export const useExpenseOperations = () => {
       store.setSessionUpdating(true);
 
       try {
-        const result = await runCommand(() =>
-          addOrUpdateItemMutation({
-            sessionId: sessionId as Id<"expenseSession">,
-            staffProfileId: currentStaffProfileId,
-            productId: item.productId!,
-            productSkuId: item.skuId!,
-            productSku: item.sku || "",
-            barcode: item.barcode || undefined,
-            productName: item.name,
-            price: item.price,
-            quantity,
-            image: item.image || undefined,
-            size: item.size || undefined,
-            length: item.length || undefined,
-          }),
-        );
+        const savedLocally = await expenseLocalGateway.updateItem({
+          terminalId: store.terminalId,
+          storeId: store.storeId,
+          staffProfileId: currentStaffProfileId,
+          localExpenseSessionId: sessionId as string,
+          localItemId: itemId as string,
+          productId: item.productId!,
+          productSkuId: item.skuId!,
+          pendingCheckoutItemId: item.pendingCheckoutItemId,
+          inventoryImportProvisionalSkuId: item.inventoryImportProvisionalSkuId,
+          productSku: item.sku || "",
+          barcode: item.barcode || undefined,
+          productName: item.name,
+          price: item.price,
+          quantity,
+          image: item.image || undefined,
+          size: item.size || undefined,
+          length: item.length || undefined,
+          color: item.color,
+        }).catch((error) => {
+          logger.error("[Expense] Failed to update cart item locally", {
+            error: error instanceof Error ? error : new Error(String(error)),
+          });
+          return false;
+        });
 
-        if (result.kind !== "ok") {
+        if (!savedLocally) {
           store.replaceCartItems(previousCartItems);
-          presentCommandToast(result);
           return;
         }
 
-        store.setSessionExpiresAt(result.data.expiresAt);
         logger.info("[Expense] Quantity updated successfully", {
           itemName: item.name,
           quantity,
-          sessionExpiresAt: result.data.expiresAt,
         });
       } finally {
         store.setSessionUpdating(false);
       }
     },
-    [store, addOrUpdateItemMutation, removeItem, currentStaffProfileId]
+    [store, expenseLocalGateway, removeItem, currentStaffProfileId]
   );
 
   /**
    * Clears the entire expense cart
    */
-  const clearCart = useCallback(() => {
+  const clearCart = useCallback(async () => {
     logger.info("[Expense] Clearing cart", {
       itemCount: store.cart.items.length,
       cartTotal: store.cart.total,
     });
+    const sessionId = store.session.currentSessionId;
+    const previousCartItems = cloneCartItems(store.cart.items);
     store.clearCart();
-  }, [store]);
+    store.setSessionUpdating(true);
+
+    try {
+      if (
+        sessionId &&
+        store.storeId &&
+        store.terminalId &&
+        currentStaffProfileId
+      ) {
+        const savedLocally = await expenseLocalGateway.clearCart({
+          terminalId: store.terminalId,
+          storeId: store.storeId,
+          staffProfileId: currentStaffProfileId,
+          localExpenseSessionId: sessionId as string,
+        }).catch((error) => {
+          logger.error("[Expense] Failed to clear cart locally", {
+            error: error instanceof Error ? error : new Error(String(error)),
+          });
+          return false;
+        });
+        if (!savedLocally) {
+          store.replaceCartItems(previousCartItems);
+          return false;
+        }
+      }
+
+      return true;
+    } finally {
+      store.setSessionUpdating(false);
+    }
+  }, [currentStaffProfileId, expenseLocalGateway, store]);
 
   return {
     addProduct,

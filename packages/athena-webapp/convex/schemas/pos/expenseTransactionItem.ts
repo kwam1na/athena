@@ -4,6 +4,11 @@ export const expenseTransactionItemSchema = v.object({
   transactionId: v.id("expenseTransaction"),
   productId: v.id("product"),
   productSkuId: v.id("productSku"),
+  pendingCheckoutItemId: v.optional(v.id("posPendingCheckoutItem")),
+  inventoryImportProvisionalSkuId: v.optional(
+    v.id("inventoryImportProvisionalSku"),
+  ),
+  inventoryHoldApplied: v.optional(v.boolean()),
   productName: v.string(),
   productSku: v.string(), // human-readable SKU reference
   quantity: v.number(),

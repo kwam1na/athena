@@ -43,6 +43,9 @@ type ExpenseItemRecord = {
   sessionId: string;
   productSkuId: string;
   quantity: number;
+  inventoryHoldApplied?: boolean;
+  pendingCheckoutItemId?: string;
+  inventoryImportProvisionalSkuId?: string;
 };
 
 type ProductSkuRecord = {
@@ -420,6 +423,20 @@ describe("expense session command results", () => {
           productSkuId: "sku-1",
           quantity: 3,
         },
+        {
+          _id: "expense-item-3",
+          sessionId: "expense-session-1",
+          productSkuId: "sku-1",
+          quantity: 4,
+          inventoryHoldApplied: false,
+        },
+        {
+          _id: "expense-item-4",
+          sessionId: "expense-session-1",
+          productSkuId: "sku-1",
+          quantity: 5,
+          pendingCheckoutItemId: "pending-checkout-item-1",
+        },
       ],
       productSkus: [{ _id: "sku-1", quantityAvailable: 4 }],
     });
@@ -440,7 +457,7 @@ describe("expense session command results", () => {
     });
   });
 
-  it("restores quantity-patch expense holds when expiring sessions", async () => {
+  it("does not expire or release old expense sessions from the legacy cleanup hook", async () => {
     vi.spyOn(Date, "now").mockReturnValue(2_000);
     const ctx = createMutationCtx({
       sessions: [
@@ -467,14 +484,12 @@ describe("expense session command results", () => {
     );
 
     expect(result).toEqual({
-      releasedCount: 1,
-      sessionIds: ["expense-session-1"],
+      releasedCount: 0,
+      sessionIds: [],
     });
     expect(ctx.productSkus[0]).toEqual(
-      expect.objectContaining({ quantityAvailable: 6 }),
+      expect.objectContaining({ quantityAvailable: 4 }),
     );
-    expect(ctx.db.patch).toHaveBeenCalledWith("productSku", "sku-1", {
-      quantityAvailable: 6,
-    });
+    expect(ctx.db.patch).not.toHaveBeenCalled();
   });
 });

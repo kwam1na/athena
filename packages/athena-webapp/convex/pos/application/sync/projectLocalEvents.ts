@@ -39,6 +39,7 @@ type ProjectEventArgs = {
 
 type SaleCompletedArgs = ProjectEventArgsFor<"sale_completed">;
 type SaleClearedArgs = ProjectEventArgsFor<"sale_cleared">;
+type ExpenseRecordedArgs = ProjectEventArgsFor<"expense_recorded">;
 
 type StoreRecord = Awaited<ReturnType<SyncProjectionRepository["getStore"]>>;
 type TerminalRecord = Awaited<
@@ -151,6 +152,8 @@ const POS_USABLE_REGISTER_SESSION_STATUSES = new Set(["open", "active"]);
 
 const INVENTORY_CONFLICT_SUMMARY =
   "Inventory needs manager review for a synced offline sale.";
+const EXPENSE_INVENTORY_CONFLICT_SUMMARY =
+  "Inventory needs manager review for a synced expense.";
 const PAYMENT_CONFLICT_SUMMARY =
   "Payment needs manager review for a synced offline sale.";
 const PERMISSION_DRIFT_SUMMARY =
@@ -163,6 +166,7 @@ const POS_SYNC_ALLOWED_ROLES_BY_EVENT = {
   sale_cleared: ["cashier", "manager"],
   register_closed: ["cashier", "manager"],
   register_reopened: ["manager"],
+  expense_recorded: ["cashier", "manager"],
 } satisfies Record<PosLocalSyncEventType, PosSyncOperationalRole[]>;
 
 export async function projectLocalSyncEvent(
@@ -223,7 +227,417 @@ export async function projectLocalSyncEvent(
     );
   }
 
+  if (args.event.eventType === "expense_recorded") {
+    return projectExpenseRecorded(
+      repository,
+      args as ProjectEventArgsFor<"expense_recorded">,
+    );
+  }
+
   assertNever(args.event);
+}
+
+async function projectExpenseRecorded(
+  repository: SyncProjectionRepository,
+  args: ExpenseRecordedArgs,
+): Promise<ProjectionResult> {
+  const existingTransactionMapping = await findMappingForTerminal(repository, args, {
+    localIdKind: "expenseTransaction",
+    localId: args.event.payload.localExpenseEventId,
+  });
+  if (existingTransactionMapping) {
+    const existingSessionMapping = await findMappingForTerminal(repository, args, {
+      localIdKind: "expenseSession",
+      localId: args.event.payload.localExpenseSessionId,
+    });
+    return {
+      status: "projected",
+      mappings: [
+        ...(existingSessionMapping ? [existingSessionMapping] : []),
+        existingTransactionMapping,
+      ],
+      conflicts: [],
+    };
+  }
+
+  const store = await repository.getStore(args.storeId);
+  if (!store) {
+    const conflict = await createConflict(repository, args, {
+      conflictType: "inventory",
+      summary: "Store is missing for synced expense history.",
+      details: { blocksProjection: true, storeId: args.storeId },
+    });
+    return { status: "conflicted", mappings: [], conflicts: [conflict] };
+  }
+
+  const resolvedItems: Array<{
+    item: ExpenseRecordedArgs["event"]["payload"]["items"][number];
+    productId: Id<"product">;
+    productSkuId: Id<"productSku">;
+    pendingCheckoutItemId?: Id<"posPendingCheckoutItem">;
+    inventoryImportProvisionalSkuId?: Id<"inventoryImportProvisionalSku">;
+  }> = [];
+  const trustedExpenseSkuQuantities = new Map<
+    Id<"productSku">,
+    {
+      productSkuId: Id<"productSku">;
+      requestedQuantity: number;
+      inventoryCount: number;
+      quantityAvailable: number;
+    }
+  >();
+  const trustedExpenseSkuAvailability = new Map<Id<"productSku">, boolean>();
+  const reviewConflicts: LocalSyncConflictRecord[] = [];
+
+  for (const item of args.event.payload.items) {
+    if (item.pendingCheckoutItemId && item.inventoryImportProvisionalSkuId) {
+      const conflict = await createConflict(repository, args, {
+        conflictType: "inventory",
+        summary:
+          "Synced expense line has conflicting pending checkout and provisional import sources.",
+        details: {
+          blocksProjection: true,
+          localExpenseEventId: args.event.payload.localExpenseEventId,
+          localTransactionItemId: item.localTransactionItemId,
+          pendingCheckoutItemId: item.pendingCheckoutItemId,
+          inventoryImportProvisionalSkuId:
+            item.inventoryImportProvisionalSkuId,
+          productId: item.productId,
+          productSkuId: item.productSkuId,
+        },
+      });
+      return { status: "conflicted", mappings: [], conflicts: [conflict] };
+    }
+
+    const productId = repository.normalizeCloudId("product", item.productId);
+    const productSkuId = repository.normalizeCloudId(
+      "productSku",
+      item.productSkuId,
+    );
+    if (!productId || !productSkuId) {
+      const conflict = await createConflict(repository, args, {
+        conflictType: "inventory",
+        summary: "Expense line item catalog reference is missing.",
+        details: {
+          blocksProjection: true,
+          productId: item.productId,
+          productSkuId: item.productSkuId,
+        },
+      });
+      return { status: "conflicted", mappings: [], conflicts: [conflict] };
+    }
+
+    const [product, sku] = await Promise.all([
+      repository.getProduct(productId),
+      repository.getProductSku(productSkuId),
+    ]);
+    if (
+      !product ||
+      !sku ||
+      product.storeId !== args.storeId ||
+      sku.storeId !== args.storeId ||
+      sku.productId !== productId
+    ) {
+      const conflict = await createConflict(repository, args, {
+        conflictType: "inventory",
+        summary: "Expense line item catalog reference does not belong to this store.",
+        details: {
+          blocksProjection: true,
+          productId,
+          productSkuId,
+        },
+      });
+      return { status: "conflicted", mappings: [], conflicts: [conflict] };
+    }
+
+    let pendingCheckoutItemId: Id<"posPendingCheckoutItem"> | undefined;
+    if (item.pendingCheckoutItemId) {
+      const normalizedPendingCheckoutItemId = repository.normalizeCloudId(
+        "posPendingCheckoutItem",
+        item.pendingCheckoutItemId,
+      );
+      if (!normalizedPendingCheckoutItemId) {
+        const conflict = await createConflict(repository, args, {
+          conflictType: "inventory",
+          summary: "Expense pending checkout reference does not match this line.",
+          details: {
+            blocksProjection: true,
+            pendingCheckoutItemId: item.pendingCheckoutItemId,
+            productId,
+            productSkuId,
+          },
+        });
+        return { status: "conflicted", mappings: [], conflicts: [conflict] };
+      }
+      const pendingCheckoutItem = await repository.getPendingCheckoutItem(
+        normalizedPendingCheckoutItemId,
+      );
+      if (
+        !pendingCheckoutItem ||
+        pendingCheckoutItem.storeId !== args.storeId ||
+        pendingCheckoutItem.provisionalProductId !== productId ||
+        pendingCheckoutItem.provisionalProductSkuId !== productSkuId
+      ) {
+        const conflict = await createConflict(repository, args, {
+          conflictType: "inventory",
+          summary: "Expense pending checkout reference does not match this line.",
+          details: {
+            blocksProjection: true,
+            pendingCheckoutItemId: item.pendingCheckoutItemId,
+            productId,
+            productSkuId,
+          },
+        });
+        return { status: "conflicted", mappings: [], conflicts: [conflict] };
+      }
+      pendingCheckoutItemId = normalizedPendingCheckoutItemId;
+    }
+
+    let inventoryImportProvisionalSkuId:
+      | Id<"inventoryImportProvisionalSku">
+      | undefined;
+    if (item.inventoryImportProvisionalSkuId) {
+      const normalizedInventoryImportProvisionalSkuId =
+        repository.normalizeCloudId(
+          "inventoryImportProvisionalSku",
+          item.inventoryImportProvisionalSkuId,
+        );
+      if (!normalizedInventoryImportProvisionalSkuId) {
+        const conflict = await createConflict(repository, args, {
+          conflictType: "inventory",
+          summary: "Expense provisional import reference does not match this line.",
+          details: {
+            blocksProjection: true,
+            inventoryImportProvisionalSkuId: item.inventoryImportProvisionalSkuId,
+            productId,
+            productSkuId,
+          },
+        });
+        return { status: "conflicted", mappings: [], conflicts: [conflict] };
+      }
+      const provisionalSku = await repository.getInventoryImportProvisionalSku(
+        normalizedInventoryImportProvisionalSkuId,
+      );
+      if (
+        !provisionalSku ||
+        provisionalSku.storeId !== args.storeId ||
+        provisionalSku.productId !== productId ||
+        provisionalSku.productSkuId !== productSkuId ||
+        provisionalSku.status !== "active" ||
+        provisionalSku.posExposureStatus === "hidden"
+      ) {
+        const conflict = await createConflict(repository, args, {
+          conflictType: "inventory",
+          summary: "Expense provisional import reference does not match this line.",
+          details: {
+            blocksProjection: true,
+            inventoryImportProvisionalSkuId: item.inventoryImportProvisionalSkuId,
+            productId,
+            productSkuId,
+          },
+        });
+        return { status: "conflicted", mappings: [], conflicts: [conflict] };
+      }
+      inventoryImportProvisionalSkuId =
+        normalizedInventoryImportProvisionalSkuId;
+    }
+
+    if (!pendingCheckoutItemId && !inventoryImportProvisionalSkuId) {
+      const current = trustedExpenseSkuQuantities.get(productSkuId) ?? {
+        productSkuId,
+        requestedQuantity: 0,
+        inventoryCount: sku.inventoryCount,
+        quantityAvailable: sku.quantityAvailable,
+      };
+      current.requestedQuantity += item.quantity;
+      trustedExpenseSkuQuantities.set(productSkuId, current);
+    }
+
+    resolvedItems.push({
+      item,
+      productId,
+      productSkuId,
+      ...(pendingCheckoutItemId ? { pendingCheckoutItemId } : {}),
+      ...(inventoryImportProvisionalSkuId
+        ? { inventoryImportProvisionalSkuId }
+        : {}),
+    });
+  }
+
+  for (const aggregate of trustedExpenseSkuQuantities.values()) {
+    const inventoryAvailable =
+      aggregate.inventoryCount >= aggregate.requestedQuantity &&
+      aggregate.quantityAvailable >= aggregate.requestedQuantity;
+    trustedExpenseSkuAvailability.set(aggregate.productSkuId, inventoryAvailable);
+
+    if (!inventoryAvailable) {
+      reviewConflicts.push(
+        await createConflict(repository, args, {
+          conflictType: "inventory",
+          summary: EXPENSE_INVENTORY_CONFLICT_SUMMARY,
+          details: {
+            blocksProjection: false,
+            localExpenseEventId: args.event.payload.localExpenseEventId,
+            productSkuId: aggregate.productSkuId,
+            requestedQuantity: aggregate.requestedQuantity,
+            inventoryCount: aggregate.inventoryCount,
+            quantityAvailable: aggregate.quantityAvailable,
+          },
+        }),
+      );
+    }
+  }
+
+  const existingSessionMapping = await findMappingForTerminal(repository, args, {
+    localIdKind: "expenseSession",
+    localId: args.event.payload.localExpenseSessionId,
+  });
+  const existingSession = await repository.getExpenseSessionByLocalId({
+    storeId: args.storeId,
+    terminalId: args.terminalId,
+    localExpenseSessionId: args.event.payload.localExpenseSessionId,
+  });
+
+  const sessionId =
+    existingSession?._id ??
+    (await repository.createExpenseSession({
+      localExpenseSessionId: args.event.payload.localExpenseSessionId,
+      sessionNumber: args.event.payload.localExpenseSessionId,
+      storeId: args.storeId,
+      staffProfileId: args.event.staffProfileId,
+      terminalId: args.terminalId,
+      createdAt: args.event.occurredAt,
+      updatedAt: args.now,
+      expiresAt: Number.MAX_SAFE_INTEGER,
+      completedAt: args.event.occurredAt,
+      notes: args.event.payload.notes ?? args.event.payload.reason,
+    }));
+
+  const sessionMapping =
+    existingSessionMapping ??
+    (await createMapping(repository, args, {
+      syncScope: "expense",
+      localExpenseSessionId: args.event.payload.localExpenseSessionId,
+      localIdKind: "expenseSession",
+      localId: args.event.payload.localExpenseSessionId,
+      cloudTable: "expenseSession",
+      cloudId: sessionId,
+    }));
+
+  for (const resolved of resolvedItems) {
+    const usesTrustedInventory =
+      !resolved.pendingCheckoutItemId &&
+      !resolved.inventoryImportProvisionalSkuId;
+    const inventoryHoldApplied =
+      usesTrustedInventory &&
+      trustedExpenseSkuAvailability.get(resolved.productSkuId) === true;
+    const sessionItemId = await repository.createExpenseSessionItem({
+      sessionId,
+      storeId: args.storeId,
+      productId: resolved.productId,
+      productSkuId: resolved.productSkuId,
+      ...(resolved.pendingCheckoutItemId
+        ? { pendingCheckoutItemId: resolved.pendingCheckoutItemId }
+        : {}),
+      ...(resolved.inventoryImportProvisionalSkuId
+        ? {
+            inventoryImportProvisionalSkuId:
+              resolved.inventoryImportProvisionalSkuId,
+          }
+        : {}),
+      inventoryHoldApplied,
+      productSku: resolved.item.productSku,
+      barcode: resolved.item.barcode,
+      productName: resolved.item.productName,
+      price: resolved.item.unitPrice,
+      quantity: resolved.item.quantity,
+      image: resolved.item.image,
+      createdAt: args.event.occurredAt,
+      updatedAt: args.now,
+    });
+
+    if (resolved.item.localTransactionItemId) {
+      await createMapping(repository, args, {
+        syncScope: "expense",
+        localExpenseSessionId: args.event.payload.localExpenseSessionId,
+        localIdKind: "transactionItem",
+        localId: resolved.item.localTransactionItemId,
+        cloudTable: "expenseSessionItem",
+        cloudId: sessionItemId,
+      });
+    }
+  }
+
+  const transactionId = await repository.createExpenseTransaction({
+    transactionNumber: args.event.payload.localExpenseEventId,
+    storeId: args.storeId,
+    sessionId,
+    staffProfileId: args.event.staffProfileId,
+    totalValue: args.event.payload.totals.total,
+    completedAt: args.event.occurredAt,
+    notes: args.event.payload.notes ?? args.event.payload.reason,
+  });
+
+  for (const resolved of resolvedItems) {
+    const usesTrustedInventory =
+      !resolved.pendingCheckoutItemId &&
+      !resolved.inventoryImportProvisionalSkuId;
+    const inventoryHoldApplied =
+      usesTrustedInventory &&
+      trustedExpenseSkuAvailability.get(resolved.productSkuId) === true;
+    await repository.createExpenseTransactionItem({
+      transactionId,
+      productId: resolved.productId,
+      productSkuId: resolved.productSkuId,
+      ...(resolved.pendingCheckoutItemId
+        ? { pendingCheckoutItemId: resolved.pendingCheckoutItemId }
+        : {}),
+      ...(resolved.inventoryImportProvisionalSkuId
+        ? {
+            inventoryImportProvisionalSkuId:
+              resolved.inventoryImportProvisionalSkuId,
+          }
+        : {}),
+      inventoryHoldApplied,
+      productName: resolved.item.productName,
+      productSku: resolved.item.productSku,
+      quantity: resolved.item.quantity,
+      costPrice: resolved.item.unitPrice,
+      image: resolved.item.image,
+    });
+  }
+
+  for (const aggregate of trustedExpenseSkuQuantities.values()) {
+    if (trustedExpenseSkuAvailability.get(aggregate.productSkuId) !== true) {
+      continue;
+    }
+
+    await repository.patchProductSku(aggregate.productSkuId, {
+      inventoryCount: Math.max(
+        0,
+        aggregate.inventoryCount - aggregate.requestedQuantity,
+      ),
+      quantityAvailable: Math.max(
+        0,
+        aggregate.quantityAvailable - aggregate.requestedQuantity,
+      ),
+    });
+  }
+
+  const transactionMapping = await createMapping(repository, args, {
+    syncScope: "expense",
+    localExpenseSessionId: args.event.payload.localExpenseSessionId,
+    localIdKind: "expenseTransaction",
+    localId: args.event.payload.localExpenseEventId,
+    cloudTable: "expenseTransaction",
+    cloudId: transactionId,
+  });
+
+  return {
+    status: "projected",
+    mappings: [sessionMapping, transactionMapping],
+    conflicts: reviewConflicts,
+  };
 }
 
 function assertNever(value: never): never {
@@ -549,7 +963,7 @@ async function projectPendingCheckoutItemDefined(
   const registerSession = await repository.getRegisterSessionByLocalId({
     storeId: args.storeId,
     terminalId: args.terminalId,
-    localRegisterSessionId: args.event.localRegisterSessionId,
+    localRegisterSessionId: args.event.localRegisterSessionId ?? "",
   });
   if (!registerSession) {
     const conflict = await createConflict(repository, args, {
@@ -808,7 +1222,7 @@ async function resolveSaleRegisterAndSession(
   const registerSession = await repository.getRegisterSessionByLocalId({
     storeId: args.storeId,
     terminalId: args.terminalId,
-    localRegisterSessionId: args.event.localRegisterSessionId,
+    localRegisterSessionId: args.event.localRegisterSessionId ?? "",
   });
 
   if (!registerSession) {
@@ -858,7 +1272,7 @@ async function resolveSaleRegisterAndSession(
   const existingPosSession = await repository.getPosSessionByLocalId({
     storeId: args.storeId,
     terminalId: args.terminalId,
-    localRegisterSessionId: args.event.localRegisterSessionId,
+    localRegisterSessionId: args.event.localRegisterSessionId ?? "",
     localPosSessionId: payload.localPosSessionId,
     registerSessionId: registerSession._id,
   });
@@ -971,7 +1385,7 @@ async function projectSaleCleared(
   const registerSession = await repository.getRegisterSessionByLocalId({
     storeId: args.storeId,
     terminalId: args.terminalId,
-    localRegisterSessionId: args.event.localRegisterSessionId,
+    localRegisterSessionId: args.event.localRegisterSessionId ?? "",
   });
   if (!registerSession) {
     const conflict = await createConflict(repository, args, {
@@ -988,7 +1402,7 @@ async function projectSaleCleared(
   const existingPosSession = await repository.getPosSessionByLocalId({
     storeId: args.storeId,
     terminalId: args.terminalId,
-    localRegisterSessionId: args.event.localRegisterSessionId,
+    localRegisterSessionId: args.event.localRegisterSessionId ?? "",
     localPosSessionId: args.event.payload.localPosSessionId,
     registerSessionId: registerSession._id,
   });
@@ -2567,7 +2981,7 @@ async function projectRegisterClosed(
   const registerSession = await repository.getRegisterSessionByLocalId({
     storeId: args.storeId,
     terminalId: args.terminalId,
-    localRegisterSessionId: args.event.localRegisterSessionId,
+    localRegisterSessionId: args.event.localRegisterSessionId ?? "",
   });
   if (!registerSession) {
     const conflict = await createConflict(repository, args, {
@@ -2847,7 +3261,7 @@ async function findMapping(
   return repository.findMapping({
     storeId: args.storeId,
     terminalId: args.terminalId,
-    localRegisterSessionId: args.event.localRegisterSessionId,
+    localRegisterSessionId: args.event.localRegisterSessionId ?? "",
     localIdKind: local.localIdKind,
     localId: local.localId,
   });
@@ -2877,7 +3291,7 @@ function createMapping(
   const scopedInput: LocalSyncMappingRecordInput = {
     storeId: args.storeId,
     terminalId: args.terminalId,
-    localRegisterSessionId: args.event.localRegisterSessionId,
+    localRegisterSessionId: args.event.localRegisterSessionId ?? "",
     localEventId: args.event.localEventId,
     createdAt: args.now,
     ...input,
@@ -2906,7 +3320,7 @@ function createConflict(
   return repository.createConflict({
     storeId: args.storeId,
     terminalId: args.terminalId,
-    localRegisterSessionId: args.event.localRegisterSessionId,
+    localRegisterSessionId: args.event.localRegisterSessionId ?? "",
     localEventId: args.event.localEventId,
     sequence: args.event.sequence,
     conflictType: input.conflictType,

@@ -612,6 +612,54 @@ export function createConvexLocalSyncRepository(
     async createTransactionItem(input) {
       return ctx.db.insert("posTransactionItem", input as never);
     },
+    async getExpenseSessionByLocalId(args) {
+      const mapping = await ctx.db
+        .query("posLocalSyncMapping")
+        .withIndex("by_store_terminal_localKindId", (q) =>
+          q
+            .eq("storeId", args.storeId)
+            .eq("terminalId", args.terminalId)
+            .eq("localIdKind", "expenseSession")
+            .eq("localId", args.localExpenseSessionId),
+        )
+        .unique();
+      if (!mapping) return null;
+      return ctx.db.get("expenseSession", mapping.cloudId as Id<"expenseSession">);
+    },
+    async createExpenseSession(input) {
+      return ctx.db.insert("expenseSession", {
+        sessionNumber: input.sessionNumber,
+        storeId: input.storeId,
+        staffProfileId: input.staffProfileId,
+        terminalId: input.terminalId,
+        registerNumber: input.registerNumber,
+        status: input.completedAt ? "completed" : "active",
+        createdAt: input.createdAt,
+        updatedAt: input.updatedAt,
+        expiresAt: input.expiresAt,
+        completedAt: input.completedAt,
+        notes: input.notes,
+      });
+    },
+    async createExpenseSessionItem(input) {
+      return ctx.db.insert("expenseSessionItem", input);
+    },
+    async createExpenseTransaction(input) {
+      return ctx.db.insert("expenseTransaction", {
+        transactionNumber: input.transactionNumber,
+        storeId: input.storeId,
+        sessionId: input.sessionId,
+        staffProfileId: input.staffProfileId,
+        registerNumber: input.registerNumber,
+        totalValue: input.totalValue,
+        status: "completed",
+        completedAt: input.completedAt,
+        notes: input.notes,
+      });
+    },
+    async createExpenseTransactionItem(input) {
+      return ctx.db.insert("expenseTransactionItem", input);
+    },
     async createTransactionServiceLine(input) {
       return ctx.db.insert("posTransactionServiceLine", input);
     },

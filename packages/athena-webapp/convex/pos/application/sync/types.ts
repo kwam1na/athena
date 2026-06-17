@@ -4,7 +4,6 @@ import type { PosSessionTraceableSession } from "../commands/posSessionTracing";
 import type {
   PosLocalSyncEventStatus,
   PosLocalSyncEventType,
-  PosLocalSyncUploadEvent,
 } from "../../../../shared/posLocalSyncContract";
 
 export type { PosLocalSyncEventStatus, PosLocalSyncEventType };
@@ -25,7 +24,9 @@ export type PosLocalSyncMappingKind =
   | "receipt"
   | "serviceCase"
   | "serviceLine"
-  | "closeout";
+  | "closeout"
+  | "expenseSession"
+  | "expenseTransaction";
 
 export type PosLocalPaymentInput = {
   localPaymentId?: string;
@@ -126,40 +127,81 @@ export type PosLocalRegisterReopenedPayload = {
   reason?: string;
 };
 
-export type PosLocalSyncEventInput = Omit<
-  PosLocalSyncUploadEvent,
-  "payload" | "staffProfileId"
-> & {
+export type PosLocalExpenseRecordedPayload = {
+  localExpenseSessionId: string;
+  localExpenseEventId: string;
+  reason?: string;
+  notes?: string;
+  totals: {
+    subtotal: number;
+    tax: number;
+    total: number;
+  };
+  items: PosLocalSaleItemInput[];
+};
+
+export type PosLocalSyncEventInput = {
+  syncScope?: "pos" | "expense";
+  localEventId: string;
+  localRegisterSessionId?: string;
+  localExpenseSessionId?: string;
+  sequence: number;
+  eventType: PosLocalSyncEventType;
+  occurredAt: number;
   staffProfileId: Id<"staffProfile">;
   staffProofToken?: string;
   payload: Record<string, unknown>;
 };
 
-type ParsedPosLocalSyncEventBase<
-  EventType extends PosLocalSyncEventType,
+type ParsedPosLocalSyncPosEventBase<
+  EventType extends Exclude<PosLocalSyncEventType, "expense_recorded">,
   Payload,
-> = Omit<PosLocalSyncEventInput, "eventType" | "payload"> & {
+> = Omit<
+  PosLocalSyncEventInput,
+  "eventType" | "payload" | "syncScope" | "localRegisterSessionId"
+> & {
+  syncScope?: "pos";
+  localRegisterSessionId: string;
+  eventType: EventType;
+  payload: Payload;
+};
+
+type ParsedPosLocalSyncExpenseEventBase<
+  EventType extends "expense_recorded",
+  Payload,
+> = Omit<
+  PosLocalSyncEventInput,
+  "eventType" | "payload" | "syncScope" | "localExpenseSessionId"
+> & {
+  syncScope: "expense";
+  localExpenseSessionId: string;
   eventType: EventType;
   payload: Payload;
 };
 
 export type ParsedPosLocalSyncEventInput =
-  | ParsedPosLocalSyncEventBase<"register_opened", PosLocalRegisterOpenedPayload>
-  | ParsedPosLocalSyncEventBase<
+  | ParsedPosLocalSyncPosEventBase<"register_opened", PosLocalRegisterOpenedPayload>
+  | ParsedPosLocalSyncPosEventBase<
       "pending_checkout_item_defined",
       PosLocalPendingCheckoutItemDefinedPayload
     >
-  | ParsedPosLocalSyncEventBase<"sale_completed", PosLocalSalePayload>
-  | ParsedPosLocalSyncEventBase<"sale_cleared", PosLocalSaleClearedPayload>
-  | ParsedPosLocalSyncEventBase<"register_closed", PosLocalRegisterClosedPayload>
-  | ParsedPosLocalSyncEventBase<"register_reopened", PosLocalRegisterReopenedPayload>;
+  | ParsedPosLocalSyncPosEventBase<"sale_completed", PosLocalSalePayload>
+  | ParsedPosLocalSyncPosEventBase<"sale_cleared", PosLocalSaleClearedPayload>
+  | ParsedPosLocalSyncPosEventBase<"register_closed", PosLocalRegisterClosedPayload>
+  | ParsedPosLocalSyncPosEventBase<"register_reopened", PosLocalRegisterReopenedPayload>
+  | ParsedPosLocalSyncExpenseEventBase<
+      "expense_recorded",
+      PosLocalExpenseRecordedPayload
+    >;
 
 export type LocalSyncEventRecord = {
   _id: string;
   storeId: Id<"store">;
   terminalId: Id<"posTerminal">;
+  syncScope?: "pos" | "expense";
   localEventId: string;
   localRegisterSessionId: string;
+  localExpenseSessionId?: string;
   sequence: number;
   eventType: PosLocalSyncEventType;
   occurredAt: number;
@@ -179,7 +221,9 @@ type LocalSyncMappingRecordBase = {
   _id: string;
   storeId: Id<"store">;
   terminalId: Id<"posTerminal">;
+  syncScope?: "pos" | "expense";
   localRegisterSessionId: string;
+  localExpenseSessionId?: string;
   localEventId: string;
   localId: string;
   createdAt: number;
@@ -464,6 +508,70 @@ export type SyncProjectionRepository = {
     totalPrice: number;
     image?: string;
   }): Promise<Id<"posTransactionItem">>;
+  getExpenseSessionByLocalId(args: {
+    storeId: Id<"store">;
+    terminalId: Id<"posTerminal">;
+    localExpenseSessionId: string;
+  }): Promise<Doc<"expenseSession"> | null>;
+  createExpenseSession(input: {
+    localExpenseSessionId?: string;
+    sessionNumber: string;
+    storeId: Id<"store">;
+    staffProfileId: Id<"staffProfile">;
+    registerNumber?: string;
+    terminalId: Id<"posTerminal">;
+    createdAt: number;
+    updatedAt: number;
+    expiresAt: number;
+    completedAt?: number;
+    notes?: string;
+  }): Promise<Id<"expenseSession">>;
+  createExpenseSessionItem(input: {
+    sessionId: Id<"expenseSession">;
+    storeId: Id<"store">;
+    productId: Id<"product">;
+    productSkuId: Id<"productSku">;
+    pendingCheckoutItemId?: Id<"posPendingCheckoutItem">;
+    inventoryImportProvisionalSkuId?: Id<"inventoryImportProvisionalSku">;
+    inventoryHoldApplied?: boolean;
+    productSku: string;
+    barcode?: string;
+    productName: string;
+    price: number;
+    quantity: number;
+    image?: string;
+    size?: string;
+    length?: number;
+    color?: string;
+    createdAt: number;
+    updatedAt: number;
+  }): Promise<Id<"expenseSessionItem">>;
+  createExpenseTransaction(input: {
+    transactionNumber: string;
+    storeId: Id<"store">;
+    sessionId: Id<"expenseSession">;
+    staffProfileId: Id<"staffProfile">;
+    registerNumber?: string;
+    totalValue: number;
+    completedAt: number;
+    notes?: string;
+  }): Promise<Id<"expenseTransaction">>;
+  createExpenseTransactionItem(input: {
+    transactionId: Id<"expenseTransaction">;
+    productId: Id<"product">;
+    productSkuId: Id<"productSku">;
+    pendingCheckoutItemId?: Id<"posPendingCheckoutItem">;
+    inventoryImportProvisionalSkuId?: Id<"inventoryImportProvisionalSku">;
+    inventoryHoldApplied?: boolean;
+    productName: string;
+    productSku: string;
+    quantity: number;
+    costPrice: number;
+    image?: string;
+    size?: string;
+    length?: number;
+    color?: string;
+  }): Promise<Id<"expenseTransactionItem">>;
   recordPendingCheckoutItemSaleEvidence(input: {
     pendingCheckoutItemId: Id<"posPendingCheckoutItem">;
     storeId: Id<"store">;

@@ -234,7 +234,7 @@ describe("POS and expense session indexing", () => {
     const activeSource = readSourceSlice(
       expenseSessionSource,
       "export const getActiveExpenseSession = query({",
-      "// Release inventory holds from expired expense sessions",
+      "export const releaseExpenseSessionItems = internalMutation({",
     );
 
     expect(storeListSource).toContain(
@@ -248,26 +248,11 @@ describe("POS and expense session indexing", () => {
     );
   });
 
-  it("uses targeted status-expiry indexes for expense session cleanup", () => {
+  it("keeps expense session cleanup as a no-op because expense sessions do not expire", () => {
     const source = readProjectFile(
       "convex",
       "inventory",
       "expenseSessions.ts",
-    );
-    const helperSource = readSourceSlice(
-      source,
-      "async function listExpenseSessionsByStatusBefore(",
-      "export const getStoreExpenseSessions = query({",
-    );
-
-    expect(helperSource).toContain('withIndex("by_status_and_expiresAt",');
-    expect(helperSource).not.toContain('withIndex("by_expiresAt",');
-    expect(helperSource).not.toContain("Promise.all");
-    expect(helperSource).not.toContain("while (true)");
-    expect(helperSource).not.toContain("continueCursor");
-    expect(helperSource).not.toContain(".paginate(");
-    expect(helperSource).toContain(
-      ".take(EXPENSE_SESSION_CLEANUP_BATCH_SIZE)"
     );
 
     const releaseSource = readSourceSlice(
@@ -275,9 +260,11 @@ describe("POS and expense session indexing", () => {
       "export const releaseExpenseSessionItems = internalMutation({",
     );
 
+    expect(source).not.toContain("listExpenseSessionsByStatusBefore");
+    expect(releaseSource).not.toContain('withIndex("by_status_and_expiresAt",');
+    expect(releaseSource).not.toContain('withIndex("by_expiresAt",');
     expect(releaseSource).not.toContain("Promise.all");
-    expect(releaseSource).toContain(
-      "const expiredSessions = await listExpenseSessionsByStatusBefore(ctx, now);"
-    );
+    expect(releaseSource).not.toContain(".paginate(");
+    expect(releaseSource).toContain("return { releasedCount: 0, sessionIds: [] };");
   });
 });

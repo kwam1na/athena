@@ -11,6 +11,7 @@ import {
 } from "../lib/errors/runCommand";
 import { logger } from "../lib/logger";
 import { useExpenseStore } from "../stores/expenseStore";
+import { useExpenseLocalRuntime } from "./useExpenseLocalRuntime";
 import { useExpenseActiveSession } from "./useExpenseSessions";
 import { useGetTerminal } from "./useGetTerminal";
 
@@ -39,22 +40,12 @@ export const useSessionManagementExpense = () => {
     terminal?._id,
     currentStaffProfileId || undefined,
   );
+  const { expenseLocalGateway } = useExpenseLocalRuntime({
+    staffProfileId: currentStaffProfileId || null,
+    storeId: store.storeId,
+    terminalId: store.terminalId,
+  });
 
-  const createSessionMutation = useMutation(
-    api.inventory.expenseSessions.createExpenseSession,
-  );
-  const updateSessionMutation = useMutation(
-    api.inventory.expenseSessions.updateExpenseSession,
-  );
-  const holdSessionMutation = useMutation(
-    api.inventory.expenseSessions.holdExpenseSession,
-  );
-  const resumeSessionMutation = useMutation(
-    api.inventory.expenseSessions.resumeExpenseSession,
-  );
-  const voidSessionMutation = useMutation(
-    api.inventory.expenseSessions.voidExpenseSession,
-  );
   const releaseSessionInventoryHoldsAndDeleteItemsMutation = useMutation(
     api.inventory.expenseSessions.releaseExpenseSessionInventoryHoldsAndDeleteItems,
   );
@@ -87,32 +78,30 @@ export const useSessionManagementExpense = () => {
         store.clearCart();
         logger.debug("[Expense] Cleared cart before creating new session");
 
-        const result = await runCommand(() =>
-          createSessionMutation({
-            storeId,
-            staffProfileId: sessionStaffProfileId,
-            registerNumber: store.ui.registerNumber,
-            terminalId,
-          }),
-        );
+        const result = await expenseLocalGateway.startSession({
+          storeId,
+          staffProfileId: sessionStaffProfileId,
+          registerNumber: store.ui.registerNumber,
+          terminalId,
+        });
 
         if (result.kind !== "ok") {
-          presentCommandToast(result);
           throw new Error(getCommandErrorMessage(result));
         }
 
-        store.setCurrentSessionId(result.data.sessionId);
-        store.setSessionExpiresAt(result.data.expiresAt);
+        store.setCurrentSessionId(
+          result.data.localExpenseSessionId as Id<"expenseSession">,
+        );
+        store.setSessionExpiresAt(null);
 
         logger.info("[Expense] Session created successfully", {
-          sessionId: result.data.sessionId,
-          expiresAt: result.data.expiresAt,
+          sessionId: result.data.localExpenseSessionId,
           registerNumber: store.ui.registerNumber,
           staffProfileId,
         });
 
         toast.success("New expense session created");
-        return result.data.sessionId;
+        return result.data.localExpenseSessionId as Id<"expenseSession">;
       } catch (error) {
         logger.error("[Expense] Failed to create session", error as Error);
         throw error;
@@ -120,7 +109,7 @@ export const useSessionManagementExpense = () => {
         store.setSessionCreating(false);
       }
     },
-    [createSessionMutation, currentStaffProfileId, store],
+    [currentStaffProfileId, expenseLocalGateway, store],
   );
 
   const updateSession = useCallback(
@@ -141,35 +130,19 @@ export const useSessionManagementExpense = () => {
         return { success: false, error };
       }
 
-      const result = await runCommand(() =>
-        updateSessionMutation({
-          sessionId: sessionId as Id<"expenseSession">,
-          ...updates,
-          staffProfileId: updates.staffProfileId,
-        }),
-      );
-
-      if (result.kind !== "ok") {
-        const errorMessage = getCommandErrorMessage(result);
-        logger.error("[Expense] Failed to update session", { error: errorMessage });
-        return { success: false, error: errorMessage };
-      }
-
-      store.setSessionExpiresAt(result.data.expiresAt);
-
       logger.debug("[Expense] Session updated successfully", {
-        sessionId: result.data.sessionId,
-        expiresAt: result.data.expiresAt,
+        sessionId,
+        hasNotes: !!updates.notes,
       });
       return { success: true };
     },
-    [store, updateSessionMutation],
+    [store],
   );
 
   const holdSession = useCallback(async (): Promise<
     { success: true } | { success: false; error: string }
   > => {
-    const sessionId = activeSession?._id;
+    const sessionId = store.session.currentSessionId ?? activeSession?._id;
 
     logger.info("[Expense] Holding session", {
       sessionId,
@@ -191,24 +164,29 @@ export const useSessionManagementExpense = () => {
       return { success: false, error };
     }
 
-    const result = await runCommand(() =>
-      holdSessionMutation({
-        sessionId: sessionId as Id<"expenseSession">,
-        staffProfileId: currentStaffProfileId,
-      }),
-    );
+    if (!store.storeId || !store.terminalId) {
+      const error = "Terminal details missing";
+      toast.error(error);
+      return { success: false, error };
+    }
 
-    if (result.kind !== "ok") {
-      const errorMessage = getCommandErrorMessage(result);
+    const savedLocally = await expenseLocalGateway.holdSession({
+      terminalId: store.terminalId,
+      storeId: store.storeId,
+      staffProfileId: currentStaffProfileId,
+      localExpenseSessionId: sessionId as string,
+    });
+
+    if (!savedLocally) {
+      const errorMessage = "Unable to hold this expense session locally.";
       logger.error("[Expense] Failed to hold session", {
         sessionId,
         message: errorMessage,
       });
-      presentCommandToast(result);
       return { success: false, error: errorMessage };
     }
 
-    store.setSessionExpiresAt(result.data.expiresAt);
+    store.setSessionExpiresAt(null);
     store.setCurrentSessionId(null);
     store.setActiveSession(null);
     store.startNewTransaction();
@@ -219,7 +197,7 @@ export const useSessionManagementExpense = () => {
     });
     toast.success("Session held");
     return { success: true };
-  }, [activeSession, currentStaffProfileId, holdSessionMutation, store]);
+  }, [activeSession, currentStaffProfileId, expenseLocalGateway, store]);
 
   const resumeSession = useCallback(
     async (
@@ -235,36 +213,41 @@ export const useSessionManagementExpense = () => {
     > => {
       logger.info("[Expense] Resuming held session", { sessionId });
 
-      const result = await runCommand(() =>
-        resumeSessionMutation({
-          sessionId,
-          staffProfileId,
-          terminalId,
-        }),
-      );
+      if (!store.storeId) {
+        const error = "Store details missing";
+        toast.error(error);
+        return { success: false, error };
+      }
 
-      if (result.kind !== "ok") {
-        const errorMessage = getCommandErrorMessage(result);
+      const savedLocally = await expenseLocalGateway.resumeSession({
+        terminalId,
+        storeId: store.storeId,
+        staffProfileId,
+        localExpenseSessionId: sessionId as string,
+      });
+
+      if (!savedLocally) {
+        const errorMessage = "Unable to resume this expense session locally.";
         logger.error("[Expense] Failed to resume session", {
           sessionId,
           message: errorMessage,
         });
-        presentCommandToast(result);
         return { success: false, error: errorMessage };
       }
 
-      store.setSessionExpiresAt(result.data.expiresAt);
+      store.setCurrentSessionId(sessionId);
+      store.setSessionExpiresAt(null);
       toast.success("Session resumed");
 
-      return { success: true, data: result.data };
+      return { success: true, data: { sessionId, expiresAt: 0 } };
     },
-    [resumeSessionMutation, store],
+    [expenseLocalGateway, store],
   );
 
   const voidSession = useCallback(async (): Promise<
     { success: true } | { success: false; error: string }
   > => {
-    const sessionId = activeSession?._id;
+    const sessionId = store.session.currentSessionId ?? activeSession?._id;
 
     logger.info("[Expense] Voiding session", {
       sessionId,
@@ -278,19 +261,25 @@ export const useSessionManagementExpense = () => {
       return { success: false, error };
     }
 
-    const result = await runCommand(() =>
-      voidSessionMutation({
-        sessionId: sessionId as Id<"expenseSession">,
-      }),
-    );
+    if (!currentStaffProfileId || !store.storeId || !store.terminalId) {
+      const error = "Terminal or staff details missing";
+      toast.error(error);
+      return { success: false, error };
+    }
 
-    if (result.kind !== "ok") {
-      const errorMessage = getCommandErrorMessage(result);
+    const savedLocally = await expenseLocalGateway.voidSession({
+      terminalId: store.terminalId,
+      storeId: store.storeId,
+      staffProfileId: currentStaffProfileId,
+      localExpenseSessionId: sessionId as string,
+    });
+
+    if (!savedLocally) {
+      const errorMessage = "Unable to void this expense session locally.";
       logger.error("[Expense] Failed to void session", {
         sessionId,
         message: errorMessage,
       });
-      presentCommandToast(result);
       return { success: false, error: errorMessage };
     }
 
@@ -301,7 +290,7 @@ export const useSessionManagementExpense = () => {
     logger.info("[Expense] Session voided successfully", { sessionId });
     toast.success("Session voided");
     return { success: true };
-  }, [activeSession, store, voidSessionMutation]);
+  }, [activeSession, currentStaffProfileId, expenseLocalGateway, store]);
 
   const releaseSessionInventoryHoldsAndDeleteItems = useCallback(
     async (

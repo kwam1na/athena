@@ -1579,6 +1579,8 @@ function toLocalCloudMappingEntity(
   if (kind === "registerSession") return "registerSession";
   if (kind === "posSession") return "posSession";
   if (kind === "transaction") return "posTransaction";
+  if (kind === "expenseSession") return "expenseSession";
+  if (kind === "expenseTransaction") return "expenseTransaction";
   return null;
 }
 

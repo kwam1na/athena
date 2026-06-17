@@ -5,6 +5,7 @@ export const POS_LOCAL_SYNC_EVENT_TYPES = [
   "register_closed",
   "register_reopened",
   "sale_cleared",
+  "expense_recorded",
 ] as const;
 
 export const POS_LOCAL_SYNC_EVENT_STATUSES = [
@@ -124,6 +125,19 @@ export type PosLocalSyncRegisterReopenedPayload = {
   reason?: string;
 };
 
+export type PosLocalSyncExpenseRecordedPayload = {
+  localExpenseSessionId: string;
+  localExpenseEventId: string;
+  reason?: string;
+  notes?: string;
+  totals: {
+    subtotal: number;
+    tax: number;
+    total: number;
+  };
+  items: PosLocalSyncSaleItemPayload[];
+};
+
 export type PosLocalSyncPayloadByEventType = {
   register_opened: PosLocalSyncRegisterOpenedPayload;
   pending_checkout_item_defined: PosLocalSyncPendingCheckoutItemDefinedPayload;
@@ -131,11 +145,13 @@ export type PosLocalSyncPayloadByEventType = {
   sale_cleared: PosLocalSyncSaleClearedPayload;
   register_closed: PosLocalSyncRegisterClosedPayload;
   register_reopened: PosLocalSyncRegisterReopenedPayload;
+  expense_recorded: PosLocalSyncExpenseRecordedPayload;
 };
 
 export type PosLocalSyncUploadEventBase<
   EventType extends PosLocalSyncEventType,
 > = {
+  syncScope?: "pos";
   localEventId: string;
   localRegisterSessionId: string;
   sequence: number;
@@ -146,6 +162,19 @@ export type PosLocalSyncUploadEventBase<
   payload: PosLocalSyncPayloadByEventType[EventType];
 };
 
-export type PosLocalSyncUploadEvent = {
-  [EventType in PosLocalSyncEventType]: PosLocalSyncUploadEventBase<EventType>;
-}[PosLocalSyncEventType];
+export type PosLocalSyncPosUploadEvent = {
+  [EventType in Exclude<PosLocalSyncEventType, "expense_recorded">]:
+    PosLocalSyncUploadEventBase<EventType>;
+}[Exclude<PosLocalSyncEventType, "expense_recorded">];
+
+export type PosLocalSyncExpenseUploadEvent = Omit<
+  PosLocalSyncUploadEventBase<"expense_recorded">,
+  "localRegisterSessionId" | "syncScope"
+> & {
+  syncScope: "expense";
+  localExpenseSessionId: string;
+};
+
+export type PosLocalSyncUploadEvent =
+  | PosLocalSyncPosUploadEvent
+  | PosLocalSyncExpenseUploadEvent;

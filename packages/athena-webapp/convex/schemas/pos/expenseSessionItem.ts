@@ -7,6 +7,11 @@ export const expenseSessionItemSchema = v.object({
   // Product references
   productId: v.id("product"),
   productSkuId: v.id("productSku"),
+  pendingCheckoutItemId: v.optional(v.id("posPendingCheckoutItem")),
+  inventoryImportProvisionalSkuId: v.optional(
+    v.id("inventoryImportProvisionalSku"),
+  ),
+  inventoryHoldApplied: v.optional(v.boolean()),
   productSku: v.string(), // human-readable SKU reference
   barcode: v.optional(v.string()),
 
