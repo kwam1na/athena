@@ -5,7 +5,7 @@
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 7034 nodes · 7940 edges · 1900 communities detected
+- 7035 nodes · 7942 edges · 1900 communities detected
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
 - Token cost: 0 input · 0 output
 
@@ -1958,12 +1958,12 @@ Cohesion: 0.06
 Nodes (26): asRecord(), createEmptyMemoryStore(), createMemoryPosLocalStorageAdapter(), getExpenseLocalSessionId(), getUploadSequenceScopeId(), normalizeCashierPresenceRecord(), normalizeDrawerAuthorityState(), normalizeLocalEventPayload() (+18 more)
 
 ### Community 5 - "Community 5"
-Cohesion: 0.1
-Nodes (46): buildFinding(), buildHumanReport(), buildSemanticPrompt(), buildShadowSummary(), buildShellCommandPattern(), collectHarnessSafetySignalFindings(), collectHarnessScriptTestUpdateFindings(), createOutput() (+38 more)
+Cohesion: 0.08
+Nodes (44): attentionSeverity(), buildDailyOperationsSnapshotWithCtx(), buildLanes(), buildPendingRegisterCountTimelineMessage(), buildRegisterCloseoutTimelineEvents(), buildWeekMetricForDate(), buildWeekMetrics(), compareDailyOperationsTimelineEvents() (+36 more)
 
 ### Community 6 - "Community 6"
-Cohesion: 0.08
-Nodes (43): attentionSeverity(), buildDailyOperationsSnapshotWithCtx(), buildLanes(), buildPendingRegisterCountTimelineMessage(), buildRegisterCloseoutTimelineEvents(), buildWeekMetricForDate(), buildWeekMetrics(), compareDailyOperationsTimelineEvents() (+35 more)
+Cohesion: 0.1
+Nodes (46): buildFinding(), buildHumanReport(), buildSemanticPrompt(), buildShadowSummary(), buildShellCommandPattern(), collectHarnessSafetySignalFindings(), collectHarnessScriptTestUpdateFindings(), createOutput() (+38 more)
 
 ### Community 7 - "Community 7"
 Cohesion: 0.09
@@ -2515,19 +2515,19 @@ Nodes (8): fileExists(), isJsonObject(), normalizeGraphJsonArtifact(), normalize
 
 ### Community 144 - "Community 144"
 Cohesion: 0.39
-Nodes (7): resolveVerificationCodeRecipient(), sendDiscountCodeEmail(), sendDiscountReminderEmail(), sendFeedbackRequestEmail(), sendNewOrderEmail(), sendOrderEmail(), sendVerificationCode()
+Nodes (6): buildInventoryMovement(), buildSkuActivityForInventoryMovement(), getSkuActivityTypeForMovement(), recordInventoryMovementWithCtx(), recordInventoryMovementWithDispositionWithCtx(), recordSkuActivityForInventoryMovementWithCtx()
 
 ### Community 145 - "Community 145"
 Cohesion: 0.39
-Nodes (6): buildInventoryMovement(), buildSkuActivityForInventoryMovement(), getSkuActivityTypeForMovement(), recordInventoryMovementWithCtx(), recordInventoryMovementWithDispositionWithCtx(), recordSkuActivityForInventoryMovementWithCtx()
-
-### Community 146 - "Community 146"
-Cohesion: 0.39
 Nodes (7): assertActiveTerminal(), getActiveManagerElevationByIdWithCtx(), getActiveManagerElevationWithCtx(), getCandidateElevations(), getStaffDisplayName(), startManagerElevationWithCtx(), toActiveElevation()
 
-### Community 147 - "Community 147"
+### Community 146 - "Community 146"
 Cohesion: 0.22
 Nodes (0):
+
+### Community 147 - "Community 147"
+Cohesion: 0.39
+Nodes (7): resolveVerificationCodeRecipient(), sendDiscountCodeEmail(), sendDiscountReminderEmail(), sendFeedbackRequestEmail(), sendNewOrderEmail(), sendOrderEmail(), sendVerificationCode()
 
 ### Community 148 - "Community 148"
 Cohesion: 0.5
@@ -2838,16 +2838,16 @@ Cohesion: 0.29
 Nodes (0):
 
 ### Community 225 - "Community 225"
-Cohesion: 0.33
-Nodes (2): getProductName(), sortProduct()
-
-### Community 226 - "Community 226"
 Cohesion: 0.29
 Nodes (0):
 
-### Community 227 - "Community 227"
+### Community 226 - "Community 226"
 Cohesion: 0.52
 Nodes (6): addItemToSavedBag(), getActiveSavedBag(), getBaseUrl(), removeItemFromSavedBag(), updateSavedBagItem(), updateSavedBagOwner()
+
+### Community 227 - "Community 227"
+Cohesion: 0.33
+Nodes (2): getProductName(), sortProduct()
 
 ### Community 228 - "Community 228"
 Cohesion: 0.43
@@ -12055,4 +12055,4 @@ _Questions this graph is uniquely positioned to answer:_
 - **Should `Community 4` be split into smaller, more focused modules?**
   _Cohesion score 0.06 - nodes in this community are weakly interconnected._
 - **Should `Community 5` be split into smaller, more focused modules?**
-  _Cohesion score 0.1 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.08 - nodes in this community are weakly interconnected._
