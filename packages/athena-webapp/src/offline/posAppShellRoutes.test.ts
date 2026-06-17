@@ -97,4 +97,21 @@ describe("POS app-shell route policy", () => {
       ),
     ).toBe(true);
   });
+
+  it("rejects business and diagnostic payload extensions even under asset-like paths", () => {
+    for (const path of [
+      "/assets/payment-intent.json",
+      "/assets/customer-export.txt",
+      "/assets/register.js.map",
+    ]) {
+      expect(
+        isPosAppShellStaticAssetRequest(
+          {
+            url: `${origin}${path}`,
+          },
+          origin,
+        ),
+      ).toBe(false);
+    }
+  });
 });

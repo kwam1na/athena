@@ -76,7 +76,30 @@ async function unregisterLocalDevAppShell() {
 
 self.addEventListener("message", (event) => {
   const message = event.data;
-  if (!message || message.type !== "athena-pos-app-shell:warm") return;
+  if (!message) return;
+
+  if (message.type === "athena-pos-app-shell:stage-static-assets") {
+    event.waitUntil(
+      stageStaticShellAssets(message.assetUrls)
+        .then((result) => {
+          event.source?.postMessage({
+            type: "athena-pos-app-shell:stage-static-assets-complete",
+            id: message.id,
+            result,
+          });
+        })
+        .catch((error) => {
+          event.source?.postMessage({
+            type: "athena-pos-app-shell:stage-static-assets-error",
+            id: message.id,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }),
+    );
+    return;
+  }
+
+  if (message.type !== "athena-pos-app-shell:warm") return;
 
   event.waitUntil(
     warmPosAppShell(message.url)
@@ -177,6 +200,53 @@ async function warmPosAppShell(url) {
 
   const keys = await cache.keys();
   return { cacheName: POS_APP_SHELL_CACHE, cachedRequests: keys.length };
+}
+
+async function stageStaticShellAssets(assetUrls) {
+  const urls = Array.isArray(assetUrls) ? assetUrls : [];
+  const cache = await caches.open(POS_APP_SHELL_CACHE);
+  const stagedAssetUrls = [];
+  const rejectedAssetUrls = [];
+  const failedAssetUrls = [];
+
+  for (const assetUrl of urls) {
+    if (typeof assetUrl !== "string") {
+      continue;
+    }
+
+    let request;
+    let parsedUrl;
+    try {
+      parsedUrl = new URL(assetUrl, self.location.origin);
+      request = new Request(parsedUrl.toString());
+    } catch (_error) {
+      rejectedAssetUrls.push(assetUrl);
+      continue;
+    }
+
+    if (!isStaticShellAsset(request, parsedUrl)) {
+      rejectedAssetUrls.push(parsedUrl.toString());
+      continue;
+    }
+
+    try {
+      if (!(await matchCached(cache, request))) {
+        await cacheAssetRequest(request, cache);
+      }
+      stagedAssetUrls.push(parsedUrl.toString());
+    } catch (_error) {
+      failedAssetUrls.push(parsedUrl.toString());
+    }
+  }
+
+  const keys = await cache.keys();
+  return {
+    cacheName: POS_APP_SHELL_CACHE,
+    cachedRequests: keys.length,
+    failedAssetUrls,
+    rejectedAssetUrls,
+    stagedAssetUrls,
+  };
 }
 
 async function cacheFirstAsset(request) {

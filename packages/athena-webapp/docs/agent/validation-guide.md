@@ -226,6 +226,18 @@ Run:
 
 Use this when POS service-worker app-shell caching, POS-only offline route entry, offline readiness diagnostics, or hard-reload register continuity changes. Cache Storage must stay limited to static shell assets; POS business state, staff authority, cart events, payments, and catalog snapshots remain in IndexedDB/local POS stores.
 
+## App update readiness and apply-safety edits
+
+Touched surfaces: `public/pos-app-shell-sw.js`, `src/main.tsx`, `src/routes/__root.tsx`, `src/lib/app-update`, `src/components/app-update`, `src/utils/versionChecker.ts`, `src/offline/posAppShellRoutes.ts`, `src/components/operations/InventoryImportView.tsx`, `src/components/operations/InventoryImportView.test.tsx`, `src/components/pos/register/POSRegisterView.tsx`, `src/components/pos/register/POSRegisterView.test.tsx`, `src/lib/pos/presentation/register/registerUiState.ts`, `src/lib/pos/presentation/register/useRegisterViewModel.ts`, `src/lib/pos/presentation/register/useRegisterViewModel.test.ts`
+
+Run:
+
+- `bun run --filter '@athena/webapp' test -- src/lib/app-update/updateCoordinator.test.ts src/lib/app-update/updateAssetStaging.test.ts src/lib/app-update/updateDetectionSequencer.test.ts src/utils/versionChecker.test.ts src/components/app-update/UpdateReadyBanner.test.tsx src/offline/posAppShellRoutes.test.ts src/offline/posAppShellServiceWorkerStaging.test.ts src/offline/registerPosAppShellServiceWorker.test.ts src/offline/posOfflineReadiness.test.ts src/lib/pos/presentation/register/registerUiState.test.ts src/lib/pos/presentation/register/useRegisterViewModel.test.ts src/components/pos/register/POSRegisterView.test.tsx src/components/operations/InventoryImportView.test.tsx`
+- `bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json`
+- `bun run --filter '@athena/webapp' build`
+
+Use this when app update detection, Update Ready UI, cross-tab apply blockers, service-worker static update staging, POS update blockers, or Inventory Import update blockers change. Version detection must not reload automatically; surfaces should opt in only while active work, commands, or resumability risk make refresh unsafe.
+
 ## POS terminal health visibility and diagnostics edits
 
 Touched surfaces: `convex/schemas/pos/posTerminal.ts`, `convex/schemas/pos/posTerminalRuntimeStatus.ts`, `convex/pos/application/commands/terminals.ts`, `convex/pos/application/queries/terminals.ts`, `convex/pos/application/terminalRecovery`, `convex/pos/infrastructure/repositories/terminalRepository.ts`, `convex/pos/infrastructure/repositories/terminalRecoveryRepository.ts`, `convex/pos/public/terminals.ts`, `convex/schemas/pos/posTerminalRecovery.ts`, `convex/inventory/posTerminal.ts`, `src/components/pos/settings/POSSettingsView.tsx`, `src/hooks/useGetTerminal.ts`, `src/lib/pos/application/registerAndProvisionPosTerminal.ts`, `src/lib/pos/infrastructure/terminal`, `src/lib/pos/infrastructure/local/terminalRecoveryCommands.ts`, `src/lib/pos/infrastructure/local/terminalRuntimeStatus.ts`, `src/lib/pos/infrastructure/local/usePosLocalSyncRuntime.ts`, `src/lib/pos/presentation/syncStatusPresentation.ts`, `src/components/pos/register/POSRegisterView.tsx`, `src/components/pos/terminals`, `src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/terminals`, `src/components/cash-controls/CashControlsDashboard.tsx`, `src/components/cash-controls/RegisterSessionView.tsx`

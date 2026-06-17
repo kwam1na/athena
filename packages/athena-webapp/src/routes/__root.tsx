@@ -10,6 +10,7 @@ import { DefaultCatchBoundary } from "@/components/auth/DefaultCatchBoundary";
 import { NotFoundView } from "@/components/states/not-found/NotFoundView";
 import { z } from "zod";
 import { useNavigationKeyboardShortcuts } from "@/hooks/use-navigation-keyboard-shortcuts";
+import { UpdateReadyBanner } from "@/components/app-update/UpdateReadyBanner";
 
 const procurementModeSchema = z.preprocess(
   (value) => (value === "resolved" ? undefined : value),
@@ -85,6 +86,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
   return (
     <main>
       <Toaster expand />
+      <UpdateReadyBanner />
       {children}
       <ScrollRestoration />
     </main>

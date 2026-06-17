@@ -547,6 +547,40 @@
       "behaviorScenarios": []
     },
     {
+      "name": "app-update-readiness-and-apply-safety-edits",
+      "pathPrefixes": [
+        "packages/athena-webapp/public/pos-app-shell-sw.js",
+        "packages/athena-webapp/src/main.tsx",
+        "packages/athena-webapp/src/routes/__root.tsx",
+        "packages/athena-webapp/src/lib/app-update",
+        "packages/athena-webapp/src/components/app-update",
+        "packages/athena-webapp/src/utils/versionChecker.ts",
+        "packages/athena-webapp/src/offline/posAppShellRoutes.ts",
+        "packages/athena-webapp/src/components/operations/InventoryImportView.tsx",
+        "packages/athena-webapp/src/components/operations/InventoryImportView.test.tsx",
+        "packages/athena-webapp/src/components/pos/register/POSRegisterView.tsx",
+        "packages/athena-webapp/src/components/pos/register/POSRegisterView.test.tsx",
+        "packages/athena-webapp/src/lib/pos/presentation/register/registerUiState.ts",
+        "packages/athena-webapp/src/lib/pos/presentation/register/useRegisterViewModel.ts",
+        "packages/athena-webapp/src/lib/pos/presentation/register/useRegisterViewModel.test.ts"
+      ],
+      "commands": [
+        {
+          "kind": "raw",
+          "command": "bun run --filter '@athena/webapp' test -- src/lib/app-update/updateCoordinator.test.ts src/lib/app-update/updateAssetStaging.test.ts src/lib/app-update/updateDetectionSequencer.test.ts src/utils/versionChecker.test.ts src/components/app-update/UpdateReadyBanner.test.tsx src/offline/posAppShellRoutes.test.ts src/offline/posAppShellServiceWorkerStaging.test.ts src/offline/registerPosAppShellServiceWorker.test.ts src/offline/posOfflineReadiness.test.ts src/lib/pos/presentation/register/registerUiState.test.ts src/lib/pos/presentation/register/useRegisterViewModel.test.ts src/components/pos/register/POSRegisterView.test.tsx src/components/operations/InventoryImportView.test.tsx"
+        },
+        {
+          "kind": "raw",
+          "command": "bunx tsc --noEmit -p packages/athena-webapp/tsconfig.json"
+        },
+        {
+          "kind": "script",
+          "script": "build"
+        }
+      ],
+      "behaviorScenarios": []
+    },
+    {
       "name": "pos-terminal-health-visibility-and-diagnostics-edits",
       "pathPrefixes": [
         "packages/athena-webapp/convex/schemas/pos/posTerminal.ts",

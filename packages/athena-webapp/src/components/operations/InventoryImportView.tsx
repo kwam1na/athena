@@ -28,6 +28,7 @@ import { useGetTerminal } from "@/hooks/useGetTerminal";
 import { useOptionalManagerElevation } from "@/contexts/ManagerElevationContext";
 import { runCommand } from "@/lib/errors/runCommand";
 import { presentCommandToast } from "@/lib/errors/presentCommandToast";
+import { useUpdateApplyBlocker } from "@/lib/app-update";
 import { formatStoredCurrencyAmount } from "@/lib/pos/displayAmounts";
 import { getOrigin } from "@/lib/navigationUtils";
 import {
@@ -594,6 +595,39 @@ export function InventoryImportView({
   const shouldShowCollapsedSource =
     Boolean(rawContent.trim()) && Boolean(parseResult) && !isSourceExpanded;
   const isReviewMode = (isReviewRoute || isReviewModeState) && Boolean(parseResult);
+  const savedRowDraftDecisions = useMemo(
+    () =>
+      buildSavedRowDraftDecisions({
+        rows: overlayRows,
+        rowDraftDecisions,
+      }),
+    [overlayRows, rowDraftDecisions],
+  );
+  const draftSignature = useMemo(
+    () => getDraftAutosaveSignature(savedRowDraftDecisions),
+    [savedRowDraftDecisions],
+  );
+  const hasUnsavedRowDraftDecisions =
+    savedRowDraftDecisions.length > 0 &&
+    draftSignature !== lastSavedDraftSignatureRef.current;
+  const hasUnsavedReviewSource =
+    hasReviewableContent && !lastSavedReviewVersion?._id;
+  const hasActiveImportSaveWork =
+    isSavingReviewVersion ||
+    isStagingReviewForPos ||
+    draftAutosaveStatus === "pending" ||
+    draftAutosaveStatus === "saving" ||
+    draftAutosaveStatus === "error";
+  const shouldBlockUpdateApply =
+    hasActiveImportSaveWork || hasUnsavedRowDraftDecisions || hasUnsavedReviewSource;
+
+  useUpdateApplyBlocker({
+    active: shouldBlockUpdateApply,
+    guidance: "Save the current import work before refreshing.",
+    label: "Inventory import",
+    priority: hasActiveImportSaveWork ? "active-command" : "resume-required",
+    surfaceId: "operations.inventory-import",
+  });
 
   useEffect(() => {
     if (isHydratingReviewVersionRef.current) {

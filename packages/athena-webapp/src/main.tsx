@@ -6,13 +6,23 @@ import { ConvexReactClient } from "convex/react";
 import { ConvexAuthProvider } from "@convex-dev/auth/react";
 import "./index.css";
 import { useEffect } from "react";
-import { createVersionChecker } from "./utils/versionChecker";
+import {
+  createVersionChecker,
+  type VersionCheckerUpdateDetectedEvent,
+} from "./utils/versionChecker";
 import {
   registerPosAppShellServiceWorker,
   unregisterPosAppShellServiceWorkerForDev,
 } from "./offline/registerPosAppShellServiceWorker";
 import { removeConvexAuthCodeParamFromUrl } from "./auth/convexAuthUrl";
 import { initializeAthenaTheme } from "./lib/theme";
+import {
+  stageUpdateStaticAssets,
+  UpdateCoordinatorProvider,
+  useUpdateCoordinator,
+  type UpdateStagingStatus,
+} from "./lib/app-update";
+import { createUpdateDetectionSequencer } from "./lib/app-update/updateDetectionSequencer";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -43,25 +53,71 @@ const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL as string);
 
 // App wrapper component to handle version checking
 function App() {
+  return (
+    <UpdateCoordinatorProvider>
+      <VersionCheckerBridge />
+      <ConvexAuthProvider client={convex}>
+        <QueryClientProvider client={queryClient}>
+          <RouterProvider router={router} />
+        </QueryClientProvider>
+      </ConvexAuthProvider>
+    </UpdateCoordinatorProvider>
+  );
+}
+
+function VersionCheckerBridge() {
+  const { reportUpdateDetected, reportDetectorFailed } = useUpdateCoordinator();
+
   useEffect(() => {
-    // Start version checking
+    const sequencer = createUpdateDetectionSequencer({
+      report: reportVersionCheckerUpdate,
+      stage: stageVersionCheckerUpdate,
+    });
+
     const versionChecker = createVersionChecker({
-      onNewVersionAvailable: () => {
-        window.location.reload();
+      onDetectorFailed: () => {
+        reportDetectorFailed();
+      },
+      onUpdateDetected: (event) => {
+        void sequencer.handle(event);
       },
     });
 
-    // Clean up on unmount
-    return () => versionChecker.stop();
-  }, []);
+    async function stageVersionCheckerUpdate(
+      event: VersionCheckerUpdateDetectedEvent,
+    ): Promise<UpdateStagingStatus> {
+      const stagingResult =
+        event.staging?.entryHtml && event.staging.entryUrl
+          ? await stageUpdateStaticAssets({
+              entryHtml: event.staging.entryHtml,
+              entryUrl: event.staging.entryUrl,
+            }).catch((error) => {
+              console.warn("Failed to stage update assets:", error);
+              return { status: "unstaged" as const };
+            })
+          : { status: "unstaged" as const };
 
-  return (
-    <ConvexAuthProvider client={convex}>
-      <QueryClientProvider client={queryClient}>
-        <RouterProvider router={router} />
-      </QueryClientProvider>
-    </ConvexAuthProvider>
-  );
+      return stagingResult.status;
+    }
+
+    function reportVersionCheckerUpdate(
+      event: VersionCheckerUpdateDetectedEvent,
+      stagingStatus: UpdateStagingStatus,
+    ) {
+      reportUpdateDetected({
+        currentBuildId: event.currentBuildId,
+        pendingBuildId: event.pendingBuildId,
+        stagingStatus,
+      });
+    }
+
+    return () => {
+      sequencer.stop();
+      versionChecker.stop();
+    };
+  }, [reportDetectorFailed, reportUpdateDetected]);
+
+  return null;
 }
 
 const rootElement = document.getElementById("app")!;

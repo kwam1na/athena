@@ -50,6 +50,7 @@ import {
 } from "@/lib/pos/presentation/register/registerUiState";
 import { usePosTerminalAppSessionRecoveryRuntimeInput } from "@/lib/pos/infrastructure/terminal/posTerminalAppSessionRecoveryContext";
 import { useRegisterViewModel } from "@/lib/pos/presentation/register/useRegisterViewModel";
+import { useUpdateApplyBlocker } from "@/lib/app-update";
 import { currencyFormatter } from "~/shared/currencyFormatter";
 import { formatStoredAmount } from "~/src/lib/pos/displayAmounts";
 
@@ -1111,6 +1112,15 @@ function POSRegisterViewContent({
   const effectiveWorkflowMode: RegisterWorkflowMode =
     workflowMode ?? viewModel.workflowMode ?? "pos";
   const isPosWorkflow = effectiveWorkflowMode === "pos";
+  const updateApplyBlocker = viewModel.updateApplyBlocker;
+  useUpdateApplyBlocker({
+    surfaceId: "pos-register",
+    active: isPosWorkflow && Boolean(updateApplyBlocker?.active),
+    priority: updateApplyBlocker?.priority ?? "critical-workflow",
+    label: updateApplyBlocker?.label ?? "Register ready",
+    guidance:
+      updateApplyBlocker?.guidance ?? "Apply the update when you are ready.",
+  });
   const [isPaymentEntryActive, setIsPaymentEntryActive] = useState(false);
   const [isPaymentEditActive, setIsPaymentEditActive] = useState(false);
   const [isPaymentsListExpanded, setIsPaymentsListExpanded] = useState(false);
