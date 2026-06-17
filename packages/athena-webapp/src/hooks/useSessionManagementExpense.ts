@@ -1,19 +1,11 @@
 import { useCallback } from "react";
 import { toast } from "sonner";
-import { useMutation } from "convex/react";
 
-import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
-import { presentCommandToast } from "../lib/errors/presentCommandToast";
-import {
-  type NormalizedCommandResult,
-  runCommand,
-} from "../lib/errors/runCommand";
+import { type NormalizedCommandResult } from "../lib/errors/runCommand";
 import { logger } from "../lib/logger";
 import { useExpenseStore } from "../stores/expenseStore";
 import { useExpenseLocalRuntime } from "./useExpenseLocalRuntime";
-import { useExpenseActiveSession } from "./useExpenseSessions";
-import { useGetTerminal } from "./useGetTerminal";
 
 type ExpenseActorId = Id<"staffProfile">;
 
@@ -33,22 +25,13 @@ function getCommandErrorMessage<T>(
  */
 export const useSessionManagementExpense = () => {
   const store = useExpenseStore();
-  const terminal = useGetTerminal();
   const currentStaffProfileId = store.cashier.id;
-  const activeSession = useExpenseActiveSession(
-    store.storeId,
-    terminal?._id,
-    currentStaffProfileId || undefined,
-  );
   const { expenseLocalGateway } = useExpenseLocalRuntime({
     staffProfileId: currentStaffProfileId || null,
     storeId: store.storeId,
+    syncEnabled: false,
     terminalId: store.terminalId,
   });
-
-  const releaseSessionInventoryHoldsAndDeleteItemsMutation = useMutation(
-    api.inventory.expenseSessions.releaseExpenseSessionInventoryHoldsAndDeleteItems,
-  );
 
   const createSession = useCallback(
     async (storeId: Id<"store">, staffProfileId?: ExpenseActorId) => {
@@ -100,7 +83,6 @@ export const useSessionManagementExpense = () => {
           staffProfileId,
         });
 
-        toast.success("New expense session created");
         return result.data.localExpenseSessionId as Id<"expenseSession">;
       } catch (error) {
         logger.error("[Expense] Failed to create session", error as Error);
@@ -142,7 +124,7 @@ export const useSessionManagementExpense = () => {
   const holdSession = useCallback(async (): Promise<
     { success: true } | { success: false; error: string }
   > => {
-    const sessionId = store.session.currentSessionId ?? activeSession?._id;
+    const sessionId = store.session.currentSessionId;
 
     logger.info("[Expense] Holding session", {
       sessionId,
@@ -197,7 +179,7 @@ export const useSessionManagementExpense = () => {
     });
     toast.success("Session held");
     return { success: true };
-  }, [activeSession, currentStaffProfileId, expenseLocalGateway, store]);
+  }, [currentStaffProfileId, expenseLocalGateway, store]);
 
   const resumeSession = useCallback(
     async (
@@ -247,7 +229,7 @@ export const useSessionManagementExpense = () => {
   const voidSession = useCallback(async (): Promise<
     { success: true } | { success: false; error: string }
   > => {
-    const sessionId = store.session.currentSessionId ?? activeSession?._id;
+    const sessionId = store.session.currentSessionId;
 
     logger.info("[Expense] Voiding session", {
       sessionId,
@@ -288,41 +270,8 @@ export const useSessionManagementExpense = () => {
     store.startNewTransaction();
 
     logger.info("[Expense] Session voided successfully", { sessionId });
-    toast.success("Session voided");
     return { success: true };
-  }, [activeSession, currentStaffProfileId, expenseLocalGateway, store]);
-
-  const releaseSessionInventoryHoldsAndDeleteItems = useCallback(
-    async (
-      sessionId: Id<"expenseSession">,
-    ): Promise<{ success: true } | { success: false; error: string }> => {
-      logger.info("[Expense] Releasing inventory holds and deleting items", {
-        sessionId,
-      });
-
-      const result = await runCommand(() =>
-        releaseSessionInventoryHoldsAndDeleteItemsMutation({
-          sessionId,
-        }),
-      );
-
-      if (result.kind !== "ok") {
-        const errorMessage = getCommandErrorMessage(result);
-        logger.error("[Expense] Failed to release holds", {
-          sessionId,
-          message: errorMessage,
-        });
-        presentCommandToast(result);
-        return { success: false, error: errorMessage };
-      }
-
-      logger.info("[Expense] Inventory holds released successfully", {
-        sessionId,
-      });
-      return { success: true };
-    },
-    [releaseSessionInventoryHoldsAndDeleteItemsMutation],
-  );
+  }, [currentStaffProfileId, expenseLocalGateway, store]);
 
   return {
     createSession,
@@ -330,6 +279,5 @@ export const useSessionManagementExpense = () => {
     holdSession,
     resumeSession,
     voidSession,
-    releaseSessionInventoryHoldsAndDeleteItems,
   };
 };

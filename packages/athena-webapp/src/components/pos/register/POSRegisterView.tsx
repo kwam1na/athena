@@ -108,8 +108,10 @@ function ProductLookupEmptyState({
   workflowMode: RegisterWorkflowMode;
 }) {
   const isExpenseWorkflow = workflowMode === "expense";
-  const isServiceOnly = !isExpenseWorkflow && !canSearchProducts && canSearchServices;
-  const isProductOnly = isExpenseWorkflow || (canSearchProducts && !canSearchServices);
+  const isServiceOnly =
+    !isExpenseWorkflow && !canSearchProducts && canSearchServices;
+  const isProductOnly =
+    isExpenseWorkflow || (canSearchProducts && !canSearchServices);
   const title = isExpenseWorkflow
     ? "Ready for expense entry"
     : isServiceOnly
@@ -1265,9 +1267,15 @@ function POSRegisterViewContent({
       shouldRenderCheckoutPanel ||
       isAwaitingCashierAuth) &&
     !isLocallyClosedPendingSync;
+  const shouldPreviewCompletedExpenseItems =
+    !isPosWorkflow && viewModel.checkout.isTransactionCompleted;
+  const completedExpenseCartItems = shouldPreviewCompletedExpenseItems
+    ? (viewModel.checkout.completedTransactionData?.cartItems ??
+      viewModel.checkout.cartItems)
+    : null;
   const workspaceSidebarCartItems = isPosRegisterLocked
     ? []
-    : (viewModel.cart?.items ?? []);
+    : (completedExpenseCartItems ?? viewModel.cart?.items ?? []);
   const workspaceSidebarServiceItems = isPosRegisterLocked
     ? []
     : (viewModel.cart?.serviceItems ?? []);
@@ -1660,7 +1668,7 @@ function POSRegisterViewContent({
     >
       <FadeIn className={registerContentClassName}>
         <div className="flex h-full min-h-0 flex-col gap-6 overflow-hidden">
-          {isPosWorkflow ? (
+          {viewModel.debug ? (
             <POSLocalDebugStrip
               appSessionRecovery={
                 debugAppSessionRecovery ?? appSessionRecovery?.status ?? null
@@ -1713,7 +1721,8 @@ function POSRegisterViewContent({
                   <DrawerGateWorkspace drawerGate={viewModel.drawerGate} />
                 ) : isAwaitingCashierAuth && viewModel.authDialog ? (
                   <div className="flex min-h-0 flex-1 flex-col gap-4">
-                    {cashierPresenceRestore.status === "validation_pending" ? null : (
+                    {cashierPresenceRestore.status ===
+                    "validation_pending" ? null : (
                       <CashierPresenceRestoreWorkspace
                         restore={cashierPresenceRestore}
                       />
@@ -1842,7 +1851,12 @@ function POSRegisterViewContent({
                       }
                       onRemoveService={viewModel.cart.onRemoveService}
                       clearCart={viewModel.cart.onClearCart}
-                      density="compact"
+                      readOnly={shouldPreviewCompletedExpenseItems}
+                      density={
+                        shouldPreviewCompletedExpenseItems
+                          ? "comfortable"
+                          : "compact"
+                      }
                     />
                   ) : null}
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import type { RegisterCheckoutState } from "@/lib/pos/presentation/register/registerUiState";
 import { ExpenseCompletion } from "@/components/expense/ExpenseCompletion";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
@@ -10,17 +10,14 @@ interface ExpenseCompletionPanelProps {
   checkout: RegisterCheckoutState;
 }
 
-const attemptedAutoPrintReceiptKeys = new Set<string>();
-
-export function clearAttemptedExpenseAutoPrintReceiptKeysForTest() {
-  attemptedAutoPrintReceiptKeys.clear();
+function isLocalExpenseReportNumber(value: string | null | undefined) {
+  return value?.startsWith("local-expense-event-") ?? false;
 }
 
 export function ExpenseCompletionPanel({
   checkout,
 }: ExpenseCompletionPanelProps) {
   const [isCompleting, setIsCompleting] = useState(false);
-  const printedReceiptKeyRef = useRef<string | null>(null);
   const { activeStore } = useGetActiveStore();
   const { printReceipt } = usePrint();
   const formatter = useMemo(
@@ -41,11 +38,6 @@ export function ExpenseCompletionPanel({
       notes: checkout.completedTransactionData.notes,
     };
   }, [checkout.completedTransactionData]);
-  const completedReceiptKey =
-    checkout.completedOrderNumber ??
-    completedTransactionData?.transactionId ??
-    completedTransactionData?.completedAt?.toISOString() ??
-    null;
   const displayCartItems =
     checkout.isTransactionCompleted && completedTransactionData
       ? completedTransactionData.cartItems
@@ -54,6 +46,11 @@ export function ExpenseCompletionPanel({
     checkout.isTransactionCompleted && completedTransactionData
       ? completedTransactionData.totalValue
       : checkout.total;
+  const displayReportNumber = isLocalExpenseReportNumber(
+    checkout.completedOrderNumber,
+  )
+    ? null
+    : checkout.completedOrderNumber;
 
   const handlePrintReceipt = useCallback(async () => {
     if (!activeStore || !completedTransactionData) {
@@ -64,7 +61,7 @@ export function ExpenseCompletionPanel({
       const receiptHtml = await buildExpenseReceiptHtml({
         store: activeStore,
         formatter,
-        reportNumber: checkout.completedOrderNumber ?? "Expense",
+        reportNumber: displayReportNumber ?? "Expense",
         completedAt: completedTransactionData.completedAt,
         recordedBy: checkout.cashierName,
         registerNumber: checkout.registerNumber,
@@ -82,45 +79,11 @@ export function ExpenseCompletionPanel({
   }, [
     activeStore,
     checkout.cashierName,
-    checkout.completedOrderNumber,
     checkout.registerNumber,
     completedTransactionData,
+    displayReportNumber,
     formatter,
     printReceipt,
-  ]);
-
-  useEffect(() => {
-    if (
-      !checkout.isTransactionCompleted ||
-      !completedTransactionData ||
-      !completedReceiptKey
-    ) {
-      printedReceiptKeyRef.current = null;
-      return;
-    }
-
-    if (
-      printedReceiptKeyRef.current === completedReceiptKey ||
-      attemptedAutoPrintReceiptKeys.has(completedReceiptKey)
-    ) {
-      return;
-    }
-
-    printedReceiptKeyRef.current = completedReceiptKey;
-    attemptedAutoPrintReceiptKeys.add(completedReceiptKey);
-    void handlePrintReceipt().then((didPrint) => {
-      if (!didPrint) {
-        attemptedAutoPrintReceiptKeys.delete(completedReceiptKey);
-        if (printedReceiptKeyRef.current === completedReceiptKey) {
-          printedReceiptKeyRef.current = null;
-        }
-      }
-    });
-  }, [
-    checkout.isTransactionCompleted,
-    completedReceiptKey,
-    completedTransactionData,
-    handlePrintReceipt,
   ]);
 
   const handleComplete = async () => {
@@ -151,7 +114,7 @@ export function ExpenseCompletionPanel({
       isCompleting={isCompleting}
       isCompleted={checkout.isTransactionCompleted}
       completedTransactionData={completedTransactionData}
-      reportNumber={checkout.completedOrderNumber}
+      reportNumber={displayReportNumber}
       recordedBy={checkout.cashierName}
       onPrintReceipt={() => {
         void handlePrintReceipt();

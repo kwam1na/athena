@@ -70,6 +70,7 @@ interface UIState {
 
 interface CashierState {
   id: Id<"staffProfile"> | null;
+  displayName: string | null;
   isAuthenticated: boolean;
 }
 
@@ -125,7 +126,10 @@ interface ExpenseState {
   setNotes: (notes: string) => void;
 
   // Cashier Actions
-  setCashier: (cashierId: Id<"staffProfile"> | null) => void;
+  setCashier: (
+    cashierId: Id<"staffProfile"> | null,
+    displayName?: string | null,
+  ) => void;
   clearCashier: () => void;
 
   // Global Actions
@@ -167,9 +171,65 @@ const initialState = {
   },
   cashier: {
     id: null,
+    displayName: null,
     isAuthenticated: false,
   },
 };
+
+function expenseCartItemSourceKey(item: object) {
+  const inventoryImportProvisionalSkuId =
+    "inventoryImportProvisionalSkuId" in item
+      ? item.inventoryImportProvisionalSkuId
+      : null;
+  if (typeof inventoryImportProvisionalSkuId === "string") {
+    return `provisional_import:${inventoryImportProvisionalSkuId}`;
+  }
+
+  const pendingCheckoutItemId =
+    "pendingCheckoutItemId" in item ? item.pendingCheckoutItemId : null;
+  if (typeof pendingCheckoutItemId === "string") {
+    return `pending_checkout:${pendingCheckoutItemId}`;
+  }
+
+  return "trusted_inventory";
+}
+
+function isPendingOptimisticExpenseCartItem(item: CartItem) {
+  return item.id.toString().startsWith("optimistic:");
+}
+
+function sessionItemRepresentsCartItem(
+  cartItem: CartItem,
+  sessionItem: ExpenseSessionCartItem,
+) {
+  return (
+    sessionItem.productSkuId === cartItem.skuId &&
+    expenseCartItemSourceKey(sessionItem) ===
+      expenseCartItemSourceKey(cartItem) &&
+    sessionItem.quantity >= cartItem.quantity
+  );
+}
+
+function mapExpenseSessionCartItemToCartItem(
+  item: ExpenseSessionCartItem,
+): CartItem {
+  return {
+    id: item._id,
+    name: item.productName ?? "",
+    barcode: item.barcode ?? "",
+    sku: item.productSku ?? "",
+    price: item.price ?? 0,
+    quantity: item.quantity,
+    image: item.image,
+    size: item.size ?? undefined,
+    length: item.length,
+    color: item.color ?? undefined,
+    productId: item.productId,
+    skuId: item.productSkuId,
+    pendingCheckoutItemId: item.pendingCheckoutItemId,
+    inventoryImportProvisionalSkuId: item.inventoryImportProvisionalSkuId,
+  };
+}
 
 export const useExpenseStore = create<ExpenseState>()(
   devtools(
@@ -301,23 +361,20 @@ export const useExpenseStore = create<ExpenseState>()(
         loadSessionData: (session) =>
           set((state) => {
             const sessionCartItems = session.cartItems || [];
-            state.cart.items = sessionCartItems.map((item) => ({
-              id: item._id,
-              name: item.productName ?? "",
-              barcode: item.barcode ?? "",
-              sku: item.productSku ?? "",
-              price: item.price ?? 0,
-              quantity: item.quantity,
-              image: item.image,
-              size: item.size ?? undefined,
-              length: item.length,
-              color: item.color ?? undefined,
-              productId: item.productId,
-              skuId: item.productSkuId,
-              pendingCheckoutItemId: item.pendingCheckoutItemId,
-              inventoryImportProvisionalSkuId:
-                item.inventoryImportProvisionalSkuId,
-            }));
+            const nextCartItems = sessionCartItems.map(
+              mapExpenseSessionCartItemToCartItem,
+            );
+            const pendingOptimisticItems =
+              state.session.currentSessionId === session._id
+                ? state.cart.items.filter(
+                    (cartItem) =>
+                      isPendingOptimisticExpenseCartItem(cartItem) &&
+                      !sessionCartItems.some((sessionItem) =>
+                        sessionItemRepresentsCartItem(cartItem, sessionItem),
+                      ),
+                  )
+                : [];
+            state.cart.items = [...nextCartItems, ...pendingOptimisticItems];
 
             state.session.currentSessionId = session._id;
             state.session.activeSession = session;
@@ -389,15 +446,17 @@ export const useExpenseStore = create<ExpenseState>()(
           }),
 
         // Cashier Actions
-        setCashier: (cashierId) =>
+        setCashier: (cashierId, displayName = null) =>
           set((state) => {
             state.cashier.id = cashierId;
+            state.cashier.displayName = displayName;
             state.cashier.isAuthenticated = !!cashierId;
           }),
 
         clearCashier: () =>
           set((state) => {
             state.cashier.id = null;
+            state.cashier.displayName = null;
             state.cashier.isAuthenticated = false;
           }),
 

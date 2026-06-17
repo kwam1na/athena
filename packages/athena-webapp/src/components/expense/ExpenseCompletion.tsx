@@ -39,6 +39,7 @@ export function ExpenseCompletion({
 }: ExpenseCompletionProps) {
   const { activeStore } = useGetActiveStore();
   const formatter = currencyFormatter(activeStore?.currency || "GHS");
+  const hasReportNumber = Boolean(reportNumber?.trim());
 
   if (isCompleted && completedTransactionData) {
     const itemCount = completedTransactionData.cartItems.reduce(
@@ -70,7 +71,11 @@ export function ExpenseCompletion({
           </div>
 
           <div className="mt-auto space-y-5">
-            <div className="grid gap-3 md:grid-cols-4 md:gap-4">
+            <div
+              className={`grid gap-3 md:gap-4 ${
+                hasReportNumber ? "md:grid-cols-4" : "md:grid-cols-3"
+              }`}
+            >
               <div className="rounded-lg border border-border/70 bg-surface-raised p-4 backdrop-blur-sm">
                 <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
                   Total value
@@ -89,14 +94,16 @@ export function ExpenseCompletion({
                   {itemCount}
                 </p>
               </div>
-              <div className="rounded-lg border border-border/70 bg-surface-raised p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                  Report
-                </p>
-                <p className="mt-3 truncate text-sm font-medium text-foreground">
-                  #{reportNumber ?? "Pending"}
-                </p>
-              </div>
+              {hasReportNumber ? (
+                <div className="rounded-lg border border-border/70 bg-surface-raised p-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                    Report
+                  </p>
+                  <p className="mt-3 truncate text-sm font-medium text-foreground">
+                    #{reportNumber}
+                  </p>
+                </div>
+              ) : null}
               <div className="rounded-lg border border-border/70 bg-surface-raised p-4">
                 <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
                   Recorded by

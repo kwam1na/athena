@@ -576,10 +576,67 @@ describe("createLocalSyncIngestionService", () => {
     ]);
     expect(repository.createdExpenseTransactions).toEqual([
       expect.objectContaining({
-        transactionNumber: "local-expense-event-1",
+        transactionNumber: expect.stringMatching(/^\d{6}$/),
         totalValue: 25,
       }),
     ]);
+    expect(repository.createdExpenseTransactions).not.toEqual([
+      expect.objectContaining({
+        transactionNumber: "local-expense-event-1",
+      }),
+    ]);
+  });
+
+  it("projects held expense retries that move from global to scoped sequence", async () => {
+    const repository = createFakeSyncRepository();
+    const service = createLocalSyncIngestionService({
+      repository,
+      projectionRepository: repository,
+      now: () => 100,
+    });
+    const globallySequencedExpense = buildExpenseRecordedEvent({
+      sequence: 42,
+    });
+
+    await service.ingestBatch(
+      buildBatch({
+        events: [globallySequencedExpense],
+      }),
+    );
+
+    const retry = await service.ingestBatch(
+      buildBatch({
+        events: [
+          {
+            ...globallySequencedExpense,
+            sequence: 1,
+          },
+        ],
+      }),
+    );
+
+    expect(retry.kind).toBe("ok");
+    if (retry.kind !== "ok") throw new Error("Expected ok result");
+    expect(retry.data.held).toEqual([]);
+    expect(retry.data.accepted).toEqual([
+      expect.objectContaining({
+        localEventId: "event-expense-recorded-42",
+        sequence: 1,
+        status: "projected",
+      }),
+    ]);
+    expect(retry.data.syncCursor).toEqual({
+      localRegisterSessionId: "local-expense-session-1",
+      acceptedThroughSequence: 1,
+    });
+    expect(repository.events).toEqual([
+      expect.objectContaining({
+        localEventId: "event-expense-recorded-42",
+        sequence: 1,
+        status: "projected",
+      }),
+    ]);
+    expect(repository.createdExpenseTransactions).toHaveLength(1);
   });
 
   it("rejects mixed POS and expense sync batches before recording events", async () => {

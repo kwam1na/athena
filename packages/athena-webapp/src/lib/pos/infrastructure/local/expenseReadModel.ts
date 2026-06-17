@@ -380,6 +380,13 @@ function removeCartItem(
   items: ExpenseLocalCartItemReadModel[],
   item: ExpenseLocalCartItemReadModel,
 ) {
+  const filteredByLocalItemId = items.filter(
+    (candidate) => candidate.localItemId !== item.localItemId,
+  );
+  if (filteredByLocalItemId.length !== items.length) {
+    return filteredByLocalItemId;
+  }
+
   return items.filter(
     (candidate) =>
       candidate.productSkuId !== item.productSkuId ||
@@ -396,7 +403,10 @@ function removeCartItemByPayload(
     stringField(payload, "localExpenseItemId") ??
     stringField(payload, "localItemId");
   if (localItemId) {
-    return items.filter((candidate) => candidate.localItemId !== localItemId);
+    const filteredItems = items.filter(
+      (candidate) => candidate.localItemId !== localItemId,
+    );
+    if (filteredItems.length !== items.length) return filteredItems;
   }
 
   const productSkuId = stringField(payload, "productSkuId");

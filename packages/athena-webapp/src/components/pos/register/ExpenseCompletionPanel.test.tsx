@@ -2,10 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import {
-  clearAttemptedExpenseAutoPrintReceiptKeysForTest,
-  ExpenseCompletionPanel,
-} from "./ExpenseCompletionPanel";
+import { ExpenseCompletionPanel } from "./ExpenseCompletionPanel";
 import type { RegisterCheckoutState } from "@/lib/pos/presentation/register/registerUiState";
 import type { Id } from "~/convex/_generated/dataModel";
 
@@ -89,7 +86,6 @@ function buildCheckout(
 
 describe("ExpenseCompletionPanel", () => {
   beforeEach(() => {
-    clearAttemptedExpenseAutoPrintReceiptKeysForTest();
     mocks.buildExpenseReceiptHtml.mockClear();
     mocks.buildExpenseReceiptHtml.mockResolvedValue("<expense-receipt />");
     mocks.printReceipt.mockClear();
@@ -101,11 +97,24 @@ describe("ExpenseCompletionPanel", () => {
     };
   });
 
-  it("prints the expense receipt once when completion data appears", async () => {
+  it("does not auto-print the expense receipt when completion data appears", async () => {
     const checkout = buildCheckout();
 
     const { rerender } = render(<ExpenseCompletionPanel checkout={checkout} />);
     rerender(<ExpenseCompletionPanel checkout={checkout} />);
+
+    expect(mocks.buildExpenseReceiptHtml).not.toHaveBeenCalled();
+    expect(mocks.printReceipt).not.toHaveBeenCalled();
+  });
+
+  it("allows staff to intentionally print the receipt", async () => {
+    render(<ExpenseCompletionPanel checkout={buildCheckout()} />);
+
+    expect(mocks.printReceipt).not.toHaveBeenCalled();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: /print receipt/i }),
+    );
 
     await waitFor(() => {
       expect(mocks.printReceipt).toHaveBeenCalledTimes(1);
@@ -120,62 +129,6 @@ describe("ExpenseCompletionPanel", () => {
       }),
     );
     expect(mocks.printReceipt).toHaveBeenCalledWith("<expense-receipt />");
-  });
-
-  it("allows staff to intentionally print the receipt again", async () => {
-    render(<ExpenseCompletionPanel checkout={buildCheckout()} />);
-
-    await waitFor(() => {
-      expect(mocks.printReceipt).toHaveBeenCalledTimes(1);
-    });
-
-    await userEvent.click(
-      screen.getByRole("button", { name: /print receipt/i }),
-    );
-
-    await waitFor(() => {
-      expect(mocks.printReceipt).toHaveBeenCalledTimes(2);
-    });
-  });
-
-  it("opens the print window after completion once store data is available", async () => {
-    mocks.activeStore = null;
-    const checkout = buildCheckout();
-
-    const { rerender } = render(<ExpenseCompletionPanel checkout={checkout} />);
-
-    await waitFor(() => {
-      expect(mocks.printReceipt).not.toHaveBeenCalled();
-    });
-
-    mocks.activeStore = {
-      _id: "store-1",
-      name: "Wig Club",
-      currency: "GHS",
-      config: {},
-    };
-    rerender(<ExpenseCompletionPanel checkout={checkout} />);
-
-    await waitFor(() => {
-      expect(mocks.printReceipt).toHaveBeenCalledTimes(1);
-    });
-  });
-
-  it("does not auto-open the print window again after the completed expense remounts", async () => {
-    const checkout = buildCheckout();
-
-    const { unmount } = render(<ExpenseCompletionPanel checkout={checkout} />);
-
-    await waitFor(() => {
-      expect(mocks.printReceipt).toHaveBeenCalledTimes(1);
-    });
-
-    unmount();
-    render(<ExpenseCompletionPanel checkout={checkout} />);
-
-    await waitFor(() => {
-      expect(mocks.printReceipt).toHaveBeenCalledTimes(1);
-    });
   });
 
   it("matches the POS completed register surface while keeping expense facts", async () => {
@@ -199,5 +152,32 @@ describe("ExpenseCompletionPanel", () => {
     );
 
     expect(checkout.onStartNewTransaction).toHaveBeenCalledTimes(1);
+  });
+
+  it("hides local expense event ids until a cloud report number is available", async () => {
+    render(
+      <ExpenseCompletionPanel
+        checkout={buildCheckout({
+          completedOrderNumber: "local-expense-event-1781716468471",
+        })}
+      />,
+    );
+
+    expect(screen.queryByText("Report")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("#local-expense-event-1781716468471"),
+    ).not.toBeInTheDocument();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: /print receipt/i }),
+    );
+
+    await waitFor(() => {
+      expect(mocks.buildExpenseReceiptHtml).toHaveBeenCalledWith(
+        expect.objectContaining({
+          reportNumber: "Expense",
+        }),
+      );
+    });
   });
 });

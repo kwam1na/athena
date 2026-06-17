@@ -341,13 +341,16 @@ describe("usePosLocalSyncRuntimeStatus", () => {
         }),
       ),
     );
-    expect(store.markEventsSynced).toHaveBeenCalledWith([
-      "event-checkout",
-      "event-session",
-      "event-cart",
-      "event-payment",
-      "event-clear",
-    ], { uploaded: true });
+    expect(store.markEventsSynced).toHaveBeenCalledWith(
+      [
+        "event-checkout",
+        "event-session",
+        "event-cart",
+        "event-payment",
+        "event-clear",
+      ],
+      { uploaded: true },
+    );
     expect(store.writeLocalCloudMapping).toHaveBeenCalledWith({
       entity: "posSession",
       localId: "local-session-1",
@@ -366,7 +369,9 @@ describe("usePosLocalSyncRuntimeStatus", () => {
       cloudId: "register-session-1",
       mappedAt: 12,
     });
-    expect(store.writeLocalCloudMapping.mock.calls.length).toBeGreaterThanOrEqual(3);
+    expect(
+      store.writeLocalCloudMapping.mock.calls.length,
+    ).toBeGreaterThanOrEqual(3);
     expect(onLocalEventsChanged).toHaveBeenCalled();
   });
 
@@ -584,7 +589,8 @@ describe("usePosLocalSyncRuntimeStatus", () => {
           onLocalEventsChanged,
           storeFactory,
           storeId,
-          terminalId: storeId === "store-1" ? "terminal-cloud-1" : "terminal-cloud-2",
+          terminalId:
+            storeId === "store-1" ? "terminal-cloud-1" : "terminal-cloud-2",
         }),
       {
         initialProps: {
@@ -931,7 +937,9 @@ describe("usePosLocalSyncRuntimeStatus", () => {
       result.current?.onRetrySync?.();
     });
 
-    await waitFor(() => expect(store.listEvents.mock.calls.length).toBeGreaterThan(1));
+    await waitFor(() =>
+      expect(store.listEvents.mock.calls.length).toBeGreaterThan(1),
+    );
     expect(mocks.ingestLocalEvents).not.toHaveBeenCalled();
     expect(store.markEventsSynced).not.toHaveBeenCalled();
     expect(store.markEventsNeedsReview).not.toHaveBeenCalled();
@@ -1268,7 +1276,9 @@ describe("usePosLocalSyncRuntimeStatus", () => {
       }),
     );
 
-    await waitFor(() => expect(store.readTerminalIntegrityState).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(store.readTerminalIntegrityState).toHaveBeenCalled(),
+    );
     expect(mocks.ingestLocalEvents).not.toHaveBeenCalled();
     expect(store.markEventsSynced).not.toHaveBeenCalled();
   });
@@ -1299,10 +1309,7 @@ describe("usePosLocalSyncRuntimeStatus", () => {
             sequence: 1,
             type: "transaction.completed",
             validationMetadata: {
-              flags: [
-                "app-session-unverified",
-                "cloud-validation-uncertain",
-              ],
+              flags: ["app-session-unverified", "cloud-validation-uncertain"],
               observedAt: 2_000,
               uploadDeferredUntil: "app-session-validated",
             },
@@ -1407,10 +1414,7 @@ describe("usePosLocalSyncRuntimeStatus", () => {
             sequence: 1,
             type: "transaction.completed",
             validationMetadata: {
-              flags: [
-                "app-session-unverified",
-                "cloud-validation-uncertain",
-              ],
+              flags: ["app-session-unverified", "cloud-validation-uncertain"],
               observedAt: 2_000,
               uploadDeferredUntil: "app-session-validated",
             },
@@ -1463,9 +1467,12 @@ describe("usePosLocalSyncRuntimeStatus", () => {
         ),
       { timeout: 5_000 },
     );
-    expect(store.markEventsSynced).toHaveBeenCalledWith(["event-offline-sale"], {
-      uploaded: true,
-    });
+    expect(store.markEventsSynced).toHaveBeenCalledWith(
+      ["event-offline-sale"],
+      {
+        uploaded: true,
+      },
+    );
   });
 
   it("returns failure when local cloud mapping persistence fails", async () => {
@@ -1476,17 +1483,14 @@ describe("usePosLocalSyncRuntimeStatus", () => {
       })),
     };
 
-    const result = await writeReturnedLocalCloudMappings(
-      store as never,
-      [
-        {
-          cloudId: "session-1",
-          createdAt: 10,
-          localId: "local-session-1",
-          localIdKind: "posSession",
-        },
-      ],
-    );
+    const result = await writeReturnedLocalCloudMappings(store as never, [
+      {
+        cloudId: "session-1",
+        createdAt: 10,
+        localId: "local-session-1",
+        localIdKind: "posSession",
+      },
+    ]);
 
     expect(result).toEqual({
       ok: false,
@@ -1508,23 +1512,20 @@ describe("usePosLocalSyncRuntimeStatus", () => {
       })),
     };
 
-    const result = await writeReturnedLocalCloudMappings(
-      store as never,
-      [
-        {
-          cloudId: "expense-session-1",
-          createdAt: 10,
-          localId: "local-expense-session-1",
-          localIdKind: "expenseSession",
-        },
-        {
-          cloudId: "expense-transaction-1",
-          createdAt: 11,
-          localId: "local-expense-event-1",
-          localIdKind: "expenseTransaction",
-        },
-      ],
-    );
+    const result = await writeReturnedLocalCloudMappings(store as never, [
+      {
+        cloudId: "expense-session-1",
+        createdAt: 10,
+        localId: "local-expense-session-1",
+        localIdKind: "expenseSession",
+      },
+      {
+        cloudId: "expense-transaction-1",
+        createdAt: 11,
+        localId: "local-expense-event-1",
+        localIdKind: "expenseTransaction",
+      },
+    ]);
 
     expect(result).toEqual({ ok: true });
     expect(store.writeLocalCloudMapping).toHaveBeenCalledWith({
@@ -1885,25 +1886,27 @@ describe("usePosLocalSyncRuntimeStatus", () => {
         ok: true,
         value: [],
       })),
-      readDrawerAuthorityState: vi.fn(async (input: {
-        localRegisterSessionId: string;
-        storeId: string;
-        terminalId: string;
-      }) => ({
-        ok: true,
-        value:
-          input.localRegisterSessionId === "register-old"
-            ? {
-                cloudRegisterSessionId: "register-cloud-1",
-                localRegisterSessionId: "register-old",
-                observedAt: 10,
-                reason: "lifecycle_rejected" as const,
-                status: "blocked" as const,
-                storeId: "store-1",
-                terminalId: "local-terminal-1",
-              }
-            : null,
-      })),
+      readDrawerAuthorityState: vi.fn(
+        async (input: {
+          localRegisterSessionId: string;
+          storeId: string;
+          terminalId: string;
+        }) => ({
+          ok: true,
+          value:
+            input.localRegisterSessionId === "register-old"
+              ? {
+                  cloudRegisterSessionId: "register-cloud-1",
+                  localRegisterSessionId: "register-old",
+                  observedAt: 10,
+                  reason: "lifecycle_rejected" as const,
+                  status: "blocked" as const,
+                  storeId: "store-1",
+                  terminalId: "local-terminal-1",
+                }
+              : null,
+        }),
+      ),
       readProvisionedTerminalSeed: vi.fn(async () => ({
         ok: true,
         value: {
@@ -2286,6 +2289,104 @@ describe("usePosLocalSyncRuntimeStatus", () => {
     expect(store.markEventsSynced).not.toHaveBeenCalled();
   });
 
+  it("drains already-pending expense completions from status-only mode on route entry", async () => {
+    const store = {
+      listEvents: vi.fn(async () => ({
+        ok: true,
+        value: [
+          buildLocalEvent({
+            localEventId: "event-expense",
+            localRegisterSessionId: undefined,
+            payload: {
+              localExpenseEventId: "local-expense-event-1",
+              localExpenseSessionId: "local-expense-session-1",
+              subtotal: 1000,
+              tax: 0,
+              total: 1000,
+              items: [],
+            },
+            sequence: 1,
+            type: "expense.completed" as PosLocalEventRecord["type"],
+            uploadSequence: 1,
+          }),
+        ],
+      })),
+      markEventsSynced: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      readProvisionedTerminalSeed: vi.fn(async () => ({
+        ok: true,
+        value: {
+          cloudTerminalId: "terminal-cloud-1",
+          displayName: "Front",
+          provisionedAt: 1,
+          schemaVersion: 1,
+          syncSecretHash: "sync-secret-1",
+          storeId: "store-1",
+          terminalId: "local-terminal-1",
+        },
+      })),
+      writeLocalCloudMapping: vi.fn(async () => ({
+        ok: true,
+        value: {
+          cloudId: "expense-transaction-1",
+          entity: "expenseTransaction",
+          localId: "local-expense-event-1",
+          mappedAt: 10,
+        },
+      })),
+    };
+    mocks.ingestLocalEvents.mockResolvedValue({
+      kind: "ok",
+      data: {
+        accepted: [
+          {
+            localEventId: "event-expense",
+            sequence: 1,
+            status: "projected",
+          },
+        ],
+        held: [],
+        mappings: [],
+        conflicts: [],
+        syncCursor: {
+          localRegisterSessionId: "local-expense-session-1",
+          acceptedThroughSequence: 1,
+        },
+      },
+    });
+    const storeFactory = () => store as never;
+
+    renderHook(() =>
+      usePosLocalSyncRuntimeStatus({
+        drainOnAppend: true,
+        eventAppendToken: 0,
+        mode: "status-only",
+        storeFactory,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(mocks.ingestLocalEvents).toHaveBeenCalledWith(
+        expect.objectContaining({
+          events: [
+            expect.objectContaining({
+              eventType: "expense_recorded",
+              localEventId: "event-expense",
+              sequence: 1,
+            }),
+          ],
+        }),
+      ),
+    );
+    expect(store.markEventsSynced).toHaveBeenCalledWith(["event-expense"], {
+      uploaded: true,
+    });
+  });
+
   it("runs one immediate upload from status-only mode after a local event append when enabled", async () => {
     const store = {
       listEvents: vi.fn(async () => ({
@@ -2483,13 +2584,19 @@ describe("usePosLocalSyncRuntimeStatus", () => {
       ),
     );
     expect(
-      JSON.stringify(mocks.reportTerminalRuntimeStatus.mock.calls[0]?.[0].status),
+      JSON.stringify(
+        mocks.reportTerminalRuntimeStatus.mock.calls[0]?.[0].status,
+      ),
     ).not.toContain("proof-token-a");
     expect(
-      JSON.stringify(mocks.reportTerminalRuntimeStatus.mock.calls[0]?.[0].status),
+      JSON.stringify(
+        mocks.reportTerminalRuntimeStatus.mock.calls[0]?.[0].status,
+      ),
     ).not.toContain("payload-proof-token");
     expect(
-      JSON.stringify(mocks.reportTerminalRuntimeStatus.mock.calls[0]?.[0].status),
+      JSON.stringify(
+        mocks.reportTerminalRuntimeStatus.mock.calls[0]?.[0].status,
+      ),
     ).not.toContain("sync-secret-1");
     await waitFor(() => expect(mocks.ingestLocalEvents).toHaveBeenCalled());
     expect(store.markEventsSynced).toHaveBeenCalledWith(["event-open"], {
@@ -2553,7 +2660,9 @@ describe("usePosLocalSyncRuntimeStatus", () => {
       status: "blocked_app_account",
     });
     expect(
-      JSON.stringify(mocks.reportTerminalRuntimeStatus.mock.calls[0]?.[0].status),
+      JSON.stringify(
+        mocks.reportTerminalRuntimeStatus.mock.calls[0]?.[0].status,
+      ),
     ).not.toContain("app_account_not_pos_scoped");
     expect(JSON.stringify(result.current)).not.toContain(
       "app_account_not_pos_scoped",
@@ -2704,8 +2813,7 @@ describe("usePosLocalSyncRuntimeStatus", () => {
         metadata: { terminalAuthorizationFailure: boolean };
       };
     }>();
-    mocks.reportTerminalRuntimeStatus
-      .mockReturnValueOnce(oldCheckIn.promise);
+    mocks.reportTerminalRuntimeStatus.mockReturnValueOnce(oldCheckIn.promise);
     const store = {
       listEvents: vi.fn(async () => ({
         ok: true,
@@ -2781,20 +2889,22 @@ describe("usePosLocalSyncRuntimeStatus", () => {
           }),
         ],
       })),
-      readDrawerAuthorityState: vi.fn(async (input: { terminalId: string }) => ({
-        ok: true,
-        value:
-          input.terminalId === "terminal-cloud-1"
-            ? {
-                localRegisterSessionId: "register-1",
-                observedAt: 1,
-                reason: "cloud_closed",
-                status: "blocked",
-                storeId: "store-1",
-                terminalId: "terminal-cloud-1",
-              }
-            : null,
-      })),
+      readDrawerAuthorityState: vi.fn(
+        async (input: { terminalId: string }) => ({
+          ok: true,
+          value:
+            input.terminalId === "terminal-cloud-1"
+              ? {
+                  localRegisterSessionId: "register-1",
+                  observedAt: 1,
+                  reason: "cloud_closed",
+                  status: "blocked",
+                  storeId: "store-1",
+                  terminalId: "terminal-cloud-1",
+                }
+              : null,
+        }),
+      ),
       readProvisionedTerminalSeed: vi.fn(async () => ({
         ok: true,
         value: {
@@ -3353,8 +3463,9 @@ describe("usePosLocalSyncRuntimeStatus", () => {
       { timeout: 3000 },
     );
     const uploadedEvents = mocks.ingestLocalEvents.mock.calls[0]?.[0].events;
-    expect(uploadedEvents.map((event: { sequence: number }) => event.sequence))
-      .toEqual([1, 2]);
+    expect(
+      uploadedEvents.map((event: { sequence: number }) => event.sequence),
+    ).toEqual([1, 2]);
   });
 
   it("keeps server-conflicted events in review and settles server-rejected events locally", () => {
@@ -3425,9 +3536,111 @@ describe("usePosLocalSyncRuntimeStatus", () => {
         ],
         ["event-clear"],
       ),
-    ).toEqual(
-      ["event-clear", "event-session", "event-cart", "event-payment"],
+    ).toEqual(["event-clear", "event-session", "event-cart", "event-payment"]);
+  });
+
+  it("uploads completed expense events with their scoped upload sequence", async () => {
+    const expenseEvent = buildLocalEvent({
+      localEventId: "event-expense",
+      localExpenseSessionId: "expense-session-1",
+      localRegisterSessionId: undefined,
+      payload: {
+        localExpenseSessionId: "expense-session-1",
+        localExpenseEventId: "expense-event-1",
+        subtotal: 25,
+        tax: 0,
+        total: 25,
+        items: [
+          {
+            localItemId: "expense-line-1",
+            productId: "product-1",
+            productSkuId: "sku-1",
+            productName: "Repair kit",
+            productSku: "KIT-1",
+            quantity: 1,
+            price: 25,
+          },
+        ],
+      },
+      sequence: 42,
+      type: "expense.completed",
+      uploadSequence: 1,
+    });
+    const store = {
+      listEvents: vi.fn(async () => ({
+        ok: true,
+        value: [expenseEvent],
+      })),
+      listEventsForUpload: vi.fn(async () => ({
+        ok: true,
+        value: [expenseEvent],
+      })),
+      markEventsNeedsReview: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      markEventsSynced: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      readProvisionedTerminalSeed: vi.fn(async () => ({
+        ok: true,
+        value: {
+          cloudTerminalId: "terminal-cloud-1",
+          displayName: "Front",
+          provisionedAt: 1,
+          schemaVersion: 1,
+          syncSecretHash: "sync-secret-1",
+          storeId: "store-1",
+          terminalId: "local-terminal-1",
+        },
+      })),
+    };
+    mocks.ingestLocalEvents.mockResolvedValue({
+      kind: "ok",
+      data: {
+        accepted: [
+          {
+            localEventId: "event-expense",
+            sequence: 1,
+            status: "projected",
+          },
+        ],
+        held: [],
+        mappings: [],
+        conflicts: [],
+        syncCursor: {
+          localRegisterSessionId: "expense-session-1",
+          acceptedThroughSequence: 1,
+        },
+      },
+    });
+
+    renderHook(() =>
+      usePosLocalSyncRuntimeStatus({
+        mode: "drain-enabled",
+        storeFactory: () => store as never,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
     );
+
+    await waitFor(() => expect(mocks.ingestLocalEvents).toHaveBeenCalled());
+    expect(mocks.ingestLocalEvents).toHaveBeenCalledWith(
+      expect.objectContaining({
+        events: [
+          expect.objectContaining({
+            eventType: "expense_recorded",
+            localEventId: "event-expense",
+            localExpenseSessionId: "expense-session-1",
+            sequence: 1,
+          }),
+        ],
+      }),
+    );
+    expect(store.markEventsSynced).toHaveBeenCalledWith(["event-expense"], {
+      uploaded: true,
+    });
   });
 
   it("marks rejected runtime sale responses and embedded local events as settled", async () => {

@@ -4060,7 +4060,13 @@ describe("projectLocalSyncEvent", () => {
     expect(repository.createdExpenseTransactions).toEqual([
       expect.objectContaining({
         sessionId: "expense-session-1",
+        transactionNumber: expect.stringMatching(/^\d{6}$/),
         totalValue: 25,
+      }),
+    ]);
+    expect(repository.createdExpenseTransactions).not.toEqual([
+      expect.objectContaining({
+        transactionNumber: "local-expense-event-1",
       }),
     ]);
     expect(repository.createdExpenseTransactionItems).toEqual([
@@ -4078,6 +4084,63 @@ describe("projectLocalSyncEvent", () => {
         },
       },
     ]);
+  });
+
+  it("projects repeated expense records even when older clients reused cart line ids", async () => {
+    const repository = createProjectionRepository({
+      validCloudIds: new Set(["product-1", "sku-1"]),
+    });
+    const reusedLineId = "optimistic:sku-1:trusted_inventory";
+    const baseEvent = buildExpenseRecordedEvent({
+      payload: {
+        ...buildExpenseRecordedEvent().payload,
+        items: [
+          {
+            ...buildExpenseRecordedEvent().payload.items[0],
+            localTransactionItemId: reusedLineId,
+          },
+        ],
+      },
+    });
+
+    const first = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: baseEvent,
+      syncEventId: "sync-event-expense-1",
+      submittedByUserId: "athena-user-1" as never,
+      now: 100,
+    });
+    const second = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: buildExpenseRecordedEvent({
+        localEventId: "event-expense-recorded-2",
+        localExpenseSessionId: "local-expense-session-2",
+        sequence: 2,
+        payload: {
+          ...baseEvent.payload,
+          localExpenseSessionId: "local-expense-session-2",
+          localExpenseEventId: "local-expense-event-2",
+        },
+      }),
+      syncEventId: "sync-event-expense-2",
+      submittedByUserId: "athena-user-1" as never,
+      now: 200,
+    });
+
+    expect(first.status).toBe("projected");
+    expect(second.status).toBe("projected");
+    expect(repository.createdExpenseTransactions).toHaveLength(2);
+    expect(repository.mappings).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          localIdKind: "transactionItem",
+          localId: reusedLineId,
+          cloudTable: "expenseSessionItem",
+        }),
+      ]),
+    );
   });
 
   it("projects trusted zero-stock expense records with review evidence and no stock decrement", async () => {
@@ -4364,16 +4427,9 @@ describe("projectLocalSyncEvent", () => {
       }),
     ]);
     expect(repository.productPatches).toEqual([]);
-    expect(repository.mappings).toEqual(
+    expect(repository.mappings).not.toEqual(
       expect.arrayContaining([
-        expect.objectContaining({
-          syncScope: "expense",
-          localExpenseSessionId: "local-expense-session-1",
-          localIdKind: "transactionItem",
-          localId: "local-expense-pending-line-1",
-          cloudTable: "expenseSessionItem",
-          cloudId: "expense-session-item-1",
-        }),
+        expect.objectContaining({ cloudTable: "expenseSessionItem" }),
       ]),
     );
   });
@@ -5196,6 +5252,27 @@ function createProjectionRepository(
       );
     },
     async createMapping(input) {
+      const existing = mappings.find(
+        (mapping) =>
+          mapping.storeId === input.storeId &&
+          mapping.terminalId === input.terminalId &&
+          mapping.localRegisterSessionId === input.localRegisterSessionId &&
+          mapping.localIdKind === input.localIdKind &&
+          mapping.localId === input.localId,
+      );
+      if (existing) {
+        if (
+          existing.localEventId === input.localEventId &&
+          existing.cloudTable === input.cloudTable &&
+          existing.cloudId === input.cloudId
+        ) {
+          return existing;
+        }
+
+        throw new Error(
+          "POS local sync mapping already belongs to another projection.",
+        );
+      }
       const mapping = {
         _id: `mapping-${nextId++}`,
         ...input,

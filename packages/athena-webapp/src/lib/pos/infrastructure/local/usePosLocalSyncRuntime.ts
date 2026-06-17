@@ -37,9 +37,7 @@ import {
   type PosLocalSyncTrigger,
 } from "./syncScheduler";
 import { derivePosLocalSyncStatus } from "./syncStatus";
-import {
-  readScopedPosLocalEvents,
-} from "./localRegisterReader";
+import { readScopedPosLocalEvents } from "./localRegisterReader";
 import {
   isPosLocalEventInTerminalScope,
   resolvePosLocalTerminalScope,
@@ -351,7 +349,9 @@ export function usePosLocalSyncRuntimeStatus(input: {
         }
         if (!refreshedEvents.ok || cancelled) {
           if (!cancelled) {
-            setReadError(refreshedEvents.ok ? null : refreshedEvents.error.message);
+            setReadError(
+              refreshedEvents.ok ? null : refreshedEvents.error.message,
+            );
           }
           return false;
         }
@@ -373,7 +373,11 @@ export function usePosLocalSyncRuntimeStatus(input: {
       setRuntimeStatusObservationToken((current) => current + 1);
       setDebug((current) => ({
         ...current,
-        ...buildRuntimeSyncDebug(eventsResult.value.events, mode, uploadSupport),
+        ...buildRuntimeSyncDebug(
+          eventsResult.value.events,
+          mode,
+          uploadSupport,
+        ),
         lastTrigger: trigger,
         lastTriggerAt: Date.now(),
         lastTriggerPriority: triggerPriority,
@@ -385,184 +389,242 @@ export function usePosLocalSyncRuntimeStatus(input: {
           includeUploadedReviewEvents?: boolean;
           onlyUploadedReviewEvents?: boolean;
         } = {},
-      ) => createPosLocalSyncScheduler({
-        isOnline: () =>
-          typeof navigator === "undefined" ? true : navigator.onLine,
-        loadPendingEvents: async () => {
-          const readTerminalIntegrityState = (
-            store as {
-              readTerminalIntegrityState?: PosLocalRuntimeStore["readTerminalIntegrityState"];
+      ) =>
+        createPosLocalSyncScheduler({
+          isOnline: () =>
+            typeof navigator === "undefined" ? true : navigator.onLine,
+          loadPendingEvents: async () => {
+            const readTerminalIntegrityState = (
+              store as {
+                readTerminalIntegrityState?: PosLocalRuntimeStore["readTerminalIntegrityState"];
+              }
+            ).readTerminalIntegrityState;
+            if (readTerminalIntegrityState) {
+              const terminalIntegrity = await readTerminalIntegrityState({
+                storeId: syncSeed.storeId,
+                terminalId: syncSeed.cloudTerminalId,
+              });
+              assertPosLocalStoreOk(terminalIntegrity);
+              if (
+                terminalIntegrity.value &&
+                terminalIntegrity.value.status !== "healthy"
+              ) {
+                return [];
+              }
             }
-          ).readTerminalIntegrityState;
-          if (readTerminalIntegrityState) {
-            const terminalIntegrity = await readTerminalIntegrityState({
-              storeId: syncSeed.storeId,
-              terminalId: syncSeed.cloudTerminalId,
+
+            const pending = await readScopedPosLocalUploadEvents({
+              store,
+              storeId,
+              terminalId,
             });
-            assertPosLocalStoreOk(terminalIntegrity);
-            if (
-              terminalIntegrity.value &&
-              terminalIntegrity.value.status !== "healthy"
-            ) {
+            if (shouldStop()) {
               return [];
             }
-          }
+            if (!pending.ok) {
+              setReadError(pending.error.message);
+              throw new Error(pending.error.message);
+            }
+            const uploadableEvents = pending.value.events
+              .filter((event) => {
+                const isUploadedReviewEvent =
+                  options.includeUploadedReviewEvents === true &&
+                  event.sync.status === "needs_review" &&
+                  event.sync.uploaded;
+                if (options.onlyUploadedReviewEvents === true) {
+                  return isUploadedReviewEvent;
+                }
 
-          const pending = await readScopedPosLocalUploadEvents({
-            store,
-            storeId,
-            terminalId,
-          });
-          if (shouldStop()) {
-            return [];
-          }
-          if (!pending.ok) {
-            setReadError(pending.error.message);
-            throw new Error(pending.error.message);
-          }
-          const uploadableEvents = pending.value.events
-            .filter((event) => {
-              const isUploadedReviewEvent =
-                options.includeUploadedReviewEvents === true &&
-                event.sync.status === "needs_review" &&
-                event.sync.uploaded;
-              if (options.onlyUploadedReviewEvents === true) {
-                return isUploadedReviewEvent;
-              }
-
-              return (
-                event.sync.status === "pending" ||
-                event.sync.status === "syncing" ||
-                event.sync.status === "failed" ||
-                isUploadedReviewEvent
-              );
-            })
-            .filter((event) => isSyncablePosLocalEvent(event, uploadSupport));
-          if (!shouldStop()) {
+                return (
+                  event.sync.status === "pending" ||
+                  event.sync.status === "syncing" ||
+                  event.sync.status === "failed" ||
+                  isUploadedReviewEvent
+                );
+              })
+              .filter((event) => isSyncablePosLocalEvent(event, uploadSupport));
+            if (!shouldStop()) {
+              setDebug((current) => ({
+                ...current,
+                ...buildRuntimeSyncDebug(
+                  pending.value.events,
+                  mode,
+                  uploadSupport,
+                ),
+              }));
+            }
+            return uploadableEvents.map((event) => ({
+              id: event.localEventId,
+              terminalId: event.terminalId,
+              localRegisterSessionId: event.localRegisterSessionId ?? "",
+              createdAt: event.createdAt,
+              sequence: event.sequence,
+            }));
+          },
+          onStatusChange: (status) => {
+            if (shouldStop()) {
+              return;
+            }
             setDebug((current) => ({
               ...current,
-              ...buildRuntimeSyncDebug(
-                pending.value.events,
-                mode,
-                uploadSupport,
-              ),
+              failureCount: status.failureCount,
+              lastFailure: status.lastFailure,
+              schedulerBackoffUntil: status.backoffUntil,
+              schedulerRunning: status.running,
+              schedulerScheduled: status.scheduled,
             }));
-          }
-          return uploadableEvents.map((event) => ({
-            id: event.localEventId,
-            terminalId: event.terminalId,
-            localRegisterSessionId: event.localRegisterSessionId ?? "",
-            createdAt: event.createdAt,
-            sequence: event.sequence,
-          }));
-        },
-        onStatusChange: (status) => {
-          if (shouldStop()) {
-            return;
-          }
-          setDebug((current) => ({
-            ...current,
-            failureCount: status.failureCount,
-            lastFailure: status.lastFailure,
-            schedulerBackoffUntil: status.backoffUntil,
-            schedulerRunning: status.running,
-            schedulerScheduled: status.scheduled,
-          }));
-        },
-        markSynced: async (eventIds) => {
-          if (eventIds.length === 0) return;
-          const result = await store.markEventsSynced(eventIds, {
-            uploaded: true,
-          });
-          if (shouldStop()) {
-            return;
-          }
-          assertPosLocalStoreOk(result);
-          if (!(await refreshEvents())) {
-            return;
-          }
-          if (shouldStop()) {
-            return;
-          }
-          onLocalEventsChanged?.();
-        },
-        uploadBatch: async (pendingEvents) => {
-          const latestEvents = await readScopedPosLocalUploadEvents({
-            store,
-            storeId,
-            terminalId,
-          });
-          if (shouldStop()) {
-            return { syncedEventIds: [] };
-          }
-          if (!latestEvents.ok) {
-            setReadError(latestEvents.error.message);
-            throw new Error(latestEvents.error.message);
-          }
-          const pendingEventIds = new Set(
-            pendingEvents.map((event) => event.id),
-          );
-          const eventsToUpload = latestEvents.value.events.filter((event) =>
-            pendingEventIds.has(event.localEventId),
-          );
-          const uploadedEvents = buildPosLocalSyncUploadEvents(
-            eventsToUpload,
-            latestEvents.value.events,
-            uploadSupport,
-          );
-          const locallySettledEventIds = collectLocallySettledSkippedReviewEventIds(
-            eventsToUpload,
-            uploadedEvents,
-          );
-          setDebug((current) => ({
-            ...current,
-            lastBatchEventCount: uploadedEvents.length,
-          }));
-          if (uploadedEvents.length === 0) {
-            return { syncedEventIds: locallySettledEventIds };
-          }
-
-          const result = await ingestLocalEvents(
-            toIngestLocalEventsArgs({
-              events: uploadedEvents,
-              storeId: syncSeed.storeId,
-              syncSecretHash: syncSeed.syncSecretHash,
-              terminalId: cloudTerminalId,
-            }) as IngestLocalEventsArgs,
-          );
-          if (shouldStop()) {
-            return { syncedEventIds: [] };
-          }
-          if (result.kind !== "ok") {
-            if (isTerminalAuthorizationFailure(result)) {
-              await persistTerminalAuthorizationFailure({
-                message: result.error.message,
-                store,
-                syncSeed,
-              });
-              if (!(await refreshEvents())) {
-                return { syncedEventIds: [] };
-              }
-              if (shouldStop()) {
-                return { syncedEventIds: [] };
-              }
-              onLocalEventsChanged?.();
+          },
+          markSynced: async (eventIds) => {
+            if (eventIds.length === 0) return;
+            const result = await store.markEventsSynced(eventIds, {
+              uploaded: true,
+            });
+            if (shouldStop()) {
+              return;
+            }
+            assertPosLocalStoreOk(result);
+            if (!(await refreshEvents())) {
+              return;
+            }
+            if (shouldStop()) {
+              return;
+            }
+            onLocalEventsChanged?.();
+          },
+          uploadBatch: async (pendingEvents) => {
+            const latestEvents = await readScopedPosLocalUploadEvents({
+              store,
+              storeId,
+              terminalId,
+            });
+            if (shouldStop()) {
               return { syncedEventIds: [] };
             }
-            if (isRetryableSyncAuthorizationFailure(result)) {
-              throw new Error(result.error.message);
+            if (!latestEvents.ok) {
+              setReadError(latestEvents.error.message);
+              throw new Error(latestEvents.error.message);
             }
+            const pendingEventIds = new Set(
+              pendingEvents.map((event) => event.id),
+            );
+            const eventsToUpload = latestEvents.value.events.filter((event) =>
+              pendingEventIds.has(event.localEventId),
+            );
+            const uploadedEvents = buildPosLocalSyncUploadEvents(
+              eventsToUpload,
+              latestEvents.value.events,
+              uploadSupport,
+            );
+            const locallySettledEventIds =
+              collectLocallySettledSkippedReviewEventIds(
+                eventsToUpload,
+                uploadedEvents,
+              );
             setDebug((current) => ({
               ...current,
-              lastReviewEventCount: uploadedEvents.length,
+              lastBatchEventCount: uploadedEvents.length,
             }));
-            const reviewEventIds = collectReviewLocalEventIds(
-              latestEvents.value.events,
-              uploadedEvents.map((event) => event.localEventId),
+            if (uploadedEvents.length === 0) {
+              return { syncedEventIds: locallySettledEventIds };
+            }
+
+            const result = await ingestLocalEvents(
+              toIngestLocalEventsArgs({
+                events: uploadedEvents,
+                storeId: syncSeed.storeId,
+                syncSecretHash: syncSeed.syncSecretHash,
+                terminalId: cloudTerminalId,
+              }) as IngestLocalEventsArgs,
             );
-            const localReviewEventIds = withoutEventIds(
+            if (shouldStop()) {
+              return { syncedEventIds: [] };
+            }
+            if (result.kind !== "ok") {
+              if (isTerminalAuthorizationFailure(result)) {
+                await persistTerminalAuthorizationFailure({
+                  message: result.error.message,
+                  store,
+                  syncSeed,
+                });
+                if (!(await refreshEvents())) {
+                  return { syncedEventIds: [] };
+                }
+                if (shouldStop()) {
+                  return { syncedEventIds: [] };
+                }
+                onLocalEventsChanged?.();
+                return { syncedEventIds: [] };
+              }
+              if (isRetryableSyncAuthorizationFailure(result)) {
+                throw new Error(result.error.message);
+              }
+              setDebug((current) => ({
+                ...current,
+                lastReviewEventCount: uploadedEvents.length,
+              }));
+              const reviewEventIds = collectReviewLocalEventIds(
+                latestEvents.value.events,
+                uploadedEvents.map((event) => event.localEventId),
+              );
+              const localReviewEventIds = withoutEventIds(
+                reviewEventIds,
+                locallySettledEventIds,
+              );
+              await persistDrawerAuthorityBlockForReviewEvents({
+                events: latestEvents.value.events,
+                reason: "lifecycle_rejected",
+                reviewEventIds: localReviewEventIds,
+                store,
+              });
+              return {
+                syncedEventIds: locallySettledEventIds,
+                reviewEventIds: localReviewEventIds,
+              };
+            }
+
+            const mappingWrite = await writeReturnedLocalCloudMappings(
+              store,
+              result.data.mappings,
+            );
+            if (shouldStop()) {
+              return { syncedEventIds: [] };
+            }
+            if (!mappingWrite.ok) {
+              setReadError(mappingWrite.message);
+              setDebug((current) => ({
+                ...current,
+                lastReviewEventCount: uploadedEvents.length,
+              }));
+              const reviewEventIds = collectReviewLocalEventIds(
+                latestEvents.value.events,
+                uploadedEvents.map((event) => event.localEventId),
+              );
+              const localReviewEventIds = withoutEventIds(
+                reviewEventIds,
+                locallySettledEventIds,
+              );
+              await persistDrawerAuthorityBlockForReviewEvents({
+                events: latestEvents.value.events,
+                reason: "authority_unknown",
+                reviewEventIds: localReviewEventIds,
+                store,
+              });
+              return {
+                syncedEventIds: locallySettledEventIds,
+                reviewEventIds: localReviewEventIds,
+              };
+            }
+            const reviewEventIds = collectServerReviewLocalEventIds(
+              result.data.accepted,
+            );
+            setDebug((current) => ({
+              ...current,
+              lastHeldEventCount: result.data.held.length,
+              lastReviewEventCount: reviewEventIds.length,
+            }));
+            const localReviewEventIds = collectReviewLocalEventIds(
+              latestEvents.value.events,
               reviewEventIds,
-              locallySettledEventIds,
             );
             await persistDrawerAuthorityBlockForReviewEvents({
               events: latestEvents.value.events,
@@ -570,112 +632,56 @@ export function usePosLocalSyncRuntimeStatus(input: {
               reviewEventIds: localReviewEventIds,
               store,
             });
-            return {
-              syncedEventIds: locallySettledEventIds,
-              reviewEventIds: localReviewEventIds,
-            };
-          }
-
-          const mappingWrite = await writeReturnedLocalCloudMappings(
-            store,
-            result.data.mappings,
-          );
-          if (shouldStop()) {
-            return { syncedEventIds: [] };
-          }
-          if (!mappingWrite.ok) {
-            setReadError(mappingWrite.message);
-            setDebug((current) => ({
-              ...current,
-              lastReviewEventCount: uploadedEvents.length,
-            }));
-            const reviewEventIds = collectReviewLocalEventIds(
+            const syncedEventIds = collectSyncedLocalEventIds(
               latestEvents.value.events,
-              uploadedEvents.map((event) => event.localEventId),
+              collectServerSettledLocalEventIds(result.data.accepted),
             );
-            const localReviewEventIds = withoutEventIds(
-              reviewEventIds,
+            const localSyncedEventIds = mergeEventIds(
               locallySettledEventIds,
+              syncedEventIds,
             );
-            await persistDrawerAuthorityBlockForReviewEvents({
+            await clearSupersededRecoverableDrawerAuthorityBlocks({
+              acceptedEvents: result.data.accepted,
               events: latestEvents.value.events,
-              reason: "authority_unknown",
-              reviewEventIds: localReviewEventIds,
+              returnedMappings: result.data.mappings,
               store,
             });
-            return {
-              syncedEventIds: locallySettledEventIds,
+            await clearRecoverableDrawerAuthorityForSyncedEvents({
+              events: latestEvents.value.events,
               reviewEventIds: localReviewEventIds,
-            };
-          }
-          const reviewEventIds = collectServerReviewLocalEventIds(
-            result.data.accepted,
-          );
-          setDebug((current) => ({
-            ...current,
-            lastHeldEventCount: result.data.held.length,
-            lastReviewEventCount: reviewEventIds.length,
-          }));
-          const localReviewEventIds = collectReviewLocalEventIds(
-            latestEvents.value.events,
-            reviewEventIds,
-          );
-          await persistDrawerAuthorityBlockForReviewEvents({
-            events: latestEvents.value.events,
-            reason: "lifecycle_rejected",
-            reviewEventIds: localReviewEventIds,
-            store,
-          });
-          const syncedEventIds = collectSyncedLocalEventIds(
-            latestEvents.value.events,
-            collectServerSettledLocalEventIds(result.data.accepted),
-          );
-          const localSyncedEventIds = mergeEventIds(
-            locallySettledEventIds,
-            syncedEventIds,
-          );
-          await clearSupersededRecoverableDrawerAuthorityBlocks({
-            acceptedEvents: result.data.accepted,
-            events: latestEvents.value.events,
-            returnedMappings: result.data.mappings,
-            store,
-          });
-          await clearRecoverableDrawerAuthorityForSyncedEvents({
-            events: latestEvents.value.events,
-            reviewEventIds: localReviewEventIds,
-            store,
-            syncedEventIds: localSyncedEventIds,
-          });
+              store,
+              syncedEventIds: localSyncedEventIds,
+            });
 
-          return {
-            heldEventIds: collectServerHeldLocalEventIds(result.data.held),
-            syncedEventIds: localSyncedEventIds,
-            reviewEventIds: withoutEventIds(
-              localReviewEventIds,
-              locallySettledEventIds,
-            ),
-          };
-        },
-        markNeedsReview: async (eventIds) => {
-          if (eventIds.length === 0) return;
-          const result = await store.markEventsNeedsReview(
-            eventIds,
-            "Cloud sync needs review before this local event can finish.",
-            { uploaded: true },
-          );
-          if (shouldStop()) {
-            return;
-          }
-          assertPosLocalStoreOk(result);
-          if (!(await refreshEvents())) {
-            return;
-          }
-          if (shouldStop()) {
-            return;
-          }
-          onLocalEventsChanged?.();
-        },
-      });
+            return {
+              heldEventIds: collectServerHeldLocalEventIds(result.data.held),
+              syncedEventIds: localSyncedEventIds,
+              reviewEventIds: withoutEventIds(
+                localReviewEventIds,
+                locallySettledEventIds,
+              ),
+            };
+          },
+          markNeedsReview: async (eventIds) => {
+            if (eventIds.length === 0) return;
+            const result = await store.markEventsNeedsReview(
+              eventIds,
+              "Cloud sync needs review before this local event can finish.",
+              { uploaded: true },
+            );
+            if (shouldStop()) {
+              return;
+            }
+            assertPosLocalStoreOk(result);
+            if (!(await refreshEvents())) {
+              return;
+            }
+            if (shouldStop()) {
+              return;
+            }
+            onLocalEventsChanged?.();
+          },
+        });
 
       if (mode === "status-only") {
         stopSchedulers.push(
@@ -692,10 +698,20 @@ export function usePosLocalSyncRuntimeStatus(input: {
           provisionedSeed.syncSecretHash &&
           provisionedSeed.cloudTerminalId === cloudTerminalId
         ) {
-          if (drainOnAppend && trigger === "event-appended") {
+          const shouldDrainPendingExpenseEvents =
+            drainOnAppend &&
+            trigger !== "manual-retry" &&
+            hasPendingSyncableExpenseEvents(
+              eventsResult.value.events,
+              uploadSupport,
+            );
+          if (
+            drainOnAppend &&
+            (trigger === "event-appended" || shouldDrainPendingExpenseEvents)
+          ) {
             const scheduler = createDrainScheduler(provisionedSeed);
             stopSchedulers.push(() => scheduler.stop());
-            scheduler.trigger("event-appended", { priority: "high" });
+            scheduler.trigger(trigger, { priority: "high" });
           }
 
           if (trigger === "manual-retry") {
@@ -861,11 +877,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
       );
       return;
     }
-    if (
-      !runtimeReadiness.terminalSeed &&
-      !readError &&
-      events.length === 0
-    ) {
+    if (!runtimeReadiness.terminalSeed && !readError && events.length === 0) {
       setDebug((current) =>
         withCheckInPublishDebug(current, {
           checkInPublishReason: "not_ready",
@@ -1010,10 +1022,9 @@ export function usePosLocalSyncRuntimeStatus(input: {
           withCheckInPublishDebug(current, {
             checkInPublishCompletedAt: Date.now(),
             checkInPublishMessage: error?.message ?? "Check-in was rejected.",
-            checkInPublishReason:
-              terminalAuthorizationRejected
-                ? "authorization_failed"
-                : "rejected",
+            checkInPublishReason: terminalAuthorizationRejected
+              ? "authorization_failed"
+              : "rejected",
             checkInPublishStatus: "rejected",
           }),
         );
@@ -1105,147 +1116,155 @@ export function usePosLocalSyncRuntimeStatus(input: {
       storeId: storeId as Id<"store">,
       syncSecretHash: runtimeStatusSyncSecretHash,
       terminalId: runtimeStatusTerminalId as Id<"posTerminal">,
-    }).then(async (claimResult) => {
-      if (claimResult.kind !== "ok") {
-        observedRecoveryCommandIdsRef.current.delete(command._id);
-        if (!isStale) {
-          setDebug((current) => ({
-            ...current,
-            terminalRecoveryCommandCompletedAt: Date.now(),
-            terminalRecoveryCommandMessage:
-              claimResult.kind === "user_error"
-                ? claimResult.error.message
-                : "Recovery command could not be claimed.",
-            terminalRecoveryCommandStatus: "failed",
-          }));
-          setRecoveryCommandRetryToken((current) => current + 1);
-        }
-        return;
-      }
-
-      const localResult = await executeTerminalRecoveryCommand({
-        command: claimResult.data,
-        onRetrySync: requestRetry,
-        refreshStaffAuthority: async ({ storeId, terminalId }) => {
-          if (typeof store.replaceStaffAuthoritySnapshot !== "function") {
-            throw new Error("Local staff authority storage is unavailable.");
+    })
+      .then(async (claimResult) => {
+        if (claimResult.kind !== "ok") {
+          observedRecoveryCommandIdsRef.current.delete(command._id);
+          if (!isStale) {
+            setDebug((current) => ({
+              ...current,
+              terminalRecoveryCommandCompletedAt: Date.now(),
+              terminalRecoveryCommandMessage:
+                claimResult.kind === "user_error"
+                  ? claimResult.error.message
+                  : "Recovery command could not be claimed.",
+              terminalRecoveryCommandStatus: "failed",
+            }));
+            setRecoveryCommandRetryToken((current) => current + 1);
           }
-
-          const result = await refreshAndStoreTerminalStaffAuthority({
-            localStore: store,
-            refreshTerminalStaffAuthority: refreshTerminalStaffAuthority as Parameters<
-              typeof refreshAndStoreTerminalStaffAuthority
-            >[0]["refreshTerminalStaffAuthority"],
-            storeId: storeId as Id<"store">,
-            terminalId: terminalId as Id<"posTerminal">,
-            mapRecords: (records) =>
-              records.flatMap((record) => {
-                if (record.status !== "active" && record.status !== "revoked") {
-                  return [];
-                }
-                const verifier = record.verifier;
-                if (!isLocalPinVerifierMetadata(verifier)) {
-                  return [];
-                }
-
-                const localRecord: PosLocalStaffAuthorityRecord = {
-                  ...record,
-                  status: record.status,
-                  verifier,
-                };
-                return [localRecord];
-              }),
-          });
-          if (result.status === "preserved") {
-            throw new Error(result.message ?? "Staff authority refresh failed.");
-          }
-          if (result.status === "write_failed") {
-            throw new Error(result.message);
-          }
-
-          return {
-            message: "Staff authority refreshed.",
-            refreshedAt: Date.now(),
-            status: "ready",
-          };
-        },
-        store,
-        storeId,
-        terminalId: runtimeStatusTerminalId,
-        terminalSeed: runtimeReadiness.terminalSeed,
-      });
-
-      if (localResult.status === "ignored") {
-        observedRecoveryCommandIdsRef.current.delete(command._id);
-        if (!isStale) {
-          setDebug((current) => ({
-            ...current,
-            terminalRecoveryCommandCompletedAt: Date.now(),
-            terminalRecoveryCommandMessage: localResult.message,
-            terminalRecoveryCommandStatus: "ignored",
-          }));
-          setRecoveryCommandRetryToken((current) => current + 1);
+          return;
         }
-        return;
-      }
 
-      const ackResult = toTerminalRecoveryCommandAckResult(localResult);
-      const acknowledged = await acknowledgeTerminalRecoveryCommand({
-        commandId: claimResult.data._id,
-        message: localResult.message,
-        result: ackResult,
-        storeId: storeId as Id<"store">,
-        syncSecretHash: runtimeStatusSyncSecretHash,
-        terminalId: runtimeStatusTerminalId as Id<"posTerminal">,
-      });
-      if (acknowledged.kind !== "ok") {
-        observedRecoveryCommandIdsRef.current.delete(command._id);
-        if (!isStale) {
-          setRecoveryCommandRetryToken((current) => current + 1);
-        }
-      }
-      if (isStale) return;
+        const localResult = await executeTerminalRecoveryCommand({
+          command: claimResult.data,
+          onRetrySync: requestRetry,
+          refreshStaffAuthority: async ({ storeId, terminalId }) => {
+            if (typeof store.replaceStaffAuthoritySnapshot !== "function") {
+              throw new Error("Local staff authority storage is unavailable.");
+            }
 
-      if (acknowledged.kind === "ok") {
-        const readiness = await refreshTerminalRuntimeReadiness({
+            const result = await refreshAndStoreTerminalStaffAuthority({
+              localStore: store,
+              refreshTerminalStaffAuthority:
+                refreshTerminalStaffAuthority as Parameters<
+                  typeof refreshAndStoreTerminalStaffAuthority
+                >[0]["refreshTerminalStaffAuthority"],
+              storeId: storeId as Id<"store">,
+              terminalId: terminalId as Id<"posTerminal">,
+              mapRecords: (records) =>
+                records.flatMap((record) => {
+                  if (
+                    record.status !== "active" &&
+                    record.status !== "revoked"
+                  ) {
+                    return [];
+                  }
+                  const verifier = record.verifier;
+                  if (!isLocalPinVerifierMetadata(verifier)) {
+                    return [];
+                  }
+
+                  const localRecord: PosLocalStaffAuthorityRecord = {
+                    ...record,
+                    status: record.status,
+                    verifier,
+                  };
+                  return [localRecord];
+                }),
+            });
+            if (result.status === "preserved") {
+              throw new Error(
+                result.message ?? "Staff authority refresh failed.",
+              );
+            }
+            if (result.status === "write_failed") {
+              throw new Error(result.message);
+            }
+
+            return {
+              message: "Staff authority refreshed.",
+              refreshedAt: Date.now(),
+              status: "ready",
+            };
+          },
           store,
           storeId,
           terminalId: runtimeStatusTerminalId,
           terminalSeed: runtimeReadiness.terminalSeed,
         });
+
+        if (localResult.status === "ignored") {
+          observedRecoveryCommandIdsRef.current.delete(command._id);
+          if (!isStale) {
+            setDebug((current) => ({
+              ...current,
+              terminalRecoveryCommandCompletedAt: Date.now(),
+              terminalRecoveryCommandMessage: localResult.message,
+              terminalRecoveryCommandStatus: "ignored",
+            }));
+            setRecoveryCommandRetryToken((current) => current + 1);
+          }
+          return;
+        }
+
+        const ackResult = toTerminalRecoveryCommandAckResult(localResult);
+        const acknowledged = await acknowledgeTerminalRecoveryCommand({
+          commandId: claimResult.data._id,
+          message: localResult.message,
+          result: ackResult,
+          storeId: storeId as Id<"store">,
+          syncSecretHash: runtimeStatusSyncSecretHash,
+          terminalId: runtimeStatusTerminalId as Id<"posTerminal">,
+        });
+        if (acknowledged.kind !== "ok") {
+          observedRecoveryCommandIdsRef.current.delete(command._id);
+          if (!isStale) {
+            setRecoveryCommandRetryToken((current) => current + 1);
+          }
+        }
         if (isStale) return;
 
-        setRuntimeReadiness(readiness);
-      }
+        if (acknowledged.kind === "ok") {
+          const readiness = await refreshTerminalRuntimeReadiness({
+            store,
+            storeId,
+            terminalId: runtimeStatusTerminalId,
+            terminalSeed: runtimeReadiness.terminalSeed,
+          });
+          if (isStale) return;
 
-      setDebug((current) => ({
-        ...current,
-        terminalRecoveryCommandCompletedAt: Date.now(),
-        terminalRecoveryCommandMessage:
-          acknowledged.kind === "ok"
-            ? localResult.message
-            : acknowledged.kind === "user_error"
-              ? acknowledged.error.message
-              : "Recovery command acknowledgement failed.",
-        terminalRecoveryCommandStatus:
-          acknowledged.kind === "ok" ? localResult.status : "failed",
-      }));
-      setRefreshToken((current) => current + 1);
-      setRuntimeStatusObservationToken((current) => current + 1);
-      onLocalEventsChanged?.();
-    }).catch(() => {
-      observedRecoveryCommandIdsRef.current.delete(command._id);
-      if (isStale) return;
+          setRuntimeReadiness(readiness);
+        }
 
-      setDebug((current) => ({
-        ...current,
-        terminalRecoveryCommandCompletedAt: Date.now(),
-        terminalRecoveryCommandMessage:
-          "Recovery command could not reach the server.",
-        terminalRecoveryCommandStatus: "failed",
-      }));
-      setRecoveryCommandRetryToken((current) => current + 1);
-    });
+        setDebug((current) => ({
+          ...current,
+          terminalRecoveryCommandCompletedAt: Date.now(),
+          terminalRecoveryCommandMessage:
+            acknowledged.kind === "ok"
+              ? localResult.message
+              : acknowledged.kind === "user_error"
+                ? acknowledged.error.message
+                : "Recovery command acknowledgement failed.",
+          terminalRecoveryCommandStatus:
+            acknowledged.kind === "ok" ? localResult.status : "failed",
+        }));
+        setRefreshToken((current) => current + 1);
+        setRuntimeStatusObservationToken((current) => current + 1);
+        onLocalEventsChanged?.();
+      })
+      .catch(() => {
+        observedRecoveryCommandIdsRef.current.delete(command._id);
+        if (isStale) return;
+
+        setDebug((current) => ({
+          ...current,
+          terminalRecoveryCommandCompletedAt: Date.now(),
+          terminalRecoveryCommandMessage:
+            "Recovery command could not reach the server.",
+          terminalRecoveryCommandStatus: "failed",
+        }));
+        setRecoveryCommandRetryToken((current) => current + 1);
+      });
 
     return () => {
       isStale = true;
@@ -1379,9 +1398,10 @@ async function persistTerminalAuthorizationFailure(input: {
   return state;
 }
 
-function isTerminalAuthorizationFailure(
-  result: { kind: string; error?: { code?: string; metadata?: Record<string, unknown> } },
-): result is {
+function isTerminalAuthorizationFailure(result: {
+  kind: string;
+  error?: { code?: string; metadata?: Record<string, unknown> };
+}): result is {
   kind: "user_error";
   error: {
     code: "authorization_failed";
@@ -1397,7 +1417,11 @@ function isTerminalAuthorizationFailure(
 
 function isRetryableSyncAuthorizationFailure(result: {
   kind: string;
-  error?: { code?: string; message?: string; metadata?: Record<string, unknown> };
+  error?: {
+    code?: string;
+    message?: string;
+    metadata?: Record<string, unknown>;
+  };
 }): result is {
   kind: "user_error";
   error: { code: "authorization_failed"; message: string };
@@ -1410,7 +1434,10 @@ function isRetryableSyncAuthorizationFailure(result: {
 }
 
 function isTerminalAuthorizationUserError(
-  error: { code?: string; metadata?: Record<string, unknown> } | null | undefined,
+  error:
+    | { code?: string; metadata?: Record<string, unknown> }
+    | null
+    | undefined,
 ) {
   return (
     error?.code === "authorization_failed" &&
@@ -1422,7 +1449,10 @@ function toTerminalRecoveryCommandAckResult(
   result: PosTerminalRecoveryCommandResult,
 ) {
   if (result.status === "completed") return "completed" as const;
-  if (result.status === "precondition_failed" || result.reason === "precondition_failed") {
+  if (
+    result.status === "precondition_failed" ||
+    result.reason === "precondition_failed"
+  ) {
     return "precondition_failed" as const;
   }
   return "failed" as const;
@@ -1567,7 +1597,8 @@ export async function writeReturnedLocalCloudMappings(
       cloudId: mapping.cloudId,
       mappedAt: mapping.createdAt,
     });
-    if (!result.ok) return { ok: false as const, message: result.error.message };
+    if (!result.ok)
+      return { ok: false as const, message: result.error.message };
   }
 
   return { ok: true as const };
@@ -1588,14 +1619,20 @@ export function collectSyncedLocalEventIds(
   events: PosLocalEventRecord[],
   acceptedUploadEventIds: string[],
 ) {
-  return collectAcceptedEventIdsWithLocalPrecursors(events, acceptedUploadEventIds);
+  return collectAcceptedEventIdsWithLocalPrecursors(
+    events,
+    acceptedUploadEventIds,
+  );
 }
 
 function collectReviewLocalEventIds(
   events: PosLocalEventRecord[],
   acceptedReviewEventIds: string[],
 ) {
-  return collectAcceptedEventIdsWithLocalPrecursors(events, acceptedReviewEventIds);
+  return collectAcceptedEventIdsWithLocalPrecursors(
+    events,
+    acceptedReviewEventIds,
+  );
 }
 
 export function collectLocallySettledSkippedReviewEventIds(
@@ -1665,7 +1702,10 @@ function collectAcceptedEventIdsWithLocalPrecursors(
 
   for (const event of events) {
     if (!accepted.has(event.localEventId)) continue;
-    if (event.type !== "transaction.completed" && event.type !== "cart.cleared") {
+    if (
+      event.type !== "transaction.completed" &&
+      event.type !== "cart.cleared"
+    ) {
       continue;
     }
 
@@ -1699,7 +1739,9 @@ export function derivePosLocalRuntimeSyncStatus(
     options.staffProfileId === undefined
       ? events
       : options.staffProfileId
-        ? events.filter((event) => event.staffProfileId === options.staffProfileId)
+        ? events.filter(
+            (event) => event.staffProfileId === options.staffProfileId,
+          )
         : [];
   const terminalBlockingReviewEvents =
     options.staffProfileId === undefined
@@ -1718,10 +1760,7 @@ export function derivePosLocalRuntimeSyncStatus(
   const terminalBlockingRelevantEvents = terminalBlockingReviewEvents.filter(
     (event) => !relevantEventIds.has(event.localEventId),
   );
-  const statusEvents = [
-    ...relevantEvents,
-    ...terminalBlockingRelevantEvents,
-  ];
+  const statusEvents = [...relevantEvents, ...terminalBlockingRelevantEvents];
   const status = derivePosLocalSyncStatus({
     events: statusEvents.map((event) =>
       typeof event.uploadSequence === "number"
@@ -1738,7 +1777,8 @@ export function derivePosLocalRuntimeSyncStatus(
   return {
     onRetrySync: options.onRetrySync ?? null,
     pendingEventCount: status.pendingCount + status.failedCount,
-    status: status.state === "failed" || status.state === "needs_review"
+    status:
+      status.state === "failed" || status.state === "needs_review"
         ? "needs_review"
         : hasPendingLocalCloseout(statusEvents)
           ? "locally_closed_pending_sync"
@@ -1757,7 +1797,8 @@ function collectRuntimeRelevantEvents(events: PosLocalEventRecord[]) {
 
   for (const event of events) {
     if (
-      (event.type !== "transaction.completed" && event.type !== "cart.cleared") ||
+      (event.type !== "transaction.completed" &&
+        event.type !== "cart.cleared") ||
       event.sync.status === "synced"
     ) {
       continue;
@@ -1789,6 +1830,20 @@ function isRuntimeRelevantLocalEvent(event: PosLocalEventRecord) {
     event.type === "cart.cleared" ||
     event.type === "register.closeout_started" ||
     event.type === "register.reopened"
+  );
+}
+
+function hasPendingSyncableExpenseEvents(
+  events: PosLocalEventRecord[],
+  uploadSupport: PosLocalSyncUploadSupport,
+) {
+  return events.some(
+    (event) =>
+      event.type === "expense.completed" &&
+      (event.sync.status === "pending" ||
+        event.sync.status === "syncing" ||
+        event.sync.status === "failed") &&
+      isSyncablePosLocalEvent(event, uploadSupport),
   );
 }
 

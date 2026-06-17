@@ -1,6 +1,4 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { getFunctionName } from "convex/server";
-import { useMutation, useQuery } from "convex/react";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -13,10 +11,6 @@ import { useExpenseStore } from "@/stores/expenseStore";
 import { useExpenseRegisterViewModel } from "./useExpenseRegisterViewModel";
 
 const mockCreateExpenseSession = vi.fn();
-const mockUpdateExpenseSession = vi.fn();
-const mockHoldExpenseSession = vi.fn();
-const mockResumeExpenseSession = vi.fn();
-const mockVoidExpenseSession = vi.fn();
 const mockReleaseExpenseSessionInventoryHoldsAndDeleteItems = vi.fn();
 const mockCompleteExpenseSession = vi.fn();
 const mockAddOrUpdateExpenseItem = vi.fn();
@@ -37,6 +31,8 @@ const localRuntimeMocks = vi.hoisted(() => ({
   updateItem: vi.fn(),
   voidSession: vi.fn(),
   listEvents: vi.fn(),
+  hasListEvents: { current: false },
+  eventAppendToken: { current: 0 },
 }));
 const loadedSessionIds: string[] = [];
 const realLoadSessionData = useExpenseStore.getState().loadSessionData;
@@ -76,34 +72,21 @@ type MockRegisterCatalogAvailabilityRow = {
 };
 let mockRegisterCatalogRows: MockRegisterCatalogRow[];
 let mockRegisterCatalogAvailabilityRows: MockRegisterCatalogAvailabilityRow[] | undefined;
-let mockActiveSessionQuery: {
-  _id: Id<"expenseSession">;
-  status: "active";
-  expiresAt: number;
-  sessionNumber: string;
+type ExpenseSessionCartItemFixture = {
+  _id: Id<"expenseSessionItem">;
+  quantity: number;
   updatedAt: number;
-  notes?: string;
-  cartItems: Array<{
-    _id: Id<"expenseSessionItem">;
-    quantity: number;
-    updatedAt: number;
-    productName?: string;
-    productSku?: string;
-    barcode?: string;
-    price?: number;
-    image?: string | null;
-    size?: string;
-    length?: number | null;
-    color?: string;
-    productId?: Id<"product">;
-    productSkuId?: Id<"productSku">;
-  }>;
-} | null;
-
-vi.mock("convex/react", () => ({
-  useMutation: vi.fn(),
-  useQuery: vi.fn(),
-}));
+  productName?: string;
+  productSku?: string;
+  barcode?: string;
+  price?: number;
+  image?: string | null;
+  size?: string;
+  length?: number | null;
+  color?: string;
+  productId?: Id<"product">;
+  productSkuId?: Id<"productSku">;
+};
 
 vi.mock("sonner", () => ({
   toast: {
@@ -142,11 +125,15 @@ vi.mock("@/lib/pos/infrastructure/convex/catalogGateway", () => ({
 vi.mock("@/hooks/useExpenseLocalRuntime", () => ({
   useExpenseLocalRuntime: () => ({
     expenseLocalGateway: localRuntimeMocks,
-    eventAppendToken: 0,
-    localStore: {
-      listEvents: localRuntimeMocks.listEvents,
+    eventAppendToken: localRuntimeMocks.eventAppendToken.current,
+    localStore: localRuntimeMocks.hasListEvents.current
+      ? {
+          listEvents: localRuntimeMocks.listEvents,
+        }
+      : {},
+    noteEventAppended: () => {
+      localRuntimeMocks.eventAppendToken.current += 1;
     },
-    noteEventAppended: vi.fn(),
     syncRuntime: null,
   }),
 }));
@@ -204,26 +191,9 @@ function buildRegisterCatalogAvailabilityRow(
   };
 }
 
-function buildActiveExpenseSession(
-  cartItems: NonNullable<typeof mockActiveSessionQuery>["cartItems"] = [],
-  overrides: Partial<NonNullable<typeof mockActiveSessionQuery>> = {},
-) {
-  return {
-    _id: "expense-session-1" as Id<"expenseSession">,
-    status: "active" as const,
-    expiresAt: Date.now() + 60_000,
-    sessionNumber: "EXP-0001",
-    updatedAt: 100,
-    cartItems,
-    ...overrides,
-  };
-}
-
 function buildExpenseCartItem(
-  overrides: Partial<
-    NonNullable<typeof mockActiveSessionQuery>["cartItems"][number]
-  > = {},
-): NonNullable<typeof mockActiveSessionQuery>["cartItems"][number] {
+  overrides: Partial<ExpenseSessionCartItemFixture> = {},
+): ExpenseSessionCartItemFixture {
   return {
     _id: "expense-item-1" as Id<"expenseSessionItem">,
     quantity: 1,
@@ -271,24 +241,78 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
-function seedActiveExpenseCart() {
+function seedActiveExpenseCart(
+  item: ExpenseSessionCartItemFixture = buildExpenseCartItem(),
+) {
   const store = useExpenseStore.getState();
   store.setCurrentSessionId("expense-session-1" as Id<"expenseSession">);
   store.setSessionExpiresAt(Date.now() + 60_000);
   store.addToCart({
-    id: "expense-item-1" as Id<"expenseSessionItem">,
-    name: "Repair kit",
-    barcode: "1234567890123",
-    sku: "KIT-1",
-    price: 3600,
-    quantity: 1,
-    image: null,
-    size: "",
-    length: null,
-    color: "",
-    productId: "product-1" as Id<"product">,
-    skuId: "product-sku-1" as Id<"productSku">,
+    id: item._id,
+    name: item.productName ?? "Repair kit",
+    barcode: item.barcode ?? "1234567890123",
+    sku: item.productSku ?? "KIT-1",
+    price: item.price ?? 3600,
+    quantity: item.quantity,
+    image: item.image ?? null,
+    size: item.size ?? "",
+    length: item.length ?? null,
+    color: item.color ?? "",
+    productId: item.productId ?? ("product-1" as Id<"product">),
+    skuId: item.productSkuId ?? ("product-sku-1" as Id<"productSku">),
   });
+  enableLocalExpenseEventReplay();
+  localRuntimeMocks.listEvents.mockResolvedValue({
+    ok: true,
+    value: [
+      {
+        localEventId: "expense-started-1",
+        sequence: 1,
+        type: "expense.session_started",
+        terminalId: "terminal-1",
+        storeId: "store-1",
+        staffProfileId: "staff-1",
+        createdAt: 100,
+        payload: {
+          localExpenseSessionId: "expense-session-1",
+        },
+        sync: { status: "pending" },
+      },
+      {
+        localEventId: item._id,
+        sequence: 2,
+        type: "expense.item_added",
+        terminalId: "terminal-1",
+        storeId: "store-1",
+        staffProfileId: "staff-1",
+        createdAt: item.updatedAt,
+        payload: {
+          localExpenseSessionId: "expense-session-1",
+          localItemId: item._id,
+          productId: item.productId ?? "product-1",
+          productSkuId: item.productSkuId ?? "product-sku-1",
+          productName: item.productName ?? "Repair kit",
+          productSku: item.productSku ?? "KIT-1",
+          barcode: item.barcode ?? "1234567890123",
+          price: item.price ?? 3600,
+          quantity: item.quantity,
+          image: item.image ?? null,
+          size: item.size ?? "",
+          length: item.length ?? null,
+          color: item.color ?? "",
+        },
+        sync: { status: "pending" },
+      },
+    ],
+  });
+}
+
+function enableLocalExpenseEventReplay() {
+  localRuntimeMocks.hasListEvents.current = true;
+}
+
+function bumpLocalExpenseEventReplay() {
+  localRuntimeMocks.eventAppendToken.current += 1;
 }
 
 describe("useExpenseRegisterViewModel", () => {
@@ -298,7 +322,6 @@ describe("useExpenseRegisterViewModel", () => {
     useExpenseStore.getState().resetAll();
     useExpenseStore.setState({ loadSessionData: realLoadSessionData });
     useExpenseStore.getState().setCashier("staff-1" as Id<"staffProfile">);
-    mockActiveSessionQuery = null;
     mockRegisterCatalogRows = [];
     mockRegisterCatalogAvailabilityRows = [];
     catalogGatewayMocks.useConvexRegisterCatalog.mockImplementation(
@@ -311,14 +334,9 @@ describe("useExpenseRegisterViewModel", () => {
     mockCreateExpenseSession.mockImplementation(async () => {
       const callCount = mockCreateExpenseSession.mock.calls.length;
       if (callCount >= 2) {
-        mockActiveSessionQuery = {
-          _id: "expense-session-1" as Id<"expenseSession">,
-          status: "active",
-          expiresAt: Date.now() + 60_000,
-          sessionNumber: "EXP-0001",
-          updatedAt: 100,
-          cartItems: [],
-        };
+        useExpenseStore
+          .getState()
+          .setCurrentSessionId("expense-session-1" as Id<"expenseSession">);
       }
 
       return {
@@ -386,56 +404,20 @@ describe("useExpenseRegisterViewModel", () => {
     localRuntimeMocks.holdSession.mockResolvedValue(true);
     localRuntimeMocks.resumeSession.mockResolvedValue(true);
     localRuntimeMocks.voidSession.mockResolvedValue(true);
+    localRuntimeMocks.hasListEvents.current = false;
+    localRuntimeMocks.eventAppendToken.current = 0;
     localRuntimeMocks.listEvents.mockResolvedValue({
       ok: true,
       value: [],
     });
-    vi.mocked(useMutation).mockImplementation((mutation) => {
-      const mutationName = getFunctionName(mutation);
-      if (mutationName === "inventory/expenseSessions:createExpenseSession") {
-        return mockCreateExpenseSession as never;
-      }
-      if (mutationName === "inventory/expenseSessions:updateExpenseSession") {
-        return mockUpdateExpenseSession as never;
-      }
-      if (mutationName === "inventory/expenseSessions:holdExpenseSession") {
-        return mockHoldExpenseSession as never;
-      }
-      if (mutationName === "inventory/expenseSessions:resumeExpenseSession") {
-        return mockResumeExpenseSession as never;
-      }
-      if (mutationName === "inventory/expenseSessions:voidExpenseSession") {
-        return mockVoidExpenseSession as never;
-      }
-      if (
-        mutationName ===
-        "inventory/expenseSessions:releaseExpenseSessionInventoryHoldsAndDeleteItems"
-      ) {
-        return mockReleaseExpenseSessionInventoryHoldsAndDeleteItems as never;
-      }
-      if (mutationName === "inventory/expenseSessions:completeExpenseSession") {
-        return mockCompleteExpenseSession as never;
-      }
-      if (
-        mutationName ===
-        "inventory/expenseSessionItems:addOrUpdateExpenseItem"
-      ) {
-        return mockAddOrUpdateExpenseItem as never;
-      }
-      if (mutationName === "inventory/expenseSessionItems:removeExpenseItem") {
-        return mockRemoveExpenseItem as never;
-      }
-
-      return vi.fn() as never;
-    });
-    vi.mocked(useQuery).mockImplementation(() => mockActiveSessionQuery);
   });
 
   it("does not auto-create duplicate sessions while the active-session query is still empty", async () => {
-    const { rerender } = renderHook(() => useExpenseRegisterViewModel());
+    const { result, rerender } = renderHook(() => useExpenseRegisterViewModel());
 
     await waitFor(() => {
       expect(mockCreateExpenseSession).toHaveBeenCalledTimes(1);
+      expect(result.current.header.isSessionActive).toBe(true);
     });
 
     rerender();
@@ -443,11 +425,68 @@ describe("useExpenseRegisterViewModel", () => {
     await waitFor(() => {
       expect(mockCreateExpenseSession).toHaveBeenCalledTimes(1);
     });
-    expect(toast.success).toHaveBeenCalledTimes(1);
-    expect(toast.success).toHaveBeenCalledWith("New expense session created");
+    expect(toast.success).not.toHaveBeenCalledWith(
+      "New expense session created",
+    );
   });
 
-  it("loads an unchanged active session only once", async () => {
+  it("keeps expense lookup enabled when cashier identity is present but the legacy auth flag drifted", async () => {
+    useExpenseStore.setState({
+      cashier: {
+        id: "staff-1" as Id<"staffProfile">,
+        isAuthenticated: false,
+        displayName: null,
+      },
+    });
+
+    const { result } = renderHook(() => useExpenseRegisterViewModel());
+
+    expect(result.current.authDialog).toBeNull();
+    expect(result.current.cashierCard).not.toBeNull();
+    expect(result.current.onboarding?.cashierSignedIn).toBe(true);
+    expect(result.current.productEntry.disabled).toBe(false);
+
+    await waitFor(() => {
+      expect(mockCreateExpenseSession).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("does not toast when voiding an expense session on cashier sign out", async () => {
+    const { result } = renderHook(() => useExpenseRegisterViewModel());
+
+    await waitFor(() => {
+      expect(result.current.header.isSessionActive).toBe(true);
+    });
+
+    vi.mocked(toast.success).mockClear();
+
+    await act(async () => {
+      await result.current.cashierCard?.onSignOut();
+    });
+
+    expect(localRuntimeMocks.voidSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        localExpenseSessionId: "expense-session-1",
+      }),
+    );
+    expect(toast.success).not.toHaveBeenCalledWith("Session voided");
+  });
+
+  it("keeps expense lookup enabled for a signed-in cashier while replacing a stale session", async () => {
+    useExpenseStore
+      .getState()
+      .setCurrentSessionId("stale-expense-session" as Id<"expenseSession">);
+
+    const { result } = renderHook(() => useExpenseRegisterViewModel());
+
+    await waitFor(() => {
+      expect(mockCreateExpenseSession).toHaveBeenCalledTimes(1);
+    });
+    expect(useExpenseStore.getState().cashier.isAuthenticated).toBe(true);
+    expect(result.current.productEntry.disabled).toBe(false);
+  });
+
+  it("loads an unchanged local active session only once", async () => {
     useExpenseStore.setState((state) => ({
       ...state,
       loadSessionData: (session: { _id: Id<"expenseSession"> }) => {
@@ -461,14 +500,25 @@ describe("useExpenseRegisterViewModel", () => {
         }));
       },
     }));
-    mockActiveSessionQuery = {
-      _id: "expense-session-1" as Id<"expenseSession">,
-      status: "active",
-      expiresAt: Date.now() + 60_000,
-      sessionNumber: "EXP-0001",
-      updatedAt: 100,
-      cartItems: [],
-    };
+    enableLocalExpenseEventReplay();
+    localRuntimeMocks.listEvents.mockResolvedValue({
+      ok: true,
+      value: [
+        {
+          localEventId: "expense-started-1",
+          sequence: 1,
+          type: "expense.session_started",
+          terminalId: "terminal-1",
+          storeId: "store-1",
+          staffProfileId: "staff-1",
+          createdAt: 100,
+          payload: {
+            localExpenseSessionId: "expense-session-1",
+          },
+          sync: { status: "pending" },
+        },
+      ],
+    });
 
     const { rerender } = renderHook(() => useExpenseRegisterViewModel());
 
@@ -482,8 +532,8 @@ describe("useExpenseRegisterViewModel", () => {
     expect(loadedSessionIds).toEqual(["expense-session-1"]);
   });
 
-  it("rehydrates an active local expense session before creating a cloud session", async () => {
-    mockActiveSessionQuery = null;
+  it("rehydrates an active local expense session before creating a new session", async () => {
+    enableLocalExpenseEventReplay();
     localRuntimeMocks.listEvents.mockResolvedValue({
       ok: true,
       value: [
@@ -523,9 +573,10 @@ describe("useExpenseRegisterViewModel", () => {
       ],
     });
 
-    renderHook(() => useExpenseRegisterViewModel());
+    const { result } = renderHook(() => useExpenseRegisterViewModel());
 
     await waitFor(() => {
+      expect(result.current.header.isSessionActive).toBe(true);
       expect(useExpenseStore.getState().session.currentSessionId).toBe(
         "local-expense-session-1",
       );
@@ -541,7 +592,7 @@ describe("useExpenseRegisterViewModel", () => {
   });
 
   it("rehydrates held local expense sessions without expiring old sessions", async () => {
-    mockActiveSessionQuery = null;
+    enableLocalExpenseEventReplay();
     localRuntimeMocks.listEvents.mockResolvedValue({
       ok: true,
       value: [
@@ -587,7 +638,7 @@ describe("useExpenseRegisterViewModel", () => {
   });
 
   it("ignores local expense events outside the current terminal scope", async () => {
-    mockActiveSessionQuery = null;
+    enableLocalExpenseEventReplay();
     localRuntimeMocks.listEvents.mockResolvedValue({
       ok: true,
       value: [
@@ -625,21 +676,17 @@ describe("useExpenseRegisterViewModel", () => {
     expect(result.current.authDialog?.workflowMode).toBe("expense");
   });
 
-  it("uses the local register catalog index for text and exact expense search", () => {
-    mockActiveSessionQuery = {
-      _id: "expense-session-1" as Id<"expenseSession">,
-      status: "active",
-      expiresAt: Date.now() + 60_000,
-      sessionNumber: "EXP-0001",
-      updatedAt: 100,
-      cartItems: [],
-    };
+  it("uses the local register catalog index for text and exact expense search", async () => {
     mockRegisterCatalogRows = [buildRegisterCatalogRow()];
     mockRegisterCatalogAvailabilityRows = [
       buildRegisterCatalogAvailabilityRow(),
     ];
 
     const { result } = renderHook(() => useExpenseRegisterViewModel());
+
+    await waitFor(() => {
+      expect(mockCreateExpenseSession).toHaveBeenCalledTimes(1);
+    });
 
     act(() => {
       result.current.productEntry.setProductSearchQuery("repair");
@@ -669,20 +716,16 @@ describe("useExpenseRegisterViewModel", () => {
   });
 
   it("keeps exact matches visible without auto-adding until availability loads", async () => {
-    mockActiveSessionQuery = {
-      _id: "expense-session-1" as Id<"expenseSession">,
-      status: "active",
-      expiresAt: Date.now() + 60_000,
-      sessionNumber: "EXP-0001",
-      updatedAt: 100,
-      cartItems: [],
-    };
     mockRegisterCatalogRows = [buildRegisterCatalogRow()];
     mockRegisterCatalogAvailabilityRows = undefined;
 
     const { result, rerender } = renderHook(() =>
       useExpenseRegisterViewModel(),
     );
+
+    await waitFor(() => {
+      expect(mockCreateExpenseSession).toHaveBeenCalledTimes(1);
+    });
 
     act(() => {
       result.current.productEntry.setProductSearchQuery("1234567890123");
@@ -699,7 +742,6 @@ describe("useExpenseRegisterViewModel", () => {
       }),
     ]);
     await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(mockCreateExpenseSession).not.toHaveBeenCalled();
 
     mockRegisterCatalogAvailabilityRows = [
       buildRegisterCatalogAvailabilityRow(),
@@ -713,14 +755,6 @@ describe("useExpenseRegisterViewModel", () => {
   });
 
   it("shows ambiguous exact product matches without auto-adding", async () => {
-    mockActiveSessionQuery = {
-      _id: "expense-session-1" as Id<"expenseSession">,
-      status: "active",
-      expiresAt: Date.now() + 60_000,
-      sessionNumber: "EXP-0001",
-      updatedAt: 100,
-      cartItems: [],
-    };
     mockRegisterCatalogRows = [
       buildRegisterCatalogRow(),
       buildRegisterCatalogRow({
@@ -741,24 +775,20 @@ describe("useExpenseRegisterViewModel", () => {
 
     const { result } = renderHook(() => useExpenseRegisterViewModel());
 
+    await waitFor(() => {
+      expect(mockCreateExpenseSession).toHaveBeenCalledTimes(1);
+    });
+
     act(() => {
       result.current.productEntry.setProductSearchQuery("product-1");
     });
 
     expect(result.current.productEntry.searchResults).toHaveLength(2);
     await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(mockCreateExpenseSession).not.toHaveBeenCalled();
+    expect(mockAddOrUpdateExpenseItem).not.toHaveBeenCalled();
   });
 
   it("auto-adds a single available exact expense match once", async () => {
-    mockActiveSessionQuery = {
-      _id: "expense-session-1" as Id<"expenseSession">,
-      status: "active",
-      expiresAt: Date.now() + 60_000,
-      sessionNumber: "EXP-0001",
-      updatedAt: 100,
-      cartItems: [],
-    };
     mockRegisterCatalogRows = [buildRegisterCatalogRow()];
     mockRegisterCatalogAvailabilityRows = [
       buildRegisterCatalogAvailabilityRow(),
@@ -782,7 +812,6 @@ describe("useExpenseRegisterViewModel", () => {
   });
 
   it("auto-adds exact trusted inventory matches with zero available quantity", async () => {
-    mockActiveSessionQuery = buildActiveExpenseSession();
     mockRegisterCatalogRows = [buildRegisterCatalogRow()];
     mockRegisterCatalogAvailabilityRows = [
       buildRegisterCatalogAvailabilityRow({
@@ -838,7 +867,6 @@ describe("useExpenseRegisterViewModel", () => {
   ])(
     "auto-adds exact $availabilityPolicy expense matches with zero trusted quantity",
     async ({ availabilityPolicy, expectedPayload, rowOverrides }) => {
-      mockActiveSessionQuery = buildActiveExpenseSession();
       mockRegisterCatalogRows = [
         buildRegisterCatalogRow({
           ...rowOverrides,
@@ -888,7 +916,6 @@ describe("useExpenseRegisterViewModel", () => {
   it("optimistically adds expense product selections while the server mutation is pending", async () => {
     const pendingAdd = deferred<ReturnType<typeof ok>>();
     mockAddOrUpdateExpenseItem.mockReturnValueOnce(pendingAdd.promise);
-    mockActiveSessionQuery = buildActiveExpenseSession();
 
     const { result, rerender } = renderHook(() => useExpenseRegisterViewModel());
 
@@ -915,9 +942,6 @@ describe("useExpenseRegisterViewModel", () => {
       ]),
     );
 
-    mockActiveSessionQuery = buildActiveExpenseSession([], {
-      updatedAt: 101,
-    });
     rerender();
     expect(result.current.cart.items).toEqual(
       expect.arrayContaining([
@@ -954,10 +978,182 @@ describe("useExpenseRegisterViewModel", () => {
     );
   });
 
+  it("adds the selected product quantity to the expense cart", async () => {
+    const { result } = renderHook(() => useExpenseRegisterViewModel());
+
+    await act(async () => {
+      await result.current.productEntry.onAddProduct(buildProduct(), 3);
+    });
+
+    expect(result.current.cart.items).toEqual([
+      expect.objectContaining({
+        skuId: "product-sku-2",
+        quantity: 3,
+      }),
+    ]);
+    expect(mockAddOrUpdateExpenseItem).toHaveBeenCalledWith(
+      expect.objectContaining({
+        productSkuId: "product-sku-2",
+        quantity: 3,
+      }),
+    );
+  });
+
+  it("keeps optimistic expense items when local replay is still session-only", async () => {
+    enableLocalExpenseEventReplay();
+    localRuntimeMocks.listEvents.mockResolvedValue({
+      ok: true,
+      value: [
+        {
+          localEventId: "expense-started-1",
+          sequence: 1,
+          type: "expense.session_started",
+          terminalId: "terminal-1",
+          storeId: "store-1",
+          staffProfileId: "staff-1",
+          createdAt: 100,
+          payload: {
+            localExpenseSessionId: "local-expense-session-1",
+          },
+          sync: { status: "pending" },
+        },
+      ],
+    });
+
+    const { result, rerender } = renderHook(() => useExpenseRegisterViewModel());
+
+    await waitFor(() => {
+      expect(useExpenseStore.getState().session.currentSessionId).toBe(
+        "local-expense-session-1",
+      );
+    });
+
+    await act(async () => {
+      await result.current.productEntry.onAddProduct(buildProduct());
+    });
+
+    expect(result.current.cart.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          skuId: "product-sku-2",
+          quantity: 1,
+        }),
+      ]),
+    );
+
+    const replayCallsBefore = localRuntimeMocks.listEvents.mock.calls.length;
+    bumpLocalExpenseEventReplay();
+    rerender();
+
+    await waitFor(() => {
+      expect(localRuntimeMocks.listEvents.mock.calls.length).toBeGreaterThan(
+        replayCallsBefore,
+      );
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(result.current.cart.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          skuId: "product-sku-2",
+          quantity: 1,
+        }),
+      ]),
+    );
+  });
+
+  it("keeps optimistic expense items when local replay is missing only the new item", async () => {
+    enableLocalExpenseEventReplay();
+    localRuntimeMocks.listEvents.mockResolvedValue({
+      ok: true,
+      value: [
+        {
+          localEventId: "expense-started-1",
+          sequence: 1,
+          type: "expense.session_started",
+          terminalId: "terminal-1",
+          storeId: "store-1",
+          staffProfileId: "staff-1",
+          createdAt: 100,
+          payload: {
+            localExpenseSessionId: "local-expense-session-1",
+          },
+          sync: { status: "pending" },
+        },
+      ],
+    });
+
+    const { result, rerender } = renderHook(() => useExpenseRegisterViewModel());
+
+    await waitFor(() => {
+      expect(useExpenseStore.getState().session.currentSessionId).toBe(
+        "local-expense-session-1",
+      );
+    });
+
+    await act(async () => {
+      await result.current.productEntry.onAddProduct(buildProduct());
+    });
+
+    localRuntimeMocks.listEvents.mockResolvedValue({
+      ok: true,
+      value: [
+        {
+          localEventId: "expense-started-1",
+          sequence: 1,
+          type: "expense.session_started",
+          terminalId: "terminal-1",
+          storeId: "store-1",
+          staffProfileId: "staff-1",
+          createdAt: 100,
+          payload: {
+            localExpenseSessionId: "local-expense-session-1",
+          },
+          sync: { status: "pending" },
+        },
+        {
+          localEventId: "expense-existing-item-1",
+          sequence: 2,
+          type: "expense.item_added",
+          terminalId: "terminal-1",
+          storeId: "store-1",
+          staffProfileId: "staff-1",
+          localExpenseSessionId: "local-expense-session-1",
+          createdAt: 101,
+          payload: {
+            localExpenseSessionId: "local-expense-session-1",
+            localItemId: "expense-existing-item-1",
+            productId: "product-1",
+            productSkuId: "product-sku-1",
+            productSku: "KIT-1",
+            productName: "Repair kit",
+            price: 3600,
+            quantity: 1,
+          },
+          sync: { status: "pending" },
+        },
+      ],
+    });
+    bumpLocalExpenseEventReplay();
+    rerender();
+
+    await waitFor(() => {
+      expect(result.current.cart.items).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            skuId: "product-sku-2",
+            quantity: 1,
+          }),
+        ]),
+      );
+    });
+  });
+
   it("rolls back optimistic expense product selections when add fails", async () => {
     const pendingAdd = deferred<ReturnType<typeof userError>>();
     mockAddOrUpdateExpenseItem.mockReturnValueOnce(pendingAdd.promise);
-    mockActiveSessionQuery = buildActiveExpenseSession();
 
     const { result } = renderHook(() => useExpenseRegisterViewModel());
 
@@ -1006,7 +1202,6 @@ describe("useExpenseRegisterViewModel", () => {
   it("rolls back optimistic expense product selections when the add mutation rejects", async () => {
     const pendingAdd = deferred<ReturnType<typeof ok>>();
     mockAddOrUpdateExpenseItem.mockReturnValueOnce(pendingAdd.promise);
-    mockActiveSessionQuery = buildActiveExpenseSession();
 
     const { result } = renderHook(() => useExpenseRegisterViewModel());
 
@@ -1036,9 +1231,7 @@ describe("useExpenseRegisterViewModel", () => {
   it("optimistically updates expense cart quantity while the server mutation is pending", async () => {
     const pendingUpdate = deferred<ReturnType<typeof ok>>();
     mockAddOrUpdateExpenseItem.mockReturnValueOnce(pendingUpdate.promise);
-    mockActiveSessionQuery = buildActiveExpenseSession([
-      buildExpenseCartItem(),
-    ]);
+    seedActiveExpenseCart();
 
     const { result } = renderHook(() => useExpenseRegisterViewModel());
     await waitFor(() => {
@@ -1070,9 +1263,7 @@ describe("useExpenseRegisterViewModel", () => {
   it("rolls back optimistic expense quantity changes when the update fails", async () => {
     const pendingUpdate = deferred<ReturnType<typeof userError>>();
     mockAddOrUpdateExpenseItem.mockReturnValueOnce(pendingUpdate.promise);
-    mockActiveSessionQuery = buildActiveExpenseSession([
-      buildExpenseCartItem(),
-    ]);
+    seedActiveExpenseCart();
 
     const { result } = renderHook(() => useExpenseRegisterViewModel());
     await waitFor(() => {
@@ -1109,9 +1300,7 @@ describe("useExpenseRegisterViewModel", () => {
   it("rolls back optimistic expense quantity changes when the update mutation rejects", async () => {
     const pendingUpdate = deferred<ReturnType<typeof ok>>();
     mockAddOrUpdateExpenseItem.mockReturnValueOnce(pendingUpdate.promise);
-    mockActiveSessionQuery = buildActiveExpenseSession([
-      buildExpenseCartItem(),
-    ]);
+    seedActiveExpenseCart();
 
     const { result } = renderHook(() => useExpenseRegisterViewModel());
     await waitFor(() => {
@@ -1141,9 +1330,6 @@ describe("useExpenseRegisterViewModel", () => {
   it("does not start a second expense cart mutation while one is pending", async () => {
     const pendingUpdate = deferred<ReturnType<typeof ok>>();
     mockAddOrUpdateExpenseItem.mockReturnValueOnce(pendingUpdate.promise);
-    mockActiveSessionQuery = buildActiveExpenseSession([
-      buildExpenseCartItem(),
-    ]);
     seedActiveExpenseCart();
 
     const { result, rerender } = renderHook(() => useExpenseRegisterViewModel());
@@ -1170,9 +1356,6 @@ describe("useExpenseRegisterViewModel", () => {
     expect(mockRemoveExpenseItem).not.toHaveBeenCalled();
     expect(result.current.cart.items[0].quantity).toBe(2);
 
-    mockActiveSessionQuery = buildActiveExpenseSession([buildExpenseCartItem()], {
-      updatedAt: 101,
-    });
     rerender();
     expect(result.current.cart.items[0].quantity).toBe(2);
 
@@ -1190,9 +1373,6 @@ describe("useExpenseRegisterViewModel", () => {
   it("optimistically removes expense cart items while the server mutation is pending", async () => {
     const pendingRemove = deferred<ReturnType<typeof ok>>();
     mockRemoveExpenseItem.mockReturnValueOnce(pendingRemove.promise);
-    mockActiveSessionQuery = buildActiveExpenseSession([
-      buildExpenseCartItem(),
-    ]);
     seedActiveExpenseCart();
 
     const { result, rerender } = renderHook(() => useExpenseRegisterViewModel());
@@ -1210,9 +1390,6 @@ describe("useExpenseRegisterViewModel", () => {
     expect(result.current.cart.items).toHaveLength(0);
     expect(result.current.checkout.cartItems).toHaveLength(0);
 
-    mockActiveSessionQuery = buildActiveExpenseSession([buildExpenseCartItem()], {
-      updatedAt: 101,
-    });
     rerender();
     expect(result.current.cart.items).toHaveLength(0);
     expect(result.current.checkout.cartItems).toHaveLength(0);
@@ -1227,12 +1404,24 @@ describe("useExpenseRegisterViewModel", () => {
     });
   });
 
+  it("does not keep a second optimistic cart overlay after the store cart is empty", async () => {
+    const { result } = renderHook(() => useExpenseRegisterViewModel());
+
+    await act(async () => {
+      await result.current.productEntry.onAddProduct(buildProduct());
+    });
+
+    await act(async () => {
+      useExpenseStore.getState().replaceCartItems([]);
+    });
+
+    expect(result.current.cart.items).toHaveLength(0);
+    expect(result.current.checkout.cartItems).toHaveLength(0);
+  });
+
   it("rolls back optimistic expense cart item removals when remove fails", async () => {
     const pendingRemove = deferred<ReturnType<typeof userError>>();
     mockRemoveExpenseItem.mockReturnValueOnce(pendingRemove.promise);
-    mockActiveSessionQuery = buildActiveExpenseSession([
-      buildExpenseCartItem(),
-    ]);
     seedActiveExpenseCart();
 
     const { result } = renderHook(() => useExpenseRegisterViewModel());
@@ -1270,9 +1459,6 @@ describe("useExpenseRegisterViewModel", () => {
   it("rolls back optimistic expense cart item removals when remove rejects", async () => {
     const pendingRemove = deferred<ReturnType<typeof ok>>();
     mockRemoveExpenseItem.mockReturnValueOnce(pendingRemove.promise);
-    mockActiveSessionQuery = buildActiveExpenseSession([
-      buildExpenseCartItem(),
-    ]);
     seedActiveExpenseCart();
 
     const { result } = renderHook(() => useExpenseRegisterViewModel());
@@ -1304,9 +1490,6 @@ describe("useExpenseRegisterViewModel", () => {
     mockReleaseExpenseSessionInventoryHoldsAndDeleteItems.mockReturnValueOnce(
       pendingClear.promise,
     );
-    mockActiveSessionQuery = buildActiveExpenseSession([
-      buildExpenseCartItem(),
-    ]);
     seedActiveExpenseCart();
 
     const { result } = renderHook(() => useExpenseRegisterViewModel());
@@ -1337,9 +1520,6 @@ describe("useExpenseRegisterViewModel", () => {
     mockReleaseExpenseSessionInventoryHoldsAndDeleteItems.mockReturnValueOnce(
       pendingClear.promise,
     );
-    mockActiveSessionQuery = buildActiveExpenseSession([
-      buildExpenseCartItem(),
-    ]);
     seedActiveExpenseCart();
 
     const { result } = renderHook(() => useExpenseRegisterViewModel());
@@ -1375,9 +1555,6 @@ describe("useExpenseRegisterViewModel", () => {
     mockReleaseExpenseSessionInventoryHoldsAndDeleteItems.mockReturnValueOnce(
       pendingClear.promise,
     );
-    mockActiveSessionQuery = buildActiveExpenseSession([
-      buildExpenseCartItem(),
-    ]);
     seedActiveExpenseCart();
 
     const { result } = renderHook(() => useExpenseRegisterViewModel());
@@ -1403,16 +1580,6 @@ describe("useExpenseRegisterViewModel", () => {
   });
 
   it("preserves completed expense data after completing a session", async () => {
-    mockActiveSessionQuery = {
-      _id: "expense-session-1" as Id<"expenseSession">,
-      status: "active",
-      expiresAt: Date.now() + 60_000,
-      sessionNumber: "EXP-0001",
-      updatedAt: 100,
-      notes: "Damaged item",
-      cartItems: [],
-    };
-
     const { result, rerender } = renderHook(() => useExpenseRegisterViewModel());
 
     act(() => {
@@ -1442,7 +1609,9 @@ describe("useExpenseRegisterViewModel", () => {
     });
 
     const state = useExpenseStore.getState();
-    expect(toast.success).toHaveBeenCalledWith("Expense recorded successfully");
+    expect(toast.success).not.toHaveBeenCalledWith(
+      "Expense recorded successfully",
+    );
     expect(state.cart.items).toEqual([]);
     expect(state.cart.total).toBe(0);
     expect(state.session.currentSessionId).toBeNull();
@@ -1467,16 +1636,46 @@ describe("useExpenseRegisterViewModel", () => {
     expect(state.ui.notes).toBe("Damaged item");
   });
 
-  it("records completion against the local store session when a stale cloud session is present", async () => {
-    mockActiveSessionQuery = {
-      _id: "cloud-expense-session-stale" as Id<"expenseSession">,
-      status: "active",
-      expiresAt: Date.now() + 60_000,
-      sessionNumber: "EXP-STALE",
-      updatedAt: 100,
-      cartItems: [],
-    };
+  it("starts the next expense without signing out the current cashier", async () => {
+    const { result, rerender } = renderHook(() => useExpenseRegisterViewModel());
 
+    act(() => {
+      useExpenseStore.getState().setTransactionCompleted(true, "EXP-1001", {
+        transactionId: "expense-transaction-1" as Id<"expenseTransaction">,
+        completedAt: new Date("2026-06-17T12:00:00Z"),
+        cartItems: [
+          {
+            id: "expense-item-1" as Id<"expenseSessionItem">,
+            name: "Repair kit",
+            barcode: "123",
+            sku: "KIT-1",
+            price: 3600,
+            quantity: 1,
+            productId: "product-1" as Id<"product">,
+            skuId: "product-sku-1" as Id<"productSku">,
+          },
+        ],
+        totalValue: 3600,
+      });
+    });
+    rerender();
+
+    await act(async () => {
+      result.current.checkout.onStartNewTransaction();
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(localRuntimeMocks.startSession).toHaveBeenCalled();
+    });
+
+    const state = useExpenseStore.getState();
+    expect(state.transaction.isCompleted).toBe(false);
+    expect(state.cashier.id).toBe("staff-1");
+    expect(state.cashier.isAuthenticated).toBe(true);
+  });
+
+  it("records completion against the local store session", async () => {
     const { result, rerender } = renderHook(() => useExpenseRegisterViewModel());
 
     act(() => {
@@ -1504,25 +1703,20 @@ describe("useExpenseRegisterViewModel", () => {
     expect(localRuntimeMocks.completeExpense).toHaveBeenCalledWith(
       expect.objectContaining({
         localExpenseSessionId: "local-expense-session-1",
-      }),
-    );
-    expect(localRuntimeMocks.completeExpense).not.toHaveBeenCalledWith(
-      expect.objectContaining({
-        localExpenseSessionId: "cloud-expense-session-stale",
+        localExpenseEventId: expect.stringMatching(/^local-expense-event-/),
+        items: [
+          expect.objectContaining({
+            localItemId: expect.stringMatching(
+              /^local-expense-event-.+:line:1$/,
+            ),
+          }),
+        ],
       }),
     );
   });
 
   it("keeps the active expense intact when local completion append fails", async () => {
     localRuntimeMocks.completeExpense.mockResolvedValueOnce(false);
-    mockActiveSessionQuery = {
-      _id: "expense-session-1" as Id<"expenseSession">,
-      status: "active",
-      expiresAt: Date.now() + 60_000,
-      sessionNumber: "EXP-0001",
-      updatedAt: 100,
-      cartItems: [],
-    };
 
     const { result, rerender } = renderHook(() => useExpenseRegisterViewModel());
 

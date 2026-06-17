@@ -116,6 +116,23 @@ export function createExpenseLocalCommandGateway(
     );
   }
 
+  async function reopenPreCompletionClosedSession(
+    input: ExpenseLocalCommandScope & { localExpenseSessionId: string },
+  ) {
+    const session = await readExpenseSession(input.localExpenseSessionId);
+    if (session?.status !== "voided") {
+      return false;
+    }
+
+    return append(
+      baseInput(
+        "expense.session_started",
+        input,
+        { status: "active", recoveredFromStatus: session.status },
+      ),
+    );
+  }
+
   function baseInput(
     type: PosLocalAppendEventInput["type"],
     input: ExpenseLocalCommandScope & { localExpenseSessionId: string },
@@ -172,7 +189,12 @@ export function createExpenseLocalCommandGateway(
     },
 
     async addItem(input) {
-      if (!(await canMutate(input.localExpenseSessionId))) return false;
+      if (
+        !(await canMutate(input.localExpenseSessionId)) &&
+        !(await reopenPreCompletionClosedSession(input))
+      ) {
+        return false;
+      }
       return append(baseInput("expense.item_added", input, itemPayload(input)));
     },
 
