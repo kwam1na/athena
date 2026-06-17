@@ -9,6 +9,8 @@ symptoms:
   - "Expense product adds feel slower than POS because trusted items wait on Convex"
   - "Zero-stock trusted items cannot be expensed even when the cashier is physically holding the item"
   - "Expense sessions age out while POS sessions remain recoverable"
+  - "Completed expense transactions remain local-only after the cashier leaves the expense entry screen"
+  - "Expense reports display local event ids instead of cloud transaction numbers"
 root_cause: expense_flow_kept_cloud_mutations_as_the_cashier_success_boundary
 resolution_type: architecture_pattern
 severity: high
@@ -44,6 +46,13 @@ Make the expense cashier path local-first:
 - Keep expense sessions non-expiring like POS. Old active and held sessions
   remain visible unless explicitly completed, canceled, voided, or expired by
   status.
+- Mount the expense local sync drain anywhere operators review completed
+  expenses, not only on the entry surface. The POS hub and expense reports
+  surface can both own a drain trigger so completed local expense events keep
+  projecting after the cashier leaves the transaction entry screen.
+- Treat the returned cloud transaction mapping as the display source for reports
+  and details. Local expense event ids are durable sync keys, not operator-facing
+  report numbers.
 - Preserve POS availability exceptions in expense search and cart lines:
   trusted inventory, active provisional import, and pending checkout sources are
   distinct source keys.
@@ -67,6 +76,25 @@ Expense projection must not convert exception sources into trusted stock:
   evidence with the requested quantity and cloud stock values.
 - Reject a line that claims both `pendingCheckoutItemId` and
   `inventoryImportProvisionalSkuId`; a line has exactly one exception source.
+- Create one local-to-cloud sync mapping per completed expense event. If an
+  upload is retried after projection, return the existing mapping when it points
+  to the same cloud expense transaction instead of throwing a projection
+  ownership error.
+
+## Cashier UI
+
+The expense UI should mirror POS where the underlying transaction concept is the
+same:
+
+- Keep the cart summary, completed-item preview, and transaction summary layout
+  aligned with POS register components instead of maintaining a second expense
+  variant.
+- Show completed expense item previews from the preserved completed transaction
+  data after the local cart is cleared.
+- Keep cashier authentication when the operator starts the next expense from the
+  completion screen. Starting the next local expense session is not a sign-out.
+- Do not toast routine local expense session creation or voiding. Those events
+  are housekeeping; error toasts remain useful when local persistence fails.
 
 ## Boundaries
 
@@ -85,6 +113,12 @@ completed according to durable state.
 - Scope local expense replay by store, terminal, staff profile, and register.
 - Keep source-aware cart matching; SKU-only matching collapses trusted,
   provisional, and pending lines incorrectly.
+- Keep the projection drain single-owner per mounted runtime, but mount it on
+  every surface that needs local expense completion freshness. This avoids a
+  "completed locally but never visited entry again" sync gap.
+- Keep report display values cloud-first after mapping. If there is no cloud
+  transaction number yet, show pending/sync state or omit the report number
+  instead of exposing `local-expense-event-*` as a final report id.
 - Gate trusted stock projection on aggregate quantity per SKU, not per line.
 - Use both `inventoryCount` and `quantityAvailable` before applying trusted
   stock effects.

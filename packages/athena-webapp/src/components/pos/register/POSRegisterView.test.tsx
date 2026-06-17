@@ -205,12 +205,7 @@ vi.mock("@/components/pos/ProductEntry", async () => {
       }
     >(
       (
-        {
-          disabled,
-          lookupKind = "products_services",
-          onActivate,
-          readOnly,
-        },
+        { disabled, lookupKind = "products_services", onActivate, readOnly },
         ref,
       ) => (
         <div>
@@ -233,20 +228,27 @@ vi.mock("@/components/pos/CartItems", () => ({
   CartItems: ({
     cartItems = [],
     density,
+    readOnly = false,
     serviceItems = [],
   }: {
-    cartItems?: Array<{ quantity: number }>;
+    cartItems?: Array<{ name?: string; quantity: number }>;
     density?: string;
+    readOnly?: boolean;
     serviceItems?: Array<{ quantity: number }>;
   }) => (
     <div data-testid={`cart-items-${density ?? "default"}`}>
       <span>cart-items</span>
       <span>
-        {`cart-items-count-${cartItems.reduce(
-          (sum, item) => sum + item.quantity,
-          0,
-        ) + serviceItems.reduce((sum, item) => sum + item.quantity, 0)}`}
+        {`cart-items-count-${
+          cartItems.reduce((sum, item) => sum + item.quantity, 0) +
+          serviceItems.reduce((sum, item) => sum + item.quantity, 0)
+        }`}
       </span>
+      <span>{`cart-items-readonly-${readOnly ? "yes" : "no"}`}</span>
+      <span>{`cart-items-density-${density ?? "comfortable"}`}</span>
+      {cartItems.map((item) =>
+        item.name ? <span key={item.name}>{item.name}</span> : null,
+      )}
     </div>
   ),
 }));
@@ -352,10 +354,7 @@ vi.mock("./RegisterCheckoutPanel", () => ({
       {hideActiveSummaryCards ? <div>hide-active-summary-cards</div> : null}
       <div>
         {`checkout-items-count-${
-          checkout.cartItems?.reduce(
-            (sum, item) => sum + item.quantity,
-            0,
-          ) ?? 0
+          checkout.cartItems?.reduce((sum, item) => sum + item.quantity, 0) ?? 0
         }`}
       </div>
       <div>{`checkout-total-${checkout.total ?? 0}`}</div>
@@ -529,8 +528,9 @@ describe("POSRegisterView", () => {
     expect(screen.queryByText("Barcode")).not.toBeInTheDocument();
     expect(screen.queryByText("Product search")).not.toBeInTheDocument();
     expect(screen.queryByText("Quick add product")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "mock-add-product" }))
-      .not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "mock-add-product" }),
+    ).not.toBeInTheDocument();
   });
 
   it("surfaces product-only lookup without service actions", async () => {
@@ -597,8 +597,9 @@ describe("POSRegisterView", () => {
     expect(screen.getByText("Barcode")).toBeInTheDocument();
     expect(screen.getByText("Product search")).toBeInTheDocument();
     expect(screen.queryByText("Service search")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "mock-add-service" }))
-      .not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "mock-add-service" }),
+    ).not.toBeInTheDocument();
   });
 
   it("returns focus to the header product search after adding a service", async () => {
@@ -887,6 +888,156 @@ describe("POSRegisterView", () => {
     expect(
       screen.queryByText("Support sync diagnostics"),
     ).not.toBeInTheDocument();
+  });
+
+  it("shows the same debug strip in the expense workflow with the established shortcut", async () => {
+    mockUseRegisterViewModel.mockReturnValue({
+      hasActiveStore: true,
+      header: {
+        title: "POS",
+        isSessionActive: false,
+      },
+      registerInfo: {
+        registerLabel: "Front Counter",
+        hasTerminal: true,
+      },
+      customerPanel: {},
+      productEntry: {
+        disabled: true,
+        productSearchQuery: "",
+        setProductSearchQuery: vi.fn(),
+        onBarcodeSubmit: vi.fn(),
+      },
+      cart: {
+        items: [],
+      },
+      checkout: {
+        isTransactionCompleted: false,
+      },
+      sessionPanel: null,
+      cashierCard: null,
+      closeoutControl: null,
+      authDialog: null,
+      drawerGate: null,
+      onNavigateBack: vi.fn(),
+    });
+
+    const { POSRegisterView } = await import("./POSRegisterView");
+    render(
+      <POSRegisterView
+        workflowMode="expense"
+        viewModel={{
+          workflowMode: "expense",
+          hasActiveStore: true,
+          debug: {
+            activeStoreSource: "live",
+            authDialogOpen: false,
+            cashierPresence: "missing",
+            hasLiveActiveStore: true,
+            localStaffAuthorityStatus: "ready",
+            localEntryStatus: "ready",
+            online: true,
+            staffSignedIn: true,
+            storeId: "store-1",
+            syncFlow: {
+              eventAppendToken: 4,
+              lastRuntimeTrigger: "event-appended",
+              lastRuntimeTriggerPriority: "high",
+              mode: "status-only",
+              pendingEventCount: 2,
+              pendingUploadEventCount: 2,
+              source: "runtime",
+              staffProof: "present",
+              status: "pending_sync",
+            },
+            terminalId: "terminal-1",
+            terminalSource: "live",
+          },
+          header: {
+            title: "Expense Products",
+            isSessionActive: false,
+          },
+          registerInfo: {
+            registerLabel: "Expense Register",
+            hasTerminal: true,
+          },
+          onboarding: {
+            shouldShow: false,
+            terminalReady: true,
+            cashierSetupReady: true,
+            cashierSignedIn: true,
+            cashierCount: 1,
+            nextStep: "ready",
+          },
+          customerPanel: {
+            isOpen: false,
+            onOpenChange: vi.fn(),
+            customerInfo: { name: "", email: "", phone: "" },
+            onCustomerCommitted: vi.fn(),
+            setCustomerInfo: vi.fn(),
+          },
+          productEntry: {
+            disabled: false,
+            showProductLookup: true,
+            setShowProductLookup: vi.fn(),
+            productSearchQuery: "",
+            setProductSearchQuery: vi.fn(),
+            onBarcodeSubmit: vi.fn(),
+            onAddProduct: vi.fn(),
+            searchResults: [],
+            isSearchLoading: false,
+            isSearchReady: true,
+            canQuickAddProduct: false,
+          },
+          cart: {
+            items: [],
+            onUpdateQuantity: vi.fn(),
+            onRemoveItem: vi.fn(),
+            onClearCart: vi.fn(),
+          },
+          checkout: {
+            cartItems: [],
+            registerNumber: "Expense Register",
+            subtotal: 0,
+            tax: 0,
+            total: 0,
+            payments: [],
+            hasTerminal: true,
+            isTransactionCompleted: false,
+            completedOrderNumber: null,
+            onAddPayment: vi.fn(),
+            onUpdatePayment: vi.fn(),
+            onRemovePayment: vi.fn(),
+            onClearPayments: vi.fn(),
+            onCompleteTransaction: vi.fn(),
+            onStartNewTransaction: vi.fn(),
+          },
+          sessionPanel: null,
+          cashierCard: {
+            cashierName: "Jogo D.",
+            onSignOut: vi.fn(),
+          },
+          cashierPresenceRestore: { status: "missing" },
+          closeoutControl: null,
+          authDialog: null,
+          drawerGate: null,
+          commandApprovalDialog: null,
+          onNavigateBack: vi.fn(),
+        }}
+      />,
+    );
+
+    expect(
+      screen.queryByText("Support sync diagnostics"),
+    ).not.toBeInTheDocument();
+    pressDebugPanelShortcut();
+
+    expect(screen.getByText("Support sync diagnostics")).toBeInTheDocument();
+    expect(screen.getByText("Expense Products")).toBeInTheDocument();
+    expect(screen.getByText("activity signal")).toBeInTheDocument();
+    expect(screen.getByText("4")).toBeInTheDocument();
+    expect(screen.getByText("New register activity")).toBeInTheDocument();
+    expect(screen.getByText("High")).toBeInTheDocument();
   });
 
   it("shows POS sync status and schedules manual retry from the header", async () => {
@@ -1995,7 +2146,9 @@ describe("POSRegisterView", () => {
     expect(screen.getByText("register-checkout-panel")).toBeInTheDocument();
     expect(screen.getByText("checkout-items-count-0")).toBeInTheDocument();
     expect(screen.getByText("checkout-total-0")).toBeInTheDocument();
-    expect(screen.getByTestId("register-workspace-sidebar")).toBeInTheDocument();
+    expect(
+      screen.getByTestId("register-workspace-sidebar"),
+    ).toBeInTheDocument();
     expect(screen.getByTestId("register-main-workspace")).not.toHaveClass(
       "lg:col-span-2",
     );
@@ -2151,6 +2304,21 @@ describe("POSRegisterView", () => {
       },
       checkout: {
         isTransactionCompleted: true,
+        cartItems: [],
+        completedTransactionData: {
+          completedAt: new Date("2026-06-17T12:00:00Z"),
+          cartItems: [
+            {
+              id: "expense-item-1",
+              name: "Wigclub Scarf",
+              price: 1000,
+              quantity: 2,
+              productId: "product-1",
+              skuId: "sku-1",
+            },
+          ],
+          total: 2000,
+        },
       },
       workflowMode: "expense",
       sessionPanel: null,
@@ -2182,6 +2350,10 @@ describe("POSRegisterView", () => {
       screen.queryByText("Search or scan products to add expense items"),
     ).not.toBeInTheDocument();
     expect(screen.getByText("cart-items")).toBeInTheDocument();
+    expect(screen.getByText("cart-items-count-2")).toBeInTheDocument();
+    expect(screen.getByText("cart-items-readonly-yes")).toBeInTheDocument();
+    expect(screen.getByText("cart-items-density-comfortable")).toBeInTheDocument();
+    expect(screen.getByText("Wigclub Scarf")).toBeInTheDocument();
     expect(screen.getByText("expense-completion-panel")).toBeInTheDocument();
     expect(screen.getByText("Cashier")).toBeInTheDocument();
     expect(screen.getByText("Unassigned")).toBeInTheDocument();

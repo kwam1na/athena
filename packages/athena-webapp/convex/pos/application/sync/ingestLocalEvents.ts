@@ -351,6 +351,12 @@ export function createLocalSyncIngestionService(
           await dependencies.repository.patchEvent(existing._id, {
             occurredAt: event.occurredAt,
             staffProfileId: event.staffProfileId,
+            syncScope: getLocalSyncScope(event),
+            localRegisterSessionId: getLocalSyncCursorIdentity(event),
+            ...(getLocalSyncScope(event) === "expense"
+              ? { localExpenseSessionId: event.localExpenseSessionId ?? "" }
+              : {}),
+            sequence: event.sequence,
             payload: parsedEvent.payload,
             status: "accepted",
             submittedAt: batch.submittedAt,
@@ -1495,14 +1501,31 @@ function isSameLocalEvent(
   existing: LocalSyncEventRecord,
   incoming: PosLocalSyncEventInput,
 ) {
+  const sequenceMatches =
+    existing.sequence === incoming.sequence ||
+    isRepairableHeldExpenseSequenceRetry(existing, incoming);
+
   return (
     (existing.syncScope ?? "pos") === getLocalSyncScope(incoming) &&
     existing.localRegisterSessionId === getLocalSyncCursorIdentity(incoming) &&
-    existing.sequence === incoming.sequence &&
+    sequenceMatches &&
     existing.eventType === incoming.eventType &&
     existing.occurredAt === incoming.occurredAt &&
     existing.staffProfileId === incoming.staffProfileId &&
     canonicalJson(existing.payload) === canonicalJson(incoming.payload)
+  );
+}
+
+function isRepairableHeldExpenseSequenceRetry(
+  existing: LocalSyncEventRecord,
+  incoming: PosLocalSyncEventInput,
+) {
+  return (
+    existing.status === "held" &&
+    existing.heldReason === "out_of_order" &&
+    (existing.syncScope ?? "pos") === "expense" &&
+    getLocalSyncScope(incoming) === "expense" &&
+    existing.sequence > incoming.sequence
   );
 }
 

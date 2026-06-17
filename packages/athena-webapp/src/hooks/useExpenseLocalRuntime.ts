@@ -1,8 +1,9 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { Id } from "../../convex/_generated/dataModel";
 import {
   createIndexedDbPosLocalStorageAdapter,
+  createMemoryPosLocalStorageAdapter,
   createPosLocalStore,
 } from "@/lib/pos/infrastructure/local/posLocalStore";
 import { createExpenseLocalCommandGateway } from "@/lib/pos/infrastructure/local/expenseLocalCommandGateway";
@@ -11,12 +12,22 @@ import { usePosLocalSyncRuntimeStatus } from "@/lib/pos/infrastructure/local/use
 type ExpenseLocalStore = ReturnType<typeof createPosLocalStore>;
 
 let sharedExpenseLocalStore: ExpenseLocalStore | null = null;
+const expenseLocalEventListeners = new Set<() => void>();
 
 function getExpenseLocalStore() {
   sharedExpenseLocalStore ??= createPosLocalStore({
-    adapter: createIndexedDbPosLocalStorageAdapter(),
+    adapter:
+      typeof indexedDB === "undefined"
+        ? createMemoryPosLocalStorageAdapter()
+        : createIndexedDbPosLocalStorageAdapter(),
   });
   return sharedExpenseLocalStore;
+}
+
+function notifyExpenseLocalEventAppended() {
+  for (const listener of expenseLocalEventListeners) {
+    listener();
+  }
 }
 
 function createLocalId(kind: string) {
@@ -30,6 +41,7 @@ function createLocalId(kind: string) {
 export function useExpenseLocalRuntime(input: {
   staffProfileId?: Id<"staffProfile"> | null;
   storeId?: Id<"store"> | null;
+  syncEnabled?: boolean;
   terminalId?: Id<"posTerminal"> | null;
 }) {
   const [eventAppendToken, setEventAppendToken] = useState(0);
@@ -40,24 +52,35 @@ export function useExpenseLocalRuntime(input: {
     setEventAppendToken((current) => current + 1);
   }, []);
 
+  useEffect(() => {
+    expenseLocalEventListeners.add(noteEventAppended);
+    return () => {
+      expenseLocalEventListeners.delete(noteEventAppended);
+    };
+  }, [noteEventAppended]);
+
   const expenseLocalGateway = useMemo(
     () =>
       createExpenseLocalCommandGateway({
         store: localStore,
         createLocalId,
-        onEventAppended: noteEventAppended,
+        onEventAppended: notifyExpenseLocalEventAppended,
       }),
-    [localStore, noteEventAppended],
+    [localStore],
   );
+  const syncEnabled = input.syncEnabled !== false;
   const syncRuntime = usePosLocalSyncRuntimeStatus({
-    drainOnAppend: true,
+    drainOnAppend: syncEnabled,
     eventAppendToken,
-    mode: "drain-enabled",
+    mode: "status-only",
+    onLocalEventsChanged: syncEnabled
+      ? notifyExpenseLocalEventAppended
+      : undefined,
     source: "sync-runtime",
-    staffProfileId: input.staffProfileId,
+    staffProfileId: syncEnabled ? input.staffProfileId : null,
     storeFactory,
-    storeId: input.storeId,
-    terminalId: input.terminalId,
+    storeId: syncEnabled ? input.storeId : undefined,
+    terminalId: syncEnabled ? input.terminalId : undefined,
   });
 
   return {

@@ -7,11 +7,10 @@ import View from "../../View";
 import { FadeIn } from "../../common/FadeIn";
 import { EmptyState } from "../../states/empty/empty-state";
 import { GenericDataTable } from "../../base/table/data-table";
-import {
-  PageLevelHeader,
-  PageWorkspace,
-} from "../../common/PageLevelHeader";
+import { PageLevelHeader, PageWorkspace } from "../../common/PageLevelHeader";
+import { useExpenseLocalRuntime } from "@/hooks/useExpenseLocalRuntime";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
+import { useGetTerminal } from "@/hooks/useGetTerminal";
 import { api } from "~/convex/_generated/api";
 import { currencyFormatter } from "~/convex/utils";
 import { expenseReportColumns, ExpenseReportRow } from "./expenseReportColumns";
@@ -32,16 +31,11 @@ function getStartOfOperatingDate(operatingDate?: string) {
   if (!match) return null;
 
   const [, year, month, day] = match;
-  return new Date(
-    Number(year),
-    Number(month) - 1,
-    Number(day),
-  ).getTime();
+  return new Date(Number(year), Number(month) - 1, Number(day)).getTime();
 }
 
 function isOnOperatingDate(timestamp: number, operatingDateStartAt: number) {
-  const nextOperatingDateStartAt =
-    operatingDateStartAt + 24 * 60 * 60 * 1_000;
+  const nextOperatingDateStartAt = operatingDateStartAt + 24 * 60 * 60 * 1_000;
 
   return (
     timestamp >= operatingDateStartAt && timestamp < nextOperatingDateStartAt
@@ -76,9 +70,7 @@ function ExpenseReportMobileCard({ report }: { report: ExpenseReportRow }) {
             <span className="truncate">#{report.transactionNumber}</span>
             <ArrowUpRight className="h-4 w-4 shrink-0 text-muted-foreground" />
           </p>
-          <p className="text-xs leading-5 text-muted-foreground">
-            {itemLabel}
-          </p>
+          <p className="text-xs leading-5 text-muted-foreground">{itemLabel}</p>
         </div>
         <p className="shrink-0 text-right text-lg font-semibold leading-6 text-foreground">
           {report.formattedTotal}
@@ -119,6 +111,12 @@ function ExpenseReportMobileCard({ report }: { report: ExpenseReportRow }) {
 
 export function ExpenseReportsView() {
   const { activeStore } = useGetActiveStore();
+  const terminal = useGetTerminal();
+  useExpenseLocalRuntime({
+    staffProfileId: null,
+    storeId: activeStore?._id,
+    terminalId: terminal?._id,
+  });
   const { operatingDate } = useSearch({ strict: false }) as {
     operatingDate?: string;
   };
@@ -227,9 +225,7 @@ export function ExpenseReportsView() {
             ) : (
               <div className="flex min-h-[50vh] items-center justify-center">
                 <EmptyState
-                  icon={
-                    <Receipt className="h-16 w-16 text-muted-foreground" />
-                  }
+                  icon={<Receipt className="h-16 w-16 text-muted-foreground" />}
                   title={
                     <p className="text-muted-foreground">
                       {filter === "all"

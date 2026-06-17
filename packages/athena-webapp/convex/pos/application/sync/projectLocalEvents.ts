@@ -1,7 +1,7 @@
 import type { Id } from "../../../_generated/dataModel";
 import { normalizeInStorePayments } from "../../../cashControls/paymentAllocationAttribution";
 import { toDisplayAmount } from "../../../lib/currency";
-import { currencyFormatter } from "../../../utils";
+import { currencyFormatter, generateTransactionNumber } from "../../../utils";
 import type {
   LocalSyncConflictRecord,
   LocalSyncMappingRecord,
@@ -531,7 +531,7 @@ async function projectExpenseRecorded(
     const inventoryHoldApplied =
       usesTrustedInventory &&
       trustedExpenseSkuAvailability.get(resolved.productSkuId) === true;
-    const sessionItemId = await repository.createExpenseSessionItem({
+    await repository.createExpenseSessionItem({
       sessionId,
       storeId: args.storeId,
       productId: resolved.productId,
@@ -555,21 +555,10 @@ async function projectExpenseRecorded(
       createdAt: args.event.occurredAt,
       updatedAt: args.now,
     });
-
-    if (resolved.item.localTransactionItemId) {
-      await createMapping(repository, args, {
-        syncScope: "expense",
-        localExpenseSessionId: args.event.payload.localExpenseSessionId,
-        localIdKind: "transactionItem",
-        localId: resolved.item.localTransactionItemId,
-        cloudTable: "expenseSessionItem",
-        cloudId: sessionItemId,
-      });
-    }
   }
 
   const transactionId = await repository.createExpenseTransaction({
-    transactionNumber: args.event.payload.localExpenseEventId,
+    transactionNumber: generateTransactionNumber(),
     storeId: args.storeId,
     sessionId,
     staffProfileId: args.event.staffProfileId,

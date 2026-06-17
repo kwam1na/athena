@@ -1,9 +1,7 @@
 import type { FormEvent } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useQuery } from "convex/react";
 
 import type { StaffAuthenticationResult } from "@/components/staff-auth/StaffAuthenticationDialog";
-import { useExpenseActiveSession } from "@/hooks/useExpenseSessions";
 import { useExpenseOperations } from "@/hooks/useExpenseOperations";
 import { useSessionManagementExpense } from "@/hooks/useSessionManagementExpense";
 import { useExpenseLocalRuntime } from "@/hooks/useExpenseLocalRuntime";
@@ -27,22 +25,22 @@ import {
 import { useRegisterCatalogIndex } from "@/lib/pos/presentation/register/useRegisterCatalogIndex";
 import { logger } from "@/lib/logger";
 import { toast } from "sonner";
-import { api } from "~/convex/_generated/api";
 import { EMPTY_REGISTER_CUSTOMER_INFO } from "@/lib/pos/presentation/register/registerUiState";
 import type { RegisterViewModel } from "@/lib/pos/presentation/register/registerUiState";
 import type { Id } from "~/convex/_generated/dataModel";
 import { formatStaffDisplayNameOrFallback } from "~/shared/staffDisplayName";
-import type { CartItem } from "@/components/pos/types";
+import type { CartItem, Product } from "@/components/pos/types";
 import {
   projectExpenseLocalReadModel,
   type ExpenseLocalSessionReadModel,
 } from "@/lib/pos/infrastructure/local/expenseReadModel";
 import type { PosLocalEventRecord } from "@/lib/pos/infrastructure/local/posLocalStore";
+import { calculateCartTotals } from "@/lib/pos/services/calculationService";
 
 function getCashierDisplayName(staffProfile?: {
-  firstName?: string;
-  lastName?: string;
-  fullName?: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  fullName?: string | null;
 }) {
   if (!staffProfile) {
     return "Unassigned";
@@ -60,7 +58,17 @@ function isExpenseProductCartItem(item: CartItem): item is CartItem & {
   return Boolean(item.productId && item.skuId);
 }
 
-function localExpenseSessionToStoreSession(session: ExpenseLocalSessionReadModel) {
+function createLocalExpenseEventId() {
+  const suffix =
+    typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return `local-expense-event-${suffix}`;
+}
+
+function localExpenseSessionToStoreSession(
+  session: ExpenseLocalSessionReadModel,
+) {
   return {
     _id: session.localExpenseSessionId as Id<"expenseSession">,
     expiresAt: null,
@@ -79,12 +87,12 @@ function localExpenseSessionToStoreSession(session: ExpenseLocalSessionReadModel
       color: item.color,
       productId: item.productId as Id<"product">,
       productSkuId: item.productSkuId as Id<"productSku">,
-      pendingCheckoutItemId:
-        item.pendingCheckoutItemId as Id<"posPendingCheckoutItem"> | undefined,
-      inventoryImportProvisionalSkuId:
-        item.inventoryImportProvisionalSkuId as
-          | Id<"inventoryImportProvisionalSku">
-          | undefined,
+      pendingCheckoutItemId: item.pendingCheckoutItemId as
+        | Id<"posPendingCheckoutItem">
+        | undefined,
+      inventoryImportProvisionalSkuId: item.inventoryImportProvisionalSkuId as
+        | Id<"inventoryImportProvisionalSku">
+        | undefined,
     })),
   };
 }
@@ -95,23 +103,60 @@ function localExpenseSessionsToStoreSessions(
   return sessions.map(localExpenseSessionToStoreSession);
 }
 
-function getExpenseSessionLoadKey(
-  session: NonNullable<ReturnType<typeof useExpenseActiveSession>>,
-) {
-  const itemKey = (session.cartItems ?? [])
-    .map(
-      (item: { _id: string; quantity: number; updatedAt?: number }) =>
-        `${item._id}:${item.quantity}:${item.updatedAt ?? ""}`,
-    )
-    .join("|");
+function expenseItemSourceKey(item: object) {
+  const inventoryImportProvisionalSkuId =
+    "inventoryImportProvisionalSkuId" in item
+      ? item.inventoryImportProvisionalSkuId
+      : null;
+  if (typeof inventoryImportProvisionalSkuId === "string") {
+    return `provisional_import:${inventoryImportProvisionalSkuId}`;
+  }
 
-  return [
-    session._id,
-    session.updatedAt,
-    session.expiresAt,
-    session.notes ?? "",
-    itemKey,
-  ].join("::");
+  const pendingCheckoutItemId =
+    "pendingCheckoutItemId" in item ? item.pendingCheckoutItemId : null;
+  if (typeof pendingCheckoutItemId === "string") {
+    return `pending_checkout:${pendingCheckoutItemId}`;
+  }
+
+  return "trusted_inventory";
+}
+
+function isPendingOptimisticExpenseCartItem(item: CartItem) {
+  return item.id.toString().startsWith("optimistic:");
+}
+
+function sessionItemRepresentsCartItem(
+  cartItem: CartItem,
+  sessionItem: {
+    quantity: number;
+    productSkuId?: string;
+    pendingCheckoutItemId?: string | null;
+    inventoryImportProvisionalSkuId?: string | null;
+  },
+) {
+  return (
+    sessionItem.productSkuId === cartItem.skuId &&
+    expenseItemSourceKey(sessionItem) === expenseItemSourceKey(cartItem) &&
+    sessionItem.quantity >= cartItem.quantity
+  );
+}
+
+function hasUnrepresentedOptimisticExpenseCartItem(
+  cartItems: CartItem[],
+  sessionItems: Array<{
+    quantity: number;
+    productSkuId?: string;
+    pendingCheckoutItemId?: string | null;
+    inventoryImportProvisionalSkuId?: string | null;
+  }>,
+) {
+  return cartItems.some(
+    (cartItem) =>
+      isPendingOptimisticExpenseCartItem(cartItem) &&
+      !sessionItems.some((sessionItem) =>
+        sessionItemRepresentsCartItem(cartItem, sessionItem),
+      ),
+  );
 }
 
 function isScopedExpenseLocalEvent(
@@ -147,22 +192,25 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
   const { activeStore } = useGetActiveStore();
   const terminal = useGetTerminal();
   const store = useExpenseStore();
+  const cashierStaffProfileId = store.cashier.id;
+  const isCashierSignedIn = Boolean(cashierStaffProfileId);
   const navigateBack = useNavigateBack();
   const cart = useExpenseOperations();
-  const { createSession } = useSessionManagementExpense();
-  const { voidSession } = useSessionManagementExpense();
+  const { createSession, voidSession } = useSessionManagementExpense();
   const setHeldExpenseSessions = useExpenseStore(
     (state) => state.setHeldSessions,
   );
-  const { eventAppendToken, expenseLocalGateway, localStore } =
+  const { eventAppendToken, expenseLocalGateway, localStore, syncRuntime } =
     useExpenseLocalRuntime({
-    staffProfileId: store.cashier.id,
-    storeId: store.storeId,
-    terminalId: store.terminalId,
-  });
-  const listLocalExpenseEvents = (localStore as {
-    listEvents?: typeof localStore.listEvents;
-  }).listEvents;
+      staffProfileId: cashierStaffProfileId,
+      storeId: store.storeId,
+      terminalId: store.terminalId,
+    });
+  const listLocalExpenseEvents = (
+    localStore as {
+      listEvents?: typeof localStore.listEvents;
+    }
+  ).listEvents;
   const [localExpenseReadState, setLocalExpenseReadState] = useState<{
     activeSession: ExpenseLocalSessionReadModel | null;
     loaded: boolean;
@@ -176,14 +224,7 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
   const loadedSessionKeyRef = useRef<string | null>(null);
   const sessionContextKeyRef = useRef<string | null>(null);
   const exactAddKeyRef = useRef<string | null>(null);
-  const staffProfile = useQuery(
-    api.operations.staffProfiles.getStaffProfileById,
-    store.cashier.id
-      ? {
-          staffProfileId: store.cashier.id,
-        }
-      : "skip",
-  );
+  const cashierDisplayName = store.cashier.displayName ?? undefined;
 
   const handleSetStoreId = useCallback(() => {
     if (!activeStore?._id || store.storeId === activeStore._id) {
@@ -209,24 +250,10 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
     handleSetTerminalId();
   }, [handleSetTerminalId]);
 
-  const handleSessionLoaded = useCallback(
-    (sessionData: NonNullable<ReturnType<typeof useExpenseActiveSession>>) => {
-      store.loadSessionData(sessionData);
-    },
-    [store],
-  );
-
   const resetAutoSessionInitialized = useCallback(() => {
     autoSessionInitialized.current = false;
     loadedSessionKeyRef.current = null;
   }, []);
-
-  const activeSessionQuery = useExpenseActiveSession(
-    activeStore?._id,
-    store.terminalId,
-    store.cashier.id || undefined,
-    store.ui.registerNumber,
-  );
 
   useEffect(() => {
     if (typeof listLocalExpenseEvents !== "function") {
@@ -250,7 +277,7 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
       const scopedEvents = result.value.filter((event) =>
         isScopedExpenseLocalEvent(event, {
           registerNumber: store.ui.registerNumber,
-          staffProfileId: store.cashier.id,
+          staffProfileId: cashierStaffProfileId,
           storeId: store.storeId,
           terminalId: store.terminalId,
         }),
@@ -274,21 +301,31 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
     eventAppendToken,
     listLocalExpenseEvents,
     setHeldExpenseSessions,
-    store.cashier.id,
+    cashierStaffProfileId,
     store.storeId,
     store.terminalId,
     store.ui.registerNumber,
   ]);
 
-  const isSessionActive = Boolean(activeSessionQuery?.status === "active");
+  const isSessionActive = Boolean(
+    localExpenseActiveSession || store.session.currentSessionId,
+  );
+  const visibleCartItems = store.cart.items;
+  const visibleCartTotals = useMemo(
+    () => calculateCartTotals(visibleCartItems),
+    [visibleCartItems],
+  );
 
   const handleCashierAuthenticated = useCallback(
     (result: Id<"staffProfile"> | StaffAuthenticationResult) => {
-      store.setCashier(
-        typeof result === "string"
-          ? (result as Id<"staffProfile">)
-          : result.staffProfileId,
-      );
+      if (typeof result === "string") {
+        store.setCashier(result as Id<"staffProfile">);
+      } else {
+        store.setCashier(
+          result.staffProfileId,
+          getCashierDisplayName(result.staffProfile),
+        );
+      }
       resetAutoSessionInitialized();
     },
     [resetAutoSessionInitialized, store],
@@ -298,7 +335,7 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
     const sessionContextKey = [
       activeStore?._id ?? "",
       store.ui.registerNumber,
-      store.cashier.id ?? "",
+      cashierStaffProfileId ?? "",
       store.terminalId ?? "",
     ].join("::");
 
@@ -309,7 +346,7 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
     }
   }, [
     activeStore?._id,
-    store.cashier.id,
+    cashierStaffProfileId,
     store.terminalId,
     store.ui.registerNumber,
   ]);
@@ -319,11 +356,7 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
       return;
     }
 
-    if (!store.cashier.isAuthenticated) {
-      return;
-    }
-
-    if (activeSessionQuery === undefined) {
+    if (!isCashierSignedIn) {
       return;
     }
 
@@ -335,54 +368,18 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
       return;
     }
 
-    if (activeSessionQuery) {
-      if (
-        store.session.currentSessionId &&
-        store.session.currentSessionId !== activeSessionQuery._id
-      ) {
-        logger.debug("[Expense] Skipping session load - ID mismatch", {
-          storeSessionId: store.session.currentSessionId,
-          querySessionId: activeSessionQuery._id,
-        });
-        return;
-      }
-
+    if (localExpenseActiveSession) {
       if (store.session.isUpdating) {
-        return;
-      }
-
-      if (
-        store.session.currentSessionId === activeSessionQuery._id &&
-        store.cart.items.length > 0 &&
-        (activeSessionQuery.cartItems?.length ?? 0) === 0
-      ) {
         logger.debug(
-          "[Expense] Keeping local cart while cloud expense session catches up",
+          "[Expense] Keeping local cart while expense command is pending",
           {
-            sessionId: activeSessionQuery._id,
+            sessionId: localExpenseActiveSession.localExpenseSessionId,
             localItemCount: store.cart.items.length,
           },
         );
         return;
       }
 
-      const sessionLoadKey = getExpenseSessionLoadKey(activeSessionQuery);
-      if (loadedSessionKeyRef.current === sessionLoadKey) {
-        return;
-      }
-      loadedSessionKeyRef.current = sessionLoadKey;
-
-      logger.info("[Expense] Active session found, loading into store", {
-        sessionId: activeSessionQuery._id,
-        sessionNumber: activeSessionQuery.sessionNumber,
-        itemCount: activeSessionQuery.cartItems?.length || 0,
-      });
-
-      handleSessionLoaded(activeSessionQuery);
-      return;
-    }
-
-    if (localExpenseActiveSession) {
       if (
         store.session.currentSessionId &&
         store.session.currentSessionId !==
@@ -402,6 +399,26 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
       if (loadedSessionKeyRef.current === sessionLoadKey) {
         return;
       }
+
+      if (
+        store.session.currentSessionId ===
+          localExpenseActiveSession.localExpenseSessionId &&
+        store.cart.items.length > 0 &&
+        hasUnrepresentedOptimisticExpenseCartItem(
+          store.cart.items,
+          localExpenseActiveSession.items,
+        )
+      ) {
+        logger.debug(
+          "[Expense] Keeping local cart while local expense session catches up",
+          {
+            sessionId: localExpenseActiveSession.localExpenseSessionId,
+            localItemCount: store.cart.items.length,
+          },
+        );
+        return;
+      }
+
       loadedSessionKeyRef.current = sessionLoadKey;
 
       logger.info("[Expense] Local active session found, loading into store", {
@@ -420,44 +437,41 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
 
     autoSessionInitialized.current = true;
 
-    if (activeSessionQuery === null) {
-      if (store.session.currentSessionId) {
-        logger.debug("[Expense] Clearing stale session ID", {
-          staleSessionId: store.session.currentSessionId,
-        });
-        store.setCurrentSessionId(null);
-        store.setActiveSession(null);
-        loadedSessionKeyRef.current = null;
-        if (store.cashier.isAuthenticated) {
-          store.clearCashier();
-        }
-      }
+    if (store.session.currentSessionId) {
+      logger.debug("[Expense] Clearing stale local session ID", {
+        staleSessionId: store.session.currentSessionId,
+      });
+      store.setCurrentSessionId(null);
+      store.setActiveSession(null);
+      loadedSessionKeyRef.current = null;
+    }
 
-      if (store.session.isCreating) {
-        logger.debug(
-          "[Expense] Session creation already in progress, skipping auto-init",
-        );
-        return;
-      }
+    if (store.session.isCreating) {
+      logger.debug(
+        "[Expense] Session creation already in progress, skipping auto-init",
+      );
+      return;
+    }
 
-      logger.info("[Expense] No active session found, creating new session", {
+    logger.info(
+      "[Expense] No local active session found, creating new session",
+      {
         storeId: activeStore._id,
         registerNumber: store.ui.registerNumber,
-        staffProfileId: store.cashier.id,
-      });
+        staffProfileId: cashierStaffProfileId,
+      },
+    );
 
-      createSession(activeStore._id, store.cashier.id || undefined).catch(
-        (error) => {
-          logger.error("[Expense] Failed to auto-create session", error);
-          autoSessionInitialized.current = false;
-        },
-      );
-    }
+    createSession(activeStore._id, cashierStaffProfileId || undefined).catch(
+      (error) => {
+        logger.error("[Expense] Failed to auto-create session", error);
+        autoSessionInitialized.current = false;
+      },
+    );
   }, [
     activeStore?._id,
-    store.cashier.id,
-    store.cashier.isAuthenticated,
-    activeSessionQuery,
+    cashierStaffProfileId,
+    isCashierSignedIn,
     localExpenseActiveSession,
     localExpenseReadLoaded,
     store.session.currentSessionId,
@@ -465,7 +479,6 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
     store.session.isUpdating,
     store.transaction.isCompleted,
     createSession,
-    handleSessionLoaded,
     store.storeId,
     store,
   ]);
@@ -512,11 +525,10 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
       ...registerMetadataSearchState,
       canAutoAdd: Boolean(
         registerMetadataSearchState.exactMatch &&
-          exactAvailability &&
-          (exactAvailability.availabilityPolicy ===
-            "active_provisional_import" ||
-            exactAvailability.availabilityPolicy === "pending_checkout" ||
-            exactAvailability.quantityAvailable >= 0),
+        exactAvailability &&
+        (exactAvailability.availabilityPolicy === "active_provisional_import" ||
+          exactAvailability.availabilityPolicy === "pending_checkout" ||
+          exactAvailability.quantityAvailable >= 0),
       ),
     };
   }, [registerCatalogAvailabilityBySkuId, registerMetadataSearchState]);
@@ -599,8 +611,34 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
     [addExactSearchProductOnce, registerSearchState.intent, store],
   );
 
+  const handleAddProduct = useCallback(
+    async (product: Product, quantity = 1) => {
+      const wasAdded = await cart.addProduct(product, quantity);
+      if (wasAdded) {
+        store.setProductSearchQuery("");
+      }
+
+      return wasAdded;
+    },
+    [cart, store],
+  );
+
+  const handleRemoveCartItem = useCallback(
+    async (itemId: Id<"expenseSessionItem">) => {
+      return cart.removeItem(itemId);
+    },
+    [cart],
+  );
+
+  const handleUpdateCartQuantity = useCallback(
+    async (itemId: Id<"expenseSessionItem">, quantity: number) => {
+      return cart.updateQuantity(itemId, quantity);
+    },
+    [cart],
+  );
+
   const handleClearCart = useCallback(async () => {
-    const sessionId = activeSessionQuery?._id || store.session.currentSessionId;
+    const sessionId = store.session.currentSessionId;
     if (!sessionId) {
       return;
     }
@@ -615,35 +653,31 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
     } else {
       toast.error("Could not clear this expense cart.");
     }
-  }, [activeSessionQuery?._id, cart, store]);
+  }, [cart, store]);
 
   const handleCompleteExpense = useCallback(async () => {
-    const sessionId =
-      store.session.currentSessionId ||
-      (activeSessionQuery?._id === store.session.currentSessionId
-        ? activeSessionQuery._id
-        : null);
+    const sessionId = store.session.currentSessionId;
     if (!sessionId) {
       toast.error("No active session");
       return;
     }
 
-    if (store.cart.items.length === 0) {
+    if (visibleCartItems.length === 0) {
       toast.error("Cart is empty");
       return;
     }
 
     try {
       store.setTransactionCompleting(true);
-      const totalValue = store.cart.total;
-      const completedCartItems = store.cart.items.map((item) => ({ ...item }));
+      const totalValue = visibleCartTotals.total;
+      const completedCartItems = visibleCartItems.map((item) => ({ ...item }));
       const notes = store.ui.notes;
       if (!store.storeId || !store.terminalId || !store.cashier.id) {
         toast.error("Terminal or staff details missing");
         return;
       }
 
-      const localExpenseEventId = `local-expense-event-${Date.now()}`;
+      const localExpenseEventId = createLocalExpenseEventId();
       const savedLocally = await expenseLocalGateway.completeExpense({
         storeId: store.storeId,
         terminalId: store.terminalId,
@@ -651,27 +685,29 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
         localExpenseSessionId: sessionId as string,
         localExpenseEventId,
         notes,
-        subtotal: store.cart.subtotal,
-        tax: store.cart.tax,
+        subtotal: visibleCartTotals.subtotal,
+        tax: visibleCartTotals.tax,
         total: totalValue,
-        items: completedCartItems.filter(isExpenseProductCartItem).map((item) => ({
-          localExpenseSessionId: sessionId as string,
-          localItemId: item.id as string,
-          productId: item.productId,
-          productSkuId: item.skuId,
-          pendingCheckoutItemId: item.pendingCheckoutItemId,
-          inventoryImportProvisionalSkuId:
-            item.inventoryImportProvisionalSkuId,
-          productSku: item.sku || "",
-          barcode: item.barcode || undefined,
-          productName: item.name,
-          price: item.price,
-          quantity: item.quantity,
-          image: item.image || undefined,
-          size: item.size || undefined,
-          length: item.length || undefined,
-          color: item.color,
-        })),
+        items: completedCartItems
+          .filter(isExpenseProductCartItem)
+          .map((item, index) => ({
+            localExpenseSessionId: sessionId as string,
+            localItemId: `${localExpenseEventId}:line:${index + 1}`,
+            productId: item.productId,
+            productSkuId: item.skuId,
+            pendingCheckoutItemId: item.pendingCheckoutItemId,
+            inventoryImportProvisionalSkuId:
+              item.inventoryImportProvisionalSkuId,
+            productSku: item.sku || "",
+            barcode: item.barcode || undefined,
+            productName: item.name,
+            price: item.price,
+            quantity: item.quantity,
+            image: item.image || undefined,
+            size: item.size || undefined,
+            length: item.length || undefined,
+            color: item.color,
+          })),
       });
 
       if (!savedLocally) {
@@ -679,7 +715,6 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
         return;
       }
 
-      toast.success("Expense recorded successfully");
       store.setTransactionCompleted(true, localExpenseEventId, {
         transactionId: localExpenseEventId as Id<"expenseTransaction">,
         completedAt: new Date(),
@@ -694,14 +729,10 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
     } finally {
       store.setTransactionCompleting(false);
     }
-  }, [
-    activeSessionQuery?._id,
-    expenseLocalGateway,
-    store,
-  ]);
+  }, [expenseLocalGateway, store, visibleCartItems, visibleCartTotals]);
 
   const handleNavigateBack = useCallback(async () => {
-    const sessionId = activeSessionQuery?._id || store.session.currentSessionId;
+    const sessionId = store.session.currentSessionId;
 
     if (sessionId && !store.transaction.isCompleted) {
       try {
@@ -717,7 +748,7 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
 
     store.clearCashier();
     await navigateBack();
-  }, [activeSessionQuery?._id, navigateBack, store, voidSession]);
+  }, [navigateBack, store, voidSession]);
 
   const handleCheckoutComplete = useCallback(async () => {
     await handleCompleteExpense();
@@ -725,7 +756,7 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
   }, [handleCompleteExpense, store]);
 
   const handleCashierSignOut = useCallback(async () => {
-    if (activeSessionQuery) {
+    if (store.session.currentSessionId) {
       const result = await voidSession();
       if (!result.success) {
         return;
@@ -733,7 +764,7 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
     }
 
     store.clearCashier();
-  }, [activeSessionQuery, voidSession, store]);
+  }, [voidSession, store]);
 
   const baseCheckoutProps = {
     payments: [],
@@ -743,7 +774,6 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
     onClearPayments: async () => false,
     onStartNewTransaction: () => {
       store.startNewTransaction();
-      store.clearCashier();
       resetAutoSessionInitialized();
     },
   };
@@ -751,6 +781,58 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
   return {
     workflowMode: "expense",
     hasActiveStore: Boolean(activeStore),
+    debug: {
+      activeStoreSource: activeStore ? "live" : "missing",
+      authDialogOpen: Boolean(activeStore && terminal && !isCashierSignedIn),
+      cashierPresence: "missing",
+      hasLiveActiveStore: Boolean(activeStore),
+      localEntryStatus: localExpenseReadLoaded ? "ready" : "loading",
+      localStaffAuthorityStatus: isCashierSignedIn ? "ready" : "missing",
+      online: typeof navigator === "undefined" ? true : navigator.onLine,
+      staffSignedIn: isCashierSignedIn,
+      storeId: store.storeId ?? activeStore?._id,
+      syncFlow: {
+        checkInPublishAttemptedAt:
+          syncRuntime?.debug?.checkInPublishAttemptedAt,
+        checkInPublishCompletedAt:
+          syncRuntime?.debug?.checkInPublishCompletedAt,
+        checkInPublishMessage: syncRuntime?.debug?.checkInPublishMessage,
+        checkInPublishReason: syncRuntime?.debug?.checkInPublishReason,
+        checkInPublishStatus: syncRuntime?.debug?.checkInPublishStatus,
+        eventAppendToken,
+        failureCount: syncRuntime?.debug?.failureCount,
+        failedEventCount: syncRuntime?.debug?.failedEventCount,
+        lastBatchEventCount: syncRuntime?.debug?.lastBatchEventCount,
+        lastFailure: syncRuntime?.debug?.lastFailure,
+        lastHeldEventCount: syncRuntime?.debug?.lastHeldEventCount,
+        lastReviewEventCount: syncRuntime?.debug?.lastReviewEventCount,
+        lastRuntimeTrigger: syncRuntime?.debug?.lastTrigger ?? "none",
+        lastRuntimeTriggerAt: syncRuntime?.debug?.lastTriggerAt,
+        lastRuntimeTriggerPriority:
+          syncRuntime?.debug?.lastTriggerPriority ?? "normal",
+        localOnlyEventCount: syncRuntime?.debug?.localOnlyEventCount,
+        mode: syncRuntime?.debug?.mode,
+        oldestPendingEventAt: syncRuntime?.debug?.oldestPendingEventAt,
+        oldestPendingEventId: syncRuntime?.debug?.oldestPendingEventId,
+        oldestPendingEventSequence:
+          syncRuntime?.debug?.oldestPendingEventSequence,
+        oldestPendingUploadSequence:
+          syncRuntime?.debug?.oldestPendingUploadSequence,
+        nextPendingUploadSequence:
+          syncRuntime?.debug?.nextPendingUploadSequence,
+        pendingEventCount: syncRuntime?.pendingEventCount ?? 0,
+        pendingUploadEventCount: syncRuntime?.debug?.pendingUploadEventCount,
+        reviewEventCount: syncRuntime?.debug?.reviewEventCount,
+        schedulerBackoffUntil: syncRuntime?.debug?.schedulerBackoffUntil,
+        schedulerRunning: syncRuntime?.debug?.schedulerRunning,
+        schedulerScheduled: syncRuntime?.debug?.schedulerScheduled,
+        source: syncRuntime ? "runtime" : "none",
+        staffProof: isCashierSignedIn ? "present" : "missing",
+        status: syncRuntime?.status ?? "synced",
+      },
+      ...(terminal?._id ? { terminalId: terminal._id } : {}),
+      terminalSource: terminal ? "live" : "missing",
+    },
     header: {
       title: "Expense Products",
       isSessionActive,
@@ -766,8 +848,8 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
       shouldShow: false,
       terminalReady: Boolean(terminal),
       cashierSetupReady: true,
-      cashierSignedIn: store.cashier.isAuthenticated,
-      cashierCount: store.cashier.isAuthenticated ? 1 : 0,
+      cashierSignedIn: isCashierSignedIn,
+      cashierCount: isCashierSignedIn ? 1 : 0,
       nextStep: "ready",
     },
     customerPanel: {
@@ -778,38 +860,32 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
       setCustomerInfo: () => {},
     },
     productEntry: {
-      disabled: !terminal || !store.cashier.isAuthenticated,
+      disabled: !terminal || !isCashierSignedIn,
       showProductLookup: true,
       setShowProductLookup: store.setShowProductEntry,
       productSearchQuery: store.ui.productSearchQuery,
       setProductSearchQuery: store.setProductSearchQuery,
       onBarcodeSubmit: handleBarcodeSubmit,
-      onAddProduct: async (product) => {
-        const wasAdded = await cart.addProduct(product);
-        if (wasAdded) {
-          store.setProductSearchQuery("");
-        }
-        return wasAdded;
-      },
+      onAddProduct: handleAddProduct,
       searchResults: entrySearchResults,
       isSearchLoading: isProductEntrySearchLoading,
       isSearchReady: isRegisterCatalogReady,
       canQuickAddProduct: false,
     },
     cart: {
-      items: store.cart.items,
+      items: visibleCartItems,
       onUpdateQuantity: (itemId, quantity) =>
-        cart.updateQuantity(itemId as Id<"expenseSessionItem">, quantity),
+        handleUpdateCartQuantity(itemId as Id<"expenseSessionItem">, quantity),
       onRemoveItem: (itemId) =>
-        cart.removeItem(itemId as Id<"expenseSessionItem">),
+        handleRemoveCartItem(itemId as Id<"expenseSessionItem">),
       onClearCart: handleClearCart,
     },
     checkout: {
-      cartItems: store.cart.items,
+      cartItems: visibleCartItems,
       registerNumber: store.ui.registerNumber,
-      subtotal: store.cart.subtotal,
-      tax: store.cart.tax,
-      total: store.cart.total,
+      subtotal: visibleCartTotals.subtotal,
+      tax: visibleCartTotals.tax,
+      total: visibleCartTotals.total,
       ...baseCheckoutProps,
       customerInfo: undefined,
       hasTerminal: Boolean(terminal),
@@ -819,7 +895,8 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
         ? {
             paymentMethod: "manual",
             payments: [],
-            transactionId: store.transaction.completedTransactionData.transactionId,
+            transactionId:
+              store.transaction.completedTransactionData.transactionId,
             completedAt: store.transaction.completedTransactionData.completedAt,
             cartItems: store.transaction.completedTransactionData.cartItems,
             subtotal: store.transaction.completedTransactionData.totalValue,
@@ -833,19 +910,21 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
             },
           }
         : null,
-      cashierName: getCashierDisplayName(staffProfile ?? undefined),
+      cashierName: cashierDisplayName ?? "Unassigned",
       onCompleteTransaction: handleCheckoutComplete,
     },
     sessionPanel: null,
-    cashierCard: {
-      cashierName: getCashierDisplayName(staffProfile ?? undefined),
-      onSignOut: handleCashierSignOut,
-    },
+    cashierCard: isCashierSignedIn
+      ? {
+          cashierName: cashierDisplayName ?? "Unassigned",
+          onSignOut: handleCashierSignOut,
+        }
+      : null,
     cashierPresenceRestore: { status: "missing" },
     drawerGate: null,
     closeoutControl: null,
     authDialog:
-      activeStore && terminal && !store.cashier.isAuthenticated
+      activeStore && terminal && !isCashierSignedIn
         ? {
             open: true,
             storeId: activeStore._id,

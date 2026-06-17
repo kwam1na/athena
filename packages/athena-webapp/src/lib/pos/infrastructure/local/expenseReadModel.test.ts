@@ -44,6 +44,56 @@ describe("projectExpenseLocalReadModel", () => {
     expect(model.errors).toEqual([]);
   });
 
+  it("removes a replayed item when the remove event used an optimistic item id", () => {
+    const model = projectExpenseLocalReadModel({
+      events: [
+        event({
+          sequence: 1,
+          type: "expense.session_started",
+          localExpenseSessionId: "expense-1",
+          payload: { localExpenseSessionId: "expense-1" },
+        }),
+        event({
+          sequence: 2,
+          type: "expense.item_added",
+          localExpenseSessionId: "expense-1",
+          payload: item({
+            localItemId: "expense-item-1",
+            productSkuId: "sku-1",
+          }),
+        }),
+        event({
+          sequence: 3,
+          type: "expense.item_added",
+          localExpenseSessionId: "expense-1",
+          payload: item({
+            localItemId: "pending-item-1",
+            pendingCheckoutItemId: "pending-1",
+            productSkuId: "sku-1",
+          }),
+        }),
+        event({
+          sequence: 4,
+          type: "expense.item_removed",
+          localExpenseSessionId: "expense-1",
+          payload: {
+            localExpenseSessionId: "expense-1",
+            localItemId: "optimistic:sku-1:trusted_inventory",
+            productSkuId: "sku-1",
+          },
+        }),
+      ],
+    });
+
+    expect(model.activeSession?.items).toEqual([
+      expect.objectContaining({
+        localItemId: "pending-item-1",
+        sourceKey: "pending_checkout:pending-1",
+      }),
+    ]);
+    expect(model.errors).toEqual([]);
+  });
+
   it("preserves trusted, pending checkout, and provisional import source metadata", () => {
     const model = projectExpenseLocalReadModel({
       events: [

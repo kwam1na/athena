@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ExpenseReportsView } from "./ExpenseReportsView";
 
 const getActiveStoreMock = vi.fn();
+const getTerminalMock = vi.fn();
+const useExpenseLocalRuntimeMock = vi.fn();
 const useQueryMock = vi.fn();
 const useSearchMock = vi.fn();
 
@@ -44,6 +46,15 @@ vi.mock("convex/react", () => ({
 
 vi.mock("@/hooks/useGetActiveStore", () => ({
   default: () => getActiveStoreMock(),
+}));
+
+vi.mock("@/hooks/useGetTerminal", () => ({
+  useGetTerminal: () => getTerminalMock(),
+}));
+
+vi.mock("@/hooks/useExpenseLocalRuntime", () => ({
+  useExpenseLocalRuntime: (...args: unknown[]) =>
+    useExpenseLocalRuntimeMock(...args),
 }));
 
 vi.mock("../../View", () => ({
@@ -115,6 +126,7 @@ describe("ExpenseReportsView", () => {
         currency: "GHS",
       },
     });
+    getTerminalMock.mockReturnValue({ _id: "terminal-1" });
   });
 
   afterEach(() => {
@@ -150,6 +162,11 @@ describe("ExpenseReportsView", () => {
       "data-remote-assist-control-id",
       "pos-expense-reports-filter-all",
     );
+    expect(useExpenseLocalRuntimeMock).toHaveBeenCalledWith({
+      staffProfileId: null,
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    });
   });
 
   it("renders expense reports as scan-friendly mobile cards", () => {
@@ -221,7 +238,9 @@ describe("ExpenseReportsView", () => {
 
     render(<ExpenseReportsView />);
 
-    expect(screen.getByRole("button", { name: "Selected day" })).toHaveAttribute(
+    expect(
+      screen.getByRole("button", { name: "Selected day" }),
+    ).toHaveAttribute(
       "data-remote-assist-control-id",
       "pos-expense-reports-filter-operating-date",
     );

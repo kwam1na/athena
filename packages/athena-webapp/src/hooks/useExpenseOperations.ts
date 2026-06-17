@@ -90,6 +90,7 @@ export const useExpenseOperations = () => {
   const { expenseLocalGateway } = useExpenseLocalRuntime({
     staffProfileId: currentStaffProfileId,
     storeId: store.storeId,
+    syncEnabled: false,
     terminalId: store.terminalId,
   });
 
@@ -159,13 +160,18 @@ export const useExpenseOperations = () => {
    * Adds a product to the expense cart
    */
   const addProduct = useCallback(
-    async (product: Product) => {
+    async (product: Product, quantity = 1) => {
+      const requestedQuantity = Number.isFinite(quantity)
+        ? Math.max(1, Math.trunc(quantity))
+        : 1;
+
       logger.info("[Expense] Adding product to cart", {
         productName: product.name,
         productId: product.productId,
         skuId: product.skuId,
         price: product.price,
         barcode: product.barcode,
+        quantity: requestedQuantity,
       });
 
       // Validate product data
@@ -192,7 +198,9 @@ export const useExpenseOperations = () => {
         const existingItem = store.cart.items.find(
           (item) => expenseLineMatchesProduct(item, product)
         );
-        const newQuantity = existingItem ? existingItem.quantity + 1 : 1;
+        const newQuantity = existingItem
+          ? existingItem.quantity + requestedQuantity
+          : requestedQuantity;
         const isUpdate = !!existingItem;
 
         logger.debug("[Expense] Cart operation details", {
@@ -220,53 +228,62 @@ export const useExpenseOperations = () => {
         store.setSessionUpdating(true);
 
         try {
-          const savedLocally = await (existingItem
-            ? expenseLocalGateway.updateItem({
-              ...commandScope,
-              localExpenseSessionId: sessionId as string,
-              localItemId: existingItem.id as string,
-              productId: product.productId!,
-              productSkuId: product.skuId!,
-              pendingCheckoutItemId: product.pendingCheckoutItemId,
-              inventoryImportProvisionalSkuId:
-                product.inventoryImportProvisionalSkuId,
-              productSku: product.sku || "",
-              barcode: product.barcode || undefined,
-              productName: product.name,
-              price: product.price,
-              quantity: newQuantity,
-              image: product.image || undefined,
-              size: product.size || undefined,
-              length: product.length || undefined,
-              color: product.color,
-            })
-            : expenseLocalGateway.addItem({
-              ...commandScope,
-              localExpenseSessionId: sessionId as string,
-              localItemId: optimisticItemId as string,
-              productId: product.productId!,
-              productSkuId: product.skuId!,
-              pendingCheckoutItemId: product.pendingCheckoutItemId,
-              inventoryImportProvisionalSkuId:
-                product.inventoryImportProvisionalSkuId,
-              productSku: product.sku || "",
-              barcode: product.barcode || undefined,
-              productName: product.name,
-              price: product.price,
-              quantity: newQuantity,
-              image: product.image || undefined,
-              size: product.size || undefined,
-              length: product.length || undefined,
-              color: product.color,
-            })).catch((error) => {
-              logger.error("[Expense] Failed to save cart item locally", {
-                error:
-                  error instanceof Error ? error : new Error(String(error)),
-              });
-              return false;
+          const saveCartItemLocally = () =>
+            existingItem
+              ? expenseLocalGateway.updateItem({
+                  ...commandScope,
+                  localExpenseSessionId: sessionId as string,
+                  localItemId: existingItem.id as string,
+                  productId: product.productId!,
+                  productSkuId: product.skuId!,
+                  pendingCheckoutItemId: product.pendingCheckoutItemId,
+                  inventoryImportProvisionalSkuId:
+                    product.inventoryImportProvisionalSkuId,
+                  productSku: product.sku || "",
+                  barcode: product.barcode || undefined,
+                  productName: product.name,
+                  price: product.price,
+                  quantity: newQuantity,
+                  image: product.image || undefined,
+                  size: product.size || undefined,
+                  length: product.length || undefined,
+                  color: product.color,
+                })
+              : expenseLocalGateway.addItem({
+                  ...commandScope,
+                  localExpenseSessionId: sessionId as string,
+                  localItemId: optimisticItemId as string,
+                  productId: product.productId!,
+                  productSkuId: product.skuId!,
+                  pendingCheckoutItemId: product.pendingCheckoutItemId,
+                  inventoryImportProvisionalSkuId:
+                    product.inventoryImportProvisionalSkuId,
+                  productSku: product.sku || "",
+                  barcode: product.barcode || undefined,
+                  productName: product.name,
+                  price: product.price,
+                  quantity: newQuantity,
+                  image: product.image || undefined,
+                  size: product.size || undefined,
+                  length: product.length || undefined,
+                  color: product.color,
+                });
+
+          const savedLocally = await saveCartItemLocally().catch((error) => {
+            logger.error("[Expense] Failed to save cart item locally", {
+              error: error instanceof Error ? error : new Error(String(error)),
             });
+            return false;
+          });
 
           if (!savedLocally) {
+            logger.warn("[Expense] Local cart item save was rejected", {
+              sessionId,
+              productName: product.name,
+              itemId: existingItem?.id ?? optimisticItemId,
+              quantity: newQuantity,
+              wasUpdate: isUpdate,
+            });
             store.replaceCartItems(previousCartItems);
             return false;
           }
@@ -419,6 +436,11 @@ export const useExpenseOperations = () => {
         });
 
         if (!savedLocally) {
+          logger.warn("[Expense] Local cart item removal was rejected", {
+            sessionId,
+            itemId,
+            itemName: item.name,
+          });
           store.replaceCartItems(previousCartItems);
           return;
         }
@@ -530,6 +552,12 @@ export const useExpenseOperations = () => {
         });
 
         if (!savedLocally) {
+          logger.warn("[Expense] Local cart item quantity update was rejected", {
+            sessionId,
+            itemId,
+            itemName: item.name,
+            quantity,
+          });
           store.replaceCartItems(previousCartItems);
           return;
         }
@@ -577,6 +605,9 @@ export const useExpenseOperations = () => {
           return false;
         });
         if (!savedLocally) {
+          logger.warn("[Expense] Local cart clear was rejected", {
+            sessionId,
+          });
           store.replaceCartItems(previousCartItems);
           return false;
         }

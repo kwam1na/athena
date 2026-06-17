@@ -198,6 +198,48 @@ describe("createExpenseLocalCommandGateway", () => {
       ],
     });
   });
+
+  it("reopens a stale voided local expense session before adding an item", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+    });
+    const gateway = createExpenseLocalCommandGateway({
+      store,
+      createLocalId: (kind) => `${kind}-1`,
+    });
+
+    await gateway.startSession(scope());
+    await gateway.voidSession({
+      ...scope(),
+      localExpenseSessionId: "local-expense-session-1",
+      reason: "stale_navigation",
+    });
+
+    await expect(
+      gateway.addItem({
+        ...scope(),
+        localExpenseSessionId: "local-expense-session-1",
+        localItemId: "item-1",
+        productSkuId: "sku-1",
+        price: 10,
+        quantity: 1,
+      }),
+    ).resolves.toBe(true);
+    await expect(store.listEvents()).resolves.toMatchObject({
+      ok: true,
+      value: [
+        expect.objectContaining({ type: "expense.session_started" }),
+        expect.objectContaining({ type: "expense.voided" }),
+        expect.objectContaining({
+          type: "expense.session_started",
+          payload: expect.objectContaining({
+            recoveredFromStatus: "voided",
+          }),
+        }),
+        expect.objectContaining({ type: "expense.item_added" }),
+      ],
+    });
+  });
 });
 
 function scope() {
