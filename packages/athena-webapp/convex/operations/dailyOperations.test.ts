@@ -989,6 +989,19 @@ describe("daily operations overview read model", () => {
             subjectType: "posTransaction",
           },
           {
+            _id: "event-pos-recovery-code-updated",
+            createdAt: Date.UTC(2026, 4, 8, 19),
+            eventType: "pos_recovery_code_login_succeeded",
+            message: "POS recovery-code credential updated.",
+            metadata: {
+              reason: "verified",
+              status: "active",
+            },
+            storeId: "store-1",
+            subjectId: "pos-recovery-credential-1",
+            subjectType: "posRecoveryCredential",
+          },
+          {
             _id: "event-pending-checkout-item-reused",
             createdAt: Date.UTC(2026, 4, 8, 17),
             eventType: "pos_pending_checkout_item_reused",
@@ -1043,6 +1056,9 @@ describe("daily operations overview read model", () => {
     ]);
     expect(snapshot.timeline.map((event) => event.id)).not.toContain(
       "event-pending-checkout-item-reused",
+    );
+    expect(snapshot.timeline.map((event) => event.id)).not.toContain(
+      "event-pos-recovery-code-updated",
     );
     expect(
       snapshot.timeline.find((event) => event.id === "event-pos-sale-synced")
