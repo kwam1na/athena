@@ -465,6 +465,48 @@ const automationReviewSnapshot: DailyOperationsSnapshot = {
             type: "daily_close",
           },
         },
+        {
+          id: "pending-checkout-1",
+          label: "Review pending checkout item: Ebin tinted lace",
+          source: {
+            id: "pending-checkout-1",
+            label: "POS pending checkout",
+            type: "pos_pending_checkout_item",
+          },
+          sourceLink: {
+            to: "/$orgUrlSlug/store/$storeUrlSlug/operations/open-work",
+          },
+        },
+        {
+          id: "pending-checkout-2",
+          label: "Review pending checkout item: Hooded dryer bonnet",
+          source: {
+            id: "pending-checkout-2",
+            label: "POS pending checkout",
+            type: "pos_pending_checkout_item",
+          },
+          sourceLink: {
+            to: "/$orgUrlSlug/store/$storeUrlSlug/operations/open-work",
+          },
+        },
+        {
+          id: "pending-checkout-3",
+          label: "Review pending checkout item: Eco lip balm",
+          source: {
+            id: "pending-checkout-3",
+            label: "POS pending checkout",
+            type: "pos_pending_checkout_item",
+          },
+        },
+        {
+          id: "pending-checkout-4",
+          label: "Review pending checkout item: Hidden lace bond",
+          source: {
+            id: "pending-checkout-4",
+            label: "POS pending checkout",
+            type: "pos_pending_checkout_item",
+          },
+        },
       ],
       sourceLink: {
         to: "/$orgUrlSlug/store/$storeUrlSlug/operations/opening",
@@ -864,6 +906,19 @@ describe("DailyOperationsViewContent", () => {
     expect(
       screen.getByText("Cash variance reviewed at close"),
     ).toBeInTheDocument();
+    expect(screen.getByText("Ebin tinted lace")).toBeInTheDocument();
+    expect(screen.getByText("Hooded dryer bonnet")).toBeInTheDocument();
+    expect(screen.queryByText("Eco lip balm")).not.toBeInTheDocument();
+    expect(screen.queryByText("Hidden lace bond")).not.toBeInTheDocument();
+    expect(screen.getByText("2 more items in the full Opening workflow.")).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", {
+        name: "Review all Opening Handoff review items",
+      }),
+    ).toHaveAttribute(
+      "href",
+      "/wigclub/store/osu/operations/opening?o=%252Fwigclub%252Fstore%252Fosu%252Foperations",
+    );
     expect(
       screen.getByRole("link", {
         name: "Open Register session still needs closeout review source",
