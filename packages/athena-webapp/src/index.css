@@ -52,6 +52,12 @@
     --surface: 40 42% 99%;
     --surface-muted: 36 28% 92%;
     --surface-raised: 0 0% 100%;
+    --legacy-neutral-50: var(--surface-raised);
+    --legacy-neutral-100: var(--surface-muted);
+    --legacy-neutral-200: var(--border);
+    --legacy-neutral-400: var(--muted-foreground);
+    --legacy-neutral-500: var(--muted-foreground);
+    --legacy-neutral-900: var(--foreground);
     --shell: 223 34% 14%;
     --shell-foreground: 35 42% 95%;
     --signal: 338 62% 43%;
@@ -122,29 +128,35 @@
 
   .dark {
     color-scheme: dark;
-    --background: 224 28% 10%;
+    --background: 224 24% 9%;
     --foreground: 36 34% 95%;
-    --card: 223 24% 14%;
+    --card: 223 18% 13%;
     --card-foreground: 36 34% 95%;
-    --popover: 223 24% 14%;
+    --popover: 223 18% 13%;
     --popover-foreground: 36 34% 95%;
     --primary: 336 72% 68%;
     --primary-foreground: 222 30% 12%;
-    --secondary: 223 19% 18%;
+    --secondary: 223 15% 17%;
     --secondary-foreground: 36 34% 95%;
-    --muted: 223 16% 17%;
-    --muted-foreground: 35 18% 72%;
-    --accent: 225 17% 22%;
+    --muted: 223 13% 16%;
+    --muted-foreground: 36 16% 75%;
+    --accent: 225 14% 20%;
     --accent-foreground: 36 34% 95%;
     --destructive: 6 79% 64%;
     --destructive-foreground: 0 0% 98%;
-    --border: 222 14% 24%;
-    --input: 222 14% 24%;
+    --border: 222 12% 23%;
+    --input: 222 12% 23%;
     --ring: 31 91% 67%;
 
-    --surface: 223 24% 14%;
-    --surface-muted: 223 18% 18%;
-    --surface-raised: 223 20% 17%;
+    --surface: 223 18% 13%;
+    --surface-muted: 223 13% 17%;
+    --surface-raised: 223 16% 15%;
+    --legacy-neutral-50: 223 16% 15%;
+    --legacy-neutral-100: 223 13% 17%;
+    --legacy-neutral-200: 222 12% 23%;
+    --legacy-neutral-400: 36 16% 75%;
+    --legacy-neutral-500: 36 16% 75%;
+    --legacy-neutral-900: 36 34% 95%;
     --shell: 222 38% 8%;
     --shell-foreground: 36 30% 94%;
     --signal: 336 72% 68%;
@@ -211,6 +223,17 @@
   }
 }
 
+.dark .bg-warning\/5.text-warning-foreground,
+.dark .bg-warning\/10.text-warning-foreground,
+.dark .bg-warning\/15.text-warning-foreground,
+.dark .bg-warning\/20.text-warning-foreground,
+.dark .bg-warning\/5 .text-warning-foreground,
+.dark .bg-warning\/10 .text-warning-foreground,
+.dark .bg-warning\/15 .text-warning-foreground,
+.dark .bg-warning\/20 .text-warning-foreground {
+  color: hsl(var(--warning));
+}
+
 @keyframes focus-sweep {
   0% {
     transform: translateX(-12%);
@@ -254,6 +277,20 @@
     background-color: hsl(var(--surface-raised));
   }
 
+  .dark .bg-white\/70 {
+    background-color: hsl(var(--legacy-neutral-50) / 0.72);
+  }
+
+  .dark .bg-white\/75,
+  .dark .bg-white\/80 {
+    background-color: hsl(var(--legacy-neutral-50) / 0.82);
+  }
+
+  .dark .bg-white\/90,
+  .dark .hover\:bg-white:hover {
+    background-color: hsl(var(--legacy-neutral-50) / 0.94);
+  }
+
   .dark .bg-gray-50,
   .dark .bg-slate-50,
   .dark .bg-zinc-50,
@@ -263,6 +300,12 @@
     background-color: hsl(var(--surface));
   }
 
+  .dark .bg-gray-50\/50,
+  .dark .bg-slate-50\/50,
+  .dark .bg-zinc-50\/50 {
+    background-color: hsl(var(--legacy-neutral-50) / 0.62);
+  }
+
   .dark .bg-gray-100,
   .dark .bg-slate-100,
   .dark .bg-zinc-100,
@@ -270,6 +313,26 @@
   .dark .hover\:bg-slate-100:hover,
   .dark .hover\:bg-zinc-100:hover {
     background-color: hsl(var(--surface-muted));
+  }
+
+  .dark .bg-gray-100\/30,
+  .dark .bg-slate-100\/30,
+  .dark .bg-zinc-100\/30 {
+    background-color: hsl(var(--legacy-neutral-100) / 0.42);
+  }
+
+  .dark .from-gray-50\/50,
+  .dark .from-slate-50\/50,
+  .dark .from-zinc-50\/50 {
+    --tw-gradient-from: hsl(var(--legacy-neutral-50) / 0.68) var(--tw-gradient-from-position);
+    --tw-gradient-to: hsl(var(--legacy-neutral-50) / 0) var(--tw-gradient-to-position);
+    --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
+  }
+
+  .dark .to-gray-100\/30,
+  .dark .to-slate-100\/30,
+  .dark .to-zinc-100\/30 {
+    --tw-gradient-to: hsl(var(--legacy-neutral-100) / 0.5) var(--tw-gradient-to-position);
   }
 
   .dark .text-gray-950,
