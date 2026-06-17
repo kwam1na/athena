@@ -993,11 +993,25 @@ function AutomationReviewEvidencePanel({
 
   if (evidenceItems.length === 0) return null;
 
+  const pendingCheckoutCount = evidenceItems.filter(isPendingCheckoutReview).length;
+  const otherReviewCount = evidenceItems.length - pendingCheckoutCount;
+  const previewItems = evidenceItems.slice(0, REVIEW_EVIDENCE_PREVIEW_LIMIT);
+  const hiddenItemCount = Math.max(
+    evidenceItems.length - REVIEW_EVIDENCE_PREVIEW_LIMIT,
+    0,
+  );
+
   return (
-    <section className="rounded-lg border border-warning/25 bg-surface-raised p-layout-md shadow-surface">
+    <section
+      aria-labelledby="daily-operations-opening-review-title"
+      className="rounded-lg border border-warning/25 bg-surface-raised shadow-surface"
+    >
       <div className="flex flex-col gap-layout-sm sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <h3 className="flex items-center gap-layout-xs text-base font-medium text-foreground">
+        <div className="min-w-0 px-layout-md pt-layout-md">
+          <h3
+            className="flex items-center gap-layout-xs text-base font-medium text-foreground"
+            id="daily-operations-opening-review-title"
+          >
             <CircleAlert aria-hidden="true" className="h-4 w-4 text-warning" />
             Opening review
           </h3>
@@ -1010,36 +1024,55 @@ function AutomationReviewEvidencePanel({
             workflows.
           </p>
         </div>
+        <div className="grid shrink-0 grid-cols-2 gap-layout-xs px-layout-md pt-layout-md sm:min-w-48">
+          <ReviewEvidenceCount
+            label="Pending checkout"
+            value={pendingCheckoutCount}
+          />
+          <ReviewEvidenceCount label="Other" value={otherReviewCount} />
+        </div>
+      </div>
+
+      <div className="mx-layout-md mt-layout-md flex flex-wrap items-center justify-between gap-layout-sm border-t border-border/70 pt-layout-sm">
         <Badge
           className="border-warning/30 bg-warning/10 text-warning-foreground shadow-sm"
           variant="outline"
         >
-          {evidenceItems.length} to review
+          {formatReviewEvidenceCount(evidenceItems.length)}
         </Badge>
+        <p className="text-xs leading-5 text-muted-foreground">
+          {getReviewEvidencePreviewMessage(evidenceItems.length)}
+        </p>
       </div>
-      <div className="mt-layout-md divide-y divide-border/70 overflow-hidden rounded-md border border-border/70 bg-background/60">
-        {evidenceItems.map((item) => (
+
+      <div className="mt-layout-sm border-t border-border/70">
+        {previewItems.map((item) => (
           <article
-            className="flex flex-col gap-layout-xs px-layout-md py-layout-sm transition-colors hover:bg-surface/80 sm:flex-row sm:items-center sm:justify-between"
+            className="grid gap-layout-sm border-b border-border/70 px-layout-md py-layout-sm transition-colors last:border-b-0 hover:bg-surface/80 md:grid-cols-[minmax(0,1fr)_minmax(10rem,0.35fr)_auto] md:items-center"
             key={item.id}
           >
             <div className="min-w-0">
-              <p className="text-sm font-medium text-foreground">
+              <p className="truncate text-sm font-medium text-foreground">
                 {getReviewEvidenceTitle(item)}
               </p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                {getReviewEvidenceContextLabel(item)}
-              </p>
               {getReviewEvidenceDetail(item) ? (
-                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                <p className="mt-0.5 line-clamp-1 text-xs leading-5 text-muted-foreground">
                   {getReviewEvidenceDetail(item)}
                 </p>
               ) : null}
             </div>
+            <div className="min-w-0">
+              <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                Source
+              </p>
+              <p className="mt-0.5 truncate text-xs text-foreground">
+                {getReviewEvidenceContextLabel(item)}
+              </p>
+            </div>
             {item.sourceLink?.to ? (
               <Button
                 asChild
-                className="h-8 shrink-0 self-start px-2 text-xs sm:self-center"
+                className="h-8 shrink-0 justify-self-start px-2 text-xs md:justify-self-end"
                 size="sm"
                 variant="ghost"
               >
@@ -1066,6 +1099,35 @@ function AutomationReviewEvidencePanel({
           </article>
         ))}
       </div>
+      {hiddenItemCount > 0 ? (
+        <div className="flex flex-col gap-layout-sm border-t border-border/70 bg-background/60 px-layout-md py-layout-sm sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-muted-foreground">
+            {formatReviewEvidenceHiddenCount(hiddenItemCount)} in the full
+            Opening workflow.
+          </p>
+          <Button
+            asChild
+            className="h-8 shrink-0 self-start px-2 text-xs sm:self-center"
+            size="sm"
+            variant="outline"
+          >
+            <Link
+              aria-label="Review all Opening Handoff review items"
+              params={buildParams(orgUrlSlug, storeUrlSlug)}
+              search={
+                getWorkflowSearch(
+                  "/$orgUrlSlug/store/$storeUrlSlug/operations/opening",
+                  snapshot.operatingDate,
+                ) as never
+              }
+              to="/$orgUrlSlug/store/$storeUrlSlug/operations/opening"
+            >
+              Review all
+              <ArrowUpRight aria-hidden="true" className="h-3.5 w-3.5" />
+            </Link>
+          </Button>
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -1073,9 +1135,49 @@ function AutomationReviewEvidencePanel({
 const PENDING_CHECKOUT_REVIEW_PREFIX = "Review pending checkout item:";
 const DEFAULT_CARRY_FORWARD_DETAIL =
   "This unresolved carry-forward item remains open and must be acknowledged for Opening.";
+const REVIEW_EVIDENCE_PREVIEW_LIMIT = 4;
+
+function ReviewEvidenceCount({
+  label,
+  value,
+}: {
+  label: string;
+  value: number;
+}) {
+  return (
+    <div className="rounded-md border border-border/70 bg-background/60 px-layout-sm py-layout-xs">
+      <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+        {label}
+      </p>
+      <p className="mt-0.5 text-base font-medium tabular-nums text-foreground">
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function formatReviewEvidenceCount(count: number) {
+  return count === 1 ? "1 item to review" : `${count} items to review`;
+}
+
+function formatReviewEvidenceHiddenCount(count: number) {
+  return count === 1 ? "1 more item" : `${count} more items`;
+}
+
+function getReviewEvidencePreviewMessage(count: number) {
+  if (count <= REVIEW_EVIDENCE_PREVIEW_LIMIT) {
+    return "Use Opening Handoff for the full workflow.";
+  }
+
+  return `Showing the first ${REVIEW_EVIDENCE_PREVIEW_LIMIT}; use Opening Handoff for the full workflow.`;
+}
+
+function isPendingCheckoutReview(item: DailyOperationsReviewEvidence) {
+  return item.label.startsWith(PENDING_CHECKOUT_REVIEW_PREFIX);
+}
 
 function getReviewEvidenceTitle(item: DailyOperationsReviewEvidence) {
-  if (item.label.startsWith(PENDING_CHECKOUT_REVIEW_PREFIX)) {
+  if (isPendingCheckoutReview(item)) {
     return item.label.slice(PENDING_CHECKOUT_REVIEW_PREFIX.length).trim();
   }
 
@@ -1083,7 +1185,7 @@ function getReviewEvidenceTitle(item: DailyOperationsReviewEvidence) {
 }
 
 function getReviewEvidenceContextLabel(item: DailyOperationsReviewEvidence) {
-  if (item.label.startsWith(PENDING_CHECKOUT_REVIEW_PREFIX)) {
+  if (isPendingCheckoutReview(item)) {
     return "Pending checkout item";
   }
 
@@ -1272,7 +1374,7 @@ function WeekMetricsStrip({
       block: "nearest",
       inline: "center",
     });
-  }, [metrics]);
+  }, []);
 
   if (metrics.length === 0) return null;
 
