@@ -7,6 +7,7 @@ import type { PosLocalRegisterReadModel } from "./registerReadModel";
 import {
   createIndexedDbPosLocalStorageAdapter,
   createPosLocalStore,
+  type PosLocalEventRecord,
   type PosLocalStoreDayReadiness,
   type PosLocalStoreResult,
 } from "./posLocalStore";
@@ -176,7 +177,10 @@ export function evaluateLocalPosReadiness(input: {
     );
   }
 
-  if (input.registerReadModel?.closeoutState?.status === "closed_locally") {
+  if (
+    input.registerReadModel?.closeoutState?.status === "closed_locally" &&
+    !hasSettledLocalCloseout(input.registerReadModel)
+  ) {
     return blocked(
       "local_closeout",
       "Drawer closeout started. Reopen the drawer before starting sales.",
@@ -231,6 +235,21 @@ export function evaluateLocalPosReadiness(input: {
     "unknown",
     "Store day status unavailable. Connect this terminal before starting sales.",
   );
+}
+
+function hasSettledLocalCloseout(model: PosLocalRegisterReadModel) {
+  const localRegisterSessionId = model.closeoutState?.localRegisterSessionId;
+  if (!localRegisterSessionId) return false;
+
+  const latestCloseout = [...(model.sourceEvents ?? [])]
+    .reverse()
+    .find(
+      (event: PosLocalEventRecord) =>
+        event.type === "register.closeout_started" &&
+        event.localRegisterSessionId === localRegisterSessionId,
+    );
+
+  return latestCloseout?.sync.status === "synced";
 }
 
 export function evaluateLocalPosServiceCatalogReadiness(

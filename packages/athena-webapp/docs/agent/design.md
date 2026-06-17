@@ -28,6 +28,7 @@ Core token map:
 | Raised surface        | `--surface-raised`                   | dialogs, inspectors, important panels  |
 | Shell                 | `--shell` / `--shell-foreground`     | deep navigation and structural framing |
 | Primary action signal | `--signal` / `--signal-foreground`   | one action accent                      |
+| Strong neutral action | `--action-neutral-strong` / `--action-neutral-strong-foreground` | high-emphasis neutral commands |
 | Success               | `--success` / `--success-foreground` | completed or healthy state             |
 | Warning               | `--warning` / `--warning-foreground` | pending risk or degraded state         |
 | Danger                | `--danger` / `--danger-foreground`   | destructive or blocked state           |

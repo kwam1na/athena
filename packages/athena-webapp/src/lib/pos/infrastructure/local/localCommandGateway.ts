@@ -445,10 +445,18 @@ export function createLocalCommandGateway(
       const isLifecycleReviewDrawerBlock =
         existingModel.value.saleBlockReason === "drawer_authority" &&
         existingModel.value.drawerAuthorityReason === "lifecycle_rejected";
+      const isSettledClosedDrawerBlock =
+        existingModel.value.saleBlockReason === "drawer_closed" &&
+        hasSettledRegisterCloseout({
+          events: existingModel.value.sourceEvents,
+          localRegisterSessionId:
+            existingModel.value.activeRegisterSession?.localRegisterSessionId,
+        });
       if (
         existingModel.value.saleBlockReason &&
         !isClosedCloudDrawerBlock &&
-        !isLifecycleReviewDrawerBlock
+        !isLifecycleReviewDrawerBlock &&
+        !isSettledClosedDrawerBlock
       ) {
         return toLocalUserError(
           blockedSaleMessage(existingModel.value.saleBlockReason),
@@ -705,6 +713,23 @@ function hasLocalSaleActivity(
 
 function isOpenLocalRegisterSessionStatus(status: string) {
   return status === "open" || status === "active";
+}
+
+function hasSettledRegisterCloseout(input: {
+  events: PosLocalEventRecord[];
+  localRegisterSessionId?: string;
+}) {
+  if (!input.localRegisterSessionId) return false;
+
+  const latestCloseout = [...input.events]
+    .reverse()
+    .find(
+      (event) =>
+        event.type === "register.closeout_started" &&
+        event.localRegisterSessionId === input.localRegisterSessionId,
+    );
+
+  return latestCloseout?.sync.status === "synced";
 }
 
 function toLocalUserError(message: string) {

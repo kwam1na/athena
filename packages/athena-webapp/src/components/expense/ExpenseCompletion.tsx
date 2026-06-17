@@ -112,8 +112,8 @@ export function ExpenseCompletion({
                 type="button"
                 onClick={onPrintReceipt}
                 disabled={!onPrintReceipt}
-                className="h-14 rounded-2xl border-[hsl(var(--foreground))] bg-[hsl(var(--foreground))] px-5 text-sm font-semibold text-white shadow-[hsl(var(--foreground))/0.18] hover:border-[hsl(var(--primary))] hover:bg-[hsl(var(--primary))] hover:text-[hsl(var(--primary-foreground))]"
-                variant="outline"
+                className="h-14 rounded-2xl px-5 text-sm font-semibold"
+                variant="utility-strong"
               >
                 <Printer className="h-4 w-4" />
                 Print receipt

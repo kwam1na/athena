@@ -82,6 +82,9 @@
     --action-workflow-border: 232 38% 82%;
     --action-neutral: 225 18% 35%;
     --action-neutral-soft: 225 20% 96%;
+    --action-neutral-strong: var(--foreground);
+    --action-neutral-strong-foreground: 0 0% 100%;
+    --action-neutral-strong-border: var(--foreground);
     --success: 151 42% 34%;
     --success-foreground: 145 60% 96%;
     --warning: 35 79% 52%;
@@ -181,6 +184,9 @@
     --action-workflow-border: 233 36% 44%;
     --action-neutral: 225 18% 76%;
     --action-neutral-soft: 225 17% 22%;
+    --action-neutral-strong: var(--shell);
+    --action-neutral-strong-foreground: var(--shell-foreground);
+    --action-neutral-strong-border: 222 12% 28%;
     --success: 151 44% 34%;
     --success-foreground: 145 56% 94%;
     --warning: 38 92% 61%;

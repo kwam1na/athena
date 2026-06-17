@@ -25,6 +25,7 @@ describe("Button", () => {
         <Button variant="workflow">Correct</Button>
         <Button variant="workflow-soft">Selected correction</Button>
         <Button variant="utility">View receipt</Button>
+        <Button variant="utility-strong">Print receipt</Button>
       </>
     );
 
@@ -40,6 +41,10 @@ describe("Button", () => {
     ).toHaveClass("bg-action-workflow-soft");
     expect(screen.getByRole("button", { name: "View receipt" })).toHaveClass(
       "text-action-neutral",
+    );
+    expect(screen.getByRole("button", { name: "Print receipt" })).toHaveClass(
+      "bg-action-neutral-strong",
+      "text-action-neutral-strong-foreground",
     );
   });
 });

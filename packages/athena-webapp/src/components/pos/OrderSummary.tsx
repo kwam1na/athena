@@ -927,8 +927,8 @@ export function OrderSummary({
           </div>
           <Button
             onClick={handlePrintReceipt}
-            variant="outline"
-            className="h-11 w-full rounded-xl border-[hsl(var(--foreground))] bg-[hsl(var(--foreground))] px-4 text-sm font-semibold text-white shadow-[hsl(var(--foreground))/0.18] hover:border-[hsl(var(--primary))] hover:bg-[hsl(var(--primary))] hover:text-[hsl(var(--primary-foreground))]"
+            variant="utility-strong"
+            className="h-11 w-full rounded-xl px-4 text-sm font-semibold"
           >
             <Printer className="h-4 w-4" />
             Print receipt
@@ -1054,8 +1054,8 @@ export function OrderSummary({
                 >
                   <Button
                     onClick={handlePrintReceipt}
-                    variant="outline"
-                    className="h-14 rounded-2xl border-[hsl(var(--foreground))] bg-[hsl(var(--foreground))] px-5 text-sm font-semibold text-white shadow-[hsl(var(--foreground))/0.18] hover:border-[hsl(var(--primary))] hover:bg-[hsl(var(--primary))] hover:text-[hsl(var(--primary-foreground))]"
+                    variant="utility-strong"
+                    className="h-14 rounded-2xl px-5 text-sm font-semibold"
                   >
                     <Printer className="h-4 w-4" />
                     Print receipt

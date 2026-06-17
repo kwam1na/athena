@@ -702,7 +702,9 @@ describe("DailyOpeningViewContent", () => {
 
     expect(screen.getByText("Store day started")).toBeInTheDocument();
     expect(
-      screen.getByText("Athena started the store day with manager review items."),
+      screen.getByText(
+        "Store day started. Review the carried-forward items when a manager is available.",
+      ),
     ).toBeInTheDocument();
     expect(
       screen.getByText("Register session still needs closeout"),

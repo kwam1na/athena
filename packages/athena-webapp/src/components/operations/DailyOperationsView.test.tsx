@@ -855,7 +855,7 @@ describe("DailyOperationsViewContent", () => {
     ).toBeInTheDocument();
     expect(
       screen.getAllByText(
-        "Athena started the store day with manager review items.",
+        "Store day started. Review the carried-forward items when a manager is available.",
       ).length,
     ).toBeGreaterThan(0);
     expect(

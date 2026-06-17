@@ -686,25 +686,37 @@ function OpeningAutomationReviewPanel({
   if (items.length === 0) return null;
 
   return (
-    <section className="rounded-lg border border-warning/30 bg-warning/10 p-layout-md shadow-surface">
-      <h3 className="flex items-center gap-layout-xs text-base font-medium text-foreground">
-        <ClipboardCheck aria-hidden="true" className="h-4 w-4" />
-        Opening review
-      </h3>
-      <p className="mt-layout-sm text-sm leading-6 text-foreground">
-        Athena started the store day with manager review items.
-      </p>
-      <p className="mt-1 text-sm leading-6 text-muted-foreground">
-        Review these items in the owning workflow. They were preserved from the
-        opening check and were not resolved by automation.
-      </p>
-      <div className="mt-layout-md space-y-layout-md">
+    <section className="rounded-lg border border-warning/25 bg-surface-raised p-layout-md shadow-surface">
+      <div className="flex flex-col gap-layout-sm sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h3 className="flex items-center gap-layout-xs text-base font-medium text-foreground">
+            <ClipboardCheck aria-hidden="true" className="h-4 w-4 text-warning" />
+            Opening review
+          </h3>
+          <p className="mt-layout-xs text-sm leading-6 text-foreground">
+            Store day started. Review the carried-forward items when a manager
+            is available.
+          </p>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+            These items stayed visible from the opening check and were not
+            resolved by automation.
+          </p>
+        </div>
+        <Badge
+          className="border-warning/30 bg-warning/10 text-warning-foreground shadow-sm"
+          variant="outline"
+        >
+          {items.length} to review
+        </Badge>
+      </div>
+      <div className="mt-layout-md space-y-layout-xs">
         {items.map((item) => (
           <OpeningItemCard
             currency={currency}
             item={item}
             key={getItemId(item)}
             orgUrlSlug={orgUrlSlug}
+            showCollapsedDescription={false}
             storeUrlSlug={storeUrlSlug}
           />
         ))}
@@ -725,7 +737,7 @@ function getStatusRailIconClassName(status: DailyOpeningStatus) {
 function getStatusRailBadgeClassName(status: DailyOpeningStatus) {
   return cn(
     status === "blocked" && "text-danger",
-    status === "needs_attention" && "text-warning-foreground",
+    status === "needs_attention" && "text-warning",
     (status === "ready" || status === "started") && "text-success",
   );
 }
@@ -924,6 +936,7 @@ function OpeningItemCard({
   orgUrlSlug,
   requiresAcknowledgement,
   selected,
+  showCollapsedDescription = true,
   storeUrlSlug,
   onSelectedChange,
 }: {
@@ -933,6 +946,7 @@ function OpeningItemCard({
   orgUrlSlug: string;
   requiresAcknowledgement?: boolean;
   selected?: boolean;
+  showCollapsedDescription?: boolean;
   storeUrlSlug: string;
 }) {
   const itemId = getItemId(item);
@@ -976,6 +990,7 @@ function OpeningItemCard({
           />
         ) : null
       }
+      showCollapsedDescription={showCollapsedDescription}
       title={item.title}
     />
   );
@@ -1292,7 +1307,7 @@ function OpeningRail({
                   className={cn(
                     "shrink-0 text-right font-medium text-foreground",
                     item.valueTone === "danger" && "text-danger",
-                    item.valueTone === "warning" && "text-warning-foreground",
+                    item.valueTone === "warning" && "text-warning",
                     item.valueTone === "workflow" && "text-action-workflow",
                   )}
                 >

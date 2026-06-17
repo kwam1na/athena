@@ -295,7 +295,7 @@ function ReadyReadinessValue() {
 
 function ExpiredReadinessValue() {
   return (
-    <span className="inline-flex items-center justify-end gap-1 text-warning-foreground">
+    <span className="inline-flex items-center justify-end gap-1 text-warning">
       <AlertTriangle className="h-3 w-3" aria-hidden="true" />
       <span>Expired</span>
     </span>
@@ -357,7 +357,7 @@ function RailSignalRow({
           tone === "success"
             ? "text-success"
             : tone === "warning"
-              ? "text-warning-foreground"
+              ? "text-warning"
               : "text-foreground",
         )}
       >
