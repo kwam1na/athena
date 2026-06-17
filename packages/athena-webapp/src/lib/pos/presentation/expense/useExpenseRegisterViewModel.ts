@@ -1,12 +1,12 @@
 import type { FormEvent } from "react";
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "convex/react";
-import { useMutation } from "convex/react";
 
 import type { StaffAuthenticationResult } from "@/components/staff-auth/StaffAuthenticationDialog";
 import { useExpenseActiveSession } from "@/hooks/useExpenseSessions";
 import { useExpenseOperations } from "@/hooks/useExpenseOperations";
 import { useSessionManagementExpense } from "@/hooks/useSessionManagementExpense";
+import { useExpenseLocalRuntime } from "@/hooks/useExpenseLocalRuntime";
 import { useExpenseStore } from "@/stores/expenseStore";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { useGetTerminal } from "@/hooks/useGetTerminal";
@@ -28,12 +28,16 @@ import { useRegisterCatalogIndex } from "@/lib/pos/presentation/register/useRegi
 import { logger } from "@/lib/logger";
 import { toast } from "sonner";
 import { api } from "~/convex/_generated/api";
-import { runCommand } from "@/lib/errors/runCommand";
-import { presentCommandToast } from "@/lib/errors/presentCommandToast";
 import { EMPTY_REGISTER_CUSTOMER_INFO } from "@/lib/pos/presentation/register/registerUiState";
 import type { RegisterViewModel } from "@/lib/pos/presentation/register/registerUiState";
 import type { Id } from "~/convex/_generated/dataModel";
 import { formatStaffDisplayNameOrFallback } from "~/shared/staffDisplayName";
+import type { CartItem } from "@/components/pos/types";
+import {
+  projectExpenseLocalReadModel,
+  type ExpenseLocalSessionReadModel,
+} from "@/lib/pos/infrastructure/local/expenseReadModel";
+import type { PosLocalEventRecord } from "@/lib/pos/infrastructure/local/posLocalStore";
 
 function getCashierDisplayName(staffProfile?: {
   firstName?: string;
@@ -45,6 +49,50 @@ function getCashierDisplayName(staffProfile?: {
   }
 
   return formatStaffDisplayNameOrFallback(staffProfile, "Unassigned");
+}
+
+function isExpenseProductCartItem(item: CartItem): item is CartItem & {
+  productId: Id<"product">;
+  skuId: Id<"productSku">;
+  pendingCheckoutItemId?: Id<"posPendingCheckoutItem">;
+  inventoryImportProvisionalSkuId?: Id<"inventoryImportProvisionalSku">;
+} {
+  return Boolean(item.productId && item.skuId);
+}
+
+function localExpenseSessionToStoreSession(session: ExpenseLocalSessionReadModel) {
+  return {
+    _id: session.localExpenseSessionId as Id<"expenseSession">,
+    expiresAt: null,
+    notes: session.notes,
+    cartItems: session.items.map((item) => ({
+      _id: item.localItemId as Id<"expenseSessionItem">,
+      quantity: item.quantity,
+      updatedAt: session.updatedAt,
+      productName: item.productName,
+      productSku: item.productSku,
+      barcode: item.barcode,
+      price: item.price,
+      image: item.image,
+      size: item.size,
+      length: item.length,
+      color: item.color,
+      productId: item.productId as Id<"product">,
+      productSkuId: item.productSkuId as Id<"productSku">,
+      pendingCheckoutItemId:
+        item.pendingCheckoutItemId as Id<"posPendingCheckoutItem"> | undefined,
+      inventoryImportProvisionalSkuId:
+        item.inventoryImportProvisionalSkuId as
+          | Id<"inventoryImportProvisionalSku">
+          | undefined,
+    })),
+  };
+}
+
+function localExpenseSessionsToStoreSessions(
+  sessions: ExpenseLocalSessionReadModel[],
+) {
+  return sessions.map(localExpenseSessionToStoreSession);
 }
 
 function getExpenseSessionLoadKey(
@@ -66,22 +114,68 @@ function getExpenseSessionLoadKey(
   ].join("::");
 }
 
+function isScopedExpenseLocalEvent(
+  event: PosLocalEventRecord,
+  scope: {
+    registerNumber?: string;
+    staffProfileId?: string | null;
+    storeId?: string | null;
+    terminalId?: string | null;
+  },
+) {
+  if (!event.type.startsWith("expense.")) return false;
+  if (scope.storeId && event.storeId !== scope.storeId) return false;
+  if (scope.terminalId && event.terminalId !== scope.terminalId) return false;
+  if (
+    scope.staffProfileId &&
+    event.staffProfileId &&
+    event.staffProfileId !== scope.staffProfileId
+  ) {
+    return false;
+  }
+  if (
+    scope.registerNumber &&
+    event.registerNumber &&
+    event.registerNumber !== scope.registerNumber
+  ) {
+    return false;
+  }
+  return true;
+}
+
 export function useExpenseRegisterViewModel(): RegisterViewModel {
   const { activeStore } = useGetActiveStore();
   const terminal = useGetTerminal();
   const store = useExpenseStore();
   const navigateBack = useNavigateBack();
   const cart = useExpenseOperations();
-  const { createSession, releaseSessionInventoryHoldsAndDeleteItems } =
-    useSessionManagementExpense();
+  const { createSession } = useSessionManagementExpense();
   const { voidSession } = useSessionManagementExpense();
+  const setHeldExpenseSessions = useExpenseStore(
+    (state) => state.setHeldSessions,
+  );
+  const { eventAppendToken, expenseLocalGateway, localStore } =
+    useExpenseLocalRuntime({
+    staffProfileId: store.cashier.id,
+    storeId: store.storeId,
+    terminalId: store.terminalId,
+  });
+  const listLocalExpenseEvents = (localStore as {
+    listEvents?: typeof localStore.listEvents;
+  }).listEvents;
+  const [localExpenseReadState, setLocalExpenseReadState] = useState<{
+    activeSession: ExpenseLocalSessionReadModel | null;
+    loaded: boolean;
+  }>({
+    activeSession: null,
+    loaded: false,
+  });
+  const localExpenseActiveSession = localExpenseReadState.activeSession;
+  const localExpenseReadLoaded = localExpenseReadState.loaded;
   const autoSessionInitialized = useRef(false);
   const loadedSessionKeyRef = useRef<string | null>(null);
   const sessionContextKeyRef = useRef<string | null>(null);
   const exactAddKeyRef = useRef<string | null>(null);
-  const completeExpenseSession = useMutation(
-    api.inventory.expenseSessions.completeExpenseSession,
-  );
   const staffProfile = useQuery(
     api.operations.staffProfiles.getStaffProfileById,
     store.cashier.id
@@ -134,11 +228,59 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
     store.ui.registerNumber,
   );
 
-  const isSessionActive = Boolean(
-    activeSessionQuery?.status === "active" &&
-    activeSessionQuery.expiresAt &&
-    activeSessionQuery.expiresAt > Date.now(),
-  );
+  useEffect(() => {
+    if (typeof listLocalExpenseEvents !== "function") {
+      setLocalExpenseReadState({ activeSession: null, loaded: true });
+      setHeldExpenseSessions([]);
+      return;
+    }
+
+    let cancelled = false;
+    setLocalExpenseReadState((current) => ({
+      ...current,
+      loaded: false,
+    }));
+    void listLocalExpenseEvents().then((result) => {
+      if (cancelled) return;
+      if (!result.ok) {
+        setLocalExpenseReadState({ activeSession: null, loaded: true });
+        setHeldExpenseSessions([]);
+        return;
+      }
+      const scopedEvents = result.value.filter((event) =>
+        isScopedExpenseLocalEvent(event, {
+          registerNumber: store.ui.registerNumber,
+          staffProfileId: store.cashier.id,
+          storeId: store.storeId,
+          terminalId: store.terminalId,
+        }),
+      );
+      const readModel = projectExpenseLocalReadModel({
+        events: scopedEvents,
+      });
+      setLocalExpenseReadState({
+        activeSession: readModel.activeSession,
+        loaded: true,
+      });
+      setHeldExpenseSessions(
+        localExpenseSessionsToStoreSessions(readModel.heldSessions),
+      );
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    eventAppendToken,
+    listLocalExpenseEvents,
+    setHeldExpenseSessions,
+    store.cashier.id,
+    store.storeId,
+    store.terminalId,
+    store.ui.registerNumber,
+  ]);
+
+  const isSessionActive = Boolean(activeSessionQuery?.status === "active");
 
   const handleCashierAuthenticated = useCallback(
     (result: Id<"staffProfile"> | StaffAuthenticationResult) => {
@@ -185,6 +327,10 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
       return;
     }
 
+    if (!localExpenseReadLoaded) {
+      return;
+    }
+
     if (store.transaction.isCompleted) {
       return;
     }
@@ -205,18 +351,18 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
         return;
       }
 
-      const now = Date.now();
-      if (activeSessionQuery.expiresAt && activeSessionQuery.expiresAt < now) {
-        logger.warn("[Expense] Active session has expired, clearing state", {
-          sessionId: activeSessionQuery._id,
-          expiresAt: activeSessionQuery.expiresAt,
-          now,
-        });
-        store.setCurrentSessionId(null);
-        store.setActiveSession(null);
-        store.clearCashier();
-        autoSessionInitialized.current = false;
-        loadedSessionKeyRef.current = null;
+      if (
+        store.session.currentSessionId === activeSessionQuery._id &&
+        store.cart.items.length > 0 &&
+        (activeSessionQuery.cartItems?.length ?? 0) === 0
+      ) {
+        logger.debug(
+          "[Expense] Keeping local cart while cloud expense session catches up",
+          {
+            sessionId: activeSessionQuery._id,
+            localItemCount: store.cart.items.length,
+          },
+        );
         return;
       }
 
@@ -233,6 +379,38 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
       });
 
       handleSessionLoaded(activeSessionQuery);
+      return;
+    }
+
+    if (localExpenseActiveSession) {
+      if (
+        store.session.currentSessionId &&
+        store.session.currentSessionId !==
+          localExpenseActiveSession.localExpenseSessionId
+      ) {
+        return;
+      }
+
+      const sessionLoadKey = [
+        localExpenseActiveSession.localExpenseSessionId,
+        localExpenseActiveSession.updatedAt,
+        localExpenseActiveSession.notes ?? "",
+        localExpenseActiveSession.items
+          .map((item) => `${item.localItemId}:${item.quantity}`)
+          .join("|"),
+      ].join("::");
+      if (loadedSessionKeyRef.current === sessionLoadKey) {
+        return;
+      }
+      loadedSessionKeyRef.current = sessionLoadKey;
+
+      logger.info("[Expense] Local active session found, loading into store", {
+        sessionId: localExpenseActiveSession.localExpenseSessionId,
+        itemCount: localExpenseActiveSession.items.length,
+      });
+      store.loadSessionData(
+        localExpenseSessionToStoreSession(localExpenseActiveSession),
+      );
       return;
     }
 
@@ -280,6 +458,8 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
     store.cashier.id,
     store.cashier.isAuthenticated,
     activeSessionQuery,
+    localExpenseActiveSession,
+    localExpenseReadLoaded,
     store.session.currentSessionId,
     store.session.isCreating,
     store.session.isUpdating,
@@ -333,7 +513,10 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
       canAutoAdd: Boolean(
         registerMetadataSearchState.exactMatch &&
           exactAvailability &&
-          exactAvailability.quantityAvailable > 0,
+          (exactAvailability.availabilityPolicy ===
+            "active_provisional_import" ||
+            exactAvailability.availabilityPolicy === "pending_checkout" ||
+            exactAvailability.quantityAvailable >= 0),
       ),
     };
   }, [registerCatalogAvailabilityBySkuId, registerMetadataSearchState]);
@@ -426,37 +609,20 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
       return;
     }
 
-    const previousCartItems = [...store.cart.items];
-    cart.clearCart();
-    store.setSessionUpdating(true);
-
-    try {
-      const result = await releaseSessionInventoryHoldsAndDeleteItems(
-        sessionId as Id<"expenseSession">,
-      );
-
-      if (result.success) {
-        toast.success("Cart cleared");
-        return;
-      }
-
-      store.replaceCartItems(previousCartItems);
-    } catch (error) {
-      logger.error("[Expense] Failed to clear cart", error as Error);
-      store.replaceCartItems(previousCartItems);
+    const cleared = await cart.clearCart();
+    if (cleared) {
+      toast.success("Cart cleared");
+    } else {
       toast.error("Could not clear this expense cart.");
-    } finally {
-      store.setSessionUpdating(false);
     }
-  }, [
-    activeSessionQuery?._id,
-    cart,
-    releaseSessionInventoryHoldsAndDeleteItems,
-    store,
-  ]);
+  }, [activeSessionQuery?._id, cart, store]);
 
   const handleCompleteExpense = useCallback(async () => {
-    const sessionId = activeSessionQuery?._id || store.session.currentSessionId;
+    const sessionId =
+      store.session.currentSessionId ||
+      (activeSessionQuery?._id === store.session.currentSessionId
+        ? activeSessionQuery._id
+        : null);
     if (!sessionId) {
       toast.error("No active session");
       return;
@@ -472,23 +638,51 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
       const totalValue = store.cart.total;
       const completedCartItems = store.cart.items.map((item) => ({ ...item }));
       const notes = store.ui.notes;
-      const result = await runCommand(() =>
-        completeExpenseSession({
-          sessionId: sessionId as Id<"expenseSession">,
-          notes,
-          totalValue,
-        }),
-      );
+      if (!store.storeId || !store.terminalId || !store.cashier.id) {
+        toast.error("Terminal or staff details missing");
+        return;
+      }
 
-      if (result.kind !== "ok") {
-        presentCommandToast(result);
+      const localExpenseEventId = `local-expense-event-${Date.now()}`;
+      const savedLocally = await expenseLocalGateway.completeExpense({
+        storeId: store.storeId,
+        terminalId: store.terminalId,
+        staffProfileId: store.cashier.id,
+        localExpenseSessionId: sessionId as string,
+        localExpenseEventId,
+        notes,
+        subtotal: store.cart.subtotal,
+        tax: store.cart.tax,
+        total: totalValue,
+        items: completedCartItems.filter(isExpenseProductCartItem).map((item) => ({
+          localExpenseSessionId: sessionId as string,
+          localItemId: item.id as string,
+          productId: item.productId,
+          productSkuId: item.skuId,
+          pendingCheckoutItemId: item.pendingCheckoutItemId,
+          inventoryImportProvisionalSkuId:
+            item.inventoryImportProvisionalSkuId,
+          productSku: item.sku || "",
+          barcode: item.barcode || undefined,
+          productName: item.name,
+          price: item.price,
+          quantity: item.quantity,
+          image: item.image || undefined,
+          size: item.size || undefined,
+          length: item.length || undefined,
+          color: item.color,
+        })),
+      });
+
+      if (!savedLocally) {
+        toast.error("Could not record this expense locally.");
         return;
       }
 
       toast.success("Expense recorded successfully");
-      store.setTransactionCompleted(true, result.data.transactionNumber, {
-        transactionId: result.data.transactionId,
-        completedAt: new Date(result.data.completedAt),
+      store.setTransactionCompleted(true, localExpenseEventId, {
+        transactionId: localExpenseEventId as Id<"expenseTransaction">,
+        completedAt: new Date(),
         cartItems: completedCartItems,
         totalValue,
         notes,
@@ -502,7 +696,7 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
     }
   }, [
     activeSessionQuery?._id,
-    completeExpenseSession,
+    expenseLocalGateway,
     store,
   ]);
 

@@ -25,7 +25,7 @@ export async function validateExpenseSessionExists(
   if (!session) {
     return {
       success: false,
-      message: "Session not found. It may have been deleted or expired.",
+      message: "Session not found.",
     };
   }
 
@@ -34,7 +34,7 @@ export async function validateExpenseSessionExists(
 
 /**
  * Validates that an expense session is in active status
- * Prevents modifications to completed, voided, held, or expired sessions
+ * Prevents modifications to completed, voided, or held sessions
  */
 export async function validateExpenseSessionActive(
   db: DatabaseReader,
@@ -42,12 +42,10 @@ export async function validateExpenseSessionActive(
   staffProfileId: Id<"staffProfile">
 ): Promise<ExpenseValidationResult> {
   const session = await db.get("expenseSession", sessionId);
-  const now = Date.now();
-
   if (!session) {
     return {
       success: false,
-      message: "Your session has expired. Start a new one to proceed.",
+      message: "Session not found.",
     };
   }
 
@@ -58,21 +56,13 @@ export async function validateExpenseSessionActive(
     };
   }
 
-  // Check if session has expired based on timestamp
-  if (session.expiresAt && session.expiresAt < now) {
-    return {
-      success: false,
-      message: "This session has expired. Start a new one to proceed.",
-    };
-  }
-
   if (session.status !== "active") {
     const statusMessages: Record<string, string> = {
       completed:
         "This session has been completed and cannot be modified. Start a new one to proceed",
       void: "This session has been voided and cannot be modified. Start a new one to proceed",
       held: "Can only add items to active sessions. Please resume or create a new session",
-      expired: "This session has expired. Start a new one to proceed",
+      expired: "This session is no longer active. Start a new one to proceed",
     };
 
     return {
@@ -87,7 +77,6 @@ export async function validateExpenseSessionActive(
 /**
  * Validates that an expense session can be modified (active or held)
  * Used for operations that should work on both active and held sessions
- * Also checks expiration timestamp to prevent modifications to expired sessions
  */
 export async function validateExpenseSessionModifiable(
   db: DatabaseReader,
@@ -95,8 +84,6 @@ export async function validateExpenseSessionModifiable(
   staffProfileId: Id<"staffProfile">
 ): Promise<ExpenseValidationResult> {
   const session = await db.get("expenseSession", sessionId);
-  const now = Date.now();
-
   if (!session) {
     return {
       success: false,
@@ -108,14 +95,6 @@ export async function validateExpenseSessionModifiable(
     return {
       success: false,
       message: "This session is not associated with your staff profile.",
-    };
-  }
-
-  // Check if session has expired based on timestamp
-  if (session.expiresAt && session.expiresAt < now) {
-    return {
-      success: false,
-      message: "This session has expired. Start a new one to proceed.",
     };
   }
 

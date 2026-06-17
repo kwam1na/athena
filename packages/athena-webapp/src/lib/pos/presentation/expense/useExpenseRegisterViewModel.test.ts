@@ -26,12 +26,27 @@ const catalogGatewayMocks = vi.hoisted(() => ({
   useConvexRegisterCatalog: vi.fn(),
   useConvexRegisterCatalogAvailability: vi.fn(),
 }));
+const localRuntimeMocks = vi.hoisted(() => ({
+  addItem: vi.fn(),
+  clearCart: vi.fn(),
+  completeExpense: vi.fn(),
+  holdSession: vi.fn(),
+  removeItem: vi.fn(),
+  resumeSession: vi.fn(),
+  startSession: vi.fn(),
+  updateItem: vi.fn(),
+  voidSession: vi.fn(),
+  listEvents: vi.fn(),
+}));
 const loadedSessionIds: string[] = [];
+const realLoadSessionData = useExpenseStore.getState().loadSessionData;
 type MockRegisterCatalogRow = {
-  id: Id<"productSku">;
+  id: Id<"productSku"> | Id<"inventoryImportProvisionalSku">;
   productSkuId: Id<"productSku">;
   skuId: Id<"productSku">;
   productId: Id<"product">;
+  pendingCheckoutItemId?: Id<"posPendingCheckoutItem">;
+  inventoryImportProvisionalSkuId?: Id<"inventoryImportProvisionalSku">;
   name: string;
   sku: string;
   barcode: string;
@@ -43,12 +58,21 @@ type MockRegisterCatalogRow = {
   length: number | null;
   color: string;
   areProcessingFeesAbsorbed: boolean;
+  availabilityPolicy?:
+    | "trusted_inventory"
+    | "active_provisional_import"
+    | "pending_checkout";
 };
 type MockRegisterCatalogAvailabilityRow = {
   productSkuId: Id<"productSku">;
   skuId: Id<"productSku">;
+  inventoryImportProvisionalSkuId?: Id<"inventoryImportProvisionalSku">;
   inStock: boolean;
   quantityAvailable: number;
+  availabilityPolicy?:
+    | "trusted_inventory"
+    | "active_provisional_import"
+    | "pending_checkout";
 };
 let mockRegisterCatalogRows: MockRegisterCatalogRow[];
 let mockRegisterCatalogAvailabilityRows: MockRegisterCatalogAvailabilityRow[] | undefined;
@@ -113,6 +137,18 @@ vi.mock("@/lib/pos/infrastructure/convex/catalogGateway", () => ({
   useConvexRegisterCatalog: catalogGatewayMocks.useConvexRegisterCatalog,
   useConvexRegisterCatalogAvailability:
     catalogGatewayMocks.useConvexRegisterCatalogAvailability,
+}));
+
+vi.mock("@/hooks/useExpenseLocalRuntime", () => ({
+  useExpenseLocalRuntime: () => ({
+    expenseLocalGateway: localRuntimeMocks,
+    eventAppendToken: 0,
+    localStore: {
+      listEvents: localRuntimeMocks.listEvents,
+    },
+    noteEventAppended: vi.fn(),
+    syncRuntime: null,
+  }),
 }));
 
 vi.mock("@/hooks/usePOSProducts", () => ({
@@ -260,6 +296,7 @@ describe("useExpenseRegisterViewModel", () => {
     vi.clearAllMocks();
     loadedSessionIds.length = 0;
     useExpenseStore.getState().resetAll();
+    useExpenseStore.setState({ loadSessionData: realLoadSessionData });
     useExpenseStore.getState().setCashier("staff-1" as Id<"staffProfile">);
     mockActiveSessionQuery = null;
     mockRegisterCatalogRows = [];
@@ -292,6 +329,15 @@ describe("useExpenseRegisterViewModel", () => {
         },
       };
     });
+    localRuntimeMocks.startSession.mockImplementation(async () => {
+      const result = await mockCreateExpenseSession();
+      if (result.kind !== "ok") return result;
+      return ok({
+        localExpenseSessionId: result.data.sessionId,
+        status: "active" as const,
+        startedAt: Date.now(),
+      });
+    });
     mockAddOrUpdateExpenseItem.mockResolvedValue(
       ok({
         itemId: "expense-item-1" as Id<"expenseSessionItem">,
@@ -316,6 +362,34 @@ describe("useExpenseRegisterViewModel", () => {
         completedAt: new Date("2026-05-20T10:00:00.000Z").getTime(),
       }),
     );
+    localRuntimeMocks.addItem.mockImplementation(async (input) => {
+      const result = await mockAddOrUpdateExpenseItem(input);
+      return result.kind === "ok";
+    });
+    localRuntimeMocks.updateItem.mockImplementation(async (input) => {
+      const result = await mockAddOrUpdateExpenseItem(input);
+      return result.kind === "ok";
+    });
+    localRuntimeMocks.removeItem.mockImplementation(async (input) => {
+      const result = await mockRemoveExpenseItem(input);
+      return result.kind === "ok";
+    });
+    localRuntimeMocks.clearCart.mockImplementation(async (input) => {
+      const result =
+        await mockReleaseExpenseSessionInventoryHoldsAndDeleteItems(input);
+      return result.kind === "ok";
+    });
+    localRuntimeMocks.completeExpense.mockImplementation(async (input) => {
+      const result = await mockCompleteExpenseSession(input);
+      return result.kind === "ok";
+    });
+    localRuntimeMocks.holdSession.mockResolvedValue(true);
+    localRuntimeMocks.resumeSession.mockResolvedValue(true);
+    localRuntimeMocks.voidSession.mockResolvedValue(true);
+    localRuntimeMocks.listEvents.mockResolvedValue({
+      ok: true,
+      value: [],
+    });
     vi.mocked(useMutation).mockImplementation((mutation) => {
       const mutationName = getFunctionName(mutation);
       if (mutationName === "inventory/expenseSessions:createExpenseSession") {
@@ -406,6 +480,141 @@ describe("useExpenseRegisterViewModel", () => {
 
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(loadedSessionIds).toEqual(["expense-session-1"]);
+  });
+
+  it("rehydrates an active local expense session before creating a cloud session", async () => {
+    mockActiveSessionQuery = null;
+    localRuntimeMocks.listEvents.mockResolvedValue({
+      ok: true,
+      value: [
+        {
+          localEventId: "expense-started-1",
+          sequence: 1,
+          type: "expense.session_started",
+          terminalId: "terminal-1",
+          storeId: "store-1",
+          staffProfileId: "staff-1",
+          createdAt: 100,
+          payload: {
+            localExpenseSessionId: "local-expense-session-1",
+          },
+          sync: { status: "pending" },
+        },
+        {
+          localEventId: "expense-item-1",
+          sequence: 2,
+          type: "expense.item_added",
+          terminalId: "terminal-1",
+          storeId: "store-1",
+          staffProfileId: "staff-1",
+          createdAt: 110,
+          payload: {
+            localExpenseSessionId: "local-expense-session-1",
+            localItemId: "local-expense-line-1",
+            productId: "product-1",
+            productSkuId: "product-sku-1",
+            productName: "Repair kit",
+            productSku: "KIT-1",
+            quantity: 1,
+            price: 3600,
+          },
+          sync: { status: "pending" },
+        },
+      ],
+    });
+
+    renderHook(() => useExpenseRegisterViewModel());
+
+    await waitFor(() => {
+      expect(useExpenseStore.getState().session.currentSessionId).toBe(
+        "local-expense-session-1",
+      );
+      expect(useExpenseStore.getState().cart.items).toEqual([
+        expect.objectContaining({
+          id: "local-expense-line-1",
+          name: "Repair kit",
+          quantity: 1,
+        }),
+      ]);
+    });
+    expect(mockCreateExpenseSession).not.toHaveBeenCalled();
+  });
+
+  it("rehydrates held local expense sessions without expiring old sessions", async () => {
+    mockActiveSessionQuery = null;
+    localRuntimeMocks.listEvents.mockResolvedValue({
+      ok: true,
+      value: [
+        {
+          localEventId: "expense-started-old",
+          sequence: 1,
+          type: "expense.session_started",
+          terminalId: "terminal-1",
+          storeId: "store-1",
+          staffProfileId: "staff-1",
+          createdAt: 1,
+          payload: {
+            localExpenseSessionId: "local-expense-held-1",
+          },
+          sync: { status: "pending" },
+        },
+        {
+          localEventId: "expense-held-old",
+          sequence: 2,
+          type: "expense.held",
+          terminalId: "terminal-1",
+          storeId: "store-1",
+          staffProfileId: "staff-1",
+          createdAt: 2,
+          payload: {
+            localExpenseSessionId: "local-expense-held-1",
+            reason: "waiting_on_receipt",
+          },
+          sync: { status: "pending" },
+        },
+      ],
+    });
+
+    renderHook(() => useExpenseRegisterViewModel());
+
+    await waitFor(() => {
+      expect(useExpenseStore.getState().session.heldSessions).toEqual([
+        expect.objectContaining({
+          _id: "local-expense-held-1",
+        }),
+      ]);
+    });
+  });
+
+  it("ignores local expense events outside the current terminal scope", async () => {
+    mockActiveSessionQuery = null;
+    localRuntimeMocks.listEvents.mockResolvedValue({
+      ok: true,
+      value: [
+        {
+          localEventId: "foreign-expense-started",
+          sequence: 1,
+          type: "expense.session_started",
+          terminalId: "other-terminal",
+          storeId: "store-1",
+          staffProfileId: "staff-1",
+          createdAt: 100,
+          payload: {
+            localExpenseSessionId: "foreign-expense-session",
+          },
+          sync: { status: "pending" },
+        },
+      ],
+    });
+
+    renderHook(() => useExpenseRegisterViewModel());
+
+    await waitFor(() => {
+      expect(mockCreateExpenseSession).toHaveBeenCalled();
+    });
+    expect(useExpenseStore.getState().session.currentSessionId).not.toBe(
+      "foreign-expense-session",
+    );
   });
 
   it("identifies the cashier auth dialog as an expense session sign-in", () => {
@@ -503,40 +712,6 @@ describe("useExpenseRegisterViewModel", () => {
     expect(useExpenseStore.getState().ui.productSearchQuery).toBe("");
   });
 
-  it("keeps out-of-stock exact matches visible without auto-adding", async () => {
-    mockActiveSessionQuery = {
-      _id: "expense-session-1" as Id<"expenseSession">,
-      status: "active",
-      expiresAt: Date.now() + 60_000,
-      sessionNumber: "EXP-0001",
-      updatedAt: 100,
-      cartItems: [],
-    };
-    mockRegisterCatalogRows = [buildRegisterCatalogRow()];
-    mockRegisterCatalogAvailabilityRows = [
-      buildRegisterCatalogAvailabilityRow({
-        inStock: false,
-        quantityAvailable: 0,
-      }),
-    ];
-
-    const { result } = renderHook(() => useExpenseRegisterViewModel());
-
-    act(() => {
-      result.current.productEntry.setProductSearchQuery("KIT-1");
-    });
-
-    expect(result.current.productEntry.searchResults).toEqual([
-      expect.objectContaining({
-        skuId: "product-sku-1",
-        inStock: false,
-        quantityAvailable: 0,
-      }),
-    ]);
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(mockCreateExpenseSession).not.toHaveBeenCalled();
-  });
-
   it("shows ambiguous exact product matches without auto-adding", async () => {
     mockActiveSessionQuery = {
       _id: "expense-session-1" as Id<"expenseSession">,
@@ -606,6 +781,99 @@ describe("useExpenseRegisterViewModel", () => {
     expect(mockAddOrUpdateExpenseItem).toHaveBeenCalledTimes(1);
   });
 
+  it("auto-adds exact trusted inventory matches with zero available quantity", async () => {
+    mockActiveSessionQuery = buildActiveExpenseSession();
+    mockRegisterCatalogRows = [buildRegisterCatalogRow()];
+    mockRegisterCatalogAvailabilityRows = [
+      buildRegisterCatalogAvailabilityRow({
+        availabilityPolicy: "trusted_inventory",
+        inStock: false,
+        quantityAvailable: 0,
+      }),
+    ];
+
+    const { result } = renderHook(() => useExpenseRegisterViewModel());
+
+    act(() => {
+      result.current.productEntry.setProductSearchQuery("KIT-1");
+    });
+
+    await waitFor(() => {
+      expect(mockAddOrUpdateExpenseItem).toHaveBeenCalledWith(
+        expect.objectContaining({
+          productSkuId: "product-sku-1",
+          quantity: 1,
+        }),
+      );
+    });
+    expect(useExpenseStore.getState().ui.productSearchQuery).toBe("");
+  });
+
+  it.each([
+    {
+      availabilityPolicy: "active_provisional_import" as const,
+      expectedPayload: {
+        inventoryImportProvisionalSkuId:
+          "provisional-import-sku-1" as Id<"inventoryImportProvisionalSku">,
+      },
+      rowOverrides: {
+        id: "provisional-import-sku-1" as Id<"inventoryImportProvisionalSku">,
+        inventoryImportProvisionalSkuId:
+          "provisional-import-sku-1" as Id<"inventoryImportProvisionalSku">,
+        availabilityPolicy: "active_provisional_import" as const,
+      },
+    },
+    {
+      availabilityPolicy: "pending_checkout" as const,
+      expectedPayload: {
+        pendingCheckoutItemId:
+          "pending-checkout-1" as Id<"posPendingCheckoutItem">,
+      },
+      rowOverrides: {
+        pendingCheckoutItemId:
+          "pending-checkout-1" as Id<"posPendingCheckoutItem">,
+        availabilityPolicy: "pending_checkout" as const,
+      },
+    },
+  ])(
+    "auto-adds exact $availabilityPolicy expense matches with zero trusted quantity",
+    async ({ availabilityPolicy, expectedPayload, rowOverrides }) => {
+      mockActiveSessionQuery = buildActiveExpenseSession();
+      mockRegisterCatalogRows = [
+        buildRegisterCatalogRow({
+          ...rowOverrides,
+          sku: "EXCEPTION-1",
+          barcode: "000111222333",
+        }),
+      ];
+      mockRegisterCatalogAvailabilityRows = [
+        buildRegisterCatalogAvailabilityRow({
+          ...expectedPayload,
+          availabilityPolicy,
+          inStock: true,
+          quantityAvailable: 0,
+        }),
+      ];
+
+      const { result } = renderHook(() => useExpenseRegisterViewModel());
+
+      act(() => {
+        result.current.productEntry.setProductSearchQuery("EXCEPTION-1");
+      });
+
+      await waitFor(() => {
+        expect(mockAddOrUpdateExpenseItem).toHaveBeenCalledWith(
+          expect.objectContaining({
+            productSkuId: "product-sku-1",
+            quantity: 1,
+            ...expectedPayload,
+          }),
+        );
+      });
+      expect(useExpenseStore.getState().ui.productSearchQuery).toBe("");
+    },
+  );
+
   it("does not depend on legacy POS product search hooks", () => {
     const currentDir = dirname(fileURLToPath(import.meta.url));
     const source = readFileSync(
@@ -672,7 +940,7 @@ describe("useExpenseRegisterViewModel", () => {
 
     expect(result.current.cart.items).toEqual([
       expect.objectContaining({
-        id: "expense-item-2",
+        id: "optimistic:product-sku-2:trusted_inventory",
         skuId: "product-sku-2",
         quantity: 1,
       }),
@@ -730,7 +998,7 @@ describe("useExpenseRegisterViewModel", () => {
         }),
       ]),
     );
-    expect(toast.error).toHaveBeenCalledWith(
+    expect(toast.error).not.toHaveBeenCalledWith(
       "Shop towels are no longer available.",
     );
   });
@@ -762,7 +1030,7 @@ describe("useExpenseRegisterViewModel", () => {
 
     expect(result.current.cart.items).toEqual([]);
     expect(useExpenseStore.getState().session.isUpdating).toBe(false);
-    expect(toast.error).toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalled();
   });
 
   it("optimistically updates expense cart quantity while the server mutation is pending", async () => {
@@ -771,7 +1039,6 @@ describe("useExpenseRegisterViewModel", () => {
     mockActiveSessionQuery = buildActiveExpenseSession([
       buildExpenseCartItem(),
     ]);
-    seedActiveExpenseCart();
 
     const { result } = renderHook(() => useExpenseRegisterViewModel());
     await waitFor(() => {
@@ -806,7 +1073,6 @@ describe("useExpenseRegisterViewModel", () => {
     mockActiveSessionQuery = buildActiveExpenseSession([
       buildExpenseCartItem(),
     ]);
-    seedActiveExpenseCart();
 
     const { result } = renderHook(() => useExpenseRegisterViewModel());
     await waitFor(() => {
@@ -835,7 +1101,7 @@ describe("useExpenseRegisterViewModel", () => {
 
     expect(result.current.cart.items[0].quantity).toBe(1);
     expect(result.current.checkout.cartItems[0].quantity).toBe(1);
-    expect(toast.error).toHaveBeenCalledWith(
+    expect(toast.error).not.toHaveBeenCalledWith(
       "Only one Repair kit is available.",
     );
   });
@@ -846,7 +1112,6 @@ describe("useExpenseRegisterViewModel", () => {
     mockActiveSessionQuery = buildActiveExpenseSession([
       buildExpenseCartItem(),
     ]);
-    seedActiveExpenseCart();
 
     const { result } = renderHook(() => useExpenseRegisterViewModel());
     await waitFor(() => {
@@ -870,7 +1135,7 @@ describe("useExpenseRegisterViewModel", () => {
 
     expect(result.current.cart.items[0].quantity).toBe(1);
     expect(useExpenseStore.getState().session.isUpdating).toBe(false);
-    expect(toast.error).toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalled();
   });
 
   it("does not start a second expense cart mutation while one is pending", async () => {
@@ -997,7 +1262,7 @@ describe("useExpenseRegisterViewModel", () => {
     expect(result.current.cart.items).toHaveLength(1);
     expect(result.current.cart.items[0].quantity).toBe(1);
     expect(result.current.checkout.cartItems).toHaveLength(1);
-    expect(toast.error).toHaveBeenCalledWith(
+    expect(toast.error).not.toHaveBeenCalledWith(
       "Could not remove this expense item.",
     );
   });
@@ -1031,7 +1296,7 @@ describe("useExpenseRegisterViewModel", () => {
 
     expect(result.current.cart.items).toHaveLength(1);
     expect(useExpenseStore.getState().session.isUpdating).toBe(false);
-    expect(toast.error).toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalled();
   });
 
   it("optimistically clears expense cart items while bulk removal is pending", async () => {
@@ -1184,9 +1449,11 @@ describe("useExpenseRegisterViewModel", () => {
     expect(state.session.activeSession).toBeNull();
     expect(state.session.expiresAt).toBeNull();
     expect(state.transaction.isCompleted).toBe(true);
-    expect(state.transaction.completedTransactionNumber).toBe("EXP-TXN-1");
+    expect(state.transaction.completedTransactionNumber).toMatch(
+      /^local-expense-event-/,
+    );
     expect(state.transaction.completedTransactionData).toMatchObject({
-      transactionId: "expense-transaction-1",
+      transactionId: expect.stringMatching(/^local-expense-event-/),
       cartItems: [
         expect.objectContaining({
           name: "Repair kit",
@@ -1198,5 +1465,95 @@ describe("useExpenseRegisterViewModel", () => {
     });
     expect(state.cashier.isAuthenticated).toBe(true);
     expect(state.ui.notes).toBe("Damaged item");
+  });
+
+  it("records completion against the local store session when a stale cloud session is present", async () => {
+    mockActiveSessionQuery = {
+      _id: "cloud-expense-session-stale" as Id<"expenseSession">,
+      status: "active",
+      expiresAt: Date.now() + 60_000,
+      sessionNumber: "EXP-STALE",
+      updatedAt: 100,
+      cartItems: [],
+    };
+
+    const { result, rerender } = renderHook(() => useExpenseRegisterViewModel());
+
+    act(() => {
+      useExpenseStore
+        .getState()
+        .setCurrentSessionId("local-expense-session-1" as Id<"expenseSession">);
+      useExpenseStore.getState().addToCart({
+        id: "expense-item-1" as Id<"expenseSessionItem">,
+        name: "Repair kit",
+        barcode: "123",
+        sku: "KIT-1",
+        price: 3600,
+        quantity: 1,
+        image: null,
+        productId: "product-1" as Id<"product">,
+        skuId: "product-sku-1" as Id<"productSku">,
+      });
+    });
+    rerender();
+
+    await act(async () => {
+      await result.current.checkout.onCompleteTransaction();
+    });
+
+    expect(localRuntimeMocks.completeExpense).toHaveBeenCalledWith(
+      expect.objectContaining({
+        localExpenseSessionId: "local-expense-session-1",
+      }),
+    );
+    expect(localRuntimeMocks.completeExpense).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        localExpenseSessionId: "cloud-expense-session-stale",
+      }),
+    );
+  });
+
+  it("keeps the active expense intact when local completion append fails", async () => {
+    localRuntimeMocks.completeExpense.mockResolvedValueOnce(false);
+    mockActiveSessionQuery = {
+      _id: "expense-session-1" as Id<"expenseSession">,
+      status: "active",
+      expiresAt: Date.now() + 60_000,
+      sessionNumber: "EXP-0001",
+      updatedAt: 100,
+      cartItems: [],
+    };
+
+    const { result, rerender } = renderHook(() => useExpenseRegisterViewModel());
+
+    act(() => {
+      useExpenseStore
+        .getState()
+        .setCurrentSessionId("expense-session-1" as Id<"expenseSession">);
+      useExpenseStore.getState().addToCart({
+        id: "expense-item-1" as Id<"expenseSessionItem">,
+        name: "Repair kit",
+        barcode: "123",
+        sku: "KIT-1",
+        price: 3600,
+        quantity: 1,
+        image: null,
+        productId: "product-1" as Id<"product">,
+        skuId: "product-sku-1" as Id<"productSku">,
+      });
+    });
+    rerender();
+
+    await act(async () => {
+      await result.current.checkout.onCompleteTransaction();
+    });
+
+    const state = useExpenseStore.getState();
+    expect(toast.error).toHaveBeenCalledWith(
+      "Could not record this expense locally.",
+    );
+    expect(state.transaction.isCompleted).toBe(false);
+    expect(state.session.currentSessionId).toBe("expense-session-1");
+    expect(state.cart.items).toHaveLength(1);
   });
 });

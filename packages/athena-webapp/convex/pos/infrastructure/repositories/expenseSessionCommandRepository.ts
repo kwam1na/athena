@@ -1,10 +1,13 @@
 import type { Doc, Id } from "../../../_generated/dataModel";
 import type { MutationCtx } from "../../../_generated/server";
 import { internal } from "../../../_generated/api";
+import { readActiveProvisionalImportSkuForStoreSku } from "../../application/queries/listRegisterCatalog";
 import {
   collectSessionItemsFromPages,
   findSessionItemBySkuInPages,
 } from "./sessionCommandRepository";
+
+type InventoryImportProvisionalSkuId = Id<"inventoryImportProvisionalSku">;
 
 const ACTIVE_SESSION_CANDIDATE_LIMIT = 100;
 const SESSION_ITEMS_PAGE_SIZE = 200;
@@ -40,6 +43,15 @@ export interface ExpenseSessionCommandRepository {
   getSessionItemById(
     itemId: Id<"expenseSessionItem">,
   ): Promise<Doc<"expenseSessionItem"> | null>;
+  getPendingCheckoutItem(
+    pendingCheckoutItemId: Id<"posPendingCheckoutItem">,
+  ): Promise<Doc<"posPendingCheckoutItem"> | null>;
+  getActiveProvisionalImportSkuForStoreSku(args: {
+    storeId: Id<"store">;
+    productId: Id<"product">;
+    productSkuId: Id<"productSku">;
+    provisionalSkuId?: InventoryImportProvisionalSkuId;
+  }): Promise<{ _id: InventoryImportProvisionalSkuId } | null>;
   createSession(
     input: Omit<Doc<"expenseSession">, "_id" | "_creationTime">,
   ): Promise<Id<"expenseSession">>;
@@ -134,6 +146,12 @@ export function createExpenseSessionCommandRepository(
     },
     getSessionItemById(itemId) {
       return ctx.db.get("expenseSessionItem", itemId);
+    },
+    getPendingCheckoutItem(pendingCheckoutItemId) {
+      return ctx.db.get("posPendingCheckoutItem", pendingCheckoutItemId);
+    },
+    getActiveProvisionalImportSkuForStoreSku(args) {
+      return readActiveProvisionalImportSkuForStoreSku(ctx, args);
     },
     createSession(input) {
       return ctx.db.insert("expenseSession", input);

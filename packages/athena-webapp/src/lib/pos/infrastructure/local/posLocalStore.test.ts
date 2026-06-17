@@ -860,6 +860,149 @@ describe("posLocalStore", () => {
     ]);
   });
 
+  it("allocates drawerless expense upload sequences by local expense session", async () => {
+    let nextLocalId = 1;
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+      createLocalId: () => `local-event-${nextLocalId++}`,
+    });
+
+    await store.appendEvent({
+      type: "expense.completed",
+      terminalId: "terminal-1",
+      storeId: "store-1",
+      localExpenseSessionId: "expense-session-1",
+      staffProfileId: "staff-1",
+      staffProofToken: "proof-token-1",
+      payload: {
+        localExpenseSessionId: "expense-session-1",
+        localExpenseEventId: "expense-event-1",
+        notes: "Damaged item",
+      },
+    });
+    await store.appendEvent({
+      type: "expense.completed",
+      terminalId: "terminal-1",
+      storeId: "store-1",
+      localExpenseSessionId: "expense-session-2",
+      staffProfileId: "staff-1",
+      payload: {
+        localExpenseSessionId: "expense-session-2",
+        localExpenseEventId: "expense-event-2",
+      },
+    });
+
+    const events = await store.listEvents();
+    expect(events.ok).toBe(true);
+    if (!events.ok) return;
+    expect(
+      events.value.map((event) => ({
+        localEventId: event.localEventId,
+        localExpenseSessionId: event.localExpenseSessionId,
+        localRegisterSessionId: event.localRegisterSessionId,
+        sync: event.sync.status,
+        uploadSequence: event.uploadSequence,
+      })),
+    ).toEqual([
+      {
+        localEventId: "local-event-1",
+        localExpenseSessionId: "expense-session-1",
+        localRegisterSessionId: undefined,
+        sync: "pending",
+        uploadSequence: 1,
+      },
+      {
+        localEventId: "local-event-2",
+        localExpenseSessionId: "expense-session-2",
+        localRegisterSessionId: undefined,
+        sync: "pending",
+        uploadSequence: 1,
+      },
+    ]);
+
+    await expect(store.listEventsForUpload()).resolves.toEqual({
+      ok: true,
+      value: [
+        expect.objectContaining({
+          localEventId: "local-event-1",
+          localExpenseSessionId: "expense-session-1",
+          type: "expense.completed",
+          uploadSequence: 1,
+        }),
+        expect.objectContaining({
+          localEventId: "local-event-2",
+          localExpenseSessionId: "expense-session-2",
+          type: "expense.completed",
+          uploadSequence: 1,
+        }),
+      ],
+    });
+  });
+
+  it("persists drawerless expense lifecycle events without upload sequencing until completion", async () => {
+    let nextLocalId = 1;
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+      createLocalId: () => `local-event-${nextLocalId++}`,
+    });
+
+    await store.appendEvent({
+      type: "expense.session_started",
+      terminalId: "terminal-1",
+      storeId: "store-1",
+      localExpenseSessionId: "expense-session-1",
+      staffProfileId: "staff-1",
+      payload: { localExpenseSessionId: "expense-session-1" },
+    });
+    await store.appendEvent({
+      type: "expense.item_added",
+      terminalId: "terminal-1",
+      storeId: "store-1",
+      localExpenseSessionId: "expense-session-1",
+      staffProfileId: "staff-1",
+      payload: {
+        localExpenseSessionId: "expense-session-1",
+        localItemId: "item-1",
+        productSkuId: "sku-1",
+        price: 25,
+        quantity: 1,
+      },
+    });
+    await store.appendEvent({
+      type: "expense.completed",
+      terminalId: "terminal-1",
+      storeId: "store-1",
+      localExpenseSessionId: "expense-session-1",
+      staffProfileId: "staff-1",
+      payload: {
+        localExpenseSessionId: "expense-session-1",
+        localExpenseEventId: "expense-event-1",
+      },
+    });
+
+    await expect(store.listEvents()).resolves.toMatchObject({
+      ok: true,
+      value: [
+        expect.objectContaining({
+          type: "expense.session_started",
+          localExpenseSessionId: "expense-session-1",
+          sync: { status: "synced" },
+        }),
+        expect.objectContaining({
+          type: "expense.item_added",
+          localExpenseSessionId: "expense-session-1",
+          sync: { status: "synced" },
+        }),
+        expect.objectContaining({
+          type: "expense.completed",
+          localExpenseSessionId: "expense-session-1",
+          sync: { status: "pending" },
+          uploadSequence: 1,
+        }),
+      ],
+    });
+  });
+
   it("does not advance the local sequence cursor when an event write fails", async () => {
     const adapter = createMemoryPosLocalStorageAdapter({
       failNextPutForStore: "events",

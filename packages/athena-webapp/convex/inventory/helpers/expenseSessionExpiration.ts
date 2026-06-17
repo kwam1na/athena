@@ -1,47 +1,47 @@
 /**
- * Expense Session Expiration Utilities
+ * Expense Session Lifetime Utilities
  *
- * Centralized logic for calculating expense session expiration times.
- * Expense sessions expire after 5 minutes of inactivity (shorter than POS sessions).
+ * Expense sessions follow POS continuity: they do not expire automatically in
+ * the cashier path. Keep a far-future timestamp for compatibility with older
+ * rows and result contracts that still carry `expiresAt`.
  */
 
 /**
- * Default expense session expiration duration in milliseconds
- * Expense sessions expire after 5 minutes of inactivity
+ * Compatibility lifetime for expense sessions.
  */
-const EXPENSE_SESSION_EXPIRY_DURATION_MS = 5 * 60 * 1000; // 5 minutes
+const EXPENSE_SESSION_NON_EXPIRING_DURATION_MS = 100 * 365 * 24 * 60 * 60 * 1000;
 
 /**
- * Calculates the expiration timestamp for an expense session
+ * Calculates the compatibility lifetime timestamp for an expense session.
  *
  * @param baseTime - Base time in milliseconds (usually Date.now())
- * @param customDuration - Optional custom duration in milliseconds. Defaults to EXPENSE_SESSION_EXPIRY_DURATION_MS
- * @returns Expiration timestamp in milliseconds
+ * @param customDuration - Optional custom duration in milliseconds. Defaults to EXPENSE_SESSION_NON_EXPIRING_DURATION_MS
+ * @returns Compatibility lifetime timestamp in milliseconds
  */
 export function calculateExpenseSessionExpiration(
   baseTime: number,
   customDuration?: number
 ): number {
-  const duration = customDuration ?? EXPENSE_SESSION_EXPIRY_DURATION_MS;
+  const duration = customDuration ?? EXPENSE_SESSION_NON_EXPIRING_DURATION_MS;
   return baseTime + duration;
 }
 
 /**
- * Gets the default expense session expiration duration in milliseconds
+ * Gets the default expense session compatibility lifetime in milliseconds.
  * Useful for display purposes or when you need the duration value
  *
- * @returns Default expiration duration in milliseconds
+ * @returns Default compatibility lifetime in milliseconds
  */
 export function getExpenseSessionExpiryDuration(): number {
-  return EXPENSE_SESSION_EXPIRY_DURATION_MS;
+  return EXPENSE_SESSION_NON_EXPIRING_DURATION_MS;
 }
 
 /**
- * Gets the default expense session expiration duration in minutes
+ * Gets the default expense session compatibility lifetime in minutes.
  * Useful for user-facing displays
  *
- * @returns Default expiration duration in minutes
+ * @returns Default compatibility lifetime in minutes
  */
 export function getExpenseSessionExpiryDurationMinutes(): number {
-  return EXPENSE_SESSION_EXPIRY_DURATION_MS / (60 * 1000);
+  return EXPENSE_SESSION_NON_EXPIRING_DURATION_MS / (60 * 1000);
 }

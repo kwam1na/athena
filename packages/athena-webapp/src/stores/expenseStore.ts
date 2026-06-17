@@ -4,7 +4,6 @@ import { immer } from "zustand/middleware/immer";
 import { Id } from "../../convex/_generated/dataModel";
 import { CartItem } from "../components/pos/types";
 import { calculateCartTotals } from "../lib/pos/services/calculationService";
-import { logger } from "../lib/logger";
 
 // State interfaces
 interface CartState {
@@ -27,6 +26,8 @@ type ExpenseSessionCartItem = {
   color?: string | null;
   productId?: Id<"product">;
   productSkuId?: Id<"productSku">;
+  pendingCheckoutItemId?: Id<"posPendingCheckoutItem">;
+  inventoryImportProvisionalSkuId?: Id<"inventoryImportProvisionalSku">;
 };
 
 type ExpenseSession = {
@@ -299,22 +300,6 @@ export const useExpenseStore = create<ExpenseState>()(
 
         loadSessionData: (session) =>
           set((state) => {
-            const now = Date.now();
-            if (session.expiresAt && session.expiresAt < now) {
-              logger.warn(
-                "[Expense] Attempted to load expired session, clearing state",
-                {
-                  sessionId: session._id,
-                  expiresAt: session.expiresAt,
-                  now,
-                }
-              );
-              state.session.currentSessionId = null;
-              state.session.activeSession = null;
-              state.session.expiresAt = null;
-              return;
-            }
-
             const sessionCartItems = session.cartItems || [];
             state.cart.items = sessionCartItems.map((item) => ({
               id: item._id,
@@ -329,6 +314,9 @@ export const useExpenseStore = create<ExpenseState>()(
               color: item.color ?? undefined,
               productId: item.productId,
               skuId: item.productSkuId,
+              pendingCheckoutItemId: item.pendingCheckoutItemId,
+              inventoryImportProvisionalSkuId:
+                item.inventoryImportProvisionalSkuId,
             }));
 
             state.session.currentSessionId = session._id;

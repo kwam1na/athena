@@ -1500,6 +1500,47 @@ describe("usePosLocalSyncRuntimeStatus", () => {
     });
   });
 
+  it("persists returned expense session and transaction mappings", async () => {
+    const store = {
+      writeLocalCloudMapping: vi.fn(async () => ({
+        ok: true,
+        value: null,
+      })),
+    };
+
+    const result = await writeReturnedLocalCloudMappings(
+      store as never,
+      [
+        {
+          cloudId: "expense-session-1",
+          createdAt: 10,
+          localId: "local-expense-session-1",
+          localIdKind: "expenseSession",
+        },
+        {
+          cloudId: "expense-transaction-1",
+          createdAt: 11,
+          localId: "local-expense-event-1",
+          localIdKind: "expenseTransaction",
+        },
+      ],
+    );
+
+    expect(result).toEqual({ ok: true });
+    expect(store.writeLocalCloudMapping).toHaveBeenCalledWith({
+      entity: "expenseSession",
+      localId: "local-expense-session-1",
+      cloudId: "expense-session-1",
+      mappedAt: 10,
+    });
+    expect(store.writeLocalCloudMapping).toHaveBeenCalledWith({
+      entity: "expenseTransaction",
+      localId: "local-expense-event-1",
+      cloudId: "expense-transaction-1",
+      mappedAt: 11,
+    });
+  });
+
   it("writes drawer authority when mapping persistence fails during runtime upload", async () => {
     mocks.ingestLocalEvents.mockResolvedValue({
       kind: "ok",

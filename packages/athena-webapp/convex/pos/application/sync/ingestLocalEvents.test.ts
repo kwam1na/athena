@@ -538,6 +538,235 @@ describe("createLocalSyncIngestionService", () => {
     expect(repository.events).toEqual([]);
   });
 
+  it("accepts and projects drawerless expense sync batches on local expense session scope", async () => {
+    const repository = createFakeSyncRepository();
+    const service = createLocalSyncIngestionService({
+      repository,
+      projectionRepository: repository,
+      now: () => 100,
+    });
+
+    const result = await service.ingestBatch(
+      buildBatch({
+        events: [buildExpenseRecordedEvent({ sequence: 1 })],
+      }),
+    );
+
+    expect(result.kind).toBe("ok");
+    if (result.kind !== "ok") throw new Error("Expected ok result");
+    expect(result.data.accepted).toEqual([
+      {
+        localEventId: "event-expense-recorded-1",
+        sequence: 1,
+        status: "projected",
+      },
+    ]);
+    expect(result.data.syncCursor).toEqual({
+      localRegisterSessionId: "local-expense-session-1",
+      acceptedThroughSequence: 1,
+    });
+    expect(repository.events).toEqual([
+      expect.objectContaining({
+        syncScope: "expense",
+        localRegisterSessionId: "local-expense-session-1",
+        localExpenseSessionId: "local-expense-session-1",
+        eventType: "expense_recorded",
+        status: "projected",
+      }),
+    ]);
+    expect(repository.createdExpenseTransactions).toEqual([
+      expect.objectContaining({
+        transactionNumber: "local-expense-event-1",
+        totalValue: 25,
+      }),
+    ]);
+  });
+
+  it("rejects mixed POS and expense sync batches before recording events", async () => {
+    const repository = createFakeSyncRepository();
+    const service = createLocalSyncIngestionService({
+      repository,
+      projectionRepository: repository,
+      now: () => 100,
+    });
+
+    const result = await service.ingestBatch(
+      buildBatch({
+        events: [
+          buildRegisterOpenedEvent({ sequence: 1 }),
+          buildExpenseRecordedEvent({ sequence: 2 }),
+        ],
+      }),
+    );
+
+    expect(result).toEqual({
+      kind: "user_error",
+      error: {
+        code: "validation_failed",
+        message: "POS sync batches cannot mix POS and expense events.",
+      },
+    });
+    expect(repository.events).toEqual([]);
+  });
+
+  it("rejects expense events missing local expense identity before projection", async () => {
+    const repository = createFakeSyncRepository();
+    const service = createLocalSyncIngestionService({
+      repository,
+      projectionRepository: repository,
+      now: () => 100,
+    });
+
+    const result = await service.ingestBatch(
+      buildBatch({
+        events: [
+          buildExpenseRecordedEvent({
+            sequence: 1,
+            localExpenseSessionId: "",
+            payload: {
+              localExpenseSessionId: "",
+              localExpenseEventId: "",
+            },
+          }),
+        ],
+      }),
+    );
+
+    expect(result.kind).toBe("ok");
+    if (result.kind !== "ok") throw new Error("Expected ok result");
+    expect(result.data.accepted).toEqual([
+      expect.objectContaining({
+        localEventId: "event-expense-recorded-1",
+        status: "rejected",
+      }),
+    ]);
+    expect(repository.events).toEqual([
+      expect.objectContaining({
+        eventType: "expense_recorded",
+        status: "rejected",
+        rejectionCode: "validation_failed",
+        rejectionMessage: "Expense sync event is missing required local identifiers.",
+      }),
+    ]);
+    expect(repository.createdTransactions).toHaveLength(0);
+  });
+
+  it("rejects expense events with invalid line quantities before projection", async () => {
+    const repository = createFakeSyncRepository();
+    const service = createLocalSyncIngestionService({
+      repository,
+      projectionRepository: repository,
+      now: () => 100,
+    });
+
+    const result = await service.ingestBatch(
+      buildBatch({
+        events: [
+          buildExpenseRecordedEvent({
+            sequence: 1,
+            payload: {
+              localExpenseSessionId: "local-expense-session-1",
+              localExpenseEventId: "local-expense-event-1",
+              totals: {
+                subtotal: 25,
+                tax: 0,
+                total: 25,
+              },
+              items: [
+                {
+                  localTransactionItemId: "local-expense-line-1",
+                  productId: "product-1",
+                  productSkuId: "sku-1",
+                  productName: "Repair kit",
+                  productSku: "KIT-1",
+                  quantity: -1,
+                  unitPrice: 25,
+                },
+              ],
+            },
+          }),
+        ],
+      }),
+    );
+
+    expect(result.kind).toBe("ok");
+    if (result.kind !== "ok") throw new Error("Expected ok result");
+    expect(result.data.accepted).toEqual([
+      expect.objectContaining({
+        localEventId: "event-expense-recorded-1",
+        status: "rejected",
+      }),
+    ]);
+    expect(repository.events).toEqual([
+      expect.objectContaining({
+        eventType: "expense_recorded",
+        status: "rejected",
+        rejectionCode: "validation_failed",
+        rejectionMessage: "Expense sync line items are invalid.",
+      }),
+    ]);
+    expect(repository.createdExpenseTransactions).toHaveLength(0);
+  });
+
+  it("rejects expense events with both pending checkout and provisional import sources before projection", async () => {
+    const repository = createFakeSyncRepository();
+    const service = createLocalSyncIngestionService({
+      repository,
+      projectionRepository: repository,
+      now: () => 100,
+    });
+
+    const result = await service.ingestBatch(
+      buildBatch({
+        events: [
+          buildExpenseRecordedEvent({
+            sequence: 1,
+            payload: {
+              localExpenseSessionId: "local-expense-session-1",
+              localExpenseEventId: "local-expense-event-1",
+              totals: {
+                subtotal: 25,
+                tax: 0,
+                total: 25,
+              },
+              items: [
+                {
+                  localTransactionItemId: "local-expense-line-1",
+                  productId: "product-1",
+                  productSkuId: "sku-1",
+                  productName: "Repair kit",
+                  productSku: "KIT-1",
+                  pendingCheckoutItemId: "pending-checkout-item-1",
+                  inventoryImportProvisionalSkuId: "provisional-import-sku-1",
+                  quantity: 1,
+                  unitPrice: 25,
+                },
+              ],
+            },
+          }),
+        ],
+      }),
+    );
+
+    expect(result.kind).toBe("ok");
+    if (result.kind !== "ok") throw new Error("Expected ok result");
+    expect(result.data.accepted).toEqual([
+      expect.objectContaining({
+        localEventId: "event-expense-recorded-1",
+        status: "rejected",
+      }),
+    ]);
+    expect(repository.events).toEqual([
+      expect.objectContaining({
+        eventType: "expense_recorded",
+        status: "rejected",
+        rejectionCode: "validation_failed",
+        rejectionMessage: "Expense sync line items are invalid.",
+      }),
+    ]);
+    expect(repository.createdExpenseTransactions).toHaveLength(0);
+  });
+
   it("projects a previously held event after earlier history syncs", async () => {
     const repository = createFakeSyncRepository();
     const service = createLocalSyncIngestionService({
@@ -3177,6 +3406,49 @@ function buildSaleClearedEvent(
   };
 }
 
+function buildExpenseRecordedEvent(
+  overrides: Partial<PosLocalSyncEventInput> & {
+    localExpenseSessionId?: string;
+    sequence: number;
+  },
+): PosLocalSyncEventInput {
+  const { sequence, localExpenseSessionId, ...rest } = overrides;
+  const resolvedLocalExpenseSessionId =
+    localExpenseSessionId ?? "local-expense-session-1";
+  return {
+    syncScope: "expense",
+    localEventId: `event-expense-recorded-${sequence}`,
+    localExpenseSessionId: resolvedLocalExpenseSessionId,
+    sequence,
+    eventType: "expense_recorded",
+    occurredAt: 20,
+    staffProfileId: "staff-1" as never,
+    staffProofToken: "proof-token-1",
+    payload: {
+      localExpenseSessionId: resolvedLocalExpenseSessionId,
+      localExpenseEventId: `local-expense-event-${sequence}`,
+      notes: "Damaged stock",
+      totals: {
+        subtotal: 25,
+        tax: 0,
+        total: 25,
+      },
+      items: [
+        {
+          localTransactionItemId: "local-expense-line-1",
+          productId: "product-1",
+          productSkuId: "sku-1",
+          productName: "Repair kit",
+          productSku: "KIT-1",
+          quantity: 1,
+          unitPrice: 25,
+        },
+      ],
+    },
+    ...rest,
+  } as PosLocalSyncEventInput;
+}
+
 function createFakeSyncRepository(
   overrides: Partial<{
     terminal: {
@@ -3222,6 +3494,10 @@ function createFakeSyncRepository(
   conflicts: LocalSyncConflictRecord[];
   createdPendingCheckoutItems: unknown[];
   createdPaymentAllocations: unknown[];
+  createdExpenseSessions: unknown[];
+  createdExpenseSessionItems: unknown[];
+  createdExpenseTransactions: unknown[];
+  createdExpenseTransactionItems: unknown[];
 	  createdRegisterSessions: unknown[];
 	  createdTransactions: unknown[];
 	  events: LocalSyncEventRecord[];
@@ -3246,6 +3522,10 @@ function createFakeSyncRepository(
 	  const createdRegisterSessions: unknown[] = [];
 	  const createdTransactions: unknown[] = [];
 	  const createdPaymentAllocations: unknown[] = [];
+  const createdExpenseSessions: unknown[] = [];
+  const createdExpenseSessionItems: unknown[] = [];
+  const createdExpenseTransactions: unknown[] = [];
+  const createdExpenseTransactionItems: unknown[] = [];
 	  const registerSessionPatches: Array<{
 	    registerSessionId: string;
 	    patch: unknown;
@@ -3278,6 +3558,10 @@ function createFakeSyncRepository(
     conflicts,
     createdPendingCheckoutItems,
     createdPaymentAllocations,
+    createdExpenseSessions,
+    createdExpenseSessionItems,
+    createdExpenseTransactions,
+    createdExpenseTransactionItems,
     createdRegisterSessions,
     createdTransactions,
 	    events,
@@ -3668,6 +3952,45 @@ function createFakeSyncRepository(
     },
     async createTransactionItem() {
       return `transaction-item-${nextId++}` as never;
+    },
+    async getExpenseSessionByLocalId(args) {
+      const mapping = mappings.find(
+        (candidate) =>
+          candidate.storeId === args.storeId &&
+          candidate.terminalId === args.terminalId &&
+          candidate.localIdKind === "expenseSession" &&
+          candidate.localId === args.localExpenseSessionId,
+      );
+      if (!mapping) return null;
+      return (
+        (createdExpenseSessions.find(
+          (candidate) =>
+            typeof candidate === "object" &&
+            candidate !== null &&
+            "_id" in candidate &&
+            candidate._id === mapping.cloudId,
+        ) as never) ?? null
+      );
+    },
+    async createExpenseSession(input) {
+      const id = `expense-session-${createdExpenseSessions.length + 1}`;
+      createdExpenseSessions.push({ _id: id, ...input });
+      return id as never;
+    },
+    async createExpenseSessionItem(input) {
+      const id = `expense-session-item-${createdExpenseSessionItems.length + 1}`;
+      createdExpenseSessionItems.push({ _id: id, ...input });
+      return id as never;
+    },
+    async createExpenseTransaction(input) {
+      const id = `expense-transaction-${createdExpenseTransactions.length + 1}`;
+      createdExpenseTransactions.push({ _id: id, ...input });
+      return id as never;
+    },
+    async createExpenseTransactionItem(input) {
+      const id = `expense-transaction-item-${createdExpenseTransactionItems.length + 1}`;
+      createdExpenseTransactionItems.push({ _id: id, ...input });
+      return id as never;
     },
     async createTransactionServiceLine() {
       return `transaction-service-line-${nextId++}` as never;

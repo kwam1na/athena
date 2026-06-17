@@ -11,6 +11,7 @@ import type {
   LocalSyncMappingRecord,
   LocalSyncRepository,
   ParsedPosLocalSyncEventInput,
+  PosLocalSaleItemInput,
   PosLocalSalePayload,
   PosLocalSyncEventInput,
   PosLocalSyncEventStatus,
@@ -131,9 +132,17 @@ export function createLocalSyncIngestionService(
       const mappings: LocalSyncMappingRecord[] = [];
       const conflicts: LocalSyncConflictRecord[] = [];
       let cursorRegisterSessionId: string | null =
-        batch.events[0]?.localRegisterSessionId ?? null;
+        batch.events[0] ? getLocalSyncCursorIdentity(batch.events[0]) : null;
+      const syncScopes = new Set(batch.events.map(getLocalSyncScope));
+      if (syncScopes.size > 1) {
+        return userError({
+          code: "validation_failed",
+          message: "POS sync batches cannot mix POS and expense events.",
+        });
+      }
+
       const registerSessionIds = new Set(
-        batch.events.map((event) => event.localRegisterSessionId),
+        batch.events.map(getLocalSyncCursorIdentity),
       );
       if (registerSessionIds.size > 1) {
         return userError({
@@ -153,7 +162,7 @@ export function createLocalSyncIngestionService(
       for (const event of [...batch.events].sort(
         (left, right) => left.sequence - right.sequence,
       )) {
-        cursorRegisterSessionId = event.localRegisterSessionId;
+        cursorRegisterSessionId = getLocalSyncCursorIdentity(event);
         const existing = await dependencies.repository.findEvent({
           storeId: batch.storeId,
           terminalId: batch.terminalId,
@@ -413,6 +422,18 @@ type PreparedLocalSyncEvent =
   | { kind: "held" }
   | { kind: "rejected"; message: string };
 
+function getLocalSyncScope(event: PosLocalSyncEventInput): "pos" | "expense" {
+  return event.syncScope === "expense" || event.eventType === "expense_recorded"
+    ? "expense"
+    : "pos";
+}
+
+function getLocalSyncCursorIdentity(event: PosLocalSyncEventInput): string {
+  return getLocalSyncScope(event) === "expense"
+    ? event.localExpenseSessionId ?? ""
+    : event.localRegisterSessionId ?? "";
+}
+
 function prepareLocalSyncEventForProjection(input: {
   existing: LocalSyncEventRecord | null;
   event: PosLocalSyncEventInput;
@@ -445,8 +466,12 @@ async function buildLocalSyncEventRecordInput(
   return {
     storeId: batch.storeId,
     terminalId: batch.terminalId,
+    syncScope: getLocalSyncScope(event),
     localEventId: event.localEventId,
-    localRegisterSessionId: event.localRegisterSessionId,
+    localRegisterSessionId: getLocalSyncCursorIdentity(event),
+    ...(getLocalSyncScope(event) === "expense"
+      ? { localExpenseSessionId: event.localExpenseSessionId ?? "" }
+      : {}),
     sequence: event.sequence,
     eventType: event.eventType,
     occurredAt: event.occurredAt,
@@ -467,7 +492,12 @@ async function buildLocalSyncEventRecordInput(
 function validateLocalSyncEventEnvelope(
   event: PosLocalSyncEventInput,
 ): string | null {
-  if (!event.localEventId.trim() || !event.localRegisterSessionId.trim()) {
+  const scope = getLocalSyncScope(event);
+  const localSyncIdentity = getLocalSyncCursorIdentity(event);
+  if (!event.localEventId.trim() || !localSyncIdentity.trim()) {
+    if (scope === "expense") {
+      return "Expense sync event is missing required local identifiers.";
+    }
     return "POS sync event is missing required local identifiers.";
   }
 
@@ -500,6 +530,8 @@ function parseLocalSyncEvent(
       ok: true,
       event: {
         ...event,
+        syncScope: "pos",
+        localRegisterSessionId: event.localRegisterSessionId ?? "",
         eventType: "register_opened",
         payload: {
           openingFloat: event.payload.openingFloat as number,
@@ -515,6 +547,8 @@ function parseLocalSyncEvent(
       ok: true,
       event: {
         ...event,
+        syncScope: "pos",
+        localRegisterSessionId: event.localRegisterSessionId ?? "",
         eventType: "pending_checkout_item_defined",
         payload: parsePendingCheckoutItemDefinedPayload(event.payload),
       },
@@ -526,6 +560,8 @@ function parseLocalSyncEvent(
       ok: true,
       event: {
         ...event,
+        syncScope: "pos",
+        localRegisterSessionId: event.localRegisterSessionId ?? "",
         eventType: "sale_completed",
         payload: parseSaleCompletedPayload(repository, event.payload),
       },
@@ -537,6 +573,8 @@ function parseLocalSyncEvent(
       ok: true,
       event: {
         ...event,
+        syncScope: "pos",
+        localRegisterSessionId: event.localRegisterSessionId ?? "",
         eventType: "sale_cleared",
         payload: {
           localPosSessionId: event.payload.localPosSessionId as string,
@@ -551,6 +589,8 @@ function parseLocalSyncEvent(
       ok: true,
       event: {
         ...event,
+        syncScope: "pos",
+        localRegisterSessionId: event.localRegisterSessionId ?? "",
         eventType: "register_closed",
         payload: {
           countedCash:
@@ -563,10 +603,35 @@ function parseLocalSyncEvent(
     };
   }
 
+  if (event.eventType === "expense_recorded") {
+    return {
+      ok: true,
+      event: {
+        ...event,
+        syncScope: "expense",
+        localExpenseSessionId: event.localExpenseSessionId ?? "",
+        eventType: "expense_recorded",
+        payload: {
+          localExpenseSessionId: event.payload.localExpenseSessionId as string,
+          localExpenseEventId: event.payload.localExpenseEventId as string,
+          reason: optionalString(event.payload.reason),
+          notes: optionalString(event.payload.notes),
+          totals: totalsFromPayload(event.payload.totals),
+          items: (Array.isArray(event.payload.items)
+            ? event.payload.items
+            : []
+          ).map(toSaleItemInput),
+        },
+      },
+    };
+  }
+
   return {
     ok: true,
     event: {
       ...event,
+      syncScope: "pos",
+      localRegisterSessionId: event.localRegisterSessionId ?? "",
       eventType: "register_reopened",
       payload: {
         reason: optionalString(event.payload.reason),
@@ -618,7 +683,128 @@ function validateLocalSyncEventPayload(event: PosLocalSyncEventInput): string | 
     return validateRegisterClosedPayload(event.payload);
   }
 
+  if (event.eventType === "expense_recorded") {
+    return validateExpenseRecordedPayload(event);
+  }
+
   return validateRegisterReopenedPayload(event.payload);
+}
+
+function validateExpenseRecordedPayload(event: PosLocalSyncEventInput): string | null {
+  if (event.eventType !== "expense_recorded") return null;
+  const payload = event.payload;
+  if (
+    !isNonEmptyString(event.localExpenseSessionId) ||
+    !isNonEmptyString(payload.localExpenseSessionId) ||
+    !isNonEmptyString(payload.localExpenseEventId) ||
+    payload.localExpenseSessionId !== event.localExpenseSessionId
+  ) {
+    return "Expense sync event is missing required local identifiers.";
+  }
+
+  if ("reason" in payload && !isOptionalNonEmptyString(payload.reason)) {
+    return "Expense sync reason is invalid.";
+  }
+
+  if ("notes" in payload && !isOptionalNonEmptyString(payload.notes)) {
+    return "Expense sync notes are invalid.";
+  }
+
+  const itemsMessage = validateExpenseRecordedItems(payload);
+  if (itemsMessage) return itemsMessage;
+
+  return null;
+}
+
+function validateExpenseRecordedItems(payload: Record<string, unknown>) {
+  const items = payload.items;
+  if (!Array.isArray(items) || items.length === 0) {
+    return "Expense sync event has no line items.";
+  }
+
+  const totals = payload.totals;
+  if (!isRecord(totals)) {
+    return "Expense sync totals are invalid.";
+  }
+
+  if (
+    !isNonNegativeFiniteNumber(totals.subtotal) ||
+    !isNonNegativeFiniteNumber(totals.tax) ||
+    !isNonNegativeFiniteNumber(totals.total)
+  ) {
+    return "Expense sync totals are invalid.";
+  }
+
+  const productSubtotal = items.reduce((sum, item) => {
+    if (!isRecord(item)) return Number.NaN;
+    if (
+      !isNonEmptyString(item.productId) ||
+      !isNonEmptyString(item.productSkuId) ||
+      !isNonEmptyString(item.productName) ||
+      !isOptionalString(item.productSku) ||
+      !isOptionalNonEmptyString(item.localTransactionItemId) ||
+      !isOptionalNonEmptyString(item.pendingCheckoutItemId) ||
+      !isOptionalNonEmptyString(item.inventoryImportProvisionalSkuId) ||
+      !isPositiveInteger(item.quantity) ||
+      !isNonNegativeFiniteNumber(item.unitPrice)
+    ) {
+      return Number.NaN;
+    }
+    if (item.pendingCheckoutItemId && item.inventoryImportProvisionalSkuId) {
+      return Number.NaN;
+    }
+    return sum + item.quantity * item.unitPrice;
+  }, 0);
+
+  if (!Number.isFinite(productSubtotal)) {
+    return "Expense sync line items are invalid.";
+  }
+
+  const canonicalTotal = roundMoney(totals.subtotal + totals.tax);
+  if (
+    roundMoney(totals.subtotal) !== roundMoney(productSubtotal) ||
+    roundMoney(totals.total) !== canonicalTotal
+  ) {
+    return "Expense sync totals do not match line items.";
+  }
+
+  return null;
+}
+
+function totalsFromPayload(value: unknown) {
+  const totals = value && typeof value === "object"
+    ? (value as Record<string, unknown>)
+    : {};
+  return {
+    subtotal: numberOrZero(totals.subtotal),
+    tax: numberOrZero(totals.tax),
+    total: numberOrZero(totals.total),
+  };
+}
+
+function toSaleItemInput(value: unknown): PosLocalSaleItemInput {
+  const item = value && typeof value === "object"
+    ? (value as Record<string, unknown>)
+    : {};
+  return {
+    localTransactionItemId: optionalString(item.localTransactionItemId),
+    productId: String(item.productId ?? ""),
+    productSkuId: String(item.productSkuId ?? ""),
+    pendingCheckoutItemId: optionalString(item.pendingCheckoutItemId),
+    inventoryImportProvisionalSkuId: optionalString(
+      item.inventoryImportProvisionalSkuId,
+    ),
+    productName: String(item.productName ?? ""),
+    productSku: String(item.productSku ?? ""),
+    barcode: optionalString(item.barcode),
+    quantity: numberOrZero(item.quantity),
+    unitPrice: numberOrZero(item.unitPrice),
+    image: optionalString(item.image),
+  };
+}
+
+function numberOrZero(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 
 function validateLocalSyncEventReferences(
@@ -1310,7 +1496,8 @@ function isSameLocalEvent(
   incoming: PosLocalSyncEventInput,
 ) {
   return (
-    existing.localRegisterSessionId === incoming.localRegisterSessionId &&
+    (existing.syncScope ?? "pos") === getLocalSyncScope(incoming) &&
+    existing.localRegisterSessionId === getLocalSyncCursorIdentity(incoming) &&
     existing.sequence === incoming.sequence &&
     existing.eventType === incoming.eventType &&
     existing.occurredAt === incoming.occurredAt &&

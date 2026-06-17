@@ -586,6 +586,59 @@ describe("POS local sync public mutation", () => {
       }),
     );
   });
+
+  it("exposes drawerless expense upload fields in the public args validator", () => {
+    const argsValidator = JSON.stringify((ingestLocalEvents as any).exportArgs());
+
+    expect(argsValidator).toContain("expense_recorded");
+    expect(argsValidator).toContain("syncScope");
+    expect(argsValidator).toContain("localExpenseSessionId");
+    expect(argsValidator).not.toContain(
+      '"eventType":{"type":"literal","value":"expense_recorded"},"localRegisterSessionId"',
+    );
+  });
+
+  it("passes drawerless expense sync batches to ingestion", async () => {
+    const ctx = buildCtx();
+
+    await getHandler(ingestLocalEvents)(ctx as never, {
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      syncSecretHash: "sync-secret-1",
+      events: [buildExpenseRecordedEvent()],
+    });
+
+    expect(mocks.ingestLocalEventsWithCtx).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({
+        events: [
+          expect.objectContaining({
+            syncScope: "expense",
+            eventType: "expense_recorded",
+            localExpenseSessionId: "local-expense-session-1",
+            payload: expect.objectContaining({
+              localExpenseSessionId: "local-expense-session-1",
+              localExpenseEventId: "local-expense-event-1",
+              totals: {
+                subtotal: 25,
+                tax: 0,
+                total: 25,
+              },
+              items: [
+                expect.objectContaining({
+                  localTransactionItemId: "local-expense-line-1",
+                  productId: "product-1",
+                  productSkuId: "sku-1",
+                  quantity: 1,
+                  unitPrice: 25,
+                }),
+              ],
+            }),
+          }),
+        ],
+      }),
+    );
+  });
 });
 
 function buildCtx(
@@ -673,6 +726,40 @@ function buildSaleCompletedEvent(
     payload: {
       ...baseSaleCompletedPayload(),
       ...payloadOverrides,
+    },
+  };
+}
+
+function buildExpenseRecordedEvent() {
+  return {
+    syncScope: "expense",
+    localEventId: "event-expense-1",
+    localExpenseSessionId: "local-expense-session-1",
+    sequence: 1,
+    eventType: "expense_recorded",
+    occurredAt: 124,
+    staffProfileId: "staff-1",
+    staffProofToken: "proof-token-1",
+    payload: {
+      localExpenseSessionId: "local-expense-session-1",
+      localExpenseEventId: "local-expense-event-1",
+      notes: "Damaged stock",
+      totals: {
+        subtotal: 25,
+        tax: 0,
+        total: 25,
+      },
+      items: [
+        {
+          localTransactionItemId: "local-expense-line-1",
+          productId: "product-1",
+          productSkuId: "sku-1",
+          productName: "Repair kit",
+          productSku: "KIT-1",
+          quantity: 1,
+          unitPrice: 25,
+        },
+      ],
     },
   };
 }

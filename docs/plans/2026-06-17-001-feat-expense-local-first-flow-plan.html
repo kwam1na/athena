@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>feat: Align expense flow to local-first POS</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f7f5;
+      --paper: #ffffff;
+      --ink: #202124;
+      --muted: #5f6368;
+      --line: #d9d7d2;
+      --accent: #1f6f5b;
+      --accent-soft: #e7f2ee;
+      --warn: #8a5a13;
+      --warn-soft: #fff4dc;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--ink);
+      background: var(--bg);
+      line-height: 1.55;
+    }
+    main {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 40px 24px 72px;
+    }
+    header {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 28px;
+      margin-bottom: 24px;
+    }
+    h1 { margin: 0 0 12px; font-size: 2rem; line-height: 1.15; }
+    h2 { margin-top: 0; font-size: 1.25rem; }
+    h3 { margin-bottom: 8px; font-size: 1rem; }
+    p { margin: 0 0 14px; }
+    a { color: var(--accent); }
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+    .pill {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 4px 10px;
+      background: #fbfbfa;
+    }
+    nav, section {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 18px;
+    }
+    nav ul {
+      margin: 0;
+      padding-left: 20px;
+      columns: 2;
+    }
+    li { margin: 6px 0; }
+    .callout {
+      border-left: 4px solid var(--accent);
+      background: var(--accent-soft);
+      padding: 14px 16px;
+      margin: 14px 0;
+      border-radius: 4px;
+    }
+    .assumption {
+      border-left-color: var(--warn);
+      background: var(--warn-soft);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: #f2f1ee; }
+    code {
+      background: #f2f1ee;
+      padding: 2px 5px;
+      border-radius: 4px;
+      font-size: 0.92em;
+    }
+    .unit {
+      border-top: 1px solid var(--line);
+      padding-top: 16px;
+      margin-top: 16px;
+    }
+    .unit:first-of-type {
+      border-top: 0;
+      padding-top: 0;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 14px;
+    }
+    .mini {
+      background: #fbfbfa;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px;
+    }
+    @media (max-width: 700px) {
+      main { padding: 24px 14px 48px; }
+      header, nav, section { padding: 18px; }
+      nav ul { columns: 1; }
+      h1 { font-size: 1.6rem; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>feat: Align expense flow to local-first POS</h1>
+      <p>This plan moves expense session, cart, and completion actions onto a durable local-first command boundary that mirrors POS continuity without reusing POS sale/drawer commands.</p>
+      <div class="meta">
+        <span class="pill">Type: feat</span>
+        <span class="pill">Status: active</span>
+        <span class="pill">Date: 2026-06-17</span>
+        <span class="pill">Source: <a href="./2026-06-17-001-feat-expense-local-first-flow-plan.md">Markdown plan</a></span>
+      </div>
+    </header>
+
+    <nav aria-label="Plan sections">
+      <h2>Contents</h2>
+      <ul>
+        <li><a href="#problem">Problem Frame</a></li>
+        <li><a href="#requirements">Requirements</a></li>
+        <li><a href="#decisions">Key Decisions</a></li>
+        <li><a href="#units">Implementation Units</a></li>
+        <li><a href="#impact">System Impact</a></li>
+        <li><a href="#risks">Risks</a></li>
+        <li><a href="#verification">Verification Strategy</a></li>
+      </ul>
+    </nav>
+
+    <section id="problem">
+      <h2>Problem Frame</h2>
+      <p>Expense product search already uses local POS catalog behavior, but expense still waits on Convex mutations for the durable cart/session transaction path. This makes trusted inventory slower than exception rows and less resilient than POS.</p>
+      <div class="callout assumption">
+        <strong>Planning assumptions:</strong> trusted zero-available physical items proceed locally and route conflicts to review; expense gets first-class local events; expense sync is drawerless and terminal-scoped; sessions do not expire in the cashier path; cloud inventory effects happen during projection, not local cart edits.
+      </div>
+    </section>
+
+    <section id="requirements">
+      <h2>Requirements</h2>
+      <ul>
+        <li>Expense actions are durable locally before cashier acceptance.</li>
+        <li>Local state survives reloads, held sessions, voids, completion, and offline/online transitions.</li>
+        <li>Sync is ordered and idempotent with stable local-to-cloud mappings.</li>
+        <li>Trusted, provisional, and pending checkout SKU sources stay distinct.</li>
+        <li>Local receipt/report evidence exists before cloud mapping.</li>
+        <li>Expense remains drawerless and does not reuse POS sale commands.</li>
+        <li>Expense sessions remain recoverable until explicitly completed, held, voided, or reconciled.</li>
+      </ul>
+    </section>
+
+    <section id="decisions">
+      <h2>Key Decisions</h2>
+      <div class="grid">
+        <div class="mini"><strong>First-class expense events</strong><br>Clear projection and audit semantics without overloading POS sales.</div>
+        <div class="mini"><strong>Local append before success</strong><br>Convex latency no longer gates cashier acceptance.</div>
+        <div class="mini"><strong>No cloud cart holds</strong><br>Trusted stock changes apply once during projected completion.</div>
+        <div class="mini"><strong>Source-aware identity</strong><br>Same-SKU trusted, pending, and provisional rows do not collapse incorrectly.</div>
+        <div class="mini"><strong>Drawerless sync scope</strong><br>Expense events do not fake POS register-session identity.</div>
+        <div class="mini"><strong>No local expiry gate</strong><br>Session age becomes sync/review metadata, not a cashier blocker.</div>
+      </div>
+    </section>
+
+    <section id="units">
+      <h2>Implementation Units</h2>
+      <article class="unit">
+        <h3>U6. Create a drawerless expense sync scope</h3>
+        <p>Add an explicit sync scope for expense events so upload cursors, mappings, and conflicts do not depend on POS register-session ids.</p>
+      </article>
+      <article class="unit">
+        <h3>U1. Define expense local event contract and storage projection</h3>
+        <p>Add expense event types, local ids, ordering, and a read model for active, held, pre-completion voided, completed, synced, and needs-review sessions.</p>
+      </article>
+      <article class="unit">
+        <h3>U2. Move expense UI/session operations to local-first commands</h3>
+        <p>Make add/update/remove/clear, create/hold/resume/void, and complete use local appends and local read state.</p>
+      </article>
+      <article class="unit">
+        <h3>U3. Project local expense events into Convex idempotently</h3>
+        <p>Upload expense local events through the sync boundary and map them into existing expense session/transaction records once.</p>
+      </article>
+      <article class="unit">
+        <h3>U4. Handle trusted inventory conflicts and exception sources during projection</h3>
+        <p>Apply trusted stock effects once, skip trusted effects for pending/provisional rows, and create review evidence for conflicts.</p>
+      </article>
+      <article class="unit">
+        <h3>U7. Provide local receipt/report handoff before cloud mapping</h3>
+        <p>Let locally completed expenses display, print, reload, and open report detail before a cloud transaction id exists.</p>
+      </article>
+      <article class="unit">
+        <h3>U5. Expose synced expense status, cloud report mapping, and docs</h3>
+        <p>Connect cloud-mapped expense reports back to local identifiers, expose synced/needs-review/failed-sync status, and document the new boundary and validation coverage.</p>
+      </article>
+    </section>
+
+    <section id="impact">
+      <h2>System Impact</h2>
+      <ul>
+        <li>Expense UI shifts from Convex mutation-first to local command/read-model-first.</li>
+        <li>Convex remains the cloud reporting and reconciliation target.</li>
+        <li>Projection failures become sync/review state instead of cashier rollback.</li>
+        <li>POS sale flow, drawer gates, and payment flows stay unchanged.</li>
+        <li>Expense sync uses terminal/session scope rather than synthetic register-session ids.</li>
+      </ul>
+    </section>
+
+    <section id="risks">
+      <h2>Risks</h2>
+      <table>
+        <thead><tr><th>Risk</th><th>Mitigation</th></tr></thead>
+        <tbody>
+          <tr><td>Duplicate projection on retry</td><td>Local-to-cloud mappings and replay tests before implementation.</td></tr>
+          <tr><td>Inventory double-decrement</td><td>No cloud cart holds in the local path; projection applies trusted effects once.</td></tr>
+          <tr><td>Expense accidentally inherits POS drawer/payment semantics</td><td>Expense-specific event types and tests proving drawerless behavior.</td></tr>
+          <tr><td>Register-session-only sync blocks expense upload</td><td>Add a drawerless expense sync scope before projection work.</td></tr>
+          <tr><td>Generated artifacts conflict across tickets</td><td>Coordinate tickets through a single integration PR and one final artifact refresh.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="delivery">
+      <h2>Delivery Sequence</h2>
+      <p>Track as a coordinated Linear batch: U6 -> U1 -> U2 and U3 where safe -> U4, with U7 after U2 and U5 after U4 plus U7. Land through one integration PR, loop relevant reviewer agents to unanimous approval, squash-merge to remote main, fast-forward the local root checkout, then deploy Convex and Athena webapp surfaces from clean local main.</p>
+    </section>
+
+    <section id="verification">
+      <h2>Verification Strategy</h2>
+      <p>Use test-first implementation for new behavior. Focused sensors should cover expense local command/read-model behavior, sync ingestion/projection idempotency, trusted zero-available inventory review, source metadata preservation, and receipt/report handoff. Finish with changed-file lint, Convex validation, TypeScript, build, graphify rebuild, generated artifact refresh, and the repo harness review.</p>
+    </section>
+  </main>
+</body>
+</html>

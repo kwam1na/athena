@@ -11,12 +11,16 @@ export const posLocalSyncMappingKindValidator = v.union(
   v.literal("serviceCase"),
   v.literal("serviceLine"),
   v.literal("closeout"),
+  v.literal("expenseSession"),
+  v.literal("expenseTransaction"),
 );
 
 export const posLocalSyncMappingSchema = v.object({
   storeId: v.id("store"),
   terminalId: v.id("posTerminal"),
+  syncScope: v.optional(v.union(v.literal("pos"), v.literal("expense"))),
   localRegisterSessionId: v.string(),
+  localExpenseSessionId: v.optional(v.string()),
   localEventId: v.string(),
   localIdKind: posLocalSyncMappingKindValidator,
   localId: v.string(),

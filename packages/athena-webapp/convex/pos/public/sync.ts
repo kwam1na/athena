@@ -22,7 +22,9 @@ const localSyncMappingValidator = v.object({
   _id: v.string(),
   storeId: v.id("store"),
   terminalId: v.id("posTerminal"),
+  syncScope: v.optional(v.union(v.literal("pos"), v.literal("expense"))),
   localRegisterSessionId: v.string(),
+  localExpenseSessionId: v.optional(v.string()),
   localEventId: v.string(),
   localIdKind: posLocalSyncMappingKindValidator,
   localId: v.string(),
@@ -78,6 +80,7 @@ const MAX_LOCAL_SYNC_EVENTS_PER_REQUEST = 250;
 const MAX_PENDING_CHECKOUT_DEFINITIONS_PER_REQUEST = 50;
 
 const posLocalSyncEventBaseValidator = {
+  syncScope: v.optional(v.literal("pos")),
   localEventId: v.string(),
   localRegisterSessionId: v.string(),
   sequence: v.number(),
@@ -85,6 +88,20 @@ const posLocalSyncEventBaseValidator = {
   staffProfileId: v.id("staffProfile"),
   staffProofToken: v.optional(v.string()),
 };
+
+const posLocalSyncProductLineValidator = v.object({
+  localTransactionItemId: v.optional(v.string()),
+  productId: v.string(),
+  productSkuId: v.string(),
+  pendingCheckoutItemId: v.optional(v.string()),
+  inventoryImportProvisionalSkuId: v.optional(v.string()),
+  productName: v.string(),
+  productSku: v.string(),
+  barcode: v.optional(v.string()),
+  quantity: v.number(),
+  unitPrice: v.number(),
+  image: v.optional(v.string()),
+});
 
 const posLocalSyncUploadEventValidator = v.union(
   v.object({
@@ -118,21 +135,7 @@ const posLocalSyncUploadEventValidator = v.union(
         tax: v.number(),
         total: v.number(),
       }),
-      items: v.array(
-        v.object({
-          localTransactionItemId: v.optional(v.string()),
-          productId: v.string(),
-          productSkuId: v.string(),
-          pendingCheckoutItemId: v.optional(v.string()),
-          inventoryImportProvisionalSkuId: v.optional(v.string()),
-          productName: v.string(),
-          productSku: v.string(),
-          barcode: v.optional(v.string()),
-          quantity: v.number(),
-          unitPrice: v.number(),
-          image: v.optional(v.string()),
-        }),
-      ),
+      items: v.array(posLocalSyncProductLineValidator),
       serviceLines: v.optional(
         v.array(
           v.object({
@@ -243,6 +246,28 @@ const posLocalSyncUploadEventValidator = v.union(
     eventType: v.literal("register_reopened"),
     payload: v.object({
       reason: v.optional(v.string()),
+    }),
+  }),
+  v.object({
+    syncScope: v.literal("expense"),
+    localEventId: v.string(),
+    localExpenseSessionId: v.string(),
+    sequence: v.number(),
+    eventType: v.literal("expense_recorded"),
+    occurredAt: v.number(),
+    staffProfileId: v.id("staffProfile"),
+    staffProofToken: v.optional(v.string()),
+    payload: v.object({
+      localExpenseSessionId: v.string(),
+      localExpenseEventId: v.string(),
+      reason: v.optional(v.string()),
+      notes: v.optional(v.string()),
+      totals: v.object({
+        subtotal: v.number(),
+        tax: v.number(),
+        total: v.number(),
+      }),
+      items: v.array(posLocalSyncProductLineValidator),
     }),
   }),
 );

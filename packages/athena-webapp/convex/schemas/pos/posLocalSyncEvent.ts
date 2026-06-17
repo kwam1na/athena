@@ -5,7 +5,7 @@ import {
   POS_LOCAL_SYNC_EVENT_TYPES,
 } from "../../../shared/posLocalSyncContract";
 
-const POS_LOCAL_SYNC_EVENT_TYPE_COUNT: (typeof POS_LOCAL_SYNC_EVENT_TYPES)["length"] = 6;
+const POS_LOCAL_SYNC_EVENT_TYPE_COUNT: (typeof POS_LOCAL_SYNC_EVENT_TYPES)["length"] = 7;
 const POS_LOCAL_SYNC_EVENT_STATUS_COUNT: (typeof POS_LOCAL_SYNC_EVENT_STATUSES)["length"] = 5;
 void POS_LOCAL_SYNC_EVENT_TYPE_COUNT;
 void POS_LOCAL_SYNC_EVENT_STATUS_COUNT;
@@ -25,13 +25,16 @@ export const posLocalSyncEventTypeValidator = v.union(
   v.literal(POS_LOCAL_SYNC_EVENT_TYPES[3]),
   v.literal(POS_LOCAL_SYNC_EVENT_TYPES[4]),
   v.literal(POS_LOCAL_SYNC_EVENT_TYPES[5]),
+  v.literal(POS_LOCAL_SYNC_EVENT_TYPES[6]),
 );
 
 export const posLocalSyncEventSchema = v.object({
   storeId: v.id("store"),
   terminalId: v.id("posTerminal"),
+  syncScope: v.optional(v.union(v.literal("pos"), v.literal("expense"))),
   localEventId: v.string(),
   localRegisterSessionId: v.string(),
+  localExpenseSessionId: v.optional(v.string()),
   sequence: v.number(),
   eventType: posLocalSyncEventTypeValidator,
   occurredAt: v.number(),

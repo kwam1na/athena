@@ -56,6 +56,11 @@ export const getExpenseSessionItems = query({
       storeId: v.id("store"),
       productId: v.id("product"),
       productSkuId: v.id("productSku"),
+      pendingCheckoutItemId: v.optional(v.id("posPendingCheckoutItem")),
+      inventoryImportProvisionalSkuId: v.optional(
+        v.id("inventoryImportProvisionalSku"),
+      ),
+      inventoryHoldApplied: v.optional(v.boolean()),
       productSku: v.string(),
       barcode: v.optional(v.string()),
       productName: v.string(),
@@ -87,6 +92,10 @@ export const addOrUpdateExpenseItem = mutation({
     sessionId: v.id("expenseSession"),
     productId: v.id("product"),
     productSkuId: v.id("productSku"),
+    pendingCheckoutItemId: v.optional(v.id("posPendingCheckoutItem")),
+    inventoryImportProvisionalSkuId: v.optional(
+      v.id("inventoryImportProvisionalSku"),
+    ),
     staffProfileId: v.id("staffProfile"),
     productSku: v.string(),
     barcode: v.optional(v.string()),

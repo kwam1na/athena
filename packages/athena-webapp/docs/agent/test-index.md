@@ -303,6 +303,8 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/lib/pos/infrastructure/convex/catalogGateway.test.tsx`](../../src/lib/pos/infrastructure/convex/catalogGateway.test.tsx)
 - [`src/lib/pos/infrastructure/convex/registerGateway.test.ts`](../../src/lib/pos/infrastructure/convex/registerGateway.test.ts)
 - [`src/lib/pos/infrastructure/convex/sessionGateway.test.ts`](../../src/lib/pos/infrastructure/convex/sessionGateway.test.ts)
+- [`src/lib/pos/infrastructure/local/expenseLocalCommandGateway.test.ts`](../../src/lib/pos/infrastructure/local/expenseLocalCommandGateway.test.ts)
+- [`src/lib/pos/infrastructure/local/expenseReadModel.test.ts`](../../src/lib/pos/infrastructure/local/expenseReadModel.test.ts)
 - [`src/lib/pos/infrastructure/local/localCommandGateway.test.ts`](../../src/lib/pos/infrastructure/local/localCommandGateway.test.ts)
 - [`src/lib/pos/infrastructure/local/localPosEntryContext.test.ts`](../../src/lib/pos/infrastructure/local/localPosEntryContext.test.ts)
 - [`src/lib/pos/infrastructure/local/localPosReadiness.test.ts`](../../src/lib/pos/infrastructure/local/localPosReadiness.test.ts)

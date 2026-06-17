@@ -20,7 +20,9 @@ export const POS_LOCAL_STORE_SCHEMA_VERSION = 8;
 export type PosLocalEntityKind =
   | "registerSession"
   | "posSession"
-  | "posTransaction";
+  | "posTransaction"
+  | "expenseSession"
+  | "expenseTransaction";
 
 export type PosLocalEventType =
   | "terminal.seeded"
@@ -33,6 +35,16 @@ export type PosLocalEventType =
   | "cart.service_added"
   | "cart.service_removed"
   | "transaction.completed"
+  | "expense.session_started"
+  | "expense.item_added"
+  | "expense.item_updated"
+  | "expense.item_removed"
+  | "expense.cart_cleared"
+  | "expense.held"
+  | "expense.resumed"
+  | "expense.voided"
+  | "expense.canceled"
+  | "expense.completed"
   | "register.closeout_started"
   | "register.reopened"
   | "cash.movement_recorded";
@@ -64,7 +76,8 @@ export function canUploadPosLocalEventType(type: PosLocalEventType): boolean {
     type === "transaction.completed" ||
     type === "cart.cleared" ||
     type === "register.closeout_started" ||
-    type === "register.reopened"
+    type === "register.reopened" ||
+    type === "expense.completed"
   );
 }
 
@@ -93,6 +106,7 @@ export interface PosLocalEventRecord {
   storeId: string;
   registerNumber?: string;
   localRegisterSessionId?: string;
+  localExpenseSessionId?: string;
   localPosSessionId?: string;
   localTransactionId?: string;
   staffProfileId?: string;
@@ -316,6 +330,7 @@ export type PosLocalAppendEventInput = {
   storeId: string;
   registerNumber?: string;
   localRegisterSessionId?: string;
+  localExpenseSessionId?: string;
   localPosSessionId?: string;
   localTransactionId?: string;
   staffProfileId?: string;
@@ -417,6 +432,9 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
       ...(input.localRegisterSessionId
         ? { localRegisterSessionId: input.localRegisterSessionId }
         : {}),
+      ...(getExpenseLocalSessionId(input)
+        ? { localExpenseSessionId: getExpenseLocalSessionId(input) }
+        : {}),
       ...(input.localPosSessionId
         ? { localPosSessionId: input.localPosSessionId }
         : {}),
@@ -446,12 +464,12 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
       return undefined;
     }
 
-    const localRegisterSessionId = input.localRegisterSessionId;
-    if (!localRegisterSessionId) {
+    const sequenceScopeId = getUploadSequenceScopeId(input);
+    if (!sequenceScopeId) {
       return undefined;
     }
 
-    const key = uploadSequenceKey(localRegisterSessionId);
+    const key = uploadSequenceKey(sequenceScopeId);
     const currentUploadSequence =
       (await transaction.get<number>("meta", key)) ?? 0;
     const nextUploadSequence = currentUploadSequence + 1;
@@ -461,7 +479,7 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
 
   function shouldAllocateUploadSequence(input: PosLocalAppendEventInput): boolean {
     return Boolean(
-      input.localRegisterSessionId &&
+      getUploadSequenceScopeId(input) &&
         input.initialSyncStatus !== "synced" &&
         canUploadPosLocalEventType(input.type),
     );
@@ -1576,8 +1594,26 @@ function readinessKey(storeId: string, operatingDate: string) {
   return `${storeId}:${operatingDate}`;
 }
 
-function uploadSequenceKey(localRegisterSessionId: string) {
-  return `${META_UPLOAD_SEQUENCE_PREFIX}${localRegisterSessionId}`;
+function uploadSequenceKey(scopeId: string) {
+  return `${META_UPLOAD_SEQUENCE_PREFIX}${scopeId}`;
+}
+
+function getUploadSequenceScopeId(input: PosLocalAppendEventInput) {
+  if (input.type.startsWith("expense.")) {
+    const localExpenseSessionId = getExpenseLocalSessionId(input);
+    return localExpenseSessionId
+      ? `expense:${input.storeId}:${input.terminalId}:${localExpenseSessionId}`
+      : undefined;
+  }
+
+  return input.localRegisterSessionId;
+}
+
+function getExpenseLocalSessionId(input: PosLocalAppendEventInput) {
+  if (input.localExpenseSessionId) return input.localExpenseSessionId;
+  if (!input.type.startsWith("expense.")) return undefined;
+  const payload = asRecord(input.payload);
+  return trimmedStringToOptional(payload.localExpenseSessionId);
 }
 
 function normalizeUsername(username: string) {

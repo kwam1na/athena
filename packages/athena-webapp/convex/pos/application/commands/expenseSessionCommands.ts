@@ -21,9 +21,35 @@ type CommandFailureStatus =
   | "terminalUnavailable"
   | "validationFailed";
 
+type InventoryImportProvisionalSkuId = Id<"inventoryImportProvisionalSku">;
+
 function normalizeRegisterNumber(value?: string): string | undefined {
   const normalized = value?.trim();
   return normalized && normalized.length > 0 ? normalized : undefined;
+}
+
+function expenseSessionItemSourceKey(item: {
+  pendingCheckoutItemId?: Id<"posPendingCheckoutItem">;
+  inventoryImportProvisionalSkuId?: InventoryImportProvisionalSkuId;
+}) {
+  if (item.inventoryImportProvisionalSkuId) {
+    return `provisional_import:${item.inventoryImportProvisionalSkuId}`;
+  }
+  if (item.pendingCheckoutItemId) {
+    return `pending_checkout:${item.pendingCheckoutItemId}`;
+  }
+  return "trusted_inventory";
+}
+
+function expenseSessionItemHasTrustedAvailabilityHold(item: {
+  pendingCheckoutItemId?: Id<"posPendingCheckoutItem">;
+  inventoryImportProvisionalSkuId?: InventoryImportProvisionalSkuId;
+  inventoryHoldApplied?: boolean;
+}) {
+  return (
+    expenseSessionItemSourceKey(item) === "trusted_inventory" &&
+    item.inventoryHoldApplied !== false
+  );
 }
 
 export type ExpenseSessionCommandOutcome<TData> =
@@ -60,6 +86,8 @@ export interface UpsertExpenseSessionItemArgs {
   sessionId: Id<"expenseSession">;
   productId: Id<"product">;
   productSkuId: Id<"productSku">;
+  pendingCheckoutItemId?: Id<"posPendingCheckoutItem">;
+  inventoryImportProvisionalSkuId?: InventoryImportProvisionalSkuId;
   staffProfileId: Id<"staffProfile">;
   productSku: string;
   barcode?: string;
@@ -129,10 +157,95 @@ type ExpenseSessionCommandDependencies = {
   traceRecorder?: ExpenseSessionTraceRecorder;
 };
 
+function pendingCheckoutItemMatchesExpenseLine(
+  pendingItem: Doc<"posPendingCheckoutItem"> | null,
+  args: {
+    productId: Id<"product">;
+    productSkuId: Id<"productSku">;
+    storeId: Id<"store">;
+  },
+) {
+  return (
+    pendingItem?.storeId === args.storeId &&
+    (pendingItem.status === "pending_review" ||
+      pendingItem.status === "flagged") &&
+    pendingItem.provisionalProductId === args.productId &&
+    pendingItem.provisionalProductSkuId === args.productSkuId
+  );
+}
+
+async function validateExpensePendingCheckoutLine(
+  dependencies: ExpenseSessionCommandDependencies,
+  args: {
+    pendingCheckoutItemId?: Id<"posPendingCheckoutItem">;
+    productId: Id<"product">;
+    productSkuId: Id<"productSku">;
+    storeId: Id<"store">;
+  },
+): Promise<
+  ExpenseSessionCommandOutcome<{ isPendingCheckoutLine: boolean }>
+> {
+  if (!args.pendingCheckoutItemId) {
+    return success({ isPendingCheckoutLine: false });
+  }
+
+  const pendingItem = await dependencies.repository.getPendingCheckoutItem(
+    args.pendingCheckoutItemId,
+  );
+  if (!pendingCheckoutItemMatchesExpenseLine(pendingItem, args)) {
+    return failure(
+      "validationFailed",
+      "This pending checkout item no longer matches the expense line. Add it again before continuing.",
+    );
+  }
+
+  return success({ isPendingCheckoutLine: true });
+}
+
+async function validateExpenseProvisionalImportLine(
+  dependencies: ExpenseSessionCommandDependencies,
+  args: {
+    inventoryImportProvisionalSkuId?: InventoryImportProvisionalSkuId;
+    productId: Id<"product">;
+    productSkuId: Id<"productSku">;
+    storeId: Id<"store">;
+  },
+): Promise<
+  ExpenseSessionCommandOutcome<{
+    inventoryImportProvisionalSkuId?: InventoryImportProvisionalSkuId;
+    isProvisionalImportLine: boolean;
+  }>
+> {
+  if (!args.inventoryImportProvisionalSkuId) {
+    return success({ isProvisionalImportLine: false });
+  }
+
+  const provisionalSku =
+    await dependencies.repository.getActiveProvisionalImportSkuForStoreSku({
+      storeId: args.storeId,
+      productId: args.productId,
+      productSkuId: args.productSkuId,
+      provisionalSkuId: args.inventoryImportProvisionalSkuId,
+    });
+
+  if (!provisionalSku) {
+    return failure(
+      "validationFailed",
+      "This provisional import item is no longer active for this expense line. Refresh the register catalog before continuing.",
+    );
+  }
+
+  return success({
+    inventoryImportProvisionalSkuId: provisionalSku._id,
+    isProvisionalImportLine: true,
+  });
+}
+
 interface ExpenseInventoryHoldGatewayResult {
   success: boolean;
   message?: string;
   available?: number;
+  holdApplied?: boolean;
 }
 
 interface ExpenseInventoryHoldGateway {
@@ -165,11 +278,11 @@ export function createExpenseSessionCommandService(
           terminalId: args.terminalId,
         });
 
-      const nonExpiredTerminalSessions = existingTerminalSessions.filter(
-        (session) => !isSessionExpired(session, now),
+      const recoverableTerminalSessions = existingTerminalSessions.filter(
+        (session) => !isSessionExpired(session),
       );
 
-      const existingSession = nonExpiredTerminalSessions.find(
+      const existingSession = recoverableTerminalSessions.find(
         (session) => session.staffProfileId === args.staffProfileId,
       );
 
@@ -182,7 +295,7 @@ export function createExpenseSessionCommandService(
       const existingSessionOnDifferentTerminal = staffSessions.find(
         (session) =>
           session.terminalId !== args.terminalId &&
-          !isSessionExpired(session, now),
+          !isSessionExpired(session),
       );
 
       if (existingSessionOnDifferentTerminal) {
@@ -257,10 +370,10 @@ export function createExpenseSessionCommandService(
         return failure("notFound", "Session not found");
       }
 
-      if (isSessionExpired(session, now)) {
+      if (isSessionExpired(session)) {
         return failure(
           "sessionExpired",
-          "This session has expired. Start a new one to proceed.",
+          "This session is no longer active. Start a new one to proceed.",
         );
       }
 
@@ -272,7 +385,7 @@ export function createExpenseSessionCommandService(
       const activeSessionsOnOtherTerminals = staffSessions.filter(
         (candidate) =>
           candidate.terminalId !== args.terminalId &&
-          !isSessionExpired(candidate, now),
+          !isSessionExpired(candidate),
       );
 
       if (activeSessionsOnOtherTerminals.length > 0) {
@@ -304,11 +417,7 @@ export function createExpenseSessionCommandService(
       const session = await dependencies.repository.getSessionById(
         args.sessionId,
       );
-      const validation = validateActiveSession(
-        session,
-        args.staffProfileId,
-        now,
-      );
+      const validation = validateActiveSession(session, args.staffProfileId);
       if (validation.status !== "ok") {
         return validation;
       }
@@ -367,32 +476,99 @@ export function createExpenseSessionCommandService(
       const session = await dependencies.repository.getSessionById(
         args.sessionId,
       );
-      const validation = validateActiveSession(
-        session,
-        args.staffProfileId,
-        now,
-      );
+      const validation = validateActiveSession(session, args.staffProfileId);
       if (validation.status !== "ok") {
         return validation;
       }
 
-      const existingItem = await dependencies.repository.findSessionItemBySku({
-        sessionId: args.sessionId,
-        productSkuId: args.productSkuId,
+      if (args.pendingCheckoutItemId && args.inventoryImportProvisionalSkuId) {
+        return failure(
+          "validationFailed",
+          "This expense line has conflicting inventory sources. Remove the item and add it again before continuing.",
+        );
+      }
+
+      const pendingValidation = await validateExpensePendingCheckoutLine(
+        dependencies,
+        {
+          pendingCheckoutItemId: args.pendingCheckoutItemId,
+          productId: args.productId,
+          productSkuId: args.productSkuId,
+          storeId: validation.data.storeId,
+        },
+      );
+      if (pendingValidation.status !== "ok") {
+        return pendingValidation;
+      }
+      const isPendingCheckoutLine =
+        pendingValidation.data.isPendingCheckoutLine;
+
+      const provisionalImportValidation =
+        await validateExpenseProvisionalImportLine(dependencies, {
+          inventoryImportProvisionalSkuId: args.inventoryImportProvisionalSkuId,
+          productId: args.productId,
+          productSkuId: args.productSkuId,
+          storeId: validation.data.storeId,
+        });
+      if (provisionalImportValidation.status !== "ok") {
+        return provisionalImportValidation;
+      }
+      const isProvisionalImportLine =
+        provisionalImportValidation.data.isProvisionalImportLine;
+      const nextLineSourceKey = expenseSessionItemSourceKey({
+        inventoryImportProvisionalSkuId:
+          provisionalImportValidation.data.inventoryImportProvisionalSkuId,
+        pendingCheckoutItemId: args.pendingCheckoutItemId,
       });
+      const sameSkuItems = (await dependencies.repository.listSessionItems(
+        args.sessionId,
+      )).filter((item) => item.productSkuId === args.productSkuId);
+      const existingItem = sameSkuItems.find(
+        (item) => expenseSessionItemSourceKey(item) === nextLineSourceKey,
+      );
+      const conflictingSourceItem = sameSkuItems.find((item) => {
+        const existingSourceKey = expenseSessionItemSourceKey(item);
+        if (existingSourceKey === nextLineSourceKey) return false;
+        return !(
+          existingSourceKey.startsWith("provisional_import:") &&
+          nextLineSourceKey.startsWith("provisional_import:")
+        );
+      });
+      if (conflictingSourceItem?.pendingCheckoutItemId) {
+        return failure(
+          "validationFailed",
+          "This pending checkout item no longer matches the expense line. Add it again before continuing.",
+        );
+      }
+      if (conflictingSourceItem) {
+        return failure(
+          "validationFailed",
+          "This expense line already uses a different inventory source. Remove the item and add it again before continuing.",
+        );
+      }
 
       let itemId: Id<"expenseSessionItem">;
       if (existingItem) {
-        const adjustResult = await dependencies.inventory.adjustHold(
-          args.productSkuId,
-          existingItem.quantity,
-          args.quantity,
-        );
-        if (!adjustResult.success) {
-          return failure(
-            "inventoryUnavailable",
-            adjustResult.message || "Failed to adjust inventory",
+        let nextInventoryHoldApplied = existingItem.inventoryHoldApplied;
+        if (expenseSessionItemHasTrustedAvailabilityHold(existingItem)) {
+          const adjustResult = await dependencies.inventory.adjustHold(
+            args.productSkuId,
+            existingItem.quantity,
+            args.quantity,
           );
+          if (!adjustResult.success) {
+            return failure(
+              "inventoryUnavailable",
+              adjustResult.message || "Failed to adjust inventory",
+            );
+          }
+          if (adjustResult.holdApplied === false) {
+            return failure(
+              "inventoryUnavailable",
+              adjustResult.message || "Failed to adjust inventory",
+            );
+          }
+          nextInventoryHoldApplied = true;
         }
 
         await dependencies.repository.patchSessionItem(existingItem._id, {
@@ -400,6 +576,13 @@ export function createExpenseSessionCommandService(
           price: args.price,
           barcode: args.barcode,
           color: args.color,
+          pendingCheckoutItemId: args.pendingCheckoutItemId,
+          inventoryImportProvisionalSkuId:
+            provisionalImportValidation.data.inventoryImportProvisionalSkuId,
+          inventoryHoldApplied:
+            isPendingCheckoutLine || isProvisionalImportLine
+              ? false
+              : nextInventoryHoldApplied,
           updatedAt: now,
         });
         itemId = existingItem._id;
@@ -412,15 +595,25 @@ export function createExpenseSessionCommandService(
           previousQuantity: existingItem.quantity,
         });
       } else {
-        const holdResult = await dependencies.inventory.acquireHold(
-          args.productSkuId,
-          args.quantity,
-        );
-        if (!holdResult.success) {
-          return failure(
-            "inventoryUnavailable",
-            holdResult.message || "Failed to acquire inventory hold",
+        let inventoryHoldApplied = false;
+        if (!isPendingCheckoutLine && !isProvisionalImportLine) {
+          const holdResult = await dependencies.inventory.acquireHold(
+            args.productSkuId,
+            args.quantity,
           );
+          if (!holdResult.success) {
+            return failure(
+              "inventoryUnavailable",
+              holdResult.message || "Failed to acquire inventory hold",
+            );
+          }
+          if (!holdResult.holdApplied) {
+            return failure(
+              "inventoryUnavailable",
+              holdResult.message || "Failed to acquire inventory hold",
+            );
+          }
+          inventoryHoldApplied = true;
         }
 
         itemId = await dependencies.repository.createSessionItem({
@@ -428,6 +621,10 @@ export function createExpenseSessionCommandService(
           storeId: validation.data.storeId,
           productId: args.productId,
           productSkuId: args.productSkuId,
+          pendingCheckoutItemId: args.pendingCheckoutItemId,
+          inventoryImportProvisionalSkuId:
+            provisionalImportValidation.data.inventoryImportProvisionalSkuId,
+          inventoryHoldApplied,
           productSku: args.productSku,
           barcode: args.barcode,
           productName: args.productName,
@@ -466,7 +663,6 @@ export function createExpenseSessionCommandService(
       const validation = validateModifiableSession(
         session,
         args.staffProfileId,
-        now,
       );
       if (validation.status !== "ok") {
         return validation;
@@ -486,15 +682,17 @@ export function createExpenseSessionCommandService(
         );
       }
 
-      const releaseResult = await dependencies.inventory.releaseHold(
-        item.productSkuId,
-        item.quantity,
-      );
-      if (!releaseResult.success) {
-        return failure(
-          "inventoryUnavailable",
-          releaseResult.message || "Failed to release inventory hold",
+      if (expenseSessionItemHasTrustedAvailabilityHold(item)) {
+        const releaseResult = await dependencies.inventory.releaseHold(
+          item.productSkuId,
+          item.quantity,
         );
+        if (!releaseResult.success) {
+          return failure(
+            "inventoryUnavailable",
+            releaseResult.message || "Failed to release inventory hold",
+          );
+        }
       }
 
       await dependencies.repository.deleteSessionItem(args.itemId);
@@ -530,6 +728,10 @@ export function createExpenseSessionCommandService(
       );
       const heldQuantities = new Map<Id<"productSku">, number>();
       for (const item of items) {
+        if (!expenseSessionItemHasTrustedAvailabilityHold(item)) {
+          continue;
+        }
+
         heldQuantities.set(
           item.productSkuId,
           (heldQuantities.get(item.productSkuId) ?? 0) + item.quantity,
@@ -704,16 +906,17 @@ async function acquireExpenseQuantityPatchHold(
 
   if (sku.quantityAvailable < quantity) {
     return {
-      success: false,
-      message: `Only ${sku.quantityAvailable} unit${sku.quantityAvailable !== 1 ? "s" : ""} available`,
+      success: true,
+      holdApplied: false,
       available: sku.quantityAvailable,
+      message: `Only ${sku.quantityAvailable} unit${sku.quantityAvailable !== 1 ? "s" : ""} available`,
     };
   }
 
   await ctx.db.patch("productSku", skuId, {
     quantityAvailable: sku.quantityAvailable - quantity,
   });
-  return { success: true };
+  return { success: true, holdApplied: true };
 }
 
 async function releaseExpenseQuantityPatchHold(
@@ -723,13 +926,13 @@ async function releaseExpenseQuantityPatchHold(
 ): Promise<ExpenseInventoryHoldGatewayResult> {
   const sku = await ctx.db.get("productSku", skuId);
   if (!sku || typeof sku.quantityAvailable !== "number") {
-    return { success: true };
+    return { success: true, holdApplied: false };
   }
 
   await ctx.db.patch("productSku", skuId, {
     quantityAvailable: sku.quantityAvailable + quantity,
   });
-  return { success: true };
+  return { success: true, holdApplied: true };
 }
 
 async function adjustExpenseQuantityPatchHold(
@@ -740,7 +943,7 @@ async function adjustExpenseQuantityPatchHold(
 ): Promise<ExpenseInventoryHoldGatewayResult> {
   const quantityChange = newQuantity - oldQuantity;
   if (quantityChange === 0) {
-    return { success: true };
+    return { success: true, holdApplied: true };
   }
 
   if (quantityChange > 0) {
@@ -834,20 +1037,18 @@ async function resolveRegisterSessionBinding(
 
 function isSessionExpired(
   session: Pick<Doc<"expenseSession">, "expiresAt" | "status">,
-  now: number,
 ) {
-  return session.status === "expired" || session.expiresAt < now;
+  return session.status === "expired";
 }
 
 function validateActiveSession(
   session: Doc<"expenseSession"> | null,
   staffProfileId: Id<"staffProfile">,
-  now: number,
 ): ExpenseSessionCommandOutcome<Doc<"expenseSession">> {
   if (!session) {
     return failure(
       "sessionExpired",
-      "Your session has expired. Start a new one to proceed.",
+      "Session not found.",
     );
   }
 
@@ -858,10 +1059,10 @@ function validateActiveSession(
     );
   }
 
-  if (isSessionExpired(session, now)) {
+  if (isSessionExpired(session)) {
     return failure(
       "sessionExpired",
-      "This session has expired. Start a new one to proceed.",
+      "This session is no longer active. Start a new one to proceed.",
     );
   }
 
@@ -871,7 +1072,7 @@ function validateActiveSession(
         "This session has been completed and cannot be modified. Start a new one to proceed",
       void: "This session has been voided and cannot be modified. Start a new one to proceed",
       held: "Can only add items to active sessions. Please resume or create a new session",
-      expired: "This session has expired. Start a new one to proceed",
+      expired: "This session is no longer active. Start a new one to proceed",
     };
 
     return failure(
@@ -886,7 +1087,6 @@ function validateActiveSession(
 function validateModifiableSession(
   session: Doc<"expenseSession"> | null,
   staffProfileId: Id<"staffProfile">,
-  now: number,
 ): ExpenseSessionCommandOutcome<Doc<"expenseSession">> {
   if (!session) {
     return failure("notFound", "Session not found");
@@ -899,10 +1099,10 @@ function validateModifiableSession(
     );
   }
 
-  if (isSessionExpired(session, now)) {
+  if (isSessionExpired(session)) {
     return failure(
       "sessionExpired",
-      "This session has expired. Start a new one to proceed.",
+      "This session is no longer active. Start a new one to proceed.",
     );
   }
 

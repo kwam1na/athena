@@ -35,6 +35,23 @@ function expenseTransactionError(
   });
 }
 
+function expenseItemUsesTrustedInventory(item: {
+  pendingCheckoutItemId?: Id<"posPendingCheckoutItem">;
+  inventoryImportProvisionalSkuId?: Id<"inventoryImportProvisionalSku">;
+}) {
+  return !item.pendingCheckoutItemId && !item.inventoryImportProvisionalSkuId;
+}
+
+function expenseItemHasTrustedAvailabilityHold(item: {
+  pendingCheckoutItemId?: Id<"posPendingCheckoutItem">;
+  inventoryImportProvisionalSkuId?: Id<"inventoryImportProvisionalSku">;
+  inventoryHoldApplied?: boolean;
+}) {
+  return (
+    expenseItemUsesTrustedInventory(item) && item.inventoryHoldApplied !== false
+  );
+}
+
 export function formatExpenseStaffProfileName(
   staffProfile:
     | {
@@ -78,6 +95,10 @@ export async function createExpenseTransactionFromSessionHandler(
   // Aggregate quantities by SKU to handle multiple items of the same product
   const skuQuantityMap = new Map<Id<"productSku">, number>();
   for (const item of items) {
+    if (!expenseItemUsesTrustedInventory(item)) {
+      continue;
+    }
+
     const currentQuantity = skuQuantityMap.get(item.productSkuId) || 0;
     skuQuantityMap.set(item.productSkuId, currentQuantity + item.quantity);
   }
@@ -162,6 +183,18 @@ export async function createExpenseTransactionFromSessionHandler(
         transactionId,
         productId: item.productId,
         productSkuId: item.productSkuId,
+        ...(item.pendingCheckoutItemId
+          ? { pendingCheckoutItemId: item.pendingCheckoutItemId }
+          : {}),
+        ...(item.inventoryImportProvisionalSkuId
+          ? {
+              inventoryImportProvisionalSkuId:
+                item.inventoryImportProvisionalSkuId,
+            }
+          : {}),
+        ...(expenseItemUsesTrustedInventory(item)
+          ? { inventoryHoldApplied: item.inventoryHoldApplied !== false }
+          : { inventoryHoldApplied: false }),
         productName: item.productName,
         productSku: item.productSku ?? "",
         quantity: item.quantity,
@@ -374,11 +407,20 @@ export const voidExpenseTransaction = mutation({
 
     // Restore inventory for each item
     for (const item of items) {
+      if (!expenseItemUsesTrustedInventory(item)) {
+        continue;
+      }
+
       const sku = await ctx.db.get("productSku", item.productSkuId);
       if (sku) {
         await ctx.db.patch("productSku", item.productSkuId, {
           inventoryCount: (sku.inventoryCount || 0) + item.quantity,
-          quantityAvailable: (sku.quantityAvailable || 0) + item.quantity,
+          ...(expenseItemHasTrustedAvailabilityHold(item)
+            ? {
+                quantityAvailable:
+                  (sku.quantityAvailable || 0) + item.quantity,
+              }
+            : {}),
         });
       }
     }

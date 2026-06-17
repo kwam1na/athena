@@ -4,6 +4,7 @@ import {
 } from "./posLocalStore";
 import type {
   PosLocalSyncPaymentPayload,
+  PosLocalSyncExpenseRecordedPayload,
   PosLocalSyncPendingCheckoutItemDefinedPayload,
   PosLocalSyncPendingCheckoutItemLocalMetadata,
   PosLocalSyncPendingCheckoutItemSearchContext,
@@ -51,6 +52,14 @@ export function isSyncablePosLocalEvent(
   uploadSupport: PosLocalSyncUploadSupport | number = {},
 ): boolean {
   const support = typeof uploadSupport === "number" ? {} : uploadSupport;
+  if (isExpenseLocalSyncEvent(event)) {
+    const payload = asRecord(event.payload);
+    return Boolean(
+      event.staffProfileId &&
+        typeof event.uploadSequence === "number" &&
+        stringOrEmpty(payload.localExpenseSessionId),
+    );
+  }
 
   return (
     Boolean(
@@ -78,6 +87,10 @@ function toUploadEvent(
   event: PosLocalEventRecord,
   orderedEvents: PosLocalEventRecord[],
 ): PosLocalUploadEventWithoutSequence | null {
+  if (isExpenseLocalSyncEvent(event)) {
+    return toExpenseUploadEvent(event);
+  }
+
   if (
     !event.localRegisterSessionId ||
     typeof event.uploadSequence !== "number" ||
@@ -208,6 +221,55 @@ function toUploadEvent(
   }
 
   return null;
+}
+
+function isExpenseLocalSyncEvent(event: PosLocalEventRecord): boolean {
+  return event.type === ("expense.completed" as PosLocalEventRecord["type"]);
+}
+
+function toExpenseUploadEvent(
+  event: PosLocalEventRecord,
+): PosLocalUploadEventWithoutSequence | null {
+  const payload = asRecord(event.payload);
+  const localExpenseSessionId = stringOrEmpty(payload.localExpenseSessionId);
+  if (
+    !localExpenseSessionId ||
+    typeof event.uploadSequence !== "number" ||
+    !event.staffProfileId
+  ) {
+    return null;
+  }
+
+  const expensePayload: PosLocalSyncExpenseRecordedPayload = {
+    localExpenseSessionId,
+    localExpenseEventId:
+      stringOrEmpty(payload.localExpenseEventId) || event.localEventId,
+    ...(nullableStringToOptional(payload.reason)
+      ? { reason: nullableStringToOptional(payload.reason) }
+      : {}),
+    ...(nullableStringToOptional(payload.notes)
+      ? { notes: nullableStringToOptional(payload.notes) }
+      : {}),
+    totals: {
+      subtotal: numberOrZero(payload.subtotal),
+      tax: numberOrZero(payload.tax),
+      total: numberOrZero(payload.total),
+    },
+    items: Array.isArray(payload.items)
+      ? payload.items.map(toSaleItemPayload)
+      : [],
+  };
+
+  return {
+    syncScope: "expense",
+    localEventId: event.localEventId,
+    localExpenseSessionId,
+    eventType: "expense_recorded",
+    occurredAt: event.createdAt,
+    staffProfileId: event.staffProfileId,
+    ...(event.staffProofToken ? { staffProofToken: event.staffProofToken } : {}),
+    payload: expensePayload,
+  };
 }
 
 function hasLaterCompletedSale(
