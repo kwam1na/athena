@@ -64,10 +64,10 @@ function formatCurrency(currency: string, amount?: number | null) {
 
 function getVarianceTone(variance?: number) {
   if (variance === undefined || variance === 0) {
-    return "text-stone-900";
+    return "text-foreground";
   }
 
-  return variance > 0 ? "text-emerald-700" : "text-red-700";
+  return variance > 0 ? "text-success" : "text-danger";
 }
 
 export function RegisterDrawerGate({
@@ -169,12 +169,12 @@ export function RegisterDrawerGate({
     const currency = drawerGate.currency ?? "GHS";
 
     return (
-      <div className="mx-auto max-w-2xl rounded-lg border border-stone-200 bg-white p-8 shadow-sm">
+      <div className="mx-auto max-w-2xl rounded-lg border border-border bg-surface-raised p-8 shadow-surface">
         <div className="space-y-1">
-          <h2 className="text-2xl font-semibold text-stone-900">
+          <h2 className="text-2xl font-semibold text-foreground">
             Correct opening float
           </h2>
-          <p className="text-sm text-stone-600">
+          <p className="text-sm text-muted-foreground">
             Update the starting cash for register {drawerGate.registerNumber}.
             This adjusts expected cash and records an audit event.
           </p>
@@ -184,21 +184,21 @@ export function RegisterDrawerGate({
           className="mt-8 space-y-5"
           onSubmit={handleOpeningFloatCorrectionSubmit}
         >
-          <div className="rounded-lg border border-stone-200 bg-stone-50/70 p-4">
+          <div className="rounded-lg border border-border bg-surface p-4">
             <dl className="grid grid-cols-2 gap-3 text-sm">
               <div className="space-y-1">
-                <dt className="text-[11px] uppercase tracking-[0.16em] text-stone-500">
+                <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
                   Current float
                 </dt>
-                <dd className="font-mono text-stone-900">
+                <dd className="font-mono text-foreground">
                   {formatCurrency(currency, drawerGate.currentOpeningFloat)}
                 </dd>
               </div>
               <div className="space-y-1">
-                <dt className="text-[11px] uppercase tracking-[0.16em] text-stone-500">
+                <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
                   Expected cash
                 </dt>
-                <dd className="font-mono text-stone-900">
+                <dd className="font-mono text-foreground">
                   {formatCurrency(currency, drawerGate.expectedCash)}
                 </dd>
               </div>
@@ -206,7 +206,7 @@ export function RegisterDrawerGate({
           </div>
 
           <label className="block space-y-2">
-            <span className="text-sm font-medium text-stone-700">
+            <span className="text-sm font-medium text-foreground">
               Corrected opening float ({currencyDisplaySymbol(currency)})
             </span>
             <Input
@@ -222,7 +222,7 @@ export function RegisterDrawerGate({
           </label>
 
           <label className="block space-y-2">
-            <span className="text-sm font-medium text-stone-700">Reason</span>
+            <span className="text-sm font-medium text-foreground">Reason</span>
             <Textarea
               disabled={drawerGate.isCorrectingOpeningFloat}
               onChange={(event) =>
@@ -235,7 +235,7 @@ export function RegisterDrawerGate({
           </label>
 
           {drawerGate.errorMessage ? (
-            <p className="text-sm text-red-600" role="alert">
+            <p className="text-sm text-danger" role="alert">
               {drawerGate.errorMessage}
             </p>
           ) : null}
@@ -277,24 +277,24 @@ export function RegisterDrawerGate({
       closeoutSubmittedReason === "manager_review";
 
     return (
-      <div className="mx-auto max-w-2xl rounded-lg border border-stone-200 bg-white p-8 shadow-sm">
+      <div className="mx-auto max-w-2xl rounded-lg border border-border bg-surface-raised p-8 shadow-surface">
         {isSubmittedCloseout ? (
           <div className="space-y-8">
             <div className="flex flex-wrap items-start gap-5">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-700">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-warning/15 text-warning">
                 <Clock3Icon className="h-5 w-5" />
               </div>
               <div className="min-w-0 flex-1 space-y-4">
-                <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-amber-800">
+                <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-warning">
                   {isManagerReviewCloseout
                     ? "Manager approval required"
                     : "Closeout syncing"}
                 </p>
                 <div className="space-y-2">
-                  <h2 className="text-2xl font-semibold text-stone-900">
+                  <h2 className="text-2xl font-semibold text-foreground">
                     Register {drawerGate.registerNumber} closeout submitted
                   </h2>
-                  <p className="max-w-xl text-sm leading-6 text-stone-600">
+                  <p className="max-w-xl text-sm leading-6 text-muted-foreground">
                     {isManagerReviewCloseout
                       ? "Waiting for manager review. Selling is paused until the variance is approved or the register is reopened."
                       : "Closeout is saved on this register. Selling is paused until sync finishes or the register is reopened."}
@@ -303,21 +303,21 @@ export function RegisterDrawerGate({
               </div>
             </div>
 
-            <div className="rounded-lg border border-amber-200 bg-amber-50/40 p-5">
+            <div className="rounded-lg border border-warning/30 bg-warning/10 p-5">
               <dl className="grid gap-4 text-sm sm:grid-cols-3">
                 <div className="space-y-1">
-                  <dt className="text-[11px] uppercase tracking-[0.16em] text-stone-500">
+                  <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
                     Expected
                   </dt>
-                  <dd className="font-mono text-stone-900">
+                  <dd className="font-mono text-foreground">
                     {formatCurrency(currency, drawerGate.expectedCash)}
                   </dd>
                 </div>
                 <div className="space-y-1">
-                  <dt className="text-[11px] uppercase tracking-[0.16em] text-stone-500">
+                  <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
                     Counted
                   </dt>
-                  <dd className="font-mono text-stone-900">
+                  <dd className="font-mono text-foreground">
                     {formatCurrency(
                       currency,
                       drawerGate.closeoutSubmittedCountedCash,
@@ -325,7 +325,7 @@ export function RegisterDrawerGate({
                   </dd>
                 </div>
                 <div className="space-y-1">
-                  <dt className="text-[11px] uppercase tracking-[0.16em] text-stone-500">
+                  <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
                     Variance
                   </dt>
                   <dd
@@ -375,7 +375,7 @@ export function RegisterDrawerGate({
             </div>
 
             {drawerGate.errorMessage ? (
-              <p className="text-sm text-red-600" role="alert">
+              <p className="text-sm text-danger" role="alert">
                 {drawerGate.errorMessage}
               </p>
             ) : null}
@@ -383,28 +383,28 @@ export function RegisterDrawerGate({
         ) : (
           <>
             <div className="space-y-1">
-              <h2 className="text-2xl font-semibold text-stone-900">
+              <h2 className="text-2xl font-semibold text-foreground">
                 Register {drawerGate.registerNumber} closeout in progress
               </h2>
-              <p className="text-sm text-stone-600">
+              <p className="text-sm text-muted-foreground">
                 Finish this register closeout in Cash Controls before selling
                 here.
               </p>
             </div>
 
             <form className="mt-8 space-y-5" onSubmit={handleCloseoutSubmit}>
-              <div className="rounded-lg border border-stone-200 bg-stone-50/70 p-4">
+              <div className="rounded-lg border border-border bg-surface p-4">
                 <dl className="grid grid-cols-2 gap-3 text-sm">
                   <div className="space-y-1">
-                    <dt className="text-[11px] uppercase tracking-[0.16em] text-stone-500">
+                    <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
                       Expected
                     </dt>
-                    <dd className="font-mono text-stone-900">
+                    <dd className="font-mono text-foreground">
                       {formatCurrency(currency, drawerGate.expectedCash)}
                     </dd>
                   </div>
                   <div className="space-y-1">
-                    <dt className="text-[11px] uppercase tracking-[0.16em] text-stone-500">
+                    <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
                       Draft variance
                     </dt>
                     <dd
@@ -422,7 +422,7 @@ export function RegisterDrawerGate({
               </div>
 
               <label className="block space-y-2">
-                <span className="text-sm font-medium text-stone-700">
+                <span className="text-sm font-medium text-foreground">
                   Counted cash ({currencyDisplaySymbol(currency)})
                 </span>
                 <Input
@@ -438,7 +438,7 @@ export function RegisterDrawerGate({
               </label>
 
               <label className="block space-y-2">
-                <span className="text-sm font-medium text-stone-700">
+                <span className="text-sm font-medium text-foreground">
                   Closeout notes
                 </span>
                 <Textarea
@@ -453,7 +453,7 @@ export function RegisterDrawerGate({
               </label>
 
               {drawerGate.errorMessage ? (
-                <p className="text-sm text-red-600" role="alert">
+                <p className="text-sm text-danger" role="alert">
                   {drawerGate.errorMessage}
                 </p>
               ) : null}
@@ -514,23 +514,23 @@ export function RegisterDrawerGate({
   }
 
   return (
-    <div className="mx-auto max-w-2xl rounded-lg border border-stone-200 bg-white p-8 shadow-sm">
+    <div className="mx-auto max-w-2xl rounded-lg border border-border bg-surface-raised p-8 shadow-surface">
       <div className="space-y-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <p className="text-sm font-medium uppercase tracking-[0.2em] text-stone-500">
+          <p className="text-sm font-medium uppercase tracking-[0.2em] text-muted-foreground">
             Register {drawerGate.registerNumber}
           </p>
-          <span className="rounded-full border border-stone-200 bg-stone-50 px-2.5 py-1 text-xs font-medium text-stone-600">
+          <span className="rounded-full border border-border bg-surface px-2.5 py-1 text-xs font-medium text-muted-foreground">
             Drawer closed
           </span>
         </div>
         <div className="space-y-2">
-          <h2 className="text-2xl font-semibold text-stone-900">
+          <h2 className="text-2xl font-semibold text-foreground">
             {isRecovery
               ? "Open drawer to continue"
               : "Open drawer to start selling"}
           </h2>
-          <p className="text-sm leading-6 text-stone-600">
+          <p className="text-sm leading-6 text-muted-foreground">
             {isRecovery
               ? `${drawerGate.registerLabel} is closed. Open the drawer to continue this sale.`
               : `${drawerGate.registerLabel} is closed. Enter the opening float before starting sales.`}
@@ -540,7 +540,7 @@ export function RegisterDrawerGate({
 
       <form className="mt-8 space-y-5" onSubmit={handleSubmit}>
         <label className="block space-y-2">
-          <span className="text-sm font-medium text-stone-700">
+          <span className="text-sm font-medium text-foreground">
             Opening float ({currencyDisplaySymbol(drawerGate.currency ?? "GHS")}
             )
           </span>
@@ -557,7 +557,7 @@ export function RegisterDrawerGate({
         </label>
 
         <label className="block space-y-2">
-          <span className="text-sm font-medium text-stone-700">
+          <span className="text-sm font-medium text-foreground">
             Notes (optional)
           </span>
           <Textarea
@@ -570,11 +570,11 @@ export function RegisterDrawerGate({
         </label>
 
         {drawerGate.errorMessage ? (
-          <p className="text-sm text-red-600" role="alert">
+          <p className="text-sm text-danger" role="alert">
             {drawerGate.errorMessage}
           </p>
         ) : drawerGate.canOpenDrawer === false ? (
-          <p className="text-sm text-stone-600">
+          <p className="text-sm text-muted-foreground">
             Cashier or manager sign-in required to open this drawer.
           </p>
         ) : null}

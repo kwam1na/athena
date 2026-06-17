@@ -19,6 +19,8 @@ const buttonVariants = cva(
           "border border-action-workflow-border bg-action-workflow-soft text-action-workflow hover:bg-action-workflow-soft/75",
         utility:
           "border border-border bg-background text-action-neutral hover:bg-action-neutral-soft hover:text-action-neutral",
+        "utility-strong":
+          "border border-action-neutral-strong-border bg-action-neutral-strong text-action-neutral-strong-foreground shadow-[hsl(var(--action-neutral-strong)/0.18)] hover:border-primary hover:bg-primary hover:text-primary-foreground",
         destructive:
           "bg-destructive text-destructive-foreground hover:bg-destructive/90",
         outline:

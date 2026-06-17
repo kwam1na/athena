@@ -174,6 +174,51 @@ describe("localPosReadiness", () => {
     });
   });
 
+  it("allows POS after a local drawer closeout has synced", () => {
+    expect(
+      evaluateLocalPosReadiness({
+        entryContext,
+        operatingDate: "2026-05-14",
+        localReadiness: {
+          storeId: "store-1",
+          operatingDate: "2026-05-14",
+          status: "started",
+          source: "daily_opening",
+          updatedAt: 1_000,
+        },
+        registerReadModel: {
+          canSell: false,
+          closeoutState: {
+            status: "closed_locally",
+            localRegisterSessionId: "local-register-1",
+            updatedAt: 1_100,
+          },
+          sourceEvents: [
+            {
+              localEventId: "event-1",
+              schemaVersion: 1,
+              sequence: 1,
+              uploadSequence: 1,
+              type: "register.closeout_started",
+              terminalId: "terminal-1",
+              storeId: "store-1",
+              registerNumber: "1",
+              localRegisterSessionId: "local-register-1",
+              staffProfileId: "staff-1",
+              payload: { countedCash: 100 },
+              createdAt: 1_100,
+              sync: { status: "synced" },
+            },
+          ],
+        } as PosLocalRegisterReadModel,
+      }),
+    ).toEqual({
+      status: "ready",
+      source: "local_readiness",
+      storeDayStatus: "started",
+    });
+  });
+
   it("shows store-day start readiness before local drawer recovery", () => {
     expect(
       evaluateLocalPosReadiness({

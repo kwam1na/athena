@@ -281,7 +281,7 @@ export function AthenaLandingPage() {
       <section className="border-t border-border bg-shell px-layout-lg py-layout-3xl text-shell-foreground md:px-layout-2xl">
         <Reveal className="mx-auto flex max-w-6xl flex-col gap-layout-xl md:flex-row md:items-end md:justify-between">
           <div className="max-w-3xl space-y-layout-md">
-            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-action-workflow-foreground/80">
+            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-action-workflow">
               Athena
             </p>
             <h2 className="font-display text-5xl leading-none md:text-7xl">
@@ -544,7 +544,7 @@ function OwnerPanel() {
       whileHover={{ y: -4 }}
     >
       <div className="space-y-layout-md">
-        <Eye className="h-6 w-6 text-action-workflow-foreground" />
+        <Eye className="h-6 w-6 text-action-workflow" />
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.22em] text-shell-foreground/62">
             Owner visibility
@@ -565,7 +565,7 @@ function OwnerPanel() {
               className="flex items-center justify-between rounded-md border border-shell-foreground/10 bg-shell-foreground/5 px-layout-md py-layout-sm"
             >
               <span>{item}</span>
-              <span className="font-numeric text-sm text-action-workflow-foreground">
+              <span className="font-numeric text-sm text-action-workflow">
                 {index + 12} events
               </span>
             </div>

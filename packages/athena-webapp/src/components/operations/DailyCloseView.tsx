@@ -547,7 +547,7 @@ function SuccessCheckIcon({
 function getStatusRailBadgeClassName(status: DailyCloseStatus) {
   return cn(
     status === "blocked" && "text-danger",
-    status === "needs_review" && "text-warning-foreground",
+    status === "needs_review" && "text-warning",
     status === "carry_forward" && "text-action-workflow",
     (status === "ready" || status === "completed") && "text-success",
   );
@@ -2773,7 +2773,7 @@ function CompletionRail({
                   className={cn(
                     "shrink-0 text-right font-medium text-foreground",
                     item.valueTone === "danger" && "text-danger",
-                    item.valueTone === "warning" && "text-warning-foreground",
+                    item.valueTone === "warning" && "text-warning",
                     item.valueTone === "workflow" && "text-action-workflow",
                   )}
                 >

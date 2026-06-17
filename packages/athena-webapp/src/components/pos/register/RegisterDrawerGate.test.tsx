@@ -73,7 +73,7 @@ describe("RegisterDrawerGate", () => {
 
     expect(screen.getByText("GH₵100.02")).toBeInTheDocument();
     expect(screen.getByText("GH₵100")).toBeInTheDocument();
-    expect(screen.getByText("GH₵0.02")).toHaveClass("text-emerald-700");
+    expect(screen.getByText("GH₵0.02")).toHaveClass("text-success");
   });
 
   it("does not render a reopen action when no reopen handler is available", () => {
@@ -124,7 +124,7 @@ describe("RegisterDrawerGate", () => {
     });
 
     expect(screen.getByText("GH₵100.02")).toBeInTheDocument();
-    expect(screen.getByText("GH₵-0.02")).toHaveClass("text-red-700");
+    expect(screen.getByText("GH₵-0.02")).toHaveClass("text-danger");
   });
 
   it("runs the closeout secondary action for return-to-sale states", async () => {

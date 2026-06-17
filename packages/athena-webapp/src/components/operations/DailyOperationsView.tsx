@@ -42,6 +42,7 @@ import {
 import { EmptyState } from "../states/empty/empty-state";
 import { NoPermissionView } from "../states/no-permission/NoPermissionView";
 import { ProtectedAdminSignInView } from "../states/signed-out/ProtectedAdminSignInView";
+import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Calendar } from "../ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
@@ -140,6 +141,10 @@ type DailyOperationsAutomationStatus = {
     to?: string;
   };
 };
+
+type DailyOperationsReviewEvidence = NonNullable<
+  DailyOperationsAutomationStatus["reviewEvidence"]
+>[number];
 
 export type DailyOperationsSnapshot = {
   automationStatuses?: DailyOperationsAutomationStatus[];
@@ -989,43 +994,52 @@ function AutomationReviewEvidencePanel({
   if (evidenceItems.length === 0) return null;
 
   return (
-    <section className="rounded-lg border border-warning/30 bg-warning/10 p-layout-md shadow-surface">
-      <h3 className="flex items-center gap-layout-xs text-base font-medium text-foreground">
-        <CircleAlert aria-hidden="true" className="h-4 w-4" />
-        Opening review
-      </h3>
-      <p className="mt-layout-sm text-sm leading-6 text-foreground">
-        Athena started the store day with manager review items.
-      </p>
-      <p className="mt-1 text-sm leading-6 text-muted-foreground">
-        Review these items in the owning workflow. POS stays open through the
-        started store-day record.
-      </p>
-      <div className="mt-layout-md space-y-layout-xs">
+    <section className="rounded-lg border border-warning/25 bg-surface-raised p-layout-md shadow-surface">
+      <div className="flex flex-col gap-layout-sm sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h3 className="flex items-center gap-layout-xs text-base font-medium text-foreground">
+            <CircleAlert aria-hidden="true" className="h-4 w-4 text-warning" />
+            Opening review
+          </h3>
+          <p className="mt-layout-xs text-sm leading-6 text-foreground">
+            Store day started. Review the carried-forward items when a manager
+            is available.
+          </p>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+            POS stays open while these items remain visible in their owning
+            workflows.
+          </p>
+        </div>
+        <Badge
+          className="border-warning/30 bg-warning/10 text-warning-foreground shadow-sm"
+          variant="outline"
+        >
+          {evidenceItems.length} to review
+        </Badge>
+      </div>
+      <div className="mt-layout-md divide-y divide-border/70 overflow-hidden rounded-md border border-border/70 bg-background/60">
         {evidenceItems.map((item) => (
           <article
-            className="flex flex-col gap-layout-xs rounded-md border border-border/70 bg-background/60 px-layout-md py-layout-sm sm:flex-row sm:items-start sm:justify-between"
+            className="flex flex-col gap-layout-xs px-layout-md py-layout-sm transition-colors hover:bg-surface/80 sm:flex-row sm:items-center sm:justify-between"
             key={item.id}
           >
             <div className="min-w-0">
               <p className="text-sm font-medium text-foreground">
-                {item.label}
+                {getReviewEvidenceTitle(item)}
               </p>
-              {item.message ? (
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {getReviewEvidenceContextLabel(item)}
+              </p>
+              {getReviewEvidenceDetail(item) ? (
                 <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                  {item.message}
-                </p>
-              ) : null}
-              {item.source?.label ? (
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {item.source.label}
+                  {getReviewEvidenceDetail(item)}
                 </p>
               ) : null}
             </div>
             {item.sourceLink?.to ? (
               <Button
                 asChild
-                className="h-8 shrink-0 self-start px-2 text-xs"
+                className="h-8 shrink-0 self-start px-2 text-xs sm:self-center"
                 size="sm"
                 variant="ghost"
               >
@@ -1054,6 +1068,34 @@ function AutomationReviewEvidencePanel({
       </div>
     </section>
   );
+}
+
+const PENDING_CHECKOUT_REVIEW_PREFIX = "Review pending checkout item:";
+const DEFAULT_CARRY_FORWARD_DETAIL =
+  "This unresolved carry-forward item remains open and must be acknowledged for Opening.";
+
+function getReviewEvidenceTitle(item: DailyOperationsReviewEvidence) {
+  if (item.label.startsWith(PENDING_CHECKOUT_REVIEW_PREFIX)) {
+    return item.label.slice(PENDING_CHECKOUT_REVIEW_PREFIX.length).trim();
+  }
+
+  return item.label;
+}
+
+function getReviewEvidenceContextLabel(item: DailyOperationsReviewEvidence) {
+  if (item.label.startsWith(PENDING_CHECKOUT_REVIEW_PREFIX)) {
+    return "Pending checkout item";
+  }
+
+  return item.source?.label ?? "Manager review item";
+}
+
+function getReviewEvidenceDetail(item: DailyOperationsReviewEvidence) {
+  if (!item.message || item.message === DEFAULT_CARRY_FORWARD_DETAIL) {
+    return null;
+  }
+
+  return item.message;
 }
 
 function HistoricalWorkflowPanel({

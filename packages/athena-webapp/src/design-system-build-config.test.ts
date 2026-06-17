@@ -35,6 +35,14 @@ describe("design system build config", () => {
     expect(indexHtml).not.toContain('type="text/tailwindcss"');
   });
 
+  it("keeps warning foreground legible on dark soft-warning surfaces", () => {
+    const indexCss = fs.readFileSync(path.join(packageDir, "src/index.css"), "utf8");
+
+    expect(indexCss).toContain(".dark .bg-warning\\/10.text-warning-foreground");
+    expect(indexCss).toContain(".dark .bg-warning\\/10 .text-warning-foreground");
+    expect(indexCss).toContain("color: hsl(var(--warning));");
+  });
+
   it("routes deployment helpers through the active checkout", () => {
     const repoRoot = path.resolve(packageDir, "../..");
     const interactiveDeployScript = fs.readFileSync(

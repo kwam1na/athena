@@ -156,6 +156,68 @@ describe("createLocalCommandGateway", () => {
     expect(onEventAppended).toHaveBeenCalledTimes(1);
   });
 
+  it("opens the next drawer after a local closeout has synced", async () => {
+    let nextId = 1;
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+      createLocalId: (kind) => `local-event-${kind}-${nextId++}`,
+    });
+    const opened = await store.appendEvent({
+      type: "register.opened",
+      terminalId: "terminal-1",
+      storeId: "store-1",
+      registerNumber: "1",
+      localRegisterSessionId: "drawer-1",
+      staffProfileId: "staff-1",
+      payload: { localRegisterSessionId: "drawer-1", openingFloat: 100 },
+    });
+    const closeout = await store.appendEvent({
+      type: "register.closeout_started",
+      terminalId: "terminal-1",
+      storeId: "store-1",
+      registerNumber: "1",
+      localRegisterSessionId: "drawer-1",
+      staffProfileId: "staff-1",
+      payload: { countedCash: 100 },
+    });
+    expect(opened.ok).toBe(true);
+    expect(closeout.ok).toBe(true);
+    if (!opened.ok || !closeout.ok) return;
+    await store.markEventsSynced(
+      [opened.value.localEventId, closeout.value.localEventId],
+      { uploaded: true },
+    );
+
+    const gateway = createLocalCommandGateway({
+      store,
+      createLocalId: (kind) => `${kind}-next`,
+    });
+    const nextDrawer = await gateway.openDrawer({
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      staffProfileId: "staff-1" as never,
+      registerNumber: "1",
+      openingFloat: 250,
+    });
+
+    expect(nextDrawer).toMatchObject({
+      kind: "ok",
+      data: {
+        localRegisterSessionId: "local-register-session-next",
+        openingFloat: 250,
+      },
+    });
+    await expect(store.listEvents()).resolves.toMatchObject({
+      ok: true,
+      value: expect.arrayContaining([
+        expect.objectContaining({
+          localRegisterSessionId: "local-register-session-next",
+          type: "register.opened",
+        }),
+      ]),
+    });
+  });
+
   it("persists app-session validation metadata on sale-affecting commands", async () => {
     const store = createPosLocalStore({
       adapter: createMemoryPosLocalStorageAdapter(),

@@ -342,7 +342,9 @@ describe("POSTerminalDetailViewContent", () => {
     render(<POSTerminalDetailViewContent detail={detail} isLoading={false} />);
 
     expect(screen.getByText("Staff authority")).toBeInTheDocument();
-    expect(screen.getByText("Expired")).toBeInTheDocument();
+    expect(screen.getByText("Expired").parentElement).toHaveClass(
+      "text-warning",
+    );
   });
 
   it("starts Remote Assist from an enrolled online terminal", async () => {

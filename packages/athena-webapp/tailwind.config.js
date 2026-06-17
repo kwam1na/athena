@@ -115,6 +115,10 @@ export default {
           "workflow-border": "hsl(var(--action-workflow-border))",
           neutral: "hsl(var(--action-neutral))",
           "neutral-soft": "hsl(var(--action-neutral-soft))",
+          "neutral-strong": "hsl(var(--action-neutral-strong))",
+          "neutral-strong-foreground":
+            "hsl(var(--action-neutral-strong-foreground))",
+          "neutral-strong-border": "hsl(var(--action-neutral-strong-border))",
         },
         success: {
           DEFAULT: "hsl(var(--success))",
