@@ -26,6 +26,7 @@ import { Badge } from "@/components/ui/badge";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useLocalPosEntryContext } from "@/lib/pos/infrastructure/local/localPosEntryContext";
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
 import { cn } from "@/lib/utils";
@@ -60,6 +61,7 @@ const posTerminalApi = api.inventory.posTerminal as unknown as {
 };
 
 type POSTerminalHealthViewContentProps = {
+  currentBrowserTerminalIds?: readonly string[];
   healthSummaries: TerminalHealthSummary[];
   isLoading: boolean;
   orgUrlSlug: string;
@@ -126,9 +128,7 @@ function OfflineReadinessDiagnostic({
       {unknownSignals.length > 0 ? (
         <ReadinessSignalList
           className={
-            signalsNeedingAttention.length > 0
-              ? "mt-layout-sm"
-              : "mt-layout-md"
+            signalsNeedingAttention.length > 0 ? "mt-layout-sm" : "mt-layout-md"
           }
           signals={unknownSignals}
         />
@@ -204,19 +204,13 @@ function ReadinessSignalIcon({
 }) {
   if (signal.status === "ready" || signal.status === "local_continuation") {
     return (
-      <CheckCircle2
-        aria-hidden="true"
-        className="h-3.5 w-3.5 text-success"
-      />
+      <CheckCircle2 aria-hidden="true" className="h-3.5 w-3.5 text-success" />
     );
   }
 
   if (signal.status === "needs_attention") {
     return (
-      <CircleAlert
-        aria-hidden="true"
-        className="h-3.5 w-3.5 text-warning"
-      />
+      <CircleAlert aria-hidden="true" className="h-3.5 w-3.5 text-warning" />
     );
   }
 
@@ -228,13 +222,7 @@ function ReadinessSignalIcon({
   );
 }
 
-function TerminalFact({
-  label,
-  value,
-}: {
-  label: string;
-  value: ReactNode;
-}) {
+function TerminalFact({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div>
       <dt className="text-xs font-medium uppercase text-muted-foreground">
@@ -393,13 +381,30 @@ function getAppSessionReadinessInput(status: string) {
   return { ready: false };
 }
 
+function getCurrentBrowserTerminalIds(
+  terminalSeed:
+    | { cloudTerminalId?: string | null; terminalId?: string | null }
+    | null
+    | undefined,
+) {
+  return Array.from(
+    new Set(
+      [terminalSeed?.cloudTerminalId, terminalSeed?.terminalId].filter(
+        (terminalId): terminalId is string => Boolean(terminalId),
+      ),
+    ),
+  );
+}
+
 export function POSTerminalHealthViewContent({
+  currentBrowserTerminalIds = [],
   healthSummaries,
   isLoading,
   orgUrlSlug,
   queryUnavailable = false,
   storeUrlSlug,
 }: POSTerminalHealthViewContentProps) {
+  const currentBrowserTerminalIdSet = new Set(currentBrowserTerminalIds);
   const healthRows = healthSummaries.map((summary) => ({
     classification: classifyTerminalHealth(summary),
     summary,
@@ -484,30 +489,59 @@ export function POSTerminalHealthViewContent({
                       summary.syncEvidence.acceptedThroughSequence == null
                         ? "No accepted sequence"
                         : `Accepted through ${summary.syncEvidence.acceptedThroughSequence}`;
-	                    const operationalNote =
-	                      classification.label === "Healthy"
-	                        ? null
-	                        : (primaryReason?.summary ?? classification.description);
+                    const operationalNote =
+                      classification.label === "Healthy"
+                        ? null
+                        : (primaryReason?.summary ??
+                          classification.description);
+                    const isCurrentBrowserTerminal =
+                      currentBrowserTerminalIdSet.has(
+                        String(summary.terminal._id),
+                      ) ||
+                      (runtimeStatus?.terminalId
+                        ? currentBrowserTerminalIdSet.has(
+                            String(runtimeStatus.terminalId),
+                          )
+                        : false);
 
                     return (
                       <article
-                        className="rounded-lg border border-border bg-surface-raised p-layout-md shadow-surface"
+                        className={cn(
+                          "rounded-lg border border-border bg-surface-raised p-layout-md shadow-surface",
+                          isCurrentBrowserTerminal
+                            ? "bg-action-workflow-soft/10"
+                            : null,
+                        )}
                         key={summary.terminal._id}
                       >
                         <div className="flex flex-wrap items-start justify-between gap-layout-md">
                           <div className="min-w-0 space-y-layout-xs">
-                            <Link
-                              className="block text-xl font-medium text-foreground underline-offset-4 hover:underline"
-                              params={{
-                                orgUrlSlug,
-                                storeUrlSlug,
-                                terminalId: String(summary.terminal._id),
-                              }}
-                              to="/$orgUrlSlug/store/$storeUrlSlug/pos/terminals/$terminalId"
-                              search={{ o: getOrigin() }}
-                            >
-                              {summary.terminal.displayName}
-                            </Link>
+                            <div className="flex flex-wrap items-center gap-layout-xs">
+                              <Link
+                                className="min-w-0 text-xl font-medium text-foreground underline-offset-4 hover:underline"
+                                params={{
+                                  orgUrlSlug,
+                                  storeUrlSlug,
+                                  terminalId: String(summary.terminal._id),
+                                }}
+                                to="/$orgUrlSlug/store/$storeUrlSlug/pos/terminals/$terminalId"
+                                search={{ o: getOrigin() }}
+                              >
+                                {summary.terminal.displayName}
+                              </Link>
+                              {isCurrentBrowserTerminal ? (
+                                <Badge
+                                  className="inline-flex shrink-0 items-center gap-layout-xs border-action-workflow-border text-action-workflow"
+                                  variant="outline"
+                                >
+                                  <MonitorCheck
+                                    aria-hidden="true"
+                                    className="h-3.5 w-3.5"
+                                  />
+                                  This browser
+                                </Badge>
+                              ) : null}
+                            </div>
                             <div className="flex flex-wrap gap-layout-xs text-sm text-muted-foreground">
                               <span>
                                 {formatRegisterNumber(
@@ -622,6 +656,10 @@ export function POSTerminalHealthView() {
     posTerminalApi.listTerminalHealth,
     canQuery ? { storeId: activeStore!._id } : "skip",
   ) as TerminalHealthSummary[] | null | undefined;
+  const localPosEntryContext = useLocalPosEntryContext({
+    activeStore,
+    routeParams: params,
+  });
 
   if (isLoadingAccess) {
     return null;
@@ -654,6 +692,11 @@ export function POSTerminalHealthView() {
   return (
     <POSTerminalHealthViewContent
       healthSummaries={Array.isArray(healthSummaries) ? healthSummaries : []}
+      currentBrowserTerminalIds={
+        localPosEntryContext.status === "ready"
+          ? getCurrentBrowserTerminalIds(localPosEntryContext.terminalSeed)
+          : []
+      }
       isLoading={healthSummaries === undefined}
       orgUrlSlug={params.orgUrlSlug}
       queryUnavailable={healthSummaries === null}
