@@ -33,25 +33,13 @@ import type { StaffAuthenticationResult } from "@/components/staff-auth/StaffAut
 import { useApprovedCommand } from "@/components/operations/useApprovedCommand";
 import { logger } from "@/lib/logger";
 import { useConvexCommandGateway } from "@/lib/pos/infrastructure/convex/commandGateway";
-import {
-  createIndexedDbPosLocalStorageAdapter,
-  createPosLocalStore,
-  type PosLocalActiveCashierPresenceRecord,
-  type PosLocalEventRecord,
-  type PosLocalEventValidationMetadata,
-} from "@/lib/pos/infrastructure/local/posLocalStore";
-import { createLocalCommandGateway } from "@/lib/pos/infrastructure/local/localCommandGateway";
+import { type PosLocalEventRecord } from "@/lib/pos/infrastructure/local/posLocalStore";
 import {
   type PosLocalActiveSaleReadModel,
-  type PosLocalCartItemReadModel,
   type PosLocalRegisterReadModel,
-  type PosLocalServiceLineReadModel,
 } from "@/lib/pos/infrastructure/local/registerReadModel";
-import { readProjectedLocalRegisterModel } from "@/lib/pos/infrastructure/local/localRegisterReader";
 import { isSyncablePosLocalEvent } from "@/lib/pos/infrastructure/local/syncContract";
-import { usePosLocalSyncRuntimeStatus } from "@/lib/pos/infrastructure/local/usePosLocalSyncRuntime";
 import { useLocalPosEntryContext } from "@/lib/pos/infrastructure/local/localPosEntryContext";
-import { usePosTerminalAppSessionRecoveryRuntimeInput } from "@/lib/pos/infrastructure/terminal/posTerminalAppSessionRecoveryContext";
 import { readStoredTerminalFingerprint } from "@/lib/pos/infrastructure/terminal/fingerprint";
 import {
   useConvexRegisterCatalog,
@@ -77,7 +65,6 @@ import {
 
 import type {
   RegisterCommandApprovalDialogState,
-  CashierPresenceRestoreStatus,
   RegisterServiceLineState,
   RegisterServiceSearchResult,
   RegisterViewModel,
@@ -104,120 +91,71 @@ import {
   type RegisterCatalogAvailability,
 } from "./catalogSearchPresentation";
 import { useRegisterCatalogIndex } from "./useRegisterCatalogIndex";
+import { buildPosSyncStatusPresentation } from "@/lib/pos/presentation/syncStatusPresentation";
 import {
-  buildPosSyncStatusPresentation,
-  isRegisterCloseoutReviewItem,
-  type PosReconciliationItem,
-} from "@/lib/pos/presentation/syncStatusPresentation";
-
-type LocalSyncStatusSource = {
-  description?: string | null;
-  label?: string | null;
-  onRetrySync?: (() => void) | null;
-  pendingEventCount?: number | null;
-  reconciliationItems?: PosReconciliationItem[] | null;
-  status?: string | null;
-};
-
-type LocalSyncRecord = {
-  localSyncStatus?: LocalSyncStatusSource | null;
-  syncStatus?: LocalSyncStatusSource | string | null;
-};
+  canOperateRegister,
+  getStaffDisplayNameFromAuthResult,
+  hasRegisterManagerRole,
+  hasRegisterOperatorRole,
+  isCashierPresenceBlockingSale,
+  POS_CASHIER_PRESENCE_OFFLINE_FRESHNESS_MS,
+  readStaffProofFromAuthResult,
+  validateRestoredCashierPresence,
+  type CashierPresenceRestoreState,
+  type CashierPresenceStore,
+  type StaffProfileRosterRow,
+} from "./registerCashierPresence";
+import {
+  buildLocalCartItemPayload,
+  buildLocalCartItemPayloadFromCartItem,
+  cartItemsFromLocalRegisterModel,
+  cartLineSourceKey,
+  getProductAvailabilityStatus,
+  localAvailabilityConsumptionFromReadModel,
+  mapLocalCartItemToCartItem,
+  mapLocalPendingCheckoutEventsToProducts,
+  mapPendingCheckoutCartItemToProduct,
+  mapProductToOptimisticCartItem,
+  mergeCartItemsBySku,
+  optimisticCartProductKeyFromCartItem,
+  pendingCheckoutFieldsMatchSearch,
+  pendingCheckoutCartItemMatchesSearch,
+  productCartSourceKey,
+  renderedCartLineSourceKey,
+  totalsFromCartItems,
+} from "./registerCartProjection";
+import {
+  buildCompletedSalePayload,
+  buildServiceCheckoutBlockMessage,
+  combinePaymentsByMethod,
+  completedCustomerInfo,
+  hasCustomerDetails,
+  mapLocalPaymentToPayment,
+  mapLocalServiceLineToState,
+  mapSessionCustomer,
+  matchingServiceLineDraft,
+  serviceLineStateToCartLine,
+  serviceLineStateToLocalPayload,
+} from "./registerCheckoutProjection";
+import {
+  buildOpenDrawerFailureMessage,
+  findRegisterCloseoutReviewItem,
+  getCloseoutCloudRegisterSessionId,
+  getCloseoutLocalRegisterSessionId,
+  getLatestLocalRegisterLifecycleEvent,
+  isKnownCloudRegisterSessionBlockingLocalProjection,
+  readLocalSyncStatus,
+} from "./registerDrawerPresentation";
+import {
+  useRegisterCheckoutDraftState,
+  type RegisterPaymentMutationDraft,
+} from "./useRegisterCheckoutDraftState";
+import { useRegisterLocalRuntime } from "./useRegisterLocalRuntime";
 
 type LocalAuthenticatedStaff = {
   activeRoles: string[];
   displayName: string;
 } | null;
-
-function buildLocalSaleValidationMetadata(
-  appSessionRecoveryStatus?: string | null,
-): PosLocalEventValidationMetadata | undefined {
-  if (
-    !appSessionRecoveryStatus ||
-    appSessionRecoveryStatus === "idle" ||
-    appSessionRecoveryStatus === "recoverable"
-  ) {
-    return undefined;
-  }
-
-  return {
-    flags: ["app-session-unverified", "cloud-validation-uncertain"],
-    observedAt: Date.now(),
-    uploadDeferredUntil: "app-session-validated",
-  };
-}
-
-type RestoredCashierPresence = {
-  activeRoles?: string[];
-  displayName?: string | null;
-  expiresAt?: number | null;
-  freshnessExpiresAt?: number | null;
-  offlineFreshUntil?: number | null;
-  operatingDate?: string;
-  organizationId?: string;
-  proofExpiresAt?: number | null;
-  staffProfileId?: string;
-  staffProofToken?: string | null;
-  storeId?: string;
-  terminalId?: string;
-  username?: string | null;
-};
-
-type CashierPresenceRestoreState = {
-  displayName?: string | null;
-  message?: string;
-  status: CashierPresenceRestoreStatus;
-  username?: string | null;
-};
-
-const POS_CASHIER_PRESENCE_OFFLINE_FRESHNESS_MS = 15 * 60 * 1000;
-
-type CashierPresenceStore = {
-  clearActiveCashierPresence?: (input: {
-    operatingDate: string;
-    organizationId?: string;
-    storeId: string;
-    terminalId: string;
-  }) => Promise<{ ok: boolean }>;
-  clearCashierPresence?: (input: {
-    operatingDate: string;
-    organizationId: string;
-    storeId: string;
-    terminalId: string;
-  }) => Promise<{ ok: boolean }>;
-  invalidateCashierPresenceForTerminal?: (input: {
-    organizationId?: string;
-    storeId?: string;
-    terminalId: string;
-  }) => Promise<{ ok: boolean }>;
-  readActiveCashierPresence?: (input: {
-    now?: number;
-    operatingDate: string;
-    organizationId?: string;
-    storeId: string;
-    terminalId: string;
-  }) => Promise<{
-    ok: boolean;
-    value?: RestoredCashierPresence | null;
-  }>;
-  readCashierPresence?: (input: {
-    now?: number;
-    operatingDate: string;
-    organizationId: string;
-    storeId: string;
-    terminalId: string;
-  }) => Promise<{
-    ok: boolean;
-    value?: RestoredCashierPresence | null;
-  }>;
-  writeCashierPresence?: (
-    presence: PosLocalActiveCashierPresenceRecord,
-  ) => Promise<{
-    ok: boolean;
-    value?: PosLocalActiveCashierPresenceRecord;
-    error?: { code: string };
-  }>;
-};
 
 type ServiceCatalogRow = {
   basePrice?: number;
@@ -301,68 +239,6 @@ function isServiceCatalogRow(row: unknown): row is ServiceCatalogRow {
   );
 }
 
-function buildServiceCheckoutBlockMessage(input: {
-  customerInfo: CustomerInfo;
-  serviceItems: RegisterServiceLineState[];
-}) {
-  if (input.serviceItems.length === 0) return undefined;
-
-  if (!input.customerInfo.customerProfileId) {
-    return "Customer required. Add a customer before checking out services.";
-  }
-
-  if (input.serviceItems.some((item) => !item.serviceCatalogId)) {
-    return "Service unavailable. Remove the service line and add it again.";
-  }
-
-  if (
-    input.serviceItems.some(
-      (item) => item.pricingModel === "starting_at" && item.price <= 0,
-    )
-  ) {
-    return "Service amount required. Enter the service amount before checkout.";
-  }
-
-  if (
-    input.serviceItems.some(
-      (item) =>
-        item.pricingModel === "quote_after_consultation" && item.price <= 0,
-    )
-  ) {
-    return "Quoted amount required. Enter the quoted amount before checkout.";
-  }
-
-  return undefined;
-}
-
-function readStaffProofFromAuthResult(
-  result: StaffAuthenticationResult,
-): string | null {
-  const proof = (result as { posLocalStaffProof?: unknown }).posLocalStaffProof;
-  if (!proof || typeof proof !== "object") {
-    return null;
-  }
-
-  const { expiresAt, token } = proof as {
-    expiresAt?: unknown;
-    token?: unknown;
-  };
-  if (typeof expiresAt !== "number" || typeof token !== "string") {
-    return null;
-  }
-
-  return token;
-}
-
-function getStaffDisplayNameFromAuthResult(result: StaffAuthenticationResult) {
-  return (
-    result.staffProfile.fullName ||
-    [result.staffProfile.firstName, result.staffProfile.lastName]
-      .filter(Boolean)
-      .join(" ")
-  );
-}
-
 function getLocalOperatingDate(date = new Date()) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -370,147 +246,11 @@ function getLocalOperatingDate(date = new Date()) {
   return `${year}-${month}-${day}`;
 }
 
-function validateRestoredCashierPresence(input: {
-  isOnline: boolean;
-  now: number;
-  operatingDate: string;
-  organizationId?: string;
-  presence: RestoredCashierPresence;
-  storeId: string;
-  terminalId: string;
-}): CashierPresenceRestoreState {
-  const {
-    isOnline,
-    now,
-    operatingDate,
-    organizationId,
-    presence,
-    storeId,
-    terminalId,
-  } = input;
-  const proofExpiresAt = presence.proofExpiresAt ?? presence.expiresAt;
-  const freshnessExpiresAt =
-    presence.freshnessExpiresAt ?? presence.offlineFreshUntil;
-
-  if (
-    (presence.organizationId &&
-      organizationId &&
-      presence.organizationId !== organizationId) ||
-    presence.storeId !== storeId ||
-    presence.terminalId !== terminalId ||
-    presence.operatingDate !== operatingDate ||
-    !presence.staffProfileId ||
-    !hasRegisterOperatorRole(presence.activeRoles)
-  ) {
-    return {
-      message:
-        "Cashier sign-in no longer matches this register. Sign in to continue.",
-      status: "invalidated",
-    };
-  }
-
-  if (typeof proofExpiresAt === "number" && proofExpiresAt <= now) {
-    return {
-      message: "Cashier sign-in expired. Sign in to continue.",
-      status: "expired",
-    };
-  }
-
-  if (
-    !isOnline &&
-    typeof freshnessExpiresAt === "number" &&
-    freshnessExpiresAt <= now
-  ) {
-    return {
-      message:
-        "This terminal needs an online staff refresh before offline sign-in. Reconnect, then sign in once.",
-      status: "offline_freshness_expired",
-    };
-  }
-
-  return {
-    message: "Checking cashier access before new sales.",
-    status: "validation_pending",
-  };
-}
-
-function isCashierPresenceBlockingSale(status: CashierPresenceRestoreStatus) {
-  return status === "pending" || status === "validation_pending";
-}
-
-function hasCustomerDetails(
-  customer: CustomerInfo | undefined | null,
-): boolean {
-  if (!customer) {
-    return false;
-  }
-
-  return Boolean(
-    customer.customerProfileId ||
-    customer.name.trim() ||
-    customer.email.trim() ||
-    customer.phone.trim(),
-  );
-}
-
-function mapSessionCustomer(customer: PosSessionCustomer): CustomerInfo {
-  if (!customer) {
-    return EMPTY_REGISTER_CUSTOMER_INFO;
-  }
-
-  return {
-    customerProfileId: customer.customerProfileId,
-    name: customer.name,
-    email: customer.email ?? "",
-    phone: customer.phone ?? "",
-  };
-}
-
-function combinePaymentsByMethod(payments: Payment[]): Payment[] {
-  return payments.reduce<Payment[]>((combinedPayments, payment) => {
-    const existingPayment = combinedPayments.find(
-      (candidate) => candidate.method === payment.method,
-    );
-
-    if (!existingPayment) {
-      combinedPayments.push({ ...payment });
-      return combinedPayments;
-    }
-
-    combinedPayments[combinedPayments.indexOf(existingPayment)] = {
-      ...existingPayment,
-      amount: existingPayment.amount + payment.amount,
-      timestamp: Math.max(existingPayment.timestamp, payment.timestamp),
-    };
-    return combinedPayments;
-  }, []);
-}
-
 function createPaymentId(): string {
   return (
     globalThis.crypto?.randomUUID?.() ??
     `payment-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
   );
-}
-
-function isPosPaymentMethod(method: string): method is PosPaymentMethod {
-  return method === "cash" || method === "card" || method === "mobile_money";
-}
-
-function mapLocalPaymentToPayment(payment: {
-  amount: number;
-  id?: string;
-  method: Payment["method"] | string;
-  timestamp: number;
-}): Payment {
-  const method = isPosPaymentMethod(payment.method) ? payment.method : "cash";
-
-  return {
-    id: payment.id ?? createPaymentId(),
-    method,
-    amount: payment.amount,
-    timestamp: payment.timestamp,
-  };
 }
 
 function createLocalFallbackId(prefix: string): string {
@@ -524,70 +264,6 @@ function buildLocalReceiptNumber() {
   return generateTransactionNumber();
 }
 
-function getCloseoutLocalRegisterSessionId(
-  session:
-    | { _id?: Id<"registerSession"> | string; localRegisterSessionId?: string }
-    | null
-    | undefined,
-  localRegisterReadModel?: PosLocalRegisterReadModel | null,
-): string | undefined {
-  const cloudRegisterSessionId = session?._id?.toString();
-  const localActiveRegisterSession =
-    localRegisterReadModel?.activeRegisterSession;
-  if (
-    cloudRegisterSessionId &&
-    localActiveRegisterSession?.cloudRegisterSessionId ===
-      cloudRegisterSessionId
-  ) {
-    return localActiveRegisterSession.localRegisterSessionId;
-  }
-
-  return session?.localRegisterSessionId ?? session?._id?.toString();
-}
-
-function getCloseoutCloudRegisterSessionId(
-  session:
-    | { _id?: Id<"registerSession"> | string; localRegisterSessionId?: string }
-    | null
-    | undefined,
-): Id<"registerSession"> | undefined {
-  return session?.localRegisterSessionId
-    ? undefined
-    : (session?._id as Id<"registerSession"> | undefined);
-}
-
-function isKnownCloudRegisterSessionBlockingLocalProjection(
-  cloudRegisterSession:
-    | { _id?: Id<"registerSession"> | string; status?: string }
-    | null
-    | undefined,
-  localRegisterSession:
-    | {
-        cloudRegisterSessionId?: string;
-        localRegisterSessionId?: string;
-      }
-    | null
-    | undefined,
-) {
-  if (
-    !cloudRegisterSession ||
-    !localRegisterSession ||
-    isPosUsableRegisterSessionStatus(cloudRegisterSession.status)
-  ) {
-    return false;
-  }
-
-  const cloudRegisterSessionId = cloudRegisterSession._id?.toString();
-  if (!cloudRegisterSessionId) {
-    return false;
-  }
-
-  return (
-    localRegisterSession.cloudRegisterSessionId === cloudRegisterSessionId ||
-    localRegisterSession.localRegisterSessionId === cloudRegisterSessionId
-  );
-}
-
 function trimOptional(value: string): string | undefined {
   const trimmedValue = value.trim();
   return trimmedValue.length > 0 ? trimmedValue : undefined;
@@ -595,76 +271,6 @@ function trimOptional(value: string): string | undefined {
 
 function presentOperatorError(message: string): void {
   toast.error(toOperatorMessage(message));
-}
-
-function readLocalSyncStatus(
-  ...sources: Array<unknown>
-): LocalSyncStatusSource | null {
-  for (const source of sources) {
-    if (!source || typeof source !== "object") {
-      continue;
-    }
-
-    const record = source as LocalSyncRecord;
-    if (record.localSyncStatus && typeof record.localSyncStatus === "object") {
-      return record.localSyncStatus;
-    }
-
-    if (typeof record.syncStatus === "string") {
-      return { status: record.syncStatus };
-    }
-
-    if (record.syncStatus && typeof record.syncStatus === "object") {
-      return record.syncStatus;
-    }
-  }
-
-  return null;
-}
-
-function findRegisterCloseoutReviewItem(
-  source: unknown,
-): PosReconciliationItem | null {
-  const localSyncStatus = readLocalSyncStatus(source);
-  if (!localSyncStatus) {
-    return null;
-  }
-
-  const syncStatus = buildPosSyncStatusPresentation(localSyncStatus);
-  if (syncStatus.status !== "needs_review") {
-    return null;
-  }
-
-  return (
-    syncStatus.reconciliationItems.find(isRegisterCloseoutReviewItem) ?? null
-  );
-}
-
-function getLatestLocalRegisterLifecycleEvent(
-  model: PosLocalRegisterReadModel | null,
-) {
-  const activeRegisterSession = model?.activeRegisterSession;
-  if (!activeRegisterSession) return null;
-
-  const sessionIds = new Set(
-    [
-      activeRegisterSession.localRegisterSessionId,
-      activeRegisterSession.cloudRegisterSessionId,
-    ].filter(Boolean),
-  );
-
-  return (
-    [...model.sourceEvents]
-      .sort((left, right) => left.sequence - right.sequence)
-      .filter(
-        (event) =>
-          event.localRegisterSessionId &&
-          sessionIds.has(event.localRegisterSessionId) &&
-          (event.type === "register.closeout_started" ||
-            event.type === "register.reopened"),
-      )
-      .at(-1) ?? null
-  );
 }
 
 function countPendingSyncableLocalEventsForStaff(
@@ -714,755 +320,6 @@ function hasSyncedSaleLocalEventsForStaff(
       event.sync.uploaded,
   );
 }
-
-function mapProductToOptimisticCartItem(
-  product: Product,
-  quantity: number,
-): CartItem {
-  return {
-    id: `optimistic:${product.id}` as Id<"posSessionItem">,
-    name: product.name,
-    barcode: product.barcode,
-    sku: product.sku,
-    price: product.price,
-    quantity,
-    image: product.image ?? undefined,
-    size: product.size,
-    length: product.length,
-    color: product.color,
-    productId: product.productId,
-    skuId: product.skuId,
-    pendingCheckoutItemId: product.pendingCheckoutItemId,
-    inventoryImportProvisionalSkuId: product.inventoryImportProvisionalSkuId,
-    areProcessingFeesAbsorbed: product.areProcessingFeesAbsorbed,
-  };
-}
-
-function buildLocalCartItemPayload(input: {
-  localItemId: string;
-  product: Product;
-  quantity: number;
-}) {
-  const { localItemId, product, quantity } = input;
-  return {
-    localItemId,
-    productId: product.productId,
-    productSkuId: product.skuId,
-    pendingCheckoutItemId: product.pendingCheckoutItemId ?? null,
-    inventoryImportProvisionalSkuId:
-      product.inventoryImportProvisionalSkuId ?? null,
-    productSku: product.sku || "",
-    barcode: product.barcode || null,
-    productName: product.name,
-    price: product.price,
-    quantity,
-    quantityAvailable: product.quantityAvailable,
-    image: product.image || null,
-    size: product.size || null,
-    length: product.length || null,
-    color: product.color || null,
-    areProcessingFeesAbsorbed: product.areProcessingFeesAbsorbed,
-  };
-}
-
-function productCartSourceKey(product: {
-  pendingCheckoutItemId?: string | null;
-  inventoryImportProvisionalSkuId?: string | null;
-}) {
-  if (product.inventoryImportProvisionalSkuId) {
-    return `provisional_import:${product.inventoryImportProvisionalSkuId}`;
-  }
-  if (product.pendingCheckoutItemId) {
-    return `pending_checkout:${product.pendingCheckoutItemId}`;
-  }
-  return "trusted_inventory";
-}
-
-function cartLineSourceKey(item: {
-  pendingCheckoutItemId?: string | null;
-  inventoryImportProvisionalSkuId?: string | null;
-}) {
-  return productCartSourceKey(item);
-}
-
-function renderedCartLineSourceKey(item: CartItem) {
-  return productCartSourceKey({
-    inventoryImportProvisionalSkuId:
-      "inventoryImportProvisionalSkuId" in item
-        ? (item.inventoryImportProvisionalSkuId ?? null)
-        : null,
-    pendingCheckoutItemId:
-      "pendingCheckoutItemId" in item
-        ? (item.pendingCheckoutItemId ?? null)
-        : null,
-  });
-}
-
-function optimisticCartProductKeyFromCartItem(item: CartItem) {
-  const itemId = item.id.toString();
-  return itemId.startsWith("optimistic:")
-    ? itemId.slice("optimistic:".length)
-    : (item.skuId ?? itemId);
-}
-
-function buildLocalCartItemPayloadFromCartItem(input: {
-  item: CartItem;
-  localItemId: string;
-  quantity: number;
-}) {
-  const { item, localItemId, quantity } = input;
-  return {
-    localItemId,
-    productId: item.productId,
-    productSkuId: item.skuId,
-    pendingCheckoutItemId:
-      "pendingCheckoutItemId" in item
-        ? (item.pendingCheckoutItemId ?? null)
-        : null,
-    inventoryImportProvisionalSkuId:
-      "inventoryImportProvisionalSkuId" in item
-        ? (item.inventoryImportProvisionalSkuId ?? null)
-        : null,
-    productSku: item.sku || "",
-    barcode: item.barcode || null,
-    productName: item.name,
-    price: item.price,
-    quantity,
-    image: item.image || null,
-    size: item.size || null,
-    length: item.length || null,
-    color: item.color || null,
-    areProcessingFeesAbsorbed: item.areProcessingFeesAbsorbed,
-  };
-}
-
-function getProductAvailabilityStatus(product: Product) {
-  if (product.availabilityStatus) {
-    return product.availabilityStatus;
-  }
-
-  if (typeof product.quantityAvailable === "number") {
-    return product.inStock && product.quantityAvailable > 0
-      ? "available"
-      : "out_of_stock";
-  }
-
-  return product.inStock ? "available" : "unknown";
-}
-
-function buildCompletedSalePayload(input: {
-  cartItems: CartItem[];
-  customerInfo: CustomerInfo;
-  localReceiptNumber: string;
-  localPosSessionId: string;
-  localTransactionId: string;
-  payments: Payment[];
-  receiptNumber: string;
-  serviceItems: RegisterServiceLineState[];
-  totals: { subtotal: number; tax: number; total: number };
-}) {
-  const customer = hasCustomerDetails(input.customerInfo)
-    ? input.customerInfo
-    : null;
-
-  return {
-    localPosSessionId: input.localPosSessionId,
-    localTransactionId: input.localTransactionId,
-    localReceiptNumber: input.localReceiptNumber,
-    receiptNumber: input.receiptNumber,
-    customerProfileId: customer?.customerProfileId,
-    customerName: customer?.name || undefined,
-    customerEmail: customer?.email || undefined,
-    customerPhone: customer?.phone || undefined,
-    subtotal: input.totals.subtotal,
-    tax: input.totals.tax,
-    total: input.totals.total,
-    items: input.cartItems.map((item) => ({
-      localItemId: item.id.toString(),
-      productId: item.productId,
-      productSkuId: item.skuId,
-      pendingCheckoutItemId:
-        "pendingCheckoutItemId" in item
-          ? (item.pendingCheckoutItemId ?? null)
-          : null,
-      inventoryImportProvisionalSkuId:
-        "inventoryImportProvisionalSkuId" in item
-          ? (item.inventoryImportProvisionalSkuId ?? null)
-          : null,
-      productSku: item.sku || "",
-      barcode: item.barcode || null,
-      productName: item.name,
-      price: item.price,
-      quantity: item.quantity,
-      image: item.image || null,
-    })),
-    serviceLines:
-      input.serviceItems.length > 0
-        ? input.serviceItems.map((item) => ({
-            localServiceLineId: item.id,
-            serviceCatalogId: item.serviceCatalogId?.toString() ?? "",
-            serviceCatalogName: item.name,
-            serviceMode: item.serviceMode,
-            pricingModel: item.pricingModel,
-            quantity: item.quantity,
-            unitPrice: item.price,
-            totalPrice: item.price * item.quantity,
-            ...(item.catalogUpdatedAt !== undefined
-              ? { catalogUpdatedAt: item.catalogUpdatedAt }
-              : {}),
-            customerProfileId: customer?.customerProfileId,
-          }))
-        : undefined,
-    payments: input.payments.map((payment) => ({
-      localPaymentId: payment.id,
-      method: payment.method,
-      amount: payment.amount,
-      timestamp: payment.timestamp,
-    })),
-  };
-}
-
-function mapLocalCartItemToCartItem(item: PosLocalCartItemReadModel): CartItem {
-  return {
-    id: item.localItemId as Id<"posSessionItem">,
-    name: item.productName,
-    barcode: item.barcode || "",
-    sku: item.productSku,
-    price: item.price,
-    quantity: item.quantity,
-    image: item.image,
-    size: item.size,
-    length: item.length,
-    color: item.color,
-    productId: item.productId as Id<"product">,
-    skuId: item.productSkuId as Id<"productSku">,
-    pendingCheckoutItemId: item.pendingCheckoutItemId as
-      | Id<"posPendingCheckoutItem">
-      | undefined,
-    inventoryImportProvisionalSkuId: item.inventoryImportProvisionalSkuId as
-      | Id<"inventoryImportProvisionalSku">
-      | undefined,
-    areProcessingFeesAbsorbed: item.areProcessingFeesAbsorbed,
-  };
-}
-
-function normalizePendingCheckoutSearchText(value: string | null | undefined) {
-  return String(value ?? "")
-    .trim()
-    .toLowerCase();
-}
-
-function pendingCheckoutFieldsMatchSearch(
-  input: {
-    barcode?: string | null;
-    name?: string | null;
-    productId?: string | null;
-    sku?: string | null;
-    skuId?: string | null;
-  },
-  query: string,
-) {
-  const normalizedQuery = normalizePendingCheckoutSearchText(query);
-  if (!normalizedQuery) {
-    return false;
-  }
-
-  return [
-    input.name,
-    input.sku,
-    input.barcode,
-    input.productId,
-    input.skuId,
-    "pending checkout",
-  ].some((value) =>
-    normalizePendingCheckoutSearchText(value).includes(normalizedQuery),
-  );
-}
-
-function pendingCheckoutCartItemMatchesSearch(item: CartItem, query: string) {
-  return pendingCheckoutFieldsMatchSearch(
-    {
-      barcode: item.barcode,
-      name: item.name,
-      productId: item.productId?.toString(),
-      sku: item.sku,
-      skuId: item.skuId?.toString(),
-    },
-    query,
-  );
-}
-
-function mapPendingCheckoutCartItemToProduct(item: CartItem): Product {
-  return {
-    id: item.skuId?.toString() ?? item.id.toString(),
-    name: item.name,
-    sku: item.sku ?? "",
-    barcode: item.barcode ?? "",
-    price: item.price,
-    category: "Pending checkout",
-    description: "Pending owner review",
-    image: item.image ?? null,
-    inStock: true,
-    availabilityStatus: "available",
-    size: item.size,
-    length: item.length,
-    color: item.color,
-    productId: item.productId,
-    skuId: item.skuId,
-    pendingCheckoutItemId:
-      "pendingCheckoutItemId" in item
-        ? (item.pendingCheckoutItemId as
-            | Id<"posPendingCheckoutItem">
-            | undefined)
-        : undefined,
-    areProcessingFeesAbsorbed: item.areProcessingFeesAbsorbed,
-  };
-}
-
-function mapLocalPendingCheckoutEventsToProducts(
-  events: PosLocalEventRecord[],
-): Product[] {
-  const cartPayloadsByPendingCheckoutItemId = new Map<
-    string,
-    Record<string, unknown>
-  >();
-  const productsByPendingCheckoutItemId = new Map<string, Product>();
-
-  for (const event of events) {
-    if (event.type !== "cart.item_added") {
-      continue;
-    }
-    const payload = recordOrNull(event.payload);
-    const pendingCheckoutItemId = stringFromRecord(
-      payload,
-      "pendingCheckoutItemId",
-    );
-    if (!payload || !pendingCheckoutItemId) {
-      continue;
-    }
-    cartPayloadsByPendingCheckoutItemId.set(pendingCheckoutItemId, payload);
-  }
-
-  for (const event of events) {
-    if (event.type !== "pending_checkout_item.defined") {
-      continue;
-    }
-    const payload = recordOrNull(event.payload);
-    const pendingCheckoutItemId = stringFromRecord(
-      payload,
-      "localPendingCheckoutItemId",
-    );
-    const name = stringFromRecord(payload, "name");
-    const price = numberFromRecord(payload, "price");
-    if (!pendingCheckoutItemId || !name || price === undefined) {
-      continue;
-    }
-
-    const cartPayload =
-      cartPayloadsByPendingCheckoutItemId.get(pendingCheckoutItemId) ?? null;
-    const productSkuId =
-      stringFromRecord(cartPayload, "productSkuId") ??
-      `local-pending-sku-${pendingCheckoutItemId}`;
-    const productId =
-      stringFromRecord(cartPayload, "productId") ??
-      `local-pending-product-${pendingCheckoutItemId}`;
-
-    productsByPendingCheckoutItemId.set(pendingCheckoutItemId, {
-      id: productSkuId,
-      name,
-      sku:
-        stringFromRecord(cartPayload, "productSku") ??
-        formatLocalPendingCheckoutSku(pendingCheckoutItemId),
-      barcode:
-        stringFromRecord(payload, "lookupCode") ??
-        stringFromRecord(cartPayload, "barcode") ??
-        "",
-      price,
-      category: "Pending checkout",
-      description: "Pending owner review",
-      image: null,
-      inStock: true,
-      availabilityStatus: "available",
-      productId: productId as Id<"product">,
-      skuId: productSkuId as Id<"productSku">,
-      pendingCheckoutItemId:
-        pendingCheckoutItemId as Id<"posPendingCheckoutItem">,
-      quantityAvailable: undefined,
-    });
-  }
-
-  return [...productsByPendingCheckoutItemId.values()];
-}
-
-function formatLocalPendingCheckoutSku(localPendingCheckoutItemId: string) {
-  const code = localPendingCheckoutItemId
-    .replace(/[^a-z0-9]/gi, "")
-    .toUpperCase()
-    .slice(-10)
-    .padStart(10, "0");
-
-  return `${code.slice(0, 4)}-${code.slice(4, 7)}-${code.slice(7, 10)}`;
-}
-
-function recordOrNull(value: unknown): Record<string, unknown> | null {
-  return value !== null && typeof value === "object"
-    ? (value as Record<string, unknown>)
-    : null;
-}
-
-function stringFromRecord(record: Record<string, unknown> | null, key: string) {
-  const value = record?.[key];
-  return typeof value === "string" && value.trim().length > 0
-    ? value
-    : undefined;
-}
-
-function numberFromRecord(record: Record<string, unknown> | null, key: string) {
-  const value = record?.[key];
-  return typeof value === "number" && Number.isFinite(value)
-    ? value
-    : undefined;
-}
-
-function mapLocalServiceLineToState(
-  line: PosLocalServiceLineReadModel,
-): RegisterServiceLineState {
-  return {
-    id: line.localServiceLineId,
-    serviceCatalogId: line.serviceCatalogId as Id<"serviceCatalog">,
-    name: line.serviceCatalogName,
-    serviceMode: line.serviceMode,
-    pricingModel: line.pricingModel,
-    price: line.unitPrice,
-    quantity: line.quantity,
-    amountRequired:
-      (line.pricingModel === "starting_at" ||
-        line.pricingModel === "quote_after_consultation") &&
-      line.unitPrice <= 0,
-    catalogUpdatedAt: line.catalogUpdatedAt,
-  };
-}
-
-function matchingServiceLineDraft(
-  drafts: RegisterServiceLineState[],
-  service: RegisterServiceSearchResult,
-) {
-  const serviceCatalogId = service.serviceCatalogId?.toString();
-  const normalizedName = service.name.trim().toLowerCase();
-
-  return drafts.find((line) => {
-    const lineCatalogId = line.serviceCatalogId?.toString();
-
-    if (serviceCatalogId && lineCatalogId) {
-      return serviceCatalogId === lineCatalogId;
-    }
-
-    if (serviceCatalogId || lineCatalogId) {
-      return false;
-    }
-
-    return (
-      line.name.trim().toLowerCase() === normalizedName &&
-      line.serviceMode === service.serviceMode &&
-      line.pricingModel === service.pricingModel
-    );
-  });
-}
-
-function serviceLineStateToLocalPayload(line: RegisterServiceLineState) {
-  return {
-    localServiceLineId: line.id,
-    serviceCatalogId: line.serviceCatalogId?.toString() ?? "",
-    serviceCatalogName: line.name,
-    serviceMode: line.serviceMode,
-    pricingModel: line.pricingModel,
-    quantity: line.quantity,
-    unitPrice: line.price,
-    totalPrice: line.price * line.quantity,
-    ...(line.catalogUpdatedAt !== undefined
-      ? { catalogUpdatedAt: line.catalogUpdatedAt }
-      : {}),
-  };
-}
-
-function serviceLineStateToCartLine(line: RegisterServiceLineState) {
-  return {
-    lineKind: "service" as const,
-    id: `service:${line.id}` as const,
-    name: line.name,
-    displayName: line.name,
-    serviceCatalogId: line.serviceCatalogId as Id<"serviceCatalog">,
-    serviceMode: line.serviceMode,
-    pricingSource:
-      line.pricingModel === "fixed"
-        ? ("catalog_base_price" as const)
-        : ("pos_entered" as const),
-    unitPrice: line.price,
-    price: line.price,
-    quantity: line.quantity,
-  };
-}
-
-function recordFromPayload(payload: unknown): Record<string, unknown> {
-  return payload && typeof payload === "object"
-    ? (payload as Record<string, unknown>)
-    : {};
-}
-
-function stringFromPayload(
-  payload: Record<string, unknown>,
-  field: string,
-): string {
-  const value = payload[field];
-  return typeof value === "string" ? value : "";
-}
-
-function cartItemSkuEntry(item: CartItem): readonly [string, CartItem][] {
-  const skuId = item.skuId;
-  return skuId ? [[skuId.toString(), item]] : [];
-}
-
-function addLocalAvailabilityConsumption(
-  quantities: Map<string, number>,
-  item: PosLocalCartItemReadModel,
-) {
-  if (!item.productSkuId) return;
-  if (cartLineSourceKey(item) !== "trusted_inventory") return;
-
-  quantities.set(
-    item.productSkuId,
-    (quantities.get(item.productSkuId) ?? 0) + item.quantity,
-  );
-}
-
-function localPosSessionIdFromEvent(event: {
-  localPosSessionId?: string;
-  payload: unknown;
-}) {
-  return (
-    event.localPosSessionId ||
-    stringFromPayload(recordFromPayload(event.payload), "localPosSessionId")
-  );
-}
-
-type LocalAvailabilityEventIndexEntry = {
-  hasUnsyncedEvents: boolean;
-  syncedCartQuantityBySku: Map<string, number>;
-};
-
-function buildLocalAvailabilityEventIndex(model: PosLocalRegisterReadModel) {
-  const index = new Map<string, LocalAvailabilityEventIndexEntry>();
-  const lastSyncedSequence = model.syncStatus.lastSyncedSequence;
-
-  for (const event of model.sourceEvents) {
-    const localPosSessionId = localPosSessionIdFromEvent(event);
-    if (!localPosSessionId) {
-      continue;
-    }
-
-    const entry = index.get(localPosSessionId) ?? {
-      hasUnsyncedEvents: false,
-      syncedCartQuantityBySku: new Map<string, number>(),
-    };
-    index.set(localPosSessionId, entry);
-
-    if (event.sequence > lastSyncedSequence) {
-      entry.hasUnsyncedEvents = true;
-      continue;
-    }
-
-    if (event.type !== "cart.item_added") {
-      continue;
-    }
-
-    const payload = recordFromPayload(event.payload);
-    const productSkuId = stringFromPayload(payload, "productSkuId");
-    const quantity = payload.quantity;
-    if (!productSkuId || typeof quantity !== "number") {
-      continue;
-    }
-
-    entry.syncedCartQuantityBySku.set(productSkuId, Math.max(0, quantity));
-  }
-
-  return index;
-}
-
-function addLocalAvailabilityDeltaConsumption(input: {
-  quantities: Map<string, number>;
-  items: PosLocalCartItemReadModel[];
-  syncedCartQuantityBySku: Map<string, number>;
-}) {
-  for (const item of input.items) {
-    if (!item.productSkuId) continue;
-    if (cartLineSourceKey(item) !== "trusted_inventory") continue;
-
-    const unsyncedQuantity = Math.max(
-      0,
-      item.quantity -
-        (input.syncedCartQuantityBySku.get(item.productSkuId) ?? 0),
-    );
-    if (unsyncedQuantity <= 0) continue;
-
-    input.quantities.set(
-      item.productSkuId,
-      (input.quantities.get(item.productSkuId) ?? 0) + unsyncedQuantity,
-    );
-  }
-}
-
-function localAvailabilityConsumptionFromReadModel(
-  model: PosLocalRegisterReadModel | null,
-) {
-  const quantities = new Map<string, number>();
-  if (!model) return quantities;
-
-  const eventIndex = buildLocalAvailabilityEventIndex(model);
-
-  if (model.activeSale) {
-    const saleEventIndex = eventIndex.get(model.activeSale.localPosSessionId);
-    const hasUnsyncedSaleEvents = Boolean(saleEventIndex?.hasUnsyncedEvents);
-
-    if (!model.activeSale.cloudPosSessionId) {
-      for (const item of model.activeSale.items) {
-        addLocalAvailabilityConsumption(quantities, item);
-      }
-    } else if (hasUnsyncedSaleEvents) {
-      addLocalAvailabilityDeltaConsumption({
-        quantities,
-        items: model.activeSale.items,
-        syncedCartQuantityBySku:
-          saleEventIndex?.syncedCartQuantityBySku ?? new Map<string, number>(),
-      });
-    }
-  }
-
-  for (const sale of model.completedSales) {
-    const saleEventIndex = eventIndex.get(sale.localPosSessionId);
-    const hasUnsyncedSaleEvents = Boolean(saleEventIndex?.hasUnsyncedEvents);
-
-    if (sale.cloudTransactionId) {
-      if (!hasUnsyncedSaleEvents) continue;
-
-      addLocalAvailabilityDeltaConsumption({
-        quantities,
-        items: sale.items,
-        syncedCartQuantityBySku:
-          saleEventIndex?.syncedCartQuantityBySku ?? new Map<string, number>(),
-      });
-    } else {
-      for (const item of sale.items) {
-        addLocalAvailabilityConsumption(quantities, item);
-      }
-    }
-  }
-
-  return quantities;
-}
-
-function cartItemsFromLocalRegisterModel(
-  model: PosLocalRegisterReadModel | null,
-  localPosSessionId: string,
-  currentCartItems: CartItem[],
-) {
-  const sale =
-    model?.activeSale?.localPosSessionId === localPosSessionId
-      ? model.activeSale
-      : null;
-  if (!model || !sale) return null;
-
-  const localItems = sale.items.map(mapLocalCartItemToCartItem);
-  const localItemsBySku = new Map(localItems.flatMap(cartItemSkuEntry));
-  const removedProductSkuIds = new Set<string>();
-  const removedLocalItemIds = new Set<string>();
-
-  for (const event of model.sourceEvents) {
-    if (event.type !== "cart.item_added") continue;
-    const payload = recordFromPayload(event.payload);
-    const eventLocalPosSessionId =
-      event.localPosSessionId ||
-      stringFromPayload(payload, "localPosSessionId");
-    if (eventLocalPosSessionId !== localPosSessionId) continue;
-
-    const productSkuId = stringFromPayload(payload, "productSkuId");
-    const localItemId = stringFromPayload(payload, "localItemId");
-    const quantity = payload.quantity;
-    if ((!productSkuId && !localItemId) || typeof quantity !== "number") {
-      continue;
-    }
-
-    if (quantity <= 0 && !localItemsBySku.has(productSkuId)) {
-      if (productSkuId) removedProductSkuIds.add(productSkuId);
-      if (localItemId) removedLocalItemIds.add(localItemId);
-    } else {
-      removedProductSkuIds.delete(productSkuId);
-      removedLocalItemIds.delete(localItemId);
-    }
-  }
-
-  const mergedItemsBySku = new Map(
-    currentCartItems.flatMap((item) => {
-      const skuId = item.skuId;
-      if (!skuId) return [];
-      if (removedProductSkuIds.has(skuId.toString())) return [];
-      if (removedLocalItemIds.has(item.id.toString())) return [];
-      return cartItemSkuEntry(item);
-    }),
-  );
-  for (const [skuId, item] of localItemsBySku) {
-    mergedItemsBySku.set(skuId, item);
-  }
-
-  return Array.from(mergedItemsBySku.values());
-}
-
-function totalsFromCartItems(cartItems: CartItem[]) {
-  const subtotal = cartItems.reduce(
-    (sum, item) => sum + item.price * item.quantity,
-    0,
-  );
-  return { subtotal, tax: 0, total: subtotal };
-}
-
-function mergeCartItemsBySku(
-  baseItems: CartItem[],
-  overlayItems: CartItem[],
-): CartItem[] {
-  const mergedItemsBySku = new Map(baseItems.flatMap(cartItemSkuEntry));
-
-  for (const item of overlayItems) {
-    const skuId = item.skuId;
-    if (!skuId) continue;
-    mergedItemsBySku.set(skuId.toString(), item);
-  }
-
-  return Array.from(mergedItemsBySku.values());
-}
-
-function completedCustomerInfo(customerInfo: CustomerInfo) {
-  return hasCustomerDetails(customerInfo)
-    ? {
-        name: customerInfo.name,
-        email: customerInfo.email,
-        phone: customerInfo.phone,
-      }
-    : undefined;
-}
-
-type StaffProfileRosterRow = {
-  credentialStatus?: "pending" | "active" | "suspended" | "revoked" | null;
-  primaryRole?:
-    | "manager"
-    | "front_desk"
-    | "stylist"
-    | "technician"
-    | "cashier"
-    | null;
-  roles?: Array<
-    "manager" | "front_desk" | "stylist" | "technician" | "cashier"
-  >;
-  status?: "active" | "inactive";
-};
 
 type LocalOperableRegisterSession = {
   expectedCash: number;
@@ -1534,25 +391,6 @@ function isLocalOperableSession(
   return session?.sessionSource === "local";
 }
 
-function canOperateRegister(staff: StaffProfileRosterRow): boolean {
-  if (staff.status !== "active" || staff.credentialStatus !== "active") {
-    return false;
-  }
-
-  const roles = staff.roles?.length ? staff.roles : [staff.primaryRole];
-  return roles.some((role) => role === "cashier" || role === "manager");
-}
-
-function hasRegisterOperatorRole(roles?: string[] | null): boolean {
-  return Boolean(
-    roles?.some((role) => role === "cashier" || role === "manager"),
-  );
-}
-
-function hasRegisterManagerRole(roles?: string[] | null): boolean {
-  return Boolean(roles?.includes("manager"));
-}
-
 function isEmptyLocalSaleShell(
   sale: PosLocalActiveSaleReadModel | null,
 ): sale is PosLocalActiveSaleReadModel {
@@ -1611,8 +449,6 @@ export function useRegisterViewModel(): RegisterViewModel {
   const terminalCanTransactServices = posTerminalCanTransactServices(
     terminalTransactionCapability,
   );
-  const [localStaffAuthorityStatus, setLocalStaffAuthorityStatus] =
-    useState("unknown");
   const activeOperatingDate = useMemo(() => getLocalOperatingDate(), []);
   const [showCustomerPanel, setShowCustomerPanel] = useState(false);
   const [showProductEntry, setShowProductEntry] = useState(true);
@@ -1627,7 +463,6 @@ export function useRegisterViewModel(): RegisterViewModel {
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo>(
     EMPTY_REGISTER_CUSTOMER_INFO,
   );
-  const [payments, setPayments] = useState<Payment[]>([]);
   const [isTransactionCompleted, setIsTransactionCompleted] = useState(false);
   const [completedOrderNumber, setCompletedOrderNumber] = useState<
     string | null
@@ -1659,12 +494,18 @@ export function useRegisterViewModel(): RegisterViewModel {
   const bootstrapInitialized = useRef(false);
   const syncedSessionId = useRef<string | null>(null);
   const locallyCompletedSessionIdsRef = useRef<Set<string>>(new Set());
-  const paymentsRef = useRef<Payment[]>([]);
-  const checkoutMutationLockedRef = useRef(false);
-  const cartMutationQueueRef = useRef<Promise<void>>(Promise.resolve());
-  const paymentMutationQueueRef = useRef<Promise<void>>(Promise.resolve());
-  const serviceMutationQueueRef = useRef<Promise<void>>(Promise.resolve());
-  const checkoutStateVersionRef = useRef(0);
+  const {
+    allocateCheckoutStateVersion,
+    checkoutMutationLockedRef,
+    enqueueCartMutation,
+    enqueuePaymentQueueMutation,
+    enqueueServiceMutation,
+    payments,
+    paymentsRef,
+    resetCheckoutStateVersion,
+    setPaymentState,
+    waitForCheckoutMutationQueues,
+  } = useRegisterCheckoutDraftState();
   const activeSessionIdRef = useRef<Id<"posSession"> | null>(null);
   const isMountedRef = useRef(true);
   const customerCommitQueueRef = useRef<Promise<void>>(Promise.resolve());
@@ -1693,11 +534,33 @@ export function useRegisterViewModel(): RegisterViewModel {
     useState<LocalOperableRegisterSession | null>(null);
   const [localOperablePosSession, setLocalOperablePosSession] =
     useState<LocalOperablePosSession | null>(null);
-  const [localRegisterReadModel, setLocalRegisterReadModel] =
-    useState<PosLocalRegisterReadModel | null>(null);
-  const [localRegisterReadModelVersion, setLocalRegisterReadModelVersion] =
-    useState(0);
-  const [localSyncEventAppendToken, setLocalSyncEventAppendToken] = useState(0);
+  const requestBootstrap = useCallback(() => {
+    bootstrapInitialized.current = false;
+  }, []);
+  const {
+    appSessionRecovery,
+    hasProvisionedLocalSyncSeed,
+    localCommandGateway,
+    localRegisterReadModel,
+    localRuntimeSyncSource,
+    localSaleValidationMetadata,
+    localStaffAuthorityStatus,
+    localStore,
+    localSyncEventAppendToken,
+    noteLocalRegisterEventChanged,
+    noteLocalRuntimeChanged,
+    readCurrentLocalRegisterModel,
+    refreshLocalRegisterReadModel,
+  } = useRegisterLocalRuntime({
+    activeStoreId,
+    createLocalFallbackId,
+    onRetryBootstrap: requestBootstrap,
+    staffProfileId,
+    staffProfileIdRef,
+    staffProofToken,
+    staffProofTokenRef,
+    terminal,
+  });
 
   useEffect(() => {
     const localTransactionId = completedTransactionData?.localTransactionId;
@@ -2067,13 +930,6 @@ export function useRegisterViewModel(): RegisterViewModel {
     updateSession,
   } = useConvexSessionActions();
   const voidSessionRef = useRef<typeof voidSession>(voidSession);
-  const localStore = useMemo(
-    () =>
-      createPosLocalStore({
-        adapter: createIndexedDbPosLocalStorageAdapter(),
-      }),
-    [],
-  );
   useEffect(() => {
     const localRegisterSession = localRegisterReadModel?.activeRegisterSession;
     const cloudRegisterSessionId =
@@ -2113,7 +969,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       .then((result) => {
         if (result.ok) {
           persistedDrawerAuthorityBlockRef.current = blockKey;
-          setLocalRegisterReadModelVersion((current) => current + 1);
+          noteLocalRegisterEventChanged();
         }
       });
   }, [
@@ -2122,36 +978,11 @@ export function useRegisterViewModel(): RegisterViewModel {
     localRegisterReadModel?.activeRegisterSession,
     localRegisterReadModel?.saleBlockReason,
     localStore,
+    noteLocalRegisterEventChanged,
     registerState?.activeRegisterSession?._id,
     terminal?._id,
     terminal?.localTerminalId,
   ]);
-  const localCommandGateway = useMemo(
-    () =>
-      createLocalCommandGateway({
-        allowExplicitRegisterSessionWithoutProjection: true,
-        store: localStore,
-        createLocalId: (kind) => {
-          if (kind === "local-register-session" && terminal?._id) {
-            return createLocalFallbackId(`local-register-${terminal._id}`);
-          }
-          return createLocalFallbackId(kind);
-        },
-        onEventAppended: () => {
-          setLocalSyncEventAppendToken((current) => current + 1);
-        },
-        staffProofToken: (requestedStaffProfileId) =>
-          requestedStaffProfileId === staffProfileIdRef.current
-            ? (staffProofTokenRef.current ?? undefined)
-            : undefined,
-      }),
-    [localStore, terminal?._id],
-  );
-  const appSessionRecovery = usePosTerminalAppSessionRecoveryRuntimeInput();
-  const localSaleValidationMetadata = useMemo(
-    () => buildLocalSaleValidationMetadata(appSessionRecovery?.status),
-    [appSessionRecovery?.status],
-  );
   useEffect(() => {
     let cancelled = false;
 
@@ -2325,143 +1156,6 @@ export function useRegisterViewModel(): RegisterViewModel {
     localStore,
     terminal?._id,
   ]);
-  const localRuntimeStoreFactory = useCallback(() => localStore, [localStore]);
-  useEffect(() => {
-    if (!staffProfileId || !staffProofToken) {
-      return;
-    }
-
-    void localStore
-      .attachStaffProofTokenToPendingEvents({
-        staffProfileId,
-        staffProofToken,
-      })
-      .then((result) => {
-        if (result.ok && result.value > 0) {
-          setLocalSyncEventAppendToken((current) => current + 1);
-        }
-      });
-  }, [localStore, staffProfileId, staffProofToken]);
-  useEffect(() => {
-    let cancelled = false;
-
-    async function refreshLocalStaffAuthorityStatus() {
-      if (
-        !activeStoreId ||
-        !terminal?._id ||
-        typeof indexedDB === "undefined"
-      ) {
-        setLocalStaffAuthorityStatus("unavailable");
-        return;
-      }
-
-      try {
-        const result = await localStore.getStaffAuthorityReadiness({
-          storeId: activeStoreId,
-          terminalId: terminal._id,
-        });
-        if (!cancelled) {
-          setLocalStaffAuthorityStatus(
-            result.ok ? result.value : "unavailable",
-          );
-        }
-      } catch {
-        if (!cancelled) {
-          setLocalStaffAuthorityStatus("unavailable");
-        }
-      }
-    }
-
-    void refreshLocalStaffAuthorityStatus();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [activeStoreId, localStore, terminal?._id, staffProfileId]);
-  const hasProvisionedLocalSyncSeed = useCallback(async () => {
-    if (!activeStoreId || !terminal?._id || typeof indexedDB === "undefined") {
-      return false;
-    }
-
-    const result = await createPosLocalStore({
-      adapter: createIndexedDbPosLocalStorageAdapter(),
-    }).readProvisionedTerminalSeed();
-
-    return Boolean(
-      result.ok &&
-      result.value &&
-      result.value.storeId === activeStoreId! &&
-      result.value.cloudTerminalId === terminal._id &&
-      result.value.syncSecretHash,
-    );
-  }, [activeStoreId, terminal?._id]);
-  const readCurrentLocalRegisterModel = useCallback(async () => {
-    if (!activeStoreId || !terminal?._id || typeof indexedDB === "undefined") {
-      return null;
-    }
-
-    const store = createPosLocalStore({
-      adapter: createIndexedDbPosLocalStorageAdapter(),
-    });
-    if (
-      typeof store.listEvents !== "function" ||
-      typeof store.readProvisionedTerminalSeed !== "function"
-    ) {
-      return null;
-    }
-
-    const model = await readProjectedLocalRegisterModel({
-      store,
-      storeId: activeStoreId!,
-      terminal,
-      isOnline: globalThis.navigator?.onLine ?? false,
-    });
-    return model.ok ? model.value : null;
-  }, [activeStoreId, terminal]);
-
-  const refreshLocalRegisterReadModel = useCallback(async () => {
-    const model = await readCurrentLocalRegisterModel();
-    setLocalRegisterReadModel(model);
-  }, [readCurrentLocalRegisterModel]);
-
-  useEffect(() => {
-    void refreshLocalRegisterReadModel();
-  }, [localRegisterReadModelVersion, refreshLocalRegisterReadModel]);
-
-  const noteLocalRegisterEventChanged = useCallback(() => {
-    setLocalRegisterReadModelVersion((current) => current + 1);
-  }, []);
-
-  const enqueueCartMutation = useCallback(
-    (mutation: () => Promise<boolean | void>) => {
-      if (checkoutMutationLockedRef.current) {
-        toast.error(
-          "Finish the current checkout update before changing the sale.",
-        );
-        return Promise.resolve(false);
-      }
-
-      const queued = cartMutationQueueRef.current
-        .catch(() => undefined)
-        .then(async () => {
-          const result = await mutation();
-          return result !== false;
-        });
-      cartMutationQueueRef.current = queued.then(
-        () => undefined,
-        () => undefined,
-      );
-      return queued;
-    },
-    [],
-  );
-
-  const waitForCheckoutMutationQueues = useCallback(async () => {
-    await cartMutationQueueRef.current.catch(() => undefined);
-    await paymentMutationQueueRef.current.catch(() => undefined);
-    await serviceMutationQueueRef.current.catch(() => undefined);
-  }, []);
-
   const clearProjectedLocalSaleForStaff = useCallback(
     async (
       actingStaffProfileId: Id<"staffProfile">,
@@ -2544,7 +1238,9 @@ export function useRegisterViewModel(): RegisterViewModel {
         registerNumber: sale.registerNumber,
         localRegisterSessionId: sale.localRegisterSessionId,
         cartItems: sale.items.map(mapLocalCartItemToCartItem),
-        payments: sale.payments.map(mapLocalPaymentToPayment),
+        payments: sale.payments.map((payment) =>
+          mapLocalPaymentToPayment(payment, createPaymentId),
+        ),
         customer: null,
         localSyncStatus: {
           status: "pending_sync",
@@ -3149,8 +1845,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       }
 
       setDrawerErrorMessage(null);
-      setLocalRegisterReadModelVersion((current) => current + 1);
-      setLocalSyncEventAppendToken((current) => current + 1);
+      noteLocalRuntimeChanged();
       await refreshLocalRegisterReadModel();
     } catch (error) {
       logger.warn("[POS] Terminal setup auto repair failed", {
@@ -3165,6 +1860,7 @@ export function useRegisterViewModel(): RegisterViewModel {
   }, [
     activeStoreId,
     localStore,
+    noteLocalRuntimeChanged,
     refreshLocalRegisterReadModel,
     registerNumber,
     registerTerminalMutation,
@@ -3194,19 +1890,6 @@ export function useRegisterViewModel(): RegisterViewModel {
     isRepairingTerminalSetup,
     terminal?._id,
   ]);
-  const setPaymentState = useCallback((nextPayments: Payment[]) => {
-    paymentsRef.current = nextPayments;
-    setPayments(nextPayments);
-  }, []);
-  const allocateCheckoutStateVersion = useCallback(() => {
-    const nextVersion = Math.max(
-      checkoutStateVersionRef.current + 1,
-      Date.now(),
-    );
-    checkoutStateVersionRef.current = nextVersion;
-    return nextVersion;
-  }, []);
-
   const guardActiveSessionConflict = useCallback(() => {
     if (!activeSessionConflict) {
       return false;
@@ -3247,10 +1930,6 @@ export function useRegisterViewModel(): RegisterViewModel {
     },
     [setPaymentState],
   );
-
-  const requestBootstrap = useCallback(() => {
-    bootstrapInitialized.current = false;
-  }, []);
 
   useEffect(() => {
     if (!activeRegisterSessionId) {
@@ -3315,7 +1994,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     syncedSessionId.current = sessionId;
 
     if (!sessionId) {
-      checkoutStateVersionRef.current = 0;
+      resetCheckoutStateVersion();
       if (!isTransactionCompleted) {
         setCustomerInfo(EMPTY_REGISTER_CUSTOMER_INFO);
         setPaymentState([]);
@@ -3324,7 +2003,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       return;
     }
 
-    checkoutStateVersionRef.current = 0;
+    resetCheckoutStateVersion();
     setCustomerInfo(
       mapSessionCustomer(operableActiveSession?.customer ?? null),
     );
@@ -3347,6 +2026,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     operableActiveSession?.customer,
     operableActiveSession?.payments,
     isTransactionCompleted,
+    resetCheckoutStateVersion,
     setPaymentState,
   ]);
 
@@ -3937,6 +2617,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     activeCartItems,
     localEventRegisterSessionId,
     activeStoreId,
+    checkoutMutationLockedRef,
     ensureLocalPosSessionId,
     localCommandGateway,
     localRegisterReadModel?.activeSale?.localPosSessionId,
@@ -4195,7 +2876,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     setIsOpeningDrawer(false);
 
     if (result.kind !== "ok" || !result.data) {
-      setDrawerErrorMessage("Unable to open the drawer. Try again.");
+      setDrawerErrorMessage(buildOpenDrawerFailureMessage(result));
       return;
     }
 
@@ -4686,116 +3367,108 @@ export function useRegisterViewModel(): RegisterViewModel {
         return false;
       }
 
-      const queued = serviceMutationQueueRef.current
-        .catch(() => undefined)
-        .then(async () => {
-          if (!staffProfileId) {
-            toast.error(
-              "Register sign-in required. Sign in before adding services.",
-            );
-            return false;
-          }
-
-          if (!terminalCanTransactServices) {
-            toast.error("This terminal is not configured for service sales.");
-            return false;
-          }
-
-          if (activeSessionHasBlockedRegisterBinding) {
-            toast.error(
-              "Drawer closed. Open the drawer before adding services.",
-            );
-            return false;
-          }
-
-          const requiresAmount =
-            service.pricingModel === "starting_at" ||
-            service.pricingModel === "quote_after_consultation";
-          const lineAmount = requiresAmount
-            ? (amount ?? 0)
-            : (service.basePrice ?? 0);
-
-          if (requiresAmount && lineAmount <= 0) {
-            toast.error(
-              service.pricingModel === "starting_at"
-                ? "Service amount required. Enter the service amount before adding."
-                : "Quoted amount required. Enter the quoted amount before adding.",
-            );
-            return false;
-          }
-
-          if (service.pricingModel === "fixed" && lineAmount <= 0) {
-            toast.error("Service price unavailable. Choose another service.");
-            return false;
-          }
-
-          const localPosSessionId = await ensureLocalPosSessionId();
-          if (!localPosSessionId) {
-            return false;
-          }
-
-          if (!activeStoreId || !terminal?._id) {
-            presentOperatorError("Unable to update this sale. Try again.");
-            return false;
-          }
-
-          const currentServiceLineDrafts = serviceLineDraftsRef.current;
-          const existingServiceLine = matchingServiceLineDraft(
-            currentServiceLineDrafts,
-            service,
+      return enqueueServiceMutation(async () => {
+        if (!staffProfileId) {
+          toast.error(
+            "Register sign-in required. Sign in before adding services.",
           );
+          return false;
+        }
 
-          if (existingServiceLine) {
-            return false;
-          }
+        if (!terminalCanTransactServices) {
+          toast.error("This terminal is not configured for service sales.");
+          return false;
+        }
 
-          const serviceLine: RegisterServiceLineState = {
-            id: createLocalFallbackId("local-service-line"),
-            serviceCatalogId: service.serviceCatalogId,
-            name: service.name,
-            serviceMode: service.serviceMode,
-            pricingModel: service.pricingModel,
-            price: lineAmount,
-            quantity: 1,
-            amountRequired: requiresAmount && lineAmount <= 0,
-            catalogUpdatedAt: service.updatedAt,
-          };
-          const savedLocally = await localCommandGateway.appendServiceLine({
-            terminalId: terminal._id,
-            storeId: activeStoreId,
-            registerNumber,
-            localRegisterSessionId:
-              localEventRegisterSessionId ?? registerNumber,
-            localPosSessionId,
-            staffProfileId,
-            validationMetadata: localSaleValidationMetadata,
-            payload: serviceLineStateToLocalPayload(serviceLine),
-          });
+        if (activeSessionHasBlockedRegisterBinding) {
+          toast.error("Drawer closed. Open the drawer before adding services.");
+          return false;
+        }
 
-          if (!savedLocally) {
-            presentOperatorError("Unable to update this sale. Try again.");
-            return false;
-          }
+        const requiresAmount =
+          service.pricingModel === "starting_at" ||
+          service.pricingModel === "quote_after_consultation";
+        const lineAmount = requiresAmount
+          ? (amount ?? 0)
+          : (service.basePrice ?? 0);
 
-          const nextServiceLineDrafts = [
-            ...currentServiceLineDrafts,
-            serviceLine,
-          ];
-          serviceLineDraftsRef.current = nextServiceLineDrafts;
-          setServiceLineDrafts(nextServiceLineDrafts);
-          setShowProductEntry(true);
-          setProductSearchQuery("");
-          return true;
+        if (requiresAmount && lineAmount <= 0) {
+          toast.error(
+            service.pricingModel === "starting_at"
+              ? "Service amount required. Enter the service amount before adding."
+              : "Quoted amount required. Enter the quoted amount before adding.",
+          );
+          return false;
+        }
+
+        if (service.pricingModel === "fixed" && lineAmount <= 0) {
+          toast.error("Service price unavailable. Choose another service.");
+          return false;
+        }
+
+        const localPosSessionId = await ensureLocalPosSessionId();
+        if (!localPosSessionId) {
+          return false;
+        }
+
+        if (!activeStoreId || !terminal?._id) {
+          presentOperatorError("Unable to update this sale. Try again.");
+          return false;
+        }
+
+        const currentServiceLineDrafts = serviceLineDraftsRef.current;
+        const existingServiceLine = matchingServiceLineDraft(
+          currentServiceLineDrafts,
+          service,
+        );
+
+        if (existingServiceLine) {
+          return false;
+        }
+
+        const serviceLine: RegisterServiceLineState = {
+          id: createLocalFallbackId("local-service-line"),
+          serviceCatalogId: service.serviceCatalogId,
+          name: service.name,
+          serviceMode: service.serviceMode,
+          pricingModel: service.pricingModel,
+          price: lineAmount,
+          quantity: 1,
+          amountRequired: requiresAmount && lineAmount <= 0,
+          catalogUpdatedAt: service.updatedAt,
+        };
+        const savedLocally = await localCommandGateway.appendServiceLine({
+          terminalId: terminal._id,
+          storeId: activeStoreId,
+          registerNumber,
+          localRegisterSessionId: localEventRegisterSessionId ?? registerNumber,
+          localPosSessionId,
+          staffProfileId,
+          validationMetadata: localSaleValidationMetadata,
+          payload: serviceLineStateToLocalPayload(serviceLine),
         });
-      serviceMutationQueueRef.current = queued.then(
-        () => undefined,
-        () => undefined,
-      );
-      return queued;
+
+        if (!savedLocally) {
+          presentOperatorError("Unable to update this sale. Try again.");
+          return false;
+        }
+
+        const nextServiceLineDrafts = [
+          ...currentServiceLineDrafts,
+          serviceLine,
+        ];
+        serviceLineDraftsRef.current = nextServiceLineDrafts;
+        setServiceLineDrafts(nextServiceLineDrafts);
+        setShowProductEntry(true);
+        setProductSearchQuery("");
+        return true;
+      });
     },
     [
       activeSessionHasBlockedRegisterBinding,
       activeStoreId,
+      checkoutMutationLockedRef,
+      enqueueServiceMutation,
       ensureLocalPosSessionId,
       localCommandGateway,
       localSaleValidationMetadata,
@@ -4823,64 +3496,59 @@ export function useRegisterViewModel(): RegisterViewModel {
         return;
       }
 
-      const queued = serviceMutationQueueRef.current
-        .catch(() => undefined)
-        .then(async () => {
-          const existing = serviceLineDrafts.find((item) => item.id === lineId);
-          const localPosSessionId = await ensureLocalPosSessionId();
-          if (!localPosSessionId) {
+      await enqueueServiceMutation(async () => {
+        const existing = serviceLineDrafts.find((item) => item.id === lineId);
+        const localPosSessionId = await ensureLocalPosSessionId();
+        if (!localPosSessionId) {
+          return;
+        }
+        if (existing && activeStoreId && terminal?._id && staffProfileId) {
+          const nextLine = {
+            ...existing,
+            price: amount,
+            amountRequired:
+              (existing.pricingModel === "starting_at" ||
+                existing.pricingModel === "quote_after_consultation") &&
+              amount <= 0,
+          };
+          const savedLocally = await localCommandGateway.appendServiceLine({
+            terminalId: terminal._id,
+            storeId: activeStoreId,
+            registerNumber,
+            localRegisterSessionId:
+              localEventRegisterSessionId ?? registerNumber,
+            localPosSessionId,
+            staffProfileId,
+            validationMetadata: localSaleValidationMetadata,
+            payload: serviceLineStateToLocalPayload(nextLine),
+          });
+          if (!savedLocally) {
+            presentOperatorError("Unable to update this sale. Try again.");
             return;
           }
-          if (existing && activeStoreId && terminal?._id && staffProfileId) {
-            const nextLine = {
-              ...existing,
-              price: amount,
-              amountRequired:
-                (existing.pricingModel === "starting_at" ||
-                  existing.pricingModel === "quote_after_consultation") &&
-                amount <= 0,
-            };
-            const savedLocally = await localCommandGateway.appendServiceLine({
-              terminalId: terminal._id,
-              storeId: activeStoreId,
-              registerNumber,
-              localRegisterSessionId:
-                localEventRegisterSessionId ?? registerNumber,
-              localPosSessionId,
-              staffProfileId,
-              validationMetadata: localSaleValidationMetadata,
-              payload: serviceLineStateToLocalPayload(nextLine),
-            });
-            if (!savedLocally) {
-              presentOperatorError("Unable to update this sale. Try again.");
-              return;
-            }
-          }
+        }
 
-          setServiceLineDrafts((current) =>
-            current.map((item) =>
-              item.id === lineId
-                ? {
-                    ...item,
-                    price: amount,
-                    amountRequired:
-                      (item.pricingModel === "starting_at" ||
-                        item.pricingModel === "quote_after_consultation") &&
-                      amount <= 0,
-                  }
-                : item,
-            ),
-          );
-        });
-      serviceMutationQueueRef.current = queued.then(
-        () => undefined,
-        () => undefined,
-      );
-      return queued;
+        setServiceLineDrafts((current) =>
+          current.map((item) =>
+            item.id === lineId
+              ? {
+                  ...item,
+                  price: amount,
+                  amountRequired:
+                    (item.pricingModel === "starting_at" ||
+                      item.pricingModel === "quote_after_consultation") &&
+                    amount <= 0,
+                }
+              : item,
+          ),
+        );
+      });
     },
     [
       activeSessionHasBlockedRegisterBinding,
       activeStoreId,
+      checkoutMutationLockedRef,
+      enqueueServiceMutation,
       ensureLocalPosSessionId,
       localCommandGateway,
       localSaleValidationMetadata,
@@ -4908,50 +3576,45 @@ export function useRegisterViewModel(): RegisterViewModel {
         return;
       }
 
-      const queued = serviceMutationQueueRef.current
-        .catch(() => undefined)
-        .then(async () => {
-          const existing = serviceLineDrafts.find((item) => item.id === lineId);
-          const localPosSessionId = await ensureLocalPosSessionId();
-          if (!localPosSessionId) {
+      await enqueueServiceMutation(async () => {
+        const existing = serviceLineDrafts.find((item) => item.id === lineId);
+        const localPosSessionId = await ensureLocalPosSessionId();
+        if (!localPosSessionId) {
+          return;
+        }
+        if (existing && activeStoreId && terminal?._id && staffProfileId) {
+          const savedLocally = await localCommandGateway.appendServiceLine({
+            terminalId: terminal._id,
+            storeId: activeStoreId,
+            registerNumber,
+            localRegisterSessionId:
+              localEventRegisterSessionId ?? registerNumber,
+            localPosSessionId,
+            staffProfileId,
+            validationMetadata: localSaleValidationMetadata,
+            payload: {
+              ...serviceLineStateToLocalPayload(existing),
+              quantity: 0,
+              unitPrice: 0,
+              totalPrice: 0,
+            },
+          });
+          if (!savedLocally) {
+            presentOperatorError("Unable to update this sale. Try again.");
             return;
           }
-          if (existing && activeStoreId && terminal?._id && staffProfileId) {
-            const savedLocally = await localCommandGateway.appendServiceLine({
-              terminalId: terminal._id,
-              storeId: activeStoreId,
-              registerNumber,
-              localRegisterSessionId:
-                localEventRegisterSessionId ?? registerNumber,
-              localPosSessionId,
-              staffProfileId,
-              validationMetadata: localSaleValidationMetadata,
-              payload: {
-                ...serviceLineStateToLocalPayload(existing),
-                quantity: 0,
-                unitPrice: 0,
-                totalPrice: 0,
-              },
-            });
-            if (!savedLocally) {
-              presentOperatorError("Unable to update this sale. Try again.");
-              return;
-            }
-          }
+        }
 
-          setServiceLineDrafts((current) =>
-            current.filter((item) => item.id !== lineId),
-          );
-        });
-      serviceMutationQueueRef.current = queued.then(
-        () => undefined,
-        () => undefined,
-      );
-      return queued;
+        setServiceLineDrafts((current) =>
+          current.filter((item) => item.id !== lineId),
+        );
+      });
     },
     [
       activeSessionHasBlockedRegisterBinding,
       activeStoreId,
+      checkoutMutationLockedRef,
+      enqueueServiceMutation,
       ensureLocalPosSessionId,
       localCommandGateway,
       localSaleValidationMetadata,
@@ -5546,6 +4209,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     localEventRegisterSessionId,
     activeCartItems,
     activeStoreId,
+    checkoutMutationLockedRef,
     ensureLocalPosSessionId,
     localCommandGateway,
     noteLocalRegisterEventChanged,
@@ -6010,6 +4674,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     activeStoreId,
     activeTotals,
     cashierPresenceRestore.status,
+    checkoutMutationLockedRef,
     serviceSubtotal,
     serviceLineDrafts,
     serviceCheckoutBlockMessage,
@@ -6019,6 +4684,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     localCommandGateway,
     localSaleValidationMetadata,
     noteLocalRegisterEventChanged,
+    paymentsRef,
     readCurrentLocalRegisterModel,
     registerNumber,
     staffProfileId,
@@ -6036,17 +4702,9 @@ export function useRegisterViewModel(): RegisterViewModel {
 
   const enqueuePaymentMutation = useCallback(
     (
-      buildMutation: (currentPayments: Payment[]) => {
-        amount?: number;
-        nextPayments: Payment[];
-        paymentMethod?: PosPaymentMethod;
-        previousAmount?: number;
-        stage:
-          | "paymentAdded"
-          | "paymentUpdated"
-          | "paymentRemoved"
-          | "paymentsCleared";
-      } | null,
+      buildMutation: (
+        currentPayments: Payment[],
+      ) => RegisterPaymentMutationDraft | null,
     ) => {
       if (checkoutMutationLockedRef.current) {
         toast.error(
@@ -6078,17 +4736,13 @@ export function useRegisterViewModel(): RegisterViewModel {
         return true;
       };
 
-      const queued = paymentMutationQueueRef.current
-        .catch(() => undefined)
-        .then(runMutation);
-      paymentMutationQueueRef.current = queued.then(
-        () => undefined,
-        () => undefined,
-      );
-      return queued;
+      return enqueuePaymentQueueMutation(runMutation);
     },
     [
       allocateCheckoutStateVersion,
+      checkoutMutationLockedRef,
+      enqueuePaymentQueueMutation,
+      paymentsRef,
       persistCheckoutStateLocally,
       setPaymentState,
     ],
@@ -6298,18 +4952,6 @@ export function useRegisterViewModel(): RegisterViewModel {
     activeCloseoutRegisterSession ||
     activeOpeningFloatCorrectionRegisterSession,
   );
-  const localRuntimeSyncSource = usePosLocalSyncRuntimeStatus({
-    appSessionRecovery,
-    drainOnAppend: true,
-    eventAppendToken: localSyncEventAppendToken,
-    mode: "status-only",
-    onLocalEventsChanged: noteLocalRegisterEventChanged,
-    storeId: activeStoreId,
-    staffProfileId,
-    terminalId: terminal?._id,
-    onRetrySync: requestBootstrap,
-    storeFactory: localRuntimeStoreFactory,
-  });
   const handleRetryLocalSync = useCallback(() => {
     localRuntimeSyncSource?.onRetrySync?.();
     requestBootstrap();
