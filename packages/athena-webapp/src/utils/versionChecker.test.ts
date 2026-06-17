@@ -24,97 +24,172 @@ describe("versionChecker", () => {
     vi.unstubAllGlobals();
   });
 
-  it("does not auto-reload on the live POS register route", async () => {
-    const { shouldAutoReloadForPath } = await importVersionChecker();
-
-    expect(shouldAutoReloadForPath("/wigclub/store/wigclub/pos")).toBe(true);
-    expect(shouldAutoReloadForPath("/wigclub/store/wigclub/pos/")).toBe(true);
-    expect(
-      shouldAutoReloadForPath("/wigclub/store/wigclub/pos/register"),
-    ).toBe(false);
-    expect(
-      shouldAutoReloadForPath("/wigclub/store/wigclub/pos/register/"),
-    ).toBe(false);
-    expect(
-      shouldAutoReloadForPath("/wigclub/store/wigclub/pos/registers"),
-    ).toBe(true);
-    expect(
-      shouldAutoReloadForPath("/wigclub/store/wigclub/pos/transactions"),
-    ).toBe(true);
-  });
-
-  it("keeps polling but skips the reload callback when a new build is detected on a blocked route", async () => {
-    const fetchMock = vi.fn(async () => ({
-      ok: true,
-      text: async () =>
-        '<html><head><script type="module" src="/assets/index-new.js"></script></head></html>',
-    }));
-    vi.stubGlobal("fetch", fetchMock);
-    const { createVersionChecker } = await importVersionChecker();
-    const onNewVersionAvailable = vi.fn();
-    const checker = createVersionChecker({
-      onNewVersionAvailable,
-      pollingIntervalMs: 60_000,
-      shouldReload: () => false,
-    });
-
-    await vi.advanceTimersByTimeAsync(10_000);
-
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(onNewVersionAvailable).not.toHaveBeenCalled();
-
-    checker.stop();
-  });
-
-  it("skips reloads on the POS register route when query params are present", async () => {
+  it("emits an update event instead of reloading on POS register routes", async () => {
     window.history.pushState(
       {},
       "",
-      "/wigclub/store/wigclub/pos/register?o=%252Fwigclub%252Fstore%252Fwigclub%252Fpos&terminal=front-counter&debug=true",
+      "/wigclub/store/wigclub/pos/register?terminal=front-counter",
     );
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => ({
-        ok: true,
-        text: async () =>
+      vi.fn(async (input: RequestInfo | URL) => {
+        if (String(input).startsWith("/deploy.json")) {
+          return new Response("not found", { status: 404 });
+        }
+
+        return new Response(
           '<html><head><script type="module" src="/assets/index-new.js"></script></head></html>',
-      })),
+        );
+      }),
     );
     const { createVersionChecker } = await importVersionChecker();
-    const onNewVersionAvailable = vi.fn();
+    const onUpdateDetected = vi.fn();
+    const reload = vi.fn();
     const checker = createVersionChecker({
-      onNewVersionAvailable,
+      onUpdateDetected,
+      onApplyUpdate: reload,
       pollingIntervalMs: 60_000,
     });
 
     await vi.advanceTimersByTimeAsync(10_000);
 
-    expect(window.location.pathname).toBe("/wigclub/store/wigclub/pos/register");
-    expect(onNewVersionAvailable).not.toHaveBeenCalled();
+    expect(onUpdateDetected).toHaveBeenCalledWith(
+      expect.objectContaining({
+        detectionSource: "html",
+        pendingBuildId: expect.stringContaining("/assets/index-new.js"),
+        staging: expect.objectContaining({
+          entryHtml: expect.stringContaining("index-new.js"),
+        }),
+      }),
+    );
+    expect(reload).not.toHaveBeenCalled();
 
     checker.stop();
   });
 
-  it("reloads when a new build is detected away from blocked routes", async () => {
+  it("emits no update event when deploy metadata and entry scripts are unchanged", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => ({
-        ok: true,
-        text: async () =>
-          '<html><head><script type="module" src="/assets/index-new.js"></script></head></html>',
-      })),
+      vi.fn(async (input: RequestInfo | URL) => {
+        if (String(input).startsWith("/deploy.json")) {
+          return new Response("not found", { status: 404 });
+        }
+
+        return new Response(
+          '<html><head><script type="module" src="/assets/index-old.js"></script></head></html>',
+        );
+      }),
     );
     const { createVersionChecker } = await importVersionChecker();
-    const onNewVersionAvailable = vi.fn();
+    const onUpdateDetected = vi.fn();
     const checker = createVersionChecker({
-      onNewVersionAvailable,
+      onUpdateDetected,
       pollingIntervalMs: 60_000,
-      shouldReload: () => true,
     });
 
     await vi.advanceTimersByTimeAsync(10_000);
 
-    expect(onNewVersionAvailable).toHaveBeenCalledTimes(1);
+    expect(onUpdateDetected).not.toHaveBeenCalled();
+
+    checker.stop();
+  });
+
+  it("does not compare deploy metadata identity to the loaded HTML script identity", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        if (String(input).startsWith("/deploy.json")) {
+          return new Response(
+            JSON.stringify({
+              fun_name: "athena-webapp",
+              version: "20260617194000",
+              git_sha: "current-git-sha",
+            }),
+          );
+        }
+
+        return new Response(
+          '<html><head><script type="module" src="/assets/index-old.js"></script></head></html>',
+        );
+      }),
+    );
+    const { createVersionChecker } = await importVersionChecker();
+    const onUpdateDetected = vi.fn();
+    const checker = createVersionChecker({
+      onUpdateDetected,
+      pollingIntervalMs: 60_000,
+    });
+
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    expect(onUpdateDetected).not.toHaveBeenCalled();
+
+    checker.stop();
+  });
+
+
+  it("prefers deploy metadata when it exposes a changed build identity", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        if (String(input).startsWith("/deploy.json")) {
+          return new Response(
+            JSON.stringify({
+              fun_name: "athena-webapp",
+              version: "20260617194000",
+              git_sha: "build-new",
+            }),
+          );
+        }
+
+        return new Response(
+          '<html><head><script type="module" src="/assets/index-old.js"></script></head></html>',
+        );
+      }),
+    );
+    const { createVersionChecker } = await importVersionChecker();
+    const onUpdateDetected = vi.fn();
+    const checker = createVersionChecker({
+      currentBuildId: "build-old",
+      currentDeployBuildId: "build-old",
+      onUpdateDetected,
+      pollingIntervalMs: 60_000,
+    });
+
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    expect(onUpdateDetected).toHaveBeenCalledWith(
+      expect.objectContaining({
+        currentBuildId: "build-old",
+        pendingBuildId: "build-new",
+        detectionSource: "deploy-metadata",
+      }),
+    );
+
+    checker.stop();
+  });
+
+  it("reports detector failures without marking an update ready", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new Error("network unavailable");
+      }),
+    );
+    const { createVersionChecker } = await importVersionChecker();
+    const onUpdateDetected = vi.fn();
+    const onDetectorFailed = vi.fn();
+    const checker = createVersionChecker({
+      currentBuildId: "build-old",
+      onDetectorFailed,
+      onUpdateDetected,
+      pollingIntervalMs: 60_000,
+    });
+
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    expect(onUpdateDetected).not.toHaveBeenCalled();
+    expect(onDetectorFailed).toHaveBeenCalledWith(expect.any(Error));
 
     checker.stop();
   });

@@ -7,10 +7,11 @@ import {
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockUseRegisterViewModel = vi.fn();
 const mockOpenQuickAddProduct = vi.fn(() => true);
+const mockUseUpdateApplyBlocker = vi.fn();
 
 function pressDebugPanelShortcut(
   modifiers: { metaKey?: boolean; ctrlKey?: boolean } = { metaKey: true },
@@ -29,6 +30,10 @@ function pressDebugPanelShortcut(
 
 vi.mock("@/lib/pos/presentation/register/useRegisterViewModel", () => ({
   useRegisterViewModel: () => mockUseRegisterViewModel(),
+}));
+
+vi.mock("@/lib/app-update", () => ({
+  useUpdateApplyBlocker: (args: unknown) => mockUseUpdateApplyBlocker(args),
 }));
 
 vi.mock("@/components/ui/sidebar", () => ({
@@ -368,6 +373,11 @@ vi.mock("./ExpenseCompletionPanel", () => ({
 }));
 
 describe("POSRegisterView", () => {
+  beforeEach(() => {
+    mockUseRegisterViewModel.mockReset();
+    mockUseUpdateApplyBlocker.mockClear();
+  });
+
   it("renders a lightweight empty state while the active store is unresolved", async () => {
     mockUseRegisterViewModel.mockReturnValue({
       hasActiveStore: false,
@@ -388,6 +398,54 @@ describe("POSRegisterView", () => {
     expect(
       screen.queryByText("register-checkout-panel"),
     ).not.toBeInTheDocument();
+  });
+
+  it("registers the POS update apply blocker from the view model", async () => {
+    mockUseRegisterViewModel.mockReturnValue({
+      hasActiveStore: true,
+      updateApplyBlocker: {
+        active: true,
+        label: "Sale in progress",
+        priority: "critical-workflow",
+        guidance:
+          "Finish, hold, or clear this sale before applying the update.",
+      },
+      header: {
+        title: "POS",
+        isSessionActive: true,
+      },
+      registerInfo: {
+        registerLabel: "Front Counter",
+        hasTerminal: true,
+      },
+      customerPanel: {},
+      productEntry: {},
+      cart: {
+        items: [],
+      },
+      checkout: {
+        isTransactionCompleted: false,
+      },
+      sessionPanel: {},
+      cashierCard: null,
+      closeoutControl: null,
+      drawerGate: null,
+      syncStatus: null,
+      authDialog: null,
+      commandApprovalDialog: null,
+      onNavigateBack: vi.fn(),
+    });
+
+    const { POSRegisterView } = await import("./POSRegisterView");
+    render(<POSRegisterView />);
+
+    expect(mockUseUpdateApplyBlocker).toHaveBeenCalledWith({
+      surfaceId: "pos-register",
+      active: true,
+      label: "Sale in progress",
+      priority: "critical-workflow",
+      guidance: "Finish, hold, or clear this sale before applying the update.",
+    });
   });
 
   it("renders the thin register shell around the view model state", async () => {
@@ -1019,6 +1077,12 @@ describe("POSRegisterView", () => {
           },
           cashierPresenceRestore: { status: "missing" },
           closeoutControl: null,
+          updateApplyBlocker: {
+            active: false,
+            label: "Register ready",
+            priority: "critical-workflow",
+            guidance: "Apply the update when you are ready.",
+          },
           authDialog: null,
           drawerGate: null,
           commandApprovalDialog: null,

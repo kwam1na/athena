@@ -69,7 +69,10 @@ import type {
   RegisterServiceSearchResult,
   RegisterViewModel,
 } from "./registerUiState";
-import { EMPTY_REGISTER_CUSTOMER_INFO } from "./registerUiState";
+import {
+  buildRegisterUpdateApplyBlockerState,
+  EMPTY_REGISTER_CUSTOMER_INFO,
+} from "./registerUiState";
 import {
   buildRegisterHeaderState,
   buildRegisterInfoState,
@@ -506,6 +509,15 @@ export function useRegisterViewModel(): RegisterViewModel {
     setPaymentState,
     waitForCheckoutMutationQueues,
   } = useRegisterCheckoutDraftState();
+  const [isCheckoutMutationInFlight, setIsCheckoutMutationInFlight] =
+    useState(false);
+  const setCheckoutMutationLocked = useCallback(
+    (locked: boolean) => {
+      checkoutMutationLockedRef.current = locked;
+      setIsCheckoutMutationInFlight(locked);
+    },
+    [checkoutMutationLockedRef],
+  );
   const activeSessionIdRef = useRef<Id<"posSession"> | null>(null);
   const isMountedRef = useRef(true);
   const customerCommitQueueRef = useRef<Promise<void>>(Promise.resolve());
@@ -2548,7 +2560,7 @@ export function useRegisterViewModel(): RegisterViewModel {
         return false;
       }
 
-      checkoutMutationLockedRef.current = true;
+      setCheckoutMutationLocked(true);
       const hadCartItems =
         activeCartItems.length > 0 || serviceLineDrafts.length > 0;
       try {
@@ -2589,7 +2601,7 @@ export function useRegisterViewModel(): RegisterViewModel {
         }
         return true;
       } finally {
-        checkoutMutationLockedRef.current = false;
+        setCheckoutMutationLocked(false);
       }
     }
 
@@ -2626,6 +2638,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     registerNumber,
     resetDraftState,
     serviceLineDrafts.length,
+    setCheckoutMutationLocked,
     staffProfileId,
     terminal?._id,
     voidSession,
@@ -4156,7 +4169,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       return;
     }
 
-    checkoutMutationLockedRef.current = true;
+    setCheckoutMutationLocked(true);
     try {
       await waitForCheckoutMutationQueues();
 
@@ -4201,7 +4214,7 @@ export function useRegisterViewModel(): RegisterViewModel {
         toast.success("Sale cleared");
       }
     } finally {
-      checkoutMutationLockedRef.current = false;
+      setCheckoutMutationLocked(false);
     }
   }, [
     operableActiveSession,
@@ -4215,6 +4228,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     noteLocalRegisterEventChanged,
     registerNumber,
     serviceLineDrafts.length,
+    setCheckoutMutationLocked,
     setPaymentState,
     staffProfileId,
     terminal?._id,
@@ -4535,7 +4549,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       return false;
     }
 
-    checkoutMutationLockedRef.current = true;
+    setCheckoutMutationLocked(true);
     try {
       await waitForCheckoutMutationQueues();
 
@@ -4663,7 +4677,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       });
       return true;
     } finally {
-      checkoutMutationLockedRef.current = false;
+      setCheckoutMutationLocked(false);
     }
   }, [
     activeCartItems,
@@ -4675,6 +4689,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     activeTotals,
     cashierPresenceRestore.status,
     checkoutMutationLockedRef,
+    setCheckoutMutationLocked,
     serviceSubtotal,
     serviceLineDrafts,
     serviceCheckoutBlockMessage,
@@ -5211,6 +5226,19 @@ export function useRegisterViewModel(): RegisterViewModel {
   const shouldOpenCashierAuth =
     cashierPresenceRestore.status === "validation_pending" ||
     (!staffProfileId && cashierPresenceRestore.status !== "pending");
+  const updateApplyBlocker = buildRegisterUpdateApplyBlockerState({
+    hasActiveSaleWork: hasInProgressSaleDraft && !isTransactionCompleted,
+    hasCheckoutMutationInFlight: isCheckoutMutationInFlight,
+    hasDrawerTransitionInFlight:
+      isOpeningDrawer ||
+      isSubmittingCloseout ||
+      isReopeningCloseout ||
+      isCorrectingOpeningFloat ||
+      isRepairingTerminalSetup,
+    hasLocalRuntimeApplyRisk: Boolean(
+      hasInProgressSaleDraft && localRuntimeStatusSourceForPresentation,
+    ),
+  });
 
   const authDialog =
     activeStoreId && terminal?._id
@@ -5439,6 +5467,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     cashierPresenceRestore,
     drawerGate,
     closeoutControl,
+    updateApplyBlocker,
     syncStatus,
     authDialog,
     commandApprovalDialog,

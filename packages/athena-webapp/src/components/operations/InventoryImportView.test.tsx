@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { ok } from "~/shared/commandResult";
+import { ok, userError } from "~/shared/commandResult";
 import { InventoryImportView } from "./InventoryImportView";
 
 const mockedHooks = vi.hoisted(() => ({
@@ -17,6 +17,7 @@ const mockedHooks = vi.hoisted(() => ({
   useQuery: vi.fn(),
   useGetActiveStore: vi.fn(),
   useGetTerminal: vi.fn(),
+  useUpdateApplyBlocker: vi.fn(),
   useOptionalManagerElevation: vi.fn(),
   useProtectedAdminPageState: vi.fn(),
 }));
@@ -62,6 +63,10 @@ vi.mock("@/hooks/useProtectedAdminPageState", () => ({
   useProtectedAdminPageState: mockedHooks.useProtectedAdminPageState,
 }));
 
+vi.mock("@/lib/app-update", () => ({
+  useUpdateApplyBlocker: mockedHooks.useUpdateApplyBlocker,
+}));
+
 function buildCsvRow(index: number) {
   return `Product ${index},SKU-${index},${index * 10},${index}`;
 }
@@ -105,6 +110,7 @@ describe("InventoryImportView", () => {
     mockedHooks.navigate.mockReset();
     mockedHooks.useMutation.mockReset();
     mockedHooks.useQuery.mockReset();
+    mockedHooks.useUpdateApplyBlocker.mockReset();
     mockedHooks.inventorySkuContext = [];
     mockedHooks.latestReviewVersion = null;
     mockedHooks.search = {};
@@ -875,6 +881,143 @@ describe("InventoryImportView", () => {
       },
       { timeout: 2500 },
     );
+  });
+
+  it("registers an update apply blocker while draft row decisions are unsaved", async () => {
+    const user = userEvent.setup();
+    mockedHooks.inventorySkuContext = [
+      {
+        barcode: "111",
+        inventoryCount: 3,
+        price: 2500,
+        productAvailability: "live",
+        productId: "product-1",
+        productName: "Comb",
+        productSkuId: "sku-1",
+        quantityAvailable: 3,
+        sku: "COMB-1",
+      },
+    ];
+
+    render(<InventoryImportView />);
+
+    fireEvent.change(screen.getByLabelText("Raw export"), {
+      target: {
+        value: ["product_name,sku,barcode,price,qty", "Comb,COMB-1,111,25,5"].join(
+          "\n",
+        ),
+      },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Inventory check" })).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: "Review inventory changes" }));
+    await user.click(screen.getByRole("button", { name: "Import" }));
+
+    await waitFor(() => {
+      expect(mockedHooks.useUpdateApplyBlocker).toHaveBeenLastCalledWith({
+        active: true,
+        guidance: "Save the current import work before refreshing.",
+        label: "Inventory import",
+        priority: "active-command",
+        surfaceId: "operations.inventory-import",
+      });
+    });
+  });
+
+  it("keeps the update apply blocker active after autosave fails", async () => {
+    const user = userEvent.setup();
+    mockedHooks.inventorySkuContext = [
+      {
+        barcode: "111",
+        inventoryCount: 3,
+        price: 2500,
+        productAvailability: "live",
+        productId: "product-1",
+        productName: "Comb",
+        productSkuId: "sku-1",
+        quantityAvailable: 3,
+        sku: "COMB-1",
+      },
+    ];
+    mockedHooks.saveReviewVersion.mockResolvedValue(
+      userError({
+        code: "unavailable",
+        message: "Save unavailable",
+      }),
+    );
+
+    render(<InventoryImportView />);
+
+    fireEvent.change(screen.getByLabelText("Raw export"), {
+      target: {
+        value: ["product_name,sku,barcode,price,qty", "Comb,COMB-1,111,25,5"].join(
+          "\n",
+        ),
+      },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Inventory check" })).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: "Review inventory changes" }));
+    await user.click(screen.getByRole("button", { name: "Import" }));
+
+    await waitFor(
+      () => {
+        expect(screen.getByText("Autosave failed")).toBeInTheDocument();
+      },
+      { timeout: 2500 },
+    );
+    expect(mockedHooks.useUpdateApplyBlocker).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        active: true,
+        guidance: "Save the current import work before refreshing.",
+        label: "Inventory import",
+        priority: "active-command",
+        surfaceId: "operations.inventory-import",
+      }),
+    );
+  });
+
+  it("does not block update apply after loading a resumable saved review", async () => {
+    mockedHooks.latestReviewVersion = {
+      _id: "review-version-saved",
+      createdAt: Date.UTC(2026, 5, 7, 18),
+      fileName: "saved-products.csv",
+      importKey: "review-key",
+      issueCount: 0,
+      notes: "",
+      rawContent: ["product_name,sku,price,qty", "Saved Comb,SAVED-1,40,6"].join("\n"),
+      rowCount: 1,
+      rowDecisions: [
+        {
+          action: "create_item",
+          productName: "Saved Comb",
+          rowKey: "2:SAVED-1::Saved Comb",
+          rowNumber: 2,
+        },
+      ],
+      sourceFormat: "csv",
+      versionNumber: 4,
+    };
+
+    render(<InventoryImportView mode="review" />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Inventory review" })).toBeInTheDocument();
+    });
+
+    expect(mockedHooks.useUpdateApplyBlocker).toHaveBeenLastCalledWith({
+      active: false,
+      guidance: "Save the current import work before refreshing.",
+      label: "Inventory import",
+      priority: "resume-required",
+      surfaceId: "operations.inventory-import",
+    });
   });
 
   it("saves the current raw export as a server review version", async () => {

@@ -1,95 +1,176 @@
-// This service will check for new versions of the app by detecting changes in bundled assets
+// Detects new deployed webapp builds and reports them to the app-update coordinator.
 
-const POS_LIVE_SALES_ROUTE_PATTERN = /\/pos\/register\/?$/;
+import { normalizeDeployMetadata } from "@/lib/runtimeBuildMetadata";
 
-// Store the scripts that were loaded when the app started
-const initialScripts = Array.from(document.querySelectorAll("script"))
-  .filter(
-    (script) =>
-      script.src &&
-      (script.src.includes("/assets/") || script.src.includes("index"))
-  )
-  .map((script) => script.src);
+export type VersionCheckerDetectionSource = "deploy-metadata" | "html";
 
-export function shouldAutoReloadForPath(pathname: string) {
-  return !POS_LIVE_SALES_ROUTE_PATTERN.test(pathname);
-}
+export type VersionCheckerUpdateDetectedEvent = {
+  currentBuildId?: string;
+  pendingBuildId: string;
+  detectionSource: VersionCheckerDetectionSource;
+  staging?: {
+    entryHtml?: string;
+    entryUrl?: string;
+  };
+};
 
-function shouldAutoReloadForCurrentRoute() {
-  if (typeof window === "undefined") {
-    return true;
-  }
+type VersionCheckerFetch = (
+  input: RequestInfo | URL,
+  init?: RequestInit,
+) => Promise<Response>;
 
-  return shouldAutoReloadForPath(window.location.pathname);
-}
+type EntryHtmlScripts = {
+  entryUrl: string;
+  html: string;
+  scripts: string[];
+};
 
-/**
- * Creates a version checker that detects when the app has been updated by checking
- * if the HTML entry point references different script files than when the app was loaded.
- */
+const initialScripts = readDocumentScriptSources();
+const initialHtmlBuildId = buildIdFromScripts(initialScripts);
+
 export function createVersionChecker({
-  shouldReload = shouldAutoReloadForCurrentRoute,
-  pollingIntervalMs = 1 * 60 * 1000, // 1 minute
-  onNewVersionAvailable,
+  currentBuildId = initialHtmlBuildId,
+  currentDeployBuildId,
+  pollingIntervalMs = 1 * 60 * 1000,
+  fetchImpl = fetch,
+  onUpdateDetected,
+  onDetectorFailed,
 }: {
-  shouldReload?: () => boolean;
+  currentBuildId?: string;
+  currentDeployBuildId?: string;
   pollingIntervalMs?: number;
-  onNewVersionAvailable: () => void;
+  fetchImpl?: VersionCheckerFetch;
+  onUpdateDetected: (event: VersionCheckerUpdateDetectedEvent) => void;
+  onDetectorFailed?: (error: Error) => void;
+  onApplyUpdate?: () => void;
 }) {
-  // Function to check for a new version
+  let lastReportedBuildId: string | undefined;
+
   async function checkForNewVersion() {
     try {
-      // Fetch the HTML entry point with cache busting
-      const response = await fetch(`/?_=${Date.now()}`);
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch HTML: ${response.status}`);
+      const deployBuildId = await readDeployBuildId(fetchImpl);
+      let entryHtmlScripts: EntryHtmlScripts | null = null;
+      if (
+        currentDeployBuildId &&
+        deployBuildId &&
+        deployBuildId !== currentDeployBuildId
+      ) {
+        entryHtmlScripts = await readEntryHtmlScripts(fetchImpl);
+        reportOnce({
+          currentBuildId,
+          pendingBuildId: deployBuildId,
+          detectionSource: "deploy-metadata",
+          staging: {
+            entryHtml: entryHtmlScripts.html,
+            entryUrl: entryHtmlScripts.entryUrl,
+          },
+        });
+        return;
       }
 
-      const html = await response.text();
+      if (deployBuildId && !currentDeployBuildId) {
+        entryHtmlScripts = await readEntryHtmlScripts(fetchImpl);
+      }
 
-      // Create a DOM parser to extract scripts from the fetched HTML
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(html, "text/html");
-
-      // Extract script sources from the fetched HTML
-      const newScripts = Array.from(doc.querySelectorAll("script"))
-        .filter(
-          (script) =>
-            script.src &&
-            (script.src.includes("/assets/") || script.src.includes("index"))
-        )
-        .map((script) => script.src);
-
-      // Check if any of the script sources have changed
-      const hasNewVersion = initialScripts.some((oldSrc) => {
-        // Extract the base path without query params
-        const oldPath = new URL(oldSrc).pathname;
-        // Check if this path is missing from new scripts or has been changed
-        return !newScripts.some(
-          (newSrc) => new URL(newSrc).pathname === oldPath
-        );
-      });
-
-      if (hasNewVersion) {
-        console.log("New version detected - script references have changed");
-        if (shouldReload()) {
-          onNewVersionAvailable();
-        }
+      const { entryUrl, html, scripts } =
+        entryHtmlScripts ?? (await readEntryHtmlScripts(fetchImpl));
+      const htmlBuildId = buildIdFromScripts(scripts);
+      if (htmlBuildId && htmlBuildId !== initialHtmlBuildId) {
+        reportOnce({
+          currentBuildId,
+          pendingBuildId: htmlBuildId,
+          detectionSource: "html",
+          staging: {
+            entryHtml: html,
+            entryUrl,
+          },
+        });
       }
     } catch (error) {
-      console.error("Failed to check for new version:", error);
+      const normalizedError =
+        error instanceof Error
+          ? error
+          : new Error("Failed to check for new version");
+      console.error("Failed to check for new version:", normalizedError);
+      onDetectorFailed?.(normalizedError);
     }
   }
 
-  // Start polling for new versions
+  function reportOnce(event: VersionCheckerUpdateDetectedEvent) {
+    if (lastReportedBuildId === event.pendingBuildId) {
+      return;
+    }
+    lastReportedBuildId = event.pendingBuildId;
+    console.log("New version detected");
+    onUpdateDetected(event);
+  }
+
   const intervalId = setInterval(checkForNewVersion, pollingIntervalMs);
+  const startupTimeoutId = setTimeout(checkForNewVersion, 10_000);
 
-  // Also check immediately on startup (after a short delay)
-  setTimeout(checkForNewVersion, 10000);
-
-  // Provide a way to stop checking
   return {
-    stop: () => clearInterval(intervalId),
+    stop: () => {
+      clearInterval(intervalId);
+      clearTimeout(startupTimeoutId);
+    },
   };
+}
+
+async function readDeployBuildId(fetchImpl: VersionCheckerFetch) {
+  const response = await fetchImpl("/deploy.json", { cache: "no-store" });
+  if (!response.ok) {
+    return undefined;
+  }
+
+  const metadata = normalizeDeployMetadata(await response.json());
+  return metadata.buildSha ?? metadata.appVersion;
+}
+
+async function readEntryHtmlScripts(
+  fetchImpl: VersionCheckerFetch,
+): Promise<EntryHtmlScripts> {
+  const entryUrl = `/?_=${Date.now()}`;
+  const response = await fetchImpl(entryUrl, {
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch HTML: ${response.status}`);
+  }
+
+  const html = await response.text();
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, "text/html");
+
+  return {
+    entryUrl,
+    html,
+    scripts: readScriptSources(doc),
+  };
+}
+
+function readDocumentScriptSources() {
+  if (typeof document === "undefined") {
+    return [];
+  }
+
+  return readScriptSources(document);
+}
+
+function readScriptSources(root: Document) {
+  return Array.from(root.querySelectorAll("script"))
+    .filter(
+      (script) =>
+        script.src &&
+        (script.src.includes("/assets/") || script.src.includes("index")),
+    )
+    .map((script) => script.src);
+}
+
+function buildIdFromScripts(scripts: string[]) {
+  const paths = scripts
+    .map((scriptSrc) => new URL(scriptSrc, window.location.origin).pathname)
+    .sort();
+
+  return paths.length > 0 ? paths.join("|") : undefined;
 }

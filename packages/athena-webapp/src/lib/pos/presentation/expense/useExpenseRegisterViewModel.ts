@@ -25,7 +25,10 @@ import {
 import { useRegisterCatalogIndex } from "@/lib/pos/presentation/register/useRegisterCatalogIndex";
 import { logger } from "@/lib/logger";
 import { toast } from "sonner";
-import { EMPTY_REGISTER_CUSTOMER_INFO } from "@/lib/pos/presentation/register/registerUiState";
+import {
+  buildRegisterUpdateApplyBlockerState,
+  EMPTY_REGISTER_CUSTOMER_INFO,
+} from "@/lib/pos/presentation/register/registerUiState";
 import type { RegisterViewModel } from "@/lib/pos/presentation/register/registerUiState";
 import type { Id } from "~/convex/_generated/dataModel";
 import { formatStaffDisplayNameOrFallback } from "~/shared/staffDisplayName";
@@ -777,6 +780,12 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
       resetAutoSessionInitialized();
     },
   };
+  const updateApplyBlocker = buildRegisterUpdateApplyBlockerState({
+    hasActiveSaleWork: false,
+    hasCheckoutMutationInFlight: false,
+    hasDrawerTransitionInFlight: false,
+    hasLocalRuntimeApplyRisk: false,
+  });
 
   return {
     workflowMode: "expense",
@@ -923,6 +932,7 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
     cashierPresenceRestore: { status: "missing" },
     drawerGate: null,
     closeoutControl: null,
+    updateApplyBlocker,
     authDialog:
       activeStore && terminal && !isCashierSignedIn
         ? {

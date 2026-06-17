@@ -588,6 +588,25 @@ async function createFixtureRepo() {
   );
 
   await write("packages/athena-webapp/src/main.tsx", "export {};\n", rootDir);
+  await write("packages/athena-webapp/src/utils/versionChecker.ts", "export {};\n", rootDir);
+  await write(
+    "packages/athena-webapp/src/utils/versionChecker.test.ts",
+    "export {};\n",
+    rootDir
+  );
+  for (const appUpdatePath of [
+    "packages/athena-webapp/src/lib/app-update/UpdateCoordinatorProvider.tsx",
+    "packages/athena-webapp/src/lib/app-update/index.ts",
+    "packages/athena-webapp/src/lib/app-update/updateAssetStaging.test.ts",
+    "packages/athena-webapp/src/lib/app-update/updateAssetStaging.ts",
+    "packages/athena-webapp/src/lib/app-update/updateCoordinator.test.ts",
+    "packages/athena-webapp/src/lib/app-update/updateCoordinator.ts",
+    "packages/athena-webapp/src/lib/app-update/updateDetectionSequencer.test.ts",
+    "packages/athena-webapp/src/lib/app-update/updateDetectionSequencer.ts",
+    "packages/athena-webapp/src/lib/app-update/useUpdateApplyBlocker.ts",
+  ]) {
+    await write(appUpdatePath, "export {};\n", rootDir);
+  }
   await write(
     "packages/athena-webapp/src/offline/posAppShellRoutes.ts",
     "export {};\n",
@@ -595,6 +614,11 @@ async function createFixtureRepo() {
   );
   await write(
     "packages/athena-webapp/src/offline/posAppShellRoutes.test.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/src/offline/posAppShellServiceWorkerStaging.test.ts",
     "export {};\n",
     rootDir
   );
@@ -634,6 +658,7 @@ async function createFixtureRepo() {
   );
   await write("packages/athena-webapp/vitest.setup.ts", "export {};\n", rootDir);
   await write("packages/athena-webapp/src/routes/_authed.tsx", "export {};\n", rootDir);
+  await write("packages/athena-webapp/src/routes/__root.tsx", "export {};\n", rootDir);
   await write("packages/athena-webapp/src/routes/_authed/index.tsx", "export {};\n", rootDir);
   await write(
     "packages/athena-webapp/src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/cash-controls/index.tsx",
@@ -688,12 +713,32 @@ async function createFixtureRepo() {
   await write("packages/athena-webapp/src/routes/index.tsx", "export {};\n", rootDir);
   await write("packages/athena-webapp/src/components/AppShell.tsx", "export {};\n", rootDir);
   await write(
+    "packages/athena-webapp/src/components/app-update/UpdateReadyBanner.test.tsx",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/src/components/app-update/UpdateReadyBanner.tsx",
+    "export {};\n",
+    rootDir
+  );
+  await write(
     "packages/athena-webapp/src/components/app-sidebar.tsx",
     "export {};\n",
     rootDir
   );
   await write(
     "packages/athena-webapp/src/components/pos/PointOfSaleView.tsx",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/src/components/operations/InventoryImportView.test.tsx",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/src/components/operations/InventoryImportView.tsx",
     "export {};\n",
     rootDir
   );
@@ -978,6 +1023,21 @@ async function createFixtureRepo() {
   );
   await write(
     "packages/athena-webapp/src/lib/pos/presentation/register/useRegisterViewModel.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/src/lib/pos/presentation/register/useRegisterViewModel.test.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/src/lib/pos/presentation/register/registerUiState.test.ts",
+    "export {};\n",
+    rootDir
+  );
+  await write(
+    "packages/athena-webapp/src/lib/pos/presentation/register/registerUiState.ts",
     "export {};\n",
     rootDir
   );

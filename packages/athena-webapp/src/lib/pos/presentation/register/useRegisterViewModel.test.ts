@@ -902,6 +902,64 @@ describe("useRegisterViewModel", () => {
     expect(result.current.syncStatus).toBeNull();
   });
 
+  it("marks active cart work as unsafe for update apply", async () => {
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await waitFor(() =>
+      expect(result.current.updateApplyBlocker).toEqual({
+        active: true,
+        label: "Sale in progress",
+        priority: "critical-workflow",
+        guidance:
+          "Finish, hold, or clear this sale before applying the update.",
+      }),
+    );
+  });
+
+  it("leaves update apply unblocked when the register has no active sale work", async () => {
+    mockActiveSession = {
+      ...mockActiveSession!,
+      cartItems: [],
+      customer: null,
+      payments: [],
+    };
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await waitFor(() =>
+      expect(result.current.updateApplyBlocker).toEqual({
+        active: false,
+        label: "Register ready",
+        priority: "critical-workflow",
+        guidance: "Apply the update when you are ready.",
+      }),
+    );
+  });
+
+  it("marks active payments as unsafe for update apply", async () => {
+    mockActiveSession = {
+      ...mockActiveSession!,
+      cartItems: [],
+      customer: null,
+      payments: [{ method: "cash", amount: 120, timestamp: 1_000 }],
+    };
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await waitFor(() =>
+      expect(result.current.updateApplyBlocker).toEqual({
+        active: true,
+        label: "Sale in progress",
+        priority: "critical-workflow",
+        guidance:
+          "Finish, hold, or clear this sale before applying the update.",
+      }),
+    );
+  });
+
   it("persists terminal-scoped cashier presence after successful cashier sign-in", async () => {
     const { useRegisterViewModel } = await import("./useRegisterViewModel");
     const { result } = renderHook(() => useRegisterViewModel());
