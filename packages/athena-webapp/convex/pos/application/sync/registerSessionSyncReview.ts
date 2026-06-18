@@ -28,6 +28,26 @@ export type RegisterSessionSyncReviewKind =
   | "staff_access"
   | "unknown";
 
+export type RegisterSessionSyncSaleSummary = {
+  cashAmount?: number | null;
+  itemCount?: number | null;
+  items?: Array<{
+    name: string;
+    quantity?: number | null;
+    sku?: string | null;
+    total?: number | null;
+  }>;
+  localReceiptNumber?: string | null;
+  localTransactionId?: string | null;
+  occurredAt?: number | null;
+  paymentMethods?: string[];
+  receiptNumber?: string | null;
+  staffName?: string | null;
+  staffProfileId?: Id<"staffProfile"> | null;
+  total?: number | null;
+  totalPaid?: number | null;
+};
+
 export type RegisterSessionSyncConflict = {
   _id: string;
   conflictType?: string;
@@ -36,6 +56,7 @@ export type RegisterSessionSyncConflict = {
   localEventId: string;
   localRegisterSessionId?: string;
   sequence: number;
+  sale?: RegisterSessionSyncSaleSummary | null;
   sourceEventNotes?: string | null;
   status: string;
   storeId?: Id<"store">;
@@ -57,6 +78,7 @@ export type RegisterSessionLocalSyncStatus = {
     sequence?: number | null;
     status?: string | null;
     summary?: string | null;
+    sale?: RegisterSessionSyncSaleSummary | null;
     type?: string | null;
     variance?: number | null;
   }>;
@@ -182,8 +204,100 @@ function stringDetail(
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
+function recordDetail(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function arrayDetail(value: unknown): Record<string, unknown>[] {
+  return Array.isArray(value)
+    ? value
+        .map(recordDetail)
+        .filter((item): item is Record<string, unknown> => Boolean(item))
+    : [];
+}
+
+function summarizeSaleItems(payload: Record<string, unknown>) {
+  const retailItems = arrayDetail(payload.items).map((item) => {
+    const quantity = numberDetail(item, "quantity");
+    const unitPrice = numberDetail(item, "unitPrice");
+    return {
+      name:
+        stringDetail(item, "productName") ??
+        stringDetail(item, "name") ??
+        "Sale item",
+      quantity,
+      sku: stringDetail(item, "productSku"),
+      total:
+        quantity !== null && unitPrice !== null
+          ? Math.round(quantity * unitPrice * 100) / 100
+          : null,
+    };
+  });
+  const serviceItems = arrayDetail(payload.serviceLines).map((line) => ({
+    name:
+      stringDetail(line, "serviceCatalogName") ??
+      stringDetail(line, "name") ??
+      "Service line",
+    quantity: numberDetail(line, "quantity"),
+    sku: null,
+    total: numberDetail(line, "totalPrice"),
+  }));
+
+  return [...retailItems, ...serviceItems];
+}
+
+function buildSyncSaleSummary(
+  syncEvent?: Doc<"posLocalSyncEvent"> | null,
+): RegisterSessionSyncSaleSummary | null {
+  if (!syncEvent || syncEvent.eventType !== "sale_completed") {
+    return null;
+  }
+
+  const payload = syncEvent.payload ?? {};
+  const totals = recordDetail(payload.totals);
+  const payments = arrayDetail(payload.payments);
+  const items = summarizeSaleItems(payload);
+  const paymentMethods = Array.from(
+    new Set(
+      payments
+        .map((payment) => stringDetail(payment, "method"))
+        .filter((method): method is string => Boolean(method)),
+    ),
+  );
+  const totalPaid = payments.reduce(
+    (sum, payment) => sum + Math.max(0, numberDetail(payment, "amount") ?? 0),
+    0,
+  );
+  const cashAmount = payments
+    .filter((payment) => stringDetail(payment, "method") === "cash")
+    .reduce(
+      (sum, payment) => sum + Math.max(0, numberDetail(payment, "amount") ?? 0),
+      0,
+    );
+
+  return {
+    cashAmount: cashAmount > 0 ? cashAmount : null,
+    itemCount: items.reduce(
+      (sum, item) => sum + Math.max(0, item.quantity ?? 0),
+      0,
+    ),
+    items,
+    localReceiptNumber: stringDetail(payload, "localReceiptNumber"),
+    localTransactionId: stringDetail(payload, "localTransactionId"),
+    occurredAt: syncEvent.occurredAt,
+    paymentMethods,
+    receiptNumber: stringDetail(payload, "receiptNumber"),
+    staffProfileId: syncEvent.staffProfileId,
+    total: totals ? numberDetail(totals, "total") : null,
+    totalPaid,
+  };
+}
+
 export function buildRegisterSessionLocalSyncStatus(
   conflicts: RegisterSessionSyncConflict[],
+  options: { staffNamesById?: Map<Id<"staffProfile">, string> } = {},
 ): RegisterSessionLocalSyncStatus | null {
   if (conflicts.length === 0) {
     return null;
@@ -194,7 +308,7 @@ export function buildRegisterSessionLocalSyncStatus(
     reconciliationItems: conflicts.map((conflict) => {
       const review = classifyRegisterSessionSyncReview(conflict);
 
-      return {
+      const reconciliationItem = {
         actionPolicy: review.actionPolicy,
         createdAt: conflict.createdAt,
         countedCash: numberDetail(conflict.details, "countedCash"),
@@ -210,6 +324,21 @@ export function buildRegisterSessionLocalSyncStatus(
         type: getSyncConflictReconciliationType(review),
         variance: numberDetail(conflict.details, "variance"),
       };
+
+      if (!conflict.sale) {
+        return reconciliationItem;
+      }
+
+      return {
+        ...reconciliationItem,
+        sale: {
+          ...conflict.sale,
+          staffName: conflict.sale.staffProfileId
+            ? (options.staffNamesById?.get(conflict.sale.staffProfileId) ??
+              null)
+            : null,
+        },
+      };
     }),
   };
 }
@@ -219,28 +348,29 @@ export async function listOpenLocalSyncConflictsByRegisterSession(
   storeId: Id<"store">,
   options: { includeRejectedEvidence?: boolean } = {},
 ) {
-  const [needsReviewConflicts, resolvedConflicts, rejectedEvents] = await Promise.all([
-    ctx.db
-      .query("posLocalSyncConflict")
-      .withIndex("by_store_status", (q) =>
-        q.eq("storeId", storeId).eq("status", "needs_review"),
-      )
-      .take(SYNC_CONFLICT_LIMIT),
-    ctx.db
-      .query("posLocalSyncConflict")
-      .withIndex("by_store_status", (q) =>
-        q.eq("storeId", storeId).eq("status", "resolved"),
-      )
-      .take(SYNC_CONFLICT_LIMIT),
-    options.includeRejectedEvidence
-      ? ctx.db
-          .query("posLocalSyncEvent")
-          .withIndex("by_store_status", (q) =>
-            q.eq("storeId", storeId).eq("status", "rejected"),
-          )
-          .take(SYNC_CONFLICT_LIMIT)
-      : Promise.resolve([]),
-  ]);
+  const [needsReviewConflicts, resolvedConflicts, rejectedEvents] =
+    await Promise.all([
+      ctx.db
+        .query("posLocalSyncConflict")
+        .withIndex("by_store_status", (q) =>
+          q.eq("storeId", storeId).eq("status", "needs_review"),
+        )
+        .take(SYNC_CONFLICT_LIMIT),
+      ctx.db
+        .query("posLocalSyncConflict")
+        .withIndex("by_store_status", (q) =>
+          q.eq("storeId", storeId).eq("status", "resolved"),
+        )
+        .take(SYNC_CONFLICT_LIMIT),
+      options.includeRejectedEvidence
+        ? ctx.db
+            .query("posLocalSyncEvent")
+            .withIndex("by_store_status", (q) =>
+              q.eq("storeId", storeId).eq("status", "rejected"),
+            )
+            .take(SYNC_CONFLICT_LIMIT)
+        : Promise.resolve([]),
+    ]);
   const staleResolvedConflicts = await Promise.all(
     resolvedConflicts.map(async (conflict) => {
       const syncEvent = await ctx.db
@@ -281,12 +411,8 @@ export async function listOpenLocalSyncConflictsByRegisterSession(
       (conflict): conflict is Doc<"posLocalSyncConflict"> => conflict !== null,
     ),
   ];
-  const conflictsWithSourceEventNotes = await Promise.all(
+  const conflictsWithSourceEventEvidence = await Promise.all(
     conflicts.map(async (conflict) => {
-      if (stringDetail(conflict.details, "notes")) {
-        return conflict;
-      }
-
       const { terminalId } = conflict;
       if (!terminalId) {
         return conflict;
@@ -301,12 +427,17 @@ export async function listOpenLocalSyncConflictsByRegisterSession(
             .eq("localEventId", conflict.localEventId),
         )
         .unique();
-      const sourceEventNotes = stringDetail(syncEvent?.payload, "notes");
+      const sourceEventNotes =
+        stringDetail(conflict.details, "notes") ??
+        stringDetail(syncEvent?.payload, "notes");
+      const sale = buildSyncSaleSummary(syncEvent);
 
-      return sourceEventNotes ? { ...conflict, sourceEventNotes } : conflict;
+      return sourceEventNotes || sale
+        ? { ...conflict, sale, sourceEventNotes }
+        : conflict;
     }),
   );
-  conflicts.splice(0, conflicts.length, ...conflictsWithSourceEventNotes);
+  conflicts.splice(0, conflicts.length, ...conflictsWithSourceEventEvidence);
   const includedConflictKeys = new Set(
     conflicts.map((conflict) =>
       [conflict.terminalId, conflict.localEventId].join(":"),
@@ -326,6 +457,7 @@ export async function listOpenLocalSyncConflictsByRegisterSession(
         details: {},
         localEventId: event.localEventId,
         localRegisterSessionId: event.localRegisterSessionId,
+        sale: buildSyncSaleSummary(event),
         sequence: event.sequence,
         status: event.status,
         storeId: event.storeId,
@@ -391,16 +523,13 @@ export async function listOpenLocalSyncConflictsByRegisterSession(
     }),
   );
 
-  return entries.reduce(
-    (conflictsBySessionId, entry) => {
-      if (!entry) return conflictsBySessionId;
-      const [registerSessionId, conflict] = entry;
-      conflictsBySessionId.set(registerSessionId, [
-        ...(conflictsBySessionId.get(registerSessionId) ?? []),
-        conflict,
-      ]);
-      return conflictsBySessionId;
-    },
-    new Map<Id<"registerSession">, RegisterSessionSyncConflict[]>(),
-  );
+  return entries.reduce((conflictsBySessionId, entry) => {
+    if (!entry) return conflictsBySessionId;
+    const [registerSessionId, conflict] = entry;
+    conflictsBySessionId.set(registerSessionId, [
+      ...(conflictsBySessionId.get(registerSessionId) ?? []),
+      conflict,
+    ]);
+    return conflictsBySessionId;
+  }, new Map<Id<"registerSession">, RegisterSessionSyncConflict[]>());
 }

@@ -358,9 +358,9 @@ describe("RegisterSessionViewContent", () => {
       "tracking-[0.12em]",
     );
     expect(transactionDetails.getByText("Cash")).toHaveClass("text-sm");
-    expect(screen.getAllByText(/3 items - Esi Boateng/i).length).toBeGreaterThan(
-      0,
-    );
+    expect(
+      screen.getAllByText(/3 items - Esi Boateng/i).length,
+    ).toBeGreaterThan(0);
     expect(screen.getAllByText("Ama M.").length).toBeGreaterThan(0);
     expect(screen.getByText("Variance review required.")).toBeInTheDocument();
     expect(screen.getByText("Closeout workflow")).toBeInTheDocument();
@@ -477,11 +477,9 @@ describe("RegisterSessionViewContent", () => {
     expect(
       screen.getByText("1 review item needs manager review."),
     ).toBeInTheDocument();
+    expect(screen.getByText("Reconciliation review.")).toBeInTheDocument();
     expect(
-      screen.getByText("Types: Reconciliation review."),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText("Reasons: Review synced register activity."),
+      screen.getByText("Review synced register activity."),
     ).toBeInTheDocument();
   });
 
@@ -530,7 +528,7 @@ describe("RegisterSessionViewContent", () => {
     expect(
       screen.getByText("1 review item rejected by the server."),
     ).toBeInTheDocument();
-    expect(screen.getByText("Local queue #10.")).toBeInTheDocument();
+    expect(screen.getByText("#10")).toBeInTheDocument();
     expect(
       screen.queryByText("Register was closed before this sale synced."),
     ).not.toBeInTheDocument();
@@ -669,11 +667,7 @@ describe("RegisterSessionViewContent", () => {
     expect(screen.getAllByText("Expected")).toHaveLength(2);
     expect(screen.getAllByText("Counted")).toHaveLength(3);
     expect(screen.getAllByText("Variance")).toHaveLength(3);
-    expect(
-      screen.getByText(
-        "Short drawer",
-      ),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Short drawer")).toBeInTheDocument();
     expect(
       screen.queryByText(
         "Register closeout variance requires manager review before synced closeout can be applied.",
@@ -700,7 +694,7 @@ describe("RegisterSessionViewContent", () => {
       screen.queryByRole("button", { name: "Submit closeout" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Approve synced closeout" }),
+      screen.getByRole("button", { name: "Apply synced closeout" }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Reject synced closeout" }),
@@ -767,11 +761,11 @@ describe("RegisterSessionViewContent", () => {
     );
 
     await user.click(
-      screen.getByRole("button", { name: "Approve synced closeout" }),
+      screen.getByRole("button", { name: "Apply synced closeout" }),
     );
     await user.click(
       screen.getByRole("button", {
-        name: "Confirm staff for Approve synced closeout",
+        name: "Confirm staff for Apply synced closeout",
       }),
     );
 
@@ -846,10 +840,10 @@ describe("RegisterSessionViewContent", () => {
       ),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Approve synced sales" }),
+      screen.queryByRole("button", { name: "Apply reviewed sale activity" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Approve synced closeout" }),
+      screen.queryByRole("button", { name: "Apply synced closeout" }),
     ).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Reject synced closeout" }),
@@ -918,7 +912,9 @@ describe("RegisterSessionViewContent", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("combines synced register review items with safe event evidence", () => {
+  it("combines synced register review items with safe event evidence", async () => {
+    const user = userEvent.setup();
+
     const createdAt = new Date("2026-05-20T14:30:00.000Z").getTime();
 
     render(
@@ -938,15 +934,67 @@ describe("RegisterSessionViewContent", () => {
                   createdAt,
                   id: "sync_conflict_permission",
                   localEventId: "event-sale-completed-2",
+                  sale: {
+                    cashAmount: 2200000,
+                    itemCount: 2,
+                    items: [
+                      {
+                        name: "Lace front wig",
+                        quantity: 2,
+                        sku: "WIG-001",
+                        total: 1200000,
+                      },
+                      {
+                        name: "Wig care kit",
+                        quantity: 1,
+                        sku: "CARE-001",
+                        total: 1000000,
+                      },
+                    ],
+                    localReceiptNumber: "local-receipt-1",
+                    localTransactionId: "local-transaction-1",
+                    occurredAt: createdAt,
+                    paymentMethods: ["cash"],
+                    receiptNumber: "R-1001",
+                    staffName: "Skank H.",
+                    total: 2200000,
+                    totalPaid: 2200000,
+                  },
                   sequence: 12,
                   status: "needs_review",
                   summary: "Register was not open before this sale synced.",
                   type: "permission",
                 },
                 {
-                  createdAt,
+                  createdAt: createdAt + 60_000,
                   id: "sync_conflict_payment",
                   localEventId: "event-payment-1",
+                  sale: {
+                    cashAmount: 2200000,
+                    itemCount: 2,
+                    items: [
+                      {
+                        name: "Lace front wig",
+                        quantity: 2,
+                        sku: "WIG-001",
+                        total: 1200000,
+                      },
+                      {
+                        name: "Wig care kit",
+                        quantity: 1,
+                        sku: "CARE-001",
+                        total: 1000000,
+                      },
+                    ],
+                    localReceiptNumber: "local-receipt-1",
+                    localTransactionId: "local-transaction-1",
+                    occurredAt: createdAt,
+                    paymentMethods: ["cash"],
+                    receiptNumber: "R-1001",
+                    staffName: "Skank H.",
+                    total: 2200000,
+                    totalPaid: 2200000,
+                  },
                   sequence: 13,
                   status: "needs_review",
                   summary: "Payment allocation needs manager review.",
@@ -962,16 +1010,42 @@ describe("RegisterSessionViewContent", () => {
     expect(
       screen.getByText("2 review items need manager review."),
     ).toBeInTheDocument();
+    expect(screen.getByText("Review details")).toBeInTheDocument();
+    expect(screen.getAllByText("Items").length).toBeGreaterThan(0);
+    expect(screen.getByText("Reasons")).toBeInTheDocument();
+    expect(screen.getByText("Categories")).toBeInTheDocument();
+    expect(screen.getByText("Sync timeline")).toBeInTheDocument();
+    expect(screen.getByText("2 reports")).toBeInTheDocument();
+    expect(screen.getByText("First reported")).toBeInTheDocument();
+    expect(screen.getByText("Latest report")).toBeInTheDocument();
+    expect(screen.getByText("Upload order")).toBeInTheDocument();
     expect(
-      screen.getByText(
-        "Reasons: Register was not open before this sale synced; Payment allocation needs manager review.",
-      ),
-    ).toBeInTheDocument();
+      screen.getAllByText(
+        "Register was not open before this sale synced; Payment allocation needs manager review.",
+      ).length,
+    ).toBeGreaterThan(0);
     expect(
-      screen.getByText("Types: Permission review and Payment review."),
+      screen.getByText("Permission review and Payment review."),
     ).toBeInTheDocument();
-    expect(screen.getByText("Local queue #12 and #13.")).toBeInTheDocument();
-    expect(screen.getByText(/Reported .*2026/)).toBeInTheDocument();
+    expect(screen.getByText("#12 and #13")).toBeInTheDocument();
+    expect(screen.getAllByText(/2026/).length).toBeGreaterThan(0);
+    expect(screen.getByText("Sales under review")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Receipt #R-1001/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Cashier Skank H\./)).toBeInTheDocument();
+    expect(screen.getAllByText("GH₵22,000").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Cash").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Lace Front Wig")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /Receipt #R-1001/i }));
+
+    expect(screen.getByText("Lace Front Wig")).toBeInTheDocument();
+    expect(screen.getByText("Wig Care Kit")).toBeInTheDocument();
+    expect(screen.getByText("WIG-001")).toBeInTheDocument();
+    expect(screen.getByText("Qty 2")).toBeInTheDocument();
+    expect(screen.getByText("Items total")).toBeInTheDocument();
+    expect(screen.queryByText("2 x GH₵12,000")).not.toBeInTheDocument();
     expect(screen.queryByText("Permission review")).not.toBeInTheDocument();
     expect(
       screen.queryByText("Register was not open before this sale synced."),
@@ -1014,10 +1088,10 @@ describe("RegisterSessionViewContent", () => {
       ),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Approve synced sales" }),
+      screen.queryByRole("button", { name: "Apply reviewed sale activity" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Reject synced activity" }),
+      screen.getByRole("button", { name: "Reject reviewed activity" }),
     ).toBeInTheDocument();
   });
 
@@ -1053,6 +1127,24 @@ describe("RegisterSessionViewContent", () => {
               reconciliationItems: [
                 {
                   id: "sync_conflict_1",
+                  sale: {
+                    cashAmount: 2200000,
+                    itemCount: 1,
+                    items: [
+                      {
+                        name: "Lace front wig",
+                        quantity: 1,
+                        sku: "WIG-001",
+                        total: 2200000,
+                      },
+                    ],
+                    occurredAt: Date.parse("2026-05-20T10:30:00Z"),
+                    paymentMethods: ["cash"],
+                    receiptNumber: "R-1001",
+                    staffName: "Skank H.",
+                    total: 2200000,
+                    totalPaid: 2200000,
+                  },
                   status: "needs_review",
                   summary: "Register was not open before this sale synced.",
                   type: "permission",
@@ -1065,11 +1157,11 @@ describe("RegisterSessionViewContent", () => {
     );
 
     await user.click(
-      screen.getByRole("button", { name: "Approve synced sales" }),
+      screen.getByRole("button", { name: "Apply reviewed sale activity" }),
     );
     await user.click(
       screen.getByRole("button", {
-        name: "Confirm staff for Approve synced sales",
+        name: "Confirm staff for Apply reviewed sale activity",
       }),
     );
 
@@ -1199,10 +1291,12 @@ describe("RegisterSessionViewContent", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: "Approve synced sales" }));
+    await user.click(
+      screen.getByRole("button", { name: "Apply reviewed activity" }),
+    );
     await user.click(
       screen.getByRole("button", {
-        name: "Confirm staff for Approve synced sales",
+        name: "Confirm staff for Apply reviewed activity",
       }),
     );
 
@@ -1257,11 +1351,11 @@ describe("RegisterSessionViewContent", () => {
     );
 
     await user.click(
-      screen.getByRole("button", { name: "Reject synced activity" }),
+      screen.getByRole("button", { name: "Reject reviewed activity" }),
     );
     await user.click(
       screen.getByRole("button", {
-        name: "Confirm staff for Reject synced activity",
+        name: "Confirm staff for Reject reviewed activity",
       }),
     );
 
