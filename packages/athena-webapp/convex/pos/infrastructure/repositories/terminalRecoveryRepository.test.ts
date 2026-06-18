@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { Id } from "../../../_generated/dataModel";
 import {
+  createTerminalRecoveryCommandReadRepository,
   createTerminalRecoveryCommandRepository,
   getTerminalRecoverySourceEvent,
   listTerminalRecoveryConflictsForRepair,
@@ -18,7 +19,7 @@ describe("terminalRecoveryRepository", () => {
     const ctx = buildCtx({
       posTerminalRecoveryCommand: [command],
     });
-    const repository = createTerminalRecoveryCommandRepository(ctx as never);
+    const repository = createTerminalRecoveryCommandReadRepository(ctx as never);
 
     const result = await repository.listCommandsForTerminal({
       storeId: "store-1" as Id<"store">,
@@ -34,9 +35,102 @@ describe("terminalRecoveryRepository", () => {
     ]);
   });
 
+  it("lists command documents with a query-shaped db that has no write APIs", async () => {
+    const command = {
+      _id: "command-1" as Id<"posTerminalRecoveryCommand">,
+      storeId: "store-1" as Id<"store">,
+      terminalId: "terminal-1" as Id<"posTerminal">,
+    };
+    const ctx = buildQueryCtx({
+      posTerminalRecoveryCommand: [command],
+    });
+    const repository = createTerminalRecoveryCommandReadRepository(ctx as never);
+
+    const result = await repository.listCommandsForTerminal({
+      storeId: "store-1" as Id<"store">,
+      terminalId: "terminal-1" as Id<"posTerminal">,
+    });
+
+    expect(result).toEqual([command]);
+    expect("patch" in ctx.db).toBe(false);
+    expect("insert" in ctx.db).toBe(false);
+  });
+
+  it("lists active command documents through status and expiry indexes", async () => {
+    const expiredCommands = Array.from({ length: 75 }, (_, index) => ({
+      _id: `command-expired-${index}` as Id<"posTerminalRecoveryCommand">,
+      expiresAt: 100,
+      status: "pending",
+      storeId: "store-1" as Id<"store">,
+      terminalId: "terminal-1" as Id<"posTerminal">,
+    }));
+    const activeCommand = {
+      _id: "command-active" as Id<"posTerminalRecoveryCommand">,
+      expiresAt: 1_000,
+      status: "pending",
+      storeId: "store-1" as Id<"store">,
+      terminalId: "terminal-1" as Id<"posTerminal">,
+    };
+    const ctx = buildQueryCtx({
+      posTerminalRecoveryCommand: [...expiredCommands, activeCommand],
+    });
+    const repository = createTerminalRecoveryCommandReadRepository(ctx as never);
+
+    const result = await repository.listCommandsForTerminal({
+      expiresAfter: 500,
+      statuses: ["pending"],
+      storeId: "store-1" as Id<"store">,
+      terminalId: "terminal-1" as Id<"posTerminal">,
+    });
+
+    expect(result).toEqual([activeCommand]);
+    expect(ctx.queryLog).toContain("by_store_terminal_status_expiresAt");
+    expect(ctx.eqLog).toEqual([
+      ["storeId", "store-1"],
+      ["terminalId", "terminal-1"],
+      ["status", "pending"],
+    ]);
+    expect(ctx.gtLog).toEqual([["expiresAt", 500]]);
+  });
+
+  it("writes command documents only through the mutation repository", async () => {
+    const ctx = buildCtx();
+    const repository = createTerminalRecoveryCommandRepository(ctx as never);
+    const input = {
+      storeId: "store-1" as Id<"store">,
+      terminalId: "terminal-1" as Id<"posTerminal">,
+      commandType: "retry_sync" as const,
+      status: "pending" as const,
+      verificationStatus: "waiting_for_acknowledgement" as const,
+      commandContext: { reason: "Support requested sync retry." },
+      expectedEvidence: {},
+      issuedByUserId: "user-1" as Id<"athenaUser">,
+      issuedAt: 1,
+      expiresAt: 2,
+    };
+
+    await repository.insertCommand(input);
+    await repository.patchCommand("command-1" as Id<"posTerminalRecoveryCommand">, {
+      status: "expired",
+    });
+
+    expect(ctx.db.insert).toHaveBeenCalledWith(
+      "posTerminalRecoveryCommand",
+      input,
+    );
+    expect(ctx.db.patch).toHaveBeenCalledWith(
+      "posTerminalRecoveryCommand",
+      "command-1",
+      { status: "expired" },
+    );
+  });
+
   it("lists repair conflicts through the scoped conflict status index", async () => {
     const conflict = {
       _id: "conflict-1" as Id<"posLocalSyncConflict">,
+      status: "needs_review",
+      storeId: "store-1" as Id<"store">,
+      terminalId: "terminal-1" as Id<"posTerminal">,
     };
     const ctx = buildCtx({
       posLocalSyncConflict: [conflict],
@@ -61,6 +155,8 @@ describe("terminalRecoveryRepository", () => {
     const event = {
       _id: "event-1" as Id<"posLocalSyncEvent">,
       localEventId: "local-event-1",
+      storeId: "store-1" as Id<"store">,
+      terminalId: "terminal-1" as Id<"posTerminal">,
     };
     const ctx = buildCtx({
       posLocalSyncEvent: [event],
@@ -102,6 +198,7 @@ describe("terminalRecoveryRepository", () => {
 function buildCtx(tables: Record<string, unknown[]> = {}) {
   const queryLog: string[] = [];
   const eqLog: Array<[string, unknown]> = [];
+  const gtLog: Array<[string, unknown]> = [];
   const ctx = {
     db: {
       get: vi.fn(),
@@ -110,22 +207,60 @@ function buildCtx(tables: Record<string, unknown[]> = {}) {
       query: vi.fn((tableName: string) => ({
         withIndex(indexName: string, callback: (q: unknown) => unknown) {
           queryLog.push(indexName);
+          const filters: Array<(row: Record<string, unknown>) => boolean> = [];
           const q = {
             eq(fieldName: string, value: unknown) {
               eqLog.push([fieldName, value]);
+              filters.push((row) => row[fieldName] === value);
+              return q;
+            },
+            gt(fieldName: string, value: unknown) {
+              gtLog.push([fieldName, value]);
+              filters.push(
+                (row) =>
+                  typeof row[fieldName] === "number" &&
+                  typeof value === "number" &&
+                  row[fieldName] > value,
+              );
               return q;
             },
           };
           callback(q);
           return {
-            first: vi.fn(async () => tables[tableName]?.[0] ?? null),
-            take: vi.fn(async () => tables[tableName] ?? []),
+            first: vi.fn(async () => filterRows(tables[tableName], filters)[0] ?? null),
+            take: vi.fn(async (limit?: number) =>
+              filterRows(tables[tableName], filters).slice(0, limit),
+            ),
           };
         },
       })),
     },
     eqLog,
+    gtLog,
     queryLog,
   };
   return ctx;
+}
+
+function buildQueryCtx(tables: Record<string, unknown[]> = {}) {
+  const writableCtx = buildCtx(tables);
+  const { get, query } = writableCtx.db;
+  return {
+    db: {
+      get,
+      query,
+    },
+    eqLog: writableCtx.eqLog,
+    gtLog: writableCtx.gtLog,
+    queryLog: writableCtx.queryLog,
+  };
+}
+
+function filterRows(
+  rows: unknown[] | undefined,
+  filters: Array<(row: Record<string, unknown>) => boolean>,
+) {
+  return (rows ?? []).filter((row) =>
+    filters.every((filter) => filter(row as Record<string, unknown>)),
+  );
 }

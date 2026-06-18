@@ -18,8 +18,8 @@ Landing page for packages/athena-webapp. Use this page to orient around graph ho
 
 ## Graph Hotspots
 - `DailyCloseView.tsx` (88 edges, Community 0) - [`packages/athena-webapp/src/components/operations/DailyCloseView.tsx`](../../../packages/athena-webapp/src/components/operations/DailyCloseView.tsx)
-- `dailyClose.ts` (65 edges, Community 1) - [`packages/athena-webapp/convex/operations/dailyClose.ts`](../../../packages/athena-webapp/convex/operations/dailyClose.ts)
-- `ingestLocalEvents.ts` (54 edges, Community 2) - [`packages/athena-webapp/convex/pos/application/sync/ingestLocalEvents.ts`](../../../packages/athena-webapp/convex/pos/application/sync/ingestLocalEvents.ts)
+- `dailyClose.ts` (65 edges, Community 2) - [`packages/athena-webapp/convex/operations/dailyClose.ts`](../../../packages/athena-webapp/convex/operations/dailyClose.ts)
+- `ingestLocalEvents.ts` (54 edges, Community 3) - [`packages/athena-webapp/convex/pos/application/sync/ingestLocalEvents.ts`](../../../packages/athena-webapp/convex/pos/application/sync/ingestLocalEvents.ts)
 - `projectLocalEvents.ts` (53 edges, Community 4) - [`packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.ts`](../../../packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.ts)
 - `terminalHealthPresentation.ts` (49 edges, Community 5) - [`packages/athena-webapp/src/components/pos/terminals/terminalHealthPresentation.ts`](../../../packages/athena-webapp/src/components/pos/terminals/terminalHealthPresentation.ts)
 

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   acknowledgeTerminalRecoveryCommandService: vi.fn(),
   claimTerminalRecoveryCommandService: vi.fn(),
+  createTerminalRecoveryCommandReadRepository: vi.fn(),
   createTerminalRecoveryCommandRepository: vi.fn(),
   deleteTerminalCommand: vi.fn(),
   getTerminalHealthSummaryQuery: vi.fn(),
@@ -67,6 +68,8 @@ vi.mock("../application/terminalRecovery/terminalCommandService", () => ({
 }));
 
 vi.mock("../infrastructure/repositories/terminalRecoveryRepository", () => ({
+  createTerminalRecoveryCommandReadRepository:
+    mocks.createTerminalRecoveryCommandReadRepository,
   createTerminalRecoveryCommandRepository:
     mocks.createTerminalRecoveryCommandRepository,
 }));
@@ -89,6 +92,7 @@ import {
   listTerminalRecoveryCommands,
   listTerminalHealthSummaries,
   listTerminals,
+  previewTerminalRecovery,
   claimTerminalRecoveryCommand,
   acknowledgeTerminalRecoveryCommand,
   disconnectRemoteAssistSession,
@@ -324,8 +328,11 @@ describe("POS terminal public mutations", () => {
     mocks.listTerminalHealthSummariesQuery.mockResolvedValue([]);
     mocks.getTerminalHealthSummaryQuery.mockResolvedValue(null);
     mocks.getLatestRuntimeStatusForTerminal.mockResolvedValue(null);
+    mocks.createTerminalRecoveryCommandReadRepository.mockReturnValue({
+      repository: "read",
+    });
     mocks.createTerminalRecoveryCommandRepository.mockReturnValue({
-      repository: true,
+      repository: "write",
     });
     mocks.createRemoteAssistRepository.mockReturnValue({
       getClientByRuntime: mocks.remoteAssistGetClientByRuntime,
@@ -1272,6 +1279,57 @@ describe("POS terminal public mutations", () => {
     assertConformsToExportedReturns(getTerminalHealthSummary as never, summary);
   });
 
+  it("validates representative terminal public command results against exported return validators", () => {
+    const terminal = buildPublicTerminal();
+    const provisionedTerminal = {
+      ...terminal,
+      syncSecretHash: "sync-secret-hash",
+    };
+    const recoveryCommand = buildRecoveryCommand();
+    const commandResult = { kind: "ok" as const, data: recoveryCommand };
+
+    assertConformsToExportedReturns(listTerminals as never, [terminal]);
+    assertConformsToExportedReturns(getTerminalByFingerprint as never, terminal);
+    assertConformsToExportedReturns(
+      previewTerminalRecovery as never,
+      buildTerminalHealthSummaryResult().recoveryPreview,
+    );
+    assertConformsToExportedReturns(submitTerminalRuntimeStatus as never, {
+      kind: "ok",
+      data: {
+        terminalId: "terminal-1",
+        reportedAt: 100,
+        receivedAt: 200,
+      },
+    });
+    assertConformsToExportedReturns(getRuntimeRemoteAssistSession as never, null);
+    assertConformsToExportedReturns(disconnectRemoteAssistSession as never, null);
+    assertConformsToExportedReturns(registerTerminal as never, {
+      kind: "ok",
+      data: provisionedTerminal,
+    });
+    assertConformsToExportedReturns(updateTerminal as never, terminal);
+    assertConformsToExportedReturns(deleteTerminal as never, null);
+    assertConformsToExportedReturns(resolveTerminalCloudRepair as never, {
+      kind: "ok",
+      data: {
+        preconditionHash: "terminal-cloud-repair:hash",
+        resolvedConflictIds: ["conflict-1"],
+        skippedConflictIds: [],
+      },
+    });
+    assertConformsToExportedReturns(issueTerminalRecoveryCommand as never, commandResult);
+    assertConformsToExportedReturns(listTerminalRecoveryCommands as never, {
+      kind: "ok",
+      data: [recoveryCommand],
+    });
+    assertConformsToExportedReturns(claimTerminalRecoveryCommand as never, commandResult);
+    assertConformsToExportedReturns(
+      acknowledgeTerminalRecoveryCommand as never,
+      commandResult,
+    );
+  });
+
   it("requires store membership before loading terminal health detail", async () => {
     const ctx = buildCtx();
 
@@ -1350,7 +1408,7 @@ describe("POS terminal public mutations", () => {
       }),
     );
     expect(mocks.issueTerminalRecoveryCommandService).toHaveBeenCalledWith(
-      { repository: true },
+      { repository: "write" },
       expect.objectContaining({
         commandType: "repair_terminal_seed",
         issuedByUserId: "athena-user-1",
@@ -1365,21 +1423,24 @@ describe("POS terminal public mutations", () => {
     {
       action: "list",
       handler: listTerminalRecoveryCommands,
+      repositoryKind: "read",
       service: mocks.listClaimableTerminalRecoveryCommands,
     },
     {
       action: "claim",
       handler: claimTerminalRecoveryCommand,
+      repositoryKind: "write",
       service: mocks.claimTerminalRecoveryCommandService,
     },
     {
       action: "acknowledge",
       handler: acknowledgeTerminalRecoveryCommand,
+      repositoryKind: "write",
       service: mocks.acknowledgeTerminalRecoveryCommandService,
     },
   ])(
     "allows terminal runtime to $action recovery commands with only active sync-secret proof",
-    async ({ handler, service }) => {
+    async ({ handler, repositoryKind, service }) => {
       mocks.requireAuthenticatedAthenaUserWithCtx.mockRejectedValue(
         new Error("not signed in"),
       );
@@ -1403,7 +1464,10 @@ describe("POS terminal public mutations", () => {
       });
 
       expect(mocks.requireOrganizationMemberRoleWithCtx).not.toHaveBeenCalled();
-      expect(service).toHaveBeenCalled();
+      expect(service).toHaveBeenCalledWith(
+        { repository: repositoryKind },
+        expect.any(Object),
+      );
       expect(result.kind).toBe("ok");
     },
   );
@@ -1447,6 +1511,15 @@ describe("POS terminal public mutations", () => {
       kind: "ok",
       data: [expect.objectContaining({ _id: "command-repair" })],
     });
+    expect(mocks.createTerminalRecoveryCommandReadRepository).toHaveBeenCalledWith(ctx);
+    expect(mocks.createTerminalRecoveryCommandRepository).not.toHaveBeenCalled();
+    expect(mocks.listClaimableTerminalRecoveryCommands).toHaveBeenCalledWith(
+      { repository: "read" },
+      expect.objectContaining({
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      }),
+    );
   });
 
   it("lists update_app commands after the terminal reports app-update runtime evidence", async () => {
@@ -1514,7 +1587,7 @@ describe("POS terminal public mutations", () => {
     );
 
     expect(mocks.acknowledgeTerminalRecoveryCommandService).toHaveBeenCalledWith(
-      { repository: true },
+      { repository: "write" },
       expect.objectContaining({
         commandId: "command-1",
         executionId: "command-1:2000100",
@@ -1700,6 +1773,24 @@ function buildRecoveryCommand(overrides: Record<string, unknown> = {}) {
     issuedByUserId: "athena-user-1",
     issuedAt: 1,
     expiresAt: 901,
+    ...overrides,
+  };
+}
+
+function buildPublicTerminal(overrides: Record<string, unknown> = {}) {
+  return {
+    _id: "terminal-1",
+    _creationTime: 1,
+    storeId: "store-1",
+    fingerprintHash: "fingerprint-1",
+    displayName: "Front register",
+    registerNumber: "1",
+    loginMode: "pos_only",
+    transactionCapability: "products_and_services",
+    registeredByUserId: "athena-user-1",
+    browserInfo: { userAgent: "test" },
+    registeredAt: 1,
+    status: "active",
     ...overrides,
   };
 }

@@ -12,6 +12,10 @@ import {
   listTerminalHealthSummaries,
 } from "./queries/terminals";
 import {
+  type TerminalRecoveryCommandReadRepository,
+  type TerminalRecoveryCommandRepository,
+} from "./terminalRecovery/terminalCommandService";
+import {
   getLatestRuntimeStatusForTerminal,
   getTerminalByFingerprint,
   getTerminalById,
@@ -25,6 +29,7 @@ import {
   upsertLatestRuntimeStatus,
 } from "../infrastructure/repositories/terminalRepository";
 import {
+  createTerminalRecoveryCommandReadRepository,
   createTerminalRecoveryCommandRepository,
   getTerminalRecoverySourceEvent,
   listTerminalRecoveryConflictsForRepair,
@@ -79,6 +84,7 @@ vi.mock("../infrastructure/repositories/terminalRepository", () => ({
 }));
 
 vi.mock("../infrastructure/repositories/terminalRecoveryRepository", () => ({
+  createTerminalRecoveryCommandReadRepository: vi.fn(),
   createTerminalRecoveryCommandRepository: vi.fn(),
   getTerminalRecoverySourceEvent: vi.fn(),
   listTerminalRecoveryConflictsForRepair: vi.fn(),
@@ -614,9 +620,18 @@ describe("terminal health summaries", () => {
     vi.mocked(hasActiveRegisterSessionForTerminal).mockResolvedValue(false);
     vi.mocked(listTerminalRecoveryConflictsForRepair).mockResolvedValue([]);
     vi.mocked(getTerminalRecoverySourceEvent).mockResolvedValue(null);
-    vi.mocked(createTerminalRecoveryCommandRepository).mockReturnValue({
+    const readRepository = {
+      getCommand: vi.fn().mockResolvedValue(null),
       listCommandsForTerminal: vi.fn().mockResolvedValue([]),
-    } as never);
+    } satisfies TerminalRecoveryCommandReadRepository;
+    const writeRepository = {
+      ...readRepository,
+      insertCommand: vi.fn(),
+      patchCommand: vi.fn(),
+      listCommandsForTerminal: vi.fn().mockResolvedValue([]),
+    } satisfies TerminalRecoveryCommandRepository;
+    vi.mocked(createTerminalRecoveryCommandReadRepository).mockReturnValue(readRepository);
+    vi.mocked(createTerminalRecoveryCommandRepository).mockReturnValue(writeRepository);
   });
 
   afterEach(() => {
