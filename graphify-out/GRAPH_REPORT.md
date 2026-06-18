@@ -5,7 +5,7 @@
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 7110 nodes · 8101 edges · 1905 communities detected
+- 7111 nodes · 8103 edges · 1905 communities detected
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
 - Token cost: 0 input · 0 output
 
@@ -1944,7 +1944,7 @@
 
 ### Community 0 - "Community 0"
 Cohesion: 0.04
-Nodes (51): buildDailyCloseTransactionSearch(), canReopenDailyClose(), cn(), formatDailyCloseMoney(), formatMetadataDisplayValue(), formatMetadataValue(), formatTimestampMetadata(), getBucketConfigs() (+43 more)
+Nodes (52): buildDailyCloseExpenseSearch(), buildDailyCloseTransactionSearch(), canReopenDailyClose(), cn(), formatDailyCloseMoney(), formatMetadataDisplayValue(), formatMetadataValue(), formatTimestampMetadata() (+44 more)
 
 ### Community 1 - "Community 1"
 Cohesion: 0.06
@@ -2683,24 +2683,24 @@ Cohesion: 0.46
 Nodes (6): isLocalDevAppShellDisabled(), readCachedPosAppShellReadiness(), readPosAppShellReadiness(), resolveRegisterPath(), waitForActiveServiceWorker(), warmPosAppShellReadiness()
 
 ### Community 185 - "Community 185"
+Cohesion: 0.32
+Nodes (4): createVersionChecker(), readDocumentScriptSources(), readEntryHtmlScripts(), readScriptSources()
+
+### Community 186 - "Community 186"
 Cohesion: 0.46
 Nodes (7): addItemToBag(), clearBag(), getActiveBag(), getBaseUrl(), removeItemFromBag(), updateBagItem(), updateBagOwner()
 
-### Community 186 - "Community 186"
+### Community 187 - "Community 187"
 Cohesion: 0.43
 Nodes (6): buildQueryString(), getAllProducts(), getBaseUrl(), getBestSellers(), getFeatured(), getProduct()
 
-### Community 187 - "Community 187"
+### Community 188 - "Community 188"
 Cohesion: 0.25
 Nodes (0):
 
-### Community 188 - "Community 188"
+### Community 189 - "Community 189"
 Cohesion: 0.43
 Nodes (7): createStorefrontObservabilityContext(), createStorefrontObservabilityPayload(), getOrCreateStorefrontObservabilitySessionId(), isBrowserAutomationContext(), isSyntheticMonitorOrigin(), resolveStorefrontAnalyticsOrigin(), trackStorefrontEvent()
-
-### Community 189 - "Community 189"
-Cohesion: 0.32
-Nodes (4): createVersionChecker(), readDocumentScriptSources(), readEntryHtmlScripts(), readScriptSources()
 
 ### Community 190 - "Community 190"
 Cohesion: 0.39
@@ -2851,16 +2851,16 @@ Cohesion: 0.29
 Nodes (0):
 
 ### Community 227 - "Community 227"
-Cohesion: 0.33
-Nodes (2): getProductName(), sortProduct()
-
-### Community 228 - "Community 228"
 Cohesion: 0.29
 Nodes (0):
 
-### Community 229 - "Community 229"
+### Community 228 - "Community 228"
 Cohesion: 0.52
 Nodes (6): addItemToSavedBag(), getActiveSavedBag(), getBaseUrl(), removeItemFromSavedBag(), updateSavedBagItem(), updateSavedBagOwner()
+
+### Community 229 - "Community 229"
+Cohesion: 0.33
+Nodes (2): getProductName(), sortProduct()
 
 ### Community 230 - "Community 230"
 Cohesion: 0.43
@@ -2987,8 +2987,8 @@ Cohesion: 0.53
 Nodes (3): handleUpdateFees(), parseDeliveryFeeInputs(), parseOptionalDeliveryFeeInput()
 
 ### Community 261 - "Community 261"
-Cohesion: 0.33
-Nodes (0):
+Cohesion: 0.47
+Nodes (3): onDrop(), removeImage(), unmarkForDeletion()
 
 ### Community 262 - "Community 262"
 Cohesion: 0.33
@@ -3007,76 +3007,76 @@ Cohesion: 0.33
 Nodes (0):
 
 ### Community 266 - "Community 266"
+Cohesion: 0.33
+Nodes (0):
+
+### Community 267 - "Community 267"
 Cohesion: 0.53
 Nodes (4): calculatePosChange(), calculatePosRemainingDue(), calculatePosTotalPaid(), roundPosAmount()
 
-### Community 267 - "Community 267"
+### Community 268 - "Community 268"
 Cohesion: 0.33
 Nodes (0):
-
-### Community 268 - "Community 268"
-Cohesion: 0.4
-Nodes (2): buildRecoveryCommandStore(), storeFactory()
 
 ### Community 269 - "Community 269"
-Cohesion: 0.33
-Nodes (0):
+Cohesion: 0.4
+Nodes (2): buildRecoveryCommandStore(), storeFactory()
 
 ### Community 270 - "Community 270"
 Cohesion: 0.33
 Nodes (0):
 
 ### Community 271 - "Community 271"
-Cohesion: 0.53
-Nodes (4): isBarcodeShapedSearchQuery(), matchesSkuSearchTerms(), normalizeIdentifier(), scoreSkuSearchTerms()
-
-### Community 272 - "Community 272"
-Cohesion: 0.6
-Nodes (5): isExcludedFromPosAppShellCache(), isPosAppShellNavigationRequest(), isPosAppShellRoutePath(), isPosAppShellStaticAssetRequest(), readHeader()
-
-### Community 273 - "Community 273"
-Cohesion: 0.33
-Nodes (1): MemoryCache
-
-### Community 274 - "Community 274"
 Cohesion: 0.33
 Nodes (0):
 
+### Community 272 - "Community 272"
+Cohesion: 0.53
+Nodes (4): isBarcodeShapedSearchQuery(), matchesSkuSearchTerms(), normalizeIdentifier(), scoreSkuSearchTerms()
+
+### Community 273 - "Community 273"
+Cohesion: 0.6
+Nodes (5): isExcludedFromPosAppShellCache(), isPosAppShellNavigationRequest(), isPosAppShellRoutePath(), isPosAppShellStaticAssetRequest(), readHeader()
+
+### Community 274 - "Community 274"
+Cohesion: 0.33
+Nodes (1): MemoryCache
+
 ### Community 275 - "Community 275"
-Cohesion: 0.4
-Nodes (2): onSubmit(), saveStoreChanges()
+Cohesion: 0.33
+Nodes (0):
 
 ### Community 276 - "Community 276"
 Cohesion: 0.4
 Nodes (2): onSubmit(), saveStoreChanges()
 
 ### Community 277 - "Community 277"
-Cohesion: 0.33
-Nodes (0):
+Cohesion: 0.4
+Nodes (2): onSubmit(), saveStoreChanges()
 
 ### Community 278 - "Community 278"
-Cohesion: 0.47
-Nodes (4): fetchPosTransaction(), getBaseUrl(), getPosTransactionByReceiptToken(), PosTransactionReceiptError
+Cohesion: 0.33
+Nodes (0):
 
 ### Community 279 - "Community 279"
 Cohesion: 0.47
-Nodes (3): getBaseUrl(), getPromoCodes(), redeemPromoCode()
+Nodes (4): fetchPosTransaction(), getBaseUrl(), getPosTransactionByReceiptToken(), PosTransactionReceiptError
 
 ### Community 280 - "Community 280"
+Cohesion: 0.47
+Nodes (3): getBaseUrl(), getPromoCodes(), redeemPromoCode()
+
+### Community 281 - "Community 281"
 Cohesion: 0.33
 Nodes (0):
 
-### Community 281 - "Community 281"
+### Community 282 - "Community 282"
 Cohesion: 0.4
 Nodes (2): handleConfirm(), handlePrimaryAction()
 
-### Community 282 - "Community 282"
+### Community 283 - "Community 283"
 Cohesion: 0.33
 Nodes (0):
-
-### Community 283 - "Community 283"
-Cohesion: 0.47
-Nodes (3): onDrop(), removeImage(), unmarkForDeletion()
 
 ### Community 284 - "Community 284"
 Cohesion: 0.53

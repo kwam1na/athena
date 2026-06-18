@@ -127,6 +127,41 @@ describe("versionChecker", () => {
     checker.stop();
   });
 
+  it("can retry duplicate update detections while staging is still unresolved", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        if (String(input).startsWith("/deploy.json")) {
+          return new Response("not found", { status: 404 });
+        }
+
+        return new Response(
+          '<html><head><script type="module" src="/assets/index-new.js"></script></head></html>',
+        );
+      }),
+    );
+    const { createVersionChecker } = await importVersionChecker();
+    const onUpdateDetected = vi.fn();
+    const shouldReportDuplicateUpdate = vi
+      .fn()
+      .mockReturnValueOnce(true)
+      .mockReturnValueOnce(false);
+    const checker = createVersionChecker({
+      onUpdateDetected,
+      pollingIntervalMs: 60_000,
+      shouldReportDuplicateUpdate,
+    });
+
+    await vi.advanceTimersByTimeAsync(10_000);
+    await vi.advanceTimersByTimeAsync(60_000);
+    await vi.advanceTimersByTimeAsync(60_000);
+
+    expect(onUpdateDetected).toHaveBeenCalledTimes(2);
+    expect(shouldReportDuplicateUpdate).toHaveBeenCalledTimes(2);
+
+    checker.stop();
+  });
+
 
   it("prefers deploy metadata when it exposes a changed build identity", async () => {
     vi.stubGlobal(

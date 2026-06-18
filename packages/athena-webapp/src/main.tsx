@@ -66,7 +66,8 @@ function App() {
 }
 
 function VersionCheckerBridge() {
-  const { reportUpdateDetected, reportDetectorFailed } = useUpdateCoordinator();
+  const { getSnapshot, reportUpdateDetected, reportDetectorFailed } =
+    useUpdateCoordinator();
 
   useEffect(() => {
     const sequencer = createUpdateDetectionSequencer({
@@ -80,6 +81,13 @@ function VersionCheckerBridge() {
       },
       onUpdateDetected: (event) => {
         void sequencer.handle(event);
+      },
+      shouldReportDuplicateUpdate: (event) => {
+        const snapshot = getSnapshot();
+        return (
+          snapshot.pendingBuildId === event.pendingBuildId &&
+          snapshot.status === "ready-unstaged"
+        );
       },
     });
 
@@ -115,7 +123,7 @@ function VersionCheckerBridge() {
       sequencer.stop();
       versionChecker.stop();
     };
-  }, [reportDetectorFailed, reportUpdateDetected]);
+  }, [getSnapshot, reportDetectorFailed, reportUpdateDetected]);
 
   return null;
 }

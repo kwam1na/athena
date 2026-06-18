@@ -684,6 +684,13 @@ function buildDailyCloseTransactionSearch({
   };
 }
 
+function buildDailyCloseExpenseSearch(operatingDate: string) {
+  return {
+    o: getOrigin(),
+    ...(operatingDate !== getLocalOperatingDate() ? { operatingDate } : {}),
+  };
+}
+
 function getDailyCloseSalesMetricLabels(operatingDate: string) {
   const isCurrentOperatingDate = operatingDate === getLocalOperatingDate();
 
@@ -2492,6 +2499,15 @@ export function DailyCloseReadOnlyReport({
                 getExpenseTransactionCount(displaySnapshot.summary),
               )}
               label="Expenses"
+              link={{
+                ariaLabel: "Open expense reports",
+                orgUrlSlug,
+                search: buildDailyCloseExpenseSearch(
+                  displaySnapshot.operatingDate,
+                ),
+                storeUrlSlug,
+                to: "/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports",
+              }}
               value={
                 <DailyCloseFinancialValue
                   amount={displaySnapshot.summary.expenseTotal}
@@ -3292,6 +3308,15 @@ export function DailyCloseViewContent({
                   getExpenseTransactionCount(displaySnapshot.summary),
                 )}
                 label="Expenses"
+                link={{
+                  ariaLabel: "Open expense reports",
+                  orgUrlSlug,
+                  search: buildDailyCloseExpenseSearch(
+                    displaySnapshot.operatingDate,
+                  ),
+                  storeUrlSlug,
+                  to: "/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports",
+                }}
                 value={
                   <DailyCloseFinancialValue
                     amount={displaySnapshot.summary.expenseTotal}
