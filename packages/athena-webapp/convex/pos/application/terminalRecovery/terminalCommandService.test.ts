@@ -447,9 +447,7 @@ describe("terminal command service", () => {
       terminalId,
     });
 
-    expect(repository.patchCommand).toHaveBeenCalledWith("command-1", {
-      status: "expired",
-    });
+    expect(repository.patchCommand).not.toHaveBeenCalled();
     expect(repository.insertCommand).toHaveBeenCalledWith(
       expect.objectContaining({
         commandType: "clear_stale_drawer_authority",
@@ -498,9 +496,7 @@ describe("terminal command service", () => {
       terminalId,
     });
 
-    expect(repository.patchCommand).toHaveBeenCalledWith("command-1", {
-      status: "expired",
-    });
+    expect(repository.patchCommand).not.toHaveBeenCalled();
     expect(repository.insertCommand).toHaveBeenCalledWith(
       expect.objectContaining({
         commandType: "repair_terminal_seed",
@@ -550,9 +546,7 @@ describe("terminal command service", () => {
       terminalId,
     });
 
-    expect(repository.patchCommand).toHaveBeenCalledWith("command-1", {
-      status: "expired",
-    });
+    expect(repository.patchCommand).not.toHaveBeenCalled();
     expect(repository.insertCommand).toHaveBeenCalledWith(
       expect.objectContaining({
         commandType: "repair_terminal_seed",
@@ -597,11 +591,11 @@ describe("terminal command service", () => {
         }),
       }),
     );
-    const patch = vi.mocked(repository.patchCommand).mock.calls.at(-1)?.[1];
+    const patch = repository.patchCommand.mock.calls.at(-1)?.[1];
     expect(patch?.acknowledgement?.message).toHaveLength(240);
   });
 
-  it("expires pending commands during listing and rejects expired claims", async () => {
+  it("filters expired pending commands during listing and rejects expired claims", async () => {
     const repository = buildRepository({
       commands: [
         buildCommand({
@@ -617,9 +611,7 @@ describe("terminal command service", () => {
         terminalId,
       }),
     ).resolves.toEqual([]);
-    expect(repository.patchCommand).toHaveBeenCalledWith("command-1", {
-      status: "expired",
-    });
+    expect(repository.patchCommand).not.toHaveBeenCalled();
 
     await expect(
       claimTerminalRecoveryCommand(repository, {
@@ -634,6 +626,41 @@ describe("terminal command service", () => {
       },
       kind: "user_error",
     });
+    expect(repository.patchCommand).toHaveBeenCalledWith("command-1", {
+      status: "expired",
+    });
+  });
+
+  it("filters expired pending and claimed commands through a read-only repository", async () => {
+    const activeCommand = buildCommand({
+      _id: "command-active" as Id<"posTerminalRecoveryCommand">,
+    });
+    const repository = {
+      getCommand: vi.fn(),
+      listCommandsForTerminal: vi.fn(async () => [
+        buildCommand({
+          _id: "command-expired-pending" as Id<"posTerminalRecoveryCommand">,
+          expiresAt: now - 1,
+          status: "pending",
+        }),
+        buildCommand({
+          _id: "command-expired-claimed" as Id<"posTerminalRecoveryCommand">,
+          expiresAt: now - 1,
+          status: "claimed",
+        }),
+        activeCommand,
+      ]),
+    };
+
+    await expect(
+      listClaimableTerminalRecoveryCommands(repository, {
+        now,
+        storeId,
+        terminalId,
+      }),
+    ).resolves.toEqual([activeCommand]);
+    expect("patchCommand" in repository).toBe(false);
+    expect("insertCommand" in repository).toBe(false);
   });
 
   it("rejects non-claimable and non-acknowledgeable command states", async () => {
@@ -828,7 +855,26 @@ function buildRepository(seed: {
         return command._id;
       },
     ),
-    listCommandsForTerminal: vi.fn(async () => commands),
+    listCommandsForTerminal: vi.fn(async (args) =>
+      commands.filter((command) => {
+        if (command.storeId !== args.storeId || command.terminalId !== args.terminalId) {
+          return false;
+        }
+        if (
+          args.statuses !== undefined &&
+          !args.statuses.includes(command.status)
+        ) {
+          return false;
+        }
+        if (
+          args.expiresAfter !== undefined &&
+          command.expiresAt <= args.expiresAfter
+        ) {
+          return false;
+        }
+        return true;
+      }),
+    ),
     patchCommand: vi.fn(
       async (
         commandId: Id<"posTerminalRecoveryCommand">,

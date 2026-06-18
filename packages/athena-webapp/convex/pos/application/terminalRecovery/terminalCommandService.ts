@@ -29,17 +29,22 @@ const SECRET_LIKE_KEYS = [
 const SECRET_LIKE_KEY_PATTERN = SECRET_LIKE_KEYS.join("|");
 const SECRET_LIKE_FIELD_PATTERN = String.raw`\b[A-Za-z0-9_-]*(?:${SECRET_LIKE_KEY_PATTERN})[A-Za-z0-9_-]*\b`;
 
-export type TerminalRecoveryCommandRepository = {
+export type TerminalRecoveryCommandReadRepository = {
   getCommand(
     commandId: Id<"posTerminalRecoveryCommand">,
   ): Promise<Doc<"posTerminalRecoveryCommand"> | null>;
+  listCommandsForTerminal(args: {
+    expiresAfter?: number;
+    storeId: Id<"store">;
+    statuses?: Array<Doc<"posTerminalRecoveryCommand">["status"]>;
+    terminalId: Id<"posTerminal">;
+  }): Promise<Doc<"posTerminalRecoveryCommand">[]>;
+};
+
+export type TerminalRecoveryCommandRepository = TerminalRecoveryCommandReadRepository & {
   insertCommand(
     input: Omit<Doc<"posTerminalRecoveryCommand">, "_id" | "_creationTime">,
   ): Promise<Id<"posTerminalRecoveryCommand">>;
-  listCommandsForTerminal(args: {
-    storeId: Id<"store">;
-    terminalId: Id<"posTerminal">;
-  }): Promise<Doc<"posTerminalRecoveryCommand">[]>;
   patchCommand(
     commandId: Id<"posTerminalRecoveryCommand">,
     patch: Partial<Doc<"posTerminalRecoveryCommand">>,
@@ -80,7 +85,9 @@ export async function issueTerminalRecoveryCommand(
   const commandContext = pruneUndefined(args.commandContext);
   const expectedEvidence = pruneUndefined(args.expectedEvidence);
   const existingCommands = await repository.listCommandsForTerminal({
+    expiresAfter: args.issuedAt,
     storeId: args.storeId,
+    statuses: ["pending", "claimed", "completed"],
     terminalId: args.terminalId,
   });
   for (const command of existingCommands) {
@@ -89,10 +96,6 @@ export async function issueTerminalRecoveryCommand(
       command.commandType === "update_app" &&
       isUpdateAppActiveCommand(command)
     ) {
-      if (command.expiresAt <= args.issuedAt) {
-        await repository.patchCommand(command._id, { status: "expired" });
-        continue;
-      }
       return ok(command);
     }
     if (!isEquivalentCommand(command, {
@@ -100,10 +103,6 @@ export async function issueTerminalRecoveryCommand(
       commandType: args.commandType,
       expectedEvidence,
     })) {
-      continue;
-    }
-    if (command.expiresAt <= args.issuedAt && isActiveCommand(command)) {
-      await repository.patchCommand(command._id, { status: "expired" });
       continue;
     }
     if (isActiveCommand(command)) {
@@ -129,7 +128,7 @@ export async function issueTerminalRecoveryCommand(
 }
 
 export async function listClaimableTerminalRecoveryCommands(
-  repository: TerminalRecoveryCommandRepository,
+  repository: TerminalRecoveryCommandReadRepository,
   args: {
     now: number;
     storeId: Id<"store">;
@@ -137,7 +136,9 @@ export async function listClaimableTerminalRecoveryCommands(
   },
 ) {
   const commands = await repository.listCommandsForTerminal({
+    expiresAfter: args.now,
     storeId: args.storeId,
+    statuses: ["pending", "claimed"],
     terminalId: args.terminalId,
   });
   const claimable: Doc<"posTerminalRecoveryCommand">[] = [];
@@ -146,7 +147,6 @@ export async function listClaimableTerminalRecoveryCommands(
       command.expiresAt <= args.now &&
       (command.status === "pending" || command.status === "claimed")
     ) {
-      await repository.patchCommand(command._id, { status: "expired" });
       continue;
     }
     if (
@@ -330,6 +330,7 @@ export async function verifyTerminalRecoveryCommandsFromRuntime(
 ) {
   const commands = await repository.listCommandsForTerminal({
     storeId: args.storeId,
+    statuses: ["completed"],
     terminalId: args.terminalId,
   });
   const verifiedCommandIds: Array<Id<"posTerminalRecoveryCommand">> = [];

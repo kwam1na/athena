@@ -16,6 +16,25 @@ async function write(relativePath: string, contents: string, rootDir: string) {
   await writeFile(filePath, contents);
 }
 
+async function runFixtureCommand(rootDir: string, command: string[]) {
+  const process = Bun.spawn(command, {
+    cwd: rootDir,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(process.stdout).text(),
+    new Response(process.stderr).text(),
+    process.exited,
+  ]);
+
+  if (exitCode !== 0) {
+    throw new Error(
+      `Fixture command failed: ${command.join(" ")}\n${stdout}\n${stderr}`,
+    );
+  }
+}
+
 async function createFixtureRepo() {
   const rootDir = await mkdtemp(
     path.join(tmpdir(), "athena-harness-inferential-review-"),
@@ -117,6 +136,29 @@ async function createFixtureRepo() {
   );
 
   return rootDir;
+}
+
+async function commitFixtureRepo(rootDir: string) {
+  await runFixtureCommand(rootDir, ["git", "init"]);
+  await runFixtureCommand(rootDir, [
+    "git",
+    "config",
+    "user.email",
+    "codex@example.com",
+  ]);
+  await runFixtureCommand(rootDir, [
+    "git",
+    "config",
+    "user.name",
+    "Codex Test",
+  ]);
+  await runFixtureCommand(rootDir, ["git", "add", "."]);
+  await runFixtureCommand(rootDir, [
+    "git",
+    "commit",
+    "-m",
+    "baseline fixture",
+  ]);
 }
 
 afterEach(async () => {
@@ -1061,6 +1103,2283 @@ describe("runHarnessInferentialReview", () => {
     expect(result.machine.findings[0]?.rationale).not.toContain(
       "query listExample",
     );
+  });
+
+  it("fails when a changed Convex query directly calls mutation-only db APIs", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      "packages/athena-webapp/convex/pos/public/queryWrites.ts",
+      [
+        'import { query } from "../../../_generated/server";',
+        "",
+        "export const listCommands = query({",
+        "  args: {},",
+        "  handler: async (ctx) => {",
+        "    await ctx.db.patch(\"command-id\" as never, { status: \"expired\" });",
+        "    return [];",
+        "  },",
+        "});",
+      ].join("\n"),
+      rootDir,
+    );
+
+    const result = await runHarnessInferentialReview(rootDir, {
+      getChangedFiles: async () => [
+        "packages/athena-webapp/convex/pos/public/queryWrites.ts",
+      ],
+      nowIso: () => "2026-04-12T05:00:00.000Z",
+    });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.machine.status).toBe("fail");
+    expect(result.machine.findings).toContainEqual(
+      expect.objectContaining({
+        id: "convex-query-mutation-db-write-packages-athena-webapp-convex-pos-public-querywrites-ts",
+        severity: "high",
+        filePath: "packages/athena-webapp/convex/pos/public/queryWrites.ts",
+      }),
+    );
+    expect(result.humanReport).toContain("MutationCtx");
+  });
+
+  it("fails when a changed Convex query adds a write through an existing renamed handler ctx", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      "packages/athena-webapp/convex/pos/public/queryRenamedCtxWrites.ts",
+      [
+        'import { query } from "../../../_generated/server";',
+        "",
+        "export const listCommands = query({",
+        "  args: {},",
+        "  handler: async (queryCtx) => {",
+        "    return [];",
+        "  },",
+        "});",
+      ].join("\n"),
+      rootDir,
+    );
+    await commitFixtureRepo(rootDir);
+    await write(
+      "packages/athena-webapp/convex/pos/public/queryRenamedCtxWrites.ts",
+      [
+        'import { query } from "../../../_generated/server";',
+        "",
+        "export const listCommands = query({",
+        "  args: {},",
+        "  handler: async (queryCtx) => {",
+        "    await queryCtx.db.patch(\"command-id\" as never, { status: \"expired\" });",
+        "    return [];",
+        "  },",
+        "});",
+      ].join("\n"),
+      rootDir,
+    );
+
+    const result = await runHarnessInferentialReview(rootDir, {
+      baseRef: "HEAD",
+      getChangedFiles: async () => [
+        "packages/athena-webapp/convex/pos/public/queryRenamedCtxWrites.ts",
+      ],
+      nowIso: () => "2026-04-12T05:00:00.000Z",
+    });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.machine.findings).toContainEqual(
+      expect.objectContaining({
+        id: "convex-query-mutation-db-write-packages-athena-webapp-convex-pos-public-queryrenamedctxwrites-ts",
+        severity: "high",
+      }),
+    );
+  });
+
+  it("fails when a changed Convex query writes through a destructured db alias", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      "packages/athena-webapp/convex/pos/public/queryDestructuredDbWrites.ts",
+      [
+        'import { query } from "../../../_generated/server";',
+        "",
+        "export const listCommands = query({",
+        "  args: {},",
+        "  handler: async (ctx) => {",
+        "    return [];",
+        "  },",
+        "});",
+      ].join("\n"),
+      rootDir,
+    );
+    await commitFixtureRepo(rootDir);
+    await write(
+      "packages/athena-webapp/convex/pos/public/queryDestructuredDbWrites.ts",
+      [
+        'import { query } from "../../../_generated/server";',
+        "",
+        "export const listCommands = query({",
+        "  args: {},",
+        "  handler: async (ctx) => {",
+        "    const { db, auth }: { db: any; auth: unknown } = ctx as any;",
+        "    await db.patch(\"command-id\" as never, { status: \"expired\" });",
+        "    return [];",
+        "  },",
+        "});",
+      ].join("\n"),
+      rootDir,
+    );
+
+    const result = await runHarnessInferentialReview(rootDir, {
+      baseRef: "HEAD",
+      getChangedFiles: async () => [
+        "packages/athena-webapp/convex/pos/public/queryDestructuredDbWrites.ts",
+      ],
+      nowIso: () => "2026-04-12T05:00:00.000Z",
+    });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.machine.findings).toContainEqual(
+      expect.objectContaining({
+        id: "convex-query-mutation-db-write-packages-athena-webapp-convex-pos-public-querydestructureddbwrites-ts",
+        severity: "high",
+      }),
+    );
+  });
+
+	it("fails when a changed Convex query adds a write through an existing simple db alias", async () => {
+		const rootDir = await createFixtureRepo();
+		await write(
+			"packages/athena-webapp/convex/pos/public/queryExistingSimpleAliasWrites.ts",
+      [
+        'import { query } from "../../../_generated/server";',
+        "",
+        "export const listCommands = query({",
+        "  args: {},",
+        "  handler: async (ctx) => {",
+        "    const db = ctx.db as any;",
+        "    await db.query(\"posTerminalRecoveryCommand\").collect();",
+        "    return [];",
+        "  },",
+        "});",
+      ].join("\n"),
+      rootDir,
+    );
+    await commitFixtureRepo(rootDir);
+    await write(
+      "packages/athena-webapp/convex/pos/public/queryExistingSimpleAliasWrites.ts",
+      [
+        'import { query } from "../../../_generated/server";',
+        "",
+        "export const listCommands = query({",
+        "  args: {},",
+        "  handler: async (ctx) => {",
+        "    const db = ctx.db as any;",
+        "    await db.query(\"posTerminalRecoveryCommand\").collect();",
+        "    await db.patch(\"command-id\" as never, { status: \"expired\" });",
+        "    return [];",
+        "  },",
+        "});",
+      ].join("\n"),
+      rootDir,
+    );
+
+    const result = await runHarnessInferentialReview(rootDir, {
+      baseRef: "HEAD",
+      getChangedFiles: async () => [
+        "packages/athena-webapp/convex/pos/public/queryExistingSimpleAliasWrites.ts",
+      ],
+      nowIso: () => "2026-04-12T05:00:00.000Z",
+    });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.machine.findings).toContainEqual(
+      expect.objectContaining({
+        id: "convex-query-mutation-db-write-packages-athena-webapp-convex-pos-public-queryexistingsimplealiaswrites-ts",
+        severity: "high",
+      }),
+		);
+	});
+
+	it("fails when a changed Convex query adds a write through an existing multi-declarator db alias", async () => {
+		const rootDir = await createFixtureRepo();
+		await write(
+			"packages/athena-webapp/convex/pos/public/queryExistingMultiDeclaratorAliasWrites.ts",
+			[
+				'import { query } from "../../../_generated/server";',
+				"",
+				"export const listCommands = query({",
+				"  args: {},",
+				"  handler: async (ctx) => {",
+				"    const ready = true, db = ctx.db as any;",
+				"    await db.query(\"posTerminalRecoveryCommand\").collect();",
+				"    return [];",
+				"  },",
+				"});",
+			].join("\n"),
+			rootDir,
+		);
+		await commitFixtureRepo(rootDir);
+		await write(
+			"packages/athena-webapp/convex/pos/public/queryExistingMultiDeclaratorAliasWrites.ts",
+			[
+				'import { query } from "../../../_generated/server";',
+				"",
+				"export const listCommands = query({",
+				"  args: {},",
+				"  handler: async (ctx) => {",
+				"    const ready = true, db = ctx.db as any;",
+				"    await db.query(\"posTerminalRecoveryCommand\").collect();",
+				"    await db.patch(\"command-id\" as never, { status: \"expired\" });",
+				"    return [];",
+				"  },",
+				"});",
+			].join("\n"),
+			rootDir,
+		);
+
+		const result = await runHarnessInferentialReview(rootDir, {
+			baseRef: "HEAD",
+			getChangedFiles: async () => [
+				"packages/athena-webapp/convex/pos/public/queryExistingMultiDeclaratorAliasWrites.ts",
+			],
+			nowIso: () => "2026-04-12T05:00:00.000Z",
+		});
+
+		expect(result.exitCode).toBe(1);
+		expect(result.machine.findings).toContainEqual(
+			expect.objectContaining({
+				id: "convex-query-mutation-db-write-packages-athena-webapp-convex-pos-public-queryexistingmultideclaratoraliaswrites-ts",
+				severity: "high",
+			}),
+		);
+	});
+
+	it("fails when a changed Convex query adds a write through an existing typed db alias", async () => {
+		const rootDir = await createFixtureRepo();
+		await write(
+			"packages/athena-webapp/convex/pos/public/queryExistingTypedAliasWrites.ts",
+			[
+				'import { query } from "../../../_generated/server";',
+				"",
+				"export const listCommands = query({",
+				"  args: {},",
+				"  handler: async (ctx) => {",
+				"    const db: any = ctx.db;",
+				"    await db.query(\"posTerminalRecoveryCommand\").collect();",
+				"    return [];",
+				"  },",
+				"});",
+			].join("\n"),
+			rootDir,
+		);
+		await commitFixtureRepo(rootDir);
+		await write(
+			"packages/athena-webapp/convex/pos/public/queryExistingTypedAliasWrites.ts",
+			[
+				'import { query } from "../../../_generated/server";',
+				"",
+				"export const listCommands = query({",
+				"  args: {},",
+				"  handler: async (ctx) => {",
+				"    const db: any = ctx.db;",
+				"    await db.query(\"posTerminalRecoveryCommand\").collect();",
+				"    await db.patch(\"command-id\" as never, { status: \"expired\" });",
+				"    return [];",
+				"  },",
+				"});",
+			].join("\n"),
+			rootDir,
+		);
+
+		const result = await runHarnessInferentialReview(rootDir, {
+			baseRef: "HEAD",
+			getChangedFiles: async () => [
+				"packages/athena-webapp/convex/pos/public/queryExistingTypedAliasWrites.ts",
+			],
+			nowIso: () => "2026-04-12T05:00:00.000Z",
+		});
+
+		expect(result.exitCode).toBe(1);
+		expect(result.machine.findings).toContainEqual(
+			expect.objectContaining({
+				id: "convex-query-mutation-db-write-packages-athena-webapp-convex-pos-public-queryexistingtypedaliaswrites-ts",
+				severity: "high",
+			}),
+		);
+	});
+
+	it("fails when a changed Convex query adds a write through an existing bracket db alias", async () => {
+		const rootDir = await createFixtureRepo();
+		await write(
+			"packages/athena-webapp/convex/pos/public/queryExistingBracketAliasWrites.ts",
+			[
+				'import { query } from "../../../_generated/server";',
+				"",
+				"export const listCommands = query({",
+				"  args: {},",
+				"  handler: async (ctx) => {",
+				"    const db = ctx[\"db\"] as any;",
+				"    await db.query(\"posTerminalRecoveryCommand\").collect();",
+				"    return [];",
+				"  },",
+				"});",
+			].join("\n"),
+			rootDir,
+		);
+		await commitFixtureRepo(rootDir);
+		await write(
+			"packages/athena-webapp/convex/pos/public/queryExistingBracketAliasWrites.ts",
+			[
+				'import { query } from "../../../_generated/server";',
+				"",
+				"export const listCommands = query({",
+				"  args: {},",
+				"  handler: async (ctx) => {",
+				"    const db = ctx[\"db\"] as any;",
+				"    await db.query(\"posTerminalRecoveryCommand\").collect();",
+				"    await db.patch(\"command-id\" as never, { status: \"expired\" });",
+				"    return [];",
+				"  },",
+				"});",
+			].join("\n"),
+			rootDir,
+		);
+
+		const result = await runHarnessInferentialReview(rootDir, {
+			baseRef: "HEAD",
+			getChangedFiles: async () => [
+				"packages/athena-webapp/convex/pos/public/queryExistingBracketAliasWrites.ts",
+			],
+			nowIso: () => "2026-04-12T05:00:00.000Z",
+		});
+
+		expect(result.exitCode).toBe(1);
+		expect(result.machine.findings).toContainEqual(
+			expect.objectContaining({
+				id: "convex-query-mutation-db-write-packages-athena-webapp-convex-pos-public-queryexistingbracketaliaswrites-ts",
+				severity: "high",
+			}),
+		);
+	});
+
+	it("fails when a changed Convex query adds a write through an existing parenthesized db alias", async () => {
+		const rootDir = await createFixtureRepo();
+		await write(
+			"packages/athena-webapp/convex/pos/public/queryExistingParenthesizedAliasWrites.ts",
+			[
+				'import { query } from "../../../_generated/server";',
+				"",
+				"export const listCommands = query({",
+				"  args: {},",
+				"  handler: async (ctx) => {",
+				"    const db = (ctx).db as any;",
+				"    await db.query(\"posTerminalRecoveryCommand\").collect();",
+				"    return [];",
+				"  },",
+				"});",
+			].join("\n"),
+			rootDir,
+		);
+		await commitFixtureRepo(rootDir);
+		await write(
+			"packages/athena-webapp/convex/pos/public/queryExistingParenthesizedAliasWrites.ts",
+			[
+				'import { query } from "../../../_generated/server";',
+				"",
+				"export const listCommands = query({",
+				"  args: {},",
+				"  handler: async (ctx) => {",
+				"    const db = (ctx).db as any;",
+				"    await db.query(\"posTerminalRecoveryCommand\").collect();",
+				"    await db.patch(\"command-id\" as never, { status: \"expired\" });",
+				"    return [];",
+				"  },",
+				"});",
+			].join("\n"),
+			rootDir,
+		);
+
+		const result = await runHarnessInferentialReview(rootDir, {
+			baseRef: "HEAD",
+			getChangedFiles: async () => [
+				"packages/athena-webapp/convex/pos/public/queryExistingParenthesizedAliasWrites.ts",
+			],
+			nowIso: () => "2026-04-12T05:00:00.000Z",
+		});
+
+		expect(result.exitCode).toBe(1);
+		expect(result.machine.findings).toContainEqual(
+			expect.objectContaining({
+				id: "convex-query-mutation-db-write-packages-athena-webapp-convex-pos-public-queryexistingparenthesizedaliaswrites-ts",
+				severity: "high",
+			}),
+		);
+	});
+
+	it("fails when a changed Convex query adds a non-null asserted write through an existing db alias", async () => {
+		const rootDir = await createFixtureRepo();
+		await write(
+			"packages/athena-webapp/convex/pos/public/queryExistingNonNullAliasWrites.ts",
+			[
+				'import { query } from "../../../_generated/server";',
+				"",
+				"export const listCommands = query({",
+				"  args: {},",
+				"  handler: async (ctx) => {",
+				"    const db = ctx.db as any;",
+				"    await db.query(\"posTerminalRecoveryCommand\").collect();",
+				"    return [];",
+				"  },",
+				"});",
+			].join("\n"),
+			rootDir,
+		);
+		await commitFixtureRepo(rootDir);
+		await write(
+			"packages/athena-webapp/convex/pos/public/queryExistingNonNullAliasWrites.ts",
+			[
+				'import { query } from "../../../_generated/server";',
+				"",
+				"export const listCommands = query({",
+				"  args: {},",
+				"  handler: async (ctx) => {",
+				"    const db = ctx.db as any;",
+				"    await db.query(\"posTerminalRecoveryCommand\").collect();",
+				"    await db!.patch(\"command-id\" as never, { status: \"expired\" });",
+				"    return [];",
+				"  },",
+				"});",
+			].join("\n"),
+			rootDir,
+		);
+
+		const result = await runHarnessInferentialReview(rootDir, {
+			baseRef: "HEAD",
+			getChangedFiles: async () => [
+				"packages/athena-webapp/convex/pos/public/queryExistingNonNullAliasWrites.ts",
+			],
+			nowIso: () => "2026-04-12T05:00:00.000Z",
+		});
+
+		expect(result.exitCode).toBe(1);
+		expect(result.machine.findings).toContainEqual(
+			expect.objectContaining({
+				id: "convex-query-mutation-db-write-packages-athena-webapp-convex-pos-public-queryexistingnonnullaliaswrites-ts",
+				severity: "high",
+			}),
+		);
+	});
+
+	it("fails when a changed Convex query adds a bracket method write through an existing db alias", async () => {
+		const rootDir = await createFixtureRepo();
+		await write(
+			"packages/athena-webapp/convex/pos/public/queryExistingBracketMethodAliasWrites.ts",
+			[
+				'import { query } from "../../../_generated/server";',
+				"",
+				"export const listCommands = query({",
+				"  args: {},",
+				"  handler: async (ctx) => {",
+				"    const db = ctx.db as any;",
+				"    await db.query(\"posTerminalRecoveryCommand\").collect();",
+				"    return [];",
+				"  },",
+				"});",
+			].join("\n"),
+			rootDir,
+		);
+		await commitFixtureRepo(rootDir);
+		await write(
+			"packages/athena-webapp/convex/pos/public/queryExistingBracketMethodAliasWrites.ts",
+			[
+				'import { query } from "../../../_generated/server";',
+				"",
+				"export const listCommands = query({",
+				"  args: {},",
+				"  handler: async (ctx) => {",
+				"    const db = ctx.db as any;",
+				"    await db.query(\"posTerminalRecoveryCommand\").collect();",
+				"    await db[\"patch\"](\"command-id\" as never, { status: \"expired\" });",
+				"    return [];",
+				"  },",
+				"});",
+			].join("\n"),
+			rootDir,
+		);
+
+		const result = await runHarnessInferentialReview(rootDir, {
+			baseRef: "HEAD",
+			getChangedFiles: async () => [
+				"packages/athena-webapp/convex/pos/public/queryExistingBracketMethodAliasWrites.ts",
+			],
+			nowIso: () => "2026-04-12T05:00:00.000Z",
+		});
+
+		expect(result.exitCode).toBe(1);
+		expect(result.machine.findings).toContainEqual(
+			expect.objectContaining({
+				id: "convex-query-mutation-db-write-packages-athena-webapp-convex-pos-public-queryexistingbracketmethodaliaswrites-ts",
+				severity: "high",
+			}),
+		);
+	});
+
+	it("fails when a changed Convex query adds an optional bracket method write through an existing db alias", async () => {
+		const rootDir = await createFixtureRepo();
+		await write(
+			"packages/athena-webapp/convex/pos/public/queryExistingOptionalBracketMethodAliasWrites.ts",
+			[
+				'import { query } from "../../../_generated/server";',
+				"",
+				"export const listCommands = query({",
+				"  args: {},",
+				"  handler: async (ctx) => {",
+				"    const db = ctx.db as any;",
+				"    await db.query(\"posTerminalRecoveryCommand\").collect();",
+				"    return [];",
+				"  },",
+				"});",
+			].join("\n"),
+			rootDir,
+		);
+		await commitFixtureRepo(rootDir);
+		await write(
+			"packages/athena-webapp/convex/pos/public/queryExistingOptionalBracketMethodAliasWrites.ts",
+			[
+				'import { query } from "../../../_generated/server";',
+				"",
+				"export const listCommands = query({",
+				"  args: {},",
+				"  handler: async (ctx) => {",
+				"    const db = ctx.db as any;",
+				"    await db.query(\"posTerminalRecoveryCommand\").collect();",
+				"    await db?.[\"patch\"](\"command-id\" as never, { status: \"expired\" });",
+				"    return [];",
+				"  },",
+				"});",
+			].join("\n"),
+			rootDir,
+		);
+
+		const result = await runHarnessInferentialReview(rootDir, {
+			baseRef: "HEAD",
+			getChangedFiles: async () => [
+				"packages/athena-webapp/convex/pos/public/queryExistingOptionalBracketMethodAliasWrites.ts",
+			],
+			nowIso: () => "2026-04-12T05:00:00.000Z",
+		});
+
+		expect(result.exitCode).toBe(1);
+		expect(result.machine.findings).toContainEqual(
+			expect.objectContaining({
+				id: "convex-query-mutation-db-write-packages-athena-webapp-convex-pos-public-queryexistingoptionalbracketmethodaliaswrites-ts",
+				severity: "high",
+			}),
+		);
+	});
+
+	it("fails when a changed Convex query adds a parenthesized write through an existing db alias", async () => {
+		const rootDir = await createFixtureRepo();
+		await write(
+			"packages/athena-webapp/convex/pos/public/queryExistingParenthesizedReceiverAliasWrites.ts",
+			[
+				'import { query } from "../../../_generated/server";',
+				"",
+				"export const listCommands = query({",
+				"  args: {},",
+				"  handler: async (ctx) => {",
+				"    const db = ctx.db as any;",
+				"    await db.query(\"posTerminalRecoveryCommand\").collect();",
+				"    return [];",
+				"  },",
+				"});",
+			].join("\n"),
+			rootDir,
+		);
+		await commitFixtureRepo(rootDir);
+		await write(
+			"packages/athena-webapp/convex/pos/public/queryExistingParenthesizedReceiverAliasWrites.ts",
+			[
+				'import { query } from "../../../_generated/server";',
+				"",
+				"export const listCommands = query({",
+				"  args: {},",
+				"  handler: async (ctx) => {",
+				"    const db = ctx.db as any;",
+				"    await db.query(\"posTerminalRecoveryCommand\").collect();",
+				"    await (db).patch(\"command-id\" as never, { status: \"expired\" });",
+				"    return [];",
+				"  },",
+				"});",
+			].join("\n"),
+			rootDir,
+		);
+
+		const result = await runHarnessInferentialReview(rootDir, {
+			baseRef: "HEAD",
+			getChangedFiles: async () => [
+				"packages/athena-webapp/convex/pos/public/queryExistingParenthesizedReceiverAliasWrites.ts",
+			],
+			nowIso: () => "2026-04-12T05:00:00.000Z",
+		});
+
+		expect(result.exitCode).toBe(1);
+		expect(result.machine.findings).toContainEqual(
+			expect.objectContaining({
+				id: "convex-query-mutation-db-write-packages-athena-webapp-convex-pos-public-queryexistingparenthesizedreceiveraliaswrites-ts",
+				severity: "high",
+			}),
+		);
+	});
+
+	it("fails when a changed Convex query adds a casted receiver write through an existing db alias", async () => {
+		const rootDir = await createFixtureRepo();
+		await write(
+			"packages/athena-webapp/convex/pos/public/queryExistingCastedReceiverAliasWrites.ts",
+			[
+				'import { query } from "../../../_generated/server";',
+				"",
+				"export const listCommands = query({",
+				"  args: {},",
+				"  handler: async (ctx) => {",
+				"    const db = ctx.db as any;",
+				"    await db.query(\"posTerminalRecoveryCommand\").collect();",
+				"    return [];",
+				"  },",
+				"});",
+			].join("\n"),
+			rootDir,
+		);
+		await commitFixtureRepo(rootDir);
+		await write(
+			"packages/athena-webapp/convex/pos/public/queryExistingCastedReceiverAliasWrites.ts",
+			[
+				'import { query } from "../../../_generated/server";',
+				"",
+				"export const listCommands = query({",
+				"  args: {},",
+				"  handler: async (ctx) => {",
+				"    const db = ctx.db as any;",
+				"    await db.query(\"posTerminalRecoveryCommand\").collect();",
+				"    await (db as any).patch(\"command-id\" as never, { status: \"expired\" });",
+				"    return [];",
+				"  },",
+				"});",
+			].join("\n"),
+			rootDir,
+		);
+
+		const result = await runHarnessInferentialReview(rootDir, {
+			baseRef: "HEAD",
+			getChangedFiles: async () => [
+				"packages/athena-webapp/convex/pos/public/queryExistingCastedReceiverAliasWrites.ts",
+			],
+			nowIso: () => "2026-04-12T05:00:00.000Z",
+		});
+
+		expect(result.exitCode).toBe(1);
+		expect(result.machine.findings).toContainEqual(
+			expect.objectContaining({
+				id: "convex-query-mutation-db-write-packages-athena-webapp-convex-pos-public-queryexistingcastedreceiveraliaswrites-ts",
+				severity: "high",
+			}),
+		);
+	});
+
+	it("fails when a changed Convex query adds a satisfies receiver write through an existing db alias", async () => {
+		const rootDir = await createFixtureRepo();
+		await write(
+			"packages/athena-webapp/convex/pos/public/queryExistingSatisfiesReceiverAliasWrites.ts",
+			[
+				'import { query } from "../../../_generated/server";',
+				"",
+				"export const listCommands = query({",
+				"  args: {},",
+				"  handler: async (ctx) => {",
+				"    const db = ctx.db as any;",
+				"    await db.query(\"posTerminalRecoveryCommand\").collect();",
+				"    return [];",
+				"  },",
+				"});",
+			].join("\n"),
+			rootDir,
+		);
+		await commitFixtureRepo(rootDir);
+		await write(
+			"packages/athena-webapp/convex/pos/public/queryExistingSatisfiesReceiverAliasWrites.ts",
+			[
+				'import { query } from "../../../_generated/server";',
+				"",
+				"export const listCommands = query({",
+				"  args: {},",
+				"  handler: async (ctx) => {",
+				"    const db = ctx.db as any;",
+				"    await db.query(\"posTerminalRecoveryCommand\").collect();",
+				"    await (db satisfies any).patch(\"command-id\" as never, { status: \"expired\" });",
+				"    return [];",
+				"  },",
+				"});",
+			].join("\n"),
+			rootDir,
+		);
+
+		const result = await runHarnessInferentialReview(rootDir, {
+			baseRef: "HEAD",
+			getChangedFiles: async () => [
+				"packages/athena-webapp/convex/pos/public/queryExistingSatisfiesReceiverAliasWrites.ts",
+			],
+			nowIso: () => "2026-04-12T05:00:00.000Z",
+		});
+
+		expect(result.exitCode).toBe(1);
+		expect(result.machine.findings).toContainEqual(
+			expect.objectContaining({
+				id: "convex-query-mutation-db-write-packages-athena-webapp-convex-pos-public-queryexistingsatisfiesreceiveraliaswrites-ts",
+				severity: "high",
+			}),
+		);
+	});
+
+	it("fails when a changed Convex query calls an existing bound db write method", async () => {
+		const rootDir = await createFixtureRepo();
+		await write(
+			"packages/athena-webapp/convex/pos/public/queryExistingBoundMethodWrites.ts",
+			[
+				'import { query } from "../../../_generated/server";',
+				"",
+				"export const listCommands = query({",
+				"  args: {},",
+				"  handler: async (ctx) => {",
+				"    const db = ctx.db as any;",
+				"    const patch = db.patch.bind(db);",
+				"    await db.query(\"posTerminalRecoveryCommand\").collect();",
+				"    return [];",
+				"  },",
+				"});",
+			].join("\n"),
+			rootDir,
+		);
+		await commitFixtureRepo(rootDir);
+		await write(
+			"packages/athena-webapp/convex/pos/public/queryExistingBoundMethodWrites.ts",
+			[
+				'import { query } from "../../../_generated/server";',
+				"",
+				"export const listCommands = query({",
+				"  args: {},",
+				"  handler: async (ctx) => {",
+				"    const db = ctx.db as any;",
+				"    const patch = db.patch.bind(db);",
+				"    await db.query(\"posTerminalRecoveryCommand\").collect();",
+				"    await patch(\"command-id\" as never, { status: \"expired\" });",
+				"    return [];",
+				"  },",
+				"});",
+			].join("\n"),
+			rootDir,
+		);
+
+		const result = await runHarnessInferentialReview(rootDir, {
+			baseRef: "HEAD",
+			getChangedFiles: async () => [
+				"packages/athena-webapp/convex/pos/public/queryExistingBoundMethodWrites.ts",
+			],
+			nowIso: () => "2026-04-12T05:00:00.000Z",
+		});
+
+		expect(result.exitCode).toBe(1);
+		expect(result.machine.findings).toContainEqual(
+			expect.objectContaining({
+				id: "convex-query-mutation-db-write-packages-athena-webapp-convex-pos-public-queryexistingboundmethodwrites-ts",
+				severity: "high",
+			}),
+		);
+	});
+
+	it("fails when a changed Convex query calls an existing assigned db write method", async () => {
+		const rootDir = await createFixtureRepo();
+		await write(
+			"packages/athena-webapp/convex/pos/public/queryExistingAssignedMethodWrites.ts",
+			[
+				'import { query } from "../../../_generated/server";',
+				"",
+				"export const listCommands = query({",
+				"  args: {},",
+				"  handler: async (ctx) => {",
+				"    const db = ctx.db as any;",
+				"    const patch = db.patch;",
+				"    await db.query(\"posTerminalRecoveryCommand\").collect();",
+				"    return [];",
+				"  },",
+				"});",
+			].join("\n"),
+			rootDir,
+		);
+		await commitFixtureRepo(rootDir);
+		await write(
+			"packages/athena-webapp/convex/pos/public/queryExistingAssignedMethodWrites.ts",
+			[
+				'import { query } from "../../../_generated/server";',
+				"",
+				"export const listCommands = query({",
+				"  args: {},",
+				"  handler: async (ctx) => {",
+				"    const db = ctx.db as any;",
+				"    const patch = db.patch;",
+				"    await db.query(\"posTerminalRecoveryCommand\").collect();",
+				"    await patch(\"command-id\" as never, { status: \"expired\" });",
+				"    return [];",
+				"  },",
+				"});",
+			].join("\n"),
+			rootDir,
+		);
+
+		const result = await runHarnessInferentialReview(rootDir, {
+			baseRef: "HEAD",
+			getChangedFiles: async () => [
+				"packages/athena-webapp/convex/pos/public/queryExistingAssignedMethodWrites.ts",
+			],
+			nowIso: () => "2026-04-12T05:00:00.000Z",
+		});
+
+		expect(result.exitCode).toBe(1);
+		expect(result.machine.findings).toContainEqual(
+			expect.objectContaining({
+				id: "convex-query-mutation-db-write-packages-athena-webapp-convex-pos-public-queryexistingassignedmethodwrites-ts",
+				severity: "high",
+			}),
+		);
+	});
+
+	it("fails when a changed Convex query calls an existing renamed assigned db write method", async () => {
+		const rootDir = await createFixtureRepo();
+		await write(
+			"packages/athena-webapp/convex/pos/public/queryExistingRenamedAssignedMethodWrites.ts",
+			[
+				'import { query } from "../../../_generated/server";',
+				"",
+				"export const listCommands = query({",
+				"  args: {},",
+				"  handler: async (ctx) => {",
+				"    const db = ctx.db as any;",
+				"    const patchCommand = db.patch;",
+				"    await db.query(\"posTerminalRecoveryCommand\").collect();",
+				"    return [];",
+				"  },",
+				"});",
+			].join("\n"),
+			rootDir,
+		);
+		await commitFixtureRepo(rootDir);
+		await write(
+			"packages/athena-webapp/convex/pos/public/queryExistingRenamedAssignedMethodWrites.ts",
+			[
+				'import { query } from "../../../_generated/server";',
+				"",
+				"export const listCommands = query({",
+				"  args: {},",
+				"  handler: async (ctx) => {",
+				"    const db = ctx.db as any;",
+				"    const patchCommand = db.patch;",
+				"    await db.query(\"posTerminalRecoveryCommand\").collect();",
+				"    await patchCommand(\"command-id\" as never, { status: \"expired\" });",
+				"    return [];",
+				"  },",
+				"});",
+			].join("\n"),
+			rootDir,
+		);
+
+		const result = await runHarnessInferentialReview(rootDir, {
+			baseRef: "HEAD",
+			getChangedFiles: async () => [
+				"packages/athena-webapp/convex/pos/public/queryExistingRenamedAssignedMethodWrites.ts",
+			],
+			nowIso: () => "2026-04-12T05:00:00.000Z",
+		});
+
+		expect(result.exitCode).toBe(1);
+		expect(result.machine.findings).toContainEqual(
+			expect.objectContaining({
+				id: "convex-query-mutation-db-write-packages-athena-webapp-convex-pos-public-queryexistingrenamedassignedmethodwrites-ts",
+				severity: "high",
+			}),
+		);
+	});
+
+	it("fails when a changed Convex query calls an existing typed assigned db write method", async () => {
+		const rootDir = await createFixtureRepo();
+		await write(
+			"packages/athena-webapp/convex/pos/public/queryExistingTypedAssignedMethodWrites.ts",
+			[
+				'import { query } from "../../../_generated/server";',
+				"",
+				"export const listCommands = query({",
+				"  args: {},",
+				"  handler: async (ctx) => {",
+				"    const db = ctx.db as any;",
+				"    const patch: any = db.patch;",
+				"    await db.query(\"posTerminalRecoveryCommand\").collect();",
+				"    return [];",
+				"  },",
+				"});",
+			].join("\n"),
+			rootDir,
+		);
+		await commitFixtureRepo(rootDir);
+		await write(
+			"packages/athena-webapp/convex/pos/public/queryExistingTypedAssignedMethodWrites.ts",
+			[
+				'import { query } from "../../../_generated/server";',
+				"",
+				"export const listCommands = query({",
+				"  args: {},",
+				"  handler: async (ctx) => {",
+				"    const db = ctx.db as any;",
+				"    const patch: any = db.patch;",
+				"    await db.query(\"posTerminalRecoveryCommand\").collect();",
+				"    await patch(\"command-id\" as never, { status: \"expired\" });",
+				"    return [];",
+				"  },",
+				"});",
+			].join("\n"),
+			rootDir,
+		);
+
+		const result = await runHarnessInferentialReview(rootDir, {
+			baseRef: "HEAD",
+			getChangedFiles: async () => [
+				"packages/athena-webapp/convex/pos/public/queryExistingTypedAssignedMethodWrites.ts",
+			],
+			nowIso: () => "2026-04-12T05:00:00.000Z",
+		});
+
+		expect(result.exitCode).toBe(1);
+		expect(result.machine.findings).toContainEqual(
+			expect.objectContaining({
+				id: "convex-query-mutation-db-write-packages-athena-webapp-convex-pos-public-queryexistingtypedassignedmethodwrites-ts",
+				severity: "high",
+			}),
+		);
+	});
+
+	it("fails when a changed Convex query calls an existing multi-declarator assigned db write method", async () => {
+		const rootDir = await createFixtureRepo();
+		await write(
+			"packages/athena-webapp/convex/pos/public/queryExistingMultiDeclaratorAssignedMethodWrites.ts",
+			[
+				'import { query } from "../../../_generated/server";',
+				"",
+				"export const listCommands = query({",
+				"  args: {},",
+				"  handler: async (ctx) => {",
+				"    const db = ctx.db as any;",
+				"    const ready = true, patch = db.patch;",
+				"    await db.query(\"posTerminalRecoveryCommand\").collect();",
+				"    return [];",
+				"  },",
+				"});",
+			].join("\n"),
+			rootDir,
+		);
+		await commitFixtureRepo(rootDir);
+		await write(
+			"packages/athena-webapp/convex/pos/public/queryExistingMultiDeclaratorAssignedMethodWrites.ts",
+			[
+				'import { query } from "../../../_generated/server";',
+				"",
+				"export const listCommands = query({",
+				"  args: {},",
+				"  handler: async (ctx) => {",
+				"    const db = ctx.db as any;",
+				"    const ready = true, patch = db.patch;",
+				"    await db.query(\"posTerminalRecoveryCommand\").collect();",
+				"    await patch(\"command-id\" as never, { status: \"expired\" });",
+				"    return [];",
+				"  },",
+				"});",
+			].join("\n"),
+			rootDir,
+		);
+
+		const result = await runHarnessInferentialReview(rootDir, {
+			baseRef: "HEAD",
+			getChangedFiles: async () => [
+				"packages/athena-webapp/convex/pos/public/queryExistingMultiDeclaratorAssignedMethodWrites.ts",
+			],
+			nowIso: () => "2026-04-12T05:00:00.000Z",
+		});
+
+		expect(result.exitCode).toBe(1);
+		expect(result.machine.findings).toContainEqual(
+			expect.objectContaining({
+				id: "convex-query-mutation-db-write-packages-athena-webapp-convex-pos-public-queryexistingmultideclaratorassignedmethodwrites-ts",
+				severity: "high",
+			}),
+		);
+	});
+
+	it("fails when a changed Convex query calls an existing destructured db write method", async () => {
+		const rootDir = await createFixtureRepo();
+		await write(
+			"packages/athena-webapp/convex/pos/public/queryExistingDestructuredMethodWrites.ts",
+			[
+				'import { query } from "../../../_generated/server";',
+				"",
+				"export const listCommands = query({",
+				"  args: {},",
+				"  handler: async (ctx) => {",
+				"    const db = ctx.db as any;",
+				"    const { patch } = db;",
+				"    await db.query(\"posTerminalRecoveryCommand\").collect();",
+				"    return [];",
+				"  },",
+				"});",
+			].join("\n"),
+			rootDir,
+		);
+		await commitFixtureRepo(rootDir);
+		await write(
+			"packages/athena-webapp/convex/pos/public/queryExistingDestructuredMethodWrites.ts",
+			[
+				'import { query } from "../../../_generated/server";',
+				"",
+				"export const listCommands = query({",
+				"  args: {},",
+				"  handler: async (ctx) => {",
+				"    const db = ctx.db as any;",
+				"    const { patch } = db;",
+				"    await db.query(\"posTerminalRecoveryCommand\").collect();",
+				"    await patch(\"command-id\" as never, { status: \"expired\" });",
+				"    return [];",
+				"  },",
+				"});",
+			].join("\n"),
+			rootDir,
+		);
+
+		const result = await runHarnessInferentialReview(rootDir, {
+			baseRef: "HEAD",
+			getChangedFiles: async () => [
+				"packages/athena-webapp/convex/pos/public/queryExistingDestructuredMethodWrites.ts",
+			],
+			nowIso: () => "2026-04-12T05:00:00.000Z",
+		});
+
+		expect(result.exitCode).toBe(1);
+		expect(result.machine.findings).toContainEqual(
+			expect.objectContaining({
+				id: "convex-query-mutation-db-write-packages-athena-webapp-convex-pos-public-queryexistingdestructuredmethodwrites-ts",
+				severity: "high",
+			}),
+		);
+	});
+
+	it("fails when a changed Convex query calls an existing typed destructured db write method", async () => {
+		const rootDir = await createFixtureRepo();
+		await write(
+			"packages/athena-webapp/convex/pos/public/queryExistingTypedDestructuredMethodWrites.ts",
+			[
+				'import { query } from "../../../_generated/server";',
+				"",
+				"export const listCommands = query({",
+				"  args: {},",
+				"  handler: async (ctx) => {",
+				"    const db = ctx.db as any;",
+				"    const { patch }: { patch: (...args: any[]) => Promise<void> } = db;",
+				"    await db.query(\"posTerminalRecoveryCommand\").collect();",
+				"    return [];",
+				"  },",
+				"});",
+			].join("\n"),
+			rootDir,
+		);
+		await commitFixtureRepo(rootDir);
+		await write(
+			"packages/athena-webapp/convex/pos/public/queryExistingTypedDestructuredMethodWrites.ts",
+			[
+				'import { query } from "../../../_generated/server";',
+				"",
+				"export const listCommands = query({",
+				"  args: {},",
+				"  handler: async (ctx) => {",
+				"    const db = ctx.db as any;",
+				"    const { patch }: { patch: (...args: any[]) => Promise<void> } = db;",
+				"    await db.query(\"posTerminalRecoveryCommand\").collect();",
+				"    await patch(\"command-id\" as never, { status: \"expired\" });",
+				"    return [];",
+				"  },",
+				"});",
+			].join("\n"),
+			rootDir,
+		);
+
+		const result = await runHarnessInferentialReview(rootDir, {
+			baseRef: "HEAD",
+			getChangedFiles: async () => [
+				"packages/athena-webapp/convex/pos/public/queryExistingTypedDestructuredMethodWrites.ts",
+			],
+			nowIso: () => "2026-04-12T05:00:00.000Z",
+		});
+
+		expect(result.exitCode).toBe(1);
+		expect(result.machine.findings).toContainEqual(
+			expect.objectContaining({
+				id: "convex-query-mutation-db-write-packages-athena-webapp-convex-pos-public-queryexistingtypeddestructuredmethodwrites-ts",
+				severity: "high",
+			}),
+		);
+	});
+
+	it("fails when a changed Convex query calls an existing multi-declarator destructured db write method", async () => {
+		const rootDir = await createFixtureRepo();
+		await write(
+			"packages/athena-webapp/convex/pos/public/queryExistingMultiDeclaratorDestructuredMethodWrites.ts",
+			[
+				'import { query } from "../../../_generated/server";',
+				"",
+				"export const listCommands = query({",
+				"  args: {},",
+				"  handler: async (ctx) => {",
+				"    const db = ctx.db as any;",
+				"    const ready = true, { patch } = db;",
+				"    await db.query(\"posTerminalRecoveryCommand\").collect();",
+				"    return [];",
+				"  },",
+				"});",
+			].join("\n"),
+			rootDir,
+		);
+		await commitFixtureRepo(rootDir);
+		await write(
+			"packages/athena-webapp/convex/pos/public/queryExistingMultiDeclaratorDestructuredMethodWrites.ts",
+			[
+				'import { query } from "../../../_generated/server";',
+				"",
+				"export const listCommands = query({",
+				"  args: {},",
+				"  handler: async (ctx) => {",
+				"    const db = ctx.db as any;",
+				"    const ready = true, { patch } = db;",
+				"    await db.query(\"posTerminalRecoveryCommand\").collect();",
+				"    await patch(\"command-id\" as never, { status: \"expired\" });",
+				"    return [];",
+				"  },",
+				"});",
+			].join("\n"),
+			rootDir,
+		);
+
+		const result = await runHarnessInferentialReview(rootDir, {
+			baseRef: "HEAD",
+			getChangedFiles: async () => [
+				"packages/athena-webapp/convex/pos/public/queryExistingMultiDeclaratorDestructuredMethodWrites.ts",
+			],
+			nowIso: () => "2026-04-12T05:00:00.000Z",
+		});
+
+		expect(result.exitCode).toBe(1);
+		expect(result.machine.findings).toContainEqual(
+			expect.objectContaining({
+				id: "convex-query-mutation-db-write-packages-athena-webapp-convex-pos-public-queryexistingmultideclaratordestructuredmethodwrites-ts",
+				severity: "high",
+			}),
+		);
+	});
+
+	it("fails when a changed Convex query adds a write through an existing destructured db alias", async () => {
+		const rootDir = await createFixtureRepo();
+		await write(
+			"packages/athena-webapp/convex/pos/public/queryExistingDestructuredAliasWrites.ts",
+      [
+        'import { query } from "../../../_generated/server";',
+        "",
+        "export const listCommands = query({",
+        "  args: {},",
+        "  handler: async (ctx) => {",
+        "    const { db, auth }: { db: any; auth: unknown } = ctx as any;",
+        "    await db.query(\"posTerminalRecoveryCommand\").collect();",
+        "    return [];",
+        "  },",
+        "});",
+      ].join("\n"),
+      rootDir,
+    );
+    await commitFixtureRepo(rootDir);
+    await write(
+      "packages/athena-webapp/convex/pos/public/queryExistingDestructuredAliasWrites.ts",
+      [
+        'import { query } from "../../../_generated/server";',
+        "",
+        "export const listCommands = query({",
+        "  args: {},",
+        "  handler: async (ctx) => {",
+        "    const { db, auth }: { db: any; auth: unknown } = ctx as any;",
+        "    await db.query(\"posTerminalRecoveryCommand\").collect();",
+        "    await db.patch(\"command-id\" as never, { status: \"expired\" });",
+        "    return [];",
+        "  },",
+        "});",
+      ].join("\n"),
+      rootDir,
+    );
+
+    const result = await runHarnessInferentialReview(rootDir, {
+      baseRef: "HEAD",
+      getChangedFiles: async () => [
+        "packages/athena-webapp/convex/pos/public/queryExistingDestructuredAliasWrites.ts",
+      ],
+      nowIso: () => "2026-04-12T05:00:00.000Z",
+    });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.machine.findings).toContainEqual(
+      expect.objectContaining({
+        id: "convex-query-mutation-db-write-packages-athena-webapp-convex-pos-public-queryexistingdestructuredaliaswrites-ts",
+        severity: "high",
+      }),
+    );
+  });
+
+  it("fails when a changed Convex query writes through a destructured handler db parameter", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      "packages/athena-webapp/convex/pos/public/queryDestructuredHandlerWrites.ts",
+      [
+        'import { query } from "../../../_generated/server";',
+        "",
+        "export const listCommands = query({",
+        "  args: {},",
+        "  handler: async () => {",
+        "    return [];",
+        "  },",
+        "});",
+      ].join("\n"),
+      rootDir,
+    );
+    await commitFixtureRepo(rootDir);
+    await write(
+      "packages/athena-webapp/convex/pos/public/queryDestructuredHandlerWrites.ts",
+      [
+        'import { query } from "../../../_generated/server";',
+        "",
+        "export const listCommands = query({",
+        "  args: {},",
+        "  handler: async ({ db }: any) => {",
+        "    await db.patch(\"command-id\" as never, { status: \"expired\" });",
+        "    return [];",
+        "  },",
+        "});",
+      ].join("\n"),
+      rootDir,
+    );
+
+    const result = await runHarnessInferentialReview(rootDir, {
+      baseRef: "HEAD",
+      getChangedFiles: async () => [
+        "packages/athena-webapp/convex/pos/public/queryDestructuredHandlerWrites.ts",
+      ],
+      nowIso: () => "2026-04-12T05:00:00.000Z",
+    });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.machine.findings).toContainEqual(
+      expect.objectContaining({
+        id: "convex-query-mutation-db-write-packages-athena-webapp-convex-pos-public-querydestructuredhandlerwrites-ts",
+        severity: "high",
+      }),
+    );
+  });
+
+  it("fails when a changed Convex query writes through a casted db alias", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      "packages/athena-webapp/convex/pos/public/queryWritesAlias.ts",
+      [
+        'import { query, type MutationCtx } from "../../../_generated/server";',
+        "",
+        "export const listCommands = query({",
+        "  args: {},",
+        "  handler: async (ctx) => {",
+        "    const db = (ctx as unknown as MutationCtx).db;",
+        "    await db.patch(\"command-id\" as never, { status: \"expired\" });",
+        "    return [];",
+        "  },",
+        "});",
+      ].join("\n"),
+      rootDir,
+    );
+
+    const result = await runHarnessInferentialReview(rootDir, {
+      getChangedFiles: async () => [
+        "packages/athena-webapp/convex/pos/public/queryWritesAlias.ts",
+      ],
+      nowIso: () => "2026-04-12T05:00:00.000Z",
+    });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.machine.findings).toContainEqual(
+      expect.objectContaining({
+        id: "convex-query-mutation-db-write-packages-athena-webapp-convex-pos-public-querywritesalias-ts",
+        severity: "high",
+      }),
+    );
+  });
+
+  it("fails when a changed Convex query writes through an any db alias", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      "packages/athena-webapp/convex/pos/public/queryWritesAnyAlias.ts",
+      [
+        'import { query } from "../../../_generated/server";',
+        "",
+        "export const listCommands = query({",
+        "  args: {},",
+        "  handler: async (ctx) => {",
+        "    const db = ctx.db as any;",
+        "    await db.patch(\"command-id\" as never, { status: \"expired\" });",
+        "    return [];",
+        "  },",
+        "});",
+      ].join("\n"),
+      rootDir,
+    );
+
+    const result = await runHarnessInferentialReview(rootDir, {
+      getChangedFiles: async () => [
+        "packages/athena-webapp/convex/pos/public/queryWritesAnyAlias.ts",
+      ],
+      nowIso: () => "2026-04-12T05:00:00.000Z",
+    });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.machine.findings).toContainEqual(
+      expect.objectContaining({
+        id: "convex-query-mutation-db-write-packages-athena-webapp-convex-pos-public-querywritesanyalias-ts",
+        severity: "high",
+      }),
+    );
+  });
+
+  it("fails when a changed Convex query creates a write-capable repository", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      "packages/athena-webapp/convex/pos/public/queryFactoryWrites.ts",
+      [
+        'import { query } from "../../../_generated/server";',
+        'import { createTerminalRecoveryCommandRepository } from "../infrastructure/repositories/terminalRecoveryRepository";',
+        'import { listClaimableTerminalRecoveryCommands } from "../application/terminalRecovery/terminalCommandService";',
+        "",
+        "export const listCommands = query({",
+        "  args: {},",
+        "  handler: async (ctx) => {",
+        "    const repository = createTerminalRecoveryCommandRepository(ctx);",
+        "    return await listClaimableTerminalRecoveryCommands(repository, new Date());",
+        "  },",
+        "});",
+      ].join("\n"),
+      rootDir,
+    );
+
+    const result = await runHarnessInferentialReview(rootDir, {
+      getChangedFiles: async () => [
+        "packages/athena-webapp/convex/pos/public/queryFactoryWrites.ts",
+      ],
+      nowIso: () => "2026-04-12T05:00:00.000Z",
+    });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.machine.findings).toContainEqual(
+      expect.objectContaining({
+        id: "convex-query-mutation-db-write-packages-athena-webapp-convex-pos-public-queryfactorywrites-ts",
+        severity: "high",
+      }),
+    );
+  });
+
+  it("fails when a changed Convex query creates a write-capable repository from a renamed ctx parameter", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      "packages/athena-webapp/convex/pos/public/queryFactoryRenamedCtx.ts",
+      [
+        'import { query } from "../../../_generated/server";',
+        'import { createTerminalRecoveryCommandRepository } from "../infrastructure/repositories/terminalRecoveryRepository";',
+        "",
+        "export const listCommands = query({",
+        "  args: {},",
+        "  handler: async (queryCtx) => {",
+        "    const repository = createTerminalRecoveryCommandRepository(queryCtx as never);",
+        "    await repository.patchCommand(\"command-id\" as never, { status: \"expired\" });",
+        "    return [];",
+        "  },",
+        "});",
+      ].join("\n"),
+      rootDir,
+    );
+
+    const result = await runHarnessInferentialReview(rootDir, {
+      getChangedFiles: async () => [
+        "packages/athena-webapp/convex/pos/public/queryFactoryRenamedCtx.ts",
+      ],
+      nowIso: () => "2026-04-12T05:00:00.000Z",
+    });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.machine.findings).toContainEqual(
+      expect.objectContaining({
+        id: "convex-query-mutation-db-write-packages-athena-webapp-convex-pos-public-queryfactoryrenamedctx-ts",
+        severity: "high",
+      }),
+    );
+  });
+
+  it("fails when a changed Convex query passes ctx to a MutationCtx write helper", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      "packages/athena-webapp/convex/pos/public/queryHelperWrites.ts",
+      [
+        'import { query, type MutationCtx } from "../../../_generated/server";',
+        "",
+        "const expireCommands = async (ctx: MutationCtx): Promise<{ ok: boolean }> => {",
+        "  await ctx.db.patch(\"command-id\" as never, { status: \"expired\" });",
+        "  return { ok: true };",
+        "};",
+        "",
+        "export const listCommands = query({",
+        "  args: {},",
+        "  handler: async (ctx) => {",
+        "    await expireCommands(ctx as never);",
+        "    return [];",
+        "  },",
+        "});",
+      ].join("\n"),
+      rootDir,
+    );
+
+    const result = await runHarnessInferentialReview(rootDir, {
+      getChangedFiles: async () => [
+        "packages/athena-webapp/convex/pos/public/queryHelperWrites.ts",
+      ],
+      nowIso: () => "2026-04-12T05:00:00.000Z",
+    });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.machine.findings).toContainEqual(
+      expect.objectContaining({
+        id: "convex-query-mutation-db-write-packages-athena-webapp-convex-pos-public-queryhelperwrites-ts",
+        severity: "high",
+      }),
+    );
+  });
+
+  it("fails when a changed Convex query imports an unchanged MutationCtx write helper", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      "packages/athena-webapp/convex/pos/application/writeHelpers.ts",
+      [
+        'import type { MutationCtx } from "../../../_generated/server";',
+        "",
+        "export const expireCommands = async (ctx: MutationCtx): Promise<void> => {",
+        "  await ctx.db.patch(\"command-id\" as never, { status: \"expired\" });",
+        "};",
+      ].join("\n"),
+      rootDir,
+    );
+    await commitFixtureRepo(rootDir);
+    await write(
+      "packages/athena-webapp/convex/pos/public/queryImportedExistingHelperWrites.ts",
+      [
+        'import { query } from "../../../_generated/server";',
+        'import { expireCommands } from "../application/writeHelpers";',
+        "",
+        "export const listCommands = query({",
+        "  args: {},",
+        "  handler: async (ctx) => {",
+        "    await expireCommands(ctx as never);",
+        "    return [];",
+        "  },",
+        "});",
+      ].join("\n"),
+      rootDir,
+    );
+
+    const result = await runHarnessInferentialReview(rootDir, {
+      baseRef: "HEAD",
+      getChangedFiles: async () => [
+        "packages/athena-webapp/convex/pos/public/queryImportedExistingHelperWrites.ts",
+      ],
+      nowIso: () => "2026-04-12T05:00:00.000Z",
+    });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.machine.findings).toContainEqual(
+      expect.objectContaining({
+        id: "convex-query-mutation-db-write-packages-athena-webapp-convex-pos-public-queryimportedexistinghelperwrites-ts",
+        severity: "high",
+      }),
+    );
+  });
+
+  it("fails when a changed Convex query aliases an unchanged MutationCtx write helper import", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      "packages/athena-webapp/convex/pos/application/writeHelpers.ts",
+      [
+        'import type { MutationCtx } from "../../../_generated/server";',
+        "",
+        "export async function expireCommands(ctx: MutationCtx): Promise<void> {",
+        "  await ctx.db.patch(\"command-id\" as never, { status: \"expired\" });",
+        "}",
+      ].join("\n"),
+      rootDir,
+    );
+    await commitFixtureRepo(rootDir);
+    await write(
+      "packages/athena-webapp/convex/pos/public/queryImportedAliasHelperWrites.ts",
+      [
+        'import { query } from "../../../_generated/server";',
+        'import { expireCommands as expireTerminalCommands } from "../application/writeHelpers";',
+        "",
+        "export const listCommands = query({",
+        "  args: {},",
+        "  handler: async (ctx) => {",
+        "    await expireTerminalCommands(ctx as never);",
+        "    return [];",
+        "  },",
+        "});",
+      ].join("\n"),
+      rootDir,
+    );
+
+    const result = await runHarnessInferentialReview(rootDir, {
+      baseRef: "HEAD",
+      getChangedFiles: async () => [
+        "packages/athena-webapp/convex/pos/public/queryImportedAliasHelperWrites.ts",
+      ],
+      nowIso: () => "2026-04-12T05:00:00.000Z",
+    });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.machine.findings).toContainEqual(
+      expect.objectContaining({
+        id: "convex-query-mutation-db-write-packages-athena-webapp-convex-pos-public-queryimportedaliashelperwrites-ts",
+        severity: "high",
+      }),
+    );
+  });
+
+  it("fails when a changed Convex query adds a call to a pre-existing write-helper import alias", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      "packages/athena-webapp/convex/pos/application/writeHelpers.ts",
+      [
+        'import type { MutationCtx } from "../../../_generated/server";',
+        "",
+        "export async function expireCommands(ctx: MutationCtx): Promise<void> {",
+        "  await ctx.db.patch(\"command-id\" as never, { status: \"expired\" });",
+        "}",
+      ].join("\n"),
+      rootDir,
+    );
+    await write(
+      "packages/athena-webapp/convex/pos/public/queryImportedAliasHelperWrites.ts",
+      [
+        'import { query } from "../../../_generated/server";',
+        'import { expireCommands as expireTerminalCommands } from "../application/writeHelpers";',
+        "",
+        "export const listCommands = query({",
+        "  args: {},",
+        "  handler: async () => {",
+        "    return [];",
+        "  },",
+        "});",
+      ].join("\n"),
+      rootDir,
+    );
+    await commitFixtureRepo(rootDir);
+    await write(
+      "packages/athena-webapp/convex/pos/public/queryImportedAliasHelperWrites.ts",
+      [
+        'import { query } from "../../../_generated/server";',
+        'import { expireCommands as expireTerminalCommands } from "../application/writeHelpers";',
+        "",
+        "export const listCommands = query({",
+        "  args: {},",
+        "  handler: async (ctx) => {",
+        "    await expireTerminalCommands(ctx as never);",
+        "    return [];",
+        "  },",
+        "});",
+      ].join("\n"),
+      rootDir,
+    );
+
+    const result = await runHarnessInferentialReview(rootDir, {
+      baseRef: "HEAD",
+      getChangedFiles: async () => [
+        "packages/athena-webapp/convex/pos/public/queryImportedAliasHelperWrites.ts",
+      ],
+      nowIso: () => "2026-04-12T05:00:00.000Z",
+    });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.machine.findings).toContainEqual(
+      expect.objectContaining({
+        id: "convex-query-mutation-db-write-packages-athena-webapp-convex-pos-public-queryimportedaliashelperwrites-ts",
+        severity: "high",
+      }),
+    );
+  });
+
+  it("fails when a changed Convex query imports a changed MutationCtx write helper", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      "packages/athena-webapp/convex/pos/application/writeHelpers.ts",
+      [
+        'import type { MutationCtx } from "../../../_generated/server";',
+        "",
+        "export async function expireCommands(ctx: MutationCtx): Promise<void> {",
+        "  await ctx.db.patch(\"command-id\" as never, { status: \"expired\" });",
+        "}",
+      ].join("\n"),
+      rootDir,
+    );
+    await write(
+      "packages/athena-webapp/convex/pos/public/queryImportedHelperWrites.ts",
+      [
+        'import { query } from "../../../_generated/server";',
+        'import { expireCommands } from "../application/writeHelpers";',
+        "",
+        "export const listCommands = query({",
+        "  args: {},",
+        "  handler: async (ctx) => {",
+        "    await expireCommands(ctx as never);",
+        "    return [];",
+        "  },",
+        "});",
+      ].join("\n"),
+      rootDir,
+    );
+
+    const result = await runHarnessInferentialReview(rootDir, {
+      getChangedFiles: async () => [
+        "packages/athena-webapp/convex/pos/application/writeHelpers.ts",
+        "packages/athena-webapp/convex/pos/public/queryImportedHelperWrites.ts",
+      ],
+      nowIso: () => "2026-04-12T05:00:00.000Z",
+    });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.machine.findings).toContainEqual(
+      expect.objectContaining({
+        id: "convex-query-mutation-db-write-packages-athena-webapp-convex-pos-public-queryimportedhelperwrites-ts",
+        severity: "high",
+      }),
+    );
+  });
+
+  it("fails when a changed MutationCtx write helper has an unchanged aliased Convex query caller", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      "packages/athena-webapp/convex/pos/application/writeHelpers.ts",
+      [
+        'import type { QueryCtx } from "../../../_generated/server";',
+        "",
+        "export async function expireCommands(ctx: QueryCtx): Promise<void> {",
+        "  await ctx.db.get(\"command-id\" as never);",
+        "}",
+      ].join("\n"),
+      rootDir,
+    );
+    await write(
+      "packages/athena-webapp/convex/pos/public/queryImportedAliasHelperWrites.ts",
+      [
+        'import { query } from "../../../_generated/server";',
+        'import { expireCommands as expireTerminalCommands } from "../application/writeHelpers";',
+        "",
+        "export const listCommands = query({",
+        "  args: {},",
+        "  handler: async (ctx) => {",
+        "    await expireTerminalCommands(ctx as never);",
+        "    return [];",
+        "  },",
+        "});",
+      ].join("\n"),
+      rootDir,
+    );
+    await commitFixtureRepo(rootDir);
+    await write(
+      "packages/athena-webapp/convex/pos/application/writeHelpers.ts",
+      [
+        'import type { MutationCtx } from "../../../_generated/server";',
+        "",
+        "export async function expireCommands(ctx: MutationCtx): Promise<void> {",
+        "  await ctx.db.patch(\"command-id\" as never, { status: \"expired\" });",
+        "}",
+      ].join("\n"),
+      rootDir,
+    );
+
+    const result = await runHarnessInferentialReview(rootDir, {
+      baseRef: "HEAD",
+      getChangedFiles: async () => [
+        "packages/athena-webapp/convex/pos/application/writeHelpers.ts",
+      ],
+      nowIso: () => "2026-04-12T05:00:00.000Z",
+    });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.machine.findings).toContainEqual(
+      expect.objectContaining({
+        id: "convex-query-mutation-db-write-packages-athena-webapp-convex-pos-public-queryimportedaliashelperwrites-ts",
+        severity: "high",
+      }),
+    );
+  });
+
+  it("fails when a changed MutationCtx write helper has an unchanged Convex query caller", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      "packages/athena-webapp/convex/pos/application/writeHelpers.ts",
+      [
+        'import type { QueryCtx } from "../../../_generated/server";',
+        "",
+        "export const expireCommands = async (ctx: QueryCtx): Promise<void> => {",
+        "  await ctx.db.get(\"command-id\" as never);",
+        "};",
+      ].join("\n"),
+      rootDir,
+    );
+    await write(
+      "packages/athena-webapp/convex/pos/public/queryImportedHelperWrites.ts",
+      [
+        'import { query } from "../../../_generated/server";',
+        'import { expireCommands } from "../application/writeHelpers";',
+        "",
+        "export const listCommands = query({",
+        "  args: {},",
+        "  handler: async (ctx) => {",
+        "    await expireCommands(ctx as never);",
+        "    return [];",
+        "  },",
+        "});",
+      ].join("\n"),
+      rootDir,
+    );
+    await commitFixtureRepo(rootDir);
+    await write(
+      "packages/athena-webapp/convex/pos/application/writeHelpers.ts",
+      [
+        'import type { MutationCtx } from "../../../_generated/server";',
+        "",
+        "export const expireCommands = async (ctx: MutationCtx): Promise<void> => {",
+        "  await ctx.db.patch(\"command-id\" as never, { status: \"expired\" });",
+        "};",
+      ].join("\n"),
+      rootDir,
+    );
+
+    const result = await runHarnessInferentialReview(rootDir, {
+      baseRef: "HEAD",
+      getChangedFiles: async () => [
+        "packages/athena-webapp/convex/pos/application/writeHelpers.ts",
+      ],
+      nowIso: () => "2026-04-12T05:00:00.000Z",
+    });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.machine.findings).toContainEqual(
+      expect.objectContaining({
+        id: "convex-query-mutation-db-write-packages-athena-webapp-convex-pos-public-queryimportedhelperwrites-ts",
+        severity: "high",
+      }),
+    );
+  });
+
+  it("accepts a changed Convex query with a local read-only helper shadowing an unrelated write helper name", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      "packages/athena-webapp/convex/pos/application/writeHelpers.ts",
+      [
+        'import type { MutationCtx } from "../../../_generated/server";',
+        "",
+        "export async function createOffer(ctx: MutationCtx): Promise<void> {",
+        "  await ctx.db.patch(\"offer-id\" as never, { status: \"expired\" });",
+        "}",
+      ].join("\n"),
+      rootDir,
+    );
+    await commitFixtureRepo(rootDir);
+    await write(
+      "packages/athena-webapp/convex/pos/public/queryLocalReadHelper.ts",
+      [
+        'import { query } from "../../../_generated/server";',
+        "",
+        "async function createOffer(ctx: unknown): Promise<unknown> {",
+        "  return await Promise.resolve(ctx);",
+        "}",
+        "",
+        "export const listCommands = query({",
+        "  args: {},",
+        "  handler: async (ctx) => {",
+        "    await createOffer(ctx);",
+        "    return [];",
+        "  },",
+        "});",
+      ].join("\n"),
+      rootDir,
+    );
+
+    const result = await runHarnessInferentialReview(rootDir, {
+      baseRef: "HEAD",
+      getChangedFiles: async () => [
+        "packages/athena-webapp/convex/pos/public/queryLocalReadHelper.ts",
+      ],
+      nowIso: () => "2026-04-12T05:00:00.000Z",
+    });
+
+    expect(result.exitCode).toBe(0);
+  });
+
+  it("accepts a changed Convex query that creates a read-only repository", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      "packages/athena-webapp/convex/pos/public/queryReadFactory.ts",
+      [
+        'import { query } from "../../../_generated/server";',
+        'import { createTerminalRecoveryCommandReadRepository } from "../infrastructure/repositories/terminalRecoveryRepository";',
+        'import { listClaimableTerminalRecoveryCommands } from "../application/terminalRecovery/terminalCommandService";',
+        "",
+        "export const listCommands = query({",
+        "  args: {},",
+        "  handler: async (ctx) => {",
+        "    const repository = createTerminalRecoveryCommandReadRepository(ctx);",
+        "    return await listClaimableTerminalRecoveryCommands(repository, new Date());",
+        "  },",
+        "});",
+      ].join("\n"),
+      rootDir,
+    );
+
+    const result = await runHarnessInferentialReview(rootDir, {
+      getChangedFiles: async () => [
+        "packages/athena-webapp/convex/pos/public/queryReadFactory.ts",
+      ],
+      nowIso: () => "2026-04-12T05:00:00.000Z",
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.machine.status).toBe("pass");
+    expect(result.machine.findings).toEqual([]);
+  });
+
+  it("fails when a staged-only tracked Convex query writes", async () => {
+    const rootDir = await createFixtureRepo();
+    const queryPath =
+      "packages/athena-webapp/convex/pos/public/stagedQueryWrites.ts";
+    await write(
+      queryPath,
+      [
+        'import { query } from "../../../_generated/server";',
+        "",
+        "export const listCommands = query({",
+        "  args: {},",
+        "  handler: async () => {",
+        "    return [];",
+        "  },",
+        "});",
+      ].join("\n"),
+      rootDir,
+    );
+    await runFixtureCommand(rootDir, ["git", "init"]);
+    await runFixtureCommand(rootDir, ["git", "config", "user.email", "fixture@example.com"]);
+    await runFixtureCommand(rootDir, ["git", "config", "user.name", "Fixture"]);
+    await runFixtureCommand(rootDir, ["git", "add", "."]);
+    await runFixtureCommand(rootDir, ["git", "commit", "-m", "baseline"]);
+    await write(
+      queryPath,
+      [
+        'import { query } from "../../../_generated/server";',
+        "",
+        "export const listCommands = query({",
+        "  args: {},",
+        "  handler: async (ctx) => {",
+        "    await ctx.db.patch(\"command-id\" as never, { status: \"expired\" });",
+        "    return [];",
+        "  },",
+        "});",
+      ].join("\n"),
+      rootDir,
+    );
+    await runFixtureCommand(rootDir, ["git", "add", queryPath]);
+
+    const result = await runHarnessInferentialReview(rootDir, {
+      baseRef: "HEAD",
+      nowIso: () => "2026-04-12T05:00:00.000Z",
+    });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.machine.changedFiles).toContain(queryPath);
+    expect(result.machine.findings).toContainEqual(
+      expect.objectContaining({
+        id: "convex-query-mutation-db-write-packages-athena-webapp-convex-pos-public-stagedquerywrites-ts",
+        severity: "high",
+      }),
+    );
+  });
+
+  it("fails when a changed internal query casts ctx to MutationCtx before writing", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      "packages/athena-webapp/convex/pos/internal/queryWrites.ts",
+      [
+        'import { internalQuery, type MutationCtx } from "../../_generated/server";',
+        "",
+        "export const listCommands = internalQuery({",
+        "  args: {},",
+        "  handler: async (ctx) => {",
+        "    await (ctx as unknown as MutationCtx).db.delete(\"command-id\" as never);",
+        "    return [];",
+        "  },",
+        "});",
+      ].join("\n"),
+      rootDir,
+    );
+
+    const result = await runHarnessInferentialReview(rootDir, {
+      getChangedFiles: async () => [
+        "packages/athena-webapp/convex/pos/internal/queryWrites.ts",
+      ],
+      nowIso: () => "2026-04-12T05:00:00.000Z",
+    });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.machine.findings).toContainEqual(
+      expect.objectContaining({
+        id: "convex-query-mutation-db-write-packages-athena-webapp-convex-pos-internal-querywrites-ts",
+        severity: "high",
+      }),
+    );
+  });
+
+  it("fails when a changed mixed QueryCtx alias repository casts to MutationCtx and writes", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      "packages/athena-webapp/convex/pos/infrastructure/repositories/mixedRepository.ts",
+      [
+        'import type { MutationCtx, QueryCtx } from "../../../_generated/server";',
+        "",
+        "type MixedCtx = QueryCtx | MutationCtx;",
+        "",
+        "export function createMixedRepository(ctx: MixedCtx) {",
+        "  return {",
+        "    async listCommands() {",
+        "      return await ctx.db.query(\"posTerminalRecoveryCommand\").collect();",
+        "    },",
+        "    async patchCommand(id: string, patch: Record<string, unknown>) {",
+        "      await (ctx as MutationCtx).db.patch(id as never, patch);",
+        "    },",
+        "  };",
+        "}",
+      ].join("\n"),
+      rootDir,
+    );
+
+    const result = await runHarnessInferentialReview(rootDir, {
+      getChangedFiles: async () => [
+        "packages/athena-webapp/convex/pos/infrastructure/repositories/mixedRepository.ts",
+      ],
+      nowIso: () => "2026-04-12T05:00:00.000Z",
+    });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.machine.findings).toContainEqual(
+      expect.objectContaining({
+        id: "convex-query-compatible-write-surface-packages-athena-webapp-convex-pos-infrastructure-repositories-mixedrepository-ts",
+        severity: "high",
+      }),
+    );
+  });
+
+  it("fails when a changed arrow mixed QueryCtx repository writes", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      "packages/athena-webapp/convex/pos/infrastructure/repositories/arrowMixedRepository.ts",
+      [
+        'import type { MutationCtx, QueryCtx } from "../../../_generated/server";',
+        "",
+        "type MixedCtx = QueryCtx | MutationCtx;",
+        "",
+        "export const createMixedRepository = (ctx: MixedCtx) => ({",
+        "  async listCommands() {",
+        "    return await ctx.db.query(\"posTerminalRecoveryCommand\").collect();",
+        "  },",
+        "  async patchCommand(id: string, patch: Record<string, unknown>) {",
+        "    await (ctx as MutationCtx).db.patch(id as never, patch);",
+        "  },",
+        "});",
+      ].join("\n"),
+      rootDir,
+    );
+
+    const result = await runHarnessInferentialReview(rootDir, {
+      getChangedFiles: async () => [
+        "packages/athena-webapp/convex/pos/infrastructure/repositories/arrowMixedRepository.ts",
+      ],
+      nowIso: () => "2026-04-12T05:00:00.000Z",
+    });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.machine.findings).toContainEqual(
+      expect.objectContaining({
+        id: "convex-query-compatible-write-surface-packages-athena-webapp-convex-pos-infrastructure-repositories-arrowmixedrepository-ts",
+        severity: "high",
+      }),
+    );
+  });
+
+  it("fails when a changed repository only widens MutationCtx to QueryCtx while retaining writes", async () => {
+    const rootDir = await createFixtureRepo();
+    const repositoryPath =
+      "packages/athena-webapp/convex/pos/infrastructure/repositories/widenedRepository.ts";
+    await write(
+      repositoryPath,
+      [
+        'import type { MutationCtx, QueryCtx } from "../../../_generated/server";',
+        "",
+        "export function createWidenedRepository(ctx: MutationCtx) {",
+        "  return {",
+        "    async patchCommand(id: string, patch: Record<string, unknown>) {",
+        "      await ctx.db.patch(id as never, patch);",
+        "    },",
+        "  };",
+        "}",
+      ].join("\n"),
+      rootDir,
+    );
+    await runFixtureCommand(rootDir, ["git", "init"]);
+    await runFixtureCommand(rootDir, ["git", "config", "user.email", "fixture@example.com"]);
+    await runFixtureCommand(rootDir, ["git", "config", "user.name", "Fixture"]);
+    await runFixtureCommand(rootDir, ["git", "add", "."]);
+    await runFixtureCommand(rootDir, ["git", "commit", "-m", "baseline"]);
+    await write(
+      repositoryPath,
+      [
+        'import type { MutationCtx, QueryCtx } from "../../../_generated/server";',
+        "",
+        "export function createWidenedRepository(ctx: QueryCtx | MutationCtx) {",
+        "  return {",
+        "    async patchCommand(id: string, patch: Record<string, unknown>) {",
+        "      await ctx.db.patch(id as never, patch);",
+        "    },",
+        "  };",
+        "}",
+      ].join("\n"),
+      rootDir,
+    );
+
+    const result = await runHarnessInferentialReview(rootDir, {
+      baseRef: "HEAD",
+      getChangedFiles: async () => [repositoryPath],
+      nowIso: () => "2026-04-12T05:00:00.000Z",
+    });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.machine.findings).toContainEqual(
+      expect.objectContaining({
+        id: "convex-query-compatible-write-surface-packages-athena-webapp-convex-pos-infrastructure-repositories-widenedrepository-ts",
+        severity: "high",
+      }),
+    );
+  });
+
+  it("fails for Pick<QueryCtx | MutationCtx, db> style mixed ctx shapes that write", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      "packages/athena-webapp/convex/pos/infrastructure/repositories/pickRepository.ts",
+      [
+        'import type { MutationCtx, QueryCtx } from "../../../_generated/server";',
+        "",
+        "type DbCtx = Pick<QueryCtx | MutationCtx, \"db\">;",
+        "",
+        "export async function replaceCommand(ctx: DbCtx, id: string) {",
+        "  await (ctx as unknown as MutationCtx).db.replace(id as never, {});",
+        "}",
+      ].join("\n"),
+      rootDir,
+    );
+
+    const result = await runHarnessInferentialReview(rootDir, {
+      getChangedFiles: async () => [
+        "packages/athena-webapp/convex/pos/infrastructure/repositories/pickRepository.ts",
+      ],
+      nowIso: () => "2026-04-12T05:00:00.000Z",
+    });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.machine.findings).toContainEqual(
+      expect.objectContaining({
+        id: "convex-query-compatible-write-surface-packages-athena-webapp-convex-pos-infrastructure-repositories-pickrepository-ts",
+        severity: "high",
+      }),
+    );
+  });
+
+  it("fails when a changed query-facing service calls a write repository method", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      "packages/athena-webapp/convex/pos/application/terminalRecovery/queryFacingService.ts",
+      [
+        "type CommandRepository = {",
+        "  listCommands(): Promise<unknown[]>;",
+        "  patchCommand(id: string, patch: Record<string, unknown>): Promise<void>;",
+        "};",
+        "",
+        "export async function listClaimableCommands(repository: CommandRepository) {",
+        "  await repository.patchCommand(\"command-id\", { status: \"expired\" });",
+        "  return await repository.listCommands();",
+        "}",
+      ].join("\n"),
+      rootDir,
+    );
+
+    const result = await runHarnessInferentialReview(rootDir, {
+      getChangedFiles: async () => [
+        "packages/athena-webapp/convex/pos/application/terminalRecovery/queryFacingService.ts",
+      ],
+      nowIso: () => "2026-04-12T05:00:00.000Z",
+    });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.machine.findings).toContainEqual(
+      expect.objectContaining({
+        id: "convex-query-facing-write-repository-packages-athena-webapp-convex-pos-application-terminalrecovery-queryfacingservice-ts",
+        severity: "high",
+      }),
+    );
+  });
+
+  it("accepts changed mutations that use write repositories", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      "packages/athena-webapp/convex/pos/public/mutationWrites.ts",
+      [
+        'import { mutation } from "../../../_generated/server";',
+        "",
+        "export const expireCommand = mutation({",
+        "  args: {},",
+        "  handler: async (_ctx) => {",
+        "    const repository = {",
+        "      async patchCommand() {",
+        "        return undefined;",
+        "      },",
+        "    };",
+        "    await repository.patchCommand();",
+        "    return null;",
+        "  },",
+        "});",
+      ].join("\n"),
+      rootDir,
+    );
+
+    const result = await runHarnessInferentialReview(rootDir, {
+      getChangedFiles: async () => [
+        "packages/athena-webapp/convex/pos/public/mutationWrites.ts",
+      ],
+      nowIso: () => "2026-04-12T05:00:00.000Z",
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.machine.status).toBe("pass");
+    expect(result.machine.findings).toEqual([]);
+  });
+
+  it("accepts read-only helpers that accept QueryCtx or MutationCtx", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      "packages/athena-webapp/convex/pos/infrastructure/repositories/readRepository.ts",
+      [
+        'import type { MutationCtx, QueryCtx } from "../../../_generated/server";',
+        "",
+        "type MixedCtx = QueryCtx | MutationCtx;",
+        "",
+        "export async function listCommands(ctx: MixedCtx) {",
+        "  return await ctx.db.query(\"posTerminalRecoveryCommand\").collect();",
+        "}",
+      ].join("\n"),
+      rootDir,
+    );
+
+    const result = await runHarnessInferentialReview(rootDir, {
+      getChangedFiles: async () => [
+        "packages/athena-webapp/convex/pos/infrastructure/repositories/readRepository.ts",
+      ],
+      nowIso: () => "2026-04-12T05:00:00.000Z",
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.machine.status).toBe("pass");
+    expect(result.machine.findings).toEqual([]);
+  });
+
+  it("accepts read-only edits to an existing mixed repository with historical writes", async () => {
+    const rootDir = await createFixtureRepo();
+    const repositoryPath =
+      "packages/athena-webapp/convex/pos/infrastructure/repositories/existingMixedRepository.ts";
+    await write(
+      repositoryPath,
+      [
+        'import type { MutationCtx, QueryCtx } from "../../../_generated/server";',
+        "",
+        "type MixedCtx = QueryCtx | MutationCtx;",
+        "",
+        "export function createExistingRepository(ctx: MixedCtx) {",
+        "  return {",
+        "    async listCommands() {",
+        "      return await ctx.db.query(\"posTerminalRecoveryCommand\").collect();",
+        "    },",
+        "    async patchCommand(id: string, patch: Record<string, unknown>) {",
+        "      await (ctx as MutationCtx).db.patch(id as never, patch);",
+        "    },",
+        "  };",
+        "}",
+      ].join("\n"),
+      rootDir,
+    );
+    await runFixtureCommand(rootDir, ["git", "init"]);
+    await runFixtureCommand(rootDir, ["git", "config", "user.email", "fixture@example.com"]);
+    await runFixtureCommand(rootDir, ["git", "config", "user.name", "Fixture"]);
+    await runFixtureCommand(rootDir, ["git", "add", "."]);
+    await runFixtureCommand(rootDir, ["git", "commit", "-m", "baseline"]);
+    await write(
+      repositoryPath,
+      [
+        'import type { MutationCtx, QueryCtx } from "../../../_generated/server";',
+        "",
+        "type MixedCtx = QueryCtx | MutationCtx;",
+        "",
+        "export function createExistingRepository(ctx: MixedCtx) {",
+        "  return {",
+        "    async listCommands() {",
+        "      const query = ctx.db.query(\"posTerminalRecoveryCommand\");",
+        "      return await query.collect();",
+        "    },",
+        "    async patchCommand(id: string, patch: Record<string, unknown>) {",
+        "      await (ctx as MutationCtx).db.patch(id as never, patch);",
+        "    },",
+        "  };",
+        "}",
+      ].join("\n"),
+      rootDir,
+    );
+
+    const result = await runHarnessInferentialReview(rootDir, {
+      baseRef: "HEAD",
+      getChangedFiles: async () => [repositoryPath],
+      nowIso: () => "2026-04-12T05:00:00.000Z",
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.machine.status).toBe("pass");
+    expect(result.machine.findings).toEqual([]);
   });
 
   it("writes machine-readable output with additive shadow data via the default artifact path", async () => {

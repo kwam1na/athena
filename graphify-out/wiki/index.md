@@ -8,15 +8,15 @@ Graphify is the navigation layer for the repo graph. Use the entry docs below fo
 
 ## Repo Summary
 - Code files discovered: 1977
-- Graph nodes: 7111
-- Graph edges: 8103
+- Graph nodes: 7148
+- Graph edges: 8196
 - Communities: 1905
 
 ## Graph Hotspots
 - `DailyCloseView.tsx` (88 edges, Community 0) - [`packages/athena-webapp/src/components/operations/DailyCloseView.tsx`](../../packages/athena-webapp/src/components/operations/DailyCloseView.tsx)
-- `dailyClose.ts` (65 edges, Community 1) - [`packages/athena-webapp/convex/operations/dailyClose.ts`](../../packages/athena-webapp/convex/operations/dailyClose.ts)
-- `harness-inferential-review.ts` (54 edges, Community 3) - [`scripts/harness-inferential-review.ts`](../../scripts/harness-inferential-review.ts)
-- `ingestLocalEvents.ts` (54 edges, Community 2) - [`packages/athena-webapp/convex/pos/application/sync/ingestLocalEvents.ts`](../../packages/athena-webapp/convex/pos/application/sync/ingestLocalEvents.ts)
+- `harness-inferential-review.ts` (85 edges, Community 1) - [`scripts/harness-inferential-review.ts`](../../scripts/harness-inferential-review.ts)
+- `dailyClose.ts` (65 edges, Community 2) - [`packages/athena-webapp/convex/operations/dailyClose.ts`](../../packages/athena-webapp/convex/operations/dailyClose.ts)
+- `ingestLocalEvents.ts` (54 edges, Community 3) - [`packages/athena-webapp/convex/pos/application/sync/ingestLocalEvents.ts`](../../packages/athena-webapp/convex/pos/application/sync/ingestLocalEvents.ts)
 - `projectLocalEvents.ts` (53 edges, Community 4) - [`packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.ts`](../../packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.ts)
 - `terminalHealthPresentation.ts` (49 edges, Community 5) - [`packages/athena-webapp/src/components/pos/terminals/terminalHealthPresentation.ts`](../../packages/athena-webapp/src/components/pos/terminals/terminalHealthPresentation.ts)
 - `posLocalStore.ts` (48 edges, Community 6) - [`packages/athena-webapp/src/lib/pos/infrastructure/local/posLocalStore.ts`](../../packages/athena-webapp/src/lib/pos/infrastructure/local/posLocalStore.ts)

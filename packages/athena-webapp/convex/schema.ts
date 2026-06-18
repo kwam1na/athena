@@ -390,6 +390,12 @@ const schema = defineSchema({
     .index("by_terminal_receivedAt", ["terminalId", "receivedAt"]),
   posTerminalRecoveryCommand: defineTable(posTerminalRecoveryCommandSchema)
     .index("by_store_terminal_status", ["storeId", "terminalId", "status"])
+    .index("by_store_terminal_status_expiresAt", [
+      "storeId",
+      "terminalId",
+      "status",
+      "expiresAt",
+    ])
     .index("by_store_terminal_verification", [
       "storeId",
       "terminalId",

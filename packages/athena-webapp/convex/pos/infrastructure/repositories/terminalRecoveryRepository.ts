@@ -1,24 +1,52 @@
 import type { Doc, Id } from "../../../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../../../_generated/server";
-import type { TerminalRecoveryCommandRepository } from "../../application/terminalRecovery/terminalCommandService";
+import type {
+  TerminalRecoveryCommandReadRepository,
+  TerminalRecoveryCommandRepository,
+} from "../../application/terminalRecovery/terminalCommandService";
 
 type TerminalRecoveryCtx = QueryCtx | MutationCtx;
 export type TerminalRecoveryConflictRepositoryCtx = QueryCtx | MutationCtx;
 
-export function createTerminalRecoveryCommandRepository(
+export function createTerminalRecoveryCommandReadRepository(
   ctx: TerminalRecoveryCtx,
-): TerminalRecoveryCommandRepository {
+): TerminalRecoveryCommandReadRepository {
   return {
     getCommand(commandId) {
       return ctx.db.get("posTerminalRecoveryCommand", commandId);
     },
-    async insertCommand(input) {
-      const mutationCtx = ctx as MutationCtx;
-      return mutationCtx.db.insert("posTerminalRecoveryCommand", input);
-    },
     listCommandsForTerminal(args) {
       if (typeof ctx.db.query !== "function") {
         return Promise.resolve([]);
+      }
+      if (args.statuses !== undefined && args.statuses.length > 0) {
+        return Promise.all(
+          args.statuses.map((status) => {
+            if (args.expiresAfter !== undefined) {
+              const expiresAfter = args.expiresAfter;
+              return ctx.db
+                .query("posTerminalRecoveryCommand")
+                .withIndex("by_store_terminal_status_expiresAt", (q) =>
+                  q
+                    .eq("storeId", args.storeId)
+                    .eq("terminalId", args.terminalId)
+                    .eq("status", status)
+                    .gt("expiresAt", expiresAfter),
+                )
+                .take(50);
+            }
+
+            return ctx.db
+              .query("posTerminalRecoveryCommand")
+              .withIndex("by_store_terminal_status", (q) =>
+                q
+                  .eq("storeId", args.storeId)
+                  .eq("terminalId", args.terminalId)
+                  .eq("status", status),
+              )
+              .take(50);
+          }),
+        ).then((commandsByStatus) => commandsByStatus.flat());
       }
       return ctx.db
         .query("posTerminalRecoveryCommand")
@@ -29,9 +57,19 @@ export function createTerminalRecoveryCommandRepository(
         )
         .take(50);
     },
+  };
+}
+
+export function createTerminalRecoveryCommandRepository(
+  ctx: MutationCtx,
+): TerminalRecoveryCommandRepository {
+  return {
+    ...createTerminalRecoveryCommandReadRepository(ctx),
+    insertCommand(input) {
+      return ctx.db.insert("posTerminalRecoveryCommand", input);
+    },
     async patchCommand(commandId, patch) {
-      const mutationCtx = ctx as MutationCtx;
-      await mutationCtx.db.patch("posTerminalRecoveryCommand", commandId, patch);
+      await ctx.db.patch("posTerminalRecoveryCommand", commandId, patch);
     },
   };
 }

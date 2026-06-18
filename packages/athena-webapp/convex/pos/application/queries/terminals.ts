@@ -13,9 +13,9 @@ import {
   type TerminalSyncEvidence,
 } from "../../infrastructure/repositories/terminalRepository";
 import {
+  createTerminalRecoveryCommandReadRepository,
   getTerminalRecoverySourceEvent,
   listTerminalRecoveryConflictsForRepair,
-  createTerminalRecoveryCommandRepository,
 } from "../../infrastructure/repositories/terminalRecoveryRepository";
 import {
   buildTerminalCloudRepairPreview,
@@ -682,7 +682,7 @@ async function buildTerminalRecoveryCommandStatus(
   },
 ): Promise<TerminalRecoveryPreview["commandStatus"]> {
   const commands =
-    await createTerminalRecoveryCommandRepository(ctx).listCommandsForTerminal({
+    await createTerminalRecoveryCommandReadRepository(ctx).listCommandsForTerminal({
       storeId: args.storeId,
       terminalId: args.terminalId,
     });

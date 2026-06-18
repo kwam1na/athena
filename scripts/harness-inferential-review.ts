@@ -183,7 +183,7 @@ export async function getChangedFilesForInferentialReview(
     throw new Error(`Base ref check failed for ${baseRef}: ${detail}`);
   }
 
-  const [baseDiff, trackedDiff, untrackedDiff] = await Promise.all([
+  const [baseDiff, trackedDiff, stagedDiff, untrackedDiff] = await Promise.all([
     runCommand(rootDir, [
       "git",
       "diff",
@@ -195,6 +195,15 @@ export async function getChangedFilesForInferentialReview(
     runCommand(rootDir, [
       "git",
       "diff",
+      "--name-only",
+      "--diff-filter=ACDMRTUXB",
+      "HEAD",
+      "--",
+    ]),
+    runCommand(rootDir, [
+      "git",
+      "diff",
+      "--cached",
       "--name-only",
       "--diff-filter=ACDMRTUXB",
       "HEAD",
@@ -217,6 +226,12 @@ export async function getChangedFilesForInferentialReview(
     );
   }
 
+  if (stagedDiff.exitCode !== 0) {
+    throw new Error(
+      stagedDiff.stderr.trim() || "Unable to compute staged index changes.",
+    );
+  }
+
   if (untrackedDiff.exitCode !== 0) {
     throw new Error(
       untrackedDiff.stderr.trim() ||
@@ -227,6 +242,7 @@ export async function getChangedFilesForInferentialReview(
   return sortUnique([
     ...baseDiff.stdout.split("\n"),
     ...trackedDiff.stdout.split("\n"),
+    ...stagedDiff.stdout.split("\n"),
     ...untrackedDiff.stdout.split("\n"),
   ]);
 }
@@ -261,6 +277,17 @@ function isHarnessCriticalFile(filePath: string) {
 }
 
 function isConvexReturnContractSourcePath(filePath: string) {
+  const normalized = normalizeRepoPath(filePath);
+  return (
+    normalized.startsWith("packages/athena-webapp/convex/") &&
+    normalized.endsWith(".ts") &&
+    !normalized.endsWith(".test.ts") &&
+    !normalized.endsWith(".d.ts") &&
+    !normalized.startsWith("packages/athena-webapp/convex/_generated/")
+  );
+}
+
+function isConvexSourcePath(filePath: string) {
   const normalized = normalizeRepoPath(filePath);
   return (
     normalized.startsWith("packages/athena-webapp/convex/") &&
@@ -583,6 +610,11 @@ type ConvexPublicFunctionExport = {
   kind: "action" | "mutation" | "query";
 };
 
+type ConvexFunctionExport = {
+  exportName: string;
+  kind: "internalQuery" | "mutation" | "query";
+};
+
 function extractConvexPublicFunctionsWithReturns(contents: string) {
   const exports: ConvexPublicFunctionExport[] = [];
   const functionPattern =
@@ -610,6 +642,29 @@ function extractConvexPublicFunctionsWithReturns(contents: string) {
   return exports;
 }
 
+function extractConvexFunctionDefinitions(contents: string) {
+  const exports: Array<ConvexFunctionExport & { definitionBody: string }> = [];
+  const functionPattern =
+    /export\s+const\s+([A-Za-z_$][\w$]*)\s*=\s*(query|internalQuery|mutation)\s*\(\s*\{/g;
+
+  for (const match of contents.matchAll(functionPattern)) {
+    const bodyStart = match.index === undefined ? -1 : match.index;
+    if (bodyStart < 0) {
+      continue;
+    }
+
+    const bodyEnd = findMatchingDefinitionEnd(contents, bodyStart);
+    exports.push({
+      exportName: match[1],
+      kind: match[2] as ConvexFunctionExport["kind"],
+      definitionBody:
+        bodyEnd === -1 ? contents.slice(bodyStart) : contents.slice(bodyStart, bodyEnd),
+    });
+  }
+
+  return exports;
+}
+
 function findMatchingDefinitionEnd(contents: string, startIndex: number) {
   const nextExport = contents.indexOf("\nexport const ", startIndex + 1);
   if (nextExport !== -1) {
@@ -617,6 +672,31 @@ function findMatchingDefinitionEnd(contents: string, startIndex: number) {
   }
 
   return contents.length;
+}
+
+function findMatchingBraceBlockEnd(contents: string, startIndex: number) {
+  const openBrace = contents.indexOf("{", startIndex);
+  if (openBrace === -1) {
+    return -1;
+  }
+
+  let depth = 0;
+  for (let index = openBrace; index < contents.length; index += 1) {
+    const char = contents[index];
+    if (char === "{") {
+      depth += 1;
+      continue;
+    }
+    if (char !== "}") {
+      continue;
+    }
+    depth -= 1;
+    if (depth === 0) {
+      return index + 1;
+    }
+  }
+
+  return -1;
 }
 
 function isRelevantConvexContractProofPath(
@@ -787,6 +867,791 @@ async function collectConvexReturnValidatorContractFindings(
   return findings;
 }
 
+const CONVEX_MUTATION_ONLY_DB_METHODS = [
+  "insert",
+  "patch",
+  "replace",
+  "delete",
+] as const;
+
+const CONVEX_WRITE_METHOD_FRAGMENT =
+  "(?:insert|patch|replace|delete)[A-Za-z0-9_$]*";
+const CONVEX_WRITE_METHOD_ACCESS_FRAGMENT = `(?:\\.\\s*${CONVEX_WRITE_METHOD_FRAGMENT}|\\.?\\s*\\[\\s*(?:["']${CONVEX_WRITE_METHOD_FRAGMENT}["'])?\\s*\\])`;
+
+function hasMutationOnlyDbCall(contents: string) {
+  return new RegExp(
+    `\\.db\\s*\\.\\s*(?:${CONVEX_MUTATION_ONLY_DB_METHODS.join("|")})\\s*\\(`,
+  ).test(contents);
+}
+
+function hasCtxMutationOnlyDbCall(contents: string) {
+  const directCtxPattern = new RegExp(
+    `\\bctx\\s*\\.\\s*db\\s*\\.\\s*(?:${CONVEX_MUTATION_ONLY_DB_METHODS.join("|")})\\s*\\(`,
+  );
+  const castCtxPattern = new RegExp(
+    `\\(\\s*ctx\\s+as\\s+(?:unknown\\s+as\\s+)?MutationCtx\\s*\\)\\s*\\.\\s*db\\s*\\.\\s*(?:${CONVEX_MUTATION_ONLY_DB_METHODS.join("|")})\\s*\\(`,
+  );
+  const castDbPattern = new RegExp(
+    `\\(\\s*ctx\\s*\\.\\s*db\\s+as\\s+[^)]*MutationCtx[^)]*\\)\\s*\\.\\s*(?:${CONVEX_MUTATION_ONLY_DB_METHODS.join("|")})\\s*\\(`,
+  );
+
+  return (
+    directCtxPattern.test(contents) ||
+    castCtxPattern.test(contents) ||
+    castDbPattern.test(contents)
+  );
+}
+
+function extractConvexHandlerParamNames(contents: string) {
+  const paramNames = new Set<string>();
+  const handlerPattern =
+    /\bhandler\s*:\s*(?:async\s*)?\(\s*([A-Za-z_$][\w$]*)\b[^)]*\)\s*=>/g;
+
+  for (const match of contents.matchAll(handlerPattern)) {
+    paramNames.add(match[1]);
+  }
+
+  return paramNames;
+}
+
+function hasHandlerParamMutationOnlyDbCall(
+  contents: string,
+  paramNames: Set<string>,
+) {
+  for (const paramName of paramNames) {
+    const escapedParam = escapeRegExp(paramName);
+    const directPattern = new RegExp(
+      `\\b${escapedParam}\\s*\\.\\s*db\\s*\\.\\s*(?:${CONVEX_MUTATION_ONLY_DB_METHODS.join("|")})\\s*\\(`,
+    );
+    const castDbPattern = new RegExp(
+      `\\(\\s*${escapedParam}\\s*\\.\\s*db\\s+as\\s+[^)]*\\)\\s*\\.\\s*(?:${CONVEX_MUTATION_ONLY_DB_METHODS.join("|")})\\s*\\(`,
+    );
+    const castCtxPattern = new RegExp(
+      `\\(\\s*${escapedParam}\\s+as\\s+[^)]*\\)\\s*\\.\\s*db\\s*\\.\\s*(?:${CONVEX_MUTATION_ONLY_DB_METHODS.join("|")})\\s*\\(`,
+    );
+    if (
+      directPattern.test(contents) ||
+      castDbPattern.test(contents) ||
+      castCtxPattern.test(contents)
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function hasHandlerDbAliasMutationOnlyCall(
+  contents: string,
+  paramNames: Set<string>,
+) {
+  const dbAliases = collectHandlerDbAliases(contents, paramNames);
+
+  for (const alias of dbAliases) {
+    const aliasWritePattern = new RegExp(
+      `(?:\\(\\s*)?\\b${escapeRegExp(alias)}\\b(?:\\s+(?:as|satisfies)\\s+[^)]+)?\\s*\\)?\\s*(?:!|\\?)?\\s*${CONVEX_WRITE_METHOD_ACCESS_FRAGMENT}\\s*\\(`,
+    );
+    if (aliasWritePattern.test(contents)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function collectHandlerDbAliases(contents: string, paramNames: Set<string>) {
+  const aliases = new Set<string>();
+
+  for (const paramName of paramNames) {
+    const escapedParam = escapeRegExp(paramName);
+    const paramDbAccess = `${escapedParam}\\s*\\)?\\s*(?:\\.\\s*db|\\[\\s*(?:["']db["'])?\\s*\\])`;
+		const aliasPattern = new RegExp(
+			`(?:\\b(?:const|let)\\s+|,\\s*)([A-Za-z_$][\\w$]*)\\s*(?::\\s*[^=;\\n]+)?=\\s*(?:\\(?\\s*${paramDbAccess}\\s*(?:as\\s+[^;\\n]+)?\\)?|\\(?\\s*${escapedParam}\\s+as\\s+[^)]*\\)\\s*(?:\\.\\s*db|\\[\\s*(?:["']db["'])?\\s*\\]))`,
+			"g",
+		);
+
+    for (const match of contents.matchAll(aliasPattern)) {
+      aliases.add(match[1]);
+    }
+
+    const destructuredAliasPattern = new RegExp(
+      `\\b(?:const|let)\\s*\\{([^}]+)\\}\\s*(?::\\s*[^=]+)?=\\s*\\(?\\s*${escapedParam}\\b(?:\\s+as\\s+[^;\\n)]+)?\\s*\\)?`,
+      "g",
+    );
+
+    for (const match of contents.matchAll(destructuredAliasPattern)) {
+      const alias = getDestructuredDbAlias(match[1]);
+      if (!alias) {
+        continue;
+      }
+      aliases.add(alias);
+    }
+  }
+
+  return aliases;
+}
+
+function getDestructuredDbAlias(specifiers: string) {
+  const dbSpecifier = specifiers
+    .split(",")
+    .map((specifier) => specifier.trim())
+    .find((specifier) => /^db(?:\s*:|$)/.test(specifier));
+
+  if (!dbSpecifier) {
+    return null;
+  }
+
+  return dbSpecifier.match(/^db\s*:\s*([A-Za-z_$][\w$]*)$/)?.[1] ?? "db";
+}
+
+function hasDestructuredHandlerDbMutationOnlyCall(contents: string) {
+  const handlerPattern =
+    /\bhandler\s*:\s*(?:async\s*)?\(\s*\{([^}]+)\}\s*(?::[^)]*)?\)\s*=>/g;
+
+  for (const match of contents.matchAll(handlerPattern)) {
+    const alias = getDestructuredDbAlias(match[1]);
+    if (!alias) {
+      continue;
+    }
+
+	  const aliasWritePattern = new RegExp(
+	    `(?:\\(\\s*)?\\b${escapeRegExp(alias)}\\b(?:\\s+(?:as|satisfies)\\s+[^)]+)?\\s*\\)?\\s*(?:!|\\?)?\\s*${CONVEX_WRITE_METHOD_ACCESS_FRAGMENT}\\s*\\(`,
+	  );
+	  if (aliasWritePattern.test(contents)) {
+	    return true;
+	  }
+  }
+
+  return false;
+}
+
+function hasHandlerBoundDbMutationOnlyCall(
+  contents: string,
+  paramNames: Set<string>,
+) {
+  const dbAliases = collectHandlerDbAliases(contents, paramNames);
+
+  for (const dbAlias of dbAliases) {
+    const boundMethodPattern = new RegExp(
+      `(?:\\b(?:const|let)\\s+|,\\s*)([A-Za-z_$][\\w$]*)\\s*(?::\\s*[^=;\\n]+)?=\\s*(?:\\(\\s*)?\\b${escapeRegExp(dbAlias)}\\b(?:\\s+(?:as|satisfies)\\s+[^)]+)?\\s*\\)?\\s*(?:!|\\?)?\\s*${CONVEX_WRITE_METHOD_ACCESS_FRAGMENT}(?:\\s*\\.\\s*bind\\s*\\(\\s*${escapeRegExp(dbAlias)}\\s*\\))?`,
+      "g",
+    );
+    for (const match of contents.matchAll(boundMethodPattern)) {
+      const boundName = match[1];
+      const boundCallPattern = new RegExp(
+        `\\b${escapeRegExp(boundName)}\\s*\\(`,
+      );
+      if (boundCallPattern.test(contents)) {
+        return true;
+      }
+    }
+
+    const destructuredMethodPattern = new RegExp(
+      `(?:\\b(?:const|let)\\s*|,\\s*)\\{([^}]+)\\}\\s*(?::[^\\n]*?)?=\\s*(?:\\(\\s*)?\\b${escapeRegExp(dbAlias)}\\b\\s*\\)?`,
+      "g",
+    );
+    for (const match of contents.matchAll(destructuredMethodPattern)) {
+      for (const methodAlias of getDestructuredWriteMethodAliases(match[1])) {
+        const methodCallPattern = new RegExp(
+          `\\b${escapeRegExp(methodAlias)}\\s*\\(`,
+        );
+        if (methodCallPattern.test(contents)) {
+          return true;
+        }
+      }
+    }
+  }
+
+  return false;
+}
+
+function getDestructuredWriteMethodAliases(specifiers: string) {
+  const methodAliases: string[] = [];
+
+  for (const specifier of specifiers.split(",")) {
+    const match = specifier
+      .trim()
+      .match(/^(insert|patch|replace|delete)(?:\s*:\s*([A-Za-z_$][\w$]*))?$/);
+    if (match) {
+      methodAliases.push(match[2] ?? match[1]);
+    }
+  }
+
+  return methodAliases;
+}
+
+function hasMutationCtxCast(contents: string) {
+  return /\bas\s+(?:unknown\s+as\s+)?MutationCtx\b/.test(contents);
+}
+
+function hasWriteLikeMethodCall(contents: string) {
+  return new RegExp(
+    `(?:\\(\\s*)?\\b[A-Za-z_$][\\w$]*\\b(?:\\s+(?:as|satisfies)\\s+[^)]+)?\\s*\\)?\\s*(?:!|\\?)?\\s*${CONVEX_WRITE_METHOD_ACCESS_FRAGMENT}\\s*\\(`,
+  ).test(contents);
+}
+
+function hasFunctionCall(contents: string) {
+  return /\b[A-Za-z_$][\w$]*\s*\(/.test(contents);
+}
+
+function hasQueryCompatibleCtxShape(contents: string) {
+  const directUnion =
+    /\bQueryCtx\s*\|\s*MutationCtx\b/.test(contents) ||
+    /\bMutationCtx\s*\|\s*QueryCtx\b/.test(contents);
+  const pickUnion =
+    /Pick\s*<\s*(?:QueryCtx\s*\|\s*MutationCtx|MutationCtx\s*\|\s*QueryCtx)\s*,/.test(
+      contents,
+    ) ||
+    /Pick\s*<\s*QueryCtx\s*,[^>]+>\s*\|\s*Pick\s*<\s*MutationCtx\s*,/.test(
+      contents,
+    ) ||
+    /Pick\s*<\s*MutationCtx\s*,[^>]+>\s*\|\s*Pick\s*<\s*QueryCtx\s*,/.test(
+      contents,
+    );
+  const aliasUnion =
+    /type\s+[A-Za-z_$][\w$]*\s*=\s*(?:QueryCtx\s*\|\s*MutationCtx|MutationCtx\s*\|\s*QueryCtx)\b/.test(
+      contents,
+    );
+
+  return directUnion || pickUnion || aliasUnion;
+}
+
+function collectQueryCompatibleCtxAliases(contents: string) {
+  const aliases = new Set<string>(["QueryCtx"]);
+  const aliasPattern =
+    /type\s+([A-Za-z_$][\w$]*)\s*=\s*(?:QueryCtx\s*\|\s*MutationCtx|MutationCtx\s*\|\s*QueryCtx|Pick\s*<\s*(?:QueryCtx\s*\|\s*MutationCtx|MutationCtx\s*\|\s*QueryCtx)\s*,[^>]+>)/g;
+
+  for (const match of contents.matchAll(aliasPattern)) {
+    aliases.add(match[1]);
+  }
+
+  return aliases;
+}
+
+function paramsHaveQueryCompatibleCtxShape(
+  params: string,
+  queryCompatibleAliases: Set<string>,
+) {
+  if (
+    /\bQueryCtx\s*\|\s*MutationCtx\b/.test(params) ||
+    /\bMutationCtx\s*\|\s*QueryCtx\b/.test(params) ||
+    /Pick\s*<\s*(?:QueryCtx\s*\|\s*MutationCtx|MutationCtx\s*\|\s*QueryCtx)\s*,/.test(
+      params,
+    ) ||
+    /Pick\s*<\s*QueryCtx\s*,[^>]+>\s*\|\s*Pick\s*<\s*MutationCtx\s*,/.test(
+      params,
+    ) ||
+    /Pick\s*<\s*MutationCtx\s*,[^>]+>\s*\|\s*Pick\s*<\s*QueryCtx\s*,/.test(
+      params,
+    )
+  ) {
+    return true;
+  }
+
+  for (const alias of queryCompatibleAliases) {
+    if (new RegExp(`:\\s*${escapeRegExp(alias)}\\b`).test(params)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function extractFunctionBodiesWithParams(contents: string) {
+  const bodies: Array<{ body: string; name: string; params: string }> = [];
+  const functionPattern =
+    /(?:export\s+)?(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(([^)]*)\)\s*(?::\s*[^{};=]+)?\s*\{/g;
+
+  for (const match of contents.matchAll(functionPattern)) {
+    if (match.index === undefined) {
+      continue;
+    }
+
+    const bodyEnd = findMatchingBraceBlockEnd(contents, match.index);
+    bodies.push({
+      body:
+        bodyEnd === -1
+          ? contents.slice(match.index)
+          : contents.slice(match.index, bodyEnd),
+      name: match[1],
+      params: match[2],
+    });
+  }
+
+  const arrowFunctionPattern =
+    /(?:export\s+)?const\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?\(([^)]*)\)\s*(?::\s*(?:(?!=>)[\s\S])*?)?=>\s*/g;
+
+  for (const match of contents.matchAll(arrowFunctionPattern)) {
+    if (match.index === undefined) {
+      continue;
+    }
+
+    const bodyStart = match.index + match[0].length;
+    const bodyEnd = findMatchingBraceBlockEnd(contents, bodyStart);
+    bodies.push({
+      body:
+        bodyEnd === -1
+          ? contents.slice(match.index)
+          : contents.slice(match.index, bodyEnd),
+      name: match[1],
+      params: match[2],
+    });
+  }
+
+  const functionExpressionPattern =
+    /(?:export\s+)?const\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s+)?function\s*\(([^)]*)\)\s*(?::\s*[^{};=]+)?\s*\{/g;
+
+  for (const match of contents.matchAll(functionExpressionPattern)) {
+    if (match.index === undefined) {
+      continue;
+    }
+
+    const bodyEnd = findMatchingBraceBlockEnd(contents, match.index);
+    bodies.push({
+      body:
+        bodyEnd === -1
+          ? contents.slice(match.index)
+          : contents.slice(match.index, bodyEnd),
+      name: match[1],
+      params: match[2],
+    });
+  }
+
+  return bodies;
+}
+
+function hasQueryCompatibleFunctionBodyWithWrite(contents: string) {
+  const queryCompatibleAliases = collectQueryCompatibleCtxAliases(contents);
+  return extractFunctionBodiesWithParams(contents).some(
+    ({ body, params }) =>
+      paramsHaveQueryCompatibleCtxShape(params, queryCompatibleAliases) &&
+      (hasMutationOnlyDbCall(body) ||
+        hasMutationCtxCast(body) ||
+        hasWriteRepositorySurface(body) ||
+        hasWriteLikeMethodCall(body)),
+  );
+}
+
+function collectMutationCtxWriteHelperNames(contents: string) {
+  return new Set(
+    extractFunctionBodiesWithParams(contents)
+      .filter(
+        ({ body, params }) =>
+          /\bMutationCtx\b/.test(params) &&
+          (hasMutationOnlyDbCall(body) ||
+            hasMutationCtxCast(body) ||
+            hasWriteRepositorySurface(body) ||
+            hasWriteLikeMethodCall(body)),
+      )
+      .map(({ name }) => name),
+  );
+}
+
+function hasQueryHandlerPassingCtxToWriteHelper(
+  contents: string,
+  paramNames: Set<string>,
+  helperNames: Set<string>,
+) {
+  const candidateHelperNames = collectQueryCallableWriteHelperNames(
+    contents,
+    helperNames,
+  );
+
+  for (const helperName of candidateHelperNames) {
+    const escapedHelper = escapeRegExp(helperName);
+    for (const paramName of paramNames) {
+      const escapedParam = escapeRegExp(paramName);
+      const helperCallPattern = new RegExp(
+        `\\b${escapedHelper}\\s*\\([^)]*\\b${escapedParam}\\b`,
+      );
+      if (helperCallPattern.test(contents)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+function collectQueryCallableWriteHelperNames(
+  contents: string,
+  helperNames: Set<string>,
+) {
+  const localWriteHelperNames = collectMutationCtxWriteHelperNames(contents);
+  const localFunctionNames = new Set(
+    extractFunctionBodiesWithParams(contents).map(({ name }) => name),
+  );
+  const candidateHelperNames = new Set(helperNames);
+
+  for (const aliasName of collectImportedHelperAliasNames(contents, helperNames)) {
+    candidateHelperNames.add(aliasName);
+  }
+
+  for (const localFunctionName of localFunctionNames) {
+    if (!localWriteHelperNames.has(localFunctionName)) {
+      candidateHelperNames.delete(localFunctionName);
+    }
+  }
+
+  return candidateHelperNames;
+}
+
+function collectImportedHelperAliasNames(contents: string, helperNames: Set<string>) {
+  const aliasNames = new Set<string>();
+  const importPattern = /\bimport\s*\{([^}]+)\}\s*from\b/g;
+
+  for (const match of contents.matchAll(importPattern)) {
+    for (const rawSpecifier of match[1].split(",")) {
+      const specifier = rawSpecifier.trim();
+      const specifierMatch = specifier.match(
+        /^([A-Za-z_$][\w$]*)(?:\s+as\s+([A-Za-z_$][\w$]*))?$/,
+      );
+      if (!specifierMatch) {
+        continue;
+      }
+
+      const importedName = specifierMatch[1];
+      const localName = specifierMatch[2] ?? importedName;
+      if (helperNames.has(importedName)) {
+        aliasNames.add(localName);
+      }
+    }
+  }
+
+  return aliasNames;
+}
+
+function hasWriteRepositorySurface(contents: string) {
+  return new RegExp(
+    `\\b(?:repository|repo|service|ctx)\\s*\\.\\s*${CONVEX_WRITE_METHOD_FRAGMENT}\\s*\\(`,
+  ).test(contents);
+}
+
+function hasWriteCapableFactorySurface(
+  contents: string,
+  allowedArgumentNames: Set<string> = new Set(["ctx"]),
+) {
+  const factoryPattern =
+    /\b(create[A-Za-z0-9_$]*(?:Repository|Service|Gateway))\s*\(\s*([A-Za-z_$][\w$]*)\b/g;
+
+  for (const match of contents.matchAll(factoryPattern)) {
+    const factoryName = match[1];
+    const argumentName = match[2];
+    if (
+      allowedArgumentNames.has(argumentName) &&
+      !/(?:Read|ReadOnly)(?:Repository|Service|Gateway)$/.test(factoryName)
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function extractQueryFacingFunctionBodies(contents: string) {
+  const bodies: string[] = [];
+  const functionPattern =
+    /(?:export\s+)?(?:async\s+)?function\s+((?:list|get|find|search|read|load)[A-Za-z0-9_$]*)\s*\([^)]*\)\s*\{/g;
+
+  for (const match of contents.matchAll(functionPattern)) {
+    if (match.index === undefined) {
+      continue;
+    }
+
+    const bodyEnd = findMatchingBraceBlockEnd(contents, match.index);
+    bodies.push(
+      bodyEnd === -1 ? contents.slice(match.index) : contents.slice(match.index, bodyEnd),
+    );
+  }
+
+  const arrowFunctionPattern =
+    /(?:export\s+)?const\s+(?:list|get|find|search|read|load)[A-Za-z0-9_$]*\s*=\s*(?:async\s*)?\([^)]*\)\s*(?::\s*(?:(?!=>)[\s\S])*?)?=>\s*/g;
+
+  for (const match of contents.matchAll(arrowFunctionPattern)) {
+    if (match.index === undefined) {
+      continue;
+    }
+
+    const bodyStart = match.index + match[0].length;
+    const bodyEnd = findMatchingBraceBlockEnd(contents, bodyStart);
+    bodies.push(
+      bodyEnd === -1 ? contents.slice(match.index) : contents.slice(match.index, bodyEnd),
+    );
+  }
+
+  const functionExpressionPattern =
+    /(?:export\s+)?const\s+(?:list|get|find|search|read|load)[A-Za-z0-9_$]*\s*=\s*(?:async\s+)?function\s*\([^)]*\)\s*\{/g;
+
+  for (const match of contents.matchAll(functionExpressionPattern)) {
+    if (match.index === undefined) {
+      continue;
+    }
+
+    const bodyEnd = findMatchingBraceBlockEnd(contents, match.index);
+    bodies.push(
+      bodyEnd === -1 ? contents.slice(match.index) : contents.slice(match.index, bodyEnd),
+    );
+  }
+
+  return bodies;
+}
+
+async function readAddedLinesOrNull(
+  rootDir: string,
+  baseRef: string,
+  filePath: string,
+) {
+  const diffCommands = [
+    ["git", "diff", "--unified=0", `${baseRef}...HEAD`, "--", filePath],
+    ["git", "diff", "--unified=0", "HEAD", "--", filePath],
+    ["git", "diff", "--cached", "--unified=0", "HEAD", "--", filePath],
+  ];
+  const addedLines: string[] = [];
+  let sawUsableDiff = false;
+
+  for (const command of diffCommands) {
+    const diff = await runCommand(rootDir, command);
+    if (diff.exitCode !== 0) {
+      continue;
+    }
+
+    sawUsableDiff = true;
+    for (const line of diff.stdout.split(/\r?\n/)) {
+      if (line.startsWith("+++") || !line.startsWith("+")) {
+        continue;
+      }
+
+      addedLines.push(line.slice(1));
+    }
+  }
+
+  if (!sawUsableDiff) {
+    return null;
+  }
+
+  if (addedLines.length === 0) {
+    const lsFiles = await runCommand(rootDir, [
+      "git",
+      "ls-files",
+      "--error-unmatch",
+      "--",
+      filePath,
+    ]);
+    if (lsFiles.exitCode !== 0) {
+      return null;
+    }
+  }
+
+  return addedLines.join("\n");
+}
+
+async function listConvexSourceFiles(rootDir: string, changedFileSet: Set<string>) {
+  const trackedFiles = await runCommand(rootDir, ["git", "ls-files"]);
+  if (trackedFiles.exitCode !== 0) {
+    return [...changedFileSet].filter(isConvexSourcePath);
+  }
+
+  return sortUnique([
+    ...trackedFiles.stdout.split(/\r?\n/),
+    ...changedFileSet,
+  ]).filter(isConvexSourcePath);
+}
+
+async function collectConvexQueryWriteBoundaryFindings(
+  rootDir: string,
+  baseRef: string,
+  changedFiles: string[],
+) {
+  const changedFileSet = new Set(sortUnique(changedFiles));
+  const findings: InferentialFinding[] = [];
+  const allMutationCtxWriteHelperNames = new Set<string>();
+  const changedMutationCtxWriteHelperNames = new Set<string>();
+  const convexSourceFiles = await listConvexSourceFiles(rootDir, changedFileSet);
+
+  for (const convexSourceFile of convexSourceFiles) {
+    const contents = await readUtf8OrNull(path.join(rootDir, convexSourceFile));
+    if (!contents) {
+      continue;
+    }
+
+    for (const helperName of collectMutationCtxWriteHelperNames(
+      stripTypeScriptNonCode(contents),
+    )) {
+      allMutationCtxWriteHelperNames.add(helperName);
+      if (changedFileSet.has(convexSourceFile)) {
+        changedMutationCtxWriteHelperNames.add(helperName);
+      }
+    }
+  }
+
+  for (const changedFile of convexSourceFiles) {
+    const isChangedFile = changedFileSet.has(changedFile);
+    const contents = await readUtf8OrNull(path.join(rootDir, changedFile));
+    if (!contents) {
+      continue;
+    }
+
+    const executableContents = stripTypeScriptNonCode(contents);
+    const addedLines = isChangedFile
+      ? await readAddedLinesOrNull(rootDir, baseRef, changedFile)
+      : null;
+    const executableAddedLines =
+      addedLines === null ? null : stripTypeScriptNonCode(addedLines);
+    const changedSurface = isChangedFile
+      ? executableAddedLines ?? executableContents
+      : "";
+    const queryCallerSurface = isChangedFile
+      ? changedSurface
+      : executableContents;
+    const changedHandlerParamNames = new Set([
+      ...extractConvexHandlerParamNames(changedSurface),
+      ...extractConvexHandlerParamNames(executableContents),
+    ]);
+    const queryCallerHandlerParamNames =
+      extractConvexHandlerParamNames(queryCallerSurface);
+    const helperNamesForQueryCaller = isChangedFile
+      ? allMutationCtxWriteHelperNames
+      : changedMutationCtxWriteHelperNames;
+    const queryCallableWriteHelperNames = collectQueryCallableWriteHelperNames(
+      executableContents,
+      helperNamesForQueryCaller,
+    );
+    const changedQueryWriteSignal =
+      hasCtxMutationOnlyDbCall(changedSurface) ||
+      hasHandlerParamMutationOnlyDbCall(
+        changedSurface,
+        changedHandlerParamNames,
+      ) ||
+      hasHandlerDbAliasMutationOnlyCall(changedSurface, changedHandlerParamNames) ||
+      (hasWriteLikeMethodCall(changedSurface) &&
+        hasHandlerDbAliasMutationOnlyCall(
+          executableContents,
+          changedHandlerParamNames,
+        )) ||
+      (hasFunctionCall(changedSurface) &&
+        hasHandlerBoundDbMutationOnlyCall(
+          executableContents,
+          changedHandlerParamNames,
+        )) ||
+      (hasWriteLikeMethodCall(changedSurface) &&
+        hasDestructuredHandlerDbMutationOnlyCall(executableContents)) ||
+      hasQueryHandlerPassingCtxToWriteHelper(
+        changedSurface,
+        changedHandlerParamNames,
+        queryCallableWriteHelperNames,
+      ) ||
+      (hasMutationCtxCast(changedSurface) &&
+        hasWriteLikeMethodCall(changedSurface)) ||
+      hasWriteCapableFactorySurface(
+        changedSurface,
+        new Set(["ctx", ...changedHandlerParamNames]),
+      ) ||
+      hasQueryHandlerPassingCtxToWriteHelper(
+        queryCallerSurface,
+        queryCallerHandlerParamNames,
+        queryCallableWriteHelperNames,
+      );
+
+    const queryFunctionsWithWrites = changedQueryWriteSignal
+      ? extractConvexFunctionDefinitions(executableContents).filter(
+          (entry) => {
+            if (entry.kind !== "query" && entry.kind !== "internalQuery") {
+              return false;
+            }
+            const handlerParamNames = extractConvexHandlerParamNames(
+              entry.definitionBody,
+            );
+            return (
+              hasCtxMutationOnlyDbCall(entry.definitionBody) ||
+              hasHandlerParamMutationOnlyDbCall(
+                entry.definitionBody,
+                handlerParamNames,
+              ) ||
+              hasHandlerDbAliasMutationOnlyCall(
+                entry.definitionBody,
+                handlerParamNames,
+              ) ||
+              hasHandlerBoundDbMutationOnlyCall(
+                entry.definitionBody,
+                handlerParamNames,
+              ) ||
+              hasDestructuredHandlerDbMutationOnlyCall(entry.definitionBody) ||
+              hasQueryHandlerPassingCtxToWriteHelper(
+                entry.definitionBody,
+                handlerParamNames,
+                queryCallableWriteHelperNames,
+              ) ||
+              (hasMutationCtxCast(entry.definitionBody) &&
+                hasWriteLikeMethodCall(entry.definitionBody)) ||
+              hasWriteCapableFactorySurface(
+                entry.definitionBody,
+                new Set(["ctx", ...handlerParamNames]),
+              )
+            );
+          },
+        )
+      : [];
+
+    if (queryFunctionsWithWrites.length > 0) {
+      findings.push(
+        buildFinding(
+          `convex-query-mutation-db-write-${slugifyForFindingId(changedFile)}`,
+          "high",
+          "Convex query reaches mutation-only db API",
+          changedFile,
+          `This changed Convex module exports ${queryFunctionsWithWrites
+            .map((entry) => `${entry.kind} ${entry.exportName}`)
+            .join(", ")} that directly calls mutation-only ctx.db write APIs from query code.`,
+          "Move persistence behind a Convex mutation/internalMutation. Query handlers must stay read-only and use read repositories; write-capable factories should require `MutationCtx`.",
+        ),
+      );
+      continue;
+    }
+
+    const hasChangedWriteSignal =
+      hasMutationOnlyDbCall(changedSurface) ||
+      hasMutationCtxCast(changedSurface) ||
+      hasWriteRepositorySurface(changedSurface) ||
+      hasWriteCapableFactorySurface(changedSurface) ||
+      hasQueryCompatibleCtxShape(changedSurface);
+    if (!hasChangedWriteSignal) {
+      continue;
+    }
+
+    if (hasQueryCompatibleFunctionBodyWithWrite(executableContents)) {
+      findings.push(
+        buildFinding(
+          `convex-query-compatible-write-surface-${slugifyForFindingId(changedFile)}`,
+          "high",
+          "Query-compatible Convex helper exposes mutation write surface",
+          changedFile,
+          "This changed Convex helper accepts a query-compatible context shape while exposing or calling mutation-only db write APIs.",
+          "Split read and write repositories/services. Read factories may accept `QueryCtx | MutationCtx`, but write methods and factories must require `MutationCtx`.",
+        ),
+      );
+      continue;
+    }
+
+    const queryFacingWriteBody = extractQueryFacingFunctionBodies(
+      executableContents,
+    ).find(hasWriteRepositorySurface);
+    if (queryFacingWriteBody && hasWriteRepositorySurface(changedSurface)) {
+      findings.push(
+        buildFinding(
+          `convex-query-facing-write-repository-${slugifyForFindingId(changedFile)}`,
+          "high",
+          "Query-facing Convex helper calls write-capable repository method",
+          changedFile,
+          "This changed query-facing service or repository function calls a write-like repository/service method from a read-shaped surface.",
+          "Split the query path onto a read-only repository/service interface. Keep insert/patch/replace/delete methods behind mutation-only flows and `MutationCtx`-only factories.",
+        ),
+      );
+    }
+  }
+
+  return findings;
+}
+
 async function runDeterministicSemanticAnalysis(
   input: InferentialProviderInput,
 ): Promise<InferentialDeterministicAnalysisResult> {
@@ -801,6 +1666,11 @@ async function runDeterministicSemanticAnalysis(
     )),
     ...(await collectConvexReturnValidatorContractFindings(
       input.rootDir,
+      input.changedFiles,
+    )),
+    ...(await collectConvexQueryWriteBoundaryFindings(
+      input.rootDir,
+      input.baseRef,
       input.changedFiles,
     )),
   ];

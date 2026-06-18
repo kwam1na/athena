@@ -31,7 +31,10 @@ import {
   listClaimableTerminalRecoveryCommands,
 } from "../application/terminalRecovery/terminalCommandService";
 import { runAcceptedRuntimeStatusSideEffects } from "../application/terminalRuntime/postRuntimeStatusSideEffects";
-import { createTerminalRecoveryCommandRepository } from "../infrastructure/repositories/terminalRecoveryRepository";
+import {
+  createTerminalRecoveryCommandReadRepository,
+  createTerminalRecoveryCommandRepository,
+} from "../infrastructure/repositories/terminalRecoveryRepository";
 import { getLatestRuntimeStatusForTerminal } from "../infrastructure/repositories/terminalRepository";
 import {
   disconnectRemoteAssistRuntimeSession,
@@ -1028,7 +1031,7 @@ export const listTerminalRecoveryCommands = query({
     }
     const [commands, runtimeStatus] = await Promise.all([
       listClaimableTerminalRecoveryCommands(
-        createTerminalRecoveryCommandRepository(ctx),
+        createTerminalRecoveryCommandReadRepository(ctx),
         {
           now: Date.now(),
           storeId: args.storeId,

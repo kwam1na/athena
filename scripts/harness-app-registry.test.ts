@@ -190,6 +190,12 @@ describe("HARNESS_APP_REGISTRY", () => {
     expect(backendScenario?.note).toContain(
       "loose `exportReturns()` string checks do not prove the production return contract"
     );
+    expect(backendScenario?.note).toContain(
+      "Convex query handlers must not reach mutation-only DB APIs directly or through write-capable repositories/services"
+    );
+    expect(backendScenario?.note).toContain(
+      "split read factories from `MutationCtx`-only write factories"
+    );
   });
 
   it("covers changed Athena frontend source files with changed-file lint", () => {
