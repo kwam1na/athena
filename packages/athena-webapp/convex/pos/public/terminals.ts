@@ -354,6 +354,7 @@ const terminalHealthSummaryReturnValidator = v.object({
       }),
       commandStatus: v.union(
         v.object({
+          appUpdateCommandExecutionId: v.optional(v.string()),
           commandId: v.optional(v.id("posTerminalRecoveryCommand")),
           commandType: posTerminalRecoveryCommandTypeValidator,
           label: v.string(),

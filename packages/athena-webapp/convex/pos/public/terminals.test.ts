@@ -1109,6 +1109,7 @@ describe("POS terminal public mutations", () => {
       "latestReviewEvent",
       "latestReviewEventsByStatus",
       "appUpdate",
+      "appUpdateCommandExecutionId",
       "commandCorrelated",
       "evidenceFresh",
       "pendingBuildId",
