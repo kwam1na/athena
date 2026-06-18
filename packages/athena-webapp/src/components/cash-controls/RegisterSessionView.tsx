@@ -67,6 +67,12 @@ import {
 import { Textarea } from "../ui/textarea";
 import { WorkflowTraceRouteLink } from "../traces/WorkflowTraceRouteLink";
 import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "../ui/accordion";
+import {
   buildPosSyncStatusPresentation,
   formatPosReconciliationType,
   isRegisterCloseoutReviewItem,
@@ -315,7 +321,9 @@ type CloseoutStaffAuthIntent =
   | {
       kind: "sync_review";
       decision: "approved" | "rejected";
+      approveLabel: string;
       registerSessionId: string;
+      rejectLabel: string;
       reviewConflictIds?: string[];
     };
 
@@ -404,6 +412,30 @@ function formatPaymentMethod(method?: string | null) {
   return capitalizeWords(method.replaceAll("_", " "));
 }
 
+function formatPaymentMethods(methods?: string[] | null) {
+  const labels = Array.from(
+    new Set(
+      (methods ?? [])
+        .map((method) => formatPaymentMethod(method))
+        .filter((method) => method !== "Unknown"),
+    ),
+  );
+
+  return formatCompactTextList(labels) ?? "Unknown";
+}
+
+function getPrimaryPaymentMethod(methods?: string[] | null) {
+  const normalizedMethods = Array.from(
+    new Set((methods ?? []).map((method) => method?.trim()).filter(Boolean)),
+  );
+
+  if (normalizedMethods.length === 0) {
+    return null;
+  }
+
+  return normalizedMethods[0] ?? null;
+}
+
 function formatRegisterName(registerNumber?: string | null) {
   const trimmedRegisterNumber = registerNumber?.trim();
   return trimmedRegisterNumber ? trimmedRegisterNumber : "Unnamed register";
@@ -458,6 +490,53 @@ function getPaymentMethodIcon({
   }
 }
 
+function getSyncReviewActionCopy({
+  hasCloseoutReview,
+  hasOnlyRejectedReviewItems,
+  hasSaleReview,
+}: {
+  hasCloseoutReview: boolean;
+  hasOnlyRejectedReviewItems: boolean;
+  hasSaleReview: boolean;
+}) {
+  if (hasOnlyRejectedReviewItems) {
+    return {
+      approveAuthDescription:
+        "Authenticate to override and sync rejected local activity",
+      approveLabel: "Override and sync events",
+      rejectAuthDescription: "Authenticate to reject reviewed synced activity",
+      rejectLabel: "Reject reviewed activity",
+    };
+  }
+
+  if (hasCloseoutReview) {
+    return {
+      approveAuthDescription: "Authenticate to apply the synced closeout",
+      approveLabel: "Apply synced closeout",
+      rejectAuthDescription: "Authenticate to reject the synced closeout",
+      rejectLabel: "Reject synced closeout",
+    };
+  }
+
+  if (hasSaleReview) {
+    return {
+      approveAuthDescription:
+        "Authenticate to apply reviewed sale activity to this drawer",
+      approveLabel: "Apply reviewed sale activity",
+      rejectAuthDescription:
+        "Authenticate to reject reviewed sale activity from this review",
+      rejectLabel: "Reject reviewed sale activity",
+    };
+  }
+
+  return {
+    approveAuthDescription: "Authenticate to apply reviewed synced activity",
+    approveLabel: "Apply reviewed activity",
+    rejectAuthDescription: "Authenticate to reject reviewed synced activity",
+    rejectLabel: "Reject reviewed activity",
+  };
+}
+
 function getSyncBadgeClass(tone: PosSyncStatusPresentation["tone"]) {
   switch (tone) {
     case "success":
@@ -505,20 +584,27 @@ function formatReviewQueueSummary(items: PosReconciliationItem[]) {
     .filter((value): value is string => Boolean(value));
   const sequenceList = formatCompactTextList(sequences);
 
-  return sequenceList ? `Local queue ${sequenceList}.` : null;
+  return sequenceList ? sequenceList : null;
 }
 
-function formatReviewReportedSummary(items: PosReconciliationItem[]) {
-  const reportedTimes = Array.from(
-    new Set(
-      items
-        .map((item) => formatReviewItemTimestamp(item.createdAt))
-        .filter((value): value is string => Boolean(value)),
-    ),
-  );
-  const reportedList = formatCompactTextList(reportedTimes);
+function getReviewReportedEntries(items: PosReconciliationItem[]) {
+  const reportedEntries = items
+    .map((item) =>
+      typeof item.createdAt === "number"
+        ? {
+            timestamp: item.createdAt,
+            value: formatReviewItemTimestamp(item.createdAt),
+          }
+        : null,
+    )
+    .filter((entry): entry is { timestamp: number; value: string } =>
+      Boolean(entry?.value),
+    )
+    .sort((left, right) => left.timestamp - right.timestamp);
 
-  return reportedList ? `Reported ${reportedList}.` : null;
+  return Array.from(
+    new Map(reportedEntries.map((entry) => [entry.timestamp, entry])).values(),
+  );
 }
 
 function formatReviewTypeSummary(items: PosReconciliationItem[]) {
@@ -531,7 +617,7 @@ function formatReviewTypeSummary(items: PosReconciliationItem[]) {
   );
   const typeList = formatCompactTextList(reviewTypes);
 
-  return typeList ? `Types: ${typeList}.` : null;
+  return typeList ? `${typeList}.` : null;
 }
 
 function formatReviewReasonSummary(items: PosReconciliationItem[]) {
@@ -551,7 +637,398 @@ function formatReviewReasonSummary(items: PosReconciliationItem[]) {
     .map((reason) => reason.replace(/[.!?]+$/, ""))
     .join("; ");
 
-  return `Reasons: ${reasonList}.`;
+  return `${reasonList}.`;
+}
+
+function SyncReviewDetailGrid({
+  details,
+  title = "Review details",
+}: {
+  details: Array<{ label: string; value?: string | null }>;
+  title?: string;
+}) {
+  const visibleDetails = details.filter((detail) => detail.value?.trim());
+
+  if (visibleDetails.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="space-y-layout-xs">
+      <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+        {title}
+      </p>
+      <dl className="grid gap-layout-xs sm:grid-cols-2">
+        {visibleDetails.map((detail) => (
+          <div
+            className="rounded-md border border-border/70 bg-background/80 px-layout-sm py-layout-xs"
+            key={detail.label}
+          >
+            <dt className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+              {detail.label}
+            </dt>
+            <dd className="mt-1 text-sm leading-5 text-foreground">
+              {detail.value}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  );
+}
+
+function SyncReviewTimeline({
+  items,
+  uploadOrder,
+}: {
+  items: PosReconciliationItem[];
+  uploadOrder?: string | null;
+}) {
+  const reportedEntries = getReviewReportedEntries(items);
+  const firstReported = reportedEntries[0]?.value ?? null;
+  const latestReported = reportedEntries.at(-1)?.value ?? null;
+  const hasMultipleReports = reportedEntries.length > 1;
+
+  if (!firstReported && !uploadOrder?.trim()) {
+    return null;
+  }
+
+  return (
+    <div className="space-y-layout-xs">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-layout-sm gap-y-1">
+        <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+          Sync timeline
+        </p>
+        {reportedEntries.length > 0 ? (
+          <p className="text-xs leading-5 text-muted-foreground">
+            {reportedEntries.length === 1
+              ? "1 report"
+              : `${reportedEntries.length} reports`}
+          </p>
+        ) : null}
+      </div>
+      <dl className="grid gap-layout-xs rounded-md border border-border/70 bg-background/80 px-layout-sm py-layout-xs text-xs">
+        {firstReported ? (
+          <div className="flex items-start justify-between gap-layout-sm">
+            <dt className="text-muted-foreground">
+              {hasMultipleReports ? "First reported" : "Reported"}
+            </dt>
+            <dd className="text-right leading-5 text-foreground">
+              {firstReported}
+            </dd>
+          </div>
+        ) : null}
+        {hasMultipleReports && latestReported ? (
+          <div className="flex items-start justify-between gap-layout-sm">
+            <dt className="text-muted-foreground">Latest report</dt>
+            <dd className="text-right leading-5 text-foreground">
+              {latestReported}
+            </dd>
+          </div>
+        ) : null}
+        {uploadOrder?.trim() ? (
+          <div className="flex items-start justify-between gap-layout-sm">
+            <dt className="text-muted-foreground">Upload order</dt>
+            <dd className="text-right leading-5 text-foreground">
+              {uploadOrder}
+            </dd>
+          </div>
+        ) : null}
+      </dl>
+    </div>
+  );
+}
+
+type SyncReviewSaleSummary = NonNullable<PosReconciliationItem["sale"]> & {
+  reasons: string[];
+  sequences: number[];
+};
+
+function getSaleReviewKey(item: PosReconciliationItem) {
+  const sale = item.sale;
+
+  return (
+    sale?.localTransactionId?.trim() ||
+    sale?.receiptNumber?.trim() ||
+    sale?.localReceiptNumber?.trim() ||
+    item.localEventId?.trim() ||
+    item.id
+  );
+}
+
+function getSyncReviewSaleSummaries(items: PosReconciliationItem[]) {
+  const salesByKey = new Map<string, SyncReviewSaleSummary>();
+
+  for (const item of items) {
+    if (!item.sale) continue;
+
+    const key = getSaleReviewKey(item);
+    if (!key) continue;
+
+    const existing = salesByKey.get(key);
+    const summary = item.summary?.trim();
+    const nextSale: SyncReviewSaleSummary = existing ?? {
+      ...item.sale,
+      reasons: [],
+      sequences: [],
+    };
+
+    if (summary && !nextSale.reasons.includes(summary)) {
+      nextSale.reasons.push(summary);
+    }
+
+    if (
+      typeof item.sequence === "number" &&
+      !nextSale.sequences.includes(item.sequence)
+    ) {
+      nextSale.sequences.push(item.sequence);
+    }
+
+    salesByKey.set(key, {
+      ...nextSale,
+      sequences: nextSale.sequences.sort((left, right) => left - right),
+    });
+  }
+
+  return Array.from(salesByKey.values());
+}
+
+function formatSaleItemCount(
+  sale: Pick<SyncReviewSaleSummary, "itemCount" | "items">,
+) {
+  const itemCount =
+    typeof sale.itemCount === "number" && sale.itemCount > 0
+      ? sale.itemCount
+      : (sale.items?.length ?? 0);
+
+  if (itemCount === 0) {
+    return "Items not recorded";
+  }
+
+  return itemCount === 1 ? "1 item" : `${itemCount} items`;
+}
+
+function formatSaleItemName(name: string) {
+  return capitalizeWords(name.trim());
+}
+
+function getSaleItemsTotal(sale: Pick<SyncReviewSaleSummary, "items">) {
+  const itemsTotal = sale.items?.reduce(
+    (sum, item) => sum + (typeof item.total === "number" ? item.total : 0),
+    0,
+  );
+
+  return itemsTotal && itemsTotal > 0 ? itemsTotal : null;
+}
+
+function SalesUnderReviewList({
+  currency,
+  sales,
+}: {
+  currency: string;
+  sales: SyncReviewSaleSummary[];
+}) {
+  if (sales.length === 0) {
+    return null;
+  }
+
+  const totalSalesAmount = sales.reduce(
+    (sum, sale) =>
+      sum + (typeof sale.total === "number" ? Math.max(0, sale.total) : 0),
+    0,
+  );
+  const totalCashImpact = sales.reduce(
+    (sum, sale) =>
+      sum +
+      (typeof sale.cashAmount === "number" ? Math.max(0, sale.cashAmount) : 0),
+    0,
+  );
+
+  return (
+    <div className="space-y-layout-xs md:col-span-2">
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+            Sales under review
+          </p>
+          <p className="text-xs leading-5 text-muted-foreground">
+            These synced sale details will affect this closed drawer if applied.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-x-layout-sm gap-y-1 text-xs text-muted-foreground">
+          <span>{sales.length === 1 ? "1 sale" : `${sales.length} sales`}</span>
+          {totalSalesAmount > 0 ? (
+            <span>Total {formatCurrency(currency, totalSalesAmount)}</span>
+          ) : null}
+          {totalCashImpact > 0 ? (
+            <span>Cash impact {formatCurrency(currency, totalCashImpact)}</span>
+          ) : null}
+        </div>
+      </div>
+      <Accordion className="grid gap-layout-xs" collapsible type="single">
+        {sales.map((sale, index) => {
+          const receiptNumber =
+            sale.receiptNumber?.trim() ||
+            sale.localReceiptNumber?.trim() ||
+            sale.localTransactionId?.trim() ||
+            `Sale ${index + 1}`;
+          const completedAt =
+            typeof sale.occurredAt === "number"
+              ? formatTimestamp(sale.occurredAt)
+              : null;
+          const sequenceList = formatCompactTextList(
+            sale.sequences.map((sequence) => `#${sequence}`),
+          );
+          const primaryPaymentMethod = getPrimaryPaymentMethod(
+            sale.paymentMethods,
+          );
+          const hasMultiplePaymentMethods =
+            (sale.paymentMethods?.length ?? 0) > 1;
+          const PaymentIcon = getPaymentMethodIcon({
+            hasMultiplePaymentMethods,
+            paymentMethod: primaryPaymentMethod,
+          });
+          const itemsTotal = getSaleItemsTotal(sale);
+
+          return (
+            <AccordionItem
+              className="overflow-hidden rounded-md border border-border/70 bg-background/85"
+              key={`${receiptNumber}-${index}`}
+              value={`sale-${index}`}
+            >
+              <AccordionTrigger className="gap-layout-sm px-layout-sm py-layout-sm text-left hover:no-underline">
+                <div className="grid min-w-0 flex-1 gap-layout-sm sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                  <div className="min-w-0 space-y-1">
+                    <p className="truncate text-sm font-medium text-foreground">
+                      Receipt #{receiptNumber}
+                    </p>
+                    <p className="truncate text-xs leading-5 text-muted-foreground">
+                      {[
+                        sale.staffName ? `Cashier ${sale.staffName}` : null,
+                        completedAt,
+                        sequenceList ? `Upload ${sequenceList}` : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-x-layout-sm gap-y-1 text-xs leading-5 text-muted-foreground sm:justify-end">
+                    <span className="inline-flex items-center gap-1.5 text-foreground">
+                      <PaymentIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                      {hasMultiplePaymentMethods
+                        ? "Multiple"
+                        : formatPaymentMethod(primaryPaymentMethod)}
+                    </span>
+                    <span className="font-numeric tabular-nums text-foreground">
+                      {formatCurrency(currency, sale.total)}
+                    </span>
+                    <span>{formatSaleItemCount(sale)}</span>
+                  </div>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent className="border-t border-border/70 px-layout-sm pb-layout-sm pt-layout-sm">
+                <div className="grid gap-layout-sm lg:grid-cols-[minmax(0,1fr)_minmax(14rem,0.7fr)]">
+                  <div className="space-y-layout-xs">
+                    <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                      Items
+                    </p>
+                    {sale.items?.length ? (
+                      <div className="divide-y divide-border/70 rounded-md border border-border/70 bg-muted/10">
+                        {sale.items.map((item, itemIndex) => (
+                          <div
+                            className="grid gap-1 px-layout-sm py-layout-xs text-xs sm:grid-cols-[minmax(0,1fr)_auto]"
+                            key={`${item.name}-${itemIndex}`}
+                          >
+                            <div className="min-w-0">
+                              <p className="truncate font-medium text-foreground">
+                                {formatSaleItemName(item.name)}
+                              </p>
+                              {item.sku ? (
+                                <p className="text-muted-foreground">
+                                  {item.sku}
+                                </p>
+                              ) : null}
+                            </div>
+                            <div className="text-left sm:text-right">
+                              {typeof item.quantity === "number" ? (
+                                <p className="text-muted-foreground">
+                                  Qty {item.quantity}
+                                </p>
+                              ) : null}
+                              {typeof item.total === "number" ? (
+                                <p className="font-numeric tabular-nums text-foreground">
+                                  {formatCurrency(currency, item.total)}
+                                </p>
+                              ) : null}
+                            </div>
+                          </div>
+                        ))}
+                        {itemsTotal ? (
+                          <div className="flex items-center justify-between gap-layout-sm px-layout-sm py-layout-xs text-xs">
+                            <span className="text-muted-foreground">
+                              Items total
+                            </span>
+                            <span className="font-numeric tabular-nums text-foreground">
+                              {formatCurrency(currency, itemsTotal)}
+                            </span>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <p className="text-xs leading-5 text-muted-foreground">
+                        Item details were not included with this synced sale.
+                      </p>
+                    )}
+                  </div>
+                  <div className="space-y-layout-xs">
+                    <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                      Sale impact
+                    </p>
+                    <dl className="grid gap-layout-xs rounded-md border border-border/70 bg-muted/10 px-layout-sm py-layout-xs text-xs">
+                      <div className="flex items-center justify-between gap-layout-sm">
+                        <dt className="text-muted-foreground">Payment</dt>
+                        <dd className="inline-flex items-center gap-1.5 text-right text-foreground">
+                          <PaymentIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                          {formatPaymentMethods(sale.paymentMethods)}
+                        </dd>
+                      </div>
+                      <div className="flex items-center justify-between gap-layout-sm">
+                        <dt className="text-muted-foreground">Cash impact</dt>
+                        <dd className="font-numeric tabular-nums text-foreground">
+                          {typeof sale.cashAmount === "number" &&
+                          sale.cashAmount > 0
+                            ? formatCurrency(currency, sale.cashAmount)
+                            : "None recorded"}
+                        </dd>
+                      </div>
+                      <div className="flex items-center justify-between gap-layout-sm">
+                        <dt className="text-muted-foreground">Items</dt>
+                        <dd className="text-foreground">
+                          {formatSaleItemCount(sale)}
+                        </dd>
+                      </div>
+                    </dl>
+                    <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                      Review reason
+                    </p>
+                    <div className="rounded-md border border-border/70 bg-muted/10 px-layout-sm py-layout-xs">
+                      <p className="text-xs leading-5 text-muted-foreground">
+                        {sale.reasons.length > 0
+                          ? `${sale.reasons
+                              .map((reason) => reason.replace(/[.!?]+$/, ""))
+                              .join("; ")}.`
+                          : "This sale needs manager review before it is applied."}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          );
+        })}
+      </Accordion>
+    </div>
+  );
 }
 
 function formatReviewItemActivity(item: PosReconciliationItem) {
@@ -635,12 +1112,11 @@ function getAutomaticStaffAccessSyncReviewSignature(
   );
   if (
     unresolvedItems.length === 0 ||
-    unresolvedItems.some(
-      (item) =>
-        item.reviewKind
-          ? item.reviewKind !== "staff_access"
-          : item.type !== "permission" ||
-            item.summary?.trim() !== STAFF_ACCESS_SYNC_REVIEW_SUMMARY,
+    unresolvedItems.some((item) =>
+      item.reviewKind
+        ? item.reviewKind !== "staff_access"
+        : item.type !== "permission" ||
+          item.summary?.trim() !== STAFF_ACCESS_SYNC_REVIEW_SUMMARY,
     )
   ) {
     return null;
@@ -717,12 +1193,14 @@ function RegisterSessionSyncNotice({
   const reconciliationItems = syncStatus.reconciliationItems.filter(
     isVisibleRegisterSyncReviewItem,
   );
-  if (syncStatus.status === "needs_review" && reconciliationItems.length === 0) {
+  if (
+    syncStatus.status === "needs_review" &&
+    reconciliationItems.length === 0
+  ) {
     return null;
   }
 
-  const hasOnlyRejectedReviewItems =
-    hasOnlyRejectedSyncReviewItems(syncStatus);
+  const hasOnlyRejectedReviewItems = hasOnlyRejectedSyncReviewItems(syncStatus);
   const hasClosedRegisterSyncedCloseout = reconciliationItems.some(
     isClosedRegisterSyncedCloseoutReviewItem,
   );
@@ -733,22 +1211,16 @@ function RegisterSessionSyncNotice({
     ? "Synced closeout cannot be applied"
     : hasOnlyRejectedReviewItems
       ? "Manager override available"
-    : syncStatus.status === "locally_closed_pending_sync"
-      ? "Pending reconciliation"
-      : hasCloseoutReview
-        ? "Closeout needs review"
-        : syncStatus.label;
+      : syncStatus.status === "locally_closed_pending_sync"
+        ? "Pending reconciliation"
+        : hasCloseoutReview
+          ? "Closeout needs review"
+          : syncStatus.label;
   const noticeDescription = hasClosedRegisterSyncedCloseout
     ? "This register is already closed. Reject the duplicate synced activity to clear the review."
     : hasOnlyRejectedReviewItems
       ? "Rejected local activity can be synced from Cash Controls. A manager can override and apply these events without the cashier present."
-    : syncStatus.description;
-  const approveLabel = hasCloseoutReview
-    ? "Approve synced closeout"
-    : "Approve synced sales";
-  const rejectLabel = hasCloseoutReview
-    ? "Reject synced closeout"
-    : "Reject synced activity";
+      : syncStatus.description;
   const closeoutReviewItem = hasCloseoutReview
     ? reconciliationItems.find(isRegisterCloseoutReviewItem)
     : null;
@@ -769,19 +1241,18 @@ function RegisterSessionSyncNotice({
   const hasUnsupportedReviewItems =
     shouldCombineReviewItems &&
     !hasOnlyRejectedReviewItems &&
-    reconciliationItems.some((item) => !isApprovableRegisterSyncReviewItem(item));
+    reconciliationItems.some(
+      (item) => !isApprovableRegisterSyncReviewItem(item),
+    );
   const canApplySyncReview = canApproveSyncReview && !hasUnsupportedReviewItems;
   const rejectedSyncQueueSummary = hasOnlyRejectedReviewItems
     ? formatReviewQueueSummary(reconciliationItems)
     : null;
-  const rejectedSyncReportedSummary = hasOnlyRejectedReviewItems
-    ? formatReviewReportedSummary(reconciliationItems)
-    : null;
+  const rejectedSyncSaleSummaries = hasOnlyRejectedReviewItems
+    ? getSyncReviewSaleSummaries(reconciliationItems)
+    : [];
   const reviewQueueSummary = shouldCombineReviewItems
     ? formatReviewQueueSummary(reconciliationItems)
-    : null;
-  const reviewReportedSummary = shouldCombineReviewItems
-    ? formatReviewReportedSummary(reconciliationItems)
     : null;
   const reviewTypeSummary = shouldCombineReviewItems
     ? formatReviewTypeSummary(reconciliationItems)
@@ -789,6 +1260,36 @@ function RegisterSessionSyncNotice({
   const reviewReasonSummary = shouldCombineReviewItems
     ? formatReviewReasonSummary(reconciliationItems)
     : null;
+  const syncReviewSaleSummaries = shouldCombineReviewItems
+    ? getSyncReviewSaleSummaries(reconciliationItems)
+    : [];
+  const actionCopy = getSyncReviewActionCopy({
+    hasCloseoutReview,
+    hasOnlyRejectedReviewItems,
+    hasSaleReview:
+      syncReviewSaleSummaries.length > 0 ||
+      rejectedSyncSaleSummaries.length > 0,
+  });
+  const rejectedSyncEvidenceDetails = hasOnlyRejectedReviewItems
+    ? [
+        {
+          label: "Items",
+          value: `${formatReviewItemCount(reconciliationItems.length)} rejected by the server.`,
+        },
+      ]
+    : [];
+  const combinedSyncEvidenceDetails = shouldCombineReviewItems
+    ? [
+        {
+          label: "Items",
+          value: `${formatReviewItemCount(reconciliationItems.length)} ${
+            reconciliationItems.length === 1 ? "needs" : "need"
+          } manager review.`,
+        },
+        { label: "Reasons", value: reviewReasonSummary },
+        { label: "Categories", value: reviewTypeSummary },
+      ]
+    : [];
 
   return (
     <section
@@ -820,7 +1321,7 @@ function RegisterSessionSyncNotice({
           </p>
           {hasOnlyRejectedReviewItems ? (
             <div className="pt-layout-xs">
-              <div className="grid gap-layout-sm rounded-md border border-danger/15 bg-background/70 p-layout-sm md:grid-cols-[minmax(0,1fr)_minmax(14rem,0.75fr)]">
+              <div className="grid gap-layout-md rounded-md border border-danger/15 bg-background/70 p-layout-sm md:grid-cols-[minmax(0,0.9fr)_minmax(18rem,1.1fr)]">
                 <div className="space-y-1">
                   <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
                     Next step
@@ -830,26 +1331,26 @@ function RegisterSessionSyncNotice({
                     drawer and records the override for audit.
                   </p>
                 </div>
-                <div className="space-y-1 border-t border-border pt-layout-sm text-xs text-muted-foreground md:border-l md:border-t-0 md:pl-layout-sm md:pt-0">
-                  <p className="font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                    Evidence
-                  </p>
-                  <p>
-                    {formatReviewItemCount(reconciliationItems.length)} rejected
-                    by the server.
-                  </p>
-                  {rejectedSyncQueueSummary ? (
-                    <p>{rejectedSyncQueueSummary}</p>
-                  ) : null}
-                  {rejectedSyncReportedSummary ? (
-                    <p>{rejectedSyncReportedSummary}</p>
-                  ) : null}
+                <div className="border-t border-border pt-layout-sm md:border-l md:border-t-0 md:pl-layout-sm md:pt-0">
+                  <div className="space-y-layout-sm">
+                    <SyncReviewDetailGrid
+                      details={rejectedSyncEvidenceDetails}
+                    />
+                    <SyncReviewTimeline
+                      items={reconciliationItems}
+                      uploadOrder={rejectedSyncQueueSummary}
+                    />
+                  </div>
                 </div>
+                <SalesUnderReviewList
+                  currency={currency}
+                  sales={rejectedSyncSaleSummaries}
+                />
               </div>
             </div>
           ) : shouldCombineReviewItems ? (
             <div className="pt-layout-xs">
-              <div className="grid gap-layout-sm rounded-md border border-danger/15 bg-background/70 p-layout-sm md:grid-cols-[minmax(0,1fr)_minmax(16rem,0.85fr)]">
+              <div className="grid gap-layout-md rounded-md border border-danger/15 bg-background/70 p-layout-sm md:grid-cols-[minmax(0,0.9fr)_minmax(18rem,1.1fr)]">
                 <div className="space-y-1">
                   <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
                     Next step
@@ -858,22 +1359,21 @@ function RegisterSessionSyncNotice({
                     {getCombinedReviewNextStep(reconciliationItems)}
                   </p>
                 </div>
-                <div className="space-y-1 border-t border-border pt-layout-sm text-xs text-muted-foreground md:border-l md:border-t-0 md:pl-layout-sm md:pt-0">
-                  <p className="font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                    Evidence
-                  </p>
-                  <p>
-                    {formatReviewItemCount(reconciliationItems.length)}{" "}
-                    {reconciliationItems.length === 1 ? "needs" : "need"}{" "}
-                    manager review.
-                  </p>
-                  {reviewReasonSummary ? <p>{reviewReasonSummary}</p> : null}
-                  {reviewTypeSummary ? <p>{reviewTypeSummary}</p> : null}
-                  {reviewQueueSummary ? <p>{reviewQueueSummary}</p> : null}
-                  {reviewReportedSummary ? (
-                    <p>{reviewReportedSummary}</p>
-                  ) : null}
+                <div className="border-t border-border pt-layout-sm md:border-l md:border-t-0 md:pl-layout-sm md:pt-0">
+                  <div className="space-y-layout-sm">
+                    <SyncReviewDetailGrid
+                      details={combinedSyncEvidenceDetails}
+                    />
+                    <SyncReviewTimeline
+                      items={reconciliationItems}
+                      uploadOrder={reviewQueueSummary}
+                    />
+                  </div>
                 </div>
+                <SalesUnderReviewList
+                  currency={currency}
+                  sales={syncReviewSaleSummaries}
+                />
               </div>
             </div>
           ) : syncStatus.status === "needs_review" &&
@@ -918,7 +1418,10 @@ function RegisterSessionSyncNotice({
                                   Expected
                                 </dt>
                                 <dd className="mt-1 font-numeric tabular-nums text-foreground">
-                                  {formatCurrency(currency, closeoutExpectedCash)}
+                                  {formatCurrency(
+                                    currency,
+                                    closeoutExpectedCash,
+                                  )}
                                 </dd>
                               </div>
                             ) : null}
@@ -928,7 +1431,10 @@ function RegisterSessionSyncNotice({
                                   Counted
                                 </dt>
                                 <dd className="mt-1 font-numeric tabular-nums text-foreground">
-                                  {formatCurrency(currency, closeoutCountedCash)}
+                                  {formatCurrency(
+                                    currency,
+                                    closeoutCountedCash,
+                                  )}
                                 </dd>
                               </div>
                             ) : null}
@@ -1075,7 +1581,7 @@ function RegisterSessionSyncNotice({
                   type="button"
                   variant="workflow"
                 >
-                  {approveLabel}
+                  {actionCopy.approveLabel}
                 </LoadingButton>
               ) : null}
               <Button
@@ -1086,7 +1592,7 @@ function RegisterSessionSyncNotice({
                 type="button"
                 variant="outline"
               >
-                {rejectLabel}
+                {actionCopy.rejectLabel}
               </Button>
             </>
           ) : null}
@@ -1312,7 +1818,9 @@ function RegisterSessionDepositCard({
           <dt className="font-medium uppercase tracking-[0.14em]">By</dt>
           <dd className="min-w-0 truncate text-right text-foreground">
             {deposit.recordedByStaffName
-              ? formatStaffDisplayName({ fullName: deposit.recordedByStaffName })
+              ? formatStaffDisplayName({
+                  fullName: deposit.recordedByStaffName,
+                })
               : "N/A"}
           </dd>
         </div>
@@ -2080,10 +2588,12 @@ export function RegisterSessionViewContent({
     typeof pendingCloseoutReviewItem?.variance === "number"
       ? pendingCloseoutReviewItem.variance
       : registerSession?.variance;
-  const isRejectedSyncOverride =
-    closeoutStaffAuthIntent?.kind === "sync_review" &&
-    closeoutStaffAuthIntent.decision === "approved" &&
-    hasOnlyRejectedSyncReviewItems(syncStatus);
+  const syncReviewActionCopy = getSyncReviewActionCopy({
+    hasCloseoutReview: isRegisterCloseoutSyncReview,
+    hasOnlyRejectedReviewItems: hasOnlyRejectedSyncReviewItems(syncStatus),
+    hasSaleReview:
+      getSyncReviewSaleSummaries(visibleSyncReviewItems).length > 0,
+  });
   const closeoutStaffAuthCopy =
     closeoutStaffAuthIntent?.kind === "review"
       ? {
@@ -2102,24 +2612,12 @@ export function RegisterSessionViewContent({
             title: "Manager sign-in required",
             description:
               closeoutStaffAuthIntent.decision === "approved"
-                ? isRejectedSyncOverride
-                  ? "Authenticate to override and sync rejected local activity"
-                  : isRegisterCloseoutSyncReview
-                  ? "Authenticate to approve and apply the synced closeout"
-                  : "Authenticate to approve and apply reviewed synced sales"
-                : isRegisterCloseoutSyncReview
-                  ? "Authenticate to reject the synced closeout"
-                  : "Authenticate to reject reviewed synced activity",
+                ? syncReviewActionCopy.approveAuthDescription
+                : syncReviewActionCopy.rejectAuthDescription,
             submitLabel:
               closeoutStaffAuthIntent.decision === "approved"
-                ? isRejectedSyncOverride
-                  ? "Override and sync events"
-                  : isRegisterCloseoutSyncReview
-                  ? "Approve synced closeout"
-                  : "Approve synced sales"
-                : isRegisterCloseoutSyncReview
-                  ? "Reject synced closeout"
-                  : "Reject synced activity",
+                ? closeoutStaffAuthIntent.approveLabel
+                : closeoutStaffAuthIntent.rejectLabel,
           }
         : {
             title: "Closeout sign-in required",
@@ -2135,11 +2633,20 @@ export function RegisterSessionViewContent({
       return;
     }
 
+    const actionCopy = getSyncReviewActionCopy({
+      hasCloseoutReview: isRegisterCloseoutSyncReview,
+      hasOnlyRejectedReviewItems: hasOnlyRejectedSyncReviewItems(syncStatus),
+      hasSaleReview:
+        getSyncReviewSaleSummaries(visibleSyncReviewItems).length > 0,
+    });
+
     setSyncReviewErrorMessage("");
     setCloseoutStaffAuthIntent({
       kind: "sync_review",
       decision,
+      approveLabel: actionCopy.approveLabel,
       registerSessionId: registerSession._id,
+      rejectLabel: actionCopy.rejectLabel,
       reviewConflictIds:
         isRegisterCloseoutSyncReview && pendingCloseoutReviewItem?.id
           ? [pendingCloseoutReviewItem.id]
@@ -3014,214 +3521,217 @@ export function RegisterSessionViewContent({
                     </div>
                   ) : (
                     <>
-                    <div className="order-2 space-y-layout-sm md:hidden">
-                      {previewTransactions.map((transaction) => {
-                        const canOpenTransaction = Boolean(
-                          orgUrlSlug && storeUrlSlug,
-                        );
-                        const transactionRoute = canOpenTransaction
-                          ? {
-                              params: {
-                                orgUrlSlug: orgUrlSlug!,
-                                storeUrlSlug: storeUrlSlug!,
-                                transactionId: transaction._id,
-                              },
-                              search: { o: getOrigin() },
-                              to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId" as const,
-                            }
-                          : null;
-                        const openTransaction = () => {
-                          if (!transactionRoute) {
-                            return;
-                          }
-
-                          navigate(transactionRoute);
-                        };
-
-                        return (
-                          <RegisterSessionTransactionCard
-                            canOpenTransaction={canOpenTransaction}
-                            currency={currency}
-                            key={transaction._id}
-                            onOpen={openTransaction}
-                            transaction={transaction}
-                          />
-                        );
-                      })}
-                    </div>
-                    <div className="order-2 hidden overflow-hidden rounded-lg border border-border bg-surface-raised md:block">
-                      <Table>
-                        <TableHeader>
-                          <TableRow className="border-b border-border hover:bg-transparent">
-                            <TableHead className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                              Transaction
-                            </TableHead>
-                            <TableHead className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                              Total
-                            </TableHead>
-                            <TableHead className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                              Payment
-                            </TableHead>
-                            <TableHead className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                              Cashier
-                            </TableHead>
-                            <TableHead className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                              Completed
-                            </TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {previewTransactions.map((transaction) => {
-                            const PaymentIcon = getPaymentMethodIcon({
-                              hasMultiplePaymentMethods:
-                                transaction.hasMultiplePaymentMethods,
-                              paymentMethod: transaction.paymentMethod,
-                            });
-                            const transactionLabel = `#${transaction.transactionNumber}`;
-                            const isVoidedTransaction =
-                              transaction.status === "void" ||
-                              typeof transaction.voidedAt === "number";
-                            const canOpenTransaction = Boolean(
-                              orgUrlSlug && storeUrlSlug,
-                            );
-                            const transactionRoute = canOpenTransaction
-                              ? {
-                                  params: {
-                                    orgUrlSlug: orgUrlSlug!,
-                                    storeUrlSlug: storeUrlSlug!,
-                                    transactionId: transaction._id,
-                                  },
-                                  search: { o: getOrigin() },
-                                  to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId" as const,
-                                }
-                              : null;
-
-                            const openTransaction = () => {
-                              if (!transactionRoute) {
-                                return;
+                      <div className="order-2 space-y-layout-sm md:hidden">
+                        {previewTransactions.map((transaction) => {
+                          const canOpenTransaction = Boolean(
+                            orgUrlSlug && storeUrlSlug,
+                          );
+                          const transactionRoute = canOpenTransaction
+                            ? {
+                                params: {
+                                  orgUrlSlug: orgUrlSlug!,
+                                  storeUrlSlug: storeUrlSlug!,
+                                  transactionId: transaction._id,
+                                },
+                                search: { o: getOrigin() },
+                                to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId" as const,
                               }
+                            : null;
+                          const openTransaction = () => {
+                            if (!transactionRoute) {
+                              return;
+                            }
 
-                              navigate(transactionRoute);
-                            };
+                            navigate(transactionRoute);
+                          };
 
-                            return (
-                              <TableRow
-                                aria-label={
-                                  canOpenTransaction
-                                    ? `Open transaction ${transactionLabel}`
-                                    : undefined
-                                }
-                                className={
-                                  canOpenTransaction
-                                    ? "group border-b border-border/70 cursor-pointer transition-colors hover:bg-muted/40 focus-visible:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                                    : "border-b border-border/70 transition-colors"
-                                }
-                                key={transaction._id}
-                                onClick={
-                                  canOpenTransaction
-                                    ? openTransaction
-                                    : undefined
-                                }
-                                onKeyDown={
-                                  canOpenTransaction
-                                    ? (event) => {
-                                        if (
-                                          event.key !== "Enter" &&
-                                          event.key !== " "
-                                        ) {
-                                          return;
-                                        }
-
-                                        event.preventDefault();
-                                        openTransaction();
-                                      }
-                                    : undefined
-                                }
-                                role={canOpenTransaction ? "link" : undefined}
-                                tabIndex={canOpenTransaction ? 0 : undefined}
-                              >
-                                <TableCell>
-                                  <div className="flex flex-col gap-1">
-                                    <span className="inline-flex w-fit items-center gap-1 font-medium text-foreground group-hover:text-primary">
-                                      {transactionLabel}
-                                      {isVoidedTransaction ? (
-                                        <span className="rounded-sm border border-destructive/30 bg-destructive/10 px-1.5 py-0.5 text-xs font-medium text-destructive">
-                                          Voided
-                                        </span>
-                                      ) : null}
-                                      {canOpenTransaction ? (
-                                        <ArrowUpRight className="h-3.5 w-3.5" />
-                                      ) : null}
-                                    </span>
-                                    <span className="text-xs text-muted-foreground">
-                                      {transaction.itemCount}{" "}
-                                      {transaction.itemCount === 1
-                                        ? "item"
-                                        : "items"}
-                                      {transaction.customerName
-                                        ? ` - ${transaction.customerName}`
-                                        : ""}
-                                    </span>
-                                  </div>
-                                </TableCell>
-                                <TableCell className="font-numeric tabular-nums text-foreground">
-                                  {formatCurrency(currency, transaction.total)}
-                                </TableCell>
-                                <TableCell>
-                                  <span className="inline-flex items-center gap-2 text-sm text-muted-foreground">
-                                    <PaymentIcon className="h-4 w-4" />
-                                    {transaction.hasMultiplePaymentMethods
-                                      ? "Multiple"
-                                      : formatPaymentMethod(
-                                          transaction.paymentMethod,
-                                        )}
-                                  </span>
-                                </TableCell>
-                                <TableCell className="text-sm text-muted-foreground">
-                                  {transaction.cashierName
-                                    ? formatStaffDisplayName({
-                                        fullName: transaction.cashierName,
-                                      })
-                                    : "N/A"}
-                                </TableCell>
-                                <TableCell className="text-sm text-muted-foreground">
-                                  {formatTimestamp(transaction.completedAt)}
-                                </TableCell>
-                              </TableRow>
-                            );
-                          })}
-                        </TableBody>
-                      </Table>
-                    </div>
-                    {hasAdditionalTransactions &&
-                    registerSession &&
-                    orgUrlSlug &&
-                    storeUrlSlug ? (
-                      <div className="order-2 flex flex-col gap-layout-sm rounded-lg border border-border/70 bg-surface-raised px-4 py-3 sm:flex-row sm:items-center sm:justify-between md:rounded-t-none md:border-t-0">
-                        <p className="text-sm text-muted-foreground">
-                          Showing latest {previewTransactions.length} of{" "}
-                          {transactions.length} linked sales.
-                        </p>
-                        <Button
-                          asChild
-                          className="w-full sm:w-auto"
-                          size="sm"
-                          variant="outline"
-                        >
-                          <Link
-                            params={{ orgUrlSlug, storeUrlSlug }}
-                            search={{
-                              o: getOrigin(),
-                              registerSessionId: registerSession._id,
-                            }}
-                            to="/$orgUrlSlug/store/$storeUrlSlug/pos/transactions"
-                          >
-                            View all linked transactions
-                            <ArrowUpRight className="h-3.5 w-3.5" />
-                          </Link>
-                        </Button>
+                          return (
+                            <RegisterSessionTransactionCard
+                              canOpenTransaction={canOpenTransaction}
+                              currency={currency}
+                              key={transaction._id}
+                              onOpen={openTransaction}
+                              transaction={transaction}
+                            />
+                          );
+                        })}
                       </div>
-                    ) : null}
+                      <div className="order-2 hidden overflow-hidden rounded-lg border border-border bg-surface-raised md:block">
+                        <Table>
+                          <TableHeader>
+                            <TableRow className="border-b border-border hover:bg-transparent">
+                              <TableHead className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                                Transaction
+                              </TableHead>
+                              <TableHead className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                                Total
+                              </TableHead>
+                              <TableHead className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                                Payment
+                              </TableHead>
+                              <TableHead className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                                Cashier
+                              </TableHead>
+                              <TableHead className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                                Completed
+                              </TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {previewTransactions.map((transaction) => {
+                              const PaymentIcon = getPaymentMethodIcon({
+                                hasMultiplePaymentMethods:
+                                  transaction.hasMultiplePaymentMethods,
+                                paymentMethod: transaction.paymentMethod,
+                              });
+                              const transactionLabel = `#${transaction.transactionNumber}`;
+                              const isVoidedTransaction =
+                                transaction.status === "void" ||
+                                typeof transaction.voidedAt === "number";
+                              const canOpenTransaction = Boolean(
+                                orgUrlSlug && storeUrlSlug,
+                              );
+                              const transactionRoute = canOpenTransaction
+                                ? {
+                                    params: {
+                                      orgUrlSlug: orgUrlSlug!,
+                                      storeUrlSlug: storeUrlSlug!,
+                                      transactionId: transaction._id,
+                                    },
+                                    search: { o: getOrigin() },
+                                    to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId" as const,
+                                  }
+                                : null;
+
+                              const openTransaction = () => {
+                                if (!transactionRoute) {
+                                  return;
+                                }
+
+                                navigate(transactionRoute);
+                              };
+
+                              return (
+                                <TableRow
+                                  aria-label={
+                                    canOpenTransaction
+                                      ? `Open transaction ${transactionLabel}`
+                                      : undefined
+                                  }
+                                  className={
+                                    canOpenTransaction
+                                      ? "group border-b border-border/70 cursor-pointer transition-colors hover:bg-muted/40 focus-visible:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                      : "border-b border-border/70 transition-colors"
+                                  }
+                                  key={transaction._id}
+                                  onClick={
+                                    canOpenTransaction
+                                      ? openTransaction
+                                      : undefined
+                                  }
+                                  onKeyDown={
+                                    canOpenTransaction
+                                      ? (event) => {
+                                          if (
+                                            event.key !== "Enter" &&
+                                            event.key !== " "
+                                          ) {
+                                            return;
+                                          }
+
+                                          event.preventDefault();
+                                          openTransaction();
+                                        }
+                                      : undefined
+                                  }
+                                  role={canOpenTransaction ? "link" : undefined}
+                                  tabIndex={canOpenTransaction ? 0 : undefined}
+                                >
+                                  <TableCell>
+                                    <div className="flex flex-col gap-1">
+                                      <span className="inline-flex w-fit items-center gap-1 font-medium text-foreground group-hover:text-primary">
+                                        {transactionLabel}
+                                        {isVoidedTransaction ? (
+                                          <span className="rounded-sm border border-destructive/30 bg-destructive/10 px-1.5 py-0.5 text-xs font-medium text-destructive">
+                                            Voided
+                                          </span>
+                                        ) : null}
+                                        {canOpenTransaction ? (
+                                          <ArrowUpRight className="h-3.5 w-3.5" />
+                                        ) : null}
+                                      </span>
+                                      <span className="text-xs text-muted-foreground">
+                                        {transaction.itemCount}{" "}
+                                        {transaction.itemCount === 1
+                                          ? "item"
+                                          : "items"}
+                                        {transaction.customerName
+                                          ? ` - ${transaction.customerName}`
+                                          : ""}
+                                      </span>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell className="font-numeric tabular-nums text-foreground">
+                                    {formatCurrency(
+                                      currency,
+                                      transaction.total,
+                                    )}
+                                  </TableCell>
+                                  <TableCell>
+                                    <span className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+                                      <PaymentIcon className="h-4 w-4" />
+                                      {transaction.hasMultiplePaymentMethods
+                                        ? "Multiple"
+                                        : formatPaymentMethod(
+                                            transaction.paymentMethod,
+                                          )}
+                                    </span>
+                                  </TableCell>
+                                  <TableCell className="text-sm text-muted-foreground">
+                                    {transaction.cashierName
+                                      ? formatStaffDisplayName({
+                                          fullName: transaction.cashierName,
+                                        })
+                                      : "N/A"}
+                                  </TableCell>
+                                  <TableCell className="text-sm text-muted-foreground">
+                                    {formatTimestamp(transaction.completedAt)}
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
+                          </TableBody>
+                        </Table>
+                      </div>
+                      {hasAdditionalTransactions &&
+                      registerSession &&
+                      orgUrlSlug &&
+                      storeUrlSlug ? (
+                        <div className="order-2 flex flex-col gap-layout-sm rounded-lg border border-border/70 bg-surface-raised px-4 py-3 sm:flex-row sm:items-center sm:justify-between md:rounded-t-none md:border-t-0">
+                          <p className="text-sm text-muted-foreground">
+                            Showing latest {previewTransactions.length} of{" "}
+                            {transactions.length} linked sales.
+                          </p>
+                          <Button
+                            asChild
+                            className="w-full sm:w-auto"
+                            size="sm"
+                            variant="outline"
+                          >
+                            <Link
+                              params={{ orgUrlSlug, storeUrlSlug }}
+                              search={{
+                                o: getOrigin(),
+                                registerSessionId: registerSession._id,
+                              }}
+                              to="/$orgUrlSlug/store/$storeUrlSlug/pos/transactions"
+                            >
+                              View all linked transactions
+                              <ArrowUpRight className="h-3.5 w-3.5" />
+                            </Link>
+                          </Button>
+                        </div>
+                      ) : null}
                     </>
                   )}
                 </div>
@@ -3249,62 +3759,64 @@ export function RegisterSessionViewContent({
                   />
                 ) : (
                   <>
-                  <div className="space-y-layout-sm md:hidden">
-                    {registerSessionSnapshot.deposits.map((deposit) => (
-                      <RegisterSessionDepositCard
-                        currency={currency}
-                        deposit={deposit}
-                        key={deposit._id}
-                      />
-                    ))}
-                  </div>
-                  <div className="hidden overflow-hidden rounded-lg border border-border bg-surface-raised md:block">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="border-b border-border hover:bg-transparent">
-                          <TableHead className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                            Amount
-                          </TableHead>
-                          <TableHead className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                            Recorded
-                          </TableHead>
-                          <TableHead className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                            Reference
-                          </TableHead>
-                          <TableHead className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                            By
-                          </TableHead>
-                          <TableHead className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                            Notes
-                          </TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {registerSessionSnapshot.deposits.map((deposit) => (
-                          <TableRow
-                            className="border-b border-border/70 transition-colors hover:bg-muted/40"
-                            key={deposit._id}
-                          >
-                            <TableCell className="font-numeric tabular-nums text-foreground">
-                              {formatCurrency(currency, deposit.amount)}
-                            </TableCell>
-                            <TableCell className="text-muted-foreground">
-                              {formatTimestamp(deposit.recordedAt)}
-                            </TableCell>
-                            <TableCell>{deposit.reference ?? "N/A"}</TableCell>
-                            <TableCell>
-                              {deposit.recordedByStaffName
-                                ? formatStaffDisplayName({
-                                    fullName: deposit.recordedByStaffName,
-                                  })
-                                : "N/A"}
-                            </TableCell>
-                            <TableCell>{deposit.notes ?? "N/A"}</TableCell>
+                    <div className="space-y-layout-sm md:hidden">
+                      {registerSessionSnapshot.deposits.map((deposit) => (
+                        <RegisterSessionDepositCard
+                          currency={currency}
+                          deposit={deposit}
+                          key={deposit._id}
+                        />
+                      ))}
+                    </div>
+                    <div className="hidden overflow-hidden rounded-lg border border-border bg-surface-raised md:block">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="border-b border-border hover:bg-transparent">
+                            <TableHead className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                              Amount
+                            </TableHead>
+                            <TableHead className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                              Recorded
+                            </TableHead>
+                            <TableHead className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                              Reference
+                            </TableHead>
+                            <TableHead className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                              By
+                            </TableHead>
+                            <TableHead className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                              Notes
+                            </TableHead>
                           </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
+                        </TableHeader>
+                        <TableBody>
+                          {registerSessionSnapshot.deposits.map((deposit) => (
+                            <TableRow
+                              className="border-b border-border/70 transition-colors hover:bg-muted/40"
+                              key={deposit._id}
+                            >
+                              <TableCell className="font-numeric tabular-nums text-foreground">
+                                {formatCurrency(currency, deposit.amount)}
+                              </TableCell>
+                              <TableCell className="text-muted-foreground">
+                                {formatTimestamp(deposit.recordedAt)}
+                              </TableCell>
+                              <TableCell>
+                                {deposit.reference ?? "N/A"}
+                              </TableCell>
+                              <TableCell>
+                                {deposit.recordedByStaffName
+                                  ? formatStaffDisplayName({
+                                      fullName: deposit.recordedByStaffName,
+                                    })
+                                  : "N/A"}
+                              </TableCell>
+                              <TableCell>{deposit.notes ?? "N/A"}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
                   </>
                 )}
               </div>
@@ -3725,7 +4237,9 @@ export function RegisterSessionView() {
       return;
     }
 
-    if (automaticSyncReviewAttemptRef.current === automaticSyncReviewSignature) {
+    if (
+      automaticSyncReviewAttemptRef.current === automaticSyncReviewSignature
+    ) {
       return;
     }
     automaticSyncReviewAttemptRef.current = automaticSyncReviewSignature;

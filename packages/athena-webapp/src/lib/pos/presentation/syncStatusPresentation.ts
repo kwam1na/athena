@@ -26,6 +26,25 @@ export type PosReconciliationItem = {
   sequence?: number | null;
   status?: string | null;
   summary?: string | null;
+  sale?: {
+    cashAmount?: number | null;
+    itemCount?: number | null;
+    items?: Array<{
+      name: string;
+      quantity?: number | null;
+      sku?: string | null;
+      total?: number | null;
+    }>;
+    localReceiptNumber?: string | null;
+    localTransactionId?: string | null;
+    occurredAt?: number | null;
+    paymentMethods?: string[];
+    receiptNumber?: string | null;
+    staffName?: string | null;
+    staffProfileId?: string | null;
+    total?: number | null;
+    totalPaid?: number | null;
+  } | null;
   type?: string | null;
   variance?: number | null;
 };

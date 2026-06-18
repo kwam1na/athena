@@ -24,6 +24,7 @@ import {
   buildRegisterSessionLocalSyncStatus,
   classifyRegisterSessionSyncReview,
 } from "../pos/application/sync/registerSessionSyncReview";
+import { assertConformsToExportedReturns } from "../lib/returnValidatorContract";
 
 function getSource(relativePath: string) {
   return readFileSync(new URL(relativePath, import.meta.url), "utf8");
@@ -262,22 +263,65 @@ describe("cash control deposits", () => {
 
   it("projects sync review classification into register-session local sync status", () => {
     expect(
-      buildRegisterSessionLocalSyncStatus([
-        {
-          _id: "sync_conflict_closeout",
-          conflictType: "permission",
-          createdAt: 1,
-          details: {
-            countedCash: 45000,
-            expectedCash: 50000,
-            variance: -5000,
+      buildRegisterSessionLocalSyncStatus(
+        [
+          {
+            _id: "sync_conflict_closeout",
+            conflictType: "permission",
+            createdAt: 1,
+            details: {
+              countedCash: 45000,
+              expectedCash: 50000,
+              variance: -5000,
+            },
+            localEventId: "local-register-closed-1",
+            sequence: 2,
+            status: "needs_review",
+            summary: "Synced register closeout has a variance.",
           },
-          localEventId: "local-register-closed-1",
-          sequence: 2,
-          status: "needs_review",
-          summary: "Synced register closeout has a variance.",
+          {
+            _id: "sync_conflict_sale",
+            conflictType: "permission",
+            createdAt: 2,
+            localEventId: "event-sale-1",
+            localRegisterSessionId: "local-register-1",
+            sale: {
+              cashAmount: 2200000,
+              itemCount: 2,
+              items: [
+                {
+                  name: "Lace front wig",
+                  quantity: 1,
+                  sku: "WIG-001",
+                  total: 1200000,
+                },
+                {
+                  name: "Wig care kit",
+                  quantity: 1,
+                  sku: "CARE-001",
+                  total: 1000000,
+                },
+              ],
+              localReceiptNumber: "local-receipt-1",
+              localTransactionId: "local-transaction-1",
+              occurredAt: 1_781_623_200_000,
+              paymentMethods: ["cash"],
+              receiptNumber: "R-1001",
+              staffProfileId: "staff_1" as Id<"staffProfile">,
+              total: 2200000,
+              totalPaid: 2200000,
+            },
+            sequence: 12,
+            status: "needs_review",
+            summary: "Register was not open before this sale synced.",
+          },
+        ],
+        {
+          staffNamesById: new Map([
+            ["staff_1" as Id<"staffProfile">, "Skank H."],
+          ]),
         },
-      ]),
+      ),
     ).toEqual({
       status: "needs_review",
       reconciliationItems: [
@@ -286,6 +330,15 @@ describe("cash control deposits", () => {
           id: "sync_conflict_closeout",
           reviewKind: "register_closeout_variance",
           type: "register_closeout",
+        }),
+        expect.objectContaining({
+          id: "sync_conflict_sale",
+          sale: expect.objectContaining({
+            cashAmount: 2200000,
+            receiptNumber: "R-1001",
+            staffName: "Skank H.",
+            total: 2200000,
+          }),
         }),
       ],
     });
@@ -765,6 +818,9 @@ describe("cash control deposits", () => {
         resolvedCount: 1,
       }),
     );
+    expect(() =>
+      assertConformsToExportedReturns(resolveRegisterSessionSyncReview, result),
+    ).not.toThrow();
     expect(ctx.tables.get("posLocalSyncConflict")).toEqual([
       expect.objectContaining({
         _id: "sync_conflict_1",
@@ -3335,20 +3391,26 @@ describe("cash control deposits", () => {
   it("records register-session deposits with authenticated actor refs", async () => {
     const ctx = createAuthorizedRegisterDepositCtx();
 
-    await expect(
-      getHandler(recordRegisterSessionDeposit)(ctx as never, {
+    const result = await getHandler(recordRegisterSessionDeposit)(
+      ctx as never,
+      {
         actorStaffProfileId: "staff_1" as Id<"staffProfile">,
         amount: 100,
         registerSessionId: "session_open" as Id<"registerSession">,
         storeId: "store_1" as Id<"store">,
         submissionKey: "deposit-1",
-      }),
-    ).resolves.toEqual(
+      },
+    );
+
+    expect(result).toEqual(
       expect.objectContaining({
         data: expect.objectContaining({ action: "recorded" }),
         kind: "ok",
       }),
     );
+    expect(() =>
+      assertConformsToExportedReturns(recordRegisterSessionDeposit, result),
+    ).not.toThrow();
 
     expect(ctx.tables.get("paymentAllocation")).toEqual([
       expect.objectContaining({

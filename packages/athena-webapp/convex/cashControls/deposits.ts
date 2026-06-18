@@ -373,7 +373,9 @@ function buildRegisterSessionSummary(args: {
           status: args.approvalRequest.status,
         }
       : null,
-    localSyncStatus: buildRegisterSessionLocalSyncStatus(syncConflicts),
+    localSyncStatus: buildRegisterSessionLocalSyncStatus(syncConflicts, {
+      staffNamesById: args.staffNamesById,
+    }),
     totalDeposited: args.totalDeposited,
   };
 }
@@ -606,6 +608,10 @@ function collectStaffProfileIds(args: {
   approvalRequests: CashControlApprovalRequest[];
   deposits: CashControlDepositAllocation[];
   registerSessions: CashControlRegisterSession[];
+  syncConflictsBySessionId?: Map<
+    Id<"registerSession">,
+    CashControlSyncConflict[]
+  >;
   timeline?: Array<Pick<Doc<"operationalEvent">, "actorStaffProfileId">>;
   transactions?: CashControlTransaction[];
 }) {
@@ -642,6 +648,14 @@ function collectStaffProfileIds(args: {
   for (const transaction of args.transactions ?? []) {
     if (transaction.staffProfileId) {
       staffProfileIds.add(transaction.staffProfileId);
+    }
+  }
+
+  for (const syncConflicts of args.syncConflictsBySessionId?.values() ?? []) {
+    for (const conflict of syncConflicts) {
+      if (conflict.sale?.staffProfileId) {
+        staffProfileIds.add(conflict.sale.staffProfileId);
+      }
     }
   }
 
@@ -703,6 +717,7 @@ export const getDashboardSnapshot = query({
         approvalRequests: relevantApprovalRequests,
         deposits,
         registerSessions: dashboardRegisterSessionsWithTraceIds,
+        syncConflictsBySessionId,
       }),
     );
     const terminalNamesById = await listTerminalNames(
@@ -777,6 +792,7 @@ export const getRegisterSessionSnapshot = query({
         approvalRequests,
         deposits,
         registerSessions: [registerSessionWithTraceId],
+        syncConflictsBySessionId,
         timeline,
         transactions,
       }),

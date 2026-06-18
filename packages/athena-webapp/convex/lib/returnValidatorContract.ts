@@ -57,11 +57,11 @@ const MIN_INT64 = -(1n << 63n);
 const MAX_INT64 = (1n << 63n) - 1n;
 
 export function assertConformsToExportedReturns(
-  definition: ConvexFunctionWithReturns,
+  definition: unknown,
   value: unknown,
 ) {
   const issues = collectReturnValidatorIssues(
-    parseExportedReturnValidator(definition),
+    parseExportedReturnValidator(definition as ConvexFunctionWithReturns),
     value,
   );
 
@@ -90,12 +90,22 @@ function validateValue(
     case "any":
       return isConvexValue(value)
         ? []
-        : [issue(path, `expected Convex value, received ${describeValue(value)}`)];
+        : [
+            issue(
+              path,
+              `expected Convex value, received ${describeValue(value)}`,
+            ),
+          ];
     case "bigint":
     case "int64":
       return isInt64(value)
         ? []
-        : [issue(path, `expected int64 bigint, received ${describeValue(value)}`)];
+        : [
+            issue(
+              path,
+              `expected int64 bigint, received ${describeValue(value)}`,
+            ),
+          ];
     case "boolean":
       return typeof value === "boolean"
         ? []
