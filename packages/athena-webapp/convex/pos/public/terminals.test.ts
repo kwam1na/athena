@@ -79,6 +79,7 @@ vi.mock("../../remoteAssist/infrastructure/remoteAssistRepository", () => ({
   createRemoteAssistRepository: mocks.createRemoteAssistRepository,
 }));
 
+import { assertConformsToExportedReturns } from "../../lib/returnValidatorContract";
 import {
   deleteTerminal,
   getTerminalByFingerprint,
@@ -102,6 +103,140 @@ const SYNC_SECRET_HASH =
 
 function getHandler(definition: unknown) {
   return (definition as { _handler: Function })._handler;
+}
+
+function buildTerminalHealthSummaryResult() {
+  return {
+    terminal: {
+      _id: "terminal-1",
+      displayName: "Front register",
+      registerNumber: "1",
+      registeredByUserId: "athena-user-1",
+      browserInfo: { userAgent: "test" },
+      registeredAt: 1,
+      status: "active",
+    },
+    health: "online",
+    runtimeAgeMs: 1_000,
+    runtimeStatus: null,
+    attentionReasons: [
+      {
+        source: "terminal_runtime",
+        summary: "Terminal setup data needs repair.",
+        type: "terminal_seed_missing",
+        actionTarget: {
+          type: "pos_settings",
+        },
+      },
+    ],
+    recoveryPreview: {
+      readiness: "needs_terminal_action",
+      runtimeFresh: true,
+      evidence: {
+        activeRegisterSession: false,
+        freshRuntimeRequiredForAbleToTransactNow: true,
+      },
+      appUpdate: {
+        commandCorrelated: true,
+        currentBuildId: "build-current",
+        evidenceFresh: true,
+        observedAt: 100,
+        pendingBuildId: "build-next",
+        status: "update_ready_unstaged",
+        summary: "An app update is available but not ready to refresh yet.",
+      },
+      cloudRepair: {
+        preconditionHash: "terminal-cloud-repair:hash",
+        safeConflictIds: ["conflict-1"],
+        skippedConflictIds: [],
+      },
+      commandStatus: {
+        appUpdateCommandExecutionId: "execution-1",
+        commandId: "command-1",
+        commandType: "update_app",
+        label: "Update app",
+        latestAcknowledgement: "Update app evaluated.",
+        status: "completed",
+        verificationStatus: "runtime_verification_ready",
+      },
+      terminalActions: [
+        {
+          commandType: "update_app",
+          expectedEvidence: {
+            appUpdateCommandExecutionId: "execution-1",
+            appUpdateStatus: "update_ready_unstaged",
+          },
+          commandContext: {
+            expectedBlockerType: "app_update",
+            reason: "Support requested an app update check.",
+          },
+          reason: "Ask the checkout station to report app update readiness.",
+        },
+      ],
+      manualReview: [
+        {
+          reason: "Unsafe cloud conflict needs manual review.",
+          source: "cloud_repair",
+          type: "unsafe_cloud_conflict",
+        },
+      ],
+    },
+    registerSessionLink: {
+      registerSessionId: "register-session-1",
+      status: "open",
+    },
+    syncEvidence: {
+      latestEvent: {
+        localEventId: "event-1",
+        localRegisterSessionId: "local-register-1",
+        sequence: 7,
+        eventType: "sale_completed",
+        status: "accepted",
+        occurredAt: 90,
+        submittedAt: 95,
+        acceptedAt: 100,
+        projectedAt: 105,
+      },
+      latestReviewEvent: {
+        localEventId: "event-review",
+        localRegisterSessionId: "local-register-1",
+        sequence: 8,
+        eventType: "sale_completed",
+        status: "conflicted",
+      },
+      latestReviewEventsByStatus: {
+        conflicted: {
+          localEventId: "event-conflicted",
+          localRegisterSessionId: "local-register-1",
+          sequence: 8,
+          eventType: "sale_completed",
+          status: "conflicted",
+        },
+        held: null,
+        rejected: null,
+      },
+      sampledEventCount: 2,
+      acceptedCount: 1,
+      projectedCount: 1,
+      conflictedCount: 1,
+      heldCount: 0,
+      rejectedCount: 0,
+      unresolvedConflictCount: 1,
+      unresolvedConflicts: [
+        {
+          _id: "conflict-1",
+          conflictType: "duplicate_local_id",
+          createdAt: 100,
+          localEventId: "event-conflicted",
+          localRegisterSessionId: "local-register-1",
+          sequence: 8,
+          summary: "Duplicate local event id.",
+        },
+      ],
+      acceptedThroughSequence: 7,
+      cursorUpdatedAt: 110,
+    },
+  };
 }
 
 function buildRemoteAssistClient(overrides: Record<string, unknown> = {}) {
@@ -1126,6 +1261,15 @@ describe("POS terminal public mutations", () => {
     expect(returnValidator).not.toContain("payload");
     expect(returnValidator).not.toContain("syncSecret");
     expect(returnValidator).not.toContain("staffProofToken");
+  });
+
+  it("validates representative terminal health public results against exported return validators", () => {
+    const summary = buildTerminalHealthSummaryResult();
+
+    assertConformsToExportedReturns(listTerminalHealthSummaries as never, [
+      summary,
+    ]);
+    assertConformsToExportedReturns(getTerminalHealthSummary as never, summary);
   });
 
   it("requires store membership before loading terminal health detail", async () => {

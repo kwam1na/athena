@@ -246,6 +246,10 @@ function isHarnessCriticalFile(filePath: string) {
     return true;
   }
 
+  if (isConvexReturnContractSourcePath(normalized)) {
+    return true;
+  }
+
   if (
     normalized === "packages/athena-webapp/docs/agent/testing.md" ||
     normalized === "packages/storefront-webapp/docs/agent/testing.md"
@@ -254,6 +258,17 @@ function isHarnessCriticalFile(filePath: string) {
   }
 
   return false;
+}
+
+function isConvexReturnContractSourcePath(filePath: string) {
+  const normalized = normalizeRepoPath(filePath);
+  return (
+    normalized.startsWith("packages/athena-webapp/convex/") &&
+    normalized.endsWith(".ts") &&
+    !normalized.endsWith(".test.ts") &&
+    !normalized.endsWith(".d.ts") &&
+    !normalized.startsWith("packages/athena-webapp/convex/_generated/")
+  );
 }
 
 function buildFinding(
@@ -563,6 +578,215 @@ async function collectHarnessSafetySignalFindings(
   return findings;
 }
 
+type ConvexPublicFunctionExport = {
+  exportName: string;
+  kind: "action" | "mutation" | "query";
+};
+
+function extractConvexPublicFunctionsWithReturns(contents: string) {
+  const exports: ConvexPublicFunctionExport[] = [];
+  const functionPattern =
+    /export\s+const\s+([A-Za-z_$][\w$]*)\s*=\s*(query|mutation|action)\s*\(\s*\{/g;
+
+  for (const match of contents.matchAll(functionPattern)) {
+    const bodyStart = match.index === undefined ? -1 : match.index;
+    if (bodyStart < 0) {
+      continue;
+    }
+
+    const bodyEnd = findMatchingDefinitionEnd(contents, bodyStart);
+    const definitionBody =
+      bodyEnd === -1 ? contents.slice(bodyStart) : contents.slice(bodyStart, bodyEnd);
+    if (!/\breturns\s*:/.test(definitionBody)) {
+      continue;
+    }
+
+    exports.push({
+      exportName: match[1],
+      kind: match[2] as ConvexPublicFunctionExport["kind"],
+    });
+  }
+
+  return exports;
+}
+
+function findMatchingDefinitionEnd(contents: string, startIndex: number) {
+  const nextExport = contents.indexOf("\nexport const ", startIndex + 1);
+  if (nextExport !== -1) {
+    return nextExport;
+  }
+
+  return contents.length;
+}
+
+function isRelevantConvexContractProofPath(
+  proofPath: string,
+  sourcePath: string,
+) {
+  const normalizedProof = normalizeRepoPath(proofPath);
+  if (
+    !normalizedProof.startsWith("packages/athena-webapp/convex/") ||
+    !normalizedProof.endsWith(".test.ts")
+  ) {
+    return false;
+  }
+
+  const sourceDirectory = path.posix.dirname(normalizeRepoPath(sourcePath));
+  const proofDirectory = path.posix.dirname(normalizedProof);
+  return proofDirectory === sourceDirectory;
+}
+
+function hasConvexReturnContractProofForExport(
+  contents: string,
+  exportName: string,
+) {
+  const executableContents = stripTypeScriptNonCode(contents);
+  return new RegExp(
+    `\\bassertConformsToExportedReturns\\s*\\(\\s*${escapeRegExp(exportName)}\\b`,
+  ).test(executableContents);
+}
+
+function stripTypeScriptNonCode(contents: string) {
+  let output = "";
+  let index = 0;
+  let quote: '"' | "'" | "`" | null = null;
+
+  while (index < contents.length) {
+    const char = contents[index];
+    const next = contents[index + 1];
+
+    if (quote) {
+      output += char === "\n" ? "\n" : " ";
+      if (char === "\\" && next !== undefined) {
+        output += next === "\n" ? "\n" : " ";
+        index += 2;
+        continue;
+      }
+      if (char === quote) {
+        quote = null;
+      }
+      index += 1;
+      continue;
+    }
+
+    if (char === '"' || char === "'" || char === "`") {
+      quote = char;
+      output += " ";
+      index += 1;
+      continue;
+    }
+
+    if (char === "/" && next === "/") {
+      while (index < contents.length && contents[index] !== "\n") {
+        index += 1;
+      }
+      continue;
+    }
+
+    if (char === "/" && next === "*") {
+      index += 2;
+      while (
+        index < contents.length &&
+        !(contents[index] === "*" && contents[index + 1] === "/")
+      ) {
+        if (contents[index] === "\n") {
+          output += "\n";
+        }
+        index += 1;
+      }
+      index += 2;
+      continue;
+    }
+
+    output += char;
+    index += 1;
+  }
+
+  return output;
+}
+
+async function collectConvexReturnValidatorContractFindings(
+  rootDir: string,
+  changedFiles: string[],
+) {
+  const changedFileSet = new Set(sortUnique(changedFiles));
+  const findings: InferentialFinding[] = [];
+  const proofCache = new Map<string, string | null>();
+
+  async function readChangedProofFile(filePath: string) {
+    if (!proofCache.has(filePath)) {
+      proofCache.set(filePath, await readUtf8OrNull(path.join(rootDir, filePath)));
+    }
+    return proofCache.get(filePath);
+  }
+
+  async function hasChangedProofForPublicFunction(
+    sourcePath: string,
+    publicFunction: ConvexPublicFunctionExport,
+  ) {
+    for (const candidate of changedFileSet) {
+      if (!isRelevantConvexContractProofPath(candidate, sourcePath)) {
+        continue;
+      }
+
+      const proofContents = await readChangedProofFile(candidate);
+      if (
+        proofContents &&
+        hasConvexReturnContractProofForExport(
+          proofContents,
+          publicFunction.exportName,
+        )
+      ) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  for (const changedFile of changedFileSet) {
+    if (!isConvexReturnContractSourcePath(changedFile)) {
+      continue;
+    }
+
+    const contents = await readUtf8OrNull(path.join(rootDir, changedFile));
+    if (!contents) {
+      continue;
+    }
+
+    const publicFunctions = extractConvexPublicFunctionsWithReturns(contents);
+    if (publicFunctions.length === 0) {
+      continue;
+    }
+
+    const publicFunctionsWithoutProof: ConvexPublicFunctionExport[] = [];
+    for (const publicFunction of publicFunctions) {
+      if (!(await hasChangedProofForPublicFunction(changedFile, publicFunction))) {
+        publicFunctionsWithoutProof.push(publicFunction);
+      }
+    }
+
+    if (publicFunctionsWithoutProof.length === 0) {
+      continue;
+    }
+
+    findings.push(
+      buildFinding(
+        `missing-convex-return-validator-contract-proof-${slugifyForFindingId(changedFile)}`,
+        "high",
+        "Public Convex return validator changed without executable contract proof",
+        changedFile,
+        `This changed Convex public module exports ${publicFunctionsWithoutProof
+          .map((entry) => `${entry.kind} ${entry.exportName}`)
+          .join(", ")} with explicit return validators, but no changed sibling test validates representative returned values against the exported Convex returns validator.`,
+        "Add or update a nearby Convex test that calls `assertConformsToExportedReturns(changedExport, representativeValue)` from `convex/lib/returnValidatorContract` with representative handler or presenter return values. Loose `exportReturns()` string checks and marker comments are not sufficient proof.",
+      ),
+    );
+  }
+
+  return findings;
+}
+
 async function runDeterministicSemanticAnalysis(
   input: InferentialProviderInput,
 ): Promise<InferentialDeterministicAnalysisResult> {
@@ -572,6 +796,10 @@ async function runDeterministicSemanticAnalysis(
       input.changedFiles,
     )),
     ...(await collectHarnessSafetySignalFindings(
+      input.rootDir,
+      input.changedFiles,
+    )),
+    ...(await collectConvexReturnValidatorContractFindings(
       input.rootDir,
       input.changedFiles,
     )),

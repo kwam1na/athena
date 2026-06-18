@@ -317,7 +317,7 @@ Behavior scenarios:
 - `athena-convex-storefront-composition`
 - `athena-convex-storefront-failure-visibility`
 
-Any change that can affect Convex HTTP wiring, serviceOps schemas and workflows, shared operational rails, or route-to-backend composition should include the Convex audit pair.
+Any change that can affect Convex HTTP wiring, serviceOps schemas and workflows, shared operational rails, or route-to-backend composition should include the Convex audit pair. When a public Convex function with an explicit `returns` validator changes, add executable return-contract proof with `assertConformsToExportedReturns`; loose `exportReturns()` string checks do not prove the production return contract.
 
 ## Route runtime or build-pipeline edits
 
