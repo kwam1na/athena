@@ -294,6 +294,25 @@ const terminalHealthAttentionReasonReturnValidator = v.object({
   ),
 });
 
+const terminalAppUpdatePreviewReturnValidator = v.object({
+  commandCorrelated: v.optional(v.boolean()),
+  currentBuildId: v.optional(v.string()),
+  evidenceFresh: v.boolean(),
+  observedAt: v.optional(v.number()),
+  pendingBuildId: v.optional(v.string()),
+  status: v.union(
+    v.literal("applying"),
+    v.literal("blocked"),
+    v.literal("current"),
+    v.literal("detector_failed"),
+    v.literal("stale"),
+    v.literal("unknown"),
+    v.literal("update_ready"),
+    v.literal("update_ready_unstaged"),
+  ),
+  summary: v.optional(v.string()),
+});
+
 const terminalRegistrationSummaryReturnValidator = v.object({
   _id: v.id("posTerminal"),
   displayName: v.string(),
@@ -327,6 +346,7 @@ const terminalHealthSummaryReturnValidator = v.object({
         activeRegisterSession: v.boolean(),
         freshRuntimeRequiredForAbleToTransactNow: v.literal(true),
       }),
+      appUpdate: terminalAppUpdatePreviewReturnValidator,
       cloudRepair: v.object({
         preconditionHash: v.string(),
         safeConflictIds: v.array(v.id("posLocalSyncConflict")),
