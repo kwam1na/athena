@@ -232,6 +232,215 @@ describe("terminal health queries", () => {
     expect(summary?.recoveryPreview?.terminalActions).toEqual([]);
   });
 
+  it("derives app update status from fresh runtime evidence", async () => {
+    for (const [runtimeStatus, expectedStatus] of [
+      ["current", "current"],
+      ["update_ready", "update_ready"],
+      ["blocked", "blocked"],
+      ["detector_failed", "detector_failed"],
+    ] as const) {
+      const ctx = buildQueryCtx({
+        posTerminal: [buildTerminal()],
+        posTerminalRuntimeStatus: [
+          buildRuntimeStatus({
+            appUpdate: {
+              canApply: runtimeStatus === "update_ready",
+              currentBuildId: "build-current",
+              detectorStatus: "ok",
+              observedAt: now - 1_000,
+              pendingBuildId: "build-next",
+              selectedBlockerCode:
+                runtimeStatus === "blocked" ? "active_sale" : undefined,
+              stagingStatus:
+                runtimeStatus === "update_ready" ? "staged" : "unknown",
+              status: runtimeStatus,
+            },
+          }),
+        ],
+      });
+
+      const summary = await getTerminalHealthSummary(ctx, {
+        now,
+        storeId,
+        terminalId,
+      });
+
+      expect(summary?.recoveryPreview?.appUpdate).toEqual(
+        expect.objectContaining({
+          currentBuildId: "build-current",
+          evidenceFresh: true,
+          pendingBuildId: "build-next",
+          status: expectedStatus,
+        }),
+      );
+      expect(summary?.recoveryPreview?.terminalActions).toEqual([]);
+    }
+  });
+
+  it("treats missing and stale app update evidence as unknown or stale", async () => {
+    const missingCtx = buildQueryCtx({
+      posTerminal: [buildTerminal()],
+      posTerminalRuntimeStatus: [buildRuntimeStatus()],
+    });
+    const missingSummary = await getTerminalHealthSummary(missingCtx, {
+      now,
+      storeId,
+      terminalId,
+    });
+
+    expect(missingSummary?.recoveryPreview?.appUpdate).toEqual({
+      evidenceFresh: false,
+      status: "unknown",
+    });
+
+    const staleCtx = buildQueryCtx({
+      posTerminal: [buildTerminal()],
+      posTerminalRuntimeStatus: [
+        buildRuntimeStatus({
+          appUpdate: {
+            canApply: true,
+            currentBuildId: "build-current",
+            detectorStatus: "ok",
+            observedAt: now - 10 * 60_000,
+            pendingBuildId: "build-next",
+            stagingStatus: "staged",
+            status: "update_ready",
+          },
+          receivedAt: now - 10 * 60_000,
+        }),
+      ],
+    });
+    const staleSummary = await getTerminalHealthSummary(staleCtx, {
+      now,
+      storeId,
+      terminalId,
+    });
+
+    expect(staleSummary?.recoveryPreview?.appUpdate).toEqual(
+      expect.objectContaining({
+        evidenceFresh: false,
+        status: "stale",
+      }),
+    );
+  });
+
+  it("does not treat replayed stale app update evidence as command-correlated", async () => {
+    const ctx = buildQueryCtx({
+      posTerminal: [buildTerminal()],
+      posTerminalRecoveryCommand: [
+        {
+          _id: "command-update" as Id<"posTerminalRecoveryCommand">,
+          _creationTime: now - 5_000,
+          commandContext: {
+            expectedBlockerType: "app_update",
+            reason: "Support requested an app update check.",
+          },
+          commandType: "update_app",
+          expectedEvidence: {
+            appUpdateStatus: "current",
+          },
+          expiresAt: now + 10_000,
+          issuedAt: now - 5_000,
+          issuedByUserId: "user-1" as Id<"athenaUser">,
+          status: "completed",
+          storeId,
+          terminalId,
+          verificationStatus: "runtime_verification_ready",
+        } as unknown as Doc<"posTerminalRecoveryCommand">,
+      ],
+      posTerminalRuntimeStatus: [
+        buildRuntimeStatus({
+          appUpdate: {
+            canApply: false,
+            commandExecutionId: "older-command",
+            commandIssuedAt: now - 20_000,
+            currentBuildId: "build-current",
+            detectorStatus: "ok",
+            observedAt: now - 10 * 60_000,
+            stagingStatus: "unknown",
+            status: "current",
+          },
+          receivedAt: now - 10 * 60_000,
+        }),
+      ],
+    });
+
+    const summary = await getTerminalHealthSummary(ctx, {
+      now,
+      storeId,
+      terminalId,
+    });
+
+    expect(summary?.recoveryPreview?.commandStatus).toEqual(
+      expect.objectContaining({
+        commandType: "update_app",
+        verificationStatus: "runtime_verification_ready",
+      }),
+    );
+    expect(summary?.recoveryPreview?.appUpdate).toEqual(
+      expect.objectContaining({
+        commandCorrelated: false,
+        evidenceFresh: false,
+        status: "stale",
+      }),
+    );
+  });
+
+  it("marks fresh flat app update commandExecutionId evidence as command-correlated", async () => {
+    const ctx = buildQueryCtx({
+      posTerminal: [buildTerminal()],
+      posTerminalRecoveryCommand: [
+        {
+          _id: "command-update" as Id<"posTerminalRecoveryCommand">,
+          _creationTime: now - 5_000,
+          commandContext: {
+            expectedBlockerType: "app_update",
+            reason: "Support requested an app update check.",
+          },
+          commandType: "update_app",
+          expectedEvidence: {
+            appUpdateCommandExecutionId: "execution-1",
+          },
+          expiresAt: now + 10_000,
+          issuedAt: now - 5_000,
+          issuedByUserId: "user-1" as Id<"athenaUser">,
+          status: "completed",
+          storeId,
+          terminalId,
+          verificationStatus: "runtime_verification_ready",
+        } as unknown as Doc<"posTerminalRecoveryCommand">,
+      ],
+      posTerminalRuntimeStatus: [
+        buildRuntimeStatus({
+          appUpdate: {
+            canApply: false,
+            commandExecutionId: "execution-1",
+            commandIssuedAt: now - 5_000,
+            currentBuildId: "build-current",
+            detectorStatus: "ok",
+            observedAt: now - 1_000,
+            stagingStatus: "unknown",
+            status: "current",
+          },
+        }),
+      ],
+    });
+
+    const summary = await getTerminalHealthSummary(ctx, {
+      now,
+      storeId,
+      terminalId,
+    });
+
+    expect(summary?.recoveryPreview?.appUpdate).toEqual(
+      expect.objectContaining({
+        commandCorrelated: true,
+        evidenceFresh: true,
+        status: "current",
+      }),
+    );
+  });
+
   it("includes recovery preview on terminal health roster summaries", async () => {
     const ctx = buildQueryCtx({
       posTerminal: [buildTerminal()],

@@ -1,8 +1,10 @@
 import { useMutation, useQuery } from "convex/react";
+import { useMemo } from "react";
 
 import { RemoteAssistRuntimeShell } from "./RemoteAssistRuntimeShell";
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
+import { useOptionalUpdateCoordinator } from "@/lib/app-update/UpdateCoordinatorProvider";
 import type { PosLocalEntryContext } from "@/lib/pos/infrastructure/local/localPosEntryContext";
 import { usePosLocalSyncRuntimeStatus } from "@/lib/pos/infrastructure/local/usePosLocalSyncRuntime";
 import type { PosTerminalRuntimeAppSessionRecoveryInput } from "@/lib/pos/infrastructure/local/terminalRuntimeStatus";
@@ -29,8 +31,20 @@ export function PosRemoteAssistRuntimeHost({
     entryContext.status === "ready" ? entryContext.terminalSeed : null;
   const remoteAssistRuntimeIdentity =
     terminalSeed?.cloudTerminalId ?? terminalSeed?.terminalId;
+  const updateCoordinator = useOptionalUpdateCoordinator();
+  const appUpdateCoordinator = useMemo(
+    () =>
+      updateCoordinator
+        ? {
+            applyUpdate: updateCoordinator.applyUpdate,
+            getSnapshot: updateCoordinator.getSnapshot,
+          }
+        : null,
+    [updateCoordinator],
+  );
 
   usePosLocalSyncRuntimeStatus({
+    appUpdateCoordinator,
     appSessionRecovery,
     mode: "drain-enabled",
     storeId: terminalSeed?.storeId,

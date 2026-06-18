@@ -63,6 +63,7 @@ import {
   buildPosTerminalRuntimeCopyDiagnostics,
   buildPosTerminalRuntimeStatus,
   toReportablePosTerminalRuntimeStatus,
+  type PosTerminalRuntimeAppUpdateInput,
   type PosTerminalRuntimeAppSessionRecoveryInput,
   type PosTerminalRuntimeCopyDiagnostics,
   type PosTerminalRuntimeStatusPayload,
@@ -71,10 +72,20 @@ import {
 } from "./terminalRuntimeStatus";
 import {
   executeTerminalRecoveryCommand,
+  type PosAppUpdateCoordinatorAdapter,
   type PosTerminalRecoveryCommandResult,
 } from "./terminalRecoveryCommands";
 
 export { getRuntimeStatusSignature } from "./runtimeStatusPublisher";
+
+const APP_UPDATE_COMMAND_CORRELATION_STORAGE_KEY =
+  "athena-pos-app-update-command-correlation";
+
+type AppUpdateCommandCorrelation = {
+  commandExecutionId: string;
+  commandId?: string;
+  commandIssuedAt?: number;
+};
 
 export type PosLocalRuntimeSyncStatusSource = {
   copyDiagnostics?: PosTerminalRuntimeCopyDiagnostics;
@@ -163,6 +174,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
   onLocalEventsChanged?: (() => void) | null;
   onRetrySync?: (() => void) | null;
   source?: PosTerminalRuntimeStatusSource;
+  appUpdateCoordinator?: PosAppUpdateCoordinatorAdapter | null;
   staffProfileId?: string | null;
   staffAuthorityStatus?: PosLocalStaffAuthorityReadiness | "unknown";
   storeFactory?: (() => PosLocalRuntimeStore) | null;
@@ -188,6 +200,10 @@ export function usePosLocalSyncRuntimeStatus(input: {
   const [manualRetryToken, setManualRetryToken] = useState(0);
   const [runtimeStatusObservationToken, setRuntimeStatusObservationToken] =
     useState(0);
+  const [appUpdateCommandCorrelation, setAppUpdateCommandCorrelation] =
+    useState<AppUpdateCommandCorrelation | null>(() =>
+      readStoredAppUpdateCommandCorrelation(),
+    );
   const [runtimeBuildMetadata, setRuntimeBuildMetadata] = useState(
     getInitialRuntimeBuildMetadata,
   );
@@ -202,6 +218,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
   const drainOnAppend = input.drainOnAppend ?? false;
   const eventAppendToken = input.eventAppendToken ?? 0;
   const mode = input.mode ?? "drain-enabled";
+  const appUpdateCoordinator = input.appUpdateCoordinator;
   const onLocalEventsChanged = input.onLocalEventsChanged;
   const onRetrySync = input.onRetrySync;
   const source = input.source ?? "sync-runtime";
@@ -794,12 +811,21 @@ export function usePosLocalSyncRuntimeStatus(input: {
       debug.schedulerRunning,
     ],
   );
+  const runtimeAppUpdate = useMemo(
+    () =>
+      buildRuntimeAppUpdateInput({
+        appUpdateCoordinator,
+        commandCorrelation: appUpdateCommandCorrelation,
+      }),
+    [appUpdateCommandCorrelation, appUpdateCoordinator],
+  );
 
   const runtimeStatusInput = useMemo(
     () => ({
       activeRegisterSession: runtimeReadiness.activeRegisterSession,
       appShell: runtimeReadiness.appShell,
       appSessionRecovery: input.appSessionRecovery,
+      appUpdate: runtimeAppUpdate,
       appVersion: runtimeBuildMetadata.appVersion,
       buildSha: runtimeBuildMetadata.buildSha,
       browserInfo: getRuntimeBrowserInfo(isOnline),
@@ -821,6 +847,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
       input.staffAuthorityStatus,
       isOnline,
       readError,
+      runtimeAppUpdate,
       runtimeReadiness.activeRegisterSession,
       runtimeReadiness.appShell,
       runtimeBuildMetadata.appVersion,
@@ -928,6 +955,10 @@ export function usePosLocalSyncRuntimeStatus(input: {
         if (!isCurrentPublishScope()) return;
 
         if (result.kind === "ok") {
+          if (appUpdateCommandCorrelation) {
+            clearStoredAppUpdateCommandCorrelation();
+            setAppUpdateCommandCorrelation(null);
+          }
           if (runtimeReadiness.terminalSeed) {
             const authorityStore =
               storeFactory?.() ??
@@ -1061,6 +1092,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
     reportTerminalRuntimeStatus,
     events.length,
     readError,
+    appUpdateCommandCorrelation,
     runtimeStatus,
     runtimeStatusObservationToken,
     runtimeReadiness.terminalIntegrity,
@@ -1137,6 +1169,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
 
         const localResult = await executeTerminalRecoveryCommand({
           command: claimResult.data,
+          appUpdateCoordinator,
           onRetrySync: requestRetry,
           refreshStaffAuthority: async ({ storeId, terminalId }) => {
             if (typeof store.replaceStaffAuthoritySnapshot !== "function") {
@@ -1192,6 +1225,12 @@ export function usePosLocalSyncRuntimeStatus(input: {
           terminalId: runtimeStatusTerminalId,
           terminalSeed: runtimeReadiness.terminalSeed,
         });
+        const updateAppCorrelation = buildAppUpdateCommandCorrelation(
+          claimResult.data,
+        );
+        if (updateAppCorrelation) {
+          setAppUpdateCommandCorrelation(updateAppCorrelation);
+        }
 
         if (localResult.status === "ignored") {
           observedRecoveryCommandIdsRef.current.delete(command._id);
@@ -1208,8 +1247,13 @@ export function usePosLocalSyncRuntimeStatus(input: {
         }
 
         const ackResult = toTerminalRecoveryCommandAckResult(localResult);
+        const executionId =
+          typeof claimResult.data.executionId === "string"
+            ? claimResult.data.executionId
+            : undefined;
         const acknowledged = await acknowledgeTerminalRecoveryCommand({
           commandId: claimResult.data._id,
+          ...(executionId ? { executionId } : {}),
           message: localResult.message,
           result: ackResult,
           storeId: storeId as Id<"store">,
@@ -1217,14 +1261,34 @@ export function usePosLocalSyncRuntimeStatus(input: {
           terminalId: runtimeStatusTerminalId as Id<"posTerminal">,
         });
         if (acknowledged.kind !== "ok") {
+          localResult.onAcknowledgeFailed?.();
+          if (updateAppCorrelation) {
+            clearStoredAppUpdateCommandCorrelation();
+            setAppUpdateCommandCorrelation(null);
+          }
           observedRecoveryCommandIdsRef.current.delete(command._id);
           if (!isStale) {
             setRecoveryCommandRetryToken((current) => current + 1);
           }
         }
-        if (isStale) return;
-
+        let postAcknowledgeMessage: string | undefined;
         if (acknowledged.kind === "ok") {
+          const persistedReloadCorrelation = updateAppCorrelation
+            ? storeAppUpdateCommandCorrelation(updateAppCorrelation)
+            : true;
+          const postAcknowledgeResult = persistedReloadCorrelation
+            ? await localResult.postAcknowledge?.()
+            : {
+                applied: false,
+                message:
+                  "App update was accepted, but refresh evidence could not be saved.",
+              };
+          postAcknowledgeMessage = postAcknowledgeResult?.message;
+          if (postAcknowledgeResult?.applied === false) {
+            clearStoredAppUpdateCommandCorrelation();
+          }
+          if (isStale) return;
+
           const readiness = await refreshTerminalRuntimeReadiness({
             store,
             storeId,
@@ -1241,7 +1305,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
           terminalRecoveryCommandCompletedAt: Date.now(),
           terminalRecoveryCommandMessage:
             acknowledged.kind === "ok"
-              ? localResult.message
+              ? (postAcknowledgeMessage ?? localResult.message)
               : acknowledged.kind === "user_error"
                 ? acknowledged.error.message
                 : "Recovery command acknowledgement failed.",
@@ -1272,6 +1336,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
   }, [
     acknowledgeTerminalRecoveryCommand,
     claimTerminalRecoveryCommand,
+    appUpdateCoordinator,
     onLocalEventsChanged,
     recoveryCommandRetryToken,
     recoveryCommands,
@@ -1845,6 +1910,149 @@ function hasPendingSyncableExpenseEvents(
         event.sync.status === "failed") &&
       isSyncablePosLocalEvent(event, uploadSupport),
   );
+}
+
+function buildRuntimeAppUpdateInput({
+  appUpdateCoordinator,
+  commandCorrelation,
+}: {
+  appUpdateCoordinator?: PosAppUpdateCoordinatorAdapter | null;
+  commandCorrelation?: AppUpdateCommandCorrelation | null;
+}): PosTerminalRuntimeAppUpdateInput | null {
+  if (!appUpdateCoordinator) return null;
+
+  try {
+    const snapshot = appUpdateCoordinator.getSnapshot();
+    return {
+      canApply: snapshot.canApply,
+      commandExecutionId: commandCorrelation?.commandExecutionId,
+      commandId: commandCorrelation?.commandId,
+      commandIssuedAt: commandCorrelation?.commandIssuedAt,
+      currentBuildId: snapshot.currentBuildId,
+      detectorStatus: snapshot.status === "detector-failed" ? "failed" : "ok",
+      pendingBuildId: snapshot.pendingBuildId,
+      selectedBlockerCode: toRuntimeAppUpdateBlockerCode(
+        snapshot.selectedBlocker?.priority,
+      ),
+      stagingStatus:
+        snapshot.status === "ready"
+          ? "staged"
+          : snapshot.status === "ready-unstaged"
+            ? "unstaged"
+            : "unknown",
+      status: toRuntimeAppUpdateStatus(snapshot.status),
+    };
+  } catch {
+    return {
+      canApply: false,
+      commandExecutionId: commandCorrelation?.commandExecutionId,
+      commandId: commandCorrelation?.commandId,
+      commandIssuedAt: commandCorrelation?.commandIssuedAt,
+      detectorStatus: "failed",
+      stagingStatus: "unknown",
+      status: "detector_failed",
+    };
+  }
+}
+
+function toRuntimeAppUpdateStatus(
+  status: ReturnType<PosAppUpdateCoordinatorAdapter["getSnapshot"]>["status"],
+): PosTerminalRuntimeAppUpdateInput["status"] {
+  if (status === "ready") return "update_ready";
+  if (status === "ready-unstaged") return "update_ready_unstaged";
+  if (status === "detector-failed") return "detector_failed";
+  return status;
+}
+
+function toRuntimeAppUpdateBlockerCode(
+  priority?: "critical-workflow" | "active-command" | "resume-required",
+): PosTerminalRuntimeAppUpdateInput["selectedBlockerCode"] {
+  if (priority === "critical-workflow") return "active_sale";
+  if (priority === "active-command") return "active_command";
+  if (priority === "resume-required") return "resume_required";
+  return undefined;
+}
+
+function buildAppUpdateCommandCorrelation(command: {
+  _id?: unknown;
+  commandId?: unknown;
+  commandType?: unknown;
+  executionId?: unknown;
+  issuedAt?: unknown;
+  type?: unknown;
+}): AppUpdateCommandCorrelation | null {
+  const commandType = command.type ?? command.commandType;
+  if (commandType !== "update_app" || typeof command.executionId !== "string") {
+    return null;
+  }
+
+  return {
+    commandExecutionId: command.executionId,
+    commandId:
+      typeof command.commandId === "string"
+        ? command.commandId
+        : typeof command._id === "string"
+          ? command._id
+          : undefined,
+    commandIssuedAt:
+      typeof command.issuedAt === "number" && Number.isFinite(command.issuedAt)
+        ? command.issuedAt
+        : undefined,
+  };
+}
+
+function readStoredAppUpdateCommandCorrelation() {
+  if (typeof sessionStorage === "undefined") return null;
+
+  try {
+    const stored = sessionStorage.getItem(
+      APP_UPDATE_COMMAND_CORRELATION_STORAGE_KEY,
+    );
+    if (!stored) return null;
+
+    const parsed = JSON.parse(stored) as Partial<AppUpdateCommandCorrelation>;
+    return typeof parsed.commandExecutionId === "string" &&
+      parsed.commandExecutionId.length > 0
+      ? {
+          commandExecutionId: parsed.commandExecutionId,
+          ...(typeof parsed.commandId === "string"
+            ? { commandId: parsed.commandId }
+            : {}),
+          ...(typeof parsed.commandIssuedAt === "number" &&
+          Number.isFinite(parsed.commandIssuedAt)
+            ? { commandIssuedAt: parsed.commandIssuedAt }
+            : {}),
+        }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function storeAppUpdateCommandCorrelation(
+  correlation: AppUpdateCommandCorrelation,
+) {
+  if (typeof sessionStorage === "undefined") return false;
+
+  try {
+    sessionStorage.setItem(
+      APP_UPDATE_COMMAND_CORRELATION_STORAGE_KEY,
+      JSON.stringify(correlation),
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function clearStoredAppUpdateCommandCorrelation() {
+  if (typeof sessionStorage === "undefined") return;
+
+  try {
+    sessionStorage.removeItem(APP_UPDATE_COMMAND_CORRELATION_STORAGE_KEY);
+  } catch {
+    // Best effort only.
+  }
 }
 
 function hasPendingLocalCloseout(events: PosLocalEventRecord[]) {

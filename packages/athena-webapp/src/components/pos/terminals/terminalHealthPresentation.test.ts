@@ -11,6 +11,151 @@ import {
 } from "./terminalHealthPresentation";
 
 describe("terminal health presentation", () => {
+  it("derives app-update state from fresh runtime evidence without creating support blockers", () => {
+    const ready = buildTerminalRecoveryPresentation({
+      recoveryPreview: {
+        appUpdate: {
+          evidenceFresh: true,
+          pendingBuildId: "build-next",
+          status: "update_ready",
+        },
+        readiness: "healthy_idle",
+        runtimeFresh: true,
+      },
+      runtimeStatus: {
+        appUpdate: {
+          observedAt: Date.now(),
+          pendingBuildId: "build-next",
+          status: "update_ready",
+        },
+      },
+      syncEvidence: {},
+      terminal: { _id: "terminal-1", status: "active" },
+    });
+
+    expect(ready.appUpdate).toEqual(
+      expect.objectContaining({
+        action: expect.objectContaining({
+          commandType: "update_app",
+          status: "available",
+        }),
+        label: "Update ready",
+        status: "update_ready",
+      }),
+    );
+    expect(ready.groups.terminalRequired).toEqual([]);
+    expect(ready.readiness.status).toBe("healthy_idle");
+
+    const blocked = buildTerminalRecoveryPresentation({
+      recoveryPreview: {
+        appUpdate: {
+          evidenceFresh: true,
+          status: "blocked",
+          summary: "Refresh is blocked by active checkout work.",
+        },
+        readiness: "healthy_idle",
+        runtimeFresh: true,
+      },
+      runtimeStatus: {
+        appUpdate: {
+          blockerSummary: "payment_screen_pending",
+          observedAt: Date.now(),
+          status: "blocked",
+        },
+      },
+      syncEvidence: {},
+      terminal: { _id: "terminal-1", status: "active" },
+    });
+
+    expect(blocked.appUpdate).toEqual(
+      expect.objectContaining({
+        action: expect.objectContaining({ commandType: "update_app" }),
+        description: "Refresh is blocked by active checkout work.",
+        label: "Update blocked",
+        status: "blocked",
+      }),
+    );
+    expect(blocked.groups.terminalRequired).toEqual([]);
+  });
+
+  it("keeps Update app available for active current, stale, and unknown evidence", () => {
+    for (const [status, label] of [
+      ["current", "App current"],
+      ["stale", "Update status stale"],
+      ["unknown", "Update status unknown"],
+    ] as const) {
+      const presentation = buildTerminalRecoveryPresentation({
+        recoveryPreview: {
+          appUpdate: {
+            evidenceFresh: status !== "stale",
+            status,
+          },
+          readiness: "healthy_idle",
+        },
+        runtimeStatus: null,
+        syncEvidence: {},
+        terminal: { _id: "terminal-1", status: "active" },
+      });
+
+      expect(presentation.appUpdate).toEqual(
+        expect.objectContaining({
+          action: expect.objectContaining({
+            commandType: "update_app",
+            status: "available",
+          }),
+          label,
+          status,
+        }),
+      );
+    }
+  });
+
+  it("disables Update app for duplicate active commands and inactive terminals", () => {
+    const duplicate = buildTerminalRecoveryPresentation({
+      recoveryPreview: {
+        appUpdate: {
+          evidenceFresh: true,
+          status: "unknown",
+        },
+        commandStatus: {
+          commandType: "update_app",
+          label: "Update app",
+          status: "pending",
+          verificationStatus: "waiting_for_acknowledgement",
+        },
+        readiness: "healthy_idle",
+      },
+      runtimeStatus: null,
+      syncEvidence: {},
+      terminal: { _id: "terminal-1", status: "active" },
+    });
+
+    expect(duplicate.appUpdate.action).toEqual(
+      expect.objectContaining({
+        commandType: "update_app",
+        status: "pending",
+      }),
+    );
+    expect(duplicate.safeActions).not.toContainEqual(
+      expect.objectContaining({ commandType: "update_app" }),
+    );
+
+    const inactive = buildTerminalRecoveryPresentation({
+      recoveryPreview: {
+        appUpdate: {
+          evidenceFresh: false,
+          status: "unknown",
+        },
+        readiness: "healthy_idle",
+      },
+      runtimeStatus: null,
+      syncEvidence: {},
+      terminal: { _id: "terminal-1", status: "revoked" },
+    });
+
+    expect(inactive.appUpdate.action).toBeUndefined();
+  });
+
   it("builds recovery readiness from the backend preview and keeps healthy idle distinct from able to transact", () => {
     expect(
       buildTerminalRecoveryPresentation({

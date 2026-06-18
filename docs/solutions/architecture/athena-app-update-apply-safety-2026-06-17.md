@@ -59,6 +59,22 @@ banner. POS register surfaces opt in to persistent toast communication so the
 update notice does not shift the register shell or compete with the checkout
 workspace. Both modes use the same coordinator state and the same Refresh action.
 
+## Remote Terminal Update Commands
+
+Remote Terminal Health can ask an active POS terminal to update through the
+same coordinator, but the support command is only intent. The browser that
+claims `update_app` reads its local coordinator snapshot, acknowledges the local
+decision, and calls the coordinator reload latch only after acknowledgement
+persists. It does not call a blind reload path and it cannot bypass blockers
+owned by POS, inventory import, or another surface.
+
+The terminal applies the latest pending build it sees at execution time. The
+support user's build metadata is context for the action, not a frozen target.
+Terminal Health verifies the command through a fresh, command-correlated runtime
+check-in after the command was issued. A command acknowledgement saying
+`applying`, `current`, or `blocked` is lifecycle evidence, not proof that the
+terminal is running a newer bundle.
+
 ## Apply Blockers
 
 Surfaces opt in through `useUpdateApplyBlocker` with:
@@ -122,12 +138,16 @@ app-update module boundary.
 ## Prevention
 
 - Do not call `window.location.reload()` from detection code.
+- Do not call `window.location.reload()` from terminal command code; route
+  remote update requests through the coordinator apply API after acknowledgement.
 - Do not make POS route presence itself an update blocker.
 - Do not hard-code route names in the update coordinator for banner versus toast
   presentation; make the owning surface opt in through the preference provider.
 - Do not add a surface blocker unless the surface has active work, in-flight
   commands, or resumability risk.
 - Do not widen service-worker staging beyond static browser assets.
+- Do not treat remote command acknowledgement as update proof; require fresh
+  command-correlated runtime evidence.
 - Keep operator-facing copy calm and action-oriented; normalize implementation
   details before they reach the banner.
 

@@ -32,6 +32,7 @@ import {
 } from "../application/terminalRecovery/terminalCommandService";
 import { runAcceptedRuntimeStatusSideEffects } from "../application/terminalRuntime/postRuntimeStatusSideEffects";
 import { createTerminalRecoveryCommandRepository } from "../infrastructure/repositories/terminalRecoveryRepository";
+import { getLatestRuntimeStatusForTerminal } from "../infrastructure/repositories/terminalRepository";
 import {
   disconnectRemoteAssistRuntimeSession,
 } from "../../remoteAssist/application/sessionService";
@@ -47,6 +48,7 @@ import {
   posTerminalRuntimeActiveRegisterSessionValidator,
   posTerminalRuntimeAppSessionRecoveryValidator,
   posTerminalRuntimeAppShellValidator,
+  posTerminalRuntimeAppUpdateValidator,
   posTerminalRuntimeBrowserInfoValidator,
   posTerminalRuntimeDrawerAuthorityValidator,
   posTerminalRuntimeLocalStoreValidator,
@@ -125,6 +127,7 @@ const runtimeStatusInputValidator = v.object({
     posTerminalRuntimeAppSessionRecoveryValidator,
   ),
   appShell: v.optional(posTerminalRuntimeAppShellValidator),
+  appUpdate: v.optional(posTerminalRuntimeAppUpdateValidator),
   localStore: posTerminalRuntimeLocalStoreValidator,
   sync: posTerminalRuntimeSyncValidator,
   staffAuthority: posTerminalRuntimeStaffAuthorityValidator,
@@ -390,6 +393,7 @@ const terminalRecoveryCommandReturnValidator = v.object({
   issuedAt: v.number(),
   expiresAt: v.number(),
   claimedAt: v.optional(v.number()),
+  executionId: v.optional(v.string()),
   acknowledgement: v.optional(
     v.object({
       acknowledgedAt: v.number(),
@@ -444,6 +448,25 @@ function stripRuntimeStatusInput(
       ? {
           observedAt: status.appShell.observedAt,
           ready: status.appShell.ready,
+        }
+      : undefined,
+    appUpdate: status.appUpdate
+      ? {
+          blockerSummary:
+            status.appUpdate.blockerSummary ??
+            status.appUpdate.selectedBlockerCode,
+          canApply: status.appUpdate.canApply,
+          commandExecutionId: status.appUpdate.commandExecutionId,
+          commandId: status.appUpdate.commandId,
+          commandIssuedAt: status.appUpdate.commandIssuedAt,
+          commandNonce: status.appUpdate.commandNonce,
+          currentBuildId: status.appUpdate.currentBuildId,
+          detectorStatus: status.appUpdate.detectorStatus,
+          observedAt: status.appUpdate.observedAt,
+          pendingBuildId: status.appUpdate.pendingBuildId,
+          selectedBlockerCode: status.appUpdate.selectedBlockerCode,
+          stagingStatus: status.appUpdate.stagingStatus,
+          status: status.appUpdate.status,
         }
       : undefined,
     localStore: {
@@ -982,9 +1005,8 @@ export const listTerminalRecoveryCommands = query({
         metadata: { terminalAuthorizationFailure: true },
       });
     }
-    return {
-      kind: "ok" as const,
-      data: await listClaimableTerminalRecoveryCommands(
+    const [commands, runtimeStatus] = await Promise.all([
+      listClaimableTerminalRecoveryCommands(
         createTerminalRecoveryCommandRepository(ctx),
         {
           now: Date.now(),
@@ -992,6 +1014,17 @@ export const listTerminalRecoveryCommands = query({
           terminalId: args.terminalId,
         },
       ),
+      getLatestRuntimeStatusForTerminal(ctx, {
+        storeId: args.storeId,
+        terminalId: args.terminalId,
+      }),
+    ]);
+    const supportsAppUpdateCommands = Boolean(runtimeStatus?.appUpdate);
+    return {
+      kind: "ok" as const,
+      data: supportsAppUpdateCommands
+        ? commands
+        : commands.filter((command) => command.commandType !== "update_app"),
     };
   },
 });
@@ -1038,6 +1071,7 @@ export const acknowledgeTerminalRecoveryCommand = mutation({
       v.literal("precondition_failed"),
     ),
     message: v.optional(v.string()),
+    executionId: v.optional(v.string()),
   },
   returns: commandResultValidator(terminalRecoveryCommandReturnValidator),
   handler: async (ctx, args) => {
@@ -1055,6 +1089,7 @@ export const acknowledgeTerminalRecoveryCommand = mutation({
       {
         acknowledgedAt: Date.now(),
         commandId: args.commandId,
+        executionId: args.executionId,
         message: args.message,
         result: args.result,
         storeId: args.storeId,

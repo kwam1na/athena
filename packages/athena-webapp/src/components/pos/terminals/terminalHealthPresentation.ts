@@ -10,6 +10,8 @@ import type {
   TerminalRecoveryPreview,
   TerminalRecoveryActionStatus,
   TerminalRecoveryReadinessStatus,
+  TerminalAppUpdatePreview,
+  TerminalAppUpdateStatus,
 } from "./terminalHealthTypes";
 
 export type TerminalHealthClassification = {
@@ -36,6 +38,7 @@ export type TerminalRecoveryReadinessPresentation = {
 };
 
 export type TerminalRecoveryPresentation = {
+  appUpdate: TerminalAppUpdatePresentation;
   commandStatus: {
     commandType?: TerminalRecoveryCommandType;
     label: string;
@@ -54,6 +57,14 @@ export type TerminalRecoveryPresentation = {
     status: string;
     summary: string;
   };
+};
+
+export type TerminalAppUpdatePresentation = {
+  action?: TerminalRecoveryAction;
+  description: string;
+  label: string;
+  status: TerminalAppUpdateStatus;
+  toneClassName: string;
 };
 
 type TerminalHealthClassificationInput = {
@@ -448,6 +459,7 @@ export function buildTerminalRecoveryPresentation(
     ),
   };
   const readiness = buildRecoveryReadiness(summary, groups);
+  const appUpdate = buildTerminalAppUpdatePresentation(summary, recovery);
   const safeActions = blockers
     .map((blocker) => blocker.action)
     .filter((action): action is TerminalRecoveryAction =>
@@ -455,6 +467,7 @@ export function buildTerminalRecoveryPresentation(
     );
 
   return {
+    appUpdate,
     commandStatus: {
       commandType: recovery?.commandStatus?.commandType,
       label: normalizeSupportCopy(recovery?.commandStatus?.label) ?? "No command issued",
@@ -504,6 +517,225 @@ function buildRecoveryBlockers(
 
 function getTerminalRecoveryPreview(summary: TerminalHealthClassificationInput) {
   return summary.recoveryPreview ?? summary.recovery ?? null;
+}
+
+function buildTerminalAppUpdatePresentation(
+  summary: TerminalHealthClassificationInput,
+  recovery: TerminalRecoveryPreview | null | undefined,
+): TerminalAppUpdatePresentation {
+  const preview = getTerminalAppUpdatePreview(summary, recovery);
+  const status = preview.status;
+  const fallback = getAppUpdateStatusFallback(status);
+  const action = buildUpdateAppAction(summary, recovery);
+
+  return {
+    action,
+    description:
+      normalizeSupportCopy(preview.summary) ??
+      getAppUpdateDescription(status, preview),
+    label: fallback.label,
+    status,
+    toneClassName: fallback.toneClassName,
+  };
+}
+
+function getTerminalAppUpdatePreview(
+  summary: TerminalHealthClassificationInput,
+  recovery: TerminalRecoveryPreview | null | undefined,
+): TerminalAppUpdatePreview {
+  if (recovery?.appUpdate) {
+    return normalizeTerminalAppUpdatePreview(recovery.appUpdate);
+  }
+
+  const runtimeStatus = summary.runtimeStatus as
+    | (TerminalHealthClassificationInput["runtimeStatus"] & {
+        appUpdate?: unknown;
+      })
+    | null;
+  return normalizeTerminalAppUpdatePreview(runtimeStatus?.appUpdate);
+}
+
+function normalizeTerminalAppUpdatePreview(
+  value?: unknown,
+): TerminalAppUpdatePreview {
+  if (!value || typeof value !== "object") {
+    return {
+      evidenceFresh: false,
+      status: "unknown",
+    };
+  }
+
+  const record = value as Record<string, unknown>;
+  const status = normalizeAppUpdateStatus(
+    typeof record.status === "string" ? record.status : undefined,
+  );
+  const evidenceFresh =
+    typeof record.evidenceFresh === "boolean"
+      ? record.evidenceFresh
+      : status !== "stale";
+
+  return {
+    commandCorrelated:
+      typeof record.commandCorrelated === "boolean"
+        ? record.commandCorrelated
+        : undefined,
+    currentBuildId:
+      typeof record.currentBuildId === "string"
+        ? record.currentBuildId
+        : typeof record.currentBuildSha === "string"
+          ? record.currentBuildSha
+          : undefined,
+    evidenceFresh,
+    observedAt:
+      typeof record.observedAt === "number" ? record.observedAt : undefined,
+    pendingBuildId:
+      typeof record.pendingBuildId === "string"
+        ? record.pendingBuildId
+        : typeof record.latestBuildId === "string"
+          ? record.latestBuildId
+          : undefined,
+    status,
+    summary:
+      typeof record.summary === "string"
+        ? record.summary
+        : typeof record.blockerSummary === "string"
+          ? normalizeAppUpdateBlockerSummary(record.blockerSummary)
+          : typeof record.selectedBlockerCode === "string"
+            ? normalizeAppUpdateBlockerSummary(record.selectedBlockerCode)
+          : undefined,
+  };
+}
+
+function normalizeAppUpdateStatus(status?: string): TerminalAppUpdateStatus {
+  switch (status) {
+    case "applying":
+      return "applying";
+    case "blocked":
+      return "blocked";
+    case "current":
+      return "current";
+    case "detector-failed":
+    case "detector_failed":
+      return "detector_failed";
+    case "ready":
+    case "staged":
+    case "update_ready":
+      return "update_ready";
+    case "ready_unstaged":
+    case "update_ready_unstaged":
+      return "update_ready_unstaged";
+    case "stale":
+      return "stale";
+    case "unknown":
+    default:
+      return "unknown";
+  }
+}
+
+function buildUpdateAppAction(
+  summary: TerminalHealthClassificationInput,
+  recovery: TerminalRecoveryPreview | null | undefined,
+): TerminalRecoveryAction | undefined {
+  if (summary.terminal.status !== "active" || !summary.terminal._id) {
+    return undefined;
+  }
+
+  const duplicateStatus = getPreviewCommandActionStatus(
+    recovery?.commandStatus,
+    "update_app",
+  );
+
+  return {
+    commandContext: {
+      expectedBlockerType: "app_update",
+      reason: "Support requested an app update check.",
+    },
+    commandType: "update_app",
+    expectedEvidence: {},
+    kind: "terminal_command",
+    label: "Update app",
+    status: duplicateStatus ?? "available",
+  };
+}
+
+function getAppUpdateStatusFallback(status: TerminalAppUpdateStatus) {
+  switch (status) {
+    case "current":
+      return {
+        label: "App current",
+        toneClassName: "border-success/30 bg-success/10 text-success",
+      };
+    case "update_ready":
+      return {
+        label: "Update ready",
+        toneClassName: "border-warning/30 bg-warning/15 text-warning",
+      };
+    case "update_ready_unstaged":
+      return {
+        label: "Update available",
+        toneClassName: "border-warning/30 bg-warning/15 text-warning",
+      };
+    case "blocked":
+      return {
+        label: "Update blocked",
+        toneClassName: "border-warning/30 bg-warning/15 text-warning",
+      };
+    case "applying":
+      return {
+        label: "Update applying",
+        toneClassName: "border-warning/30 bg-warning/15 text-warning",
+      };
+    case "detector_failed":
+      return {
+        label: "Update check failed",
+        toneClassName: "border-warning/30 bg-warning/15 text-warning",
+      };
+    case "stale":
+      return {
+        label: "Update status stale",
+        toneClassName: "border-muted bg-muted/40 text-muted-foreground",
+      };
+    case "unknown":
+    default:
+      return {
+        label: "Update status unknown",
+        toneClassName: "border-muted bg-muted/40 text-muted-foreground",
+      };
+  }
+}
+
+function getAppUpdateDescription(
+  status: TerminalAppUpdateStatus,
+  appUpdate: TerminalAppUpdatePreview,
+) {
+  switch (status) {
+    case "current":
+      return "This checkout station reports the current app build.";
+    case "update_ready":
+      return "An app update is ready. The checkout station will refresh only when local work is safe.";
+    case "update_ready_unstaged":
+      return "An app update is available but not ready to refresh yet.";
+    case "blocked":
+      return "Refresh is blocked by active checkout work.";
+    case "applying":
+      return "The checkout station accepted the update. Waiting for a fresh check-in.";
+    case "detector_failed":
+      return "Athena could not confirm this checkout station's app update state.";
+    case "stale":
+      return "The latest app update evidence is stale. Send Update app to ask the checkout station to check again.";
+    case "unknown":
+    default:
+      return appUpdate.evidenceFresh
+        ? "This checkout station has not reported app update readiness."
+        : "App update readiness has not been reported yet.";
+  }
+}
+
+function normalizeAppUpdateBlockerSummary(value: string) {
+  if (/sale|payment|checkout|drawer|sync|review|work/i.test(value)) {
+    return "Refresh is blocked by active checkout work.";
+  }
+  return "Refresh is blocked by local app work.";
 }
 
 function hasStructuredRecoveryPreview(recovery: TerminalRecoveryPreview) {
@@ -811,6 +1043,8 @@ function getTerminalCommandActionLabel(
   commandType: NonNullable<TerminalRecoveryAction["commandType"]>,
 ) {
   switch (commandType) {
+    case "update_app":
+      return "Update app";
     case "repair_terminal_seed":
       return "Send terminal setup repair";
     case "clear_stale_drawer_authority":
@@ -830,6 +1064,8 @@ function getTerminalCommandTitle(
   commandType: NonNullable<TerminalRecoveryAction["commandType"]>,
 ) {
   switch (commandType) {
+    case "update_app":
+      return "App update";
     case "repair_terminal_seed":
       return "Terminal setup repair";
     case "clear_stale_drawer_authority":
@@ -850,7 +1086,9 @@ function getTerminalCommandRecoverySummary(
   status?: TerminalRecoveryActionStatus,
 ) {
   const commandName =
-    commandType === "clear_stale_drawer_authority"
+    commandType === "update_app"
+      ? "Update app command"
+      : commandType === "clear_stale_drawer_authority"
       ? "Drawer repair command"
       : commandType === "retry_sync"
         ? "Sync retry command"

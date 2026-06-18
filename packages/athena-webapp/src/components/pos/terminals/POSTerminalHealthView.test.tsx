@@ -205,6 +205,14 @@ describe("POSTerminalHealthViewContent", () => {
           baseSummary,
           {
             ...baseSummary,
+            recoveryPreview: {
+              appUpdate: {
+                evidenceFresh: true,
+                pendingBuildId: "build-next",
+                status: "update_ready",
+              },
+              readiness: "healthy_idle",
+            },
             runtimeStatus: {
               ...baseSummary.runtimeStatus!,
               sync: {
@@ -305,6 +313,8 @@ describe("POSTerminalHealthViewContent", () => {
       "/acme/store/osu/cash-controls/registers/register-session-1",
     );
     expect(screen.getAllByText("Offline checkout").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("App update").length).toBeGreaterThan(0);
+    expect(screen.getByText("Update ready")).toBeInTheDocument();
     expect(screen.getAllByText("Products and stock").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Register details").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Offline diagnostics need attention").length).toBeGreaterThan(0);

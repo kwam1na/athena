@@ -70,6 +70,12 @@ export async function issueTerminalRecoveryCommand(
       message: "Terminal recovery commands can only store non-secret audit data.",
     });
   }
+  if (containsSecretLikeField(args.expectedEvidence)) {
+    return userError({
+      code: "validation_failed",
+      message: "Terminal recovery commands can only store non-secret audit data.",
+    });
+  }
 
   const commandContext = pruneUndefined(args.commandContext);
   const expectedEvidence = pruneUndefined(args.expectedEvidence);
@@ -78,6 +84,17 @@ export async function issueTerminalRecoveryCommand(
     terminalId: args.terminalId,
   });
   for (const command of existingCommands) {
+    if (
+      args.commandType === "update_app" &&
+      command.commandType === "update_app" &&
+      isUpdateAppActiveCommand(command)
+    ) {
+      if (command.expiresAt <= args.issuedAt) {
+        await repository.patchCommand(command._id, { status: "expired" });
+        continue;
+      }
+      return ok(command);
+    }
     if (!isEquivalentCommand(command, {
       commandContext,
       commandType: args.commandType,
@@ -125,14 +142,18 @@ export async function listClaimableTerminalRecoveryCommands(
   });
   const claimable: Doc<"posTerminalRecoveryCommand">[] = [];
   for (const command of commands) {
-    if (command.expiresAt <= args.now && command.status === "pending") {
+    if (
+      command.expiresAt <= args.now &&
+      (command.status === "pending" || command.status === "claimed")
+    ) {
       await repository.patchCommand(command._id, { status: "expired" });
       continue;
     }
     if (
       command.storeId === args.storeId &&
       command.terminalId === args.terminalId &&
-      (command.status === "pending" || command.status === "claimed") &&
+      (command.status === "pending" ||
+        (command.status === "claimed" && command.commandType !== "update_app")) &&
       command.expiresAt > args.now
     ) {
       claimable.push(command);
@@ -167,17 +188,51 @@ export async function claimTerminalRecoveryCommand(
       message: "This terminal recovery command is no longer claimable.",
     });
   }
-
-  if (command.status === "pending") {
-    await repository.patchCommand(command._id, {
-      claimedAt: args.claimedAt,
-      status: "claimed",
+  if (command.commandType === "update_app" && command.status === "claimed") {
+    return userError({
+      code: "precondition_failed",
+      message: "This terminal recovery command is already claimed.",
     });
   }
 
+  if (command.status === "pending") {
+    const executionId =
+      command.commandType === "update_app"
+        ? buildExecutionId(command._id, args.claimedAt)
+        : undefined;
+    await repository.patchCommand(command._id, pruneUndefined({
+      claimedAt: args.claimedAt,
+      executionId,
+      expectedEvidence:
+        command.commandType === "update_app" &&
+        command.expectedEvidence.appUpdateCommandExecutionId === undefined
+          ? {
+              ...command.expectedEvidence,
+              appUpdateCommandExecutionId: executionId,
+            }
+          : undefined,
+      status: "claimed",
+    }));
+  }
+
+  const executionId =
+    command.executionId ??
+    (command.commandType === "update_app"
+      ? buildExecutionId(command._id, args.claimedAt)
+      : undefined);
+  const expectedEvidence =
+    command.commandType === "update_app" &&
+    command.expectedEvidence.appUpdateCommandExecutionId === undefined
+      ? {
+          ...command.expectedEvidence,
+          appUpdateCommandExecutionId: executionId,
+        }
+      : command.expectedEvidence;
   return ok({
     ...command,
     claimedAt: command.claimedAt ?? args.claimedAt,
+    executionId,
+    expectedEvidence,
     status: "claimed",
   });
 }
@@ -187,6 +242,7 @@ export async function acknowledgeTerminalRecoveryCommand(
   args: {
     acknowledgedAt: number;
     commandId: Id<"posTerminalRecoveryCommand">;
+    executionId?: string;
     message?: string;
     result: TerminalRecoveryCommandAckResult;
     storeId: Id<"store">;
@@ -202,6 +258,20 @@ export async function acknowledgeTerminalRecoveryCommand(
       code: "precondition_failed",
       message: "This terminal recovery command cannot be acknowledged.",
     });
+  }
+  if (command.commandType === "update_app") {
+    if (command.status !== "claimed") {
+      return userError({
+        code: "precondition_failed",
+        message: "This terminal recovery command must be claimed before acknowledgement.",
+      });
+    }
+    if (!command.executionId || args.executionId !== command.executionId) {
+      return userError({
+        code: "precondition_failed",
+        message: "This terminal recovery command claim is stale.",
+      });
+    }
   }
 
   const status = args.result;
@@ -289,6 +359,20 @@ function runtimeMatchesExpectedEvidence(
   expectedEvidence: TerminalRecoveryExpectedEvidence,
 ) {
   if (
+    expectedEvidence.appUpdateStatus !== undefined &&
+    getRuntimeAppUpdateEvidence(runtimeStatus).status !==
+      expectedEvidence.appUpdateStatus
+  ) {
+    return false;
+  }
+  if (
+    expectedEvidence.appUpdateCommandExecutionId !== undefined &&
+    getRuntimeAppUpdateEvidence(runtimeStatus).commandExecutionId !==
+      expectedEvidence.appUpdateCommandExecutionId
+  ) {
+    return false;
+  }
+  if (
     expectedEvidence.localStoreAvailable !== undefined &&
     runtimeStatus.localStore.available !== expectedEvidence.localStoreAvailable
   ) {
@@ -347,6 +431,24 @@ function normalizeOptionalHealthyStatus(status: string | undefined) {
   return status ?? "healthy";
 }
 
+function getRuntimeAppUpdateEvidence(
+  runtimeStatus: Doc<"posTerminalRuntimeStatus">,
+): {
+  commandExecutionId?: string;
+  status?: TerminalRecoveryExpectedEvidence["appUpdateStatus"];
+} {
+  const evidence = (
+    runtimeStatus as Doc<"posTerminalRuntimeStatus"> & {
+      appUpdate?: {
+        commandExecutionId?: string;
+        status?: TerminalRecoveryExpectedEvidence["appUpdateStatus"];
+      };
+    }
+  ).appUpdate;
+
+  return evidence ?? {};
+}
+
 function loadScopedCommand(
   repository: TerminalRecoveryCommandRepository,
   args: {
@@ -397,6 +499,17 @@ function isActiveCommand(command: Doc<"posTerminalRecoveryCommand">) {
     command.status === "claimed" ||
     command.verificationStatus === "runtime_verification_ready"
   );
+}
+
+function isUpdateAppActiveCommand(command: Doc<"posTerminalRecoveryCommand">) {
+  return command.status === "pending" || command.status === "claimed";
+}
+
+function buildExecutionId(
+  commandId: Id<"posTerminalRecoveryCommand">,
+  claimedAt: number,
+) {
+  return `${commandId}:${claimedAt}`;
 }
 
 function containsSecretLikeField(value: unknown): boolean {

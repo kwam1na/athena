@@ -898,6 +898,113 @@ describe("POSTerminalDetailViewContent", () => {
     expect(mocks.toastSuccess).toHaveBeenCalledWith("Terminal command queued.");
   });
 
+  it("issues Update app from active terminals even when update readiness is unknown", async () => {
+    const onIssueTerminalRecoveryCommand = vi.fn(async () => ({
+      data: { _id: "command-update" },
+      kind: "ok" as const,
+    }));
+
+    render(
+      <POSTerminalDetailViewContent
+        detail={{
+          ...detail,
+          attentionReasons: [],
+          recoveryPreview: {
+            appUpdate: {
+              evidenceFresh: false,
+              status: "unknown",
+            },
+            readiness: "healthy_idle",
+          },
+        }}
+        isLoading={false}
+        onIssueTerminalRecoveryCommand={onIssueTerminalRecoveryCommand}
+      />,
+    );
+
+    const updateButton = screen.getByRole("button", { name: "Update app" });
+    expect(updateButton).toBeEnabled();
+    expect(screen.getByText("Update status unknown")).toBeInTheDocument();
+
+    fireEvent.click(updateButton);
+
+    await waitFor(() => {
+      expect(onIssueTerminalRecoveryCommand).toHaveBeenCalledWith({
+        action: expect.objectContaining({
+          commandContext: expect.objectContaining({
+            expectedBlockerType: "app_update",
+          }),
+          commandType: "update_app",
+          expectedEvidence: {},
+          kind: "terminal_command",
+        }),
+        terminalId: "terminal-1",
+      });
+    });
+    expect(mocks.toastSuccess).toHaveBeenCalledWith("Update app command queued.");
+  });
+
+  it("disables duplicate Update app actions while an equivalent command is active", () => {
+    const onIssueTerminalRecoveryCommand = vi.fn();
+
+    render(
+      <POSTerminalDetailViewContent
+        detail={{
+          ...detail,
+          attentionReasons: [],
+          recoveryPreview: {
+            appUpdate: {
+              evidenceFresh: true,
+              status: "current",
+            },
+            commandStatus: {
+              commandType: "update_app",
+              label: "Update app",
+              status: "pending",
+              verificationStatus: "waiting_for_acknowledgement",
+            },
+            readiness: "healthy_idle",
+          },
+        }}
+        isLoading={false}
+        onIssueTerminalRecoveryCommand={onIssueTerminalRecoveryCommand}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Update app" })).toBeDisabled();
+    expect(
+      screen.getByText(
+        "Update app command is queued for this checkout station.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("disables Update app for inactive terminals", () => {
+    render(
+      <POSTerminalDetailViewContent
+        detail={{
+          ...detail,
+          attentionReasons: [],
+          recoveryPreview: {
+            appUpdate: {
+              evidenceFresh: false,
+              status: "unknown",
+            },
+            readiness: "healthy_idle",
+          },
+          terminal: {
+            ...detail.terminal,
+            status: "revoked",
+          },
+        }}
+        isLoading={false}
+        onIssueTerminalRecoveryCommand={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Update app" })).toBeDisabled();
+  });
+
   it("surfaces a next step when drawer repair verification fails and sync retry is available", () => {
     render(
       <POSTerminalDetailViewContent

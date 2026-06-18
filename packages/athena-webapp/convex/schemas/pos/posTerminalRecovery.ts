@@ -7,6 +7,7 @@ export const posTerminalRecoveryCommandTypeValidator = v.union(
   v.literal("refresh_staff_authority"),
   v.literal("refresh_snapshots"),
   v.literal("report_diagnostics"),
+  v.literal("update_app"),
 );
 
 export const posTerminalRecoveryCommandStatusValidator = v.union(
@@ -36,6 +37,18 @@ export const posTerminalRecoveryCommandPayloadValidator = v.object({
 });
 
 export const posTerminalRecoveryExpectedEvidenceValidator = v.object({
+  appUpdateCommandExecutionId: v.optional(v.string()),
+  appUpdateStatus: v.optional(
+    v.union(
+      v.literal("current"),
+      v.literal("update_ready"),
+      v.literal("update_ready_unstaged"),
+      v.literal("blocked"),
+      v.literal("applying"),
+      v.literal("detector_failed"),
+      v.literal("unknown"),
+    ),
+  ),
   drawerAuthorityStatus: v.optional(v.union(v.literal("healthy"), v.literal("blocked"))),
   localRegisterSessionId: v.optional(v.string()),
   localStoreAvailable: v.optional(v.boolean()),
@@ -99,6 +112,7 @@ export const posTerminalRecoveryCommandSchema = v.object({
   issuedAt: v.number(),
   expiresAt: v.number(),
   claimedAt: v.optional(v.number()),
+  executionId: v.optional(v.string()),
   acknowledgement: v.optional(posTerminalRecoveryCommandAckValidator),
   verifiedAt: v.optional(v.number()),
 });

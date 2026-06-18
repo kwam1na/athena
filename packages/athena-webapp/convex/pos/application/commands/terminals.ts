@@ -247,6 +247,21 @@ export type TerminalRuntimeStatusInput = {
     observedAt: number;
     ready: boolean;
   };
+  appUpdate?: {
+    blockerSummary?: AppUpdateBlockerCode;
+    canApply: boolean;
+    commandExecutionId?: string;
+    commandId?: string;
+    commandIssuedAt?: number;
+    commandNonce?: string;
+    currentBuildId?: string;
+    detectorStatus: AppUpdateDetectorStatus;
+    observedAt: number;
+    pendingBuildId?: string;
+    selectedBlockerCode?: AppUpdateBlockerCode;
+    stagingStatus?: AppUpdateStagingStatus;
+    status: AppUpdateStatus;
+  };
   localStore: {
     available: boolean;
     schemaVersion?: number;
@@ -347,6 +362,26 @@ type AppSessionRecoveryStatus =
   | "retry_exhausted"
   | "stale_assertion";
 
+type AppUpdateStatus =
+  | "current"
+  | "checking"
+  | "update_ready"
+  | "update_ready_unstaged"
+  | "blocked"
+  | "applying"
+  | "detector_failed"
+  | "unknown";
+
+type AppUpdateStagingStatus = "staged" | "unstaged" | "unknown";
+
+type AppUpdateDetectorStatus = "ok" | "failed" | "unknown";
+
+type AppUpdateBlockerCode =
+  | "active_sale"
+  | "active_command"
+  | "resume_required"
+  | "unknown";
+
 const TERMINAL_NOT_ACTIVE_FOR_STORE_MESSAGE =
   "This terminal is not active for this store.";
 const REDACTED_DIAGNOSTIC_VALUE = "[redacted]";
@@ -398,6 +433,7 @@ export async function submitTerminalRuntimeStatus(
     source: args.status.source,
     appSessionRecovery,
     appShell: cleanAppShell(args.status.appShell),
+    appUpdate: cleanAppUpdate(args.status.appUpdate),
     ...omitUndefined({
       appVersion: cleanOptionalString(args.status.appVersion, 80),
       buildSha: cleanOptionalString(args.status.buildSha, 80),
@@ -530,6 +566,38 @@ function cleanAppShell(appShell: TerminalRuntimeStatusInput["appShell"]) {
     observedAt: positiveTimestamp(appShell.observedAt) ?? Date.now(),
     ready: appShell.ready === true,
   };
+}
+
+function cleanAppUpdate(appUpdate: TerminalRuntimeStatusInput["appUpdate"]) {
+  if (!appUpdate) return undefined;
+
+  return omitUndefined({
+    blockerSummary: appUpdateBlockerCodes.has(appUpdate.blockerSummary)
+      ? appUpdate.blockerSummary
+      : undefined,
+    canApply: appUpdate.canApply === true,
+    commandExecutionId: cleanOptionalString(appUpdate.commandExecutionId, 120),
+    commandId: cleanOptionalString(appUpdate.commandId, 120),
+    commandIssuedAt: positiveTimestamp(appUpdate.commandIssuedAt),
+    commandNonce: cleanOptionalString(appUpdate.commandNonce, 120),
+    currentBuildId: cleanOptionalString(appUpdate.currentBuildId, 120),
+    detectorStatus: appUpdateDetectorStatuses.has(appUpdate.detectorStatus)
+      ? appUpdate.detectorStatus
+      : "unknown",
+    observedAt: positiveTimestamp(appUpdate.observedAt) ?? Date.now(),
+    pendingBuildId: cleanOptionalString(appUpdate.pendingBuildId, 120),
+    selectedBlockerCode: appUpdateBlockerCodes.has(
+      appUpdate.selectedBlockerCode,
+    )
+      ? appUpdate.selectedBlockerCode
+      : undefined,
+    stagingStatus: appUpdateStagingStatuses.has(appUpdate.stagingStatus)
+      ? appUpdate.stagingStatus
+      : undefined,
+    status: appUpdateStatuses.has(appUpdate.status)
+      ? appUpdate.status
+      : "unknown",
+  });
 }
 
 function cleanOptionalString(value: string | undefined, maxLength: number) {
@@ -677,6 +745,38 @@ const appSessionRecoveryStatuses = new Set<AppSessionRecoveryStatus>([
   "blocked_store_mismatch",
   "retry_exhausted",
   "stale_assertion",
+]);
+
+const appUpdateStatuses = new Set<AppUpdateStatus>([
+  "current",
+  "checking",
+  "update_ready",
+  "update_ready_unstaged",
+  "blocked",
+  "applying",
+  "detector_failed",
+  "unknown",
+]);
+
+const appUpdateStagingStatuses = new Set<AppUpdateStagingStatus | undefined>([
+  "staged",
+  "unstaged",
+  "unknown",
+  undefined,
+]);
+
+const appUpdateDetectorStatuses = new Set<AppUpdateDetectorStatus>([
+  "ok",
+  "failed",
+  "unknown",
+]);
+
+const appUpdateBlockerCodes = new Set<AppUpdateBlockerCode | undefined>([
+  "active_sale",
+  "active_command",
+  "resume_required",
+  "unknown",
+  undefined,
 ]);
 
 function positiveTimestamp(value: number | undefined) {

@@ -99,6 +99,241 @@ describe("terminal command service", () => {
     expect(repository.insertCommand).not.toHaveBeenCalled();
   });
 
+  it("issues update_app with command-correlated expected evidence", async () => {
+    const repository = buildRepository();
+
+    const result = await issueTerminalRecoveryCommand(repository, {
+      commandType: "update_app",
+      expectedEvidence: {
+        appUpdateCommandExecutionId: "execution-1",
+        appUpdateStatus: "current",
+      },
+      issuedAt: now,
+      issuedByUserId: "user-1" as Id<"athenaUser">,
+      commandContext: {
+        reason: "Support requested app update.",
+      },
+      storeId,
+      terminalId,
+    });
+
+    expect(result).toMatchObject({
+      kind: "ok",
+      data: {
+        commandType: "update_app",
+        expectedEvidence: {
+          appUpdateCommandExecutionId: "execution-1",
+          appUpdateStatus: "current",
+        },
+        status: "pending",
+      },
+    });
+  });
+
+  it("dedupes active update_app work without freezing support-side build metadata", async () => {
+    const existingCommand = buildCommand({
+      commandType: "update_app",
+      commandContext: {
+        reason: "Support requested app update.",
+      },
+      expectedEvidence: {
+        appUpdateStatus: "current",
+      },
+      status: "claimed",
+    });
+    const repository = buildRepository({
+      commands: [existingCommand],
+    });
+
+    const result = await issueTerminalRecoveryCommand(repository, {
+      commandType: "update_app",
+      expectedEvidence: {
+        appUpdateStatus: "update_ready",
+      },
+      issuedAt: now,
+      issuedByUserId: "user-2" as Id<"athenaUser">,
+      commandContext: {
+        reason: "Support requested app update after a newer check-in.",
+      },
+      storeId,
+      terminalId,
+    });
+
+    expect(result).toEqual({
+      kind: "ok",
+      data: existingCommand,
+    });
+    expect(repository.insertCommand).not.toHaveBeenCalled();
+  });
+
+  it("allows update_app retry after completed no-op evaluation", async () => {
+    const repository = buildRepository({
+      commands: [
+        buildCommand({
+          commandType: "update_app",
+          commandContext: {
+            reason: "Support requested app update.",
+          },
+          expectedEvidence: {
+            appUpdateStatus: "current",
+          },
+          status: "completed",
+          verificationStatus: "verified",
+        }),
+      ],
+    });
+
+    const result = await issueTerminalRecoveryCommand(repository, {
+      commandType: "update_app",
+      expectedEvidence: {
+        appUpdateStatus: "current",
+      },
+      issuedAt: now + 1_000,
+      issuedByUserId: "user-2" as Id<"athenaUser">,
+      commandContext: {
+        reason: "Support requested app update again.",
+      },
+      storeId,
+      terminalId,
+    });
+
+    expect(result).toMatchObject({
+      kind: "ok",
+      data: {
+        _id: "command-2",
+        commandType: "update_app",
+        status: "pending",
+      },
+    });
+    expect(repository.insertCommand).toHaveBeenCalled();
+  });
+
+  it("requires the update_app claim execution id for acknowledgement", async () => {
+    const repository = buildRepository({
+      commands: [
+        buildCommand({
+          commandType: "update_app",
+          status: "pending",
+        }),
+      ],
+    });
+
+    const claimed = await claimTerminalRecoveryCommand(repository, {
+      claimedAt: now + 100,
+      commandId: "command-1" as Id<"posTerminalRecoveryCommand">,
+      storeId,
+      terminalId,
+    });
+
+    expect(claimed).toMatchObject({
+      kind: "ok",
+      data: {
+        executionId: "command-1:2000100",
+        status: "claimed",
+      },
+    });
+
+    await expect(
+      acknowledgeTerminalRecoveryCommand(repository, {
+        acknowledgedAt: now + 200,
+        commandId: "command-1" as Id<"posTerminalRecoveryCommand">,
+        executionId: "stale-execution",
+        result: "completed",
+        storeId,
+        terminalId,
+      }),
+    ).resolves.toMatchObject({
+      error: {
+        code: "precondition_failed",
+        message: "This terminal recovery command claim is stale.",
+      },
+      kind: "user_error",
+    });
+
+    await expect(
+      acknowledgeTerminalRecoveryCommand(repository, {
+        acknowledgedAt: now + 300,
+        commandId: "command-1" as Id<"posTerminalRecoveryCommand">,
+        executionId: "command-1:2000100",
+        result: "completed",
+        storeId,
+        terminalId,
+      }),
+    ).resolves.toMatchObject({
+      kind: "ok",
+      data: {
+        status: "completed",
+      },
+    });
+  });
+
+  it("rejects concurrent update_app claims after the first consumer claims it", async () => {
+    const repository = buildRepository({
+      commands: [
+        buildCommand({
+          commandType: "update_app",
+          status: "pending",
+        }),
+      ],
+    });
+
+    await expect(
+      claimTerminalRecoveryCommand(repository, {
+        claimedAt: now + 100,
+        commandId: "command-1" as Id<"posTerminalRecoveryCommand">,
+        storeId,
+        terminalId,
+      }),
+    ).resolves.toMatchObject({
+      kind: "ok",
+      data: {
+        executionId: "command-1:2000100",
+      },
+    });
+
+    await expect(
+      claimTerminalRecoveryCommand(repository, {
+        claimedAt: now + 200,
+        commandId: "command-1" as Id<"posTerminalRecoveryCommand">,
+        storeId,
+        terminalId,
+      }),
+    ).resolves.toMatchObject({
+      error: {
+        code: "precondition_failed",
+        message: "This terminal recovery command is already claimed.",
+      },
+      kind: "user_error",
+    });
+  });
+
+  it("rejects secret-like update_app expected evidence before audit persistence", async () => {
+    const repository = buildRepository();
+
+    const result = await issueTerminalRecoveryCommand(repository, {
+      commandType: "update_app",
+      expectedEvidence: {
+        appUpdateStatus: "current",
+        syncSecret: "do-not-store",
+      } as never,
+      issuedAt: now,
+      issuedByUserId: "user-1" as Id<"athenaUser">,
+      commandContext: {
+        reason: "Support requested app update.",
+      },
+      storeId,
+      terminalId,
+    });
+
+    expect(result).toMatchObject({
+      error: {
+        code: "validation_failed",
+      },
+      kind: "user_error",
+    });
+    expect(repository.insertCommand).not.toHaveBeenCalled();
+  });
+
   it("returns an equivalent active command instead of inserting duplicate work", async () => {
     const existingCommand = buildCommand({
       commandType: "repair_terminal_seed",

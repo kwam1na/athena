@@ -71,6 +71,7 @@ export type PosTerminalRuntimeStatusPayload =
   ReportTerminalRuntimeStatusPayload & {
     activeRegisterSession?: PosTerminalRuntimeActiveRegisterSessionDiagnostics;
     appShell?: PosTerminalRuntimeAppShellDiagnostics;
+    appUpdate?: PosTerminalRuntimeAppUpdateDiagnostics;
     appSessionRecovery?: PosTerminalRuntimeAppSessionRecoveryDiagnostics;
   };
 export type PosTerminalRuntimeStatusSyncStatus =
@@ -123,9 +124,63 @@ export type PosTerminalRuntimeAppShellDiagnostics =
     observedAt: number;
   };
 
+export type PosTerminalRuntimeAppUpdateStatus =
+  | "current"
+  | "checking"
+  | "update_ready"
+  | "update_ready_unstaged"
+  | "blocked"
+  | "applying"
+  | "detector_failed"
+  | "unknown";
+
+export type PosTerminalRuntimeAppUpdateStagingStatus =
+  | "staged"
+  | "unstaged"
+  | "unknown";
+
+export type PosTerminalRuntimeAppUpdateDetectorStatus =
+  | "ok"
+  | "failed"
+  | "unknown";
+
+export type PosTerminalRuntimeAppUpdateBlockerCode =
+  | "active_sale"
+  | "active_command"
+  | "resume_required"
+  | "unknown";
+
+export type PosTerminalRuntimeAppUpdateCommandCorrelation = {
+  executionId?: string;
+  issuedAt?: number;
+  nonce?: string;
+};
+
+export type PosTerminalRuntimeAppUpdateInput = {
+  canApply: boolean;
+  command?: PosTerminalRuntimeAppUpdateCommandCorrelation | null;
+  commandExecutionId?: string;
+  commandId?: string;
+  commandIssuedAt?: number;
+  commandNonce?: string;
+  currentBuildId?: string;
+  detectorStatus: PosTerminalRuntimeAppUpdateDetectorStatus;
+  pendingBuildId?: string;
+  selectedBlockerCode?: PosTerminalRuntimeAppUpdateBlockerCode;
+  stagingStatus?: PosTerminalRuntimeAppUpdateStagingStatus;
+  status: PosTerminalRuntimeAppUpdateStatus;
+};
+
+export type PosTerminalRuntimeAppUpdateDiagnostics =
+  PosTerminalRuntimeAppUpdateInput & {
+    command?: PosTerminalRuntimeAppUpdateCommandCorrelation;
+    observedAt: number;
+  };
+
 export type PosTerminalRuntimeStatusInput = {
   activeRegisterSession?: PosTerminalRuntimeActiveRegisterSessionInput | null;
   appShell?: PosTerminalRuntimeAppShellInput | null;
+  appUpdate?: PosTerminalRuntimeAppUpdateInput | null;
   appVersion?: string;
   appSessionRecovery?: PosTerminalRuntimeAppSessionRecoveryInput | null;
   browserInfo?: PosTerminalRuntimeBrowserInfo;
@@ -237,6 +292,32 @@ type PosTerminalRuntimeSyncMetrics = {
   uploadableEventCount: number;
 };
 
+const appUpdateStatuses = new Set<PosTerminalRuntimeAppUpdateStatus>([
+  "current",
+  "checking",
+  "update_ready",
+  "update_ready_unstaged",
+  "blocked",
+  "applying",
+  "detector_failed",
+  "unknown",
+]);
+
+const appUpdateStagingStatuses = new Set<
+  PosTerminalRuntimeAppUpdateStagingStatus | undefined
+>(["staged", "unstaged", "unknown", undefined]);
+
+const appUpdateDetectorStatuses =
+  new Set<PosTerminalRuntimeAppUpdateDetectorStatus>([
+    "ok",
+    "failed",
+    "unknown",
+  ]);
+
+const appUpdateBlockerCodes = new Set<
+  PosTerminalRuntimeAppUpdateBlockerCode | undefined
+>(["active_sale", "active_command", "resume_required", "unknown", undefined]);
+
 export function buildPosTerminalRuntimeStatus(
   input: PosTerminalRuntimeStatusInput,
 ): PosTerminalRuntimeStatusPayload {
@@ -250,12 +331,14 @@ export function buildPosTerminalRuntimeStatus(
   const appSessionRecovery = toSafeAppSessionRecoveryDiagnostics(
     input.appSessionRecovery,
   );
+  const appUpdate = toSafeAppUpdateDiagnostics(input.appUpdate, now);
 
   return {
     ...(input.appVersion ? { appVersion: input.appVersion } : {}),
     ...(input.buildSha ? { buildSha: input.buildSha } : {}),
     ...(input.browserInfo ? { browserInfo: input.browserInfo } : {}),
     ...(appSessionRecovery ? { appSessionRecovery } : {}),
+    ...(appUpdate ? { appUpdate } : {}),
     ...(input.appShell
       ? {
           appShell: {
@@ -680,6 +763,65 @@ function toSafeAppSessionRecoveryLabel(
   return "blocked_terminal";
 }
 
+function toSafeAppUpdateDiagnostics(
+  appUpdate: PosTerminalRuntimeAppUpdateInput | null | undefined,
+  observedAt: number,
+): PosTerminalRuntimeAppUpdateDiagnostics | undefined {
+  if (!appUpdate) return undefined;
+
+  return omitUndefined({
+    canApply: appUpdate.canApply === true,
+    blockerSummary: appUpdateBlockerCodes.has(appUpdate.selectedBlockerCode)
+      ? appUpdate.selectedBlockerCode
+      : undefined,
+    commandExecutionId: toSafeRuntimeString(
+      appUpdate.commandExecutionId ?? appUpdate.command?.executionId,
+      120,
+    ),
+    commandId: toSafeRuntimeString(appUpdate.commandId, 120),
+    commandIssuedAt:
+      positiveRuntimeTimestamp(appUpdate.commandIssuedAt) ??
+      positiveRuntimeTimestamp(appUpdate.command?.issuedAt),
+    commandNonce: toSafeRuntimeString(
+      appUpdate.commandNonce ?? appUpdate.command?.nonce,
+      120,
+    ),
+    currentBuildId: toSafeBuildId(appUpdate.currentBuildId),
+    detectorStatus: appUpdateDetectorStatuses.has(appUpdate.detectorStatus)
+      ? appUpdate.detectorStatus
+      : "unknown",
+    observedAt,
+    pendingBuildId: toSafeBuildId(appUpdate.pendingBuildId),
+    selectedBlockerCode: appUpdateBlockerCodes.has(
+      appUpdate.selectedBlockerCode,
+    )
+      ? appUpdate.selectedBlockerCode
+      : undefined,
+    stagingStatus: appUpdateStagingStatuses.has(appUpdate.stagingStatus)
+      ? appUpdate.stagingStatus
+      : undefined,
+    status: appUpdateStatuses.has(appUpdate.status)
+      ? appUpdate.status
+      : "unknown",
+  });
+}
+
+function positiveRuntimeTimestamp(value: number | undefined) {
+  return Number.isFinite(value) && value !== undefined && value > 0
+    ? value
+    : undefined;
+}
+
+function toSafeBuildId(value: string | undefined) {
+  return toSafeRuntimeString(value, 120);
+}
+
+function toSafeRuntimeString(value: string | undefined, maxLength: number) {
+  const trimmed = value?.trim();
+  if (!trimmed) return undefined;
+  return trimmed.slice(0, maxLength);
+}
+
 function snapshotAges(
   snapshots: PosTerminalRuntimeSnapshotReadiness | undefined,
   now: number,
@@ -780,4 +922,15 @@ function toSafeFailureMessage(message?: string | null) {
     )
     .replace(/[A-Za-z0-9_-]{24,}/g, "[redacted]")
     .slice(0, 240);
+}
+
+function omitUndefined<T extends Record<string, unknown>>(input: T) {
+  return Object.fromEntries(
+    Object.entries(input).filter(([, value]) => value !== undefined),
+  ) as {
+    [Key in keyof T as undefined extends T[Key] ? Key : Key]: Exclude<
+      T[Key],
+      undefined
+    >;
+  };
 }

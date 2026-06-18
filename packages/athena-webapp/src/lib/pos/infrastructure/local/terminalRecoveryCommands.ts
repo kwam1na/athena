@@ -7,6 +7,7 @@ import type {
   PosProvisionedTerminalSeed,
   createPosLocalStore,
 } from "./posLocalStore";
+import type { UpdateCoordinatorSnapshot } from "@/lib/app-update/updateCoordinator";
 
 export type PosTerminalRecoveryCommandType =
   | "retry_sync"
@@ -14,13 +15,15 @@ export type PosTerminalRecoveryCommandType =
   | "clear_stale_drawer_authority"
   | "refresh_staff_authority"
   | "refresh_snapshots"
-  | "report_diagnostics";
+  | "report_diagnostics"
+  | "update_app";
 
 export type PosTerminalRecoveryCommand = {
   _id?: string;
   commandContext?: unknown;
   commandId?: string;
   commandType?: PosTerminalRecoveryCommandType;
+  executionId?: string;
   expectedEvidence?: unknown;
   storeId: string;
   terminalId: string;
@@ -33,6 +36,11 @@ export type PosTerminalRecoveryCommandResult = {
   commandId: string;
   diagnostics?: Record<string, string | number | boolean | null>;
   message?: string;
+  onAcknowledgeFailed?: () => void;
+  postAcknowledge?: () =>
+    | { applied?: boolean; message?: string }
+    | void
+    | Promise<{ applied?: boolean; message?: string } | void>;
   reason?:
     | "local_store_failure"
     | "missing_callback"
@@ -52,6 +60,11 @@ export type PosTerminalRecoveryCommandCallbackResult = {
 };
 
 type PosLocalRuntimeStore = ReturnType<typeof createPosLocalStore>;
+
+export type PosAppUpdateCoordinatorAdapter = {
+  applyUpdate: () => boolean;
+  getSnapshot: () => UpdateCoordinatorSnapshot;
+};
 
 export type PosTerminalRecoveryCommandContext = {
   command: PosTerminalRecoveryCommand;
@@ -80,6 +93,7 @@ export type PosTerminalRecoveryCommandContext = {
         | Promise<PosTerminalRecoveryCommandCallbackResult>
         | PosTerminalRecoveryCommandCallbackResult)
     | null;
+  appUpdateCoordinator?: PosAppUpdateCoordinatorAdapter | null;
   store: PosLocalRuntimeStore;
   storeId: string;
   terminalId: string;
@@ -108,7 +122,10 @@ const SUPPORTED_COMMAND_TYPES = new Set<string>([
   "refresh_staff_authority",
   "refresh_snapshots",
   "report_diagnostics",
+  "update_app",
 ]);
+
+const activeUpdateAppCommands = new Set<string>();
 
 export async function executeTerminalRecoveryCommand(
   context: PosTerminalRecoveryCommandContext,
@@ -145,6 +162,8 @@ export async function executeTerminalRecoveryCommand(
         return executeCallbackCommand(context, context.reportDiagnostics, {
           allowMissingCallback: true,
         });
+      case "update_app":
+        return executeUpdateApp(context);
       default:
         return failed(command, "unsupported_command");
     }
@@ -153,6 +172,86 @@ export async function executeTerminalRecoveryCommand(
       message: safeRecoveryMessage(error),
     });
   }
+}
+
+async function executeUpdateApp(
+  context: PosTerminalRecoveryCommandContext,
+): Promise<PosTerminalRecoveryCommandResult> {
+  const commandKey = getCommandExecutionKey(context.command);
+  if (activeUpdateAppCommands.has(commandKey)) {
+    return preconditionFailed(context.command);
+  }
+
+  const coordinator = context.appUpdateCoordinator;
+  if (!coordinator) {
+    return completed(context.command, {
+      diagnostics: {
+        appUpdateStatus: "unknown",
+        terminalId: context.terminalId,
+      },
+      message: "App update status is not available on this terminal.",
+    });
+  }
+
+  activeUpdateAppCommands.add(commandKey);
+  const releaseLock = () => activeUpdateAppCommands.delete(commandKey);
+  let snapshot: UpdateCoordinatorSnapshot;
+  try {
+    snapshot = coordinator.getSnapshot();
+  } catch (error) {
+    releaseLock();
+    return completed(context.command, {
+      diagnostics: {
+        appUpdateStatus: "detector_failed",
+        terminalId: context.terminalId,
+      },
+      message: safeRecoveryMessage(error),
+    });
+  }
+
+  const appUpdateStatus = toCanonicalAppUpdateStatus(snapshot);
+  const baseDiagnostics = {
+    appUpdateCanApply: snapshot.canApply,
+    appUpdateStatus,
+    ...(snapshot.currentBuildId
+      ? { currentBuildId: snapshot.currentBuildId }
+      : {}),
+    ...(snapshot.pendingBuildId
+      ? { pendingBuildId: snapshot.pendingBuildId }
+      : {}),
+    terminalId: context.terminalId,
+  };
+
+  if (!snapshot.canApply) {
+    releaseLock();
+    return completed(context.command, {
+      diagnostics: baseDiagnostics,
+      message: getAppUpdateEvaluationMessage(appUpdateStatus),
+    });
+  }
+
+  return completed(context.command, {
+    diagnostics: {
+      ...baseDiagnostics,
+      appUpdateStatus: "applying",
+    },
+    message: "App update accepted and will apply when the terminal is safe to refresh.",
+    onAcknowledgeFailed: releaseLock,
+    postAcknowledge: () => {
+      try {
+        const applied = coordinator.applyUpdate();
+        return applied
+          ? { applied: true }
+          : {
+              applied: false,
+              message:
+                "App update was accepted, but refresh is now blocked by local work.",
+            };
+      } finally {
+        releaseLock();
+      }
+    },
+  });
 }
 
 async function executeRetrySync(
@@ -521,6 +620,8 @@ function completed(
   options: {
     diagnostics?: Record<string, string | number | boolean | null>;
     message?: string;
+    onAcknowledgeFailed?: () => void;
+    postAcknowledge?: PosTerminalRecoveryCommandResult["postAcknowledge"];
   } = {},
 ): PosTerminalRecoveryCommandResult {
   return {
@@ -530,6 +631,12 @@ function completed(
       : {}),
     ...(options.message
       ? { message: safeRecoveryMessage(options.message) }
+      : {}),
+    ...(options.onAcknowledgeFailed
+      ? { onAcknowledgeFailed: options.onAcknowledgeFailed }
+      : {}),
+    ...(options.postAcknowledge
+      ? { postAcknowledge: options.postAcknowledge }
       : {}),
     status: "completed",
     type: getCommandType(command) ?? "unknown_command",
@@ -585,8 +692,53 @@ function getCommandId(command: PosTerminalRecoveryCommand) {
   return command.commandId ?? command._id ?? "unknown-command";
 }
 
+function getCommandExecutionKey(command: PosTerminalRecoveryCommand) {
+  return getCommandId(command);
+}
+
 function getCommandType(command: PosTerminalRecoveryCommand) {
   return command.type ?? command.commandType;
+}
+
+function toCanonicalAppUpdateStatus(snapshot: UpdateCoordinatorSnapshot) {
+  if (snapshot.status === "current" || snapshot.status === "checking") {
+    return "current";
+  }
+  if (snapshot.status === "ready") {
+    return snapshot.canApply ? "update_ready" : "blocked";
+  }
+  if (snapshot.status === "ready-unstaged") {
+    return snapshot.canApply ? "update_ready" : "update_ready_unstaged";
+  }
+  if (snapshot.status === "blocked") {
+    return "blocked";
+  }
+  if (snapshot.status === "applying") {
+    return "applying";
+  }
+  if (snapshot.status === "detector-failed") {
+    return "detector_failed";
+  }
+  return "unknown";
+}
+
+function getAppUpdateEvaluationMessage(status: string) {
+  if (status === "current") {
+    return "The terminal is already running the current app.";
+  }
+  if (status === "blocked") {
+    return "The terminal has active work that is blocking app refresh.";
+  }
+  if (status === "update_ready_unstaged") {
+    return "An app update is available but is not ready to refresh yet.";
+  }
+  if (status === "detector_failed") {
+    return "The terminal could not determine app update status.";
+  }
+  if (status === "applying") {
+    return "The terminal is already applying an app update.";
+  }
+  return "App update status is not available on this terminal.";
 }
 
 function getCommandPayload(command: PosTerminalRecoveryCommand) {

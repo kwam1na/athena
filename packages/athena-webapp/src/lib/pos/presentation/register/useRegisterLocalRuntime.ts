@@ -3,6 +3,7 @@ import type { MutableRefObject } from "react";
 
 import type { Id } from "~/convex/_generated/dataModel";
 
+import { useOptionalUpdateCoordinator } from "@/lib/app-update/UpdateCoordinatorProvider";
 import {
   createIndexedDbPosLocalStorageAdapter,
   createPosLocalStore,
@@ -132,6 +133,17 @@ export function useRegisterLocalRuntime(input: {
   );
 
   const appSessionRecovery = usePosTerminalAppSessionRecoveryRuntimeInput();
+  const updateCoordinator = useOptionalUpdateCoordinator();
+  const appUpdateCoordinator = useMemo(
+    () =>
+      updateCoordinator
+        ? {
+            applyUpdate: updateCoordinator.applyUpdate,
+            getSnapshot: updateCoordinator.getSnapshot,
+          }
+        : null,
+    [updateCoordinator],
+  );
   const localSaleValidationMetadata = useMemo(
     () => buildLocalSaleValidationMetadata(appSessionRecovery?.status),
     [appSessionRecovery?.status],
@@ -239,6 +251,7 @@ export function useRegisterLocalRuntime(input: {
 
   const localRuntimeStoreFactory = useCallback(() => localStore, [localStore]);
   const localRuntimeSyncSource = usePosLocalSyncRuntimeStatus({
+    appUpdateCoordinator,
     appSessionRecovery,
     drainOnAppend: true,
     eventAppendToken: localSyncEventAppendToken,
