@@ -619,6 +619,10 @@ export function POSTerminalHealthViewContent({
                               }
                             />
                             <TerminalFact
+                              label="App update"
+                              value={recovery.appUpdate.label}
+                            />
+                            <TerminalFact
                               label="Cloud cursor"
                               value={cloudCursorSummary}
                             />

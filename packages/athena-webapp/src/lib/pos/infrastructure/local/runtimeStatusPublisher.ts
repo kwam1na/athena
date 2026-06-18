@@ -29,7 +29,7 @@ export function getRuntimeStatusSignature(input: {
   terminalId: string;
 }) {
   return JSON.stringify({
-    runtimeStatus: input.runtimeStatus,
+    runtimeStatus: normalizeRuntimeStatusSignature(input.runtimeStatus),
     storeId: input.storeId,
     terminalId: input.terminalId,
   });
@@ -42,7 +42,7 @@ export function getRuntimeStatusPublishSignature(input: {
   terminalId: string;
 }) {
   const stableStatus: Partial<PosTerminalRuntimeStatusPayload> = {
-    ...input.runtimeStatus,
+    ...normalizeRuntimeStatusSignature(input.runtimeStatus),
   };
   delete stableStatus.reportedAt;
   delete stableStatus.snapshots;
@@ -53,6 +53,20 @@ export function getRuntimeStatusPublishSignature(input: {
     storeId: input.storeId,
     terminalId: input.terminalId,
   });
+}
+
+function normalizeRuntimeStatusSignature(
+  runtimeStatus: PosTerminalRuntimeStatusPayload,
+): PosTerminalRuntimeStatusPayload {
+  if (!runtimeStatus.appUpdate) return runtimeStatus;
+
+  return {
+    ...runtimeStatus,
+    appUpdate: {
+      ...runtimeStatus.appUpdate,
+      observedAt: 0,
+    },
+  };
 }
 
 export function getRuntimeCheckInNotReadyReason(input: {

@@ -45,6 +45,54 @@ export const posTerminalRuntimeAppShellValidator = v.object({
   ready: v.boolean(),
 });
 
+export const posTerminalRuntimeAppUpdateStatusValidator = v.union(
+  v.literal("current"),
+  v.literal("checking"),
+  v.literal("update_ready"),
+  v.literal("update_ready_unstaged"),
+  v.literal("blocked"),
+  v.literal("applying"),
+  v.literal("detector_failed"),
+  v.literal("unknown"),
+);
+
+export const posTerminalRuntimeAppUpdateStagingStatusValidator = v.union(
+  v.literal("staged"),
+  v.literal("unstaged"),
+  v.literal("unknown"),
+);
+
+export const posTerminalRuntimeAppUpdateDetectorStatusValidator = v.union(
+  v.literal("ok"),
+  v.literal("failed"),
+  v.literal("unknown"),
+);
+
+export const posTerminalRuntimeAppUpdateBlockerCodeValidator = v.union(
+  v.literal("active_sale"),
+  v.literal("active_command"),
+  v.literal("resume_required"),
+  v.literal("unknown"),
+);
+
+export const posTerminalRuntimeAppUpdateValidator = v.object({
+  blockerSummary: v.optional(posTerminalRuntimeAppUpdateBlockerCodeValidator),
+  canApply: v.boolean(),
+  commandExecutionId: v.optional(v.string()),
+  commandId: v.optional(v.string()),
+  commandIssuedAt: v.optional(v.number()),
+  commandNonce: v.optional(v.string()),
+  currentBuildId: v.optional(v.string()),
+  detectorStatus: posTerminalRuntimeAppUpdateDetectorStatusValidator,
+  observedAt: v.number(),
+  pendingBuildId: v.optional(v.string()),
+  selectedBlockerCode: v.optional(
+    posTerminalRuntimeAppUpdateBlockerCodeValidator,
+  ),
+  stagingStatus: v.optional(posTerminalRuntimeAppUpdateStagingStatusValidator),
+  status: posTerminalRuntimeAppUpdateStatusValidator,
+});
+
 export const posTerminalRuntimeBrowserInfoValidator = v.object({
   userAgent: v.optional(v.string()),
   platform: v.optional(v.string()),
@@ -181,6 +229,7 @@ export const posTerminalRuntimeStatusSchema = v.object({
     posTerminalRuntimeAppSessionRecoveryValidator,
   ),
   appShell: v.optional(posTerminalRuntimeAppShellValidator),
+  appUpdate: v.optional(posTerminalRuntimeAppUpdateValidator),
   localStore: posTerminalRuntimeLocalStoreValidator,
   sync: posTerminalRuntimeSyncValidator,
   staffAuthority: posTerminalRuntimeStaffAuthorityValidator,

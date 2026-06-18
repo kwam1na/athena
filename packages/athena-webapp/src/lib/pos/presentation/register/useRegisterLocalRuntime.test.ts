@@ -29,6 +29,7 @@ const mocks = vi.hoisted(() => {
     usePosTerminalAppSessionRecoveryRuntimeInput: vi.fn(() => ({
       status: "idle",
     })),
+    useOptionalUpdateCoordinator: vi.fn(() => null),
   };
 });
 
@@ -48,6 +49,10 @@ vi.mock("@/lib/pos/infrastructure/local/localRegisterReader", () => ({
 
 vi.mock("@/lib/pos/infrastructure/local/usePosLocalSyncRuntime", () => ({
   usePosLocalSyncRuntimeStatus: mocks.usePosLocalSyncRuntimeStatus,
+}));
+
+vi.mock("@/lib/app-update/UpdateCoordinatorProvider", () => ({
+  useOptionalUpdateCoordinator: mocks.useOptionalUpdateCoordinator,
 }));
 
 vi.mock(
@@ -121,6 +126,7 @@ describe("useRegisterLocalRuntime", () => {
       ok: true,
       value: { canSell: true },
     });
+    mocks.useOptionalUpdateCoordinator.mockReturnValue(null);
   });
 
   it("creates a stable local store and gateway while terminal identity is unchanged", async () => {
@@ -174,6 +180,26 @@ describe("useRegisterLocalRuntime", () => {
     });
 
     expect(result.current.localSyncEventAppendToken).toBe(1);
+  });
+
+  it("passes the app update coordinator adapter into the local sync runtime", () => {
+    const applyUpdate = vi.fn();
+    const getSnapshot = vi.fn();
+    mocks.useOptionalUpdateCoordinator.mockReturnValue({
+      applyUpdate,
+      getSnapshot,
+    } as never);
+
+    renderRuntime();
+
+    expect(mocks.usePosLocalSyncRuntimeStatus).toHaveBeenCalledWith(
+      expect.objectContaining({
+        appUpdateCoordinator: {
+          applyUpdate,
+          getSnapshot,
+        },
+      }),
+    );
   });
 
   it("refreshes the projected local register read model through the runtime bridge", async () => {

@@ -1571,6 +1571,26 @@ function RecoveryBlockerAction({
 }
 
 function getRecoveryActionStatusCopy(action: TerminalRecoveryAction) {
+  if (action.commandType === "update_app") {
+    switch (action.status) {
+      case "pending":
+        return "Update app command is queued for this checkout station.";
+      case "claimed":
+        return "Update app command is running on this checkout station.";
+      case "completed":
+      case "waiting_for_check_in":
+        return "Update app command completed locally. Waiting for a fresh check-in.";
+      case "verified":
+        return "App update verified by the latest terminal check-in.";
+      case "expired":
+        return "Update app command expired. Refresh terminal health before sending another command.";
+      case "failed":
+        return "Update app command did not complete. Refresh terminal health before retrying.";
+      case "blocked":
+        return "Update app command is blocked by current terminal evidence.";
+    }
+  }
+
   switch (action.status) {
     case "pending":
       return "Command is queued for this checkout station.";
@@ -1606,6 +1626,83 @@ function normalizeRecoveryActionError(message?: string) {
     return "Terminal recovery evidence changed. Refresh terminal health before retrying.";
   }
   return message;
+}
+
+function AppUpdateActionPanel({
+  appUpdate,
+  onIssueTerminalRecoveryCommand,
+  terminalId,
+}: {
+  appUpdate: ReturnType<typeof buildTerminalRecoveryPresentation>["appUpdate"];
+  onIssueTerminalRecoveryCommand?: POSTerminalDetailViewContentProps["onIssueTerminalRecoveryCommand"];
+  terminalId: Id<"posTerminal"> | string;
+}) {
+  const action = appUpdate.action;
+  const canIssue = action ? isRecoveryActionIssuable(action) : false;
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+
+  const submitUpdateApp = async () => {
+    if (!action || !canIssue || !onIssueTerminalRecoveryCommand || isSubmitting) {
+      return;
+    }
+
+    setIsSubmitting(true);
+    setErrorMessage("");
+    const result = await onIssueTerminalRecoveryCommand({ action, terminalId });
+    setIsSubmitting(false);
+
+    if (result.kind === "ok") {
+      toast.success("Update app command queued.");
+      return;
+    }
+
+    const message = normalizeRecoveryActionError(result.error.message);
+    setErrorMessage(message);
+    toast.error(message);
+  };
+
+  return (
+    <div className="mt-layout-md rounded-md border border-border/80 bg-surface px-layout-md py-layout-md">
+      <div className="grid gap-layout-md md:grid-cols-[minmax(0,1fr)_auto] md:items-start">
+        <div className="min-w-0">
+          <p className="text-xs font-medium uppercase text-muted-foreground">
+            App update
+          </p>
+          <div className="mt-1 flex flex-wrap items-center gap-layout-xs">
+            <p className="text-base font-medium text-foreground">
+              {appUpdate.label}
+            </p>
+            <Badge className={appUpdate.toneClassName} variant="outline">
+              {formatStatusLabel(appUpdate.status)}
+            </Badge>
+          </div>
+          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+            {appUpdate.description}
+          </p>
+          {action?.status && action.status !== "available" ? (
+            <p className="mt-layout-xs text-xs text-muted-foreground" role="status">
+              {getRecoveryActionStatusCopy(action)}
+            </p>
+          ) : null}
+          {errorMessage ? (
+            <p className="mt-layout-xs text-xs text-danger">{errorMessage}</p>
+          ) : null}
+        </div>
+        <Button
+          disabled={!action || !canIssue || !onIssueTerminalRecoveryCommand || isSubmitting}
+          onClick={() => {
+            void submitUpdateApp();
+          }}
+          size="sm"
+          variant="utility"
+        >
+          <MonitorUp aria-hidden="true" />
+          {isSubmitting ? "Sending..." : "Update app"}
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 function RecoveryPanel({
@@ -1653,6 +1750,12 @@ function RecoveryPanel({
           </div>
         </div>
       </div>
+
+      <AppUpdateActionPanel
+        appUpdate={recovery.appUpdate}
+        onIssueTerminalRecoveryCommand={onIssueTerminalRecoveryCommand}
+        terminalId={detail.terminal._id}
+      />
 
       {hasCurrentRecoveryWork ? (
         <>

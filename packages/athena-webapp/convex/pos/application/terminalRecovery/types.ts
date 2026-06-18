@@ -7,6 +7,7 @@ export const TERMINAL_RECOVERY_COMMAND_TYPES = [
   "refresh_staff_authority",
   "refresh_snapshots",
   "report_diagnostics",
+  "update_app",
 ] as const;
 
 export type TerminalRecoveryCommandType =
@@ -45,6 +46,15 @@ export type TerminalRecoveryCommandPayload = {
 };
 
 export type TerminalRecoveryExpectedEvidence = {
+  appUpdateCommandExecutionId?: string;
+  appUpdateStatus?:
+    | "current"
+    | "update_ready"
+    | "update_ready_unstaged"
+    | "blocked"
+    | "applying"
+    | "detector_failed"
+    | "unknown";
   drawerAuthorityStatus?: "healthy" | "blocked";
   localRegisterSessionId?: string;
   localStoreAvailable?: boolean;

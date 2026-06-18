@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>feat: Add Remote Terminal App Update Command</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f8fafc;
+      --paper: #ffffff;
+      --ink: #111827;
+      --muted: #5b6472;
+      --line: #d9dee7;
+      --accent: #2563eb;
+      --accent-soft: #e7efff;
+      --warn: #9a5b00;
+      --warn-soft: #fff4d6;
+      --code: #f3f5f8;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 32px 20px 56px;
+    }
+    header, section {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 24px;
+      margin: 16px 0;
+    }
+    h1 { margin: 0 0 8px; font-size: 2rem; line-height: 1.15; }
+    h2 { margin: 0 0 14px; font-size: 1.25rem; }
+    h3 { margin: 22px 0 8px; font-size: 1rem; }
+    p { margin: 0 0 12px; }
+    ul, ol { margin: 8px 0 0; padding-left: 22px; }
+    li { margin: 6px 0; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    code {
+      background: var(--code);
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.92em;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: #f3f6fb; }
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 14px;
+    }
+    .pill {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 4px 10px;
+      color: var(--muted);
+      background: #fbfcfe;
+      font-size: 0.875rem;
+    }
+    .callout {
+      border-left: 4px solid var(--accent);
+      background: var(--accent-soft);
+      padding: 12px 14px;
+      border-radius: 6px;
+    }
+    .warning {
+      border-left-color: var(--warn);
+      background: var(--warn-soft);
+    }
+    .toc {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 8px;
+      padding-left: 0;
+      list-style: none;
+    }
+    .unit {
+      border-top: 1px solid var(--line);
+      padding-top: 16px;
+      margin-top: 16px;
+    }
+    .unit:first-of-type {
+      border-top: 0;
+      padding-top: 0;
+    }
+    .small { color: var(--muted); font-size: 0.92rem; }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>feat: Add Remote Terminal App Update Command</h1>
+    <p>Plan for adding an anytime Terminal Health command that asks a POS terminal to update through the existing app-update coordinator, while deriving outdated/current state from fresh runtime evidence.</p>
+    <div class="meta">
+      <span class="pill">Type: feat</span>
+      <span class="pill">Status: active</span>
+      <span class="pill">Date: 2026-06-18</span>
+      <span class="pill">Markdown: <a href="./2026-06-18-001-feat-remote-terminal-app-update-command-plan.md">source</a></span>
+    </div>
+  </header>
+
+  <section aria-labelledby="toc">
+    <h2 id="toc">Contents</h2>
+    <ul class="toc">
+      <li><a href="#scope">Scope</a></li>
+      <li><a href="#decisions">Key Decisions</a></li>
+      <li><a href="#state-model">State Model</a></li>
+      <li><a href="#units">Implementation Units</a></li>
+      <li><a href="#verification">Verification</a></li>
+      <li><a href="#risks">Risks</a></li>
+      <li><a href="#references">References</a></li>
+    </ul>
+  </section>
+
+  <section id="scope" aria-labelledby="scope-heading">
+    <h2 id="scope-heading">Scope</h2>
+    <p>The active scope is the bridge between two existing foundations: typed terminal recovery commands and the update-ready coordinator. Support can queue the request any time; the terminal evaluates local coordinator state and blockers before any reload.</p>
+    <div class="callout warning">
+      <p><strong>Boundary:</strong> this is not remote control and not a forced refresh. Command acknowledgement is action lifecycle only; fresh command-correlated runtime evidence is the update truth.</p>
+    </div>
+    <h3>Requirements Digest</h3>
+    <ul>
+      <li>Full-admin support can send an allow-listed <code>update_app</code> command to active terminals.</li>
+      <li>The terminal handles current, update-ready, blocked, applying, detector-failed, ready-unstaged, stale, and unknown states locally.</li>
+      <li>The command queue enforces single-consumer execution with a claim token or execution id.</li>
+      <li>Runtime status publishes sanitized, code-based app-update evidence for Terminal Health.</li>
+      <li>Coordinator blockers and cross-tab blockers remain authoritative.</li>
+      <li>No secret, staff proof, payment, customer, or raw local payload data leaks through command or runtime evidence.</li>
+    </ul>
+  </section>
+
+  <section id="decisions" aria-labelledby="decisions-heading">
+    <h2 id="decisions-heading">Key Decisions</h2>
+    <ul>
+      <li>Add <code>update_app</code> to the existing terminal command queue instead of adding a new support channel.</li>
+      <li>Make the command an anytime intent; the terminal applies the latest pending build at execution time.</li>
+      <li>Publish structured app-update evidence instead of relying only on ad hoc build-string comparison.</li>
+      <li>Acknowledge before reload because <code>applyUpdate()</code> can reload synchronously.</li>
+      <li>Use server-side claim semantics as the authoritative exactly-once guard; browser locks are only defense in depth.</li>
+      <li>Require command-correlated runtime evidence so replayed pre-command status cannot verify a new command.</li>
+      <li>Model blocked and no-op outcomes as completed local evaluations, not support-recovery failures.</li>
+      <li>Keep Terminal Health state derived from fresh runtime evidence, with command status shown as lifecycle context.</li>
+    </ul>
+  </section>
+
+  <section id="state-model" aria-labelledby="state-model-heading">
+    <h2 id="state-model-heading">Canonical App-Update Status Model</h2>
+    <p>Terminal Health and command acknowledgement should use the same normalized vocabulary even if the coordinator keeps its own internal state names.</p>
+    <table>
+      <thead>
+        <tr><th>Status</th><th>Meaning</th><th>Command behavior</th><th>Terminal Health behavior</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>current</code></td><td>No pending update, or already on the latest known build.</td><td>Acknowledge completed no-op.</td><td>Show current evidence; keep the action available for future retry.</td></tr>
+        <tr><td><code>update_ready</code></td><td>Pending update exists and coordinator says apply is safe.</td><td>Acknowledge applying, then invoke the reload latch.</td><td>Show update ready until post-reload check-in verifies current.</td></tr>
+        <tr><td><code>update_ready_unstaged</code></td><td>Update exists, but assets are not ready or <code>canApply</code> is false for staging reasons.</td><td>Acknowledge completed evaluation unless <code>canApply</code> is true at execution time.</td><td>Show update available but not ready to refresh.</td></tr>
+        <tr><td><code>blocked</code></td><td>Local work, sync review, payment/sale risk, or cross-tab blocker prevents refresh.</td><td>Acknowledge blocked evaluation; do not reload.</td><td>Show operational blocker guidance without marking terminal failed.</td></tr>
+        <tr><td><code>applying</code></td><td>The terminal accepted apply and acknowledged before reload.</td><td>Wait for fresh command-correlated runtime evidence.</td><td>Show waiting for check-in, not verified.</td></tr>
+        <tr><td><code>detector_failed</code></td><td>The update detector errored or cannot produce a trustworthy snapshot.</td><td>Acknowledge unable-to-determine evaluation.</td><td>Show unable to determine, with retry available.</td></tr>
+        <tr><td><code>stale</code></td><td>Runtime evidence is older than the freshness window.</td><td>Do not use stale evidence to verify a command.</td><td>Show stale/unknown, not current or outdated certainty.</td></tr>
+        <tr><td><code>unknown</code></td><td>Older client, missing adapter, or missing app-update evidence.</td><td>Acknowledge unsupported/unable-to-determine when claimed by such a client.</td><td>Show not reported/unknown and keep active-terminal action scoped by role and command lifecycle.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="units" aria-labelledby="units-heading">
+    <h2 id="units-heading">Implementation Units</h2>
+    <article class="unit">
+      <h3>U1. Extend the terminal command contract with Update app</h3>
+      <p>Add <code>update_app</code> through backend/frontend command type unions, validators, expected evidence, command issue tests, dedupe, redaction, and server-side single-consumer claim semantics.</p>
+      <p class="small">Primary files: terminal recovery types/schema/service, public terminal functions, terminal health types, command service/public tests.</p>
+    </article>
+    <article class="unit">
+      <h3>U2. Publish structured app-update runtime evidence</h3>
+      <p>Thread current build, pending build, canonical coordinator status code, apply availability, staging state, selected blocker code, observed timestamp, and optional command execution id/nonce through runtime status.</p>
+      <p class="small">Primary files: runtime status schema, public terminal input stripping, terminal commands, local runtime builder, runtime tests.</p>
+    </article>
+    <article class="unit">
+      <h3>U3. Execute Update app through the coordinator</h3>
+      <p>Add an optional runtime adapter and two-phase executor: evaluate, persist acknowledgement, then run the post-ack effect such as <code>applyUpdate()</code>. Server claim tokens remain the authoritative duplicate-tab guard.</p>
+      <p class="small">Primary files: local recovery command executor, POS local sync runtime, update coordinator/provider tests.</p>
+    </article>
+    <article class="unit">
+      <h3>U4. Derive Terminal Health update state from runtime evidence</h3>
+      <p>Normalize fresh, command-correlated app-update evidence into the canonical states without treating update readiness as a health blocker or letting stale command state overrule runtime truth.</p>
+      <p class="small">Primary files: terminal queries, terminal health types/presentation, terminal detail/roster UI tests.</p>
+    </article>
+    <article class="unit">
+      <h3>U5. Wire Terminal Health Update app action</h3>
+      <p>Expose the anytime Update app support action for active terminals with explicit disabled states, duplicate protection, accessible status announcements, and calm operational copy.</p>
+      <p class="small">Primary files: terminal detail, terminal health roster, presentation helpers, component tests.</p>
+    </article>
+    <article class="unit">
+      <h3>U6. Update validation routing and durable docs</h3>
+      <p>Update solution notes and, only if current routing is missing coverage, harness routing so future changes to this boundary run both app-update and terminal-health validation slices.</p>
+      <p class="small">Primary files: solution notes, validation guide/map, harness registry and tests.</p>
+    </article>
+  </section>
+
+  <section id="verification" aria-labelledby="verification-heading">
+    <h2 id="verification-heading">Verification Strategy</h2>
+    <p>Implementation should combine the existing app-update readiness/apply-safety suite with the POS terminal health diagnostics suite.</p>
+    <ul>
+      <li>Command service/public tests for <code>update_app</code>, dedupe, auth, and redaction.</li>
+      <li>Concurrent claim and stale-token tests for server-side single-consumer execution.</li>
+      <li>Runtime status tests for app-update evidence and publish-loop stability.</li>
+      <li>Local runtime tests for ack-before-reload, blocked/no-op/applying outcomes, replayed evidence rejection, and duplicate-tab safety.</li>
+      <li>Terminal Health query/presentation/component tests for fresh, stale, blocked, current, unknown, accessibility, and command/runtime lane separation.</li>
+      <li>At least one manual or Playwright multi-tab gate before production rollout.</li>
+      <li>Typecheck, build, Convex audit/lint, graphify rebuild after code changes, and harness review when validation routing changes.</li>
+    </ul>
+  </section>
+
+  <section id="risks" aria-labelledby="risks-heading">
+    <h2 id="risks-heading">Risks</h2>
+    <table>
+      <thead>
+        <tr><th>Risk</th><th>Mitigation</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Reload before acknowledgement persists</td><td>Use a two-phase executor and test with synchronous reload mocks.</td></tr>
+        <tr><td>Support bypasses local blockers</td><td>Execute only through coordinator snapshot/apply APIs.</td></tr>
+        <tr><td>Command ack mistaken for update truth</td><td>Derive state from fresh runtime evidence and keep command status as lifecycle context.</td></tr>
+        <tr><td>Duplicate tabs run the same command</td><td>Enforce server-side claim/ack tokens, with browser-local locking as defense in depth.</td></tr>
+        <tr><td>Replayed runtime evidence verifies a new command</td><td>Require a safe execution id, nonce, or issued-at observation after command issue.</td></tr>
+        <tr><td>Runtime evidence leaks sensitive details</td><td>Use code-based evidence, sanitized blocker summaries, secret-like rejection, and redacted acknowledgement copy.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="references" aria-labelledby="references-heading">
+    <h2 id="references-heading">References</h2>
+    <ul>
+      <li><a href="../plans/2026-06-13-001-feat-remote-terminal-commands-plan.md">Remote terminal commands plan</a></li>
+      <li><a href="../plans/2026-06-17-002-feat-update-ready-coordinator-plan.md">Update ready coordinator plan</a></li>
+      <li><a href="../solutions/architecture/athena-app-update-apply-safety-2026-06-17.md">App update apply safety solution</a></li>
+      <li><a href="../solutions/architecture/athena-pos-terminal-recovery-readiness-boundary-2026-06-14.md">Terminal recovery readiness boundary</a></li>
+      <li><a href="../solutions/architecture/athena-pos-remote-terminal-health-recovery-2026-06-11.md">Remote terminal health recovery</a></li>
+      <li><a href="../../packages/athena-webapp/docs/agent/validation-guide.md">Athena validation guide</a></li>
+    </ul>
+  </section>
+</main>
+</body>
+</html>

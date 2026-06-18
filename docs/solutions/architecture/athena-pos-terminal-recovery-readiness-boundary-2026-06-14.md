@@ -154,6 +154,34 @@ runtime evidence has no current blocker. If current support work exists, show th
 failure reason and the next safe action. If no current support work exists, show
 that no support action is needed.
 
+### Update App Command Outcomes
+
+`update_app` uses the same audited command lane, but its result must stay
+separate from terminal repair readiness. Sending Update app says support asked
+the checkout station to evaluate its app-update coordinator. It does not mean
+the terminal was outdated, and it does not mean the terminal refreshed.
+
+Terminal Health derives app-update state from fresh runtime `appUpdate`
+evidence, not from command history. The canonical states are:
+
+- `current`: no pending update, or the terminal is already on the latest known
+  build.
+- `update_ready`: a pending update exists and the coordinator says refresh is
+  safe.
+- `update_ready_unstaged`: an update exists, but static assets are not ready or
+  the coordinator cannot apply for staging reasons.
+- `blocked`: active local work or cross-tab blocker prevents refresh.
+- `applying`: the command acknowledged before reload and is waiting for a fresh
+  post-reload check-in.
+- `detector_failed`, `stale`, or `unknown`: Terminal Health should avoid live
+  certainty and keep copy operational.
+
+`update_app` is available as an active-terminal support action even when update
+readiness is unknown, but duplicate active update commands should disable the
+same action. Command verification requires a fresh runtime check-in correlated
+to the command execution id or nonce; stale pre-command evidence cannot verify a
+new command.
+
 ## Register Session Review Compatibility
 
 Older review records were created before review items carried structured
@@ -204,6 +232,11 @@ or zero review items, which is not true during the initial query gap.
 
 - Do not add support recovery copy by reading raw command status alone. First
   decide whether current blockers or safe actions still exist.
+- Do not classify an available app update as support recovery work by itself.
+  Show app-update state in its own lane and keep sales/support readiness derived
+  from their existing evidence.
+- Do not verify `update_app` from command acknowledgement or stale runtime
+  evidence. Require fresh command-correlated app-update evidence.
 - Do not let staff authority expiry create a support repair action unless there
   is separate evidence that a terminal-side refresh command is actually needed.
 - Do not treat `cloud_closed` drawer authority as blocked when the matching

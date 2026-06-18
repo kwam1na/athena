@@ -114,6 +114,7 @@ type ActiveRegisterSessionLinkStatus = Extract<
 >;
 
 export type TerminalRecoveryPreview = {
+  appUpdate: TerminalAppUpdatePreview;
   readiness: TerminalRecoveryReadiness;
   runtimeFresh: boolean;
   evidence: {
@@ -126,6 +127,7 @@ export type TerminalRecoveryPreview = {
     skippedConflictIds: Array<Id<"posLocalSyncConflict">>;
   };
   commandStatus: {
+    appUpdateCommandExecutionId?: string;
     commandId?: Id<"posTerminalRecoveryCommand">;
     commandType: TerminalRecoveryCommandType;
     label: string;
@@ -146,6 +148,26 @@ export type TerminalRecoveryPreview = {
       | "cloud_repair";
     type: TerminalHealthAttentionReason["type"] | "unsafe_cloud_conflict";
   }>;
+};
+
+export type TerminalAppUpdateStatus =
+  | "applying"
+  | "blocked"
+  | "current"
+  | "detector_failed"
+  | "stale"
+  | "unknown"
+  | "update_ready"
+  | "update_ready_unstaged";
+
+export type TerminalAppUpdatePreview = {
+  commandCorrelated?: boolean;
+  currentBuildId?: string;
+  evidenceFresh: boolean;
+  observedAt?: number;
+  pendingBuildId?: string;
+  status: TerminalAppUpdateStatus;
+  summary?: string;
 };
 
 export async function listTerminals(
@@ -469,6 +491,12 @@ async function buildTerminalRecoveryPreview(
     activeRegisterSession && healthyIdle && runtimeHasSaleAuthority(args.runtimeStatus);
 
   return {
+    appUpdate: buildTerminalAppUpdatePreview({
+      commandStatus,
+      runtimeAgeMs: args.runtimeAgeMs,
+      runtimeFresh,
+      runtimeStatus: args.runtimeStatus,
+    }),
     readiness: ableToTransactNow
       ? "able_to_transact_now"
       : manualReview.length > 0
@@ -490,6 +518,159 @@ async function buildTerminalRecoveryPreview(
     terminalActions,
     manualReview,
   };
+}
+
+function buildTerminalAppUpdatePreview(args: {
+  commandStatus: TerminalRecoveryPreview["commandStatus"];
+  runtimeAgeMs: number | null;
+  runtimeFresh: boolean;
+  runtimeStatus: Doc<"posTerminalRuntimeStatus"> | null;
+}): TerminalAppUpdatePreview {
+  const evidence = readRuntimeAppUpdateEvidence(args.runtimeStatus);
+  if (!evidence) {
+    return {
+      evidenceFresh: false,
+      status: "unknown",
+    };
+  }
+
+  if (!args.runtimeFresh || args.runtimeAgeMs === null) {
+    return {
+      commandCorrelated: isAppUpdateEvidenceCommandCorrelated(
+        evidence,
+        args.commandStatus,
+      ),
+      currentBuildId: readString(evidence.currentBuildId ?? evidence.currentBuildSha),
+      evidenceFresh: false,
+      observedAt: readNumber(evidence.observedAt),
+      pendingBuildId: readString(evidence.pendingBuildId ?? evidence.latestBuildId),
+      status: "stale",
+      summary:
+        "The latest app update evidence is stale. Send Update app to ask the checkout station to check again.",
+    };
+  }
+
+  const status = normalizeRuntimeAppUpdateStatus(readString(evidence.status));
+  return {
+    commandCorrelated: isAppUpdateEvidenceCommandCorrelated(
+      evidence,
+      args.commandStatus,
+    ),
+    currentBuildId: readString(evidence.currentBuildId ?? evidence.currentBuildSha),
+    evidenceFresh: true,
+    observedAt: readNumber(evidence.observedAt),
+    pendingBuildId: readString(evidence.pendingBuildId ?? evidence.latestBuildId),
+    status,
+    summary: getRuntimeAppUpdateSummary(status, evidence),
+  };
+}
+
+function readRuntimeAppUpdateEvidence(
+  runtimeStatus: Doc<"posTerminalRuntimeStatus"> | null,
+) {
+  if (!runtimeStatus) {
+    return null;
+  }
+
+  const evidence = (runtimeStatus as unknown as { appUpdate?: unknown }).appUpdate;
+  return evidence && typeof evidence === "object"
+    ? (evidence as Record<string, unknown>)
+    : null;
+}
+
+function normalizeRuntimeAppUpdateStatus(
+  status?: string,
+): TerminalAppUpdateStatus {
+  switch (status) {
+    case "applying":
+      return "applying";
+    case "blocked":
+      return "blocked";
+    case "current":
+      return "current";
+    case "detector-failed":
+    case "detector_failed":
+      return "detector_failed";
+    case "ready":
+    case "staged":
+    case "update_ready":
+      return "update_ready";
+    case "ready_unstaged":
+    case "update_ready_unstaged":
+      return "update_ready_unstaged";
+    case "stale":
+      return "stale";
+    case "unknown":
+    default:
+      return "unknown";
+  }
+}
+
+function getRuntimeAppUpdateSummary(
+  status: TerminalAppUpdateStatus,
+  evidence: Record<string, unknown>,
+) {
+  if (status === "blocked") {
+    return normalizeRuntimeAppUpdateBlockerSummary(
+      readString(evidence.blockerSummary),
+    );
+  }
+  if (status === "current") {
+    return "This checkout station reports the current app build.";
+  }
+  if (status === "update_ready") {
+    return "An app update is ready. The checkout station will refresh only when local work is safe.";
+  }
+  if (status === "update_ready_unstaged") {
+    return "An app update is available but not ready to refresh yet.";
+  }
+  if (status === "applying") {
+    return "The checkout station accepted the update. Waiting for a fresh check-in.";
+  }
+  if (status === "detector_failed") {
+    return "Athena could not confirm this checkout station's app update state.";
+  }
+  return "This checkout station has not reported app update readiness.";
+}
+
+function normalizeRuntimeAppUpdateBlockerSummary(value?: string) {
+  if (!value) {
+    return "Refresh is blocked by active checkout work.";
+  }
+  if (/sale|payment|checkout|drawer|sync|review|work/i.test(value)) {
+    return "Refresh is blocked by active checkout work.";
+  }
+  return "Refresh is blocked by local app work.";
+}
+
+function isAppUpdateEvidenceCommandCorrelated(
+  evidence: Record<string, unknown>,
+  commandStatus: TerminalRecoveryPreview["commandStatus"],
+) {
+  if (!commandStatus || String(commandStatus.commandType) !== "update_app") {
+    return false;
+  }
+
+  const command =
+    evidence.command && typeof evidence.command === "object"
+      ? (evidence.command as Record<string, unknown>)
+      : null;
+  const executionId =
+    readString(evidence.commandExecutionId) ?? readString(command?.executionId);
+  const expectedExecutionId = commandStatus.appUpdateCommandExecutionId;
+  if (executionId && expectedExecutionId) {
+    return executionId === expectedExecutionId;
+  }
+
+  return false;
+}
+
+function readString(value: unknown) {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function readNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
 async function buildTerminalRecoveryCommandStatus(
@@ -518,6 +699,8 @@ async function buildTerminalRecoveryCommandStatus(
   }
 
   return {
+    appUpdateCommandExecutionId:
+      latestCommand.expectedEvidence.appUpdateCommandExecutionId,
     commandId: latestCommand._id,
     commandType: latestCommand.commandType,
     label: getTerminalRecoveryCommandLabel(latestCommand.commandType),
@@ -541,8 +724,12 @@ function getTerminalRecoveryCommandStatusForPreview(
   return command.status;
 }
 
-function getTerminalRecoveryCommandLabel(commandType: TerminalRecoveryCommandType) {
+function getTerminalRecoveryCommandLabel(
+  commandType: TerminalRecoveryCommandType | string,
+) {
   switch (commandType) {
+    case "update_app":
+      return "Update app";
     case "repair_terminal_seed":
       return "Terminal setup repair";
     case "clear_stale_drawer_authority":
@@ -555,6 +742,8 @@ function getTerminalRecoveryCommandLabel(commandType: TerminalRecoveryCommandTyp
       return "Sync retry";
     case "report_diagnostics":
       return "Diagnostics request";
+    default:
+      return "Terminal command";
   }
 }
 

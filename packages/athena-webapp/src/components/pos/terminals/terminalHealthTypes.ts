@@ -22,6 +22,7 @@ export type TerminalRecord = {
 export type TerminalRuntimeStatus = {
   _creationTime?: number;
   _id?: string;
+  appUpdate?: TerminalRuntimeAppUpdateEvidence;
   appSessionRecovery?: {
     status:
       | "ready"
@@ -123,6 +124,44 @@ export type TerminalRuntimeStatus = {
     registerNumber?: string;
     status: "open" | "active" | "closing" | "closed" | string;
   };
+};
+
+export type TerminalRuntimeAppUpdateEvidence = {
+  blockerSummary?: string;
+  canApply?: boolean;
+  command?: {
+    executionId?: string;
+    issuedAt?: number;
+    nonce?: string;
+  };
+  currentBuildId?: string;
+  currentBuildSha?: string;
+  detectorStatus?: "failed" | "ok" | "unknown" | string;
+  errorCode?: string;
+  latestBuildId?: string;
+  observedAt?: number;
+  pendingBuildId?: string;
+  selectedBlockerCode?:
+    | "active_command"
+    | "active_sale"
+    | "resume_required"
+    | "unknown"
+    | string;
+  stagingStatus?: "staged" | "unknown" | "unstaged" | string;
+  status:
+    | "applying"
+    | "blocked"
+    | "checking"
+    | "current"
+    | "detector_failed"
+    | "detector-failed"
+    | "ready"
+    | "ready_unstaged"
+    | "staged"
+    | "update_ready"
+    | "update_ready_unstaged"
+    | "unknown"
+    | string;
 };
 
 export type TerminalSyncEvent = {
@@ -255,7 +294,8 @@ export type TerminalRecoveryCommandType =
   | "clear_stale_drawer_authority"
   | "refresh_staff_authority"
   | "refresh_snapshots"
-  | "report_diagnostics";
+  | "report_diagnostics"
+  | "update_app";
 
 export type TerminalRecoveryCommandContext = {
   cloudRegisterSessionId?: string;
@@ -267,6 +307,15 @@ export type TerminalRecoveryCommandContext = {
 };
 
 export type TerminalRecoveryExpectedEvidence = {
+  appUpdateCommandExecutionId?: string;
+  appUpdateStatus?:
+    | "applying"
+    | "blocked"
+    | "current"
+    | "detector_failed"
+    | "unknown"
+    | "update_ready"
+    | "update_ready_unstaged";
   drawerAuthorityStatus?: "healthy" | "blocked";
   localRegisterSessionId?: string;
   localStoreAvailable?: boolean;
@@ -306,6 +355,7 @@ export type TerminalRecoveryBlocker = {
 };
 
 export type TerminalRecoveryPreview = {
+  appUpdate?: TerminalAppUpdatePreview | null;
   blockers?: TerminalRecoveryBlocker[];
   cloudRepair?: {
     preconditionHash: string;
@@ -347,6 +397,26 @@ export type TerminalRecoveryPreview = {
     status?: TerminalRecoveryActionStatus;
     summary?: string;
   } | null;
+};
+
+export type TerminalAppUpdateStatus =
+  | "applying"
+  | "blocked"
+  | "current"
+  | "detector_failed"
+  | "stale"
+  | "unknown"
+  | "update_ready"
+  | "update_ready_unstaged";
+
+export type TerminalAppUpdatePreview = {
+  commandCorrelated?: boolean;
+  currentBuildId?: string;
+  evidenceFresh: boolean;
+  observedAt?: number;
+  pendingBuildId?: string;
+  status: TerminalAppUpdateStatus;
+  summary?: string;
 };
 
 export type TerminalHealthSummary = {

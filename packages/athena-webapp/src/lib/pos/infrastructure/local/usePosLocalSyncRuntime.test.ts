@@ -2669,6 +2669,73 @@ describe("usePosLocalSyncRuntimeStatus", () => {
     );
   });
 
+  it("publishes app update coordinator evidence with runtime check-ins", async () => {
+    const store = {
+      listEvents: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      readProvisionedTerminalSeed: vi.fn(async () => ({
+        ok: true,
+        value: {
+          cloudTerminalId: "terminal-cloud-1",
+          displayName: "Front",
+          provisionedAt: 1,
+          schemaVersion: 1,
+          syncSecretHash: "sync-secret-1",
+          storeId: "store-1",
+          terminalId: "local-terminal-1",
+        },
+      })),
+    };
+    const appUpdateCoordinator = {
+      applyUpdate: vi.fn(() => true),
+      getSnapshot: vi.fn(() => ({
+        blockers: [],
+        canApply: true,
+        currentBuildId: "build-current",
+        pendingBuildId: "build-next",
+        status: "ready" as const,
+      })),
+    };
+
+    const { result } = renderHook(() =>
+      usePosLocalSyncRuntimeStatus({
+        appUpdateCoordinator,
+        mode: "status-only",
+        source: "register",
+        storeFactory: () => store as never,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(result.current?.runtimeStatus?.appUpdate).toEqual(
+        expect.objectContaining({
+          canApply: true,
+          currentBuildId: "build-current",
+          detectorStatus: "ok",
+          pendingBuildId: "build-next",
+          stagingStatus: "staged",
+          status: "update_ready",
+        }),
+      ),
+    );
+    await waitFor(() =>
+      expect(mocks.reportTerminalRuntimeStatus).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: expect.objectContaining({
+            appUpdate: expect.objectContaining({
+              pendingBuildId: "build-next",
+              status: "update_ready",
+            }),
+          }),
+        }),
+      ),
+    );
+  });
+
   it("exposes rejected runtime check-in publishes in debug state", async () => {
     mocks.reportTerminalRuntimeStatus.mockResolvedValue({
       kind: "user_error",
@@ -3340,6 +3407,58 @@ describe("usePosLocalSyncRuntimeStatus", () => {
         runtimeStatus: {
           ...runtimeStatus,
           reportedAt: 200,
+        } as never,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+  });
+
+  it("normalizes volatile app-update observation timestamps in publish signatures", () => {
+    const runtimeStatus = {
+      appUpdate: {
+        canApply: true,
+        currentBuildId: "build-current",
+        detectorStatus: "ok",
+        observedAt: 100,
+        pendingBuildId: "build-next",
+        stagingStatus: "staged",
+        status: "update_ready",
+      },
+      localStore: {
+        available: true,
+        terminalSeedReady: true,
+      },
+      reportedAt: 100,
+      snapshots: {},
+      source: "sync-runtime",
+      staffAuthority: {
+        status: "unknown",
+      },
+      sync: {
+        failedEventCount: 0,
+        localOnlyEventCount: 0,
+        pendingEventCount: 0,
+        reviewEventCount: 0,
+        status: "idle",
+        uploadableEventCount: 0,
+      },
+    };
+
+    expect(
+      getRuntimeStatusSignature({
+        runtimeStatus: runtimeStatus as never,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    ).toEqual(
+      getRuntimeStatusSignature({
+        runtimeStatus: {
+          ...runtimeStatus,
+          appUpdate: {
+            ...runtimeStatus.appUpdate,
+            observedAt: 200,
+          },
         } as never,
         storeId: "store-1",
         terminalId: "terminal-cloud-1",
@@ -4171,6 +4290,251 @@ describe("usePosLocalSyncRuntimeStatus", () => {
       }),
     );
     expect(retry).toHaveBeenCalled();
+  });
+
+  it("acknowledges update_app before invoking the app update coordinator apply latch", async () => {
+    const command = buildRecoveryCommand({
+      commandType: "update_app",
+      executionId: "command-1:2000100",
+    });
+    const ack = deferred<{ kind: "ok"; data: Record<string, never> }>();
+    const applyUpdate = vi.fn(() => true);
+    const appUpdateCoordinator = {
+      applyUpdate,
+      getSnapshot: () => ({
+        blockers: [],
+        canApply: true,
+        currentBuildId: "build-1",
+        pendingBuildId: "build-2",
+        status: "ready" as const,
+      }),
+    };
+    const storeFactory = () => buildRecoveryCommandStore() as never;
+    const commandResult = { kind: "ok", data: [command] };
+    mocks.listTerminalRecoveryCommands.mockImplementation((args) =>
+      args === "skip" ? undefined : commandResult,
+    );
+    mocks.claimTerminalRecoveryCommand.mockResolvedValue({
+      kind: "ok",
+      data: command,
+    });
+    mocks.acknowledgeTerminalRecoveryCommand.mockReturnValue(ack.promise);
+
+    renderHook(() =>
+      usePosLocalSyncRuntimeStatus({
+        appUpdateCoordinator,
+        mode: "status-only",
+        storeFactory,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(mocks.acknowledgeTerminalRecoveryCommand).toHaveBeenCalledWith({
+        commandId: "command-1",
+        executionId: "command-1:2000100",
+        message:
+          "App update accepted and will apply when the terminal is safe to refresh.",
+        result: "completed",
+        storeId: "store-1",
+        syncSecretHash: "sync-secret-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+    expect(applyUpdate).not.toHaveBeenCalled();
+
+    await act(async () => {
+      ack.resolve({ kind: "ok", data: {} });
+      await ack.promise;
+    });
+
+    await waitFor(() => expect(applyUpdate).toHaveBeenCalledTimes(1));
+  });
+
+  it("publishes a fresh runtime observation when update_app apply returns false after acknowledgement", async () => {
+    const command = buildRecoveryCommand({
+      commandType: "update_app",
+      executionId: "command-1:2000100",
+    });
+    const applyUpdate = vi.fn(() => false);
+    const appUpdateCoordinator = {
+      applyUpdate,
+      getSnapshot: () => ({
+        blockers: [],
+        canApply: true,
+        currentBuildId: "build-1",
+        pendingBuildId: "build-2",
+        status: "ready" as const,
+      }),
+    };
+    const storeFactory = () => buildRecoveryCommandStore() as never;
+    const commandResult = { kind: "ok", data: [command] };
+    mocks.listTerminalRecoveryCommands.mockImplementation((args) =>
+      args === "skip" ? undefined : commandResult,
+    );
+    mocks.claimTerminalRecoveryCommand.mockResolvedValue({
+      kind: "ok",
+      data: command,
+    });
+    const initialReportCount = mocks.reportTerminalRuntimeStatus.mock.calls.length;
+
+    renderHook(() =>
+      usePosLocalSyncRuntimeStatus({
+        appUpdateCoordinator,
+        mode: "status-only",
+        storeFactory,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+
+    await waitFor(() => expect(applyUpdate).toHaveBeenCalledTimes(1));
+    await waitFor(() => {
+      const publishedAppUpdate = mocks.reportTerminalRuntimeStatus.mock.calls
+        .slice(initialReportCount)
+        .map((call) => call[0]?.status?.appUpdate)
+        .find(
+          (appUpdate) =>
+            appUpdate?.commandExecutionId === "command-1:2000100",
+        );
+
+      expect(publishedAppUpdate).toEqual(
+        expect.objectContaining({
+          commandExecutionId: "command-1:2000100",
+          commandId: "command-1",
+          status: "update_ready",
+        }),
+      );
+    });
+  });
+
+  it("runs update_app post-ack cleanup even when the hook unmounts during acknowledgement", async () => {
+    const command = buildRecoveryCommand({
+      commandType: "update_app",
+      executionId: "command-1:2000100",
+    });
+    const ack = deferred<{ kind: "ok"; data: Record<string, never> }>();
+    const applyUpdate = vi.fn(() => true);
+    const storage = {
+      getItem: vi.fn(() => null),
+      removeItem: vi.fn(),
+      setItem: vi.fn(),
+    };
+    Object.defineProperty(globalThis, "sessionStorage", {
+      configurable: true,
+      value: storage,
+    });
+    const appUpdateCoordinator = {
+      applyUpdate,
+      getSnapshot: () => ({
+        blockers: [],
+        canApply: true,
+        currentBuildId: "build-1",
+        pendingBuildId: "build-2",
+        status: "ready" as const,
+      }),
+    };
+    const storeFactory = () => buildRecoveryCommandStore() as never;
+    const commandResult = { kind: "ok", data: [command] };
+    mocks.listTerminalRecoveryCommands.mockImplementation((args) =>
+      args === "skip" ? undefined : commandResult,
+    );
+    mocks.claimTerminalRecoveryCommand.mockResolvedValue({
+      kind: "ok",
+      data: command,
+    });
+    mocks.acknowledgeTerminalRecoveryCommand.mockReturnValue(ack.promise);
+
+    const { unmount } = renderHook(() =>
+      usePosLocalSyncRuntimeStatus({
+        appUpdateCoordinator,
+        mode: "status-only",
+        storeFactory,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(mocks.acknowledgeTerminalRecoveryCommand).toHaveBeenCalled(),
+    );
+    unmount();
+
+    await act(async () => {
+      ack.resolve({ kind: "ok", data: {} });
+      await ack.promise;
+    });
+
+    expect(storage.setItem).toHaveBeenCalled();
+    expect(applyUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not reload when update_app reload correlation cannot be stored", async () => {
+    const command = buildRecoveryCommand({
+      commandType: "update_app",
+      executionId: "command-1:2000100",
+    });
+    const applyUpdate = vi.fn(() => true);
+    Object.defineProperty(globalThis, "sessionStorage", {
+      configurable: true,
+      value: {
+        getItem: vi.fn(() => null),
+        removeItem: vi.fn(),
+        setItem: vi.fn(() => {
+          throw new Error("storage unavailable");
+        }),
+      },
+    });
+    const appUpdateCoordinator = {
+      applyUpdate,
+      getSnapshot: () => ({
+        blockers: [],
+        canApply: true,
+        currentBuildId: "build-1",
+        pendingBuildId: "build-2",
+        status: "ready" as const,
+      }),
+    };
+    const storeFactory = () => buildRecoveryCommandStore() as never;
+    const commandResult = { kind: "ok", data: [command] };
+    mocks.listTerminalRecoveryCommands.mockImplementation((args) =>
+      args === "skip" ? undefined : commandResult,
+    );
+    mocks.claimTerminalRecoveryCommand.mockResolvedValue({
+      kind: "ok",
+      data: command,
+    });
+
+    renderHook(() =>
+      usePosLocalSyncRuntimeStatus({
+        appUpdateCoordinator,
+        mode: "status-only",
+        storeFactory,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(mocks.acknowledgeTerminalRecoveryCommand).toHaveBeenCalled(),
+    );
+    await waitFor(() => {
+      const publishedAppUpdate = mocks.reportTerminalRuntimeStatus.mock.calls
+        .map((call) => call[0]?.status?.appUpdate)
+        .find(
+          (appUpdate) =>
+            appUpdate?.commandExecutionId === "command-1:2000100",
+        );
+
+      expect(publishedAppUpdate).toEqual(
+        expect.objectContaining({
+          commandExecutionId: "command-1:2000100",
+          status: "update_ready",
+        }),
+      );
+    });
+    expect(applyUpdate).not.toHaveBeenCalled();
   });
 
   it("refreshes drawer authority before publishing the post-recovery check-in", async () => {

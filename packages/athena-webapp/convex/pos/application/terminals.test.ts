@@ -460,6 +460,81 @@ describe("submitTerminalRuntimeStatus", () => {
     );
   });
 
+  it("persists sanitized app-update runtime evidence", async () => {
+    vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
+    vi.mocked(upsertLatestRuntimeStatus).mockResolvedValue(
+      "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
+    );
+
+    await submitTerminalRuntimeStatus(
+      { db: null as never } as never,
+      {
+        storeId: "store-1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+        status: {
+          ...buildRuntimeStatus(),
+          appUpdate: {
+            blockerSummary: "active_sale",
+            canApply: false,
+            commandExecutionId: "exec-123",
+            commandIssuedAt: 90,
+            commandNonce: "nonce-abc",
+            currentBuildId: " build-current ",
+            detectorStatus: "ok",
+            observedAt: 100,
+            pendingBuildId: "build-next",
+            selectedBlockerCode: "active_sale",
+            stagingStatus: "staged",
+            status: "blocked",
+          },
+        },
+      },
+    );
+
+    expect(vi.mocked(upsertLatestRuntimeStatus)).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        appUpdate: {
+          blockerSummary: "active_sale",
+          canApply: false,
+          commandExecutionId: "exec-123",
+          commandIssuedAt: 90,
+          commandNonce: "nonce-abc",
+          currentBuildId: "build-current",
+          detectorStatus: "ok",
+          observedAt: 100,
+          pendingBuildId: "build-next",
+          selectedBlockerCode: "active_sale",
+          stagingStatus: "staged",
+          status: "blocked",
+        },
+      }),
+    );
+  });
+
+  it("clears stale app-update evidence when older clients omit it", async () => {
+    vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
+    vi.mocked(upsertLatestRuntimeStatus).mockResolvedValue(
+      "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
+    );
+
+    await submitTerminalRuntimeStatus(
+      { db: null as never } as never,
+      {
+        storeId: "store-1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+        status: buildRuntimeStatus(),
+      },
+    );
+
+    expect(vi.mocked(upsertLatestRuntimeStatus)).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        appUpdate: undefined,
+      }),
+    );
+  });
+
   it("clears stale app-session recovery status when runtime check-ins omit it", async () => {
     vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
     vi.mocked(upsertLatestRuntimeStatus).mockResolvedValue(

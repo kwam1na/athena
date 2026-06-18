@@ -21,7 +21,7 @@ Landing page for packages/athena-webapp. Use this page to orient around graph ho
 - `dailyClose.ts` (65 edges, Community 1) - [`packages/athena-webapp/convex/operations/dailyClose.ts`](../../../packages/athena-webapp/convex/operations/dailyClose.ts)
 - `ingestLocalEvents.ts` (54 edges, Community 2) - [`packages/athena-webapp/convex/pos/application/sync/ingestLocalEvents.ts`](../../../packages/athena-webapp/convex/pos/application/sync/ingestLocalEvents.ts)
 - `projectLocalEvents.ts` (53 edges, Community 3) - [`packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.ts`](../../../packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.ts)
-- `posLocalStore.ts` (48 edges, Community 4) - [`packages/athena-webapp/src/lib/pos/infrastructure/local/posLocalStore.ts`](../../../packages/athena-webapp/src/lib/pos/infrastructure/local/posLocalStore.ts)
+- `terminalHealthPresentation.ts` (49 edges, Community 4) - [`packages/athena-webapp/src/components/pos/terminals/terminalHealthPresentation.ts`](../../../packages/athena-webapp/src/components/pos/terminals/terminalHealthPresentation.ts)
 
 ## Navigation
 - [wiki index](../index.md) - back to the wiki index

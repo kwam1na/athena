@@ -339,6 +339,152 @@ describe("terminalRuntimeStatus", () => {
     });
   });
 
+  it.each([
+    {
+      name: "current",
+      appUpdate: {
+        canApply: false,
+        currentBuildId: "build-current",
+        detectorStatus: "ok",
+        status: "current",
+      },
+      expected: {
+        canApply: false,
+        currentBuildId: "build-current",
+        detectorStatus: "ok",
+        observedAt: 2_000,
+        status: "current",
+      },
+    },
+    {
+      name: "update_ready",
+      appUpdate: {
+        canApply: true,
+        currentBuildId: "build-current",
+        detectorStatus: "ok",
+        pendingBuildId: "build-next",
+        stagingStatus: "staged",
+        status: "update_ready",
+      },
+      expected: {
+        canApply: true,
+        currentBuildId: "build-current",
+        detectorStatus: "ok",
+        observedAt: 2_000,
+        pendingBuildId: "build-next",
+        stagingStatus: "staged",
+        status: "update_ready",
+      },
+    },
+    {
+      name: "blocked",
+      appUpdate: {
+        canApply: false,
+        currentBuildId: "build-current",
+        detectorStatus: "ok",
+        pendingBuildId: "build-next",
+        selectedBlockerCode: "active_sale",
+        stagingStatus: "staged",
+        status: "blocked",
+      },
+      expected: {
+        blockerSummary: "active_sale",
+        canApply: false,
+        currentBuildId: "build-current",
+        detectorStatus: "ok",
+        observedAt: 2_000,
+        pendingBuildId: "build-next",
+        selectedBlockerCode: "active_sale",
+        stagingStatus: "staged",
+        status: "blocked",
+      },
+    },
+    {
+      name: "detector failed",
+      appUpdate: {
+        canApply: false,
+        currentBuildId: "build-current",
+        detectorStatus: "failed",
+        status: "detector_failed",
+      },
+      expected: {
+        canApply: false,
+        currentBuildId: "build-current",
+        detectorStatus: "failed",
+        observedAt: 2_000,
+        status: "detector_failed",
+      },
+    },
+  ] satisfies Array<{
+    name: string;
+    appUpdate: PosTerminalRuntimeStatusInput["appUpdate"];
+    expected: NonNullable<
+      ReturnType<typeof buildPosTerminalRuntimeStatus>["appUpdate"]
+    >;
+  }>)(
+    "reports sanitized app-update runtime evidence for $name state",
+    ({ appUpdate, expected }) => {
+      const status = buildPosTerminalRuntimeStatus({
+        appUpdate,
+        clock: () => 2_000,
+        events: [],
+        source: "register",
+      });
+
+      expect(status.appUpdate).toEqual(expected);
+    },
+  );
+
+  it("reports command-correlated app-update evidence without local payload or blocker text", () => {
+    const status = buildPosTerminalRuntimeStatus({
+      appUpdate: {
+        canApply: false,
+        command: {
+          executionId: "exec-123",
+          issuedAt: 1_900,
+          nonce: "nonce-abc",
+        },
+        currentBuildId: "build-current",
+        detectorStatus: "ok",
+        pendingBuildId: "build-next",
+        selectedBlockerCode: "active_sale",
+        stagingStatus: "staged",
+        status: "blocked",
+        blockerLabel: "Customer checkout token secret raw backend error",
+        localPayload: {
+          customerEmail: "customer@example.com",
+          payments: [{ amount: 10_000 }],
+          staffProofToken: "proof-token",
+        },
+      } as PosTerminalRuntimeStatusInput["appUpdate"],
+      clock: () => 2_000,
+      events: [],
+      source: "register",
+    });
+
+    expect(status.appUpdate).toEqual({
+      blockerSummary: "active_sale",
+      canApply: false,
+      commandExecutionId: "exec-123",
+      commandIssuedAt: 1_900,
+      commandNonce: "nonce-abc",
+      currentBuildId: "build-current",
+      detectorStatus: "ok",
+      observedAt: 2_000,
+      pendingBuildId: "build-next",
+      selectedBlockerCode: "active_sale",
+      stagingStatus: "staged",
+      status: "blocked",
+    });
+
+    const serialized = JSON.stringify(status.appUpdate);
+    expect(serialized).not.toContain("Customer checkout");
+    expect(serialized).not.toContain("customer@example.com");
+    expect(serialized).not.toContain("payments");
+    expect(serialized).not.toContain("proof-token");
+    expect(serialized).not.toContain("raw backend error");
+  });
+
   it("reports sale authority when the local terminal can transact now", () => {
     const status = buildPosTerminalRuntimeStatus({
       clock: () => 2_000,

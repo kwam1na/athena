@@ -112,6 +112,326 @@ describe("terminalRecoveryCommands", () => {
     expect(JSON.stringify(result)).not.toContain("new-sync-secret-material");
   });
 
+  it("maps a current app update snapshot to a completed no-op without applying", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+    });
+    const applyUpdate = vi.fn();
+
+    const result = await executeTerminalRecoveryCommand({
+      appUpdateCoordinator: {
+        applyUpdate,
+        getSnapshot: () => ({
+          blockers: [],
+          canApply: false,
+          currentBuildId: "build-1",
+          status: "current",
+        }),
+      },
+      command: buildCommand({ type: "update_app" }),
+      store,
+      storeId: "store-1",
+      terminalId: "terminal-cloud-1",
+      terminalSeed: seed,
+    });
+
+    expect(result).toMatchObject({
+      diagnostics: {
+        appUpdateCanApply: false,
+        appUpdateStatus: "current",
+        currentBuildId: "build-1",
+      },
+      message: "The terminal is already running the current app.",
+      status: "completed",
+      type: "update_app",
+    });
+    expect(result.postAcknowledge).toBeUndefined();
+    expect(applyUpdate).not.toHaveBeenCalled();
+  });
+
+  it("prepares an app update apply effect only when the coordinator can apply", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+    });
+    const applyUpdate = vi.fn(() => true);
+
+    const result = await executeTerminalRecoveryCommand({
+      appUpdateCoordinator: {
+        applyUpdate,
+        getSnapshot: () => ({
+          blockers: [],
+          canApply: true,
+          currentBuildId: "build-1",
+          pendingBuildId: "build-2",
+          status: "ready",
+        }),
+      },
+      command: buildCommand({ type: "update_app" }),
+      store,
+      storeId: "store-1",
+      terminalId: "terminal-cloud-1",
+      terminalSeed: seed,
+    });
+
+    expect(result).toMatchObject({
+      diagnostics: {
+        appUpdateCanApply: true,
+        appUpdateStatus: "applying",
+        pendingBuildId: "build-2",
+      },
+      status: "completed",
+      type: "update_app",
+    });
+    expect(applyUpdate).not.toHaveBeenCalled();
+
+    await expect(Promise.resolve(result.postAcknowledge?.())).resolves.toEqual({
+      applied: true,
+    });
+
+    expect(applyUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  it("releases the update command latch when acknowledgement fails", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+    });
+    const applyUpdate = vi.fn(() => true);
+    const coordinator = {
+      applyUpdate,
+      getSnapshot: () => ({
+        blockers: [],
+        canApply: true,
+        pendingBuildId: "build-2",
+        status: "ready" as const,
+      }),
+    };
+    const command = buildCommand({
+      commandId: "command-latch",
+      type: "update_app",
+    });
+
+    const first = await executeTerminalRecoveryCommand({
+      appUpdateCoordinator: coordinator,
+      command,
+      store,
+      storeId: "store-1",
+      terminalId: "terminal-cloud-1",
+      terminalSeed: seed,
+    });
+    const duplicateWhileClaimed = await executeTerminalRecoveryCommand({
+      appUpdateCoordinator: coordinator,
+      command,
+      store,
+      storeId: "store-1",
+      terminalId: "terminal-cloud-1",
+      terminalSeed: seed,
+    });
+
+    first.onAcknowledgeFailed?.();
+
+    const retryAfterAckFailure = await executeTerminalRecoveryCommand({
+      appUpdateCoordinator: coordinator,
+      command,
+      store,
+      storeId: "store-1",
+      terminalId: "terminal-cloud-1",
+      terminalSeed: seed,
+    });
+
+    expect(duplicateWhileClaimed.status).toBe("precondition_failed");
+    expect(retryAfterAckFailure.status).toBe("completed");
+    expect(retryAfterAckFailure.postAcknowledge).toBeDefined();
+  });
+
+  it("reports post-ack app update blockers and releases the latch", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+    });
+    const applyUpdate = vi.fn(() => false);
+    const command = buildCommand({
+      commandId: "command-post-ack-blocked",
+      type: "update_app",
+    });
+
+    const result = await executeTerminalRecoveryCommand({
+      appUpdateCoordinator: {
+        applyUpdate,
+        getSnapshot: () => ({
+          blockers: [],
+          canApply: true,
+          pendingBuildId: "build-2",
+          status: "ready",
+        }),
+      },
+      command,
+      store,
+      storeId: "store-1",
+      terminalId: "terminal-cloud-1",
+      terminalSeed: seed,
+    });
+
+    await expect(Promise.resolve(result.postAcknowledge?.())).resolves.toEqual({
+      applied: false,
+      message:
+        "App update was accepted, but refresh is now blocked by local work.",
+    });
+
+    const retryAfterBlockedApply = await executeTerminalRecoveryCommand({
+      appUpdateCoordinator: {
+        applyUpdate,
+        getSnapshot: () => ({
+          blockers: [],
+          canApply: true,
+          pendingBuildId: "build-2",
+          status: "ready",
+        }),
+      },
+      command,
+      store,
+      storeId: "store-1",
+      terminalId: "terminal-cloud-1",
+      terminalSeed: seed,
+    });
+
+    expect(applyUpdate).toHaveBeenCalledTimes(1);
+    expect(retryAfterBlockedApply.status).toBe("completed");
+  });
+
+  it("does not apply blocked or ready-unstaged app updates", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+    });
+    const applyUpdate = vi.fn();
+
+    const blocked = await executeTerminalRecoveryCommand({
+      appUpdateCoordinator: {
+        applyUpdate,
+        getSnapshot: () => ({
+          blockers: [
+            {
+              generation: 1,
+              guidance: "Finish the sale before refreshing.",
+              label: "Register sale",
+              ownerTabId: "tab-a",
+              priority: "critical-workflow",
+              surfaceId: "pos-register",
+              updatedAt: 1_000,
+            },
+          ],
+          canApply: false,
+          pendingBuildId: "build-2",
+          status: "blocked",
+        }),
+      },
+      command: buildCommand({ commandId: "command-blocked", type: "update_app" }),
+      store,
+      storeId: "store-1",
+      terminalId: "terminal-cloud-1",
+      terminalSeed: seed,
+    });
+
+    const unstaged = await executeTerminalRecoveryCommand({
+      appUpdateCoordinator: {
+        applyUpdate,
+        getSnapshot: () => ({
+          blockers: [],
+          canApply: false,
+          pendingBuildId: "build-2",
+          status: "ready-unstaged",
+        }),
+      },
+      command: buildCommand({ commandId: "command-unstaged", type: "update_app" }),
+      store,
+      storeId: "store-1",
+      terminalId: "terminal-cloud-1",
+      terminalSeed: seed,
+    });
+
+    expect(blocked).toMatchObject({
+      diagnostics: { appUpdateStatus: "blocked" },
+      message: "The terminal has active work that is blocking app refresh.",
+      status: "completed",
+    });
+    expect(unstaged).toMatchObject({
+      diagnostics: { appUpdateStatus: "update_ready_unstaged" },
+      message: "An app update is available but is not ready to refresh yet.",
+      status: "completed",
+    });
+    expect(applyUpdate).not.toHaveBeenCalled();
+  });
+
+  it("reports detector failure and unavailable coordinator without applying", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+    });
+    const applyUpdate = vi.fn();
+
+    const detectorFailed = await executeTerminalRecoveryCommand({
+      appUpdateCoordinator: {
+        applyUpdate,
+        getSnapshot: () => ({
+          blockers: [],
+          canApply: false,
+          status: "detector-failed",
+        }),
+      },
+      command: buildCommand({ commandId: "command-detector", type: "update_app" }),
+      store,
+      storeId: "store-1",
+      terminalId: "terminal-cloud-1",
+      terminalSeed: seed,
+    });
+    const unavailable = await executeTerminalRecoveryCommand({
+      appUpdateCoordinator: null,
+      command: buildCommand({ commandId: "command-unavailable", type: "update_app" }),
+      store,
+      storeId: "store-1",
+      terminalId: "terminal-cloud-1",
+      terminalSeed: seed,
+    });
+
+    expect(detectorFailed).toMatchObject({
+      diagnostics: { appUpdateStatus: "detector_failed" },
+      status: "completed",
+    });
+    expect(unavailable).toMatchObject({
+      diagnostics: { appUpdateStatus: "unknown" },
+      status: "completed",
+    });
+    expect(applyUpdate).not.toHaveBeenCalled();
+  });
+
+  it("reports detector failure when the app update snapshot cannot be read", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+    });
+    const applyUpdate = vi.fn();
+
+    const result = await executeTerminalRecoveryCommand({
+      appUpdateCoordinator: {
+        applyUpdate,
+        getSnapshot: () => {
+          throw new Error("coordinator unavailable");
+        },
+      },
+      command: buildCommand({ commandId: "command-snapshot-error", type: "update_app" }),
+      store,
+      storeId: "store-1",
+      terminalId: "terminal-cloud-1",
+      terminalSeed: seed,
+    });
+
+    expect(result).toMatchObject({
+      diagnostics: {
+        appUpdateStatus: "detector_failed",
+      },
+      message: "coordinator unavailable",
+      status: "completed",
+      type: "update_app",
+    });
+    expect(applyUpdate).not.toHaveBeenCalled();
+  });
+
   it("repairs terminal seed from safe backend command context without shipping seed material", async () => {
     const store = createPosLocalStore({
       adapter: createMemoryPosLocalStorageAdapter(),

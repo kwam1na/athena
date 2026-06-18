@@ -19,6 +19,7 @@ import {
 
 type UpdateCoordinatorContextValue = {
   snapshot: UpdateCoordinatorSnapshot;
+  getSnapshot: () => UpdateCoordinatorSnapshot;
   reportChecking: () => void;
   reportUpdateDetected: (input: UpdateDetectedInput) => void;
   reportDetectorFailed: () => void;
@@ -80,6 +81,7 @@ export function UpdateCoordinatorProvider({
   const value = useMemo<UpdateCoordinatorContextValue>(
     () => ({
       snapshot,
+      getSnapshot: store.getSnapshot,
       reportChecking: store.reportChecking,
       reportUpdateDetected: store.reportUpdateDetected,
       reportDetectorFailed: store.reportDetectorFailed,
@@ -105,6 +107,10 @@ export function useUpdateCoordinator() {
     );
   }
   return context;
+}
+
+export function useOptionalUpdateCoordinator() {
+  return useContext(UpdateCoordinatorContext);
 }
 
 export function useUpdateCoordinatorSnapshot() {

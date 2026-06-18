@@ -7,6 +7,7 @@ const useMutationMock = vi.fn();
 const useQueryMock = vi.fn();
 const usePosLocalSyncRuntimeStatusMock = vi.fn();
 const useRemoteAssistRuntimeTransportMock = vi.fn();
+const useOptionalUpdateCoordinatorMock = vi.fn();
 
 vi.mock("convex/react", () => ({
   useMutation: () => useMutationMock,
@@ -16,6 +17,10 @@ vi.mock("convex/react", () => ({
 vi.mock("@/lib/pos/infrastructure/local/usePosLocalSyncRuntime", () => ({
   usePosLocalSyncRuntimeStatus: (input: Record<string, unknown>) =>
     usePosLocalSyncRuntimeStatusMock(input),
+}));
+
+vi.mock("@/lib/app-update/UpdateCoordinatorProvider", () => ({
+  useOptionalUpdateCoordinator: () => useOptionalUpdateCoordinatorMock(),
 }));
 
 vi.mock("@/lib/remote-assist", async () => {
@@ -34,6 +39,7 @@ describe("PosRemoteAssistRuntimeHost", () => {
     vi.clearAllMocks();
     useMutationMock.mockResolvedValue(null);
     useQueryMock.mockReturnValue(null);
+    useOptionalUpdateCoordinatorMock.mockReturnValue(null);
     useRemoteAssistRuntimeTransportMock.mockReturnValue({
       connectionState: "connected",
     });
@@ -61,6 +67,26 @@ describe("PosRemoteAssistRuntimeHost", () => {
         mode: "drain-enabled",
         storeId: "store-1",
         terminalId: "terminal-cloud-1",
+      }),
+    );
+  });
+
+  it("passes the app update coordinator adapter into the local sync runtime", () => {
+    const applyUpdate = vi.fn();
+    const getSnapshot = vi.fn();
+    useOptionalUpdateCoordinatorMock.mockReturnValue({
+      applyUpdate,
+      getSnapshot,
+    });
+
+    render(<PosRemoteAssistRuntimeHost entryContext={readyEntryContext()} />);
+
+    expect(usePosLocalSyncRuntimeStatusMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        appUpdateCoordinator: {
+          applyUpdate,
+          getSnapshot,
+        },
       }),
     );
   });

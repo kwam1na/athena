@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   deleteTerminalCommand: vi.fn(),
   getTerminalHealthSummaryQuery: vi.fn(),
   getTerminalByFingerprintQuery: vi.fn(),
+  getLatestRuntimeStatusForTerminal: vi.fn(),
   issueTerminalRecoveryCommandService: vi.fn(),
   listClaimableTerminalRecoveryCommands: vi.fn(),
   listTerminalHealthSummariesQuery: vi.fn(),
@@ -68,6 +69,10 @@ vi.mock("../application/terminalRecovery/terminalCommandService", () => ({
 vi.mock("../infrastructure/repositories/terminalRecoveryRepository", () => ({
   createTerminalRecoveryCommandRepository:
     mocks.createTerminalRecoveryCommandRepository,
+}));
+
+vi.mock("../infrastructure/repositories/terminalRepository", () => ({
+  getLatestRuntimeStatusForTerminal: mocks.getLatestRuntimeStatusForTerminal,
 }));
 
 vi.mock("../../remoteAssist/infrastructure/remoteAssistRepository", () => ({
@@ -183,6 +188,7 @@ describe("POS terminal public mutations", () => {
     mocks.getTerminalByFingerprintQuery.mockResolvedValue(null);
     mocks.listTerminalHealthSummariesQuery.mockResolvedValue([]);
     mocks.getTerminalHealthSummaryQuery.mockResolvedValue(null);
+    mocks.getLatestRuntimeStatusForTerminal.mockResolvedValue(null);
     mocks.createTerminalRecoveryCommandRepository.mockReturnValue({
       repository: true,
     });
@@ -891,6 +897,77 @@ describe("POS terminal public mutations", () => {
     );
   });
 
+  it("accepts only structured app-update evidence in runtime check-ins", async () => {
+    const ctx = buildCtx({
+      terminal: {
+        _id: "terminal-1",
+        storeId: "store-1",
+        status: "active",
+        registeredByUserId: "athena-user-2",
+        syncSecretHash: SYNC_SECRET_HASH,
+      },
+    });
+
+    await getHandler(submitTerminalRuntimeStatus)(ctx as never, {
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      syncSecretHash: "sync-secret-1",
+      status: buildRuntimeStatus({
+        appUpdate: {
+          canApply: false,
+          command: { localPayload: { staffProofToken: "raw-proof" } },
+          commandExecutionId: "exec-123",
+          commandIssuedAt: 90,
+          commandNonce: "nonce-abc",
+          currentBuildId: "build-current",
+          detectorStatus: "ok",
+          observedAt: 100,
+          pendingBuildId: "build-next",
+          selectedBlockerCode: "active_sale",
+          stagingStatus: "staged",
+          status: "blocked",
+          blockerLabel: "Active sale raw customer details",
+          localPayload: { customerEmail: "customer@example.com" },
+        },
+      }),
+    });
+
+    expect(mocks.submitTerminalRuntimeStatusCommand).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({
+        status: expect.objectContaining({
+          appUpdate: {
+            blockerSummary: "active_sale",
+            canApply: false,
+            commandExecutionId: "exec-123",
+            commandIssuedAt: 90,
+            commandNonce: "nonce-abc",
+            currentBuildId: "build-current",
+            detectorStatus: "ok",
+            observedAt: 100,
+            pendingBuildId: "build-next",
+            selectedBlockerCode: "active_sale",
+            stagingStatus: "staged",
+            status: "blocked",
+          },
+        }),
+      }),
+    );
+
+    const appUpdate =
+      mocks.submitTerminalRuntimeStatusCommand.mock.calls[0]?.[1].status
+        .appUpdate;
+    expect(appUpdate).not.toEqual(
+      expect.objectContaining({
+        blockerLabel: expect.anything(),
+        localPayload: expect.anything(),
+      }),
+    );
+    expect(appUpdate).not.toEqual(
+      expect.objectContaining({ command: expect.anything() }),
+    );
+  });
+
   it.each([
     {
       name: "missing terminal",
@@ -1180,6 +1257,124 @@ describe("POS terminal public mutations", () => {
       expect(result.kind).toBe("ok");
     },
   );
+
+  it("hides update_app commands from terminals that have not reported app-update runtime evidence", async () => {
+    mocks.listClaimableTerminalRecoveryCommands.mockResolvedValue([
+      buildRecoveryCommand({
+        _id: "command-repair",
+        commandType: "repair_terminal_seed",
+      }),
+      buildRecoveryCommand({
+        _id: "command-update",
+        commandType: "update_app",
+        commandContext: {
+          expectedBlockerType: "app_update",
+          reason: "Support requested an app update check.",
+        },
+        expectedEvidence: {},
+      }),
+    ]);
+    mocks.getLatestRuntimeStatusForTerminal.mockResolvedValue({
+      appUpdate: undefined,
+    });
+    const ctx = buildCtx({
+      terminal: {
+        _id: "terminal-1",
+        storeId: "store-1",
+        status: "active",
+        registeredByUserId: "athena-user-2",
+        syncSecretHash: SYNC_SECRET_HASH,
+      },
+    });
+
+    const result = await getHandler(listTerminalRecoveryCommands)(ctx as never, {
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      syncSecretHash: "sync-secret-1",
+    });
+
+    expect(result).toMatchObject({
+      kind: "ok",
+      data: [expect.objectContaining({ _id: "command-repair" })],
+    });
+  });
+
+  it("lists update_app commands after the terminal reports app-update runtime evidence", async () => {
+    mocks.listClaimableTerminalRecoveryCommands.mockResolvedValue([
+      buildRecoveryCommand({
+        _id: "command-update",
+        commandType: "update_app",
+        commandContext: {
+          expectedBlockerType: "app_update",
+          reason: "Support requested an app update check.",
+        },
+        expectedEvidence: {},
+      }),
+    ]);
+    mocks.getLatestRuntimeStatusForTerminal.mockResolvedValue({
+      appUpdate: { status: "current" },
+    });
+    const ctx = buildCtx({
+      terminal: {
+        _id: "terminal-1",
+        storeId: "store-1",
+        status: "active",
+        registeredByUserId: "athena-user-2",
+        syncSecretHash: SYNC_SECRET_HASH,
+      },
+    });
+
+    const result = await getHandler(listTerminalRecoveryCommands)(ctx as never, {
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      syncSecretHash: "sync-secret-1",
+    });
+
+    expect(result).toMatchObject({
+      kind: "ok",
+      data: [expect.objectContaining({ _id: "command-update" })],
+    });
+  });
+
+  it("forwards update_app acknowledgement execution ids from terminal runtime proof", async () => {
+    mocks.requireAuthenticatedAthenaUserWithCtx.mockRejectedValue(
+      new Error("not signed in"),
+    );
+    const ctx = buildCtx({
+      terminal: {
+        _id: "terminal-1",
+        storeId: "store-1",
+        status: "active",
+        registeredByUserId: "athena-user-2",
+        syncSecretHash: SYNC_SECRET_HASH,
+      },
+    });
+
+    const result = await getHandler(acknowledgeTerminalRecoveryCommand)(
+      ctx as never,
+      {
+        storeId: "store-1",
+        terminalId: "terminal-1",
+        syncSecretHash: "sync-secret-1",
+        commandId: "command-1",
+        result: "completed",
+        message: "Update app evaluated.",
+        executionId: "command-1:2000100",
+      },
+    );
+
+    expect(mocks.acknowledgeTerminalRecoveryCommandService).toHaveBeenCalledWith(
+      { repository: true },
+      expect.objectContaining({
+        commandId: "command-1",
+        executionId: "command-1:2000100",
+        result: "completed",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      }),
+    );
+    expect(result.kind).toBe("ok");
+  });
 
   it("does not let terminal runtime proof issue terminal recovery commands", async () => {
     mocks.requireAuthenticatedAthenaUserWithCtx.mockRejectedValue(
