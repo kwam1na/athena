@@ -1116,6 +1116,12 @@ describe("DailyCloseViewContent", () => {
       "href",
       "/wigclub/store/osu/pos/transactions?o=%252Fwigclub%252Fstore%252Fosu%252Foperations%252Fdaily-close&operatingDate=2026-05-07&paymentMethod=card",
     );
+    expect(
+      screen.getByRole("link", { name: "Open expense reports" }),
+    ).toHaveAttribute(
+      "href",
+      "/wigclub/store/osu/pos/expense-reports?o=%252Fwigclub%252Fstore%252Fosu%252Foperations%252Fdaily-close&operatingDate=2026-05-07",
+    );
   });
 
   it("redacts EOD Review financial details without manager access", async () => {

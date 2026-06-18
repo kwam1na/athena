@@ -35,6 +35,7 @@ export function createVersionChecker({
   fetchImpl = fetch,
   onUpdateDetected,
   onDetectorFailed,
+  shouldReportDuplicateUpdate,
 }: {
   currentBuildId?: string;
   currentDeployBuildId?: string;
@@ -43,6 +44,9 @@ export function createVersionChecker({
   onUpdateDetected: (event: VersionCheckerUpdateDetectedEvent) => void;
   onDetectorFailed?: (error: Error) => void;
   onApplyUpdate?: () => void;
+  shouldReportDuplicateUpdate?: (
+    event: VersionCheckerUpdateDetectedEvent,
+  ) => boolean;
 }) {
   let lastReportedBuildId: string | undefined;
 
@@ -98,9 +102,12 @@ export function createVersionChecker({
 
   function reportOnce(event: VersionCheckerUpdateDetectedEvent) {
     if (lastReportedBuildId === event.pendingBuildId) {
-      return;
+      if (!shouldReportDuplicateUpdate?.(event)) {
+        return;
+      }
+    } else {
+      lastReportedBuildId = event.pendingBuildId;
     }
-    lastReportedBuildId = event.pendingBuildId;
     console.log("New version detected");
     onUpdateDetected(event);
   }
