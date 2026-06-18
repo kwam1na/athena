@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { collectRootScriptTestFiles } from "./root-scripts-coverage";
+import { collectHarnessTestTargets } from "./harness-test";
 
 const tempRoots: string[] = [];
 
@@ -40,5 +41,16 @@ describe("collectRootScriptTestFiles", () => {
       path.join(rootDir, "scripts/alpha.test.ts"),
       path.join(rootDir, "scripts/beta.test.ts"),
     ]);
+  });
+
+  it("stays in parity with harness:test target collection", async () => {
+    const rootDir = await createFixtureRoot();
+    await write("scripts/alpha.test.ts", rootDir);
+    await write("scripts/beta.test.ts", rootDir);
+    await write("scripts/not-a-test.ts", rootDir);
+
+    expect(collectRootScriptTestFiles(rootDir)).toEqual(
+      await collectHarnessTestTargets(rootDir)
+    );
   });
 });

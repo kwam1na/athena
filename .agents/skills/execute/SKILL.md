@@ -143,6 +143,8 @@ Use this resolution order before asking the user for context:
 ### 6. Validate Before Claiming Success
 
 - Run the smallest targeted test first, then the relevant suite, typecheck, build, lint, repo preflight, and `git diff --check`.
+- After reviewer-requested fixes, rerun the focused tests that prove the fixed surface before spending the full merge gate.
+- For Athena, run the full `bun run pr:athena` gate when the branch is merge-ready, after syncing or rebasing on a changed base, when `pre-push:review` reports a stale or missing proof, or when the change touches validation wiring such as Git hooks, repo harness scripts, generated-artifact repair, Graphify checks, or PR validation commands.
 - Match validation to the ticket's expected sensors and supplement with discovered repo sensors when the ticket is incomplete.
 - If the repo defines a PR-equivalent command, run that before trusting local parity with remote CI.
 - If the repo has generated-artifact repair hooks, run them before the final commit and inspect the diff. For Athena, `bun run pre-commit:generated-artifacts` refreshes harness docs, Convex generated API files, graphify artifacts, and tracked generated changes so new Convex modules do not leave `_generated/api.d.ts` drift for a follow-up PR.
@@ -219,6 +221,7 @@ After opening the PR:
 - For coordinated batches, confirm every included ticket reached `Done`, not just the ticket that happened to anchor the PR title.
 - After delivery, fetch `origin`, fast-forward the local root checkout's `main` branch to `origin/main`, switch back to `main`, and confirm the local checkout reflects the merged result.
 - Clean up the working tree and any temporary worktree or branch created for the ticket so the local repo is tidy before handoff.
+- For subagent batches, close each worker explicitly before handoff: wait for completion, review and merge or intentionally reject its diff, run the relevant focused validation, remove the worker worktree, delete the worker branch only after it is merged, and record any unresolved blocker in the parent ticket or PR.
 - If repeated blockers remain and the next fix is not clear, leave the issue in the most accurate state, post an unresolved-item checklist with the latest telemetry, and hand off the exact blocker.
 - If merge permissions or repo settings prevent merge, leave the ticket in `In Review` and document the exact blocker.
 - If `auto_review_and_merge = off`, stop at review-ready state and say it is awaiting manual review or merge.

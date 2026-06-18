@@ -13,6 +13,7 @@ const ATHENA_GENERATED_DOC_PATHS = [
 const EXPIRED_PROOF_OPTIONS = {
   evaluatePrePushValidationProof: async () => ({
     reusable: false as const,
+    status: "stale" as const,
     reason: "test proof disabled",
   }),
 };
@@ -151,6 +152,7 @@ describe("pre-push review wiring", () => {
     await prePushReview.runPrePushReview(ROOT_DIR, {
       evaluatePrePushValidationProof: async () => ({
         reusable: true,
+        status: "reusable",
         proofPath: "/tmp/proof.json",
         proof: {
           schemaVersion: 2,
@@ -191,6 +193,38 @@ describe("pre-push review wiring", () => {
     expect(steps).toEqual([]);
     expect(logs).toContain(
       "[pre-push] Reusing current pr:athena validation proof for tree tree-sha.",
+    );
+    expect(logs).toContain(
+      "[pre-push] Handoff: validation=skipped; proof=reusable; proofReason=reusable current pr:athena proof.",
+    );
+  });
+
+  it("reports validation success separately from stale proof status", async () => {
+    const logs: string[] = [];
+
+    await prePushReview.runPrePushReview(ROOT_DIR, {
+      ...EXPIRED_PROOF_OPTIONS,
+      getChangedFiles: async () => ["packages/athena-webapp/src/main.tsx"],
+      runGraphifyCheck: async () => {},
+      runHarnessSelfReview: async () => {},
+      runArchitectureCheck: async () => {},
+      runHarnessReview: async () => {},
+      runHarnessInferentialReview: async () => {},
+      getLocalChangedFiles: async () => [],
+      logger: {
+        log(message: string) {
+          logs.push(message);
+        },
+        warn() {},
+        error() {},
+      },
+    } as any);
+
+    expect(logs).toContain(
+      "[pre-push] pr:athena proof not reusable (stale): test proof disabled. Running validation suite.",
+    );
+    expect(logs).toContain(
+      "[pre-push] Handoff: validation=passed; proof=stale; proofReason=test proof disabled.",
     );
   });
 
@@ -894,7 +928,7 @@ describe("repo harness ergonomics", () => {
     expect(workflow).toContain("run: bun run graphify:check");
   });
 
-  it("includes prepare, validate, and proof recording in the local pr:athena command chain", async () => {
+  it("runs the local pr:athena gate through the delivery-run wrapper", async () => {
     const packageJson = JSON.parse(
       await readFile(path.join(ROOT_DIR, "package.json"), "utf8"),
     ) as {
@@ -902,7 +936,10 @@ describe("repo harness ergonomics", () => {
     };
 
     expect(packageJson.scripts?.["pr:athena"]).toBe(
-      "bun run pr:athena:prepare && bun run pr:athena:validate && bun run pr:athena:record-proof",
+      "bun run pr:athena:delivery-run",
+    );
+    expect(packageJson.scripts?.["pr:athena:delivery-run"]).toBe(
+      "bun scripts/pr-athena-delivery-run.ts",
     );
     expect(packageJson.scripts?.["pr:athena:prepare"]).toContain(
       "bun run pre-commit:generated-artifacts",
@@ -911,31 +948,52 @@ describe("repo harness ergonomics", () => {
       "bun scripts/pre-push-validation-proof.ts prepare-pr-athena",
     );
     expect(packageJson.scripts?.["pr:athena:validate"]).toContain(
+      "bun run pr:athena:validate-provider && bun scripts/pr-athena-delivery-run.ts write-provider-evidence && bun run pr:athena:validate-review",
+    );
+    expect(packageJson.scripts?.["pr:athena:validate-provider"]).toContain(
       "bun run compound:check",
     );
-    expect(packageJson.scripts?.["pr:athena:validate"]).toContain(
+    expect(packageJson.scripts?.["pr:athena:validate-provider"]).toContain(
       "bun run workflow:check",
     );
-    expect(packageJson.scripts?.["pr:athena:validate"]).toContain(
+    expect(packageJson.scripts?.["harness:test"]).toBe(
+      "bun scripts/harness-test.ts",
+    );
+    expect(packageJson.scripts?.["pr:athena:validate-provider"]).toContain(
+      "bun run test:coverage",
+    );
+    expect(packageJson.scripts?.["pr:athena:validate-provider"]).not.toContain(
       "bun run harness:test",
     );
-    expect(packageJson.scripts?.["pr:athena:validate"]).toContain(
+    expect(packageJson.scripts?.["pr:athena:validate-provider"]).not.toContain(
+      "bun run harness:check",
+    );
+    expect(packageJson.scripts?.["pr:athena:validate-review"]).toContain(
       "bun run harness:review --base origin/main --repo-validation-provided-by pr:athena",
+    );
+    expect(packageJson.scripts?.["pr:athena:validate-review"]).toContain(
+      "--provider-evidence artifacts/harness-delivery-runs/provider-evidence.json",
     );
     expect(packageJson.scripts?.["pr:athena:record-proof"]).toBe(
       "bun scripts/pre-push-validation-proof.ts record-pr-athena",
     );
-    expect(packageJson.scripts?.["pr:athena:validate"]).toContain(
+    expect(packageJson.scripts?.["pr:athena:scorecard"]).toBe(
+      "bun run harness:scorecard",
+    );
+    expect(packageJson.scripts?.["pr:athena:validate-provider"]).toContain(
       "bun run --filter '@athena/webapp' lint:frontend:changed",
     );
-    expect(packageJson.scripts?.["pr:athena:validate"]).toContain(
+    expect(packageJson.scripts?.["pr:athena:validate-review"]).toContain(
       "bun run harness:audit",
     );
-    expect(packageJson.scripts?.["pr:athena:validate"]).toContain(
+    expect(packageJson.scripts?.["pr:athena:validate-review"]).toContain(
       "bun run harness:inferential-review",
     );
-    expect(packageJson.scripts?.["pr:athena:validate"]).toContain(
+    expect(packageJson.scripts?.["pr:athena:validate-review"]).toContain(
       "bun run graphify:check",
+    );
+    expect(packageJson.scripts?.["pr:athena:validate-review"]).not.toContain(
+      "bun run harness:scorecard",
     );
   });
 

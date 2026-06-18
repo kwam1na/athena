@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>refactor: Make Athena delivery loops proof-aware and measurable</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #18212b;
+        --muted: #5c6570;
+        --line: #d8dee6;
+        --panel: #f6f8fa;
+        --accent: #0f6b5f;
+        --accent-2: #6a4a12;
+      }
+      body {
+        margin: 0;
+        font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        color: var(--ink);
+        background: #ffffff;
+        line-height: 1.55;
+      }
+      main {
+        max-width: 1040px;
+        margin: 0 auto;
+        padding: 48px 24px 72px;
+      }
+      header {
+        border-bottom: 1px solid var(--line);
+        margin-bottom: 30px;
+        padding-bottom: 20px;
+      }
+      h1 {
+        font-size: 32px;
+        line-height: 1.15;
+        margin: 0 0 10px;
+        letter-spacing: 0;
+      }
+      h2 {
+        font-size: 22px;
+        margin: 34px 0 12px;
+        letter-spacing: 0;
+      }
+      h3 {
+        font-size: 17px;
+        margin: 22px 0 8px;
+        letter-spacing: 0;
+      }
+      p, li, td, th {
+        font-size: 15px;
+      }
+      .meta {
+        color: var(--muted);
+        font-size: 14px;
+      }
+      .badge {
+        display: inline-block;
+        color: #ffffff;
+        background: var(--accent);
+        border-radius: 4px;
+        padding: 2px 8px;
+        font-size: 12px;
+        font-weight: 600;
+        margin-bottom: 12px;
+      }
+      .summary, .unit, .callout {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 18px 20px;
+      }
+      .unit {
+        margin: 14px 0;
+      }
+      .callout {
+        border-left: 4px solid var(--accent-2);
+      }
+      code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+        font-size: 0.94em;
+        background: #edf2f6;
+        border-radius: 4px;
+        padding: 1px 4px;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 16px 0;
+      }
+      th, td {
+        border: 1px solid var(--line);
+        padding: 10px 12px;
+        text-align: left;
+        vertical-align: top;
+      }
+      th {
+        background: var(--panel);
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 14px;
+      }
+      .small {
+        color: var(--muted);
+        font-size: 14px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div class="badge">Plan</div>
+        <h1>refactor: Make Athena delivery loops proof-aware and measurable</h1>
+        <div class="meta">Date: 2026-06-18 · Status: active · Type: refactor</div>
+      </header>
+
+      <section class="summary">
+        <h2>Summary</h2>
+        <p>Make delivery work cheaper and easier to reason about by pruning duplicate local gate work, making <code>$execute</code> and reviewer loops proof-aware, and adding baseline capture plus a durable delivery-run ledger. Metrics support the audit findings; they are not the whole project.</p>
+      </section>
+
+      <section>
+        <h2>Audit Findings</h2>
+        <ul>
+          <li>Agents often rerun full <code>bun run pr:athena</code> during reviewer loops instead of using focused tests between small fixes.</li>
+          <li><code>pr:athena:validate</code> currently runs <code>harness:check</code> directly, then calls <code>harness:review</code>, which runs <code>harness:check</code> internally.</li>
+          <li>The full local gate runs both <code>test:coverage</code> and <code>harness:test</code>, while both currently target root <code>scripts/*.test.ts</code> tests.</li>
+          <li>Root <code>test:coverage</code> runs <code>@athena/webapp test:coverage</code>, while <code>harness:review</code> can still select <code>@athena/webapp test</code> or focused webapp Vitest commands in the same local gate.</li>
+          <li>Existing proof reuse is strong, but handoffs do not always separate validation success from reusable proof success.</li>
+          <li>Completed subagents can stay open across reviewer waves unless cleanup is made explicit.</li>
+          <li>Historical metrics exist for harness runtime trends and scorecards, but not for delivery runs, reviewer waves, proof reuse, and duplicate validation work.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Scope Guard</h2>
+        <div class="callout">
+          <p>The first package is local-only. CI duplicate pruning and CI provider-semantics changes are deferred unless dedicated workflow-provider tests are added. Existing CI provider flags stay frozen.</p>
+        </div>
+      </section>
+
+      <section>
+        <h2>Requirements</h2>
+        <div class="grid">
+          <div class="unit"><strong>R1</strong><br>Capture a pre-pruning baseline, then record durable delivery-run metrics.</div>
+          <div class="unit"><strong>R2</strong><br>Prune duplicate local gate work after equivalent coverage is proven.</div>
+          <div class="unit"><strong>R3</strong><br>Use narrow capability-based provider evidence for the local duplicate targets, including webapp Vitest duplication.</div>
+          <div class="unit"><strong>R4</strong><br>Update <code>$execute</code> guidance for proof-aware reviewer loops.</div>
+          <div class="unit"><strong>R5</strong><br>Make subagent cleanup sequence explicit before reviewer waves.</div>
+          <div class="unit"><strong>R6</strong><br>Report validation status and proof status separately in ledger and handoffs.</div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Provider Contract</h2>
+        <p>The provider contract covers only the audited local duplicate targets in this package. Provider evidence must include schema version, provider, base/head/tree identifiers, validated time, capabilities, and command evidence.</p>
+        <table>
+          <thead>
+            <tr><th>Capability</th><th>Candidate provider</th><th>Required proof before skip</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>harness-doc-freshness</code></td><td><code>harness:review</code> internal check</td><td>Regression proves <code>harness:review</code> always runs <code>harness:check</code> before selection, and inferential policy accepts that ownership.</td></tr>
+            <tr><td><code>root-script-tests</code></td><td><code>test:coverage:scripts</code></td><td>Cross-helper parity test proves the same <code>scripts/*.test.ts</code> targets as <code>harness:test</code>, while standalone <code>harness:test</code> behavior remains covered.</td></tr>
+            <tr><td><code>athena-webapp-vitest</code></td><td><code>@athena/webapp test:coverage</code></td><td>Characterization proves coverage-mode Vitest execution covers the full or focused package test command selected by <code>harness:review</code>.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>Run Ledger States</h2>
+        <table>
+          <thead>
+            <tr><th>State</th><th>Meaning</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>started</code></td><td>A delivery run or gate phase began with base, head, and tree identifiers.</td></tr>
+            <tr><td><code>validated</code></td><td>A validation command or capability completed with status and duration.</td></tr>
+            <tr><td><code>provider_skipped</code></td><td>A validation was skipped with <code>status: "covered_by_provider"</code> and same-tree evidence.</td></tr>
+            <tr><td><code>proof_recorded</code></td><td>The gate recorded reusable proof.</td></tr>
+            <tr><td><code>proof_not_recorded</code></td><td>Validation passed, but proof was degraded and pre-push will validate normally.</td></tr>
+            <tr><td><code>prepush_reused</code></td><td>Pre-push reused proof and avoided the expensive suite.</td></tr>
+            <tr><td><code>blocked</code></td><td>A run stopped before a valid delivery state.</td></tr>
+            <tr><td><code>interrupted</code></td><td>A run ended before completion with the last completed state recorded.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>Linear Traceability</h2>
+        <table>
+          <thead>
+            <tr><th>Issue</th><th>Units</th><th>Expected sensors</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>V26-782</td><td>U0, U1</td><td>Delivery ledger, wrapper, and scorecard tests</td></tr>
+            <tr><td>V26-783</td><td>U2</td><td>Harness review and repo validation provider-evidence tests</td></tr>
+            <tr><td>V26-784</td><td>U3</td><td>Pre-push, inferential-review, harness-test, and root-script parity tests</td></tr>
+            <tr><td>V26-785</td><td>U4</td><td>Proof-status and pre-push reuse tests</td></tr>
+            <tr><td>V26-786</td><td>U5</td><td>Execute guidance and package-script wiring tests</td></tr>
+            <tr><td>V26-787</td><td>U6</td><td>Plan HTML validation, Graphify rebuild/check, docs, and solution note</td></tr>
+          </tbody>
+        </table>
+        <p>The coordinated integration strategy is one branch and PR listing all six tickets, focused post-review tests until approval, then a single merge-ready <code>bun run pr:athena</code> gate.</p>
+      </section>
+
+      <section>
+        <h2>Implementation Units</h2>
+        <article class="unit">
+          <h3>U0. Baseline Capture Before Pruning</h3>
+          <p>Capture the current expanded gate chain and either run an observe-only baseline or import audit findings into an ignored baseline artifact before pruning begins, including duplicate webapp package test execution.</p>
+        </article>
+        <article class="unit">
+          <h3>U1. Delivery-Run Ledger, Wrapper, and Scorecard Visibility</h3>
+          <p>Create <code>scripts/pr-athena-delivery-run.ts</code> as the concrete local gate instrumentation point, plus ledger storage, tests, scorecard integration, and docs.</p>
+        </article>
+        <article class="unit">
+          <h3>U2. Capability Provider Contract and Harness Review Dedupe</h3>
+          <p>Add local provider evidence for <code>harness-doc-freshness</code>, <code>root-script-tests</code>, and <code>athena-webapp-vitest</code>. Evidence is written only after provider commands pass; missing, dirty, stale, or incomplete evidence runs validation instead of skipping.</p>
+        </article>
+        <article class="unit">
+          <h3>U3. Prune Local <code>pr:athena</code> Duplicate Work</h3>
+          <p>Remove direct duplicate <code>harness:check</code>, duplicate root script test execution, and duplicate webapp Vitest execution only after policy, regression, parity, and package characterization tests prove coverage.</p>
+        </article>
+        <article class="unit">
+          <h3>U4. Pre-Push and Proof-Status Instrumentation</h3>
+          <p>Emit structured proof events and require a machine-readable handoff summary that distinguishes validation success from reusable proof success.</p>
+        </article>
+        <article class="unit">
+          <h3>U5. Proof-Aware <code>$execute</code> and Reviewer Guidance</h3>
+          <p>Update <code>$execute</code> first, and only directly referenced companion guidance if needed, after script states and commands are settled.</p>
+        </article>
+        <article class="unit">
+          <h3>U6. Docs and Post-Implementation Learning</h3>
+          <p>Document the final contract, keep the HTML artifact alongside markdown, add the solution note after tests prove behavior, and rebuild Graphify after code changes.</p>
+        </article>
+      </section>
+
+      <section>
+        <h2>Validation</h2>
+        <ul>
+          <li><code>bun test scripts/harness-delivery-run-ledger.test.ts</code></li>
+          <li><code>bun test scripts/pr-athena-delivery-run.test.ts</code></li>
+          <li><code>bun test scripts/harness-scorecard.test.ts</code></li>
+          <li><code>bun test scripts/harness-review.test.ts</code></li>
+          <li><code>bun test scripts/harness-repo-validation.test.ts</code></li>
+          <li><code>bun test scripts/harness-inferential-review.test.ts</code></li>
+          <li><code>bun test scripts/harness-test.test.ts</code></li>
+          <li><code>bun test scripts/root-scripts-coverage.test.ts</code></li>
+          <li><code>bun test scripts/pre-push-validation-proof.test.ts</code></li>
+          <li><code>bun test scripts/pre-push-review.test.ts</code></li>
+          <li><code>bun run compound:check</code></li>
+          <li><code>bun scripts/validate-plan-html.ts docs/plans/2026-06-18-004-refactor-proof-aware-delivery-optimization-plan.html</code></li>
+          <li><code>bun run graphify:rebuild</code> after implementation code changes</li>
+          <li><code>bun run pr:athena</code></li>
+        </ul>
+      </section>
+    </main>
+  </body>
+</html>

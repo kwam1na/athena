@@ -4,7 +4,10 @@ import path from "node:path";
 
 import { HARNESS_APP_REGISTRY, type ValidationCommand } from "./harness-app-registry";
 import { runHarnessCheck } from "./harness-check";
-import { collectHarnessRepoValidationSelection } from "./harness-repo-validation";
+import {
+  collectHarnessRepoValidationCapabilities,
+  collectHarnessRepoValidationSelection,
+} from "./harness-repo-validation";
 
 const HARNESS_APP_REGISTRY_PATH = "scripts/harness-app-registry.ts";
 
@@ -40,6 +43,7 @@ type ParsedHarnessReviewArgs = {
   baseRef?: string;
   repoValidationProvidedBy?: "pr:athena";
   validationProvidedBy?: "athena-pr-tests";
+  providerEvidencePath?: string;
 };
 
 type HarnessReviewOptions = {
@@ -52,6 +56,38 @@ type HarnessReviewOptions = {
   runHarnessBehaviorScenario?: (scenario: string) => Promise<void>;
   repoValidationProvidedBy?: "pr:athena";
   validationProvidedBy?: "athena-pr-tests";
+  providerEvidencePath?: string;
+};
+
+type LocalProviderCapability =
+  | "harness-doc-freshness"
+  | "root-script-tests"
+  | "athena-webapp-vitest";
+
+type LocalProviderEvidenceCapability = {
+  capability?: string;
+  command?: string;
+  coverage?: {
+    mode?: string;
+    files?: string[];
+  };
+};
+
+type LocalProviderEvidence = {
+  schemaVersion?: number;
+  provider?: string;
+  treeSha?: string;
+  capabilities?: LocalProviderEvidenceCapability[];
+};
+
+type LocalProviderSkip = {
+  type: "provider_skipped";
+  status: "covered_by_provider";
+  capability: LocalProviderCapability;
+  command: string;
+  providedBy: string;
+  coveredCapabilities: LocalProviderCapability[];
+  evidence: string;
 };
 
 function normalizeRepoPath(repoPath: string) {
@@ -128,6 +164,213 @@ function isAthenaPrTestsProvidedCommand(
   }
 
   return false;
+}
+
+function commandDisplayName(
+  command:
+    | { kind: "script"; workspace: string; script: string }
+    | { kind: "raw"; command: string }
+) {
+  return command.kind === "script"
+    ? `${command.workspace}:${command.script}`
+    : command.command;
+}
+
+function parseAthenaWebappFocusedVitestTargets(command: string) {
+  const prefix = "bun run --filter '@athena/webapp' test --";
+  const trimmed = command.trim();
+  if (!trimmed.startsWith(prefix)) {
+    return null;
+  }
+
+  return trimmed
+    .slice(prefix.length)
+    .trim()
+    .split(/\s+/)
+    .map((target) => target.trim())
+    .filter(Boolean);
+}
+
+function localCapabilityForCommand(
+  command:
+    | { kind: "script"; workspace: string; script: string }
+    | { kind: "raw"; command: string }
+): LocalProviderCapability | null {
+  if (
+    command.kind === "raw" &&
+    collectHarnessRepoValidationCapabilities().some((entry) =>
+      entry.commands.includes(command.command)
+    )
+  ) {
+    return "root-script-tests";
+  }
+
+  if (
+    command.kind === "script" &&
+    command.workspace === "@athena/webapp" &&
+    command.script === "test"
+  ) {
+    return "athena-webapp-vitest";
+  }
+
+  if (
+    command.kind === "raw" &&
+    command.command.trim().startsWith("bun run --filter '@athena/webapp' test ")
+  ) {
+    return "athena-webapp-vitest";
+  }
+
+  return null;
+}
+
+async function readLocalProviderEvidence(
+  rootDir: string,
+  evidencePath?: string
+) {
+  if (!evidencePath) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(
+      await readFile(path.join(rootDir, evidencePath), "utf8")
+    ) as LocalProviderEvidence;
+
+    if (
+      parsed.schemaVersion !== 1 ||
+      !parsed.provider ||
+      !Array.isArray(parsed.capabilities)
+    ) {
+      return null;
+    }
+
+    if (parsed.treeSha) {
+      const unstaged = await runGitCommand(rootDir, [
+        "git",
+        "diff",
+        "--quiet",
+      ]);
+      const untracked = await runGitCommand(rootDir, [
+        "git",
+        "ls-files",
+        "--others",
+        "--exclude-standard",
+      ]);
+      const tree = await runGitCommand(rootDir, ["git", "write-tree"]);
+
+      if (
+        unstaged.exitCode !== 0 ||
+        untracked.exitCode !== 0 ||
+        untracked.stdout.trim() ||
+        tree.exitCode !== 0 ||
+        tree.stdout.trim() !== parsed.treeSha
+      ) {
+        return null;
+      }
+    }
+
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function hasCoveredCapability(
+  evidence: LocalProviderEvidence,
+  capability: LocalProviderCapability
+) {
+  return evidence.capabilities?.some((entry) => entry.capability === capability) ?? false;
+}
+
+function isAthenaWebappVitestCoveredByProvider(
+  command:
+    | { kind: "script"; workspace: string; script: string }
+    | { kind: "raw"; command: string },
+  evidence: LocalProviderEvidence
+) {
+  const coverageEntries =
+    evidence.capabilities?.filter(
+      (entry) => entry.capability === "athena-webapp-vitest"
+    ) ?? [];
+
+  if (coverageEntries.length === 0) {
+    return false;
+  }
+
+  if (
+    command.kind === "script" &&
+    command.workspace === "@athena/webapp" &&
+    command.script === "test"
+  ) {
+    return coverageEntries.some((entry) => entry.coverage?.mode === "full");
+  }
+
+  if (command.kind !== "raw") {
+    return false;
+  }
+
+  const focusedTargets = parseAthenaWebappFocusedVitestTargets(command.command);
+  if (!focusedTargets || focusedTargets.length === 0) {
+    return false;
+  }
+
+  return coverageEntries.some((entry) => {
+    if (entry.coverage?.mode === "full") {
+      return true;
+    }
+
+    const coveredFiles = new Set(entry.coverage?.files ?? []);
+    return focusedTargets.every((target) => coveredFiles.has(target));
+  });
+}
+
+function buildProviderSkip(
+  command:
+    | { kind: "script"; workspace: string; script: string }
+    | { kind: "raw"; command: string },
+  capability: LocalProviderCapability,
+  evidence: LocalProviderEvidence,
+  evidencePath: string
+): LocalProviderSkip {
+  return {
+    type: "provider_skipped",
+    status: "covered_by_provider",
+    capability,
+    command: commandDisplayName(command),
+    providedBy: evidence.provider ?? "unknown",
+    coveredCapabilities:
+      evidence.capabilities
+        ?.map((entry) => entry.capability)
+        .filter(
+          (entry): entry is LocalProviderCapability =>
+            entry === "harness-doc-freshness" ||
+            entry === "root-script-tests" ||
+            entry === "athena-webapp-vitest"
+        ) ?? [],
+    evidence: evidencePath,
+  };
+}
+
+function isCoveredByLocalProvider(
+  command:
+    | { kind: "script"; workspace: string; script: string }
+    | { kind: "raw"; command: string },
+  evidence: LocalProviderEvidence | null
+) {
+  if (!evidence) {
+    return false;
+  }
+
+  const capability = localCapabilityForCommand(command);
+  if (!capability) {
+    return false;
+  }
+
+  if (capability === "athena-webapp-vitest") {
+    return isAthenaWebappVitestCoveredByProvider(command, evidence);
+  }
+
+  return hasCoveredCapability(evidence, capability);
 }
 
 function formatMissingPathPrefixError(
@@ -653,6 +896,10 @@ export async function runHarnessReview(
   } =
     await collectCommandsForChangedFiles(rootDir, changedFiles, reviewTargets);
   const repoValidation = collectHarnessRepoValidationSelection(changedFiles);
+  const localProviderEvidence = await readLocalProviderEvidence(
+    rootDir,
+    options.providerEvidencePath
+  );
 
   if (uncoveredFiles.length > 0) {
     throw new Error(
@@ -673,7 +920,7 @@ export async function runHarnessReview(
     return;
   }
 
-  const combinedCommands = [
+  const unprunedCommands = [
     ...(options.repoValidationProvidedBy === "pr:athena" ||
     options.validationProvidedBy === "athena-pr-tests"
       ? []
@@ -688,6 +935,28 @@ export async function runHarnessReview(
       !isAthenaPrTestsProvidedCommand(command)
   );
 
+  const providerSkips: LocalProviderSkip[] = [];
+  const combinedCommands = unprunedCommands.filter((command) => {
+    if (!isCoveredByLocalProvider(command, localProviderEvidence)) {
+      return true;
+    }
+
+    const capability = localCapabilityForCommand(command);
+    if (!capability || !options.providerEvidencePath || !localProviderEvidence) {
+      return true;
+    }
+
+    providerSkips.push(
+      buildProviderSkip(
+        command,
+        capability,
+        localProviderEvidence,
+        options.providerEvidencePath
+      )
+    );
+    return false;
+  });
+
   if (
     (options.repoValidationProvidedBy === "pr:athena" ||
       options.validationProvidedBy === "athena-pr-tests") &&
@@ -700,11 +969,15 @@ export async function runHarnessReview(
 
   if (
     options.validationProvidedBy === "athena-pr-tests" &&
-    selectedCommands.length > combinedCommands.length
+    selectedCommands.length > unprunedCommands.length
   ) {
     logger.log(
-      `Package validation commands provided by athena-pr-tests for ${selectedCommands.length - combinedCommands.length} selected command(s).`
+      `Package validation commands provided by athena-pr-tests for ${selectedCommands.length - unprunedCommands.length} selected command(s).`
     );
+  }
+
+  for (const skip of providerSkips) {
+    logger.log(JSON.stringify(skip));
   }
 
   for (const command of combinedCommands) {
@@ -745,6 +1018,7 @@ export function parseHarnessReviewArgs(
   let baseRef: string | undefined;
   let repoValidationProvidedBy: "pr:athena" | undefined;
   let validationProvidedBy: "athena-pr-tests" | undefined;
+  let providerEvidencePath: string | undefined;
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -818,8 +1092,31 @@ export function parseHarnessReviewArgs(
       continue;
     }
 
+    if (arg === "--provider-evidence") {
+      const value = argv[index + 1]?.trim();
+      if (!value) {
+        throw new Error(
+          "Missing value for --provider-evidence. Usage: bun run harness:review --provider-evidence <path>"
+        );
+      }
+      providerEvidencePath = value;
+      index += 1;
+      continue;
+    }
+
+    if (arg.startsWith("--provider-evidence=")) {
+      const value = arg.slice("--provider-evidence=".length).trim();
+      if (!value) {
+        throw new Error(
+          "Missing value for --provider-evidence. Usage: bun run harness:review --provider-evidence <path>"
+        );
+      }
+      providerEvidencePath = value;
+      continue;
+    }
+
     throw new Error(
-      `Unknown argument: ${arg}. Usage: bun run harness:review [--base <ref>] [--repo-validation-provided-by pr:athena] [--validation-provided-by athena-pr-tests]`
+      `Unknown argument: ${arg}. Usage: bun run harness:review [--base <ref>] [--repo-validation-provided-by pr:athena] [--validation-provided-by athena-pr-tests] [--provider-evidence <path>]`
     );
   }
 
@@ -827,6 +1124,7 @@ export function parseHarnessReviewArgs(
     baseRef,
     repoValidationProvidedBy,
     validationProvidedBy,
+    providerEvidencePath,
   };
 }
 
@@ -837,6 +1135,7 @@ if (import.meta.main) {
       baseRef: parsed.baseRef,
       repoValidationProvidedBy: parsed.repoValidationProvidedBy,
       validationProvidedBy: parsed.validationProvidedBy,
+      providerEvidencePath: parsed.providerEvidencePath,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

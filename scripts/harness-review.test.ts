@@ -712,6 +712,471 @@ describe("runHarnessReview", () => {
     ]);
   });
 
+  it("skips only root script tests when local provider evidence covers that capability", async () => {
+    const rootDir = await createFixtureRepo();
+    const steps: string[] = [];
+    const logLines: string[] = [];
+
+    await write(
+      "artifacts/harness-delivery-runs/provider-evidence.json",
+      JSON.stringify(
+        {
+          schemaVersion: 1,
+          provider: "local-pr-athena",
+          capabilities: [
+            {
+              capability: "root-script-tests",
+              command: "bun run test:coverage:scripts",
+            },
+          ],
+        },
+        null,
+        2
+      ),
+      rootDir
+    );
+
+    await runHarnessReview(rootDir, {
+      getChangedFiles: async () => ["scripts/harness-review.ts"],
+      providerEvidencePath: "artifacts/harness-delivery-runs/provider-evidence.json",
+      runHarnessCheck: async () => {
+        steps.push("harness:check");
+      },
+      runRawCommand: async (command) => {
+        steps.push(`raw:${command}`);
+      },
+      logger: {
+        log(line) {
+          logLines.push(line);
+        },
+        error() {},
+      },
+    });
+
+    expect(steps).toEqual([
+      "harness:check",
+      "raw:bun run workflow:check",
+      "raw:bun run compound:check",
+      "raw:bun run test:coverage",
+      "raw:bun run harness:inferential-review",
+    ]);
+    expect(logLines).toContain(
+      JSON.stringify({
+        type: "provider_skipped",
+        status: "covered_by_provider",
+        capability: "root-script-tests",
+        command: "bun run harness:test",
+        providedBy: "local-pr-athena",
+        coveredCapabilities: ["root-script-tests"],
+        evidence: "artifacts/harness-delivery-runs/provider-evidence.json",
+      })
+    );
+  });
+
+  it("runs root script tests when local provider evidence is incomplete", async () => {
+    const rootDir = await createFixtureRepo();
+    const steps: string[] = [];
+
+    await write(
+      "artifacts/harness-delivery-runs/provider-evidence.json",
+      JSON.stringify(
+        {
+          schemaVersion: 1,
+          provider: "local-pr-athena",
+          capabilities: [],
+        },
+        null,
+        2
+      ),
+      rootDir
+    );
+
+    await runHarnessReview(rootDir, {
+      getChangedFiles: async () => ["scripts/harness-review.ts"],
+      providerEvidencePath: "artifacts/harness-delivery-runs/provider-evidence.json",
+      runHarnessCheck: async () => {
+        steps.push("harness:check");
+      },
+      runRawCommand: async (command) => {
+        steps.push(`raw:${command}`);
+      },
+      logger: {
+        log() {},
+        error() {},
+      },
+    });
+
+    expect(steps).toContain("raw:bun run harness:test");
+  });
+
+  it("skips full athena webapp Vitest when coverage evidence covers the package suite", async () => {
+    const rootDir = await createFixtureRepo();
+    const steps: string[] = [];
+    const logLines: string[] = [];
+
+    await write(
+      "artifacts/harness-delivery-runs/provider-evidence.json",
+      JSON.stringify(
+        {
+          schemaVersion: 1,
+          provider: "local-pr-athena",
+          capabilities: [
+            {
+              capability: "athena-webapp-vitest",
+              command: "bun run --filter '@athena/webapp' test:coverage",
+              coverage: { mode: "full" },
+            },
+          ],
+        },
+        null,
+        2
+      ),
+      rootDir
+    );
+
+    await runHarnessReview(rootDir, {
+      getChangedFiles: async () => ["packages/athena-webapp/src/app.ts"],
+      providerEvidencePath: "artifacts/harness-delivery-runs/provider-evidence.json",
+      runHarnessCheck: async () => {
+        steps.push("harness:check");
+      },
+      runPackageScript: async (workspace, script) => {
+        steps.push(`${workspace}:${script}`);
+      },
+      logger: {
+        log(line) {
+          logLines.push(line);
+        },
+        error() {},
+      },
+    });
+
+    expect(steps).toEqual([
+      "harness:check",
+      "@athena/webapp:audit:convex",
+      "@athena/webapp:lint:convex:changed",
+    ]);
+    expect(logLines).toContain(
+      JSON.stringify({
+        type: "provider_skipped",
+        status: "covered_by_provider",
+        capability: "athena-webapp-vitest",
+        command: "@athena/webapp:test",
+        providedBy: "local-pr-athena",
+        coveredCapabilities: ["athena-webapp-vitest"],
+        evidence: "artifacts/harness-delivery-runs/provider-evidence.json",
+      })
+    );
+  });
+
+  it("accepts same-index provider evidence for staged pr:athena changes", async () => {
+    const rootDir = await createFixtureRepo();
+    const steps: string[] = [];
+    await write(
+      ".gitignore",
+      "artifacts/harness-delivery-runs/\n",
+      rootDir
+    );
+    initializeGitHistory(rootDir);
+    await write(
+      "packages/athena-webapp/src/app.ts",
+      "export const app = 'changed';\n",
+      rootDir
+    );
+    runGit(rootDir, ["add", "packages/athena-webapp/src/app.ts"]);
+    const treeSha = runGit(rootDir, ["write-tree"]);
+
+    await write(
+      "artifacts/harness-delivery-runs/provider-evidence.json",
+      JSON.stringify(
+        {
+          schemaVersion: 1,
+          provider: "pr:athena:delivery-run",
+          treeSha,
+          capabilities: [
+            {
+              capability: "athena-webapp-vitest",
+              command: "bun run --filter '@athena/webapp' test:coverage",
+              coverage: { mode: "full" },
+            },
+          ],
+        },
+        null,
+        2
+      ),
+      rootDir
+    );
+
+    await runHarnessReview(rootDir, {
+      getChangedFiles: async () => ["packages/athena-webapp/src/app.ts"],
+      providerEvidencePath: "artifacts/harness-delivery-runs/provider-evidence.json",
+      runHarnessCheck: async () => {
+        steps.push("harness:check");
+      },
+      runPackageScript: async (workspace, script) => {
+        steps.push(`${workspace}:${script}`);
+      },
+      logger: {
+        log() {},
+        error() {},
+      },
+    });
+
+    expect(steps).toEqual([
+      "harness:check",
+      "@athena/webapp:audit:convex",
+      "@athena/webapp:lint:convex:changed",
+    ]);
+  });
+
+  it("runs selected validation when provider evidence has a stale tree", async () => {
+    const rootDir = await createFixtureRepo();
+    const steps: string[] = [];
+    const logLines: string[] = [];
+    await write(
+      ".gitignore",
+      "artifacts/harness-delivery-runs/\n",
+      rootDir
+    );
+    initializeGitHistory(rootDir);
+    const staleTreeSha = runGit(rootDir, ["rev-parse", "HEAD^{tree}"]);
+    await write(
+      "packages/athena-webapp/src/app.ts",
+      "export const app = 'changed';\n",
+      rootDir
+    );
+    runGit(rootDir, ["add", "packages/athena-webapp/src/app.ts"]);
+
+    await write(
+      "artifacts/harness-delivery-runs/provider-evidence.json",
+      JSON.stringify(
+        {
+          schemaVersion: 1,
+          provider: "pr:athena:delivery-run",
+          treeSha: staleTreeSha,
+          capabilities: [
+            {
+              capability: "athena-webapp-vitest",
+              command: "bun run --filter '@athena/webapp' test:coverage",
+              coverage: { mode: "full" },
+            },
+          ],
+        },
+        null,
+        2
+      ),
+      rootDir
+    );
+
+    await runHarnessReview(rootDir, {
+      getChangedFiles: async () => ["packages/athena-webapp/src/app.ts"],
+      providerEvidencePath: "artifacts/harness-delivery-runs/provider-evidence.json",
+      runHarnessCheck: async () => {
+        steps.push("harness:check");
+      },
+      runPackageScript: async (workspace, script) => {
+        steps.push(`${workspace}:${script}`);
+      },
+      logger: {
+        log(line) {
+          logLines.push(line);
+        },
+        error() {},
+      },
+    });
+
+    expect(steps).toContain("@athena/webapp:test");
+    expect(logLines.some((line) => line.includes("provider_skipped"))).toBe(false);
+  });
+
+  it("runs selected validation when provider evidence tree has unstaged changes", async () => {
+    const rootDir = await createFixtureRepo();
+    const steps: string[] = [];
+    await write(
+      ".gitignore",
+      "artifacts/harness-delivery-runs/\n",
+      rootDir
+    );
+    initializeGitHistory(rootDir);
+    await write(
+      "packages/athena-webapp/src/app.ts",
+      "export const app = 'staged';\n",
+      rootDir
+    );
+    runGit(rootDir, ["add", "packages/athena-webapp/src/app.ts"]);
+    const treeSha = runGit(rootDir, ["write-tree"]);
+    await write(
+      "packages/athena-webapp/src/app.ts",
+      "export const app = 'unstaged';\n",
+      rootDir
+    );
+
+    await write(
+      "artifacts/harness-delivery-runs/provider-evidence.json",
+      JSON.stringify(
+        {
+          schemaVersion: 1,
+          provider: "pr:athena:delivery-run",
+          treeSha,
+          capabilities: [
+            {
+              capability: "athena-webapp-vitest",
+              command: "bun run --filter '@athena/webapp' test:coverage",
+              coverage: { mode: "full" },
+            },
+          ],
+        },
+        null,
+        2
+      ),
+      rootDir
+    );
+
+    await runHarnessReview(rootDir, {
+      getChangedFiles: async () => ["packages/athena-webapp/src/app.ts"],
+      providerEvidencePath: "artifacts/harness-delivery-runs/provider-evidence.json",
+      runHarnessCheck: async () => {
+        steps.push("harness:check");
+      },
+      runPackageScript: async (workspace, script) => {
+        steps.push(`${workspace}:${script}`);
+      },
+      logger: {
+        log() {},
+        error() {},
+      },
+    });
+
+    expect(steps).toContain("@athena/webapp:test");
+  });
+
+  it("runs selected validation when provider evidence tree has untracked files", async () => {
+    const rootDir = await createFixtureRepo();
+    const steps: string[] = [];
+    await write(
+      ".gitignore",
+      "artifacts/harness-delivery-runs/\n",
+      rootDir
+    );
+    initializeGitHistory(rootDir);
+    await write(
+      "packages/athena-webapp/src/app.ts",
+      "export const app = 'changed';\n",
+      rootDir
+    );
+    runGit(rootDir, ["add", "packages/athena-webapp/src/app.ts"]);
+    const treeSha = runGit(rootDir, ["write-tree"]);
+    await write("untracked-local-file.txt", "local\n", rootDir);
+
+    await write(
+      "artifacts/harness-delivery-runs/provider-evidence.json",
+      JSON.stringify(
+        {
+          schemaVersion: 1,
+          provider: "pr:athena:delivery-run",
+          treeSha,
+          capabilities: [
+            {
+              capability: "athena-webapp-vitest",
+              command: "bun run --filter '@athena/webapp' test:coverage",
+              coverage: { mode: "full" },
+            },
+          ],
+        },
+        null,
+        2
+      ),
+      rootDir
+    );
+
+    await runHarnessReview(rootDir, {
+      getChangedFiles: async () => ["packages/athena-webapp/src/app.ts"],
+      providerEvidencePath: "artifacts/harness-delivery-runs/provider-evidence.json",
+      runHarnessCheck: async () => {
+        steps.push("harness:check");
+      },
+      runPackageScript: async (workspace, script) => {
+        steps.push(`${workspace}:${script}`);
+      },
+      logger: {
+        log() {},
+        error() {},
+      },
+    });
+
+    expect(steps).toContain("@athena/webapp:test");
+  });
+
+  it("skips focused athena webapp Vitest only when coverage evidence includes every focused target", async () => {
+    const rootDir = await createFixtureRepo();
+    const steps: string[] = [];
+
+    await write(
+      "packages/athena-webapp/docs/agent/validation-map.json",
+      JSON.stringify(
+        {
+          workspace: "@athena/webapp",
+          packageDir: "packages/athena-webapp",
+          surfaces: [
+            {
+              name: "focused-app-test",
+              pathPrefixes: ["packages/athena-webapp/src/app.ts"],
+              commands: [
+                {
+                  kind: "raw",
+                  command:
+                    "bun run --filter '@athena/webapp' test -- src/app.test.ts src/other.test.ts",
+                },
+              ],
+            },
+          ],
+        },
+        null,
+        2
+      ),
+      rootDir
+    );
+    await write(
+      "artifacts/harness-delivery-runs/provider-evidence.json",
+      JSON.stringify(
+        {
+          schemaVersion: 1,
+          provider: "local-pr-athena",
+          capabilities: [
+            {
+              capability: "athena-webapp-vitest",
+              command: "bun run --filter '@athena/webapp' test:coverage",
+              coverage: { mode: "focused", files: ["src/app.test.ts"] },
+            },
+          ],
+        },
+        null,
+        2
+      ),
+      rootDir
+    );
+
+    await runHarnessReview(rootDir, {
+      getChangedFiles: async () => ["packages/athena-webapp/src/app.ts"],
+      providerEvidencePath: "artifacts/harness-delivery-runs/provider-evidence.json",
+      runHarnessCheck: async () => {
+        steps.push("harness:check");
+      },
+      runRawCommand: async (command) => {
+        steps.push(`raw:${command}`);
+      },
+      logger: {
+        log() {},
+        error() {},
+      },
+    });
+
+    expect(steps).toEqual([
+      "harness:check",
+      "raw:bun run --filter '@athena/webapp' test -- src/app.test.ts src/other.test.ts",
+    ]);
+  });
+
   it("lets athena-pr-tests provide broad package commands while still running selected behavior", async () => {
     const rootDir = await createFixtureRepo();
     const steps: string[] = [];
@@ -1263,6 +1728,20 @@ describe("parseHarnessReviewArgs", () => {
     ).toEqual({
       baseRef: "origin/main",
       validationProvidedBy: "athena-pr-tests",
+    });
+  });
+
+  it("accepts a local provider evidence path", () => {
+    expect(
+      parseHarnessReviewArgs([
+        "--base=origin/main",
+        "--provider-evidence",
+        "artifacts/harness-delivery-runs/provider-evidence.json",
+      ])
+    ).toEqual({
+      baseRef: "origin/main",
+      providerEvidencePath:
+        "artifacts/harness-delivery-runs/provider-evidence.json",
     });
   });
 

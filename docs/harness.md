@@ -115,6 +115,10 @@ Freshness sensors catch stale generated artifacts.
 - `pr:athena:prepare` runs generated-artifact repair, stages tracked changes
   only, then blocks before heavy validation if unstaged or untracked files would
   prevent reusable proof recording.
+- `pr:athena` runs the delivery-run wrapper, which records local run metrics for
+  the prepare, validate, record-proof, and scorecard phases. It writes same-tree
+  provider evidence only after provider commands pass, then runs the scorecard
+  against the current delivery-run ledger.
 - `pr:athena:validate` runs the heavy local PR ladder without recording proof.
 - `pr:athena:record-proof` records a git-private proof only when the branch
   head or staged index, `origin/main`, validation wiring, Bun version, and
@@ -255,12 +259,14 @@ For merge-ready Athena work, the broad command is:
 bun run pr:athena
 ```
 
-That command composes three explicit phases:
+That command runs the delivery-run wrapper, which records local run metrics while
+composing explicit phases:
 
 ```sh
 bun run pr:athena:prepare
 bun run pr:athena:validate
 bun run pr:athena:record-proof
+bun run pr:athena:scorecard
 ```
 
 `pr:athena:prepare` repairs generated artifacts and stages tracked changes, then
@@ -268,9 +274,11 @@ stops before the heavy ladder if unstaged or untracked files remain. It does not
 stage new files automatically; stage intended new files explicitly and rerun the
 prepare step before spending the full validation cycle.
 
-`pr:athena:validate` runs the main repo ladder: Convex audits, architecture
-checks, coverage, harness tests, generated-doc checks, review sensors, audit,
-scorecard, and graphify freshness.
+`pr:athena:validate` runs the main repo ladder in two halves. The provider half
+runs Convex audits, architecture checks, and coverage; if those commands pass,
+the gate writes same-tree provider evidence. The review half then runs harness
+review, inferential review, audit, and graphify freshness. `pr:athena:scorecard`
+runs after proof recording so it reads the current delivery-run ledger.
 
 After the final `graphify:check`, `pr:athena:record-proof` records a
 worktree-local proof for the current clean tree or staged index and
@@ -281,6 +289,15 @@ rebase, advanced `origin/main`, changed hook, changed harness script, or missing
 proof makes pre-push run the full validation suite normally and prints the
 reason. If `origin/main` or the base diff cannot be read, the hook blocks
 instead of treating the changed-file set as empty.
+
+The reusable proof is local-only git metadata, not a source artifact and not a
+remote CI substitute. Proof evaluation emits a structured status for local
+handoff and run-metrics ledgers: `reusable`, `missing`, `dirty`, `stale`,
+`base_changed`, `validation_wiring_changed`, `generated_repaired`, and
+`proof_not_recorded`, plus `source_registry_drift` for source-registry drift
+sensors when that drift is the modeled cause. The provider/ledger plumbing
+records what the local sensor observed; it does not make the proof portable
+across worktrees, machines, or a changed `origin/main`.
 
 For harness-only changes, useful focused commands are:
 
@@ -358,3 +375,6 @@ provided the same repo-owned command set for the same head and base, or when
 noise when the proof is missing or stale, when the working tree is dirty, when
 generated outputs were repaired, when `origin/main` advanced, or when the change
 touches validation wiring. In those cases rerunning is the fail-closed policy.
+The pre-push handoff line separates `validation=<passed|skipped>` from
+`proof=<status>` so a successful validation rerun is not confused with proof
+reuse.

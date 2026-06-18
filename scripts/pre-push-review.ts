@@ -258,17 +258,24 @@ export async function runPrePushReview(
   let repairedGeneratedHarnessDocs = false;
   let usingWorkingTreeChangedFiles = false;
 
+  const logHandoffSummary = (validation: "passed" | "skipped") => {
+    logger.log(
+      `[pre-push] Handoff: validation=${validation}; proof=${proofEvaluation.status}; proofReason=${proofEvaluation.reusable ? "reusable current pr:athena proof" : proofEvaluation.reason}.`,
+    );
+  };
+
   const proofEvaluation = await evaluateValidationProof(rootDir);
   if (proofEvaluation.reusable) {
     logger.log(
       `[pre-push] Reusing current pr:athena validation proof for tree ${proofEvaluation.proof.validatedTreeSha}.`,
     );
+    logHandoffSummary("skipped");
     logger.log("[pre-push] All checks passed.");
     return;
   }
 
   logger.log(
-    `[pre-push] pr:athena proof not reusable: ${proofEvaluation.reason}. Running validation suite.`,
+    `[pre-push] pr:athena proof not reusable (${proofEvaluation.status}): ${proofEvaluation.reason}. Running validation suite.`,
   );
 
   const loadChangedFiles = () => {
@@ -448,6 +455,9 @@ export async function runPrePushReview(
 
   if (pendingGeneratedHarnessDocs.length > 0) {
     logger.log(
+      "[pre-push] Handoff: validation=passed; proof=generated_repaired; proofReason=generated harness docs were repaired locally.",
+    );
+    logger.log(
       "\n[pre-push] Generated harness docs were repaired and revalidated locally.",
     );
     throw new Error(REPAIRED_DOCS_COMMIT_BLOCKER);
@@ -457,11 +467,15 @@ export async function runPrePushReview(
 
   if (repairedGraphifyArtifacts || pendingGraphifyArtifacts.length > 0) {
     logger.log(
+      "[pre-push] Handoff: validation=passed; proof=generated_repaired; proofReason=tracked graphify artifacts were repaired locally.",
+    );
+    logger.log(
       "\n[pre-push] Tracked graphify artifacts were repaired and revalidated locally.",
     );
     throw new Error(REPAIRED_GRAPHIFY_COMMIT_BLOCKER);
   }
 
+  logHandoffSummary("passed");
   logger.log("\n[pre-push] All checks passed.");
 }
 

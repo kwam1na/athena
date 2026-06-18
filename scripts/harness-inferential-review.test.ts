@@ -329,6 +329,33 @@ describe("runHarnessInferentialReview", () => {
     expect(result.machine.findings).toEqual([]);
   });
 
+  it("accepts harness review as the owner of harness check in pr:athena", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      "package.json",
+      JSON.stringify(
+        {
+          scripts: {
+            "pr:athena":
+              "bun run harness:review --base origin/main --repo-validation-provided-by pr:athena && bun run harness:inferential-review && bun run harness:audit && bun run graphify:check",
+          },
+        },
+        null,
+        2,
+      ),
+      rootDir,
+    );
+
+    const result = await runHarnessInferentialReview(rootDir, {
+      getChangedFiles: async () => ["package.json"],
+      nowIso: () => "2026-04-12T05:00:00.000Z",
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.machine.status).toBe("pass");
+    expect(result.machine.findings).toEqual([]);
+  });
+
   it("accepts harness review and inferential review through pr:athena subcommands", async () => {
     const rootDir = await createFixtureRepo();
     await write(
@@ -343,6 +370,42 @@ describe("runHarnessInferentialReview", () => {
               "bun run harness:check && bun run harness:review --base origin/main --repo-validation-provided-by pr:athena && bun run harness:inferential-review && bun run harness:audit && bun run graphify:check",
             "pr:athena:record-proof":
               "bun scripts/pre-push-validation-proof.ts record-pr-athena",
+          },
+        },
+        null,
+        2,
+      ),
+      rootDir,
+    );
+
+    const result = await runHarnessInferentialReview(rootDir, {
+      getChangedFiles: async () => ["package.json"],
+      nowIso: () => "2026-04-12T05:00:00.000Z",
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.machine.status).toBe("pass");
+    expect(result.machine.findings).toEqual([]);
+  });
+
+  it("accepts harness review and inferential review through the delivery-run wrapper", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      "package.json",
+      JSON.stringify(
+        {
+          scripts: {
+            "pr:athena": "bun run pr:athena:delivery-run",
+            "pr:athena:delivery-run": "bun scripts/pr-athena-delivery-run.ts",
+            "pr:athena:prepare": "bun run pre-commit:generated-artifacts",
+            "pr:athena:validate":
+              "bun run pr:athena:validate-provider && bun scripts/pr-athena-delivery-run.ts write-provider-evidence && bun run pr:athena:validate-review",
+            "pr:athena:validate-provider": "bun run test:coverage",
+            "pr:athena:validate-review":
+              "bun run harness:review --base origin/main --repo-validation-provided-by pr:athena --provider-evidence artifacts/harness-delivery-runs/provider-evidence.json && bun run harness:inferential-review && bun run harness:audit && bun run graphify:check",
+            "pr:athena:record-proof":
+              "bun scripts/pre-push-validation-proof.ts record-pr-athena",
+            "pr:athena:scorecard": "bun run harness:scorecard",
           },
         },
         null,

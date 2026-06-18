@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  collectHarnessRepoValidationCapabilities,
   collectHarnessRepoValidationSelection,
   matchesHarnessRepoValidationPath,
 } from "./harness-repo-validation";
@@ -28,6 +29,17 @@ describe("matchesHarnessRepoValidationPath", () => {
     "graphify-out/GRAPH_REPORT.md",
   ])("ignores non-repo harness path %s", (filePath) => {
     expect(matchesHarnessRepoValidationPath(filePath)).toBe(false);
+  });
+});
+
+describe("collectHarnessRepoValidationCapabilities", () => {
+  it("keeps repo validation capabilities narrower than the selected command names", () => {
+    expect(collectHarnessRepoValidationCapabilities()).toEqual([
+      {
+        capability: "root-script-tests",
+        commands: ["bun run harness:test"],
+      },
+    ]);
   });
 });
 

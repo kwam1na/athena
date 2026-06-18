@@ -6,6 +6,14 @@ import {
   type HarnessAppRegistryEntry,
 } from "./harness-app-registry";
 import { HARNESS_BEHAVIOR_SCENARIOS } from "./harness-behavior-scenarios";
+import {
+  buildPartialDeliveryRunBaseline,
+  readDeliveryRunLedger,
+  summarizeDeliveryRunBaseline,
+  type DeliveryRunBaselineSummary,
+  type DeliveryRunProofState,
+  type DeliveryRunStatus,
+} from "./harness-delivery-run-ledger";
 
 const DEFAULT_OUTPUT_PATH = "artifacts/harness-scorecard/latest.json";
 const REQUIRED_TESTING_SNIPPETS = [
@@ -154,6 +162,22 @@ type HarnessScorecardOutput = {
       scenarioCount: number;
       regressionCount: number;
       history: HarnessScorecardHistoryMetric;
+    };
+    deliveryRun: {
+      definition: string;
+      artifactPath: string;
+      baselinePath: string;
+      present: boolean;
+      status: DeliveryRunStatus | "missing";
+      generatedAt: string | null;
+      proofState: DeliveryRunProofState | null;
+      commandCount: number;
+      failedCommandCount: number;
+      duplicateCommandCount: number;
+      duplicatePackageSuiteCount: number;
+      providerSkippedCount: number;
+      totalDurationMs: number;
+      baseline: DeliveryRunBaselineSummary;
     };
     graphify: {
       definition: string;
@@ -328,12 +352,16 @@ function buildSummary(
   documentation: HarnessScorecardOutput["metrics"]["documentation"],
   inferential: HarnessScorecardOutput["metrics"]["inferential"],
   runtimeTrends: HarnessScorecardOutput["metrics"]["runtimeTrends"],
+  deliveryRun: HarnessScorecardOutput["metrics"]["deliveryRun"],
   graphify: HarnessScorecardOutput["metrics"]["graphify"]
 ): HarnessScorecardOutput["summary"] {
+  const deliveryRunHealthy =
+    deliveryRun.status === "pass" && deliveryRun.proofState === "proof_recorded";
   const healthySignals =
     documentation.healthyAppCount +
     (isHealthyInferentialStatus(inferential.status) ? 1 : 0) +
     (runtimeTrends.status === "missing" ? 0 : 1) +
+    (deliveryRunHealthy ? 1 : 0) +
     (graphify.status === "paired" ? 1 : 0);
   const degradedSignals =
     documentation.degradedAppCount +
@@ -345,11 +373,13 @@ function buildSummary(
     (inferential.history.parseErrorCount > 0 ? 1 : 0) +
     (runtimeTrends.status === "mixed" || runtimeTrends.status === "degraded" ? 1 : 0) +
     (runtimeTrends.history.parseErrorCount > 0 ? 1 : 0) +
+    (deliveryRun.present && !deliveryRunHealthy ? 1 : 0) +
     (graphify.status === "partial" ? 1 : 0);
   const missingSignals =
     documentation.missingAppCount +
     (inferential.status === "missing" ? 1 : 0) +
     (runtimeTrends.status === "missing" ? 1 : 0) +
+    (!deliveryRun.present ? 1 : 0) +
     (graphify.status === "missing" ? 1 : 0);
 
   let status: ScorecardStatus = "healthy";
@@ -368,6 +398,13 @@ function buildSummary(
     runtimeTrends.status === "missing"
       ? "Runtime trend artifact missing."
       : `Runtime trend artifact ${runtimeTrends.status}.`
+  );
+  noteParts.push(
+    !deliveryRun.present
+      ? "Delivery-run ledger missing."
+      : deliveryRunHealthy
+      ? "Delivery-run ledger pass with recorded proof."
+      : `Delivery-run ledger ${deliveryRun.status} with proof ${deliveryRun.proofState ?? "unknown"}.`
   );
   noteParts.push(
     graphify.status === "paired"
@@ -721,6 +758,34 @@ async function inspectRuntimeTrendHistory(
   };
 }
 
+async function inspectDeliveryRunArtifact(rootDir: string) {
+  const artifactPath = "artifacts/harness-delivery-runs/latest.json";
+  const baselinePath = "artifacts/harness-delivery-runs/baseline.json";
+  const [latest, baseline] = await Promise.all([
+    readDeliveryRunLedger(rootDir, artifactPath),
+    buildPartialDeliveryRunBaseline(rootDir, baselinePath),
+  ]);
+
+  const latestSummary = summarizeDeliveryRunBaseline(latest);
+  return {
+    definition:
+      "Latest pr:athena delivery-run ledger state from artifacts/harness-delivery-runs/latest.json, with optional baseline comparison.",
+    artifactPath,
+    baselinePath,
+    present: latestSummary.present,
+    status: latestSummary.status,
+    generatedAt: latestSummary.generatedAt,
+    proofState: latestSummary.proofState,
+    commandCount: latestSummary.commandCount,
+    failedCommandCount: latest?.summary.failedCommandCount ?? 0,
+    duplicateCommandCount: latestSummary.duplicateCommandCount,
+    duplicatePackageSuiteCount: latestSummary.duplicatePackageSuiteCount,
+    providerSkippedCount: latestSummary.providerSkippedCount,
+    totalDurationMs: latestSummary.totalDurationMs,
+    baseline,
+  };
+}
+
 async function inspectGraphifyArtifacts(rootDir: string, fsApi: ScorecardFileSystem) {
   const reportPath = path.join(rootDir, "graphify-out/GRAPH_REPORT.md");
   const graphPath = path.join(rootDir, "graphify-out/graph.json");
@@ -821,9 +886,16 @@ export async function collectHarnessScorecard(
   inferential.history = await inspectInferentialHistory(rootDir, fsApi);
   const runtimeTrends = await inspectRuntimeTrendArtifact(rootDir, fsApi);
   runtimeTrends.history = await inspectRuntimeTrendHistory(rootDir, fsApi);
+  const deliveryRun = await inspectDeliveryRunArtifact(rootDir);
   const graphify = await inspectGraphifyArtifacts(rootDir, fsApi);
 
-  const summary = buildSummary(documentation, inferential, runtimeTrends, graphify);
+  const summary = buildSummary(
+    documentation,
+    inferential,
+    runtimeTrends,
+    deliveryRun,
+    graphify
+  );
 
   return {
     version: "1.0",
@@ -833,6 +905,7 @@ export async function collectHarnessScorecard(
       documentation,
       inferential,
       runtimeTrends,
+      deliveryRun,
       graphify,
     },
     summary,
