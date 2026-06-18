@@ -59,6 +59,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`convex/inventory/storeConfigV2.test.ts`](../../convex/inventory/storeConfigV2.test.ts)
 - [`convex/lib/commandResultValidators.test.ts`](../../convex/lib/commandResultValidators.test.ts)
 - [`convex/lib/currency.test.ts`](../../convex/lib/currency.test.ts)
+- [`convex/lib/returnValidatorContract.test.ts`](../../convex/lib/returnValidatorContract.test.ts)
 - [`convex/mailersend/index.test.tsx`](../../convex/mailersend/index.test.tsx)
 - [`convex/mtn/client.test.ts`](../../convex/mtn/client.test.ts)
 - [`convex/mtn/config.test.ts`](../../convex/mtn/config.test.ts)

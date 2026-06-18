@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>fix: Guard Convex return validator contract drift</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #182026;
+      --muted: #5c6770;
+      --line: #d8dee4;
+      --panel: #f7f9fb;
+      --accent: #0f766e;
+      --warn: #9a5b00;
+    }
+    body {
+      margin: 0;
+      font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--ink);
+      background: #ffffff;
+    }
+    main {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 36px 28px 56px;
+    }
+    header {
+      border-bottom: 1px solid var(--line);
+      margin-bottom: 28px;
+      padding-bottom: 18px;
+    }
+    h1 {
+      font-size: 30px;
+      line-height: 1.2;
+      margin: 0 0 12px;
+    }
+    h2 {
+      font-size: 20px;
+      margin: 30px 0 10px;
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 6px;
+    }
+    h3 {
+      font-size: 16px;
+      margin: 22px 0 8px;
+    }
+    .meta, .source {
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .callout {
+      background: var(--panel);
+      border-left: 4px solid var(--accent);
+      padding: 12px 14px;
+      margin: 16px 0;
+    }
+    .warning {
+      border-left-color: var(--warn);
+    }
+    code {
+      background: #eef2f5;
+      border-radius: 4px;
+      padding: 1px 4px;
+      font-size: 0.92em;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 12px 0 22px;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 8px 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      background: var(--panel);
+    }
+    li {
+      margin: 4px 0;
+    }
+    nav {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      padding: 12px 16px;
+      margin: 18px 0 26px;
+    }
+    nav a {
+      color: var(--accent);
+      margin-right: 14px;
+      white-space: nowrap;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>fix: Guard Convex return validator contract drift</h1>
+      <div class="meta">Type: fix · Status: active · Date: 2026-06-18 · Source: <a href="2026-06-18-002-fix-convex-return-contract-guard-plan.md">markdown plan</a></div>
+    </header>
+
+    <nav aria-label="Plan sections">
+      <a href="#summary">Summary</a>
+      <a href="#requirements">Requirements</a>
+      <a href="#units">Implementation Units</a>
+      <a href="#risks">Risks</a>
+      <a href="#verification">Verification</a>
+    </nav>
+
+    <section id="summary">
+      <h2>Summary</h2>
+      <p>Add a reusable Convex return-validator conformance helper and a repo-level inferential-review guard so changed public Convex functions with explicit <code>returns</code> validators must carry executable contract proof, not just loose exported-validator string checks.</p>
+      <div class="callout warning">
+        <strong>Audit finding:</strong> PR #522 changed a public Convex response shape, while PRs #523 and #524 were needed to patch missed return-validator fields after production rejected valid handler results.
+      </div>
+    </section>
+
+    <section id="requirements">
+      <h2>Requirements</h2>
+      <ul>
+        <li>Target the general Convex <code>ReturnsValidationError</code> class, not terminal-health-specific fields.</li>
+        <li>Validate representative returned values against exported Convex return validators.</li>
+        <li>Block changed public Convex functions with explicit <code>returns</code> validators when no executable contract proof changes with them.</li>
+        <li>Keep public Convex modules thin and application-owned behavior intact.</li>
+        <li>Keep Athena generated docs, Graphify, and <code>pr:athena</code> validation aligned.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Key Decisions</h2>
+      <ul>
+        <li>Use a serialized-validator assertion helper instead of expanding string-token checks.</li>
+        <li>Use <code>scripts/harness-inferential-review.ts</code> as the repo-level enforcement point because it already gates <code>pr:athena</code>.</li>
+        <li>Require changed proof near the public Convex change so reviewers see the contract was considered in that PR.</li>
+      </ul>
+    </section>
+
+    <section id="units">
+      <h2>Implementation Units</h2>
+      <article>
+        <h3>U1. Reusable return-validator conformance helper</h3>
+        <p>Create <code>packages/athena-webapp/convex/lib/returnValidatorContract.ts</code> and tests for nested objects, unions, arrays, records, ids, primitives, optional fields, missing fields, and extra returned fields.</p>
+      </article>
+      <article>
+        <h3>U2. Generic inferential-review guard</h3>
+        <p>Extend <code>scripts/harness-inferential-review.ts</code> and its tests so changed public Convex functions with <code>returns:</code> require changed executable contract proof.</p>
+      </article>
+      <article>
+        <h3>U3. Representative public-contract fixture</h3>
+        <p>Use terminal health as one real regression fixture for the generic helper, proving the helper would have caught the #522 and partial #523 misses.</p>
+      </article>
+      <article>
+        <h3>U4. Harness documentation and generated artifacts</h3>
+        <p>Update harness registry guidance, regenerate docs, and rebuild Graphify.</p>
+      </article>
+    </section>
+
+    <section id="risks">
+      <h2>Risks</h2>
+      <table>
+        <thead>
+          <tr><th>Risk</th><th>Mitigation</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Harness rule is too noisy</td><td>Scope to changed public Convex exports with explicit <code>returns</code> and add ignored cases for generated, schema, and test-only files.</td></tr>
+          <tr><td>Helper diverges from Convex runtime semantics</td><td>Support repo-used serialized validator shapes and test each shape explicitly.</td></tr>
+          <tr><td>String-only tests falsely satisfy the guard</td><td>Require the reusable helper or an explicit contract-proof marker.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="verification">
+      <h2>Verification Strategy</h2>
+      <ul>
+        <li>Focused helper and inferential-review tests prove generic class coverage.</li>
+        <li>Terminal-health public contract test proves the recent production failure shape through the generic helper.</li>
+        <li>Harness generation and Graphify rebuild keep generated artifacts current.</li>
+        <li><code>bun run pr:athena</code> remains the final local merge gate.</li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>

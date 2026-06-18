@@ -115,6 +115,7 @@ import type * as inventory_utils from "../inventory/utils.js";
 import type * as lib_athenaUserAuth from "../lib/athenaUserAuth.js";
 import type * as lib_commandResultValidators from "../lib/commandResultValidators.js";
 import type * as lib_currency from "../lib/currency.js";
+import type * as lib_returnValidatorContract from "../lib/returnValidatorContract.js";
 import type * as llm_callLlmProvider from "../llm/callLlmProvider.js";
 import type * as llm_providers_anthropic from "../llm/providers/anthropic.js";
 import type * as llm_providers_openai from "../llm/providers/openai.js";
@@ -491,6 +492,7 @@ declare const fullApi: ApiFromModules<{
   "lib/athenaUserAuth": typeof lib_athenaUserAuth;
   "lib/commandResultValidators": typeof lib_commandResultValidators;
   "lib/currency": typeof lib_currency;
+  "lib/returnValidatorContract": typeof lib_returnValidatorContract;
   "llm/callLlmProvider": typeof llm_callLlmProvider;
   "llm/providers/anthropic": typeof llm_providers_anthropic;
   "llm/providers/openai": typeof llm_providers_openai;

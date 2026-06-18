@@ -752,6 +752,317 @@ describe("runHarnessInferentialReview", () => {
     );
   });
 
+  it("fails when a changed public Convex function with returns has no executable return contract proof", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      "packages/athena-webapp/convex/pos/public/example.ts",
+      [
+        'import { query } from "../../../_generated/server";',
+        'import { v } from "convex/values";',
+        "",
+        "export const listExample = query({",
+        "  args: { storeId: v.id(\"store\") },",
+        "  returns: v.object({ status: v.string() }),",
+        "  handler: async () => ({ status: \"ok\" }),",
+        "});",
+      ].join("\n"),
+      rootDir,
+    );
+
+    const result = await runHarnessInferentialReview(rootDir, {
+      getChangedFiles: async () => [
+        "packages/athena-webapp/convex/pos/public/example.ts",
+      ],
+      nowIso: () => "2026-04-12T05:00:00.000Z",
+    });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.machine.status).toBe("fail");
+    expect(result.machine.findings).toContainEqual(
+      expect.objectContaining({
+        id: "missing-convex-return-validator-contract-proof-packages-athena-webapp-convex-pos-public-example-ts",
+        severity: "high",
+        filePath: "packages/athena-webapp/convex/pos/public/example.ts",
+      }),
+    );
+    expect(result.humanReport).toContain(
+      "assertConformsToExportedReturns",
+    );
+  });
+
+  it("accepts a changed public Convex function when a sibling test uses the return contract helper", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      "packages/athena-webapp/convex/pos/public/example.ts",
+      [
+        'import { query } from "../../../_generated/server";',
+        'import { v } from "convex/values";',
+        "",
+        "export const listExample = query({",
+        "  args: { storeId: v.id(\"store\") },",
+        "  returns: v.object({ status: v.string() }),",
+        "  handler: async () => ({ status: \"ok\" }),",
+        "});",
+      ].join("\n"),
+      rootDir,
+    );
+    await write(
+      "packages/athena-webapp/convex/pos/public/example.test.ts",
+      [
+        'import { listExample } from "./example";',
+        'import { assertConformsToExportedReturns } from "../../lib/returnValidatorContract";',
+        "",
+        "assertConformsToExportedReturns(listExample, { status: \"ok\" });",
+      ].join("\n"),
+      rootDir,
+    );
+
+    const result = await runHarnessInferentialReview(rootDir, {
+      getChangedFiles: async () => [
+        "packages/athena-webapp/convex/pos/public/example.ts",
+        "packages/athena-webapp/convex/pos/public/example.test.ts",
+      ],
+      nowIso: () => "2026-04-12T05:00:00.000Z",
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.machine.status).toBe("pass");
+    expect(result.machine.findings).toEqual([]);
+  });
+
+  it("does not accept loose exportReturns string checks as Convex return contract proof", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      "packages/athena-webapp/convex/pos/public/example.ts",
+      [
+        'import { query } from "../../../_generated/server";',
+        'import { v } from "convex/values";',
+        "",
+        "export const listExample = query({",
+        "  args: { storeId: v.id(\"store\") },",
+        "  returns: v.object({ status: v.string() }),",
+        "  handler: async () => ({ status: \"ok\" }),",
+        "});",
+      ].join("\n"),
+      rootDir,
+    );
+    await write(
+      "packages/athena-webapp/convex/pos/public/example.test.ts",
+      [
+        'import { expect, it } from "vitest";',
+        'import { listExample } from "./example";',
+        "",
+        'it("exports status", () => {',
+        "  expect((listExample as any).exportReturns()).toContain(\"status\");",
+        "});",
+      ].join("\n"),
+      rootDir,
+    );
+
+    const result = await runHarnessInferentialReview(rootDir, {
+      getChangedFiles: async () => [
+        "packages/athena-webapp/convex/pos/public/example.ts",
+        "packages/athena-webapp/convex/pos/public/example.test.ts",
+      ],
+      nowIso: () => "2026-04-12T05:00:00.000Z",
+    });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.machine.status).toBe("fail");
+    expect(result.machine.findings).toContainEqual(
+      expect.objectContaining({
+        id: "missing-convex-return-validator-contract-proof-packages-athena-webapp-convex-pos-public-example-ts",
+      }),
+    );
+  });
+
+  it("does not accept marker comments as Convex return contract proof", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      "packages/athena-webapp/convex/pos/public/example.ts",
+      [
+        'import { query } from "../../../_generated/server";',
+        'import { v } from "convex/values";',
+        "",
+        "export const listExample = query({",
+        "  args: {},",
+        "  returns: v.object({ status: v.string() }),",
+        "  handler: async () => ({ status: \"ok\" }),",
+        "});",
+      ].join("\n"),
+      rootDir,
+    );
+    await write(
+      "packages/athena-webapp/convex/pos/public/example.test.ts",
+      [
+        'import { it } from "vitest";',
+        "",
+        'it("has a note", () => {',
+        "  // @convex-return-validator-contract-proof",
+        "});",
+      ].join("\n"),
+      rootDir,
+    );
+
+    const result = await runHarnessInferentialReview(rootDir, {
+      getChangedFiles: async () => [
+        "packages/athena-webapp/convex/pos/public/example.ts",
+        "packages/athena-webapp/convex/pos/public/example.test.ts",
+      ],
+      nowIso: () => "2026-04-12T05:00:00.000Z",
+    });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.machine.status).toBe("fail");
+    expect(result.machine.findings).toContainEqual(
+      expect.objectContaining({
+        id: "missing-convex-return-validator-contract-proof-packages-athena-webapp-convex-pos-public-example-ts",
+      }),
+    );
+  });
+
+  it("does not accept commented-out helper calls as Convex return contract proof", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      "packages/athena-webapp/convex/pos/public/example.ts",
+      [
+        'import { query } from "../../../_generated/server";',
+        'import { v } from "convex/values";',
+        "",
+        "export const listExample = query({",
+        "  args: {},",
+        "  returns: v.object({ status: v.string() }),",
+        "  handler: async () => ({ status: \"ok\" }),",
+        "});",
+      ].join("\n"),
+      rootDir,
+    );
+    await write(
+      "packages/athena-webapp/convex/pos/public/example.test.ts",
+      [
+        'import { listExample } from "./example";',
+        'import { assertConformsToExportedReturns } from "../../lib/returnValidatorContract";',
+        "",
+        "// assertConformsToExportedReturns(listExample, { status: \"ok\" });",
+      ].join("\n"),
+      rootDir,
+    );
+
+    const result = await runHarnessInferentialReview(rootDir, {
+      getChangedFiles: async () => [
+        "packages/athena-webapp/convex/pos/public/example.ts",
+        "packages/athena-webapp/convex/pos/public/example.test.ts",
+      ],
+      nowIso: () => "2026-04-12T05:00:00.000Z",
+    });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.machine.status).toBe("fail");
+    expect(result.machine.findings).toContainEqual(
+      expect.objectContaining({
+        id: "missing-convex-return-validator-contract-proof-packages-athena-webapp-convex-pos-public-example-ts",
+      }),
+    );
+  });
+
+  it("does not accept helper-shaped string literals as Convex return contract proof", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      "packages/athena-webapp/convex/pos/public/example.ts",
+      [
+        'import { query } from "../../../_generated/server";',
+        'import { v } from "convex/values";',
+        "",
+        "export const listExample = query({",
+        "  args: {},",
+        "  returns: v.object({ status: v.string() }),",
+        "  handler: async () => ({ status: \"ok\" }),",
+        "});",
+      ].join("\n"),
+      rootDir,
+    );
+    await write(
+      "packages/athena-webapp/convex/pos/public/example.test.ts",
+      [
+        'import { listExample } from "./example";',
+        'import { assertConformsToExportedReturns } from "../../lib/returnValidatorContract";',
+        "",
+        "const note = \"assertConformsToExportedReturns(listExample, { status: 'ok' })\";",
+      ].join("\n"),
+      rootDir,
+    );
+
+    const result = await runHarnessInferentialReview(rootDir, {
+      getChangedFiles: async () => [
+        "packages/athena-webapp/convex/pos/public/example.ts",
+        "packages/athena-webapp/convex/pos/public/example.test.ts",
+      ],
+      nowIso: () => "2026-04-12T05:00:00.000Z",
+    });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.machine.status).toBe("fail");
+    expect(result.machine.findings).toContainEqual(
+      expect.objectContaining({
+        id: "missing-convex-return-validator-contract-proof-packages-athena-webapp-convex-pos-public-example-ts",
+      }),
+    );
+  });
+
+  it("requires return contract proof for every changed public Convex export with returns", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      "packages/athena-webapp/convex/pos/public/example.ts",
+      [
+        'import { query } from "../../../_generated/server";',
+        'import { v } from "convex/values";',
+        "",
+        "export const listExample = query({",
+        "  args: {},",
+        "  returns: v.object({ status: v.string() }),",
+        "  handler: async () => ({ status: \"ok\" }),",
+        "});",
+        "",
+        "export const getExample = query({",
+        "  args: {},",
+        "  returns: v.object({ detail: v.string() }),",
+        "  handler: async () => ({ detail: \"ok\" }),",
+        "});",
+      ].join("\n"),
+      rootDir,
+    );
+    await write(
+      "packages/athena-webapp/convex/pos/public/example.test.ts",
+      [
+        'import { listExample } from "./example";',
+        'import { assertConformsToExportedReturns } from "../../lib/returnValidatorContract";',
+        "",
+        "assertConformsToExportedReturns(listExample, { status: \"ok\" });",
+      ].join("\n"),
+      rootDir,
+    );
+
+    const result = await runHarnessInferentialReview(rootDir, {
+      getChangedFiles: async () => [
+        "packages/athena-webapp/convex/pos/public/example.ts",
+        "packages/athena-webapp/convex/pos/public/example.test.ts",
+      ],
+      nowIso: () => "2026-04-12T05:00:00.000Z",
+    });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.machine.status).toBe("fail");
+    expect(result.machine.findings).toContainEqual(
+      expect.objectContaining({
+        id: "missing-convex-return-validator-contract-proof-packages-athena-webapp-convex-pos-public-example-ts",
+        rationale: expect.stringContaining("query getExample"),
+      }),
+    );
+    expect(result.machine.findings[0]?.rationale).not.toContain(
+      "query listExample",
+    );
+  });
+
   it("writes machine-readable output with additive shadow data via the default artifact path", async () => {
     const rootDir = await createFixtureRepo();
 

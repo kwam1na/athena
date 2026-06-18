@@ -180,13 +180,16 @@ describe("HARNESS_APP_REGISTRY", () => {
         { kind: "script", script: "audit:convex" },
         { kind: "script", script: "lint:convex:changed" },
       ],
-      note:
-        "Any change that can affect Convex HTTP wiring, serviceOps schemas and workflows, shared operational rails, or route-to-backend composition should include the Convex audit pair.",
       behaviorScenarios: [
         "athena-convex-storefront-composition",
         "athena-convex-storefront-failure-visibility",
       ],
     });
+    expect(backendScenario?.note).toContain("Convex audit pair");
+    expect(backendScenario?.note).toContain("assertConformsToExportedReturns");
+    expect(backendScenario?.note).toContain(
+      "loose `exportReturns()` string checks do not prove the production return contract"
+    );
   });
 
   it("covers changed Athena frontend source files with changed-file lint", () => {
