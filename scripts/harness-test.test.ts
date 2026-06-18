@@ -8,6 +8,7 @@ import {
   parseHarnessTestCliArgs,
   runHarnessTest,
 } from "./harness-test";
+import { collectRootScriptTestFiles } from "./root-scripts-coverage";
 
 const tempRoots: string[] = [];
 
@@ -43,6 +44,17 @@ describe("collectHarnessTestTargets", () => {
       path.join(rootDir, "scripts", "harness-audit.test.ts"),
       path.join(rootDir, "scripts", "pre-push-review.test.ts"),
     ]);
+  });
+
+  it("matches the root script coverage target set", async () => {
+    const rootDir = await createFixtureRoot();
+    await write("scripts/alpha.test.ts", "test('a', () => {});\n", rootDir);
+    await write("scripts/beta.test.ts", "test('b', () => {});\n", rootDir);
+    await write("scripts/not-a-test.ts", "export {};\n", rootDir);
+
+    await expect(collectHarnessTestTargets(rootDir)).resolves.toEqual(
+      collectRootScriptTestFiles(rootDir)
+    );
   });
 
   it("ignores test files in cloned worktree trees", async () => {

@@ -22,6 +22,8 @@ const HARNESS_REPO_VALIDATION_COMMANDS = [
 const HARNESS_REPO_VALIDATION_SURFACE_NAME =
   "repo harness implementation and workflow wiring";
 
+export type HarnessValidationCapability = "root-script-tests";
+
 export type HarnessRepoSurfaceCoverage = {
   surfaceName: string;
   files: string[];
@@ -66,4 +68,13 @@ export function collectHarnessRepoValidationSelection(changedFiles: string[]) {
         ? []
         : [...HARNESS_REPO_VALIDATION_COMMANDS],
   };
+}
+
+export function collectHarnessRepoValidationCapabilities() {
+  return [
+    {
+      capability: "root-script-tests" as const,
+      commands: ["bun run harness:test"],
+    },
+  ];
 }

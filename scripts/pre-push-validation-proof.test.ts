@@ -224,6 +224,7 @@ describe("pre-push validation proof", () => {
       evaluatePrePushValidationProof(rootDir, { spawn }),
     ).resolves.toMatchObject({
       reusable: true,
+      status: "reusable",
       proof: {
         recordedHeadSha: "head-a",
         baseSha: "base-a",
@@ -263,6 +264,7 @@ describe("pre-push validation proof", () => {
       }),
     ).resolves.toMatchObject({
       reusable: true,
+      status: "reusable",
       proof: {
         recordedHeadSha: "head-before",
         validatedTreeSha: "tree-after",
@@ -286,6 +288,7 @@ describe("pre-push validation proof", () => {
       }),
     ).resolves.toMatchObject({
       recorded: false,
+      status: "proof_not_recorded",
       reason: "working tree has unstaged or untracked changes",
     });
   });
@@ -305,6 +308,7 @@ describe("pre-push validation proof", () => {
       }),
     ).resolves.toMatchObject({
       recorded: false,
+      status: "proof_not_recorded",
       reason: "working tree has unstaged or untracked changes",
     });
   });
@@ -322,7 +326,22 @@ describe("pre-push validation proof", () => {
       }),
     ).resolves.toMatchObject({
       reusable: false,
+      status: "dirty",
       reason: "working tree is not clean",
+    });
+  });
+
+  it("reruns pre-push when no proof has been recorded", async () => {
+    const rootDir = await createFixtureRoot();
+
+    await expect(
+      evaluatePrePushValidationProof(rootDir, {
+        spawn: createSpawn({}),
+      }),
+    ).resolves.toMatchObject({
+      reusable: false,
+      status: "missing",
+      reason: "no current pr:athena proof was found",
     });
   });
 
@@ -348,6 +367,7 @@ describe("pre-push validation proof", () => {
       }),
     ).resolves.toMatchObject({
       reusable: false,
+      status: "stale",
       reason: "HEAD tree changed since pr:athena recorded its proof",
     });
   });
@@ -365,6 +385,7 @@ describe("pre-push validation proof", () => {
       }),
     ).resolves.toMatchObject({
       reusable: false,
+      status: "base_changed",
       reason: "origin/main changed since pr:athena recorded its proof",
     });
   });
@@ -388,6 +409,7 @@ describe("pre-push validation proof", () => {
       }),
     ).resolves.toMatchObject({
       reusable: false,
+      status: "validation_wiring_changed",
       reason: "validation wiring changed since proof recording",
     });
   });

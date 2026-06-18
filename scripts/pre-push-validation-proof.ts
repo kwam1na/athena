@@ -32,14 +32,27 @@ export type PrePushValidationProof = {
   validationFingerprint: string;
 };
 
+export type PrePushValidationProofStatus =
+  | "reusable"
+  | "stale"
+  | "missing"
+  | "dirty"
+  | "base_changed"
+  | "validation_wiring_changed"
+  | "generated_repaired"
+  | "source_registry_drift"
+  | "proof_not_recorded";
+
 export type PrePushValidationProofEvaluation =
   | {
       reusable: true;
+      status: "reusable";
       proof: PrePushValidationProof;
       proofPath: string;
     }
   | {
       reusable: false;
+      status: Exclude<PrePushValidationProofStatus, "reusable">;
       reason: string;
       proofPath?: string;
     };
@@ -436,6 +449,20 @@ function validateProofShape(value: unknown): value is PrePushValidationProof {
   );
 }
 
+function classifySnapshotError(reason: string): Exclude<
+  PrePushValidationProofStatus,
+  "reusable"
+> {
+  if (
+    reason === "working tree is not clean" ||
+    reason === "working tree has unstaged or untracked changes"
+  ) {
+    return "dirty";
+  }
+
+  return "proof_not_recorded";
+}
+
 export async function evaluatePrePushValidationProof(
   rootDir: string,
   options: ProofRuntimeOptions = {},
@@ -445,7 +472,7 @@ export async function evaluatePrePushValidationProof(
     snapshot = await collectProofSnapshot(rootDir, options);
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
-    return { reusable: false, reason };
+    return { reusable: false, status: classifySnapshotError(reason), reason };
   }
 
   const fsReadFile = options.readFile ?? readFile;
@@ -455,6 +482,7 @@ export async function evaluatePrePushValidationProof(
   } catch {
     return {
       reusable: false,
+      status: "missing",
       reason: "no current pr:athena proof was found",
       proofPath: snapshot.proofPath,
     };
@@ -463,32 +491,51 @@ export async function evaluatePrePushValidationProof(
   if (!validateProofShape(proof)) {
     return {
       reusable: false,
+      status: "missing",
       reason: "stored pr:athena proof has an unsupported shape",
       proofPath: snapshot.proofPath,
     };
   }
 
-  const comparisons: Array<[keyof PrePushValidationProof, string]> = [
+  const comparisons: Array<
+    [
+      keyof PrePushValidationProof,
+      Exclude<PrePushValidationProofStatus, "reusable">,
+      string,
+    ]
+  > = [
     [
       "validatedTreeSha",
+      "stale",
       "HEAD tree changed since pr:athena recorded its proof",
     ],
     [
       "baseSha",
+      "base_changed",
       `${PR_ATHENA_PROOF_BASE_REF} changed since pr:athena recorded its proof`,
     ],
-    ["bunVersion", "Bun version changed since pr:athena recorded its proof"],
-    ["prAthenaScript", "pr:athena command changed since proof recording"],
+    [
+      "bunVersion",
+      "stale",
+      "Bun version changed since pr:athena recorded its proof",
+    ],
+    [
+      "prAthenaScript",
+      "validation_wiring_changed",
+      "pr:athena command changed since proof recording",
+    ],
     [
       "validationFingerprint",
+      "validation_wiring_changed",
       "validation wiring changed since proof recording",
     ],
   ];
 
-  for (const [field, reason] of comparisons) {
+  for (const [field, status, reason] of comparisons) {
     if (proof[field] !== snapshot[field]) {
       return {
         reusable: false,
+        status,
         reason,
         proofPath: snapshot.proofPath,
       };
@@ -497,6 +544,7 @@ export async function evaluatePrePushValidationProof(
 
   return {
     reusable: true,
+    status: "reusable",
     proof,
     proofPath: snapshot.proofPath,
   };
@@ -537,7 +585,11 @@ export async function recordPrePushValidationProof(
       // Best-effort stale proof cleanup only.
     }
 
-    return { recorded: false as const, reason };
+    return {
+      recorded: false as const,
+      status: "proof_not_recorded" as const,
+      reason,
+    };
   }
 }
 
@@ -556,5 +608,6 @@ if (import.meta.main) {
     process.exit(1);
   }
 
-  await recordPrePushValidationProof(process.cwd());
+  const result = await recordPrePushValidationProof(process.cwd());
+  process.exit(result.recorded ? 0 : 1);
 }

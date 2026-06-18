@@ -333,7 +333,7 @@ function buildShellCommandPattern(commandBody: string) {
 
 function hasHarnessReviewCommand(value: string, baseRef: string) {
   const pattern = buildShellCommandPattern(
-    `bun\\s+run\\s+harness:review\\s+--base(?:\\s+|=)${escapeRegExp(baseRef)}(?:\\s+--repo-validation-provided-by\\s+pr:athena)?(?:\\s+--validation-provided-by\\s+athena-pr-tests)?`,
+    `bun\\s+run\\s+harness:review\\s+--base(?:\\s+|=)${escapeRegExp(baseRef)}(?:\\s+--repo-validation-provided-by\\s+pr:athena)?(?:\\s+--validation-provided-by\\s+athena-pr-tests)?(?:\\s+--[\\w-]+(?:\\s+|=)\\S+)*`,
   );
   return pattern.test(value);
 }
@@ -358,6 +358,20 @@ function expandPackageScriptChain(
   const childScripts = [...script.matchAll(/\bbun\s+run\s+([@\w:./-]+)/g)]
     .map((match) => match[1])
     .filter((name) => scripts?.[name]);
+
+  if (
+    (scriptName === "pr:athena" || scriptName === "pr:athena:delivery-run") &&
+    /\bbun\s+scripts\/pr-athena-delivery-run\.ts\b/.test(script)
+  ) {
+    childScripts.push(
+      ...[
+        "pr:athena:prepare",
+        "pr:athena:validate",
+        "pr:athena:record-proof",
+        "pr:athena:scorecard",
+      ].filter((name) => scripts?.[name]),
+    );
+  }
 
   return [
     script,
@@ -528,12 +542,11 @@ async function collectHarnessSafetySignalFindings(
       severity: "high",
       title: "PR preflight lost harness safety wiring",
       requiredSignals: [
-        "bun run harness:check",
         "bun run harness:audit",
         "bun run graphify:check",
       ],
       remediation:
-        "Restore the pr:athena safety chain so the harness check, audit, and graphify gates still run before merge.",
+        "Restore the pr:athena safety chain so the harness review-owned check, audit, and graphify gates still run before merge.",
     },
     {
       filePath: ".github/workflows/athena-pr-tests.yml",
