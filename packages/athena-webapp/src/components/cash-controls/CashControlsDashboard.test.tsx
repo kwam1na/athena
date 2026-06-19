@@ -372,7 +372,8 @@ describe("CashControlsDashboardContent", () => {
     );
     expect(screen.getAllByText("Register 1").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Register 3").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Back counter").length).toBeGreaterThan(0);
+    expect(screen.getByText("N-OPEN")).toBeInTheDocument();
+    expect(screen.getByText("Back counter / LOSING")).toBeInTheDocument();
     expect(screen.getAllByText("Needs review").length).toBeGreaterThan(0);
     expect(screen.getByText("Counted")).toBeInTheDocument();
     expect(screen.getAllByText("$171").length).toBeGreaterThan(0);
@@ -813,6 +814,20 @@ describe("CashControlsDashboardContent", () => {
     expect(
       screen.getByText(/Payment review: Mobile money payment record needs review./i),
     ).toBeInTheDocument();
+
+    const pendingSyncCard = screen
+      .getAllByRole("link", { name: /Register 3/i })
+      .find((link) => within(link).queryByText("Pending reconciliation"));
+    expect(pendingSyncCard).toHaveTextContent("Counted");
+    expect(pendingSyncCard).toHaveTextContent("Variance");
+    expect(pendingSyncCard).toHaveTextContent("GH₵0");
+
+    const needsReviewCard = screen
+      .getAllByRole("link", { name: /Register 4/i })
+      .find((link) => within(link).queryByText("Needs review"));
+    expect(needsReviewCard).toHaveTextContent("Counted");
+    expect(needsReviewCard).toHaveTextContent("Variance");
+    expect(needsReviewCard).toHaveTextContent("GH₵0");
   });
 
   it("labels synced closeout variance review without showing the drawer as simply active", () => {
@@ -931,7 +946,7 @@ describe("CashControlsDashboardContent", () => {
       />,
     );
 
-    expect(screen.getAllByText("Front counter").length).toBeGreaterThan(0);
+    expect(screen.getByText("Front counter / -STALE")).toBeInTheDocument();
     expect(screen.getAllByText("Pending sync").length).toBeGreaterThan(0);
     expect(
       screen.getAllByText("Terminal check-in is waiting for a fresh upload.")
@@ -1003,6 +1018,85 @@ describe("CashControlsDashboardContent", () => {
         /Reconciliation review: Review this synced register activity./i,
       ),
     ).toBeInTheDocument();
+  });
+
+  it("shows counted cash and zero variance on closed review session cards", () => {
+    render(
+      <CashControlsDashboardContent
+        currency="GHS"
+        dashboardSnapshot={{
+          ...baseSnapshot,
+          registerSessions: [
+            {
+              _id: "session-closed-inventory-review",
+              closedAt: new Date("2026-06-17T08:00:00.000Z").getTime(),
+              countedCash: 231000,
+              expectedCash: 231000,
+              openedAt: new Date("2026-06-17T04:56:00.000Z").getTime(),
+              openedByStaffName: "P O.",
+              openingFloat: 15500,
+              registerNumber: "Register 1",
+              status: "closed",
+              terminalName: "M Supplies",
+              totalDeposited: 0,
+              variance: 0,
+              localSyncStatus: {
+                status: "needs_review",
+                reconciliationItems: [
+                  {
+                    summary:
+                      "Inventory needs manager review for a synced offline sale.",
+                    type: "inventory",
+                  },
+                ],
+              },
+            },
+          ],
+          unresolvedVariances: [
+            {
+              _id: "session-closed-inventory-review",
+              closedAt: new Date("2026-06-17T08:00:00.000Z").getTime(),
+              countedCash: 231000,
+              expectedCash: 231000,
+              openedAt: new Date("2026-06-17T04:56:00.000Z").getTime(),
+              openedByStaffName: "P O.",
+              openingFloat: 15500,
+              registerNumber: "Register 1",
+              status: "closed",
+              terminalName: "M Supplies",
+              totalDeposited: 0,
+              variance: 0,
+              localSyncStatus: {
+                status: "needs_review",
+                reconciliationItems: [
+                  {
+                    summary:
+                      "Inventory needs manager review for a synced offline sale.",
+                    type: "inventory",
+                  },
+                ],
+              },
+            },
+          ],
+        }}
+        isLoading={false}
+        orgUrlSlug="v26"
+        storeUrlSlug="east-legon"
+      />,
+    );
+
+    const closedReviewCard = screen
+      .getAllByRole("link", { name: /Register 1/i })
+      .find((link) => within(link).queryByText("View session"));
+
+    expect(closedReviewCard).toHaveTextContent("Expected cash");
+    expect(closedReviewCard).toHaveTextContent("GH₵2,310");
+    expect(closedReviewCard).toHaveTextContent("Counted");
+    expect(closedReviewCard).toHaveTextContent("Variance");
+    expect(closedReviewCard).toHaveTextContent("GH₵0");
+    expect(closedReviewCard).toHaveTextContent(
+      "Inventory review: Inventory needs manager review for a synced offline sale.",
+    );
   });
 
   it("links register session cards to the session route", () => {

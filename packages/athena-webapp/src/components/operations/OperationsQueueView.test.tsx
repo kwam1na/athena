@@ -393,6 +393,81 @@ describe("OperationsQueueViewContent", () => {
     expect(screen.getByRole("button", { name: /show details/i })).toBeInTheDocument();
   });
 
+  it("links synced sale inventory work items to manual stock adjustments", () => {
+    render(
+      <OperationsQueueViewContent
+        {...baseProps}
+        activeWorkflow="queue"
+        orgUrlSlug="wigclub"
+        storeUrlSlug="wigclub"
+        workItems={[
+          {
+            _id: "work-item-1" as Id<"operationalWorkItem">,
+            approvalState: "not_required",
+            createdAt: Date.now() - 5 * 60 * 1000,
+            metadata: {
+              primaryProductSkuId: "product-sku-1" as Id<"productSku">,
+              receiptNumber: "939540",
+              sourceId: "transaction-1",
+              sourceType: "posTransaction",
+            },
+            priority: "high",
+            status: "open",
+            title: "Review inventory for Ebin Skin Protector Enhanced",
+            type: "synced_sale_inventory_review",
+          },
+        ]}
+      />,
+    );
+
+    expect(
+      screen.getByText("Review inventory for Ebin Skin Protector Enhanced"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Synced Sale Inventory Review")).toBeInTheDocument();
+
+    const stockAdjustmentsHref = new URL(
+      screen
+        .getByRole("link", { name: "Open stock adjustments" })
+        .getAttribute("href") ?? "",
+      "http://localhost",
+    );
+    expect(stockAdjustmentsHref.pathname).toBe(
+      "/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments",
+    );
+    expect(stockAdjustmentsHref.searchParams.get("mode")).toBe("manual");
+    expect(stockAdjustmentsHref.searchParams.get("sku")).toBe("product-sku-1");
+  });
+
+  it("does not link synced sale inventory work items without valid SKU metadata", () => {
+    render(
+      <OperationsQueueViewContent
+        {...baseProps}
+        activeWorkflow="queue"
+        orgUrlSlug="wigclub"
+        storeUrlSlug="wigclub"
+        workItems={[
+          {
+            _id: "work-item-1" as Id<"operationalWorkItem">,
+            approvalState: "not_required",
+            createdAt: Date.now() - 5 * 60 * 1000,
+            metadata: {
+              primaryProductSkuId: 42,
+              receiptNumber: "939540",
+            },
+            priority: "high",
+            status: "open",
+            title: "Review inventory for Ebin Skin Protector Enhanced",
+            type: "synced_sale_inventory_review",
+          },
+        ]}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("link", { name: "Open stock adjustments" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("renders stock approval actions and routes decisions through the provided handler", async () => {
     const { default: userEvent } = await import("@testing-library/user-event");
     const user = userEvent.setup();

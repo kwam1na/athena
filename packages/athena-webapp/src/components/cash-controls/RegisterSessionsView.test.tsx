@@ -64,7 +64,6 @@ describe("RegisterSessionsViewContent", () => {
       <RegisterSessionsViewContent
         currency="GHS"
         isLoading={false}
-        orgUrlSlug="wigclub"
         registerSessions={[
           {
             _id: "session-active",
@@ -91,7 +90,6 @@ describe("RegisterSessionsViewContent", () => {
             variance: -20000,
           },
         ]}
-        storeUrlSlug="wigclub"
       />,
     );
 
@@ -136,9 +134,7 @@ describe("RegisterSessionsViewContent", () => {
       <RegisterSessionsViewContent
         currency="GHS"
         isLoading={false}
-        orgUrlSlug="wigclub"
         registerSessions={[]}
-        storeUrlSlug="wigclub"
       />,
     );
 

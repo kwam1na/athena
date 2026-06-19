@@ -151,6 +151,17 @@ function formatRegisterName(registerNumber?: string | null) {
     : `Register ${trimmedRegisterNumber}`;
 }
 
+function formatSessionCode(sessionId: string) {
+  return sessionId.slice(-6).toUpperCase();
+}
+
+function formatSessionIdentifier(session: CashControlsDashboardSession) {
+  const terminalLine = getSessionTerminalLine(session);
+  const sessionCode = formatSessionCode(session._id);
+
+  return terminalLine ? `${terminalLine} / ${sessionCode}` : sessionCode;
+}
+
 function getVarianceTone(variance?: number) {
   if (!variance) {
     return "text-foreground";
@@ -470,12 +481,12 @@ function DrawerSessionCard({
     typeof closeoutReviewItem?.variance === "number"
       ? closeoutReviewItem.variance
       : (session.variance ?? 0);
-  const showVariance = variance !== 0;
   const countedCash =
     typeof closeoutReviewItem?.countedCash === "number"
       ? closeoutReviewItem.countedCash
       : session.countedCash;
-  const showCountedCash = variance !== 0 && countedCash !== undefined;
+  const showCountedCash = countedCash !== undefined;
+  const showVariance = variance !== 0 || showCountedCash;
   const showDeposited = session.totalDeposited > 0;
   const isCloseoutSyncReview =
     syncStatus.status === "needs_review" &&
@@ -491,7 +502,7 @@ function DrawerSessionCard({
     (showCountedCash ? 1 : 0) +
     (showVariance ? 1 : 0);
   const openedLine = getSessionOpenedLine(session);
-  const terminalLine = getSessionTerminalLine(session);
+  const sessionIdentifier = formatSessionIdentifier(session);
 
   return (
     <Link
@@ -513,11 +524,9 @@ function DrawerSessionCard({
             <p className="truncate font-medium text-foreground">
               {formatRegisterName(session.registerNumber)}
             </p>
-            {terminalLine ? (
-              <p className="truncate text-xs text-muted-foreground">
-                {terminalLine}
-              </p>
-            ) : null}
+            <p className="truncate text-xs text-muted-foreground">
+              {sessionIdentifier}
+            </p>
           </div>
           <p className="text-xs text-muted-foreground">{openedLine}</p>
         </div>

@@ -1095,6 +1095,163 @@ describe("RegisterSessionViewContent", () => {
     ).toBeInTheDocument();
   });
 
+  it("keeps inventory sale reviews applyable so managers can retain the sale", async () => {
+    const user = userEvent.setup();
+    const onAuthenticateStaff = vi.fn().mockResolvedValue(
+      ok({
+        activeRoles: ["manager"],
+        staffProfile: { fullName: "Ato Kofi" },
+        staffProfileId: "manager-1",
+      }),
+    );
+    const onResolveSyncReview = vi
+      .fn()
+      .mockResolvedValue(
+        ok({ action: "resolved", projectedCount: 1, resolvedCount: 1 }),
+      );
+
+    render(
+      <RegisterSessionViewContent
+        currency="GHS"
+        isLoading={false}
+        onRecordDeposit={vi.fn()}
+        {...closeoutHandlers}
+        onAuthenticateStaff={onAuthenticateStaff}
+        onResolveSyncReview={onResolveSyncReview}
+        orgUrlSlug="wigclub"
+        registerSessionSnapshot={{
+          ...baseSnapshot,
+          registerSession: {
+            ...baseSnapshot.registerSession,
+            localSyncStatus: {
+              status: "needs_review",
+              reconciliationItems: [
+                {
+                  actionPolicy: "apply_or_reject",
+                  id: "sync_conflict_inventory",
+                  inventoryReview: {
+                    activeHeldQuantity: 1,
+                    availableInventoryCount: 1,
+                    productSkuId: "sku-hair-dryer",
+                    quantityAvailable: 2,
+                    quantityAvailableAfterHolds: 1,
+                    requestedQuantity: 2,
+                  },
+                  reviewKind: "inventory_review",
+                  sale: {
+                    cashAmount: null,
+                    itemCount: 12,
+                    items: [
+                      {
+                        name: "Promaxgold 3000w Hair Dryer",
+                        productSkuId: "sku-hair-dryer",
+                        quantity: 2,
+                        sku: "KK38-E2Z-E9V",
+                        total: 36000,
+                      },
+                      {
+                        name: "Ebin Skin Protector Enhanced",
+                        quantity: 5,
+                        sku: "KK38-3NA-5QK",
+                        total: 60000,
+                      },
+                      {
+                        name: "Nab Lace Tint Mousse 120ml",
+                        quantity: 5,
+                        sku: "KK38-DGB-W6V",
+                        total: 20000,
+                      },
+                    ],
+                    occurredAt: Date.parse("2026-06-17T06:59:00Z"),
+                    paymentMethods: ["mobile_money"],
+                    receiptNumber: "939540",
+                    staffName: "P O.",
+                    total: 116000,
+                    totalPaid: 116000,
+                  },
+                  sequence: 3,
+                  status: "needs_review",
+                  summary: "Inventory needs manager review for a synced offline sale.",
+                  type: "inventory",
+                },
+              ],
+            },
+          },
+        }}
+        storeUrlSlug="wigclub"
+      />,
+    );
+
+    expect(
+      screen.getByText(
+        "Manager sign-in reviews the inventory details and applies the synced sale activity to this drawer.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Apply reviewed sale activity" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Receipt #939540/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Mobile Money")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /Receipt #939540/i }));
+
+    expect(screen.getByText("None recorded")).toBeInTheDocument();
+    expect(screen.getByText("Inventory review")).toBeInTheDocument();
+    expect(screen.getByText("Requested 2")).toBeInTheDocument();
+    expect(screen.getByText("Available after holds 1")).toBeInTheDocument();
+    expect(screen.getByText("Active holds 1")).toBeInTheDocument();
+    const stockAdjustmentsHref = new URL(
+      screen
+        .getByRole("link", { name: "Open stock adjustments" })
+        .getAttribute("href") ?? "",
+      "http://localhost",
+    );
+    expect(stockAdjustmentsHref.pathname).toBe(
+      "/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments",
+    );
+    expect(stockAdjustmentsHref.searchParams.get("mode")).toBe("manual");
+    expect(stockAdjustmentsHref.searchParams.get("sku")).toBe("sku-hair-dryer");
+    expect(stockAdjustmentsHref.searchParams.get("o")).toBe("%2F");
+
+    const skuActivityHref = new URL(
+      screen
+        .getByRole("link", { name: "View SKU activity" })
+        .getAttribute("href") ?? "",
+      "http://localhost",
+    );
+    expect(skuActivityHref.pathname).toBe(
+      "/$orgUrlSlug/store/$storeUrlSlug/operations/sku-activity",
+    );
+    expect(skuActivityHref.searchParams.get("productSkuId")).toBe(
+      "sku-hair-dryer",
+    );
+    expect(skuActivityHref.searchParams.get("sku")).toBe("KK38-E2Z-E9V");
+    expect(skuActivityHref.searchParams.get("o")).toBe("%2F");
+    expect(
+      screen.queryByText(
+        "This synced activity needs correction before it can be applied. Reject it to clear this review, then correct the sale from the appropriate workflow if needed.",
+      ),
+    ).not.toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: "Apply reviewed sale activity" }),
+    );
+    await user.click(
+      screen.getByRole("button", {
+        name: "Confirm staff for Apply reviewed sale activity",
+      }),
+    );
+
+    expect(onResolveSyncReview).toHaveBeenCalledWith({
+      actorStaffProfileId: "manager-1",
+      decision: "approved",
+      registerSessionId: "session-1",
+      reviewConflictIds: ["sync_conflict_inventory"],
+    });
+  });
+
   it("approves synced register review items after manager sign-in", async () => {
     const user = userEvent.setup();
     const onAuthenticateStaff = vi.fn().mockResolvedValue(
@@ -1176,6 +1333,7 @@ describe("RegisterSessionViewContent", () => {
       actorStaffProfileId: "manager-1",
       decision: "approved",
       registerSessionId: "session-1",
+      reviewConflictIds: ["sync_conflict_1"],
     });
   });
 
@@ -1243,6 +1401,7 @@ describe("RegisterSessionViewContent", () => {
       actorStaffProfileId: "manager-1",
       decision: "approved",
       registerSessionId: "session-1",
+      reviewConflictIds: ["sync_event_1"],
     });
   });
 
@@ -1304,6 +1463,7 @@ describe("RegisterSessionViewContent", () => {
       actorStaffProfileId: "manager-1",
       decision: "approved",
       registerSessionId: "session-1",
+      reviewConflictIds: ["sync_conflict_1"],
     });
   });
 
@@ -1363,6 +1523,7 @@ describe("RegisterSessionViewContent", () => {
       actorStaffProfileId: "manager-1",
       decision: "rejected",
       registerSessionId: "session-1",
+      reviewConflictIds: ["sync_conflict_1"],
     });
   });
 

@@ -2492,6 +2492,199 @@ describe("projectLocalSyncEvent", () => {
     ]);
   });
 
+  it("creates an open inventory work item when reviewed sale replay skips stock mutation", async () => {
+    const repository = createProjectionRepository({
+      sku: {
+        _id: "sku-1",
+        storeId: "store-1",
+        productId: "product-1",
+        sku: "CAP-1",
+        price: 25,
+        quantityAvailable: 0,
+        inventoryCount: 0,
+        images: [],
+      },
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: buildSaleCompletedEvent(),
+      syncEventId: "sync-event-1",
+      submittedByUserId: "athena-user-1" as never,
+      now: 100,
+      options: {
+        allowReviewedInventorySaleProjection: true,
+      },
+    });
+
+    expect(result.status).toBe("projected");
+    expect(repository.productPatches).toEqual([]);
+    expect(repository.recordedSaleInventoryMovements).toEqual([]);
+    expect(repository.createdServiceWorkItems).toEqual([
+      expect.objectContaining({
+        approvalState: "not_required",
+        createdByStaffProfileId: "staff-1",
+        createdByUserId: "athena-user-1",
+        metadata: expect.objectContaining({
+          primaryProductSkuId: "sku-1",
+          receiptNumber: "LR-001",
+          skippedMutationItems: [
+            expect.objectContaining({
+              productSkuId: "sku-1",
+              reason: "stock_shortfall",
+              requestedQuantity: 1,
+            }),
+          ],
+          sourceType: "posTransaction",
+          trustedInventoryLines: [
+            expect.objectContaining({
+              productSkuId: "sku-1",
+              quantity: 1,
+            }),
+          ],
+        }),
+        priority: "high",
+        status: "open",
+        title: "Review inventory for Wig Cap",
+        type: "synced_sale_inventory_review",
+      }),
+    ]);
+  });
+
+  it("projects an existing reviewed sale mapping and opens inventory work for the selected conflict", async () => {
+    const repository = createProjectionRepository({
+      registerSession: {
+        _id: "register-session-1",
+        expectedCash: 100,
+        closeoutRecords: [],
+        registerNumber: "1",
+        status: "closed",
+      },
+      sku: {
+        _id: "sku-1",
+        storeId: "store-1",
+        productId: "product-1",
+        sku: "CAP-1",
+        price: 25,
+        quantityAvailable: 0,
+        inventoryCount: 0,
+        images: [],
+      },
+    });
+    repository.mappings.push(
+      {
+        _id: "mapping-existing-transaction",
+        storeId: "store-1" as never,
+        terminalId: "terminal-1" as never,
+        localRegisterSessionId: "local-register-1",
+        localEventId: "event-sale-completed-1",
+        localIdKind: "transaction",
+        localId: "local-txn-1",
+        cloudTable: "posTransaction",
+        cloudId: "transaction-1",
+        createdAt: 1,
+      },
+      {
+        _id: "mapping-existing-receipt",
+        storeId: "store-1" as never,
+        terminalId: "terminal-1" as never,
+        localRegisterSessionId: "local-register-1",
+        localEventId: "event-sale-completed-1",
+        localIdKind: "receipt",
+        localId: "LR-001",
+        cloudTable: "posTransaction",
+        cloudId: "transaction-1",
+        createdAt: 1,
+      },
+    );
+    repository.createdConflicts.push({
+      _id: "conflict-reviewed-inventory",
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      localRegisterSessionId: "local-register-1",
+      localEventId: "event-sale-completed-1",
+      sequence: 2,
+      conflictType: "inventory",
+      status: "needs_review",
+      summary: "Inventory needs manager review for a synced offline sale.",
+      details: {
+        localTransactionId: "local-txn-1",
+        productSkuId: "sku-1",
+        quantityAvailable: 0,
+        requestedQuantity: 1,
+      },
+      createdAt: 1,
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: buildSaleCompletedEvent(),
+      syncEventId: "sync-event-1",
+      submittedByUserId: "athena-user-1" as never,
+      now: 100,
+      options: {
+        allowClosedRegisterSaleProjection: true,
+        allowReviewedInventorySaleProjection: true,
+        reviewedConflictIds: ["conflict-reviewed-inventory"],
+      },
+    });
+
+    expect(result.status).toBe("projected");
+    expect(result.conflicts).toEqual([]);
+    expect(repository.createdTransactions).toEqual([]);
+    expect(repository.createdTransactionItems).toEqual([]);
+    expect(repository.productPatches).toEqual([]);
+    expect(repository.recordedSaleInventoryMovements).toEqual([]);
+    expect(repository.createdServiceWorkItems).toEqual([
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          receiptNumber: "LR-001",
+          registerSessionId: "register-session-1",
+          skippedMutationItems: [
+            expect.objectContaining({
+              productSkuId: "sku-1",
+              reason: "stock_shortfall",
+              requestedQuantity: 1,
+            }),
+          ],
+          sourceId: "transaction-1",
+          sourceType: "posTransaction",
+        }),
+        type: "synced_sale_inventory_review",
+      }),
+    ]);
+
+    const retryResult = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: buildSaleCompletedEvent(),
+      syncEventId: "sync-event-1-retry",
+      submittedByUserId: "athena-user-1" as never,
+      now: 101,
+      options: {
+        allowClosedRegisterSaleProjection: true,
+        allowReviewedInventorySaleProjection: true,
+        reviewedConflictIds: ["conflict-reviewed-inventory"],
+      },
+    });
+
+    expect(retryResult.status).toBe("projected");
+    expect(repository.createdTransactions).toEqual([]);
+    expect(repository.createdServiceWorkItems).toHaveLength(1);
+    expect(repository.mappings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          cloudId: "service-work-item-1",
+          cloudTable: "operationalWorkItem",
+          localId: "local-txn-1:inventory-review",
+          localIdKind: "inventoryReviewWorkItem",
+        }),
+      ]),
+    );
+  });
+
   it("aggregates duplicate SKU lines before validating and patching inventory", async () => {
     const repository = createProjectionRepository({
       sku: {

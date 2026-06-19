@@ -24,6 +24,7 @@ export type PosLocalSyncMappingKind =
   | "receipt"
   | "serviceCase"
   | "serviceLine"
+  | "inventoryReviewWorkItem"
   | "closeout"
   | "expenseSession"
   | "expenseTransaction";
@@ -450,6 +451,7 @@ export type SyncProjectionRepository = {
     title: string;
     notes?: string;
     metadata?: Record<string, unknown>;
+    createdByUserId?: Id<"athenaUser">;
     createdByStaffProfileId?: Id<"staffProfile">;
     customerProfileId?: Id<"customerProfile">;
   }): Promise<Id<"operationalWorkItem">>;

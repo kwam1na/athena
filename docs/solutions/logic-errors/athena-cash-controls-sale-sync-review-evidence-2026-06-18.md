@@ -9,6 +9,7 @@ symptoms:
   - "Managers could see that synced sale activity needed review without seeing the sale details behind the decision"
   - "Register-session review actions used generic sync wording even when the drawer was closed and the action would apply or reject sale activity"
   - "Expanded sale rows repeated totals in multiple places and could make item totals look inconsistent with the sale total"
+  - "Applying a reviewed stock-shortfall sale could retain the sale but leave the original inventory review blocking follow-up resolution"
 root_cause: sale_sync_review_payload_was_not_promoted_to_operator_evidence
 resolution_type: server_owned_review_evidence_contract
 severity: medium
@@ -59,6 +60,10 @@ rewording pass:
   activity to the drawer, or reject reviewed sale activity from the review. Keep
   closeout review copy separate because approving a closeout has different
   ledger implications than approving late sale activity.
+- Treat reviewed stock shortfalls as a two-step workflow: retain the sale and
+  payment evidence, skip the unsafe inventory mutation, and create an operations
+  work item for the stock correction. The original selected sync conflict should
+  not block its own idempotent replay after the sale mapping already exists.
 
 ## Prevention
 
@@ -73,3 +78,6 @@ rewording pass:
 - Add tests for sale summary enrichment, staff-name mapping, collapsed default
   state, item-total reconciliation, and action copy whenever register sale
   review presentation changes.
+- Add a regression whenever a reviewed sync action can re-enter an idempotent
+  projection path. Existing mappings must not cause the selected review conflict
+  to block itself, and any required follow-up work item must still be created.

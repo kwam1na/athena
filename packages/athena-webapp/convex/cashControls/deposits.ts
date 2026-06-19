@@ -1277,10 +1277,12 @@ export const resolveRegisterSessionSyncReview = mutation({
       const shouldApplyReviewedSale =
         (syncEvent.eventType === "sale_completed" &&
           matchesLocalRegisterSession &&
-          conflict.conflictType === "permission" &&
-          review.reviewKind === "register_not_open_sale") ||
+          (review.reviewKind === "register_not_open_sale" ||
+            review.reviewKind === "inventory_review")) ||
         (shouldApplyManagerOverride &&
           syncEvent.eventType === "sale_completed");
+      const shouldApplyReviewedInventorySale =
+        shouldApplyReviewedSale && review.reviewKind === "inventory_review";
       const shouldApplyReviewedCloseout =
         (syncEvent.eventType === "register_closed" &&
           matchesLocalRegisterSession &&
@@ -1370,7 +1372,14 @@ export const resolveRegisterSessionSyncReview = mutation({
         now: resolvedAt,
         options: {
           allowClosedRegisterSaleProjection: true,
+          allowReviewedInventorySaleProjection:
+            shouldApplyReviewedInventorySale,
           allowRegisterCloseoutVarianceProjection: shouldApplyReviewedCloseout,
+          reviewedConflictIds:
+            requestedConflictIds.size > 0
+              ? Array.from(requestedConflictIds)
+              : conflicts.map((reviewConflict) => reviewConflict._id),
+          reviewActorStaffProfileId: args.actorStaffProfileId,
           trustStoredStaffProof: true,
         },
       });

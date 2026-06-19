@@ -740,6 +740,7 @@ function SyncReviewTimeline({
 }
 
 type SyncReviewSaleSummary = NonNullable<PosReconciliationItem["sale"]> & {
+  inventoryReviews: NonNullable<PosReconciliationItem["inventoryReview"]>[];
   reasons: string[];
   sequences: number[];
 };
@@ -769,6 +770,7 @@ function getSyncReviewSaleSummaries(items: PosReconciliationItem[]) {
     const summary = item.summary?.trim();
     const nextSale: SyncReviewSaleSummary = existing ?? {
       ...item.sale,
+      inventoryReviews: [],
       reasons: [],
       sequences: [],
     };
@@ -782,6 +784,16 @@ function getSyncReviewSaleSummaries(items: PosReconciliationItem[]) {
       !nextSale.sequences.includes(item.sequence)
     ) {
       nextSale.sequences.push(item.sequence);
+    }
+
+    if (item.inventoryReview) {
+      const inventoryReviewKey = JSON.stringify(item.inventoryReview);
+      const hasInventoryReview = nextSale.inventoryReviews.some(
+        (review) => JSON.stringify(review) === inventoryReviewKey,
+      );
+      if (!hasInventoryReview) {
+        nextSale.inventoryReviews.push(item.inventoryReview);
+      }
     }
 
     salesByKey.set(key, {
@@ -821,12 +833,140 @@ function getSaleItemsTotal(sale: Pick<SyncReviewSaleSummary, "items">) {
   return itemsTotal && itemsTotal > 0 ? itemsTotal : null;
 }
 
+function formatInventoryQuantity(label: string, value?: number | null) {
+  return typeof value === "number" && Number.isFinite(value)
+    ? `${label} ${value}`
+    : null;
+}
+
+function findInventoryReviewItem(
+  sale: Pick<SyncReviewSaleSummary, "items">,
+  review: NonNullable<PosReconciliationItem["inventoryReview"]>,
+) {
+  const productSkuId = review.productSkuId?.trim();
+
+  return (
+    sale.items?.find(
+      (item) => productSkuId && item.productSkuId?.trim() === productSkuId,
+    ) ?? (sale.items?.length === 1 ? sale.items[0] : null)
+  );
+}
+
+function InventoryReviewList({
+  orgUrlSlug,
+  sale,
+  storeUrlSlug,
+}: {
+  orgUrlSlug?: string;
+  sale: SyncReviewSaleSummary;
+  storeUrlSlug?: string;
+}) {
+  if (sale.inventoryReviews.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="space-y-layout-xs">
+      <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+        Inventory review
+      </p>
+      <div className="grid gap-layout-xs">
+        {sale.inventoryReviews.map((review, index) => {
+          const item = findInventoryReviewItem(sale, review);
+          const origin = getOrigin();
+          const sku = item?.sku?.trim();
+          const productSkuId = review.productSkuId?.trim();
+          const quantityDetails = [
+            formatInventoryQuantity("Requested", review.requestedQuantity),
+            formatInventoryQuantity(
+              "Available after holds",
+              review.quantityAvailableAfterHolds,
+            ),
+            formatInventoryQuantity("Available", review.quantityAvailable),
+            formatInventoryQuantity("Active holds", review.activeHeldQuantity),
+            formatInventoryQuantity("On hand", review.availableInventoryCount),
+            formatInventoryQuantity("Held for sale", review.heldForSession),
+          ].filter((detail): detail is string => Boolean(detail));
+
+          return (
+            <div
+              className="space-y-layout-xs rounded-md border border-border/70 bg-muted/10 px-layout-sm py-layout-xs"
+              key={`${productSkuId ?? "inventory"}-${index}`}
+            >
+              <div className="min-w-0">
+                <p className="truncate text-xs font-medium text-foreground">
+                  {item?.name ? formatSaleItemName(item.name) : "Sale item"}
+                </p>
+                <p className="text-xs leading-5 text-muted-foreground">
+                  {sku ?? productSkuId ?? "SKU not recorded"}
+                </p>
+              </div>
+              {quantityDetails.length > 0 ? (
+                <div className="flex flex-wrap gap-x-layout-sm gap-y-1 text-xs text-muted-foreground">
+                  {quantityDetails.map((detail) => (
+                    <span key={detail}>{detail}</span>
+                  ))}
+                </div>
+              ) : null}
+              {review.reason ? (
+                <p className="text-xs leading-5 text-muted-foreground">
+                  {review.reason === "existing_pos_session_hold_expired"
+                    ? "The original inventory hold expired before this sale synced."
+                    : review.reason}
+                </p>
+              ) : null}
+              {orgUrlSlug && storeUrlSlug ? (
+                <div className="flex flex-row flex-wrap items-center gap-layout-xs pt-1">
+                  <Button asChild size="sm" variant="ghost">
+                    <Link
+                      params={{ orgUrlSlug, storeUrlSlug }}
+                      search={{
+                        mode: "manual",
+                        ...(productSkuId ? { sku: productSkuId } : {}),
+                        o: origin,
+                      }}
+                      to="/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments"
+                    >
+                      Open stock adjustments
+                      <ArrowUpRight className="h-3.5 w-3.5" />
+                    </Link>
+                  </Button>
+                  {productSkuId ? (
+                    <Button asChild size="sm" variant="ghost">
+                      <Link
+                        params={{ orgUrlSlug, storeUrlSlug }}
+                        search={{
+                          productSkuId,
+                          ...(sku ? { sku } : {}),
+                          o: origin,
+                        }}
+                        to="/$orgUrlSlug/store/$storeUrlSlug/operations/sku-activity"
+                      >
+                        View SKU activity
+                        <ArrowUpRight className="h-3.5 w-3.5" />
+                      </Link>
+                    </Button>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function SalesUnderReviewList({
   currency,
+  orgUrlSlug,
   sales,
+  storeUrlSlug,
 }: {
   currency: string;
+  orgUrlSlug?: string;
   sales: SyncReviewSaleSummary[];
+  storeUrlSlug?: string;
 }) {
   if (sales.length === 0) {
     return null;
@@ -927,100 +1067,107 @@ function SalesUnderReviewList({
                 </div>
               </AccordionTrigger>
               <AccordionContent className="border-t border-border/70 px-layout-sm pb-layout-sm pt-layout-sm">
-                <div className="grid gap-layout-sm lg:grid-cols-[minmax(0,1fr)_minmax(14rem,0.7fr)]">
-                  <div className="space-y-layout-xs">
-                    <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                      Items
-                    </p>
-                    {sale.items?.length ? (
-                      <div className="divide-y divide-border/70 rounded-md border border-border/70 bg-muted/10">
-                        {sale.items.map((item, itemIndex) => (
-                          <div
-                            className="grid gap-1 px-layout-sm py-layout-xs text-xs sm:grid-cols-[minmax(0,1fr)_auto]"
-                            key={`${item.name}-${itemIndex}`}
-                          >
-                            <div className="min-w-0">
-                              <p className="truncate font-medium text-foreground">
-                                {formatSaleItemName(item.name)}
-                              </p>
-                              {item.sku ? (
-                                <p className="text-muted-foreground">
-                                  {item.sku}
-                                </p>
-                              ) : null}
-                            </div>
-                            <div className="text-left sm:text-right">
-                              {typeof item.quantity === "number" ? (
-                                <p className="text-muted-foreground">
-                                  Qty {item.quantity}
-                                </p>
-                              ) : null}
-                              {typeof item.total === "number" ? (
-                                <p className="font-numeric tabular-nums text-foreground">
-                                  {formatCurrency(currency, item.total)}
-                                </p>
-                              ) : null}
-                            </div>
-                          </div>
-                        ))}
-                        {itemsTotal ? (
-                          <div className="flex items-center justify-between gap-layout-sm px-layout-sm py-layout-xs text-xs">
-                            <span className="text-muted-foreground">
-                              Items total
-                            </span>
-                            <span className="font-numeric tabular-nums text-foreground">
-                              {formatCurrency(currency, itemsTotal)}
-                            </span>
-                          </div>
-                        ) : null}
-                      </div>
-                    ) : (
-                      <p className="text-xs leading-5 text-muted-foreground">
-                        Item details were not included with this synced sale.
+                <div className="space-y-layout-sm">
+                  <div className="grid gap-layout-sm lg:grid-cols-[minmax(0,1fr)_minmax(14rem,0.7fr)]">
+                    <div className="space-y-layout-xs">
+                      <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                        Items
                       </p>
-                    )}
-                  </div>
-                  <div className="space-y-layout-xs">
-                    <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                      Sale impact
-                    </p>
-                    <dl className="grid gap-layout-xs rounded-md border border-border/70 bg-muted/10 px-layout-sm py-layout-xs text-xs">
-                      <div className="flex items-center justify-between gap-layout-sm">
-                        <dt className="text-muted-foreground">Payment</dt>
-                        <dd className="inline-flex items-center gap-1.5 text-right text-foreground">
-                          <PaymentIcon className="h-3.5 w-3.5 text-muted-foreground" />
-                          {formatPaymentMethods(sale.paymentMethods)}
-                        </dd>
-                      </div>
-                      <div className="flex items-center justify-between gap-layout-sm">
-                        <dt className="text-muted-foreground">Cash impact</dt>
-                        <dd className="font-numeric tabular-nums text-foreground">
-                          {typeof sale.cashAmount === "number" &&
-                          sale.cashAmount > 0
-                            ? formatCurrency(currency, sale.cashAmount)
-                            : "None recorded"}
-                        </dd>
-                      </div>
-                      <div className="flex items-center justify-between gap-layout-sm">
-                        <dt className="text-muted-foreground">Items</dt>
-                        <dd className="text-foreground">
-                          {formatSaleItemCount(sale)}
-                        </dd>
-                      </div>
-                    </dl>
-                    <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                      Review reason
-                    </p>
-                    <div className="rounded-md border border-border/70 bg-muted/10 px-layout-sm py-layout-xs">
-                      <p className="text-xs leading-5 text-muted-foreground">
-                        {sale.reasons.length > 0
-                          ? `${sale.reasons
-                              .map((reason) => reason.replace(/[.!?]+$/, ""))
-                              .join("; ")}.`
-                          : "This sale needs manager review before it is applied."}
+                      {sale.items?.length ? (
+                        <div className="divide-y divide-border/70 rounded-md border border-border/70 bg-muted/10">
+                          {sale.items.map((item, itemIndex) => (
+                            <div
+                              className="grid gap-1 px-layout-sm py-layout-xs text-xs sm:grid-cols-[minmax(0,1fr)_auto]"
+                              key={`${item.name}-${itemIndex}`}
+                            >
+                              <div className="min-w-0">
+                                <p className="truncate font-medium text-foreground">
+                                  {formatSaleItemName(item.name)}
+                                </p>
+                                {item.sku ? (
+                                  <p className="text-muted-foreground">
+                                    {item.sku}
+                                  </p>
+                                ) : null}
+                              </div>
+                              <div className="text-left sm:text-right">
+                                {typeof item.quantity === "number" ? (
+                                  <p className="text-muted-foreground">
+                                    Qty {item.quantity}
+                                  </p>
+                                ) : null}
+                                {typeof item.total === "number" ? (
+                                  <p className="font-numeric tabular-nums text-foreground">
+                                    {formatCurrency(currency, item.total)}
+                                  </p>
+                                ) : null}
+                              </div>
+                            </div>
+                          ))}
+                          {itemsTotal ? (
+                            <div className="flex items-center justify-between gap-layout-sm px-layout-sm py-layout-xs text-xs">
+                              <span className="text-muted-foreground">
+                                Items total
+                              </span>
+                              <span className="font-numeric tabular-nums text-foreground">
+                                {formatCurrency(currency, itemsTotal)}
+                              </span>
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <p className="text-xs leading-5 text-muted-foreground">
+                          Item details were not included with this synced sale.
+                        </p>
+                      )}
+                    </div>
+                    <div className="space-y-layout-xs">
+                      <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                        Sale impact
                       </p>
+                      <dl className="grid gap-layout-xs rounded-md border border-border/70 bg-muted/10 px-layout-sm py-layout-xs text-xs">
+                        <div className="flex items-center justify-between gap-layout-sm">
+                          <dt className="text-muted-foreground">Payment</dt>
+                          <dd className="inline-flex items-center gap-1.5 text-right text-foreground">
+                            <PaymentIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                            {formatPaymentMethods(sale.paymentMethods)}
+                          </dd>
+                        </div>
+                        <div className="flex items-center justify-between gap-layout-sm">
+                          <dt className="text-muted-foreground">Cash impact</dt>
+                          <dd className="font-numeric tabular-nums text-foreground">
+                            {typeof sale.cashAmount === "number" &&
+                            sale.cashAmount > 0
+                              ? formatCurrency(currency, sale.cashAmount)
+                              : "None recorded"}
+                          </dd>
+                        </div>
+                        <div className="flex items-center justify-between gap-layout-sm">
+                          <dt className="text-muted-foreground">Items</dt>
+                          <dd className="text-foreground">
+                            {formatSaleItemCount(sale)}
+                          </dd>
+                        </div>
+                      </dl>
+                      <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                        Review reason
+                      </p>
+                      <div className="rounded-md border border-border/70 bg-muted/10 px-layout-sm py-layout-xs">
+                        <p className="text-xs leading-5 text-muted-foreground">
+                          {sale.reasons.length > 0
+                            ? `${sale.reasons
+                                .map((reason) => reason.replace(/[.!?]+$/, ""))
+                                .join("; ")}.`
+                            : "This sale needs manager review before it is applied."}
+                        </p>
+                      </div>
                     </div>
                   </div>
+                  <InventoryReviewList
+                    orgUrlSlug={orgUrlSlug}
+                    sale={sale}
+                    storeUrlSlug={storeUrlSlug}
+                  />
                 </div>
               </AccordionContent>
             </AccordionItem>
@@ -1164,6 +1311,17 @@ function getCombinedReviewNextStep(items: PosReconciliationItem[]) {
 
   if (items.some((item) => !isApprovableRegisterSyncReviewItem(item))) {
     return "This synced activity needs correction before it can be applied. Reject it to clear this review, then correct the sale from the appropriate workflow if needed.";
+  }
+
+  if (
+    items.some(
+      (item) =>
+        item.reviewKind === "inventory_review" ||
+        item.type === "inventory" ||
+        item.type === "inventory_conflict",
+    )
+  ) {
+    return "Manager sign-in reviews the inventory details and applies the synced sale activity to this drawer.";
   }
 
   return "Manager sign-in reviews and applies the synced register activity to this drawer.";
@@ -1344,7 +1502,9 @@ function RegisterSessionSyncNotice({
                 </div>
                 <SalesUnderReviewList
                   currency={currency}
+                  orgUrlSlug={orgUrlSlug}
                   sales={rejectedSyncSaleSummaries}
+                  storeUrlSlug={storeUrlSlug}
                 />
               </div>
             </div>
@@ -1372,7 +1532,9 @@ function RegisterSessionSyncNotice({
                 </div>
                 <SalesUnderReviewList
                   currency={currency}
+                  orgUrlSlug={orgUrlSlug}
                   sales={syncReviewSaleSummaries}
+                  storeUrlSlug={storeUrlSlug}
                 />
               </div>
             </div>
@@ -2639,6 +2801,9 @@ export function RegisterSessionViewContent({
       hasSaleReview:
         getSyncReviewSaleSummaries(visibleSyncReviewItems).length > 0,
     });
+    const visibleReviewConflictIds = visibleSyncReviewItems
+      .map((item) => item.id)
+      .filter((id): id is string => Boolean(id));
 
     setSyncReviewErrorMessage("");
     setCloseoutStaffAuthIntent({
@@ -2650,6 +2815,8 @@ export function RegisterSessionViewContent({
       reviewConflictIds:
         isRegisterCloseoutSyncReview && pendingCloseoutReviewItem?.id
           ? [pendingCloseoutReviewItem.id]
+          : visibleReviewConflictIds.length > 0
+            ? visibleReviewConflictIds
           : undefined,
     });
   }
