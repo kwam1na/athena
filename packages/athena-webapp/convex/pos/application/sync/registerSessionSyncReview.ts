@@ -13,6 +13,8 @@ export const CLOSED_REGISTER_SYNCED_CLOSEOUT_SUMMARY =
   "Register session is not open for synced POS closeout.";
 export const REGISTER_CLOSEOUT_VARIANCE_SYNC_REVIEW_SUMMARY =
   "Register closeout variance requires manager review before synced closeout can be applied.";
+export const INVENTORY_SYNC_REVIEW_SUMMARY =
+  "Inventory needs manager review for a synced offline sale.";
 
 export type RegisterSessionSyncReviewActionPolicy =
   | "apply_or_reject"
@@ -25,6 +27,7 @@ export type RegisterSessionSyncReviewKind =
   | "register_not_open_sale"
   | "server_rejected"
   | "service_customer_attribution"
+  | "inventory_review"
   | "staff_access"
   | "unknown";
 
@@ -33,6 +36,7 @@ export type RegisterSessionSyncSaleSummary = {
   itemCount?: number | null;
   items?: Array<{
     name: string;
+    productSkuId?: string | null;
     quantity?: number | null;
     sku?: string | null;
     total?: number | null;
@@ -79,6 +83,18 @@ export type RegisterSessionLocalSyncStatus = {
     status?: string | null;
     summary?: string | null;
     sale?: RegisterSessionSyncSaleSummary | null;
+    inventoryReview?: {
+      activeHeldQuantity?: number | null;
+      availableInventoryCount?: number | null;
+      heldForSession?: number | null;
+      inventoryImportProvisionalSkuId?: string | null;
+      pendingCheckoutItemId?: string | null;
+      productSkuId?: string | null;
+      quantityAvailable?: number | null;
+      quantityAvailableAfterHolds?: number | null;
+      reason?: string | null;
+      requestedQuantity?: number | null;
+    } | null;
     type?: string | null;
     variance?: number | null;
   }>;
@@ -171,6 +187,17 @@ export function classifyRegisterSessionSyncReview(
     };
   }
 
+  if (
+    summary === INVENTORY_SYNC_REVIEW_SUMMARY ||
+    conflict.conflictType === "inventory"
+  ) {
+    return {
+      actionPolicy: "apply_or_reject",
+      conflictType: conflict.conflictType,
+      reviewKind: "inventory_review",
+    };
+  }
+
   if (summary === SERVICE_CUSTOMER_ATTRIBUTION_SYNC_REVIEW_SUMMARY) {
     return {
       actionPolicy: "reject_only",
@@ -218,6 +245,31 @@ function arrayDetail(value: unknown): Record<string, unknown>[] {
     : [];
 }
 
+function buildInventoryReviewDetail(details?: Record<string, unknown>) {
+  if (!details) return null;
+
+  const review = {
+    activeHeldQuantity: numberDetail(details, "activeHeldQuantity"),
+    availableInventoryCount: numberDetail(details, "availableInventoryCount"),
+    heldForSession: numberDetail(details, "heldForSession"),
+    inventoryImportProvisionalSkuId: stringDetail(
+      details,
+      "inventoryImportProvisionalSkuId",
+    ),
+    pendingCheckoutItemId: stringDetail(details, "pendingCheckoutItemId"),
+    productSkuId: stringDetail(details, "productSkuId"),
+    quantityAvailable: numberDetail(details, "quantityAvailable"),
+    quantityAvailableAfterHolds: numberDetail(
+      details,
+      "quantityAvailableAfterHolds",
+    ),
+    reason: stringDetail(details, "reason"),
+    requestedQuantity: numberDetail(details, "requestedQuantity"),
+  };
+
+  return Object.values(review).some((value) => value !== null) ? review : null;
+}
+
 function summarizeSaleItems(payload: Record<string, unknown>) {
   const retailItems = arrayDetail(payload.items).map((item) => {
     const quantity = numberDetail(item, "quantity");
@@ -227,6 +279,7 @@ function summarizeSaleItems(payload: Record<string, unknown>) {
         stringDetail(item, "productName") ??
         stringDetail(item, "name") ??
         "Sale item",
+      productSkuId: stringDetail(item, "productSkuId"),
       quantity,
       sku: stringDetail(item, "productSku"),
       total:
@@ -321,6 +374,10 @@ export function buildRegisterSessionLocalSyncStatus(
         sequence: conflict.sequence,
         status: conflict.status,
         summary: conflict.summary,
+        inventoryReview:
+          review.reviewKind === "inventory_review"
+            ? buildInventoryReviewDetail(conflict.details)
+            : null,
         type: getSyncConflictReconciliationType(review),
         variance: numberDetail(conflict.details, "variance"),
       };

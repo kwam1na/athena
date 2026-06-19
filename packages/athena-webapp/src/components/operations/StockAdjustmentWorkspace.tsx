@@ -450,6 +450,7 @@ function scoreStockAdjustmentSearchRow(row: StockAdjustmentRow, query: string) {
 function getStockAdjustmentSearchTerms(row: StockAdjustmentRow) {
   const item = row.inventoryItem;
   return [
+    String(item._id),
     getInventoryItemDisplayName(item),
     cleanInventoryMetadataValue(item.sku),
     cleanInventoryMetadataValue(item.barcode),
@@ -1984,7 +1985,13 @@ export function StockAdjustmentWorkspaceContent({
         a.label.localeCompare(b.label),
       );
     }, [rows]);
-  const normalizedFilterQuery = normalizeSkuSearchQuery(filters.query);
+  const routeSkuFilterQuery =
+    adjustmentType === "manual" && !filters.query.trim() && searchState?.sku
+      ? searchState.sku
+      : "";
+  const normalizedFilterQuery = normalizeSkuSearchQuery(
+    filters.query || routeSkuFilterQuery,
+  );
   const quickAddInitialLookupCode = normalizeQuickAddInitialLookupCode(
     filters.query,
   );
@@ -2594,7 +2601,7 @@ export function StockAdjustmentWorkspaceContent({
       category: undefined,
       page: 1,
       query: undefined,
-      sku: nextActiveItem?._id,
+      sku: undefined,
     });
   };
 
@@ -2967,6 +2974,7 @@ export function StockAdjustmentWorkspaceContent({
             filterValue={filters.availability}
             hasActiveFilters={Boolean(
               filters.query ||
+              routeSkuFilterQuery ||
               filters.availability !== "all" ||
               filters.category !== ALL_CATEGORY_FILTER_KEY,
             )}

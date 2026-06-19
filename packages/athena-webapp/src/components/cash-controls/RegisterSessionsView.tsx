@@ -10,12 +10,16 @@ import { api } from "~/convex/_generated/api";
 import { formatStaffDisplayName } from "~/shared/staffDisplayName";
 import View from "../View";
 import { FadeIn } from "../common/FadeIn";
+import {
+  PageLevelHeader,
+  PageWorkspace,
+  PageWorkspaceMain,
+} from "../common/PageLevelHeader";
 import { GenericDataTable } from "../base/table/data-table";
 import { EmptyState } from "../states/empty/empty-state";
 import { NoPermissionView } from "../states/no-permission/NoPermissionView";
 import { ProtectedAdminSignInView } from "../states/signed-out/ProtectedAdminSignInView";
 import { Badge } from "../ui/badge";
-import { CashControlsWorkspaceHeader } from "./CashControlsWorkspaceHeader";
 import {
   registerSessionColumns,
   type RegisterSessionRow,
@@ -29,9 +33,7 @@ type RegisterSessionsViewContentProps = {
   currency: string;
   hasFinancialDetailsAccess?: boolean;
   isLoading: boolean;
-  orgUrlSlug: string;
   registerSessions: CashControlsDashboardSession[];
-  storeUrlSlug: string;
 };
 
 function formatCurrency(currency: string, amount?: number | null) {
@@ -162,9 +164,7 @@ export function RegisterSessionsViewContent({
   currency,
   hasFinancialDetailsAccess = true,
   isLoading,
-  orgUrlSlug,
   registerSessions,
-  storeUrlSlug,
 }: RegisterSessionsViewContentProps) {
   const tableData = useMemo<RegisterSessionRow[]>(
     () =>
@@ -216,50 +216,45 @@ export function RegisterSessionsViewContent({
   );
 
   return (
-    <View
-      hideBorder
-      hideHeaderBottomBorder
-      scrollMode="page"
-      header={
-        <CashControlsWorkspaceHeader
-          activeView="cash-controls"
-          orgUrlSlug={orgUrlSlug}
-          showBackButton
-          storeUrlSlug={storeUrlSlug}
-          title="Register sessions"
-        />
-      }
-    >
+    <View hideBorder hideHeaderBottomBorder scrollMode="page">
       <FadeIn className="container mx-auto py-layout-xl">
-        <section className="space-y-layout-md">
-          <div className="flex flex-wrap items-center justify-between gap-layout-sm">
-            <p className="text-sm text-muted-foreground">
-              Review drawer ownership, closeout timing, and cash discrepancies.
-            </p>
-            <Badge
-              className="border-border bg-surface-raised text-muted-foreground"
-              variant="outline"
-            >
-              {registerSessions.length} session
-              {registerSessions.length === 1 ? "" : "s"}
-            </Badge>
-          </div>
+        <PageWorkspace>
+          <PageLevelHeader
+            eyebrow="Cash Ops"
+            title="Register sessions"
+            description="Review drawer ownership, closeout timing, and cash discrepancies."
+            showBackButton
+          />
 
-          {isLoading ? null : registerSessions.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-border bg-surface-raised px-layout-lg py-layout-xl">
-              <EmptyState
-                description="Register sessions will appear after drawers are opened from POS"
-                title="No register sessions"
-              />
-            </div>
-          ) : (
-            <GenericDataTable
-              columns={registerSessionColumns}
-              data={tableData}
-              tableId="cash-controls-register-sessions"
-            />
-          )}
-        </section>
+          <PageWorkspaceMain>
+            <section className="space-y-layout-md">
+              <div className="flex justify-end">
+                <Badge
+                  className="border-border bg-surface-raised text-muted-foreground"
+                  variant="outline"
+                >
+                  {registerSessions.length} session
+                  {registerSessions.length === 1 ? "" : "s"}
+                </Badge>
+              </div>
+
+              {isLoading ? null : registerSessions.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-border bg-surface-raised px-layout-lg py-layout-xl">
+                  <EmptyState
+                    description="Register sessions will appear after drawers are opened from POS"
+                    title="No register sessions"
+                  />
+                </div>
+              ) : (
+                <GenericDataTable
+                  columns={registerSessionColumns}
+                  data={tableData}
+                  tableId="cash-controls-register-sessions"
+                />
+              )}
+            </section>
+          </PageWorkspaceMain>
+        </PageWorkspace>
       </FadeIn>
     </View>
   );
@@ -317,13 +312,11 @@ export function RegisterSessionsView() {
   }
 
   return (
-    <RegisterSessionsViewContent
-      currency={activeStore.currency || "USD"}
-      hasFinancialDetailsAccess={hasFinancialDetailsAccess}
-      isLoading={dashboardSnapshot === undefined}
-      orgUrlSlug={params.orgUrlSlug}
-      registerSessions={dashboardSnapshot?.registerSessions ?? []}
-      storeUrlSlug={params.storeUrlSlug}
-    />
+      <RegisterSessionsViewContent
+        currency={activeStore.currency || "USD"}
+        hasFinancialDetailsAccess={hasFinancialDetailsAccess}
+        isLoading={dashboardSnapshot === undefined}
+        registerSessions={dashboardSnapshot?.registerSessions ?? []}
+      />
   );
 }

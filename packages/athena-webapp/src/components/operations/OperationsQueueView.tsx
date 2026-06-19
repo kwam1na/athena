@@ -70,6 +70,7 @@ type QueueWorkItem = {
   createdAt: number;
   customerName?: string | null;
   dueAt?: number | null;
+  metadata?: Record<string, unknown> | null;
   priority: string;
   status: string;
   title: string;
@@ -162,7 +163,30 @@ function formatQueueWorkItemValue(value: string) {
   return capitalizeWords(value.replace(/_/g, " "));
 }
 
-function QueueWorkItemCard({ item }: { item: QueueWorkItem }) {
+function getQueueWorkItemStringMetadata(
+  item: QueueWorkItem,
+  key: string,
+): string | undefined {
+  const value = item.metadata?.[key];
+  return typeof value === "string" && value.trim() ? value : undefined;
+}
+
+function QueueWorkItemCard({
+  item,
+  orgUrlSlug,
+  storeUrlSlug,
+}: {
+  item: QueueWorkItem;
+  orgUrlSlug?: string;
+  storeUrlSlug?: string;
+}) {
+  const stockAdjustmentSkuId =
+    item.type === "synced_sale_inventory_review"
+      ? (getQueueWorkItemStringMetadata(
+          item,
+          "primaryProductSkuId",
+        ) as Id<"productSku"> | undefined)
+      : undefined;
   const collapsedMetadataEntries: OperationReviewMetadataEntry[] = [
     {
       label: "Owner",
@@ -201,6 +225,25 @@ function QueueWorkItemCard({ item }: { item: QueueWorkItem }) {
     <OperationReviewItemCard
       actionSlot={
         <>
+          {stockAdjustmentSkuId && orgUrlSlug && storeUrlSlug ? (
+            <Button asChild size="sm" variant="ghost">
+              <Link
+                params={{
+                  orgUrlSlug,
+                  storeUrlSlug,
+                }}
+                search={{
+                  mode: "manual",
+                  o: getOrigin(),
+                  sku: stockAdjustmentSkuId,
+                }}
+                to="/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments"
+              >
+                Open stock adjustments
+                <ArrowUpRight className="h-3.5 w-3.5" />
+              </Link>
+            </Button>
+          ) : null}
           <Badge
             className="border-border bg-surface text-muted-foreground shadow-sm"
             variant="outline"
@@ -714,7 +757,12 @@ export function OperationsQueueViewContent({
                   <div className="p-layout-md">
                     <div className="space-y-layout-2xl">
                       {workItems.map((item) => (
-                        <QueueWorkItemCard item={item} key={item._id} />
+                        <QueueWorkItemCard
+                          item={item}
+                          key={item._id}
+                          orgUrlSlug={orgUrlSlug}
+                          storeUrlSlug={storeUrlSlug}
+                        />
                       ))}
                     </div>
                   </div>

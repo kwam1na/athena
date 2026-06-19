@@ -10,6 +10,7 @@ export const posLocalSyncMappingKindValidator = v.union(
   v.literal("receipt"),
   v.literal("serviceCase"),
   v.literal("serviceLine"),
+  v.literal("inventoryReviewWorkItem"),
   v.literal("closeout"),
   v.literal("expenseSession"),
   v.literal("expenseTransaction"),

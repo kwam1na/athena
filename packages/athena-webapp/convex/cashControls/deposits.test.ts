@@ -259,6 +259,19 @@ describe("cash control deposits", () => {
       conflictType: "server_rejected",
       reviewKind: "server_rejected",
     });
+    expect(
+      classifyRegisterSessionSyncReview({
+        conflictType: "inventory",
+        details: {},
+        localEventId: "event-sale-completed-1",
+        status: "needs_review",
+        summary: "Inventory needs manager review for a synced offline sale.",
+      }),
+    ).toEqual({
+      actionPolicy: "apply_or_reject",
+      conflictType: "inventory",
+      reviewKind: "inventory_review",
+    });
   });
 
   it("projects sync review classification into register-session local sync status", () => {
@@ -281,7 +294,7 @@ describe("cash control deposits", () => {
           },
           {
             _id: "sync_conflict_sale",
-            conflictType: "permission",
+            conflictType: "inventory",
             createdAt: 2,
             localEventId: "event-sale-1",
             localRegisterSessionId: "local-register-1",
@@ -313,7 +326,7 @@ describe("cash control deposits", () => {
             },
             sequence: 12,
             status: "needs_review",
-            summary: "Register was not open before this sale synced.",
+            summary: "Inventory needs manager review for a synced offline sale.",
           },
         ],
         {
@@ -332,7 +345,9 @@ describe("cash control deposits", () => {
           type: "register_closeout",
         }),
         expect.objectContaining({
+          actionPolicy: "apply_or_reject",
           id: "sync_conflict_sale",
+          reviewKind: "inventory_review",
           sale: expect.objectContaining({
             cashAmount: 2200000,
             receiptNumber: "R-1001",
@@ -860,6 +875,242 @@ describe("cash control deposits", () => {
         }),
       ]),
     );
+  });
+
+  it("applies reviewed inventory sale activity without forcing a stock mutation", async () => {
+    const ctx = createAuthorizedRegisterDepositCtx({
+      operationalEvent: [],
+      posLocalSyncConflict: [
+        {
+          _id: "sync_conflict_inventory",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-1",
+          localEventId: "event_inventory_sale",
+          sequence: 3,
+          conflictType: "inventory",
+          status: "needs_review",
+          summary: "Inventory needs manager review for a synced offline sale.",
+          details: {
+            localTransactionId: "local-transaction-1",
+            productSkuId: "product_sku_1",
+            requestedQuantity: 2,
+            availableInventoryCount: 1,
+            quantityAvailable: 1,
+            quantityAvailableAfterHolds: 1,
+          },
+          createdAt: 1,
+        },
+      ],
+      posLocalSyncEvent: [
+        {
+          _id: "sync_event_inventory_sale",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-1",
+          localEventId: "event_inventory_sale",
+          sequence: 3,
+          eventType: "sale_completed",
+          occurredAt: 2,
+          staffProfileId: "staff_1",
+          payload: {
+            localPosSessionId: "local-pos-session-1",
+            localTransactionId: "local-transaction-1",
+            localReceiptNumber: "939540",
+            receiptNumber: "939540",
+            registerNumber: "1",
+            totals: {
+              subtotal: 116000,
+              tax: 0,
+              total: 116000,
+            },
+            items: [
+              {
+                localTransactionItemId: "local-item-1",
+                productId: "product_1",
+                productSkuId: "product_sku_1",
+                productName: "Ebin Skin Protector Enhanced",
+                productSku: "KK38-3NA-5QK",
+                quantity: 2,
+                unitPrice: 58000,
+              },
+            ],
+            payments: [
+              {
+                localPaymentId: "local-payment-1",
+                method: "mobile_money",
+                amount: 116000,
+                timestamp: 3,
+              },
+            ],
+          },
+          status: "conflicted",
+          submittedAt: 4,
+          acceptedAt: 4,
+        },
+      ],
+      posLocalSyncMapping: [
+        {
+          _id: "sync_mapping_1",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-1",
+          localIdKind: "registerSession",
+          localId: "local-register-1",
+          cloudTable: "registerSession",
+          cloudId: "session_open",
+        },
+      ],
+      registerSession: [
+        {
+          _id: "session_open",
+          expectedCash: 231000,
+          openedAt: 1,
+          openingFloat: 15500,
+          organizationId: "org_1",
+          registerNumber: "1",
+          status: "closed",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+        },
+      ],
+      posTerminal: [
+        {
+          _id: "terminal_1",
+          registerNumber: "1",
+          registeredByUserId: "athena_user_1",
+          status: "active",
+          storeId: "store_1",
+        },
+      ],
+      product: [
+        {
+          _id: "product_1",
+          storeId: "store_1",
+        },
+      ],
+      productSku: [
+        {
+          _id: "product_sku_1",
+          images: [],
+          inventoryCount: 1,
+          price: 58000,
+          productId: "product_1",
+          quantityAvailable: 1,
+          sku: "KK38-3NA-5QK",
+          storeId: "store_1",
+        },
+      ],
+      staffProfile: [
+        {
+          _id: "manager_1",
+          organizationId: "org_1",
+          status: "active",
+          storeId: "store_1",
+        },
+        {
+          _id: "staff_1",
+          organizationId: "org_1",
+          status: "active",
+          storeId: "store_1",
+        },
+      ],
+      staffRoleAssignment: [
+        {
+          _id: "role_1",
+          organizationId: "org_1",
+          role: "manager",
+          staffProfileId: "manager_1",
+          status: "active",
+          storeId: "store_1",
+        },
+        {
+          _id: "role_2",
+          organizationId: "org_1",
+          role: "cashier",
+          staffProfileId: "staff_1",
+          status: "active",
+          storeId: "store_1",
+        },
+      ],
+    });
+
+    const result = await getHandler(resolveRegisterSessionSyncReview)(
+      ctx as never,
+      {
+        actorStaffProfileId: "manager_1" as Id<"staffProfile">,
+        registerSessionId: "session_open" as Id<"registerSession">,
+        reviewConflictIds: ["sync_conflict_inventory"],
+        storeId: "store_1" as Id<"store">,
+      },
+    );
+
+    expect(result).toEqual(
+      ok({
+        action: "resolved",
+        projectedCount: 1,
+        registerSession: expect.objectContaining({ _id: "session_open" }),
+        resolvedCount: 1,
+      }),
+    );
+    expect(ctx.tables.get("posLocalSyncConflict")).toEqual([
+      expect.objectContaining({
+        _id: "sync_conflict_inventory",
+        resolvedByStaffProfileId: "manager_1",
+        status: "resolved",
+      }),
+    ]);
+    expect(ctx.tables.get("posLocalSyncEvent")).toEqual([
+      expect.objectContaining({
+        _id: "sync_event_inventory_sale",
+        projectedAt: expect.any(Number),
+        status: "projected",
+      }),
+    ]);
+    expect(ctx.tables.get("posTransaction")).toEqual([
+      expect.objectContaining({
+        registerSessionId: "session_open",
+        total: 116000,
+        transactionNumber: "939540",
+      }),
+    ]);
+    expect(ctx.tables.get("productSku")).toEqual([
+      expect.objectContaining({
+        _id: "product_sku_1",
+        inventoryCount: 1,
+        quantityAvailable: 1,
+      }),
+    ]);
+    expect(ctx.tables.get("operationalWorkItem")).toEqual([
+      expect.objectContaining({
+        approvalState: "not_required",
+        createdByStaffProfileId: "manager_1",
+        createdByUserId: "athena_user_1",
+        metadata: expect.objectContaining({
+          primaryProductSkuId: "product_sku_1",
+          receiptNumber: "939540",
+          registerSessionId: "session_open",
+          skippedMutationItems: [
+            expect.objectContaining({
+              productSkuId: "product_sku_1",
+              reason: "stock_shortfall",
+              requestedQuantity: 2,
+            }),
+          ],
+          sourceType: "posTransaction",
+          trustedInventoryLines: [
+            expect.objectContaining({
+              productSkuId: "product_sku_1",
+              quantity: 2,
+            }),
+          ],
+        }),
+        priority: "high",
+        status: "open",
+        title: "Review inventory for Ebin Skin Protector Enhanced",
+        type: "synced_sale_inventory_review",
+      }),
+    ]);
   });
 
   it("applies proofless staff-access sync reviews after manager approval", async () => {

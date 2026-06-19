@@ -21,6 +21,7 @@ export type PosReconciliationItem = {
     | "register_not_open_sale"
     | "server_rejected"
     | "service_customer_attribution"
+    | "inventory_review"
     | "staff_access"
     | "unknown";
   sequence?: number | null;
@@ -31,6 +32,7 @@ export type PosReconciliationItem = {
     itemCount?: number | null;
     items?: Array<{
       name: string;
+      productSkuId?: string | null;
       quantity?: number | null;
       sku?: string | null;
       total?: number | null;
@@ -44,6 +46,18 @@ export type PosReconciliationItem = {
     staffProfileId?: string | null;
     total?: number | null;
     totalPaid?: number | null;
+  } | null;
+  inventoryReview?: {
+    activeHeldQuantity?: number | null;
+    availableInventoryCount?: number | null;
+    heldForSession?: number | null;
+    inventoryImportProvisionalSkuId?: string | null;
+    pendingCheckoutItemId?: string | null;
+    productSkuId?: string | null;
+    quantityAvailable?: number | null;
+    quantityAvailableAfterHolds?: number | null;
+    reason?: string | null;
+    requestedQuantity?: number | null;
   } | null;
   type?: string | null;
   variance?: number | null;

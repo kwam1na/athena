@@ -1252,6 +1252,45 @@ describe("StockAdjustmentWorkspaceContent", () => {
     });
   });
 
+  it("filters the table to the route-selected product SKU", () => {
+    renderStockAdjustmentWorkspace({
+      inventoryItems: [
+        {
+          _id: "sku-hair" as Id<"productSku">,
+          inventoryCount: 4,
+          productCategory: "Hair",
+          productName: "closure wig",
+          quantityAvailable: 4,
+          sku: "CW-18",
+        },
+        {
+          _id: "sku-makeup" as Id<"productSku">,
+          inventoryCount: 6,
+          productCategory: "Makeup",
+          productName: "zara lip gloss",
+          quantityAvailable: 6,
+          sku: "ZA-LIP",
+        },
+      ],
+      searchState: {
+        mode: "manual",
+        sku: "sku-hair",
+      },
+    });
+
+    const table = screen.getByRole("table");
+
+    expect(screen.getByText("Showing 1 of 2 SKUs.")).toBeInTheDocument();
+    expect(within(table).getByText("Closure Wig")).toBeInTheDocument();
+    expect(within(table).queryByText("Zara Lip Gloss")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("textbox", {
+        name: /search products, skus, or barcodes/i,
+      }),
+    ).toHaveValue("");
+    expect(screen.getAllByText("CW-18").length).toBeGreaterThan(0);
+  });
+
   it("moves the category filter when selecting an outside-category match", async () => {
     const user = userEvent.setup();
     const onSearchStateChange = vi.fn();
@@ -1340,11 +1379,58 @@ describe("StockAdjustmentWorkspaceContent", () => {
       category: undefined,
       page: 1,
       query: undefined,
-      sku: "sku-beverage",
+      sku: undefined,
     });
     expect(screen.getByText("Showing 2 of 2 SKUs.")).toBeInTheDocument();
     expect(within(table).getByText("Sparkling Water")).toBeInTheDocument();
     expect(within(table).getByText("Vibes Closure")).toBeInTheDocument();
+  });
+
+  it("clears a route-selected manual SKU filter back to all SKUs", async () => {
+    const user = userEvent.setup();
+    const onSearchStateChange = vi.fn();
+
+    renderStockAdjustmentWorkspace({
+      inventoryItems: [
+        {
+          _id: "sku-hair" as Id<"productSku">,
+          inventoryCount: 4,
+          productCategory: "Hair",
+          productName: "closure wig",
+          quantityAvailable: 4,
+          sku: "CW-18",
+        },
+        {
+          _id: "sku-makeup" as Id<"productSku">,
+          inventoryCount: 6,
+          productCategory: "Makeup",
+          productName: "zara lip gloss",
+          quantityAvailable: 6,
+          sku: "ZA-LIP",
+        },
+      ],
+      onSearchStateChange,
+      searchState: {
+        mode: "manual",
+        sku: "sku-hair",
+      },
+    });
+
+    const table = screen.getByRole("table");
+
+    expect(screen.getByText("Showing 1 of 2 SKUs.")).toBeInTheDocument();
+    expect(within(table).getByText("Closure Wig")).toBeInTheDocument();
+    expect(within(table).queryByText("Zara Lip Gloss")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /^clear$/i }));
+
+    expect(onSearchStateChange).toHaveBeenLastCalledWith({
+      availability: undefined,
+      category: undefined,
+      page: 1,
+      query: undefined,
+      sku: undefined,
+    });
   });
 
   it("fuzzy matches stock rows by product and variant terms", async () => {
