@@ -53,6 +53,7 @@ import {
   posTerminalRuntimeAppShellValidator,
   posTerminalRuntimeAppUpdateValidator,
   posTerminalRuntimeBrowserInfoValidator,
+  posTerminalRuntimeDrawerAuthorityReasonValidator,
   posTerminalRuntimeDrawerAuthorityValidator,
   posTerminalRuntimeLocalStoreValidator,
   posTerminalRuntimeSaleAuthorityValidator,
@@ -144,6 +145,17 @@ const runtimeStatusInputValidator = v.object({
 });
 
 const runtimeStatusWriteResultValidator = v.object({
+  drawerAuthorityDirective: v.optional(
+    v.object({
+      cloudRegisterSessionId: v.optional(v.string()),
+      localRegisterSessionId: v.string(),
+      message: v.optional(v.string()),
+      observedAt: v.number(),
+      reason: v.optional(posTerminalRuntimeDrawerAuthorityReasonValidator),
+      registerNumber: v.optional(v.string()),
+      status: v.union(v.literal("healthy"), v.literal("blocked")),
+    }),
+  ),
   terminalId: v.id("posTerminal"),
   reportedAt: v.number(),
   receivedAt: v.number(),
@@ -303,6 +315,11 @@ const terminalAppUpdatePreviewReturnValidator = v.object({
   evidenceFresh: v.boolean(),
   observedAt: v.optional(v.number()),
   pendingBuildId: v.optional(v.string()),
+  stagingAssetCount: v.optional(v.number()),
+  stagingFailedAssetCount: v.optional(v.number()),
+  stagingReason: v.optional(v.string()),
+  stagingRejectedAssetCount: v.optional(v.number()),
+  stagingStatus: v.optional(v.string()),
   status: v.union(
     v.literal("applying"),
     v.literal("blocked"),
@@ -489,6 +506,10 @@ function stripRuntimeStatusInput(
           observedAt: status.appUpdate.observedAt,
           pendingBuildId: status.appUpdate.pendingBuildId,
           selectedBlockerCode: status.appUpdate.selectedBlockerCode,
+          stagingAssetCount: status.appUpdate.stagingAssetCount,
+          stagingFailedAssetCount: status.appUpdate.stagingFailedAssetCount,
+          stagingReason: status.appUpdate.stagingReason,
+          stagingRejectedAssetCount: status.appUpdate.stagingRejectedAssetCount,
           stagingStatus: status.appUpdate.stagingStatus,
           status: status.appUpdate.status,
         }

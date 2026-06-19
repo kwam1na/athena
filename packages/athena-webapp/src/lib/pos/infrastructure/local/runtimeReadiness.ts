@@ -8,7 +8,11 @@ import type {
 } from "./posLocalStore";
 import { createPosLocalStore } from "./posLocalStore";
 import { readProjectedLocalRegisterModel } from "./localRegisterReader";
-import type { PosLocalCashDrawerReadModel } from "./registerReadModel";
+import {
+  hasSettledRegisterCloseout,
+  type PosLocalCashDrawerReadModel,
+  type PosLocalRegisterReadModel,
+} from "./registerReadModel";
 import { resolvePosLocalTerminalScope } from "./terminalScope";
 import type {
   PosTerminalRuntimeActiveRegisterSessionInput,
@@ -133,13 +137,14 @@ export async function refreshTerminalRuntimeReadiness(input: {
     }
   }
 
+  const runtimeVisibleActiveRegisterSession = localRegisterModel.ok
+    ? getRuntimeVisibleActiveRegisterSession(localRegisterModel.value)
+    : null;
+
   return {
-    activeRegisterSession:
-      localRegisterModel.ok && localRegisterModel.value?.activeRegisterSession
-        ? toRuntimeActiveRegisterSession(
-            localRegisterModel.value.activeRegisterSession,
-          )
-        : null,
+    activeRegisterSession: runtimeVisibleActiveRegisterSession
+      ? toRuntimeActiveRegisterSession(runtimeVisibleActiveRegisterSession)
+      : null,
     appShell,
     drawerAuthority: drawerAuthority.ok ? drawerAuthority.value : null,
     snapshots: {
@@ -157,6 +162,20 @@ export async function refreshTerminalRuntimeReadiness(input: {
     terminalIntegrity: terminalIntegrity.ok ? terminalIntegrity.value : null,
     terminalSeed: input.terminalSeed,
   };
+}
+
+function getRuntimeVisibleActiveRegisterSession(
+  model: PosLocalRegisterReadModel | null | undefined,
+) {
+  const session = model?.activeRegisterSession;
+  if (!session) return null;
+  if (session.status !== "closing") return session;
+  return hasSettledRegisterCloseout({
+    events: model.sourceEvents,
+    session,
+  })
+    ? null
+    : session;
 }
 
 function toRuntimeActiveRegisterSession(

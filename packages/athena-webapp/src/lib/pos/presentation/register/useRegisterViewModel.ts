@@ -35,6 +35,7 @@ import { logger } from "@/lib/logger";
 import { useConvexCommandGateway } from "@/lib/pos/infrastructure/convex/commandGateway";
 import { type PosLocalEventRecord } from "@/lib/pos/infrastructure/local/posLocalStore";
 import {
+  hasSettledRegisterCloseout,
   type PosLocalActiveSaleReadModel,
   type PosLocalRegisterReadModel,
 } from "@/lib/pos/infrastructure/local/registerReadModel";
@@ -1699,8 +1700,17 @@ export function useRegisterViewModel(): RegisterViewModel {
     !localEventRegisterSessionId &&
     !isTransactionCompleted,
   );
-  const localSaleAuthorityBlockReason =
+  const rawLocalSaleAuthorityBlockReason =
     localRegisterReadModel?.saleBlockReason ?? null;
+  const hasSettledLocalCloseoutBlock =
+    rawLocalSaleAuthorityBlockReason === "drawer_closed" &&
+    hasSettledRegisterCloseout({
+      events: localRegisterReadModel?.sourceEvents ?? [],
+      session: localRegisterReadModel?.activeRegisterSession,
+    });
+  const localSaleAuthorityBlockReason = hasSettledLocalCloseoutBlock
+    ? null
+    : rawLocalSaleAuthorityBlockReason;
   const localDrawerAuthorityReason =
     localRegisterReadModel?.drawerAuthorityReason ?? null;
   const hasRecoverableDrawerAuthorityBlock =

@@ -6,6 +6,7 @@ import { ok, userError, type CommandResult } from "~/shared/commandResult";
 import type { PosLocalSyncPendingCheckoutItemDefinedPayload } from "~/shared/posLocalSyncContract";
 
 import { readProjectedLocalRegisterModel } from "./localRegisterReader";
+import { hasSettledRegisterCloseout } from "./registerReadModel";
 import { deriveLocalSaleBlocker } from "./saleBlockerPolicy";
 import type {
   PosLocalAppendEventInput,
@@ -449,8 +450,7 @@ export function createLocalCommandGateway(
         existingModel.value.saleBlockReason === "drawer_closed" &&
         hasSettledRegisterCloseout({
           events: existingModel.value.sourceEvents,
-          localRegisterSessionId:
-            existingModel.value.activeRegisterSession?.localRegisterSessionId,
+          session: existingModel.value.activeRegisterSession,
         });
       if (
         existingModel.value.saleBlockReason &&
@@ -713,23 +713,6 @@ function hasLocalSaleActivity(
 
 function isOpenLocalRegisterSessionStatus(status: string) {
   return status === "open" || status === "active";
-}
-
-function hasSettledRegisterCloseout(input: {
-  events: PosLocalEventRecord[];
-  localRegisterSessionId?: string;
-}) {
-  if (!input.localRegisterSessionId) return false;
-
-  const latestCloseout = [...input.events]
-    .reverse()
-    .find(
-      (event) =>
-        event.type === "register.closeout_started" &&
-        event.localRegisterSessionId === input.localRegisterSessionId,
-    );
-
-  return latestCloseout?.sync.status === "synced";
 }
 
 function toLocalUserError(message: string) {

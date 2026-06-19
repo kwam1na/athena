@@ -594,6 +594,22 @@ function normalizeTerminalAppUpdatePreview(
         : typeof record.latestBuildId === "string"
           ? record.latestBuildId
           : undefined,
+    stagingAssetCount:
+      typeof record.stagingAssetCount === "number"
+        ? record.stagingAssetCount
+        : undefined,
+    stagingFailedAssetCount:
+      typeof record.stagingFailedAssetCount === "number"
+        ? record.stagingFailedAssetCount
+        : undefined,
+    stagingReason:
+      typeof record.stagingReason === "string" ? record.stagingReason : undefined,
+    stagingRejectedAssetCount:
+      typeof record.stagingRejectedAssetCount === "number"
+        ? record.stagingRejectedAssetCount
+        : undefined,
+    stagingStatus:
+      typeof record.stagingStatus === "string" ? record.stagingStatus : undefined,
     status,
     summary:
       typeof record.summary === "string"
@@ -644,6 +660,11 @@ function buildUpdateAppAction(
     recovery?.commandStatus,
     "update_app",
   );
+  const activeDuplicateStatus = isActiveDuplicateTerminalCommandStatus(
+    duplicateStatus,
+  )
+    ? duplicateStatus
+    : undefined;
 
   return {
     commandContext: {
@@ -654,8 +675,18 @@ function buildUpdateAppAction(
     expectedEvidence: {},
     kind: "terminal_command",
     label: "Update app",
-    status: duplicateStatus ?? "available",
+    status: activeDuplicateStatus ?? "available",
   };
+}
+
+function isActiveDuplicateTerminalCommandStatus(
+  status: TerminalRecoveryActionStatus | undefined,
+) {
+  return (
+    status === "pending" ||
+    status === "claimed" ||
+    status === "waiting_for_check_in"
+  );
 }
 
 function getAppUpdateStatusFallback(status: TerminalAppUpdateStatus) {
@@ -712,9 +743,12 @@ function getAppUpdateDescription(
     case "current":
       return "This checkout station reports the current app build.";
     case "update_ready":
+      if (appUpdate.stagingStatus === "unstaged") {
+        return getAppUpdateStagingWarningDescription(appUpdate);
+      }
       return "An app update is ready. The checkout station will refresh only when local work is safe.";
     case "update_ready_unstaged":
-      return "An app update is available but not ready to refresh yet.";
+      return getAppUpdateStagingDescription(appUpdate);
     case "blocked":
       return "Refresh is blocked by active checkout work.";
     case "applying":
@@ -729,6 +763,73 @@ function getAppUpdateDescription(
         ? "This checkout station has not reported app update readiness."
         : "App update readiness has not been reported yet.";
   }
+}
+
+function getAppUpdateStagingWarningDescription(
+  appUpdate: TerminalAppUpdatePreview,
+) {
+  const reason = appUpdate.stagingReason;
+  const assetSummary = formatStagingAssetSummary(appUpdate);
+
+  if (reason === "service-worker-unavailable") {
+    return `An app update is ready, but this browser has not connected to the POS app shell cache yet.${assetSummary}`;
+  }
+  if (reason === "service-worker-timeout") {
+    return `An app update is ready, but offline cache preparation did not finish in time.${assetSummary}`;
+  }
+  if (reason === "cache-storage-unavailable") {
+    return "An app update is ready, but this browser cannot prepare offline cache storage.";
+  }
+  if (reason === "no-static-assets" || reason === "no-entry-html") {
+    return "An app update is ready, but Athena could not inspect deployed app assets for offline cache preparation.";
+  }
+  if (reason === "asset-staging-failed" || reason === "service-worker-error") {
+    return `An app update is ready, but the POS app shell could not cache every required asset for offline use.${assetSummary}`;
+  }
+
+  return "An app update is ready, but offline cache preparation is incomplete.";
+}
+
+function getAppUpdateStagingDescription(appUpdate: TerminalAppUpdatePreview) {
+  const reason = appUpdate.stagingReason;
+  const assetSummary = formatStagingAssetSummary(appUpdate);
+
+  if (reason === "service-worker-unavailable") {
+    return `An app update was detected, but this browser has not connected to the POS app shell yet.${assetSummary}`;
+  }
+  if (reason === "service-worker-timeout") {
+    return `An app update was detected, but the POS app shell did not finish staging assets in time.${assetSummary}`;
+  }
+  if (reason === "cache-storage-unavailable") {
+    return "An app update was detected, but this browser cannot use Cache Storage to prepare it.";
+  }
+  if (reason === "no-static-assets" || reason === "no-entry-html") {
+    return "An app update was detected, but Athena could not read the deployed app assets to prepare it.";
+  }
+  if (reason === "asset-staging-failed" || reason === "service-worker-error") {
+    return `An app update was detected, but the POS app shell could not cache every required asset.${assetSummary}`;
+  }
+
+  return "An app update is available but not ready to refresh yet.";
+}
+
+function formatStagingAssetSummary(appUpdate: TerminalAppUpdatePreview) {
+  const failed = appUpdate.stagingFailedAssetCount ?? 0;
+  const rejected = appUpdate.stagingRejectedAssetCount ?? 0;
+  const total = appUpdate.stagingAssetCount;
+
+  if (!total && !failed && !rejected) {
+    return "";
+  }
+
+  const issueCount = failed + rejected;
+  if (issueCount > 0) {
+    return ` ${issueCount} of ${total ?? "the"} asset${issueCount === 1 ? "" : "s"} ${issueCount === 1 ? "needs" : "need"} attention.`;
+  }
+
+  return typeof total === "number"
+    ? ` ${total} asset${total === 1 ? "" : "s"} checked.`
+    : "";
 }
 
 function normalizeAppUpdateBlockerSummary(value: string) {

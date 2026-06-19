@@ -7,9 +7,18 @@ import {
 
 type PosLocalRuntimeStore = ReturnType<typeof createPosLocalStore>;
 
+type ReviewConflict = {
+  localEventId?: string | null;
+  summary?: string | null;
+};
+
+const REGISTER_NOT_OPEN_SYNC_REVIEW_SUMMARY =
+  "Register was not open before this sale synced.";
+
 export async function persistDrawerAuthorityBlockForReviewEvents(input: {
   events: PosLocalEventRecord[];
   reason: NonNullable<PosDrawerAuthorityState["reason"]>;
+  reviewConflicts?: ReviewConflict[];
   reviewEventIds: string[];
   store: PosLocalRuntimeStore;
 }) {
@@ -23,34 +32,85 @@ export async function persistDrawerAuthorityBlockForReviewEvents(input: {
   }
 
   const reviewEventIds = new Set(input.reviewEventIds);
-  const event = input.events.find(
-    (candidate) =>
-      reviewEventIds.has(candidate.localEventId) &&
-      isDrawerAuthorityLifecycleEvent(candidate) &&
-      candidate.localRegisterSessionId,
-  );
-  if (!event?.localRegisterSessionId) return;
+  const block = findDrawerAuthorityBlockForReview({
+    events: input.events,
+    reason: input.reason,
+    reviewConflicts: input.reviewConflicts ?? [],
+    reviewEventIds,
+  });
+  if (!block) return;
 
   const mappings = await input.store.listLocalCloudMappings?.();
   if (mappings && !mappings.ok) return;
   const cloudRegisterSessionId = mappings?.value.find(
     (mapping) =>
       mapping.entity === "registerSession" &&
-      mapping.localId === event.localRegisterSessionId,
+      mapping.localId === block.event.localRegisterSessionId,
   )?.cloudId;
 
   const result = await writeDrawerAuthorityState({
     ...(cloudRegisterSessionId ? { cloudRegisterSessionId } : {}),
-    localRegisterSessionId: event.localRegisterSessionId,
-    message: "Cloud sync needs review before this local drawer can continue.",
+    localRegisterSessionId: block.event.localRegisterSessionId,
+    message: block.message,
     observedAt: Date.now(),
-    reason: input.reason,
-    registerNumber: event.registerNumber,
+    reason: block.reason,
+    registerNumber: block.event.registerNumber,
     status: "blocked",
-    storeId: event.storeId,
-    terminalId: event.terminalId,
+    storeId: block.event.storeId,
+    terminalId: block.event.terminalId,
   });
   assertPosLocalStoreOk(result);
+}
+
+function findDrawerAuthorityBlockForReview(input: {
+  events: PosLocalEventRecord[];
+  reason: NonNullable<PosDrawerAuthorityState["reason"]>;
+  reviewConflicts: ReviewConflict[];
+  reviewEventIds: Set<string>;
+}): {
+  event: PosLocalEventRecord & { localRegisterSessionId: string };
+  message: string;
+  reason: NonNullable<PosDrawerAuthorityState["reason"]>;
+} | null {
+  const registerNotOpenConflictEventIds = new Set(
+    input.reviewConflicts
+      .filter(
+        (conflict) =>
+          conflict.summary === REGISTER_NOT_OPEN_SYNC_REVIEW_SUMMARY &&
+          conflict.localEventId &&
+          input.reviewEventIds.has(conflict.localEventId),
+      )
+      .map((conflict) => conflict.localEventId as string),
+  );
+  if (registerNotOpenConflictEventIds.size > 0) {
+    const event = input.events.find(
+      (candidate) =>
+        registerNotOpenConflictEventIds.has(candidate.localEventId) &&
+        candidate.localRegisterSessionId,
+    );
+    if (event?.localRegisterSessionId) {
+      return {
+        event: event as PosLocalEventRecord & { localRegisterSessionId: string },
+        message:
+          "The mapped cloud register is closed. Open a register before selling.",
+        reason: "cloud_closed",
+      };
+    }
+  }
+
+  const event = input.events.find(
+    (candidate) =>
+      input.reviewEventIds.has(candidate.localEventId) &&
+      isDrawerAuthorityLifecycleEvent(candidate) &&
+      candidate.localRegisterSessionId,
+  );
+  if (!event?.localRegisterSessionId) return null;
+
+  return {
+    event: event as PosLocalEventRecord & { localRegisterSessionId: string },
+    message: "Cloud sync needs review before this local drawer can continue.",
+    reason: input.reason,
+  };
 }
 
 export async function clearRecoverableDrawerAuthorityForSyncedEvents(input: {

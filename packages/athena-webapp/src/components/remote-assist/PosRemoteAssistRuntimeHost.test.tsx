@@ -19,7 +19,7 @@ vi.mock("@/lib/pos/infrastructure/local/usePosLocalSyncRuntime", () => ({
     usePosLocalSyncRuntimeStatusMock(input),
 }));
 
-vi.mock("@/lib/app-update/UpdateCoordinatorProvider", () => ({
+vi.mock("@/lib/app-update", () => ({
   useOptionalUpdateCoordinator: () => useOptionalUpdateCoordinatorMock(),
 }));
 

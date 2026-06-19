@@ -5,9 +5,12 @@ export {
 export { stageUpdateStaticAssets } from "./updateAssetStaging";
 export type { UpdateAssetStagingResult } from "./updateAssetStaging";
 export {
-  UpdateCoordinatorProvider,
+  useOptionalUpdateCoordinator,
   useUpdateCoordinator,
   useUpdateCoordinatorSnapshot,
+} from "./UpdateCoordinatorContext";
+export {
+  UpdateCoordinatorProvider,
 } from "./UpdateCoordinatorProvider";
 export {
   UpdateCommunicationPreferenceProvider,
@@ -21,5 +24,7 @@ export type {
   UpdateApplyBlockerPriority,
   UpdateCoordinatorSnapshot,
   UpdateDetectedInput,
+  UpdateStagingDiagnostics,
+  UpdateStagingReason,
   UpdateStagingStatus,
 } from "./updateCoordinator";

@@ -171,12 +171,18 @@ describe("createLocalCommandGateway", () => {
       staffProfileId: "staff-1",
       payload: { localRegisterSessionId: "drawer-1", openingFloat: 100 },
     });
+    await store.writeLocalCloudMapping({
+      entity: "registerSession",
+      localId: "drawer-1",
+      cloudId: "cloud-drawer-1",
+      mappedAt: 10_001,
+    });
     const closeout = await store.appendEvent({
       type: "register.closeout_started",
       terminalId: "terminal-1",
       storeId: "store-1",
       registerNumber: "1",
-      localRegisterSessionId: "drawer-1",
+      localRegisterSessionId: "cloud-drawer-1",
       staffProfileId: "staff-1",
       payload: { countedCash: 100 },
     });

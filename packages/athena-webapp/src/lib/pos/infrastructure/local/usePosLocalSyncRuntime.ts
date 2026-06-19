@@ -4,14 +4,12 @@ import type { FunctionArgs } from "convex/server";
 
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
-import {
-  getInitialRuntimeBuildMetadata,
-  readRuntimeBuildMetadata,
-} from "@/lib/runtimeBuildMetadata";
+import { getInitialRuntimeBuildMetadata } from "@/lib/runtimeBuildMetadata";
 import { isLocalPinVerifierMetadata } from "@/lib/security/localPinVerifier";
 import {
   createIndexedDbPosLocalStorageAdapter,
   createPosLocalStore,
+  type PosDrawerAuthorityState,
   type PosLocalCloudMapping,
   type PosLocalEventRecord,
   type PosLocalStaffAuthorityRecord,
@@ -154,6 +152,11 @@ export type PosLocalRuntimeSyncDebug = {
 export type PosLocalSyncRuntimeMode = "drain-enabled" | "status-only";
 
 type PosLocalRuntimeStore = ReturnType<typeof createPosLocalStore>;
+
+type RuntimeDrawerAuthorityDirective = Omit<
+  PosDrawerAuthorityState,
+  "storeId" | "terminalId"
+>;
 type IngestLocalEventsArgs = FunctionArgs<
   typeof api.pos.public.sync.ingestLocalEvents
 >;
@@ -204,7 +207,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
     useState<AppUpdateCommandCorrelation | null>(() =>
       readStoredAppUpdateCommandCorrelation(),
     );
-  const [runtimeBuildMetadata, setRuntimeBuildMetadata] = useState(
+  const [runtimeBuildMetadata] = useState(
     getInitialRuntimeBuildMetadata,
   );
   const [recoveryCommandRetryToken, setRecoveryCommandRetryToken] = useState(0);
@@ -244,25 +247,6 @@ export function usePosLocalSyncRuntimeStatus(input: {
     },
     [],
   );
-
-  useEffect(() => {
-    let cancelled = false;
-
-    void readRuntimeBuildMetadata().then((metadata) => {
-      if (cancelled || (!metadata.appVersion && !metadata.buildSha)) {
-        return;
-      }
-
-      setRuntimeBuildMetadata((current) => ({
-        ...current,
-        ...metadata,
-      }));
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   useEffect(() => {
     const updateOnlineState = () => {
@@ -646,6 +630,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
             await persistDrawerAuthorityBlockForReviewEvents({
               events: latestEvents.value.events,
               reason: "lifecycle_rejected",
+              reviewConflicts: result.data.conflicts,
               reviewEventIds: localReviewEventIds,
               store,
             });
@@ -969,6 +954,15 @@ export function usePosLocalSyncRuntimeStatus(input: {
                   }));
 
             if (authorityStore) {
+              const drawerAuthorityUpdated =
+                await persistRuntimeDrawerAuthorityDirective({
+                  directive: readRuntimeDrawerAuthorityDirective(result.data),
+                  store: authorityStore,
+                  storeId: checkInStoreId,
+                  terminalSeed: runtimeReadiness.terminalSeed,
+                });
+              if (!isCurrentPublishScope()) return;
+
               const cleared = await clearAcceptedTerminalIntegrityState({
                 checkInTerminalId,
                 store: authorityStore,
@@ -982,6 +976,10 @@ export function usePosLocalSyncRuntimeStatus(input: {
                   ...current,
                   terminalIntegrity: null,
                 }));
+                setRuntimeStatusObservationToken((current) => current + 1);
+                onLocalEventsChanged?.();
+              }
+              if (drawerAuthorityUpdated) {
                 setRuntimeStatusObservationToken((current) => current + 1);
                 onLocalEventsChanged?.();
               }
@@ -1251,6 +1249,26 @@ export function usePosLocalSyncRuntimeStatus(input: {
           typeof claimResult.data.executionId === "string"
             ? claimResult.data.executionId
             : undefined;
+        const persistedReloadCorrelation = updateAppCorrelation
+          ? storeAppUpdateCommandCorrelation(updateAppCorrelation)
+          : true;
+        if (!persistedReloadCorrelation) {
+          localResult.onAcknowledgeFailed?.();
+          clearStoredAppUpdateCommandCorrelation();
+          setAppUpdateCommandCorrelation(null);
+          observedRecoveryCommandIdsRef.current.delete(command._id);
+          if (!isStale) {
+            setDebug((current) => ({
+              ...current,
+              terminalRecoveryCommandCompletedAt: Date.now(),
+              terminalRecoveryCommandMessage:
+                "App update was accepted, but refresh evidence could not be saved.",
+              terminalRecoveryCommandStatus: "failed",
+            }));
+            setRecoveryCommandRetryToken((current) => current + 1);
+          }
+          return;
+        }
         const acknowledged = await acknowledgeTerminalRecoveryCommand({
           commandId: claimResult.data._id,
           ...(executionId ? { executionId } : {}),
@@ -1273,16 +1291,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
         }
         let postAcknowledgeMessage: string | undefined;
         if (acknowledged.kind === "ok") {
-          const persistedReloadCorrelation = updateAppCorrelation
-            ? storeAppUpdateCommandCorrelation(updateAppCorrelation)
-            : true;
-          const postAcknowledgeResult = persistedReloadCorrelation
-            ? await localResult.postAcknowledge?.()
-            : {
-                applied: false,
-                message:
-                  "App update was accepted, but refresh evidence could not be saved.",
-              };
+          const postAcknowledgeResult = await localResult.postAcknowledge?.();
           postAcknowledgeMessage = postAcknowledgeResult?.message;
           if (postAcknowledgeResult?.applied === false) {
             clearStoredAppUpdateCommandCorrelation();
@@ -1440,6 +1449,80 @@ async function clearAcceptedTerminalIntegrityState(input: {
     assertPosLocalStoreOk(clearResult);
   }
 
+  return true;
+}
+
+function readRuntimeDrawerAuthorityDirective(
+  data: unknown,
+): RuntimeDrawerAuthorityDirective | null {
+  if (!data || typeof data !== "object") return null;
+  const directive = (data as { drawerAuthorityDirective?: unknown })
+    .drawerAuthorityDirective;
+  if (!directive || typeof directive !== "object") return null;
+  const candidate = directive as Partial<RuntimeDrawerAuthorityDirective>;
+  if (
+    typeof candidate.localRegisterSessionId !== "string" ||
+    candidate.localRegisterSessionId.length === 0 ||
+    candidate.status !== "blocked" ||
+    candidate.reason !== "cloud_closed"
+  ) {
+    return null;
+  }
+
+  return {
+    ...(typeof candidate.cloudRegisterSessionId === "string"
+      ? { cloudRegisterSessionId: candidate.cloudRegisterSessionId }
+      : {}),
+    localRegisterSessionId: candidate.localRegisterSessionId,
+    ...(typeof candidate.message === "string"
+      ? { message: candidate.message }
+      : {}),
+    observedAt:
+      typeof candidate.observedAt === "number" ? candidate.observedAt : Date.now(),
+    reason: "cloud_closed",
+    ...(typeof candidate.registerNumber === "string"
+      ? { registerNumber: candidate.registerNumber }
+      : {}),
+    status: "blocked",
+  };
+}
+
+async function persistRuntimeDrawerAuthorityDirective(input: {
+  directive: RuntimeDrawerAuthorityDirective | null;
+  store: PosLocalRuntimeStore;
+  storeId: string;
+  terminalSeed: PosProvisionedTerminalSeed;
+}): Promise<boolean> {
+  if (
+    !input.directive ||
+    typeof input.store.writeDrawerAuthorityState !== "function"
+  ) {
+    return false;
+  }
+
+  const state: PosDrawerAuthorityState = {
+    ...input.directive,
+    storeId: input.storeId,
+    terminalId: input.terminalSeed.terminalId,
+  };
+  if (typeof input.store.readDrawerAuthorityState === "function") {
+    const current = await input.store.readDrawerAuthorityState({
+      localRegisterSessionId: state.localRegisterSessionId,
+      storeId: state.storeId,
+      terminalId: state.terminalId,
+    });
+    assertPosLocalStoreOk(current);
+    if (
+      current.value?.status === state.status &&
+      current.value.reason === state.reason &&
+      current.value.cloudRegisterSessionId === state.cloudRegisterSessionId
+    ) {
+      return false;
+    }
+  }
+
+  const result = await input.store.writeDrawerAuthorityState(state);
+  assertPosLocalStoreOk(result);
   return true;
 }
 
@@ -1934,13 +2017,17 @@ function buildRuntimeAppUpdateInput({
       selectedBlockerCode: toRuntimeAppUpdateBlockerCode(
         snapshot.selectedBlocker?.priority,
       ),
+      stagingAssetCount: snapshot.staging?.assetCount,
+      stagingFailedAssetCount: snapshot.staging?.failedAssetCount,
+      stagingReason: snapshot.staging?.reason,
+      stagingRejectedAssetCount: snapshot.staging?.rejectedAssetCount,
       stagingStatus:
         snapshot.status === "ready"
           ? "staged"
           : snapshot.status === "ready-unstaged"
             ? "unstaged"
             : "unknown",
-      status: toRuntimeAppUpdateStatus(snapshot.status),
+      status: toRuntimeAppUpdateStatus(snapshot),
     };
   } catch {
     return {
@@ -1956,10 +2043,13 @@ function buildRuntimeAppUpdateInput({
 }
 
 function toRuntimeAppUpdateStatus(
-  status: ReturnType<PosAppUpdateCoordinatorAdapter["getSnapshot"]>["status"],
+  snapshot: ReturnType<PosAppUpdateCoordinatorAdapter["getSnapshot"]>,
 ): PosTerminalRuntimeAppUpdateInput["status"] {
+  const { status } = snapshot;
   if (status === "ready") return "update_ready";
-  if (status === "ready-unstaged") return "update_ready_unstaged";
+  if (status === "ready-unstaged") {
+    return snapshot.canApply ? "update_ready" : "update_ready_unstaged";
+  }
   if (status === "detector-failed") return "detector_failed";
   return status;
 }

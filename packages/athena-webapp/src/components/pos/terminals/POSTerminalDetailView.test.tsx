@@ -1628,7 +1628,7 @@ describe("POSTerminalDetailView", () => {
     expect(mocks.useQuery).toHaveBeenCalledWith(expect.anything(), "skip");
   });
 
-  it("does not query full-admin Remote Assist session state for POS-only users", () => {
+  it("does not query full-admin Remote Assist session state for POS-only users", async () => {
     mocks.hasFullAdminAccess = false;
     (
       mocks.activeStoreState as { activeStore: Record<string, unknown> }
@@ -1648,6 +1648,10 @@ describe("POSTerminalDetailView", () => {
       });
 
     render(<POSTerminalDetailView />);
+
+    await screen.findByRole("button", {
+      name: /Athena webapp .* Version details\./,
+    });
 
     expect((mocks.useQuery.mock.calls as unknown[][])[2]?.[1]).toBe("skip");
   });

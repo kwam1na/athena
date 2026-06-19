@@ -26,11 +26,8 @@ export function UpdateReadyBanner() {
   const hasBlocker = Boolean(blocker);
   const canApply = snapshot.canApply;
   const isApplying = snapshot.status === "applying";
-  const primaryCopy = blocker
-    ? blocker.guidance
-    : isApplying
-      ? "Refreshing Athena now."
-      : "Update ready";
+  const primaryCopy = getUpdateReadyBannerCopy(snapshot);
+  const showRefreshAction = !hasBlocker && (canApply || isApplying);
   const shouldShowToast =
     hasUpdate && communicationVariant === "toast";
 
@@ -51,7 +48,7 @@ export function UpdateReadyBanner() {
         toast: "justify-between",
         content: "min-w-0 flex-1",
       },
-      action: !hasBlocker ? (
+      action: showRefreshAction ? (
         <Button
           className={cn(refreshButtonClassName, "ml-auto")}
           disabled={!canApply || isApplying}
@@ -79,6 +76,7 @@ export function UpdateReadyBanner() {
     isApplying,
     primaryCopy,
     shouldShowToast,
+    showRefreshAction,
   ]);
 
   if (!hasUpdate || communicationVariant !== "banner") {
@@ -97,11 +95,11 @@ export function UpdateReadyBanner() {
             {primaryCopy}
           </p>
         </div>
-        {!blocker ? (
+        {showRefreshAction ? (
           <Button
             className={refreshButtonClassName}
             disabled={!canApply || isApplying}
-            onClick={applyUpdate}
+            onClick={() => applyUpdate()}
             size="sm"
             type="button"
             variant="ghost"
@@ -116,4 +114,37 @@ export function UpdateReadyBanner() {
       </div>
     </section>
   );
+}
+
+function getUpdateReadyBannerCopy(
+  snapshot: ReturnType<typeof useUpdateCoordinator>["snapshot"],
+) {
+  if (snapshot.selectedBlocker) {
+    return snapshot.selectedBlocker.guidance;
+  }
+  if (snapshot.status === "applying") {
+    return "Refreshing Athena now.";
+  }
+  if (snapshot.status === "ready-unstaged") {
+    switch (snapshot.staging?.reason) {
+      case "asset-staging-failed":
+      case "service-worker-error":
+        return "Update ready. Some files were not cached for offline use.";
+      case "service-worker-timeout":
+        return "Update ready. Offline file caching is still catching up.";
+      case "service-worker-unavailable":
+        return "Update ready. App shell cache is not connected.";
+      case "cache-storage-unavailable":
+      case "no-entry-html":
+      case "no-static-assets":
+        return "Update ready. Offline cache preparation is unavailable.";
+      default:
+        return "Update ready. Offline cache preparation is incomplete.";
+    }
+  }
+  if (snapshot.canApply) {
+    return "Update ready";
+  }
+
+  return "Update detected. Preparing refresh.";
 }

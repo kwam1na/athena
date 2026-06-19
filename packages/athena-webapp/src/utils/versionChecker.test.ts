@@ -162,6 +162,94 @@ describe("versionChecker", () => {
     checker.stop();
   });
 
+  it("uses bundled deploy metadata as the default current deploy identity", async () => {
+    vi.stubEnv("VITE_ATHENA_WEBAPP_BUILD_SHA", "build-old");
+    vi.stubEnv("VITE_ATHENA_WEBAPP_VERSION", "athena-webapp (20260617193000)");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        if (String(input).startsWith("/deploy.json")) {
+          return new Response(
+            JSON.stringify({
+              fun_name: "athena-webapp",
+              version: "20260617194000",
+              git_sha: "build-new",
+            }),
+          );
+        }
+
+        return new Response(
+          '<html><head><script type="module" src="/assets/index-old.js"></script></head></html>',
+        );
+      }),
+    );
+    const { createVersionChecker } = await importVersionChecker();
+    const onUpdateDetected = vi.fn();
+    const checker = createVersionChecker({
+      onUpdateDetected,
+      pollingIntervalMs: 60_000,
+    });
+
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    expect(onUpdateDetected).toHaveBeenCalledWith(
+      expect.objectContaining({
+        currentBuildId: "build-old",
+        pendingBuildId: "build-new",
+        detectionSource: "deploy-metadata",
+      }),
+    );
+
+    checker.stop();
+  });
+
+  it("detects deploy metadata changes after establishing a runtime baseline", async () => {
+    let deployBuildId = "build-old";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        if (String(input).startsWith("/deploy.json")) {
+          return new Response(
+            JSON.stringify({
+              fun_name: "athena-webapp",
+              version:
+                deployBuildId === "build-old"
+                  ? "20260617193000"
+                  : "20260617194000",
+              git_sha: deployBuildId,
+            }),
+          );
+        }
+
+        return new Response(
+          '<html><head><script type="module" src="/assets/index-old.js"></script></head></html>',
+        );
+      }),
+    );
+    const { createVersionChecker } = await importVersionChecker();
+    const onUpdateDetected = vi.fn();
+    const checker = createVersionChecker({
+      onUpdateDetected,
+      pollingIntervalMs: 60_000,
+    });
+
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(onUpdateDetected).not.toHaveBeenCalled();
+
+    deployBuildId = "build-new";
+    await vi.advanceTimersByTimeAsync(60_000);
+
+    expect(onUpdateDetected).toHaveBeenCalledWith(
+      expect.objectContaining({
+        currentBuildId: "build-old",
+        pendingBuildId: "build-new",
+        detectionSource: "deploy-metadata",
+      }),
+    );
+
+    checker.stop();
+  });
+
 
   it("prefers deploy metadata when it exposes a changed build identity", async () => {
     vi.stubGlobal(

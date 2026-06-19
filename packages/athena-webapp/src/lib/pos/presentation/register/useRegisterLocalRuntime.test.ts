@@ -51,7 +51,7 @@ vi.mock("@/lib/pos/infrastructure/local/usePosLocalSyncRuntime", () => ({
   usePosLocalSyncRuntimeStatus: mocks.usePosLocalSyncRuntimeStatus,
 }));
 
-vi.mock("@/lib/app-update/UpdateCoordinatorProvider", () => ({
+vi.mock("@/lib/app-update", () => ({
   useOptionalUpdateCoordinator: mocks.useOptionalUpdateCoordinator,
 }));
 
@@ -182,7 +182,7 @@ describe("useRegisterLocalRuntime", () => {
     expect(result.current.localSyncEventAppendToken).toBe(1);
   });
 
-  it("passes the app update coordinator adapter into the local sync runtime", () => {
+  it("passes the app update coordinator adapter into the local sync runtime", async () => {
     const applyUpdate = vi.fn();
     const getSnapshot = vi.fn();
     mocks.useOptionalUpdateCoordinator.mockReturnValue({
@@ -190,7 +190,14 @@ describe("useRegisterLocalRuntime", () => {
       getSnapshot,
     } as never);
 
-    renderRuntime();
+    const { result } = renderRuntime();
+
+    await waitFor(() => {
+      expect(result.current.localStaffAuthorityStatus).toBe("ready");
+    });
+    await waitFor(() => {
+      expect(result.current.localRegisterReadModel).toEqual({ canSell: true });
+    });
 
     expect(mocks.usePosLocalSyncRuntimeStatus).toHaveBeenCalledWith(
       expect.objectContaining({

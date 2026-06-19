@@ -139,6 +139,16 @@ export type PosTerminalRuntimeAppUpdateStagingStatus =
   | "unstaged"
   | "unknown";
 
+export type PosTerminalRuntimeAppUpdateStagingReason =
+  | "asset-staging-failed"
+  | "no-entry-html"
+  | "no-static-assets"
+  | "cache-storage-unavailable"
+  | "service-worker-unavailable"
+  | "service-worker-timeout"
+  | "service-worker-error"
+  | "unknown";
+
 export type PosTerminalRuntimeAppUpdateDetectorStatus =
   | "ok"
   | "failed"
@@ -167,6 +177,10 @@ export type PosTerminalRuntimeAppUpdateInput = {
   detectorStatus: PosTerminalRuntimeAppUpdateDetectorStatus;
   pendingBuildId?: string;
   selectedBlockerCode?: PosTerminalRuntimeAppUpdateBlockerCode;
+  stagingAssetCount?: number;
+  stagingFailedAssetCount?: number;
+  stagingReason?: PosTerminalRuntimeAppUpdateStagingReason;
+  stagingRejectedAssetCount?: number;
   stagingStatus?: PosTerminalRuntimeAppUpdateStagingStatus;
   status: PosTerminalRuntimeAppUpdateStatus;
 };
@@ -306,6 +320,20 @@ const appUpdateStatuses = new Set<PosTerminalRuntimeAppUpdateStatus>([
 const appUpdateStagingStatuses = new Set<
   PosTerminalRuntimeAppUpdateStagingStatus | undefined
 >(["staged", "unstaged", "unknown", undefined]);
+
+const appUpdateStagingReasons = new Set<
+  PosTerminalRuntimeAppUpdateStagingReason | undefined
+>([
+  "asset-staging-failed",
+  "no-entry-html",
+  "no-static-assets",
+  "cache-storage-unavailable",
+  "service-worker-unavailable",
+  "service-worker-timeout",
+  "service-worker-error",
+  "unknown",
+  undefined,
+]);
 
 const appUpdateDetectorStatuses =
   new Set<PosTerminalRuntimeAppUpdateDetectorStatus>([
@@ -800,6 +828,16 @@ function toSafeAppUpdateDiagnostics(
     stagingStatus: appUpdateStagingStatuses.has(appUpdate.stagingStatus)
       ? appUpdate.stagingStatus
       : undefined,
+    stagingReason: appUpdateStagingReasons.has(appUpdate.stagingReason)
+      ? appUpdate.stagingReason
+      : undefined,
+    stagingAssetCount: positiveRuntimeCount(appUpdate.stagingAssetCount),
+    stagingFailedAssetCount: positiveRuntimeCount(
+      appUpdate.stagingFailedAssetCount,
+    ),
+    stagingRejectedAssetCount: positiveRuntimeCount(
+      appUpdate.stagingRejectedAssetCount,
+    ),
     status: appUpdateStatuses.has(appUpdate.status)
       ? appUpdate.status
       : "unknown",
@@ -809,6 +847,12 @@ function toSafeAppUpdateDiagnostics(
 function positiveRuntimeTimestamp(value: number | undefined) {
   return Number.isFinite(value) && value !== undefined && value > 0
     ? value
+    : undefined;
+}
+
+function positiveRuntimeCount(value: number | undefined) {
+  return Number.isFinite(value) && value !== undefined && value >= 0
+    ? Math.floor(value)
     : undefined;
 }
 

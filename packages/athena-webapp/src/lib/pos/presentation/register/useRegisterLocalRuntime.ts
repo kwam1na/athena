@@ -3,7 +3,7 @@ import type { MutableRefObject } from "react";
 
 import type { Id } from "~/convex/_generated/dataModel";
 
-import { useOptionalUpdateCoordinator } from "@/lib/app-update/UpdateCoordinatorProvider";
+import { useOptionalUpdateCoordinator } from "@/lib/app-update";
 import {
   createIndexedDbPosLocalStorageAdapter,
   createPosLocalStore,

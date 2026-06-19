@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { RemoteAssistRuntimeShell } from "./RemoteAssistRuntimeShell";
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
-import { useOptionalUpdateCoordinator } from "@/lib/app-update/UpdateCoordinatorProvider";
+import { useOptionalUpdateCoordinator } from "@/lib/app-update";
 import type { PosLocalEntryContext } from "@/lib/pos/infrastructure/local/localPosEntryContext";
 import { usePosLocalSyncRuntimeStatus } from "@/lib/pos/infrastructure/local/usePosLocalSyncRuntime";
 import type { PosTerminalRuntimeAppSessionRecoveryInput } from "@/lib/pos/infrastructure/local/terminalRuntimeStatus";

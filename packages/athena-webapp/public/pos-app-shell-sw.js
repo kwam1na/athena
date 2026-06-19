@@ -79,17 +79,26 @@ self.addEventListener("message", (event) => {
   if (!message) return;
 
   if (message.type === "athena-pos-app-shell:stage-static-assets") {
+    const replyPort = event.ports?.[0];
+    const reply = (payload) => {
+      if (replyPort) {
+        replyPort.postMessage(payload);
+        return;
+      }
+      event.source?.postMessage(payload);
+    };
+
     event.waitUntil(
       stageStaticShellAssets(message.assetUrls)
         .then((result) => {
-          event.source?.postMessage({
+          reply({
             type: "athena-pos-app-shell:stage-static-assets-complete",
             id: message.id,
             result,
           });
         })
         .catch((error) => {
-          event.source?.postMessage({
+          reply({
             type: "athena-pos-app-shell:stage-static-assets-error",
             id: message.id,
             error: error instanceof Error ? error.message : String(error),
@@ -233,7 +242,11 @@ async function stageStaticShellAssets(assetUrls) {
       if (!(await matchCached(cache, request))) {
         await cacheAssetRequest(request, cache);
       }
-      stagedAssetUrls.push(parsedUrl.toString());
+      if (await matchCached(cache, request)) {
+        stagedAssetUrls.push(parsedUrl.toString());
+      } else {
+        failedAssetUrls.push(parsedUrl.toString());
+      }
     } catch (_error) {
       failedAssetUrls.push(parsedUrl.toString());
     }
@@ -265,10 +278,12 @@ async function cacheAssetRequest(request, cache, visited = new Set()) {
   visited.add(request.url);
 
   const response = await fetch(request);
-  if (response.ok) {
-    await cache.put(request, response.clone());
-    await cacheModuleDependencies(response.clone(), request.url, cache, visited);
+  if (!response.ok) {
+    throw new Error(`Unable to cache POS shell asset: ${response.status}`);
   }
+
+  await cache.put(request, response.clone());
+  await cacheModuleDependencies(response.clone(), request.url, cache, visited);
   return response;
 }
 

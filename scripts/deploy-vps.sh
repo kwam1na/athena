@@ -199,6 +199,8 @@ fun_name="$(awk 'BEGIN {
 
 cd "$REMOTE_SOURCE_DIR/$PACKAGE_DIR"
 rm -rf dist
+export VITE_ATHENA_WEBAPP_VERSION="$fun_name ($timestamp)"
+export VITE_ATHENA_WEBAPP_BUILD_SHA="$git_sha"
 eval "$ENV_SCRIPT bun run build"
 
 mkdir -p "$version_path"
@@ -314,7 +316,7 @@ deploy_static_app_local() {
   git_sha="$(git rev-parse HEAD)"
   deployed_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
-  build_static_app_locally "$package_dir" "$env_script"
+  build_static_app_locally "$package_dir" "VITE_ATHENA_WEBAPP_VERSION=\"$fun_name ($version)\" VITE_ATHENA_WEBAPP_BUILD_SHA=\"$git_sha\" $env_script"
   upload_static_app_build "$app_name" "$package_dir" "$version" "$fun_name" "$git_sha" "$deployed_at"
 }
 

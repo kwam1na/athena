@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 
-import { useUpdateCoordinator } from "./UpdateCoordinatorProvider";
+import { useUpdateCoordinator } from "./UpdateCoordinatorContext";
 import type {
   UpdateApplyBlockerPriority,
   UpdateApplyBlockerInput,

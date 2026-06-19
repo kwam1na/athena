@@ -166,4 +166,128 @@ describe("update asset staging", () => {
     expect(controller.postMessage).toHaveBeenCalledTimes(1);
     expect(win.location.reload).not.toHaveBeenCalled();
   });
+
+  it("uses a message channel for service-worker staging replies", async () => {
+    class FakeMessageChannel {
+      port1 = {
+        close: vi.fn(),
+        onmessage: undefined as ((event: MessageEvent) => void) | undefined,
+        start: vi.fn(),
+      };
+      port2 = {};
+    }
+    const controller = {
+      postMessage: vi.fn(
+        (
+          message: { assetUrls: string[]; id: string; type: string },
+          transfer?: unknown[],
+        ) => {
+          expect(transfer).toEqual([expect.any(Object)]);
+          const channel = transfer?.[0] as FakeMessageChannel["port2"];
+          expect(channel).toBeDefined();
+          queueMicrotask(() => {
+            fakeChannel.port1.onmessage?.({
+              data: {
+                id: message.id,
+                result: {
+                  cacheName: "athena-pos-app-shell-v6",
+                  cachedRequests: 2,
+                  failedAssetUrls: [],
+                  rejectedAssetUrls: [],
+                  stagedAssetUrls: message.assetUrls,
+                },
+                type: "athena-pos-app-shell:stage-static-assets-complete",
+              },
+            } as MessageEvent);
+          });
+        },
+      ),
+    };
+    const fakeChannel = new FakeMessageChannel();
+    const win = {
+      MessageChannel: vi.fn(() => fakeChannel),
+      caches: {},
+      clearTimeout: globalThis.clearTimeout.bind(globalThis),
+      location: { origin },
+      navigator: {
+        serviceWorker: {
+          addEventListener: vi.fn(),
+          controller,
+          removeEventListener: vi.fn(),
+        },
+      },
+      setTimeout: globalThis.setTimeout.bind(globalThis),
+    } as unknown as Window;
+
+    await expect(
+      stageUpdateStaticAssets({
+        entryHtml: `<script src="/assets/app.js"></script>`,
+        entryUrl,
+        win,
+      }),
+    ).resolves.toMatchObject({
+      status: "staged",
+    });
+    expect(controller.postMessage).toHaveBeenCalledTimes(1);
+    expect(fakeChannel.port1.close).toHaveBeenCalled();
+  });
+
+  it("keeps staging unstaged when the service worker cannot cache every asset", async () => {
+    const handlers: Array<(event: MessageEvent) => void> = [];
+    const controller = {
+      postMessage: vi.fn(
+        (message: { assetUrls: string[]; id: string; type: string }) => {
+          handlers.forEach((handler) =>
+            handler({
+              data: {
+                id: message.id,
+                result: {
+                  cacheName: "athena-pos-app-shell-v6",
+                  cachedRequests: 1,
+                  failedAssetUrls: [`${origin}/assets/app.css`],
+                  rejectedAssetUrls: [],
+                  stagedAssetUrls: [`${origin}/assets/app.js`],
+                },
+                type: "athena-pos-app-shell:stage-static-assets-complete",
+              },
+            } as MessageEvent),
+          );
+        },
+      ),
+    };
+    const win = {
+      caches: {},
+      clearTimeout: globalThis.clearTimeout.bind(globalThis),
+      location: { origin },
+      navigator: {
+        serviceWorker: {
+          addEventListener: vi.fn(
+            (_type: string, handler: (event: MessageEvent) => void) => {
+              handlers.push(handler);
+            },
+          ),
+          controller,
+          removeEventListener: vi.fn(),
+        },
+      },
+      setTimeout: globalThis.setTimeout.bind(globalThis),
+    } as unknown as Window;
+
+    await expect(
+      stageUpdateStaticAssets({
+        entryHtml: `
+          <script src="/assets/app.js"></script>
+          <link rel="stylesheet" href="/assets/app.css">
+        `,
+        entryUrl,
+        win,
+      }),
+    ).resolves.toEqual({
+      assetUrls: [`${origin}/assets/app.js`, `${origin}/assets/app.css`],
+      failedAssetUrls: [`${origin}/assets/app.css`],
+      reason: "asset-staging-failed",
+      rejectedAssetUrls: [],
+      status: "unstaged",
+    });
+  });
 });

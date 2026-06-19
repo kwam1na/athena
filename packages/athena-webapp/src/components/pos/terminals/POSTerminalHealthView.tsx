@@ -405,12 +405,27 @@ export function POSTerminalHealthViewContent({
   storeUrlSlug,
 }: POSTerminalHealthViewContentProps) {
   const currentBrowserTerminalIdSet = new Set(currentBrowserTerminalIds);
-  const healthRows = healthSummaries.map((summary) => ({
-    classification: classifyTerminalHealth(summary),
-    summary,
-  }));
+  const healthRows = healthSummaries
+    .map((summary, index) => ({
+      classification: classifyTerminalHealth(summary),
+      isCurrentBrowserTerminal: isCurrentBrowserTerminalSummary(
+        summary,
+        currentBrowserTerminalIdSet,
+      ),
+      originalIndex: index,
+      summary,
+    }))
+    .sort((left, right) => {
+      if (left.isCurrentBrowserTerminal !== right.isCurrentBrowserTerminal) {
+        return left.isCurrentBrowserTerminal ? -1 : 1;
+      }
+      return left.originalIndex - right.originalIndex;
+    });
   const reviewCount = healthRows.filter(
     (row) => row.classification.label === "Needs review",
+  ).length;
+  const healthyCount = healthRows.filter(
+    (row) => row.classification.label === "Healthy",
   ).length;
   const pendingCount = healthRows.filter((row) =>
     ["Pending sync", "Syncing"].includes(row.classification.label),
@@ -441,10 +456,14 @@ export function POSTerminalHealthViewContent({
             </div>
           ) : (
             <>
-              <section className="grid gap-layout-sm sm:grid-cols-2 xl:grid-cols-4">
+              <section className="grid gap-layout-sm sm:grid-cols-2 xl:grid-cols-5">
                 <CountMetric
                   label="Terminals"
                   value={loadingMetricValue ?? healthRows.length}
+                />
+                <CountMetric
+                  label="Healthy"
+                  value={loadingMetricValue ?? healthyCount}
                 />
                 <CountMetric
                   label="Pending sync"
@@ -472,7 +491,8 @@ export function POSTerminalHealthViewContent({
                 </div>
               ) : (
                 <section className="space-y-layout-sm">
-                  {healthRows.map(({ classification, summary }) => {
+                  {healthRows.map(
+                    ({ classification, isCurrentBrowserTerminal, summary }) => {
                     const runtimeStatus = summary.runtimeStatus;
                     const primaryReason =
                       getPrimaryTerminalAttentionReason(summary);
@@ -494,16 +514,6 @@ export function POSTerminalHealthViewContent({
                         ? null
                         : (primaryReason?.summary ??
                           classification.description);
-                    const isCurrentBrowserTerminal =
-                      currentBrowserTerminalIdSet.has(
-                        String(summary.terminal._id),
-                      ) ||
-                      (runtimeStatus?.terminalId
-                        ? currentBrowserTerminalIdSet.has(
-                            String(runtimeStatus.terminalId),
-                          )
-                        : false);
-
                     return (
                       <article
                         className={cn(
@@ -634,7 +644,8 @@ export function POSTerminalHealthViewContent({
                         />
                       </article>
                     );
-                  })}
+                    },
+                  )}
                 </section>
               )}
             </>
@@ -643,6 +654,20 @@ export function POSTerminalHealthViewContent({
       </FadeIn>
     </View>
   );
+}
+
+function isCurrentBrowserTerminalSummary(
+  summary: TerminalHealthSummary,
+  currentBrowserTerminalIdSet: Set<string>,
+) {
+  if (currentBrowserTerminalIdSet.has(String(summary.terminal._id))) {
+    return true;
+  }
+
+  const runtimeTerminalId = summary.runtimeStatus?.terminalId;
+  return runtimeTerminalId
+    ? currentBrowserTerminalIdSet.has(String(runtimeTerminalId))
+    : false;
 }
 
 export function POSTerminalHealthView() {

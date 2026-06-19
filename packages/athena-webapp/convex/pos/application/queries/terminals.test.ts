@@ -277,6 +277,46 @@ describe("terminal health queries", () => {
     }
   });
 
+  it("keeps unstaged app-update cache evidence refreshable when runtime can apply", async () => {
+    const ctx = buildQueryCtx({
+      posTerminal: [buildTerminal()],
+      posTerminalRuntimeStatus: [
+        buildRuntimeStatus({
+          appUpdate: {
+            canApply: true,
+            currentBuildId: "build-current",
+            detectorStatus: "ok",
+            observedAt: now - 1_000,
+            pendingBuildId: "build-next",
+            stagingAssetCount: 17,
+            stagingFailedAssetCount: 1,
+            stagingReason: "asset-staging-failed",
+            stagingRejectedAssetCount: 0,
+            stagingStatus: "unstaged",
+            status: "update_ready",
+          },
+        }),
+      ],
+    });
+
+    const summary = await getTerminalHealthSummary(ctx, {
+      now,
+      storeId,
+      terminalId,
+    });
+
+    expect(summary?.recoveryPreview?.appUpdate).toEqual(
+      expect.objectContaining({
+        evidenceFresh: true,
+        pendingBuildId: "build-next",
+        stagingStatus: "unstaged",
+        status: "update_ready",
+        summary:
+          "An app update is ready, but the POS app shell could not cache every required asset for offline use. 1 of 17 asset needs attention.",
+      }),
+    );
+  });
+
   it("treats missing and stale app update evidence as unknown or stale", async () => {
     const missingCtx = buildQueryCtx({
       posTerminal: [buildTerminal()],

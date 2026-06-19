@@ -177,6 +177,7 @@ This index enumerates the current automated test files and ties them back to the
 
 ## Section `src`
 
+- [`src/App.test.tsx`](../../src/App.test.tsx)
 - [`src/auth/convexAuthUrl.test.ts`](../../src/auth/convexAuthUrl.test.ts)
 - [`src/components/View.test.tsx`](../../src/components/View.test.tsx)
 - [`src/components/add-product/ProductStock.test.ts`](../../src/components/add-product/ProductStock.test.ts)
@@ -291,6 +292,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/hooks/useGetTerminal.test.ts`](../../src/hooks/useGetTerminal.test.ts)
 - [`src/hooks/useProtectedAdminPageState.test.tsx`](../../src/hooks/useProtectedAdminPageState.test.tsx)
 - [`src/lib/access/capabilities.test.ts`](../../src/lib/access/capabilities.test.ts)
+- [`src/lib/app-update/appUpdateReload.test.ts`](../../src/lib/app-update/appUpdateReload.test.ts)
 - [`src/lib/app-update/updateAssetStaging.test.ts`](../../src/lib/app-update/updateAssetStaging.test.ts)
 - [`src/lib/app-update/updateCoordinator.test.ts`](../../src/lib/app-update/updateCoordinator.test.ts)
 - [`src/lib/app-update/updateDetectionSequencer.test.ts`](../../src/lib/app-update/updateDetectionSequencer.test.ts)

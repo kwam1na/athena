@@ -466,6 +466,103 @@ describe("submitTerminalRuntimeStatus", () => {
     );
   });
 
+  it("returns a cloud-closed drawer authority directive when the mapped cloud register is no longer usable", async () => {
+    vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
+    vi.mocked(upsertLatestRuntimeStatus).mockResolvedValue(
+      "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
+    );
+    const db = {
+      normalizeId: vi.fn(() => "cloud-register-1"),
+      get: vi.fn(async () => ({
+        _id: "cloud-register-1",
+        status: "closed",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      })),
+    };
+
+    const result = await submitTerminalRuntimeStatus(
+      { db } as never,
+      {
+        storeId: "store-1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+        status: {
+          ...buildRuntimeStatus(),
+          activeRegisterSession: {
+            cloudRegisterSessionId: "cloud-register-1",
+            localRegisterSessionId: "local-register-1",
+            observedAt: 120,
+            openedAt: 100,
+            registerNumber: "8",
+            status: "active",
+          },
+        },
+      },
+    );
+
+    expect(db.get).toHaveBeenCalledWith(
+      "registerSession",
+      "cloud-register-1",
+    );
+    expect(result).toEqual({
+      kind: "ok",
+      data: expect.objectContaining({
+        drawerAuthorityDirective: {
+          cloudRegisterSessionId: "cloud-register-1",
+          localRegisterSessionId: "local-register-1",
+          message:
+            "The mapped cloud register is closed. Open a register before selling.",
+          observedAt: 200,
+          reason: "cloud_closed",
+          registerNumber: "8",
+          status: "blocked",
+        },
+      }),
+    });
+  });
+
+  it("ignores malformed cloud register ids in runtime drawer authority evidence", async () => {
+    vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
+    vi.mocked(upsertLatestRuntimeStatus).mockResolvedValue(
+      "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
+    );
+    const db = {
+      normalizeId: vi.fn(() => null),
+      get: vi.fn(),
+    };
+
+    const result = await submitTerminalRuntimeStatus(
+      { db } as never,
+      {
+        storeId: "store-1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+        status: {
+          ...buildRuntimeStatus(),
+          activeRegisterSession: {
+            cloudRegisterSessionId: "not-a-register-id",
+            localRegisterSessionId: "local-register-1",
+            observedAt: 120,
+            openedAt: 100,
+            registerNumber: "8",
+            status: "active",
+          },
+        },
+      },
+    );
+
+    expect(result).toEqual({
+      kind: "ok",
+      data: expect.not.objectContaining({
+        drawerAuthorityDirective: expect.anything(),
+      }),
+    });
+    expect(db.normalizeId).toHaveBeenCalledWith(
+      "registerSession",
+      "not-a-register-id",
+    );
+    expect(db.get).not.toHaveBeenCalled();
+  });
+
   it("persists sanitized app-update runtime evidence", async () => {
     vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
     vi.mocked(upsertLatestRuntimeStatus).mockResolvedValue(
@@ -490,6 +587,10 @@ describe("submitTerminalRuntimeStatus", () => {
             observedAt: 100,
             pendingBuildId: "build-next",
             selectedBlockerCode: "active_sale",
+            stagingAssetCount: 12.8,
+            stagingFailedAssetCount: -2,
+            stagingReason: "service-worker-error",
+            stagingRejectedAssetCount: 3.2,
             stagingStatus: "staged",
             status: "blocked",
           },
@@ -511,6 +612,9 @@ describe("submitTerminalRuntimeStatus", () => {
           observedAt: 100,
           pendingBuildId: "build-next",
           selectedBlockerCode: "active_sale",
+          stagingAssetCount: 12,
+          stagingReason: "service-worker-error",
+          stagingRejectedAssetCount: 3,
           stagingStatus: "staged",
           status: "blocked",
         },

@@ -457,19 +457,30 @@ function RailSection({
 }
 
 function TerminalContextRail({
+  classification,
   detail,
   runtimeStatus,
 }: {
+  classification: ReturnType<typeof classifyTerminalHealth>;
   detail: TerminalHealthDetail;
   runtimeStatus: TerminalRuntimeStatus | null;
 }) {
   return (
     <aside className="self-start overflow-hidden rounded-lg border border-border bg-surface-raised shadow-surface">
       <RailSection title="Identity">
-        <RailField
-          label="Register"
-          value={formatRegisterNumber(detail.terminal.registerNumber)}
-        />
+        <div className="grid gap-layout-2xs">
+          <p className="text-xs font-medium uppercase text-muted-foreground">
+            Register
+          </p>
+          <div className="flex flex-wrap items-center gap-layout-xs">
+            <p className="text-sm text-foreground">
+              {formatRegisterNumber(detail.terminal.registerNumber)}
+            </p>
+            <Badge className={classification.toneClassName} variant="outline">
+              {classification.label}
+            </Badge>
+          </div>
+        </div>
         <RailField
           label="Status"
           value={formatStatusLabel(detail.terminal.status)}
@@ -2276,20 +2287,9 @@ export function POSTerminalDetailViewContent({
             description="Inspect the latest terminal check-in, cloud sync evidence, and support notes."
           />
 
-          <div className="flex flex-wrap gap-layout-xs">
-            <Badge className={classification.toneClassName} variant="outline">
-              {classification.label}
-            </Badge>
-            <Badge
-              className="border-border bg-surface-raised text-muted-foreground"
-              variant="outline"
-            >
-              {formatRegisterNumber(detail.terminal.registerNumber)}
-            </Badge>
-          </div>
-
           <div className="grid gap-layout-xl xl:grid-cols-[20rem_minmax(0,1fr)]">
             <TerminalContextRail
+              classification={classification}
               detail={detail}
               runtimeStatus={runtimeStatus}
             />
