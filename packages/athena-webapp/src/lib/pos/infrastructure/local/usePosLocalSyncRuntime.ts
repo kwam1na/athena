@@ -4,7 +4,10 @@ import type { FunctionArgs } from "convex/server";
 
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
-import { getInitialRuntimeBuildMetadata } from "@/lib/runtimeBuildMetadata";
+import {
+  getInitialRuntimeBuildMetadata,
+  type AthenaWebappRuntimeBuildMetadata,
+} from "@/lib/runtimeBuildMetadata";
 import { isLocalPinVerifierMetadata } from "@/lib/security/localPinVerifier";
 import {
   createIndexedDbPosLocalStorageAdapter,
@@ -801,8 +804,9 @@ export function usePosLocalSyncRuntimeStatus(input: {
       buildRuntimeAppUpdateInput({
         appUpdateCoordinator,
         commandCorrelation: appUpdateCommandCorrelation,
+        runtimeBuildMetadata,
       }),
-    [appUpdateCommandCorrelation, appUpdateCoordinator],
+    [appUpdateCommandCorrelation, appUpdateCoordinator, runtimeBuildMetadata],
   );
 
   const runtimeStatusInput = useMemo(
@@ -1998,14 +2002,29 @@ function hasPendingSyncableExpenseEvents(
 function buildRuntimeAppUpdateInput({
   appUpdateCoordinator,
   commandCorrelation,
+  runtimeBuildMetadata,
 }: {
   appUpdateCoordinator?: PosAppUpdateCoordinatorAdapter | null;
   commandCorrelation?: AppUpdateCommandCorrelation | null;
+  runtimeBuildMetadata: AthenaWebappRuntimeBuildMetadata;
 }): PosTerminalRuntimeAppUpdateInput | null {
   if (!appUpdateCoordinator) return null;
 
   try {
     const snapshot = appUpdateCoordinator.getSnapshot();
+    if (isPendingSnapshotAlreadyRunning(snapshot, runtimeBuildMetadata)) {
+      return {
+        canApply: false,
+        commandExecutionId: commandCorrelation?.commandExecutionId,
+        commandId: commandCorrelation?.commandId,
+        commandIssuedAt: commandCorrelation?.commandIssuedAt,
+        currentBuildId: snapshot.pendingBuildId,
+        detectorStatus: "ok",
+        stagingStatus: "unknown",
+        status: "current",
+      };
+    }
+
     return {
       canApply: snapshot.canApply,
       commandExecutionId: commandCorrelation?.commandExecutionId,
@@ -2040,6 +2059,34 @@ function buildRuntimeAppUpdateInput({
       status: "detector_failed",
     };
   }
+}
+
+function isPendingSnapshotAlreadyRunning(
+  snapshot: ReturnType<PosAppUpdateCoordinatorAdapter["getSnapshot"]>,
+  runtimeBuildMetadata: AthenaWebappRuntimeBuildMetadata,
+) {
+  if (
+    snapshot.status !== "ready" &&
+    snapshot.status !== "ready-unstaged" &&
+    snapshot.status !== "blocked"
+  ) {
+    return false;
+  }
+
+  const pendingBuildId = normalizeBuildIdentity(snapshot.pendingBuildId);
+  if (!pendingBuildId) {
+    return false;
+  }
+
+  return (
+    normalizeBuildIdentity(runtimeBuildMetadata.buildSha) === pendingBuildId ||
+    normalizeBuildIdentity(runtimeBuildMetadata.appVersion) === pendingBuildId
+  );
+}
+
+function normalizeBuildIdentity(value?: string | null) {
+  const trimmed = value?.trim();
+  return trimmed && trimmed.length > 0 ? trimmed : undefined;
 }
 
 function toRuntimeAppUpdateStatus(

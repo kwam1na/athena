@@ -86,6 +86,7 @@ function deferred<T>() {
 describe("usePosLocalSyncRuntimeStatus", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    vi.unstubAllEnvs();
     mocks.reportTerminalRuntimeStatus.mockResolvedValue({
       kind: "ok",
       data: {},
@@ -2884,6 +2885,79 @@ describe("usePosLocalSyncRuntimeStatus", () => {
           }),
         }),
       ),
+    );
+  });
+
+  it("publishes current app update state when pending build is already running", async () => {
+    vi.stubEnv("VITE_ATHENA_WEBAPP_BUILD_SHA", "build-next");
+    vi.stubEnv("VITE_ATHENA_WEBAPP_VERSION", "quick-dolphin-prowls");
+    const store = {
+      listEvents: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      readProvisionedTerminalSeed: vi.fn(async () => ({
+        ok: true,
+        value: {
+          cloudTerminalId: "terminal-cloud-1",
+          displayName: "Front",
+          provisionedAt: 1,
+          schemaVersion: 1,
+          syncSecretHash: "sync-secret-1",
+          storeId: "store-1",
+          terminalId: "local-terminal-1",
+        },
+      })),
+    };
+    const appUpdateCoordinator = {
+      applyUpdate: vi.fn(() => false),
+      getSnapshot: vi.fn(() => ({
+        blockers: [],
+        canApply: false,
+        currentBuildId: "build-current",
+        pendingBuildId: "build-next",
+        staging: {
+          reason: "service-worker-unavailable" as const,
+          status: "unstaged" as const,
+        },
+        status: "ready-unstaged" as const,
+      })),
+    };
+
+    renderHook(() =>
+      usePosLocalSyncRuntimeStatus({
+        appUpdateCoordinator,
+        mode: "status-only",
+        source: "register",
+        storeFactory: () => store as never,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(mocks.reportTerminalRuntimeStatus).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: expect.objectContaining({
+            appUpdate: expect.objectContaining({
+              canApply: false,
+              currentBuildId: "build-next",
+              detectorStatus: "ok",
+              stagingStatus: "unknown",
+              status: "current",
+            }),
+            buildSha: "build-next",
+          }),
+        }),
+      ),
+    );
+    expect(
+      mocks.reportTerminalRuntimeStatus.mock.calls[0]?.[0].status.appUpdate,
+    ).not.toEqual(
+      expect.objectContaining({
+        pendingBuildId: "build-next",
+        status: "update_ready_unstaged",
+      }),
     );
   });
 

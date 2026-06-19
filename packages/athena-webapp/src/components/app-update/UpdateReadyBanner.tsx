@@ -1,8 +1,14 @@
 import { useEffect } from "react";
-import { RefreshCw } from "lucide-react";
+import { Download, Info } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
   usePreferredUpdateCommunicationVariant,
   useUpdateCoordinator,
@@ -10,7 +16,7 @@ import {
 import { cn } from "@/lib/utils";
 
 const updateReadyToastId = "athena-update-ready-toast";
-const refreshButtonClassName =
+const updateButtonClassName =
   "min-h-10 shrink-0 px-layout-md text-action-commit hover:bg-action-commit-soft hover:text-action-commit";
 
 export function UpdateReadyBanner() {
@@ -26,8 +32,8 @@ export function UpdateReadyBanner() {
   const hasBlocker = Boolean(blocker);
   const canApply = snapshot.canApply;
   const isApplying = snapshot.status === "applying";
-  const primaryCopy = getUpdateReadyBannerCopy(snapshot);
-  const showRefreshAction = !hasBlocker && (canApply || isApplying);
+  const bannerContent = getUpdateReadyBannerContent(snapshot);
+  const showUpdateAction = !hasBlocker && (canApply || isApplying);
   const shouldShowToast =
     hasUpdate && communicationVariant === "toast";
 
@@ -37,7 +43,7 @@ export function UpdateReadyBanner() {
       return;
     }
 
-    toast.message(primaryCopy, {
+    toast.message(bannerContent.message, {
       id: updateReadyToastId,
       closeButton: false,
       dismissible: false,
@@ -48,9 +54,9 @@ export function UpdateReadyBanner() {
         toast: "justify-between",
         content: "min-w-0 flex-1",
       },
-      action: showRefreshAction ? (
+      action: showUpdateAction ? (
         <Button
-          className={cn(refreshButtonClassName, "ml-auto")}
+          className={cn(updateButtonClassName, "ml-auto")}
           disabled={!canApply || isApplying}
           onClick={() => {
             if (canApply && !isApplying) {
@@ -61,22 +67,22 @@ export function UpdateReadyBanner() {
           type="button"
           variant="ghost"
         >
-          <RefreshCw
+          <Download
             aria-hidden="true"
             className={cn(isApplying && "animate-spin")}
           />
-          Refresh
+          Update
         </Button>
       ) : undefined,
     });
   }, [
     applyUpdate,
+    bannerContent.message,
     canApply,
     hasBlocker,
     isApplying,
-    primaryCopy,
     shouldShowToast,
-    showRefreshAction,
+    showUpdateAction,
   ]);
 
   if (!hasUpdate || communicationVariant !== "banner") {
@@ -91,24 +97,42 @@ export function UpdateReadyBanner() {
     >
       <div className="mx-auto flex max-w-7xl flex-col items-center justify-center gap-layout-lg text-center sm:flex-row sm:text-left">
         <div className="min-w-0">
-          <p className="truncate text-sm font-medium text-foreground">
-            {primaryCopy}
-          </p>
+          <div className="flex min-w-0 items-center justify-center gap-layout-xs truncate text-sm font-medium text-foreground sm:justify-start">
+            <span className="truncate">{bannerContent.message}</span>
+            {bannerContent.tooltip ? (
+              <TooltipProvider delayDuration={150}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      aria-label="Update cache details"
+                      className="inline-flex size-5 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      type="button"
+                    >
+                      <Info aria-hidden="true" className="size-4" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-64 text-xs leading-5">
+                    {bannerContent.tooltip}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            ) : null}
+          </div>
         </div>
-        {showRefreshAction ? (
+        {showUpdateAction ? (
           <Button
-            className={refreshButtonClassName}
+            className={updateButtonClassName}
             disabled={!canApply || isApplying}
             onClick={() => applyUpdate()}
             size="sm"
             type="button"
             variant="ghost"
           >
-            <RefreshCw
+            <Download
               aria-hidden="true"
               className={cn(isApplying && "animate-spin")}
             />
-            Refresh
+            Update
           </Button>
         ) : null}
       </div>
@@ -116,35 +140,44 @@ export function UpdateReadyBanner() {
   );
 }
 
-function getUpdateReadyBannerCopy(
+function getUpdateReadyBannerContent(
   snapshot: ReturnType<typeof useUpdateCoordinator>["snapshot"],
 ) {
   if (snapshot.selectedBlocker) {
-    return snapshot.selectedBlocker.guidance;
+    return { message: snapshot.selectedBlocker.guidance };
   }
   if (snapshot.status === "applying") {
-    return "Refreshing Athena now.";
+    return { message: "Updating Athena now." };
   }
   if (snapshot.status === "ready-unstaged") {
     switch (snapshot.staging?.reason) {
       case "asset-staging-failed":
       case "service-worker-error":
-        return "Update ready. Some files were not cached for offline use.";
+        return {
+          message: "Update ready.",
+          tooltip: "Some files were not cached for offline use.",
+        };
       case "service-worker-timeout":
-        return "Update ready. Offline file caching is still catching up.";
+        return {
+          message: "Update ready. Offline file caching is still catching up.",
+        };
       case "service-worker-unavailable":
-        return "Update ready. App shell cache is not connected.";
+        return { message: "Update ready. App shell cache is not connected." };
       case "cache-storage-unavailable":
       case "no-entry-html":
       case "no-static-assets":
-        return "Update ready. Offline cache preparation is unavailable.";
+        return {
+          message: "Update ready. Offline cache preparation is unavailable.",
+        };
       default:
-        return "Update ready. Offline cache preparation is incomplete.";
+        return {
+          message: "Update ready. Offline cache preparation is incomplete.",
+        };
     }
   }
   if (snapshot.canApply) {
-    return "Update ready";
+    return { message: "Update ready" };
   }
 
-  return "Update detected. Preparing refresh.";
+  return { message: "Update detected. Preparing refresh." };
 }

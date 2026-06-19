@@ -123,8 +123,8 @@ describe("UpdateReadyBanner", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "mark ready" }));
-    fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
-    fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
+    fireEvent.click(screen.getByRole("button", { name: "Update" }));
+    fireEvent.click(screen.getByRole("button", { name: "Update" }));
 
     expect(screen.getByLabelText("Update ready")).toBeInTheDocument();
     expect(reload).toHaveBeenCalledTimes(1);
@@ -175,7 +175,7 @@ describe("UpdateReadyBanner", () => {
       screen.getByText("Finish this sale before refreshing."),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Refresh" }),
+      screen.queryByRole("button", { name: "Update" }),
     ).not.toBeInTheDocument();
   });
 
@@ -194,12 +194,14 @@ describe("UpdateReadyBanner", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "mark ready" }));
 
+    expect(screen.getByText("Update ready.")).toBeInTheDocument();
     expect(
-      screen.getByText(
-        "Update ready. Some files were not cached for offline use.",
-      ),
+      screen.queryByText("Some files were not cached for offline use."),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Update cache details" }),
     ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
+    fireEvent.click(screen.getByRole("button", { name: "Update" }));
     expect(reload).toHaveBeenCalledTimes(1);
   });
 });
