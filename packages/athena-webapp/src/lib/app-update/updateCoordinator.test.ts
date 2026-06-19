@@ -28,6 +28,40 @@ describe("updateCoordinator", () => {
     expect(reload).not.toHaveBeenCalled();
   });
 
+  it("keeps detected but unstaged updates visible while allowing manual apply", () => {
+    const reload = vi.fn();
+    const coordinator = createUpdateCoordinatorStore({
+      reload,
+      now: () => 1_000,
+      tabId: "tab-a",
+    });
+
+    coordinator.reportUpdateDetected({
+      assetCount: 17,
+      currentBuildId: "build-1",
+      failedAssetCount: 0,
+      pendingBuildId: "build-2",
+      rejectedAssetCount: 0,
+      stagingReason: "service-worker-timeout",
+      stagingStatus: "unstaged",
+    });
+
+    expect(coordinator.getSnapshot()).toMatchObject({
+      status: "ready-unstaged",
+      canApply: true,
+      pendingBuildId: "build-2",
+      staging: {
+        assetCount: 17,
+        failedAssetCount: 0,
+        reason: "service-worker-timeout",
+        rejectedAssetCount: 0,
+        status: "unstaged",
+      },
+    });
+    expect(coordinator.applyUpdate()).toBe(true);
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
   it("returns a stable snapshot while no store change occurs", () => {
     let now = 1_000;
     const coordinator = createUpdateCoordinatorStore({
@@ -87,6 +121,24 @@ describe("updateCoordinator", () => {
     expect(coordinator.applyUpdate()).toBe(true);
     expect(coordinator.applyUpdate()).toBe(false);
     expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  it("passes unload bypass options to the reload boundary when requested", () => {
+    const reload = vi.fn();
+    const coordinator = createUpdateCoordinatorStore({
+      reload,
+      now: () => 1_000,
+      tabId: "tab-a",
+    });
+    coordinator.reportUpdateDetected({
+      currentBuildId: "build-1",
+      pendingBuildId: "build-2",
+      stagingStatus: "staged",
+    });
+
+    expect(coordinator.applyUpdate({ bypassUnloadPrompt: true })).toBe(true);
+
+    expect(reload).toHaveBeenCalledWith({ bypassUnloadPrompt: true });
   });
 
   it("keeps the reload latch active when detection reports again while applying", () => {

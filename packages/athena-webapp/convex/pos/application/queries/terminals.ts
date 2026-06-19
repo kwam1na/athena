@@ -166,6 +166,11 @@ export type TerminalAppUpdatePreview = {
   evidenceFresh: boolean;
   observedAt?: number;
   pendingBuildId?: string;
+  stagingAssetCount?: number;
+  stagingFailedAssetCount?: number;
+  stagingReason?: string;
+  stagingRejectedAssetCount?: number;
+  stagingStatus?: string;
   status: TerminalAppUpdateStatus;
   summary?: string;
 };
@@ -544,6 +549,11 @@ function buildTerminalAppUpdatePreview(args: {
       evidenceFresh: false,
       observedAt: readNumber(evidence.observedAt),
       pendingBuildId: readString(evidence.pendingBuildId ?? evidence.latestBuildId),
+      stagingAssetCount: readNumber(evidence.stagingAssetCount),
+      stagingFailedAssetCount: readNumber(evidence.stagingFailedAssetCount),
+      stagingReason: readString(evidence.stagingReason),
+      stagingRejectedAssetCount: readNumber(evidence.stagingRejectedAssetCount),
+      stagingStatus: readString(evidence.stagingStatus),
       status: "stale",
       summary:
         "The latest app update evidence is stale. Send Update app to ask the checkout station to check again.",
@@ -560,6 +570,11 @@ function buildTerminalAppUpdatePreview(args: {
     evidenceFresh: true,
     observedAt: readNumber(evidence.observedAt),
     pendingBuildId: readString(evidence.pendingBuildId ?? evidence.latestBuildId),
+    stagingAssetCount: readNumber(evidence.stagingAssetCount),
+    stagingFailedAssetCount: readNumber(evidence.stagingFailedAssetCount),
+    stagingReason: readString(evidence.stagingReason),
+    stagingRejectedAssetCount: readNumber(evidence.stagingRejectedAssetCount),
+    stagingStatus: readString(evidence.stagingStatus),
     status,
     summary: getRuntimeAppUpdateSummary(status, evidence),
   };
@@ -619,10 +634,13 @@ function getRuntimeAppUpdateSummary(
     return "This checkout station reports the current app build.";
   }
   if (status === "update_ready") {
+    if (readString(evidence.stagingStatus) === "unstaged") {
+      return getRuntimeAppUpdateStagingWarningSummary(evidence);
+    }
     return "An app update is ready. The checkout station will refresh only when local work is safe.";
   }
   if (status === "update_ready_unstaged") {
-    return "An app update is available but not ready to refresh yet.";
+    return getRuntimeAppUpdateStagingSummary(evidence);
   }
   if (status === "applying") {
     return "The checkout station accepted the update. Waiting for a fresh check-in.";
@@ -631,6 +649,67 @@ function getRuntimeAppUpdateSummary(
     return "Athena could not confirm this checkout station's app update state.";
   }
   return "This checkout station has not reported app update readiness.";
+}
+
+function getRuntimeAppUpdateStagingWarningSummary(
+  evidence: Record<string, unknown>,
+) {
+  const reason = readString(evidence.stagingReason);
+  const assetSummary = formatRuntimeAppUpdateAssetSummary(evidence);
+
+  if (reason === "service-worker-unavailable") {
+    return `An app update is ready, but this browser has not connected to the POS app shell cache yet.${assetSummary}`;
+  }
+  if (reason === "service-worker-timeout") {
+    return `An app update is ready, but offline cache preparation did not finish in time.${assetSummary}`;
+  }
+  if (reason === "cache-storage-unavailable") {
+    return "An app update is ready, but this browser cannot prepare offline cache storage.";
+  }
+  if (reason === "no-entry-html" || reason === "no-static-assets") {
+    return "An app update is ready, but Athena could not inspect deployed app assets for offline cache preparation.";
+  }
+  if (reason === "asset-staging-failed" || reason === "service-worker-error") {
+    return `An app update is ready, but the POS app shell could not cache every required asset for offline use.${assetSummary}`;
+  }
+
+  return "An app update is ready, but offline cache preparation is incomplete.";
+}
+
+function getRuntimeAppUpdateStagingSummary(evidence: Record<string, unknown>) {
+  const assetSummary = formatRuntimeAppUpdateAssetSummary(evidence);
+  const reason = readString(evidence.stagingReason);
+
+  if (reason === "service-worker-unavailable") {
+    return `An app update was detected, but this browser has not connected to the POS app shell yet.${assetSummary}`;
+  }
+  if (reason === "service-worker-timeout") {
+    return `An app update was detected, but the POS app shell did not finish staging assets in time.${assetSummary}`;
+  }
+  if (reason === "cache-storage-unavailable") {
+    return "An app update was detected, but this browser cannot use Cache Storage to prepare it.";
+  }
+  if (reason === "no-entry-html" || reason === "no-static-assets") {
+    return "An app update was detected, but Athena could not read the deployed app assets to prepare it.";
+  }
+  if (reason === "asset-staging-failed" || reason === "service-worker-error") {
+    return `An app update was detected, but the POS app shell could not cache every required asset.${assetSummary}`;
+  }
+
+  return "An app update is available but not ready to refresh yet.";
+}
+
+function formatRuntimeAppUpdateAssetSummary(evidence: Record<string, unknown>) {
+  const assetCount = readNumber(evidence.stagingAssetCount);
+  const failedCount = readNumber(evidence.stagingFailedAssetCount) ?? 0;
+  const rejectedCount = readNumber(evidence.stagingRejectedAssetCount) ?? 0;
+  const issueCount = failedCount + rejectedCount;
+
+  if (issueCount > 0) {
+    return ` ${issueCount} of ${assetCount ?? "the"} asset${issueCount === 1 ? "" : "s"} ${issueCount === 1 ? "needs" : "need"} attention.`;
+  }
+
+  return "";
 }
 
 function normalizeRuntimeAppUpdateBlockerSummary(value?: string) {

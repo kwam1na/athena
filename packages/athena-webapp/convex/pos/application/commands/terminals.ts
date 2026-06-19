@@ -13,6 +13,7 @@ import {
   normalizePosTerminalLoginMode,
   type PosTerminalLoginMode,
 } from "../../../../shared/posTerminalLoginMode";
+import { isPosUsableRegisterSessionStatus } from "../../../../shared/registerSessionStatus";
 
 import {
   getTerminalByFingerprint,
@@ -259,6 +260,10 @@ export type TerminalRuntimeStatusInput = {
     observedAt: number;
     pendingBuildId?: string;
     selectedBlockerCode?: AppUpdateBlockerCode;
+    stagingAssetCount?: number;
+    stagingFailedAssetCount?: number;
+    stagingReason?: AppUpdateStagingReason;
+    stagingRejectedAssetCount?: number;
     stagingStatus?: AppUpdateStagingStatus;
     status: AppUpdateStatus;
   };
@@ -351,6 +356,16 @@ type DrawerAuthorityReason =
   | "cloud_closed"
   | "lifecycle_rejected";
 
+type DrawerAuthorityDirective = {
+  cloudRegisterSessionId?: string;
+  localRegisterSessionId: string;
+  message?: string;
+  observedAt: number;
+  reason?: DrawerAuthorityReason;
+  registerNumber?: string;
+  status: DrawerAuthorityStatus;
+};
+
 type AppSessionRecoveryStatus =
   | "ready"
   | "recovering"
@@ -373,6 +388,16 @@ type AppUpdateStatus =
   | "unknown";
 
 type AppUpdateStagingStatus = "staged" | "unstaged" | "unknown";
+
+type AppUpdateStagingReason =
+  | "asset-staging-failed"
+  | "no-entry-html"
+  | "no-static-assets"
+  | "cache-storage-unavailable"
+  | "service-worker-unavailable"
+  | "service-worker-timeout"
+  | "service-worker-error"
+  | "unknown";
 
 type AppUpdateDetectorStatus = "ok" | "failed" | "unknown";
 
@@ -403,6 +428,7 @@ export async function submitTerminalRuntimeStatus(
   },
 ): Promise<
   CommandResult<{
+    drawerAuthorityDirective?: DrawerAuthorityDirective;
     terminalId: Id<"posTerminal">;
     reportedAt: number;
     receivedAt: number;
@@ -425,6 +451,10 @@ export async function submitTerminalRuntimeStatus(
   const appSessionRecovery = cleanAppSessionRecovery(
     args.status.appSessionRecovery,
   );
+  const activeRegisterSession = cleanActiveRegisterSession(
+    args.status.activeRegisterSession,
+  );
+  const drawerAuthority = cleanDrawerAuthority(args.status.drawerAuthority);
   await upsertLatestRuntimeStatus(ctx, {
     storeId: args.storeId,
     terminalId: args.terminalId,
@@ -482,9 +512,7 @@ export async function submitTerminalRuntimeStatus(
       expiresAt: positiveTimestamp(args.status.staffAuthority.expiresAt),
     }),
     saleAuthority: cleanSaleAuthority(args.status.saleAuthority),
-    activeRegisterSession: cleanActiveRegisterSession(
-      args.status.activeRegisterSession,
-    ),
+    activeRegisterSession,
     snapshots: omitUndefined({
       catalogAgeMs: nonNegativeInteger(args.status.snapshots.catalogAgeMs),
       serviceCatalogAgeMs: nonNegativeInteger(
@@ -498,13 +526,83 @@ export async function submitTerminalRuntimeStatus(
       ),
     }),
     terminalIntegrity: cleanTerminalIntegrity(args.status.terminalIntegrity),
-    drawerAuthority: cleanDrawerAuthority(args.status.drawerAuthority),
+    drawerAuthority,
   });
 
+  const drawerAuthorityDirective =
+    await buildRuntimeDrawerAuthorityDirective(ctx, {
+      activeRegisterSession,
+      drawerAuthority,
+      receivedAt,
+      storeId: args.storeId,
+    });
+
   return ok({
+    ...omitUndefined({ drawerAuthorityDirective }),
     terminalId: args.terminalId,
     reportedAt,
     receivedAt,
+  });
+}
+
+async function buildRuntimeDrawerAuthorityDirective(
+  ctx: MutationCtx,
+  args: {
+    activeRegisterSession:
+      | ReturnType<typeof cleanActiveRegisterSession>
+      | undefined;
+    drawerAuthority: ReturnType<typeof cleanDrawerAuthority> | undefined;
+    receivedAt: number;
+    storeId: Id<"store">;
+  },
+): Promise<DrawerAuthorityDirective | undefined> {
+  const session = args.activeRegisterSession;
+  if (
+    !session ||
+    !session.cloudRegisterSessionId ||
+    !isPosUsableRegisterSessionStatus(session.status)
+  ) {
+    return undefined;
+  }
+  if (
+    args.drawerAuthority?.status === "blocked" &&
+    args.drawerAuthority.reason === "cloud_closed" &&
+    args.drawerAuthority.localRegisterSessionId ===
+      session.localRegisterSessionId &&
+    args.drawerAuthority.cloudRegisterSessionId === session.cloudRegisterSessionId
+  ) {
+    return undefined;
+  }
+
+  const cloudRegisterSessionId = ctx.db.normalizeId(
+    "registerSession",
+    session.cloudRegisterSessionId,
+  );
+  if (!cloudRegisterSessionId) {
+    return undefined;
+  }
+
+  const cloudRegisterSession = await ctx.db.get(
+    "registerSession",
+    cloudRegisterSessionId,
+  );
+  if (
+    !cloudRegisterSession ||
+    cloudRegisterSession.storeId !== args.storeId ||
+    isPosUsableRegisterSessionStatus(cloudRegisterSession.status)
+  ) {
+    return undefined;
+  }
+
+  return omitUndefined({
+    cloudRegisterSessionId: session.cloudRegisterSessionId,
+    localRegisterSessionId: session.localRegisterSessionId,
+    message:
+      "The mapped cloud register is closed. Open a register before selling.",
+    observedAt: args.receivedAt,
+    reason: "cloud_closed" as const,
+    registerNumber: session.registerNumber,
+    status: "blocked" as const,
   });
 }
 
@@ -594,6 +692,14 @@ function cleanAppUpdate(appUpdate: TerminalRuntimeStatusInput["appUpdate"]) {
     stagingStatus: appUpdateStagingStatuses.has(appUpdate.stagingStatus)
       ? appUpdate.stagingStatus
       : undefined,
+    stagingReason: appUpdateStagingReasons.has(appUpdate.stagingReason)
+      ? appUpdate.stagingReason
+      : undefined,
+    stagingAssetCount: positiveCount(appUpdate.stagingAssetCount),
+    stagingFailedAssetCount: positiveCount(appUpdate.stagingFailedAssetCount),
+    stagingRejectedAssetCount: positiveCount(
+      appUpdate.stagingRejectedAssetCount,
+    ),
     status: appUpdateStatuses.has(appUpdate.status)
       ? appUpdate.status
       : "unknown",
@@ -765,6 +871,18 @@ const appUpdateStagingStatuses = new Set<AppUpdateStagingStatus | undefined>([
   undefined,
 ]);
 
+const appUpdateStagingReasons = new Set<AppUpdateStagingReason | undefined>([
+  "asset-staging-failed",
+  "no-entry-html",
+  "no-static-assets",
+  "cache-storage-unavailable",
+  "service-worker-unavailable",
+  "service-worker-timeout",
+  "service-worker-error",
+  "unknown",
+  undefined,
+]);
+
 const appUpdateDetectorStatuses = new Set<AppUpdateDetectorStatus>([
   "ok",
   "failed",
@@ -788,6 +906,12 @@ function positiveTimestamp(value: number | undefined) {
 function positiveInteger(value: number | undefined) {
   return Number.isSafeInteger(value) && value !== undefined && value > 0
     ? value
+    : undefined;
+}
+
+function positiveCount(value: number | undefined) {
+  return Number.isFinite(value) && value !== undefined && value >= 0
+    ? Math.floor(value)
     : undefined;
 }
 

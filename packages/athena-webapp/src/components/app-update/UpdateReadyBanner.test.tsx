@@ -28,9 +28,13 @@ vi.mock("sonner", () => ({
 function Probe({
   blocked = false,
   onReady,
+  stagingReason,
+  stagingStatus = "staged",
 }: {
   blocked?: boolean;
   onReady?: () => void;
+  stagingReason?: "asset-staging-failed";
+  stagingStatus?: "staged" | "unstaged";
 }) {
   const { reportUpdateDetected, registerApplyBlocker } = useUpdateCoordinator();
 
@@ -41,7 +45,8 @@ function Probe({
         reportUpdateDetected({
           currentBuildId: "build-1",
           pendingBuildId: "build-2",
-          stagingStatus: "staged",
+          ...(stagingReason ? { stagingReason } : {}),
+          stagingStatus,
         });
         if (blocked) {
           registerApplyBlocker({
@@ -172,5 +177,29 @@ describe("UpdateReadyBanner", () => {
     expect(
       screen.queryByRole("button", { name: "Refresh" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("warns about incomplete staging while allowing a manual refresh", () => {
+    const reload = vi.fn();
+    renderWithUpdateProviders(
+      <>
+        <Probe
+          stagingReason="asset-staging-failed"
+          stagingStatus="unstaged"
+        />
+        <UpdateReadyBanner />
+      </>,
+      { reload },
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "mark ready" }));
+
+    expect(
+      screen.getByText(
+        "Update ready. Some files were not cached for offline use.",
+      ),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
+    expect(reload).toHaveBeenCalledTimes(1);
   });
 });

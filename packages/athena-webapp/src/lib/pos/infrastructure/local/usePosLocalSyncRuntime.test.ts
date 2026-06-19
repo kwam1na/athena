@@ -2604,6 +2604,79 @@ describe("usePosLocalSyncRuntimeStatus", () => {
     });
   });
 
+  it("does not publish a synced local closeout as an active closing register session", async () => {
+    const store = {
+      listEvents: vi.fn(async () => ({
+        ok: true,
+        value: [
+          buildLocalEvent({
+            localEventId: "event-open",
+            payload: { openingFloat: 100 },
+            sequence: 1,
+            sync: { status: "synced", uploaded: true },
+            type: "register.opened",
+            uploadSequence: 1,
+          }),
+          buildLocalEvent({
+            localEventId: "event-close",
+            localRegisterSessionId: "cloud-register-1",
+            payload: { countedCash: 100 },
+            sequence: 2,
+            sync: { status: "synced", uploaded: true },
+            type: "register.closeout_started",
+            uploadSequence: 2,
+          }),
+        ],
+      })),
+      listLocalCloudMappings: vi.fn(async () => ({
+        ok: true,
+        value: [
+          {
+            cloudId: "cloud-register-1",
+            entity: "registerSession",
+            localId: "register-1",
+            mappedAt: 10,
+          },
+        ],
+      })),
+      readDrawerAuthorityState: vi.fn(async () => ({
+        ok: true,
+        value: null,
+      })),
+      readProvisionedTerminalSeed: vi.fn(async () => ({
+        ok: true,
+        value: {
+          cloudTerminalId: "terminal-cloud-1",
+          displayName: "Front",
+          provisionedAt: 1,
+          schemaVersion: 1,
+          syncSecretHash: "sync-secret-1",
+          storeId: "store-1",
+          terminalId: "local-terminal-1",
+        },
+      })),
+    };
+
+    renderHook(() =>
+      usePosLocalSyncRuntimeStatus({
+        source: "register",
+        storeFactory: () => store as never,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(mocks.reportTerminalRuntimeStatus).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: expect.not.objectContaining({
+            activeRegisterSession: expect.anything(),
+          }),
+        }),
+      ),
+    );
+  });
+
   it("exposes supplied app-session recovery diagnostics without leaking raw block reasons", async () => {
     const store = {
       listEvents: vi.fn(async () => ({
@@ -2695,6 +2768,12 @@ describe("usePosLocalSyncRuntimeStatus", () => {
         canApply: true,
         currentBuildId: "build-current",
         pendingBuildId: "build-next",
+        staging: {
+          assetCount: 17,
+          failedAssetCount: 0,
+          rejectedAssetCount: 0,
+          status: "staged" as const,
+        },
         status: "ready" as const,
       })),
     };
@@ -2717,6 +2796,9 @@ describe("usePosLocalSyncRuntimeStatus", () => {
           currentBuildId: "build-current",
           detectorStatus: "ok",
           pendingBuildId: "build-next",
+          stagingAssetCount: 17,
+          stagingFailedAssetCount: 0,
+          stagingRejectedAssetCount: 0,
           stagingStatus: "staged",
           status: "update_ready",
         }),
@@ -2728,6 +2810,75 @@ describe("usePosLocalSyncRuntimeStatus", () => {
           status: expect.objectContaining({
             appUpdate: expect.objectContaining({
               pendingBuildId: "build-next",
+              stagingAssetCount: 17,
+              status: "update_ready",
+            }),
+          }),
+        }),
+      ),
+    );
+  });
+
+  it("publishes app update staging failure diagnostics with runtime check-ins", async () => {
+    const store = {
+      listEvents: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      readProvisionedTerminalSeed: vi.fn(async () => ({
+        ok: true,
+        value: {
+          cloudTerminalId: "terminal-cloud-1",
+          displayName: "Front",
+          provisionedAt: 1,
+          schemaVersion: 1,
+          syncSecretHash: "sync-secret-1",
+          storeId: "store-1",
+          terminalId: "local-terminal-1",
+        },
+      })),
+    };
+    const appUpdateCoordinator = {
+      applyUpdate: vi.fn(() => false),
+      getSnapshot: vi.fn(() => ({
+        blockers: [],
+        canApply: true,
+        currentBuildId: "build-current",
+        pendingBuildId: "build-next",
+        staging: {
+          assetCount: 17,
+          failedAssetCount: 1,
+          reason: "asset-staging-failed" as const,
+          rejectedAssetCount: 0,
+          status: "unstaged" as const,
+        },
+        status: "ready-unstaged" as const,
+      })),
+    };
+
+    renderHook(() =>
+      usePosLocalSyncRuntimeStatus({
+        appUpdateCoordinator,
+        mode: "status-only",
+        source: "register",
+        storeFactory: () => store as never,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(mocks.reportTerminalRuntimeStatus).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: expect.objectContaining({
+            appUpdate: expect.objectContaining({
+              canApply: true,
+              pendingBuildId: "build-next",
+              stagingAssetCount: 17,
+              stagingFailedAssetCount: 1,
+              stagingReason: "asset-staging-failed",
+              stagingRejectedAssetCount: 0,
+              stagingStatus: "unstaged",
               status: "update_ready",
             }),
           }),
@@ -3008,6 +3159,84 @@ describe("usePosLocalSyncRuntimeStatus", () => {
         }),
       ),
     );
+  });
+
+  it("persists drawer authority directives returned by accepted runtime check-ins", async () => {
+    mocks.reportTerminalRuntimeStatus.mockResolvedValue({
+      kind: "ok",
+      data: {
+        drawerAuthorityDirective: {
+          cloudRegisterSessionId: "cloud-register-1",
+          localRegisterSessionId: "register-1",
+          message:
+            "The mapped cloud register is closed. Open a register before selling.",
+          observedAt: 200,
+          reason: "cloud_closed",
+          registerNumber: "8",
+          status: "blocked",
+        },
+      },
+    });
+    const onLocalEventsChanged = vi.fn();
+    const store = {
+      listEvents: vi.fn(async () => ({
+        ok: true,
+        value: [
+          buildLocalEvent({
+            localEventId: "event-open",
+            localRegisterSessionId: "register-1",
+            sequence: 1,
+            type: "register.opened",
+          }),
+        ],
+      })),
+      readDrawerAuthorityState: vi.fn(async () => ({
+        ok: true,
+        value: null,
+      })),
+      readProvisionedTerminalSeed: vi.fn(async () => ({
+        ok: true,
+        value: {
+          cloudTerminalId: "terminal-cloud-1",
+          displayName: "Front",
+          provisionedAt: 1,
+          schemaVersion: 1,
+          syncSecretHash: "sync-secret-1",
+          storeId: "store-1",
+          terminalId: "local-terminal-1",
+        },
+      })),
+      writeDrawerAuthorityState: vi.fn(async () => ({
+        ok: true,
+        value: null,
+      })),
+    };
+
+    renderHook(() =>
+      usePosLocalSyncRuntimeStatus({
+        mode: "status-only",
+        onLocalEventsChanged,
+        storeFactory: () => store as never,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(store.writeDrawerAuthorityState).toHaveBeenCalledWith({
+        cloudRegisterSessionId: "cloud-register-1",
+        localRegisterSessionId: "register-1",
+        message:
+          "The mapped cloud register is closed. Open a register before selling.",
+        observedAt: 200,
+        reason: "cloud_closed",
+        registerNumber: "8",
+        status: "blocked",
+        storeId: "store-1",
+        terminalId: "local-terminal-1",
+      }),
+    );
+    expect(onLocalEventsChanged).toHaveBeenCalled();
   });
 
   it("does not persist terminal integrity for generic runtime check-in rejections", async () => {
@@ -4003,6 +4232,143 @@ describe("usePosLocalSyncRuntimeStatus", () => {
     );
   });
 
+  it("persists a cloud-closed drawer authority block for register-not-open sale conflicts", async () => {
+    mocks.ingestLocalEvents.mockResolvedValue({
+      kind: "ok",
+      data: {
+        accepted: [
+          {
+            localEventId: "event-sale-completed",
+            sequence: 3,
+            status: "conflicted",
+          },
+        ],
+        held: [],
+        mappings: [],
+        conflicts: [
+          {
+            _id: "conflict-1",
+            conflictType: "permission",
+            localEventId: "event-sale-completed",
+            localRegisterSessionId: "register-1",
+            status: "needs_review",
+            summary: "Register was not open before this sale synced.",
+          },
+        ],
+        syncCursor: {
+          localRegisterSessionId: "register-1",
+          acceptedThroughSequence: 3,
+        },
+      },
+    });
+    const store = {
+      clearDrawerAuthorityState: vi.fn(async () => ({ ok: true, value: null })),
+      listEvents: vi.fn(async () => ({
+        ok: true,
+        value: [
+          buildLocalEvent({
+            localEventId: "event-open",
+            sequence: 1,
+            type: "register.opened",
+          }),
+          buildLocalEvent({
+            localEventId: "event-session",
+            localPosSessionId: "session-1",
+            payload: {
+              localPosSessionId: "session-1",
+              status: "active",
+            },
+            sequence: 2,
+            type: "session.started",
+          }),
+          buildLocalEvent({
+            localEventId: "event-sale-completed",
+            localPosSessionId: "session-1",
+            localTransactionId: "local-txn-1",
+            payload: {
+              localPosSessionId: "session-1",
+              localTransactionId: "local-txn-1",
+              payments: [{ amount: 25, method: "cash", timestamp: 2 }],
+              receiptNumber: "LOCAL-1-000001",
+              subtotal: 25,
+              tax: 0,
+              total: 25,
+            },
+            sequence: 3,
+            type: "transaction.completed",
+          }),
+        ],
+      })),
+      listLocalCloudMappings: vi.fn(async () => ({
+        ok: true,
+        value: [
+          {
+            cloudId: "cloud-register-closed-1",
+            entity: "registerSession",
+            localId: "register-1",
+            mappedAt: 1,
+          },
+        ],
+      })),
+      markEventsNeedsReview: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      markEventsSynced: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      readDrawerAuthorityState: vi.fn(async () => ({ ok: true, value: null })),
+      readProvisionedTerminalSeed: vi.fn(async () => ({
+        ok: true,
+        value: {
+          cloudTerminalId: "terminal-cloud-1",
+          displayName: "Front",
+          provisionedAt: 1,
+          schemaVersion: 1,
+          syncSecretHash: "sync-secret-1",
+          storeId: "store-1",
+          terminalId: "local-terminal-1",
+        },
+      })),
+      writeDrawerAuthorityState: vi.fn(async () => ({
+        ok: true,
+        value: null,
+      })),
+      writeLocalCloudMapping: vi.fn(async () => ({
+        ok: true,
+        value: {},
+      })),
+    };
+
+    renderHook(() =>
+      usePosLocalSyncRuntimeStatus({
+        mode: "drain-enabled",
+        storeFactory: () => store as never,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(store.markEventsNeedsReview).toHaveBeenCalledWith(
+        ["event-sale-completed", "event-session"],
+        "Cloud sync needs review before this local event can finish.",
+        { uploaded: true },
+      ),
+    );
+    expect(store.writeDrawerAuthorityState).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cloudRegisterSessionId: "cloud-register-closed-1",
+        localRegisterSessionId: "register-1",
+        reason: "cloud_closed",
+        status: "blocked",
+        storeId: "store-1",
+        terminalId: "local-terminal-1",
+      }),
+    );
+  });
+
   it("does not persist drawer authority blocks for sale inventory review conflicts", async () => {
     mocks.ingestLocalEvents.mockResolvedValue({
       kind: "ok",
@@ -4292,7 +4658,7 @@ describe("usePosLocalSyncRuntimeStatus", () => {
     expect(retry).toHaveBeenCalled();
   });
 
-  it("acknowledges update_app before invoking the app update coordinator apply latch", async () => {
+  it("acknowledges update_app only after saving reload correlation", async () => {
     const command = buildRecoveryCommand({
       commandType: "update_app",
       executionId: "command-1:2000100",
@@ -4470,7 +4836,7 @@ describe("usePosLocalSyncRuntimeStatus", () => {
     expect(applyUpdate).toHaveBeenCalledTimes(1);
   });
 
-  it("does not reload when update_app reload correlation cannot be stored", async () => {
+  it("does not acknowledge or reload when update_app reload correlation cannot be stored", async () => {
     const command = buildRecoveryCommand({
       commandType: "update_app",
       executionId: "command-1:2000100",
@@ -4517,23 +4883,10 @@ describe("usePosLocalSyncRuntimeStatus", () => {
     );
 
     await waitFor(() =>
-      expect(mocks.acknowledgeTerminalRecoveryCommand).toHaveBeenCalled(),
+      expect(mocks.claimTerminalRecoveryCommand).toHaveBeenCalled(),
     );
-    await waitFor(() => {
-      const publishedAppUpdate = mocks.reportTerminalRuntimeStatus.mock.calls
-        .map((call) => call[0]?.status?.appUpdate)
-        .find(
-          (appUpdate) =>
-            appUpdate?.commandExecutionId === "command-1:2000100",
-        );
-
-      expect(publishedAppUpdate).toEqual(
-        expect.objectContaining({
-          commandExecutionId: "command-1:2000100",
-          status: "update_ready",
-        }),
-      );
-    });
+    expect(globalThis.sessionStorage.setItem).toHaveBeenCalled();
+    expect(mocks.acknowledgeTerminalRecoveryCommand).not.toHaveBeenCalled();
     expect(applyUpdate).not.toHaveBeenCalled();
   });
 

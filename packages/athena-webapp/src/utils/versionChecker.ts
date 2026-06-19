@@ -1,6 +1,9 @@
 // Detects new deployed webapp builds and reports them to the app-update coordinator.
 
-import { normalizeDeployMetadata } from "@/lib/runtimeBuildMetadata";
+import {
+  getInitialRuntimeBuildMetadata,
+  normalizeDeployMetadata,
+} from "@/lib/runtimeBuildMetadata";
 
 export type VersionCheckerDetectionSource = "deploy-metadata" | "html";
 
@@ -29,7 +32,7 @@ const initialScripts = readDocumentScriptSources();
 const initialHtmlBuildId = buildIdFromScripts(initialScripts);
 
 export function createVersionChecker({
-  currentBuildId = initialHtmlBuildId,
+  currentBuildId,
   currentDeployBuildId,
   pollingIntervalMs = 1 * 60 * 1000,
   fetchImpl = fetch,
@@ -48,20 +51,26 @@ export function createVersionChecker({
     event: VersionCheckerUpdateDetectedEvent,
   ) => boolean;
 }) {
+  const initialDeployBuildId =
+    currentDeployBuildId ?? getInitialDeployBuildId();
+  const loadedBuildId = currentBuildId ?? initialDeployBuildId ?? initialHtmlBuildId;
+  let observedDeployBuildId = initialDeployBuildId;
   let lastReportedBuildId: string | undefined;
 
   async function checkForNewVersion() {
     try {
       const deployBuildId = await readDeployBuildId(fetchImpl);
       let entryHtmlScripts: EntryHtmlScripts | null = null;
-      if (
-        currentDeployBuildId &&
+      if (deployBuildId && observedDeployBuildId === undefined) {
+        observedDeployBuildId = deployBuildId;
+      } else if (
         deployBuildId &&
-        deployBuildId !== currentDeployBuildId
+        observedDeployBuildId &&
+        deployBuildId !== observedDeployBuildId
       ) {
         entryHtmlScripts = await readEntryHtmlScripts(fetchImpl);
         reportOnce({
-          currentBuildId,
+          currentBuildId: observedDeployBuildId,
           pendingBuildId: deployBuildId,
           detectionSource: "deploy-metadata",
           staging: {
@@ -81,7 +90,7 @@ export function createVersionChecker({
       const htmlBuildId = buildIdFromScripts(scripts);
       if (htmlBuildId && htmlBuildId !== initialHtmlBuildId) {
         reportOnce({
-          currentBuildId,
+          currentBuildId: loadedBuildId,
           pendingBuildId: htmlBuildId,
           detectionSource: "html",
           staging: {
@@ -121,6 +130,12 @@ export function createVersionChecker({
       clearTimeout(startupTimeoutId);
     },
   };
+}
+
+function getInitialDeployBuildId() {
+  const metadata = getInitialRuntimeBuildMetadata();
+  const appVersion = metadata.appVersion === "dev" ? undefined : metadata.appVersion;
+  return metadata.buildSha ?? appVersion;
 }
 
 async function readDeployBuildId(fetchImpl: VersionCheckerFetch) {

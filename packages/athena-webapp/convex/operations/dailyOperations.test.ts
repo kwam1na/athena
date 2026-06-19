@@ -152,6 +152,9 @@ function createDb(seed: Partial<Record<TableName, Row[]>> = {}) {
 
       return null;
     },
+    normalizeId(table: TableName, id: string) {
+      return tableFor(table).has(id) ? id : null;
+    },
     query,
   };
 
@@ -213,6 +216,87 @@ const priorClose = {
   summary: { salesTotal: 45000 },
   updatedAt: Date.UTC(2026, 4, 7, 22),
 };
+
+function buildPendingRegisterCountSeed(): Partial<Record<TableName, Row[]>> {
+  return {
+    dailyClose: [priorClose],
+    dailyOpening: [startedOpening],
+    posLocalSyncConflict: [
+      {
+        _id: "conflict-register-count",
+        conflictType: "permission",
+        createdAt: Date.UTC(2026, 4, 8, 20, 46),
+        details: {
+          countedCash: 232_500,
+          expectedCash: 190_500,
+          variance: 42_000,
+        },
+        localEventId: "local-closeout-event",
+        localRegisterSessionId: "local-register-1",
+        sequence: 8,
+        status: "needs_review",
+        storeId: "store-1",
+        summary:
+          "Register closeout variance requires manager review before synced closeout can be applied.",
+        terminalId: "terminal-1",
+      },
+    ],
+    posLocalSyncEvent: [
+      {
+        _id: "sync-register-count",
+        acceptedAt: Date.UTC(2026, 4, 8, 20, 46),
+        eventType: "register_closed",
+        localEventId: "local-closeout-event",
+        localRegisterSessionId: "local-register-1",
+        occurredAt: Date.UTC(2026, 4, 8, 20, 45),
+        payload: {
+          countedCash: 232_500,
+        },
+        sequence: 8,
+        staffProfileId: "staff-pos",
+        status: "conflicted",
+        storeId: "store-1",
+        submittedAt: Date.UTC(2026, 4, 8, 20, 46),
+        terminalId: "terminal-1",
+      },
+    ],
+    posLocalSyncMapping: [
+      {
+        _id: "mapping-register-1",
+        cloudId: "register-1",
+        cloudTable: "registerSession",
+        createdAt: Date.UTC(2026, 4, 8, 8),
+        localEventId: "local-open-event",
+        localId: "local-register-1",
+        localIdKind: "registerSession",
+        localRegisterSessionId: "local-register-1",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      },
+    ],
+    registerSession: [
+      {
+        _id: "register-1",
+        expectedCash: 190_500,
+        openedAt: Date.UTC(2026, 4, 8, 8),
+        openingFloat: 16_000,
+        organizationId: "org-1",
+        registerNumber: "1",
+        status: "active",
+        storeId: "store-1",
+      },
+    ],
+    staffProfile: [
+      {
+        _id: "staff-pos",
+        fullName: "P OS",
+        organizationId: "org-1",
+        storeId: "store-1",
+      },
+    ],
+    store: [store],
+  };
+}
 
 function buildCtx(seed: Partial<Record<TableName, Row[]>>) {
   const { db } = createDb(seed);
@@ -1019,6 +1103,16 @@ describe("daily operations overview read model", () => {
             subjectType: "pos_pending_checkout_item",
           },
           {
+            _id: "event-register-opened",
+            actorStaffProfileId: "staff-pos",
+            createdAt: Date.UTC(2026, 4, 8, 16),
+            eventType: "pos_local_sync.register_opened_projected",
+            message: "Offline POS register opened.",
+            storeId: "store-1",
+            subjectId: "register-session-80",
+            subjectType: "registerSession",
+          },
+          {
             _id: "event-other-day",
             createdAt: Date.UTC(2026, 4, 9, 8),
             eventType: "daily_opening.started",
@@ -1037,6 +1131,25 @@ describe("daily operations overview read model", () => {
             storeId: "store-1",
           },
         ],
+        registerSession: [
+          {
+            _id: "register-session-80",
+            expectedCash: 0,
+            openedAt: Date.UTC(2026, 4, 8, 16),
+            openingFloat: 50_000,
+            registerNumber: "80",
+            status: "closed",
+            storeId: "store-1",
+          },
+        ],
+        staffProfile: [
+          {
+            _id: "staff-pos",
+            fullName: "P OS",
+            organizationId: "org-1",
+            storeId: "store-1",
+          },
+        ],
         store: [store],
       }),
       { operatingDate: "2026-05-08", storeId: "store-1" as Id<"store"> },
@@ -1050,6 +1163,7 @@ describe("daily operations overview read model", () => {
     expect(snapshot.timeline.map((event) => event.id)).toEqual([
       "event-2",
       "event-pos-sale-synced",
+      "event-register-opened",
       "event-pending-checkout-item",
       "event-quick-add",
       "event-1",
@@ -1073,6 +1187,20 @@ describe("daily operations overview read model", () => {
         transactionId: "txn-946956",
       },
       to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId",
+    });
+    expect(
+      snapshot.timeline.find((event) => event.id === "event-register-opened")
+        ?.message,
+    ).toBe("Register 80 opened by P OS with opening float GH₵500.");
+    expect(
+      snapshot.timeline.find((event) => event.id === "event-register-opened")
+        ?.registerLink,
+    ).toEqual({
+      label: "Register 80",
+      params: {
+        sessionId: "register-session-80",
+      },
+      to: "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId",
     });
     expect(
       snapshot.timeline.find((event) => event.id === "event-quick-add")
@@ -1155,86 +1283,185 @@ describe("daily operations overview read model", () => {
     });
   });
 
-  it("surfaces pending synced register count submissions for the operating day", async () => {
+  it("labels and links generic register session close operational events", async () => {
     const snapshot = await buildDailyOperationsSnapshotWithCtx(
       buildCtx({
         dailyClose: [priorClose],
         dailyOpening: [startedOpening],
-        posLocalSyncConflict: [
+        operationalEvent: [
           {
-            _id: "conflict-register-count",
-            conflictType: "permission",
-            createdAt: Date.UTC(2026, 4, 8, 20, 46),
-            details: {
-              countedCash: 232_500,
-              expectedCash: 190_500,
-              variance: 42_000,
+            _id: "event-register-session-closed",
+            createdAt: Date.UTC(2026, 4, 8, 20, 45),
+            eventType: "register_session_closed",
+            message: "Register session closed with an exact cash match.",
+            metadata: {
+              countedCash: 450,
+              expectedCash: 450,
+              variance: 0,
             },
-            localEventId: "local-closeout-event",
-            localRegisterSessionId: "local-register-1",
-            sequence: 8,
-            status: "needs_review",
             storeId: "store-1",
-            summary:
-              "Register closeout variance requires manager review before synced closeout can be applied.",
-            terminalId: "terminal-1",
-          },
-        ],
-        posLocalSyncEvent: [
-          {
-            _id: "sync-register-count",
-            acceptedAt: Date.UTC(2026, 4, 8, 20, 46),
-            eventType: "register_closed",
-            localEventId: "local-closeout-event",
-            localRegisterSessionId: "local-register-1",
-            occurredAt: Date.UTC(2026, 4, 8, 20, 45),
-            payload: {
-              countedCash: 232_500,
-            },
-            sequence: 8,
-            staffProfileId: "staff-pos",
-            status: "conflicted",
-            storeId: "store-1",
-            submittedAt: Date.UTC(2026, 4, 8, 20, 46),
-            terminalId: "terminal-1",
-          },
-        ],
-        posLocalSyncMapping: [
-          {
-            _id: "mapping-register-1",
-            cloudId: "register-1",
-            cloudTable: "registerSession",
-            createdAt: Date.UTC(2026, 4, 8, 8),
-            localEventId: "local-open-event",
-            localId: "local-register-1",
-            localIdKind: "registerSession",
-            localRegisterSessionId: "local-register-1",
-            storeId: "store-1",
-            terminalId: "terminal-1",
+            subjectId: "register-session-80",
+            subjectLabel: "80",
+            subjectType: "register_session",
           },
         ],
         registerSession: [
           {
-            _id: "register-1",
-            expectedCash: 190_500,
+            _id: "register-session-80",
+            expectedCash: 450,
             openedAt: Date.UTC(2026, 4, 8, 8),
-            openingFloat: 16_000,
-            organizationId: "org-1",
-            registerNumber: "1",
-            status: "active",
+            registerNumber: "80",
+            status: "closed",
             storeId: "store-1",
+          },
+        ],
+        store: [store],
+      }),
+      { operatingDate: "2026-05-08", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(snapshot.timeline[0]).toMatchObject({
+      id: "event-register-session-closed",
+      message: "Register 80 closed with an exact cash match.",
+      registerLink: {
+        label: "Register 80",
+        params: {
+          sessionId: "register-session-80",
+        },
+        to: "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId",
+      },
+      subject: {
+        id: "register-session-80",
+        label: "Register 80",
+        type: "register_session",
+      },
+      type: "register_session_closed",
+    });
+  });
+
+  it("normalizes manager approval audit events for the store-day timeline", async () => {
+    const snapshot = await buildDailyOperationsSnapshotWithCtx(
+      buildCtx({
+        dailyClose: [priorClose],
+        dailyOpening: [startedOpening],
+        operationalEvent: [
+          {
+            _id: "event-manager-approval-granted",
+            actorStaffProfileId: "manager-1",
+            createdAt: Date.UTC(2026, 4, 8, 15, 4),
+            eventType: "approval.manager_granted",
+            message: "approval.manager_granted on 8",
+            metadata: {
+              actionKey: "cash.register.opening_float.correct",
+            },
+            storeId: "store-1",
+            subjectId: "register-session-8",
+            subjectLabel: "8",
+            subjectType: "register_session",
+          },
+          {
+            _id: "event-manager-approval-applied",
+            actorStaffProfileId: "manager-1",
+            createdAt: Date.UTC(2026, 4, 8, 15, 5),
+            eventType: "approval.proof_consumed",
+            message: "approval.proof_consumed on 8",
+            metadata: {
+              actionKey: "cash.register.opening_float.correct",
+            },
+            storeId: "store-1",
+            subjectId: "register-session-8",
+            subjectLabel: "8",
+            subjectType: "register_session",
           },
         ],
         staffProfile: [
           {
-            _id: "staff-pos",
-            fullName: "P OS",
+            _id: "manager-1",
+            fullName: "Mina Q.",
             organizationId: "org-1",
             storeId: "store-1",
           },
         ],
         store: [store],
       }),
+      { operatingDate: "2026-05-08", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(snapshot.timeline.map((event) => event.id)).toEqual([
+      "event-manager-approval-applied",
+      "event-manager-approval-granted",
+    ]);
+    expect(snapshot.timeline[0]).toMatchObject({
+      message: "Manager approval applied for Register 8.",
+      subject: {
+        id: "register-session-8",
+        label: "Register 8",
+        type: "register_session",
+      },
+      type: "approval.proof_consumed",
+    });
+    expect(snapshot.timeline[1]).toMatchObject({
+      message: "Manager approval granted by Mina Q. for Register 8.",
+      subject: {
+        id: "register-session-8",
+        label: "Register 8",
+        type: "register_session",
+      },
+      type: "approval.manager_granted",
+    });
+  });
+
+  it("includes the actor on register opening float correction timeline events", async () => {
+    const snapshot = await buildDailyOperationsSnapshotWithCtx(
+      buildCtx({
+        dailyClose: [priorClose],
+        dailyOpening: [startedOpening],
+        operationalEvent: [
+          {
+            _id: "event-opening-float-corrected",
+            actorStaffProfileId: "manager-1",
+            createdAt: Date.UTC(2026, 4, 8, 15, 6),
+            eventType: "register_session_opening_float_corrected",
+            message: "Register session opening float corrected.",
+            metadata: {
+              correctedOpeningFloat: 500,
+              previousOpeningFloat: 300,
+            },
+            storeId: "store-1",
+            subjectId: "register-session-8",
+            subjectLabel: "8",
+            subjectType: "register_session",
+          },
+        ],
+        staffProfile: [
+          {
+            _id: "manager-1",
+            fullName: "Mina Q.",
+            organizationId: "org-1",
+            storeId: "store-1",
+          },
+        ],
+        store: [store],
+      }),
+      { operatingDate: "2026-05-08", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(snapshot.timeline[0]).toMatchObject({
+      id: "event-opening-float-corrected",
+      message: "Register 8 opening float corrected by Mina Q.",
+      subject: {
+        id: "register-session-8",
+        label: "Register 8",
+        type: "register_session",
+      },
+      type: "register_session_opening_float_corrected",
+    });
+  });
+
+  it("surfaces pending synced register count submissions for the operating day", async () => {
+    const ctx = buildCtx(buildPendingRegisterCountSeed());
+    const snapshot = await buildDailyOperationsSnapshotWithCtx(
+      ctx,
       { operatingDate: "2026-05-08", storeId: "store-1" as Id<"store"> },
     );
 
@@ -1255,6 +1482,58 @@ describe("daily operations overview read model", () => {
         type: "register_session",
       },
       type: "register_session_count_submitted",
+    });
+  });
+
+  it("omits pending synced register count submissions without manager evidence access", async () => {
+    const snapshot = await buildDailyOperationsSnapshotWithCtx(
+      buildCtx(buildPendingRegisterCountSeed()),
+      {
+        includeManagerReviewEvidence: false,
+        operatingDate: "2026-05-08",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(snapshot.timeline.map((event) => event.id)).not.toContain(
+      "pos_local_sync_register_count:sync-register-count",
+    );
+  });
+
+  it("renders legacy register session timeline events with non-ID subjects", async () => {
+    const snapshot = await buildDailyOperationsSnapshotWithCtx(
+      buildCtx({
+        dailyClose: [priorClose],
+        dailyOpening: [startedOpening],
+        operationalEvent: [
+          {
+            _id: "event-legacy-register-opened",
+            createdAt: Date.UTC(2026, 4, 8, 9),
+            eventType: "pos_local_sync.register_opened_projected",
+            message: "POS register opened.",
+            metadata: {
+              openingFloat: 50_000,
+            },
+            storeId: "store-1",
+            subjectId: "8",
+            subjectLabel: "8",
+            subjectType: "register_session",
+          },
+        ],
+        store: [store],
+      }),
+      { operatingDate: "2026-05-08", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(snapshot.timeline[0]).toMatchObject({
+      id: "event-legacy-register-opened",
+      message: "Register 8 opened with opening float GH₵500.",
+      registerLink: undefined,
+      subject: {
+        id: "8",
+        label: "Register 8",
+        type: "register_session",
+      },
     });
   });
 

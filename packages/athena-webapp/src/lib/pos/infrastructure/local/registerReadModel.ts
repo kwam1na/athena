@@ -462,6 +462,30 @@ export function projectLocalRegisterReadModel(input: {
   };
 }
 
+export function hasSettledRegisterCloseout(input: {
+  events: PosLocalEventRecord[];
+  session:
+    | Pick<
+        PosLocalCashDrawerReadModel,
+        "cloudRegisterSessionId" | "localRegisterSessionId"
+      >
+    | null
+    | undefined;
+}) {
+  const session = input.session;
+  if (!session?.localRegisterSessionId) return false;
+
+  const latestCloseout = [...input.events]
+    .reverse()
+    .find(
+      (event) =>
+        event.type === "register.closeout_started" &&
+        registerLifecycleEventMatchesSession(event, session),
+    );
+
+  return latestCloseout?.sync.status === "synced";
+}
+
 function getSaleBlockReason(input: {
   activeRegisterSession: PosLocalCashDrawerReadModel | null;
   drawerAuthority?: PosDrawerAuthorityState | null;
@@ -507,14 +531,24 @@ function registerLifecycleEventMatchesActiveSession(
   event: PosLocalEventRecord,
   activeRegisterSession: PosLocalCashDrawerReadModel,
 ) {
+  return registerLifecycleEventMatchesSession(event, activeRegisterSession);
+}
+
+function registerLifecycleEventMatchesSession(
+  event: PosLocalEventRecord,
+  session: Pick<
+    PosLocalCashDrawerReadModel,
+    "cloudRegisterSessionId" | "localRegisterSessionId"
+  >,
+) {
   const localRegisterSessionId =
     event.localRegisterSessionId ??
     stringField(event.payload, "localRegisterSessionId");
   if (!localRegisterSessionId) return false;
 
   return (
-    localRegisterSessionId === activeRegisterSession.localRegisterSessionId ||
-    localRegisterSessionId === activeRegisterSession.cloudRegisterSessionId
+    localRegisterSessionId === session.localRegisterSessionId ||
+    localRegisterSessionId === session.cloudRegisterSessionId
   );
 }
 

@@ -291,7 +291,7 @@ describe("POSTerminalHealthViewContent", () => {
     expect(
       screen.getByRole("heading", { level: 1, name: "Terminal Health" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("Healthy")).toBeInTheDocument();
+    expect(metricCard("Healthy")).toHaveTextContent("1");
     expect(screen.getAllByText("Pending sync").length).toBeGreaterThan(0);
     expect(screen.queryByText("No check-in")).not.toBeInTheDocument();
     expect(screen.getAllByText("Needs review").length).toBeGreaterThan(0);
@@ -386,6 +386,42 @@ describe("POSTerminalHealthViewContent", () => {
     expect(screen.getByRole("link", { name: /Back counter/i })).toBeInTheDocument();
   });
 
+  it("orders the terminal attached to the current browser first", () => {
+    render(
+      <POSTerminalHealthViewContent
+        currentBrowserTerminalIds={["terminal-2"]}
+        healthSummaries={[
+          baseSummary,
+          {
+            ...baseSummary,
+            runtimeStatus: {
+              ...baseSummary.runtimeStatus!,
+              terminalId: "terminal-2",
+            },
+            terminal: {
+              ...baseSummary.terminal,
+              _id: "terminal-2",
+              displayName: "Back counter",
+              registerNumber: "2",
+            },
+          },
+        ]}
+        isLoading={false}
+        orgUrlSlug="acme"
+        storeUrlSlug="osu"
+      />,
+    );
+
+    const backCounterLink = screen.getByRole("link", { name: "Back counter" });
+    const frontCounterLink = screen.getByRole("link", { name: "Front counter" });
+    expect(
+      Boolean(
+        backCounterLink.compareDocumentPosition(frontCounterLink) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      ),
+    ).toBe(true);
+  });
+
   it("shows unknown metric values while terminal health is loading", () => {
     render(
       <POSTerminalHealthViewContent
@@ -397,10 +433,11 @@ describe("POSTerminalHealthViewContent", () => {
     );
 
     expect(screen.getByText("Terminals")).toBeInTheDocument();
+    expect(screen.getAllByText("Healthy").length).toBeGreaterThan(0);
     expect(screen.getByText("Pending sync")).toBeInTheDocument();
     expect(screen.getByText("Needs review")).toBeInTheDocument();
     expect(screen.getByText("Stale or missing")).toBeInTheDocument();
-    expect(screen.getAllByText("-")).toHaveLength(4);
+    expect(screen.getAllByText("-")).toHaveLength(5);
     expect(screen.queryByText("No POS terminals registered")).not.toBeInTheDocument();
   });
 
@@ -539,7 +576,7 @@ describe("POSTerminalHealthViewContent", () => {
       />,
     );
 
-    expect(screen.getByText("Healthy")).toBeInTheDocument();
+    expect(screen.getAllByText("Healthy").length).toBeGreaterThan(0);
     expect(screen.getByText("Healthy idle")).toBeInTheDocument();
     expect(
       screen.queryByText(
@@ -548,6 +585,22 @@ describe("POSTerminalHealthViewContent", () => {
     ).not.toBeInTheDocument();
   });
 });
+
+function metricCard(label: string) {
+  const metricLabel = screen.getAllByText(label).find(
+    (element) => element.tagName.toLowerCase() === "p",
+  );
+  if (!metricLabel) {
+    throw new Error(`Metric ${label} was not rendered.`);
+  }
+
+  const card = metricLabel.closest("div");
+  if (!card) {
+    throw new Error(`Metric ${label} has no card container.`);
+  }
+
+  return card;
+}
 
 describe("POSTerminalHealthView", () => {
   beforeEach(() => {

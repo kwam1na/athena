@@ -189,6 +189,47 @@ describe("terminalRecoveryCommands", () => {
     });
 
     expect(applyUpdate).toHaveBeenCalledTimes(1);
+    expect(applyUpdate).toHaveBeenCalledWith({ bypassUnloadPrompt: true });
+  });
+
+  it("applies ready unstaged app updates when cache staging is only diagnostic", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+    });
+    const applyUpdate = vi.fn(() => true);
+
+    const result = await executeTerminalRecoveryCommand({
+      appUpdateCoordinator: {
+        applyUpdate,
+        getSnapshot: () => ({
+          blockers: [],
+          canApply: true,
+          pendingBuildId: "build-2",
+          status: "ready-unstaged",
+        }),
+      },
+      command: buildCommand({ type: "update_app" }),
+      store,
+      storeId: "store-1",
+      terminalId: "terminal-cloud-1",
+      terminalSeed: seed,
+    });
+
+    expect(result).toMatchObject({
+      diagnostics: {
+        appUpdateCanApply: true,
+        appUpdateStatus: "applying",
+        pendingBuildId: "build-2",
+      },
+      status: "completed",
+      type: "update_app",
+    });
+
+    await expect(Promise.resolve(result.postAcknowledge?.())).resolves.toEqual({
+      applied: true,
+    });
+    expect(applyUpdate).toHaveBeenCalledTimes(1);
+    expect(applyUpdate).toHaveBeenCalledWith({ bypassUnloadPrompt: true });
   });
 
   it("releases the update command latch when acknowledgement fails", async () => {

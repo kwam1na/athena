@@ -16,6 +16,22 @@ export type UpdateApplyBlockerPriority =
   | "resume-required";
 
 export type UpdateStagingStatus = "staged" | "unstaged";
+export type UpdateStagingReason =
+  | "asset-staging-failed"
+  | "no-entry-html"
+  | "no-static-assets"
+  | "cache-storage-unavailable"
+  | "service-worker-unavailable"
+  | "service-worker-timeout"
+  | "service-worker-error";
+
+export type UpdateStagingDiagnostics = {
+  status: UpdateStagingStatus;
+  reason?: UpdateStagingReason;
+  assetCount?: number;
+  failedAssetCount?: number;
+  rejectedAssetCount?: number;
+};
 
 export type UpdateApplyBlockerInput = {
   surfaceId: string;
@@ -36,6 +52,7 @@ export type UpdateCoordinatorSnapshot = {
   currentBuildId?: string;
   pendingBuildId?: string;
   canApply: boolean;
+  staging?: UpdateStagingDiagnostics;
   blockers: UpdateApplyBlocker[];
   selectedBlocker?: UpdateApplyBlocker;
 };
@@ -44,6 +61,10 @@ export type UpdateDetectedInput = {
   currentBuildId?: string;
   pendingBuildId: string;
   stagingStatus: UpdateStagingStatus;
+  stagingReason?: UpdateStagingReason;
+  assetCount?: number;
+  failedAssetCount?: number;
+  rejectedAssetCount?: number;
 };
 
 export type UpdateCoordinatorMessageBlocker = UpdateApplyBlockerInput & {
@@ -58,6 +79,10 @@ export type UpdateCoordinatorMessage = {
   blockers: UpdateCoordinatorMessageBlocker[];
 };
 
+export type UpdateApplyOptions = {
+  bypassUnloadPrompt?: boolean;
+};
+
 export type UpdateCoordinatorStore = {
   getSnapshot: () => UpdateCoordinatorSnapshot;
   getMessage: () => UpdateCoordinatorMessage | null;
@@ -68,7 +93,7 @@ export type UpdateCoordinatorStore = {
   registerApplyBlocker: (blocker: UpdateApplyBlockerInput) => void;
   clearApplyBlocker: (surfaceId: string) => void;
   receiveMessage: (message: UpdateCoordinatorMessage) => void;
-  applyUpdate: () => boolean;
+  applyUpdate: (options?: UpdateApplyOptions) => boolean;
 };
 
 const DEFAULT_REMOTE_BLOCKER_LEASE_MS = 30_000;
@@ -88,7 +113,7 @@ export function createUpdateCoordinatorStore({
   tabId = createTabId(),
   remoteBlockerLeaseMs = DEFAULT_REMOTE_BLOCKER_LEASE_MS,
 }: {
-  reload: () => void;
+  reload: (options?: UpdateApplyOptions) => void;
   now?: () => number;
   setTimer?: (callback: () => void, delay: number) => unknown;
   clearTimer?: (timerId: unknown) => void;
@@ -98,6 +123,7 @@ export function createUpdateCoordinatorStore({
   let currentBuildId: string | undefined;
   let pendingBuildId: string | undefined;
   let baseStatus: UpdateCoordinatorStatus = "current";
+  let stagingDiagnostics: UpdateStagingDiagnostics = { status: "staged" };
   let applying = false;
   const localBlockers = new Map<string, UpdateApplyBlocker>();
   const remoteBlockers = new Map<string, UpdateApplyBlocker>();
@@ -183,6 +209,7 @@ export function createUpdateCoordinatorStore({
       ...(currentBuildId ? { currentBuildId } : {}),
       ...(pendingBuildId ? { pendingBuildId } : {}),
       canApply: hasUpdate && blockers.length === 0 && !applying,
+      staging: stagingDiagnostics,
       blockers,
       ...(blockers[0] ? { selectedBlocker: blockers[0] } : {}),
     };
@@ -200,6 +227,19 @@ export function createUpdateCoordinatorStore({
   function reportUpdateDetected(input: UpdateDetectedInput) {
     currentBuildId = input.currentBuildId;
     pendingBuildId = input.pendingBuildId;
+    stagingDiagnostics = {
+      status: input.stagingStatus,
+      ...(input.stagingReason ? { reason: input.stagingReason } : {}),
+      ...(typeof input.assetCount === "number"
+        ? { assetCount: input.assetCount }
+        : {}),
+      ...(typeof input.failedAssetCount === "number"
+        ? { failedAssetCount: input.failedAssetCount }
+        : {}),
+      ...(typeof input.rejectedAssetCount === "number"
+        ? { rejectedAssetCount: input.rejectedAssetCount }
+        : {}),
+    };
     baseStatus = input.stagingStatus === "staged" ? "ready" : "ready-unstaged";
     emit();
   }
@@ -262,14 +302,14 @@ export function createUpdateCoordinatorStore({
     emit();
   }
 
-  function applyUpdate() {
+  function applyUpdate(options?: UpdateApplyOptions) {
     const snapshot = getSnapshot();
     if (!snapshot.canApply) {
       return false;
     }
     applying = true;
     emit();
-    reload();
+    reload(options);
     return true;
   }
 

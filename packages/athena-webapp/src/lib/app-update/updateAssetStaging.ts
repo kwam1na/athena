@@ -7,6 +7,7 @@ const STAGE_STATIC_ASSETS_ERROR_MESSAGE =
   "athena-pos-app-shell:stage-static-assets-error";
 
 export type UpdateAssetStagingReason =
+  | "asset-staging-failed"
   | "no-entry-html"
   | "no-static-assets"
   | "cache-storage-unavailable"
@@ -103,7 +104,16 @@ export async function stageUpdateStaticAssets(input: {
   const id = `stage-assets-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
   return new Promise<UpdateAssetStagingResult>((resolve) => {
+    const MessageChannelConstructor =
+      (messagingWindow as Window & { MessageChannel?: typeof MessageChannel })
+        .MessageChannel ?? globalThis.MessageChannel;
+    const channel =
+      typeof MessageChannelConstructor === "function"
+        ? new MessageChannelConstructor()
+        : null;
+
     const timeout = messagingWindow.setTimeout(() => {
+      channel?.port1.close();
       serviceWorker.removeEventListener("message", handleMessage);
       resolve({
         assetUrls,
@@ -114,6 +124,7 @@ export async function stageUpdateStaticAssets(input: {
 
     function finish(result: UpdateAssetStagingResult) {
       messagingWindow.clearTimeout(timeout);
+      channel?.port1.close();
       serviceWorker.removeEventListener("message", handleMessage);
       resolve(result);
     }
@@ -128,6 +139,21 @@ export async function stageUpdateStaticAssets(input: {
           finish({
             assetUrls,
             reason: "service-worker-error",
+            status: "unstaged",
+          });
+          return;
+        }
+
+        if (
+          result.failedAssetUrls.length > 0 ||
+          result.rejectedAssetUrls.length > 0 ||
+          result.stagedAssetUrls.length < assetUrls.length
+        ) {
+          finish({
+            assetUrls,
+            failedAssetUrls: result.failedAssetUrls,
+            reason: "asset-staging-failed",
+            rejectedAssetUrls: result.rejectedAssetUrls,
             status: "unstaged",
           });
           return;
@@ -155,11 +181,20 @@ export async function stageUpdateStaticAssets(input: {
     }
 
     serviceWorker.addEventListener("message", handleMessage);
-    messageTarget.postMessage({
+    if (channel) {
+      channel.port1.onmessage = handleMessage;
+      channel.port1.start();
+    }
+    const message = {
       assetUrls,
       id,
       type: STAGE_STATIC_ASSETS_MESSAGE,
-    });
+    };
+    if (channel) {
+      messageTarget.postMessage(message, [channel.port2]);
+    } else {
+      messageTarget.postMessage(message);
+    }
   });
 }
 

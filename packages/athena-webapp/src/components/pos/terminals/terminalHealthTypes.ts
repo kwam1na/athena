@@ -147,6 +147,10 @@ export type TerminalRuntimeAppUpdateEvidence = {
     | "resume_required"
     | "unknown"
     | string;
+  stagingAssetCount?: number;
+  stagingFailedAssetCount?: number;
+  stagingReason?: string;
+  stagingRejectedAssetCount?: number;
   stagingStatus?: "staged" | "unknown" | "unstaged" | string;
   status:
     | "applying"
@@ -415,6 +419,11 @@ export type TerminalAppUpdatePreview = {
   evidenceFresh: boolean;
   observedAt?: number;
   pendingBuildId?: string;
+  stagingAssetCount?: number;
+  stagingFailedAssetCount?: number;
+  stagingReason?: string;
+  stagingRejectedAssetCount?: number;
+  stagingStatus?: string;
   status: TerminalAppUpdateStatus;
   summary?: string;
 };

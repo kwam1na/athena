@@ -496,6 +496,7 @@ async function listTimelineEvents(
   ctx: Pick<QueryCtx, "db">,
   args: {
     endAt: number;
+    includeManagerReviewEvidence?: boolean;
     startAt: number;
     storeId: Id<"store">;
   },
@@ -512,16 +513,18 @@ async function listTimelineEvents(
     )
     .order("desc")
     .take(MAX_OPERATIONS_QUERY_LIMIT);
+  const storePromise = ctx.db.get("store", args.storeId);
   const registerSessionsPromise = listTimelineRegisterSessions(ctx, args.storeId);
-  const pendingRegisterCountsPromise = listPendingRegisterCountTimelineEvents(
-    ctx,
-    args,
-  );
-  const [events, registerSessions, pendingRegisterCountEvents] = await Promise.all([
-    eventsPromise,
-    registerSessionsPromise,
-    pendingRegisterCountsPromise,
-  ]);
+  const pendingRegisterCountsPromise = args.includeManagerReviewEvidence
+    ? listPendingRegisterCountTimelineEvents(ctx, args)
+    : Promise.resolve([]);
+  const [events, registerSessions, pendingRegisterCountEvents, store] =
+    await Promise.all([
+      eventsPromise,
+      registerSessionsPromise,
+      pendingRegisterCountsPromise,
+      storePromise,
+    ]);
   const operationalCloseoutKeys = new Set(
     events
       .map((event) => getOperationalRegisterCloseoutKey(event))
@@ -529,7 +532,14 @@ async function listTimelineEvents(
   );
   const [operationalTimelineEvents, registerCloseoutTimelineEvents] =
     await Promise.all([
-      Promise.all(events.map((event) => mapOperationalTimelineEvent(ctx, event))),
+      Promise.all(
+        events.map((event) =>
+          mapOperationalTimelineEvent(ctx, {
+            currency: store?.currency ?? "GHS",
+            event,
+          }),
+        ),
+      ),
       Promise.resolve(
         buildRegisterCloseoutTimelineEvents({
           endAt: args.endAt,
@@ -685,17 +695,23 @@ async function mapPendingRegisterCountTimelineEvent(
 
 async function mapOperationalTimelineEvent(
   ctx: Pick<QueryCtx, "db">,
-  event: {
-    _id: Id<"operationalEvent">;
-    createdAt: number;
-    eventType: string;
-    message: string;
-    metadata?: Record<string, unknown>;
-    subjectId: string;
-    subjectLabel?: string;
-    subjectType: string;
+  args: {
+    currency: string;
+    event: {
+      _id: Id<"operationalEvent">;
+      actorStaffProfileId?: string;
+      createdAt: number;
+      eventType: string;
+      message: string;
+      metadata?: Record<string, unknown>;
+      registerSessionId?: Id<"registerSession">;
+      subjectId: string;
+      subjectLabel?: string;
+      subjectType: string;
+    };
   },
 ): Promise<DailyOperationsTimelineEvent | null> {
+  const event = args.event;
   const metadata = event.metadata ?? {};
   if (isDailyOperationsTimelineAuditEvent(event)) {
     return null;
@@ -718,6 +734,24 @@ async function mapOperationalTimelineEvent(
         : undefined;
   const productSku = productSkuId
     ? await ctx.db.get("productSku", productSkuId)
+    : null;
+  const isRegisterSessionEvent = isRegisterSessionSubjectType(event.subjectType);
+  const registerSessionId =
+    event.registerSessionId ??
+    (isRegisterSessionEvent
+      ? ctx.db.normalizeId("registerSession", event.subjectId)
+      : null);
+  const registerSession = registerSessionId
+    ? await ctx.db.get("registerSession", registerSessionId)
+    : null;
+  const actorStaffProfileId =
+    typeof event.actorStaffProfileId === "string"
+      ? (event.actorStaffProfileId as Id<"staffProfile">)
+      : typeof registerSession?.openedByStaffProfileId === "string"
+        ? (registerSession.openedByStaffProfileId as Id<"staffProfile">)
+        : undefined;
+  const actorStaffProfile = actorStaffProfileId
+    ? await ctx.db.get("staffProfile", actorStaffProfileId)
     : null;
   const productName =
     typeof metadata.productName === "string"
@@ -781,17 +815,28 @@ async function mapOperationalTimelineEvent(
   const registerNumber =
     typeof metadata.registerNumber === "string"
       ? metadata.registerNumber
-      : undefined;
+      : registerSession?.registerNumber;
   const registerLabel =
-    event.subjectType === "register_session"
-      ? event.subjectLabel ?? formatRegisterSessionLabel(registerNumber)
+    isRegisterSessionEvent
+      ? formatRegisterSessionLabel(event.subjectLabel ?? registerNumber)
+      : undefined;
+  const approvalSubjectLabel = getApprovalTimelineSubjectLabel({
+    event,
+    metadata,
+    registerLabel,
+  });
+  const openingFloat =
+    numberFromRecord(metadata, "openingFloat") ?? registerSession?.openingFloat;
+  const openingFloatLabel =
+    typeof openingFloat === "number"
+      ? formatTimelineAmount(args.currency, openingFloat)
       : undefined;
   const registerLink =
-    event.subjectType === "register_session"
+    isRegisterSessionEvent && registerSessionId
       ? {
           label: registerLabel ?? "Register session",
           params: {
-            sessionId: event.subjectId,
+            sessionId: registerSessionId,
           },
           to: "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId",
         }
@@ -800,17 +845,27 @@ async function mapOperationalTimelineEvent(
   return {
     createdAt: event.createdAt,
     id: event._id,
-    message: normalizeTimelineEventMessage(event.message),
+    message: normalizeTimelineEventMessage(event.message, {
+      actorName: actorStaffProfile?.fullName,
+      approvalSubjectLabel,
+      eventType: event.eventType,
+      openingFloatLabel,
+      registerLabel,
+    }),
     productLink,
     registerLink,
     subject: {
       id: event.subjectId,
-      label: event.subjectLabel ?? registerLabel,
+      label: registerLabel ?? event.subjectLabel,
       type: event.subjectType,
     },
     transactionLink,
     type: event.eventType,
   };
+}
+
+function isRegisterSessionSubjectType(subjectType: string) {
+  return subjectType === "register_session" || subjectType === "registerSession";
 }
 
 function isDailyOperationsTimelineAuditEvent(event: {
@@ -836,8 +891,176 @@ function isSaleBackedPendingCheckoutReuseEvent(
   );
 }
 
-function normalizeTimelineEventMessage(message: string) {
+function normalizeTimelineEventMessage(
+  message: string,
+  context?: {
+    actorName?: string;
+    approvalSubjectLabel?: string;
+    eventType?: string;
+    openingFloatLabel?: string;
+    registerLabel?: string;
+  },
+) {
+  const approvalMessage = normalizeApprovalTimelineEventMessage(context);
+  if (approvalMessage) return approvalMessage;
+
+  if (
+    context?.eventType === "register_session_opening_float_corrected" ||
+    /^Register session opening float corrected\.$/i.test(message)
+  ) {
+    const registerLabel = context?.registerLabel ?? "Register session";
+    const actorName = context?.actorName?.trim();
+    return actorName
+      ? punctuateTimelineSentence(
+          `${registerLabel} opening float corrected by ${actorName}`,
+        )
+      : `${registerLabel} opening float corrected.`;
+  }
+
+  if (/^(?:Offline )?POS register opened\.$/i.test(message)) {
+    const registerLabel = context?.registerLabel ?? "POS register";
+    const actorName = context?.actorName?.trim();
+    const openingFloatPhrase = context?.openingFloatLabel
+      ? ` with opening float ${context.openingFloatLabel}`
+      : "";
+    return actorName
+      ? punctuateTimelineSentence(
+          `${registerLabel} opened by ${actorName}${openingFloatPhrase}`,
+        )
+      : punctuateTimelineSentence(`${registerLabel} opened${openingFloatPhrase}`);
+  }
+
+  if (/^Register session closed with an exact cash match\.$/i.test(message)) {
+    return `${context?.registerLabel ?? "Register session"} closed with an exact cash match.`;
+  }
+
+  const varianceMatch = message.match(
+    /^Register session closed with a variance of (.+)\.$/i,
+  );
+  if (varianceMatch?.[1]) {
+    return `${context?.registerLabel ?? "Register session"} closed with a variance of ${varianceMatch[1]}.`;
+  }
+
   return message.replace(/^Offline POS sale\b/, "Sale");
+}
+
+function normalizeApprovalTimelineEventMessage(context?: {
+  actorName?: string;
+  approvalSubjectLabel?: string;
+  eventType?: string;
+}) {
+  if (!context?.eventType?.startsWith("approval.")) return null;
+
+  const subjectPhrase = context.approvalSubjectLabel
+    ? ` for ${context.approvalSubjectLabel}`
+    : "";
+
+  if (context.eventType === "approval.manager_granted") {
+    const actorPhrase = context.actorName?.trim()
+      ? ` by ${context.actorName.trim()}`
+      : "";
+    return punctuateTimelineSentence(
+      `Manager approval granted${actorPhrase}${subjectPhrase}`,
+    );
+  }
+
+  if (context.eventType === "approval.proof_consumed") {
+    return punctuateTimelineSentence(`Manager approval applied${subjectPhrase}`);
+  }
+
+  return null;
+}
+
+function punctuateTimelineSentence(value: string) {
+  return /[.!?]$/.test(value) ? value : `${value}.`;
+}
+
+function getApprovalTimelineSubjectLabel(args: {
+  event: {
+    subjectId: string;
+    subjectLabel?: string;
+    subjectType: string;
+  };
+  metadata: Record<string, unknown>;
+  registerLabel?: string;
+}) {
+  if (!isApprovalTimelineSubject(args.event, args.metadata)) return undefined;
+
+  if (args.registerLabel && args.registerLabel !== "Register session") {
+    return args.registerLabel;
+  }
+
+  if (typeof args.event.subjectLabel === "string") {
+    const normalizedLabel = normalizeApprovalSubjectLabel(
+      args.event.subjectLabel,
+      args.event.subjectType,
+      args.metadata,
+    );
+    if (normalizedLabel) return normalizedLabel;
+  }
+
+  if (typeof args.metadata.registerNumber === "string") {
+    return formatRegisterSessionLabel(args.metadata.registerNumber);
+  }
+
+  return normalizeApprovalSubjectIdFallback(
+    args.event.subjectId,
+    args.event.subjectType,
+    args.metadata,
+  );
+}
+
+function isApprovalTimelineSubject(
+  event: { subjectType: string },
+  metadata: Record<string, unknown>,
+) {
+  return (
+    isRegisterSessionSubjectType(event.subjectType) ||
+    typeof metadata.registerNumber === "string" ||
+    String(metadata.actionKey ?? "").includes("register")
+  );
+}
+
+function normalizeApprovalSubjectLabel(
+  value: string,
+  subjectType: string,
+  metadata: Record<string, unknown>,
+) {
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+
+  if (
+    isRegisterSessionSubjectType(subjectType) ||
+    typeof metadata.registerNumber === "string" ||
+    String(metadata.actionKey ?? "").includes("register")
+  ) {
+    return formatRegisterSessionLabel(trimmed);
+  }
+
+  return trimmed;
+}
+
+function normalizeApprovalSubjectIdFallback(
+  value: string,
+  subjectType: string,
+  metadata: Record<string, unknown>,
+) {
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+
+  if (
+    isRegisterSessionSubjectType(subjectType) ||
+    typeof metadata.registerNumber === "string" ||
+    String(metadata.actionKey ?? "").includes("register")
+  ) {
+    if (/^register\b/i.test(trimmed) || /^\d+$/.test(trimmed)) {
+      return formatRegisterSessionLabel(trimmed);
+    }
+
+    return undefined;
+  }
+
+  return trimmed;
 }
 
 async function listTimelineRegisterSessions(
@@ -1500,7 +1723,12 @@ export async function buildDailyOperationsSnapshotWithCtx(
       getDailyCloseRecordForDate(ctx, args),
       listOpenQueueSnapshot(ctx, args.storeId),
       listDailyOperationsAutomationStatuses(ctx, args),
-      listTimelineEvents(ctx, { ...range, storeId: args.storeId }),
+      listTimelineEvents(ctx, {
+        ...range,
+        includeManagerReviewEvidence:
+          args.includeManagerReviewEvidence ?? true,
+        storeId: args.storeId,
+      }),
       ctx.db.get("store", args.storeId),
       buildWeekMetrics(ctx, args),
     ]);

@@ -7,7 +7,10 @@ import type {
   PosProvisionedTerminalSeed,
   createPosLocalStore,
 } from "./posLocalStore";
-import type { UpdateCoordinatorSnapshot } from "@/lib/app-update/updateCoordinator";
+import type {
+  UpdateApplyOptions,
+  UpdateCoordinatorSnapshot,
+} from "@/lib/app-update/updateCoordinator";
 
 export type PosTerminalRecoveryCommandType =
   | "retry_sync"
@@ -62,7 +65,7 @@ export type PosTerminalRecoveryCommandCallbackResult = {
 type PosLocalRuntimeStore = ReturnType<typeof createPosLocalStore>;
 
 export type PosAppUpdateCoordinatorAdapter = {
-  applyUpdate: () => boolean;
+  applyUpdate: (options?: UpdateApplyOptions) => boolean;
   getSnapshot: () => UpdateCoordinatorSnapshot;
 };
 
@@ -213,6 +216,18 @@ async function executeUpdateApp(
   const baseDiagnostics = {
     appUpdateCanApply: snapshot.canApply,
     appUpdateStatus,
+    ...(snapshot.staging?.reason
+      ? { appUpdateStagingReason: snapshot.staging.reason }
+      : {}),
+    ...(typeof snapshot.staging?.assetCount === "number"
+      ? { appUpdateStagingAssetCount: snapshot.staging.assetCount }
+      : {}),
+    ...(typeof snapshot.staging?.failedAssetCount === "number"
+      ? { appUpdateStagingFailedAssetCount: snapshot.staging.failedAssetCount }
+      : {}),
+    ...(typeof snapshot.staging?.rejectedAssetCount === "number"
+      ? { appUpdateStagingRejectedAssetCount: snapshot.staging.rejectedAssetCount }
+      : {}),
     ...(snapshot.currentBuildId
       ? { currentBuildId: snapshot.currentBuildId }
       : {}),
@@ -239,7 +254,7 @@ async function executeUpdateApp(
     onAcknowledgeFailed: releaseLock,
     postAcknowledge: () => {
       try {
-        const applied = coordinator.applyUpdate();
+        const applied = coordinator.applyUpdate({ bypassUnloadPrompt: true });
         return applied
           ? { applied: true }
           : {

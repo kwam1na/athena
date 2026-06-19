@@ -90,6 +90,14 @@ describe("VPS QA deploy contract", () => {
     expect(deployScript).toContain("deploy_static_app_local()");
     expect(deployScript).toContain('eval "$env_script bun run build"');
     expect(deployScript).toContain(
+      'export VITE_ATHENA_WEBAPP_VERSION="$fun_name ($timestamp)"',
+    );
+    expect(deployScript).toContain('export VITE_ATHENA_WEBAPP_BUILD_SHA="$git_sha"');
+    expect(deployScript).toContain(
+      'VITE_ATHENA_WEBAPP_VERSION=\\"$fun_name ($version)\\"',
+    );
+    expect(deployScript).toContain('VITE_ATHENA_WEBAPP_BUILD_SHA=\\"$git_sha\\"');
+    expect(deployScript).toContain(
       'rsync -a --delete "$package_dir/dist/" "$REMOTE:$version_path/"',
     );
     expect(deployScript).toContain('"built_on": "local"');

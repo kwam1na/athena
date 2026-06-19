@@ -110,6 +110,104 @@ describe("terminal health presentation", () => {
     }
   });
 
+  it("keeps Update app available when a new app update appears after a verified command", () => {
+    const presentation = buildTerminalRecoveryPresentation({
+      recoveryPreview: {
+        appUpdate: {
+          evidenceFresh: true,
+          pendingBuildId: "build-next",
+          status: "update_ready_unstaged",
+        },
+        commandStatus: {
+          commandType: "update_app",
+          label: "Update app",
+          status: "completed",
+          verificationStatus: "verified",
+        },
+        readiness: "healthy_idle",
+      },
+      runtimeStatus: {
+        appUpdate: {
+          observedAt: Date.now(),
+          pendingBuildId: "build-next",
+          status: "update_ready_unstaged",
+        },
+      },
+      syncEvidence: {},
+      terminal: { _id: "terminal-1", status: "active" },
+    });
+
+    expect(presentation.appUpdate).toEqual(
+      expect.objectContaining({
+        action: expect.objectContaining({
+          commandType: "update_app",
+          status: "available",
+        }),
+        label: "Update available",
+        status: "update_ready_unstaged",
+      }),
+    );
+  });
+
+  it("describes why an app update is detected but not staged", () => {
+    const presentation = buildTerminalRecoveryPresentation({
+      recoveryPreview: {
+        appUpdate: {
+          evidenceFresh: true,
+          pendingBuildId: "build-next",
+          stagingAssetCount: 17,
+          stagingFailedAssetCount: 1,
+          stagingReason: "asset-staging-failed",
+          stagingRejectedAssetCount: 0,
+          stagingStatus: "unstaged",
+          status: "update_ready_unstaged",
+        },
+        readiness: "healthy_idle",
+      },
+      runtimeStatus: null,
+      syncEvidence: {},
+      terminal: { _id: "terminal-1", status: "active" },
+    });
+
+    expect(presentation.appUpdate.description).toBe(
+      "An app update was detected, but the POS app shell could not cache every required asset. 1 of 17 asset needs attention.",
+    );
+  });
+
+  it("treats unstaged cache evidence as a warning when the app update is ready", () => {
+    const presentation = buildTerminalRecoveryPresentation({
+      recoveryPreview: {
+        appUpdate: {
+          evidenceFresh: true,
+          pendingBuildId: "build-next",
+          stagingAssetCount: 17,
+          stagingFailedAssetCount: 1,
+          stagingReason: "asset-staging-failed",
+          stagingRejectedAssetCount: 0,
+          stagingStatus: "unstaged",
+          status: "update_ready",
+        },
+        readiness: "healthy_idle",
+      },
+      runtimeStatus: null,
+      syncEvidence: {},
+      terminal: { _id: "terminal-1", status: "active" },
+    });
+
+    expect(presentation.appUpdate).toEqual(
+      expect.objectContaining({
+        action: expect.objectContaining({
+          commandType: "update_app",
+          status: "available",
+        }),
+        description:
+          "An app update is ready, but the POS app shell could not cache every required asset for offline use. 1 of 17 asset needs attention.",
+        label: "Update ready",
+        status: "update_ready",
+      }),
+    );
+  });
+
   it("disables Update app for duplicate active commands and inactive terminals", () => {
     const duplicate = buildTerminalRecoveryPresentation({
       recoveryPreview: {

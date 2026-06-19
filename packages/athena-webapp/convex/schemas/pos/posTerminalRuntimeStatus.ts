@@ -62,6 +62,17 @@ export const posTerminalRuntimeAppUpdateStagingStatusValidator = v.union(
   v.literal("unknown"),
 );
 
+export const posTerminalRuntimeAppUpdateStagingReasonValidator = v.union(
+  v.literal("asset-staging-failed"),
+  v.literal("no-entry-html"),
+  v.literal("no-static-assets"),
+  v.literal("cache-storage-unavailable"),
+  v.literal("service-worker-unavailable"),
+  v.literal("service-worker-timeout"),
+  v.literal("service-worker-error"),
+  v.literal("unknown"),
+);
+
 export const posTerminalRuntimeAppUpdateDetectorStatusValidator = v.union(
   v.literal("ok"),
   v.literal("failed"),
@@ -89,6 +100,10 @@ export const posTerminalRuntimeAppUpdateValidator = v.object({
   selectedBlockerCode: v.optional(
     posTerminalRuntimeAppUpdateBlockerCodeValidator,
   ),
+  stagingAssetCount: v.optional(v.number()),
+  stagingFailedAssetCount: v.optional(v.number()),
+  stagingRejectedAssetCount: v.optional(v.number()),
+  stagingReason: v.optional(posTerminalRuntimeAppUpdateStagingReasonValidator),
   stagingStatus: v.optional(posTerminalRuntimeAppUpdateStagingStatusValidator),
   status: posTerminalRuntimeAppUpdateStatusValidator,
 });

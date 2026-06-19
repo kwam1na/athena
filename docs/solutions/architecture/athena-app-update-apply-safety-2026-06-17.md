@@ -75,6 +75,15 @@ check-in after the command was issued. A command acknowledgement saying
 `applying`, `current`, or `blocked` is lifecycle evidence, not proof that the
 terminal is running a newer bundle.
 
+`ready-unstaged` must stay visible but not applyable. The coordinator should
+only set `canApply` for staged updates; an unstaged update means detection
+succeeded but the browser has not proved that the static assets are prepared.
+The app-shell staging handshake uses a `MessageChannel` reply path and treats
+partial asset failures as unstaged. Runtime check-ins publish compact staging
+diagnostics, including reason and asset counts, so Terminal Health can explain
+whether staging failed because the service worker was unavailable, timed out, or
+could not cache every required asset.
+
 ## Apply Blockers
 
 Surfaces opt in through `useUpdateApplyBlocker` with:

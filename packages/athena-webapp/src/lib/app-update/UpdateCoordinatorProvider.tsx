@@ -1,6 +1,4 @@
 import {
-  createContext,
-  useContext,
   useEffect,
   useMemo,
   useRef,
@@ -11,37 +9,30 @@ import {
 import {
   createUpdateCoordinatorStore,
   isValidUpdateCoordinatorMessage,
-  type UpdateApplyBlockerInput,
-  type UpdateCoordinatorSnapshot,
+  type UpdateApplyOptions,
   type UpdateCoordinatorStore,
-  type UpdateDetectedInput,
 } from "./updateCoordinator";
-
-type UpdateCoordinatorContextValue = {
-  snapshot: UpdateCoordinatorSnapshot;
-  getSnapshot: () => UpdateCoordinatorSnapshot;
-  reportChecking: () => void;
-  reportUpdateDetected: (input: UpdateDetectedInput) => void;
-  reportDetectorFailed: () => void;
-  registerApplyBlocker: (blocker: UpdateApplyBlockerInput) => void;
-  clearApplyBlocker: (surfaceId: string) => void;
-  applyUpdate: () => boolean;
-};
-
-const UpdateCoordinatorContext =
-  createContext<UpdateCoordinatorContextValue | null>(null);
+import {
+  installAppUpdateUnloadPromptBypass,
+  reloadBrowserForAppUpdate,
+} from "./appUpdateReload";
+import {
+  UpdateCoordinatorContext,
+  type UpdateCoordinatorContextValue,
+} from "./UpdateCoordinatorContext";
 
 const CHANNEL_NAME = "athena-update-coordinator";
 
 export function UpdateCoordinatorProvider({
   children,
-  reload = () => window.location.reload(),
+  reload = reloadBrowserForAppUpdate,
 }: {
   children: ReactNode;
-  reload?: () => void;
+  reload?: (options?: UpdateApplyOptions) => void;
 }) {
   const storeRef = useRef<UpdateCoordinatorStore | null>(null);
   if (!storeRef.current) {
+    installAppUpdateUnloadPromptBypass();
     storeRef.current = createUpdateCoordinatorStore({ reload });
   }
   const store = storeRef.current;
@@ -97,22 +88,4 @@ export function UpdateCoordinatorProvider({
       {children}
     </UpdateCoordinatorContext.Provider>
   );
-}
-
-export function useUpdateCoordinator() {
-  const context = useContext(UpdateCoordinatorContext);
-  if (!context) {
-    throw new Error(
-      "useUpdateCoordinator must be used within UpdateCoordinatorProvider",
-    );
-  }
-  return context;
-}
-
-export function useOptionalUpdateCoordinator() {
-  return useContext(UpdateCoordinatorContext);
-}
-
-export function useUpdateCoordinatorSnapshot() {
-  return useUpdateCoordinator().snapshot;
 }

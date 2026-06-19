@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { createUpdateDetectionSequencer } from "./updateDetectionSequencer";
-import type { UpdateStagingStatus } from "./updateCoordinator";
+import type { UpdateStagingDiagnostics } from "./updateCoordinator";
 
 function createDeferredStatus() {
-  let resolve!: (status: UpdateStagingStatus) => void;
-  const promise = new Promise<UpdateStagingStatus>((innerResolve) => {
+  let resolve!: (status: UpdateStagingDiagnostics) => void;
+  const promise = new Promise<UpdateStagingDiagnostics>((innerResolve) => {
     resolve = innerResolve;
   });
   return { promise, resolve };
@@ -25,13 +25,19 @@ describe("updateDetectionSequencer", () => {
     const firstHandle = sequencer.handle({ pendingBuildId: "build-a" });
     const secondHandle = sequencer.handle({ pendingBuildId: "build-b" });
 
-    second.resolve("staged");
+    second.resolve({ status: "staged" });
     await secondHandle;
-    first.resolve("unstaged");
+    first.resolve({
+      reason: "service-worker-timeout",
+      status: "unstaged",
+    });
     await firstHandle;
 
     expect(report).toHaveBeenCalledTimes(1);
-    expect(report).toHaveBeenCalledWith({ pendingBuildId: "build-b" }, "staged");
+    expect(report).toHaveBeenCalledWith(
+      { pendingBuildId: "build-b" },
+      { status: "staged" },
+    );
   });
 
   it("does not report after the sequencer stops", async () => {
@@ -44,7 +50,7 @@ describe("updateDetectionSequencer", () => {
 
     const handle = sequencer.handle({ pendingBuildId: "build-a" });
     sequencer.stop();
-    deferred.resolve("staged");
+    deferred.resolve({ status: "staged" });
     await handle;
 
     expect(report).not.toHaveBeenCalled();

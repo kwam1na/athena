@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { PosLocalEventRecord } from "./posLocalStore";
 import {
+  hasSettledRegisterCloseout,
   projectLocalRegisterReadModel,
   type PosLocalRegisterReadModelError,
 } from "./registerReadModel";
@@ -877,6 +878,70 @@ describe("projectLocalRegisterReadModel", () => {
       localRegisterSessionId: "local-register-1",
       status: "closed_locally",
     });
+  });
+
+  it("recognizes a synced closeout recorded with the mapped cloud drawer id as settled", () => {
+    const closed = projectLocalRegisterReadModel({
+      mappings: [
+        {
+          entity: "registerSession",
+          localId: "local-register-1",
+          cloudId: "cloud-register-1",
+          mappedAt: 1_001,
+        },
+      ],
+      events: [
+        event({
+          sequence: 1,
+          type: "register.opened",
+          localRegisterSessionId: "local-register-1",
+          payload: { openingFloat: 100 },
+          sync: { status: "synced", uploaded: true },
+        }),
+        event({
+          sequence: 2,
+          type: "register.closeout_started",
+          localRegisterSessionId: "cloud-register-1",
+          payload: { countedCash: 100 },
+          sync: { status: "synced", uploaded: true },
+        }),
+      ],
+    });
+
+    expect(
+      hasSettledRegisterCloseout({
+        events: closed.sourceEvents,
+        session: closed.activeRegisterSession,
+      }),
+    ).toBe(true);
+  });
+
+  it("does not treat an unsynced closeout as settled", () => {
+    const closed = projectLocalRegisterReadModel({
+      events: [
+        event({
+          sequence: 1,
+          type: "register.opened",
+          localRegisterSessionId: "local-register-1",
+          payload: { openingFloat: 100 },
+          sync: { status: "synced", uploaded: true },
+        }),
+        event({
+          sequence: 2,
+          type: "register.closeout_started",
+          localRegisterSessionId: "local-register-1",
+          payload: { countedCash: 100 },
+          sync: { status: "pending" },
+        }),
+      ],
+    });
+
+    expect(
+      hasSettledRegisterCloseout({
+        events: closed.sourceEvents,
+        session: closed.activeRegisterSession,
+      }),
+    ).toBe(false);
   });
 
   it("blocks selling when terminal integrity requires repair", () => {

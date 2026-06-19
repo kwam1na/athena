@@ -37,6 +37,12 @@ function createServiceWorkerFixture() {
     if (url.endsWith("/assets/fail.js")) {
       throw new Error("network unavailable");
     }
+    if (url.endsWith("/assets/missing.js")) {
+      return new Response("missing", {
+        headers: { "content-type": "application/javascript" },
+        status: 404,
+      });
+    }
     return new Response("body", {
       headers: {
         "content-type": url.endsWith(".css")
@@ -112,6 +118,7 @@ describe("POS app-shell service worker static update staging", () => {
       "https://athena.example/assets/customer-data.json",
       "https://athena.example/api/customer.js",
       "https://athena.example/assets/fail.js",
+      "https://athena.example/assets/missing.js",
       "not a url",
     ]);
 
@@ -122,7 +129,10 @@ describe("POS app-shell service worker static update staging", () => {
         result: {
           cacheName: "athena-pos-app-shell-v6",
           cachedRequests: 1,
-          failedAssetUrls: ["https://athena.example/assets/fail.js"],
+          failedAssetUrls: [
+            "https://athena.example/assets/fail.js",
+            "https://athena.example/assets/missing.js",
+          ],
           rejectedAssetUrls: [
             "https://athena.example/assets/customer-data.json",
             "https://athena.example/api/customer.js",

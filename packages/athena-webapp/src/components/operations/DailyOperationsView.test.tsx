@@ -381,6 +381,54 @@ const registerCloseoutTimelineSnapshot: DailyOperationsSnapshot = {
   ],
 };
 
+const registerSessionClosedTimelineSnapshot: DailyOperationsSnapshot = {
+  ...operatingSnapshot,
+  timeline: [
+    {
+      createdAt: Date.UTC(2026, 4, 8, 20, 45),
+      id: "event-register-session-closed",
+      message: "Register 80 closed with an exact cash match.",
+      registerLink: {
+        label: "Register 80",
+        params: {
+          sessionId: "register-session-80",
+        },
+        to: "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId",
+      },
+      subject: {
+        id: "register-session-80",
+        label: "Register 80",
+        type: "register_session",
+      },
+      type: "register_session_closed",
+    },
+  ],
+};
+
+const registerOpenedTimelineSnapshot: DailyOperationsSnapshot = {
+  ...operatingSnapshot,
+  timeline: [
+    {
+      createdAt: Date.UTC(2026, 4, 8, 10, 3),
+      id: "event-register-opened",
+      message: "Register 80 opened.",
+      registerLink: {
+        label: "Register 80",
+        params: {
+          sessionId: "register-session-80",
+        },
+        to: "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId",
+      },
+      subject: {
+        id: "register-session-80",
+        label: "Register 80",
+        type: "register_session",
+      },
+      type: "pos_local_sync.register_opened_projected",
+    },
+  ],
+};
+
 const posSyncedSaleTimelineSnapshot: DailyOperationsSnapshot = {
   ...operatingSnapshot,
   timeline: [
@@ -1285,6 +1333,47 @@ describe("DailyOperationsViewContent", () => {
         );
       }),
     ).toBeInTheDocument();
+  });
+
+  it("links generic register session closed timeline events to the register session", () => {
+    renderContent(registerSessionClosedTimelineSnapshot);
+
+    const registerLink = screen.getByRole("link", { name: "Register 80" });
+
+    expect(registerLink).toHaveAttribute(
+      "href",
+      expect.stringContaining(
+        "/wigclub/store/osu/cash-controls/registers/register-session-80?o=",
+      ),
+    );
+    expect(
+      screen.getByText((content, node) => {
+        return (
+          node?.textContent ===
+          "Register 80 closed with an exact cash match."
+        );
+      }),
+    ).toBeInTheDocument();
+    expect(registerLink.querySelector("svg")).toBeInTheDocument();
+  });
+
+  it("links POS register opened timeline events to the register session", () => {
+    renderContent(registerOpenedTimelineSnapshot);
+
+    const registerLink = screen.getByRole("link", { name: "Register 80" });
+
+    expect(registerLink).toHaveAttribute(
+      "href",
+      expect.stringContaining(
+        "/wigclub/store/osu/cash-controls/registers/register-session-80?o=",
+      ),
+    );
+    expect(
+      screen.getByText((content, node) => {
+        return node?.textContent === "Register 80 opened.";
+      }),
+    ).toBeInTheDocument();
+    expect(registerLink.querySelector("svg")).toBeInTheDocument();
   });
 
   it("links synced offline POS sale transaction numbers with link-out affordance", () => {

@@ -1297,6 +1297,16 @@ describe("POS terminal public mutations", () => {
     assertConformsToExportedReturns(submitTerminalRuntimeStatus as never, {
       kind: "ok",
       data: {
+        drawerAuthorityDirective: {
+          cloudRegisterSessionId: "register-session-1",
+          localRegisterSessionId: "local-register-session-1",
+          message:
+            "The mapped cloud register is closed. Open a register before selling.",
+          observedAt: 200,
+          reason: "cloud_closed",
+          registerNumber: "8",
+          status: "blocked",
+        },
         terminalId: "terminal-1",
         reportedAt: 100,
         receivedAt: 200,
