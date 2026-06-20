@@ -12,6 +12,8 @@ import {
   type UpdateApplyOptions,
   type UpdateCoordinatorStore,
 } from "./updateCoordinator";
+import { useAppActionBlockers } from "@/lib/app-messages";
+import { APP_UPDATE_APPLY_ACTION_ID } from "./appUpdateActions";
 import {
   installAppUpdateUnloadPromptBypass,
   reloadBrowserForAppUpdate,
@@ -36,11 +38,23 @@ export function UpdateCoordinatorProvider({
     storeRef.current = createUpdateCoordinatorStore({ reload });
   }
   const store = storeRef.current;
+  const applyBlockers = useAppActionBlockers(APP_UPDATE_APPLY_ACTION_ID);
   const snapshot = useSyncExternalStore(
     store.subscribe,
     store.getSnapshot,
     store.getSnapshot,
   );
+
+  useEffect(() => {
+    store.syncApplyBlockers(
+      applyBlockers.map((blocker) => ({
+        surfaceId: blocker.blockerId,
+        priority: blocker.priority,
+        label: blocker.label,
+        guidance: blocker.guidance,
+      })),
+    );
+  }, [applyBlockers, store]);
 
   useEffect(() => {
     if (typeof BroadcastChannel === "undefined") {

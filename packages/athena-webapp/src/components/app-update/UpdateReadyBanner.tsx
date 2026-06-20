@@ -1,28 +1,20 @@
-import { useEffect } from "react";
-import { Info } from "lucide-react";
-import { toast } from "sonner";
+import { useMemo } from "react";
 
-import { Button } from "@/components/ui/button";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import {
-  usePreferredUpdateCommunicationVariant,
-  useUpdateCoordinator,
-} from "@/lib/app-update";
-import { cn } from "@/lib/utils";
-
-const updateReadyToastId = "athena-update-ready-toast";
-const updateButtonClassName =
-  "min-h-10 shrink-0 px-layout-md text-action-commit hover:bg-action-commit-soft hover:text-action-commit";
-const ghostUpdateButtonLabel = "New Athena version available";
+import { AppMessageHost } from "@/components/app-messages/AppMessageHost";
+import { useAppMessage } from "@/lib/app-messages";
+import { useUpdateCoordinator } from "@/lib/app-update";
 
 export function UpdateReadyBanner() {
+  return (
+    <>
+      <UpdateReadyMessageAdapter />
+      <AppMessageHost />
+    </>
+  );
+}
+
+function UpdateReadyMessageAdapter() {
   const { snapshot, applyUpdate } = useUpdateCoordinator();
-  const communicationVariant = usePreferredUpdateCommunicationVariant();
   const hasUpdate =
     snapshot.status === "ready" ||
     snapshot.status === "ready-unstaged" ||
@@ -30,140 +22,42 @@ export function UpdateReadyBanner() {
     snapshot.status === "applying";
 
   const blocker = snapshot.selectedBlocker;
-  const hasBlocker = Boolean(blocker);
   const canApply = snapshot.canApply;
   const isApplying = snapshot.status === "applying";
-  const bannerContent = getUpdateReadyBannerContent(snapshot);
-  const showUpdateAction = !hasBlocker && (canApply || isApplying);
-  const shouldShowToast = hasUpdate && communicationVariant === "toast";
-  const ghostButtonLabel =
-    communicationVariant === "ghost" && hasBlocker
-      ? (blocker?.guidance ?? bannerContent.tooltip ?? bannerContent.message)
-      : ghostUpdateButtonLabel;
-
-  useEffect(() => {
-    if (!shouldShowToast) {
-      toast.dismiss(updateReadyToastId);
-      return;
-    }
-
-    toast.message(bannerContent.message, {
-      id: updateReadyToastId,
-      closeButton: false,
-      dismissible: false,
-      duration: Number.POSITIVE_INFINITY,
-      position: "top-right",
-      className: "min-w-80",
-      classNames: {
-        toast: "justify-between",
-        content: "min-w-0 flex-1",
-      },
-      action: showUpdateAction ? (
-        <Button
-          className={cn(updateButtonClassName, "ml-auto")}
-          disabled={!canApply || isApplying}
-          onClick={() => {
-            if (canApply && !isApplying) {
-              applyUpdate();
-            }
-          }}
-          size="sm"
-          type="button"
-          variant="ghost"
-        >
-          Update
-        </Button>
-      ) : undefined,
-    });
-  }, [
-    applyUpdate,
-    bannerContent.message,
-    canApply,
-    hasBlocker,
-    isApplying,
-    shouldShowToast,
-    showUpdateAction,
-  ]);
-
-  if (!hasUpdate) {
-    return null;
-  }
-
-  if (communicationVariant === "ghost") {
-    return (
-      <section
-        aria-label="Update ready"
-        aria-live="polite"
-        className="fixed bottom-layout-md left-layout-md z-50"
-      >
-	        <Button
-	          aria-label={ghostButtonLabel}
-	          className="min-h-10 rounded-full border border-border/70 bg-foreground/10 px-layout-md text-sm font-semibold text-foreground shadow-surface backdrop-blur transition-colors hover:border-border hover:bg-foreground/15 hover:text-foreground supports-[backdrop-filter]:bg-foreground/10"
-	          disabled={!canApply || isApplying}
-          onClick={() => {
-            if (canApply && !isApplying) {
-              applyUpdate();
-            }
-          }}
-          title={bannerContent.tooltip ?? bannerContent.message}
-          type="button"
-	          variant="ghost"
-	        >
-	          {ghostButtonLabel}
-	        </Button>
-      </section>
-    );
-  }
-
-  if (communicationVariant !== "banner") {
-    return null;
-  }
-
-  return (
-    <section
-      aria-label="Update ready"
-      aria-live="polite"
-      className="fixed inset-x-0 top-0 z-50 border-b border-border/80 bg-surface/95 px-layout-md py-layout-sm shadow-surface backdrop-blur supports-[backdrop-filter]:bg-surface/85"
-    >
-      <div className="mx-auto flex max-w-7xl flex-col items-center justify-center gap-layout-lg text-center sm:flex-row sm:text-left">
-        <div className="min-w-0">
-          <div className="flex min-w-0 items-center justify-center gap-layout-xs truncate text-sm font-medium text-foreground sm:justify-start">
-            <span className="truncate">{bannerContent.message}</span>
-            {bannerContent.tooltip ? (
-              <TooltipProvider delayDuration={150}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      aria-label="Update cache details"
-                      className="inline-flex size-5 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                      type="button"
-                    >
-                      <Info aria-hidden="true" className="size-4" />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent className="w-72 max-w-[calc(100vw-2rem)] whitespace-normal text-left text-xs leading-5">
-                    {bannerContent.tooltip}
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            ) : null}
-          </div>
-        </div>
-        {showUpdateAction ? (
-          <Button
-            className={updateButtonClassName}
-            disabled={!canApply || isApplying}
-            onClick={() => applyUpdate()}
-            size="sm"
-            type="button"
-            variant="ghost"
-          >
-            Update
-          </Button>
-        ) : null}
-      </div>
-    </section>
+  const content = getUpdateReadyBannerContent(snapshot);
+  const showUpdateAction = canApply || isApplying || Boolean(blocker);
+  const action = useMemo(
+    () =>
+      showUpdateAction
+        ? {
+            actionId: "app-update.apply",
+            disabled: !canApply || isApplying,
+            iconName: "download" as const,
+            label: "Update",
+            onInvoke: () => {
+              if (canApply && !isApplying) {
+                applyUpdate();
+              }
+            },
+          }
+        : undefined,
+    [applyUpdate, canApply, isApplying, showUpdateAction],
   );
+
+  useAppMessage({
+    id: "app-update.ready",
+    active: hasUpdate,
+    label: "Update ready",
+    message: content.message,
+    compactLabel: "New Athena version available",
+    details: content.tooltip,
+    detailsLabel: "Update cache details",
+    priority: 100,
+    toastId: "athena-update-ready-toast",
+    action,
+  });
+
+  return null;
 }
 
 function getUpdateReadyBannerContent(

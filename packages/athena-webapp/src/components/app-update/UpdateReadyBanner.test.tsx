@@ -4,9 +4,15 @@ import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  AppMessagesProvider,
+  useAppActionBlocker,
+  useAppMessageCommunicationPreference,
+} from "@/lib/app-messages";
+import {
   UpdateCommunicationPreferenceProvider,
   UpdateCoordinatorProvider,
   useUpdateCoordinator,
+  useUpdateApplyBlocker,
   useUpdateCommunicationPreference,
 } from "@/lib/app-update";
 import { UpdateReadyBanner } from "./UpdateReadyBanner";
@@ -70,7 +76,7 @@ function CommunicationPreferenceProbe({
 }: {
   variant: "ghost" | "banner" | "toast";
 }) {
-  useUpdateCommunicationPreference({
+  useAppMessageCommunicationPreference({
     surfaceId: "pos-register",
     variant,
   });
@@ -78,16 +84,61 @@ function CommunicationPreferenceProbe({
   return null;
 }
 
+function AppMessageBlockerProbe() {
+  useAppActionBlocker({
+    actionId: "app-update.apply",
+    active: true,
+    blockerId: "pos-register",
+    priority: "critical-workflow",
+    label: "Register sale",
+    guidance: "Finish this sale before refreshing.",
+  });
+
+  return null;
+}
+
+function CompatibilityToastPreferenceProbe() {
+  useUpdateCommunicationPreference({
+    surfaceId: "pos-register",
+    variant: "toast",
+  });
+
+  return null;
+}
+
+function LegacyApplyBlockerProbe({ active = true }: { active?: boolean }) {
+  useUpdateApplyBlocker({
+    active,
+    guidance: "Finish this legacy workflow before refreshing.",
+    label: "Legacy workflow",
+    priority: "active-command",
+    surfaceId: "legacy-workflow",
+  });
+
+  return null;
+}
+
+function CoordinatorSnapshotProbe() {
+  const { snapshot } = useUpdateCoordinator();
+
+  return (
+    <div>
+      <span>{snapshot.status}</span>
+      <span>{snapshot.selectedBlocker?.guidance}</span>
+    </div>
+  );
+}
+
 function renderWithUpdateProviders(
   children: ReactNode,
   { reload = vi.fn() }: { reload?: () => void } = {},
 ) {
   return render(
-    <UpdateCoordinatorProvider reload={reload}>
-      <UpdateCommunicationPreferenceProvider>
+    <AppMessagesProvider>
+      <UpdateCoordinatorProvider reload={reload}>
         {children}
-      </UpdateCommunicationPreferenceProvider>
-    </UpdateCoordinatorProvider>,
+      </UpdateCoordinatorProvider>
+    </AppMessagesProvider>,
   );
 }
 
@@ -191,7 +242,8 @@ describe("UpdateReadyBanner", () => {
   it("shows blocker guidance without an apply action while work is unsafe", () => {
     renderWithUpdateProviders(
       <>
-        <Probe blocked />
+        <Probe />
+        <AppMessageBlockerProbe />
         <UpdateReadyBanner />
       </>,
     );
@@ -242,5 +294,64 @@ describe("UpdateReadyBanner", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Update" }));
     expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the app-update communication provider as a compatibility wrapper", () => {
+    render(
+      <UpdateCommunicationPreferenceProvider>
+        <UpdateCoordinatorProvider>
+          <CompatibilityToastPreferenceProbe />
+          <Probe />
+          <UpdateReadyBanner />
+        </UpdateCoordinatorProvider>
+      </UpdateCommunicationPreferenceProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "mark ready" }));
+
+    expect(screen.queryByLabelText("Update ready")).not.toBeInTheDocument();
+    expect(toastMock.message).toHaveBeenCalledWith(
+      "Update ready",
+      expect.objectContaining({ id: "athena-update-ready-toast" }),
+    );
+  });
+
+  it("keeps the app-update communication provider from shadowing an existing app-message provider", () => {
+    render(
+      <AppMessagesProvider>
+        <UpdateCoordinatorProvider>
+          <UpdateCommunicationPreferenceProvider>
+            <CompatibilityToastPreferenceProbe />
+            <Probe />
+            <UpdateReadyBanner />
+          </UpdateCommunicationPreferenceProvider>
+        </UpdateCoordinatorProvider>
+      </AppMessagesProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "mark ready" }));
+
+    expect(screen.queryByLabelText("Update ready")).not.toBeInTheDocument();
+    expect(toastMock.message).toHaveBeenCalledWith(
+      "Update ready",
+      expect.objectContaining({ id: "athena-update-ready-toast" }),
+    );
+  });
+
+  it("keeps the app-update apply blocker hook compatible under only the update coordinator", () => {
+    render(
+      <UpdateCoordinatorProvider>
+        <LegacyApplyBlockerProbe />
+        <Probe />
+        <CoordinatorSnapshotProbe />
+      </UpdateCoordinatorProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "mark ready" }));
+
+    expect(screen.getByText("blocked")).toBeInTheDocument();
+    expect(
+      screen.getByText("Finish this legacy workflow before refreshing."),
+    ).toBeInTheDocument();
   });
 });

@@ -90,6 +90,7 @@ export type UpdateCoordinatorStore = {
   reportChecking: () => void;
   reportUpdateDetected: (input: UpdateDetectedInput) => void;
   reportDetectorFailed: () => void;
+  syncApplyBlockers: (blockers: UpdateApplyBlockerInput[]) => void;
   registerApplyBlocker: (blocker: UpdateApplyBlockerInput) => void;
   clearApplyBlocker: (surfaceId: string) => void;
   receiveMessage: (message: UpdateCoordinatorMessage) => void;
@@ -126,6 +127,7 @@ export function createUpdateCoordinatorStore({
   let stagingDiagnostics: UpdateStagingDiagnostics = { status: "staged" };
   let applying = false;
   const localBlockers = new Map<string, UpdateApplyBlocker>();
+  const compatibilityBlockers = new Map<string, UpdateApplyBlocker>();
   const remoteBlockers = new Map<string, UpdateApplyBlocker>();
   const generations = new Map<string, number>();
   const listeners = new Set<() => void>();
@@ -190,8 +192,23 @@ export function createUpdateCoordinatorStore({
   }
 
   function getActiveBlockers() {
-    return [...localBlockers.values(), ...remoteBlockers.values()].sort(
-      compareBlockers,
+    return [
+      ...localBlockers.values(),
+      ...getCompatibilityOnlyBlockers(),
+      ...remoteBlockers.values(),
+    ].sort(compareBlockers);
+  }
+
+  function getLocalMessageBlockers() {
+    return [
+      ...localBlockers.values(),
+      ...getCompatibilityOnlyBlockers(),
+    ];
+  }
+
+  function getCompatibilityOnlyBlockers() {
+    return Array.from(compatibilityBlockers.values()).filter(
+      (blocker) => !localBlockers.has(blocker.surfaceId),
     );
   }
 
@@ -252,25 +269,85 @@ export function createUpdateCoordinatorStore({
   }
 
   function registerApplyBlocker(blocker: UpdateApplyBlockerInput) {
+    setCompatibilityBlocker(blocker);
+  }
+
+  function clearApplyBlocker(surfaceId: string) {
+    if (compatibilityBlockers.delete(surfaceId)) {
+      generations.set(surfaceId, (generations.get(surfaceId) ?? 0) + 1);
+      emit();
+    }
+  }
+
+  function syncApplyBlockers(blockers: UpdateApplyBlockerInput[]) {
+    const nextSurfaceIds = new Set<string>();
+    let didChange = false;
+
+    for (const blocker of blockers) {
+      if (!isValidUpdateApplyBlockerInput(blocker)) {
+        continue;
+      }
+      nextSurfaceIds.add(blocker.surfaceId);
+      if (setLocalBlocker(blocker, { emitChange: false })) {
+        didChange = true;
+      }
+    }
+
+    for (const surfaceId of Array.from(localBlockers.keys())) {
+      if (!nextSurfaceIds.has(surfaceId)) {
+        localBlockers.delete(surfaceId);
+        generations.set(surfaceId, (generations.get(surfaceId) ?? 0) + 1);
+        didChange = true;
+      }
+    }
+
+    if (didChange) {
+      emit();
+    }
+  }
+
+  function setCompatibilityBlocker(blocker: UpdateApplyBlockerInput) {
     if (!blocker.surfaceId || !blocker.label || !blocker.guidance) {
       return;
     }
+    if (
+      setBlockerForMap(compatibilityBlockers, blocker, { emitChange: false })
+    ) {
+      emit();
+    }
+  }
+
+  function setLocalBlocker(
+    blocker: UpdateApplyBlockerInput,
+    { emitChange }: { emitChange: boolean },
+  ) {
+    return setBlockerForMap(localBlockers, blocker, { emitChange });
+  }
+
+  function setBlockerForMap(
+    target: Map<string, UpdateApplyBlocker>,
+    blocker: UpdateApplyBlockerInput,
+    { emitChange }: { emitChange: boolean },
+  ) {
+    if (!isValidUpdateApplyBlockerInput(blocker)) {
+      return false;
+    }
+    const existing = target.get(blocker.surfaceId);
+    if (existing && areBlockersEqual(existing, blocker)) {
+      return false;
+    }
     const generation = (generations.get(blocker.surfaceId) ?? 0) + 1;
     generations.set(blocker.surfaceId, generation);
-    localBlockers.set(blocker.surfaceId, {
+    target.set(blocker.surfaceId, {
       ...blocker,
       ownerTabId: tabId,
       generation,
       updatedAt: now(),
     });
-    emit();
-  }
-
-  function clearApplyBlocker(surfaceId: string) {
-    if (localBlockers.delete(surfaceId)) {
-      generations.set(surfaceId, (generations.get(surfaceId) ?? 0) + 1);
+    if (emitChange) {
       emit();
     }
+    return true;
   }
 
   function receiveMessage(message: UpdateCoordinatorMessage) {
@@ -324,7 +401,7 @@ export function createUpdateCoordinatorStore({
         sourceTabId: tabId,
         pendingBuildId,
         sentAt: now(),
-        blockers: Array.from(localBlockers.values()).map((blocker) => ({
+        blockers: getLocalMessageBlockers().map((blocker) => ({
           surfaceId: blocker.surfaceId,
           priority: blocker.priority,
           label: blocker.label,
@@ -340,6 +417,7 @@ export function createUpdateCoordinatorStore({
     reportChecking,
     reportUpdateDetected,
     reportDetectorFailed,
+    syncApplyBlockers,
     registerApplyBlocker,
     clearApplyBlocker,
     receiveMessage,
@@ -387,6 +465,12 @@ function isValidMessageBlocker(
   );
 }
 
+function isValidUpdateApplyBlockerInput(
+  blocker: UpdateApplyBlockerInput,
+) {
+  return Boolean(blocker.surfaceId && blocker.label && blocker.guidance);
+}
+
 function isValidPriority(
   priority: unknown,
 ): priority is UpdateApplyBlockerPriority {
@@ -394,6 +478,18 @@ function isValidPriority(
     priority === "critical-workflow" ||
     priority === "active-command" ||
     priority === "resume-required"
+  );
+}
+
+function areBlockersEqual(
+  left: UpdateApplyBlocker,
+  right: UpdateApplyBlockerInput,
+) {
+  return (
+    left.surfaceId === right.surfaceId &&
+    left.priority === right.priority &&
+    left.label === right.label &&
+    left.guidance === right.guidance
   );
 }
 

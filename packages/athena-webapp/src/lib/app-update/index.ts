@@ -2,6 +2,7 @@ export {
   useUpdateApplyBlocker,
   type UseUpdateApplyBlockerInput,
 } from "./useUpdateApplyBlocker";
+export { APP_UPDATE_APPLY_ACTION_ID } from "./appUpdateActions";
 export { stageUpdateStaticAssets } from "./updateAssetStaging";
 export type { UpdateAssetStagingResult } from "./updateAssetStaging";
 export {
