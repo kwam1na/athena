@@ -53,7 +53,10 @@ import {
   SheetHeader,
   SheetTitle,
 } from "../ui/sheet";
-import { OperationsSummaryMetric } from "./OperationsSummaryMetric";
+import {
+  formatOperationsMetricHelper,
+  OperationsSummaryMetric,
+} from "./OperationsSummaryMetric";
 
 type DailyOperationsApi = {
   getDailyOperationsSnapshot?: unknown;
@@ -241,6 +244,11 @@ export type DailyOperationsSnapshot = {
     isReopened?: boolean;
     isSelected: boolean;
     operatingDate: string;
+    paymentTotals?: Array<{
+      amount: number;
+      method: string;
+      transactionCount?: number | null;
+    }>;
     salesTotal: number;
     transactionCount: number;
   }>;
@@ -640,6 +648,48 @@ function getOtherPaymentTotals(summary: DailyOperationsSnapshot["closeSummary"])
   return (summary.paymentTotals ?? [])
     .filter((paymentTotal) => paymentTotal.method.toLowerCase() !== "cash")
     .sort((left, right) => right.amount - left.amount);
+}
+
+function getPaymentTotalAmount(
+  summary:
+    | {
+        paymentTotals?: Array<{
+          amount: number;
+          method: string;
+        }>;
+      }
+    | undefined,
+  method: string,
+) {
+  return (
+    summary?.paymentTotals?.find(
+      (paymentTotal) =>
+        paymentTotal.method.toLowerCase() === method.toLowerCase(),
+    )?.amount ?? 0
+  );
+}
+
+function getPreviousOperatingDate(operatingDate: string) {
+  const date = getLocalDateFromOperatingDate(operatingDate);
+
+  if (!date) return undefined;
+
+  date.setDate(date.getDate() - 1);
+  return getLocalOperatingDate(date);
+}
+
+function getPriorWeekMetric(snapshot: DailyOperationsSnapshot) {
+  const previousOperatingDate = getPreviousOperatingDate(snapshot.operatingDate);
+
+  if (!previousOperatingDate) return undefined;
+
+  return snapshot.weekMetrics.find(
+    (metric) => metric.operatingDate === previousOperatingDate,
+  );
+}
+
+function getPriorWindowLabel(operatingDate: string) {
+  return operatingDate === getLocalOperatingDate() ? "yesterday" : "prior day";
 }
 
 function shouldShowExpenseMetric(summary: DailyOperationsSnapshot["closeSummary"]) {
@@ -1608,6 +1658,10 @@ export function DailyOperationsViewContent({
   const otherPaymentTotals = snapshot
     ? getOtherPaymentTotals(snapshot.closeSummary)
     : [];
+  const priorWeekMetric = snapshot ? getPriorWeekMetric(snapshot) : undefined;
+  const priorWindowLabel = snapshot
+    ? getPriorWindowLabel(snapshot.operatingDate)
+    : "yesterday";
   const showPrimaryAction = snapshot
     ? shouldShowPrimaryAction(snapshot)
     : false;
@@ -1696,10 +1750,15 @@ export function DailyOperationsViewContent({
 
                 <div className="grid gap-layout-sm sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
                   <OperationsSummaryMetric
-                    helper={formatEntityCount(
-                      snapshot.closeSummary.transactionCount,
-                      "transaction",
-                    )}
+                    helper={formatOperationsMetricHelper({
+                      currentValue: snapshot.closeSummary.salesTotal,
+                      detail: formatEntityCount(
+                        snapshot.closeSummary.transactionCount,
+                        "transaction",
+                      ),
+                      priorValue: priorWeekMetric?.salesTotal,
+                      priorWindowLabel,
+                    })}
                     label={metricLabels?.netSales ?? "Net sales"}
                     link={{
                       ariaLabel: "Open transactions",
@@ -1723,9 +1782,14 @@ export function DailyOperationsViewContent({
                     }
                   />
                   <OperationsSummaryMetric
-                    helper={formatTodayCashTransactionCount(
-                      snapshot.closeSummary.currentDayCashTransactionCount,
-                    )}
+                    helper={formatOperationsMetricHelper({
+                      currentValue: snapshot.closeSummary.currentDayCashTotal,
+                      detail: formatTodayCashTransactionCount(
+                        snapshot.closeSummary.currentDayCashTransactionCount,
+                      ),
+                      priorValue: priorWeekMetric?.currentDayCashTotal,
+                      priorWindowLabel,
+                    })}
                     label={metricLabels?.cash ?? "Cash"}
                     link={{
                       ariaLabel: "Open cash transactions",
@@ -1756,9 +1820,17 @@ export function DailyOperationsViewContent({
 
                     return (
                       <OperationsSummaryMetric
-                        helper={formatPaymentCount(
-                          paymentTotal.transactionCount,
-                        )}
+                        helper={formatOperationsMetricHelper({
+                          currentValue: paymentTotal.amount,
+                          detail: formatPaymentCount(
+                            paymentTotal.transactionCount,
+                          ),
+                          priorValue: getPaymentTotalAmount(
+                            priorWeekMetric,
+                            paymentTotal.method,
+                          ),
+                          priorWindowLabel,
+                        })}
                         key={paymentTotal.method}
                         label={paymentMethodLabel}
                         link={{

@@ -363,6 +363,52 @@ describe("end-of-day review backend foundation", () => {
     vi.restoreAllMocks();
   });
 
+  it("keeps daily close command results aligned with exported return validators", () => {
+    expect(() =>
+      assertConformsToExportedReturns(completeDailyClose, {
+        kind: "user_error",
+        error: {
+          code: "precondition_failed",
+          message:
+            "EOD Review cannot be completed while blocker items remain.",
+          metadata: { blockerCount: 1 },
+        },
+      }),
+    ).not.toThrow();
+
+    expect(() =>
+      assertConformsToExportedReturns(reopenDailyClose, {
+        kind: "approval_required",
+        approval: {
+          action: {
+            key: "operations.daily_close.reopen",
+            label: "Reopen EOD Review",
+          },
+          copy: {
+            message:
+              "A manager needs to approve reopening this EOD Review before the operating day can be revised.",
+            primaryActionLabel: "Approve and reopen",
+            secondaryActionLabel: "Cancel",
+            title: "Manager approval required",
+          },
+          metadata: {
+            dailyCloseId: "daily-close-1",
+            operatingDate: "2026-05-07",
+          },
+          reason: "Manager approval is required to reopen EOD Review.",
+          requiredRole: "manager",
+          resolutionModes: [{ kind: "inline_manager_proof" }],
+          selfApproval: "allowed",
+          subject: {
+            id: "daily-close-1",
+            label: "EOD Review 2026-05-07",
+            type: "daily_close",
+          },
+        },
+      }),
+    ).not.toThrow();
+  });
+
   it("includes the latest EOD automation preparation status when present", async () => {
     const { db } = createDb({
       automationRun: [

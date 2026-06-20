@@ -210,6 +210,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/components/operations/InventoryImportView.test.tsx`](../../src/components/operations/InventoryImportView.test.tsx)
 - [`src/components/operations/OperationsQueueView.auth.test.tsx`](../../src/components/operations/OperationsQueueView.auth.test.tsx)
 - [`src/components/operations/OperationsQueueView.test.tsx`](../../src/components/operations/OperationsQueueView.test.tsx)
+- [`src/components/operations/OperationsSummaryMetric.test.tsx`](../../src/components/operations/OperationsSummaryMetric.test.tsx)
 - [`src/components/operations/SkuActivityTimeline.test.tsx`](../../src/components/operations/SkuActivityTimeline.test.tsx)
 - [`src/components/operations/StockAdjustmentWorkspace.test.tsx`](../../src/components/operations/StockAdjustmentWorkspace.test.tsx)
 - [`src/components/operations/skuActivityTimelineAdapter.test.ts`](../../src/components/operations/skuActivityTimelineAdapter.test.ts)

@@ -115,7 +115,7 @@ function CartItemQuantityControl({
         aria-label={`Decrease quantity for ${item.name}`}
         onClick={() =>
           updateQuantity(
-            Math.max(1, normalizeCartQuantityInput(draftQuantity) - 1),
+            Math.max(0, normalizeCartQuantityInput(draftQuantity) - 1),
           )
         }
       >
@@ -186,6 +186,9 @@ export function CartItems({
   const totalQuantity =
     cartItems.reduce((sum, item) => sum + item.quantity, 0) +
     serviceItems.reduce((sum, item) => sum + item.quantity, 0);
+  const totalAmount =
+    cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0) +
+    serviceItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
   return (
     <div
@@ -202,9 +205,11 @@ export function CartItems({
             isCompact && "px-4 py-3",
           )}
         >
-          <CardTitle className="flex items-center gap-2 text-sm font-medium">
-            <ShoppingBasket className="w-4 h-4" />
-            Items · {totalQuantity}
+          <CardTitle className="flex min-w-0 items-center gap-2 text-sm font-medium">
+            <ShoppingBasket className="h-4 w-4 shrink-0" />
+            <span className="truncate">
+              Items · {totalQuantity} · {formatStoredAmount(formatter, totalAmount)}
+            </span>
           </CardTitle>
           {!readOnly && clearCart && (
             <Button

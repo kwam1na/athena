@@ -46,6 +46,7 @@ export type PosReconciliationItem = {
     staffProfileId?: string | null;
     total?: number | null;
     totalPaid?: number | null;
+    transactionId?: string | null;
   } | null;
   inventoryReview?: {
     activeHeldQuantity?: number | null;

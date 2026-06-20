@@ -8,6 +8,7 @@ import {
   useAppActionBlocker,
   useAppMessageCommunicationPreference,
 } from "@/lib/app-messages";
+import { SidebarProvider } from "@/components/ui/sidebar";
 import {
   UpdateCommunicationPreferenceProvider,
   UpdateCoordinatorProvider,
@@ -145,6 +146,19 @@ function renderWithUpdateProviders(
 describe("UpdateReadyBanner", () => {
   beforeEach(() => {
     vi.stubGlobal("BroadcastChannel", undefined);
+    vi.stubGlobal(
+      "matchMedia",
+      vi.fn().mockImplementation((query: string) => ({
+        addEventListener: vi.fn(),
+        addListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+        matches: false,
+        media: query,
+        onchange: null,
+        removeEventListener: vi.fn(),
+        removeListener: vi.fn(),
+      })),
+    );
     toastMock.show.mockReset();
     toastMock.message.mockReset();
     toastMock.custom.mockReset();
@@ -183,12 +197,38 @@ describe("UpdateReadyBanner", () => {
     const applyingButton = screen.getByRole("button", {
       name: "New Athena version available",
     });
+    expect(applyingButton).toHaveClass(
+      "bg-action-workflow-soft",
+      "text-action-workflow",
+    );
     fireEvent.click(applyingButton);
     fireEvent.click(applyingButton);
 
     expect(screen.getByLabelText("Update ready")).toBeInTheDocument();
     expect(reload).toHaveBeenCalledTimes(1);
     expect(toastMock.message).not.toHaveBeenCalled();
+  });
+
+  it("uses a rounded icon-only ghost update button when the desktop sidebar is collapsed", () => {
+    renderWithUpdateProviders(
+      <SidebarProvider defaultOpen={false}>
+        <Probe />
+        <UpdateReadyBanner />
+      </SidebarProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "mark ready" }));
+
+    const updateButton = screen.getByRole("button", {
+      name: "New Athena version available",
+    });
+    expect(updateButton).toHaveClass(
+      "size-10",
+      "px-0",
+      "bg-action-workflow-soft",
+    );
+    expect(updateButton).not.toHaveTextContent("New Athena version available");
+    expect(updateButton.querySelector("svg")).toBeInTheDocument();
   });
 
   it("uses a persistent top-right toast instead of the banner when a surface opts in", () => {

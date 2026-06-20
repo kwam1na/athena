@@ -5,6 +5,7 @@ import { render as renderEmail } from "@react-email/components";
 import type { ComponentProps } from "react";
 
 import { currencyFormatter } from "~/shared/currencyFormatter";
+import type { Id } from "~/convex/_generated/dataModel";
 import {
   clearAttemptedOrderSummaryAutoPrintReceiptKeysForTest,
   OrderSummary,
@@ -273,6 +274,51 @@ describe("OrderSummary completed transaction summary", () => {
     await waitFor(() => {
       expect(mockStoreState.printReceipt).not.toHaveBeenCalled();
     });
+  });
+
+  it("records completed sale receipt prints without blocking the print action", async () => {
+    const user = userEvent.setup();
+    const transactionId = "txn-printed" as Id<"posTransaction">;
+    const onReceiptPrinted = vi.fn().mockRejectedValue(new Error("offline"));
+    const consoleWarn = vi
+      .spyOn(console, "warn")
+      .mockImplementation(() => undefined);
+
+    render(
+      <OrderSummary
+        cartItems={[]}
+        completedOrderNumber="404927"
+        completedTransactionData={{
+          paymentMethod: "cash",
+          transactionId,
+          completedAt: new Date("2026-04-25T18:08:00.000Z"),
+          cartItems: [],
+          customerInfo: undefined,
+          subtotal: 1000,
+          tax: 0,
+          total: 1000,
+          payments: [
+            { id: "payment-1", method: "cash", amount: 1000, timestamp: 1 },
+          ],
+        }}
+        isTransactionCompleted
+        receiptPrintTransactionId={transactionId}
+        onReceiptPrinted={onReceiptPrinted}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /Print receipt/i }));
+
+    expect(mockStoreState.printReceipt).toHaveBeenCalledWith("<receipt />");
+    expect(onReceiptPrinted).toHaveBeenCalledWith(transactionId);
+    await waitFor(() => {
+      expect(consoleWarn).toHaveBeenCalledWith(
+        "Failed to record receipt print",
+        expect.any(Error),
+      );
+    });
+
+    consoleWarn.mockRestore();
   });
 
   it("does not render the tax line in the completed sale totals", () => {
@@ -924,9 +970,103 @@ describe("OrderSummary completed transaction summary", () => {
 
     expect(screen.getAllByText("Balance due")).toHaveLength(1);
     expect(
-      screen.getByRole("button", { name: /show payments \(1\)/i }),
+      screen.getByRole("button", { name: /hide payments/i }),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Cash" })).toBeInTheDocument();
+  });
+
+  it("omits the payments-list balance when another surface owns active summaries", () => {
+    render(
+      <OrderSummary
+        cartItems={[
+          {
+            id: "item-1",
+            name: "Hair",
+            barcode: "123456789012",
+            price: 1700,
+            quantity: 2,
+            productId: "product-1",
+            skuId: "sku-1",
+          } as never,
+        ]}
+        total={1700}
+        payments={[
+          {
+            id: "payment-1",
+            amount: 800,
+            method: "cash",
+            timestamp: 1,
+          },
+        ]}
+        hideActiveSummaryCards
+      />,
+    );
+
+    expect(screen.queryByText("Balance due")).not.toBeInTheDocument();
+    expect(screen.getByText("Payments")).toBeInTheDocument();
+    expect(screen.getByText("GH₵8")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cash" })).toBeInTheDocument();
+  });
+
+  it("compacts existing payment rows while a new payment amount is being entered", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <OrderSummary
+        cartItems={[
+          {
+            id: "item-1",
+            name: "Hair",
+            barcode: "123456789012",
+            price: 1700,
+            quantity: 2,
+            productId: "product-1",
+            skuId: "sku-1",
+          } as never,
+        ]}
+        total={3400}
+        payments={[
+          {
+            id: "payment-1",
+            amount: 800,
+            method: "cash",
+            timestamp: 1,
+          },
+        ]}
+        onClearPayments={vi.fn()}
+        onRemovePayment={vi.fn()}
+        onUpdatePayment={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: /clear all/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /edit/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /remove cash payment/i }),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Mobile Money" }));
+
+    const compactCashRow = screen.getByText("Cash").closest(".flex");
+    expect(compactCashRow).toHaveTextContent("GH₵8");
+    expect(compactCashRow).toHaveClass("gap-2");
+    expect(compactCashRow).not.toHaveClass("justify-between");
+    expect(screen.getByText("Cash")).toHaveClass(
+      "font-medium",
+      "text-muted-foreground",
+    );
+    expect(screen.getByText("GH₵8")).toHaveClass(
+      "font-semibold",
+      "text-sm",
+      "text-gray-950",
+    );
+    expect(screen.getByText("GH₵8")).toBeInTheDocument();
+    expect(screen.getByText("Amount to add")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /clear all/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /edit/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /remove cash payment/i }),
+    ).not.toBeInTheDocument();
   });
 
   it("shows complete sale instead of payment methods once payments cover the balance", () => {
@@ -1108,9 +1248,20 @@ describe("OrderSummary completed transaction summary", () => {
       />,
     );
 
-    expect(screen.getByText("Paid GH₵8")).toHaveClass(
+    const paymentLabel = screen
+      .getAllByText("Cash")
+      .find((node) => node.classList.contains("text-muted-foreground"));
+    expect(paymentLabel).toBeDefined();
+    const paymentRow = paymentLabel?.closest(".flex");
+    expect(paymentRow).toHaveTextContent("GH₵8");
+    expect(paymentRow).toHaveClass("gap-2");
+    expect(paymentLabel).toHaveClass(
+      "font-medium",
+      "text-muted-foreground",
+    );
+    expect(screen.getByText("GH₵8")).toHaveClass(
       "font-semibold",
-      "text-foreground",
+      "text-gray-950",
     );
     expect(screen.queryByText("2 items")).not.toBeInTheDocument();
   });
@@ -1145,11 +1296,11 @@ describe("OrderSummary completed transaction summary", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: /show payments/i }));
-    expect(onPaymentsExpandedChange).toHaveBeenCalledWith(true);
-
     await user.click(screen.getByRole("button", { name: /hide payments/i }));
     expect(onPaymentsExpandedChange).toHaveBeenCalledWith(false);
+
+    await user.click(screen.getByRole("button", { name: /show payments/i }));
+    expect(onPaymentsExpandedChange).toHaveBeenCalledWith(true);
   });
 
   it("collapses payment-summary state after removing the final payment succeeds", async () => {
@@ -1184,7 +1335,6 @@ describe("OrderSummary completed transaction summary", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: /show payments/i }));
     onPaymentsExpandedChange.mockClear();
 
     await user.click(
@@ -1236,7 +1386,6 @@ describe("OrderSummary completed transaction summary", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: /show payments/i }));
     onPaymentsExpandedChange.mockClear();
 
     await user.click(screen.getByRole("button", { name: /clear all/i }));
@@ -1280,7 +1429,6 @@ describe("OrderSummary completed transaction summary", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: /show payments/i }));
     onPaymentFlowChange.mockClear();
     await user.click(screen.getByRole("button", { name: /clear all/i }));
 
@@ -1324,7 +1472,6 @@ describe("OrderSummary completed transaction summary", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: /show payments/i }));
     onEditingPaymentChange.mockClear();
     onPaymentFlowChange.mockClear();
 
@@ -1379,7 +1526,6 @@ describe("OrderSummary completed transaction summary", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: /show payments/i }));
     await user.click(screen.getByRole("button", { name: "Edit" }));
     onEditingPaymentChange.mockClear();
     onPaymentsExpandedChange.mockClear();
@@ -1427,7 +1573,6 @@ describe("OrderSummary completed transaction summary", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: /show payments/i }));
     await user.click(screen.getByRole("button", { name: "Edit" }));
     onEditingPaymentChange.mockClear();
     onPaymentsExpandedChange.mockClear();

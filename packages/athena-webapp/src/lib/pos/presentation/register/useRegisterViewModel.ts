@@ -23,6 +23,7 @@ import { bootstrapRegister } from "@/lib/pos/application/useCases/bootstrapRegis
 import { holdSession as runHoldSession } from "@/lib/pos/application/useCases/holdSession";
 import {
   calculatePosCartTotals,
+  normalizeNonCashOverpayment,
   type PosPaymentMethod,
 } from "@/lib/pos/domain";
 import { parseDisplayAmountInput } from "@/lib/pos/displayAmounts";
@@ -2484,6 +2485,47 @@ export function useRegisterViewModel(): RegisterViewModel {
     setPaymentState,
   ]);
 
+  useEffect(() => {
+    if (
+      isTransactionCompleted ||
+      payments.length === 0 ||
+      (activeCartItems.length === 0 && serviceLineDrafts.length === 0)
+    ) {
+      return;
+    }
+
+    const payableTotal = activeTotals.total + serviceSubtotal;
+    const { adjustedPayments, changed } = normalizeNonCashOverpayment(
+      payments,
+      payableTotal,
+    );
+    if (!changed) {
+      return;
+    }
+
+    const checkoutStateVersion = allocateCheckoutStateVersion();
+    void (async () => {
+      const saved = await persistCheckoutStateLocally({
+        checkoutStateVersion,
+        nextPayments: adjustedPayments,
+        stage: "paymentUpdated",
+      });
+      if (saved) {
+        setPaymentState(adjustedPayments);
+      }
+    })();
+  }, [
+    activeCartItems.length,
+    activeTotals.total,
+    allocateCheckoutStateVersion,
+    isTransactionCompleted,
+    payments,
+    persistCheckoutStateLocally,
+    serviceLineDrafts.length,
+    serviceSubtotal,
+    setPaymentState,
+  ]);
+
   const holdCurrentSession = useCallback(
     async (reason?: string) => {
       if (!operableActiveSession || !staffProfileId) {
@@ -3960,6 +4002,13 @@ export function useRegisterViewModel(): RegisterViewModel {
         if (itemIsLocalOnly) {
           if (!item.skuId) return;
           if (quantity <= 0) {
+            const optimisticProductKey =
+              optimisticCartProductKeyFromCartItem(item);
+            setOptimisticCartProducts((current) => {
+              const next = { ...current };
+              delete next[optimisticProductKey];
+              return next;
+            });
             const savedLocally = await appendLocalCartItem({
               localPosSessionId: operableActiveSession._id.toString(),
               payload: buildLocalCartItemPayloadFromCartItem({
@@ -3969,15 +4018,14 @@ export function useRegisterViewModel(): RegisterViewModel {
               }),
             });
             if (!savedLocally) {
+              setOptimisticCartProducts((current) => ({
+                ...current,
+                [optimisticProductKey]: item,
+              }));
               presentOperatorError("Unable to update this sale. Try again.");
               return;
             }
             noteLocalRegisterEventChanged();
-            setOptimisticCartProducts((current) => {
-              const next = { ...current };
-              delete next[optimisticCartProductKeyFromCartItem(item)];
-              return next;
-            });
             return;
           }
 
@@ -4005,6 +4053,11 @@ export function useRegisterViewModel(): RegisterViewModel {
         }
 
         if (quantity <= 0) {
+          setOptimisticCartQuantities((current) => ({
+            ...current,
+            [itemId]: 0,
+          }));
+
           const savedLocally = await appendLocalCartItem({
             localPosSessionId: operableActiveSession._id.toString(),
             payload: buildLocalCartItemPayloadFromCartItem({
@@ -4015,14 +4068,14 @@ export function useRegisterViewModel(): RegisterViewModel {
           });
 
           if (!savedLocally) {
+            setOptimisticCartQuantities((current) => {
+              const next = { ...current };
+              delete next[itemId];
+              return next;
+            });
             presentOperatorError("Unable to update this sale. Try again.");
             return;
           }
-
-          setOptimisticCartQuantities((current) => ({
-            ...current,
-            [itemId]: 0,
-          }));
           noteLocalRegisterEventChanged();
           return;
         }
@@ -4563,7 +4616,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     try {
       await waitForCheckoutMutationQueues();
 
-      const currentPayments = paymentsRef.current;
+      let currentPayments = paymentsRef.current;
       const localPosSessionId = operableActiveSession._id.toString();
       const currentCartItemsForLocalProjection =
         activeCartItems.length > 0 &&
@@ -4601,6 +4654,22 @@ export function useRegisterViewModel(): RegisterViewModel {
           "Payment required. Add payment before completing the sale.",
         );
         return false;
+      }
+      const paymentAdjustment = normalizeNonCashOverpayment(
+        currentPayments,
+        saleTotals.total,
+      );
+      if (paymentAdjustment.changed) {
+        const checkoutStateVersion = allocateCheckoutStateVersion();
+        const saved = await persistCheckoutStateLocally({
+          checkoutStateVersion,
+          nextPayments: paymentAdjustment.adjustedPayments,
+          stage: "paymentUpdated",
+        });
+        if (saved) {
+          currentPayments = paymentAdjustment.adjustedPayments;
+          setPaymentState(paymentAdjustment.adjustedPayments);
+        }
       }
       const finishCompletedSale = (input: {
         localTransactionId: string;
@@ -4697,6 +4766,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     localEventRegisterSessionId,
     activeStoreId,
     activeTotals,
+    allocateCheckoutStateVersion,
     cashierPresenceRestore.status,
     checkoutMutationLockedRef,
     setCheckoutMutationLocked,
@@ -4710,8 +4780,10 @@ export function useRegisterViewModel(): RegisterViewModel {
     localSaleValidationMetadata,
     noteLocalRegisterEventChanged,
     paymentsRef,
+    persistCheckoutStateLocally,
     readCurrentLocalRegisterModel,
     registerNumber,
+    setPaymentState,
     staffProfileId,
     terminal?._id,
     waitForCheckoutMutationQueues,

@@ -78,6 +78,7 @@ describe("CartItems service lines", () => {
     expect(screen.getByText(/Entered amount/i)).toBeInTheDocument();
     expect(screen.getByText("Body Wave")).toBeInTheDocument();
     expect(screen.getByText("BW-18")).toBeInTheDocument();
+    expect(screen.getByText("Items · 2 · GH₵185")).toBeInTheDocument();
   });
 
   it("does not render legacy NULL metadata on cart items", () => {
@@ -210,5 +211,34 @@ describe("CartItems service lines", () => {
     await user.tab();
 
     expect(onUpdateQuantity).toHaveBeenCalledWith("item-1", 9);
+  });
+
+  it("lets the decrement button remove a quantity-one product line", async () => {
+    const user = userEvent.setup();
+    const onUpdateQuantity = vi.fn();
+
+    render(
+      <CartItems
+        cartItems={[
+          {
+            id: "item-1" as never,
+            barcode: "4739394883944",
+            name: "Amin Uh",
+            price: 109900,
+            quantity: 1,
+            sku: "6N2Y-RGV-A54",
+          },
+        ]}
+        onUpdateQuantity={onUpdateQuantity}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", {
+        name: /decrease quantity for amin uh/i,
+      }),
+    );
+
+    expect(onUpdateQuantity).toHaveBeenCalledWith("item-1", 0);
   });
 });

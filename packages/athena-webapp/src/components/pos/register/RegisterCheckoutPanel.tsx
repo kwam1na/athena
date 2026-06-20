@@ -1,8 +1,10 @@
 import type {
   RegisterCheckoutState,
 } from "@/lib/pos/presentation/register/registerUiState";
+import { useMutation } from "convex/react";
 import { useNavigate } from "@tanstack/react-router";
 import { useCallback } from "react";
+import { api } from "~/convex/_generated/api";
 import { getOrigin } from "~/src/lib/navigationUtils";
 import type { Id } from "~/convex/_generated/dataModel";
 
@@ -32,6 +34,7 @@ export function RegisterCheckoutPanel({
   onPaymentsExpandedChange,
 }: RegisterCheckoutPanelProps) {
   const navigate = useNavigate();
+  const markReceiptPrinted = useMutation(api.inventory.pos.markReceiptPrinted);
   const completedTransactionId = checkout.completedTransactionData
     ?.transactionId as Id<"posTransaction"> | undefined;
   const handleVoidTransaction = useCallback(() => {
@@ -67,12 +70,18 @@ export function RegisterCheckoutPanel({
         completedTransactionData={checkout.completedTransactionData}
         cashierName={checkout.cashierName}
         actorStaffProfileId={checkout.actorStaffProfileId}
+        receiptPrintTransactionId={completedTransactionId}
         onAddPayment={checkout.onAddPayment}
         onUpdatePayment={checkout.onUpdatePayment}
         onRemovePayment={checkout.onRemovePayment}
         onClearPayments={checkout.onClearPayments}
         onCompleteTransaction={checkout.onCompleteTransaction}
         onStartNewTransaction={checkout.onStartNewTransaction}
+        onReceiptPrinted={(transactionId) =>
+          markReceiptPrinted({
+            transactionId,
+          })
+        }
         onVoidTransaction={
           completedTransactionId ? handleVoidTransaction : undefined
         }

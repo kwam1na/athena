@@ -151,6 +151,14 @@ type CashControlRegisterSession = Pick<
 
 type CashControlSyncConflict = RegisterSessionSyncConflict;
 
+type StoredLocalSyncEvent = NonNullable<
+  Awaited<
+    ReturnType<
+      ReturnType<typeof createConvexLocalSyncRepository>["findEvent"]
+    >
+  >
+>;
+
 type CashControlTransaction = Pick<
   Doc<"posTransaction">,
   | "_id"
@@ -223,6 +231,101 @@ async function resolveDepositActorStaffProfileId(
   }
 
   return staffProfile._id;
+}
+
+function numberDetail(
+  details: Record<string, unknown> | undefined,
+  key: string,
+) {
+  const value = details?.[key];
+
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function recordDetail(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function arrayDetail(value: unknown): Record<string, unknown>[] {
+  return Array.isArray(value)
+    ? value
+        .map(recordDetail)
+        .filter((item): item is Record<string, unknown> => Boolean(item))
+    : [];
+}
+
+function roundCurrencyAmount(value: number) {
+  return Number(value.toFixed(2));
+}
+
+function normalizeReviewedNonCashOverpaymentPayload(
+  payload: Record<string, unknown>,
+) {
+  const totals = recordDetail(payload.totals);
+  const expectedTotal = numberDetail(totals ?? undefined, "total");
+  const payments = arrayDetail(payload.payments);
+  if (expectedTotal === null || payments.length === 0) {
+    return payload;
+  }
+
+  const totalPaid = roundCurrencyAmount(
+    payments.reduce(
+      (sum, payment) => sum + Math.max(0, numberDetail(payment, "amount") ?? 0),
+      0,
+    ),
+  );
+  const nonCashPaid = roundCurrencyAmount(
+    payments
+      .filter((payment) => payment.method !== "cash")
+      .reduce(
+        (sum, payment) =>
+          sum + Math.max(0, numberDetail(payment, "amount") ?? 0),
+        0,
+      ),
+  );
+  if (totalPaid < expectedTotal || nonCashPaid <= expectedTotal) {
+    return payload;
+  }
+
+  let remaining = roundCurrencyAmount(Math.max(0, expectedTotal));
+  const normalizedPayments: Record<string, unknown>[] = [];
+  for (const payment of payments) {
+    if (payment.method === "cash") {
+      continue;
+    }
+
+    if (remaining <= 0) {
+      break;
+    }
+
+    const amount = roundCurrencyAmount(
+      Math.min(Math.max(0, numberDetail(payment, "amount") ?? 0), remaining),
+    );
+    if (amount <= 0) {
+      continue;
+    }
+
+    normalizedPayments.push({ ...payment, amount });
+    remaining = roundCurrencyAmount(remaining - amount);
+  }
+
+  return {
+    ...payload,
+    payments: normalizedPayments,
+  };
+}
+
+function buildReviewedSaleProjectionEvent(syncEvent: StoredLocalSyncEvent) {
+  if (syncEvent.eventType !== "sale_completed") {
+    return syncEvent;
+  }
+
+  return {
+    ...syncEvent,
+    payload: normalizeReviewedNonCashOverpaymentPayload(syncEvent.payload),
+  };
 }
 
 async function staffProfileCanResolveSyncReview(
@@ -1398,7 +1501,9 @@ export const resolveRegisterSessionSyncReview = mutation({
 
       const parsedEvent = parseStoredLocalSyncEvent(
         localSyncRepository,
-        syncEvent,
+        shouldApplyManagerOverride && syncEvent.eventType === "sale_completed"
+          ? buildReviewedSaleProjectionEvent(syncEvent)
+          : syncEvent,
       );
       if (
         !parsedEvent.ok ||
@@ -1426,6 +1531,8 @@ export const resolveRegisterSessionSyncReview = mutation({
         now: resolvedAt,
         options: {
           allowClosedRegisterSaleProjection: true,
+          applyExpectedTotalForReviewedNonCashOverpayment:
+            shouldApplyManagerOverride || shouldApplyReviewedSale,
           allowReviewedInventorySaleProjection:
             shouldApplyReviewedInventorySale,
           allowRegisterCloseoutVarianceProjection: shouldApplyReviewedCloseout,

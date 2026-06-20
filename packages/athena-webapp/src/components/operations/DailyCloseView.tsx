@@ -73,7 +73,10 @@ import {
 } from "./useApprovedCommand";
 import { OperationReviewWorkspace } from "./OperationReviewWorkspace";
 import { OperationReviewItemCard } from "./OperationReviewItemCard";
-import { OperationsSummaryMetric } from "./OperationsSummaryMetric";
+import {
+  formatOperationsMetricHelper,
+  OperationsSummaryMetric,
+} from "./OperationsSummaryMetric";
 
 type DailyCloseApi = {
   completeDailyClose?: unknown;
@@ -152,6 +155,7 @@ export type DailyCloseSnapshot = {
     supersededByDailyCloseId?: Id<"dailyClose"> | string | null;
   } | null;
   operatingDate: string;
+  priorDaySummary?: DailyCloseSnapshot["summary"] | null;
   readyItems: DailyCloseItem[];
   reportSnapshot?: DailyCloseStoredReportSnapshot | null;
   startAt: number;
@@ -383,6 +387,29 @@ function getOtherPaymentTotals(summary: DailyCloseSnapshot["summary"]) {
   return (summary.paymentTotals ?? [])
     .filter((paymentTotal) => paymentTotal.method.toLowerCase() !== "cash")
     .sort((left, right) => right.amount - left.amount);
+}
+
+function getPaymentTotalAmount(
+  summary:
+    | {
+        paymentTotals?: Array<{
+          amount: number;
+          method: string;
+        }>;
+      }
+    | undefined,
+  method: string,
+) {
+  return (
+    summary?.paymentTotals?.find(
+      (paymentTotal) =>
+        paymentTotal.method.toLowerCase() === method.toLowerCase(),
+    )?.amount ?? 0
+  );
+}
+
+function getPriorWindowLabel(operatingDate: string) {
+  return operatingDate === getLocalOperatingDate() ? "yesterday" : "prior day";
 }
 
 function shouldShowExpenseMetric(summary: DailyCloseSnapshot["summary"]) {
@@ -2353,6 +2380,8 @@ export function DailyCloseReadOnlyReport({
     displaySnapshot.operatingDate,
   );
   const otherPaymentTotals = getOtherPaymentTotals(displaySnapshot.summary);
+  const priorDaySummary = displaySnapshot.priorDaySummary ?? undefined;
+  const priorWindowLabel = getPriorWindowLabel(displaySnapshot.operatingDate);
 
   return (
     <PageWorkspace>
@@ -2383,14 +2412,25 @@ export function DailyCloseReadOnlyReport({
 
         <div className="grid gap-layout-sm md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
           <OperationsSummaryMetric
-            helper={formatEntityCount(
-              getSummaryCount(
+            helper={formatOperationsMetricHelper({
+              currentValue: getSummaryAmount(
                 displaySnapshot.summary,
-                "transactionCount",
-                "transactionCount",
+                "totalSales",
+                "salesTotal",
               ),
-              "transaction",
-            )}
+              detail: formatEntityCount(
+                getSummaryCount(
+                  displaySnapshot.summary,
+                  "transactionCount",
+                  "transactionCount",
+                ),
+                "transaction",
+              ),
+              priorValue: priorDaySummary
+                ? getSummaryAmount(priorDaySummary, "totalSales", "salesTotal")
+                : undefined,
+              priorWindowLabel,
+            })}
             label={salesMetricLabels.netSales}
             link={{
               ariaLabel: "Open transactions",
@@ -2415,13 +2455,28 @@ export function DailyCloseReadOnlyReport({
             }
           />
           <OperationsSummaryMetric
-            helper={formatTodayCashTransactionCount(
-              getSummaryCount(
+            helper={formatOperationsMetricHelper({
+              currentValue: getSummaryAmount(
                 displaySnapshot.summary,
-                "currentDayCashTransactionCount",
-                "transactionCount",
+                "currentDayCashTotal",
+                "cashExpected",
               ),
-            )}
+              detail: formatTodayCashTransactionCount(
+                getSummaryCount(
+                  displaySnapshot.summary,
+                  "currentDayCashTransactionCount",
+                  "transactionCount",
+                ),
+              ),
+              priorValue: priorDaySummary
+                ? getSummaryAmount(
+                    priorDaySummary,
+                    "currentDayCashTotal",
+                    "cashExpected",
+                  )
+                : undefined,
+              priorWindowLabel,
+            })}
             label={salesMetricLabels.cash}
             link={{
               ariaLabel: "Open cash transactions",
@@ -2448,7 +2503,15 @@ export function DailyCloseReadOnlyReport({
           />
           {otherPaymentTotals.map((paymentTotal) => (
             <OperationsSummaryMetric
-              helper={formatPaymentCount(paymentTotal.transactionCount)}
+              helper={formatOperationsMetricHelper({
+                currentValue: paymentTotal.amount,
+                detail: formatPaymentCount(paymentTotal.transactionCount),
+                priorValue: getPaymentTotalAmount(
+                  priorDaySummary,
+                  paymentTotal.method,
+                ),
+                priorWindowLabel,
+              })}
               key={paymentTotal.method}
               label={formatPaymentMethodLabel(paymentTotal.method)}
               link={{
@@ -3007,6 +3070,10 @@ export function DailyCloseViewContent({
   const otherPaymentTotals = displaySnapshot
     ? getOtherPaymentTotals(displaySnapshot.summary)
     : [];
+  const priorDaySummary = displaySnapshot?.priorDaySummary ?? undefined;
+  const priorWindowLabel = displaySnapshot
+    ? getPriorWindowLabel(displaySnapshot.operatingDate)
+    : "yesterday";
   const buckets = displaySnapshot ? getBucketConfigs(displaySnapshot) : [];
   const defaultBucketValue = displaySnapshot
     ? getDefaultBucketValue(displaySnapshot, status)
@@ -3192,14 +3259,29 @@ export function DailyCloseViewContent({
         displaySnapshot ? (
           <>
             <OperationsSummaryMetric
-              helper={formatEntityCount(
-                getSummaryCount(
+              helper={formatOperationsMetricHelper({
+                currentValue: getSummaryAmount(
                   displaySnapshot.summary,
-                  "transactionCount",
-                  "transactionCount",
+                  "totalSales",
+                  "salesTotal",
                 ),
-                "transaction",
-              )}
+                detail: formatEntityCount(
+                  getSummaryCount(
+                    displaySnapshot.summary,
+                    "transactionCount",
+                    "transactionCount",
+                  ),
+                  "transaction",
+                ),
+                priorValue: priorDaySummary
+                  ? getSummaryAmount(
+                      priorDaySummary,
+                      "totalSales",
+                      "salesTotal",
+                    )
+                  : undefined,
+                priorWindowLabel,
+              })}
               label={salesMetricLabels?.netSales ?? "Net sales"}
               link={{
                 ariaLabel: "Open transactions",
@@ -3224,13 +3306,28 @@ export function DailyCloseViewContent({
               }
             />
             <OperationsSummaryMetric
-              helper={formatTodayCashTransactionCount(
-                getSummaryCount(
+              helper={formatOperationsMetricHelper({
+                currentValue: getSummaryAmount(
                   displaySnapshot.summary,
-                  "currentDayCashTransactionCount",
-                  "transactionCount",
+                  "currentDayCashTotal",
+                  "cashExpected",
                 ),
-              )}
+                detail: formatTodayCashTransactionCount(
+                  getSummaryCount(
+                    displaySnapshot.summary,
+                    "currentDayCashTransactionCount",
+                    "transactionCount",
+                  ),
+                ),
+                priorValue: priorDaySummary
+                  ? getSummaryAmount(
+                      priorDaySummary,
+                      "currentDayCashTotal",
+                      "cashExpected",
+                    )
+                  : undefined,
+                priorWindowLabel,
+              })}
               label={salesMetricLabels?.cash ?? "Cash"}
               link={{
                 ariaLabel: "Open cash transactions",
@@ -3257,7 +3354,15 @@ export function DailyCloseViewContent({
             />
             {otherPaymentTotals.map((paymentTotal) => (
               <OperationsSummaryMetric
-                helper={formatPaymentCount(paymentTotal.transactionCount)}
+                helper={formatOperationsMetricHelper({
+                  currentValue: paymentTotal.amount,
+                  detail: formatPaymentCount(paymentTotal.transactionCount),
+                  priorValue: getPaymentTotalAmount(
+                    priorDaySummary,
+                    paymentTotal.method,
+                  ),
+                  priorWindowLabel,
+                })}
                 key={paymentTotal.method}
                 label={formatPaymentMethodLabel(paymentTotal.method)}
                 link={{

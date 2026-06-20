@@ -45,6 +45,7 @@ interface PaymentsAddedListProps {
   onClearPayments?: () => boolean | Promise<boolean>;
   onEditingPaymentChange?: (isEditing: boolean) => void;
   onPaymentsExpandedChange?: (isExpanded: boolean) => void;
+  compactReadOnlyRows?: boolean;
   variant?: "default" | "minimized";
 }
 
@@ -70,27 +71,6 @@ const getPaymentMethodLabel = (method: SelectedPaymentMethod) => {
   }
 };
 
-function PaidTotalBadge({
-  formatter,
-  totalPaid,
-  compact = false,
-}: {
-  formatter: Intl.NumberFormat;
-  totalPaid: number;
-  compact?: boolean;
-}) {
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center rounded-md bg-white/75 px-2.5 py-1 font-semibold text-foreground ring-1 ring-inset ring-border/70",
-        compact ? "text-xs" : "text-sm",
-      )}
-    >
-      Paid {formatStoredAmount(formatter, totalPaid)}
-    </span>
-  );
-}
-
 export const PaymentsAddedList = ({
   payments,
   formatter,
@@ -108,6 +88,7 @@ export const PaymentsAddedList = ({
   onClearPayments,
   onEditingPaymentChange,
   onPaymentsExpandedChange,
+  compactReadOnlyRows = false,
   variant = "default",
 }: PaymentsAddedListProps) => {
   const [internalEditingPaymentId, setInternalEditingPaymentId] = useState<
@@ -116,7 +97,7 @@ export const PaymentsAddedList = ({
   const [editingAmount, setEditingAmount] = useState<number | undefined>(
     undefined,
   );
-  const [isPaymentsExpanded, setIsPaymentsExpanded] = useState(false);
+  const [isPaymentsExpanded, setIsPaymentsExpanded] = useState(true);
   const [editingKeypadValue, setEditingKeypadValue] = useState("");
   const editingPaymentId =
     controlledEditingPaymentId ?? internalEditingPaymentId;
@@ -253,11 +234,10 @@ export const PaymentsAddedList = ({
   const summaryLabelClass = hasProjectedChangeDue
     ? "text-green-700"
     : "text-signal";
-  const summaryDividerClass = hasProjectedChangeDue
-    ? "border-green-200"
-    : "border-signal/10";
   const showSaleSummary = balanceDue !== undefined;
   const isMinimized = variant === "minimized";
+  const showPaymentControls =
+    !compactReadOnlyRows && !isTransactionCompleted && !readOnly;
   const editingPayment = payments.find(
     (payment) => payment.id === editingPaymentId,
   );
@@ -409,14 +389,6 @@ export const PaymentsAddedList = ({
                 {formatStoredAmount(formatter, summaryAmount)}
               </p>
             </div>
-            <div
-              className={cn(
-                "mt-2 flex justify-end border-t pt-2 text-xs text-muted-foreground",
-                summaryDividerClass,
-              )}
-            >
-              <PaidTotalBadge formatter={formatter} totalPaid={totalPaid} />
-            </div>
           </div>
         )}
 
@@ -554,18 +526,6 @@ export const PaymentsAddedList = ({
                 {formatStoredAmount(formatter, summaryAmount)}
               </p>
             </div>
-            <div
-              className={cn(
-                "mt-2 flex justify-end border-t pt-2 text-xs text-muted-foreground",
-                summaryDividerClass,
-              )}
-            >
-              <PaidTotalBadge
-                formatter={formatter}
-                totalPaid={totalPaid}
-                compact
-              />
-            </div>
             {renderPaymentsToggle(true)}
           </div>
         )}
@@ -582,7 +542,7 @@ export const PaymentsAddedList = ({
                   {payments.length === 1 ? "entry" : "entries"}
                 </p>
               </div>
-              {!isTransactionCompleted && !readOnly && onClearPayments && (
+              {showPaymentControls && onClearPayments && (
                 <Button
                   variant="outline"
                   className="h-9 rounded-lg border-red-100 bg-white px-3 text-xs font-medium text-red-600 hover:bg-red-50 hover:text-red-700"
@@ -596,11 +556,22 @@ export const PaymentsAddedList = ({
 
             <div className="space-y-2">
               {payments.map((payment) => (
-                <div key={payment.id} className="rounded-lg bg-gray-50 p-2.5">
+                <div
+                  key={payment.id}
+                  className={cn(
+                    "rounded-lg bg-gray-50",
+                    compactReadOnlyRows ? "p-2" : "p-2.5",
+                  )}
+                >
                   {editingPaymentId === payment.id ? (
                     <div className="grid gap-3">
                       <div className="flex items-center gap-3">
-                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-gray-950 shadow-sm">
+                        <div
+                          className={cn(
+                            "flex shrink-0 items-center justify-center rounded-lg bg-white text-gray-950 shadow-sm",
+                            compactReadOnlyRows ? "h-8 w-8" : "h-9 w-9",
+                          )}
+                        >
                           {getPaymentMethodIcon(payment.method)}
                         </div>
                         <p className="text-sm font-medium">
@@ -643,21 +614,31 @@ export const PaymentsAddedList = ({
                     </div>
                   ) : (
                     <div className="flex items-center justify-between gap-3">
-                      <div className="flex min-w-0 items-center gap-3">
+                      <div
+                        className={cn(
+                          "flex min-w-0 items-center gap-3",
+                          compactReadOnlyRows && "flex-1",
+                        )}
+                      >
                         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-gray-950 shadow-sm">
                           {getPaymentMethodIcon(payment.method)}
                         </div>
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold text-gray-950">
+                        <div className="flex min-w-0 flex-1 items-center gap-2">
+                          <p className="truncate text-xs font-medium text-muted-foreground">
                             {getPaymentMethodLabel(payment.method)}
                           </p>
-                          <p className="mt-0.5 text-xs font-medium text-muted-foreground">
+                          <p
+                            className={cn(
+                              "shrink-0 font-semibold text-gray-950",
+                              compactReadOnlyRows ? "text-sm" : "text-xs",
+                            )}
+                          >
                             {formatStoredAmount(formatter, payment.amount)}
                           </p>
                         </div>
                       </div>
 
-                      {!isTransactionCompleted && !readOnly && (
+                      {showPaymentControls && (
                         <div className="flex shrink-0 items-center gap-2">
                           {onUpdatePayment && (
                             <Button
@@ -709,14 +690,6 @@ export const PaymentsAddedList = ({
                 {formatStoredAmount(formatter, summaryAmount)}
               </p>
             </div>
-            <div
-              className={cn(
-                "mt-5 flex justify-end border-t pt-4 text-sm text-muted-foreground",
-                summaryDividerClass,
-              )}
-            >
-              <PaidTotalBadge formatter={formatter} totalPaid={totalPaid} />
-            </div>
             {renderPaymentsToggle()}
           </div>
         </div>
@@ -733,7 +706,7 @@ export const PaymentsAddedList = ({
                 {payments.length} {payments.length === 1 ? "entry" : "entries"}
               </p>
             </div>
-            {!isTransactionCompleted && !readOnly && onClearPayments && (
+            {showPaymentControls && onClearPayments && (
               <Button
                 variant="outline"
                 className="h-11 rounded-lg border-red-100 bg-white px-4 text-sm font-medium text-red-600 hover:bg-red-50 hover:text-red-700"
@@ -747,7 +720,13 @@ export const PaymentsAddedList = ({
 
           <div className="space-y-3">
             {payments.map((payment) => (
-              <div key={payment.id} className="rounded-lg bg-gray-50 p-4">
+              <div
+                key={payment.id}
+                className={cn(
+                  "rounded-lg bg-gray-50",
+                  compactReadOnlyRows ? "p-3" : "p-4",
+                )}
+              >
                 {editingPaymentId === payment.id ? (
                   <div className="grid gap-3">
                     <div className="flex items-center gap-3">
@@ -794,21 +773,36 @@ export const PaymentsAddedList = ({
                   </div>
                 ) : (
                   <div className="flex items-center justify-between gap-3">
-                    <div className="flex min-w-0 items-center gap-3">
-                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-white text-gray-950 shadow-sm">
+                    <div
+                      className={cn(
+                        "flex min-w-0 items-center gap-3",
+                        compactReadOnlyRows && "flex-1",
+                      )}
+                    >
+                      <div
+                        className={cn(
+                          "flex shrink-0 items-center justify-center rounded-lg bg-white text-gray-950 shadow-sm",
+                          compactReadOnlyRows ? "h-9 w-9" : "h-11 w-11",
+                        )}
+                      >
                         {getPaymentMethodIcon(payment.method)}
                       </div>
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-gray-950">
+                      <div className="flex min-w-0 flex-1 items-center gap-2">
+                        <p className="truncate text-xs font-medium text-muted-foreground">
                           {getPaymentMethodLabel(payment.method)}
                         </p>
-                        <p className="mt-0.5 text-xs font-medium text-muted-foreground">
+                        <p
+                          className={cn(
+                            "shrink-0 font-semibold text-gray-950",
+                            compactReadOnlyRows ? "text-sm" : "text-xs",
+                          )}
+                        >
                           {formatStoredAmount(formatter, payment.amount)}
                         </p>
                       </div>
                     </div>
 
-                    {!isTransactionCompleted && !readOnly && (
+                    {showPaymentControls && (
                       <div className="flex shrink-0 items-center gap-3">
                         {onUpdatePayment && (
                           <Button

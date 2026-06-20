@@ -32,6 +32,7 @@ type ProjectEventArgs = {
   now: number;
   options?: {
     allowClosedRegisterSaleProjection?: boolean;
+    applyExpectedTotalForReviewedNonCashOverpayment?: boolean;
     allowReviewedInventorySaleProjection?: boolean;
     allowRegisterCloseoutVarianceProjection?: boolean;
     reviewedConflictIds?: string[];
@@ -1600,7 +1601,19 @@ async function calculateSalePayments(
   args: SaleCompletedArgs,
   payload: PosLocalSalePayload,
 ): Promise<SalePaymentCalculation> {
-  const validPayments = payload.payments.filter(isValidPayment);
+  const rawValidPayments = payload.payments.filter(isValidPayment);
+  const rawTotalPaid = sumPaymentAmounts(rawValidPayments);
+  const rawNonCashPaid = sumPaymentAmounts(
+    rawValidPayments.filter((payment) => payment.method !== "cash"),
+  );
+  const appliesReviewedNonCashOverpayment =
+    args.options?.applyExpectedTotalForReviewedNonCashOverpayment === true &&
+    rawValidPayments.length === payload.payments.length &&
+    rawTotalPaid >= payload.totals.total &&
+    rawNonCashPaid > payload.totals.total;
+  const validPayments = appliesReviewedNonCashOverpayment
+    ? capNonCashPaymentsToExpectedTotal(rawValidPayments, payload.totals.total)
+    : rawValidPayments;
   const totalPaid = validPayments.reduce(
     (sum, payment) => sum + Math.max(0, payment.amount),
     0,
@@ -1609,7 +1622,8 @@ async function calculateSalePayments(
     .filter((payment) => payment.method !== "cash")
     .reduce((sum, payment) => sum + payment.amount, 0);
   const paymentConflict =
-    validPayments.length !== payload.payments.length ||
+    (!appliesReviewedNonCashOverpayment &&
+      validPayments.length !== payload.payments.length) ||
     totalPaid < payload.totals.total ||
     nonCashPaid > payload.totals.total
       ? await createConflict(repository, args, {
@@ -1651,6 +1665,43 @@ async function calculateSalePayments(
     })),
     validPayments,
   };
+}
+
+function sumPaymentAmounts(payments: PosLocalSalePayload["payments"]) {
+  return roundMoney(
+    payments.reduce((sum, payment) => sum + Math.max(0, payment.amount), 0),
+  );
+}
+
+function capNonCashPaymentsToExpectedTotal(
+  payments: PosLocalSalePayload["payments"],
+  expectedTotal: number,
+) {
+  let remaining = roundMoney(Math.max(0, expectedTotal));
+  const cappedPayments: PosLocalSalePayload["payments"] = [];
+
+  for (const payment of payments) {
+    if (payment.method === "cash") {
+      continue;
+    }
+
+    if (remaining <= 0) {
+      break;
+    }
+
+    const amount = roundMoney(Math.min(Math.max(0, payment.amount), remaining));
+    if (amount <= 0) {
+      continue;
+    }
+
+    cappedPayments.push({
+      ...payment,
+      amount,
+    });
+    remaining = roundMoney(remaining - amount);
+  }
+
+  return cappedPayments;
 }
 
 function planSalePaymentAllocations(args: {

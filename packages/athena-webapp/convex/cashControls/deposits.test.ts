@@ -2375,6 +2375,217 @@ describe("cash control deposits", () => {
     );
   });
 
+  it("lets managers override server-rejected non-cash overpayments at the expected sale total", async () => {
+    const ctx = createAuthorizedRegisterDepositCtx({
+      operationalEvent: [],
+      posLocalSyncEvent: [
+        {
+          _id: "sync_event_rejected",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-1",
+          localEventId: "event_rejected_sale",
+          sequence: 4,
+          eventType: "sale_completed",
+          occurredAt: 2,
+          staffProfileId: "staff_1",
+          payload: {
+            localPosSessionId: "local-pos-session-1",
+            localTransactionId: "local-transaction-1",
+            localReceiptNumber: "885447",
+            receiptNumber: "885447",
+            registerNumber: "1",
+            totals: {
+              subtotal: 15000,
+              tax: 0,
+              total: 15000,
+            },
+            items: [
+              {
+                localTransactionItemId: "local-item-1",
+                productId: "product_1",
+                productSkuId: "product_sku_1",
+                productName: "Wig Cap",
+                productSku: "CAP-1",
+                quantity: 1,
+                unitPrice: 15000,
+              },
+            ],
+            payments: [
+              {
+                localPaymentId: "local-payment-cash",
+                method: "cash",
+                amount: 15000,
+                timestamp: 2,
+              },
+              {
+                localPaymentId: "local-payment-1",
+                method: "mobile_money",
+                amount: 16000,
+                timestamp: 3,
+              },
+            ],
+          },
+          status: "rejected",
+          rejectionCode: "validation_failed",
+          rejectionMessage:
+            "POS sale non-cash payments cannot exceed the sale total.",
+          submittedAt: 4,
+          acceptedAt: 4,
+        },
+      ],
+      posLocalSyncMapping: [
+        {
+          _id: "sync_mapping_1",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-1",
+          localIdKind: "registerSession",
+          localId: "local-register-1",
+          cloudTable: "registerSession",
+          cloudId: "session_open",
+        },
+      ],
+      registerSession: [
+        {
+          _id: "session_open",
+          expectedCash: 50000,
+          openedAt: 1,
+          openingFloat: 10000,
+          organizationId: "org_1",
+          registerNumber: "1",
+          status: "active",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+        },
+      ],
+      posTerminal: [
+        {
+          _id: "terminal_1",
+          registerNumber: "1",
+          registeredByUserId: "athena_user_1",
+          status: "active",
+          storeId: "store_1",
+        },
+      ],
+      product: [
+        {
+          _id: "product_1",
+          storeId: "store_1",
+        },
+      ],
+      productSku: [
+        {
+          _id: "product_sku_1",
+          images: [],
+          inventoryCount: 10,
+          price: 15000,
+          productId: "product_1",
+          quantityAvailable: 10,
+          sku: "CAP-1",
+          storeId: "store_1",
+        },
+      ],
+      staffProfile: [
+        {
+          _id: "manager_1",
+          organizationId: "org_1",
+          status: "active",
+          storeId: "store_1",
+        },
+        {
+          _id: "staff_1",
+          organizationId: "org_1",
+          status: "active",
+          storeId: "store_1",
+        },
+      ],
+      staffRoleAssignment: [
+        {
+          _id: "role_1",
+          organizationId: "org_1",
+          role: "manager",
+          staffProfileId: "manager_1",
+          status: "active",
+          storeId: "store_1",
+        },
+        {
+          _id: "role_2",
+          organizationId: "org_1",
+          role: "cashier",
+          staffProfileId: "staff_1",
+          status: "active",
+          storeId: "store_1",
+        },
+      ],
+    });
+
+    const result = await getHandler(resolveRegisterSessionSyncReview)(
+      ctx as never,
+      {
+        actorStaffProfileId: "manager_1" as Id<"staffProfile">,
+        registerSessionId: "session_open" as Id<"registerSession">,
+        storeId: "store_1" as Id<"store">,
+      },
+    );
+
+    expect(result).toEqual(
+      ok({
+        action: "resolved",
+        projectedCount: 1,
+        registerSession: expect.objectContaining({ _id: "session_open" }),
+        resolvedCount: 1,
+      }),
+    );
+    expect(ctx.tables.get("posTransaction")).toEqual([
+      expect.objectContaining({
+        payments: [
+          expect.objectContaining({
+            amount: 15000,
+            method: "mobile_money",
+          }),
+        ],
+        registerSessionId: "session_open",
+        total: 15000,
+        totalPaid: 15000,
+      }),
+    ]);
+    expect(ctx.tables.get("paymentAllocation")).toEqual([
+      expect.objectContaining({
+        amount: 15000,
+        externalReference: "local-payment-1",
+        method: "mobile_money",
+        targetType: "pos_transaction",
+      }),
+    ]);
+    expect(ctx.tables.get("registerSession")).toEqual([
+      expect.objectContaining({
+        _id: "session_open",
+        expectedCash: 50000,
+        status: "active",
+      }),
+    ]);
+    expect(ctx.tables.get("posLocalSyncEvent")).toEqual([
+      expect.objectContaining({
+        _id: "sync_event_rejected",
+        payload: expect.objectContaining({
+          payments: [
+            expect.objectContaining({
+              amount: 15000,
+              method: "cash",
+            }),
+            expect.objectContaining({
+              amount: 16000,
+              method: "mobile_money",
+            }),
+          ],
+        }),
+        projectedAt: expect.any(Number),
+        status: "projected",
+      }),
+    ]);
+  });
+
   it("settles server-rejected synced activity when a manager rejects it", async () => {
     const ctx = createAuthorizedRegisterDepositCtx({
       posLocalSyncEvent: [

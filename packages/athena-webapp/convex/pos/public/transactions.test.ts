@@ -12,6 +12,7 @@ import {
   getTransaction,
   getTransactionById,
   getTransactionsByStore,
+  markReceiptPrinted,
   updateInventory,
   voidTransaction,
 } from "./transactions";
@@ -96,6 +97,10 @@ describe("POS public transaction query validators", () => {
     );
     assertConformsToExportedReturns(adjustTransactionItems, validationError);
     assertConformsToExportedReturns(getRecentTransactionsWithCustomers, []);
+    assertConformsToExportedReturns(markReceiptPrinted, {
+      kind: "ok" as const,
+      data: null,
+    });
     assertConformsToExportedReturns(getTodaySummary, {
       averageTransaction: 0,
       date: "2026-06-19",
@@ -515,6 +520,134 @@ describe("legacy POS public checkout mutations", () => {
     ).rejects.toThrow("You cannot complete this POS sale.");
 
     expect(completeTransactionCommands.completeTransaction).not.toHaveBeenCalled();
+  });
+
+  it("marks a transaction receipt as printed after authorization", async () => {
+    vi.mocked(transactionQueries.getTransaction).mockResolvedValue({
+      _id: "txn-1",
+      storeId: "store-1",
+      receiptPrinted: false,
+    } as never);
+    const patch = vi.fn();
+    const ctx = {
+      db: {
+        get: vi.fn(async (tableName: string, id: string) => {
+          if (tableName === "store" && id === "store-1") {
+            return { _id: "store-1", organizationId: "org-1" };
+          }
+          return null;
+        }),
+        patch,
+      },
+    };
+
+    await expect(
+      getHandler(markReceiptPrinted)(ctx as never, {
+        transactionId: "txn-1" as Id<"posTransaction">,
+      }),
+    ).resolves.toEqual({
+      kind: "ok",
+      data: null,
+    });
+
+    expect(patch).toHaveBeenCalledWith("posTransaction", "txn-1", {
+      receiptPrinted: true,
+    });
+    expect(
+      athenaUserAuth.requireOrganizationMemberRoleWithCtx,
+    ).toHaveBeenCalledWith(ctx, {
+      allowedRoles: ["full_admin", "pos_only"],
+      failureMessage: "You cannot update this transaction.",
+      organizationId: "org-1",
+      userId: "user-1",
+    });
+  });
+
+  it("does not patch a transaction whose receipt was already printed", async () => {
+    vi.mocked(transactionQueries.getTransaction).mockResolvedValue({
+      _id: "txn-1",
+      storeId: "store-1",
+      receiptPrinted: true,
+    } as never);
+    const patch = vi.fn();
+    const ctx = {
+      db: {
+        get: vi.fn(async (tableName: string, id: string) => {
+          if (tableName === "store" && id === "store-1") {
+            return { _id: "store-1", organizationId: "org-1" };
+          }
+          return null;
+        }),
+        patch,
+      },
+    };
+
+    await expect(
+      getHandler(markReceiptPrinted)(ctx as never, {
+        transactionId: "txn-1" as Id<"posTransaction">,
+      }),
+    ).resolves.toEqual({
+      kind: "ok",
+      data: null,
+    });
+
+    expect(patch).not.toHaveBeenCalled();
+  });
+
+  it("does not patch a receipt print when authorization fails", async () => {
+    vi.mocked(transactionQueries.getTransaction).mockResolvedValue({
+      _id: "txn-1",
+      storeId: "store-1",
+      receiptPrinted: false,
+    } as never);
+    vi.mocked(
+      athenaUserAuth.requireOrganizationMemberRoleWithCtx,
+    ).mockRejectedValueOnce(new Error("You cannot update this transaction."));
+    const patch = vi.fn();
+    const ctx = {
+      db: {
+        get: vi.fn(async (tableName: string, id: string) => {
+          if (tableName === "store" && id === "store-1") {
+            return { _id: "store-1", organizationId: "org-1" };
+          }
+          return null;
+        }),
+        patch,
+      },
+    };
+
+    await expect(
+      getHandler(markReceiptPrinted)(ctx as never, {
+        transactionId: "txn-1" as Id<"posTransaction">,
+      }),
+    ).rejects.toThrow("You cannot update this transaction.");
+
+    expect(patch).not.toHaveBeenCalled();
+  });
+
+  it("returns a command error when receipt print transaction is not found", async () => {
+    vi.mocked(transactionQueries.getTransaction).mockResolvedValue(null);
+    const patch = vi.fn();
+    const ctx = {
+      db: {
+        get: vi.fn(),
+        patch,
+      },
+    };
+
+    await expect(
+      getHandler(markReceiptPrinted)(ctx as never, {
+        transactionId: "txn-1" as Id<"posTransaction">,
+      }),
+    ).resolves.toEqual({
+      kind: "user_error",
+      error: expect.objectContaining({
+        code: "not_found",
+        message: "Transaction not found.",
+      }),
+    });
+
+    expect(patch).not.toHaveBeenCalled();
   });
 
   it("authorizes direct inventory updates by SKU store before invoking the command", async () => {

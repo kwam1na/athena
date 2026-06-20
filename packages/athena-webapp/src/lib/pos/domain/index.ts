@@ -29,6 +29,7 @@ export {
   calculatePosRemainingDue,
   calculatePosTotalPaid,
   isPosPaymentSufficient,
+  normalizeNonCashOverpayment,
 } from "./payments";
 
 export {

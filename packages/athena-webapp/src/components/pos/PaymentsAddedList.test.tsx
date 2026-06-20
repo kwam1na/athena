@@ -107,7 +107,7 @@ describe("PaymentsAddedList", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: /show payments/i }));
+    expect(screen.getByRole("button", { name: /hide payments/i })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /edit/i }));
     await user.click(screen.getByRole("button", { name: /save/i }));
 
@@ -130,7 +130,6 @@ describe("PaymentsAddedList", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: /show payments/i }));
     await user.click(screen.getByRole("button", { name: /edit/i }));
     await user.click(screen.getByRole("button", { name: /save/i }));
 
@@ -155,7 +154,6 @@ describe("PaymentsAddedList", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: /show payments/i }));
     await user.click(screen.getByRole("button", { name: /clear all/i }));
 
     expect(onClearPayments).toHaveBeenCalled();
@@ -177,7 +175,6 @@ describe("PaymentsAddedList", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: /show payments/i }));
     await user.click(screen.getByRole("button", { name: /clear all/i }));
 
     expect(screen.getByRole("button", { name: /clear all/i })).toBeInTheDocument();
@@ -201,7 +198,6 @@ describe("PaymentsAddedList", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: /show payments/i }));
     await user.click(screen.getByRole("button", { name: /remove cash payment/i }));
 
     expect(onRemovePayment).toHaveBeenCalledWith("payment-1");
@@ -223,7 +219,6 @@ describe("PaymentsAddedList", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: /show payments/i }));
     await user.click(screen.getByRole("button", { name: /remove cash payment/i }));
 
     expect(screen.getByRole("button", { name: /remove cash payment/i })).toBeInTheDocument();

@@ -52,6 +52,7 @@ export type RegisterSessionSyncSaleSummary = {
   staffProfileId?: Id<"staffProfile"> | null;
   total?: number | null;
   totalPaid?: number | null;
+  transactionId?: Id<"posTransaction"> | null;
 };
 
 export type RegisterSessionSyncConflict = {
@@ -374,6 +375,7 @@ function summarizeSaleItems(payload: Record<string, unknown>) {
 
 function buildSyncSaleSummary(
   syncEvent?: Doc<"posLocalSyncEvent"> | null,
+  transactionId?: Id<"posTransaction"> | null,
 ): RegisterSessionSyncSaleSummary | null {
   if (!syncEvent || syncEvent.eventType !== "sale_completed") {
     return null;
@@ -416,7 +418,45 @@ function buildSyncSaleSummary(
     staffProfileId: syncEvent.staffProfileId,
     total: totals ? numberDetail(totals, "total") : null,
     totalPaid,
+    transactionId: transactionId ?? null,
   };
+}
+
+async function findTransactionIdForSyncEvent(
+  ctx: Pick<QueryCtx, "db">,
+  syncEvent?: Doc<"posLocalSyncEvent"> | null,
+) {
+  if (
+    !syncEvent ||
+    syncEvent.eventType !== "sale_completed" ||
+    !syncEvent.localRegisterSessionId
+  ) {
+    return null;
+  }
+
+  const localTransactionId = stringDetail(
+    syncEvent.payload,
+    "localTransactionId",
+  );
+  if (!localTransactionId) {
+    return null;
+  }
+
+  const mapping = await ctx.db
+    .query("posLocalSyncMapping")
+    .withIndex("by_store_terminal_local", (q) =>
+      q
+        .eq("storeId", syncEvent.storeId)
+        .eq("terminalId", syncEvent.terminalId)
+        .eq("localRegisterSessionId", syncEvent.localRegisterSessionId)
+        .eq("localIdKind", "transaction")
+        .eq("localId", localTransactionId),
+    )
+    .unique();
+
+  return mapping?.cloudTable === "posTransaction"
+    ? (mapping.cloudId as Id<"posTransaction">)
+    : null;
 }
 
 export function buildRegisterSessionLocalSyncStatus(
@@ -584,7 +624,10 @@ export async function listOpenLocalSyncConflictsByRegisterSession(
       const sourceEventNotes =
         stringDetail(conflict.details, "notes") ??
         stringDetail(syncEvent?.payload, "notes");
-      const sale = buildSyncSaleSummary(syncEvent);
+      const sale = buildSyncSaleSummary(
+        syncEvent,
+        await findTransactionIdForSyncEvent(ctx, syncEvent),
+      );
 
       return sourceEventNotes || sale
         ? { ...conflict, sale, sourceEventNotes }
@@ -611,7 +654,10 @@ export async function listOpenLocalSyncConflictsByRegisterSession(
         details: {},
         localEventId: event.localEventId,
         localRegisterSessionId: event.localRegisterSessionId,
-        sale: buildSyncSaleSummary(event),
+        sale: buildSyncSaleSummary(
+          event,
+          await findTransactionIdForSyncEvent(ctx, event),
+        ),
         sequence: event.sequence,
         status: event.status,
         storeId: event.storeId,

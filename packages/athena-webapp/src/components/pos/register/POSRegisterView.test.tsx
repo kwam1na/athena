@@ -479,6 +479,8 @@ describe("POSRegisterView", () => {
       },
       checkout: {
         isTransactionCompleted: false,
+        payments: [{ method: "mobile_money", amount: 24000, timestamp: 1 }],
+        total: 24000,
       },
       sessionPanel: {},
       cashierCard: {
@@ -515,7 +517,12 @@ describe("POSRegisterView", () => {
     expect(
       screen.getByRole("region", { name: "Sale summary" }),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("region", { name: "Sale summary" }).parentElement,
+    ).toHaveClass("lg:grid-cols-[minmax(0,0.86fr)_minmax(28rem,0.68fr)]");
     expect(screen.getByText("Balance due")).toBeInTheDocument();
+    expect(screen.getByText("Paid")).toBeInTheDocument();
+    expect(screen.getByText("GH₵240")).toBeInTheDocument();
     expect(screen.getByText("GH₵0")).toBeInTheDocument();
     expect(screen.getByText("cart-items")).toBeInTheDocument();
     expect(screen.getByText("register-checkout-panel")).toBeInTheDocument();
@@ -2598,6 +2605,19 @@ describe("POSRegisterView", () => {
     await waitFor(() => {
       expect(screen.getByText("product-entry")).toBeInTheDocument();
     });
+    expect(
+      within(screen.getByTestId("register-main-workspace")).queryByTestId(
+        "cart-items-compact",
+      ),
+    ).not.toBeInTheDocument();
+    expect(
+      within(screen.getByTestId("register-workspace-sidebar")).queryByTestId(
+        "cart-items-compact",
+      ),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText("register-checkout-panel").closest(".rounded-lg"),
+    ).toHaveClass("flex", "flex-1");
 
     await userEvent.click(screen.getByText("show-payment-methods"));
 
@@ -2654,11 +2674,20 @@ describe("POSRegisterView", () => {
 
     await userEvent.click(screen.getByText("start-payment-entry"));
 
+    expect(screen.getByText("Ready for checkout lookup")).toBeInTheDocument();
     expect(
-      screen.queryByText("Ready for product lookup"),
+      within(screen.getByTestId("register-main-workspace")).getByTestId(
+        "cart-items-compact",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId("register-workspace-sidebar")).queryByTestId(
+        "cart-items-compact",
+      ),
     ).not.toBeInTheDocument();
-    expect(screen.getByTestId("cart-items-comfortable")).toBeInTheDocument();
-    expect(screen.queryByTestId("cart-items-compact")).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("cart-items-comfortable"),
+    ).not.toBeInTheDocument();
   });
 
   it("keeps the product lookup workspace stable while a payment is edited", async () => {
@@ -2717,16 +2746,25 @@ describe("POSRegisterView", () => {
     await userEvent.click(screen.getByText("start-payment-edit"));
 
     expect(screen.getByText("Ready for checkout lookup")).toBeInTheDocument();
-    expect(screen.queryByTestId("cart-items-compact")).not.toBeInTheDocument();
+    expect(
+      within(screen.getByTestId("register-main-workspace")).getByTestId(
+        "cart-items-compact",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId("register-workspace-sidebar")).queryByTestId(
+        "cart-items-compact",
+      ),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByTestId("cart-items-comfortable"),
     ).not.toBeInTheDocument();
-    const cartSummary = screen.getByRole("button", { name: "Show cart items" });
-    expect(within(cartSummary).getByText("Items")).toBeInTheDocument();
-    expect(within(cartSummary).getByText("3")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Show cart items" }),
+    ).not.toBeInTheDocument();
   });
 
-  it("summarizes the cart in the rail when payment entry stays beside product results", async () => {
+  it("hides the cart column when payment entry stays beside product results", async () => {
     mockUseRegisterViewModel.mockReturnValue({
       hasActiveStore: true,
       header: {
@@ -2778,138 +2816,170 @@ describe("POSRegisterView", () => {
 
     await userEvent.click(screen.getByText("activate-payment-entry"));
 
-    expect(screen.getByText("product-entry")).toBeInTheDocument();
-    const cartSummary = screen.getByRole("button", { name: "Show cart items" });
-    expect(within(cartSummary).getByText("Items")).toBeInTheDocument();
-    expect(within(cartSummary).getByText("3")).toBeInTheDocument();
-    expect(screen.queryByTestId("cart-items-compact")).not.toBeInTheDocument();
+    expect(
+      within(screen.getByTestId("register-main-workspace")).getByText(
+        "product-entry",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId("register-main-workspace")).queryByTestId(
+        "cart-items-compact",
+      ),
+    ).not.toBeInTheDocument();
+    expect(
+      within(screen.getByTestId("register-workspace-sidebar")).queryByTestId(
+        "cart-items-compact",
+      ),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByTestId("cart-items-comfortable"),
     ).not.toBeInTheDocument();
-  });
-
-  it("collapses the cart in the rail when payments are expanded", async () => {
-    mockUseRegisterViewModel.mockReturnValue({
-      hasActiveStore: true,
-      header: {
-        title: "POS",
-        isSessionActive: true,
-      },
-      registerInfo: {
-        customerName: "Ama Serwa",
-        registerLabel: "Front Counter",
-        hasTerminal: true,
-      },
-      customerPanel: {},
-      productEntry: {
-        disabled: false,
-        productSearchQuery: "",
-        setProductSearchQuery: vi.fn(),
-        onBarcodeSubmit: vi.fn(),
-      },
-      cart: {
-        items: [
-          {
-            id: "line-1",
-            name: "Nuggs",
-            price: 5500,
-            quantity: 1,
-          },
-          {
-            id: "line-2",
-            name: "Agya",
-            price: 7500,
-            quantity: 2,
-          },
-        ],
-      },
-      checkout: {
-        isTransactionCompleted: false,
-      },
-      sessionPanel: {},
-      cashierCard: {},
-      authDialog: {
-        open: false,
-      },
-      drawerGate: null,
-      onNavigateBack: vi.fn(),
-    });
-
-    const { POSRegisterView } = await import("./POSRegisterView");
-    render(<POSRegisterView />);
-
-    expect(screen.getByTestId("cart-items-compact")).toBeInTheDocument();
-
-    await userEvent.click(screen.getByText("expand-payments"));
-
-    expect(screen.queryByTestId("cart-items-compact")).not.toBeInTheDocument();
-    const cartSummary = screen.getByRole("button", { name: "Show cart items" });
-    expect(within(cartSummary).getByText("Items")).toBeInTheDocument();
-    expect(within(cartSummary).getByText("3")).toBeInTheDocument();
-  });
-
-  it("expands the cart and collapses payments when the item summary is selected", async () => {
-    mockUseRegisterViewModel.mockReturnValue({
-      hasActiveStore: true,
-      header: {
-        title: "POS",
-        isSessionActive: true,
-      },
-      registerInfo: {
-        customerName: "Ama Serwa",
-        registerLabel: "Front Counter",
-        hasTerminal: true,
-      },
-      customerPanel: {},
-      productEntry: {
-        disabled: false,
-        productSearchQuery: "",
-        setProductSearchQuery: vi.fn(),
-        onBarcodeSubmit: vi.fn(),
-      },
-      cart: {
-        items: [
-          {
-            id: "line-1",
-            name: "Nuggs",
-            price: 5500,
-            quantity: 1,
-          },
-          {
-            id: "line-2",
-            name: "Agya",
-            price: 7500,
-            quantity: 2,
-          },
-        ],
-      },
-      checkout: {
-        isTransactionCompleted: false,
-      },
-      sessionPanel: {},
-      cashierCard: {},
-      authDialog: {
-        open: false,
-      },
-      drawerGate: null,
-      onNavigateBack: vi.fn(),
-    });
-
-    const { POSRegisterView } = await import("./POSRegisterView");
-    render(<POSRegisterView />);
-
-    await userEvent.click(screen.getByText("expand-payments"));
-
-    expect(screen.queryByTestId("cart-items-compact")).not.toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Show cart items" }),
-    ).toBeInTheDocument();
+      screen.queryByRole("button", { name: "Show cart items" }),
+    ).not.toBeInTheDocument();
+  });
 
-    await userEvent.click(
-      screen.getByRole("button", { name: "Show cart items" }),
-    );
+  it("keeps the cart visible when payments are expanded", async () => {
+    mockUseRegisterViewModel.mockReturnValue({
+      hasActiveStore: true,
+      header: {
+        title: "POS",
+        isSessionActive: true,
+      },
+      registerInfo: {
+        customerName: "Ama Serwa",
+        registerLabel: "Front Counter",
+        hasTerminal: true,
+      },
+      customerPanel: {},
+      productEntry: {
+        disabled: false,
+        productSearchQuery: "",
+        setProductSearchQuery: vi.fn(),
+        onBarcodeSubmit: vi.fn(),
+      },
+      cart: {
+        items: [
+          {
+            id: "line-1",
+            name: "Nuggs",
+            price: 5500,
+            quantity: 1,
+          },
+          {
+            id: "line-2",
+            name: "Agya",
+            price: 7500,
+            quantity: 2,
+          },
+        ],
+      },
+      checkout: {
+        isTransactionCompleted: false,
+      },
+      sessionPanel: {},
+      cashierCard: {},
+      authDialog: {
+        open: false,
+      },
+      drawerGate: null,
+      onNavigateBack: vi.fn(),
+    });
+
+    const { POSRegisterView } = await import("./POSRegisterView");
+    render(<POSRegisterView />);
 
     expect(screen.getByTestId("cart-items-compact")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByText("expand-payments"));
+
+    expect(
+      within(screen.getByTestId("register-main-workspace")).getByTestId(
+        "cart-items-compact",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId("register-main-workspace")).getByText(
+        "cart-items-count-3",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId("register-workspace-sidebar")).queryByTestId(
+        "cart-items-compact",
+      ),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Show cart items" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("does not render the collapsed cart summary after payments expand", async () => {
+    mockUseRegisterViewModel.mockReturnValue({
+      hasActiveStore: true,
+      header: {
+        title: "POS",
+        isSessionActive: true,
+      },
+      registerInfo: {
+        customerName: "Ama Serwa",
+        registerLabel: "Front Counter",
+        hasTerminal: true,
+      },
+      customerPanel: {},
+      productEntry: {
+        disabled: false,
+        productSearchQuery: "",
+        setProductSearchQuery: vi.fn(),
+        onBarcodeSubmit: vi.fn(),
+      },
+      cart: {
+        items: [
+          {
+            id: "line-1",
+            name: "Nuggs",
+            price: 5500,
+            quantity: 1,
+          },
+          {
+            id: "line-2",
+            name: "Agya",
+            price: 7500,
+            quantity: 2,
+          },
+        ],
+      },
+      checkout: {
+        isTransactionCompleted: false,
+      },
+      sessionPanel: {},
+      cashierCard: {},
+      authDialog: {
+        open: false,
+      },
+      drawerGate: null,
+      onNavigateBack: vi.fn(),
+    });
+
+    const { POSRegisterView } = await import("./POSRegisterView");
+    render(<POSRegisterView />);
+
+    await userEvent.click(screen.getByText("expand-payments"));
+
+    expect(
+      within(screen.getByTestId("register-main-workspace")).getByTestId(
+        "cart-items-compact",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId("register-main-workspace")).getByText(
+        "cart-items-count-3",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId("register-workspace-sidebar")).queryByTestId(
+        "cart-items-compact",
+      ),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Show cart items" }),
     ).not.toBeInTheDocument();

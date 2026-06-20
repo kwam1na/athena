@@ -319,6 +319,7 @@ vi.mock("../OrderSummary", () => ({
   OrderSummary: ({
     completedAdjustmentSummary,
     completedTransactionData,
+    onReceiptPrinted,
   }: {
     completedAdjustmentSummary?: {
       originalTotal: number;
@@ -326,9 +327,20 @@ vi.mock("../OrderSummary", () => ({
       settlementDirection: string;
       totalDelta: number;
     } | null;
-    completedTransactionData?: { total: number } | null;
+    completedTransactionData?: { total: number; transactionId?: string } | null;
+    onReceiptPrinted?: (transactionId: string) => void | Promise<void>;
   }) => (
     <div data-testid="order-summary">
+      {completedTransactionData?.transactionId && onReceiptPrinted ? (
+        <button
+          onClick={() =>
+            void onReceiptPrinted(completedTransactionData.transactionId!)
+          }
+          type="button"
+        >
+          Print receipt
+        </button>
+      ) : null}
       {completedAdjustmentSummary ? (
         <span>
           adjusted summary {completedTransactionData?.total} original{" "}
@@ -500,6 +512,7 @@ describe("TransactionView", () => {
     approvalMutation: ReturnType<typeof vi.fn> = vi.fn(),
     itemAdjustmentMutation: ReturnType<typeof vi.fn> = vi.fn(),
     terminalAuthMutation: ReturnType<typeof vi.fn> = authMutation,
+    receiptPrintedMutation: ReturnType<typeof vi.fn> = vi.fn(),
     voidMutation: ReturnType<typeof vi.fn> = vi.fn(),
   ) {
     const mutations = [
@@ -509,6 +522,7 @@ describe("TransactionView", () => {
       paymentMutation,
       customerMutation,
       itemAdjustmentMutation,
+      receiptPrintedMutation,
       voidMutation,
     ];
     let mutationIndex = 0;
@@ -589,6 +603,48 @@ describe("TransactionView", () => {
     render(<TransactionView />);
 
     expect(screen.queryByTestId("session-trace-link")).not.toBeInTheDocument();
+  });
+
+  it("records receipt print clicks for the displayed transaction", async () => {
+    const user = userEvent.setup();
+    const receiptPrintedMutation = vi.fn().mockResolvedValue({
+      kind: "ok",
+      data: null,
+    });
+    mockTransactionMutations(
+      vi.fn(),
+      vi.fn(),
+      vi.fn(),
+      vi.fn(),
+      vi.fn(),
+      vi.fn(),
+      receiptPrintedMutation,
+    );
+    useParamsMock.mockReturnValue({ transactionId: "txn_printed" });
+    useQueryMock.mockReturnValue({
+      ...baseTransaction,
+      _id: "txn_printed",
+      transactionNumber: "POS-PRINTED",
+      items: [
+        {
+          productName: "Wig Cap",
+          productSku: "CAP-1",
+          quantity: 1,
+          unitPrice: 1000,
+          totalPrice: 1000,
+        },
+      ],
+    });
+
+    render(<TransactionView />);
+
+    await user.click(screen.getByRole("button", { name: /Print receipt/i }));
+
+    await waitFor(() => {
+      expect(receiptPrintedMutation).toHaveBeenCalledWith({
+        transactionId: "txn_printed",
+      });
+    });
   });
 
   it("renders completed transaction customer contact details", () => {
@@ -834,6 +890,7 @@ describe("TransactionView", () => {
       vi.fn(),
       vi.fn(),
       authMutation,
+      vi.fn(),
       voidMutation,
     );
     useParamsMock.mockReturnValue({ transactionId: "txn_void" });
@@ -869,6 +926,7 @@ describe("TransactionView", () => {
     const user = userEvent.setup();
     const voidMutation = vi.fn();
     mockTransactionMutations(
+      vi.fn(),
       vi.fn(),
       vi.fn(),
       vi.fn(),
@@ -1001,6 +1059,7 @@ describe("TransactionView", () => {
       vi.fn(),
       vi.fn(),
       terminalAuthMutation,
+      vi.fn(),
       voidMutation,
     );
     useParamsMock.mockReturnValue({ transactionId: "txn_void_terminal" });
@@ -1058,6 +1117,7 @@ describe("TransactionView", () => {
       vi.fn(),
       vi.fn(),
       authMutation,
+      vi.fn(),
       voidMutation,
     );
     useParamsMock.mockReturnValue({ transactionId: "txn_void_async" });
@@ -1096,6 +1156,7 @@ describe("TransactionView", () => {
       vi.fn(),
       vi.fn(),
       authMutation,
+      vi.fn(),
       voidMutation,
     );
     useParamsMock.mockReturnValue({ transactionId: "txn_void_cancel" });
@@ -1161,6 +1222,7 @@ describe("TransactionView", () => {
       approvalMutation,
       vi.fn(),
       authMutation,
+      vi.fn(),
       voidMutation,
     );
     useParamsMock.mockReturnValue({ transactionId: "txn_void_success" });
@@ -1218,6 +1280,7 @@ describe("TransactionView", () => {
       vi.fn(),
       vi.fn(),
       authMutation,
+      vi.fn(),
       voidMutation,
     );
     useParamsMock.mockReturnValue({ transactionId: "txn_void_blocked" });
@@ -1267,6 +1330,7 @@ describe("TransactionView", () => {
       vi.fn(),
       vi.fn(),
       authMutation,
+      vi.fn(),
       voidMutation,
     );
     useParamsMock.mockReturnValue({ transactionId: "txn_void_daily_close" });
@@ -1314,6 +1378,7 @@ describe("TransactionView", () => {
       vi.fn(),
       vi.fn(),
       authMutation,
+      vi.fn(),
       voidMutation,
     );
     useParamsMock.mockReturnValue({ transactionId: "txn_void_auth" });

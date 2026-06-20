@@ -199,11 +199,11 @@ export function RegisterCustomerAttribution({
     <section
       aria-label="Customer attribution"
       className={cn(
-        "rounded-lg border border-border/80 bg-muted/20 px-4 py-3",
+        "flex min-h-[6.5rem] flex-col justify-center rounded-lg border border-border/80 bg-muted/20 px-5 py-4",
         disabled && "opacity-60",
       )}
     >
-      <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex w-full min-w-0 flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex min-w-0 items-center gap-3">
           <div
             className={cn(
@@ -280,7 +280,7 @@ export function RegisterCustomerAttribution({
       </div>
 
       {isExpanded && (
-        <div className="mt-3 border-t border-border/70 pt-3">
+        <div className="mt-3 w-full border-t border-border/70 pt-3">
           <div className="flex min-w-0 flex-col gap-2 sm:flex-row">
             <div className="relative min-w-0 flex-1">
               <Search

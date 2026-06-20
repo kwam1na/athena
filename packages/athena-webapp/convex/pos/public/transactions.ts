@@ -770,6 +770,32 @@ export const voidTransaction = mutation({
   },
 });
 
+export const markReceiptPrinted = mutation({
+  args: {
+    transactionId: v.id("posTransaction"),
+  },
+  returns: commandResultValidator(v.null()),
+  handler: async (ctx, args) => {
+    const access = await requirePosTransactionAccess(ctx, {
+      transactionId: args.transactionId,
+      failureMessage: "You cannot update this transaction.",
+    });
+    if ("kind" in access) {
+      return access;
+    }
+
+    if (access.transaction.receiptPrinted === true) {
+      return ok(null);
+    }
+
+    await ctx.db.patch("posTransaction", args.transactionId, {
+      receiptPrinted: true,
+    });
+
+    return ok(null);
+  },
+});
+
 export const createTransactionFromSession = mutation({
   args: {
     sessionId: v.id("posSession"),

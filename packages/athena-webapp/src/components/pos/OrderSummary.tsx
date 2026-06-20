@@ -122,7 +122,7 @@ interface OrderSummaryProps {
   completedTransactionData?: {
     paymentMethod: string;
     payments?: Payment[];
-    transactionId?: string;
+    transactionId?: Id<"posTransaction"> | Id<"expenseTransaction"> | string;
     completedAt: Date | number;
     cartItems: CartItem[];
     serviceLines?: PosServiceReceiptLine[];
@@ -146,6 +146,7 @@ interface OrderSummaryProps {
   presentation?: "workspace" | "rail";
   cashierName?: string;
   receiptMessaging?: ReceiptMessagingConfig;
+  receiptPrintTransactionId?: Id<"posTransaction">;
   actorStaffProfileId?: Id<"staffProfile"> | string | null;
   receiptNumberOverride?: string;
   onAddPayment?: (
@@ -161,6 +162,9 @@ interface OrderSummaryProps {
   onCompleteTransaction?: () => Promise<boolean>;
   onStartNewTransaction?: () => void | Promise<void>;
   onVoidTransaction?: () => void | Promise<void>;
+  onReceiptPrinted?: (
+    transactionId: Id<"posTransaction">,
+  ) => void | Promise<unknown>;
   pendingVoidApprovalRequestId?: string | null;
   onPaymentFlowChange?: (isActive: boolean) => void;
   onPaymentEntryStart?: () => void;
@@ -197,6 +201,7 @@ export function OrderSummary({
   presentation = "workspace",
   cashierName,
   receiptMessaging,
+  receiptPrintTransactionId,
   actorStaffProfileId,
   receiptNumberOverride,
   onAddPayment,
@@ -206,6 +211,7 @@ export function OrderSummary({
   onCompleteTransaction,
   onStartNewTransaction,
   onVoidTransaction,
+  onReceiptPrinted,
   pendingVoidApprovalRequestId,
   onPaymentFlowChange,
   onPaymentEntryStart,
@@ -403,7 +409,8 @@ export function OrderSummary({
     !isEditingPaymentAmount &&
     !showPaymentButtons;
   const shouldDockPaymentButtons = showPaymentButtons;
-  const shouldShowPaymentButtonBalance = payments.length === 0;
+  const shouldShowPaymentButtonBalance =
+    payments.length === 0 && !hideActiveSummaryCards;
   const isPaymentEntryActive = showPaymentEditor;
   const isPaymentFlowActive =
     !readOnly &&
@@ -682,6 +689,12 @@ export function OrderSummary({
       );
 
       printReceipt(receiptHTML);
+      const transactionId = receiptPrintTransactionId;
+      if (transactionId && onReceiptPrinted) {
+        void Promise.resolve(onReceiptPrinted(transactionId)).catch((error) => {
+          console.warn("Failed to record receipt print", error);
+        });
+      }
       return true;
     } catch (error) {
       console.error("Error in handlePrintReceipt:", error);
@@ -696,7 +709,9 @@ export function OrderSummary({
     formatter,
     payments,
     printReceipt,
+    onReceiptPrinted,
     readOnly,
+    receiptPrintTransactionId,
     receiptNumberOverride,
     registerNumber,
   ]);
@@ -1343,7 +1358,11 @@ export function OrderSummary({
             payments={payments}
             formatter={formatter}
             totalAmountDue={total}
-            balanceDue={isPaymentFlowActive ? remainingDue : undefined}
+            balanceDue={
+              isPaymentFlowActive && !hideActiveSummaryCards
+                ? remainingDue
+                : undefined
+            }
             selectedPaymentMethod={selectedPaymentMethod}
             paymentAmountDraft={paymentAmountDraft}
             readOnly={readOnly}
@@ -1366,6 +1385,7 @@ export function OrderSummary({
                 : undefined
             }
             onPaymentsExpandedChange={onPaymentsExpandedChange}
+            compactReadOnlyRows={selectedPaymentMethod !== null}
             variant={selectedPaymentMethod ? "minimized" : "default"}
           />
         )}
