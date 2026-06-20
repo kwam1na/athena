@@ -1,4 +1,5 @@
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
+import * as AccordionPrimitive from "@radix-ui/react-accordion";
 import { useMutation, useQuery } from "convex/react";
 import {
   ArrowUpRight,
@@ -33,7 +34,12 @@ import {
   runCommand,
 } from "@/lib/errors/runCommand";
 import { getOrigin } from "@/lib/navigationUtils";
-import { capitalizeWords, cn, currencyFormatter } from "@/lib/utils";
+import {
+  capitalizeFirstLetter,
+  capitalizeWords,
+  cn,
+  currencyFormatter,
+} from "@/lib/utils";
 import {
   formatStoredCurrencyAmount,
   parseDisplayAmountInput,
@@ -70,7 +76,6 @@ import {
   Accordion,
   AccordionContent,
   AccordionItem,
-  AccordionTrigger,
 } from "../ui/accordion";
 import {
   buildPosSyncStatusPresentation,
@@ -527,7 +532,7 @@ function getSyncReviewActionCopy({
   if (hasSaleReview) {
     return {
       approveAuthDescription:
-        "Authenticate to apply reviewed sale activity to this drawer",
+        "Authenticate to apply reviewed sale activity to this register session",
       approveLabel: "Apply reviewed sale activity",
       rejectAuthDescription:
         "Authenticate to reject reviewed sale activity from this review",
@@ -842,6 +847,47 @@ function getSaleItemsTotal(sale: Pick<SyncReviewSaleSummary, "items">) {
   return itemsTotal && itemsTotal > 0 ? itemsTotal : null;
 }
 
+function formatPaymentMismatchSummary(
+  sale: Pick<
+    SyncReviewSaleSummary,
+    "paymentMethods" | "total" | "totalPaid"
+  >,
+  currency: string,
+) {
+  if (
+    typeof sale.total !== "number" ||
+    typeof sale.totalPaid !== "number" ||
+    sale.totalPaid <= sale.total
+  ) {
+    return null;
+  }
+
+  return `collected ${formatCurrency(currency, sale.totalPaid)} by ${formatPaymentMethods(
+    sale.paymentMethods,
+  )} against expected total ${formatCurrency(currency, sale.total)}`;
+}
+
+function formatPaymentMismatchDetailSummary(
+  sales: SyncReviewSaleSummary[],
+  currency: string,
+) {
+  const mismatches = sales
+    .map((sale) => formatPaymentMismatchSummary(sale, currency))
+    .filter((summary): summary is string => Boolean(summary));
+
+  if (mismatches.length === 0) {
+    return null;
+  }
+
+  const summary = mismatches
+    .map((mismatch, index) =>
+      index === 0 ? capitalizeFirstLetter(mismatch) : mismatch,
+    )
+    .join("; ");
+
+  return `${summary}.`;
+}
+
 function formatInventoryQuantity(label: string, value?: number | null) {
   return typeof value === "number" && Number.isFinite(value)
     ? `${label} ${value}`
@@ -1008,7 +1054,7 @@ function SalesUnderReviewList({
             Sales under review
           </p>
           <p className="text-xs leading-5 text-muted-foreground">
-            These synced sale details will affect this closed drawer if applied.
+            These synced sale details will affect this register session if applied.
           </p>
         </div>
         <div className="flex flex-wrap gap-x-layout-sm gap-y-1 text-xs text-muted-foreground">
@@ -1045,6 +1091,18 @@ function SalesUnderReviewList({
             paymentMethod: primaryPaymentMethod,
           });
           const itemsTotal = getSaleItemsTotal(sale);
+          const transactionId = sale.transactionId?.trim();
+          const paymentMismatchSummary = formatPaymentMismatchSummary(
+            sale,
+            currency,
+          );
+          const reviewReasons =
+            paymentMismatchSummary !== null
+              ? [
+                  `Payment mismatch: ${paymentMismatchSummary}`,
+                  ...sale.reasons,
+                ]
+              : sale.reasons;
 
           return (
             <AccordionItem
@@ -1052,8 +1110,8 @@ function SalesUnderReviewList({
               key={`${receiptNumber}-${index}`}
               value={`sale-${index}`}
             >
-              <AccordionTrigger className="gap-layout-sm px-layout-sm py-layout-sm text-left hover:no-underline">
-                <div className="grid min-w-0 flex-1 gap-layout-sm sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+              <AccordionPrimitive.Header className="flex">
+                <AccordionPrimitive.Trigger className="grid w-full min-w-0 gap-layout-sm px-layout-sm py-layout-sm text-left transition-colors hover:bg-muted/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-muted/10 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center [&[data-state=open]_.review-sale-chevron]:rotate-180">
                   <div className="min-w-0 space-y-1">
                     <p className="truncate text-sm font-medium text-foreground">
                       Receipt #{receiptNumber}
@@ -1080,10 +1138,31 @@ function SalesUnderReviewList({
                     </span>
                     <span>{formatSaleItemCount(sale)}</span>
                   </div>
-                </div>
-              </AccordionTrigger>
+                  <span className="flex shrink-0 items-center self-stretch justify-center text-muted-foreground transition-colors">
+                    <ChevronDown className="review-sale-chevron h-4 w-4 shrink-0 transition-transform duration-200" />
+                  </span>
+                </AccordionPrimitive.Trigger>
+              </AccordionPrimitive.Header>
               <AccordionContent className="border-t border-border/70 px-layout-sm pb-layout-sm pt-layout-sm">
                 <div className="space-y-layout-sm">
+                  {transactionId && orgUrlSlug && storeUrlSlug ? (
+                    <div className="flex justify-end">
+                      <Link
+                        aria-label={`Open transaction for receipt ${receiptNumber}`}
+                        className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:text-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        params={{
+                          orgUrlSlug,
+                          storeUrlSlug,
+                          transactionId: transactionId as Id<"posTransaction">,
+                        }}
+                        search={{ o: getOrigin() }}
+                        to="/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId"
+                      >
+                        Open transaction
+                        <ArrowUpRight className="h-3.5 w-3.5 shrink-0" />
+                      </Link>
+                    </div>
+                  ) : null}
                   <div className="grid gap-layout-sm lg:grid-cols-[minmax(0,1fr)_minmax(14rem,0.7fr)]">
                     <div className="space-y-layout-xs">
                       <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
@@ -1170,8 +1249,8 @@ function SalesUnderReviewList({
                       </p>
                       <div className="rounded-md border border-border/70 bg-muted/10 px-layout-sm py-layout-xs">
                         <p className="text-xs leading-5 text-muted-foreground">
-                          {sale.reasons.length > 0
-                            ? `${sale.reasons
+                          {reviewReasons.length > 0
+                            ? `${reviewReasons
                                 .map((reason) => reason.replace(/[.!?]+$/, ""))
                                 .join("; ")}.`
                             : "This sale needs manager review before it is applied."}
@@ -1436,10 +1515,10 @@ function getCombinedReviewNextStep(items: PosReconciliationItem[]) {
         item.type === "inventory_conflict",
     )
   ) {
-    return "Manager sign-in reviews the inventory details and applies the synced sale activity to this drawer.";
+    return "Manager sign-in reviews the inventory details and applies the synced sale activity to this register session.";
   }
 
-  return "Manager sign-in reviews and applies the synced register activity to this drawer.";
+  return "Manager sign-in reviews and applies the synced register activity to this register session.";
 }
 
 function isInventoryRegisterSyncReviewItem(item: PosReconciliationItem) {
@@ -1660,6 +1739,12 @@ function RegisterSessionSyncNotice({
   const rejectedSyncSaleSummaries = hasOnlyRejectedReviewItems
     ? getSyncReviewSaleSummaries(reconciliationItems)
     : [];
+  const rejectedPaymentMismatchSummary = hasOnlyRejectedReviewItems
+    ? formatPaymentMismatchDetailSummary(rejectedSyncSaleSummaries, currency)
+    : null;
+  const rejectedSyncNextStep = rejectedPaymentMismatchSummary
+    ? "Manager sign-in applies the expected sale total as the collected amount and records the override for audit."
+    : "Manager sign-in applies the rejected local activity to this register session and records the override for audit.";
   const reviewQueueSummary = shouldCombineReviewItems
     ? formatReviewQueueSummary(reconciliationItems)
     : null;
@@ -1684,6 +1769,10 @@ function RegisterSessionSyncNotice({
         {
           label: "Items",
           value: `${formatReviewItemCount(reconciliationItems.length)} rejected by the server.`,
+        },
+        {
+          label: "Payment mismatch",
+          value: rejectedPaymentMismatchSummary,
         },
       ]
     : [];
@@ -1736,8 +1825,7 @@ function RegisterSessionSyncNotice({
                     Next step
                   </p>
                   <p className="text-sm leading-6 text-foreground">
-                    Manager sign-in applies the rejected local events to this
-                    drawer and records the override for audit.
+                    {rejectedSyncNextStep}
                   </p>
                 </div>
                 <div className="border-t border-border pt-layout-sm md:border-l md:border-t-0 md:pl-layout-sm md:pt-0">

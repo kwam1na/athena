@@ -8,6 +8,7 @@ import {
   type PosServiceCartLineInput,
   calculatePosTotalPaid,
   isPosPaymentSufficient,
+  normalizeNonCashOverpayment,
 } from "./index";
 
 describe("calculatePosCartTotals", () => {
@@ -163,5 +164,87 @@ describe("payment helpers", () => {
     expect(totalPaid).toBe(22.5);
     expect(calculatePosRemainingDue(totalPaid, 30.06)).toBe(7.56);
     expect(isPosPaymentSufficient(totalPaid, 30.06)).toBe(false);
+  });
+
+  it("reduces non-cash payments when cart total drops below the paid amount", () => {
+    const result = normalizeNonCashOverpayment(
+      [
+        {
+          id: "payment-1",
+          method: "mobile_money",
+          amount: 18.95,
+          timestamp: 1,
+        },
+      ],
+      18.5,
+    );
+
+    expect(result.changed).toBe(true);
+    expect(result.adjustedPayments).toEqual([
+      expect.objectContaining({ amount: 18.5, method: "mobile_money" }),
+    ]);
+  });
+
+  it("leaves cash overpayment as change due", () => {
+    const payments = [
+      {
+        id: "payment-1",
+        method: "cash" as const,
+        amount: 18.95,
+        timestamp: 1,
+      },
+    ];
+
+    expect(normalizeNonCashOverpayment(payments, 18.5)).toEqual({
+      adjustedPayments: payments,
+      changed: false,
+    });
+  });
+
+  it("preserves non-cash payment when cash creates mixed-tender change due", () => {
+    const payments = [
+      {
+        id: "payment-1",
+        method: "mobile_money" as const,
+        amount: 80,
+        timestamp: 1,
+      },
+      {
+        id: "payment-2",
+        method: "cash" as const,
+        amount: 50,
+        timestamp: 2,
+      },
+    ];
+
+    expect(normalizeNonCashOverpayment(payments, 100)).toEqual({
+      adjustedPayments: payments,
+      changed: false,
+    });
+  });
+
+  it("removes non-cash payments reduced to zero", () => {
+    const result = normalizeNonCashOverpayment(
+      [
+        {
+          id: "payment-1",
+          method: "mobile_money",
+          amount: 5,
+          timestamp: 1,
+        },
+        {
+          id: "payment-2",
+          method: "card",
+          amount: 10,
+          timestamp: 2,
+        },
+      ],
+      5,
+    );
+
+    expect(result.changed).toBe(true);
+    expect(result.adjustedPayments).toEqual([
+      expect.objectContaining({ amount: 5, method: "mobile_money" }),
+    ]);
   });
 });

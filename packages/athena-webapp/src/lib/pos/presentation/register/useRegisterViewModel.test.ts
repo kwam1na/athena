@@ -10651,7 +10651,7 @@ describe("useRegisterViewModel", () => {
     );
   });
 
-  it("keeps remove-to-zero changes visible when the local write fails", async () => {
+  it("hides remove-to-zero quantity changes while the local write is pending and restores on failure", async () => {
     const pendingAppend = deferred<{
       ok: false;
       error: { message: string };
@@ -10675,8 +10675,8 @@ describe("useRegisterViewModel", () => {
       );
     });
 
-    expect(result.current.cart.items).toHaveLength(1);
-    expect(result.current.checkout.cartItems).toHaveLength(1);
+    expect(result.current.cart.items).toHaveLength(0);
+    expect(result.current.checkout.cartItems).toHaveLength(0);
 
     pendingAppend.resolve({
       ok: false,
@@ -11666,6 +11666,117 @@ describe("useRegisterViewModel", () => {
     );
     expect(mockSyncSessionCheckoutState).not.toHaveBeenCalled();
     expect(result.current.checkout.payments).toEqual([]);
+  });
+
+  it("reduces non-cash payments when the cart total drops below the paid amount", async () => {
+    mockActiveSession = {
+      ...mockActiveSession!,
+      payments: [{ method: "mobile_money", amount: 120, timestamp: 1_000 }],
+    };
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result, rerender } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    mockActiveSession = {
+      ...mockActiveSession!,
+      cartItems: [
+        {
+          ...mockActiveSession!.cartItems[0],
+          price: 90,
+        },
+      ],
+      payments: [{ method: "mobile_money", amount: 120, timestamp: 1_000 }],
+    };
+
+    await act(async () => {
+      rerender();
+    });
+
+    await waitFor(() =>
+      expect(mockAppendLocalEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "session.payments_updated",
+          payload: expect.objectContaining({
+            stage: "paymentUpdated",
+            payments: [expect.objectContaining({ amount: 90 })],
+          }),
+        }),
+      ),
+    );
+    expect(result.current.checkout.payments).toEqual([
+      expect.objectContaining({ amount: 90, method: "mobile_money" }),
+    ]);
+    expect(mockSyncSessionCheckoutState).not.toHaveBeenCalled();
+  });
+
+  it("completes with stale non-cash overpayment when adjustment persistence fails", async () => {
+    mockActiveSession = {
+      ...mockActiveSession!,
+      payments: [{ method: "mobile_money", amount: 120, timestamp: 1_000 }],
+    };
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result, rerender } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        "staff-1" as Id<"staffProfile">,
+      );
+    });
+
+    mockAppendLocalEvent.mockImplementation(async (input: { type: string }) =>
+      input.type === "session.payments_updated"
+        ? {
+            ok: false,
+            error: {
+              message: "POS local store could not write the local event.",
+            },
+          }
+        : { ok: true, value: { localEventId: "local-event-1" } },
+    );
+    mockActiveSession = {
+      ...mockActiveSession!,
+      cartItems: [
+        {
+          ...mockActiveSession!.cartItems[0],
+          price: 90,
+        },
+      ],
+      payments: [{ method: "mobile_money", amount: 120, timestamp: 1_000 }],
+    };
+
+    await act(async () => {
+      rerender();
+    });
+    let completed = false;
+    await act(async () => {
+      completed = await result.current.checkout.onCompleteTransaction();
+    });
+
+    expect(completed).toBe(true);
+    expect(mockAppendLocalEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "transaction.completed",
+        payload: expect.objectContaining({
+          total: 90,
+          payments: [
+            expect.objectContaining({
+              amount: 120,
+              method: "mobile_money",
+            }),
+          ],
+        }),
+      }),
+    );
+    expect(toast.error).not.toHaveBeenCalledWith(
+      "Unable to update this payment. Try again.",
+    );
   });
 
   it("does not show the sale-cleared toast when clearing an already-empty cart", async () => {

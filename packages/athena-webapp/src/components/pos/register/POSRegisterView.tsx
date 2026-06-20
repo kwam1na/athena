@@ -235,21 +235,29 @@ function RegisterSaleSummaryStrip({
   return (
     <section
       aria-label="Sale summary"
-      className="grid min-h-[4.5rem] overflow-hidden rounded-lg border border-border/80 bg-surface shadow-surface sm:grid-cols-2"
+      className="grid min-h-[6.5rem] overflow-hidden rounded-lg border border-border/80 bg-surface shadow-surface sm:grid-cols-3"
     >
-      <div className="flex min-w-0 flex-col justify-center border-b border-border/70 px-4 py-3 sm:border-b-0 sm:border-r">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+      <div className="flex min-w-0 flex-col justify-center gap-2 border-b border-border/70 px-5 py-5 sm:border-b-0 sm:border-r">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
           Items
         </p>
-        <p className="mt-1 text-2xl font-semibold leading-none text-foreground">
+        <p className="text-3xl font-semibold leading-none text-foreground">
           {itemCount}
         </p>
       </div>
-      <div className="flex min-w-0 flex-col justify-center px-4 py-3">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-warning">
+      <div className="flex min-w-0 flex-col justify-center gap-2 border-b border-border/70 px-5 py-5 sm:border-b-0 sm:border-r">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+          Paid
+        </p>
+        <p className="text-3xl font-semibold leading-none text-foreground">
+          {formatStoredAmount(formatter, totalPaid)}
+        </p>
+      </div>
+      <div className="flex min-w-0 flex-col justify-center gap-2 bg-warning/10 px-5 py-5 ring-1 ring-inset ring-warning/20">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-warning">
           Balance due
         </p>
-        <p className="mt-1 text-2xl font-semibold leading-none text-foreground">
+        <p className="text-3xl font-semibold leading-none text-foreground">
           {formatStoredAmount(formatter, balanceDue)}
         </p>
       </div>
@@ -320,7 +328,7 @@ function RegisterSetupResolvingWorkspace() {
   );
 }
 
-function CartCountSummary({
+export function CartCountSummary({
   itemCount,
   onExpandCart,
 }: {
@@ -1123,9 +1131,9 @@ function POSRegisterViewContent({
     guidance:
       updateApplyBlocker?.guidance ?? "Apply the update when you are ready.",
   });
-  const [isPaymentEntryActive, setIsPaymentEntryActive] = useState(false);
-  const [isPaymentEditActive, setIsPaymentEditActive] = useState(false);
-  const [isPaymentsListExpanded, setIsPaymentsListExpanded] = useState(false);
+  const [, setIsPaymentEntryActive] = useState(false);
+  const [, setIsPaymentEditActive] = useState(false);
+  const [isPaymentsListExpanded, setIsPaymentsListExpanded] = useState(true);
   const [isEmptyStateQuickAddActive, setIsEmptyStateQuickAddActive] =
     useState(false);
   const productEntryRef = useRef<ProductEntryHandle>(null);
@@ -1229,8 +1237,6 @@ function POSRegisterViewContent({
     !isPosWorkflow && !shouldRenderExpenseCompletionWorkspace;
   const shouldRenderCheckoutPanel =
     isPosWorkflow || shouldRenderExpenseCompletionPanel;
-  const shouldShowPaymentWorkspace =
-    isPosWorkflow && isPaymentEntryActive && !hasLookupIntent;
   const shouldShowDrawerRecoveryActionBar =
     isPosWorkflow &&
     viewModel.drawerGate?.mode === "recovery" &&
@@ -1239,35 +1245,20 @@ function POSRegisterViewContent({
     !isAwaitingCashierAuth &&
     !shouldShowOnboarding &&
     !isResolvingRegisterSetup;
-  const shouldShowIdleLookupCartSplit =
+  const shouldShowLookupCartSplit =
     isPosWorkflow &&
     shouldRenderSaleSurface &&
     cartItemCount > 0 &&
     !hasLookupIntent &&
-    !shouldShowPaymentWorkspace &&
-    !isPaymentEditActive &&
-    !isPaymentsListExpanded &&
     !shouldShowOnboarding &&
     !isResolvingRegisterSetup &&
     !isResolvingCashierPresence &&
     !isAwaitingCashierAuth &&
     !viewModel.drawerGate;
-  const shouldShowCartSummarySidebar =
-    isPosWorkflow &&
-    shouldRenderSaleSurface &&
-    ((isPaymentEntryActive && hasLookupIntent) ||
-      isPaymentEditActive ||
-      isPaymentsListExpanded) &&
-    !shouldShowPaymentWorkspace &&
-    !shouldShowOnboarding &&
-    !isResolvingCashierPresence &&
-    !isPosRegisterLocked &&
-    !isResolvingRegisterSetup;
   const shouldRenderCartSidebar =
     shouldRenderSaleSurface &&
-    !shouldShowIdleLookupCartSplit &&
-    !shouldShowPaymentWorkspace &&
-    !shouldShowCartSummarySidebar &&
+    !shouldShowLookupCartSplit &&
+    !hasLookupIntent &&
     !shouldShowOnboarding &&
     !isResolvingCashierPresence &&
     !isResolvingRegisterSetup;
@@ -1351,10 +1342,6 @@ function POSRegisterViewContent({
 
   const handlePaymentsExpandedChange = useCallback((isExpanded: boolean) => {
     setIsPaymentsListExpanded(isExpanded);
-  }, []);
-
-  const handleCartSummaryClick = useCallback(() => {
-    setIsPaymentsListExpanded(false);
   }, []);
 
   const handleEditingPaymentChange = useCallback((isEditing: boolean) => {
@@ -1696,7 +1683,7 @@ function POSRegisterViewContent({
           !isPosRegisterLocked &&
           !isResolvingCashierPresence &&
           !isResolvingRegisterSetup ? (
-            <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,0.48fr)]">
+            <div className="grid gap-3 lg:grid-cols-[minmax(0,0.86fr)_minmax(28rem,0.68fr)]">
               <RegisterCustomerPanel
                 customerPanel={viewModel.customerPanel}
                 disabled={!isSessionActive}
@@ -1750,20 +1737,9 @@ function POSRegisterViewContent({
                   <div className="min-h-0 flex-1 overflow-y-auto rounded-lg bg-surface p-4">
                     <ExpenseCompletionPanel checkout={viewModel.checkout} />
                   </div>
-                ) : shouldShowPaymentWorkspace ? (
-                  <CartItems
-                    cartItems={viewModel.cart.items}
-                    serviceItems={viewModel.cart.serviceItems}
-                    onUpdateQuantity={viewModel.cart.onUpdateQuantity}
-                    onRemoveItem={viewModel.cart.onRemoveItem}
-                    onUpdateServiceAmount={viewModel.cart.onUpdateServiceAmount}
-                    onRemoveService={viewModel.cart.onRemoveService}
-                    clearCart={viewModel.cart.onClearCart}
-                    density="comfortable"
-                  />
                 ) : hasLookupIntent ? (
                   <div className="min-h-0 flex-1">{renderProductEntry()}</div>
-                ) : shouldShowIdleLookupCartSplit ? (
+                ) : shouldShowLookupCartSplit ? (
                   <div className="grid h-full min-h-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(20rem,0.72fr)]">
                     <ProductLookupEmptyState
                       canQuickAddProduct={
@@ -1872,20 +1848,12 @@ function POSRegisterViewContent({
                     />
                   ) : null}
 
-                  {shouldShowCartSummarySidebar ? (
-                    <CartCountSummary
-                      itemCount={cartItemCount}
-                      onExpandCart={handleCartSummaryClick}
-                    />
-                  ) : null}
-
                   {shouldRenderCheckoutPanel ? (
                     <div
                       className={cn(
                         "rounded-lg bg-surface p-4",
-                        shouldShowPaymentWorkspace ||
-                          shouldShowIdleLookupCartSplit ||
-                          shouldShowCartSummarySidebar ||
+                        shouldShowLookupCartSplit ||
+                          hasLookupIntent ||
                           viewModel.checkout.isTransactionCompleted
                           ? "flex min-h-0 flex-1 flex-col overflow-hidden"
                           : "shrink-0",
@@ -1898,9 +1866,6 @@ function POSRegisterViewContent({
                           onPaymentEntryStart={handlePaymentEntryStart}
                           onCompletionBlockAction={handleCompletionBlockAction}
                           onEditingPaymentChange={handleEditingPaymentChange}
-                          hidePaymentItemCountSummary={
-                            shouldShowCartSummarySidebar
-                          }
                           hideActiveSummaryCards
                           paymentsExpanded={isPaymentsListExpanded}
                           onPaymentsExpandedChange={

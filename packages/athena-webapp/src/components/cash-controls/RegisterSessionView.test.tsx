@@ -38,11 +38,26 @@ vi.mock("@tanstack/react-router", () => ({
     search?: Record<string, string>;
     to?: string;
   }) => {
-    void params;
+    const resolvedParams =
+      typeof params === "function"
+        ? params({
+            orgUrlSlug: "org",
+            sessionId: "session-1",
+            storeUrlSlug: "store",
+            transactionId: "transaction-1",
+          })
+        : params;
+    const resolvedTo =
+      to && resolvedParams && typeof resolvedParams === "object"
+        ? Object.entries(resolvedParams as Record<string, string>).reduce(
+            (path, [key, value]) => path.replace(`$${key}`, value),
+            to,
+          )
+        : to;
     const searchParams = search ? `?${new URLSearchParams(search)}` : "";
 
     return (
-      <a href={`${to ?? "#"}${searchParams}`} {...props}>
+      <a href={`${resolvedTo ?? "#"}${searchParams}`} {...props}>
         {children}
       </a>
     );
@@ -522,7 +537,7 @@ describe("RegisterSessionViewContent", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        "Manager sign-in applies the rejected local events to this drawer and records the override for audit.",
+        "Manager sign-in applies the rejected local activity to this register session and records the override for audit.",
       ),
     ).toBeInTheDocument();
     expect(
@@ -959,6 +974,7 @@ describe("RegisterSessionViewContent", () => {
                     staffName: "Skank H.",
                     total: 2200000,
                     totalPaid: 2200000,
+                    transactionId: "transaction-1001",
                   },
                   sequence: 12,
                   status: "needs_review",
@@ -1004,6 +1020,8 @@ describe("RegisterSessionViewContent", () => {
             },
           },
         }}
+        orgUrlSlug="wigclub"
+        storeUrlSlug="wigclub"
       />,
     );
 
@@ -1030,16 +1048,24 @@ describe("RegisterSessionViewContent", () => {
     expect(screen.getByText("#12 and #13")).toBeInTheDocument();
     expect(screen.getAllByText(/2026/).length).toBeGreaterThan(0);
     expect(screen.getByText("Sales under review")).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /Receipt #R-1001/i }),
-    ).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Open transaction/i }))
+      .not.toBeInTheDocument();
     expect(screen.getByText(/Cashier Skank H\./)).toBeInTheDocument();
     expect(screen.getAllByText("GH₵22,000").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Cash").length).toBeGreaterThan(0);
     expect(screen.queryByText("Lace Front Wig")).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /Receipt #R-1001/i }));
+    await user.click(
+      screen.getByRole("button", {
+        name: /Receipt #R-1001/i,
+      }),
+    );
 
+    expect(screen.getByRole("link", { name: /Open transaction/i }))
+      .toHaveAttribute(
+        "href",
+        "/wigclub/store/wigclub/pos/transactions/transaction-1001?o=%252F",
+      );
     expect(screen.getByText("Lace Front Wig")).toBeInTheDocument();
     expect(screen.getByText("Wig Care Kit")).toBeInTheDocument();
     expect(screen.getByText("WIG-001")).toBeInTheDocument();
@@ -1184,18 +1210,24 @@ describe("RegisterSessionViewContent", () => {
 
     expect(
       screen.getByText(
-        "Manager sign-in reviews the inventory details and applies the synced sale activity to this drawer.",
+        "Manager sign-in reviews the inventory details and applies the synced sale activity to this register session.",
       ),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Apply reviewed sale activity" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /Receipt #939540/i }),
+      screen.getByRole("button", {
+        name: /Receipt #939540/i,
+      }),
     ).toBeInTheDocument();
     expect(screen.getByText("Mobile Money")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /Receipt #939540/i }));
+    await user.click(
+      screen.getByRole("button", {
+        name: /Receipt #939540/i,
+      }),
+    );
 
     expect(screen.getByText("None recorded")).toBeInTheDocument();
     expect(screen.getAllByText("Inventory review").length).toBeGreaterThan(0);
@@ -1209,7 +1241,7 @@ describe("RegisterSessionViewContent", () => {
       "http://localhost",
     );
     expect(stockAdjustmentsHref.pathname).toBe(
-      "/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments",
+      "/wigclub/store/wigclub/operations/stock-adjustments",
     );
     expect(stockAdjustmentsHref.searchParams.get("mode")).toBe("manual");
     expect(stockAdjustmentsHref.searchParams.get("sku")).toBe("sku-hair-dryer");
@@ -1222,7 +1254,7 @@ describe("RegisterSessionViewContent", () => {
       "http://localhost",
     );
     expect(skuActivityHref.pathname).toBe(
-      "/$orgUrlSlug/store/$storeUrlSlug/operations/sku-activity",
+      "/wigclub/store/wigclub/operations/sku-activity",
     );
     expect(skuActivityHref.searchParams.get("productSkuId")).toBe(
       "sku-hair-dryer",
@@ -1359,7 +1391,9 @@ describe("RegisterSessionViewContent", () => {
     ).not.toBeInTheDocument();
 
     await user.click(
-      screen.getByRole("button", { name: /Receipt #8707507/i }),
+      screen.getByRole("button", {
+        name: /Receipt #8707507/i,
+      }),
     );
 
     expect(screen.getByText("Review decisions")).toBeInTheDocument();
@@ -1509,9 +1543,39 @@ describe("RegisterSessionViewContent", () => {
               reconciliationItems: [
                 {
                   id: "sync_event_1",
+                  sale: {
+                    itemCount: 4,
+                    items: [
+                      {
+                        name: "Cluster Lashes",
+                        quantity: 1,
+                        sku: "KK38-G60-8DV",
+                        total: 10000,
+                      },
+                      {
+                        name: "One Step Round Brush Hot Air Brush",
+                        quantity: 1,
+                        sku: "KK38-8HZ-CZ0",
+                        total: 19000,
+                      },
+                      {
+                        name: "Best Beauty Eye Pencil",
+                        quantity: 2,
+                        sku: "KK38-6RR-VV5",
+                        total: 4000,
+                      },
+                    ],
+                    occurredAt: Date.parse("2026-06-20T10:40:00-04:00"),
+                    paymentMethods: ["mobile_money"],
+                    receiptNumber: "664153",
+                    staffName: "Gertrude A.",
+                    total: 33000,
+                    totalPaid: 66000,
+                  },
                   sequence: 4,
                   status: "rejected",
-                  summary: "Server rejected synced register activity.",
+                  summary:
+                    "POS sale non-cash payments cannot exceed the sale total.",
                   type: "server_rejected",
                 },
               ],
@@ -1520,6 +1584,29 @@ describe("RegisterSessionViewContent", () => {
         }}
       />,
     );
+
+    expect(
+      screen.getByText(
+        "Collected GH₵660 by Mobile Money against expected total GH₵330.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Manager sign-in applies the expected sale total as the collected amount and records the override for audit.",
+      ),
+    ).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", {
+        name: /Receipt #664153/i,
+      }),
+    );
+
+    expect(
+      screen.getByText(
+        /Payment mismatch: collected GH₵660 by Mobile Money against expected total GH₵330/,
+      ),
+    ).toBeInTheDocument();
 
     await user.click(
       screen.getByRole("button", { name: "Override and sync events" }),
@@ -2929,7 +3016,7 @@ describe("RegisterSessionViewContent", () => {
       screen.getByRole("link", { name: /View all linked transactions/i }),
     ).toHaveAttribute(
       "href",
-      "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions?o=%252F&registerSessionId=session-1",
+      "/wigclub/store/wigclub/pos/transactions?o=%252F&registerSessionId=session-1",
     );
   });
 

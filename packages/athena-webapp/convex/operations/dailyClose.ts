@@ -147,6 +147,7 @@ type DailyCloseSnapshot = {
     notes?: string;
   } | null;
   priorClose: Doc<"dailyClose"> | null;
+  priorDaySummary?: DailyCloseSummary | null;
   status: "blocked" | "needs_review" | "carry_forward" | "ready" | "completed";
   blockers: DailyCloseItem[];
   reviewItems: DailyCloseItem[];
@@ -202,6 +203,7 @@ function normalizeCompletedDailyCloseSnapshot(args: {
   dailyClose: Doc<"dailyClose">;
   completedByStaffName?: string | null;
   completedByStaffProfileId?: Id<"staffProfile">;
+  priorClose?: Doc<"dailyClose"> | null;
 }): DailyCloseSnapshot | null {
   const reportSnapshot = args.dailyClose.reportSnapshot as
     | DailyCloseReportSnapshot
@@ -225,7 +227,10 @@ function normalizeCompletedDailyCloseSnapshot(args: {
       completedByUserId: reportSnapshot.closeMetadata.completedByUserId,
       notes: reportSnapshot.closeMetadata.notes,
     },
-    priorClose: null,
+    priorClose: args.priorClose ?? null,
+    priorDaySummary: args.priorClose?.summary
+      ? normalizeDailyCloseSummary(args.priorClose.summary)
+      : null,
     status: "completed",
     blockers: [],
     reviewItems: reportSnapshot.reviewedItems,
@@ -1570,6 +1575,7 @@ export async function buildDailyCloseSnapshotWithCtx(
       existingClose: null,
       completedClose: null,
       priorClose: null,
+      priorDaySummary: null,
       status: "blocked",
       blockers: [blocker],
       reviewItems: [],
@@ -1599,12 +1605,14 @@ export async function buildDailyCloseSnapshotWithCtx(
     const staffNamesById = await buildStaffNamesById(ctx, [
       completedByStaffProfileId,
     ]);
+    const priorClose = await getPriorCompletedDailyClose(ctx, args);
     const completedSnapshot = normalizeCompletedDailyCloseSnapshot({
       dailyClose: existingClose,
       completedByStaffProfileId,
       completedByStaffName: completedByStaffProfileId
         ? (staffNamesById.get(completedByStaffProfileId) ?? null)
         : null,
+      priorClose,
     });
 
     if (completedSnapshot) {
@@ -2309,6 +2317,9 @@ export async function buildDailyCloseSnapshotWithCtx(
     existingClose,
     completedClose,
     priorClose,
+    priorDaySummary: priorClose?.summary
+      ? normalizeDailyCloseSummary(priorClose.summary)
+      : null,
     status,
     blockers,
     reviewItems,

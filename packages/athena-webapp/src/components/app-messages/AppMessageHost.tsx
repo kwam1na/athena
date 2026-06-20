@@ -3,6 +3,7 @@ import { Download, Info } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { useOptionalSidebar } from "@/components/ui/sidebar";
 import {
   Tooltip,
   TooltipContent,
@@ -23,6 +24,7 @@ const actionButtonClassName =
 export function AppMessageHost() {
   const messages = useAppMessages();
   const communicationVariant = usePreferredAppMessageCommunicationVariant();
+  const sidebar = useOptionalSidebar();
   const message = messages[0];
   const actionBlockers = useAppActionBlockers(message?.action?.actionId ?? "");
   const selectedBlocker = actionBlockers[0];
@@ -31,6 +33,11 @@ export function AppMessageHost() {
   const shouldShowToast = Boolean(message) && communicationVariant === "toast";
   const ghostButtonLabel =
     selectedBlocker?.guidance ?? message?.compactLabel ?? message?.message;
+  const isCollapsedSidebarGhost =
+    communicationVariant === "ghost" &&
+    sidebar?.state === "collapsed" &&
+    !sidebar.isMobile &&
+    message?.action?.iconName === "download";
   const activeToastIdRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -89,7 +96,10 @@ export function AppMessageHost() {
       >
         <Button
           aria-label={ghostButtonLabel}
-          className="min-h-10 rounded-full border border-border/70 bg-foreground/10 px-layout-md text-sm font-semibold text-foreground shadow-surface backdrop-blur transition-colors hover:border-border hover:bg-foreground/15 hover:text-foreground supports-[backdrop-filter]:bg-foreground/10"
+          className={cn(
+            "min-h-10 rounded-full border border-action-workflow-border bg-action-workflow-soft text-sm font-semibold text-action-workflow shadow-surface backdrop-blur transition-colors hover:bg-action-workflow-soft/75 hover:text-action-workflow",
+            isCollapsedSidebarGhost ? "size-10 px-0" : "px-layout-md",
+          )}
           disabled={!presentedAction || presentedAction.disabled}
           onClick={() => {
             presentedAction?.onInvoke();
@@ -98,7 +108,11 @@ export function AppMessageHost() {
           type="button"
           variant="ghost"
         >
-          {ghostButtonLabel}
+          {isCollapsedSidebarGhost ? (
+            <Download aria-hidden="true" className="size-4" />
+          ) : (
+            ghostButtonLabel
+          )}
         </Button>
       </section>
     );

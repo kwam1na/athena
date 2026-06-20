@@ -14,6 +14,7 @@ export {
   correctTransactionCustomer,
   correctTransactionPaymentMethod,
   adjustTransactionItems,
+  markReceiptPrinted,
   getRecentTransactionsWithCustomers,
   getTodaySummary,
 } from "../pos/public/transactions";

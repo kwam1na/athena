@@ -4110,6 +4110,247 @@ describe("projectLocalSyncEvent", () => {
     );
   });
 
+  it("applies the expected total for manager-reviewed non-cash overpayment", async () => {
+    const repository = createProjectionRepository({
+      registerSession: {
+        _id: "register-session-1",
+        expectedCash: 100,
+        closeoutRecords: [],
+        countedCash: 100,
+        registerNumber: "1",
+        status: "closed",
+        variance: 0,
+      },
+    });
+    const baseSale = buildSaleCompletedEvent();
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: buildSaleCompletedEvent({
+        payload: {
+          ...baseSale.payload,
+          payments: [
+            {
+              localPaymentId: "local-payment-1",
+              method: "mobile_money",
+              amount: 50,
+              timestamp: 21,
+            },
+          ],
+        },
+        staffProofToken: undefined,
+      }),
+      syncEventId: "sync-event-1",
+      now: 100,
+      options: {
+        allowClosedRegisterSaleProjection: true,
+        applyExpectedTotalForReviewedNonCashOverpayment: true,
+        trustStoredStaffProof: true,
+      },
+    });
+
+    expect(result.status).toBe("projected");
+    expect(result.conflicts).toEqual([]);
+    expect(repository.createdTransactions).toEqual([
+      expect.objectContaining({
+        payments: [
+          expect.objectContaining({
+            amount: 25,
+            method: "mobile_money",
+          }),
+        ],
+        total: 25,
+        totalPaid: 25,
+      }),
+    ]);
+    expect(repository.createdPaymentAllocations).toEqual([
+      expect.objectContaining({
+        amount: 25,
+        externalReference: "local-payment-1",
+        method: "mobile_money",
+        targetType: "pos_transaction",
+      }),
+    ]);
+    expect(repository.registerSessionPatches).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          patch: expect.objectContaining({
+            expectedCash: expect.any(Number),
+          }),
+        }),
+      ]),
+    );
+  });
+
+  it("keeps reviewed mixed-tender non-cash overpayment out of expected cash", async () => {
+    const repository = createProjectionRepository({
+      registerSession: {
+        _id: "register-session-1",
+        expectedCash: 100,
+        closeoutRecords: [],
+        countedCash: 100,
+        registerNumber: "1",
+        status: "closed",
+        variance: 0,
+      },
+    });
+    const baseSale = buildSaleCompletedEvent();
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: buildSaleCompletedEvent({
+        payload: {
+          ...baseSale.payload,
+          payments: [
+            {
+              localPaymentId: "local-payment-cash",
+              method: "cash",
+              amount: 25,
+              timestamp: 20,
+            },
+            {
+              localPaymentId: "local-payment-mobile",
+              method: "mobile_money",
+              amount: 50,
+              timestamp: 21,
+            },
+          ],
+        },
+        staffProofToken: undefined,
+      }),
+      syncEventId: "sync-event-1",
+      now: 100,
+      options: {
+        allowClosedRegisterSaleProjection: true,
+        applyExpectedTotalForReviewedNonCashOverpayment: true,
+        trustStoredStaffProof: true,
+      },
+    });
+
+    expect(result.status).toBe("projected");
+    expect(result.conflicts).toEqual([]);
+    expect(repository.createdTransactions).toEqual([
+      expect.objectContaining({
+        payments: [
+          expect.objectContaining({
+            amount: 25,
+            method: "mobile_money",
+          }),
+        ],
+        total: 25,
+        totalPaid: 25,
+      }),
+    ]);
+    expect(repository.createdPaymentAllocations).toEqual([
+      expect.objectContaining({
+        amount: 25,
+        externalReference: "local-payment-mobile",
+        method: "mobile_money",
+        targetType: "pos_transaction",
+      }),
+    ]);
+    expect(repository.registerSessionPatches).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          patch: expect.objectContaining({
+            expectedCash: expect.any(Number),
+          }),
+        }),
+      ]),
+    );
+  });
+
+  it("keeps mixed-tender cash change when non-cash is within the sale total", async () => {
+    const repository = createProjectionRepository({
+      registerSession: {
+        _id: "register-session-1",
+        expectedCash: 100,
+        closeoutRecords: [],
+        countedCash: 100,
+        registerNumber: "1",
+        status: "closed",
+        variance: 0,
+      },
+    });
+    const baseSale = buildSaleCompletedEvent();
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: buildSaleCompletedEvent({
+        payload: {
+          ...baseSale.payload,
+          payments: [
+            {
+              localPaymentId: "local-payment-mobile",
+              method: "mobile_money",
+              amount: 20,
+              timestamp: 20,
+            },
+            {
+              localPaymentId: "local-payment-cash",
+              method: "cash",
+              amount: 10,
+              timestamp: 21,
+            },
+          ],
+        },
+        staffProofToken: undefined,
+      }),
+      syncEventId: "sync-event-1",
+      now: 100,
+      options: {
+        allowClosedRegisterSaleProjection: true,
+        applyExpectedTotalForReviewedNonCashOverpayment: true,
+        trustStoredStaffProof: true,
+      },
+    });
+
+    expect(result.status).toBe("projected");
+    expect(result.conflicts).toEqual([]);
+    expect(repository.createdTransactions).toEqual([
+      expect.objectContaining({
+        payments: [
+          expect.objectContaining({
+            amount: 20,
+            method: "mobile_money",
+          }),
+          expect.objectContaining({
+            amount: 10,
+            method: "cash",
+          }),
+        ],
+        total: 25,
+        totalPaid: 30,
+      }),
+    ]);
+    expect(repository.createdPaymentAllocations).toEqual([
+      expect.objectContaining({
+        amount: 20,
+        externalReference: "local-payment-mobile",
+        method: "mobile_money",
+        targetType: "pos_transaction",
+      }),
+      expect.objectContaining({
+        amount: 5,
+        externalReference: "local-payment-cash",
+        method: "cash",
+        targetType: "pos_transaction",
+      }),
+    ]);
+    expect(repository.registerSessionPatches).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          patch: expect.objectContaining({
+            expectedCash: 105,
+          }),
+        }),
+      ]),
+    );
+  });
+
   it("projects a synced closeout as idempotent when the register was already closed with the same count", async () => {
     const repository = createProjectionRepository({
       registerSession: {

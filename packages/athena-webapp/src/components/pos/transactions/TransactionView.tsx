@@ -400,6 +400,7 @@ export function TransactionView() {
   const adjustTransactionItems = useMutation(
     api.inventory.pos.adjustTransactionItems,
   );
+  const markReceiptPrinted = useMutation(api.inventory.pos.markReceiptPrinted);
   const voidTransaction = useMutation(api.inventory.pos.voidTransaction);
   const paymentApprovalRunner = useApprovedCommand({
     storeId: activeStore?._id,
@@ -659,6 +660,7 @@ export function TransactionView() {
         ? "voided"
         : "completed";
     return {
+      transactionId: transaction._id,
       paymentMethod: transaction.paymentMethod || "cash",
       completedAt: transaction.completedAt,
       cartItems: displayCartItems,
@@ -2465,6 +2467,12 @@ export function TransactionView() {
                 }
                 receiptNumberOverride={transaction.transactionNumber}
                 receiptMessaging={receiptMessaging}
+                receiptPrintTransactionId={transaction._id}
+                onReceiptPrinted={(printedTransactionId) =>
+                  markReceiptPrinted({
+                    transactionId: printedTransactionId,
+                  })
+                }
                 pendingVoidApprovalRequestId={pendingVoidApprovalRequestId}
                 customerInfo={
                   transaction.customer
