@@ -1,16 +1,11 @@
-import { useContext, useEffect } from "react";
-
 import {
-  DEFAULT_UPDATE_COMMUNICATION_VARIANT,
-  UpdateCommunicationPreferenceContext,
-  type UpdateCommunicationPreferenceInput,
-} from "./updateCommunicationPreferenceContext";
+  useAppMessageCommunicationPreference,
+  usePreferredAppMessageCommunicationVariant,
+} from "@/lib/app-messages";
+import type { UpdateCommunicationPreferenceInput } from "./updateCommunicationPreferenceContext";
 
 export function usePreferredUpdateCommunicationVariant() {
-  return (
-    useContext(UpdateCommunicationPreferenceContext)?.variant ??
-    DEFAULT_UPDATE_COMMUNICATION_VARIANT
-  );
+  return usePreferredAppMessageCommunicationVariant();
 }
 
 export function useUpdateCommunicationPreference({
@@ -18,14 +13,5 @@ export function useUpdateCommunicationPreference({
   surfaceId,
   variant,
 }: UpdateCommunicationPreferenceInput) {
-  const registerPreference = useContext(UpdateCommunicationPreferenceContext)
-    ?.registerPreference;
-
-  useEffect(() => {
-    if (!enabled || !registerPreference) {
-      return undefined;
-    }
-
-    return registerPreference({ surfaceId, variant });
-  }, [enabled, registerPreference, surfaceId, variant]);
+  useAppMessageCommunicationPreference({ enabled, surfaceId, variant });
 }

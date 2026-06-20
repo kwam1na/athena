@@ -17,7 +17,7 @@ const mockedHooks = vi.hoisted(() => ({
   useQuery: vi.fn(),
   useGetActiveStore: vi.fn(),
   useGetTerminal: vi.fn(),
-  useUpdateApplyBlocker: vi.fn(),
+  useAppActionBlocker: vi.fn(),
   useOptionalManagerElevation: vi.fn(),
   useProtectedAdminPageState: vi.fn(),
 }));
@@ -63,8 +63,12 @@ vi.mock("@/hooks/useProtectedAdminPageState", () => ({
   useProtectedAdminPageState: mockedHooks.useProtectedAdminPageState,
 }));
 
+vi.mock("@/lib/app-messages", () => ({
+  useAppActionBlocker: mockedHooks.useAppActionBlocker,
+}));
+
 vi.mock("@/lib/app-update", () => ({
-  useUpdateApplyBlocker: mockedHooks.useUpdateApplyBlocker,
+  APP_UPDATE_APPLY_ACTION_ID: "app-update.apply",
 }));
 
 function buildCsvRow(index: number) {
@@ -110,7 +114,7 @@ describe("InventoryImportView", () => {
     mockedHooks.navigate.mockReset();
     mockedHooks.useMutation.mockReset();
     mockedHooks.useQuery.mockReset();
-    mockedHooks.useUpdateApplyBlocker.mockReset();
+    mockedHooks.useAppActionBlocker.mockReset();
     mockedHooks.inventorySkuContext = [];
     mockedHooks.latestReviewVersion = null;
     mockedHooks.search = {};
@@ -917,12 +921,13 @@ describe("InventoryImportView", () => {
     await user.click(screen.getByRole("button", { name: "Import" }));
 
     await waitFor(() => {
-      expect(mockedHooks.useUpdateApplyBlocker).toHaveBeenLastCalledWith({
+      expect(mockedHooks.useAppActionBlocker).toHaveBeenLastCalledWith({
+        actionId: "app-update.apply",
         active: true,
+        blockerId: "operations.inventory-import",
         guidance: "Save the current import work before refreshing.",
         label: "Inventory import",
         priority: "active-command",
-        surfaceId: "operations.inventory-import",
       });
     });
   });
@@ -972,13 +977,14 @@ describe("InventoryImportView", () => {
       },
       { timeout: 2500 },
     );
-    expect(mockedHooks.useUpdateApplyBlocker).toHaveBeenLastCalledWith(
+    expect(mockedHooks.useAppActionBlocker).toHaveBeenLastCalledWith(
       expect.objectContaining({
+        actionId: "app-update.apply",
         active: true,
+        blockerId: "operations.inventory-import",
         guidance: "Save the current import work before refreshing.",
         label: "Inventory import",
         priority: "active-command",
-        surfaceId: "operations.inventory-import",
       }),
     );
   });
@@ -1011,12 +1017,13 @@ describe("InventoryImportView", () => {
       expect(screen.getByRole("heading", { name: "Inventory review" })).toBeInTheDocument();
     });
 
-    expect(mockedHooks.useUpdateApplyBlocker).toHaveBeenLastCalledWith({
+    expect(mockedHooks.useAppActionBlocker).toHaveBeenLastCalledWith({
+      actionId: "app-update.apply",
       active: false,
+      blockerId: "operations.inventory-import",
       guidance: "Save the current import work before refreshing.",
       label: "Inventory import",
       priority: "resume-required",
-      surfaceId: "operations.inventory-import",
     });
   });
 

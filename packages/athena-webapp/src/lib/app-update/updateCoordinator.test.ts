@@ -207,6 +207,44 @@ describe("updateCoordinator", () => {
     });
   });
 
+  it("clears app-message synced blockers when the foundation action state clears", () => {
+    const coordinator = createUpdateCoordinatorStore({
+      reload: vi.fn(),
+      now: () => 1_000,
+      tabId: "tab-a",
+    });
+
+    coordinator.reportUpdateDetected({
+      currentBuildId: "build-1",
+      pendingBuildId: "build-2",
+      stagingStatus: "staged",
+    });
+    coordinator.syncApplyBlockers([
+      {
+        surfaceId: "pos-register",
+        priority: "critical-workflow",
+        label: "Register sale",
+        guidance: "Finish this sale before refreshing.",
+      },
+    ]);
+
+    expect(coordinator.getSnapshot()).toMatchObject({
+      status: "blocked",
+      canApply: false,
+      selectedBlocker: {
+        surfaceId: "pos-register",
+      },
+    });
+
+    coordinator.syncApplyBlockers([]);
+
+    expect(coordinator.getSnapshot()).toMatchObject({
+      status: "ready",
+      canApply: true,
+      blockers: [],
+    });
+  });
+
   it("expires stale remote blockers with a subscriber notification", () => {
     let now = 10_000;
     const timers: Array<() => void> = [];

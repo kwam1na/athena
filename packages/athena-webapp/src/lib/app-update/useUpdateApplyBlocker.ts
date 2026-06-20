@@ -1,5 +1,7 @@
 import { useEffect } from "react";
 
+import { useAppActionBlocker } from "@/lib/app-messages";
+import { APP_UPDATE_APPLY_ACTION_ID } from "./appUpdateActions";
 import { useUpdateCoordinator } from "./UpdateCoordinatorContext";
 import type {
   UpdateApplyBlockerPriority,
@@ -22,6 +24,15 @@ export function useUpdateApplyBlocker({
   guidance,
 }: UseUpdateApplyBlockerInput) {
   const { registerApplyBlocker, clearApplyBlocker } = useUpdateCoordinator();
+
+  useAppActionBlocker({
+    actionId: APP_UPDATE_APPLY_ACTION_ID,
+    active,
+    blockerId: surfaceId,
+    guidance,
+    label,
+    priority,
+  });
 
   useEffect(() => {
     if (!active) {

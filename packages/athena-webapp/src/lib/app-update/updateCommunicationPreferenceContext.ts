@@ -1,12 +1,13 @@
-import { createContext } from "react";
+import {
+  DEFAULT_APP_MESSAGE_COMMUNICATION_VARIANT,
+  type AppMessageCommunicationPreferenceInput,
+  type AppMessageCommunicationVariant,
+} from "@/lib/app-messages";
 
-export type UpdateCommunicationVariant = "ghost" | "banner" | "toast";
+export type UpdateCommunicationVariant = AppMessageCommunicationVariant;
 
-export type UpdateCommunicationPreferenceInput = {
-  surfaceId: string;
-  variant: UpdateCommunicationVariant;
-  enabled?: boolean;
-};
+export type UpdateCommunicationPreferenceInput =
+  AppMessageCommunicationPreferenceInput;
 
 export type UpdateCommunicationPreferenceContextValue = {
   variant: UpdateCommunicationVariant;
@@ -16,7 +17,4 @@ export type UpdateCommunicationPreferenceContextValue = {
 };
 
 export const DEFAULT_UPDATE_COMMUNICATION_VARIANT: UpdateCommunicationVariant =
-  "ghost";
-
-export const UpdateCommunicationPreferenceContext =
-  createContext<UpdateCommunicationPreferenceContextValue | null>(null);
+  DEFAULT_APP_MESSAGE_COMMUNICATION_VARIANT;

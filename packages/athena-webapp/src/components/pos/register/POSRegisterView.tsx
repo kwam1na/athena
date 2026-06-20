@@ -50,7 +50,8 @@ import {
 } from "@/lib/pos/presentation/register/registerUiState";
 import { usePosTerminalAppSessionRecoveryRuntimeInput } from "@/lib/pos/infrastructure/terminal/posTerminalAppSessionRecoveryContext";
 import { useRegisterViewModel } from "@/lib/pos/presentation/register/useRegisterViewModel";
-import { useUpdateApplyBlocker } from "@/lib/app-update";
+import { useAppActionBlocker } from "@/lib/app-messages";
+import { APP_UPDATE_APPLY_ACTION_ID } from "@/lib/app-update";
 import { currencyFormatter } from "~/shared/currencyFormatter";
 import { formatStoredAmount } from "~/src/lib/pos/displayAmounts";
 
@@ -1113,9 +1114,10 @@ function POSRegisterViewContent({
     workflowMode ?? viewModel.workflowMode ?? "pos";
   const isPosWorkflow = effectiveWorkflowMode === "pos";
   const updateApplyBlocker = viewModel.updateApplyBlocker;
-  useUpdateApplyBlocker({
-    surfaceId: "pos-register",
+  useAppActionBlocker({
+    actionId: APP_UPDATE_APPLY_ACTION_ID,
     active: isPosWorkflow && Boolean(updateApplyBlocker?.active),
+    blockerId: "pos-register",
     priority: updateApplyBlocker?.priority ?? "critical-workflow",
     label: updateApplyBlocker?.label ?? "Register ready",
     guidance:

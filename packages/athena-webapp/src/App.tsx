@@ -4,6 +4,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { ConvexAuthProvider } from "@convex-dev/auth/react";
 
 import { convex, queryClient, router } from "./appRouter";
+import { AppMessagesProvider } from "./lib/app-messages";
 import {
   stageUpdateStaticAssets,
   UpdateCoordinatorProvider,
@@ -18,14 +19,16 @@ import {
 
 export function App() {
   return (
-    <UpdateCoordinatorProvider>
-      <VersionCheckerBridge />
-      <ConvexAuthProvider client={convex}>
-        <QueryClientProvider client={queryClient}>
-          <RouterProvider router={router} />
-        </QueryClientProvider>
-      </ConvexAuthProvider>
-    </UpdateCoordinatorProvider>
+    <AppMessagesProvider>
+      <UpdateCoordinatorProvider>
+        <VersionCheckerBridge />
+        <ConvexAuthProvider client={convex}>
+          <QueryClientProvider client={queryClient}>
+            <RouterProvider router={router} />
+          </QueryClientProvider>
+        </ConvexAuthProvider>
+      </UpdateCoordinatorProvider>
+    </AppMessagesProvider>
   );
 }
 

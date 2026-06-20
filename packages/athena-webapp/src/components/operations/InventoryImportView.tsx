@@ -28,7 +28,8 @@ import { useGetTerminal } from "@/hooks/useGetTerminal";
 import { useOptionalManagerElevation } from "@/contexts/ManagerElevationContext";
 import { runCommand } from "@/lib/errors/runCommand";
 import { presentCommandToast } from "@/lib/errors/presentCommandToast";
-import { useUpdateApplyBlocker } from "@/lib/app-update";
+import { useAppActionBlocker } from "@/lib/app-messages";
+import { APP_UPDATE_APPLY_ACTION_ID } from "@/lib/app-update";
 import { formatStoredCurrencyAmount } from "@/lib/pos/displayAmounts";
 import { getOrigin } from "@/lib/navigationUtils";
 import {
@@ -621,12 +622,13 @@ export function InventoryImportView({
   const shouldBlockUpdateApply =
     hasActiveImportSaveWork || hasUnsavedRowDraftDecisions || hasUnsavedReviewSource;
 
-  useUpdateApplyBlocker({
+  useAppActionBlocker({
+    actionId: APP_UPDATE_APPLY_ACTION_ID,
     active: shouldBlockUpdateApply,
+    blockerId: "operations.inventory-import",
     guidance: "Save the current import work before refreshing.",
     label: "Inventory import",
     priority: hasActiveImportSaveWork ? "active-command" : "resume-required",
-    surfaceId: "operations.inventory-import",
   });
 
   useEffect(() => {

@@ -1,11 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useAppShellFullscreenMode } from "@/contexts/AppShellFullscreenContext";
+import { useAppMessageCommunicationPreference } from "@/lib/app-messages";
 import { POSRegisterOpeningGuard } from "~/src/components/pos/register/POSRegisterOpeningGuard";
 import { POSRegisterView } from "~/src/components/pos/register/POSRegisterView";
 import { NotFoundView } from "~/src/components/states/not-found/NotFoundView";
 
 export const Route = createFileRoute(
-  "/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/register/"
+  "/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/register/",
 )({
   component: POSRegisterRoute,
 
@@ -14,6 +15,10 @@ export const Route = createFileRoute(
 
 function POSRegisterRoute() {
   useAppShellFullscreenMode();
+  useAppMessageCommunicationPreference({
+    surfaceId: "pos-register",
+    variant: "toast",
+  });
 
   return (
     <POSRegisterOpeningGuard>

@@ -11,7 +11,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockUseRegisterViewModel = vi.fn();
 const mockOpenQuickAddProduct = vi.fn(() => true);
-const mockUseUpdateApplyBlocker = vi.fn();
+const mockUseAppActionBlocker = vi.fn();
 
 function pressDebugPanelShortcut(
   modifiers: { metaKey?: boolean; ctrlKey?: boolean } = { metaKey: true },
@@ -32,8 +32,12 @@ vi.mock("@/lib/pos/presentation/register/useRegisterViewModel", () => ({
   useRegisterViewModel: () => mockUseRegisterViewModel(),
 }));
 
+vi.mock("@/lib/app-messages", () => ({
+  useAppActionBlocker: (args: unknown) => mockUseAppActionBlocker(args),
+}));
+
 vi.mock("@/lib/app-update", () => ({
-  useUpdateApplyBlocker: (args: unknown) => mockUseUpdateApplyBlocker(args),
+  APP_UPDATE_APPLY_ACTION_ID: "app-update.apply",
 }));
 
 vi.mock("@/components/ui/sidebar", () => ({
@@ -375,7 +379,7 @@ vi.mock("./ExpenseCompletionPanel", () => ({
 describe("POSRegisterView", () => {
   beforeEach(() => {
     mockUseRegisterViewModel.mockReset();
-    mockUseUpdateApplyBlocker.mockClear();
+    mockUseAppActionBlocker.mockClear();
   });
 
   it("renders a lightweight empty state while the active store is unresolved", async () => {
@@ -439,9 +443,10 @@ describe("POSRegisterView", () => {
     const { POSRegisterView } = await import("./POSRegisterView");
     render(<POSRegisterView />);
 
-    expect(mockUseUpdateApplyBlocker).toHaveBeenCalledWith({
-      surfaceId: "pos-register",
+    expect(mockUseAppActionBlocker).toHaveBeenCalledWith({
+      actionId: "app-update.apply",
       active: true,
+      blockerId: "pos-register",
       label: "Sale in progress",
       priority: "critical-workflow",
       guidance: "Finish, hold, or clear this sale before applying the update.",

@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>refactor: Add app-wide message action foundation</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f7f4;
+      --surface: #ffffff;
+      --ink: #1f2523;
+      --muted: #66706b;
+      --line: #d9ded8;
+      --accent: #2f6f62;
+      --accent-soft: #e7f1ee;
+      --warn-soft: #fff4dc;
+    }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.55;
+    }
+    main {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 40px 24px 64px;
+    }
+    header {
+      margin-bottom: 28px;
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 24px;
+    }
+    h1 {
+      margin: 0 0 12px;
+      font-size: 2rem;
+      line-height: 1.15;
+    }
+    h2 {
+      margin-top: 32px;
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 8px;
+      font-size: 1.25rem;
+    }
+    h3 {
+      margin-top: 24px;
+      font-size: 1rem;
+    }
+    a {
+      color: var(--accent);
+    }
+    code {
+      border-radius: 4px;
+      background: #eef1ee;
+      padding: 0.1rem 0.25rem;
+      font-size: 0.92em;
+    }
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+    .pill {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--surface);
+      padding: 4px 10px;
+    }
+    .summary {
+      border-left: 4px solid var(--accent);
+      background: var(--accent-soft);
+      padding: 16px 18px;
+      margin: 24px 0;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 16px;
+    }
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+      padding: 16px;
+    }
+    .unit {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+      padding: 18px;
+      margin: 16px 0;
+    }
+    .risk {
+      background: var(--warn-soft);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--surface);
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      background: #eef1ee;
+    }
+    ul {
+      padding-left: 1.3rem;
+    }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>refactor: Add app-wide message action foundation</h1>
+    <div class="meta">
+      <span class="pill">Date: 2026-06-20</span>
+      <span class="pill">Type: refactor</span>
+      <span class="pill">Status: active</span>
+      <span class="pill">Markdown: <a href="./2026-06-20-001-refactor-app-wide-message-action-foundation-plan.md">source</a></span>
+    </div>
+  </header>
+
+  <section class="summary">
+    <strong>Summary.</strong> Create an app-wide messaging/action foundation that owns placement, priority, and action-scoped blockers, then rebuild app update as the first implementation on top of it. App update keeps detection, staging, runtime evidence, and reload safety as adapter-owned behavior.
+  </section>
+
+  <section>
+    <h2>Core Decisions</h2>
+    <div class="grid">
+      <article class="card">
+        <h3>Foundation First</h3>
+        <p>The platform layer is app-wide messages/actions, not app update. App update is the first adapter.</p>
+      </article>
+      <article class="card">
+        <h3>Action-Scoped Blockers</h3>
+        <p>Blockers attach to an action such as <code>app-update.apply</code>, preventing unrelated actions from being suppressed.</p>
+      </article>
+      <article class="card">
+        <h3>Provider Ownership</h3>
+        <p><code>AppMessagesProvider</code> mounts above app update; app update consumes action state while preserving pending-build scoped leases.</p>
+      </article>
+      <article class="card">
+        <h3>Adapter Execution</h3>
+        <p>The foundation gates and renders actions. App update still owns reload/apply execution.</p>
+      </article>
+      <article class="card">
+        <h3>Surface Truth</h3>
+        <p>POS and Inventory Import decide when they block; the foundation does not compute domain state.</p>
+      </article>
+    </div>
+  </section>
+
+  <section>
+    <h2>Implementation Units</h2>
+    <article class="unit">
+      <h3>U1. Create app-wide message/action foundation</h3>
+      <p>Add only the neutral action-blocker mechanics app update needs now: action-scoped registration, selected-blocker resolution, provider/context, and tests.</p>
+    </article>
+    <article class="unit">
+      <h3>U2. Move update communication preference into messaging</h3>
+      <p>Convert banner/toast placement from app-update-specific preference into app-message placement policy while preserving current behavior.</p>
+    </article>
+    <article class="unit">
+      <h3>U3. Adapt app update to publish through app messages</h3>
+      <p>Publish the update-ready message and <code>app-update.apply</code> action through the foundation while preserving update coordinator reload safety.</p>
+    </article>
+    <article class="unit">
+      <h3>U4. Migrate POS and Inventory blockers to the foundation</h3>
+      <p>Move first adopter opt-ins from app-update hook imports to the action-scoped messaging contract.</p>
+    </article>
+    <article class="unit">
+      <h3>U5. Verify terminal update adapter compatibility</h3>
+      <p>Use POS local runtime, Remote Assist runtime host, and terminal runtime tests as a compatibility gate; modify terminal files only if the app-update adapter API actually changes.</p>
+    </article>
+    <article class="unit">
+      <h3>U6. Document the new boundary and validation routing</h3>
+      <p>Update solution docs, validation routing if needed, and Graphify after code changes.</p>
+    </article>
+  </section>
+
+  <section>
+    <h2>Verification Strategy</h2>
+    <ul>
+      <li>Foundation tests for action-scoped blockers and unrelated action availability.</li>
+      <li>App-update coordinator and Update Ready UI tests for behavior parity.</li>
+      <li>POS and Inventory component tests for adopter opt-in behavior.</li>
+      <li>Terminal runtime/recovery tests if app-update snapshot mapping changes.</li>
+      <li>Typecheck, build, graphify rebuild, and the Athena PR gate before merge.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Risks</h2>
+    <table>
+      <thead>
+        <tr><th>Risk</th><th>Mitigation</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Foundation becomes too broad</td><td>Limit active work to mechanics needed by app update.</td></tr>
+        <tr><td>Domain truth moves into messaging</td><td>Require surface-owned blockers and action-scoped snapshots.</td></tr>
+        <tr><td>Remote update command regresses</td><td>Preserve app-update adapter APIs and run terminal runtime tests.</td></tr>
+        <tr><td>Cross-tab safety changes</td><td>Keep existing lease behavior until parity tests prove extraction.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Deployment Impact</h2>
+    <p>Relevant production surface is <code>athena-local</code>. Convex deploy is not expected unless implementation expands into Convex runtime or schema changes.</p>
+  </section>
+</main>
+</body>
+</html>
