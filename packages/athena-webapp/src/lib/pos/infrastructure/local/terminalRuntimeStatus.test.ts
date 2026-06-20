@@ -325,6 +325,40 @@ describe("terminalRuntimeStatus", () => {
     );
   });
 
+  it("keeps local review samples from sync debug when event state is stale", () => {
+    const status = buildPosTerminalRuntimeStatus({
+      clock: () => 2_000,
+      events: [],
+      source: "register",
+      syncDebug: {
+        localOnlyEventCount: 1,
+        pendingUploadEventCount: 0,
+        reviewEventCount: 1,
+        reviewEvents: [
+          {
+            createdAt: 1_000,
+            localEventId: "event-review",
+            localRegisterSessionId: "register-1",
+            sequence: 5,
+            status: "needs_review",
+            type: "transaction.completed",
+            uploaded: true,
+            uploadSequence: 2,
+          },
+        ],
+      },
+    });
+
+    expect(status.sync.reviewEventCount).toBe(1);
+    expect(status.sync.reviewEvents).toEqual([
+      expect.objectContaining({
+        localEventId: "event-review",
+        sequence: 5,
+        type: "transaction.completed",
+      }),
+    ]);
+  });
+
   it("reports app-shell readiness from the terminal runtime", () => {
     const status = buildPosTerminalRuntimeStatus({
       appShell: { ready: true },

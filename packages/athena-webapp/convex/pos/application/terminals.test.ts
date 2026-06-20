@@ -845,6 +845,55 @@ describe("terminal health summaries", () => {
     });
   });
 
+  it("ages preserved app-update evidence independently from fresh runtime check-ins", async () => {
+    vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
+    vi.mocked(getLatestRuntimeStatusForTerminal).mockResolvedValue(
+      buildPersistedRuntimeStatus({
+        appUpdate: {
+          canApply: true,
+          currentBuildId: "build-current",
+          detectorStatus: "ok",
+          observedAt: 100,
+          pendingBuildId: "build-next",
+          stagingStatus: "unstaged",
+          status: "update_ready_unstaged",
+        },
+        receivedAt: 130_000,
+        reportedAt: 130_000,
+      } as never),
+    );
+    vi.mocked(getTerminalSyncEvidence).mockResolvedValue({
+      latestEvent: null,
+      sampledEventCount: 0,
+      acceptedCount: 0,
+      projectedCount: 0,
+      conflictedCount: 0,
+      heldCount: 0,
+      rejectedCount: 0,
+      unresolvedConflictCount: 0,
+      unresolvedConflicts: [],
+    });
+
+    const result = await getTerminalHealthSummary(
+      { db: null as never } as never,
+      {
+        storeId: "store-1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+        now: 130_010,
+      },
+    );
+
+    expect(result?.runtimeAgeMs).toBe(10);
+    expect(result?.recoveryPreview?.runtimeFresh).toBe(true);
+    expect(result?.recoveryPreview?.appUpdate).toEqual(
+      expect.objectContaining({
+        evidenceFresh: false,
+        observedAt: 100,
+        status: "stale",
+      }),
+    );
+  });
+
   it("loads sampled sync evidence for terminal detail", async () => {
     vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
     vi.mocked(getLatestRuntimeStatusForTerminal).mockResolvedValue(
@@ -1186,6 +1235,96 @@ describe("terminal health summaries", () => {
           type: "cash_control_register_session",
         },
         type: "cloud_conflict",
+      }),
+    ]);
+  });
+
+  it("routes projected inventory review conflicts to operations work", async () => {
+    vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
+    vi.mocked(getLatestRuntimeStatusForTerminal).mockResolvedValue(null);
+    vi.mocked(getTerminalSyncEvidence).mockResolvedValue({
+      latestEvent: {
+        localEventId: "event-sale-completed-1",
+        localRegisterSessionId: "local-register-1",
+        sequence: 26,
+        eventType: "sale_completed",
+        status: "conflicted",
+        occurredAt: 120,
+        submittedAt: 130,
+      },
+      latestReviewEvent: {
+        localEventId: "event-sale-completed-1",
+        localRegisterSessionId: "local-register-1",
+        sequence: 26,
+        eventType: "sale_completed",
+        status: "conflicted",
+      },
+      sampledEventCount: 1,
+      acceptedCount: 0,
+      projectedCount: 1,
+      conflictedCount: 1,
+      heldCount: 0,
+      rejectedCount: 0,
+      unresolvedConflictCount: 1,
+      unresolvedConflicts: [
+        {
+          _id: "conflict-1" as Id<"posLocalSyncConflict">,
+          conflictType: "inventory",
+          createdAt: 140,
+          localEventId: "event-sale-completed-1",
+          localRegisterSessionId: "local-register-1",
+          sequence: 26,
+          summary: "Inventory needs manager review for a synced offline sale.",
+        },
+      ],
+    });
+
+    const result = await getTerminalHealthSummary(
+      {
+        db: {
+          query: vi.fn((tableName: string) => ({
+            withIndex: vi.fn(() => {
+              const query = {
+                order: vi.fn(() => query),
+                take: vi.fn().mockResolvedValue(
+                  tableName === "operationalWorkItem"
+                    ? [
+                        {
+                          _id: "work-item-1" as Id<"operationalWorkItem">,
+                          metadata: {
+                            localEventId: "event-sale-completed-1",
+                          },
+                          status: "open",
+                          storeId: "store-1",
+                          type: "synced_sale_inventory_review",
+                        },
+                      ]
+                    : [],
+                ),
+              };
+              return query;
+            }),
+          })),
+        },
+      } as never,
+      {
+        storeId: "store-1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+        now: 220,
+      },
+    );
+
+    expect(resolveTerminalRegisterSessionActionTarget).not.toHaveBeenCalled();
+    expect(result?.attentionReasons).toEqual([
+      expect.objectContaining({
+        actionTarget: {
+          label: "Review inventory work",
+          type: "open_work",
+        },
+        count: 1,
+        source: "cloud_sync",
+        summary: "1 inventory review item needs attention.",
+        type: "synced_sale_inventory_review",
       }),
     ]);
   });

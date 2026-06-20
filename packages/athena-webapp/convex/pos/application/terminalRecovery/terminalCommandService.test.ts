@@ -807,6 +807,56 @@ describe("terminal command service", () => {
     expect(result.verifiedCommandIds).toEqual(["command-1"]);
   });
 
+  it("waits for post-apply runtime evidence before verifying app update commands", async () => {
+    const repository = buildRepository({
+      commands: [
+        buildCommand({
+          commandType: "update_app",
+          expectedEvidence: {
+            appUpdateCommandExecutionId: "execution-1",
+          },
+          status: "completed",
+          verificationStatus: "runtime_verification_ready",
+        }),
+      ],
+    });
+
+    const applying = await verifyTerminalRecoveryCommandsFromRuntime(repository, {
+      runtimeStatus: buildRuntimeStatus({
+        appUpdate: {
+          canApply: false,
+          commandExecutionId: "execution-1",
+          detectorStatus: "ok",
+          observedAt: now,
+          status: "applying",
+        },
+        receivedAt: now,
+      }),
+      storeId,
+      terminalId,
+      verifiedAt: now,
+    });
+    expect(applying.verifiedCommandIds).toEqual([]);
+
+    const current = await verifyTerminalRecoveryCommandsFromRuntime(repository, {
+      runtimeStatus: buildRuntimeStatus({
+        appUpdate: {
+          canApply: false,
+          commandExecutionId: "execution-1",
+          detectorStatus: "ok",
+          observedAt: now,
+          status: "current",
+        },
+        receivedAt: now,
+      }),
+      storeId,
+      terminalId,
+      verifiedAt: now,
+    });
+
+    expect(current.verifiedCommandIds).toEqual(["command-1"]);
+  });
+
   it("verifies cleared drawer authority when runtime omits the healthy drawer section", async () => {
     const repository = buildRepository({
       commands: [

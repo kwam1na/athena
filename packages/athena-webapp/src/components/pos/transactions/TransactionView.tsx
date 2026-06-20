@@ -380,7 +380,8 @@ export function TransactionView() {
     reason: string;
     result: TransactionVoidResultData;
   } | null>(null);
-  const { activeStore, isAuthenticated } = useProtectedAdminPageState();
+  const { activeStore, hasFullAdminAccess, isAuthenticated } =
+    useProtectedAdminPageState();
   const correctAuth = useMutation(
     api.operations.staffCredentials.authenticateStaffCredential,
   );
@@ -826,10 +827,28 @@ export function TransactionView() {
     showPaymentMethodDirectFlow && correctionError;
   const transactionRecord = transaction as typeof transaction & {
     canVoid?: boolean;
+    pendingVoidApprovalRequest?: {
+      _id: Id<"approvalRequest"> | string;
+      createdAt: number;
+      requestedByStaffProfileId?: Id<"staffProfile"> | string;
+    } | null;
     voidEligibility?: { eligible?: boolean } | null;
     voidReason?: string | null;
     voidedAt?: number | null;
   };
+  const pendingVoidApprovalRequestId =
+    transactionRecord.pendingVoidApprovalRequest?._id ?? null;
+  const hasPendingVoidApprovalRequest = Boolean(pendingVoidApprovalRequestId);
+  const voidApprovalLinkParams =
+    hasPendingVoidApprovalRequest &&
+    hasFullAdminAccess &&
+    params?.orgUrlSlug &&
+    params?.storeUrlSlug
+      ? {
+          orgUrlSlug: params.orgUrlSlug,
+          storeUrlSlug: params.storeUrlSlug,
+        }
+      : null;
   const transactionVoidedAt =
     localVoidState?.result.voidedAt ?? transactionRecord.voidedAt ?? null;
   const transactionVoidReason =
@@ -843,7 +862,10 @@ export function TransactionView() {
     transactionRecord.canVoid !== false &&
     transactionRecord.voidEligibility?.eligible !== false;
   const canVoidTransaction =
-    isCompletedTransaction && !isVoidedTransaction && readModelAllowsVoid;
+    isCompletedTransaction &&
+    !isVoidedTransaction &&
+    readModelAllowsVoid &&
+    !hasPendingVoidApprovalRequest;
   const transactionStatusLabel = isVoidedTransaction ? "Voided" : "Completed";
   const transactionStatusTime = getRelativeTime(
     transactionVoidedAt ?? transaction.completedAt,
@@ -1534,10 +1556,15 @@ export function TransactionView() {
                             Update
                           </Button>
                         ) : null}
-                        {canVoidTransaction ? (
+                        {canVoidTransaction || hasPendingVoidApprovalRequest ? (
                           <Button
                             className="w-full"
+                            disabled={hasPendingVoidApprovalRequest}
                             onClick={() => {
+                              if (hasPendingVoidApprovalRequest) {
+                                return;
+                              }
+
                               if (voidPanelOpen) {
                                 exitVoidWorkflow();
                                 return;
@@ -1552,8 +1579,43 @@ export function TransactionView() {
                               voidPanelOpen ? "destructive" : "outline"
                             }
                           >
-                            Void sale
+                            {hasPendingVoidApprovalRequest
+                              ? "Void requested"
+                              : "Void sale"}
                           </Button>
+                        ) : null}
+                        {voidApprovalLinkParams ? (
+                          <div className="rounded-[calc(var(--radius)*0.85)] border border-border bg-background p-3">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0 space-y-1">
+                                <p className="text-sm font-medium text-foreground">
+                                  Void approval pending
+                                </p>
+                                <p className="text-xs leading-5 text-muted-foreground">
+                                  Review this request in Approvals before the
+                                  sale can be voided.
+                                </p>
+                              </div>
+                              <Button
+                                asChild
+                                className="h-8 shrink-0 px-2 text-xs"
+                                size="sm"
+                                variant="ghost"
+                              >
+                                <Link
+                                  params={voidApprovalLinkParams}
+                                  search={{ o: getOrigin() }}
+                                  to="/$orgUrlSlug/store/$storeUrlSlug/operations/approvals"
+                                >
+                                  Review
+                                  <ArrowUpRight
+                                    aria-hidden="true"
+                                    className="h-3.5 w-3.5"
+                                  />
+                                </Link>
+                              </Button>
+                            </div>
+                          </div>
                         ) : null}
                       </div>
                     ) : null}
@@ -2403,6 +2465,7 @@ export function TransactionView() {
                 }
                 receiptNumberOverride={transaction.transactionNumber}
                 receiptMessaging={receiptMessaging}
+                pendingVoidApprovalRequestId={pendingVoidApprovalRequestId}
                 customerInfo={
                   transaction.customer
                     ? {

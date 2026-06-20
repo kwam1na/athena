@@ -542,6 +542,7 @@ async function listTimelineEvents(
       ),
       Promise.resolve(
         buildRegisterCloseoutTimelineEvents({
+          currency: store?.currency ?? "GHS",
           endAt: args.endAt,
           operationalCloseoutKeys,
           registerSessions,
@@ -790,7 +791,7 @@ async function mapOperationalTimelineEvent(
         ? metadata.receiptNumber
         : undefined;
   const transactionLink =
-    event.subjectType === "posTransaction" && transactionNumber
+    isPosTransactionSubjectType(event.subjectType) && transactionNumber
       ? {
           label: `#${transactionNumber}`,
           params: {
@@ -848,9 +849,11 @@ async function mapOperationalTimelineEvent(
     message: normalizeTimelineEventMessage(event.message, {
       actorName: actorStaffProfile?.fullName,
       approvalSubjectLabel,
+      currency: args.currency,
       eventType: event.eventType,
       openingFloatLabel,
       registerLabel,
+      variance: numberFromRecord(metadata, "variance"),
     }),
     productLink,
     registerLink,
@@ -866,6 +869,10 @@ async function mapOperationalTimelineEvent(
 
 function isRegisterSessionSubjectType(subjectType: string) {
   return subjectType === "register_session" || subjectType === "registerSession";
+}
+
+function isPosTransactionSubjectType(subjectType: string) {
+  return subjectType === "pos_transaction" || subjectType === "posTransaction";
 }
 
 function isDailyOperationsTimelineAuditEvent(event: {
@@ -896,9 +903,11 @@ function normalizeTimelineEventMessage(
   context?: {
     actorName?: string;
     approvalSubjectLabel?: string;
+    currency?: string;
     eventType?: string;
     openingFloatLabel?: string;
     registerLabel?: string;
+    variance?: number;
   },
 ) {
   const approvalMessage = normalizeApprovalTimelineEventMessage(context);
@@ -917,6 +926,13 @@ function normalizeTimelineEventMessage(
       : `${registerLabel} opening float corrected.`;
   }
 
+  if (context?.eventType === "pos_transaction_void_approval_requested") {
+    const actorName = context.actorName?.trim();
+    return actorName
+      ? message.replace(/^Void requested for\b/i, `Void requested by ${actorName} for`)
+      : message;
+  }
+
   if (/^(?:Offline )?POS register opened\.$/i.test(message)) {
     const registerLabel = context?.registerLabel ?? "POS register";
     const actorName = context?.actorName?.trim();
@@ -932,6 +948,14 @@ function normalizeTimelineEventMessage(
 
   if (/^Register session closed with an exact cash match\.$/i.test(message)) {
     return `${context?.registerLabel ?? "Register session"} closed with an exact cash match.`;
+  }
+
+  if (
+    context?.eventType === "register_session_variance_review_requested" &&
+    typeof context.variance === "number" &&
+    context.variance !== 0
+  ) {
+    return `${context.registerLabel ?? "Register session"} closeout recorded with a cash variance of ${formatTimelineAmount(context.currency ?? "GHS", context.variance)}.`;
   }
 
   const varianceMatch = message.match(
@@ -1087,6 +1111,7 @@ async function listTimelineRegisterSessions(
 }
 
 function buildRegisterCloseoutTimelineEvents(args: {
+  currency: string;
   endAt: number;
   operationalCloseoutKeys: Set<string>;
   registerSessions: Array<Doc<"registerSession">>;
@@ -1119,6 +1144,7 @@ function buildRegisterCloseoutTimelineEvents(args: {
           createdAt: record.occurredAt,
           id: `register_closeout:${session._id}:${record.type}:${record.occurredAt}`,
           message: buildRegisterCloseoutTimelineMessage({
+            currency: args.currency,
             label,
             type: record.type,
             variance: record.variance,
@@ -1142,6 +1168,7 @@ function buildRegisterCloseoutTimelineEvents(args: {
 }
 
 function buildRegisterCloseoutTimelineMessage(args: {
+  currency: string;
   label: string;
   type: "closed" | "reopened";
   variance?: number;
@@ -1151,7 +1178,7 @@ function buildRegisterCloseoutTimelineMessage(args: {
   }
 
   if (args.variance && args.variance !== 0) {
-    return `${args.label} closeout recorded with a cash variance of ${args.variance}.`;
+    return `${args.label} closeout recorded with a cash variance of ${formatTimelineAmount(args.currency, args.variance)}.`;
   }
 
   return `${args.label} closeout recorded with an exact cash match.`;

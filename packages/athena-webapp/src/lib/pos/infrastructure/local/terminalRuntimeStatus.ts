@@ -87,6 +87,7 @@ export type PosTerminalRuntimeSyncDebugInput = {
   nextPendingUploadSequence?: number;
   oldestPendingEventAt?: number;
   pendingUploadEventCount?: number;
+  reviewEvents?: PosTerminalRuntimeDiagnosticsEvent[];
   reviewEventCount?: number;
   schedulerRunning?: boolean;
 };
@@ -288,6 +289,7 @@ export type PosTerminalRuntimeDiagnosticsEvent = {
   staffProfileId?: string;
   status: PosLocalEventRecord["sync"]["status"];
   type: PosLocalEventRecord["type"];
+  uploaded?: boolean;
   uploadSequence?: number;
 };
 
@@ -437,7 +439,8 @@ export function buildPosTerminalRuntimeStatus(
       localOnlyEventCount: sync.localOnlyEventCount,
       pendingEventCount: sync.pendingEventCount,
       reviewEventCount: sync.reviewEventCount,
-      reviewEvents: getReviewDiagnosticsEvents(input.events),
+      reviewEvents:
+        input.syncDebug?.reviewEvents ?? getReviewDiagnosticsEvents(input.events),
       status: sync.status,
       uploadableEventCount: sync.uploadableEventCount,
       lastSyncedSequence: sync.lastSyncedSequence,

@@ -5,6 +5,7 @@ import {
 } from "./syncContract";
 import type { PosLocalSyncTrigger } from "./syncScheduler";
 import type { PosLocalEventRecord } from "./posLocalStore";
+import type { PosTerminalRuntimeDiagnosticsEvent } from "./terminalRuntimeStatus";
 
 export type PosLocalRuntimeSyncDebugSnapshot = {
   appSessionUnverifiedEventCount?: number;
@@ -19,6 +20,7 @@ export type PosLocalRuntimeSyncDebugSnapshot = {
   oldestPendingUploadSequence?: number;
   nextPendingUploadSequence?: number;
   pendingUploadEventCount?: number;
+  reviewEvents?: PosTerminalRuntimeDiagnosticsEvent[];
   reviewEventCount?: number;
 };
 
@@ -89,6 +91,7 @@ export function buildRuntimeSyncDebug(
     oldestPendingUploadSequence: oldestPendingEvent?.uploadSequence,
     nextPendingUploadSequence: nextPendingUploadableEvent?.uploadSequence,
     pendingUploadEventCount: pendingUploadableEvents.length,
+    reviewEvents: getReviewDiagnosticsEvents(reviewEvents),
     reviewEventCount: reviewEvents.length,
   };
 }
@@ -119,6 +122,38 @@ function compareUploadableEventOrder(
   }
 
   return left.sequence - right.sequence;
+}
+
+function getReviewDiagnosticsEvents(
+  events: PosLocalEventRecord[],
+): PosTerminalRuntimeDiagnosticsEvent[] {
+  return events
+    .slice()
+    .sort(compareUploadableEventOrder)
+    .slice(0, 10)
+    .map((event) => ({
+      createdAt: event.createdAt,
+      localEventId: event.localEventId,
+      ...(event.localPosSessionId
+        ? { localPosSessionId: event.localPosSessionId }
+        : {}),
+      ...(event.localRegisterSessionId
+        ? { localRegisterSessionId: event.localRegisterSessionId }
+        : {}),
+      ...(event.localTransactionId
+        ? { localTransactionId: event.localTransactionId }
+        : {}),
+      sequence: event.sequence,
+      ...(event.staffProfileId ? { staffProfileId: event.staffProfileId } : {}),
+      status: event.sync.status,
+      type: event.type,
+      ...(event.sync.uploaded !== undefined
+        ? { uploaded: event.sync.uploaded }
+        : {}),
+      ...(typeof event.uploadSequence === "number"
+        ? { uploadSequence: event.uploadSequence }
+        : {}),
+    }));
 }
 
 function isPendingUploadCandidate(event: PosLocalEventRecord) {

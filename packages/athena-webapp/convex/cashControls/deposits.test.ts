@@ -171,6 +171,95 @@ function createQueryCtx(seed: Record<string, Array<Record<string, unknown>>>) {
   };
 }
 
+function createProjectedInventoryReviewQueryCtx(input: {
+  workItemMetadata?: Record<string, unknown>;
+  workItemStatus?: string;
+}) {
+  return createQueryCtx({
+    operationalWorkItem: [
+      {
+        _id: "work_item_inventory",
+        approvalState: "not_required",
+        createdAt: 4,
+        metadata: {
+          localEventId: "event_inventory_sale",
+          localRegisterSessionId: "local-register-1",
+          localTransactionId: "local-transaction-1",
+          receiptNumber: "939540",
+          registerSessionId: "session_open",
+          ...(input.workItemMetadata ?? {}),
+        },
+        organizationId: "org_1",
+        priority: "high",
+        status: input.workItemStatus ?? "open",
+        storeId: "store_1",
+        title: "Review inventory for Ebin Skin Protector Enhanced",
+        type: "synced_sale_inventory_review",
+      },
+    ],
+    posLocalSyncConflict: [
+      {
+        _id: "sync_conflict_inventory",
+        storeId: "store_1",
+        terminalId: "terminal_1",
+        localRegisterSessionId: "local-register-1",
+        localEventId: "event_inventory_sale",
+        sequence: 3,
+        conflictType: "inventory",
+        status: "needs_review",
+        summary: "Inventory needs manager review for a synced offline sale.",
+        details: {
+          localTransactionId: "local-transaction-1",
+          productSkuId: "product_sku_1",
+          requestedQuantity: 2,
+          quantityAvailable: 1,
+          quantityAvailableAfterHolds: 1,
+        },
+        createdAt: 1,
+      },
+    ],
+    posLocalSyncEvent: [
+      {
+        _id: "sync_event_inventory_sale",
+        storeId: "store_1",
+        terminalId: "terminal_1",
+        localRegisterSessionId: "local-register-1",
+        localEventId: "event_inventory_sale",
+        sequence: 3,
+        eventType: "sale_completed",
+        occurredAt: 2,
+        staffProfileId: "staff_1",
+        payload: {
+          localTransactionId: "local-transaction-1",
+          receiptNumber: "939540",
+        },
+        projectedAt: 4,
+        status: "conflicted",
+        submittedAt: 3,
+      },
+    ],
+    posLocalSyncMapping: [
+      {
+        _id: "sync_mapping_1",
+        storeId: "store_1",
+        terminalId: "terminal_1",
+        localRegisterSessionId: "local-register-1",
+        localIdKind: "registerSession",
+        localId: "local-register-1",
+        cloudTable: "registerSession",
+        cloudId: "session_open",
+      },
+    ],
+    registerSession: [
+      {
+        _id: "session_open",
+        storeId: "store_1",
+        terminalId: "terminal_1",
+      },
+    ],
+  });
+}
+
 function createAuthorizedRegisterDepositCtx(
   overrides: Record<string, Array<Record<string, unknown>>> = {},
 ) {
@@ -1111,6 +1200,350 @@ describe("cash control deposits", () => {
         type: "synced_sale_inventory_review",
       }),
     ]);
+  });
+
+  it("resolves selected sale review rows without clearing sibling review rows", async () => {
+    const ctx = createAuthorizedRegisterDepositCtx({
+      operationalEvent: [],
+      posLocalSyncConflict: [
+        {
+          _id: "sync_conflict_inventory",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-1",
+          localEventId: "event_inventory_sale",
+          sequence: 3,
+          conflictType: "inventory",
+          status: "needs_review",
+          summary: "Inventory needs manager review for a synced offline sale.",
+          details: {
+            localTransactionId: "local-transaction-1",
+            productSkuId: "product_sku_1",
+            requestedQuantity: 2,
+            availableInventoryCount: 1,
+            quantityAvailable: 1,
+            quantityAvailableAfterHolds: 1,
+          },
+          createdAt: 1,
+        },
+        {
+          _id: "sync_conflict_duplicate",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-1",
+          localEventId: "event_inventory_sale",
+          sequence: 3,
+          conflictType: "duplicate_local_id",
+          status: "needs_review",
+          summary:
+            "Local POS session id was reused by a different synced sale.",
+          details: {
+            localId: "local-pos-session-1",
+            localIdKind: "posSession",
+            localTransactionId: "local-transaction-1",
+            originalTransactionId: "transaction_original",
+          },
+          createdAt: 2,
+        },
+      ],
+      posLocalSyncEvent: [
+        {
+          _id: "sync_event_inventory_sale",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-1",
+          localEventId: "event_inventory_sale",
+          sequence: 3,
+          eventType: "sale_completed",
+          occurredAt: 2,
+          staffProfileId: "staff_1",
+          payload: {
+            localPosSessionId: "local-pos-session-1",
+            localTransactionId: "local-transaction-1",
+            localReceiptNumber: "939540",
+            receiptNumber: "939540",
+            registerNumber: "1",
+            totals: {
+              subtotal: 116000,
+              tax: 0,
+              total: 116000,
+            },
+            items: [
+              {
+                localTransactionItemId: "local-item-1",
+                productId: "product_1",
+                productSkuId: "product_sku_1",
+                productName: "Ebin Skin Protector Enhanced",
+                productSku: "KK38-3NA-5QK",
+                quantity: 2,
+                unitPrice: 58000,
+              },
+            ],
+            payments: [
+              {
+                localPaymentId: "local-payment-1",
+                method: "mobile_money",
+                amount: 116000,
+                timestamp: 3,
+              },
+            ],
+          },
+          status: "conflicted",
+          submittedAt: 4,
+          acceptedAt: 4,
+        },
+      ],
+      posLocalSyncMapping: [
+        {
+          _id: "sync_mapping_1",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-1",
+          localIdKind: "registerSession",
+          localId: "local-register-1",
+          cloudTable: "registerSession",
+          cloudId: "session_open",
+        },
+      ],
+      registerSession: [
+        {
+          _id: "session_open",
+          expectedCash: 231000,
+          openedAt: 1,
+          openingFloat: 15500,
+          organizationId: "org_1",
+          registerNumber: "1",
+          status: "closed",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+        },
+      ],
+      posTerminal: [
+        {
+          _id: "terminal_1",
+          registerNumber: "1",
+          registeredByUserId: "athena_user_1",
+          status: "active",
+          storeId: "store_1",
+        },
+      ],
+      product: [
+        {
+          _id: "product_1",
+          storeId: "store_1",
+        },
+      ],
+      productSku: [
+        {
+          _id: "product_sku_1",
+          images: [],
+          inventoryCount: 1,
+          price: 58000,
+          productId: "product_1",
+          quantityAvailable: 1,
+          sku: "KK38-3NA-5QK",
+          storeId: "store_1",
+        },
+      ],
+      staffProfile: [
+        {
+          _id: "manager_1",
+          organizationId: "org_1",
+          status: "active",
+          storeId: "store_1",
+        },
+        {
+          _id: "staff_1",
+          organizationId: "org_1",
+          status: "active",
+          storeId: "store_1",
+        },
+      ],
+      staffRoleAssignment: [
+        {
+          _id: "role_1",
+          organizationId: "org_1",
+          role: "manager",
+          staffProfileId: "manager_1",
+          status: "active",
+          storeId: "store_1",
+        },
+        {
+          _id: "role_2",
+          organizationId: "org_1",
+          role: "cashier",
+          staffProfileId: "staff_1",
+          status: "active",
+          storeId: "store_1",
+        },
+      ],
+    });
+
+    const rejectDuplicate = await getHandler(resolveRegisterSessionSyncReview)(
+      ctx as never,
+      {
+        actorStaffProfileId: "manager_1" as Id<"staffProfile">,
+        decision: "rejected",
+        registerSessionId: "session_open" as Id<"registerSession">,
+        reviewConflictIds: ["sync_conflict_duplicate"],
+        storeId: "store_1" as Id<"store">,
+      },
+    );
+
+    expect(rejectDuplicate).toEqual(
+      ok({
+        action: "rejected",
+        projectedCount: 0,
+        registerSession: expect.objectContaining({ _id: "session_open" }),
+        resolvedCount: 1,
+      }),
+    );
+    expect(ctx.tables.get("posLocalSyncEvent")).toEqual([
+      expect.objectContaining({
+        _id: "sync_event_inventory_sale",
+        status: "conflicted",
+      }),
+    ]);
+    expect(ctx.tables.get("posLocalSyncConflict")).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          _id: "sync_conflict_duplicate",
+          resolvedByStaffProfileId: "manager_1",
+          status: "resolved",
+        }),
+        expect.objectContaining({
+          _id: "sync_conflict_inventory",
+          status: "needs_review",
+        }),
+      ]),
+    );
+    await expect(
+      listOpenLocalSyncConflictsByRegisterSession(
+        ctx as never,
+        "store_1" as Id<"store">,
+        { includeRejectedEvidence: true },
+      ),
+    ).resolves.toEqual(
+      new Map([
+        [
+          "session_open",
+          [
+            expect.objectContaining({
+              _id: "sync_conflict_inventory",
+              status: "needs_review",
+            }),
+          ],
+        ],
+      ]),
+    );
+
+    const applyInventory = await getHandler(resolveRegisterSessionSyncReview)(
+      ctx as never,
+      {
+        actorStaffProfileId: "manager_1" as Id<"staffProfile">,
+        registerSessionId: "session_open" as Id<"registerSession">,
+        reviewConflictIds: ["sync_conflict_inventory"],
+        storeId: "store_1" as Id<"store">,
+      },
+    );
+
+    expect(applyInventory).toEqual(
+      ok({
+        action: "resolved",
+        projectedCount: 1,
+        registerSession: expect.objectContaining({ _id: "session_open" }),
+        resolvedCount: 1,
+      }),
+    );
+    expect(ctx.tables.get("posLocalSyncConflict")).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          _id: "sync_conflict_duplicate",
+          status: "resolved",
+        }),
+        expect.objectContaining({
+          _id: "sync_conflict_inventory",
+          resolvedByStaffProfileId: "manager_1",
+          status: "resolved",
+        }),
+      ]),
+    );
+    expect(ctx.tables.get("posLocalSyncEvent")).toEqual([
+      expect.objectContaining({
+        _id: "sync_event_inventory_sale",
+        projectedAt: expect.any(Number),
+        status: "projected",
+      }),
+    ]);
+    expect(ctx.tables.get("operationalWorkItem")).toEqual([
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          receiptNumber: "939540",
+          sourceType: "posTransaction",
+        }),
+        title: "Review inventory for Ebin Skin Protector Enhanced",
+        type: "synced_sale_inventory_review",
+      }),
+    ]);
+  });
+
+  it("does not keep projected inventory handoff sales in cash-controls review", async () => {
+    const ctx = createProjectedInventoryReviewQueryCtx({});
+
+    await expect(
+      listOpenLocalSyncConflictsByRegisterSession(
+        ctx as never,
+        "store_1" as Id<"store">,
+        { includeRejectedEvidence: true },
+      ),
+    ).resolves.toEqual(new Map());
+  });
+
+  it("keeps projected inventory sales in cash-controls review when inventory work is closed", async () => {
+    const ctx = createProjectedInventoryReviewQueryCtx({
+      workItemStatus: "resolved",
+    });
+
+    await expect(
+      listOpenLocalSyncConflictsByRegisterSession(
+        ctx as never,
+        "store_1" as Id<"store">,
+        { includeRejectedEvidence: true },
+      ),
+    ).resolves.toEqual(
+      new Map([
+        [
+          "session_open",
+          [expect.objectContaining({ _id: "sync_conflict_inventory" })],
+        ],
+      ]),
+    );
+  });
+
+  it("keeps projected inventory sales in cash-controls review when receipt-only metadata belongs to another local drawer", async () => {
+    const ctx = createProjectedInventoryReviewQueryCtx({
+      workItemMetadata: {
+        localEventId: "other-event",
+        localRegisterSessionId: "other-local-register",
+        localTransactionId: "other-local-transaction",
+        receiptNumber: "939540",
+      },
+    });
+
+    await expect(
+      listOpenLocalSyncConflictsByRegisterSession(
+        ctx as never,
+        "store_1" as Id<"store">,
+        { includeRejectedEvidence: true },
+      ),
+    ).resolves.toEqual(
+      new Map([
+        [
+          "session_open",
+          [expect.objectContaining({ _id: "sync_conflict_inventory" })],
+        ],
+      ]),
+    );
   });
 
   it("applies proofless staff-access sync reviews after manager approval", async () => {
@@ -2682,6 +3115,7 @@ describe("cash control deposits", () => {
 
   it("clears duplicate synced closeout reviews after manager rejection", async () => {
     const ctx = createAuthorizedRegisterDepositCtx({
+      operationalEvent: [],
       posLocalSyncConflict: [
         {
           _id: "sync_conflict_closeout",
@@ -2694,8 +3128,12 @@ describe("cash control deposits", () => {
           status: "needs_review",
           summary: "Register session is not open for synced POS closeout.",
           details: {
+            countedCash: 45000,
+            expectedCash: 50000,
             localRegisterSessionId: "session_closed",
+            notes: "cash count issue",
             status: "closed",
+            variance: -5000,
           },
           createdAt: 1,
         },
@@ -2710,8 +3148,12 @@ describe("cash control deposits", () => {
           status: "needs_review",
           summary: "Register session is not open for synced POS closeout.",
           details: {
+            countedCash: 45000,
+            expectedCash: 50000,
             localRegisterSessionId: "session_closed",
+            notes: "cash count issue",
             status: "closed",
+            variance: -5000,
           },
           createdAt: 2,
         },
@@ -2728,7 +3170,8 @@ describe("cash control deposits", () => {
           occurredAt: 2,
           staffProfileId: "staff_1",
           payload: {
-            countedCash: 50000,
+            countedCash: 45000,
+            notes: "cash count issue",
           },
           status: "conflicted",
           submittedAt: 4,
@@ -2824,6 +3267,29 @@ describe("cash control deposits", () => {
         { includeRejectedEvidence: true },
       ),
     ).resolves.toEqual(new Map());
+    expect(ctx.tables.get("operationalEvent")).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          actorStaffProfileId: "manager_1",
+          eventType: "register_session_sync_closeout_rejected",
+          localEventId: "event_closeout",
+          message: "Rejected synced closeout for Register 1.",
+          metadata: expect.objectContaining({
+            conflictId: "sync_conflict_closeout",
+            countedCash: 45000,
+            decision: "rejected",
+            expectedCash: 50000,
+            notes: "cash count issue",
+            sequence: 2,
+            syncOrigin: "local_sync",
+            variance: -5000,
+          }),
+          registerSessionId: "session_closed",
+          subjectId: "session_closed",
+          terminalId: "terminal_1",
+        }),
+      ]),
+    );
   });
 
   it("does not report success when a scoped review id is no longer present", async () => {

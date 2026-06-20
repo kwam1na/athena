@@ -110,11 +110,29 @@ export async function upsertLatestRuntimeStatus(
       return existing._id;
     }
 
-    await ctx.db.patch("posTerminalRuntimeStatus", existing._id, input);
+    await ctx.db.patch(
+      "posTerminalRuntimeStatus",
+      existing._id,
+      mergeRuntimeStatusPatch(existing, input),
+    );
     return existing._id;
   }
 
   return ctx.db.insert("posTerminalRuntimeStatus", omitUndefined(input));
+}
+
+function mergeRuntimeStatusPatch(
+  existing: Doc<"posTerminalRuntimeStatus">,
+  input: Omit<Doc<"posTerminalRuntimeStatus">, "_id" | "_creationTime">,
+) {
+  if (input.appUpdate !== undefined || existing.appUpdate === undefined) {
+    return input;
+  }
+
+  return {
+    ...input,
+    appUpdate: existing.appUpdate,
+  };
 }
 
 function omitUndefined<T extends Record<string, unknown>>(input: T) {
@@ -154,6 +172,11 @@ export type TerminalSyncEvidence = {
     createdAt: number;
     localEventId: string;
     localRegisterSessionId: string;
+    reviewTarget?: {
+      type: "open_work";
+      workItemId: Id<"operationalWorkItem">;
+      workItemType: "synced_sale_inventory_review";
+    };
     sequence: number;
     summary: string;
   }>;

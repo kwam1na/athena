@@ -1198,7 +1198,7 @@ describe("RegisterSessionViewContent", () => {
     await user.click(screen.getByRole("button", { name: /Receipt #939540/i }));
 
     expect(screen.getByText("None recorded")).toBeInTheDocument();
-    expect(screen.getByText("Inventory review")).toBeInTheDocument();
+    expect(screen.getAllByText("Inventory review").length).toBeGreaterThan(0);
     expect(screen.getByText("Requested 2")).toBeInTheDocument();
     expect(screen.getByText("Available after holds 1")).toBeInTheDocument();
     expect(screen.getByText("Active holds 1")).toBeInTheDocument();
@@ -1250,6 +1250,146 @@ describe("RegisterSessionViewContent", () => {
       registerSessionId: "session-1",
       reviewConflictIds: ["sync_conflict_inventory"],
     });
+  });
+
+  it("shows only the duplicate rejection decision for duplicate synced sale reviews", async () => {
+    const user = userEvent.setup();
+    const onAuthenticateStaff = vi.fn().mockResolvedValue(
+      ok({
+        activeRoles: ["manager"],
+        staffProfile: { fullName: "Ato Kofi" },
+        staffProfileId: "manager-1",
+      }),
+    );
+    const onResolveSyncReview = vi
+      .fn()
+      .mockResolvedValue(
+        ok({ action: "rejected", projectedCount: 0, resolvedCount: 1 }),
+      );
+
+    render(
+      <RegisterSessionViewContent
+        currency="GHS"
+        isLoading={false}
+        onRecordDeposit={vi.fn()}
+        {...closeoutHandlers}
+        onAuthenticateStaff={onAuthenticateStaff}
+        onResolveSyncReview={onResolveSyncReview}
+        registerSessionSnapshot={{
+          ...baseSnapshot,
+          registerSession: {
+            ...baseSnapshot.registerSession,
+            localSyncStatus: {
+              status: "needs_review",
+              reconciliationItems: [
+                {
+                  actionPolicy: "apply_or_reject",
+                  id: "sync_conflict_inventory",
+                  inventoryReview: {
+                    availableInventoryCount: 1,
+                    productSkuId: "sku-hair-dryer",
+                    quantityAvailable: 1,
+                    quantityAvailableAfterHolds: 1,
+                    requestedQuantity: 2,
+                  },
+                  reviewKind: "inventory_review",
+                  sale: {
+                    itemCount: 8,
+                    items: [
+                      {
+                        name: "Promaxgold 3000w Hair Dryer",
+                        productSkuId: "sku-hair-dryer",
+                        quantity: 2,
+                        sku: "KK38-E2Z-E9V",
+                        total: 36000,
+                      },
+                    ],
+                    occurredAt: Date.parse("2026-06-19T10:52:00Z"),
+                    paymentMethods: ["mobile_money"],
+                    receiptNumber: "8707507",
+                    staffName: "Joyce O.",
+                    total: 18500,
+                    totalPaid: 18500,
+                  },
+                  sequence: 26,
+                  status: "needs_review",
+                  summary:
+                    "Inventory needs manager review for a synced offline sale.",
+                  type: "inventory",
+                },
+                {
+                  actionPolicy: "reject_only",
+                  id: "sync_conflict_duplicate",
+                  localEventId: "event-duplicate-sale",
+                  reviewKind: "unknown",
+                  sale: {
+                    itemCount: 8,
+                    items: [
+                      {
+                        name: "Promaxgold 3000w Hair Dryer",
+                        productSkuId: "sku-hair-dryer",
+                        quantity: 2,
+                        sku: "KK38-E2Z-E9V",
+                        total: 36000,
+                      },
+                    ],
+                    occurredAt: Date.parse("2026-06-19T10:52:00Z"),
+                    paymentMethods: ["mobile_money"],
+                    receiptNumber: "8707507",
+                    staffName: "Joyce O.",
+                    total: 18500,
+                    totalPaid: 18500,
+                  },
+                  sequence: 10,
+                  status: "needs_review",
+                  summary:
+                    "Local POS session id was reused by a different synced sale.",
+                  type: "duplicate_local_id",
+                },
+              ],
+            },
+          },
+        }}
+      />,
+    );
+
+    expect(screen.queryByText("Review decisions")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Reject reviewed sale activity" }),
+    ).not.toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: /Receipt #8707507/i }),
+    );
+
+    expect(screen.getByText("Review decisions")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Apply inventory review item" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Reject inventory review item" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Apply duplicate review item" }),
+    ).not.toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: "Reject duplicate review item" }),
+    );
+    await user.click(
+      screen.getByRole("button", {
+        name: "Confirm staff for Reject duplicate review item",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(onResolveSyncReview).toHaveBeenNthCalledWith(1, {
+        actorStaffProfileId: "manager-1",
+        decision: "rejected",
+        registerSessionId: "session-1",
+        reviewConflictIds: ["sync_conflict_duplicate"],
+      }),
+    );
   });
 
   it("approves synced register review items after manager sign-in", async () => {
@@ -2671,7 +2811,11 @@ describe("RegisterSessionViewContent", () => {
       screen.getByLabelText("Manager closeout notes"),
       "Deposit variance approved.",
     );
-    await user.click(screen.getByRole("button", { name: "Approve variance" }));
+    const approveVarianceButton = screen.getByRole("button", {
+      name: "Approve variance",
+    });
+    expect(approveVarianceButton).toHaveClass("bg-action-workflow");
+    await user.click(approveVarianceButton);
     await user.click(
       screen.getByRole("button", {
         name: "Confirm staff for Approve variance",

@@ -1283,6 +1283,45 @@ describe("daily operations overview read model", () => {
     });
   });
 
+  it("formats fallback register closeout variance records for the timeline", async () => {
+    const snapshot = await buildDailyOperationsSnapshotWithCtx(
+      buildCtx({
+        dailyClose: [priorClose],
+        dailyOpening: [startedOpening],
+        registerSession: [
+          {
+            _id: "register-1",
+            closeoutRecords: [
+              {
+                actorStaffProfileId: "staff-1",
+                countedCash: 124_500,
+                expectedCash: 144_000,
+                occurredAt: Date.UTC(2026, 4, 8, 20, 45),
+                type: "closed",
+                variance: -19_500,
+              },
+            ],
+            expectedCash: 144_000,
+            openedAt: Date.UTC(2026, 4, 8, 8),
+            openingFloat: 100,
+            organizationId: "org-1",
+            registerNumber: "1",
+            status: "closed",
+            storeId: "store-1",
+          },
+        ],
+        store: [store],
+      }),
+      { operatingDate: "2026-05-08", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(snapshot.timeline[0]).toMatchObject({
+      id: "register_closeout:register-1:closed:1778273100000",
+      message: "Register 1 closeout recorded with a cash variance of GH₵-195.",
+      type: "register_session_closed",
+    });
+  });
+
   it("labels and links generic register session close operational events", async () => {
     const snapshot = await buildDailyOperationsSnapshotWithCtx(
       buildCtx({
@@ -1336,6 +1375,58 @@ describe("daily operations overview read model", () => {
         type: "register_session",
       },
       type: "register_session_closed",
+    });
+  });
+
+  it("normalizes raw closeout variance approval events for the timeline", async () => {
+    const snapshot = await buildDailyOperationsSnapshotWithCtx(
+      buildCtx({
+        dailyClose: [priorClose],
+        dailyOpening: [startedOpening],
+        operationalEvent: [
+          {
+            _id: "event-variance-review-requested",
+            createdAt: Date.UTC(2026, 4, 8, 20, 45),
+            eventType: "register_session_variance_review_requested",
+            message: "Variance of -19500 exceeded the closeout approval threshold.",
+            metadata: {
+              countedCash: 124_500,
+              expectedCash: 144_000,
+              variance: -19_500,
+            },
+            registerSessionId: "register-1",
+            storeId: "store-1",
+            subjectId: "register-1",
+            subjectLabel: "1",
+            subjectType: "register_session",
+          },
+        ],
+        registerSession: [
+          {
+            _id: "register-1",
+            expectedCash: 144_000,
+            openedAt: Date.UTC(2026, 4, 8, 8),
+            registerNumber: "1",
+            status: "closing",
+            storeId: "store-1",
+          },
+        ],
+        store: [store],
+      }),
+      { operatingDate: "2026-05-08", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(snapshot.timeline[0]).toMatchObject({
+      id: "event-variance-review-requested",
+      message: "Register 1 closeout recorded with a cash variance of GH₵-195.",
+      registerLink: {
+        label: "Register 1",
+        params: {
+          sessionId: "register-1",
+        },
+        to: "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId",
+      },
+      type: "register_session_variance_review_requested",
     });
   });
 
@@ -1455,6 +1546,59 @@ describe("daily operations overview read model", () => {
         type: "register_session",
       },
       type: "register_session_opening_float_corrected",
+    });
+  });
+
+  it("links void approval requests to the transaction and includes the requester", async () => {
+    const snapshot = await buildDailyOperationsSnapshotWithCtx(
+      buildCtx({
+        dailyClose: [priorClose],
+        dailyOpening: [startedOpening],
+        operationalEvent: [
+          {
+            _id: "event-void-requested",
+            actorStaffProfileId: "cashier-1",
+            createdAt: Date.UTC(2026, 4, 8, 15, 7),
+            eventType: "pos_transaction_void_approval_requested",
+            message: "Void requested for Transaction #851031.",
+            metadata: {
+              transactionNumber: "851031",
+            },
+            storeId: "store-1",
+            subjectId: "transaction-851031",
+            subjectLabel: "Transaction #851031",
+            subjectType: "pos_transaction",
+          },
+        ],
+        staffProfile: [
+          {
+            _id: "cashier-1",
+            fullName: "Joyce O.",
+            organizationId: "org-1",
+            storeId: "store-1",
+          },
+        ],
+        store: [store],
+      }),
+      { operatingDate: "2026-05-08", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(snapshot.timeline[0]).toMatchObject({
+      id: "event-void-requested",
+      message: "Void requested by Joyce O. for Transaction #851031.",
+      subject: {
+        id: "transaction-851031",
+        label: "Transaction #851031",
+        type: "pos_transaction",
+      },
+      transactionLink: {
+        label: "#851031",
+        params: {
+          transactionId: "transaction-851031",
+        },
+        to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId",
+      },
+      type: "pos_transaction_void_approval_requested",
     });
   });
 

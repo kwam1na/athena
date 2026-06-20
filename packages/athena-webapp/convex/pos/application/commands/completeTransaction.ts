@@ -1241,6 +1241,9 @@ async function transactionFallsInCompletedDailyClose(
 async function validateTransactionVoidPreconditions(
   ctx: MutationCtx,
   transaction: NonNullable<Awaited<ReturnType<typeof getPosTransactionById>>>,
+  options?: {
+    requireUsableRegisterSession?: boolean;
+  },
 ) {
   if (transaction.status === "void") {
     return userError({
@@ -1301,10 +1304,18 @@ async function validateTransactionVoidPreconditions(
   if (
     !registerSession ||
     registerSession.storeId !== transaction.storeId ||
-    !isUsableRegisterSession(registerSession) ||
     !registerSessionMatchesIdentity(registerSession, {
       terminalId: transaction.terminalId,
     })
+  ) {
+    return userError({
+      code: "precondition_failed",
+      message: "Drawer closed. Open the drawer before voiding this sale.",
+    });
+  }
+  if (
+    options?.requireUsableRegisterSession !== false &&
+    !isUsableRegisterSession(registerSession)
   ) {
     return userError({
       code: "precondition_failed",
@@ -1734,9 +1745,16 @@ export async function resolveTransactionVoidApprovalDecisionWithCtx(
     throw new Error(matchingApprovalRequest.error.message);
   }
 
+  const registerSession = await getRegisterSessionById(
+    ctx,
+    transaction.registerSessionId as Id<"registerSession">,
+  );
   const preconditions = await validateTransactionVoidPreconditions(
     ctx,
     transaction,
+    {
+      requireUsableRegisterSession: registerSession?.status !== "closing",
+    },
   );
   if (preconditions.kind !== "ok") {
     throw new Error(preconditions.error.message);

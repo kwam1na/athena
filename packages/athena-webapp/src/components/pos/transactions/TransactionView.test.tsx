@@ -865,6 +865,112 @@ describe("TransactionView", () => {
     });
   });
 
+  it("disables completed sale voids while a void approval request is pending", async () => {
+    const user = userEvent.setup();
+    const voidMutation = vi.fn();
+    mockTransactionMutations(
+      vi.fn(),
+      vi.fn(),
+      vi.fn(),
+      vi.fn(),
+      vi.fn(),
+      vi.fn(),
+      voidMutation,
+    );
+    useParamsMock.mockReturnValue({ transactionId: "txn_void_pending" });
+    useQueryMock.mockReturnValue({
+      ...baseTransaction,
+      _id: "txn_void_pending",
+      pendingVoidApprovalRequest: {
+        _id: "approval-request-1",
+        createdAt: 100,
+        requestedByStaffProfileId: "staff_1",
+      },
+    });
+
+    render(<TransactionView />);
+
+    const voidButton = screen.getByRole("button", {
+      name: "Void requested",
+    });
+
+    expect(voidButton).toBeDisabled();
+    await user.click(voidButton);
+    expect(voidMutation).not.toHaveBeenCalled();
+    expect(
+      screen.queryByRole("heading", { name: "Void completed sale" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("links full admins to approvals when a void request is pending", () => {
+    mockTransactionMutations(vi.fn(), vi.fn(), vi.fn());
+    useProtectedAdminPageStateMock.mockReturnValue({
+      activeStore: { _id: "store_1" },
+      hasFullAdminAccess: true,
+      isAuthenticated: true,
+    });
+    useParamsMock.mockReturnValue({
+      orgUrlSlug: "wigclub",
+      storeUrlSlug: "wigclub",
+      transactionId: "txn_void_pending",
+    });
+    useQueryMock.mockReturnValue({
+      ...baseTransaction,
+      _id: "txn_void_pending",
+      pendingVoidApprovalRequest: {
+        _id: "approval-request-1",
+        createdAt: 100,
+        requestedByStaffProfileId: "staff_1",
+      },
+    });
+
+    render(<TransactionView />);
+
+    expect(screen.getByText("Void approval pending")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Review this request in Approvals before the sale can be voided.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Review/ })).toHaveAttribute(
+      "href",
+      "/wigclub/store/wigclub/operations/approvals",
+    );
+  });
+
+  it("does not link non-admins to approvals when a void request is pending", () => {
+    mockTransactionMutations(vi.fn(), vi.fn(), vi.fn());
+    useProtectedAdminPageStateMock.mockReturnValue({
+      activeStore: { _id: "store_1" },
+      hasFullAdminAccess: false,
+      isAuthenticated: true,
+    });
+    useParamsMock.mockReturnValue({
+      orgUrlSlug: "wigclub",
+      storeUrlSlug: "wigclub",
+      transactionId: "txn_void_pending",
+    });
+    useQueryMock.mockReturnValue({
+      ...baseTransaction,
+      _id: "txn_void_pending",
+      pendingVoidApprovalRequest: {
+        _id: "approval-request-1",
+        createdAt: 100,
+        requestedByStaffProfileId: "staff_1",
+      },
+    });
+
+    render(<TransactionView />);
+
+    expect(
+      screen.queryByText("Void approval pending"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Review/ })).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Void requested" }),
+    ).toBeDisabled();
+  });
+
   it("uses terminal staff proof when submitting completed sale voids without a reason", async () => {
     const user = userEvent.setup();
     const authMutation = vi.fn().mockResolvedValue({

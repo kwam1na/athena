@@ -11,6 +11,8 @@ import { consumeApprovalProofWithCtx } from "../operations/approvalProofs";
 import { recordOperationalEventWithCtx } from "../operations/operationalEvents";
 import { recordRegisterSessionTraceBestEffort } from "../operations/registerSessionTracing";
 import { commandResultValidator } from "../lib/commandResultValidators";
+import { toDisplayAmount } from "../lib/currency";
+import { currencyFormatter } from "../utils";
 import {
   approvalRequired,
   ok,
@@ -34,6 +36,33 @@ const REGISTER_CLOSEOUT_REOPEN_ACTION =
   APPROVAL_ACTIONS.registerSessionCloseoutReopen;
 const REGISTER_CLOSEOUT_MODIFICATION_SUBMIT_ACTION =
   APPROVAL_ACTIONS.registerSessionCloseoutModificationSubmit;
+
+function formatCloseoutVarianceAmount(
+  currency: string | undefined,
+  amount: number,
+) {
+  const storeCurrency = currency?.trim() || "GHS";
+
+  try {
+    return currencyFormatter(storeCurrency).format(toDisplayAmount(amount));
+  } catch {
+    return currencyFormatter("GHS").format(toDisplayAmount(amount));
+  }
+}
+
+function buildRegisterCloseoutVarianceTimelineMessage(args: {
+  currency?: string;
+  registerNumber?: string;
+  variance: number;
+}) {
+  const registerLabel = args.registerNumber?.trim()
+    ? /^register\b/i.test(args.registerNumber)
+      ? args.registerNumber
+      : `Register ${args.registerNumber}`
+    : "Register session";
+
+  return `${registerLabel} closeout recorded with a cash variance of ${formatCloseoutVarianceAmount(args.currency, args.variance)}.`;
+}
 
 const userErrorValidator = v.object({
   code: v.union(
@@ -972,15 +1001,18 @@ export const submitRegisterSessionCloseout = mutation({
       await ctx.db.patch("registerSession", registerSession._id, {
         managerApprovalRequestId: approvalRequestId,
       });
+      const store = await ctx.db.get("store", args.storeId);
 
       await recordOperationalEventWithCtx(ctx, {
         actorStaffProfileId: closeoutSubmitActorStaffProfileId,
         actorUserId: args.actorUserId,
         approvalRequestId,
         eventType: "register_session_variance_review_requested",
-        message:
-          closeoutReview.reason ??
-          "Register closeout submitted for manager variance review.",
+        message: buildRegisterCloseoutVarianceTimelineMessage({
+          currency: store?.currency,
+          registerNumber: registerSession.registerNumber,
+          variance: closeoutReview.variance,
+        }),
         metadata: {
           actionKey: REGISTER_VARIANCE_REVIEW_ACTION_KEY,
           approvalMode: "async_approval",

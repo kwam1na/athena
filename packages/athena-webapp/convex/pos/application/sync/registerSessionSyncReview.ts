@@ -3,6 +3,8 @@ import type { QueryCtx } from "../../../_generated/server";
 
 const SYNC_CONFLICT_LIMIT = 500;
 const MANAGER_REJECTED_SYNC_REVIEW_CODE = "manager_rejected";
+const SYNCED_SALE_INVENTORY_REVIEW_WORK_ITEM_TYPE =
+  "synced_sale_inventory_review";
 export const REGISTER_NOT_OPEN_SYNC_REVIEW_SUMMARY =
   "Register was not open before this sale synced.";
 export const STAFF_ACCESS_SYNC_REVIEW_SUMMARY =
@@ -231,6 +233,75 @@ function stringDetail(
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
+function syncConflictEventKey(
+  conflict: Pick<RegisterSessionSyncConflict, "localEventId" | "terminalId">,
+) {
+  return [conflict.terminalId, conflict.localEventId].join(":");
+}
+
+async function hasInventoryReviewWorkItemForProjectedSale(
+  ctx: Pick<QueryCtx, "db">,
+  storeId: Id<"store">,
+  conflict: Doc<"posLocalSyncConflict">,
+) {
+  if (
+    classifyRegisterSessionSyncReview(conflict).reviewKind !==
+    "inventory_review"
+  ) {
+    return false;
+  }
+
+  const syncEvent = await ctx.db
+    .query("posLocalSyncEvent")
+    .withIndex("by_store_terminal_localEvent", (q) =>
+      q
+        .eq("storeId", conflict.storeId)
+        .eq("terminalId", conflict.terminalId)
+        .eq("localEventId", conflict.localEventId),
+    )
+    .unique();
+  if (
+    syncEvent?.eventType !== "sale_completed" ||
+    typeof syncEvent.projectedAt !== "number"
+  ) {
+    return false;
+  }
+
+  const localTransactionId =
+    stringDetail(conflict.details, "localTransactionId") ??
+    stringDetail(syncEvent.payload, "localTransactionId");
+  const receiptNumber = stringDetail(syncEvent.payload, "receiptNumber");
+  const inventoryReviewWorkItems = await ctx.db
+    .query("operationalWorkItem")
+    .withIndex("by_storeId_type", (q) =>
+      q
+        .eq("storeId", storeId)
+        .eq("type", SYNCED_SALE_INVENTORY_REVIEW_WORK_ITEM_TYPE),
+    )
+    .take(SYNC_CONFLICT_LIMIT);
+
+  return inventoryReviewWorkItems.some((workItem) => {
+    if (workItem.status !== "open") {
+      return false;
+    }
+
+    const metadata = workItem.metadata ?? {};
+    const metadataLocalRegisterSessionId =
+      typeof metadata.localRegisterSessionId === "string"
+        ? metadata.localRegisterSessionId
+        : null;
+
+    return (
+      metadata.localEventId === conflict.localEventId ||
+      (localTransactionId !== null &&
+        metadata.localTransactionId === localTransactionId) ||
+      (receiptNumber !== null &&
+        metadata.receiptNumber === receiptNumber &&
+        metadataLocalRegisterSessionId === conflict.localRegisterSessionId)
+    );
+  });
+}
+
 function recordDetail(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -428,8 +499,34 @@ export async function listOpenLocalSyncConflictsByRegisterSession(
             .take(SYNC_CONFLICT_LIMIT)
         : Promise.resolve([]),
     ]);
+  const projectedInventoryReviewResults = await Promise.all(
+    needsReviewConflicts.map(async (conflict) => ({
+      conflict,
+      hasInventoryWorkItem:
+        await hasInventoryReviewWorkItemForProjectedSale(ctx, storeId, conflict),
+    })),
+  );
+  const projectedInventoryReviewEventKeys = new Set(
+    projectedInventoryReviewResults
+      .filter((result) => result.hasInventoryWorkItem)
+      .map((result) => syncConflictEventKey(result.conflict)),
+  );
+  const activeNeedsReviewConflicts = projectedInventoryReviewResults
+    .filter((result) => !result.hasInventoryWorkItem)
+    .map((result) => result.conflict);
+  const openConflictEventKeys = new Set(
+    activeNeedsReviewConflicts.map(syncConflictEventKey),
+  );
   const staleResolvedConflicts = await Promise.all(
     resolvedConflicts.map(async (conflict) => {
+      const conflictEventKey = syncConflictEventKey(conflict);
+      if (
+        openConflictEventKeys.has(conflictEventKey) ||
+        projectedInventoryReviewEventKeys.has(conflictEventKey)
+      ) {
+        return null;
+      }
+
       const syncEvent = await ctx.db
         .query("posLocalSyncEvent")
         .withIndex("by_store_terminal_localEvent", (q) =>
@@ -463,7 +560,7 @@ export async function listOpenLocalSyncConflictsByRegisterSession(
     }),
   );
   const conflicts: RegisterSessionSyncConflict[] = [
-    ...needsReviewConflicts,
+    ...activeNeedsReviewConflicts,
     ...staleResolvedConflicts.filter(
       (conflict): conflict is Doc<"posLocalSyncConflict"> => conflict !== null,
     ),

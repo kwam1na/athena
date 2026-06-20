@@ -146,6 +146,21 @@ const detail: TerminalHealthDetail = {
   runtimeStatus: {
     _id: "status-1",
     _creationTime: 1,
+    activeRegisterSession: {
+      cloudRegisterSessionId: "register-session-1",
+      localRegisterSessionId: "local-register-session-1",
+      observedAt: Date.now() - 4 * 60_000,
+      openedAt: Date.now() - 60 * 60_000,
+      registerNumber: "1",
+      status: "closing",
+    },
+    appUpdate: {
+      canApply: false,
+      detectorStatus: "ok",
+      observedAt: Date.now() - 4 * 60_000,
+      stagingStatus: "unknown",
+      status: "current",
+    },
     appVersion: "gentle-lion-climbs (20260608193135)",
     buildSha: "b463caa2d36dabcdef",
     browserInfo: { online: false, platform: "MacIntel" },
@@ -314,6 +329,16 @@ describe("POSTerminalDetailViewContent", () => {
       "Latest version: gentle-lion-climbs (20260608193135) / b463caa2d36d.",
     );
     expect(screen.getByText("Readiness evidence")).toBeInTheDocument();
+    expect(screen.getByText("Runtime report")).toBeInTheDocument();
+    expect(screen.getByText("Latest terminal report")).toBeInTheDocument();
+    expect(screen.getByText("Active drawer")).toBeInTheDocument();
+    expect(screen.getByText("Register 1 Closing")).toBeInTheDocument();
+    expect(screen.getByText("Upload queue")).toBeInTheDocument();
+    expect(screen.getByText("2 uploadable / 3 pending")).toBeInTheDocument();
+    expect(screen.getByText("Local review")).toBeInTheDocument();
+    expect(screen.getByText("1 item")).toBeInTheDocument();
+    expect(screen.getAllByText("App update").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Current").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Availability").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Catalog").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Service catalog").length).toBeGreaterThan(0);
@@ -1432,6 +1457,43 @@ describe("POSTerminalDetailViewContent", () => {
     expect(onResolveRegisterSessionReview).not.toHaveBeenCalled();
   });
 
+  it("routes inventory review attention to open work with inventory copy", () => {
+    render(
+      <POSTerminalDetailViewContent
+        detail={{
+          ...detail,
+          attentionReasons: [
+            {
+              actionTarget: {
+                label: "Review inventory work",
+                type: "open_work",
+              },
+              count: 1,
+              latestEventSequence: 26,
+              latestEventStatus: "conflicted",
+              source: "cloud_sync",
+              summary: "1 inventory review item needs attention.",
+              type: "synced_sale_inventory_review",
+            },
+          ],
+        }}
+        isLoading={false}
+        orgUrlSlug="wigclub"
+        storeUrlSlug="osu"
+      />,
+    );
+
+    expect(
+      screen.getByText("1 inventory review item needs attention."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /review inventory work/i }),
+    ).toHaveAttribute("href", "/wigclub/store/osu/operations/open-work");
+    expect(
+      screen.queryByRole("link", { name: /review register session/i }),
+    ).not.toBeInTheDocument();
+  });
+
   it("resolves explicitly eligible register reviews inline from terminal health", async () => {
     const onResolveRegisterSessionReview = vi.fn().mockResolvedValue({
       data: { action: "resolved", resolvedCount: 1 },
@@ -1524,6 +1586,40 @@ describe("POSTerminalDetailViewContent", () => {
     expect(
       screen.getByText(
         "No unresolved cloud sync conflicts are currently reported. Local runtime review, pending sync, or stale check-ins may still need attention above.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("explains when local review counts arrive without item details", () => {
+    render(
+      <POSTerminalDetailViewContent
+        detail={{
+          ...detail,
+          runtimeStatus: {
+            ...detail.runtimeStatus!,
+            sync: {
+              ...detail.runtimeStatus!.sync,
+              reviewEventCount: 33,
+              reviewEvents: [],
+              status: "needs_review",
+            },
+          },
+          syncEvidence: {
+            ...detail.syncEvidence,
+            unresolvedConflicts: [],
+            unresolvedConflictCount: 0,
+          },
+        }}
+        isLoading={false}
+      />,
+    );
+
+    expect(
+      screen.getByText("33 local review items were reported by this terminal."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "The latest runtime check-in did not include item-level local review details.",
       ),
     ).toBeInTheDocument();
   });

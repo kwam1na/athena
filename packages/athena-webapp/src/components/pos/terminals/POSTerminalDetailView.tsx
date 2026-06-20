@@ -436,6 +436,146 @@ function SnapshotReadinessGroup({
   );
 }
 
+function RuntimeReportGroup({
+  runtimeStatus,
+}: {
+  runtimeStatus: TerminalRuntimeStatus | null;
+}) {
+  const syncTone = getRuntimeSyncTone(runtimeStatus?.sync.status);
+  const appUpdateTone = getRuntimeAppUpdateTone(runtimeStatus?.appUpdate?.status);
+  const activeRegisterSession = runtimeStatus?.activeRegisterSession;
+
+  return (
+    <div className="space-y-layout-xs rounded-md border border-border/80 bg-surface px-layout-md py-layout-sm">
+      <div className="flex items-center justify-between gap-layout-sm">
+        <p className="text-xs font-medium uppercase text-muted-foreground">
+          Runtime report
+        </p>
+        <span className="text-xs text-muted-foreground">
+          {runtimeStatus ? "Latest terminal report" : "Not reported"}
+        </span>
+      </div>
+      <div className="divide-y divide-border/70">
+        <RailSignalRow
+          label="Reported"
+          value={formatTerminalTimestamp(runtimeStatus?.reportedAt)}
+        />
+        <RailSignalRow
+          label="Active drawer"
+          tone={activeRegisterSession ? "neutral" : "warning"}
+          value={
+            activeRegisterSession
+              ? formatActiveRegisterSession(activeRegisterSession)
+              : "Not reported"
+          }
+        />
+        <RailSignalRow
+          label="Sync"
+          tone={syncTone}
+          value={
+            runtimeStatus ? formatStatusLabel(runtimeStatus.sync.status) : "No report"
+          }
+        />
+        <RailSignalRow
+          label="Upload queue"
+          value={formatUploadQueue(runtimeStatus)}
+        />
+        <RailSignalRow
+          label="Local review"
+          tone={(runtimeStatus?.sync.reviewEventCount ?? 0) > 0 ? "warning" : "neutral"}
+          value={formatLocalReviewCount(runtimeStatus)}
+        />
+        <RailSignalRow
+          label="App update"
+          tone={appUpdateTone}
+          value={
+            runtimeStatus?.appUpdate
+              ? formatStatusLabel(runtimeStatus.appUpdate.status)
+              : "Not reported"
+          }
+        />
+      </div>
+    </div>
+  );
+}
+
+function getRuntimeSyncTone(status?: TerminalRuntimeStatus["sync"]["status"]) {
+  switch (status) {
+    case "idle":
+      return "success";
+    case "failed":
+    case "needs_review":
+    case "pending":
+    case "syncing":
+      return "warning";
+    default:
+      return "neutral";
+  }
+}
+
+function getRuntimeAppUpdateTone(
+  status?: TerminalRuntimeStatus["appUpdate"] extends infer AppUpdate
+    ? AppUpdate extends { status?: infer Status }
+      ? Status
+      : never
+    : never,
+) {
+  switch (status) {
+    case "current":
+      return "success";
+    case "applying":
+    case "blocked":
+    case "checking":
+    case "detector_failed":
+    case "detector-failed":
+    case "ready":
+    case "ready_unstaged":
+    case "staged":
+    case "update_ready":
+    case "update_ready_unstaged":
+      return "warning";
+    default:
+      return "neutral";
+  }
+}
+
+function formatActiveRegisterSession(
+  activeRegisterSession: NonNullable<
+    TerminalRuntimeStatus["activeRegisterSession"]
+  >,
+) {
+  const registerLabel = activeRegisterSession.registerNumber
+    ? `Register ${activeRegisterSession.registerNumber}`
+    : "Drawer";
+
+  return `${registerLabel} ${formatStatusLabel(activeRegisterSession.status)}`;
+}
+
+function formatUploadQueue(runtimeStatus: TerminalRuntimeStatus | null) {
+  if (!runtimeStatus) {
+    return "Not reported";
+  }
+
+  const uploadable = runtimeStatus.sync.uploadableEventCount;
+  const pending = runtimeStatus.sync.pendingEventCount;
+
+  if (uploadable === 0 && pending === 0) {
+    return "Clear";
+  }
+
+  return `${uploadable} uploadable / ${pending} pending`;
+}
+
+function formatLocalReviewCount(runtimeStatus: TerminalRuntimeStatus | null) {
+  if (!runtimeStatus) {
+    return "Not reported";
+  }
+
+  const reviewCount = runtimeStatus.sync.reviewEventCount;
+
+  return `${reviewCount} item${reviewCount === 1 ? "" : "s"}`;
+}
+
 function RailSection({
   children,
   icon,
@@ -522,6 +662,7 @@ function TerminalContextRail({
                   : "Not reported"
             }
           />
+          <RuntimeReportGroup runtimeStatus={runtimeStatus} />
           <SnapshotReadinessGroup runtimeStatus={runtimeStatus} />
         </RailSection>
       </div>
@@ -911,6 +1052,9 @@ function ConflictSection({
   syncEvidence: TerminalSyncEvidence;
 }) {
   const localReviewEvents = runtimeStatus?.sync.reviewEvents ?? [];
+  const runtimeReviewCount = runtimeStatus?.sync.reviewEventCount ?? 0;
+  const missingRuntimeReviewDetails =
+    runtimeReviewCount > 0 && localReviewEvents.length === 0;
   const unresolvedConflicts = syncEvidence.unresolvedConflicts ?? [];
   const reviewCount = getReviewEvidenceCount(syncEvidence);
 
@@ -981,6 +1125,20 @@ function ConflictSection({
                 </div>
               ))}
             </div>
+          </div>
+        ) : null}
+
+        {missingRuntimeReviewDetails ? (
+          <div className="rounded-md border border-warning/30 bg-warning/10 px-layout-md py-layout-sm">
+            <p className="text-sm font-medium text-foreground">
+              {runtimeReviewCount} local review{" "}
+              {runtimeReviewCount === 1 ? "item was" : "items were"} reported
+              by this terminal.
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              The latest runtime check-in did not include item-level local
+              review details.
+            </p>
           </div>
         ) : null}
       </div>
@@ -1143,7 +1301,7 @@ function AttentionReasonAction({
           search={{ o: getOrigin() }}
           to="/$orgUrlSlug/store/$storeUrlSlug/operations/open-work"
         >
-          Review open work
+          {target.label ?? "Review open work"}
           <ArrowRight aria-hidden="true" />
         </Link>
       </Button>

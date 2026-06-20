@@ -70,6 +70,47 @@ describe("terminalRepository runtime status", () => {
     expect(ctx.db.insert).not.toHaveBeenCalled();
   });
 
+  it("preserves last-known app-update evidence when a newer runtime report omits it", async () => {
+    const appUpdate = {
+      canApply: true,
+      currentBuildId: "build-current",
+      detectorStatus: "ok",
+      observedAt: 200,
+      pendingBuildId: "build-next",
+      stagingStatus: "unstaged",
+      status: "update_ready_unstaged",
+    } as const;
+    const ctx = buildCtx({
+      posTerminalRuntimeStatus: [
+        buildRuntimeStatus({
+          appUpdate,
+          reportedAt: 200,
+          receivedAt: 210,
+        }),
+      ],
+    });
+    const input = {
+      ...buildRuntimeStatus(),
+      appUpdate: undefined,
+      reportedAt: 250,
+      receivedAt: 260,
+    };
+
+    const result = await upsertLatestRuntimeStatus(ctx as never, input);
+
+    expect(result).toBe("runtime-status-1");
+    expect(ctx.db.patch).toHaveBeenCalledWith(
+      "posTerminalRuntimeStatus",
+      "runtime-status-1",
+      expect.objectContaining({
+        appUpdate,
+        reportedAt: 250,
+        receivedAt: 260,
+      }),
+    );
+    expect(ctx.db.insert).not.toHaveBeenCalled();
+  });
+
   it("ignores delayed older runtime status reports for the latest row", async () => {
     const ctx = buildCtx({
       posTerminalRuntimeStatus: [

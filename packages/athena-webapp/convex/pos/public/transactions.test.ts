@@ -16,6 +16,7 @@ import {
   voidTransaction,
 } from "./transactions";
 import type { Id } from "../../_generated/dataModel";
+import { assertConformsToExportedReturns } from "../../lib/returnValidatorContract";
 import * as athenaUserAuth from "../../lib/athenaUserAuth";
 import * as correctionCommands from "../application/commands/correctTransaction";
 import * as itemAdjustmentCommands from "../application/commands/adjustTransactionItems";
@@ -74,6 +75,36 @@ beforeEach(() => {
 });
 
 describe("POS public transaction query validators", () => {
+  it("validates representative public transaction results against exported return validators", () => {
+    const validationError = {
+      kind: "user_error" as const,
+      error: {
+        code: "validation_failed" as const,
+        message: "Validation failed.",
+      },
+    };
+
+    assertConformsToExportedReturns(completeTransaction, validationError);
+    assertConformsToExportedReturns(getCompletedTransactions, []);
+    assertConformsToExportedReturns(getTransactionById, null);
+    assertConformsToExportedReturns(voidTransaction, validationError);
+    assertConformsToExportedReturns(createTransactionFromSession, validationError);
+    assertConformsToExportedReturns(correctTransactionCustomer, validationError);
+    assertConformsToExportedReturns(
+      correctTransactionPaymentMethod,
+      validationError,
+    );
+    assertConformsToExportedReturns(adjustTransactionItems, validationError);
+    assertConformsToExportedReturns(getRecentTransactionsWithCustomers, []);
+    assertConformsToExportedReturns(getTodaySummary, {
+      averageTransaction: 0,
+      date: "2026-06-19",
+      totalItemsSold: 0,
+      totalSales: 0,
+      totalTransactions: 0,
+    });
+  });
+
   it("allows payment correction to return inline approval requirements", () => {
     const validator = parseValidator(exportReturns(correctTransactionPaymentMethod));
 

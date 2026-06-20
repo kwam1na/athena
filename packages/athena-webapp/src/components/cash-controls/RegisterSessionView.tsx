@@ -230,6 +230,12 @@ type ResolveSyncReviewArgs = {
   reviewConflictIds?: string[];
 };
 
+type ResolveSyncReviewDecisionOptions = {
+  approveLabel?: string;
+  rejectLabel?: string;
+  reviewConflictIds?: string[];
+};
+
 type ResolveSyncReviewResult = NormalizedCommandResult<{
   action?: "already_resolved" | "resolved" | "rejected";
   projectedCount?: number;
@@ -742,6 +748,7 @@ function SyncReviewTimeline({
 type SyncReviewSaleSummary = NonNullable<PosReconciliationItem["sale"]> & {
   inventoryReviews: NonNullable<PosReconciliationItem["inventoryReview"]>[];
   reasons: string[];
+  reviewItems: PosReconciliationItem[];
   sequences: number[];
 };
 
@@ -772,6 +779,7 @@ function getSyncReviewSaleSummaries(items: PosReconciliationItem[]) {
       ...item.sale,
       inventoryReviews: [],
       reasons: [],
+      reviewItems: [],
       sequences: [],
     };
 
@@ -798,6 +806,7 @@ function getSyncReviewSaleSummaries(items: PosReconciliationItem[]) {
 
     salesByKey.set(key, {
       ...nextSale,
+      reviewItems: [...nextSale.reviewItems, item],
       sequences: nextSale.sequences.sort((left, right) => left - right),
     });
   }
@@ -959,11 +968,18 @@ function InventoryReviewList({
 
 function SalesUnderReviewList({
   currency,
+  isResolving,
+  onReviewDecision,
   orgUrlSlug,
   sales,
   storeUrlSlug,
 }: {
   currency: string;
+  isResolving?: boolean;
+  onReviewDecision?: (
+    decision: "approved" | "rejected",
+    options?: ResolveSyncReviewDecisionOptions,
+  ) => void;
   orgUrlSlug?: string;
   sales: SyncReviewSaleSummary[];
   storeUrlSlug?: string;
@@ -1168,12 +1184,111 @@ function SalesUnderReviewList({
                     sale={sale}
                     storeUrlSlug={storeUrlSlug}
                   />
+                  {onReviewDecision && sale.reviewItems.length > 0 ? (
+                    <RegisterSyncReviewItemDecisionList
+                      isResolving={isResolving}
+                      items={sale.reviewItems}
+                      onReviewDecision={onReviewDecision}
+                    />
+                  ) : null}
                 </div>
               </AccordionContent>
             </AccordionItem>
           );
         })}
       </Accordion>
+    </div>
+  );
+}
+
+function RegisterSyncReviewItemDecisionList({
+  isResolving,
+  items,
+  onReviewDecision,
+}: {
+  isResolving?: boolean;
+  items: PosReconciliationItem[];
+  onReviewDecision: (
+    decision: "approved" | "rejected",
+    options?: ResolveSyncReviewDecisionOptions,
+  ) => void;
+}) {
+  const duplicateItems = items.filter(isDuplicateLocalIdRegisterSyncReviewItem);
+  const decisionItems =
+    duplicateItems.length > 0 ? duplicateItems : items;
+  const actionableItems = decisionItems.filter((item) => item.id);
+
+  if (actionableItems.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="space-y-layout-xs">
+      <div className="space-y-1">
+        <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+          Review decisions
+        </p>
+        <p className="text-xs leading-5 text-muted-foreground">
+          Resolve only the review item that matches this sale decision.
+        </p>
+      </div>
+      <div className="grid gap-layout-xs">
+        {actionableItems.map((item, index) => {
+          const labels = getRegisterSyncReviewItemActionLabels(item);
+          const reviewConflictIds = item.id ? [item.id] : undefined;
+
+          return (
+            <article
+              className="grid gap-layout-sm rounded-md border border-border/70 bg-background/80 p-layout-sm sm:grid-cols-[minmax(0,1fr)_auto]"
+              key={item.id ?? `${item.type ?? "review"}-${index}`}
+            >
+              <div className="min-w-0 space-y-1">
+                <p className="text-xs font-medium text-foreground">
+                  {formatPosReconciliationType(item.type, item)}
+                </p>
+                <p className="text-xs leading-5 text-muted-foreground">
+                  {getRegisterSyncReviewItemSummary(item)}
+                </p>
+              </div>
+              <div className="flex flex-col gap-layout-xs sm:flex-row sm:items-center">
+                {isApprovableRegisterSyncReviewItem(item) ? (
+                  <LoadingButton
+                    className="w-full sm:w-auto"
+                    disabled={isResolving}
+                    isLoading={Boolean(isResolving)}
+                    onClick={() =>
+                      onReviewDecision("approved", {
+                        approveLabel: labels.approveLabel,
+                        reviewConflictIds,
+                      })
+                    }
+                    size="sm"
+                    type="button"
+                    variant="workflow"
+                  >
+                    {labels.approveLabel}
+                  </LoadingButton>
+                ) : null}
+                <Button
+                  className="w-full border-destructive/30 bg-background text-destructive hover:bg-destructive/10 hover:text-destructive sm:w-auto"
+                  disabled={isResolving}
+                  onClick={() =>
+                    onReviewDecision("rejected", {
+                      rejectLabel: labels.rejectLabel,
+                      reviewConflictIds,
+                    })
+                  }
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                >
+                  {labels.rejectLabel}
+                </Button>
+              </div>
+            </article>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -1327,6 +1442,117 @@ function getCombinedReviewNextStep(items: PosReconciliationItem[]) {
   return "Manager sign-in reviews and applies the synced register activity to this drawer.";
 }
 
+function isInventoryRegisterSyncReviewItem(item: PosReconciliationItem) {
+  return (
+    item.reviewKind === "inventory_review" ||
+    item.type === "inventory" ||
+    item.type === "inventory_conflict"
+  );
+}
+
+function isDuplicateLocalIdRegisterSyncReviewItem(item: PosReconciliationItem) {
+  const summary = item.summary?.trim().toLowerCase() ?? "";
+
+  return (
+    item.type === "duplicate_local_id" ||
+    summary.includes("session id was reused") ||
+    summary.includes("duplicate")
+  );
+}
+
+function getRegisterSyncReviewItemActionLabels(item: PosReconciliationItem) {
+  if (isDuplicateLocalIdRegisterSyncReviewItem(item)) {
+    return {
+      approveLabel: "Apply duplicate review item",
+      rejectLabel: "Reject duplicate review item",
+    };
+  }
+
+  if (isInventoryRegisterSyncReviewItem(item)) {
+    return {
+      approveLabel: "Apply inventory review item",
+      rejectLabel: "Reject inventory review item",
+    };
+  }
+
+  return {
+    approveLabel: "Apply review item",
+    rejectLabel: "Reject review item",
+  };
+}
+
+function getRegisterSyncReviewItemSummary(item: PosReconciliationItem) {
+  if (isDuplicateLocalIdRegisterSyncReviewItem(item)) {
+    return "Local register activity already synced from another sale. Reject this item unless the sale needs to be reviewed again.";
+  }
+
+  if (isInventoryRegisterSyncReviewItem(item)) {
+    return "Inventory needs manager review before this synced sale can be applied.";
+  }
+
+  if (item.reviewKind === "register_closeout_variance") {
+    return "Closeout variance needs manager review before this synced closeout can be applied.";
+  }
+
+  if (item.reviewKind === "duplicate_register_closeout") {
+    return "This synced closeout has already been reviewed. Reject this item to clear it.";
+  }
+
+  if (
+    item.reviewKind === "service_customer_attribution" ||
+    item.summary?.trim() === SERVICE_CUSTOMER_ATTRIBUTION_SYNC_REVIEW_SUMMARY
+  ) {
+    return "Service customer attribution is missing. Reject this item, then recreate the service work with a customer if needed.";
+  }
+
+  if (
+    item.reviewKind === "staff_access" ||
+    item.summary?.trim() === STAFF_ACCESS_SYNC_REVIEW_SUMMARY
+  ) {
+    return "Staff access changed before this local register activity synced.";
+  }
+
+  if (
+    item.reviewKind === "register_not_open_sale" ||
+    item.summary?.trim() === REGISTER_NOT_OPEN_SYNC_REVIEW_SUMMARY
+  ) {
+    return "Drawer state needs manager review before this synced sale can be applied.";
+  }
+
+  return "Review synced register activity before it is applied.";
+}
+
+function getRegisterSyncReviewDecisionScope(item: PosReconciliationItem) {
+  if (isDuplicateLocalIdRegisterSyncReviewItem(item)) {
+    return "duplicate_local_id";
+  }
+
+  if (isInventoryRegisterSyncReviewItem(item)) {
+    return "inventory";
+  }
+
+  if (isRegisterCloseoutReviewItem(item)) {
+    return "register_closeout";
+  }
+
+  if (
+    item.reviewKind === "service_customer_attribution" ||
+    item.summary?.trim() === SERVICE_CUSTOMER_ATTRIBUTION_SYNC_REVIEW_SUMMARY
+  ) {
+    return "service_customer_attribution";
+  }
+
+  return `${item.actionPolicy ?? "default"}:${item.reviewKind ?? item.type ?? "unknown"}`;
+}
+
+function hasUniformRegisterSyncReviewDecisionScope(
+  items: PosReconciliationItem[],
+) {
+  const scopes = new Set(items.map(getRegisterSyncReviewDecisionScope));
+
+  return scopes.size <= 1;
+}
+
 function RegisterSessionSyncNotice({
   currency,
   errorMessage,
@@ -1339,7 +1565,10 @@ function RegisterSessionSyncNotice({
   currency: string;
   errorMessage?: string;
   isResolving?: boolean;
-  onReviewDecision?: (decision: "approved" | "rejected") => void;
+  onReviewDecision?: (
+    decision: "approved" | "rejected",
+    options?: ResolveSyncReviewDecisionOptions,
+  ) => void;
   orgUrlSlug?: string;
   storeUrlSlug?: string;
   syncStatus: PosSyncStatusPresentation;
@@ -1402,7 +1631,29 @@ function RegisterSessionSyncNotice({
     reconciliationItems.some(
       (item) => !isApprovableRegisterSyncReviewItem(item),
     );
+  const hasUniformBatchReviewDecision =
+    !shouldCombineReviewItems ||
+    hasUniformRegisterSyncReviewDecisionScope(reconciliationItems);
   const canApplySyncReview = canApproveSyncReview && !hasUnsupportedReviewItems;
+  const shouldShowRejectedReviewAction =
+    syncStatus.status === "needs_review" &&
+    hasOnlyRejectedReviewItems &&
+    Boolean(onReviewDecision);
+  const shouldShowRejectedReviewRetryLink =
+    syncStatus.status === "needs_review" &&
+    hasOnlyRejectedReviewItems &&
+    !onReviewDecision &&
+    Boolean(orgUrlSlug && storeUrlSlug);
+  const shouldShowNeedsReviewBatchActions =
+    syncStatus.status === "needs_review" &&
+    !hasOnlyRejectedReviewItems &&
+    Boolean(onReviewDecision) &&
+    hasUniformBatchReviewDecision;
+  const shouldShowSyncFooter =
+    shouldShowRejectedReviewAction ||
+    shouldShowRejectedReviewRetryLink ||
+    shouldShowNeedsReviewBatchActions ||
+    syncStatus.status !== "needs_review";
   const rejectedSyncQueueSummary = hasOnlyRejectedReviewItems
     ? formatReviewQueueSummary(reconciliationItems)
     : null;
@@ -1532,6 +1783,8 @@ function RegisterSessionSyncNotice({
                 </div>
                 <SalesUnderReviewList
                   currency={currency}
+                  isResolving={isResolving}
+                  onReviewDecision={onReviewDecision}
                   orgUrlSlug={orgUrlSlug}
                   sales={syncReviewSaleSummaries}
                   storeUrlSlug={storeUrlSlug}
@@ -1689,76 +1942,72 @@ function RegisterSessionSyncNotice({
             <p className="text-sm leading-6 text-destructive">{errorMessage}</p>
           ) : null}
         </div>
-        <div
-          className={cn(
-            "flex w-full flex-col gap-layout-sm border-t pt-layout-md sm:flex-row sm:flex-wrap sm:items-center",
-            hasCloseoutReview ? "border-amber-200/70" : "border-border/70",
-          )}
-        >
-          {syncStatus.status === "needs_review" &&
-          hasOnlyRejectedReviewItems &&
-          onReviewDecision ? (
-            <LoadingButton
-              className="w-full border-border bg-background text-foreground hover:bg-muted sm:w-auto"
-              disabled={isResolving}
-              isLoading={Boolean(isResolving)}
-              onClick={() => onReviewDecision("approved")}
-              size="sm"
-              type="button"
-              variant="outline"
-            >
-              Override and sync events
-            </LoadingButton>
-          ) : syncStatus.status === "needs_review" &&
-            hasOnlyRejectedReviewItems &&
-            orgUrlSlug &&
-            storeUrlSlug ? (
-            <Button
-              asChild
-              className="w-full border-border bg-background text-foreground hover:bg-muted sm:w-auto"
-              size="sm"
-              variant="outline"
-            >
-              <Link
-                params={{ orgUrlSlug, storeUrlSlug }}
-                search={{ o: getOrigin() }}
-                to="/$orgUrlSlug/store/$storeUrlSlug/pos/register"
-              >
-                <span>Open POS to retry sync</span>
-                <ArrowUpRight className="size-3.5" aria-hidden="true" />
-              </Link>
-            </Button>
-          ) : null}
-          {syncStatus.status === "needs_review" &&
-          !hasOnlyRejectedReviewItems &&
-          onReviewDecision ? (
-            <>
-              {canApplySyncReview ? (
-                <LoadingButton
-                  className="w-full sm:w-auto"
-                  disabled={isResolving}
-                  isLoading={Boolean(isResolving)}
-                  onClick={() => onReviewDecision("approved")}
-                  size="sm"
-                  type="button"
-                  variant="workflow"
-                >
-                  {actionCopy.approveLabel}
-                </LoadingButton>
-              ) : null}
-              <Button
-                className="w-full border-destructive/30 bg-background text-destructive hover:bg-destructive/10 hover:text-destructive sm:w-auto"
+        {shouldShowSyncFooter ? (
+          <div
+            className={cn(
+              "flex w-full flex-col gap-layout-sm border-t pt-layout-md sm:flex-row sm:flex-wrap sm:items-center",
+              hasCloseoutReview ? "border-amber-200/70" : "border-border/70",
+            )}
+          >
+            {shouldShowRejectedReviewAction ? (
+              <LoadingButton
+                className="w-full border-border bg-background text-foreground hover:bg-muted sm:w-auto"
                 disabled={isResolving}
-                onClick={() => onReviewDecision("rejected")}
+                isLoading={Boolean(isResolving)}
+                onClick={() => onReviewDecision?.("approved")}
                 size="sm"
                 type="button"
                 variant="outline"
               >
-                {actionCopy.rejectLabel}
+                Override and sync events
+              </LoadingButton>
+            ) : shouldShowRejectedReviewRetryLink &&
+              orgUrlSlug &&
+              storeUrlSlug ? (
+              <Button
+                asChild
+                className="w-full border-border bg-background text-foreground hover:bg-muted sm:w-auto"
+                size="sm"
+                variant="outline"
+              >
+                <Link
+                  params={{ orgUrlSlug, storeUrlSlug }}
+                  search={{ o: getOrigin() }}
+                  to="/$orgUrlSlug/store/$storeUrlSlug/pos/register"
+                >
+                  <span>Open POS to retry sync</span>
+                  <ArrowUpRight className="size-3.5" aria-hidden="true" />
+                </Link>
               </Button>
-            </>
-          ) : null}
-          {syncStatus.status !== "needs_review" ? (
+            ) : null}
+            {shouldShowNeedsReviewBatchActions ? (
+              <>
+                {canApplySyncReview ? (
+                  <LoadingButton
+                    className="w-full sm:w-auto"
+                    disabled={isResolving}
+                    isLoading={Boolean(isResolving)}
+                    onClick={() => onReviewDecision?.("approved")}
+                    size="sm"
+                    type="button"
+                    variant="workflow"
+                  >
+                    {actionCopy.approveLabel}
+                  </LoadingButton>
+                ) : null}
+                <Button
+                  className="w-full border-destructive/30 bg-background text-destructive hover:bg-destructive/10 hover:text-destructive sm:w-auto"
+                  disabled={isResolving}
+                  onClick={() => onReviewDecision?.("rejected")}
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                >
+                  {actionCopy.rejectLabel}
+                </Button>
+              </>
+            ) : null}
+            {syncStatus.status !== "needs_review" ? (
             <Badge
               className={getSyncBadgeClass(syncStatus.tone)}
               size="sm"
@@ -1768,8 +2017,9 @@ function RegisterSessionSyncNotice({
                 ? `${syncStatus.pendingEventCount} pending`
                 : syncStatus.label}
             </Badge>
-          ) : null}
-        </div>
+            ) : null}
+          </div>
+        ) : null}
       </div>
     </section>
   );
@@ -2790,7 +3040,10 @@ export function RegisterSessionViewContent({
     syncStatus.status === "needs_review" && Boolean(onResolveSyncReview);
   const headerTerminalName = registerSession?.terminalName?.trim();
 
-  function requestResolveSyncReview(decision: "approved" | "rejected") {
+  function requestResolveSyncReview(
+    decision: "approved" | "rejected",
+    options: ResolveSyncReviewDecisionOptions = {},
+  ) {
     if (!registerSession || !canResolveSyncReview) {
       return;
     }
@@ -2809,15 +3062,16 @@ export function RegisterSessionViewContent({
     setCloseoutStaffAuthIntent({
       kind: "sync_review",
       decision,
-      approveLabel: actionCopy.approveLabel,
+      approveLabel: options.approveLabel ?? actionCopy.approveLabel,
       registerSessionId: registerSession._id,
-      rejectLabel: actionCopy.rejectLabel,
+      rejectLabel: options.rejectLabel ?? actionCopy.rejectLabel,
       reviewConflictIds:
-        isRegisterCloseoutSyncReview && pendingCloseoutReviewItem?.id
+        options.reviewConflictIds ??
+        (isRegisterCloseoutSyncReview && pendingCloseoutReviewItem?.id
           ? [pendingCloseoutReviewItem.id]
           : visibleReviewConflictIds.length > 0
             ? visibleReviewConflictIds
-          : undefined,
+            : undefined),
     });
   }
   const sessionCode = registerSession
@@ -3002,6 +3256,7 @@ export function RegisterSessionViewContent({
             isLoading={pendingCloseoutAction === "approved"}
             onClick={() => void handleReviewCloseout("approved")}
             type="button"
+            variant="workflow"
           >
             Approve variance
           </LoadingButton>
