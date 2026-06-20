@@ -294,6 +294,47 @@ export async function listCompletedTransactions(
     .slice(0, limit);
 }
 
+export async function listCompletedTransactionsSince(
+  ctx: QueryCtx,
+  args: {
+    completedFrom: number;
+    limit?: number;
+    storeId: Id<"store">;
+  },
+) {
+  return ctx.db
+    .query("posTransaction")
+    .withIndex("by_storeId_status_completedAt", (q) =>
+      q
+        .eq("storeId", args.storeId)
+        .eq("status", "completed")
+        .gte("completedAt", args.completedFrom),
+    )
+    .order("desc")
+    .take(args.limit ?? 400);
+}
+
+export async function listCompletedTransactionsForRange(
+  ctx: QueryCtx,
+  args: {
+    completedFrom: number;
+    completedTo: number;
+    storeId: Id<"store">;
+  },
+) {
+  return readAllQueryResults(
+    ctx.db
+      .query("posTransaction")
+      .withIndex("by_storeId_status_completedAt", (q) =>
+        q
+          .eq("storeId", args.storeId)
+          .eq("status", "completed")
+          .gte("completedAt", args.completedFrom)
+          .lte("completedAt", args.completedTo),
+      ),
+  );
+}
+
 export async function listCompletedTransactionsForDay(
   ctx: QueryCtx,
   args: {

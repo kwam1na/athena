@@ -54,10 +54,10 @@ highest-priority blocker guidance when a surface has opted in.
 
 The coordinator should not encode presentation rules for individual routes.
 Surfaces that need a different communication shape opt in through
-`UpdateCommunicationPreferenceProvider`. The default remains the persistent
-banner. POS register surfaces opt in to persistent toast communication so the
-update notice does not shift the register shell or compete with the checkout
-workspace. Both modes use the same coordinator state and the same Refresh action.
+`UpdateCommunicationPreferenceProvider`. The default is a bottom-left ghost
+button that keeps update availability visible without shifting the application
+layout. Persistent top banner and toast communication remain explicit variants.
+All modes use the same coordinator state and the same apply action.
 
 ## Remote Terminal Update Commands
 
@@ -104,10 +104,9 @@ POS registers a critical blocker only for active sale work, checkout mutations,
 drawer/register transitions, or local runtime save risk. An idle register does
 not defer refresh merely because it is the POS route.
 
-POS register routes also opt in to toast communication for update-ready notices.
-This is a surface preference, not a coordinator rule: adding another route that
-needs toast behavior should wrap that surface with the same preference provider
-instead of branching on route names inside the coordinator.
+Routes can opt into non-default update communication when the surface genuinely
+needs it. That preference should stay owned by the surface instead of branching
+on route names inside the coordinator.
 
 Inventory Import registers while review work is not safely resumable, a save or
 stage command is active, or autosave has failed. Once import work is saved to

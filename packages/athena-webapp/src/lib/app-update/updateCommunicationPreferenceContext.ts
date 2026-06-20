@@ -1,6 +1,6 @@
 import { createContext } from "react";
 
-export type UpdateCommunicationVariant = "banner" | "toast";
+export type UpdateCommunicationVariant = "ghost" | "banner" | "toast";
 
 export type UpdateCommunicationPreferenceInput = {
   surfaceId: string;
@@ -16,7 +16,7 @@ export type UpdateCommunicationPreferenceContextValue = {
 };
 
 export const DEFAULT_UPDATE_COMMUNICATION_VARIANT: UpdateCommunicationVariant =
-  "banner";
+  "ghost";
 
 export const UpdateCommunicationPreferenceContext =
   createContext<UpdateCommunicationPreferenceContextValue | null>(null);

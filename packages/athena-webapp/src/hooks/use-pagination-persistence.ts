@@ -49,14 +49,23 @@ export function usePaginationPersistence({
 
   // Persist pagination changes to localStorage
   useEffect(() => {
-    localStorage.setItem(pageIndexKey, pagination.pageIndex.toString());
+    if (controlledPageIndex === undefined) {
+      localStorage.setItem(pageIndexKey, pagination.pageIndex.toString());
+    }
+
     localStorage.setItem(pageSizeKey, pagination.pageSize.toString());
 
     if (lastNotifiedPageIndexRef.current !== pagination.pageIndex) {
       lastNotifiedPageIndexRef.current = pagination.pageIndex;
       onPageIndexChange?.(pagination.pageIndex);
     }
-  }, [onPageIndexChange, pagination, pageIndexKey, pageSizeKey]);
+  }, [
+    controlledPageIndex,
+    onPageIndexChange,
+    pagination,
+    pageIndexKey,
+    pageSizeKey,
+  ]);
 
   return { pagination, setPagination };
 }

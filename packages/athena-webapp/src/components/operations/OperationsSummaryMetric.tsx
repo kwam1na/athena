@@ -28,6 +28,7 @@ function buildParams(
 export function OperationsSummaryMetric({
   className,
   helper,
+  helperClassName,
   label,
   labelClassName,
   link,
@@ -36,7 +37,8 @@ export function OperationsSummaryMetric({
   valueClassName,
 }: {
   className?: string;
-  helper?: string;
+  helper?: ReactNode;
+  helperClassName?: string;
   label: string;
   labelClassName?: string;
   link?: OperationsSummaryMetricLink;
@@ -96,7 +98,14 @@ export function OperationsSummaryMetric({
         {value}
       </p>
       {helper ? (
-        <p className="mt-1 text-xs leading-5 text-muted-foreground">{helper}</p>
+        <p
+          className={cn(
+            "mt-1 text-xs leading-5 text-muted-foreground",
+            helperClassName,
+          )}
+        >
+          {helper}
+        </p>
       ) : null}
     </div>
   );

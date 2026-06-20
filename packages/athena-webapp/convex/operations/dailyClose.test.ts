@@ -3,12 +3,15 @@ import type { Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import {
   buildDailyCloseSnapshotWithCtx,
+  completeDailyClose,
   completeDailyCloseWithCtx,
   getCompletedDailyCloseHistoryDetailWithCtx,
   getDailyCloseOpeningContextWithCtx,
   listCompletedDailyCloseHistoryWithCtx,
+  reopenDailyClose,
   reopenDailyCloseWithCtx,
 } from "./dailyClose";
+import { assertConformsToExportedReturns } from "../lib/returnValidatorContract";
 
 type TableName =
   | "approvalProof"
@@ -440,6 +443,22 @@ describe("end-of-day review backend foundation", () => {
           subjectId: "txn-next-day",
           subjectType: "pos_transaction",
         },
+        {
+          _id: "approval-prior-closeout",
+          createdAt: Date.UTC(2026, 4, 6, 21),
+          metadata: {
+            countedCash: 1535,
+            expectedCash: 1535,
+            variance: 0,
+          },
+          notes: "Closeout submitted on its operating day.",
+          registerSessionId: "register-prior-closeout",
+          requestType: "variance_review",
+          status: "pending",
+          storeId: "store-1",
+          subjectId: "register-prior-closeout",
+          subjectType: "register_session",
+        },
       ],
       operationalWorkItem: [
         {
@@ -649,6 +668,19 @@ describe("end-of-day review backend foundation", () => {
           terminalId: "terminal-1",
         },
         {
+          _id: "register-prior-closeout",
+          countedCash: 1535,
+          expectedCash: 1535,
+          managerApprovalRequestId: "approval-prior-closeout",
+          openedAt: Date.UTC(2026, 4, 6, 10),
+          openingFloat: 1535,
+          registerNumber: "A0",
+          status: "closing",
+          storeId: "store-1",
+          terminalId: "terminal-1",
+          variance: 0,
+        },
+        {
           _id: "register-closing",
           countedCash: 8000,
           expectedCash: 10000,
@@ -702,6 +734,12 @@ describe("end-of-day review backend foundation", () => {
       "register_session:register-open:open",
       "pos_session:pos-held:held",
     ]);
+    expect(snapshot.blockers.map((item) => item.key)).not.toContain(
+      "approval_request:approval-prior-closeout:pending",
+    );
+    expect(snapshot.blockers.map((item) => item.key)).not.toContain(
+      "register_session:register-prior-closeout:closing",
+    );
     expect(snapshot.blockers[2].metadata).toMatchObject({
       openedAt: Date.UTC(2026, 4, 6, 20),
       operatingScope: "Carried over from prior day",
@@ -1702,6 +1740,9 @@ describe("end-of-day review backend foundation", () => {
         metadata: { blockerCount: 1 },
       },
     });
+    expect(() =>
+      assertConformsToExportedReturns(completeDailyClose, result),
+    ).not.toThrow();
     expect(inserts).toEqual([]);
   });
 
@@ -1801,6 +1842,9 @@ describe("end-of-day review backend foundation", () => {
         },
       },
     });
+    expect(() =>
+      assertConformsToExportedReturns(completeDailyClose, result),
+    ).not.toThrow();
     expect(inserts).toEqual([]);
   });
 
@@ -2027,6 +2071,9 @@ describe("end-of-day review backend foundation", () => {
         },
       },
     });
+    expect(() =>
+      assertConformsToExportedReturns(reopenDailyClose, result),
+    ).not.toThrow();
     expect(inserts).toEqual([]);
   });
 

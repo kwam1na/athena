@@ -66,6 +66,23 @@ type DailyCloseItem = {
   metadata?: Record<string, unknown>;
 };
 
+type DailyCloseRange = { endAt: number; startAt: number };
+
+type RegisterSessionRangeCandidate = Pick<
+  Doc<"registerSession">,
+  | "closedAt"
+  | "closeoutRecords"
+  | "countedCash"
+  | "managerApprovalRequestId"
+  | "openedAt"
+  | "status"
+>;
+
+type RegisterSessionCloseoutApproval = Pick<
+  Doc<"approvalRequest">,
+  "createdAt" | "requestType"
+>;
+
 type DailyCloseReadinessStatus = "blocked" | "needs_review" | "ready";
 
 type DailyCloseReadiness = {
@@ -458,14 +475,21 @@ function isInRange(value: unknown, startAt: number, endAt: number) {
 }
 
 function registerSessionCloseoutOperatingAt(
-  session: Pick<Doc<"registerSession">, "closedAt" | "closeoutRecords">,
+  session: RegisterSessionRangeCandidate,
+  closeoutApproval?: RegisterSessionCloseoutApproval,
 ) {
   const firstClosedRecord = session.closeoutRecords?.find(
     (record) =>
       record.type === "closed" && typeof record.occurredAt === "number",
   );
+  const closeoutSubmittedAt =
+    session.status === "closing" &&
+    typeof session.countedCash === "number" &&
+    closeoutApproval?.requestType === "variance_review"
+      ? closeoutApproval.createdAt
+      : undefined;
 
-  return firstClosedRecord?.occurredAt ?? session.closedAt;
+  return firstClosedRecord?.occurredAt ?? closeoutSubmittedAt ?? session.closedAt;
 }
 
 function registerSessionLabel(
@@ -591,6 +615,56 @@ async function buildRegisterSessionsById(
   );
 
   return new Map(registerSessionEntries);
+}
+
+async function buildApprovalRequestsById(
+  ctx: Pick<QueryCtx, "db">,
+  approvalRequestIds: Array<Id<"approvalRequest"> | null | undefined>,
+) {
+  const uniqueApprovalRequestIds = Array.from(
+    new Set(approvalRequestIds.filter(Boolean) as Id<"approvalRequest">[]),
+  );
+  const approvalRequestEntries = await Promise.all(
+    uniqueApprovalRequestIds.map(async (approvalRequestId) => {
+      const approvalRequest = await ctx.db.get(
+        "approvalRequest",
+        approvalRequestId,
+      );
+      return [approvalRequestId, approvalRequest] as const;
+    }),
+  );
+
+  return new Map(approvalRequestEntries);
+}
+
+function closeoutApprovalForRegisterSession(
+  session: Pick<Doc<"registerSession">, "managerApprovalRequestId">,
+  approvalRequestsById: Map<Id<"approvalRequest">, Doc<"approvalRequest"> | null>,
+) {
+  return session.managerApprovalRequestId
+    ? (approvalRequestsById.get(session.managerApprovalRequestId) ?? undefined)
+    : undefined;
+}
+
+async function filterRegisterSessionsBelongingToRange<
+  TSession extends RegisterSessionRangeCandidate,
+>(
+  ctx: Pick<QueryCtx, "db">,
+  sessions: TSession[],
+  range: DailyCloseRange,
+) {
+  const approvalRequestsById = await buildApprovalRequestsById(
+    ctx,
+    sessions.map((session) => session.managerApprovalRequestId),
+  );
+
+  return sessions.filter((session) =>
+    registerSessionBelongsToRange(
+      session,
+      range,
+      closeoutApprovalForRegisterSession(session, approvalRequestsById),
+    ),
+  );
 }
 
 async function buildExpenseSessionsById(
@@ -751,7 +825,7 @@ async function listClosedRegisterSessionsForDay(
 
 function registerSessionIntersectsRange(
   session: Pick<Doc<"registerSession">, "closedAt" | "openedAt">,
-  range: { endAt: number; startAt: number },
+  range: DailyCloseRange,
 ) {
   return (
     session.openedAt < range.endAt &&
@@ -760,13 +834,14 @@ function registerSessionIntersectsRange(
 }
 
 function registerSessionBelongsToRange(
-  session: Pick<
-    Doc<"registerSession">,
-    "closedAt" | "closeoutRecords" | "openedAt"
-  >,
-  range: { endAt: number; startAt: number },
+  session: RegisterSessionRangeCandidate,
+  range: DailyCloseRange,
+  closeoutApproval?: RegisterSessionCloseoutApproval,
 ) {
-  const closeoutOperatingAt = registerSessionCloseoutOperatingAt(session);
+  const closeoutOperatingAt = registerSessionCloseoutOperatingAt(
+    session,
+    closeoutApproval,
+  );
 
   if (typeof closeoutOperatingAt === "number") {
     return isInRange(closeoutOperatingAt, range.startAt, range.endAt);
@@ -824,7 +899,7 @@ async function approvalBelongsToRange(
     );
 
     if (registerSession) {
-      return registerSessionBelongsToRange(registerSession, range);
+      return registerSessionBelongsToRange(registerSession, range, approval);
     }
   }
 
@@ -1577,8 +1652,10 @@ export async function buildDailyCloseSnapshotWithCtx(
     getPriorCompletedDailyClose(ctx, args),
   ]);
 
-  const activeRegisterSessions = activeRegisterSessionsForStore.filter(
-    (session) => registerSessionBelongsToRange(session, range),
+  const activeRegisterSessions = await filterRegisterSessionsBelongingToRange(
+    ctx,
+    activeRegisterSessionsForStore,
+    range,
   );
   const relevantRegisterSessions = [
     ...activeRegisterSessions,

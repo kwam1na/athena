@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link, useSearch } from "@tanstack/react-router";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 import {
   ArrowUpRight,
@@ -18,6 +18,7 @@ import {
   PageLevelHeader,
   PageWorkspace,
 } from "../../common/PageLevelHeader";
+import { Button } from "../../ui/button";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { api } from "~/convex/_generated/api";
 import { currencyFormatter, capitalizeWords } from "~/convex/utils";
@@ -48,6 +49,10 @@ function formatRegisterFilterLabel(registerNumber?: string | null) {
     : `Register ${trimmedRegisterNumber}`;
 }
 
+const completedTransactionBatchSize = 100;
+const completedTransactionPageSize = 10;
+type TransactionTimeFilter = "today" | "fromDate" | "all";
+
 // Helper to check if timestamp is today
 const isToday = (timestamp: number) => {
   const date = new Date(timestamp);
@@ -70,6 +75,76 @@ function formatOperatingDateFilterLabel(operatingDate: string) {
     day: "numeric",
     year: "numeric",
   });
+}
+
+function getPageIndexFromSearch(page?: unknown) {
+  const parsedPage = typeof page === "number" ? page : Number(page);
+
+  return Number.isInteger(parsedPage) && parsedPage > 0 ? parsedPage - 1 : 0;
+}
+
+function getCompletedTransactionLimitForPage(pageIndex: number) {
+  const requestedRows = (pageIndex + 1) * completedTransactionPageSize;
+
+  return Math.max(
+    completedTransactionBatchSize,
+    Math.ceil(requestedRows / completedTransactionBatchSize) *
+      completedTransactionBatchSize,
+  );
+}
+
+function getNextTransactionPageSearch(
+  current: Record<string, unknown>,
+  pageIndex: number,
+) {
+  const next = { ...current };
+  const page = pageIndex + 1;
+
+  if (page <= 1) {
+    delete next.page;
+  } else {
+    next.page = page;
+  }
+
+  return next;
+}
+
+function getTransactionTimeFilter({
+  operatingDateStartAt,
+  registerSessionId,
+  timeRange,
+}: {
+  operatingDateStartAt: number | null;
+  registerSessionId?: string;
+  timeRange?: unknown;
+}): TransactionTimeFilter {
+  if (timeRange === "today" || timeRange === "all") {
+    return timeRange;
+  }
+
+  if (timeRange === "fromDate" && operatingDateStartAt !== null) {
+    return "fromDate";
+  }
+
+  if (operatingDateStartAt !== null) {
+    return "fromDate";
+  }
+
+  if (registerSessionId) {
+    return "all";
+  }
+
+  return "today";
+}
+
+function getNextTransactionTimeFilterSearch(
+  current: Record<string, unknown>,
+  timeRange: TransactionTimeFilter,
+) {
+  return {
+    ...getNextTransactionPageSearch(current, 0),
+    timeRange,
+  };
 }
 
 type CompletedTransaction = {
@@ -203,34 +278,58 @@ function TransactionMobileCard({
 
 export function TransactionsView() {
   const { activeStore } = useGetActiveStore();
-  const { operatingDate, paymentMethod, registerSessionId } = useSearch({
-    strict: false,
-  }) as {
+  const navigate = useNavigate();
+  const { operatingDate, page, paymentMethod, registerSessionId, timeRange } =
+    useSearch({
+      strict: false,
+    }) as {
     operatingDate?: string;
+    page?: unknown;
     paymentMethod?: string;
     registerSessionId?: string;
+    timeRange?: unknown;
   };
   const operatingDateStartAt = getStartOfOperatingDate(operatingDate);
-  const [filter, setFilter] = useState<"today" | "fromDate" | "all">(
-    operatingDateStartAt ? "fromDate" : registerSessionId ? "all" : "today",
+  const [filter, setFilter] = useState<TransactionTimeFilter>(() =>
+    getTransactionTimeFilter({
+      operatingDateStartAt,
+      registerSessionId,
+      timeRange,
+    }),
   );
+  const tablePageIndex = getPageIndexFromSearch(page);
+  const minimumLoadedLimit = getCompletedTransactionLimitForPage(tablePageIndex);
+  const [loadedLimit, setLoadedLimit] = useState(minimumLoadedLimit);
   const paymentMethodFilter = paymentMethod?.trim();
   const isOperatingDateFilterActive =
     filter === "fromDate" && operatingDateStartAt !== null;
+  const todayStartAt = useMemo(() => {
+    const today = new Date();
+    return new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate(),
+    ).getTime();
+  }, []);
+  const completedFrom =
+    isOperatingDateFilterActive
+      ? operatingDateStartAt
+      : filter === "today"
+        ? todayStartAt
+        : undefined;
 
   const transactions = useQuery(
     api.inventory.pos.getCompletedTransactions,
     activeStore?._id
       ? {
+          limit: loadedLimit,
           storeId: activeStore._id,
           ...(registerSessionId
             ? {
                 registerSessionId: registerSessionId as Id<"registerSession">,
               }
             : {}),
-          ...(isOperatingDateFilterActive
-            ? { completedFrom: operatingDateStartAt }
-            : {}),
+          ...(completedFrom !== undefined ? { completedFrom } : {}),
         }
       : "skip",
   );
@@ -252,15 +351,16 @@ export function TransactionsView() {
     registerSessionSnapshot?.registerSession?.registerNumber,
   );
   const hasActiveFilter = Boolean(
-    registerSessionId || paymentMethodFilter || operatingDate,
+    registerSessionId || paymentMethodFilter || isOperatingDateFilterActive,
   );
+  const isTransactionBatchFull = (transactions?.length ?? 0) >= loadedLimit;
   const activeFilterSummary = hasActiveFilter
     ? [
         paymentMethodFilter
           ? `${formatPaymentMethod(paymentMethodFilter)} transactions`
           : "transactions",
         registerSessionId ? `linked to ${registerFilterLabel}` : null,
-        operatingDate && operatingDateStartAt !== null
+        isOperatingDateFilterActive && operatingDate
           ? `from ${formatOperatingDateFilterLabel(operatingDate)}`
           : null,
       ]
@@ -314,12 +414,78 @@ export function TransactionsView() {
   }, [tableData, filter, operatingDateStartAt, paymentMethodFilter]);
 
   useEffect(() => {
-    if (operatingDateStartAt) {
-      setFilter("fromDate");
-    } else if (registerSessionId) {
-      setFilter("all");
+    setFilter(
+      getTransactionTimeFilter({
+        operatingDateStartAt,
+        registerSessionId,
+        timeRange,
+      }),
+    );
+  }, [operatingDateStartAt, registerSessionId, timeRange]);
+
+  useEffect(() => {
+    setLoadedLimit(minimumLoadedLimit);
+  }, [
+    filter,
+    minimumLoadedLimit,
+    operatingDateStartAt,
+    paymentMethodFilter,
+    registerSessionId,
+  ]);
+
+  useEffect(() => {
+    setLoadedLimit((currentLimit) =>
+      Math.max(currentLimit, minimumLoadedLimit),
+    );
+  }, [minimumLoadedLimit]);
+
+  const handleTablePageIndexChange = useCallback(
+    (pageIndex: number) => {
+      void navigate({
+        replace: true,
+        search: ((current: Record<string, unknown>) =>
+          getNextTransactionPageSearch(current, pageIndex)) as never,
+      });
+    },
+    [navigate],
+  );
+
+  const handleFilterChange = useCallback(
+    (value: string) => {
+      const nextFilter = value as TransactionTimeFilter;
+
+      setFilter(nextFilter);
+      void navigate({
+        replace: true,
+        search: ((current: Record<string, unknown>) =>
+          getNextTransactionTimeFilterSearch(current, nextFilter)) as never,
+      });
+    },
+    [navigate],
+  );
+
+  useEffect(() => {
+    if (!transactions || isTransactionBatchFull || tablePageIndex === 0) {
+      return;
     }
-  }, [operatingDateStartAt, registerSessionId]);
+
+    const maxPageIndex = Math.max(
+      0,
+      Math.ceil(filteredData.length / completedTransactionPageSize) - 1,
+    );
+
+    if (tablePageIndex <= maxPageIndex) {
+      return;
+    }
+
+    handleTablePageIndexChange(maxPageIndex);
+  }, [
+    filteredData.length,
+    handleTablePageIndexChange,
+    isTransactionBatchFull,
+    tablePageIndex,
+    transactions,
+  ]);
 
   if (!activeStore || !transactions || !formatter) return null;
 
@@ -342,13 +508,29 @@ export function TransactionsView() {
                 Showing {activeFilterSummary}
               </div>
             ) : null}
+            {isTransactionBatchFull ? (
+              <div className="flex flex-col gap-layout-sm rounded-md border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+                <span>
+                  Showing latest {loadedLimit.toLocaleString()} completed
+                  transactions.
+                </span>
+                <Button
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                  onClick={() =>
+                    setLoadedLimit(
+                      (currentLimit) =>
+                        currentLimit + completedTransactionBatchSize,
+                    )
+                  }
+                >
+                  Load more history
+                </Button>
+              </div>
+            ) : null}
 
-            <Tabs
-              value={filter}
-              onValueChange={(v) =>
-                setFilter(v as "today" | "fromDate" | "all")
-              }
-            >
+            <Tabs value={filter} onValueChange={handleFilterChange}>
               <TabsList>
                 <TabsTrigger value="today">Today</TabsTrigger>
                 {operatingDate && operatingDateStartAt !== null ? (
@@ -374,6 +556,8 @@ export function TransactionsView() {
                   <GenericDataTable
                     data={filteredData}
                     columns={transactionColumns}
+                    pageIndex={tablePageIndex}
+                    onPageIndexChange={handleTablePageIndexChange}
                     tableId="pos-completed-transactions"
                   />
                 </div>
