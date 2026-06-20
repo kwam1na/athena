@@ -1,4 +1,5 @@
 import { useQuery } from "convex/react";
+import { useState } from "react";
 import type { ComponentType, ReactNode } from "react";
 import View from "../View";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
@@ -13,7 +14,6 @@ import {
 import { Link, useParams } from "@tanstack/react-router";
 import {
   ScanBarcode,
-  BarChart3,
   Users,
   Settings,
   Receipt,
@@ -27,11 +27,14 @@ import { getOrigin } from "~/src/lib/navigationUtils";
 import { useGetCurrencyFormatter } from "~/src/hooks/useGetCurrencyFormatter";
 import { Badge } from "../ui/badge";
 import { usePermissions } from "~/src/hooks/usePermissions";
-import { toDisplayAmount } from "~/convex/lib/currency";
 import { PageLevelHeader, PageWorkspace } from "../common/PageLevelHeader";
 import { useLocalPosEntryContext } from "@/lib/pos/infrastructure/local/localPosEntryContext";
 import { usePrewarmRegisterCatalogOfflineSnapshots } from "@/lib/pos/infrastructure/convex/catalogGateway";
 import type { Id } from "~/convex/_generated/dataModel";
+import {
+  POSStorePulseSection,
+  type POSStorePulseWindow,
+} from "./sales-pulse/POSSalesPulseView";
 
 type FeatureLinkProps = {
   children: ReactNode;
@@ -55,6 +58,8 @@ const FeatureLink = Link as unknown as ComponentType<FeatureLinkProps>;
 export default function PointOfSaleView() {
   const { activeStore } = useGetActiveStore();
   const { activeOrganization } = useGetActiveOrganization();
+  const [storePulseWindow, setStorePulseWindow] =
+    useState<POSStorePulseWindow>("today");
   const routeParams = useParams({ strict: false }) as
     | {
         orgUrlSlug?: string;
@@ -72,11 +77,12 @@ export default function PointOfSaleView() {
       ? (localEntryContext.storeId as Id<"store">)
       : undefined);
   usePrewarmRegisterCatalogOfflineSnapshots({ storeId: snapshotStoreId });
-  // Get today's POS transaction summary
-  const todaySummary = useQuery(
-    api.inventory.pos.getTodaySummary,
-    activeStore?._id ? { storeId: activeStore._id } : "skip",
-  );
+	  const todaySummary = useQuery(
+	    api.inventory.pos.getTodaySummary,
+	    snapshotStoreId
+	      ? { pulseWindow: storePulseWindow, storeId: snapshotStoreId }
+	      : "skip",
+	  );
 
   // Currency formatter
   const currencyFormatter = useGetCurrencyFormatter();
@@ -134,15 +140,6 @@ export default function PointOfSaleView() {
       available: Boolean(liveLinkParams),
     },
 
-    {
-      title: "Sales Reports",
-      description: "View daily sales and transaction reports",
-      icon: BarChart3,
-      href: "/$orgUrlSlug/store/$storeUrlSlug/analytics" as const,
-      params: liveLinkParams,
-      color: "bg-purple-500",
-      available: false,
-    },
     {
       title: "Transactions",
       description: "View completed transaction history",
@@ -289,95 +286,13 @@ export default function PointOfSaleView() {
             </div>
           </div>
 
-          {/* Store day summary */}
-          <div>
-            <h2 className="text-xl font-medium mb-6">Summary</h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {hasFullAdminAccess && (
-                <>
-                  <div className="border rounded-lg">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm text-muted-foreground">
-                        Total Sales
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-2">
-                      <div className="text-2xl font-bold">
-                        {todaySummary ? (
-                          currencyFormatter.format(
-                            toDisplayAmount(todaySummary.totalSales),
-                          )
-                        ) : (
-                          <span className="text-muted-foreground">--</span>
-                        )}
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        Store day
-                      </p>
-                    </CardContent>
-                  </div>
-                </>
-              )}
-
-              <div className="border rounded-lg">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm text-muted-foreground">
-                    Transactions
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  <div className="text-2xl font-bold">
-                    {todaySummary ? (
-                      todaySummary.totalTransactions
-                    ) : (
-                      <span className="text-muted-foreground">--</span>
-                    )}
-                  </div>
-                  <p className="text-xs text-muted-foreground">Store day</p>
-                </CardContent>
-              </div>
-
-              <div className="border rounded-lg">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm text-muted-foreground">
-                    Items Sold
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  <div className="text-2xl font-bold">
-                    {todaySummary ? (
-                      todaySummary.totalItemsSold
-                    ) : (
-                      <span className="text-muted-foreground">--</span>
-                    )}
-                  </div>
-                  <p className="text-xs text-muted-foreground">Store day</p>
-                </CardContent>
-              </div>
-
-              {/* {hasFullAdminAccess && (
-              <div className="border rounded-lg">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm text-muted-foreground">
-                    Avg. Transaction
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
-                    {todaySummary ? (
-                      currencyFormatter.format(
-                        toDisplayAmount(todaySummary.averageTransaction),
-                      )
-                    ) : (
-                      <span className="text-muted-foreground">--</span>
-                    )}
-                  </div>
-                  <p className="text-xs text-muted-foreground">Store day</p>
-                </CardContent>
-              </div>
-            )} */}
-            </div>
-          </div>
+          <POSStorePulseSection
+            currencyFormatter={currencyFormatter}
+            hasFullAdminAccess={hasFullAdminAccess}
+            onPulseWindowChange={setStorePulseWindow}
+            pulseWindow={storePulseWindow}
+            todaySummary={todaySummary}
+          />
         </PageWorkspace>
       </FadeIn>
     </View>

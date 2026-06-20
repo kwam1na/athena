@@ -32,6 +32,7 @@ const rootPageSchema = z.object({
   query: z.string().optional(),
   scope: z.string().optional(),
   sku: z.string().optional(),
+  timeRange: z.enum(["today", "fromDate", "all"]).optional(),
 });
 
 export const Route = createRootRouteWithContext<{

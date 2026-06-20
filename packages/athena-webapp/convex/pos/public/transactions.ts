@@ -215,6 +215,62 @@ const voidTransactionResultValidator = commandResultValidator(
   }),
 );
 
+const posOperatorSnapshotValidator = v.object({
+  busiestHour: v.union(
+    v.object({
+      hour: v.number(),
+      label: v.string(),
+      totalSales: v.number(),
+      transactionCount: v.number(),
+    }),
+    v.null(),
+  ),
+  comparison: v.object({
+    averageTransactionDeltaPercent: v.number(),
+    currentAverageTransaction: v.number(),
+    currentItemsSold: v.number(),
+    currentSales: v.number(),
+    currentTransactions: v.number(),
+    itemsSoldDeltaPercent: v.number(),
+    salesDeltaPercent: v.number(),
+    transactionDeltaPercent: v.number(),
+    yesterdayAverageTransaction: v.number(),
+    yesterdayItemsSold: v.number(),
+    yesterdaySales: v.number(),
+    yesterdayTransactions: v.number(),
+  }),
+  historyDays: v.number(),
+  isLimited: v.boolean(),
+  paymentMix: v.array(
+    v.object({
+      count: v.number(),
+      label: v.string(),
+      method: v.string(),
+      share: v.number(),
+      total: v.number(),
+    }),
+  ),
+  topItems: v.array(
+    v.object({
+      name: v.string(),
+      productSku: v.union(v.string(), v.null()),
+      quantity: v.number(),
+      totalSales: v.number(),
+    }),
+  ),
+  trend: v.array(
+    v.object({
+      averageTransaction: v.number(),
+      date: v.string(),
+      label: v.string(),
+      totalItemsSold: v.number(),
+      totalSales: v.number(),
+      transactionCount: v.number(),
+    }),
+  ),
+  usableHistoryDays: v.number(),
+});
+
 function mapCorrectionError(error: unknown): CommandResult<never> | null {
   const message = error instanceof Error ? error.message : "";
 
@@ -1086,6 +1142,17 @@ export const getRecentTransactionsWithCustomers = query({
 
 export const getTodaySummary = query({
   args: {
+    pulseWindow: v.optional(
+      v.union(
+        v.literal("today"),
+        v.literal("yesterday"),
+        v.literal("this_week"),
+        v.literal("this_month"),
+        v.literal("all_time"),
+        v.literal("last_week"),
+        v.literal("last_month"),
+      ),
+    ),
     storeId: v.id("store"),
   },
   returns: v.object({
@@ -1094,6 +1161,7 @@ export const getTodaySummary = query({
     totalItemsSold: v.number(),
     averageTransaction: v.number(),
     date: v.string(),
+    operatorSnapshot: posOperatorSnapshotValidator,
   }),
   handler: async (ctx, args) => {
     const access = await requirePosTransactionStoreAccess(ctx, {
@@ -1104,6 +1172,29 @@ export const getTodaySummary = query({
       return {
         averageTransaction: 0,
         date: new Date().toISOString().split("T")[0],
+        operatorSnapshot: {
+          busiestHour: null,
+          comparison: {
+            averageTransactionDeltaPercent: 0,
+            currentAverageTransaction: 0,
+            currentItemsSold: 0,
+            currentSales: 0,
+            currentTransactions: 0,
+            itemsSoldDeltaPercent: 0,
+            salesDeltaPercent: 0,
+            transactionDeltaPercent: 0,
+            yesterdayAverageTransaction: 0,
+            yesterdayItemsSold: 0,
+            yesterdaySales: 0,
+            yesterdayTransactions: 0,
+          },
+          historyDays: 14,
+          isLimited: false,
+          paymentMix: [],
+          topItems: [],
+          trend: [],
+          usableHistoryDays: 0,
+        },
         totalItemsSold: 0,
         totalSales: 0,
         totalTransactions: 0,

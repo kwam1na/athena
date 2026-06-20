@@ -65,10 +65,14 @@ function Probe({
   );
 }
 
-function ToastPreferenceProbe() {
+function CommunicationPreferenceProbe({
+  variant,
+}: {
+  variant: "ghost" | "banner" | "toast";
+}) {
   useUpdateCommunicationPreference({
     surfaceId: "pos-register",
-    variant: "toast",
+    variant,
   });
 
   return null;
@@ -105,7 +109,7 @@ describe("UpdateReadyBanner", () => {
   it("does not show the toast variant while the app is current", () => {
     renderWithUpdateProviders(
       <>
-        <ToastPreferenceProbe />
+        <CommunicationPreferenceProbe variant="toast" />
         <UpdateReadyBanner />
       </>,
     );
@@ -114,7 +118,7 @@ describe("UpdateReadyBanner", () => {
     expect(toastMock.message).not.toHaveBeenCalled();
   });
 
-  it("renders the banner by default and reloads once when no blocker exists", () => {
+  it("renders the bottom-left ghost button by default and reloads once when no blocker exists", () => {
     const reload = vi.fn();
     renderWithUpdateProviders(
       <>
@@ -125,12 +129,13 @@ describe("UpdateReadyBanner", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "mark ready" }));
-    fireEvent.click(screen.getByRole("button", { name: "Update" }));
-    const applyingButton = screen.getByRole("button", { name: "Update" });
+    const applyingButton = screen.getByRole("button", {
+      name: "New Athena version available",
+    });
+    fireEvent.click(applyingButton);
     fireEvent.click(applyingButton);
 
     expect(screen.getByLabelText("Update ready")).toBeInTheDocument();
-    expect(applyingButton.querySelector("svg")).not.toHaveClass("animate-spin");
     expect(reload).toHaveBeenCalledTimes(1);
     expect(toastMock.message).not.toHaveBeenCalled();
   });
@@ -138,7 +143,7 @@ describe("UpdateReadyBanner", () => {
   it("uses a persistent top-right toast instead of the banner when a surface opts in", () => {
     renderWithUpdateProviders(
       <>
-        <ToastPreferenceProbe />
+        <CommunicationPreferenceProbe variant="toast" />
         <Probe />
         <UpdateReadyBanner />
       </>,
@@ -165,6 +170,24 @@ describe("UpdateReadyBanner", () => {
     );
   });
 
+  it("renders the top banner when a surface opts in to the banner variant", () => {
+    const reload = vi.fn();
+    renderWithUpdateProviders(
+      <>
+        <CommunicationPreferenceProbe variant="banner" />
+        <Probe />
+        <UpdateReadyBanner />
+      </>,
+      { reload },
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "mark ready" }));
+
+    expect(screen.getByLabelText("Update ready")).toHaveClass("top-0");
+    fireEvent.click(screen.getByRole("button", { name: "Update" }));
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
   it("shows blocker guidance without an apply action while work is unsafe", () => {
     renderWithUpdateProviders(
       <>
@@ -175,23 +198,24 @@ describe("UpdateReadyBanner", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "mark ready" }));
 
-    expect(
-      screen.getByText("Finish this sale before refreshing."),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "Update" }),
-    ).not.toBeInTheDocument();
+    const updateButton = screen.getByRole("button", {
+      name: "Finish this sale before refreshing.",
+    });
+    expect(updateButton).toBeDisabled();
+    expect(updateButton).toHaveTextContent("Finish this sale before refreshing.");
+    expect(updateButton).toHaveAttribute(
+      "title",
+      "Finish this sale before refreshing.",
+    );
   });
 
-  it("warns about incomplete staging while allowing a manual refresh", async () => {
+  it("warns about incomplete staging in the banner variant while allowing a manual refresh", async () => {
     const user = userEvent.setup();
     const reload = vi.fn();
     renderWithUpdateProviders(
       <>
-        <Probe
-          stagingReason="asset-staging-failed"
-          stagingStatus="unstaged"
-        />
+        <CommunicationPreferenceProbe variant="banner" />
+        <Probe stagingReason="asset-staging-failed" stagingStatus="unstaged" />
         <UpdateReadyBanner />
       </>,
       { reload },

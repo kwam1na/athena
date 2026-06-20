@@ -12,6 +12,8 @@ import {
   getPosTransactionById,
   getRegisterSessionById,
   listCompletedTransactions,
+  listCompletedTransactionsForRange,
+  listCompletedTransactionsSince,
   listCompletedTransactionsForDay,
   listTransactionItems,
 } from "../infrastructure/repositories/transactionRepository";
@@ -22,6 +24,8 @@ vi.mock("../infrastructure/repositories/transactionRepository", () => ({
   getPosTransactionById: vi.fn(),
   getRegisterSessionById: vi.fn(),
   listCompletedTransactions: vi.fn(),
+  listCompletedTransactionsForRange: vi.fn(),
+  listCompletedTransactionsSince: vi.fn(),
   listCompletedTransactionsForDay: vi.fn(),
   listTransactionItems: vi.fn(),
   listTransactionsByStore: vi.fn(),
@@ -30,6 +34,8 @@ vi.mock("../infrastructure/repositories/transactionRepository", () => ({
 beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(getRegisterSessionById).mockResolvedValue(null as never);
+  vi.mocked(listCompletedTransactionsForRange).mockResolvedValue([] as never);
+  vi.mocked(listCompletedTransactionsSince).mockResolvedValue([] as never);
 });
 
 function mockCorrectionHistoryDb(overrides?: {
@@ -308,6 +314,13 @@ describe("getTodaySummary", () => {
     expect(result).toEqual({
       averageTransaction: 13_500,
       date: "2026-06-19",
+      operatorSnapshot: expect.objectContaining({
+        historyDays: 14,
+        paymentMix: [],
+        topItems: [],
+        trend: expect.any(Array),
+        usableHistoryDays: 0,
+      }),
       totalItemsSold: 6,
       totalSales: 27_000,
       totalTransactions: 2,
@@ -382,10 +395,517 @@ describe("getTodaySummary", () => {
     expect(result).toEqual({
       averageTransaction: 0,
       date: "2026-06-20",
+      operatorSnapshot: expect.objectContaining({
+        historyDays: 14,
+        paymentMix: [],
+        topItems: [],
+        trend: expect.any(Array),
+        usableHistoryDays: 0,
+      }),
       totalItemsSold: 0,
       totalSales: 0,
       totalTransactions: 0,
     });
+  });
+
+  it("summarizes this week against the same span from last week", async () => {
+    vi.setSystemTime(new Date("2026-06-20T15:30:00.000Z"));
+    vi.mocked(listCompletedTransactionsForRange).mockResolvedValue([] as never);
+    vi.mocked(listCompletedTransactionsSince).mockResolvedValue([] as never);
+    const query = vi.fn(() => ({
+      withIndex: vi.fn(() => ({
+        collect: vi.fn().mockResolvedValue([]),
+        take: vi.fn().mockResolvedValue([]),
+        order: vi.fn(() => ({
+          take: vi.fn().mockResolvedValue([]),
+        })),
+      })),
+    }));
+
+    const result = await getTodaySummary(
+      {
+        db: { query },
+      } as never,
+      {
+        pulseWindow: "this_week",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(listCompletedTransactionsForRange).toHaveBeenNthCalledWith(
+      1,
+      expect.anything(),
+      {
+        completedFrom: Date.parse("2026-06-15T00:00:00.000Z"),
+        completedTo: Date.parse("2026-06-20T23:59:59.999Z"),
+        storeId: "store-1",
+      },
+    );
+    expect(listCompletedTransactionsForRange).toHaveBeenNthCalledWith(
+      2,
+      expect.anything(),
+      {
+        completedFrom: Date.parse("2026-06-08T00:00:00.000Z"),
+        completedTo: Date.parse("2026-06-13T23:59:59.999Z"),
+        storeId: "store-1",
+      },
+    );
+    expect(listCompletedTransactionsSince).toHaveBeenCalledWith(
+      expect.anything(),
+      {
+        completedFrom: Date.parse("2026-06-08T00:00:00.000Z"),
+        limit: 400,
+        storeId: "store-1",
+      },
+    );
+    expect(result.date).toBe("2026-06-20");
+    expect(result.operatorSnapshot.historyDays).toBe(6);
+    expect(result.operatorSnapshot.trend.map((day) => day.date)).toEqual([
+      "2026-06-15",
+      "2026-06-16",
+      "2026-06-17",
+      "2026-06-18",
+      "2026-06-19",
+      "2026-06-20",
+    ]);
+  });
+
+  it("summarizes today with exact totals against yesterday", async () => {
+    vi.setSystemTime(new Date("2026-06-20T15:30:00.000Z"));
+    vi.mocked(listCompletedTransactionsForRange)
+      .mockResolvedValueOnce([
+        {
+          _id: "txn-today" as Id<"posTransaction">,
+          completedAt: Date.UTC(2026, 5, 20, 15),
+          storeId: "store-1" as Id<"store">,
+          total: 18_000,
+        },
+      ] as never)
+      .mockResolvedValueOnce([
+        {
+          _id: "txn-yesterday" as Id<"posTransaction">,
+          completedAt: Date.UTC(2026, 5, 19, 15),
+          storeId: "store-1" as Id<"store">,
+          total: 12_000,
+        },
+      ] as never);
+    vi.mocked(listCompletedTransactionsSince).mockResolvedValue([] as never);
+    vi.mocked(listTransactionItems)
+      .mockResolvedValueOnce([{ quantity: 3 }] as never)
+      .mockResolvedValueOnce([{ quantity: 2 }] as never);
+    const query = vi.fn(() => ({
+      withIndex: vi.fn(() => ({
+        collect: vi.fn().mockResolvedValue([]),
+        take: vi.fn().mockResolvedValue([]),
+        order: vi.fn(() => ({
+          take: vi.fn().mockResolvedValue([]),
+        })),
+      })),
+    }));
+
+    const result = await getTodaySummary(
+      {
+        db: { query },
+      } as never,
+      {
+        pulseWindow: "today",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(listCompletedTransactionsForRange).toHaveBeenNthCalledWith(
+      1,
+      expect.anything(),
+      {
+        completedFrom: Date.parse("2026-06-20T00:00:00.000Z"),
+        completedTo: Date.parse("2026-06-20T23:59:59.999Z"),
+        storeId: "store-1",
+      },
+    );
+    expect(listCompletedTransactionsForRange).toHaveBeenNthCalledWith(
+      2,
+      expect.anything(),
+      {
+        completedFrom: Date.parse("2026-06-19T00:00:00.000Z"),
+        completedTo: Date.parse("2026-06-19T23:59:59.999Z"),
+        storeId: "store-1",
+      },
+    );
+    expect(result.totalSales).toBe(18_000);
+    expect(result.totalTransactions).toBe(1);
+    expect(result.totalItemsSold).toBe(3);
+    expect(result.operatorSnapshot.comparison).toEqual(
+      expect.objectContaining({
+        currentItemsSold: 3,
+        currentSales: 18_000,
+        currentTransactions: 1,
+        yesterdayItemsSold: 2,
+        yesterdaySales: 12_000,
+        yesterdayTransactions: 1,
+      }),
+    );
+  });
+
+  it("summarizes last week against the full week before", async () => {
+    vi.setSystemTime(new Date("2026-06-20T15:30:00.000Z"));
+    vi.mocked(listCompletedTransactionsForRange).mockResolvedValue([] as never);
+    vi.mocked(listCompletedTransactionsSince).mockResolvedValue([] as never);
+    const query = vi.fn(() => ({
+      withIndex: vi.fn(() => ({
+        collect: vi.fn().mockResolvedValue([]),
+        take: vi.fn().mockResolvedValue([]),
+        order: vi.fn(() => ({
+          take: vi.fn().mockResolvedValue([]),
+        })),
+      })),
+    }));
+
+    const result = await getTodaySummary(
+      {
+        db: { query },
+      } as never,
+      {
+        pulseWindow: "last_week",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(listCompletedTransactionsForRange).toHaveBeenNthCalledWith(
+      1,
+      expect.anything(),
+      {
+        completedFrom: Date.parse("2026-06-08T00:00:00.000Z"),
+        completedTo: Date.parse("2026-06-14T23:59:59.999Z"),
+        storeId: "store-1",
+      },
+    );
+    expect(listCompletedTransactionsForRange).toHaveBeenNthCalledWith(
+      2,
+      expect.anything(),
+      {
+        completedFrom: Date.parse("2026-06-01T00:00:00.000Z"),
+        completedTo: Date.parse("2026-06-07T23:59:59.999Z"),
+        storeId: "store-1",
+      },
+    );
+    expect(result.operatorSnapshot.historyDays).toBe(7);
+    expect(result.operatorSnapshot.trend.map((day) => day.date)).toEqual([
+      "2026-06-08",
+      "2026-06-09",
+      "2026-06-10",
+      "2026-06-11",
+      "2026-06-12",
+      "2026-06-13",
+      "2026-06-14",
+    ]);
+  });
+
+  it("summarizes this month against the same number of days from last month", async () => {
+    vi.setSystemTime(new Date("2026-06-20T15:30:00.000Z"));
+    vi.mocked(listCompletedTransactionsForRange).mockResolvedValue([] as never);
+    vi.mocked(listCompletedTransactionsSince).mockResolvedValue([] as never);
+    const query = vi.fn(() => ({
+      withIndex: vi.fn(() => ({
+        collect: vi.fn().mockResolvedValue([]),
+        take: vi.fn().mockResolvedValue([]),
+        order: vi.fn(() => ({
+          take: vi.fn().mockResolvedValue([]),
+        })),
+      })),
+    }));
+
+    const result = await getTodaySummary(
+      {
+        db: { query },
+      } as never,
+      {
+        pulseWindow: "this_month",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(listCompletedTransactionsForRange).toHaveBeenNthCalledWith(
+      1,
+      expect.anything(),
+      {
+        completedFrom: Date.parse("2026-06-01T00:00:00.000Z"),
+        completedTo: Date.parse("2026-06-20T23:59:59.999Z"),
+        storeId: "store-1",
+      },
+    );
+    expect(listCompletedTransactionsForRange).toHaveBeenNthCalledWith(
+      2,
+      expect.anything(),
+      {
+        completedFrom: Date.parse("2026-05-01T00:00:00.000Z"),
+        completedTo: Date.parse("2026-05-20T23:59:59.999Z"),
+        storeId: "store-1",
+      },
+    );
+    expect(result.operatorSnapshot.historyDays).toBe(20);
+    expect(result.operatorSnapshot.trend).toHaveLength(20);
+  });
+
+  it("summarizes last month against the month before", async () => {
+    vi.setSystemTime(new Date("2026-06-20T15:30:00.000Z"));
+    vi.mocked(listCompletedTransactionsForRange).mockResolvedValue([] as never);
+    vi.mocked(listCompletedTransactionsSince).mockResolvedValue([] as never);
+    const query = vi.fn(() => ({
+      withIndex: vi.fn(() => ({
+        collect: vi.fn().mockResolvedValue([]),
+        take: vi.fn().mockResolvedValue([]),
+        order: vi.fn(() => ({
+          take: vi.fn().mockResolvedValue([]),
+        })),
+      })),
+    }));
+
+    const result = await getTodaySummary(
+      {
+        db: { query },
+      } as never,
+      {
+        pulseWindow: "last_month",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(listCompletedTransactionsForRange).toHaveBeenNthCalledWith(
+      1,
+      expect.anything(),
+      {
+        completedFrom: Date.parse("2026-05-01T00:00:00.000Z"),
+        completedTo: Date.parse("2026-05-31T23:59:59.999Z"),
+        storeId: "store-1",
+      },
+    );
+    expect(listCompletedTransactionsForRange).toHaveBeenNthCalledWith(
+      2,
+      expect.anything(),
+      {
+        completedFrom: Date.parse("2026-04-01T00:00:00.000Z"),
+        completedTo: Date.parse("2026-04-30T23:59:59.999Z"),
+        storeId: "store-1",
+      },
+    );
+    expect(result.operatorSnapshot.historyDays).toBe(31);
+    expect(result.operatorSnapshot.trend.at(0)?.date).toBe("2026-05-01");
+    expect(result.operatorSnapshot.trend.at(-1)?.date).toBe("2026-05-31");
+  });
+
+  it("summarizes all synced history without a comparison period", async () => {
+    vi.setSystemTime(new Date("2026-06-20T15:30:00.000Z"));
+    vi.mocked(listCompletedTransactionsForRange).mockResolvedValue([
+      {
+        _id: "txn-current" as Id<"posTransaction">,
+        completedAt: Date.UTC(2026, 5, 20, 15),
+        payments: [{ amount: 18_000, method: "cash", timestamp: 1 }],
+        storeId: "store-1" as Id<"store">,
+        total: 18_000,
+      },
+      {
+        _id: "txn-older" as Id<"posTransaction">,
+        completedAt: Date.UTC(2026, 4, 5, 12),
+        payments: [{ amount: 12_000, method: "mobile_money", timestamp: 1 }],
+        storeId: "store-1" as Id<"store">,
+        total: 12_000,
+      },
+    ] as never);
+    vi.mocked(listCompletedTransactionsSince).mockResolvedValue([
+      {
+        _id: "txn-current" as Id<"posTransaction">,
+        completedAt: Date.UTC(2026, 5, 20, 15),
+        payments: [{ amount: 18_000, method: "cash", timestamp: 1 }],
+        storeId: "store-1" as Id<"store">,
+        total: 18_000,
+      },
+      {
+        _id: "txn-older" as Id<"posTransaction">,
+        completedAt: Date.UTC(2026, 4, 5, 12),
+        payments: [{ amount: 12_000, method: "mobile_money", timestamp: 1 }],
+        storeId: "store-1" as Id<"store">,
+        total: 12_000,
+      },
+    ] as never);
+    vi.mocked(listTransactionItems).mockResolvedValue([
+      {
+        productId: "product-1",
+        productName: "Braiding hair",
+        productSku: "BRAID-1",
+        productSkuId: "sku-1",
+        quantity: 1,
+        totalPrice: 12_000,
+      },
+    ] as never);
+    const query = vi.fn(() => ({
+      withIndex: vi.fn(() => ({
+        collect: vi.fn().mockResolvedValue([]),
+        take: vi.fn().mockResolvedValue([]),
+        order: vi.fn(() => ({
+          take: vi.fn().mockResolvedValue([]),
+        })),
+      })),
+    }));
+
+    const result = await getTodaySummary(
+      {
+        db: { query },
+      } as never,
+      {
+        pulseWindow: "all_time",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(listCompletedTransactionsSince).toHaveBeenNthCalledWith(
+      1,
+      expect.anything(),
+      {
+        completedFrom: 0,
+        limit: 400,
+        storeId: "store-1",
+      },
+    );
+    expect(result.totalSales).toBe(30_000);
+    expect(result.operatorSnapshot.comparison.yesterdaySales).toBe(0);
+    expect(result.operatorSnapshot.comparison.salesDeltaPercent).toBe(0);
+    expect(result.operatorSnapshot.trend.map((day) => day.date)).toEqual([
+      "2026-05-05",
+      "2026-06-20",
+    ]);
+  });
+
+  it("returns a bounded operator snapshot for recent POS history", async () => {
+    vi.setSystemTime(new Date("2026-06-20T15:30:00.000Z"));
+    vi.mocked(listCompletedTransactionsForDay).mockResolvedValue([
+      {
+        _id: "txn-today" as Id<"posTransaction">,
+        storeId: "store-1" as Id<"store">,
+        total: 18_000,
+      },
+    ] as never);
+    vi.mocked(listCompletedTransactionsSince).mockResolvedValue([
+      {
+        _id: "txn-today" as Id<"posTransaction">,
+        completedAt: Date.UTC(2026, 5, 20, 15),
+        paymentMethod: "cash",
+        payments: [{ amount: 18_000, method: "cash", timestamp: 1 }],
+        storeId: "store-1" as Id<"store">,
+        total: 18_000,
+      },
+      {
+        _id: "txn-prior" as Id<"posTransaction">,
+        completedAt: Date.UTC(2026, 5, 19, 18),
+        payments: [{ amount: 12_000, method: "mobile_money", timestamp: 1 }],
+        storeId: "store-1" as Id<"store">,
+        total: 12_000,
+      },
+    ] as never);
+    vi.mocked(listTransactionItems)
+      .mockResolvedValueOnce([{ quantity: 2 }] as never)
+      .mockResolvedValueOnce([
+        {
+          productId: "product-1",
+          productName: "Braiding hair",
+          productSku: "BRAID-1",
+          productSkuId: "sku-1",
+          quantity: 2,
+          totalPrice: 18_000,
+        },
+      ] as never)
+      .mockResolvedValueOnce([
+        {
+          productId: "product-1",
+          productName: "Braiding hair",
+          productSku: "BRAID-1",
+          productSkuId: "sku-1",
+          quantity: 1,
+          totalPrice: 12_000,
+        },
+      ] as never);
+    const query = vi.fn(() => ({
+      withIndex: vi.fn(() => ({
+        collect: vi.fn().mockResolvedValue([]),
+        take: vi.fn().mockResolvedValue([]),
+        order: vi.fn(() => ({
+          take: vi.fn().mockResolvedValue([]),
+        })),
+      })),
+    }));
+
+    const result = await getTodaySummary(
+      {
+        db: { query },
+      } as never,
+      {
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(listCompletedTransactionsSince).toHaveBeenCalledWith(
+      expect.anything(),
+      {
+        completedFrom: Date.parse("2026-06-07T00:00:00.000Z"),
+        limit: 400,
+        storeId: "store-1",
+      },
+    );
+    expect(result.operatorSnapshot).toEqual(
+      expect.objectContaining({
+        busiestHour: {
+          hour: 15,
+          label: "3 PM",
+          totalSales: 18_000,
+          transactionCount: 1,
+        },
+        comparison: {
+          averageTransactionDeltaPercent: 50,
+          currentAverageTransaction: 18_000,
+          currentItemsSold: 2,
+          currentSales: 18_000,
+          currentTransactions: 1,
+          itemsSoldDeltaPercent: 100,
+          salesDeltaPercent: 50,
+          transactionDeltaPercent: 0,
+          yesterdayAverageTransaction: 12_000,
+          yesterdayItemsSold: 1,
+          yesterdaySales: 12_000,
+          yesterdayTransactions: 1,
+        },
+        paymentMix: [
+          {
+            count: 1,
+            label: "Cash",
+            method: "cash",
+            share: 60,
+            total: 18_000,
+          },
+          {
+            count: 1,
+            label: "Mobile money",
+            method: "mobile_money",
+            share: 40,
+            total: 12_000,
+          },
+        ],
+        topItems: [
+          {
+            name: "Braiding hair",
+            productSku: "BRAID-1",
+            quantity: 3,
+            totalSales: 30_000,
+          },
+        ],
+        usableHistoryDays: 1,
+      }),
+    );
+    expect(result.operatorSnapshot.trend.at(-1)).toEqual(
+      expect.objectContaining({
+        date: "2026-06-20",
+        totalSales: 18_000,
+        transactionCount: 1,
+      }),
+    );
   });
 });
 

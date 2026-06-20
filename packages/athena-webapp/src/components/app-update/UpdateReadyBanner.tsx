@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Download, Info } from "lucide-react";
+import { Info } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils";
 const updateReadyToastId = "athena-update-ready-toast";
 const updateButtonClassName =
   "min-h-10 shrink-0 px-layout-md text-action-commit hover:bg-action-commit-soft hover:text-action-commit";
+const ghostUpdateButtonLabel = "New Athena version available";
 
 export function UpdateReadyBanner() {
   const { snapshot, applyUpdate } = useUpdateCoordinator();
@@ -34,8 +35,11 @@ export function UpdateReadyBanner() {
   const isApplying = snapshot.status === "applying";
   const bannerContent = getUpdateReadyBannerContent(snapshot);
   const showUpdateAction = !hasBlocker && (canApply || isApplying);
-  const shouldShowToast =
-    hasUpdate && communicationVariant === "toast";
+  const shouldShowToast = hasUpdate && communicationVariant === "toast";
+  const ghostButtonLabel =
+    communicationVariant === "ghost" && hasBlocker
+      ? (blocker?.guidance ?? bannerContent.tooltip ?? bannerContent.message)
+      : ghostUpdateButtonLabel;
 
   useEffect(() => {
     if (!shouldShowToast) {
@@ -67,7 +71,6 @@ export function UpdateReadyBanner() {
           type="button"
           variant="ghost"
         >
-          <Download aria-hidden="true" />
           Update
         </Button>
       ) : undefined,
@@ -82,7 +85,37 @@ export function UpdateReadyBanner() {
     showUpdateAction,
   ]);
 
-  if (!hasUpdate || communicationVariant !== "banner") {
+  if (!hasUpdate) {
+    return null;
+  }
+
+  if (communicationVariant === "ghost") {
+    return (
+      <section
+        aria-label="Update ready"
+        aria-live="polite"
+        className="fixed bottom-layout-md left-layout-md z-50"
+      >
+	        <Button
+	          aria-label={ghostButtonLabel}
+	          className="min-h-10 rounded-full border border-border/70 bg-foreground/10 px-layout-md text-sm font-semibold text-foreground shadow-surface backdrop-blur transition-colors hover:border-border hover:bg-foreground/15 hover:text-foreground supports-[backdrop-filter]:bg-foreground/10"
+	          disabled={!canApply || isApplying}
+          onClick={() => {
+            if (canApply && !isApplying) {
+              applyUpdate();
+            }
+          }}
+          title={bannerContent.tooltip ?? bannerContent.message}
+          type="button"
+	          variant="ghost"
+	        >
+	          {ghostButtonLabel}
+	        </Button>
+      </section>
+    );
+  }
+
+  if (communicationVariant !== "banner") {
     return null;
   }
 
@@ -125,7 +158,6 @@ export function UpdateReadyBanner() {
             type="button"
             variant="ghost"
           >
-            <Download aria-hidden="true" />
             Update
           </Button>
         ) : null}

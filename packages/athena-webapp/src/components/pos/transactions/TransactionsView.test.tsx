@@ -1,11 +1,16 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { TransactionsView } from "./TransactionsView";
 
 const useQueryMock = vi.fn();
 const getActiveStoreMock = vi.fn();
+const navigateMock = vi.fn();
 const useSearchMock = vi.fn();
+let tabsOnValueChange:
+  | ((value: "today" | "fromDate" | "all") => void)
+  | undefined;
 
 vi.mock("@tanstack/react-router", () => ({
   Link: ({
@@ -21,6 +26,7 @@ vi.mock("@tanstack/react-router", () => ({
       {children}
     </a>
   ),
+  useNavigate: () => navigateMock,
   useSearch: () => useSearchMock(),
 }));
 
@@ -63,6 +69,8 @@ vi.mock("../../common/PageHeader", () => ({
 vi.mock("../../base/table/data-table", () => ({
   GenericDataTable: ({
     data,
+    onPageIndexChange,
+    pageIndex,
   }: {
     data: Array<{
       itemCount?: number;
@@ -70,8 +78,13 @@ vi.mock("../../base/table/data-table", () => ({
       sessionTraceId: string | null;
       status?: string;
     }>;
+    onPageIndexChange?: (pageIndex: number) => void;
+    pageIndex?: number;
   }) => (
     <div>
+      <div data-testid="transaction-table-page-index">
+        {pageIndex ?? "local"}
+      </div>
       {data.map((row) => (
         <div key={row.transactionNumber}>
           <span>{row.transactionNumber}</span>
@@ -88,23 +101,46 @@ vi.mock("../../base/table/data-table", () => ({
           {row.status === "void" ? <span>Voided</span> : null}
         </div>
       ))}
+      <button type="button" onClick={() => onPageIndexChange?.(1)}>
+        Go to table page 2
+      </button>
     </div>
   ),
 }));
 
 vi.mock("@/components/ui/tabs", () => ({
-  Tabs: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  Tabs: ({
+    children,
+    onValueChange,
+  }: {
+    children?: React.ReactNode;
+    onValueChange?: (value: "today" | "fromDate" | "all") => void;
+  }) => {
+    tabsOnValueChange = onValueChange;
+
+    return <div>{children}</div>;
+  },
   TabsList: ({ children }: { children?: React.ReactNode }) => (
     <div>{children}</div>
   ),
-  TabsTrigger: ({ children }: { children?: React.ReactNode }) => (
-    <button type="button">{children}</button>
+  TabsTrigger: ({
+    children,
+    value,
+  }: {
+    children?: React.ReactNode;
+    value: "today" | "fromDate" | "all";
+  }) => (
+    <button type="button" onClick={() => tabsOnValueChange?.(value)}>
+      {children}
+    </button>
   ),
 }));
 
 describe("TransactionsView", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.useRealTimers();
+    tabsOnValueChange = undefined;
     useSearchMock.mockReturnValue({});
   });
 
@@ -279,7 +315,8 @@ describe("TransactionsView", () => {
 
     render(<TransactionsView />);
 
-    expect(useQueryMock).toHaveBeenNthCalledWith(1, expect.anything(), {
+    expect(useQueryMock.mock.calls[0]?.[1]).toEqual({
+      limit: 100,
       storeId: "store-1",
       registerSessionId: "session-1",
     });
@@ -366,9 +403,10 @@ describe("TransactionsView", () => {
 
     render(<TransactionsView />);
 
-    expect(useQueryMock).toHaveBeenNthCalledWith(1, expect.anything(), {
+    expect(useQueryMock.mock.calls[0]?.[1]).toEqual({
       storeId: "store-1",
       completedFrom: new Date(2026, 4, 8).getTime(),
+      limit: 100,
     });
     expect(
       screen.getByText("Showing transactions from May 8, 2026"),
@@ -376,6 +414,45 @@ describe("TransactionsView", () => {
     expect(screen.getByRole("button", { name: "From May 8, 2026" }))
       .toBeInTheDocument();
     expect(screen.getByText("POS-MAY-08")).toBeInTheDocument();
+  });
+
+  it("uses the time range search param as the selected transaction range", () => {
+    useSearchMock.mockReturnValue({
+      operatingDate: "2026-05-08",
+      timeRange: "all",
+    });
+    getActiveStoreMock.mockReturnValue({
+      activeStore: {
+        _id: "store-1",
+        currency: "GHS",
+      },
+    });
+    useQueryMock.mockReturnValue([
+      {
+        _id: "txn-1",
+        transactionNumber: "POS-ALL-TIME",
+        total: 1000,
+        paymentMethod: "cash",
+        paymentMethods: ["cash"],
+        hasMultiplePaymentMethods: false,
+        cashierName: "Ada L.",
+        customerName: null,
+        itemCount: 1,
+        completedAt: new Date(2026, 4, 7, 10).getTime(),
+        hasTrace: false,
+        sessionTraceId: null,
+      },
+    ]);
+
+    render(<TransactionsView />);
+
+    expect(useQueryMock.mock.calls[0]?.[1]).toEqual({
+      limit: 100,
+      storeId: "store-1",
+    });
+    expect(screen.queryByText("Showing transactions from May 8, 2026"))
+      .not.toBeInTheDocument();
+    expect(screen.getByText("POS-ALL-TIME")).toBeInTheDocument();
   });
 
   it("combines active payment and operating date filters into one summary", () => {
@@ -432,5 +509,279 @@ describe("TransactionsView", () => {
     render(<TransactionsView />);
 
     expect(screen.getByRole("button", { name: "Go back" })).toBeInTheDocument();
+  });
+
+  it("requests an explicit bounded transaction batch for today's history", () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date("2026-06-20T15:30:00.000Z"));
+    getActiveStoreMock.mockReturnValue({
+      activeStore: {
+        _id: "store-1",
+        currency: "GHS",
+      },
+    });
+    useQueryMock.mockReturnValue([]);
+
+    render(<TransactionsView />);
+
+    expect(useQueryMock.mock.calls[0]?.[1]).toEqual({
+      completedFrom: new Date(2026, 5, 20).getTime(),
+      limit: 100,
+      storeId: "store-1",
+    });
+    vi.useRealTimers();
+  });
+
+  it("lets operators load another bounded transaction batch", async () => {
+    const user = userEvent.setup();
+    getActiveStoreMock.mockReturnValue({
+      activeStore: {
+        _id: "store-1",
+        currency: "GHS",
+      },
+    });
+    useQueryMock.mockReturnValue(
+      Array.from({ length: 100 }, (_, index) => ({
+        _id: `txn-${index}`,
+        transactionNumber: `POS-${index}`,
+        total: 1000,
+        paymentMethod: "cash",
+        paymentMethods: ["cash"],
+        hasMultiplePaymentMethods: false,
+        cashierName: "Ada L.",
+        customerName: null,
+        itemCount: 1,
+        completedAt: Date.now(),
+        hasTrace: false,
+        sessionTraceId: null,
+      })),
+    );
+
+    render(<TransactionsView />);
+
+    expect(
+      screen.getByText("Showing latest 100 completed transactions."),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Load more history" }));
+
+    expect(useQueryMock.mock.calls.some(([, args]) => {
+      return (
+        typeof args === "object" &&
+        args !== null &&
+        "limit" in args &&
+        args.limit === 200 &&
+        "storeId" in args &&
+        args.storeId === "store-1"
+      );
+    })).toBe(true);
+  });
+
+  it("uses the page search param as the completed transactions table page", () => {
+    useSearchMock.mockReturnValue({ page: 2 });
+    getActiveStoreMock.mockReturnValue({
+      activeStore: {
+        _id: "store-1",
+        currency: "GHS",
+      },
+    });
+    useQueryMock.mockReturnValue([
+      {
+        _id: "txn-1",
+        transactionNumber: "POS-PAGE-2",
+        total: 1000,
+        paymentMethod: "cash",
+        paymentMethods: ["cash"],
+        hasMultiplePaymentMethods: false,
+        cashierName: "Ada L.",
+        customerName: null,
+        itemCount: 1,
+        completedAt: Date.now(),
+        hasTrace: false,
+        sessionTraceId: null,
+      },
+    ]);
+
+    render(<TransactionsView />);
+
+    expect(screen.getByTestId("transaction-table-page-index")).toHaveTextContent(
+      "1",
+    );
+  });
+
+  it("loads enough transaction history for the requested route page", () => {
+    useSearchMock.mockReturnValue({ page: 13, timeRange: "all" });
+    getActiveStoreMock.mockReturnValue({
+      activeStore: {
+        _id: "store-1",
+        currency: "GHS",
+      },
+    });
+    useQueryMock.mockReturnValue(
+      Array.from({ length: 200 }, (_, index) => ({
+        _id: `txn-${index}`,
+        transactionNumber: `POS-${index}`,
+        total: 1000,
+        paymentMethod: "cash",
+        paymentMethods: ["cash"],
+        hasMultiplePaymentMethods: false,
+        cashierName: "Ada L.",
+        customerName: null,
+        itemCount: 1,
+        completedAt: Date.now(),
+        hasTrace: false,
+        sessionTraceId: null,
+      })),
+    );
+
+    render(<TransactionsView />);
+
+    expect(useQueryMock.mock.calls[0]?.[1]).toEqual({
+      limit: 200,
+      storeId: "store-1",
+    });
+    expect(screen.getByTestId("transaction-table-page-index")).toHaveTextContent(
+      "12",
+    );
+  });
+
+  it("clamps stale transaction route pages after the final loaded batch", async () => {
+    useSearchMock.mockReturnValue({ page: 13, timeRange: "all" });
+    getActiveStoreMock.mockReturnValue({
+      activeStore: {
+        _id: "store-1",
+        currency: "GHS",
+      },
+    });
+    useQueryMock.mockReturnValue(
+      Array.from({ length: 100 }, (_, index) => ({
+        _id: `txn-${index}`,
+        transactionNumber: `POS-${index}`,
+        total: 1000,
+        paymentMethod: "cash",
+        paymentMethods: ["cash"],
+        hasMultiplePaymentMethods: false,
+        cashierName: "Ada L.",
+        customerName: null,
+        itemCount: 1,
+        completedAt: Date.now(),
+        hasTrace: false,
+        sessionTraceId: null,
+      })),
+    );
+
+    render(<TransactionsView />);
+
+    await waitFor(() => {
+      expect(navigateMock).toHaveBeenCalledWith({
+        replace: true,
+        search: expect.any(Function),
+      });
+    });
+
+    const [navigateOptions] = navigateMock.mock.calls.at(-1) ?? [];
+    const updateSearch = navigateOptions?.search as
+      | ((current: Record<string, unknown>) => Record<string, unknown>)
+      | undefined;
+
+    expect(updateSearch?.({ page: 13, timeRange: "all" })).toEqual({
+      page: 10,
+      timeRange: "all",
+    });
+  });
+
+  it("writes completed transactions table page changes to route search", async () => {
+    const user = userEvent.setup();
+    useSearchMock.mockReturnValue({ o: "/wigclub/store/wigclub/pos" });
+    getActiveStoreMock.mockReturnValue({
+      activeStore: {
+        _id: "store-1",
+        currency: "GHS",
+      },
+    });
+    useQueryMock.mockReturnValue([
+      {
+        _id: "txn-1",
+        transactionNumber: "POS-PAGE-1",
+        total: 1000,
+        paymentMethod: "cash",
+        paymentMethods: ["cash"],
+        hasMultiplePaymentMethods: false,
+        cashierName: "Ada L.",
+        customerName: null,
+        itemCount: 1,
+        completedAt: Date.now(),
+        hasTrace: false,
+        sessionTraceId: null,
+      },
+    ]);
+
+    render(<TransactionsView />);
+
+    await user.click(screen.getByRole("button", { name: "Go to table page 2" }));
+
+    expect(navigateMock).toHaveBeenCalledWith({
+      replace: true,
+      search: expect.any(Function),
+    });
+
+    const [navigateOptions] = navigateMock.mock.calls.at(-1) ?? [];
+    const updateSearch = navigateOptions?.search as
+      | ((current: Record<string, unknown>) => Record<string, unknown>)
+      | undefined;
+
+    expect(updateSearch?.({ o: "/wigclub/store/wigclub/pos" })).toEqual({
+      o: "/wigclub/store/wigclub/pos",
+      page: 2,
+    });
+  });
+
+  it("writes completed transactions time range changes to route search", async () => {
+    const user = userEvent.setup();
+    useSearchMock.mockReturnValue({
+      o: "/wigclub/store/wigclub/pos",
+      page: 3,
+      timeRange: "today",
+    });
+    getActiveStoreMock.mockReturnValue({
+      activeStore: {
+        _id: "store-1",
+        currency: "GHS",
+      },
+    });
+    useQueryMock.mockReturnValue([
+      {
+        _id: "txn-1",
+        transactionNumber: "POS-FILTER-1",
+        total: 1000,
+        paymentMethod: "cash",
+        paymentMethods: ["cash"],
+        hasMultiplePaymentMethods: false,
+        cashierName: "Ada L.",
+        customerName: null,
+        itemCount: 1,
+        completedAt: Date.now(),
+        hasTrace: false,
+        sessionTraceId: null,
+      },
+    ]);
+
+    render(<TransactionsView />);
+
+    await user.click(screen.getByRole("button", { name: "All Time" }));
+
+    const [navigateOptions] = navigateMock.mock.calls.at(-1) ?? [];
+    const updateSearch = navigateOptions?.search as
+      | ((current: Record<string, unknown>) => Record<string, unknown>)
+      | undefined;
+
+    expect(updateSearch?.({
+      o: "/wigclub/store/wigclub/pos",
+      page: 3,
+      timeRange: "today",
+    })).toEqual({
+      o: "/wigclub/store/wigclub/pos",
+      timeRange: "all",
+    });
   });
 });
