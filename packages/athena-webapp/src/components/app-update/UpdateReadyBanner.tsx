@@ -67,10 +67,7 @@ export function UpdateReadyBanner() {
           type="button"
           variant="ghost"
         >
-          <Download
-            aria-hidden="true"
-            className={cn(isApplying && "animate-spin")}
-          />
+          <Download aria-hidden="true" />
           Update
         </Button>
       ) : undefined,
@@ -111,7 +108,7 @@ export function UpdateReadyBanner() {
                       <Info aria-hidden="true" className="size-4" />
                     </button>
                   </TooltipTrigger>
-                  <TooltipContent className="max-w-64 text-xs leading-5">
+                  <TooltipContent className="w-72 max-w-[calc(100vw-2rem)] whitespace-normal text-left text-xs leading-5">
                     {bannerContent.tooltip}
                   </TooltipContent>
                 </Tooltip>
@@ -128,10 +125,7 @@ export function UpdateReadyBanner() {
             type="button"
             variant="ghost"
           >
-            <Download
-              aria-hidden="true"
-              className={cn(isApplying && "animate-spin")}
-            />
+            <Download aria-hidden="true" />
             Update
           </Button>
         ) : null}
@@ -154,7 +148,7 @@ function getUpdateReadyBannerContent(
       case "asset-staging-failed":
       case "service-worker-error":
         return {
-          message: "Update ready.",
+          message: "Update ready",
           tooltip: "Some files were not cached for offline use.",
         };
       case "service-worker-timeout":

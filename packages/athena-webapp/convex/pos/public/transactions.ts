@@ -488,6 +488,14 @@ export const getTransactionById = query({
       voidApprovalProofId: v.optional(v.id("approvalProof")),
       voidApprovedByStaffProfileId: v.optional(v.id("staffProfile")),
       voidOperationalEventId: v.optional(v.id("operationalEvent")),
+      pendingVoidApprovalRequest: v.union(
+        v.null(),
+        v.object({
+          _id: v.id("approvalRequest"),
+          createdAt: v.number(),
+          requestedByStaffProfileId: v.optional(v.id("staffProfile")),
+        }),
+      ),
       cashier: v.union(
         v.null(),
         v.object({

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Id } from "../../_generated/dataModel";
 import {
   getCompletedTransactions,
+  getTodaySummary,
   getTransactionById,
 } from "./queries/getTransactions";
 import {
@@ -11,6 +12,7 @@ import {
   getPosTransactionById,
   getRegisterSessionById,
   listCompletedTransactions,
+  listCompletedTransactionsForDay,
   listTransactionItems,
 } from "../infrastructure/repositories/transactionRepository";
 
@@ -51,6 +53,13 @@ function mockCorrectionHistoryDb(overrides?: {
                 : tableName === "paymentAllocation"
                   ? (overrides?.paymentAllocations ?? [])
               : (overrides?.correctionHistory ?? []),
+          ),
+        take: vi
+          .fn()
+          .mockResolvedValue(
+            tableName === "approvalRequest"
+              ? (overrides?.approvalRequests ?? [])
+              : [],
           ),
       })),
     })),
@@ -240,6 +249,146 @@ describe("getCompletedTransactions", () => {
   });
 });
 
+describe("getTodaySummary", () => {
+  it("summarizes the latest open operating day instead of the server calendar day", async () => {
+    vi.setSystemTime(new Date("2026-06-20T00:49:30.000Z"));
+    vi.mocked(listCompletedTransactionsForDay).mockResolvedValue([
+      {
+        _id: "txn-1" as Id<"posTransaction">,
+        storeId: "store-1" as Id<"store">,
+        total: 20_500,
+      },
+      {
+        _id: "txn-2" as Id<"posTransaction">,
+        storeId: "store-1" as Id<"store">,
+        total: 6_500,
+      },
+    ] as never);
+    vi.mocked(listTransactionItems)
+      .mockResolvedValueOnce([{ quantity: 3 }, { quantity: 1 }] as never)
+      .mockResolvedValueOnce([{ quantity: 2 }] as never);
+    const query = vi.fn((tableName: string) => ({
+      withIndex: vi.fn(() => ({
+        collect: vi.fn().mockResolvedValue([]),
+        take: vi.fn().mockResolvedValue([]),
+        order: vi.fn(() => ({
+          take: vi.fn().mockResolvedValue(
+            tableName === "dailyOpening"
+              ? [
+                  {
+                    _id: "opening-2026-06-19",
+                    operatingDate: "2026-06-19",
+                    status: "started",
+                    storeId: "store-1",
+                  },
+                ]
+              : [],
+          ),
+        })),
+      })),
+    }));
+
+    const result = await getTodaySummary(
+      {
+        db: { query },
+      } as never,
+      {
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(listCompletedTransactionsForDay).toHaveBeenCalledWith(
+      expect.anything(),
+      {
+        endOfDay: Date.parse("2026-06-19T23:59:59.999Z"),
+        startOfDay: Date.parse("2026-06-19T00:00:00.000Z"),
+        storeId: "store-1",
+      },
+    );
+    expect(result).toEqual({
+      averageTransaction: 13_500,
+      date: "2026-06-19",
+      totalItemsSold: 6,
+      totalSales: 27_000,
+      totalTransactions: 2,
+    });
+  });
+
+  it("falls back to the server calendar day when the latest opening is already closed", async () => {
+    vi.setSystemTime(new Date("2026-06-20T00:49:30.000Z"));
+    vi.mocked(listCompletedTransactionsForDay).mockResolvedValue([] as never);
+    const query = vi.fn((tableName: string) => ({
+      withIndex: vi.fn(() => ({
+        collect: vi.fn().mockResolvedValue(
+          tableName === "dailyClose"
+            ? [
+                {
+                  _id: "close-2026-06-19",
+                  lifecycleStatus: "active",
+                  operatingDate: "2026-06-19",
+                  status: "completed",
+                  storeId: "store-1",
+                },
+              ]
+            : [],
+        ),
+        take: vi.fn().mockResolvedValue(
+          tableName === "dailyClose"
+            ? [
+                {
+                  _id: "close-2026-06-19",
+                  lifecycleStatus: "active",
+                  operatingDate: "2026-06-19",
+                  status: "completed",
+                  storeId: "store-1",
+                },
+              ]
+            : [],
+        ),
+        order: vi.fn(() => ({
+          take: vi.fn().mockResolvedValue(
+            tableName === "dailyOpening"
+              ? [
+                  {
+                    _id: "opening-2026-06-19",
+                    operatingDate: "2026-06-19",
+                    status: "started",
+                    storeId: "store-1",
+                  },
+                ]
+              : [],
+          ),
+        })),
+      })),
+    }));
+
+    const result = await getTodaySummary(
+      {
+        db: { query },
+      } as never,
+      {
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(listCompletedTransactionsForDay).toHaveBeenCalledWith(
+      expect.anything(),
+      {
+        endOfDay: Date.parse("2026-06-20T23:59:59.999Z"),
+        startOfDay: Date.parse("2026-06-20T00:00:00.000Z"),
+        storeId: "store-1",
+      },
+    );
+    expect(result).toEqual({
+      averageTransaction: 0,
+      date: "2026-06-20",
+      totalItemsSold: 0,
+      totalSales: 0,
+      totalTransactions: 0,
+    });
+  });
+});
+
 describe("getTransactionById", () => {
   it("ignores legacy transaction workflow trace ids when no session trace is available", async () => {
     vi.mocked(getPosTransactionById).mockResolvedValue({
@@ -311,6 +460,61 @@ describe("getTransactionById", () => {
       expect.objectContaining({
         transactionNumber: "POS-654321",
         hasTrace: false,
+      }),
+    );
+  });
+
+  it("surfaces a pending void approval request for completed transactions", async () => {
+    vi.mocked(getPosTransactionById).mockResolvedValue({
+      _id: "txn-pending-void" as Id<"posTransaction">,
+      storeId: "store-1" as Id<"store">,
+      transactionNumber: "POS-851031",
+      subtotal: 6000,
+      tax: 0,
+      total: 6000,
+      paymentMethod: "cash",
+      payments: [],
+      totalPaid: 6000,
+      status: "completed",
+      completedAt: 100,
+      customerId: undefined,
+      customerInfo: undefined,
+      notes: undefined,
+    } as never);
+    vi.mocked(getCashierById).mockResolvedValue(null as never);
+    vi.mocked(getPosSessionById).mockResolvedValue(null as never);
+    vi.mocked(listTransactionItems).mockResolvedValue([] as never);
+
+    const result = await getTransactionById(
+      {
+        db: mockCorrectionHistoryDb({
+          approvalRequests: [
+            {
+              _id: "approval-request-1",
+              createdAt: 200,
+              posTransactionId: "txn-pending-void",
+              requestType: "pos_transaction_void",
+              requestedByStaffProfileId: "staff-1",
+              status: "pending",
+              storeId: "store-1",
+              subjectId: "txn-pending-void",
+              subjectType: "pos_transaction",
+            },
+          ],
+        }),
+      } as never,
+      {
+        transactionId: "txn-pending-void" as Id<"posTransaction">,
+      },
+    );
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        pendingVoidApprovalRequest: {
+          _id: "approval-request-1",
+          createdAt: 200,
+          requestedByStaffProfileId: "staff-1",
+        },
       }),
     );
   });
@@ -457,7 +661,7 @@ describe("getTransactionById", () => {
                 })),
               })),
             });
-            return { collect };
+            return { collect, take: vi.fn().mockResolvedValue([]) };
           }),
         })),
       },

@@ -452,6 +452,30 @@ const posSyncedSaleTimelineSnapshot: DailyOperationsSnapshot = {
   ],
 };
 
+const voidRequestedTimelineSnapshot: DailyOperationsSnapshot = {
+  ...operatingSnapshot,
+  timeline: [
+    {
+      createdAt: Date.UTC(2026, 4, 8, 15, 11),
+      id: "event-void-requested",
+      message: "Void requested by Joyce O. for Transaction #851031.",
+      subject: {
+        id: "transaction-851031",
+        label: "Transaction #851031",
+        type: "pos_transaction",
+      },
+      transactionLink: {
+        label: "#851031",
+        params: {
+          transactionId: "transaction-851031",
+        },
+        to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId",
+      },
+      type: "pos_transaction_void_approval_requested",
+    },
+  ],
+};
+
 const automationSnapshot: DailyOperationsSnapshot = {
   ...operatingSnapshot,
   automationStatuses: [
@@ -1392,6 +1416,28 @@ describe("DailyOperationsViewContent", () => {
         return (
           node?.textContent ===
           "Sale #946956 synced: 3 sale lines, GH₵1,039, cash."
+        );
+      }),
+    ).toBeInTheDocument();
+    expect(transactionLink.querySelector("svg")).toBeInTheDocument();
+  });
+
+  it("links void requested timeline transactions and keeps requester copy inline", () => {
+    renderContent(voidRequestedTimelineSnapshot);
+
+    const transactionLink = screen.getByRole("link", { name: "#851031" });
+
+    expect(transactionLink).toHaveAttribute(
+      "href",
+      expect.stringContaining(
+        "/wigclub/store/osu/pos/transactions/transaction-851031?o=",
+      ),
+    );
+    expect(
+      screen.getByText((content, node) => {
+        return (
+          node?.textContent ===
+          "Void requested by Joyce O. for Transaction #851031."
         );
       }),
     ).toBeInTheDocument();

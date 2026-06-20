@@ -289,7 +289,7 @@ export default function PointOfSaleView() {
             </div>
           </div>
 
-          {/* Today's Summary */}
+          {/* Store day summary */}
           <div>
             <h2 className="text-xl font-medium mb-6">Summary</h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -311,7 +311,9 @@ export default function PointOfSaleView() {
                           <span className="text-muted-foreground">--</span>
                         )}
                       </div>
-                      <p className="text-xs text-muted-foreground">Today</p>
+                      <p className="text-xs text-muted-foreground">
+                        Store day
+                      </p>
                     </CardContent>
                   </div>
                 </>
@@ -331,7 +333,7 @@ export default function PointOfSaleView() {
                       <span className="text-muted-foreground">--</span>
                     )}
                   </div>
-                  <p className="text-xs text-muted-foreground">Today</p>
+                  <p className="text-xs text-muted-foreground">Store day</p>
                 </CardContent>
               </div>
 
@@ -349,7 +351,7 @@ export default function PointOfSaleView() {
                       <span className="text-muted-foreground">--</span>
                     )}
                   </div>
-                  <p className="text-xs text-muted-foreground">Today</p>
+                  <p className="text-xs text-muted-foreground">Store day</p>
                 </CardContent>
               </div>
 
@@ -370,7 +372,7 @@ export default function PointOfSaleView() {
                       <span className="text-muted-foreground">--</span>
                     )}
                   </div>
-                  <p className="text-xs text-muted-foreground">Today</p>
+                  <p className="text-xs text-muted-foreground">Store day</p>
                 </CardContent>
               </div>
             )} */}

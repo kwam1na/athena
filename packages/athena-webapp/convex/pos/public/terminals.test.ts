@@ -1279,7 +1279,7 @@ describe("POS terminal public mutations", () => {
     assertConformsToExportedReturns(getTerminalHealthSummary as never, summary);
   });
 
-  it("validates representative terminal public command results against exported return validators", () => {
+  it("validates representative terminal public read and command results against exported return validators", () => {
     const terminal = buildPublicTerminal();
     const provisionedTerminal = {
       ...terminal,

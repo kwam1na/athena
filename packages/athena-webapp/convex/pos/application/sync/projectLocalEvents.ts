@@ -1406,17 +1406,31 @@ async function resolveSaleRegisterAndSession(
   }
 
   if (existingPosSession?.transactionId) {
-    const conflict = await createConflict(repository, args, {
-      conflictType: "duplicate_local_id",
-      summary: "Local POS session id was reused by a different synced sale.",
-      details: {
-        localIdKind: "posSession",
-        localId: payload.localPosSessionId,
-        localTransactionId: payload.localTransactionId,
-        originalTransactionId: existingPosSession.transactionId,
+    const existingTransactionMapping = await findMappingForTerminal(
+      repository,
+      args,
+      {
+        localIdKind: "transaction",
+        localId: payload.localTransactionId,
       },
-    });
-    return conflictResult(conflict);
+    );
+    const isSameSyncedSale =
+      existingTransactionMapping?.localEventId === args.event.localEventId &&
+      existingTransactionMapping.cloudId === existingPosSession.transactionId;
+
+    if (!isSameSyncedSale) {
+      const conflict = await createConflict(repository, args, {
+        conflictType: "duplicate_local_id",
+        summary: "Local POS session id was reused by a different synced sale.",
+        details: {
+          localIdKind: "posSession",
+          localId: payload.localPosSessionId,
+          localTransactionId: payload.localTransactionId,
+          originalTransactionId: existingPosSession.transactionId,
+        },
+      });
+      return conflictResult(conflict);
+    }
   }
 
   const terminalRegisterNumber = normalizeOptionalString(
@@ -3261,6 +3275,7 @@ async function projectRegisterClosed(
     roundMoney(variance) !== 0 &&
     args.options?.allowRegisterCloseoutVarianceProjection !== true
   ) {
+    const store = await repository.getStore(args.storeId);
     const conflict = await createConflict(repository, args, {
       conflictType: "permission",
       summary:
@@ -3271,6 +3286,31 @@ async function projectRegisterClosed(
         notes: payload.notes,
         variance,
       },
+    });
+    await repository.createOperationalEvent({
+      storeId: args.storeId,
+      organizationId: store?.organizationId,
+      eventType: "register_session_sync_closeout_review_requested",
+      subjectType: "register_session",
+      subjectId: registerSession._id,
+      message: registerSession.registerNumber
+        ? `Register ${registerSession.registerNumber} closeout submitted with a cash variance of ${formatSaleTotal(store?.currency, variance)}. Review before applying it.`
+        : `Register closeout submitted with a cash variance of ${formatSaleTotal(store?.currency, variance)}. Review before applying it.`,
+      metadata: {
+        countedCash,
+        expectedCash: registerSession.expectedCash,
+        localEventId: args.event.localEventId,
+        notes: payload.notes,
+        registerNumber: registerSession.registerNumber,
+        reviewConflictId: conflict._id,
+        syncOrigin: "local_sync",
+        variance,
+      },
+      createdAt: args.event.occurredAt,
+      actorStaffProfileId: args.event.staffProfileId,
+      registerSessionId: registerSession._id,
+      terminalId: args.terminalId,
+      localEventId: args.event.localEventId,
     });
     return { status: "conflicted", mappings: [], conflicts: [conflict] };
   }

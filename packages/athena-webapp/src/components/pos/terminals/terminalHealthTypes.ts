@@ -195,6 +195,11 @@ export type TerminalSyncConflict = {
   createdAt: number;
   localEventId: string;
   localRegisterSessionId: string;
+  reviewTarget?: {
+    type: "open_work";
+    workItemId: Id<"operationalWorkItem"> | string;
+    workItemType: "synced_sale_inventory_review";
+  };
   sequence: number;
   summary: string;
 };
@@ -225,7 +230,7 @@ export type TerminalHealthAttentionActionTarget =
       registerSessionId: Id<"registerSession"> | string;
       type: "cash_control_register_session";
     }
-  | { type: "open_work" }
+  | { label?: string; type: "open_work" }
   | { type: "pos_register" }
   | { type: "pos_settings" };
 
@@ -242,6 +247,7 @@ export type TerminalHealthAttentionReason = {
     | "cloud_conflict"
     | "cloud_held"
     | "cloud_rejected"
+    | "synced_sale_inventory_review"
     | "local_review"
     | "local_store_unavailable"
     | "sync_failed"

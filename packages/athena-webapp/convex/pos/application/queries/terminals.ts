@@ -64,6 +64,7 @@ export type TerminalHealthAttentionReason = {
     | "cloud_conflict"
     | "cloud_held"
     | "cloud_rejected"
+    | "synced_sale_inventory_review"
     | "local_review"
     | "local_store_unavailable"
     | "sync_failed"
@@ -79,7 +80,7 @@ export type TerminalHealthAttentionActionTarget =
       type: "cash_control_register_session";
       registerSessionId: Id<"registerSession">;
     }
-  | { type: "open_work" }
+  | { label?: string; type: "open_work" }
   | { type: "pos_register" }
   | { type: "pos_settings" };
 
@@ -316,7 +317,7 @@ async function buildTerminalHealthSummary(
     now: number;
   },
 ): Promise<TerminalHealthSummary> {
-  const [runtimeStatus, syncEvidence, registerSessionLink] = await Promise.all([
+  const [runtimeStatus, rawSyncEvidence, registerSessionLink] = await Promise.all([
     getLatestRuntimeStatusForTerminal(ctx, {
       storeId: args.terminal.storeId,
       terminalId: args.terminal._id,
@@ -332,6 +333,10 @@ async function buildTerminalHealthSummary(
       terminalId: args.terminal._id,
     }),
   ]);
+  const syncEvidence = await annotateTerminalSyncEvidenceReviewTargets(ctx, {
+    storeId: args.terminal.storeId,
+    syncEvidence: rawSyncEvidence,
+  });
   const supportRuntimeStatus = await normalizeRuntimeStatusForSupport(ctx, {
     runtimeStatus,
     terminal: args.terminal,
@@ -498,6 +503,7 @@ async function buildTerminalRecoveryPreview(
   return {
     appUpdate: buildTerminalAppUpdatePreview({
       commandStatus,
+      now: args.now,
       runtimeAgeMs: args.runtimeAgeMs,
       runtimeFresh,
       runtimeStatus: args.runtimeStatus,
@@ -527,6 +533,7 @@ async function buildTerminalRecoveryPreview(
 
 function buildTerminalAppUpdatePreview(args: {
   commandStatus: TerminalRecoveryPreview["commandStatus"];
+  now: number;
   runtimeAgeMs: number | null;
   runtimeFresh: boolean;
   runtimeStatus: Doc<"posTerminalRuntimeStatus"> | null;
@@ -539,7 +546,13 @@ function buildTerminalAppUpdatePreview(args: {
     };
   }
 
-  if (!args.runtimeFresh || args.runtimeAgeMs === null) {
+  const observedAt = readNumber(evidence.observedAt);
+  const appUpdateEvidenceFresh =
+    observedAt === undefined || args.runtimeAgeMs === null
+      ? args.runtimeFresh
+      : Math.max(0, args.now - observedAt) <= 2 * 60 * 1000;
+
+  if (!args.runtimeFresh || args.runtimeAgeMs === null || !appUpdateEvidenceFresh) {
     return {
       commandCorrelated: isAppUpdateEvidenceCommandCorrelated(
         evidence,
@@ -547,7 +560,7 @@ function buildTerminalAppUpdatePreview(args: {
       ),
       currentBuildId: readString(evidence.currentBuildId ?? evidence.currentBuildSha),
       evidenceFresh: false,
-      observedAt: readNumber(evidence.observedAt),
+      observedAt,
       pendingBuildId: readString(evidence.pendingBuildId ?? evidence.latestBuildId),
       stagingAssetCount: readNumber(evidence.stagingAssetCount),
       stagingFailedAssetCount: readNumber(evidence.stagingFailedAssetCount),
@@ -568,7 +581,7 @@ function buildTerminalAppUpdatePreview(args: {
     ),
     currentBuildId: readString(evidence.currentBuildId ?? evidence.currentBuildSha),
     evidenceFresh: true,
-    observedAt: readNumber(evidence.observedAt),
+    observedAt,
     pendingBuildId: readString(evidence.pendingBuildId ?? evidence.latestBuildId),
     stagingAssetCount: readNumber(evidence.stagingAssetCount),
     stagingFailedAssetCount: readNumber(evidence.stagingFailedAssetCount),
@@ -1038,7 +1051,7 @@ async function resolveAttentionReasonActionTargets(
   },
 ): Promise<TerminalHealthAttentionReason[]> {
   const registerSessionIdByReasonType =
-    args.attentionReasons.some((reason) => reason.source === "cloud_sync")
+    args.attentionReasons.some(isRegisterSessionReviewReason)
       ? await resolveRegisterSessionTargets(ctx, args)
       : new Map<TerminalHealthAttentionReason["type"], Id<"registerSession"> | null>();
 
@@ -1062,7 +1075,7 @@ async function resolveRegisterSessionTargets(
 ) {
   const uniqueTypes = new Set(
     args.attentionReasons
-      .filter((reason) => reason.source === "cloud_sync")
+      .filter(isRegisterSessionReviewReason)
       .map((reason) => reason.type),
   );
   const entries = await Promise.all(
@@ -1084,6 +1097,15 @@ async function resolveRegisterSessionTargets(
   );
 
   return new Map(entries);
+}
+
+function isRegisterSessionReviewReason(reason: TerminalHealthAttentionReason) {
+  return (
+    reason.source === "cloud_sync" &&
+    (reason.type === "cloud_conflict" ||
+      reason.type === "cloud_held" ||
+      reason.type === "cloud_rejected")
+  );
 }
 
 function getReviewReasonLocalRegisterSessionId(
@@ -1126,6 +1148,8 @@ function getAttentionReasonActionTarget(
   },
 ): TerminalHealthAttentionActionTarget {
   switch (reason.type) {
+    case "synced_sale_inventory_review":
+      return { label: "Review inventory work", type: "open_work" };
     case "cloud_conflict":
     case "cloud_held":
     case "cloud_rejected":
@@ -1146,6 +1170,75 @@ function getAttentionReasonActionTarget(
     case "sync_unavailable":
       return { type: "pos_register" };
   }
+}
+
+async function annotateTerminalSyncEvidenceReviewTargets(
+  ctx: QueryCtx,
+  args: {
+    storeId: Id<"store">;
+    syncEvidence: TerminalSyncEvidence;
+  },
+): Promise<TerminalSyncEvidence> {
+  const unresolvedConflicts = args.syncEvidence.unresolvedConflicts ?? [];
+  const inventoryConflictLocalEventIds = new Set(
+    unresolvedConflicts
+      .filter((conflict) => conflict.conflictType === "inventory")
+      .map((conflict) => conflict.localEventId),
+  );
+  if (
+    inventoryConflictLocalEventIds.size === 0 ||
+    !ctx.db ||
+    typeof ctx.db.query !== "function"
+  ) {
+    return args.syncEvidence;
+  }
+
+  const workItems = await ctx.db
+    .query("operationalWorkItem")
+    .withIndex("by_storeId_type", (q) =>
+      q
+        .eq("storeId", args.storeId)
+        .eq("type", "synced_sale_inventory_review"),
+    )
+    .take(200);
+  const openWorkItemByLocalEventId = new Map<
+    string,
+    Doc<"operationalWorkItem">
+  >();
+  for (const workItem of workItems) {
+    if (workItem.status !== "open") {
+      continue;
+    }
+    const localEventId = workItem.metadata?.localEventId;
+    if (
+      typeof localEventId === "string" &&
+      inventoryConflictLocalEventIds.has(localEventId)
+    ) {
+      openWorkItemByLocalEventId.set(localEventId, workItem);
+    }
+  }
+
+  if (openWorkItemByLocalEventId.size === 0) {
+    return args.syncEvidence;
+  }
+
+  return {
+    ...args.syncEvidence,
+    unresolvedConflicts: unresolvedConflicts.map((conflict) => {
+      const workItem = openWorkItemByLocalEventId.get(conflict.localEventId);
+      if (!workItem || conflict.conflictType !== "inventory") {
+        return conflict;
+      }
+      return {
+        ...conflict,
+        reviewTarget: {
+          type: "open_work" as const,
+          workItemId: workItem._id,
+          workItemType: "synced_sale_inventory_review" as const,
+        },
+      };
+    }),
+  };
 }
 
 function deriveTerminalHealth(input: {
@@ -1259,13 +1352,37 @@ function deriveTerminalHealthAttentionReasons(input: {
     });
   }
 
-  if (input.syncEvidence.conflictedCount > 0) {
+  const inventoryReviewCount =
+    input.syncEvidence.unresolvedConflicts?.filter(
+      (conflict) =>
+        conflict.conflictType === "inventory" &&
+        conflict.reviewTarget?.workItemType ===
+          "synced_sale_inventory_review",
+    ).length ?? 0;
+
+  if (inventoryReviewCount > 0) {
     reasons.push({
-      count: input.syncEvidence.conflictedCount,
+      count: inventoryReviewCount,
       latestEventSequence: latestEvent?.sequence,
       latestEventStatus: latestEvent?.status,
       source: "cloud_sync",
-      summary: `${input.syncEvidence.conflictedCount} cloud sync conflict${input.syncEvidence.conflictedCount === 1 ? " needs" : "s need"} review.`,
+      summary: `${inventoryReviewCount} inventory review item${inventoryReviewCount === 1 ? " needs" : "s need"} attention.`,
+      type: "synced_sale_inventory_review",
+    });
+  }
+
+  const conflictedCount = Math.max(
+    0,
+    input.syncEvidence.conflictedCount - inventoryReviewCount,
+  );
+
+  if (conflictedCount > 0) {
+    reasons.push({
+      count: conflictedCount,
+      latestEventSequence: latestEvent?.sequence,
+      latestEventStatus: latestEvent?.status,
+      source: "cloud_sync",
+      summary: `${conflictedCount} cloud sync conflict${conflictedCount === 1 ? " needs" : "s need"} review.`,
       type: "cloud_conflict",
     });
   }

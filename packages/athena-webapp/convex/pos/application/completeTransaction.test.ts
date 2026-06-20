@@ -852,6 +852,86 @@ describe("voidTransaction", () => {
     );
   });
 
+  it("applies a queued completed-sale void when the original drawer is closing", async () => {
+    vi.mocked(getRegisterSessionById).mockResolvedValue({
+      _id: "register-1",
+      status: "closing",
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    } as never);
+    const ctx = createVoidCtx({
+      approvalRequests: [
+        {
+          _id: "approval-request-1",
+          posTransactionId: "txn-1",
+          requestType: "pos_transaction_void",
+          requestedByStaffProfileId: "staff-1",
+          requestedByUserId: "cashier-user-1",
+          status: "pending",
+          storeId: "store-1",
+          subjectId: "txn-1",
+          subjectType: "pos_transaction",
+        },
+      ],
+    });
+
+    await expect(
+      resolveTransactionVoidApprovalDecisionWithCtx(ctx as never, {
+        approvalProofId: "decision-proof-1" as Id<"approvalProof">,
+        approvalRequestId: "approval-request-1" as Id<"approvalRequest">,
+        decision: "approved",
+        decisionNotes: "Duplicate sale",
+        reviewedByStaffProfileId: "manager-1" as Id<"staffProfile">,
+        reviewedByUserId: "manager-user-1" as Id<"athenaUser">,
+      }),
+    ).resolves.toMatchObject({
+      approvalRequestId: "approval-request-1",
+      transactionId: "txn-1",
+    });
+    expect(recordRetailVoidPaymentAllocations).toHaveBeenCalled();
+    expect(patchPosTransaction).toHaveBeenCalledWith(
+      expect.anything(),
+      "txn-1",
+      expect.objectContaining({ status: "void" }),
+    );
+  });
+
+  it("blocks a queued completed-sale void when the original drawer is closed", async () => {
+    vi.mocked(getRegisterSessionById).mockResolvedValue({
+      _id: "register-1",
+      status: "closed",
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    } as never);
+    const ctx = createVoidCtx({
+      approvalRequests: [
+        {
+          _id: "approval-request-1",
+          posTransactionId: "txn-1",
+          requestType: "pos_transaction_void",
+          requestedByStaffProfileId: "staff-1",
+          requestedByUserId: "cashier-user-1",
+          status: "pending",
+          storeId: "store-1",
+          subjectId: "txn-1",
+          subjectType: "pos_transaction",
+        },
+      ],
+    });
+
+    await expect(
+      resolveTransactionVoidApprovalDecisionWithCtx(ctx as never, {
+        approvalProofId: "decision-proof-1" as Id<"approvalProof">,
+        approvalRequestId: "approval-request-1" as Id<"approvalRequest">,
+        decision: "approved",
+        decisionNotes: "Duplicate sale",
+        reviewedByStaffProfileId: "manager-1" as Id<"staffProfile">,
+        reviewedByUserId: "manager-user-1" as Id<"athenaUser">,
+      }),
+    ).rejects.toThrow("Drawer closed. Open the drawer before voiding this sale.");
+    expectNoVoidBusinessSideEffects();
+  });
+
   it("does not apply void side effects when a queued void approval is rejected", async () => {
     const ctx = createVoidCtx({
       approvalRequests: [

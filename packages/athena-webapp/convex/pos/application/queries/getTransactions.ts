@@ -24,6 +24,8 @@ const ITEM_ADJUSTMENT_EVENT_TYPES = new Set([
   "pos_transaction_item_adjustment_applied",
   "pos_transaction_item_adjusted",
 ]);
+const TRANSACTION_VOID_REQUEST_TYPE = "pos_transaction_void";
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 type AdjustmentMetadata = {
   adjustedTotal?: number;
@@ -134,7 +136,6 @@ async function loadPendingItemAdjustmentApprovals(
     transactionId: Id<"posTransaction">;
   },
 ) {
-  // eslint-disable-next-line @convex-dev/no-collect-in-query -- Transaction detail needs all pending approvals for one transaction in the store.
   const approvalRequests = await ctx.db
     .query("approvalRequest")
     .withIndex("by_storeId_status_posTransactionId", (q) =>
@@ -143,7 +144,7 @@ async function loadPendingItemAdjustmentApprovals(
         .eq("status", "pending")
         .eq("posTransactionId", args.transactionId),
     )
-    .collect();
+    .take(10);
 
   return approvalRequests.filter(
     (request) =>
@@ -152,6 +153,39 @@ async function loadPendingItemAdjustmentApprovals(
         request.subjectId === String(args.transactionId)) ||
         request.metadata?.transactionId === args.transactionId),
   );
+}
+
+async function loadPendingVoidApprovalRequest(
+  ctx: QueryCtx,
+  args: {
+    storeId: Id<"store">;
+    transactionId: Id<"posTransaction">;
+  },
+) {
+  const pendingRequests = await ctx.db
+    .query("approvalRequest")
+    .withIndex("by_storeId_status_posTransactionId", (q) =>
+      q
+        .eq("storeId", args.storeId)
+        .eq("status", "pending")
+        .eq("posTransactionId", args.transactionId),
+    )
+    .take(10);
+
+  const request = pendingRequests.find(
+    (candidate) =>
+      candidate.requestType === TRANSACTION_VOID_REQUEST_TYPE &&
+      candidate.subjectType === "pos_transaction" &&
+      candidate.subjectId === args.transactionId,
+  );
+
+  return request
+    ? {
+        _id: request._id,
+        createdAt: request.createdAt,
+        requestedByStaffProfileId: request.requestedByStaffProfileId,
+      }
+    : null;
 }
 
 async function listStaffNames(
@@ -410,6 +444,10 @@ export async function getTransactionById(
       storeId: transaction.storeId,
       transactionId: transaction._id,
     });
+  const pendingVoidApprovalRequest = await loadPendingVoidApprovalRequest(ctx, {
+    storeId: transaction.storeId,
+    transactionId: transaction._id,
+  });
   const receiptDeliveries = await listReceiptDeliveriesForTransaction(ctx, {
     storeId: transaction.storeId,
     transactionId: transaction._id,
@@ -524,6 +562,7 @@ export async function getTransactionById(
     voidApprovalProofId: transaction.voidApprovalProofId,
     voidApprovedByStaffProfileId: transaction.voidApprovedByStaffProfileId,
     voidOperationalEventId: transaction.voidOperationalEventId,
+    pendingVoidApprovalRequest,
     cashier: cashier
       ? {
           _id: cashier._id,
@@ -648,17 +687,14 @@ export async function getTodaySummary(
     storeId: Id<"store">;
   },
 ) {
-  const now = new Date();
-  const startOfDay = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    now.getDate(),
-  ).getTime();
-  const endOfDay = startOfDay + 24 * 60 * 60 * 1000 - 1;
+  const summaryWindow = await resolveCurrentPosSummaryWindow(ctx, {
+    now: Date.now(),
+    storeId: args.storeId,
+  });
   const todayTransactions = await listCompletedTransactionsForDay(ctx, {
     storeId: args.storeId,
-    startOfDay,
-    endOfDay,
+    startOfDay: summaryWindow.startOfDay,
+    endOfDay: summaryWindow.endOfDay,
   });
 
   const totalTransactions = todayTransactions.length;
@@ -679,6 +715,76 @@ export async function getTodaySummary(
     totalItemsSold,
     averageTransaction:
       totalTransactions > 0 ? totalSales / totalTransactions : 0,
-    date: now.toISOString().split("T")[0],
+    date: summaryWindow.operatingDate,
   };
+}
+
+async function resolveCurrentPosSummaryWindow(
+  ctx: Pick<QueryCtx, "db">,
+  args: {
+    now: number;
+    storeId: Id<"store">;
+  },
+) {
+  const activeOpening = await findLatestOpenOperatingDay(ctx, {
+    storeId: args.storeId,
+  });
+  const operatingDate =
+    activeOpening?.operatingDate ??
+    new Date(args.now).toISOString().slice(0, 10);
+  const startOfDay = Date.parse(`${operatingDate}T00:00:00.000Z`);
+
+  if (!Number.isFinite(startOfDay)) {
+    const fallbackStart = Date.parse(
+      `${new Date(args.now).toISOString().slice(0, 10)}T00:00:00.000Z`,
+    );
+
+    return {
+      endOfDay: fallbackStart + DAY_MS - 1,
+      operatingDate: new Date(args.now).toISOString().slice(0, 10),
+      startOfDay: fallbackStart,
+    };
+  }
+
+  return {
+    endOfDay: startOfDay + DAY_MS - 1,
+    operatingDate,
+    startOfDay,
+  };
+}
+
+async function findLatestOpenOperatingDay(
+  ctx: Pick<QueryCtx, "db">,
+  args: {
+    storeId: Id<"store">;
+  },
+) {
+  const startedOpenings = await ctx.db
+    .query("dailyOpening")
+    .withIndex("by_storeId_status_operatingDate", (q) =>
+      q.eq("storeId", args.storeId).eq("status", "started"),
+    )
+    .order("desc")
+    .take(10);
+
+  for (const opening of startedOpenings) {
+    const closes = await ctx.db
+      .query("dailyClose")
+      .withIndex("by_storeId_operatingDate", (q) =>
+        q
+          .eq("storeId", args.storeId)
+          .eq("operatingDate", opening.operatingDate),
+      )
+      .take(10);
+    const hasCompletedActiveClose = closes.some(
+      (close) =>
+        close.status === "completed" && close.lifecycleStatus !== "reopened",
+    );
+
+    if (!hasCompletedActiveClose) {
+      return opening;
+    }
+  }
+
+  return null;
 }

@@ -1205,6 +1205,7 @@ export const resolveRegisterSessionSyncReview = mutation({
     }> = [];
     const localEventIds: string[] = [];
     const originalStatuses: string[] = [];
+    const rejectedCloseoutLocalEventIds = new Set<string>();
     const sequences: number[] = [];
     let managerOverrideCount = 0;
     let projectedCloseoutCount = 0;
@@ -1242,9 +1243,22 @@ export const resolveRegisterSessionSyncReview = mutation({
       sequences.push(syncEvent.sequence);
 
       if (decision === "rejected") {
+        const review = classifyRegisterSessionSyncReview(conflict);
+        const hasUnselectedOpenConflictForEvent =
+          requestedConflictIds.size > 0 &&
+          allConflicts.some(
+            (candidate) =>
+              candidate.localEventId === syncEvent.localEventId &&
+              candidate.terminalId === terminalId &&
+              candidate.conflictType !== conflict.conflictType &&
+              candidate.status === "needs_review" &&
+              !requestedConflictIds.has(candidate._id) &&
+              !requestedConflictIds.has(candidate.localEventId),
+          );
         if (
-          syncEvent.status === "conflicted" ||
-          syncEvent.status === "rejected"
+          !hasUnselectedOpenConflictForEvent &&
+          (syncEvent.status === "conflicted" ||
+            syncEvent.status === "rejected")
         ) {
           await localSyncRepository.patchEvent(syncEvent._id, {
             rejectionCode: "manager_rejected",
@@ -1255,6 +1269,46 @@ export const resolveRegisterSessionSyncReview = mutation({
         }
         if (hasConflictRecord) {
           resolvedConflictIds.add(conflict._id as Id<"posLocalSyncConflict">);
+        }
+        if (
+          syncEvent.eventType === "register_closed" &&
+          (review.reviewKind === "register_closeout_variance" ||
+            review.reviewKind === "duplicate_register_closeout") &&
+          !rejectedCloseoutLocalEventIds.has(syncEvent.localEventId)
+        ) {
+          const conflictDetails = conflict.details ?? {};
+          rejectedCloseoutLocalEventIds.add(syncEvent.localEventId);
+          await recordOperationalEventWithCtx(ctx, {
+            ...(args.actorStaffProfileId
+              ? { actorStaffProfileId: args.actorStaffProfileId }
+              : {}),
+            actorUserId: athenaUser._id,
+            eventType: "register_session_sync_closeout_rejected",
+            localEventId: syncEvent.localEventId,
+            message: registerSession.registerNumber
+              ? `Rejected synced closeout for Register ${registerSession.registerNumber}.`
+              : "Rejected synced register closeout.",
+            metadata: {
+              conflictId: conflict._id,
+              conflictType: conflict.conflictType,
+              countedCash: conflictDetails.countedCash,
+              decision: "rejected",
+              expectedCash: conflictDetails.expectedCash,
+              localEventId: syncEvent.localEventId,
+              notes: conflictDetails.notes ?? syncEvent.payload?.notes,
+              originalStatus: syncEvent.status,
+              sequence: syncEvent.sequence,
+              syncOrigin: "local_sync",
+              variance: conflictDetails.variance,
+            },
+            organizationId: store.organizationId,
+            registerSessionId: args.registerSessionId,
+            storeId: args.storeId,
+            subjectId: args.registerSessionId,
+            subjectLabel: registerSession.registerNumber,
+            subjectType: "register_session",
+            terminalId,
+          });
         }
         continue;
       }
@@ -1430,7 +1484,19 @@ export const resolveRegisterSessionSyncReview = mutation({
           .take(100);
 
         for (const conflict of matchingConflicts) {
-          if (conflict.status === "needs_review") {
+          const matchesSelectedConflictType = conflicts.some(
+            (selectedConflict) =>
+              selectedConflict.localEventId === conflict.localEventId &&
+              selectedConflict.terminalId === conflict.terminalId &&
+              selectedConflict.conflictType === conflict.conflictType,
+          );
+          if (
+            conflict.status === "needs_review" &&
+            (requestedConflictIds.size === 0 ||
+              requestedConflictIds.has(conflict._id) ||
+              requestedConflictIds.has(conflict.localEventId) ||
+              matchesSelectedConflictType)
+          ) {
             resolvedConflictIds.add(conflict._id);
           }
         }

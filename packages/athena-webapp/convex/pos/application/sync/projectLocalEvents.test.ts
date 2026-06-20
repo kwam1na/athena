@@ -2685,6 +2685,129 @@ describe("projectLocalSyncEvent", () => {
     );
   });
 
+  it("does not duplicate-conflict an already projected inventory review sale replay", async () => {
+    const repository = createProjectionRepository({
+      sku: {
+        _id: "sku-1",
+        storeId: "store-1",
+        productId: "product-1",
+        sku: "CAP-1",
+        price: 25,
+        quantityAvailable: 0,
+        inventoryCount: 0,
+        images: [],
+      },
+    });
+    repository.createdPosSessions.push({
+      _id: "pos-session-1",
+      completedAt: 20,
+      createdAt: 20,
+      expiresAt: 20,
+      inventoryHoldMode: "ledger",
+      payments: [
+        {
+          amount: 25,
+          method: "cash",
+          timestamp: 21,
+        },
+      ],
+      registerNumber: "1",
+      registerSessionId: "register-session-1",
+      sessionNumber: "local-session-1",
+      staffProfileId: "staff-1",
+      status: "completed",
+      storeId: "store-1",
+      subtotal: 25,
+      tax: 0,
+      terminalId: "terminal-1",
+      total: 25,
+      transactionId: "transaction-1",
+      updatedAt: 20,
+    });
+    repository.mappings.push(
+      {
+        _id: "mapping-existing-pos-session",
+        storeId: "store-1" as never,
+        terminalId: "terminal-1" as never,
+        localRegisterSessionId: "local-register-1",
+        localEventId: "event-sale-completed-1",
+        localIdKind: "posSession",
+        localId: "local-session-1",
+        cloudTable: "posSession",
+        cloudId: "pos-session-1",
+        createdAt: 1,
+      },
+      {
+        _id: "mapping-existing-transaction",
+        storeId: "store-1" as never,
+        terminalId: "terminal-1" as never,
+        localRegisterSessionId: "local-register-1",
+        localEventId: "event-sale-completed-1",
+        localIdKind: "transaction",
+        localId: "local-txn-1",
+        cloudTable: "posTransaction",
+        cloudId: "transaction-1",
+        createdAt: 1,
+      },
+      {
+        _id: "mapping-existing-receipt",
+        storeId: "store-1" as never,
+        terminalId: "terminal-1" as never,
+        localRegisterSessionId: "local-register-1",
+        localEventId: "event-sale-completed-1",
+        localIdKind: "receipt",
+        localId: "LR-001",
+        cloudTable: "posTransaction",
+        cloudId: "transaction-1",
+        createdAt: 1,
+      },
+    );
+    repository.createdConflicts.push({
+      _id: "conflict-reviewed-inventory",
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      localRegisterSessionId: "local-register-1",
+      localEventId: "event-sale-completed-1",
+      sequence: 2,
+      conflictType: "inventory",
+      status: "needs_review",
+      summary: "Inventory needs manager review for a synced offline sale.",
+      details: {
+        localTransactionId: "local-txn-1",
+        productSkuId: "sku-1",
+        quantityAvailable: 0,
+        requestedQuantity: 1,
+      },
+      createdAt: 1,
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: buildSaleCompletedEvent(),
+      syncEventId: "sync-event-1",
+      submittedByUserId: "athena-user-1" as never,
+      now: 100,
+      options: {
+        allowReviewedInventorySaleProjection: true,
+        reviewedConflictIds: ["conflict-reviewed-inventory"],
+      },
+    });
+
+    expect(result.status).toBe("projected");
+    expect(result.conflicts).toEqual([]);
+    expect(repository.createdConflicts).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          conflictType: "duplicate_local_id",
+          summary: "Local POS session id was reused by a different synced sale.",
+        }),
+      ]),
+    );
+    expect(repository.createdTransactions).toEqual([]);
+    expect(repository.createdServiceWorkItems).toHaveLength(1);
+  });
+
   it("aggregates duplicate SKU lines before validating and patching inventory", async () => {
     const repository = createProjectionRepository({
       sku: {
@@ -3836,6 +3959,27 @@ describe("projectLocalSyncEvent", () => {
         }),
         summary:
           "Register closeout variance requires manager review before synced closeout can be applied.",
+      }),
+    ]);
+    expect(repository.createdOperationalEvents).toEqual([
+      expect.objectContaining({
+        actorStaffProfileId: "staff-1",
+        createdAt: 30,
+        eventType: "register_session_sync_closeout_review_requested",
+        localEventId: "event-register-closed-1",
+        message:
+          "Register 1 closeout submitted with a cash variance of GH₵-0.1. Review before applying it.",
+        metadata: expect.objectContaining({
+          countedCash: 90,
+          expectedCash: 100,
+          localEventId: "event-register-closed-1",
+          notes: "Short drawer",
+          reviewConflictId: "conflict-1",
+          syncOrigin: "local_sync",
+          variance: -10,
+        }),
+        registerSessionId: "register-session-1",
+        terminalId: "terminal-1",
       }),
     ]);
   });

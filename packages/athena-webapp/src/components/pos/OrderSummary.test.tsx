@@ -772,6 +772,42 @@ describe("OrderSummary completed transaction summary", () => {
     expect(onVoidTransaction).toHaveBeenCalledTimes(1);
   });
 
+  it("disables the void action when a void request is pending", async () => {
+    const user = userEvent.setup();
+    const onVoidTransaction = vi.fn();
+
+    render(
+      <OrderSummary
+        cartItems={[]}
+        completedOrderNumber="192231"
+        completedTransactionData={{
+          paymentMethod: "cash",
+          completedAt: new Date("2026-05-25T14:27:00.000Z"),
+          cartItems: [],
+          customerInfo: undefined,
+          subtotal: 150000,
+          tax: 0,
+          total: 150000,
+          status: "completed",
+          payments: [
+            { id: "payment-1", method: "cash", amount: 150000, timestamp: 1 },
+          ],
+        }}
+        isTransactionCompleted
+        onVoidTransaction={onVoidTransaction}
+        pendingVoidApprovalRequestId="approval-request-1"
+      />,
+    );
+
+    const voidButton = screen.getByRole("button", {
+      name: "Void requested",
+    });
+
+    expect(voidButton).toBeDisabled();
+    await user.click(voidButton);
+    expect(onVoidTransaction).not.toHaveBeenCalled();
+  });
+
   it("reflects a draft amount equal to balance due as zero remaining", async () => {
     const user = userEvent.setup();
 

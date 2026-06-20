@@ -359,17 +359,18 @@ function runtimeMatchesExpectedEvidence(
   runtimeStatus: Doc<"posTerminalRuntimeStatus">,
   expectedEvidence: TerminalRecoveryExpectedEvidence,
 ) {
+  const appUpdateEvidence = getRuntimeAppUpdateEvidence(runtimeStatus);
   if (
     expectedEvidence.appUpdateStatus !== undefined &&
-    getRuntimeAppUpdateEvidence(runtimeStatus).status !==
-      expectedEvidence.appUpdateStatus
+    appUpdateEvidence.status !== expectedEvidence.appUpdateStatus
   ) {
     return false;
   }
   if (
     expectedEvidence.appUpdateCommandExecutionId !== undefined &&
-    getRuntimeAppUpdateEvidence(runtimeStatus).commandExecutionId !==
-      expectedEvidence.appUpdateCommandExecutionId
+    (appUpdateEvidence.commandExecutionId !==
+      expectedEvidence.appUpdateCommandExecutionId ||
+      appUpdateEvidence.status === "applying")
   ) {
     return false;
   }

@@ -146,6 +146,7 @@ export type PosLocalRuntimeSyncDebug = {
   oldestPendingUploadSequence?: number;
   nextPendingUploadSequence?: number;
   pendingUploadEventCount?: number;
+  reviewEvents?: PosTerminalRuntimeSyncDebugInput["reviewEvents"];
   reviewEventCount?: number;
   schedulerBackoffUntil?: number | null;
   schedulerRunning?: boolean;
@@ -784,6 +785,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
       nextPendingUploadSequence: debug.nextPendingUploadSequence,
       oldestPendingEventAt: debug.oldestPendingEventAt,
       pendingUploadEventCount: debug.pendingUploadEventCount,
+      reviewEvents: debug.reviewEvents,
       reviewEventCount: debug.reviewEventCount,
       schedulerRunning: debug.schedulerRunning,
     }),
@@ -795,6 +797,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
       debug.nextPendingUploadSequence,
       debug.oldestPendingEventAt,
       debug.pendingUploadEventCount,
+      debug.reviewEvents,
       debug.reviewEventCount,
       debug.schedulerRunning,
     ],

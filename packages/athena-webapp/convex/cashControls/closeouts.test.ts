@@ -6,8 +6,10 @@ import {
   correctRegisterSessionOpeningFloat,
   getCashControlsConfig,
   reopenRegisterSessionCloseout,
+  reviewRegisterSessionCloseout,
   submitRegisterSessionCloseout,
 } from "./closeouts";
+import { assertConformsToExportedReturns } from "../lib/returnValidatorContract";
 
 function getSource(relativePath: string) {
   return readFileSync(new URL(relativePath, import.meta.url), "utf8");
@@ -18,6 +20,33 @@ function getHandler(definition: unknown) {
 }
 
 describe("cash control closeouts", () => {
+  it("validates representative public closeout command results against exported return validators", () => {
+    const validationError = {
+      kind: "user_error" as const,
+      error: {
+        code: "validation_failed" as const,
+        message: "Counted cash cannot be negative.",
+      },
+    };
+
+    assertConformsToExportedReturns(
+      submitRegisterSessionCloseout,
+      validationError,
+    );
+    assertConformsToExportedReturns(
+      reopenRegisterSessionCloseout,
+      validationError,
+    );
+    assertConformsToExportedReturns(
+      correctRegisterSessionOpeningFloat,
+      validationError,
+    );
+    assertConformsToExportedReturns(
+      reviewRegisterSessionCloseout,
+      validationError,
+    );
+  });
+
   it("uses a sensible default approval threshold when store config is absent", () => {
     expect(getCashControlsConfig()).toEqual({
       requireManagerSignoffForAnyVariance: false,
@@ -166,6 +195,8 @@ describe("cash control closeouts", () => {
     expect(source).toContain("approvalMode: \"inline_manager_proof\"");
     expect(source).toContain("approvalRequired(approvalRequirement)");
     expect(source).toContain("REGISTER_VARIANCE_REVIEW_ACTION");
+    expect(source).toContain("buildRegisterCloseoutVarianceTimelineMessage");
+    expect(source).toContain("currency: store?.currency");
   });
 
   it("exposes opening float correction as a command-result mutation with audit rails", () => {

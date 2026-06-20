@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -88,6 +89,7 @@ function renderWithUpdateProviders(
 
 describe("UpdateReadyBanner", () => {
   beforeEach(() => {
+    vi.stubGlobal("BroadcastChannel", undefined);
     toastMock.show.mockReset();
     toastMock.message.mockReset();
     toastMock.custom.mockReset();
@@ -124,9 +126,11 @@ describe("UpdateReadyBanner", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "mark ready" }));
     fireEvent.click(screen.getByRole("button", { name: "Update" }));
-    fireEvent.click(screen.getByRole("button", { name: "Update" }));
+    const applyingButton = screen.getByRole("button", { name: "Update" });
+    fireEvent.click(applyingButton);
 
     expect(screen.getByLabelText("Update ready")).toBeInTheDocument();
+    expect(applyingButton.querySelector("svg")).not.toHaveClass("animate-spin");
     expect(reload).toHaveBeenCalledTimes(1);
     expect(toastMock.message).not.toHaveBeenCalled();
   });
@@ -179,7 +183,8 @@ describe("UpdateReadyBanner", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("warns about incomplete staging while allowing a manual refresh", () => {
+  it("warns about incomplete staging while allowing a manual refresh", async () => {
+    const user = userEvent.setup();
     const reload = vi.fn();
     renderWithUpdateProviders(
       <>
@@ -194,13 +199,23 @@ describe("UpdateReadyBanner", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "mark ready" }));
 
-    expect(screen.getByText("Update ready.")).toBeInTheDocument();
+    expect(screen.getByText("Update ready")).toBeInTheDocument();
     expect(
       screen.queryByText("Some files were not cached for offline use."),
     ).not.toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Update cache details" }),
-    ).toBeInTheDocument();
+    const detailsTrigger = screen.getByRole("button", {
+      name: "Update cache details",
+    });
+    expect(detailsTrigger).toBeInTheDocument();
+    await user.hover(detailsTrigger);
+    const tooltipContent = (
+      await screen.findAllByText("Some files were not cached for offline use.")
+    ).find((element) => element.classList.contains("w-72"));
+    expect(tooltipContent).toHaveClass(
+      "w-72",
+      "whitespace-normal",
+      "text-left",
+    );
     fireEvent.click(screen.getByRole("button", { name: "Update" }));
     expect(reload).toHaveBeenCalledTimes(1);
   });

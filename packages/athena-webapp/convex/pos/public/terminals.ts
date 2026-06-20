@@ -250,6 +250,11 @@ const terminalSyncEvidenceReturnValidator = v.object({
     createdAt: v.number(),
     localEventId: v.string(),
     localRegisterSessionId: v.string(),
+    reviewTarget: v.optional(v.object({
+      type: v.literal("open_work"),
+      workItemId: v.id("operationalWorkItem"),
+      workItemType: v.literal("synced_sale_inventory_review"),
+    })),
     sequence: v.number(),
     summary: v.string(),
   }))),
@@ -265,6 +270,7 @@ const terminalHealthActionTargetReturnValidator = v.union(
   }),
   v.object({
     type: v.literal("open_work"),
+    label: v.optional(v.string()),
   }),
   v.object({
     type: v.literal("pos_register"),
@@ -299,6 +305,7 @@ const terminalHealthAttentionReasonReturnValidator = v.object({
     v.literal("cloud_conflict"),
     v.literal("cloud_held"),
     v.literal("cloud_rejected"),
+    v.literal("synced_sale_inventory_review"),
     v.literal("local_review"),
     v.literal("local_store_unavailable"),
     v.literal("sync_failed"),
