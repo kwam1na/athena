@@ -23,11 +23,13 @@ import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import {
   DailyCloseReadOnlyReport,
+  type DailyCloseSnapshot,
+} from "./DailyCloseView";
+import {
   formatDailyCloseCompletedAt,
   formatDailyCloseMoney,
   formatDailyCloseOperatingDate,
-  type DailyCloseSnapshot,
-} from "./DailyCloseView";
+} from "./dailyCloseFormatting";
 
 type DailyCloseHistoryApi = {
   getCompletedDailyCloseHistoryDetail?: unknown;

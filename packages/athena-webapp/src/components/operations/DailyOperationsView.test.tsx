@@ -892,6 +892,10 @@ describe("DailyOperationsViewContent", () => {
     expect(screen.getAllByText("Manager only")).not.toHaveLength(0);
     expect(screen.getAllByText("3 transactions")).not.toHaveLength(0);
     expect(screen.getByText("2 cash transactions")).toBeInTheDocument();
+    expect(screen.queryByText(/vs prior day/)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/No payments on prior day/),
+    ).not.toBeInTheDocument();
   });
 
   it("uses today labels and current-day transaction links for the current operating date", () => {
@@ -1177,6 +1181,69 @@ describe("DailyOperationsViewContent", () => {
 
     expect(screen.getByText("Reopened")).toBeInTheDocument();
     expect(screen.queryByText("Closed")).not.toBeInTheDocument();
+  });
+
+  it("uses prior-day metric for card comparisons when yesterday is outside the visible week", () => {
+    const currentOperatingDate = getCurrentLocalOperatingDate();
+    const priorOperatingDate = shiftTestOperatingDate(currentOperatingDate, -1);
+    const futureOperatingDate = shiftTestOperatingDate(currentOperatingDate, 1);
+
+    renderContent({
+      ...operatingSnapshot,
+      closeSummary: {
+        ...operatingSnapshot.closeSummary,
+        salesTotal: 1533100,
+        transactionCount: 3,
+      },
+      operatingDate: currentOperatingDate,
+      priorDayMetric: {
+        ...weekMetrics[0],
+        currentDayCashTotal: 200000,
+        currentDayCashTransactionCount: 1,
+        isClosed: false,
+        isSelected: false,
+        operatingDate: priorOperatingDate,
+        paymentTotals: [
+          { amount: 200000, method: "cash", transactionCount: 1 },
+          { amount: 800000, method: "mobile_money", transactionCount: 1 },
+        ],
+        salesTotal: 1000000,
+        transactionCount: 2,
+      },
+      weekMetrics: [
+        {
+          ...weekMetrics[0],
+          isClosed: false,
+          isSelected: true,
+          operatingDate: currentOperatingDate,
+          salesTotal: 1533100,
+          transactionCount: 3,
+        },
+        {
+          ...weekMetrics[1],
+          isClosed: false,
+          isSelected: false,
+          operatingDate: futureOperatingDate,
+          salesTotal: 0,
+          transactionCount: 0,
+        },
+      ],
+    });
+
+    expect(screen.getByText("+53%")).toBeInTheDocument();
+    expect(screen.getAllByText("vs yesterday").length).toBeGreaterThan(0);
+    expect(screen.queryAllByText("None yesterday")).toHaveLength(0);
+  });
+
+  it("uses payment-specific copy when a prior-day payment method has no entries", () => {
+    renderContent(operatingSnapshot);
+
+    expect(
+      screen.getAllByText("No payments on prior day").length,
+    ).toBeGreaterThan(0);
+    expect(
+      screen.queryByText("3 payments · No activity on prior day"),
+    ).toBeNull();
   });
 
   it("disables future dates in the week strip", () => {

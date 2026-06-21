@@ -2,25 +2,27 @@ import { useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "~/convex/_generated/api";
 import { Id } from "~/convex/_generated/dataModel";
-import View from "../View";
 import { currencyFormatter } from "~/src/lib/utils";
 import { Tabs, TabsList, TabsTrigger } from "../ui/tabs";
-import { FadeIn } from "../common/FadeIn";
+import { OperationsSummaryMetric } from "../operations/OperationsSummaryMetric";
 
 type TimeRange = "day" | "week" | "month" | "all";
 
 interface OrderMetricsPanelProps {
+  initialTimeRange?: TimeRange;
   storeId: Id<"store">;
   currency: string;
   onTimeRangeChange: (timeRange: TimeRange) => void;
 }
 
 export default function OrderMetricsPanel({
+  initialTimeRange = "day",
   storeId,
   currency,
   onTimeRangeChange,
 }: OrderMetricsPanelProps) {
-  const [selectedTimeRange, setSelectedTimeRange] = useState<TimeRange>("day");
+  const [selectedTimeRange, setSelectedTimeRange] =
+    useState<TimeRange>(initialTimeRange);
 
   const metrics = useQuery(api.storeFront.onlineOrder.getOrderMetrics, {
     storeId,
@@ -38,62 +40,44 @@ export default function OrderMetricsPanel({
   const isLoading = metrics === undefined;
 
   return (
-    <View
-      hideBorder
-      hideHeaderBottomBorder
-      fullHeight={false}
-      lockDocumentScroll={false}
-      className="bg-background mb-6"
-    >
-      <FadeIn className="container mx-auto py-6">
-        <div className="flex items-center justify-between mb-6">
-          {/* <h2 className="text-lg font-semibold">Order Metrics</h2> */}
+    <section className="space-y-layout-md">
+      <div className="flex flex-col gap-layout-sm lg:flex-row lg:items-end lg:justify-between">
+        <div className="space-y-layout-2xs">
+          <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+            Order snapshot
+          </p>
+        </div>
+        <div className="self-start lg:self-auto">
           <Tabs value={selectedTimeRange} onValueChange={handleTimeRangeChange}>
             <TabsList>
               <TabsTrigger value="day">Day</TabsTrigger>
               <TabsTrigger value="week">Week</TabsTrigger>
               <TabsTrigger value="month">Month</TabsTrigger>
-              <TabsTrigger value="all">All Time</TabsTrigger>
+              <TabsTrigger value="all">All time</TabsTrigger>
             </TabsList>
           </Tabs>
         </div>
+      </div>
 
-        {isLoading ? null : (
-          <div className="grid grid-cols-3 gap-6">
-            {/* Gross Sales Card */}
-            <div className="border rounded-lg p-6">
-              <p className="text-sm text-muted-foreground mb-2">Gross Sales</p>
-              <p className="text-3xl font-bold">
-                {formatter.format((metrics?.grossSales || 0) / 100)}
-              </p>
-            </div>
-
-            {/* Total Discounts Card */}
-            {/* <div className="border rounded-lg p-6">
-              <p className="text-sm text-muted-foreground mb-2">
-                Total Discounts
-              </p>
-              <p className="text-3xl font-bold">
-                {formatter.format((metrics?.totalDiscounts || 0) / 100)}
-              </p>
-            </div> */}
-
-            {/* Net Revenue Card */}
-            <div className="border rounded-lg p-6">
-              <p className="text-sm text-muted-foreground mb-2">Net Revenue</p>
-              <p className="text-3xl font-bold">
-                {formatter.format((metrics?.netRevenue || 0) / 100)}
-              </p>
-            </div>
-
-            {/* Total Orders Card */}
-            <div className="border rounded-lg p-6">
-              <p className="text-sm text-muted-foreground mb-2">Total Orders</p>
-              <p className="text-3xl font-bold">{metrics?.totalOrders || 0}</p>
-            </div>
-          </div>
-        )}
-      </FadeIn>
-    </View>
+      {isLoading ? null : (
+        <div className="grid gap-layout-sm md:grid-cols-3">
+          <OperationsSummaryMetric
+            helper="Subtotal before discounts"
+            label="Gross sales"
+            value={formatter.format((metrics?.grossSales || 0) / 100)}
+          />
+          <OperationsSummaryMetric
+            helper="Subtotal plus fees after discounts"
+            label="Net revenue"
+            value={formatter.format((metrics?.netRevenue || 0) / 100)}
+          />
+          <OperationsSummaryMetric
+            helper="Open and fulfilled orders"
+            label="Orders"
+            value={metrics?.totalOrders || 0}
+          />
+        </div>
+      )}
+    </section>
   );
 }

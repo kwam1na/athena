@@ -273,6 +273,88 @@ describe("POS public transaction read and correction authorization", () => {
     };
   }
 
+  function createMembership(role: "full_admin" | "pos_only") {
+    return {
+      _creationTime: 0,
+      _id: `member-${role}` as Id<"organizationMember">,
+      organizationId: "org-1" as Id<"organization">,
+      role,
+      userId: "user-1" as Id<"athenaUser">,
+    };
+  }
+
+  function createStorePulseSummary(): Awaited<
+    ReturnType<typeof transactionQueries.getTodaySummary>
+  > {
+    return {
+      averageTransaction: 8215,
+      date: "2026-06-21",
+      operatorSnapshot: {
+        busiestHour: {
+          hour: 12,
+          label: "12 PM",
+          totalSales: 8215,
+          transactionCount: 3,
+        },
+        comparison: {
+          averageTransactionDeltaPercent: -37,
+          currentAverageTransaction: 2738.33,
+          currentItemsSold: 15,
+          currentSales: 8215,
+          currentTransactions: 3,
+          itemsSoldDeltaPercent: -17,
+          salesDeltaPercent: -37,
+          transactionDeltaPercent: -40,
+          yesterdayAverageTransaction: 4338,
+          yesterdayItemsSold: 18,
+          yesterdaySales: 13014,
+          yesterdayTransactions: 5,
+        },
+        historyDays: 14,
+        isLimited: false,
+        paymentMix: [
+          {
+            count: 1,
+            label: "Mobile money",
+            method: "mobile_money",
+            share: 82,
+            total: 6800,
+          },
+        ],
+        topItems: [
+          {
+            name: "Jowo",
+            productSku: "JOWO",
+            quantity: 5,
+            totalSales: 4000,
+          },
+        ],
+        trend: [
+          {
+            averageTransaction: 6507,
+            date: "2026-06-20",
+            label: "Jun 20",
+            totalItemsSold: 18,
+            totalSales: 13014,
+            transactionCount: 5,
+          },
+          {
+            averageTransaction: 2738.33,
+            date: "2026-06-21",
+            label: "Jun 21",
+            totalItemsSold: 15,
+            totalSales: 8215,
+            transactionCount: 3,
+          },
+        ],
+        usableHistoryDays: 2,
+      },
+      totalItemsSold: 15,
+      totalSales: 8215,
+      totalTransactions: 3,
+    };
+  }
+
   it("requires store membership before returning completed transactions", async () => {
     vi.mocked(transactionQueries.getCompletedTransactions).mockResolvedValue([
       {
@@ -296,6 +378,66 @@ describe("POS public transaction read and correction authorization", () => {
       },
     );
     expect(transactionQueries.getCompletedTransactions).toHaveBeenCalled();
+  });
+
+  it("forces today's redacted POS pulse summary for non-full-admin store members", async () => {
+    vi.mocked(
+      athenaUserAuth.requireOrganizationMemberRoleWithCtx,
+    ).mockResolvedValue(createMembership("pos_only"));
+    vi.mocked(transactionQueries.getTodaySummary).mockResolvedValue(
+      createStorePulseSummary(),
+    );
+    const ctx = createTransactionAuthCtx();
+
+    const result = await getHandler(getTodaySummary)(ctx as never, {
+      pulseWindow: "all_time",
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(transactionQueries.getTodaySummary).toHaveBeenCalledWith(ctx, {
+      pulseWindow: "today",
+      storeId: "store-1",
+    });
+    expect(result).toMatchObject({
+      averageTransaction: 0,
+      totalItemsSold: 15,
+      totalSales: 0,
+      totalTransactions: 3,
+    });
+    expect(result.operatorSnapshot.comparison).toMatchObject({
+      currentItemsSold: 15,
+      currentSales: 0,
+      currentTransactions: 3,
+      itemsSoldDeltaPercent: 0,
+      salesDeltaPercent: 0,
+      transactionDeltaPercent: 0,
+      yesterdaySales: 0,
+      yesterdayTransactions: 0,
+    });
+    expect(result.operatorSnapshot.busiestHour).toBeNull();
+    expect(result.operatorSnapshot.paymentMix).toEqual([]);
+    expect(result.operatorSnapshot.topItems).toEqual([]);
+    expect(result.operatorSnapshot.trend).toEqual([]);
+  });
+
+  it("keeps the requested POS pulse window and financial fields for full admins", async () => {
+    const summary = createStorePulseSummary();
+    vi.mocked(
+      athenaUserAuth.requireOrganizationMemberRoleWithCtx,
+    ).mockResolvedValue(createMembership("full_admin"));
+    vi.mocked(transactionQueries.getTodaySummary).mockResolvedValue(summary);
+    const ctx = createTransactionAuthCtx();
+
+    const result = await getHandler(getTodaySummary)(ctx as never, {
+      pulseWindow: "all_time",
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(transactionQueries.getTodaySummary).toHaveBeenCalledWith(ctx, {
+      pulseWindow: "all_time",
+      storeId: "store-1",
+    });
+    expect(result).toBe(summary);
   });
 
   it.each([

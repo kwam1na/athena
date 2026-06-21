@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import PointOfSaleView from "./PointOfSaleView";
@@ -283,6 +284,34 @@ describe("PointOfSaleView", () => {
       pulseWindow: "today",
       storeId: "store-1",
     });
+  });
+
+  it("keeps non-full-admin store pulse queries on today", async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(<PointOfSaleView />);
+
+    await user.click(screen.getByRole("tab", { name: "This month" }));
+    expect(useQueryMock).toHaveBeenLastCalledWith(expect.anything(), {
+      pulseWindow: "this_month",
+      storeId: "store-1",
+    });
+
+    usePermissionsMock.mockReturnValue({
+      canAccessPOS: () => true,
+      hasFinancialDetailsAccess: false,
+      hasFullAdminAccess: false,
+    });
+    useQueryMock.mockClear();
+
+    rerender(<PointOfSaleView />);
+
+    expect(useQueryMock).toHaveBeenCalledWith(expect.anything(), {
+      pulseWindow: "today",
+      storeId: "store-1",
+    });
+    expect(
+      screen.queryByRole("tab", { name: "This month" }),
+    ).not.toBeInTheDocument();
   });
 
   it("keeps POS entry points available while store pulse metrics load", () => {

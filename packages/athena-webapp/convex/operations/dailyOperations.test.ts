@@ -1,7 +1,16 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Id } from "../_generated/dataModel";
 import type { QueryCtx } from "../_generated/server";
-import { buildDailyOperationsSnapshotWithCtx } from "./dailyOperations";
+import * as athenaUserAuth from "../lib/athenaUserAuth";
+import {
+  buildDailyOperationsSnapshotWithCtx,
+  getDailyOperationsSnapshot,
+} from "./dailyOperations";
+
+vi.mock("../lib/athenaUserAuth", () => ({
+  requireAuthenticatedAthenaUserWithCtx: vi.fn(),
+  requireOrganizationMemberRoleWithCtx: vi.fn(),
+}));
 
 type TableName =
   | "approvalRequest"
@@ -304,8 +313,13 @@ function buildCtx(seed: Partial<Record<TableName, Row[]>>) {
   return { db } as unknown as QueryCtx;
 }
 
+function getHandler(definition: unknown) {
+  return (definition as { _handler: Function })._handler;
+}
+
 describe("daily operations overview read model", () => {
   afterEach(() => {
+    vi.clearAllMocks();
     vi.restoreAllMocks();
   });
 
@@ -967,7 +981,10 @@ describe("daily operations overview read model", () => {
             completedAt: Date.UTC(2026, 4, 8, 16),
             paymentMethod: "cash",
             paymentAllocations: [],
-            payments: [{ amount: 85000, method: "cash" }],
+            payments: [
+              { amount: 45000, method: "cash" },
+              { amount: 40000, method: "cash" },
+            ],
             status: "completed",
             storeId: "store-1",
             terminalId: "terminal-1",
@@ -1010,6 +1027,13 @@ describe("daily operations overview read model", () => {
       isClosed: false,
       isReopened: true,
       isSelected: false,
+      paymentTotals: [
+        {
+          amount: 80000,
+          method: "cash",
+          transactionCount: 1,
+        },
+      ],
       salesTotal: 80000,
       transactionCount: 1,
     });
@@ -1020,6 +1044,245 @@ describe("daily operations overview read model", () => {
       salesTotal: 0,
       transactionCount: 0,
     });
+  });
+
+  it("exposes prior-day metric when yesterday is outside the selected week", async () => {
+    const snapshot = await buildDailyOperationsSnapshotWithCtx(
+      buildCtx({
+        dailyOpening: [
+          {
+            ...startedOpening,
+            _id: "opening-current",
+            operatingDate: "2026-06-21",
+          },
+        ],
+        posTransaction: [
+          {
+            _id: "txn-yesterday",
+            changeGiven: 5000,
+            completedAt: Date.UTC(2026, 5, 20, 16),
+            paymentMethod: "cash",
+            paymentAllocations: [],
+            payments: [],
+            status: "completed",
+            storeId: "store-1",
+            terminalId: "terminal-1",
+            total: 50000,
+            totalPaid: 55000,
+            transactionNumber: "TXN-YESTERDAY",
+          },
+          {
+            _id: "txn-current",
+            changeGiven: 0,
+            completedAt: Date.UTC(2026, 5, 21, 16),
+            paymentMethod: "cash",
+            paymentAllocations: [],
+            payments: [{ amount: 821500, method: "cash" }],
+            status: "completed",
+            storeId: "store-1",
+            terminalId: "terminal-1",
+            total: 821500,
+            totalPaid: 821500,
+            transactionNumber: "TXN-CURRENT",
+          },
+        ],
+        store: [store],
+      }),
+      {
+        operatingDate: "2026-06-21",
+        storeId: "store-1" as Id<"store">,
+        weekEndOperatingDate: "2026-06-27",
+      },
+    );
+
+    expect(snapshot.weekMetrics.map((metric) => metric.operatingDate)).toEqual([
+      "2026-06-21",
+      "2026-06-22",
+      "2026-06-23",
+      "2026-06-24",
+      "2026-06-25",
+      "2026-06-26",
+      "2026-06-27",
+    ]);
+    expect(snapshot.priorDayMetric).toMatchObject({
+      currentDayCashTotal: 50000,
+      operatingDate: "2026-06-20",
+      paymentTotals: [
+        {
+          amount: 50000,
+          method: "cash",
+          transactionCount: 1,
+        },
+      ],
+      salesTotal: 50000,
+      transactionCount: 1,
+    });
+  });
+
+  it("redacts financial details when the snapshot is built for a non-manager viewer", async () => {
+    const snapshot = await buildDailyOperationsSnapshotWithCtx(
+      buildCtx({
+        dailyOpening: [
+          {
+            ...startedOpening,
+            _id: "opening-current",
+            operatingDate: "2026-06-21",
+          },
+        ],
+        posTransaction: [
+          {
+            _id: "txn-yesterday",
+            changeGiven: 0,
+            completedAt: Date.UTC(2026, 5, 20, 16),
+            paymentMethod: "cash",
+            paymentAllocations: [],
+            payments: [{ amount: 50000, method: "cash" }],
+            status: "completed",
+            storeId: "store-1",
+            terminalId: "terminal-1",
+            total: 50000,
+            totalPaid: 50000,
+            transactionNumber: "TXN-YESTERDAY",
+          },
+          {
+            _id: "txn-current",
+            changeGiven: 0,
+            completedAt: Date.UTC(2026, 5, 21, 16),
+            paymentMethod: "mobile_money",
+            paymentAllocations: [],
+            payments: [{ amount: 821500, method: "mobile_money" }],
+            status: "completed",
+            storeId: "store-1",
+            terminalId: "terminal-1",
+            total: 821500,
+            totalPaid: 821500,
+            transactionNumber: "TXN-CURRENT",
+          },
+        ],
+        store: [store],
+      }),
+      {
+        includeFinancialDetails: false,
+        operatingDate: "2026-06-21",
+        storeId: "store-1" as Id<"store">,
+        weekEndOperatingDate: "2026-06-27",
+      },
+    );
+
+    expect(snapshot.closeSummary).toMatchObject({
+      currentDayCashTotal: 0,
+      paymentTotals: [],
+      salesTotal: 0,
+      transactionCount: 1,
+    });
+    expect(snapshot.priorDayMetric).toBeUndefined();
+    expect(
+      snapshot.weekMetrics.find((metric) => metric.operatingDate === "2026-06-21"),
+    ).toMatchObject({
+      paymentTotals: [],
+      salesTotal: 0,
+      transactionCount: 1,
+    });
+  });
+
+  it("requires store membership before returning a daily operations snapshot", async () => {
+    vi.mocked(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).mockResolvedValue({
+      _creationTime: 0,
+      _id: "user-1" as Id<"athenaUser">,
+      email: "pos@wigclub.store",
+    });
+    vi.mocked(
+      athenaUserAuth.requireOrganizationMemberRoleWithCtx,
+    ).mockRejectedValue(new Error("You cannot view daily operations for this store."));
+
+    await expect(
+      getHandler(getDailyOperationsSnapshot)(
+        buildCtx({ store: [store] }) as never,
+        {
+          operatingDate: "2026-06-21",
+          storeId: "store-1" as Id<"store">,
+          weekEndOperatingDate: "2026-06-27",
+        },
+      ),
+    ).rejects.toThrow("You cannot view daily operations for this store.");
+  });
+
+  it("returns a redacted daily operations snapshot for POS-only store members", async () => {
+    vi.mocked(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).mockResolvedValue({
+      _creationTime: 0,
+      _id: "user-1" as Id<"athenaUser">,
+      email: "pos@wigclub.store",
+    });
+    vi.mocked(
+      athenaUserAuth.requireOrganizationMemberRoleWithCtx,
+    ).mockResolvedValue({
+      _creationTime: 0,
+      _id: "member-pos" as Id<"organizationMember">,
+      organizationId: "org-1" as Id<"organization">,
+      role: "pos_only",
+      userId: "user-1" as Id<"athenaUser">,
+    });
+
+    const snapshot = await getHandler(getDailyOperationsSnapshot)(
+      buildCtx({
+        dailyOpening: [
+          {
+            ...startedOpening,
+            _id: "opening-current",
+            operatingDate: "2026-06-21",
+          },
+        ],
+        operationalEvent: [
+          {
+            _id: "event-register-opened",
+            createdAt: Date.UTC(2026, 5, 21, 9),
+            eventType: "register_session_opened",
+            message: "Register session opened.",
+            metadata: {
+              openingFloat: 50000,
+            },
+            storeId: "store-1",
+            subjectId: "register-1",
+            subjectLabel: "Register 1",
+            subjectType: "register_session",
+          },
+        ],
+        posTransaction: [
+          {
+            _id: "txn-current",
+            changeGiven: 0,
+            completedAt: Date.UTC(2026, 5, 21, 16),
+            paymentMethod: "cash",
+            paymentAllocations: [],
+            payments: [{ amount: 821500, method: "cash" }],
+            status: "completed",
+            storeId: "store-1",
+            terminalId: "terminal-1",
+            total: 821500,
+            totalPaid: 821500,
+            transactionNumber: "TXN-CURRENT",
+          },
+        ],
+        store: [store],
+      }) as never,
+      {
+        operatingDate: "2026-06-21",
+        storeId: "store-1" as Id<"store">,
+        weekEndOperatingDate: "2026-06-27",
+      },
+    );
+
+    expect(snapshot.closeSummary).toMatchObject({
+      paymentTotals: [],
+      salesTotal: 0,
+      transactionCount: 1,
+    });
+    expect(snapshot.priorDayMetric).toBeUndefined();
+    expect(snapshot.timeline).toEqual([]);
   });
 
   it("buckets week sales by the local operating-day offset instead of UTC midnight", async () => {

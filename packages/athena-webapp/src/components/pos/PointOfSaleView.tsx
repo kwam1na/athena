@@ -77,17 +77,19 @@ export default function PointOfSaleView() {
       ? (localEntryContext.storeId as Id<"store">)
       : undefined);
   usePrewarmRegisterCatalogOfflineSnapshots({ storeId: snapshotStoreId });
-	  const todaySummary = useQuery(
-	    api.inventory.pos.getTodaySummary,
-	    snapshotStoreId
-	      ? { pulseWindow: storePulseWindow, storeId: snapshotStoreId }
-	      : "skip",
-	  );
+  const { canAccessPOS, hasFullAdminAccess } = usePermissions();
+  const visibleStorePulseWindow = hasFullAdminAccess
+    ? storePulseWindow
+    : "today";
+  const todaySummary = useQuery(
+    api.inventory.pos.getTodaySummary,
+    snapshotStoreId
+      ? { pulseWindow: visibleStorePulseWindow, storeId: snapshotStoreId }
+      : "skip",
+  );
 
   // Currency formatter
   const currencyFormatter = useGetCurrencyFormatter();
-
-  const { canAccessPOS, hasFullAdminAccess } = usePermissions();
 
   const liveLinkParams =
     activeOrganization?.slug && activeStore?.slug
@@ -290,7 +292,7 @@ export default function PointOfSaleView() {
             currencyFormatter={currencyFormatter}
             hasFullAdminAccess={hasFullAdminAccess}
             onPulseWindowChange={setStorePulseWindow}
-            pulseWindow={storePulseWindow}
+            pulseWindow={visibleStorePulseWindow}
             todaySummary={todaySummary}
           />
         </PageWorkspace>

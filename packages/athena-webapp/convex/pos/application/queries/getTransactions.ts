@@ -817,6 +817,28 @@ async function getPulseSummaryForWindow(
     ctx,
     comparisonTransactions,
   );
+  const operatorSnapshot = await buildPosOperatorSnapshot(ctx, {
+    comparisonEnd: pulseWindow.comparisonEnd,
+    comparisonSummary,
+    comparisonStart: pulseWindow.comparisonStart,
+    currentOperatingDate: args.currentOperatingDate,
+    historyBucketMode: pulseWindow.historyBucketMode,
+    historyDays: pulseWindow.dayCount,
+    historyEnd: pulseWindow.rangeEnd,
+    historyStart: pulseWindow.rangeStart,
+    storeId: args.storeId,
+    todaySummary,
+  });
+  const trend =
+    args.pulseWindow === "today" && pulseWindow.comparisonStart !== undefined
+      ? [
+          buildSummaryTrendBucket(
+            pulseWindow.comparisonStart,
+            comparisonSummary,
+          ),
+          buildSummaryTrendBucket(pulseWindow.rangeEnd, todaySummary),
+        ]
+      : operatorSnapshot.trend;
 
   return {
     averageTransaction:
@@ -824,18 +846,15 @@ async function getPulseSummaryForWindow(
         ? todaySummary.totalSales / todaySummary.totalTransactions
         : 0,
     date: toIsoDate(pulseWindow.rangeEnd),
-    operatorSnapshot: await buildPosOperatorSnapshot(ctx, {
-      comparisonEnd: pulseWindow.comparisonEnd,
-      comparisonSummary,
-      comparisonStart: pulseWindow.comparisonStart,
-      currentOperatingDate: args.currentOperatingDate,
-      historyBucketMode: pulseWindow.historyBucketMode,
-      historyDays: pulseWindow.dayCount,
-      historyEnd: pulseWindow.rangeEnd,
-      historyStart: pulseWindow.rangeStart,
-      storeId: args.storeId,
-      todaySummary,
-    }),
+    operatorSnapshot: {
+      ...operatorSnapshot,
+      historyDays: Math.max(operatorSnapshot.historyDays, trend.length),
+      trend,
+      usableHistoryDays:
+        args.pulseWindow === "today" && comparisonSummary.totalTransactions > 0
+          ? Math.max(operatorSnapshot.usableHistoryDays, 1)
+          : operatorSnapshot.usableHistoryDays,
+    },
     totalItemsSold: todaySummary.totalItemsSold,
     totalSales: todaySummary.totalSales,
     totalTransactions: todaySummary.totalTransactions,
@@ -1224,6 +1243,25 @@ function buildRecentDayBuckets(startAt: number, dayCount: number) {
       transactionCount: 0,
     };
   });
+}
+
+function buildSummaryTrendBucket(
+  dateAt: number,
+  summary: PosPulseSummaryTotals,
+): PosOperatorDayBucket {
+  const date = toIsoDate(dateAt);
+
+  return {
+    averageTransaction:
+      summary.totalTransactions > 0
+        ? summary.totalSales / summary.totalTransactions
+        : 0,
+    date,
+    label: formatShortDate(date),
+    totalItemsSold: summary.totalItemsSold,
+    totalSales: summary.totalSales,
+    transactionCount: summary.totalTransactions,
+  };
 }
 
 function buildTransactionDateBuckets(

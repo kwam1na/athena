@@ -10,7 +10,11 @@ import { buildDailyOpeningSnapshotWithCtx } from "./dailyOpening";
 import { toDisplayAmount } from "../lib/currency";
 import { currencyFormatter } from "../utils";
 import { listAutomationRunsForStoreDayActionWithCtx } from "../automation/runLedger";
-import { requireStoreFullAdminAccess } from "../stockOps/access";
+import {
+  requireAuthenticatedAthenaUserWithCtx,
+  requireOrganizationMemberRoleWithCtx,
+} from "../lib/athenaUserAuth";
+import { buildPaymentTotals, transactionCashDelta } from "./paymentTotals";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_OPERATIONS_QUERY_LIMIT = 200;
@@ -280,17 +284,6 @@ function pluralize(value: number, singular: string, plural = `${singular}s`) {
   return `${value} ${plural}`;
 }
 
-function transactionCashDelta(
-  transaction: Pick<Doc<"posTransaction">, "changeGiven" | "payments">,
-) {
-  const cashTendered = transaction.payments.reduce(
-    (sum, payment) => (payment.method === "cash" ? sum + payment.amount : sum),
-    0,
-  );
-
-  return Math.max(0, cashTendered - (transaction.changeGiven ?? 0));
-}
-
 async function buildWeekMetricForDate(
   ctx: Pick<QueryCtx, "db">,
   args: {
@@ -389,6 +382,7 @@ async function buildWeekMetricForDate(
     isReopened: currentDailyClose?.lifecycleStatus === "reopened",
     isSelected: args.isSelected,
     operatingDate: args.operatingDate,
+    paymentTotals: buildPaymentTotals(completedTransactions),
     salesTotal,
     transactionCount: completedTransactions.length,
   };
@@ -1813,6 +1807,7 @@ export async function buildDailyOperationsSnapshotWithCtx(
   ctx: Pick<QueryCtx, "db">,
   args: {
     endAt?: number;
+    includeFinancialDetails?: boolean;
     includeManagerReviewEvidence?: boolean;
     includeScheduledRunSummaries?: boolean;
     operatingDate: string;
@@ -1822,6 +1817,7 @@ export async function buildDailyOperationsSnapshotWithCtx(
     weekEndOperatingDate?: string;
   },
 ) {
+  const includeFinancialDetails = args.includeFinancialDetails ?? true;
   const range = resolveRange(args);
   const [
     openingSnapshot,
@@ -1856,6 +1852,15 @@ export async function buildDailyOperationsSnapshotWithCtx(
       ctx.db.get("store", args.storeId),
       buildWeekMetrics(ctx, args),
     ]);
+  const priorOperatingDate = shiftOperatingDate(args.operatingDate, -1);
+  const priorDayMetric =
+    weekMetrics.find((metric) => metric.operatingDate === priorOperatingDate) ??
+    (await buildWeekMetricForDate(ctx, {
+      isSelected: false,
+      operatingDate: priorOperatingDate,
+      operatingTimezoneOffsetMinutes: args.operatingTimezoneOffsetMinutes,
+      storeId: args.storeId,
+    }));
 
   const isOpeningStarted = openingSnapshot.status === "started";
   const isCloseReopened =
@@ -1932,11 +1937,8 @@ export async function buildDailyOperationsSnapshotWithCtx(
     ...lifecycleCopy(lifecycleStatus),
   };
   const closeBlockerCounts = getCloseItemCounts(closeBlockers);
-
-  return {
-    automationStatuses,
-    attentionItems,
-    closeSummary: {
+  const closeSummary = maybeRedactCloseSummary(
+    {
       carriedOverCashTotal: closeSnapshot.summary.carriedOverCashTotal,
       carriedOverRegisterCount: closeSnapshot.summary.carriedOverRegisterCount,
       currentDayCashTotal: closeSnapshot.summary.currentDayCashTotal,
@@ -1959,7 +1961,14 @@ export async function buildDailyOperationsSnapshotWithCtx(
       registerVarianceCount: closeSnapshot.summary.registerVarianceCount,
       salesTotal: closeSnapshot.summary.salesTotal,
       transactionCount: closeSnapshot.summary.transactionCount,
-    } satisfies DailyOperationsCloseSummary,
+    },
+    includeFinancialDetails,
+  );
+
+  return {
+    automationStatuses,
+    attentionItems,
+    closeSummary,
     currency: store?.currency ?? "GHS",
     endAt: range.endAt,
     lanes: buildLanes({
@@ -1978,12 +1987,50 @@ export async function buildDailyOperationsSnapshotWithCtx(
     }),
     lifecycle,
     operatingDate: args.operatingDate,
+    ...(includeFinancialDetails ? { priorDayMetric } : {}),
     primaryAction: primaryAction(lifecycleStatus),
     scheduledRunSummaries,
     startAt: range.startAt,
     storeId: args.storeId,
-    timeline,
-    weekMetrics,
+    timeline: includeFinancialDetails ? timeline : [],
+    weekMetrics: includeFinancialDetails
+      ? weekMetrics
+      : weekMetrics.map(redactWeekMetricFinancialDetails),
+  };
+}
+
+function maybeRedactCloseSummary(
+  summary: DailyOperationsCloseSummary,
+  includeFinancialDetails: boolean,
+) {
+  if (includeFinancialDetails) return summary;
+
+  return {
+    ...summary,
+    adjustedSalesTotal: 0,
+    adjustmentCashSettlementTotal: 0,
+    adjustmentCollectionTotal: 0,
+    adjustmentNetSettlementTotal: 0,
+    adjustmentRefundTotal: 0,
+    carriedOverCashTotal: 0,
+    currentDayCashTotal: 0,
+    expenseTotal: 0,
+    netCashVariance: 0,
+    netCashMovementTotal: 0,
+    paymentTotals: [],
+    salesTotal: 0,
+  } satisfies DailyOperationsCloseSummary;
+}
+
+function redactWeekMetricFinancialDetails(
+  metric: DailyOperationsWeekMetric,
+): DailyOperationsWeekMetric {
+  return {
+    ...maybeRedactCloseSummary(metric, false),
+    isClosed: metric.isClosed,
+    isReopened: metric.isReopened,
+    isSelected: metric.isSelected,
+    operatingDate: metric.operatingDate,
   };
 }
 
@@ -1997,17 +2044,23 @@ export const getDailyOperationsSnapshot = query({
     weekEndOperatingDate: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    let includeManagerReviewEvidence = false;
-
-    try {
-      await requireStoreFullAdminAccess(ctx, args.storeId);
-      includeManagerReviewEvidence = true;
-    } catch {
-      includeManagerReviewEvidence = false;
+    const store = await ctx.db.get("store", args.storeId);
+    if (!store) {
+      throw new Error("Store not found.");
     }
+
+    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+    const membership = await requireOrganizationMemberRoleWithCtx(ctx, {
+      allowedRoles: ["full_admin", "pos_only"],
+      failureMessage: "You cannot view daily operations for this store.",
+      organizationId: store.organizationId,
+      userId: athenaUser._id,
+    });
+    const includeManagerReviewEvidence = membership.role === "full_admin";
 
     return buildDailyOperationsSnapshotWithCtx(ctx, {
       ...args,
+      includeFinancialDetails: includeManagerReviewEvidence,
       includeManagerReviewEvidence,
       includeScheduledRunSummaries: includeManagerReviewEvidence,
     });

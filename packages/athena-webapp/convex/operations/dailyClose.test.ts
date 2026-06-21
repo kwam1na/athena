@@ -974,7 +974,7 @@ describe("end-of-day review backend foundation", () => {
       pendingApprovalCount: 1,
       paymentTotals: expect.arrayContaining([
         {
-          amount: 10000,
+          amount: 9500,
           method: "cash",
           transactionCount: 1,
         },
