@@ -26,36 +26,34 @@ function buildParams(
 }
 
 export function OperationsSummaryMetric({
+  ariaPressed,
   className,
+  disabled,
   helper,
   helperClassName,
   label,
   labelClassName,
   link,
+  onClick,
   tone = "default",
   value,
   valueClassName,
 }: {
+  ariaPressed?: boolean;
   className?: string;
+  disabled?: boolean;
   helper?: ReactNode;
   helperClassName?: string;
   label: string;
   labelClassName?: string;
   link?: OperationsSummaryMetricLink;
+  onClick?: () => void;
   tone?: "default" | "quiet";
   value: ReactNode;
   valueClassName?: string;
 }) {
-  return (
-    <div
-      className={cn(
-        "rounded-lg border border-border bg-surface shadow-surface",
-        tone === "quiet"
-          ? "px-layout-md py-layout-md"
-          : "px-layout-md py-layout-sm",
-        className,
-      )}
-    >
+  const content = (
+    <>
       <div className="flex items-start justify-between gap-layout-sm">
         <p
           className={cn(
@@ -102,13 +100,41 @@ export function OperationsSummaryMetric({
       {helper ? (
         <p
           className={cn(
-            "mt-1 text-xs leading-5 text-muted-foreground",
+            "mt-1 whitespace-nowrap text-xs leading-5 text-muted-foreground [&>span]:flex-nowrap",
             helperClassName,
           )}
         >
           {helper}
         </p>
       ) : null}
+    </>
+  );
+  const rootClassName = cn(
+    "min-w-max rounded-lg border border-border bg-surface shadow-surface",
+    tone === "quiet" ? "px-layout-md py-layout-md" : "px-layout-md py-layout-sm",
+    onClick
+      ? "block w-full text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-default disabled:hover:bg-surface"
+      : null,
+    className,
+  );
+
+  if (onClick) {
+    return (
+      <button
+        aria-pressed={ariaPressed}
+        className={rootClassName}
+        disabled={disabled}
+        onClick={onClick}
+        type="button"
+      >
+        {content}
+      </button>
+    );
+  }
+
+  return (
+    <div className={rootClassName}>
+      {content}
     </div>
   );
 }

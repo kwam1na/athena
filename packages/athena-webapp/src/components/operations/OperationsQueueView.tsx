@@ -4,7 +4,6 @@ import { useMutation, useQuery } from "convex/react";
 import {
   ArrowUpRight,
   ClipboardCheck,
-  Clock3,
   Lock,
   LockOpen,
 } from "lucide-react";
@@ -55,6 +54,7 @@ import {
   OperationReviewItemCard,
   type OperationReviewMetadataEntry,
 } from "./OperationReviewItemCard";
+import { OperationsSummaryMetric } from "./OperationsSummaryMetric";
 
 const operationsApi = api.operations;
 const stockOpsApi = api.stockOps;
@@ -724,21 +724,11 @@ export function OperationsQueueViewContent({
             ) : (
               <PageWorkspaceGrid className="xl:grid-cols-[minmax(15rem,0.32fr)_minmax(0,1fr)]">
                 <PageWorkspaceRail className="gap-layout-md">
-                  <div className="rounded-lg border border-border bg-surface-raised p-layout-md shadow-surface">
-                    <div className="flex items-start gap-layout-sm">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
-                        <ClipboardCheck className="h-4 w-4" />
-                      </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground">
-                          Waiting for progress
-                        </p>
-                        <p className="mt-1 font-numeric text-3xl font-semibold tabular-nums text-foreground">
-                          {workItems.length}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
+                  <OperationsSummaryMetric
+                    helper="Open work items"
+                    label="Waiting for progress"
+                    value={workItems.length}
+                  />
                 </PageWorkspaceRail>
 
                 <PageWorkspaceMain
@@ -794,21 +784,11 @@ export function OperationsQueueViewContent({
             ) : (
               <PageWorkspaceGrid className="xl:grid-cols-[minmax(15rem,0.32fr)_minmax(0,1fr)]">
                 <PageWorkspaceRail className="gap-layout-md">
-                  <div className="rounded-lg border border-border bg-surface-raised p-layout-md shadow-surface">
-                    <div className="flex items-start gap-layout-sm">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-warning/15 text-warning-foreground">
-                        <Clock3 className="h-4 w-4" />
-                      </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground">
-                          Waiting for review
-                        </p>
-                        <p className="mt-1 font-numeric text-3xl font-semibold tabular-nums text-foreground">
-                          {approvalRequests.length}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
+                  <OperationsSummaryMetric
+                    helper="Pending approvals"
+                    label="Waiting for review"
+                    value={approvalRequests.length}
+                  />
 
                   {approvalDecisionUnlockRequired ? (
                     <div className="rounded-lg border border-border bg-surface-raised p-layout-md shadow-surface">

@@ -551,11 +551,7 @@ describe("StockAdjustmentWorkspaceContent", () => {
     expect(screen.getByText("All saved counts")).toBeInTheDocument();
     expect(screen.getByText("Active category")).toBeInTheDocument();
     expect(screen.getByText("5")).toBeInTheDocument();
-    expect(screen.getByText("-9")).toBeInTheDocument();
-    expect(screen.getAllByText("SKUs").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Net").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Variance").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("4").length).toBeGreaterThan(0);
+    expect(screen.getByText(/Net -9 · variance 4/i)).toBeInTheDocument();
   });
 
   it("submits the overall cycle count draft when the current category has no changes", async () => {
