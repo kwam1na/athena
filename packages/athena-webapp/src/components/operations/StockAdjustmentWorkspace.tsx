@@ -54,6 +54,7 @@ import {
   PageWorkspaceMain,
   PageWorkspaceRail,
 } from "../common/PageLevelHeader";
+import { OperationsSummaryMetric } from "./OperationsSummaryMetric";
 import {
   QuickAddProductDialog,
   type QuickAddAttachBarcodePayload,
@@ -2899,47 +2900,27 @@ export function StockAdjustmentWorkspaceContent({
       <PageWorkspaceGrid>
         <PageWorkspaceMain>
           <div className="flex flex-wrap items-start justify-between gap-layout-xl">
-            <div className="grid w-full max-w-2xl grid-cols-3 gap-layout-sm">
-              <div className="rounded-md border border-border bg-muted/30 px-3 py-2">
-                <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                  On hand
-                </p>
-                <p className="mt-1 text-sm font-medium tabular-nums text-foreground">
-                  {formatInventoryNumber(inventoryState.onHandUnits)}
-                </p>
-              </div>
-              <div className="rounded-md border border-border bg-muted/30 px-3 py-2">
-                <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                  Available
-                </p>
-                <p className="mt-1 text-sm font-medium tabular-nums text-foreground">
-                  {formatInventoryNumber(inventoryState.availableUnits)}
-                </p>
-              </div>
-              <div
-                className={`overflow-hidden rounded-md border ${
-                  inventoryState.unavailableUnits === 0
-                    ? "border-border bg-muted/30"
-                    : isUnavailableScopeSelectionActive
-                      ? "border-action-workflow-border bg-action-workflow-soft"
-                      : "border-border bg-muted/30 hover:bg-muted"
-                }`}
-              >
-                <button
-                  aria-pressed={isUnavailableScopeSelectionActive}
-                  className="block w-full px-3 py-2 text-left disabled:cursor-default"
-                  disabled={inventoryState.unavailableUnits === 0}
-                  onClick={handleUnavailableMetricClick}
-                  type="button"
-                >
-                  <span className="block text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                    Reserved
-                  </span>
-                  <span className="mt-1 block text-sm font-medium tabular-nums text-foreground">
-                    {formatInventoryNumber(inventoryState.unavailableUnits)}
-                  </span>
-                </button>
-              </div>
+            <div className="grid w-full max-w-3xl grid-cols-1 gap-layout-sm sm:grid-cols-3">
+              <OperationsSummaryMetric
+                label="On hand"
+                value={formatInventoryNumber(inventoryState.onHandUnits)}
+              />
+              <OperationsSummaryMetric
+                label="Available"
+                value={formatInventoryNumber(inventoryState.availableUnits)}
+              />
+              <OperationsSummaryMetric
+                ariaPressed={isUnavailableScopeSelectionActive}
+                className={
+                  isUnavailableScopeSelectionActive
+                    ? "border-action-workflow-border bg-action-workflow-soft"
+                    : undefined
+                }
+                disabled={inventoryState.unavailableUnits === 0}
+                label="Reserved"
+                onClick={handleUnavailableMetricClick}
+                value={formatInventoryNumber(inventoryState.unavailableUnits)}
+              />
             </div>
 
             <Tabs
@@ -3262,73 +3243,25 @@ export function StockAdjustmentWorkspaceContent({
                   <p className="text-xs font-medium text-muted-foreground">
                     Count metrics
                   </p>
-                  <div className="grid gap-2">
-                    <div className="rounded-md border border-border bg-muted/30 px-3 py-3">
-                      <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                        All saved counts
-                      </p>
-                      <dl className="mt-2 space-y-2">
-                        <div className="flex items-baseline justify-between gap-3">
-                          <dt className="text-[11px] text-muted-foreground">
-                            SKUs
-                          </dt>
-                          <dd className="font-display text-2xl font-semibold tabular-nums tracking-tight text-foreground">
-                            {overallSummary.lineItemCount}
-                          </dd>
-                        </div>
-                        <div className="flex items-baseline justify-between gap-3">
-                          <dt className="text-[11px] text-muted-foreground">
-                            Net
-                          </dt>
-                          <dd className="font-display text-2xl font-semibold tabular-nums tracking-tight text-foreground">
-                            {overallSummary.netQuantityDelta > 0
-                              ? `+${overallSummary.netQuantityDelta}`
-                              : overallSummary.netQuantityDelta}
-                          </dd>
-                        </div>
-                        <div className="flex items-baseline justify-between gap-3">
-                          <dt className="text-[11px] text-muted-foreground">
-                            Variance
-                          </dt>
-                          <dd className="font-display text-2xl font-semibold tabular-nums tracking-tight text-foreground">
-                            {overallSummary.largestAbsoluteDelta}
-                          </dd>
-                        </div>
-                      </dl>
-                    </div>
-                    <div className="rounded-md border border-border px-3 py-3">
-                      <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                        Active category
-                      </p>
-                      <dl className="mt-2 space-y-2">
-                        <div className="flex items-baseline justify-between gap-3">
-                          <dt className="text-[11px] text-muted-foreground">
-                            SKUs
-                          </dt>
-                          <dd className="font-display text-2xl font-semibold tabular-nums tracking-tight text-foreground">
-                            {summary.lineItemCount}
-                          </dd>
-                        </div>
-                        <div className="flex items-baseline justify-between gap-3">
-                          <dt className="text-[11px] text-muted-foreground">
-                            Net
-                          </dt>
-                          <dd className="font-display text-2xl font-semibold tabular-nums tracking-tight text-foreground">
-                            {summary.netQuantityDelta > 0
-                              ? `+${summary.netQuantityDelta}`
-                              : summary.netQuantityDelta}
-                          </dd>
-                        </div>
-                        <div className="flex items-baseline justify-between gap-3">
-                          <dt className="text-[11px] text-muted-foreground">
-                            Variance
-                          </dt>
-                          <dd className="font-display text-2xl font-semibold tabular-nums tracking-tight text-foreground">
-                            {summary.largestAbsoluteDelta}
-                          </dd>
-                        </div>
-                      </dl>
-                    </div>
+                  <div className="grid gap-layout-sm">
+                    <OperationsSummaryMetric
+                      helper={`Net ${
+                        overallSummary.netQuantityDelta > 0
+                          ? `+${overallSummary.netQuantityDelta}`
+                          : overallSummary.netQuantityDelta
+                      } · variance ${overallSummary.largestAbsoluteDelta}`}
+                      label="All saved counts"
+                      value={overallSummary.lineItemCount}
+                    />
+                    <OperationsSummaryMetric
+                      helper={`Net ${
+                        summary.netQuantityDelta > 0
+                          ? `+${summary.netQuantityDelta}`
+                          : summary.netQuantityDelta
+                      } · variance ${summary.largestAbsoluteDelta}`}
+                      label="Active category"
+                      value={summary.lineItemCount}
+                    />
                   </div>
                 </div>
               ) : (
@@ -3336,39 +3269,15 @@ export function StockAdjustmentWorkspaceContent({
                   <p className="text-xs font-medium text-muted-foreground">
                     Adjustment metrics
                   </p>
-                  <div className="rounded-md border border-border bg-muted/30 px-3 py-3">
-                    <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                      Manual batch
-                    </p>
-                    <div className="mt-2 grid grid-cols-3 gap-2">
-                      <div>
-                        <p className="font-display text-3xl font-semibold tabular-nums tracking-tight text-foreground">
-                          {summary.lineItemCount}
-                        </p>
-                        <p className="mt-1 text-[11px] text-muted-foreground">
-                          SKUs
-                        </p>
-                      </div>
-                      <div>
-                        <p className="font-display text-3xl font-semibold tabular-nums tracking-tight text-foreground">
-                          {summary.netQuantityDelta > 0
-                            ? `+${summary.netQuantityDelta}`
-                            : summary.netQuantityDelta}
-                        </p>
-                        <p className="mt-1 text-[11px] text-muted-foreground">
-                          Net
-                        </p>
-                      </div>
-                      <div>
-                        <p className="font-display text-3xl font-semibold tabular-nums tracking-tight text-foreground">
-                          {summary.largestAbsoluteDelta}
-                        </p>
-                        <p className="mt-1 text-[11px] text-muted-foreground">
-                          Variance
-                        </p>
-                      </div>
-                    </div>
-                  </div>
+                  <OperationsSummaryMetric
+                    helper={`Net ${
+                      summary.netQuantityDelta > 0
+                        ? `+${summary.netQuantityDelta}`
+                        : summary.netQuantityDelta
+                    } · variance ${summary.largestAbsoluteDelta}`}
+                    label="Manual batch"
+                    value={summary.lineItemCount}
+                  />
                 </div>
               )}
               <div

@@ -1077,8 +1077,12 @@ describe("ProcurementViewContent", () => {
       ).getByText("PO-DRAFT"),
     ).toHaveClass("text-sm", "text-foreground/80");
     expect(screen.getByText("1 line · 4 units")).toBeInTheDocument();
+    const activeVendorsMetric = screen
+      .getByText("Active vendors")
+      .closest(".rounded-lg") as HTMLElement;
+
     expect(
-      within(screen.getByText("Active vendors").parentElement!).getByText("2"),
+      within(activeVendorsMetric).getByText("2"),
     ).toBeInTheDocument();
     expect(screen.getByText("Open purchase orders")).toBeInTheDocument();
     expect(

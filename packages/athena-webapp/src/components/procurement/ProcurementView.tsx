@@ -29,6 +29,7 @@ import {
   SkuDetailPanel,
   type InventorySnapshotItem,
 } from "../operations/StockAdjustmentWorkspace";
+import { OperationsSummaryMetric } from "../operations/OperationsSummaryMetric";
 import { SkuSearchFilterBar } from "../stock-ops/SkuSearchFilterBar";
 import { ReceivingView } from "./ReceivingView";
 import { WorkflowTraceRouteLink } from "../traces/WorkflowTraceRouteLink";
@@ -1175,24 +1176,18 @@ export function ProcurementViewContent({
                   }
                 />
 
-                <div className="grid overflow-hidden rounded-md border border-border bg-muted/20 sm:grid-cols-4">
+                <div className="grid grid-cols-1 gap-layout-sm sm:grid-cols-2 xl:grid-cols-4">
                   {[
                     ["Needs action", summary.needsAction],
                     ["Planned", summary.planned],
                     ["Inbound", summary.inbound],
                     ["Exceptions", summary.exceptions],
                   ].map(([label, value]) => (
-                    <div
-                      className="border-border px-layout-md py-layout-sm sm:border-l sm:first:border-l-0"
+                    <OperationsSummaryMetric
                       key={label}
-                    >
-                      <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                        {label}
-                      </p>
-                      <p className="mt-1 text-lg font-semibold tabular-nums text-foreground">
-                        {value}
-                      </p>
-                    </div>
+                      label={String(label)}
+                      value={value}
+                    />
                   ))}
                 </div>
               </section>
@@ -1919,7 +1914,7 @@ export function ProcurementViewContent({
                 title="Planning signal"
               />
 
-              <div className="divide-y divide-border/70 rounded-lg border border-border bg-background">
+              <div className="grid gap-layout-sm">
                 {[
                   ["Needs action", summary.needsAction],
                   ["Planned", summary.planned],
@@ -1929,15 +1924,11 @@ export function ProcurementViewContent({
                   ["Active vendors", vendorOptions.length],
                   ["Active purchase orders", summary.activePurchaseOrders],
                 ].map(([label, value]) => (
-                  <div
-                    className="flex items-center justify-between gap-layout-md px-4 py-3 text-sm"
+                  <OperationsSummaryMetric
                     key={label}
-                  >
-                    <span className="text-muted-foreground">{label}</span>
-                    <span className="font-semibold tabular-nums text-foreground">
-                      {value}
-                    </span>
-                  </div>
+                    label={String(label)}
+                    value={value}
+                  />
                 ))}
               </div>
             </section>
