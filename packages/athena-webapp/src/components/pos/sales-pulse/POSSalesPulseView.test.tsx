@@ -6,8 +6,20 @@ import { POSStorePulseSection } from "./POSSalesPulseView";
 
 vi.mock("recharts", () => ({
   Area: () => <path data-testid="store-pulse-area" />,
-  AreaChart: ({ children }: { children?: React.ReactNode }) => (
-    <svg data-testid="store-pulse-chart">{children}</svg>
+  AreaChart: ({
+    children,
+    data = [],
+  }: {
+    children?: React.ReactNode;
+    data?: Array<{ displayDate?: string; displayLabel?: string }>;
+  }) => (
+    <svg
+      data-testid="store-pulse-chart"
+      data-display-dates={data.map((day) => day.displayDate).join("|")}
+      data-display-labels={data.map((day) => day.displayLabel).join("|")}
+    >
+      {children}
+    </svg>
   ),
   CartesianGrid: () => null,
   XAxis: () => null,
@@ -210,13 +222,35 @@ describe("POSStorePulseSection", () => {
     expect(screen.getAllByText(/vs last week/).length).toBeGreaterThan(0);
   });
 
-  it("keeps metrics but hides the detail section when full admin access is not active", () => {
+  it("uses operator-friendly labels for the sales trend chart", () => {
+    renderStorePulse({ pulseWindow: "today" });
+
+    expect(screen.getByTestId("store-pulse-chart")).toHaveAttribute(
+      "data-display-labels",
+      "Yesterday|Today",
+    );
+    expect(screen.getByTestId("store-pulse-chart")).toHaveAttribute(
+      "data-display-dates",
+      "Friday, Jun 19, 2026|Saturday, Jun 20, 2026",
+    );
+  });
+
+  it("hides financial sales cards when full admin access is not active", () => {
     renderStorePulse({ hasFullAdminAccess: false });
 
-    expect(screen.getAllByText("Manager only").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Revenue hidden").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Manager only")).not.toBeInTheDocument();
+    expect(screen.queryByText("Revenue hidden")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("tab", { name: "Today" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("tab", { name: "All time" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Sales")).not.toBeInTheDocument();
+    expect(screen.queryByText("Average sale")).not.toBeInTheDocument();
     expect(screen.getByText("Transactions")).toBeInTheDocument();
     expect(screen.getByText("Items sold")).toBeInTheDocument();
+    expect(screen.queryByText(/vs yesterday/)).not.toBeInTheDocument();
     expect(screen.queryByText("Sales trend")).not.toBeInTheDocument();
     expect(screen.queryByText("Top items")).not.toBeInTheDocument();
     expect(screen.queryByText("How customers paid")).not.toBeInTheDocument();
@@ -238,7 +272,10 @@ describe("POSStorePulseSection", () => {
     renderStorePulse({ hasFullAdminAccess: false, todaySummary: undefined });
 
     expect(screen.getByLabelText("Store pulse loading")).toBeInTheDocument();
-    expect(screen.getByText("Sales")).toBeInTheDocument();
+    expect(screen.queryByText("Sales")).not.toBeInTheDocument();
+    expect(screen.queryByText("Average sale")).not.toBeInTheDocument();
+    expect(screen.getByText("Transactions")).toBeInTheDocument();
+    expect(screen.getByText("Items sold")).toBeInTheDocument();
     expect(screen.queryByText("Sales trend")).not.toBeInTheDocument();
     expect(screen.queryByText("Top items")).not.toBeInTheDocument();
     expect(screen.queryByText("How customers paid")).not.toBeInTheDocument();

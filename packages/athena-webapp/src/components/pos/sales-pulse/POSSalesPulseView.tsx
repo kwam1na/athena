@@ -1,7 +1,5 @@
 import { useMemo, useState } from "react";
 import {
-  ArrowDownRight,
-  ArrowUpRight,
   Banknote,
   CreditCardIcon,
   Smartphone,
@@ -24,7 +22,10 @@ import {
   PageWorkspaceMain,
   PageWorkspaceRail,
 } from "../../common/PageLevelHeader";
-import { OperationsSummaryMetric } from "../../operations/OperationsSummaryMetric";
+import {
+  formatOperationsMetricComparison,
+  OperationsSummaryMetric,
+} from "../../operations/OperationsSummaryMetric";
 import { EmptyState } from "../../states/empty/empty-state";
 import { Badge } from "../../ui/badge";
 import { Skeleton } from "../../ui/skeleton";
@@ -140,12 +141,19 @@ const detailCardClassName =
   "overflow-hidden rounded-lg border border-border bg-surface-raised shadow-surface";
 const detailRowClassName = "px-layout-md py-layout-sm";
 const topItemsPageSize = 5;
-
-function formatDeltaPercent(value: number) {
-  if (!Number.isFinite(value) || value === 0) return "In line";
-  const prefix = value > 0 ? "+" : "";
-  return `${prefix}${value}%`;
-}
+const chartAxisDateFormatter = new Intl.DateTimeFormat("en-US", {
+  day: "numeric",
+  month: "short",
+  timeZone: "UTC",
+  weekday: "short",
+});
+const chartTooltipDateFormatter = new Intl.DateTimeFormat("en-US", {
+  day: "numeric",
+  month: "short",
+  timeZone: "UTC",
+  weekday: "long",
+  year: "numeric",
+});
 
 function formatComparisonHelper({
   deltaPercent,
@@ -156,30 +164,50 @@ function formatComparisonHelper({
   priorValue?: number;
   priorWindowLabel: string;
 }) {
-  if (!priorValue) return `No ${priorWindowLabel}`;
-
-  const hasTrend = Boolean(deltaPercent && deltaPercent !== 0);
-  const trendClassName = hasTrend
-    ? deltaPercent! > 0
-      ? "text-success"
-      : "text-destructive"
-    : "text-muted-foreground";
-  const TrendIcon =
-    hasTrend && deltaPercent! > 0 ? ArrowUpRight : ArrowDownRight;
-
-  return (
-    <>
-      <span className={`inline-flex items-center gap-1 ${trendClassName}`}>
-        {hasTrend ? <TrendIcon aria-hidden="true" className="h-3 w-3" /> : null}
-        <span>{formatDeltaPercent(deltaPercent ?? 0)}</span>
-      </span>{" "}
-      vs {priorWindowLabel}
-    </>
-  );
+  return formatOperationsMetricComparison({
+    deltaPercent,
+    missingComparisonLabel: `No ${priorWindowLabel}`,
+    priorValue,
+    priorWindowLabel,
+  });
 }
 
 function formatEntityCount(count: number, singular: string) {
   return `${count} ${count === 1 ? singular : `${singular}s`}`;
+}
+
+function getDateFromOperatingDate(date: string) {
+  const parsed = Date.parse(`${date}T00:00:00.000Z`);
+  return Number.isFinite(parsed) ? new Date(parsed) : null;
+}
+
+function formatChartAxisDate(date: string) {
+  const parsedDate = getDateFromOperatingDate(date);
+  return parsedDate ? chartAxisDateFormatter.format(parsedDate) : date;
+}
+
+function formatChartTooltipDate(date: string) {
+  const parsedDate = getDateFromOperatingDate(date);
+  return parsedDate ? chartTooltipDateFormatter.format(parsedDate) : date;
+}
+
+function getTrendAxisLabel({
+  date,
+  index,
+  pulseWindow,
+  trendLength,
+}: {
+  date: string;
+  index: number;
+  pulseWindow: POSStorePulseWindow;
+  trendLength: number;
+}) {
+  if (pulseWindow === "today") {
+    if (index === trendLength - 1) return "Today";
+    if (index === trendLength - 2) return "Yesterday";
+  }
+
+  return formatChartAxisDate(date);
 }
 
 function formatProductName(name: string) {
@@ -256,11 +284,18 @@ function StorePulseTimeline({
 }) {
   const chartData = useMemo(
     () =>
-      snapshot.trend.map((day) => ({
+      snapshot.trend.map((day, index, trend) => ({
         ...day,
+        displayDate: formatChartTooltipDate(day.date),
+        displayLabel: getTrendAxisLabel({
+          date: day.date,
+          index,
+          pulseWindow,
+          trendLength: trend.length,
+        }),
         value: getTrendValue({ canViewFinancialDetails, day }),
       })),
-    [canViewFinancialDetails, snapshot.trend],
+    [canViewFinancialDetails, pulseWindow, snapshot.trend],
   );
   const xAxisTicks = useMemo(() => {
     if (
@@ -273,7 +308,7 @@ function StorePulseTimeline({
     return Array.from({ length: 7 }, (_, index) => {
       const chartIndex = Math.round((index * (chartData.length - 1)) / (7 - 1));
 
-      return chartData[chartIndex]?.label;
+      return chartData[chartIndex]?.displayLabel;
     }).filter((label): label is string => Boolean(label));
   }, [chartData, pulseWindow]);
   const chartLabel = canViewFinancialDetails ? "Sales" : "Transactions";
@@ -323,7 +358,7 @@ function StorePulseTimeline({
             </defs>
             <CartesianGrid vertical={false} />
             <XAxis
-              dataKey="label"
+              dataKey="displayLabel"
               axisLine={false}
               interval="preserveStartEnd"
               tickMargin={8}
@@ -348,9 +383,12 @@ function StorePulseTimeline({
                   hideIndicator
                   labelFormatter={(_, payload) => {
                     const day = payload?.[0]?.payload as
-                      | (POSSalesTrendDay & { value: number })
+                      | (POSSalesTrendDay & {
+                          displayDate: string;
+                          value: number;
+                        })
                       | undefined;
-                    return day?.date ?? "";
+                    return day?.displayDate ?? "";
                   }}
                   formatter={(value, _name, item) => {
                     const day = item.payload as POSSalesTrendDay & {
@@ -641,10 +679,14 @@ function StorePulseDetailSkeleton({
 }
 
 function StorePulseSkeleton({
-  showDetailSection,
+  showFinancialSalesCards,
 }: {
-  showDetailSection: boolean;
+  showFinancialSalesCards: boolean;
 }) {
+  const visibleLoadingMetrics = showFinancialSalesCards
+    ? loadingMetrics
+    : loadingMetrics.slice(2);
+
   return (
     <div
       aria-label="Store pulse loading"
@@ -652,7 +694,7 @@ function StorePulseSkeleton({
     >
       <section className="space-y-layout-2xl">
         <div className="grid gap-layout-sm sm:grid-cols-2 xl:grid-cols-4">
-          {loadingMetrics.map((metric) => (
+          {visibleLoadingMetrics.map((metric) => (
             <OperationsSummaryMetric
               helper={metric.helper}
               key={metric.label}
@@ -662,10 +704,10 @@ function StorePulseSkeleton({
           ))}
         </div>
 
-        {showDetailSection ? <StorePulseChartSkeleton /> : null}
+        {showFinancialSalesCards ? <StorePulseChartSkeleton /> : null}
       </section>
 
-      {showDetailSection ? (
+      {showFinancialSalesCards ? (
         <PageWorkspaceGrid className="xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
           <PageWorkspaceMain>
             <StorePulseDetailSkeleton
@@ -714,114 +756,120 @@ export function POSStorePulseSection({
       aria-label="Store pulse"
       className="space-y-layout-xl md:space-y-layout-2xl"
     >
-      <div className="flex justify-end">
-        <Tabs
-          onValueChange={(nextValue) => {
-            if (
-              nextValue === "today" ||
-              nextValue === "this_week" ||
-              nextValue === "this_month" ||
-              nextValue === "all_time"
-            ) {
-              onPulseWindowChange(nextValue);
-            }
-          }}
-          value={pulseWindow}
-        >
-          <TabsList
-            aria-label="Store pulse time range"
-            className="h-auto flex-wrap justify-start gap-1 border border-border bg-surface-raised p-1 text-muted-foreground shadow-surface"
-            size="sm"
+      {hasFullAdminAccess ? (
+        <div className="flex justify-end">
+          <Tabs
+            onValueChange={(nextValue) => {
+              if (
+                nextValue === "today" ||
+                nextValue === "this_week" ||
+                nextValue === "this_month" ||
+                nextValue === "all_time"
+              ) {
+                onPulseWindowChange(nextValue);
+              }
+            }}
+            value={pulseWindow}
           >
-            {storePulseWindowOptions.map((option) => (
-              <TabsTrigger
-                className="min-h-8 px-3 data-[state=active]:bg-action-workflow-soft data-[state=active]:text-action-workflow data-[state=active]:shadow-none"
-                key={option.value}
-                size="sm"
-                value={option.value}
-              >
-                {option.label}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
-      </div>
+            <TabsList
+              aria-label="Store pulse time range"
+              className="h-auto flex-wrap justify-start gap-1 border border-border bg-surface-raised p-1 text-muted-foreground shadow-surface"
+              size="sm"
+            >
+              {storePulseWindowOptions.map((option) => (
+                <TabsTrigger
+                  className="min-h-8 px-3 data-[state=active]:bg-action-workflow-soft data-[state=active]:text-action-workflow data-[state=active]:shadow-none"
+                  key={option.value}
+                  size="sm"
+                  value={option.value}
+                >
+                  {option.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+        </div>
+      ) : null}
 
       {!snapshot ? (
-        <StorePulseSkeleton showDetailSection={hasFullAdminAccess} />
+        <StorePulseSkeleton showFinancialSalesCards={hasFullAdminAccess} />
       ) : (
         <div className="min-w-0 space-y-layout-xl md:space-y-layout-2xl">
           <section className="space-y-layout-2xl">
             <div className="grid gap-layout-sm sm:grid-cols-2 xl:grid-cols-4">
-              <OperationsSummaryMetric
-                helper={
-                  hasFullAdminAccess
-                    ? copy.comparisonHelper
-                      ? formatComparisonHelper({
-                          deltaPercent: comparison?.salesDeltaPercent,
-                          priorValue: comparison?.yesterdaySales,
-                          priorWindowLabel: copy.comparisonHelper,
-                        })
-                      : "-"
-                    : "Revenue hidden"
-                }
-                label="Sales"
-                value={
-                  <FinancialValue
-                    canView={hasFullAdminAccess}
+              {hasFullAdminAccess ? (
+                <>
+                  <OperationsSummaryMetric
+                    helper={
+                      copy.comparisonHelper
+                        ? formatComparisonHelper({
+                            deltaPercent: comparison?.salesDeltaPercent,
+                            priorValue: comparison?.yesterdaySales,
+                            priorWindowLabel: copy.comparisonHelper,
+                          })
+                        : "-"
+                    }
                     label="Sales"
-                  >
-                    {currencyFormatter.format(toDisplayAmount(totalSales))}
-                  </FinancialValue>
-                }
-              />
+                    value={
+                      <FinancialValue
+                        canView={hasFullAdminAccess}
+                        label="Sales"
+                      >
+                        {currencyFormatter.format(toDisplayAmount(totalSales))}
+                      </FinancialValue>
+                    }
+                  />
+                  <OperationsSummaryMetric
+                    helper={
+                      copy.comparisonHelper
+                        ? formatComparisonHelper({
+                            deltaPercent:
+                              comparison?.averageTransactionDeltaPercent,
+                            priorValue: comparison?.yesterdayAverageTransaction,
+                            priorWindowLabel: copy.comparisonHelper,
+                          })
+                        : "-"
+                    }
+                    label="Average sale"
+                    value={
+                      <FinancialValue
+                        canView={hasFullAdminAccess}
+                        label="Average sale"
+                      >
+                        {currencyFormatter.format(
+                          toDisplayAmount(averageTransaction),
+                        )}
+                      </FinancialValue>
+                    }
+                  />
+                </>
+              ) : null}
               <OperationsSummaryMetric
                 helper={
                   hasFullAdminAccess
                     ? copy.comparisonHelper
                       ? formatComparisonHelper({
-                          deltaPercent:
-                            comparison?.averageTransactionDeltaPercent,
-                          priorValue: comparison?.yesterdayAverageTransaction,
+                          deltaPercent: comparison?.transactionDeltaPercent,
+                          priorValue: comparison?.yesterdayTransactions,
                           priorWindowLabel: copy.comparisonHelper,
                         })
                       : "-"
-                    : "Revenue hidden"
-                }
-                label="Average sale"
-                value={
-                  <FinancialValue
-                    canView={hasFullAdminAccess}
-                    label="Average sale"
-                  >
-                    {currencyFormatter.format(
-                      toDisplayAmount(averageTransaction),
-                    )}
-                  </FinancialValue>
-                }
-              />
-              <OperationsSummaryMetric
-                helper={
-                  copy.comparisonHelper
-                    ? formatComparisonHelper({
-                        deltaPercent: comparison?.transactionDeltaPercent,
-                        priorValue: comparison?.yesterdayTransactions,
-                        priorWindowLabel: copy.comparisonHelper,
-                      })
-                    : "-"
+                    : undefined
                 }
                 label="Transactions"
                 value={totalTransactions}
               />
               <OperationsSummaryMetric
                 helper={
-                  copy.comparisonHelper
-                    ? formatComparisonHelper({
-                        deltaPercent: comparison?.itemsSoldDeltaPercent,
-                        priorValue: comparison?.yesterdayItemsSold,
-                        priorWindowLabel: copy.comparisonHelper,
-                      })
-                    : "-"
+                  hasFullAdminAccess
+                    ? copy.comparisonHelper
+                      ? formatComparisonHelper({
+                          deltaPercent: comparison?.itemsSoldDeltaPercent,
+                          priorValue: comparison?.yesterdayItemsSold,
+                          priorWindowLabel: copy.comparisonHelper,
+                        })
+                      : "-"
+                    : undefined
                 }
                 label="Items sold"
                 value={totalItemsSold}

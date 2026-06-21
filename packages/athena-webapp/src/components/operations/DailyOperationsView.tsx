@@ -218,6 +218,7 @@ export type DailyOperationsSnapshot = {
     label: string;
     to: string;
   };
+  priorDayMetric?: DailyOperationsSnapshot["weekMetrics"][number];
   scheduledRunSummaries?: DailyOperationsScheduledRunSummary[];
   startAt?: number;
   storeId: Id<"store">;
@@ -641,6 +642,13 @@ function formatPaymentCount(value?: number | null) {
   return `${value} payments`;
 }
 
+function formatMissingTenderComparisonLabel(priorWindowLabel: string) {
+  if (priorWindowLabel === "yesterday") return "No payments yesterday";
+  if (priorWindowLabel === "prior day") return "No payments on prior day";
+
+  return `No payments for ${priorWindowLabel}`;
+}
+
 function formatPaymentMethodLabel(method: string) {
   return method
     .replace(/[_-]+/g, " ")
@@ -693,10 +701,14 @@ function getPreviousOperatingDate(operatingDate: string) {
   return getLocalOperatingDate(date);
 }
 
-function getPriorWeekMetric(snapshot: DailyOperationsSnapshot) {
+function getPriorComparisonMetric(snapshot: DailyOperationsSnapshot) {
   const previousOperatingDate = getPreviousOperatingDate(snapshot.operatingDate);
 
   if (!previousOperatingDate) return undefined;
+
+  if (snapshot.priorDayMetric?.operatingDate === previousOperatingDate) {
+    return snapshot.priorDayMetric;
+  }
 
   return snapshot.weekMetrics.find(
     (metric) => metric.operatingDate === previousOperatingDate,
@@ -1743,7 +1755,9 @@ export function DailyOperationsViewContent({
   const otherPaymentTotals = snapshot
     ? getOtherPaymentTotals(snapshot.closeSummary)
     : [];
-  const priorWeekMetric = snapshot ? getPriorWeekMetric(snapshot) : undefined;
+  const priorComparisonMetric = snapshot
+    ? getPriorComparisonMetric(snapshot)
+    : undefined;
   const priorWindowLabel = snapshot
     ? getPriorWindowLabel(snapshot.operatingDate)
     : "yesterday";
@@ -1841,8 +1855,9 @@ export function DailyOperationsViewContent({
                         snapshot.closeSummary.transactionCount,
                         "transaction",
                       ),
-                      priorValue: priorWeekMetric?.salesTotal,
+                      priorValue: priorComparisonMetric?.salesTotal,
                       priorWindowLabel,
+                      showComparison: hasFinancialDetailsAccess,
                     })}
                     label={metricLabels?.netSales ?? "Net sales"}
                     link={{
@@ -1872,8 +1887,11 @@ export function DailyOperationsViewContent({
                       detail: formatTodayCashTransactionCount(
                         snapshot.closeSummary.currentDayCashTransactionCount,
                       ),
-                      priorValue: priorWeekMetric?.currentDayCashTotal,
+                      missingComparisonLabel:
+                        formatMissingTenderComparisonLabel(priorWindowLabel),
+                      priorValue: priorComparisonMetric?.currentDayCashTotal,
                       priorWindowLabel,
+                      showComparison: hasFinancialDetailsAccess,
                     })}
                     label={metricLabels?.cash ?? "Cash"}
                     link={{
@@ -1910,11 +1928,16 @@ export function DailyOperationsViewContent({
                           detail: formatPaymentCount(
                             paymentTotal.transactionCount,
                           ),
+                          missingComparisonLabel:
+                            formatMissingTenderComparisonLabel(
+                              priorWindowLabel,
+                            ),
                           priorValue: getPaymentTotalAmount(
-                            priorWeekMetric,
+                            priorComparisonMetric,
                             paymentTotal.method,
                           ),
                           priorWindowLabel,
+                          showComparison: hasFinancialDetailsAccess,
                         })}
                         key={paymentTotal.method}
                         label={paymentMethodLabel}

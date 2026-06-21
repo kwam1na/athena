@@ -544,6 +544,20 @@ describe("getTodaySummary", () => {
         yesterdayTransactions: 1,
       }),
     );
+    expect(result.operatorSnapshot.trend).toEqual([
+      expect.objectContaining({
+        date: "2026-06-19",
+        totalItemsSold: 2,
+        totalSales: 12_000,
+        transactionCount: 1,
+      }),
+      expect.objectContaining({
+        date: "2026-06-20",
+        totalItemsSold: 3,
+        totalSales: 18_000,
+        transactionCount: 1,
+      }),
+    ]);
   });
 
   it("summarizes last week against the full week before", async () => {

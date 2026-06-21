@@ -147,6 +147,7 @@ import type * as operations_managerElevations from "../operations/managerElevati
 import type * as operations_operationalEvents from "../operations/operationalEvents.js";
 import type * as operations_operationalWorkItems from "../operations/operationalWorkItems.js";
 import type * as operations_paymentAllocations from "../operations/paymentAllocations.js";
+import type * as operations_paymentTotals from "../operations/paymentTotals.js";
 import type * as operations_registerSessionTracing from "../operations/registerSessionTracing.js";
 import type * as operations_registerSessions from "../operations/registerSessions.js";
 import type * as operations_serviceIntake from "../operations/serviceIntake.js";
@@ -532,6 +533,7 @@ declare const fullApi: ApiFromModules<{
   "operations/operationalEvents": typeof operations_operationalEvents;
   "operations/operationalWorkItems": typeof operations_operationalWorkItems;
   "operations/paymentAllocations": typeof operations_paymentAllocations;
+  "operations/paymentTotals": typeof operations_paymentTotals;
   "operations/registerSessionTracing": typeof operations_registerSessionTracing;
   "operations/registerSessions": typeof operations_registerSessions;
   "operations/serviceIntake": typeof operations_serviceIntake;

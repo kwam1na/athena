@@ -50,14 +50,14 @@ async function requirePosTransactionStoreAccess(
   }
 
   const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
-  await requireOrganizationMemberRoleWithCtx(ctx, {
+  const membership = await requireOrganizationMemberRoleWithCtx(ctx, {
     allowedRoles: ["full_admin", "pos_only"],
     failureMessage: args.failureMessage,
     organizationId: store.organizationId,
     userId: athenaUser._id,
   });
 
-  return { athenaUser, store };
+  return { athenaUser, membership, store };
 }
 
 async function requirePosTransactionAccess(
@@ -270,6 +270,38 @@ const posOperatorSnapshotValidator = v.object({
   ),
   usableHistoryDays: v.number(),
 });
+
+function redactPosPulseSummary(
+  summary: Awaited<ReturnType<typeof getTodaySummaryQuery>>,
+): Awaited<ReturnType<typeof getTodaySummaryQuery>> {
+  return {
+    ...summary,
+    averageTransaction: 0,
+    operatorSnapshot: {
+      ...summary.operatorSnapshot,
+      busiestHour: null,
+      comparison: {
+        ...summary.operatorSnapshot.comparison,
+        averageTransactionDeltaPercent: 0,
+        currentAverageTransaction: 0,
+        currentItemsSold: summary.totalItemsSold,
+        currentSales: 0,
+        currentTransactions: summary.totalTransactions,
+        itemsSoldDeltaPercent: 0,
+        salesDeltaPercent: 0,
+        transactionDeltaPercent: 0,
+        yesterdayAverageTransaction: 0,
+        yesterdayItemsSold: 0,
+        yesterdaySales: 0,
+        yesterdayTransactions: 0,
+      },
+      paymentMix: [],
+      topItems: [],
+      trend: [],
+    },
+    totalSales: 0,
+  };
+}
 
 function mapCorrectionError(error: unknown): CommandResult<never> | null {
   const message = error instanceof Error ? error.message : "";
@@ -1227,6 +1259,12 @@ export const getTodaySummary = query({
       };
     }
 
-    return getTodaySummaryQuery(ctx, args);
+    const hasFullAdminAccess = access.membership.role === "full_admin";
+    const summary = await getTodaySummaryQuery(ctx, {
+      ...args,
+      pulseWindow: hasFullAdminAccess ? args.pulseWindow : "today",
+    });
+
+    return hasFullAdminAccess ? summary : redactPosPulseSummary(summary);
   },
 });

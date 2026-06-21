@@ -38,31 +38,52 @@ function getDeltaPercent(currentValue: number, priorValue: number) {
   return Math.round(((currentValue - priorValue) / priorValue) * 100);
 }
 
+function formatMissingComparisonLabel(priorWindowLabel: string) {
+  if (priorWindowLabel === "yesterday") return "No activity yesterday";
+  if (priorWindowLabel === "prior day") return "No activity on prior day";
+
+  return `No activity for ${priorWindowLabel}`;
+}
+
 export function formatOperationsMetricComparison({
   currentValue,
+  deltaPercent,
+  missingComparisonLabel,
   priorValue,
   priorWindowLabel,
 }: {
   currentValue?: number | null;
+  deltaPercent?: number | null;
+  missingComparisonLabel?: ReactNode;
   priorValue?: number | null;
   priorWindowLabel: string;
 }) {
-  if (!priorValue) return `None ${priorWindowLabel}`;
+  if (!priorValue) {
+    return (
+      missingComparisonLabel ?? formatMissingComparisonLabel(priorWindowLabel)
+    );
+  }
 
-  const deltaPercent = getDeltaPercent(currentValue ?? 0, priorValue);
-  const hasTrend = deltaPercent !== 0;
+  const normalizedDeltaPercent =
+    deltaPercent ?? getDeltaPercent(currentValue ?? 0, priorValue);
+  const hasTrend = normalizedDeltaPercent !== 0;
   const trendClassName = hasTrend
-    ? deltaPercent > 0
+    ? normalizedDeltaPercent > 0
       ? "text-success"
       : "text-destructive"
     : "text-muted-foreground";
-  const TrendIcon = deltaPercent > 0 ? ArrowUpRight : ArrowDownRight;
+  const TrendIcon = normalizedDeltaPercent > 0 ? ArrowUpRight : ArrowDownRight;
 
   return (
     <span className="inline-flex items-baseline gap-1">
-      <span className={cn("inline-flex items-center gap-1", trendClassName)}>
-        {hasTrend ? <TrendIcon aria-hidden="true" className="h-3 w-3" /> : null}
-        <span>{formatDeltaPercent(deltaPercent)}</span>
+      <span className={cn("inline-flex items-baseline gap-1", trendClassName)}>
+        {hasTrend ? (
+          <TrendIcon
+            aria-hidden="true"
+            className="h-3 w-3 translate-y-[0.125em]"
+          />
+        ) : null}
+        <span>{formatDeltaPercent(normalizedDeltaPercent)}</span>
       </span>{" "}
       <span>vs {priorWindowLabel}</span>
     </span>
@@ -72,14 +93,20 @@ export function formatOperationsMetricComparison({
 export function formatOperationsMetricHelper({
   currentValue,
   detail,
+  missingComparisonLabel,
   priorValue,
   priorWindowLabel,
+  showComparison = true,
 }: {
   currentValue?: number | null;
   detail: ReactNode;
+  missingComparisonLabel?: ReactNode;
   priorValue?: number | null;
   priorWindowLabel: string;
+  showComparison?: boolean;
 }) {
+  if (!showComparison) return <span>{detail}</span>;
+
   return (
     <span className="inline-flex flex-wrap items-baseline gap-x-1.5 gap-y-0">
       <span>{detail}</span>
@@ -88,6 +115,7 @@ export function formatOperationsMetricHelper({
       </span>
       {formatOperationsMetricComparison({
         currentValue,
+        missingComparisonLabel,
         priorValue,
         priorWindowLabel,
       })}
@@ -154,7 +182,9 @@ export function OperationsSummaryMetric({
               <ArrowUpRight aria-hidden="true" className="h-3.5 w-3.5" />
             </Link>
           </Button>
-        ) : null}
+        ) : (
+          <span aria-hidden="true" className="-mr-1 -mt-1 h-7 w-7 shrink-0" />
+        )}
       </div>
       <p
         className={cn(

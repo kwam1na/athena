@@ -25,6 +25,7 @@ import {
   getLatestDailyOperationsAutomationStatusWithCtx,
   type DailyOperationsAutomationStatus,
 } from "./dailyOperationsAutomation";
+import { buildPaymentTotals, transactionCashDelta } from "./paymentTotals";
 
 const DAILY_CLOSE_QUERY_LIMIT = 200;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -1054,35 +1055,6 @@ async function listDepositsForDay(
   );
 }
 
-function buildPaymentTotals(transactions: Array<Doc<"posTransaction">>) {
-  const paymentTotals = new Map<
-    string,
-    {
-      amount: number;
-      transactionCount: number;
-    }
-  >();
-
-  transactions.forEach((transaction) => {
-    transaction.payments.forEach((payment) => {
-      const existing = paymentTotals.get(payment.method) ?? {
-        amount: 0,
-        transactionCount: 0,
-      };
-
-      paymentTotals.set(payment.method, {
-        amount: existing.amount + payment.amount,
-        transactionCount: existing.transactionCount + 1,
-      });
-    });
-  });
-
-  return Array.from(paymentTotals.entries()).map(([method, total]) => ({
-    method,
-    ...total,
-  }));
-}
-
 type PosTransactionAdjustmentReportRow = {
   _id: string;
   appliedAt?: number;
@@ -1332,17 +1304,6 @@ export function buildAdjustmentReportTotals(args: {
     netCashMovementTotal:
       args.currentDayCashTotal + adjustmentCashSettlementTotal,
   };
-}
-
-function transactionCashDelta(
-  transaction: Pick<Doc<"posTransaction">, "changeGiven" | "payments">,
-) {
-  const cashTendered = transaction.payments.reduce(
-    (sum, payment) => (payment.method === "cash" ? sum + payment.amount : sum),
-    0,
-  );
-
-  return Math.max(0, cashTendered - (transaction.changeGiven ?? 0));
 }
 
 function cashDeltasByRegisterSessionId(
