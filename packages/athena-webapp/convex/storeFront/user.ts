@@ -35,6 +35,15 @@ async function getStoreFrontActorById(
   }
 }
 
+export function assertStoreFrontActorMatchesStore(
+  actor: { storeId?: Id<"store"> } | null,
+  storeId: Id<"store">,
+) {
+  if (!actor || String(actor.storeId) !== String(storeId)) {
+    throw new Error("Customer activity is not available for this store.");
+  }
+}
+
 export const getAll = query({
   args: {},
   handler: async (ctx) => {
@@ -253,6 +262,32 @@ export const getAllUserActivityInternal = internalQuery({
     return analytics.map((analytic) => ({
       ...analytic,
       userData: userMap[analytic.storeFrontUserId] || {},
+    }));
+  },
+});
+
+export const getStoreUserActivityInternal = internalQuery({
+  args: {
+    id: v.union(v.id(entity), v.id("guest")),
+    storeId: v.id("store"),
+  },
+  handler: async (ctx, args) => {
+    const user = await getStoreFrontActorById(ctx, args.id);
+    assertStoreFrontActorMatchesStore(user, args.storeId);
+
+    const analytics = await ctx.db
+      .query("analytics")
+      .withIndex("by_storeFrontUserId_storeId", (q) =>
+        q.eq("storeFrontUserId", args.id).eq("storeId", args.storeId),
+      )
+      .filter((q) => q.neq(q.field("origin"), SYNTHETIC_MONITOR_ORIGIN))
+      .collect();
+
+    const userData = user && "email" in user ? { email: user.email } : {};
+
+    return analytics.map((analytic) => ({
+      ...analytic,
+      userData,
     }));
   },
 });

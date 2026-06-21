@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Plan: Build Athena intelligence layer</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #172026;
+      --muted: #5b6670;
+      --line: #d8dee4;
+      --panel: #f7f9fb;
+      --accent: #0f766e;
+      --risk: #9f1239;
+    }
+    body {
+      margin: 0;
+      font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--ink);
+      background: #ffffff;
+    }
+    main {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 40px 28px 64px;
+    }
+    header {
+      border-bottom: 1px solid var(--line);
+      margin-bottom: 28px;
+      padding-bottom: 20px;
+    }
+    h1 {
+      font-size: 30px;
+      line-height: 1.2;
+      margin: 0 0 10px;
+      letter-spacing: 0;
+    }
+    h2 {
+      font-size: 20px;
+      margin: 30px 0 12px;
+      letter-spacing: 0;
+    }
+    h3 {
+      font-size: 16px;
+      margin: 20px 0 8px;
+      letter-spacing: 0;
+    }
+    p, li {
+      max-width: 88ch;
+    }
+    a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 14px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .summary {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 16px 18px;
+      margin: 18px 0 26px;
+    }
+    nav {
+      background: #ffffff;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 14px 18px;
+      margin-bottom: 28px;
+    }
+    nav ul {
+      columns: 2;
+      margin: 0;
+      padding-left: 18px;
+    }
+    section {
+      border-top: 1px solid var(--line);
+      padding-top: 10px;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 12px 0 18px;
+      font-size: 14px;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 9px 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      background: var(--panel);
+    }
+    .unit {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 14px 16px;
+      margin: 14px 0;
+      background: #ffffff;
+    }
+    .unit h3 {
+      margin-top: 0;
+    }
+    .badge {
+      display: inline-block;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 2px 8px;
+      color: var(--muted);
+      font-size: 12px;
+      margin-right: 6px;
+    }
+    code, pre {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 13px;
+    }
+    pre {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 14px;
+      overflow-x: auto;
+    }
+    .callout {
+      border-left: 4px solid var(--accent);
+      background: var(--panel);
+      padding: 10px 14px;
+      margin: 14px 0;
+    }
+    .risk {
+      color: var(--risk);
+      font-weight: 600;
+    }
+    @media (max-width: 720px) {
+      main { padding: 24px 18px 48px; }
+      nav ul { columns: 1; }
+      h1 { font-size: 24px; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>feat: Build Athena intelligence layer</h1>
+      <div class="meta">
+        <span>Type: feat</span>
+        <span>Status: active</span>
+        <span>Date: 2026-06-21</span>
+        <span>Markdown: <a href="./2026-06-21-002-feat-athena-intelligence-layer-plan.md">2026-06-21-002-feat-athena-intelligence-layer-plan.md</a></span>
+      </div>
+    </header>
+
+    <div class="summary">
+      Build Athena's intelligence layer as a Convex-owned, capability-gated platform that uses Convex's AI strengths for durable state, reactivity, scheduling, retrieval, and workflow orchestration, with one TanStack-backed text adapter as the first SDK path below Athena contracts. The first delivery creates durable run/artifact state, a typed provider adapter, permission-aware context snapshots, and evidence-backed store/user insight artifacts. Image generation remains deferred as a later media adapter.
+    </div>
+
+    <nav aria-label="Plan contents">
+      <strong>Contents</strong>
+      <ul>
+        <li><a href="#requirements">Requirements</a></li>
+        <li><a href="#decisions">Key Decisions</a></li>
+        <li><a href="#design">Design Shape</a></li>
+        <li><a href="#units">Implementation Units</a></li>
+        <li><a href="#impact">System-Wide Impact</a></li>
+        <li><a href="#risks">Risks</a></li>
+        <li><a href="#phases">Phased Delivery</a></li>
+      </ul>
+    </nav>
+
+    <section id="requirements">
+      <h2>Requirements</h2>
+      <ul>
+        <li>Model intelligence as durable Athena-owned state in Convex.</li>
+        <li>Use capability-gated provider selection, with one TanStack-backed structured text adapter in v1.</li>
+        <li>Use Convex AI-native strengths intentionally: reactive subscriptions, scheduled/internal actions, Workpool/Workflow, Agent threads, RAG/vector search, and file support.</li>
+        <li>Capture permission-aware context snapshots.</li>
+        <li>Enforce read-time authorization on run and artifact queries using viewer role, visibility mode, and source refs.</li>
+        <li>Treat snapshot/RAG/customer/store text as untrusted model context.</li>
+        <li>Persist structured outputs, source references, normalized errors, provider metadata, and cost/usage evidence.</li>
+        <li>Reuse command results, approvals, operational events, work items, automation policy, automation runs, and workflow traces.</li>
+        <li>Keep v1 read/propose only; work-item promotion and apply paths are follow-up work.</li>
+        <li>Migrate existing store/user insights away from prompt JSON parsing.</li>
+        <li>Defer image generation while reserving future artifact kinds.</li>
+      </ul>
+    </section>
+
+    <section id="decisions">
+      <h2>Key Decisions</h2>
+      <ul>
+        <li>Athena owns the run state machine; TanStack AI is an adapter/orchestration dependency.</li>
+        <li>Convex is the primary intelligence runtime substrate; Agent/RAG/Workflow components are optional future helpers, not the business ledger.</li>
+        <li>Convex RAG is reserved for document-like knowledge retrieval; deterministic operational snapshots come from internal queries first.</li>
+        <li>Provider-native payloads stay out of domain tables, and raw provider payloads are omitted by default.</li>
+        <li>V1 installs no Convex Agent, RAG, or Durable Agents components.</li>
+        <li>First delivery handles text/JSON artifacts and recommendation fields only.</li>
+        <li>Client-facing generation starts through a Convex mutation that records intent and schedules/internalizes work.</li>
+        <li>TanStack tool approval is a runtime pause signal; Athena approval remains the authority model.</li>
+        <li>Operational events record visible intelligence decisions; low-level provider events stay on intelligence run records.</li>
+      </ul>
+    </section>
+
+    <section id="operator-outcome">
+      <h2>V1 Operator Outcome</h2>
+      <p>The first visible outcome is that an owner can open existing store/user insight panels and review one evidence-backed storefront/customer recommendation, understand why Athena thinks it matters, dismiss it, or rerun it against fresh context. Recommendations without evidence, with stale context, or generated from data the current viewer cannot read must be suppressed or visibly marked as limited or stale.</p>
+    </section>
+
+    <section id="design">
+      <h2>Design Shape</h2>
+      <div class="callout">
+        The architecture keeps Convex as the durable state machine: intent, snapshot, run, provider invocation, artifact, review, and future apply boundaries are all Athena-owned.
+      </div>
+      <pre>Operator or scheduled policy
+  -> Convex mutation records intent
+    -> permission-aware context snapshot
+      -> intelligenceRun
+        -> Convex scheduled/internal actions and reactivity
+        -> Athena provider contract
+          -> TanStack AI adapter
+            -> one v1 structured text provider
+        -> provider invocation evidence
+        -> artifact/recommendation fields
+        -> dismiss or rerun decision
+        -> operationalEvent for visible decisions</pre>
+      <pre>queued -> context_captured -> running
+running -> waiting_for_tool_approval -> running
+running -> completed | partial | failed | cancelled
+queued/context_captured/running -> expired
+completed -> stale | superseded
+failed/stale -> rerun_requested -> queued</pre>
+    </section>
+
+    <section id="units">
+      <h2>Implementation Units</h2>
+      <article class="unit">
+        <h3>Prerequisite Gate. TanStack runtime spike</h3>
+        <p><span class="badge">Spike</span>Pin the v1 package set, likely <code>@tanstack/ai</code> plus one text provider adapter, and prove non-streaming structured output from a server-only Convex action behind Athena's provider interface.</p>
+      </article>
+      <article class="unit">
+        <h3>U1. Add intelligence domain schemas and shared types</h3>
+        <p><span class="badge">Foundation</span>Create durable run, snapshot, artifact, provider invocation, and capability validators and browser-safe shared types with principal, visibility, and source refs.</p>
+        <p><strong>Primary files:</strong> <code>convex/schemas/intelligence.ts</code>, <code>shared/intelligence/*</code>, <code>convex/schema.ts</code>.</p>
+      </article>
+      <article class="unit">
+        <h3>U2. Create capability registry and provider contract</h3>
+        <p><span class="badge">Provider</span>Register capabilities separately from providers; implement one TanStack-backed v1 text adapter while keeping Convex Agent/RAG/Workflow documented as future component choices.</p>
+        <p><strong>Primary files:</strong> <code>convex/intelligence/capabilityRegistry.ts</code>, <code>convex/intelligence/providers/*</code>.</p>
+      </article>
+      <article class="unit">
+        <h3>U3. Implement run lifecycle, idempotency, and snapshot capture</h3>
+        <p><span class="badge">Durability</span>Record intent, capture actor-visible context, schedule provider work, expose reactive run progress, persist attempts, and normalize completion/failure.</p>
+        <p><strong>Primary files:</strong> <code>convex/intelligence/runLifecycle.ts</code>, <code>contextSnapshots.ts</code>, <code>providerInvocations.ts</code>.</p>
+      </article>
+      <article class="unit">
+        <h3>U4. Add read-only capability tools and structured artifact generation</h3>
+        <p><span class="badge">Capability</span>Prove structured output through store insights and user insights, replacing ad hoc JSON parsing and requiring evidence-backed actionable recommendation fields.</p>
+        <p><strong>Primary files:</strong> <code>convex/intelligence/capabilities/storeInsights.ts</code>, <code>userInsights.ts</code>, existing <code>convex/llm/*</code> wrappers.</p>
+      </article>
+      <article class="unit">
+        <h3>U5. Build artifact review operations and audit events</h3>
+        <p><span class="badge">Review</span>Let operators read authorized artifacts, dismiss, rerun, and mark stale/superseded while writing operational events for visible decisions.</p>
+        <p><strong>Primary files:</strong> <code>convex/intelligence/artifacts.ts</code>, <code>operations/operationalEvents.ts</code>.</p>
+      </article>
+      <article class="unit">
+        <h3>U6. Add operator-facing artifact UI and migrate existing insight panels</h3>
+        <p><span class="badge">UI</span>Move Store Insights and User Insights to persisted artifacts with generated-at, source context, stale, failed, and rerun states.</p>
+        <p><strong>Primary files:</strong> <code>src/components/intelligence/*</code>, <code>StoreInsights.tsx</code>, <code>UserInsightsSection.tsx</code>.</p>
+      </article>
+      <article class="unit">
+        <h3>U7. Document platform contract, validation ladder, and deferred adapters</h3>
+        <p><span class="badge">Docs</span>Document Athena-owned state, provider boundaries, approval/apply rules, and future media adapter constraints.</p>
+        <p><strong>Primary files:</strong> <code>packages/athena-webapp/docs/agent/intelligence.md</code>, <code>docs/solutions/architecture/athena-intelligence-layer-foundation-2026-06-21.md</code>.</p>
+      </article>
+    </section>
+
+    <section id="impact">
+      <h2>System-Wide Impact</h2>
+      <ul>
+        <li><strong>Interaction graph:</strong> New intelligence Convex modules read analytics/user activity and write intelligence tables; existing insight components shift to persisted artifact queries. Convex Agent/RAG/Workflow components can be added later as selected runtime helpers, but are not installed in v1.</li>
+        <li><strong>Error propagation:</strong> Provider/config/schema failures normalize into run/artifact state and safe command-result copy; raw provider errors are omitted from UI/logs.</li>
+        <li><strong>State lifecycle:</strong> Duplicate generation, stale recommendations, partial output, and context drift are handled by idempotency, snapshot hashes, and artifact states.</li>
+        <li><strong>Unchanged invariants:</strong> Domain records stay owned by their current modules; automation runs and workflow traces keep their existing meanings.</li>
+      </ul>
+    </section>
+
+    <section id="risks">
+      <h2>Risks</h2>
+      <table>
+        <thead><tr><th>Risk</th><th>Mitigation</th></tr></thead>
+        <tbody>
+          <tr><td>TanStack AI beta API churn</td><td>Keep TanStack behind one provider adapter and pin/test package versions.</td></tr>
+          <tr><td>Convex AI components become a second source of truth</td><td>Treat Agent/RAG/Workflow as helpers; persist Athena business state in intelligence tables and existing operational rails.</td></tr>
+          <tr><td>Model sees data the actor cannot see</td><td>Capability snapshots enforce actor or policy visibility before provider calls.</td></tr>
+          <tr><td>Persisted artifacts leak higher-privilege data</td><td>Read/list queries enforce viewer role, recorded visibility mode, and source refs.</td></tr>
+          <tr><td>Provider evidence retains PII indefinitely</td><td>Omit raw payloads by default; any retained evidence is redacted, TTL-bound, and server-internal.</td></tr>
+          <tr><td>Prompt injection shapes recommendations</td><td>Treat all snapshot/RAG/customer/store text as untrusted data and enforce schemas, allowlists, and policy checks server-side.</td></tr>
+          <tr><td>Stale advice appears current</td><td>Use snapshot hashes, stale/superseded states, and refresh-before-apply rules.</td></tr>
+          <tr><td>Future apply tools bypass approvals</td><td>Keep v1 read/propose only and require domain commands plus approval proof later.</td></tr>
+          <tr><td>Media scope creeps into foundation</td><td>Reserve artifact kind but defer media storage, consent, provenance, and publish UX.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="phases">
+      <h2>Phased Delivery</h2>
+      <ol>
+        <li><strong>Platform Foundation:</strong> U1, U2, U3.</li>
+        <li><strong>First Capabilities:</strong> U4.</li>
+        <li><strong>Review UX and Audit:</strong> U5, U6.</li>
+        <li><strong>Institutionalize:</strong> U7.</li>
+      </ol>
+    </section>
+  </main>
+</body>
+</html>
