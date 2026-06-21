@@ -122,6 +122,12 @@ import {
   scheduledRunLedgerSchema,
 } from "./schemas/automation";
 import {
+  intelligenceArtifactSchema,
+  intelligenceContextSnapshotSchema,
+  intelligenceProviderInvocationSchema,
+  intelligenceRunSchema,
+} from "./schemas/intelligence";
+import {
   remoteAssistClientSchema,
   remoteAssistSessionEventSchema,
   remoteAssistSessionSchema,
@@ -213,6 +219,51 @@ const schema = defineSchema({
     ])
     .index("by_expiresAt", ["expiresAt"]),
   athenaUser: defineTable(athenaUserSchema),
+  intelligenceRun: defineTable(intelligenceRunSchema)
+    .index("by_storeId_capability_status", ["storeId", "capability", "status"])
+    .index("by_storeId_idempotencyKey", ["storeId", "idempotencyKey"])
+    .index("by_actorRef_status", ["actorRef", "status"])
+    .index("by_contextSnapshotId", ["contextSnapshotId"])
+    .index("by_artifactId", ["artifactId"]),
+  intelligenceContextSnapshot: defineTable(intelligenceContextSnapshotSchema)
+    .index("by_runId", ["runId"])
+    .index("by_storeId_capability_hash", [
+      "storeId",
+      "capability",
+      "snapshotHash",
+    ])
+    .index("by_storeId_visibility_createdAt", [
+      "storeId",
+      "visibilityMode",
+      "createdAt",
+    ]),
+  intelligenceArtifact: defineTable(intelligenceArtifactSchema)
+    .index("by_runId", ["runId"])
+    .index("by_contextSnapshotId", ["contextSnapshotId"])
+    .index("by_storeId_capability_status", ["storeId", "capability", "status"])
+    .index("by_storeId_kind_status", ["storeId", "kind", "status"])
+    .index("by_storeId_kind_subject_status", [
+      "storeId",
+      "kind",
+      "subjectTable",
+      "subjectId",
+      "status",
+    ])
+    .index("by_storeId_visibility_status", [
+      "storeId",
+      "visibilityMode",
+      "status",
+    ])
+    .index("by_snapshotHash", ["snapshotHash"]),
+  intelligenceProviderInvocation: defineTable(intelligenceProviderInvocationSchema)
+    .index("by_runId", ["runId"])
+    .index("by_contextSnapshotId", ["contextSnapshotId"])
+    .index("by_providerKey_status", ["providerKey", "status"])
+    .index("by_storeId_capability_startedAt", [
+      "storeId",
+      "capability",
+      "startedAt",
+    ]),
   bag: defineTable(bagSchema)
     .index("by_storeId", ["storeId"])
     .index("by_storeFrontUserId", ["storeFrontUserId"]),
