@@ -887,6 +887,8 @@ describe("runHarnessInferentialReview", () => {
       expect.objectContaining({
         id: "missing-convex-return-validator-contract-proof-packages-athena-webapp-convex-pos-public-example-ts",
         severity: "high",
+        title:
+          "Public Convex return validator changed without executable contract proof",
         filePath: "packages/athena-webapp/convex/pos/public/example.ts",
       }),
     );
