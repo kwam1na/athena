@@ -10,6 +10,7 @@ import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import { Circle } from "lucide-react";
 import { useMemo } from "react";
 import { getProductName } from "~/src/lib/productUtils";
+import { WorkflowTraceRouteLink } from "../traces/WorkflowTraceRouteLink";
 
 // Types
 export enum ActivityType {
@@ -46,6 +47,39 @@ type Activity =
   | CreatedAction
   | FeedbackRequestAction;
 
+type ActivityOrderRefund = {
+  amount: number;
+  date: number;
+};
+
+type ActivityOrderTransition = {
+  date: number;
+  signedInAthenaUser?: {
+    email?: string;
+  };
+  status: string;
+};
+
+type ActivityOrderItem = {
+  feedbackRequested?: boolean;
+  feedbackRequestedAt?: number;
+  feedbackRequestedBy?: {
+    email?: string;
+  };
+  [key: string]: unknown;
+};
+
+type ActivityOrder = {
+  _creationTime?: number;
+  customerDetails: {
+    email: string;
+  };
+  items?: ActivityOrderItem[];
+  refunds?: ActivityOrderRefund[];
+  transitions?: ActivityOrderTransition[];
+  workflowTraceId?: string;
+};
+
 // Type guards
 function isRefundAction(activity: Activity): activity is RefundAction {
   return activity.type === ActivityType.Refund;
@@ -73,7 +107,7 @@ function ActivityItem({
   formatter,
 }: {
   activity: Activity;
-  order: any;
+  order: ActivityOrder;
   formatter: Intl.NumberFormat;
 }) {
   return (
@@ -128,11 +162,22 @@ function ActivityItem({
             </div>
           )}
         </div>
-        {Boolean(activity.date) && activity.date && (
-          <p className="text-xs ml-4 text-muted-foreground">
-            {getRelativeTime(activity.date)}
-          </p>
-        )}
+        {activity.date || order.workflowTraceId ? (
+          <div className="ml-4 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
+            {activity.date ? <span>{getRelativeTime(activity.date)}</span> : null}
+            {order.workflowTraceId ? (
+              <>
+                {activity.date ? <span>·</span> : null}
+                <WorkflowTraceRouteLink
+                  className="font-medium text-primary"
+                  traceId={order.workflowTraceId}
+                >
+                  View trace
+                </WorkflowTraceRouteLink>
+              </>
+            ) : null}
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -145,14 +190,14 @@ function ActivityList({
   formatter,
 }: {
   activities: Activity[];
-  order: any;
+  order: ActivityOrder;
   formatter: Intl.NumberFormat;
 }) {
   return (
     <>
       {activities.map((activity) => (
         <ActivityItem
-          key={`${activity.type}-${activity.date}-${isRefundAction(activity) ? (activity as RefundAction).amount : (activity as any).status}`}
+          key={`${activity.type}-${activity.date}-${isRefundAction(activity) ? activity.amount : "status" in activity ? activity.status : activity.productName}`}
           activity={activity}
           order={order}
           formatter={formatter}
@@ -170,13 +215,13 @@ export function ActivityView() {
   const activities: Activity[] = useMemo(() => {
     if (!order) return [];
     const refundActions: RefundAction[] =
-      order?.refunds?.map((refund: any) => ({
+      order?.refunds?.map((refund) => ({
         ...refund,
         type: ActivityType.Refund,
       })) ?? [];
 
     const transitionActions: TransitionAction[] =
-      order?.transitions?.map((transition: any) => ({
+      order?.transitions?.map((transition) => ({
         ...transition,
         type: ActivityType.Transition,
         user: transition.signedInAthenaUser?.email,
@@ -190,8 +235,8 @@ export function ActivityView() {
 
     const feedbackRequestActions: FeedbackRequestAction[] =
       order?.items
-        ?.filter((item: any) => item.feedbackRequested)
-        .map((item: any) => ({
+        ?.filter((item) => item.feedbackRequested)
+        .map((item) => ({
           date: item.feedbackRequestedAt ?? 0,
           type: ActivityType.FeedbackRequest,
           user: item.feedbackRequestedBy?.email,

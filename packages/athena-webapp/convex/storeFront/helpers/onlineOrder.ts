@@ -6,10 +6,13 @@ import {
   resolveServerDeliveryFee,
 } from "./paymentHelpers";
 import {
+  getOnlineOrderPaymentAmount,
+  getOnlineOrderPaymentMethodLabel,
   recordOnlineOrderCreatedEvent,
   recordOnlineOrderRestockMovement,
   resolveCustomerProfileForStoreFrontActor,
 } from "./orderOperations";
+import { recordOnlineOrderTraceBestEffort } from "../onlineOrderTracing";
 
 const MAX_BAG_ITEMS = 200;
 const MAX_CHECKOUT_SESSION_ITEMS = 200;
@@ -283,6 +286,20 @@ export async function createOrderFromCheckoutSession(
   const createdOrder = await ctx.db.get("onlineOrder", orderId);
   if (createdOrder) {
     await recordOnlineOrderCreatedEvent(ctx, createdOrder);
+    await recordOnlineOrderTraceBestEffort(ctx, {
+      order: createdOrder,
+      organizationId: store?.organizationId,
+      stage: "created",
+    });
+    if (createdOrder.hasVerifiedPayment) {
+      await recordOnlineOrderTraceBestEffort(ctx, {
+        amount: getOnlineOrderPaymentAmount(createdOrder),
+        order: createdOrder,
+        organizationId: store?.organizationId,
+        paymentMethod: getOnlineOrderPaymentMethodLabel(createdOrder),
+        stage: "paymentVerified",
+      });
+    }
   }
 
   console.log("created online order for session.");

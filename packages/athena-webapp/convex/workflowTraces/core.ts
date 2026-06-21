@@ -1,7 +1,11 @@
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 
-import { normalizeWorkflowTraceLookupValue } from "../../shared/workflowTrace";
+import {
+  assertWorkflowTraceDetailsAreMinimized,
+  normalizeWorkflowTraceEventKey,
+  normalizeWorkflowTraceLookupValue,
+} from "../../shared/workflowTrace";
 
 type WorkflowTraceReaderCtx = MutationCtx | QueryCtx;
 type WorkflowTraceInput = Omit<Doc<"workflowTrace">, "_id" | "_creationTime">;
@@ -12,7 +16,9 @@ type WorkflowTraceLookupInput = Omit<
 type WorkflowTraceEventInput = Omit<
   Doc<"workflowTraceEvent">,
   "_id" | "_creationTime" | "sequence"
->;
+> & {
+  eventKey?: string;
+};
 
 export async function getWorkflowTraceByIdWithCtx(
   ctx: WorkflowTraceReaderCtx,
@@ -82,6 +88,8 @@ export async function createWorkflowTraceWithCtx(
   ctx: MutationCtx,
   input: WorkflowTraceInput
 ) {
+  assertWorkflowTraceDetailsAreMinimized(input.details);
+
   const normalizedTrace = {
     ...input,
     primaryLookupValue: normalizeWorkflowTraceLookupValue(
@@ -135,6 +143,29 @@ export async function appendWorkflowTraceEventWithCtx(
   ctx: MutationCtx,
   input: WorkflowTraceEventInput
 ) {
+  assertWorkflowTraceDetailsAreMinimized(input.details);
+
+  const eventKey =
+    typeof input.eventKey === "string"
+      ? normalizeWorkflowTraceEventKey(input.eventKey)
+      : undefined;
+
+  if (eventKey) {
+    const existing = await ctx.db
+      .query("workflowTraceEvent")
+      .withIndex("by_storeId_traceId_eventKey", (q) =>
+        q
+          .eq("storeId", input.storeId)
+          .eq("traceId", input.traceId)
+          .eq("eventKey", eventKey)
+      )
+      .unique();
+
+    if (existing) {
+      return existing._id;
+    }
+  }
+
   const latest = await ctx.db
     .query("workflowTraceEvent")
     .withIndex("by_storeId_traceId_sequence", (q) =>
@@ -145,6 +176,7 @@ export async function appendWorkflowTraceEventWithCtx(
 
   return ctx.db.insert("workflowTraceEvent", {
     ...input,
+    ...(eventKey ? { eventKey } : {}),
     sequence: (latest?.sequence ?? 0) + 1,
   });
 }

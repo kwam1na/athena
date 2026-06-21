@@ -7,6 +7,12 @@ import { recordOperationalEventWithCtx } from "../operations/operationalEvents";
 import { ok, userError, type CommandResult } from "../../shared/commandResult";
 import { commandResultValidator } from "../lib/commandResultValidators";
 import { requireStoreFullAdminAccess } from "./access";
+import { bestEffortRecordPurchaseOrderStatusTraceWithCtx } from "./purchaseOrderTracing";
+import { getWorkflowTraceByLookupWithCtx } from "../workflowTraces/core";
+import {
+  PURCHASE_ORDER_ID_LOOKUP_TYPE,
+  PURCHASE_ORDER_WORKFLOW_TYPE,
+} from "../workflowTraces/adapters/purchaseOrder";
 
 const MAX_LINE_ITEMS = 200;
 const MAX_PURCHASE_ORDERS = 200;
@@ -243,7 +249,23 @@ export const listPurchaseOrders = query({
           .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
           .take(MAX_PURCHASE_ORDERS);
 
-    return purchaseOrders.sort(
+    const purchaseOrdersWithTraceIds = await Promise.all(
+      purchaseOrders.map(async (purchaseOrder) => {
+        const trace = await getWorkflowTraceByLookupWithCtx(ctx, {
+          storeId: purchaseOrder.storeId,
+          workflowType: PURCHASE_ORDER_WORKFLOW_TYPE,
+          lookupType: PURCHASE_ORDER_ID_LOOKUP_TYPE,
+          lookupValue: purchaseOrder._id,
+        });
+
+        return {
+          ...purchaseOrder,
+          workflowTraceId: trace?.traceId,
+        };
+      }),
+    );
+
+    return purchaseOrdersWithTraceIds.sort(
       (left, right) => right.createdAt - left.createdAt,
     );
   },
@@ -264,7 +286,7 @@ export const getPurchaseOrder = query({
 
     await requireStoreFullAdminAccess(ctx, purchaseOrder.storeId);
 
-    const [lineItems, vendor] = await Promise.all([
+    const [lineItems, vendor, trace] = await Promise.all([
       ctx.db
         .query("purchaseOrderLineItem")
         .withIndex("by_purchaseOrderId", (q) =>
@@ -272,12 +294,19 @@ export const getPurchaseOrder = query({
         )
         .take(MAX_LINE_ITEMS),
       ctx.db.get("vendor", purchaseOrder.vendorId),
+      getWorkflowTraceByLookupWithCtx(ctx, {
+        storeId: purchaseOrder.storeId,
+        workflowType: PURCHASE_ORDER_WORKFLOW_TYPE,
+        lookupType: PURCHASE_ORDER_ID_LOOKUP_TYPE,
+        lookupValue: purchaseOrder._id,
+      }),
     ]);
 
     return {
       ...purchaseOrder,
       lineItems,
       vendor,
+      workflowTraceId: trace?.traceId,
     };
   },
 });
@@ -397,6 +426,17 @@ export async function createPurchaseOrderWithCtx(
     workItemId: workItem?._id,
   });
 
+  const createdPurchaseOrder = await ctx.db.get("purchaseOrder", purchaseOrderId);
+  if (createdPurchaseOrder) {
+    await bestEffortRecordPurchaseOrderStatusTraceWithCtx(ctx, {
+      actorUserId: athenaUser._id,
+      nextStatus: "draft",
+      occurredAt: createdAt,
+      purchaseOrder: createdPurchaseOrder,
+      vendorName: vendor.name,
+    });
+  }
+
   return ctx.db.get("purchaseOrder", purchaseOrderId);
 }
 
@@ -451,29 +491,30 @@ export async function updatePurchaseOrderStatusWithCtx(
     return purchaseOrder;
   }
 
+  const statusChangedAt = Date.now();
   const updates: Record<string, unknown> = {
     notes: trimOptional(args.notes) ?? purchaseOrder.notes,
     status: args.nextStatus,
   };
 
   if (args.nextStatus === "submitted") {
-    updates.submittedAt = Date.now();
+    updates.submittedAt = statusChangedAt;
   }
 
   if (args.nextStatus === "approved") {
-    updates.approvedAt = Date.now();
+    updates.approvedAt = statusChangedAt;
   }
 
   if (args.nextStatus === "ordered") {
-    updates.orderedAt = Date.now();
+    updates.orderedAt = statusChangedAt;
   }
 
   if (args.nextStatus === "received") {
-    updates.receivedAt = Date.now();
+    updates.receivedAt = statusChangedAt;
   }
 
   if (args.nextStatus === "cancelled") {
-    updates.cancelledAt = Date.now();
+    updates.cancelledAt = statusChangedAt;
   }
 
   await ctx.db.patch("purchaseOrder", args.purchaseOrderId, updates);
@@ -514,6 +555,14 @@ export async function updatePurchaseOrderStatusWithCtx(
   if (!updatedPurchaseOrder) {
     throw new Error("Purchase order not found.");
   }
+
+  await bestEffortRecordPurchaseOrderStatusTraceWithCtx(ctx, {
+    actorUserId: athenaUser._id,
+    nextStatus: args.nextStatus,
+    occurredAt: statusChangedAt,
+    previousStatus: purchaseOrder.status,
+    purchaseOrder: updatedPurchaseOrder,
+  });
 
   return updatedPurchaseOrder;
 }

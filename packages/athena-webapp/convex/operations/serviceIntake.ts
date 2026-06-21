@@ -8,6 +8,7 @@ import { createOperationalWorkItemWithCtx } from "./operationalWorkItems";
 import { recordOperationalEventWithCtx } from "./operationalEvents";
 import { recordPaymentAllocationWithCtx } from "./paymentAllocations";
 import { createServiceCaseWithCtx } from "../serviceOps/serviceCases";
+import { recordServiceCaseTraceBestEffort } from "../serviceOps/serviceCaseTracing";
 import { ok, userError } from "../../shared/commandResult";
 import { validateServiceIntakeInput } from "../../shared/serviceIntake";
 
@@ -419,6 +420,20 @@ export const createServiceIntake = mutation({
       subjectLabel: workItem.title,
       subjectType: "service_case",
       workItemId: workItem._id,
+    });
+
+    await recordServiceCaseTraceBestEffort(ctx, {
+      actorStaffProfileId: createdByStaffProfile?._id,
+      actorUserId: args.createdByUserId,
+      amount: args.depositAmount,
+      approvalRequestId: approvalRequest?._id,
+      direction: hasDeposit ? "in" : undefined,
+      inventoryMovementId: inventoryMovement?._id,
+      method: args.depositMethod,
+      paymentAllocationId: paymentAllocation?._id,
+      registerSessionId: resolvedRegisterSessionId,
+      serviceCase: createdServiceCase,
+      stage: "intake_created",
     });
 
     return ok({

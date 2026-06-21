@@ -15,6 +15,17 @@ import { requireStoreFullAdminAccess } from "../stockOps/access";
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_OPERATIONS_QUERY_LIMIT = 200;
 const MAX_OPERATIONS_LOOKAHEAD_LIMIT = MAX_OPERATIONS_QUERY_LIMIT + 1;
+const SCHEDULED_RUN_CRON_FAMILIES = [
+  "release-checkout-items",
+  "clear-abandoned-sessions",
+  "complete-checkout-sessions",
+  "release-pos-session-items",
+  "auto-verify-payments",
+] as const;
+const MEANINGFUL_ZERO_CANDIDATE_CRON_FAMILIES = new Set<string>([
+  "complete-checkout-sessions",
+  "auto-verify-payments",
+]);
 const OPEN_WORK_ITEM_STATUSES = ["open", "in_progress"] as const;
 const TIMELINE_REGISTER_SESSION_STATUSES = ["closed", "closing"] as const;
 const TIMELINE_PENDING_REGISTER_COUNT_STATUSES = [
@@ -121,6 +132,20 @@ type DailyOperationsAutomationStatus = {
     sourceLink?: LinkTarget;
   }>;
   sourceLink: LinkTarget;
+};
+
+type DailyOperationsScheduledRunSummary = {
+  candidateCount: number;
+  completedAt: number;
+  cronFamily: string;
+  failedCount: number;
+  id: string;
+  outcome: "applied" | "partial_failure" | "no_candidates";
+  processedCount: number;
+  skippedCount: number;
+  succeededCount: number;
+  windowEndAt: number;
+  windowStartAt: number;
 };
 
 type DailyOperationsCloseSummary = {
@@ -1462,6 +1487,69 @@ async function listDailyOperationsAutomationStatuses(
   });
 }
 
+function isOperatorVisibleScheduledRun(run: Doc<"scheduledRunLedger">) {
+  if (run.scope !== "store" || run.visibility !== "store" || !run.storeId) {
+    return false;
+  }
+
+  if (run.outcome === "applied" || run.outcome === "partial_failure") {
+    return true;
+  }
+
+  return (
+    run.outcome === "no_candidates" &&
+    run.candidateCount === 0 &&
+    MEANINGFUL_ZERO_CANDIDATE_CRON_FAMILIES.has(run.cronFamily)
+  );
+}
+
+async function listDailyOperationsScheduledRunSummaries(
+  ctx: Pick<QueryCtx, "db">,
+  args: {
+    endAt: number;
+    storeId: Id<"store">;
+    startAt: number;
+  },
+): Promise<DailyOperationsScheduledRunSummary[]> {
+  const runs = (
+    await Promise.all(
+      SCHEDULED_RUN_CRON_FAMILIES.map((cronFamily) =>
+        ctx.db
+          .query("scheduledRunLedger")
+          .withIndex("by_storeId_cronFamily_window", (q) =>
+            q
+              .eq("storeId", args.storeId)
+              .eq("cronFamily", cronFamily)
+              .gte("scheduledWindowStartAt", args.startAt),
+          )
+          .take(MAX_OPERATIONS_QUERY_LIMIT),
+      ),
+    )
+  ).flat();
+
+  return runs
+    .filter(
+      (run) =>
+        run.scheduledWindowStartAt < args.endAt &&
+        isOperatorVisibleScheduledRun(run),
+    )
+    .sort((left, right) => right.completedAt - left.completedAt)
+    .slice(0, 8)
+    .map((run) => ({
+      candidateCount: run.candidateCount,
+      completedAt: run.completedAt,
+      cronFamily: run.cronFamily,
+      failedCount: run.failedCount,
+      id: run._id,
+      outcome: run.outcome as DailyOperationsScheduledRunSummary["outcome"],
+      processedCount: run.processedCount,
+      skippedCount: run.skippedCount,
+      succeededCount: run.succeededCount,
+      windowEndAt: run.scheduledWindowEndAt,
+      windowStartAt: run.scheduledWindowStartAt,
+    }));
+}
+
 function getCloseItemCounts(items: SourceItem[]) {
   return {
     approvalCount: items.filter((item) => item.category === "approval").length,
@@ -1726,6 +1814,7 @@ export async function buildDailyOperationsSnapshotWithCtx(
   args: {
     endAt?: number;
     includeManagerReviewEvidence?: boolean;
+    includeScheduledRunSummaries?: boolean;
     operatingDate: string;
     operatingTimezoneOffsetMinutes?: number;
     startAt?: number;
@@ -1740,6 +1829,7 @@ export async function buildDailyOperationsSnapshotWithCtx(
     dailyCloseRecord,
     queueCounts,
     automationStatuses,
+    scheduledRunSummaries,
     timeline,
     store,
     weekMetrics,
@@ -1750,6 +1840,13 @@ export async function buildDailyOperationsSnapshotWithCtx(
       getDailyCloseRecordForDate(ctx, args),
       listOpenQueueSnapshot(ctx, args.storeId),
       listDailyOperationsAutomationStatuses(ctx, args),
+      args.includeScheduledRunSummaries &&
+      (args.includeManagerReviewEvidence ?? true)
+        ? listDailyOperationsScheduledRunSummaries(ctx, {
+            ...range,
+            storeId: args.storeId,
+          })
+        : Promise.resolve([]),
       listTimelineEvents(ctx, {
         ...range,
         includeManagerReviewEvidence:
@@ -1882,6 +1979,7 @@ export async function buildDailyOperationsSnapshotWithCtx(
     lifecycle,
     operatingDate: args.operatingDate,
     primaryAction: primaryAction(lifecycleStatus),
+    scheduledRunSummaries,
     startAt: range.startAt,
     storeId: args.storeId,
     timeline,
@@ -1911,6 +2009,7 @@ export const getDailyOperationsSnapshot = query({
     return buildDailyOperationsSnapshotWithCtx(ctx, {
       ...args,
       includeManagerReviewEvidence,
+      includeScheduledRunSummaries: includeManagerReviewEvidence,
     });
   },
 });

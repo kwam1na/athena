@@ -1,9 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { Id } from "../_generated/dataModel";
 
 import {
   buildCheckoutReservationActivityArgs,
+  clearAbandonedSessions,
+  completeCheckoutSessions,
   recordCheckoutReservationActivities,
+  releaseCheckoutItems,
 } from "./checkoutSession";
 import {
   buildServerPricedCheckoutProducts,
@@ -76,6 +79,159 @@ function createReservationActivityCtx() {
   };
 
   return { ctx: ctx as any, skuActivityEvent };
+}
+
+function getHandler(definition: unknown) {
+  return (definition as { _handler: Function })._handler;
+}
+
+function createScheduledRunMutationCtx(
+  seed: {
+    checkoutSession?: Array<Record<string, unknown>>;
+    checkoutSessionItem?: Array<Record<string, unknown>>;
+    failPatchIds?: Set<string>;
+    productSku?: Array<Record<string, unknown>>;
+  } = {},
+) {
+  const scheduledRunLedger: Array<Record<string, unknown>> = [];
+  const checkoutSessions = new Map<string, Record<string, unknown>>(
+    seed.checkoutSession?.map((row) => [String(row._id), { ...row }]) ?? [],
+  );
+  const checkoutSessionItems = new Map<string, Record<string, unknown>>(
+    seed.checkoutSessionItem?.map((row) => [String(row._id), { ...row }]) ?? [],
+  );
+  const productSkus = new Map<string, Record<string, unknown>>(
+    seed.productSku?.map((row) => [String(row._id), { ...row }]) ?? [],
+  );
+  const skuActivityEvents: Array<Record<string, unknown>> = [];
+  const ctx = {
+    db: {
+      delete: async (table: string, id: string) => {
+        if (table === "checkoutSession") {
+          checkoutSessions.delete(id);
+          return;
+        }
+        if (table === "checkoutSessionItem") {
+          checkoutSessionItems.delete(id);
+          return;
+        }
+        throw new Error(`Unexpected delete from ${table}`);
+      },
+      get: async (table: string, id: string) => {
+        if (table === "productSku") {
+          return productSkus.get(id) ?? null;
+        }
+        if (table === "skuActivityEvent") {
+          return skuActivityEvents[Number(id.replace("sku-activity-", "")) - 1] ?? null;
+        }
+        throw new Error(`Unexpected get from ${table}`);
+      },
+      insert: async (table: string, input: Record<string, unknown>) => {
+        if (table === "scheduledRunLedger") {
+          scheduledRunLedger.push(input);
+          return `scheduled-run-${scheduledRunLedger.length}`;
+        }
+        if (table === "skuActivityEvent") {
+          skuActivityEvents.push(input);
+          return `sku-activity-${skuActivityEvents.length}`;
+        }
+        throw new Error(`Unexpected insert into ${table}`);
+      },
+      patch: async (
+        table: string,
+        id: string,
+        updates: Record<string, unknown>,
+      ) => {
+        if (seed.failPatchIds?.has(id)) {
+          throw new Error(`patch failed for ${id}`);
+        }
+        if (table === "checkoutSession") {
+          checkoutSessions.set(id, {
+            ...(checkoutSessions.get(id) ?? { _id: id }),
+            ...updates,
+          });
+          return;
+        }
+        if (table === "productSku") {
+          productSkus.set(id, {
+            ...(productSkus.get(id) ?? { _id: id }),
+            ...updates,
+          });
+          return;
+        }
+        throw new Error(`Unexpected patch on ${table}`);
+      },
+      query: (table: string) => {
+        if (table === "checkoutSession") {
+          return {
+            filter: () => ({
+              collect: async () => Array.from(checkoutSessions.values()),
+            }),
+          };
+        }
+
+        if (table === "checkoutSessionItem") {
+          let sessionId: unknown = null;
+          const collectItems = async () =>
+            Array.from(checkoutSessionItems.values()).filter(
+              (item) => sessionId === null || item.sesionId === sessionId,
+            );
+
+          return {
+            filter: (apply: Function) => {
+              apply({
+                eq: (_field: unknown, value: unknown) => {
+                  sessionId = value;
+                  return true;
+                },
+                field: (field: string) => field,
+              });
+              return {
+                collect: collectItems,
+              };
+            },
+            withIndex: (
+              _index: string,
+              apply: (builder: {
+                eq: (field: string, value: unknown) => unknown;
+              }) => void,
+            ) => {
+              const builder = {
+                eq(_field: string, value: unknown) {
+                  sessionId = value;
+                  return builder;
+                },
+              };
+              apply(builder);
+              return {
+                take: async () => collectItems(),
+              };
+            },
+          };
+        }
+
+        if (table === "skuActivityEvent") {
+          return {
+            withIndex: () => ({
+              first: async () => null,
+            }),
+          };
+        }
+
+        if (table === "scheduledRunLedger") {
+          return {
+            withIndex: () => ({
+              first: async () => null,
+            }),
+          };
+        }
+
+        throw new Error(`Unexpected query against ${table}`);
+      },
+    },
+  };
+
+  return { ctx: ctx as any, scheduledRunLedger };
 }
 
 describe("checkout session server-authoritative money", () => {
@@ -218,5 +374,58 @@ describe("checkout reservation SKU activity", () => {
       sourceLineId: "checkout-item-1",
       status: "expired",
     });
+  });
+});
+
+describe("checkout scheduled-run evidence producers", () => {
+  it("records no-candidate evidence for scheduled checkout release and completion mutations", async () => {
+    const releaseCtx = createScheduledRunMutationCtx();
+    await getHandler(releaseCheckoutItems)(releaseCtx.ctx, {});
+
+    expect(releaseCtx.scheduledRunLedger).toContainEqual(
+      expect.objectContaining({
+        cronFamily: "release-checkout-items",
+        scope: "system",
+        outcome: "no_candidates",
+        candidateCount: 0,
+      }),
+    );
+
+    const completeCtx = createScheduledRunMutationCtx();
+    await getHandler(completeCheckoutSessions)(completeCtx.ctx, {});
+
+    expect(completeCtx.scheduledRunLedger).toContainEqual(
+      expect.objectContaining({
+        cronFamily: "complete-checkout-sessions",
+        scope: "system",
+        outcome: "no_candidates",
+        candidateCount: 0,
+      }),
+    );
+  });
+
+  it("swallows scheduled-run evidence write failures from the action boundary", async () => {
+    const runMutation = vi.fn(async () => {
+      throw new Error("ledger unavailable");
+    });
+    const ctx = {
+      runMutation,
+      runQuery: vi.fn(async () => []),
+    };
+
+    await expect(
+      getHandler(clearAbandonedSessions)(ctx, {}),
+    ).resolves.toMatchObject({
+      success: false,
+      message: "No abandoned sessions",
+    });
+    expect(runMutation).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        cronFamily: "clear-abandoned-sessions",
+        scope: "system",
+        outcome: "no_candidates",
+      }),
+    );
   });
 });

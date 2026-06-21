@@ -32,6 +32,12 @@ import { presentCommandToast } from "~/src/lib/errors/presentCommandToast";
 import { runCommand } from "~/src/lib/errors/runCommand";
 import { formatStoredAmount } from "~/src/lib/pos/displayAmounts";
 import type { Id } from "~/convex/_generated/dataModel";
+import { WorkflowTraceRouteLink } from "../traces/WorkflowTraceRouteLink";
+
+type RefundTraceRecord = {
+  id?: string;
+  workflowTraceId?: string;
+};
 
 export function RefundsView() {
   const { order } = useOnlineOrder();
@@ -72,6 +78,10 @@ export function RefundsView() {
     state.includeDeliveryFee,
   );
   const availableItems = getAvailableItems(order);
+  const refundTraceLinks = ((order.refunds ?? []) as RefundTraceRecord[]).filter(
+    (refund): refund is RefundTraceRecord & { workflowTraceId: string } =>
+      Boolean(refund.workflowTraceId),
+  );
 
   const canRefund = netAmount > 0;
 
@@ -251,12 +261,29 @@ export function RefundsView() {
             <span>{formatStoredAmount(formatter, order.amount)}</span>
           </div>
           {amountRefunded > 0 && (
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Already refunded:</span>
-              <span className="text-destructive">
-                -{formatStoredAmount(formatter, amountRefunded)}
-              </span>
-            </div>
+            <>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Already refunded:</span>
+                <span className="text-destructive">
+                  -{formatStoredAmount(formatter, amountRefunded)}
+                </span>
+              </div>
+              {refundTraceLinks.length > 0 ? (
+                <div className="flex flex-wrap justify-end gap-2 text-xs">
+                  {refundTraceLinks.map((refund, index) => (
+                    <WorkflowTraceRouteLink
+                      className="font-medium text-primary"
+                      key={refund.id ?? refund.workflowTraceId}
+                      traceId={refund.workflowTraceId}
+                    >
+                      {refundTraceLinks.length === 1
+                        ? "View refund trace"
+                        : `Refund trace ${index + 1}`}
+                    </WorkflowTraceRouteLink>
+                  ))}
+                </div>
+              ) : null}
+            </>
           )}
           <div className="flex justify-between font-medium pt-2 border-t">
             <span>Available to refund:</span>

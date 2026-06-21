@@ -18,6 +18,12 @@ import {
   summarizePaymentAllocations,
 } from "../operations/paymentAllocations";
 import { ok, userError, type CommandResult } from "../../shared/commandResult";
+import { recordServiceCaseTraceBestEffort } from "./serviceCaseTracing";
+import { getWorkflowTraceByLookupWithCtx } from "../workflowTraces/core";
+import {
+  SERVICE_CASE_LOOKUP_TYPE,
+  SERVICE_CASE_WORKFLOW_TYPE,
+} from "../workflowTraces/adapters/serviceCase";
 
 export const SERVICE_CASE_STATUSES = [
   "intake",
@@ -348,6 +354,12 @@ export async function createServiceCaseWithCtx(
     workItemId: args.operationalWorkItemId,
   });
 
+  await recordServiceCaseTraceBestEffort(ctx, {
+    actorUserId: args.createdByUserId,
+    serviceCase,
+    stage: "created",
+  });
+
   return ok(serviceCase);
 }
 
@@ -409,7 +421,14 @@ export const listActiveServiceCases = query({
 
     return Promise.all(
       activeServiceCases.map(async (serviceCase) => {
-        const [customerProfile, staffProfile, serviceCatalogItem, workItem, pendingApprovals] =
+        const [
+          customerProfile,
+          staffProfile,
+          serviceCatalogItem,
+          workItem,
+          pendingApprovals,
+          trace,
+        ] =
           await Promise.all([
             ctx.db.get("customerProfile", serviceCase.customerProfileId),
             serviceCase.assignedStaffProfileId
@@ -420,6 +439,12 @@ export const listActiveServiceCases = query({
               : null,
             ctx.db.get("operationalWorkItem", serviceCase.operationalWorkItemId),
             listPendingApprovalRequestsWithCtx(ctx, serviceCase.operationalWorkItemId),
+            getWorkflowTraceByLookupWithCtx(ctx, {
+              storeId: serviceCase.storeId,
+              workflowType: SERVICE_CASE_WORKFLOW_TYPE,
+              lookupType: SERVICE_CASE_LOOKUP_TYPE,
+              lookupValue: serviceCase._id,
+            }),
           ]);
 
         return {
@@ -429,6 +454,7 @@ export const listActiveServiceCases = query({
           serviceCatalogName: serviceCatalogItem?.name ?? null,
           staffName: staffProfile?.fullName ?? null,
           workItemTitle: workItem?.title ?? null,
+          workflowTraceId: trace?.traceId,
         };
       })
     );
@@ -446,7 +472,14 @@ export const getServiceCaseDetails = query({
       return null;
     }
 
-    const [lineItems, inventoryUsage, paymentAllocations, pendingApprovals, workItem] =
+    const [
+      lineItems,
+      inventoryUsage,
+      paymentAllocations,
+      pendingApprovals,
+      workItem,
+      trace,
+    ] =
       await Promise.all([
         ctx.db
           .query("serviceCaseLineItem")
@@ -467,6 +500,12 @@ export const getServiceCaseDetails = query({
           .collect(),
         listPendingApprovalRequestsWithCtx(ctx, serviceCase.operationalWorkItemId),
         ctx.db.get("operationalWorkItem", serviceCase.operationalWorkItemId),
+        getWorkflowTraceByLookupWithCtx(ctx, {
+          storeId: serviceCase.storeId,
+          workflowType: SERVICE_CASE_WORKFLOW_TYPE,
+          lookupType: SERVICE_CASE_LOOKUP_TYPE,
+          lookupValue: serviceCase._id,
+        }),
       ]);
 
     return {
@@ -483,6 +522,7 @@ export const getServiceCaseDetails = query({
       pendingApprovals,
       paymentSummary: summarizePaymentAllocations(paymentAllocations),
       workItem,
+      workflowTraceId: trace?.traceId,
     };
   },
 });
@@ -526,6 +566,15 @@ export const addServiceCaseLineItem = mutation({
       subjectId: serviceCase._id,
       subjectType: "service_case",
       workItemId: workItem._id,
+    });
+
+    await recordServiceCaseTraceBestEffort(ctx, {
+      amount: lineItemResult.data.amount,
+      lineItemId,
+      lineType: args.lineType,
+      quantity: args.quantity,
+      serviceCase: nextServiceCase ?? serviceCase,
+      stage: "line_item_added",
     });
 
     return ok({
@@ -617,6 +666,17 @@ export const recordServiceInventoryUsage = mutation({
       workItemId: workItem._id,
     });
 
+    await recordServiceCaseTraceBestEffort(ctx, {
+      actorStaffProfileId: args.recordedByStaffProfileId,
+      actorUserId: args.recordedByUserId,
+      inventoryMovementId: inventoryMovement?._id,
+      productSkuId: args.productSkuId,
+      quantity: args.quantity,
+      serviceCase,
+      serviceInventoryUsageId: usageId,
+      stage: "inventory_usage_recorded",
+    });
+
     return ok(await ctx.db.get("serviceInventoryUsage", usageId));
   },
 });
@@ -682,6 +742,18 @@ export const recordServicePayment = mutation({
       subjectId: serviceCase._id,
       subjectType: "service_case",
       workItemId: workItem._id,
+    });
+
+    await recordServiceCaseTraceBestEffort(ctx, {
+      actorStaffProfileId: args.actorStaffProfileId,
+      actorUserId: args.actorUserId,
+      amount: args.amount,
+      direction: args.direction ?? "in",
+      method: args.method,
+      paymentAllocationId: paymentAllocation?._id,
+      registerSessionId: resolvedRegisterSessionId,
+      serviceCase: nextServiceCase ?? serviceCase,
+      stage: args.direction === "out" ? "refund_recorded" : "payment_recorded",
     });
 
     return ok(nextServiceCase);
@@ -785,7 +857,27 @@ export const updateServiceCaseStatus = mutation({
       workItemId: workItem._id,
     });
 
-    return ok(await ctx.db.get("serviceCase", serviceCase._id));
+    const updatedServiceCase = await ctx.db.get("serviceCase", serviceCase._id);
+
+    if (updatedServiceCase) {
+      await recordServiceCaseTraceBestEffort(ctx, {
+        nextStatus: args.status,
+        previousStatus: serviceCase.status,
+        serviceCase: updatedServiceCase,
+        stage:
+          args.status === "awaiting_approval"
+            ? "approval_pending"
+            : args.status === "awaiting_pickup"
+              ? "awaiting_pickup"
+              : args.status === "completed"
+                ? "completed"
+                : args.status === "cancelled"
+                  ? "cancelled"
+                  : "status_updated",
+      });
+    }
+
+    return ok(updatedServiceCase);
   },
 });
 

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ok } from "../../shared/commandResult";
+import { assertConformsToExportedReturns } from "../lib/returnValidatorContract";
 
 const mocks = vi.hoisted(() => ({
   createTransactionFromSessionHandler: vi.fn(),
@@ -52,12 +53,16 @@ vi.mock("../pos/application/commands/posSessionTracing", () => ({
 }));
 
 import {
+  bindSessionToRegisterSession,
   completeSession,
+  createSession,
   expireSessionFromOperations,
   expireAllSessionsForStaff,
   getStoreActiveSessionOperations,
+  holdSession,
   releaseSessionInventoryHoldsAndDeleteItems,
   releasePosSessionItems,
+  resumeSession,
   syncSessionCheckoutState,
   updateSession,
   voidSession,
@@ -94,6 +99,43 @@ type SessionRecord = {
   tax?: number;
   total?: number;
 };
+
+describe("POS session exported return contracts", () => {
+  it("accepts representative command results for changed session mutations", () => {
+    const sessionOperationResult = ok({
+      sessionId: "pos-session-1",
+      expiresAt: 1_720_000_000_000,
+    });
+    const sessionIdOnlyResult = ok({ sessionId: "pos-session-1" });
+
+    assertConformsToExportedReturns(expireSessionFromOperations, ok({
+      sessionId: "pos-session-1",
+      status: "expired",
+      priorStatus: "active",
+      releasedHoldCount: 1,
+      releasedQuantity: 2,
+    }));
+    assertConformsToExportedReturns(createSession, sessionOperationResult);
+    assertConformsToExportedReturns(
+      bindSessionToRegisterSession,
+      sessionOperationResult,
+    );
+    assertConformsToExportedReturns(updateSession, sessionOperationResult);
+    assertConformsToExportedReturns(holdSession, sessionOperationResult);
+    assertConformsToExportedReturns(resumeSession, sessionOperationResult);
+    assertConformsToExportedReturns(completeSession, ok({
+      sessionId: "pos-session-1",
+      transactionId: "pos-transaction-1",
+      transactionNumber: "TX-001",
+    }));
+    assertConformsToExportedReturns(voidSession, sessionIdOnlyResult);
+    assertConformsToExportedReturns(
+      releaseSessionInventoryHoldsAndDeleteItems,
+      sessionIdOnlyResult,
+    );
+    assertConformsToExportedReturns(syncSessionCheckoutState, sessionOperationResult);
+  });
+});
 
 type SessionItemRecord = {
   _id: string;
@@ -160,6 +202,7 @@ type CustomerProfileRecord = {
 };
 
 type QueryBuilderFilters = {
+  runKey?: string;
   storeId?: string;
   status?: string;
   expiresBefore?: number;
@@ -212,6 +255,7 @@ function createMutationCtx(seed?: {
   ];
   const productSkus = [...(seed?.productSkus ?? [])];
   const customerProfiles = [...(seed?.customerProfiles ?? [])];
+  const scheduledRunLedger: Array<Record<string, unknown>> = [];
 
   const db = {
     get: vi.fn(async (tableNameOrId: string, maybeId?: string) => {
@@ -252,6 +296,14 @@ function createMutationCtx(seed?: {
     }),
     patch: vi.fn(
       async (tableName: string, id: string, patch: Record<string, unknown>) => {
+        if (tableName === "scheduledRunLedger") {
+          const row = scheduledRunLedger.find((entry) => entry._id === id);
+          if (row) {
+            Object.assign(row, patch);
+          }
+          return;
+        }
+
         if (tableName !== "posSession") {
           return;
         }
@@ -273,6 +325,14 @@ function createMutationCtx(seed?: {
       if (index >= 0) {
         items.splice(index, 1);
       }
+    }),
+    insert: vi.fn(async (tableName: string, input: Record<string, unknown>) => {
+      if (tableName !== "scheduledRunLedger") {
+        throw new Error(`Unexpected insert ${tableName}`);
+      }
+      const id = `scheduled-run-${scheduledRunLedger.length + 1}`;
+      scheduledRunLedger.push({ _id: id, ...input });
+      return id;
     }),
     query: vi.fn((tableName: string) => ({
       withIndex(
@@ -297,6 +357,9 @@ function createMutationCtx(seed?: {
             if (field === "sessionId") {
               filters.sessionId = String(value);
             }
+            if (field === "runKey") {
+              filters.runKey = String(value);
+            }
 
             return builder;
           },
@@ -310,6 +373,19 @@ function createMutationCtx(seed?: {
         };
 
         apply(builder);
+
+        if (
+          tableName === "scheduledRunLedger" &&
+          indexName === "by_runKey"
+        ) {
+          const page = scheduledRunLedger.filter(
+            (entry) => entry.runKey === filters.runKey,
+          );
+
+          return {
+            first: async () => page[0] ?? null,
+          };
+        }
 
         if (
           tableName === "posSession" &&
@@ -417,6 +493,7 @@ function createMutationCtx(seed?: {
     db,
     sessions,
     items,
+    scheduledRunLedger,
   };
 }
 
@@ -2374,6 +2451,28 @@ describe("pos session lifecycle trace handlers", () => {
       new Set(["session-active", "session-void"]),
     );
     expect(mocks.traceRecord).toHaveBeenCalledTimes(1);
+    expect(ctx.scheduledRunLedger).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          cronFamily: "release-pos-session-items",
+          scope: "system",
+          visibility: "support",
+          outcome: "support_only",
+          candidateCount: 2,
+          succeededCount: 2,
+          snapshotCounts: { stores: 1 },
+        }),
+        expect.objectContaining({
+          cronFamily: "release-pos-session-items",
+          scope: "store",
+          storeId: "store-1",
+          visibility: "store",
+          outcome: "applied",
+          candidateCount: 2,
+          succeededCount: 2,
+        }),
+      ]),
+    );
     expect(mocks.traceRecord).toHaveBeenCalledWith(
       expect.objectContaining({
         stage: "expired",
@@ -2424,6 +2523,25 @@ describe("pos session lifecycle trace handlers", () => {
       notes: "Session expired - inventory holds released",
     });
     expect(mocks.traceRecord).toHaveBeenCalledTimes(1);
+    expect(ctx.scheduledRunLedger).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          cronFamily: "release-pos-session-items",
+          scope: "system",
+          outcome: "support_only",
+          candidateCount: 1,
+          succeededCount: 1,
+        }),
+        expect.objectContaining({
+          cronFamily: "release-pos-session-items",
+          scope: "store",
+          storeId: "store-1",
+          outcome: "applied",
+          candidateCount: 1,
+          succeededCount: 1,
+        }),
+      ]),
+    );
     expect(consoleLog).toHaveBeenCalledWith(
       "[POS] Found 1 expired sessions to process",
     );

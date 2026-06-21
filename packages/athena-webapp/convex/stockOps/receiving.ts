@@ -6,6 +6,7 @@ import { recordInventoryMovementWithCtx } from "../operations/inventoryMovements
 import { ok, userError, type CommandResult } from "../../shared/commandResult";
 import { commandResultValidator } from "../lib/commandResultValidators";
 import { requireStoreFullAdminAccess } from "./access";
+import { bestEffortRecordPurchaseOrderReceivingTraceWithCtx } from "./purchaseOrderTracing";
 
 type ReceivingLineItemInput = {
   orderedQuantity: number;
@@ -272,6 +273,13 @@ export async function receivePurchaseOrderBatchWithCtx(
     receivedAt: now,
   });
 
+  const inventoryMovements: Array<{
+    inventoryMovementId?: Id<"inventoryMovement">;
+    productSkuId: Id<"productSku">;
+    sourceId: string;
+    sourceType: "purchase_order_receiving_batch";
+  }> = [];
+
   for (const skuDelta of summarizeReceivingSkuDeltas(normalizedLineItems)) {
     const productSku = await ctx.db.get(
       "productSku",
@@ -286,7 +294,7 @@ export async function receivePurchaseOrderBatchWithCtx(
       quantityAvailable: productSku.quantityAvailable + skuDelta.receivedQuantity,
     });
 
-    await recordInventoryMovementWithCtx(ctx, {
+    const inventoryMovement = await recordInventoryMovementWithCtx(ctx, {
       actorUserId: athenaUser._id,
       movementType: "receipt",
       notes: trimOptional(args.notes),
@@ -298,6 +306,13 @@ export async function receivePurchaseOrderBatchWithCtx(
       sourceId,
       sourceType: "purchase_order_receiving_batch",
       storeId: args.storeId,
+    });
+
+    inventoryMovements.push({
+      inventoryMovementId: inventoryMovement?._id,
+      productSkuId: skuDelta.productSkuId as Id<"productSku">,
+      sourceId,
+      sourceType: "purchase_order_receiving_batch",
     });
   }
 
@@ -343,6 +358,30 @@ export async function receivePurchaseOrderBatchWithCtx(
       }
     );
   }
+
+  await bestEffortRecordPurchaseOrderReceivingTraceWithCtx(ctx, {
+    inventoryMovements,
+    lineItems: normalizedLineItems.map((lineItem) => ({
+      productId: lineItem.productId,
+      productSkuId: lineItem.productSkuId,
+      purchaseOrderLineItemId: lineItem._id,
+      receivedQuantity: lineItem.receivedQuantity,
+    })),
+    nextStatus: nextPurchaseOrderStatus,
+    occurredAt: now,
+    purchaseOrder: {
+      ...purchaseOrder,
+      receivedAt:
+        nextPurchaseOrderStatus === "received"
+          ? (purchaseOrderUpdates.receivedAt as number | undefined)
+          : purchaseOrder.receivedAt,
+      status: nextPurchaseOrderStatus,
+    },
+    receivedByUserId: athenaUser._id,
+    receivingBatchId,
+    sourceId,
+    submissionKey,
+  });
 
   return ctx.db.get("receivingBatch", receivingBatchId);
 }

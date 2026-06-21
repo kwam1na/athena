@@ -4,6 +4,7 @@ export const workflowTraceEventSchema = v.object({
   storeId: v.id("store"),
   traceId: v.string(),
   workflowType: v.string(),
+  eventKey: v.optional(v.string()),
   sequence: v.number(),
   kind: v.union(
     v.literal("milestone"),

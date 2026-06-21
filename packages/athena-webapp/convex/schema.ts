@@ -119,6 +119,7 @@ import {
 import {
   automationPolicySchema,
   automationRunSchema,
+  scheduledRunLedgerSchema,
 } from "./schemas/automation";
 import {
   remoteAssistClientSchema,
@@ -167,6 +168,19 @@ const schema = defineSchema({
     ])
     .index("by_storeId_outcome", ["storeId", "outcome"])
     .index("by_storeId_idempotencyKey", ["storeId", "idempotencyKey"]),
+  scheduledRunLedger: defineTable(scheduledRunLedgerSchema)
+    .index("by_runKey", ["runKey"])
+    .index("by_storeId_cronFamily_window", [
+      "storeId",
+      "cronFamily",
+      "scheduledWindowStartAt",
+    ])
+    .index("by_scope_cronFamily_window", [
+      "scope",
+      "cronFamily",
+      "scheduledWindowStartAt",
+    ])
+    .index("by_visibility_updatedAt", ["visibility", "updatedAt"]),
   approvalProof: defineTable(
     v.object({
       storeId: v.id("store"),
@@ -634,6 +648,7 @@ const schema = defineSchema({
   workflowTraceEvent: defineTable(workflowTraceEventSchema)
     .index("by_storeId_traceId_occurredAt", ["storeId", "traceId", "occurredAt"])
     .index("by_storeId_traceId_sequence", ["storeId", "traceId", "sequence"])
+    .index("by_storeId_traceId_eventKey", ["storeId", "traceId", "eventKey"])
     .index("by_traceId_sequence", ["traceId", "sequence"]),
   workflowTraceLookup: defineTable(workflowTraceLookupSchema)
     .index("by_storeId_workflowType_lookup", [

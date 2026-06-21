@@ -4,6 +4,7 @@ import { toast } from "sonner";
 
 import { Input } from "../ui/input";
 import { LoadingButton } from "../ui/loading-button";
+import { WorkflowTraceRouteLink } from "../traces/WorkflowTraceRouteLink";
 import type { Id } from "~/convex/_generated/dataModel";
 import { api } from "~/convex/_generated/api";
 import { presentCommandToast } from "@/lib/errors/presentCommandToast";
@@ -22,6 +23,7 @@ type ReceivingViewProps = {
   onReceived?: () => void;
   purchaseOrderId: Id<"purchaseOrder">;
   storeId: Id<"store">;
+  workflowTraceId?: string;
 };
 
 type ReceivingBatchLineItem = {
@@ -87,6 +89,7 @@ export function ReceivingView({
   onReceived,
   purchaseOrderId,
   storeId,
+  workflowTraceId,
 }: ReceivingViewProps) {
   const receivePurchaseOrderBatch = useMutation(
     api.stockOps.receiving.receivePurchaseOrderBatch,
@@ -158,10 +161,20 @@ export function ReceivingView({
 
   return (
     <div className="space-y-layout-md">
-      <p className="text-sm text-muted-foreground">
-        <span className="font-medium text-foreground">{remainingTotal}</span>{" "}
-        units remaining
-      </p>
+      <div className="flex flex-wrap items-center justify-between gap-layout-sm">
+        <p className="text-sm text-muted-foreground">
+          <span className="font-medium text-foreground">{remainingTotal}</span>{" "}
+          units remaining
+        </p>
+        {workflowTraceId ? (
+          <WorkflowTraceRouteLink
+            className="text-xs font-medium text-primary"
+            traceId={workflowTraceId}
+          >
+            View trace
+          </WorkflowTraceRouteLink>
+        ) : null}
+      </div>
 
       <div className="space-y-layout-md">
         <div className="space-y-2">

@@ -4,6 +4,7 @@ import { api, internal } from "../_generated/api";
 import { Id } from "../_generated/dataModel";
 import {
   action,
+  ActionCtx,
   internalAction,
   internalMutation,
   internalQuery,
@@ -30,6 +31,11 @@ import {
   type RecordSkuActivityEventArgs,
   type SkuActivityStatus,
 } from "../operations/skuActivity";
+import {
+  bestEffortRecordScheduledRunEvidence,
+  deriveScheduledRunOutcome,
+  type ScheduledCronFamily,
+} from "../automation/scheduledRunLedger";
 
 const entity = "checkoutSession";
 
@@ -47,6 +53,14 @@ type Product = {
 
 type AvailabilityUpdate = { id: Id<"productSku">; change: number };
 type SessionItemSnapshot = { price: number; quantity: number };
+type ScheduledRunStoreStats = {
+  candidateCount: number;
+  processedCount: number;
+  succeededCount: number;
+  failedCount: number;
+  skippedCount: number;
+  sampleSubjectIds: string[];
+};
 type CheckoutReservationActivityInput = {
   activityType: string;
   status: SkuActivityStatus;
@@ -113,6 +127,171 @@ async function listSessionItems(
     .query("checkoutSessionItem")
     .withIndex("by_sessionId", (q) => q.eq("sesionId", sessionId))
     .take(MAX_CHECKOUT_SESSION_ITEMS);
+}
+
+async function listSessionItemsForRead(
+  ctx: QueryCtx,
+  sessionId: Id<"checkoutSession">,
+) {
+  return await ctx.db
+    .query("checkoutSessionItem")
+    .withIndex("by_sessionId", (q) => q.eq("sesionId", sessionId))
+    .take(MAX_CHECKOUT_SESSION_ITEMS);
+}
+
+function addScheduledRunCandidate(
+  stats: Map<string, ScheduledRunStoreStats>,
+  storeId: Id<"store">,
+  subjectId: string,
+) {
+  const existing =
+    stats.get(storeId) ??
+    ({
+      candidateCount: 0,
+      processedCount: 0,
+      succeededCount: 0,
+      failedCount: 0,
+      skippedCount: 0,
+      sampleSubjectIds: [],
+    } satisfies ScheduledRunStoreStats);
+
+  existing.candidateCount += 1;
+  if (existing.sampleSubjectIds.length < 25) {
+    existing.sampleSubjectIds.push(subjectId);
+  }
+  stats.set(storeId, existing);
+  return existing;
+}
+
+async function recordCheckoutScheduledRunEvidence(args: {
+  ctx: MutationCtx;
+  cronFamily: ScheduledCronFamily;
+  sourceSubjectType: string;
+  storeStats: Map<string, ScheduledRunStoreStats>;
+  totalCandidateCount: number;
+  totalProcessedCount: number;
+  totalSucceededCount: number;
+  totalFailedCount: number;
+  totalSkippedCount?: number;
+  totalSampleSubjectIds: string[];
+}) {
+  await bestEffortRecordScheduledRunEvidence(args.ctx, {
+    cronFamily: args.cronFamily,
+    scope: "system",
+    visibility: "support",
+    outcome:
+      args.totalCandidateCount === 0
+        ? "no_candidates"
+        : args.totalFailedCount > 0 && args.totalSucceededCount === 0
+          ? "failed"
+          : args.totalFailedCount > 0
+            ? "partial_failure"
+            : "support_only",
+    candidateCount: args.totalCandidateCount,
+    processedCount: args.totalProcessedCount,
+    succeededCount: args.totalSucceededCount,
+    failedCount: args.totalFailedCount,
+    skippedCount: args.totalSkippedCount ?? 0,
+    sourceSubjectType: args.sourceSubjectType,
+    sampleSubjectIds: args.totalSampleSubjectIds,
+    snapshotCounts: {
+      stores: args.storeStats.size,
+    },
+    notes: "Cross-store scheduled run summary. Store-scoped rows hold operator-visible evidence.",
+  });
+
+  await Promise.all(
+    Array.from(args.storeStats.entries()).map(([storeId, stats]) =>
+      bestEffortRecordScheduledRunEvidence(args.ctx, {
+        cronFamily: args.cronFamily,
+        scope: "store",
+        storeId: storeId as Id<"store">,
+        outcome: deriveScheduledRunOutcome(stats),
+        candidateCount: stats.candidateCount,
+        processedCount: stats.processedCount,
+        succeededCount: stats.succeededCount,
+        failedCount: stats.failedCount,
+        skippedCount: stats.skippedCount,
+        sourceSubjectType: args.sourceSubjectType,
+        sampleSubjectIds: stats.sampleSubjectIds,
+      }),
+    ),
+  );
+}
+
+async function recordCheckoutScheduledRunEvidenceFromAction(args: {
+  ctx: ActionCtx;
+  cronFamily: ScheduledCronFamily;
+  sourceSubjectType: string;
+  storeStats: Map<string, ScheduledRunStoreStats>;
+  totalCandidateCount: number;
+  totalProcessedCount: number;
+  totalSucceededCount: number;
+  totalFailedCount: number;
+  totalSkippedCount?: number;
+  totalSampleSubjectIds: string[];
+}) {
+  try {
+    await args.ctx.runMutation(
+      internal.automation.scheduledRunLedger.recordScheduledRunEvidence,
+      {
+        cronFamily: args.cronFamily,
+        scope: "system",
+        visibility: "support",
+        outcome:
+          args.totalCandidateCount === 0
+            ? "no_candidates"
+            : args.totalFailedCount > 0 && args.totalSucceededCount === 0
+              ? "failed"
+              : args.totalFailedCount > 0
+                ? "partial_failure"
+                : "support_only",
+        candidateCount: args.totalCandidateCount,
+        processedCount: args.totalProcessedCount,
+        succeededCount: args.totalSucceededCount,
+        failedCount: args.totalFailedCount,
+        skippedCount: args.totalSkippedCount ?? 0,
+        sourceSubjectType: args.sourceSubjectType,
+        sampleSubjectIds: args.totalSampleSubjectIds,
+        snapshotCounts: {
+          stores: args.storeStats.size,
+        },
+        notes:
+          "Cross-store scheduled run summary. Store-scoped rows hold operator-visible evidence.",
+      },
+    );
+  } catch (error) {
+    console.error("[SCHEDULED-RUN] Failed to record action summary", error);
+  }
+
+  await Promise.all(
+    Array.from(args.storeStats.entries()).map(async ([storeId, stats]) => {
+      try {
+        await args.ctx.runMutation(
+          internal.automation.scheduledRunLedger.recordScheduledRunEvidence,
+          {
+            cronFamily: args.cronFamily,
+            scope: "store",
+            storeId: storeId as Id<"store">,
+            outcome: deriveScheduledRunOutcome(stats),
+            candidateCount: stats.candidateCount,
+            processedCount: stats.processedCount,
+            succeededCount: stats.succeededCount,
+            failedCount: stats.failedCount,
+            skippedCount: stats.skippedCount,
+            sourceSubjectType: args.sourceSubjectType,
+            sampleSubjectIds: stats.sampleSubjectIds,
+          },
+        );
+      } catch (error) {
+        console.error("[SCHEDULED-RUN] Failed to record action store row", {
+          cronFamily: args.cronFamily,
+          storeId,
+          error,
+        });
+      }
+    }),
+  );
 }
 
 const checkIfItemsHaveChanged = (
@@ -429,6 +608,8 @@ export const releaseCheckoutItems = internalMutation({
   args: { externalReferences: v.optional(v.array(v.string())) },
   handler: async (ctx, args) => {
     let expiredSessions: CheckoutSession[] = [];
+    const isScheduledRun =
+      !args.externalReferences || args.externalReferences.length === 0;
 
     if (args.externalReferences && args.externalReferences.length > 0) {
       expiredSessions = await ctx.db
@@ -458,76 +639,127 @@ export const releaseCheckoutItems = internalMutation({
 
     if (expiredSessions.length === 0) {
       console.log("No expired sessions found.");
+      if (isScheduledRun) {
+        await recordCheckoutScheduledRunEvidence({
+          ctx,
+          cronFamily: "release-checkout-items",
+          sourceSubjectType: "checkoutSession",
+          storeStats: new Map(),
+          totalCandidateCount: 0,
+          totalProcessedCount: 0,
+          totalSucceededCount: 0,
+          totalFailedCount: 0,
+          totalSampleSubjectIds: [],
+        });
+      }
       return;
     }
 
+    const storeStats = new Map<string, ScheduledRunStoreStats>();
+    const sampleSubjectIds: string[] = [];
+    let processedCount = 0;
+    let succeededCount = 0;
+    let failedCount = 0;
+
     // 2. Process each expired session
     for (const session of expiredSessions) {
-      // Fetch all items within the expired session
-      const sessionItems = await ctx.db
-        .query("checkoutSessionItem")
-        .filter((q) => q.eq(q.field("sesionId"), session._id))
-        .collect();
-
-      const availabilityUpdates = new Map<Id<"productSku">, number>();
-
-      // Calculate the quantities to release
-      for (const item of sessionItems) {
-        const currentQuantity = availabilityUpdates.get(item.productSkuId) || 0;
-        availabilityUpdates.set(
-          item.productSkuId,
-          currentQuantity + item.quantity,
-        );
+      const stats = isScheduledRun
+        ? addScheduledRunCandidate(storeStats, session.storeId, session._id)
+        : null;
+      if (isScheduledRun && sampleSubjectIds.length < 25) {
+        sampleSubjectIds.push(session._id);
       }
 
-      // Update product SKU availability in bulk
-      await Promise.all(
-        Array.from(availabilityUpdates.entries()).map(
-          async ([skuId, quantityToRelease]) => {
-            const productSku = await ctx.db.get("productSku", skuId);
-            if (productSku) {
-              await ctx.db.patch("productSku", skuId, {
-                quantityAvailable:
-                  productSku.quantityAvailable + quantityToRelease,
-              });
-            }
-          },
-        ),
-      );
+      const processSession = async () => {
+        // Fetch all items within the expired session
+        const sessionItems = await ctx.db
+          .query("checkoutSessionItem")
+          .filter((q) => q.eq(q.field("sesionId"), session._id))
+          .collect();
 
-      const releaseStatus =
-        !args.externalReferences || args.externalReferences.length === 0
-          ? "expired"
-          : "released";
-      await recordCheckoutReservationActivities(
+        const availabilityUpdates = new Map<Id<"productSku">, number>();
+
+        // Calculate the quantities to release
+        for (const item of sessionItems) {
+          const currentQuantity =
+            availabilityUpdates.get(item.productSkuId) || 0;
+          availabilityUpdates.set(
+            item.productSkuId,
+            currentQuantity + item.quantity,
+          );
+        }
+
+        // Update product SKU availability in bulk
+        await Promise.all(
+          Array.from(availabilityUpdates.entries()).map(
+            async ([skuId, quantityToRelease]) => {
+              const productSku = await ctx.db.get("productSku", skuId);
+              if (productSku) {
+                await ctx.db.patch("productSku", skuId, {
+                  quantityAvailable:
+                    productSku.quantityAvailable + quantityToRelease,
+                });
+              }
+            },
+          ),
+        );
+
+        const releaseStatus = isScheduledRun ? "expired" : "released";
+        await recordCheckoutReservationActivities(
+          ctx,
+          sessionItems.map((item) => ({
+            activityType:
+              releaseStatus === "expired"
+                ? "reservation_expired"
+                : "reservation_released",
+            productId: item.productId,
+            productSkuId: item.productSkuId,
+            quantity: item.quantity,
+            quantityDelta: item.quantity,
+            reason: releaseStatus,
+            sessionId: session._id,
+            sourceLineId: item._id,
+            status: releaseStatus,
+            storeFrontUserId: item.storeFrontUserId,
+            storeId: session.storeId,
+          })),
+        );
+
+        // Delete session items and the expired session
+        await Promise.all([
+          ...sessionItems.map((item) =>
+            ctx.db.delete("checkoutSessionItem", item._id),
+          ),
+          ctx.db.delete("checkoutSession", session._id),
+        ]);
+
+        console.log(`Released quantities for session: ${session._id}`);
+      };
+
+      if (!isScheduledRun) {
+        await processSession();
+        continue;
+      }
+
+      processedCount += 1;
+      stats!.processedCount += 1;
+      await processSession();
+      succeededCount += 1;
+      stats!.succeededCount += 1;
+    }
+
+    if (isScheduledRun) {
+      await recordCheckoutScheduledRunEvidence({
         ctx,
-        sessionItems.map((item) => ({
-          activityType:
-            releaseStatus === "expired"
-              ? "reservation_expired"
-              : "reservation_released",
-          productId: item.productId,
-          productSkuId: item.productSkuId,
-          quantity: item.quantity,
-          quantityDelta: item.quantity,
-          reason: releaseStatus,
-          sessionId: session._id,
-          sourceLineId: item._id,
-          status: releaseStatus,
-          storeFrontUserId: item.storeFrontUserId,
-          storeId: session.storeId,
-        })),
-      );
-
-      // Delete session items and the expired session
-      await Promise.all([
-        ...sessionItems.map((item) =>
-          ctx.db.delete("checkoutSessionItem", item._id),
-        ),
-        ctx.db.delete("checkoutSession", session._id),
-      ]);
-
-      console.log(`Released quantities for session: ${session._id}`);
+        cronFamily: "release-checkout-items",
+        sourceSubjectType: "checkoutSession",
+        storeStats,
+        totalCandidateCount: expiredSessions.length,
+        totalProcessedCount: processedCount,
+        totalSucceededCount: succeededCount,
+        totalFailedCount: failedCount,
+        totalSampleSubjectIds: sampleSubjectIds,
+      });
     }
   },
 });
@@ -642,12 +874,39 @@ export const completeCheckoutSessions = internalMutation({
 
     if (sessions.length === 0) {
       console.log("No sessions to complete.");
+      await recordCheckoutScheduledRunEvidence({
+        ctx,
+        cronFamily: "complete-checkout-sessions",
+        sourceSubjectType: "checkoutSession",
+        storeStats: new Map(),
+        totalCandidateCount: 0,
+        totalProcessedCount: 0,
+        totalSucceededCount: 0,
+        totalFailedCount: 0,
+        totalSampleSubjectIds: [],
+      });
       return;
     }
+
+    const storeStats = new Map<string, ScheduledRunStoreStats>();
+    const sampleSubjectIds: string[] = [];
+    let processedCount = 0;
+    let succeededCount = 0;
+    let failedCount = 0;
 
     // set all sessions to completed
     await Promise.all(
       sessions.map(async (session) => {
+        const stats = addScheduledRunCandidate(
+          storeStats,
+          session.storeId,
+          session._id,
+        );
+        if (sampleSubjectIds.length < 25) {
+          sampleSubjectIds.push(session._id);
+        }
+        processedCount += 1;
+        stats.processedCount += 1;
         await ctx.db.patch("checkoutSession", session._id, {
           hasCompletedCheckoutSession: true,
         });
@@ -668,6 +927,8 @@ export const completeCheckoutSessions = internalMutation({
             storeId: session.storeId,
           })),
         );
+        succeededCount += 1;
+        stats.succeededCount += 1;
       }),
     );
 
@@ -675,6 +936,17 @@ export const completeCheckoutSessions = internalMutation({
       "Completed checkout sessions",
       sessions.map((s) => s._id),
     );
+    await recordCheckoutScheduledRunEvidence({
+      ctx,
+      cronFamily: "complete-checkout-sessions",
+      sourceSubjectType: "checkoutSession",
+      storeStats,
+      totalCandidateCount: sessions.length,
+      totalProcessedCount: processedCount,
+      totalSucceededCount: succeededCount,
+      totalFailedCount: failedCount,
+      totalSampleSubjectIds: sampleSubjectIds,
+    });
   },
 });
 
@@ -685,37 +957,118 @@ export const clearAbandonedSessions = internalAction({
       internal.storeFront.checkoutSession.getAbandonedCheckoutSessions,
       {},
     );
+    const storeStats = new Map<string, ScheduledRunStoreStats>();
+    const sampleSubjectIds: string[] = [];
+    let processedCount = 0;
+    let succeededCount = 0;
+    let failedCount = 0;
+    let skippedCount = 0;
 
     if (sessions.length === 0) {
       console.log("No abandoned sessions found.");
+      await recordCheckoutScheduledRunEvidenceFromAction({
+        ctx,
+        cronFamily: "clear-abandoned-sessions",
+        sourceSubjectType: "checkoutSession",
+        storeStats,
+        totalCandidateCount: 0,
+        totalProcessedCount: 0,
+        totalSucceededCount: 0,
+        totalFailedCount: 0,
+        totalSkippedCount: 0,
+        totalSampleSubjectIds: [],
+      });
       return { success: false, message: "No abandoned sessions" };
     }
 
-    const checks = await Promise.all(
-      sessions.map((session) => {
-        return fetch(
-          `https://api.paystack.co/transaction/verify/${session.externalReference}`,
-          {
-            headers: {
-              Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
-            },
-          },
+    const verificationResults = await Promise.all(
+      sessions.map(async (session) => {
+        const stats = addScheduledRunCandidate(
+          storeStats,
+          session.storeId,
+          session._id,
         );
+        if (sampleSubjectIds.length < 25) {
+          sampleSubjectIds.push(session._id);
+        }
+        processedCount += 1;
+        stats.processedCount += 1;
+
+        try {
+          const check = await fetch(
+            `https://api.paystack.co/transaction/verify/${session.externalReference}`,
+            {
+              headers: {
+                Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
+              },
+            },
+          );
+          const response = await check.json();
+          const status = response?.data?.status;
+          if (status === "abandoned" || status === "failed") {
+            return {
+              release: true,
+              reference: response.data.reference as string,
+              stats,
+            };
+          }
+
+          skippedCount += 1;
+          stats.skippedCount += 1;
+          return { release: false, stats };
+        } catch (error) {
+          failedCount += 1;
+          stats.failedCount += 1;
+          console.error(
+            `[clearAbandonedSessions] Failed to verify session ${session._id}`,
+            error,
+          );
+          return { release: false, stats };
+        }
       }),
     );
 
-    const responses = await Promise.all(checks.map((check) => check.json()));
+    const abandonededBags = verificationResults
+      .filter((result) => result.release)
+      .map((result) => result.reference!)
+      .filter(Boolean);
 
-    const abandonededBags = responses
-      .filter(
-        (r) => r.data.status === "abandoned" || r.data.status === "failed",
-      )
-      .map((r) => r.data.reference);
+    if (abandonededBags.length > 0) {
+      try {
+        await ctx.runMutation(
+          internal.storeFront.checkoutSession.releaseCheckoutItems,
+          { externalReferences: abandonededBags },
+        );
+        for (const result of verificationResults) {
+          if (!result.release) continue;
+          succeededCount += 1;
+          result.stats.succeededCount += 1;
+        }
+      } catch (error) {
+        for (const result of verificationResults) {
+          if (!result.release) continue;
+          failedCount += 1;
+          result.stats.failedCount += 1;
+        }
+        console.error(
+          "[clearAbandonedSessions] Failed to release abandoned sessions",
+          error,
+        );
+      }
+    }
 
-    await ctx.runMutation(
-      internal.storeFront.checkoutSession.releaseCheckoutItems,
-      { externalReferences: abandonededBags },
-    );
+    await recordCheckoutScheduledRunEvidenceFromAction({
+      ctx,
+      cronFamily: "clear-abandoned-sessions",
+      sourceSubjectType: "checkoutSession",
+      storeStats,
+      totalCandidateCount: sessions.length,
+      totalProcessedCount: processedCount,
+      totalSucceededCount: succeededCount,
+      totalFailedCount: failedCount,
+      totalSkippedCount: skippedCount,
+      totalSampleSubjectIds: sampleSubjectIds,
+    });
   },
 });
 
@@ -981,169 +1334,6 @@ async function createOnlineOrder(
 
   return { success: true, orderId: response.orderId };
 }
-
-export const getCheckoutSession = internalQuery({
-  args: {
-    storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")),
-    externalReference: v.optional(v.string()),
-    sessionId: v.optional(v.id("checkoutSession")),
-  },
-  handler: async (ctx, args) => {
-    return await ctx.db
-      .query("checkoutSession")
-      .withIndex("by_storeFrontUserId", (q) =>
-        q.eq("storeFrontUserId", args.storeFrontUserId),
-      )
-      .filter((q) =>
-        q.or(
-          q.eq(q.field("externalReference"), args.externalReference),
-          q.eq(q.field("_id"), args.sessionId),
-        ),
-      )
-      .first();
-  },
-});
-
-export const getPendingCheckoutSessions = query({
-  args: { storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")) },
-  handler: async (ctx, args) => {
-    return await ctx.db
-      .query("checkoutSession")
-      .withIndex("by_storeFrontUserId", (q) =>
-        q.eq("storeFrontUserId", args.storeFrontUserId),
-      )
-      .filter((q) =>
-        q.and(
-          q.eq(q.field("hasCompletedPayment"), true),
-          q.eq(q.field("placedOrderId"), undefined),
-          q.neq(q.field("isPaymentRefunded"), true),
-        ),
-      )
-      .take(MAX_CHECKOUT_SESSIONS);
-  },
-});
-
-export const getUnverifiedPaidSessions = internalQuery({
-  args: {},
-  handler: async (ctx) => {
-    const fifteenMinutesAgo = Date.now() - 15 * 60 * 1000;
-
-    return await ctx.db
-      .query("checkoutSession")
-      .filter((q) =>
-        q.and(
-          q.eq(q.field("hasCompletedPayment"), true),
-          q.neq(q.field("hasVerifiedPayment"), true),
-          q.neq(q.field("placedOrderId"), undefined),
-          q.neq(q.field("externalReference"), undefined),
-          q.lt(q.field("_creationTime"), fifteenMinutesAgo),
-        ),
-      )
-      .collect();
-  },
-});
-
-export const getById = query({
-  args: { sessionId: v.id("checkoutSession") },
-  handler: async (ctx, args) => {
-    const session = await ctx.db.get("checkoutSession", args.sessionId);
-    if (!session) return null;
-
-    const sessionItems = await listSessionItems(ctx, args.sessionId);
-
-    const sessionItemsWithImages = await Promise.all(
-      sessionItems.map(async (item) => {
-        const [product, productSku] = await Promise.all([
-          ctx.db.get("product", item.productId),
-          ctx.db.get("productSku", item.productSkuId),
-        ]);
-
-        let category: string | undefined;
-
-        let colorName;
-
-        if (productSku?.color) {
-          const color = await ctx.db.get("color", productSku.color);
-          colorName = color?.name;
-        }
-
-        if (product) {
-          const productCategory = await ctx.db.get(
-            "category",
-            product.categoryId,
-          );
-          category = productCategory?.name;
-        }
-
-        return {
-          ...item,
-          productCategory: category,
-          isVisible: product?.isVisible,
-          length: productSku?.length,
-          price: productSku?.price,
-          colorName,
-          productName: product?.name,
-          productImage: productSku?.images?.[0] ?? null,
-        };
-      }),
-    );
-
-    return {
-      ...session,
-      items: sessionItemsWithImages,
-    };
-  },
-});
-
-export const getByIdInternal = internalQuery({
-  args: { sessionId: v.id("checkoutSession") },
-  handler: async (ctx, args) => {
-    const session = await ctx.db.get("checkoutSession", args.sessionId);
-    if (!session) return null;
-
-    const sessionItems = await listSessionItems(ctx, args.sessionId);
-
-    const sessionItemsWithImages = await Promise.all(
-      sessionItems.map(async (item) => {
-        const [product, productSku] = await Promise.all([
-          ctx.db.get("product", item.productId),
-          ctx.db.get("productSku", item.productSkuId),
-        ]);
-
-        let category: string | undefined;
-        let colorName;
-
-        if (productSku?.color) {
-          const color = await ctx.db.get("color", productSku.color);
-          colorName = color?.name;
-        }
-
-        if (product) {
-          const productCategory = await ctx.db.get(
-            "category",
-            product.categoryId,
-          );
-          category = productCategory?.name;
-        }
-
-        return {
-          ...item,
-          productCategory: category,
-          length: productSku?.length,
-          price: productSku?.price,
-          colorName,
-          productName: product?.name,
-          productImage: productSku?.images?.[0] ?? null,
-        };
-      }),
-    );
-
-    return {
-      ...session,
-      items: sessionItemsWithImages,
-    };
-  },
-});
 
 // --- Helper Methods ---
 
@@ -1871,3 +2061,166 @@ async function findBestValuePromoCode(
 
   return bestCode.value > 0 ? bestCode.code : null;
 }
+
+export const getCheckoutSession = internalQuery({
+  args: {
+    storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")),
+    externalReference: v.optional(v.string()),
+    sessionId: v.optional(v.id("checkoutSession")),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("checkoutSession")
+      .withIndex("by_storeFrontUserId", (q) =>
+        q.eq("storeFrontUserId", args.storeFrontUserId),
+      )
+      .filter((q) =>
+        q.or(
+          q.eq(q.field("externalReference"), args.externalReference),
+          q.eq(q.field("_id"), args.sessionId),
+        ),
+      )
+      .first();
+  },
+});
+
+export const getPendingCheckoutSessions = query({
+  args: { storeFrontUserId: v.union(v.id("storeFrontUser"), v.id("guest")) },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("checkoutSession")
+      .withIndex("by_storeFrontUserId", (q) =>
+        q.eq("storeFrontUserId", args.storeFrontUserId),
+      )
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("hasCompletedPayment"), true),
+          q.eq(q.field("placedOrderId"), undefined),
+          q.neq(q.field("isPaymentRefunded"), true),
+        ),
+      )
+      .take(MAX_CHECKOUT_SESSIONS);
+  },
+});
+
+export const getUnverifiedPaidSessions = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const fifteenMinutesAgo = Date.now() - 15 * 60 * 1000;
+
+    return await ctx.db
+      .query("checkoutSession")
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("hasCompletedPayment"), true),
+          q.neq(q.field("hasVerifiedPayment"), true),
+          q.neq(q.field("placedOrderId"), undefined),
+          q.neq(q.field("externalReference"), undefined),
+          q.lt(q.field("_creationTime"), fifteenMinutesAgo),
+        ),
+      )
+      .collect();
+  },
+});
+
+export const getById = query({
+  args: { sessionId: v.id("checkoutSession") },
+  handler: async (ctx, args) => {
+    const session = await ctx.db.get("checkoutSession", args.sessionId);
+    if (!session) return null;
+
+    const sessionItems = await listSessionItemsForRead(ctx, args.sessionId);
+
+    const sessionItemsWithImages = await Promise.all(
+      sessionItems.map(async (item) => {
+        const [product, productSku] = await Promise.all([
+          ctx.db.get("product", item.productId),
+          ctx.db.get("productSku", item.productSkuId),
+        ]);
+
+        let category: string | undefined;
+
+        let colorName;
+
+        if (productSku?.color) {
+          const color = await ctx.db.get("color", productSku.color);
+          colorName = color?.name;
+        }
+
+        if (product) {
+          const productCategory = await ctx.db.get(
+            "category",
+            product.categoryId,
+          );
+          category = productCategory?.name;
+        }
+
+        return {
+          ...item,
+          productCategory: category,
+          isVisible: product?.isVisible,
+          length: productSku?.length,
+          price: productSku?.price,
+          colorName,
+          productName: product?.name,
+          productImage: productSku?.images?.[0] ?? null,
+        };
+      }),
+    );
+
+    return {
+      ...session,
+      items: sessionItemsWithImages,
+    };
+  },
+});
+
+export const getByIdInternal = internalQuery({
+  args: { sessionId: v.id("checkoutSession") },
+  handler: async (ctx, args) => {
+    const session = await ctx.db.get("checkoutSession", args.sessionId);
+    if (!session) return null;
+
+    const sessionItems = await listSessionItemsForRead(ctx, args.sessionId);
+
+    const sessionItemsWithImages = await Promise.all(
+      sessionItems.map(async (item) => {
+        const [product, productSku] = await Promise.all([
+          ctx.db.get("product", item.productId),
+          ctx.db.get("productSku", item.productSkuId),
+        ]);
+
+        let category: string | undefined;
+        let colorName;
+
+        if (productSku?.color) {
+          const color = await ctx.db.get("color", productSku.color);
+          colorName = color?.name;
+        }
+
+        if (product) {
+          const productCategory = await ctx.db.get(
+            "category",
+            product.categoryId,
+          );
+          category = productCategory?.name;
+        }
+
+        return {
+          ...item,
+          productCategory: category,
+          length: productSku?.length,
+          price: productSku?.price,
+          colorName,
+          productName: product?.name,
+          productImage: productSku?.images?.[0] ?? null,
+        };
+      }),
+    );
+
+    return {
+      ...session,
+      items: sessionItemsWithImages,
+    };
+  },
+});
