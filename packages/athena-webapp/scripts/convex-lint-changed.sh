@@ -31,6 +31,7 @@ fi
 MERGE_BASE="$(git -C "$REPO_ROOT" merge-base HEAD "$BASE_REF")"
 
 changed_files=()
+repo_changed_files=()
 
 collect_changed_convex_files() {
   {
@@ -49,6 +50,7 @@ while IFS= read -r file; do
   if [[ "$file" == packages/athena-webapp/convex/_generated/* ]]; then
     continue
   fi
+  repo_changed_files+=("$file")
   changed_files+=("${file#packages/athena-webapp/}")
 done < <(collect_changed_convex_files | grep -E '\.ts$' || true)
 
@@ -67,3 +69,8 @@ python3 \
   scripts/convexPaginationAntiPatternCheck.py \
   "$ROOT_DIR" \
   "${changed_files[@]}"
+
+bun \
+  "$REPO_ROOT/scripts/convex-return-validator-contract-check.ts" \
+  --root "$REPO_ROOT" \
+  "${repo_changed_files[@]}"

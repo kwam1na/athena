@@ -52,5 +52,7 @@ unexpected object keys.
   returned values are accepted by Convex.
 - Keep representative values realistic enough to include nested optional
   sections that are commonly returned in production.
-- Let `bun run harness:inferential-review` fail closed when changed public
-  Convex return validators have no executable proof.
+- Let `bun run --filter '@athena/webapp' lint:convex:changed` catch missing
+  executable proof early during changed-file Convex linting.
+- Keep `bun run harness:inferential-review` as defense-in-depth for the same
+  changed-file contract rule later in the PR ladder.

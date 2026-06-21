@@ -2,6 +2,8 @@ import Anthropic from "@anthropic-ai/sdk";
 import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
+import { collectConvexReturnValidatorContractFindings as collectSharedConvexReturnValidatorContractFindings } from "./convex-return-validator-contract-check";
+
 const DEFAULT_BASE_REF = "origin/main";
 const DEFAULT_MACHINE_OUTPUT_PATH =
   "artifacts/harness-inferential-review/latest.json";
@@ -1677,7 +1679,7 @@ async function runDeterministicSemanticAnalysis(
       input.rootDir,
       input.changedFiles,
     )),
-    ...(await collectConvexReturnValidatorContractFindings(
+    ...(await collectSharedConvexReturnValidatorContractFindings(
       input.rootDir,
       input.changedFiles,
     )),
