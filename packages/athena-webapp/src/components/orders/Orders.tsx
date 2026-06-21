@@ -1,26 +1,28 @@
 import { ShoppingBag } from "lucide-react";
-import { OnlineOrder, Store } from "~/types";
-import { DataTable } from "../products/products-table/components/data-table";
+import { OnlineOrder } from "~/types";
 import { EmptyState } from "../states/empty/empty-state";
 import { OrderDataTable } from "./orders-table/components/data-table";
 import { orderColumns } from "./orders-table/components/orderColumns";
 import { slugToWords } from "~/src/lib/utils";
 
+export type FormattedOnlineOrder = Omit<OnlineOrder, "amount"> & {
+  amount: string;
+  amountValue: number;
+};
+
 export default function Orders({
-  store,
   status,
   orders,
 }: {
-  store: Store;
   status: string;
-  orders: OnlineOrder[];
+  orders: FormattedOnlineOrder[];
 }) {
   return (
-    <div className="container mx-auto">
+    <section>
       {orders && orders.length > 0 && (
-        <div className="py-8">
+        <div>
           <OrderDataTable
-            data={orders}
+            data={orders as unknown as OnlineOrder[]}
             columns={orderColumns}
             tableId="orders"
           />
@@ -40,6 +42,6 @@ export default function Orders({
           />
         </div>
       )}
-    </div>
+    </section>
   );
 }

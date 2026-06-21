@@ -23,9 +23,9 @@ import {
   PageWorkspaceRail,
 } from "../../common/PageLevelHeader";
 import {
-  formatOperationsMetricComparison,
   OperationsSummaryMetric,
 } from "../../operations/OperationsSummaryMetric";
+import { formatOperationsMetricComparison } from "../../operations/operationsMetricFormatting";
 import { EmptyState } from "../../states/empty/empty-state";
 import { Badge } from "../../ui/badge";
 import { Skeleton } from "../../ui/skeleton";

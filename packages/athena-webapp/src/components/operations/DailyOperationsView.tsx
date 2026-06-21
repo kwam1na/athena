@@ -53,10 +53,8 @@ import {
   SheetHeader,
   SheetTitle,
 } from "../ui/sheet";
-import {
-  formatOperationsMetricHelper,
-  OperationsSummaryMetric,
-} from "./OperationsSummaryMetric";
+import { OperationsSummaryMetric } from "./OperationsSummaryMetric";
+import { formatOperationsMetricHelper } from "./operationsMetricFormatting";
 
 type DailyOperationsApi = {
   getDailyOperationsSnapshot?: unknown;

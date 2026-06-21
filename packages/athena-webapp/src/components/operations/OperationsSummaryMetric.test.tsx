@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   formatOperationsMetricComparison,
   formatOperationsMetricHelper,
-} from "./OperationsSummaryMetric";
+} from "./operationsMetricFormatting";
 
 describe("operations metric helpers", () => {
   it("renders missing prior activity with operator-friendly copy", () => {
