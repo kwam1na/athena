@@ -504,6 +504,39 @@ const automationSnapshot: DailyOperationsSnapshot = {
   operatingDate: "2026-05-10",
 };
 
+const scheduledRunsSnapshot: DailyOperationsSnapshot = {
+  ...operatingSnapshot,
+  operatingDate: "2026-05-10",
+  scheduledRunSummaries: [
+    {
+      candidateCount: 3,
+      completedAt: Date.UTC(2026, 4, 10, 9, 30),
+      cronFamily: "auto-verify-payments",
+      failedCount: 1,
+      id: "scheduled-partial",
+      outcome: "partial_failure",
+      processedCount: 3,
+      skippedCount: 0,
+      succeededCount: 2,
+      windowEndAt: Date.UTC(2026, 4, 10, 9, 40),
+      windowStartAt: Date.UTC(2026, 4, 10, 9, 30),
+    },
+    {
+      candidateCount: 0,
+      completedAt: Date.UTC(2026, 4, 10, 10, 30),
+      cronFamily: "complete-checkout-sessions",
+      failedCount: 0,
+      id: "scheduled-zero",
+      outcome: "no_candidates",
+      processedCount: 0,
+      skippedCount: 0,
+      succeededCount: 0,
+      windowEndAt: Date.UTC(2026, 4, 10, 11),
+      windowStartAt: Date.UTC(2026, 4, 10, 10, 30),
+    },
+  ],
+};
+
 const automationReviewSnapshot: DailyOperationsSnapshot = {
   ...operatingSnapshot,
   automationStatuses: [
@@ -959,6 +992,23 @@ describe("DailyOperationsViewContent", () => {
       "href",
       "/wigclub/store/osu/operations/daily-close?o=%252Fwigclub%252Fstore%252Fosu%252Foperations&operatingDate=2026-05-10",
     );
+  });
+
+  it("shows compact scheduled-run evidence without backend details", () => {
+    renderContent(scheduledRunsSnapshot);
+
+    expect(
+      screen.getByRole("heading", { name: "Scheduled runs" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Payment verification partially ran. 2 applied, 1 needs review.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Checkout completion ran. No eligible work found."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/provider|exception|stack/i)).not.toBeInTheDocument();
   });
 
   it("surfaces Opening auto-start review evidence for managers", () => {

@@ -6,6 +6,7 @@ import { v } from "convex/values";
 import { createOperationalWorkItemWithCtx } from "../operations/operationalWorkItems";
 import { recordOperationalEventWithCtx } from "../operations/operationalEvents";
 import { createServiceCaseWithCtx } from "./serviceCases";
+import { recordServiceCaseTraceBestEffort } from "./serviceCaseTracing";
 import { ok, userError, type CommandResult } from "../../shared/commandResult";
 
 const NON_BLOCKING_APPOINTMENT_STATUSES = new Set([
@@ -436,6 +437,14 @@ export const convertAppointmentToWalkIn = mutation({
       subjectLabel: catalogItem.name,
       subjectType: "service_appointment",
       workItemId: workItem._id,
+    });
+
+    await recordServiceCaseTraceBestEffort(ctx, {
+      actorStaffProfileId: createdByStaffProfile?._id,
+      actorUserId: args.createdByUserId,
+      appointmentId: appointment._id,
+      serviceCase: createdServiceCase,
+      stage: "appointment_converted",
     });
 
     return ok({

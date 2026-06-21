@@ -70,3 +70,42 @@ export const automationRunSchema = v.object({
   updatedAt: v.number(),
   appliedAt: v.optional(v.number()),
 });
+
+export const scheduledRunLedgerOutcomeValidator = v.union(
+  v.literal("applied"),
+  v.literal("no_candidates"),
+  v.literal("partial_failure"),
+  v.literal("failed"),
+  v.literal("support_only"),
+);
+
+export const scheduledRunLedgerSchema = v.object({
+  runKey: v.string(),
+  cronFamily: v.string(),
+  scheduledWindowStartAt: v.number(),
+  scheduledWindowEndAt: v.number(),
+  scope: v.union(v.literal("store"), v.literal("system")),
+  visibility: v.union(v.literal("store"), v.literal("support")),
+  storeId: v.optional(v.id("store")),
+  organizationId: v.optional(v.id("organization")),
+  actorType: v.literal("system"),
+  outcome: scheduledRunLedgerOutcomeValidator,
+  candidateCount: v.number(),
+  processedCount: v.number(),
+  succeededCount: v.number(),
+  failedCount: v.number(),
+  skippedCount: v.number(),
+  sourceSubjectType: v.string(),
+  sampleSubjectIds: v.array(v.string()),
+  snapshotCounts: v.record(v.string(), v.number()),
+  notes: v.optional(v.string()),
+  error: v.optional(
+    v.object({
+      code: v.string(),
+      message: v.string(),
+    }),
+  ),
+  createdAt: v.number(),
+  updatedAt: v.number(),
+  completedAt: v.number(),
+});

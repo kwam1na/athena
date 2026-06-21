@@ -29,6 +29,7 @@ import {
 } from "./helpers/onlineOrder";
 import {
   assertValidOnlineOrderStatusTransition,
+  getOnlineOrderPaymentAmount,
   getOnlineOrderPaymentMethodLabel,
   recordOnlineOrderRestockMovement,
   recordOnlineOrderPaymentCollected,
@@ -41,12 +42,39 @@ import {
   getRemainingRefundableBalance,
   resolveRefundAmount,
 } from "./helpers/paymentHelpers";
+import {
+  recordOnlineOrderReturnExchangeTraceBestEffort,
+  recordOnlineOrderTraceBestEffort,
+} from "./onlineOrderTracing";
+import { getWorkflowTraceByLookupWithCtx } from "../workflowTraces/core";
+import {
+  buildSafeExternalReferenceRef,
+  ONLINE_ORDER_LOOKUP_TYPES,
+  ONLINE_ORDER_WORKFLOW_TYPE,
+} from "../workflowTraces/adapters/onlineOrder";
+import {
+  ORDER_RETURN_EXCHANGE_LOOKUP_TYPES,
+  ORDER_RETURN_EXCHANGE_WORKFLOW_TYPE,
+} from "../workflowTraces/adapters/orderReturnExchange";
 
 const entity = "onlineOrder";
 const MAX_ORDER_ITEMS = 200;
 const MAX_ORDERS = 500;
 const MAX_OPERATIONAL_EVENTS = 20;
 const MAX_PENDING_APPROVALS = 100;
+
+async function getWorkflowTraceIdForLookup(
+  ctx: QueryCtx,
+  args: {
+    lookupType: string;
+    lookupValue: string;
+    storeId: Id<"store">;
+    workflowType: string;
+  },
+) {
+  const trace = await getWorkflowTraceByLookupWithCtx(ctx, args);
+  return trace?.traceId;
+}
 type SignedInAthenaUser = {
   id: Id<"athenaUser">;
   email: string;
@@ -187,12 +215,26 @@ async function applyOnlineOrderUpdate(
       previousStatus: order.status,
       signedInAthenaUser: args.signedInAthenaUser,
     });
+    await recordOnlineOrderTraceBestEffort(ctx, {
+      nextStatus: nextStatus!,
+      order: nextOrder,
+      previousStatus: order.status,
+      signedInAthenaUser: args.signedInAthenaUser,
+      stage: "statusChanged",
+    });
   }
 
   if (paymentVerifiedChanged) {
     await recordOnlineOrderPaymentVerified(ctx, {
       order: nextOrder,
       signedInAthenaUser: args.signedInAthenaUser,
+    });
+    await recordOnlineOrderTraceBestEffort(ctx, {
+      amount: getOnlineOrderPaymentAmount(nextOrder),
+      order: nextOrder,
+      paymentMethod: getOnlineOrderPaymentMethodLabel(nextOrder),
+      signedInAthenaUser: args.signedInAthenaUser,
+      stage: "paymentVerified",
     });
   }
 
@@ -201,6 +243,14 @@ async function applyOnlineOrderUpdate(
       order: nextOrder,
       registerSessionId: args.registerSessionId,
       signedInAthenaUser: args.signedInAthenaUser,
+    });
+    await recordOnlineOrderTraceBestEffort(ctx, {
+      amount: getOnlineOrderPaymentAmount(nextOrder),
+      order: nextOrder,
+      paymentMethod: getOnlineOrderPaymentMethodLabel(nextOrder),
+      registerSessionId: args.registerSessionId,
+      signedInAthenaUser: args.signedInAthenaUser,
+      stage: "paymentCollected",
     });
   }
 
@@ -455,7 +505,38 @@ export const get = query({
       }),
     );
 
-    return { ...order, items: itemsWithImages };
+    const [workflowTraceId, refundsWithTraceIds] = await Promise.all([
+      getWorkflowTraceIdForLookup(ctx, {
+        storeId: order.storeId,
+        workflowType: ONLINE_ORDER_WORKFLOW_TYPE,
+        lookupType: ONLINE_ORDER_LOOKUP_TYPES.orderId,
+        lookupValue: order._id,
+      }),
+      Promise.all(
+        (order.refunds ?? []).map(async (refund) => {
+          const safeRefundRef = buildSafeExternalReferenceRef(refund.id);
+
+          return {
+            ...refund,
+            workflowTraceId: safeRefundRef
+              ? await getWorkflowTraceIdForLookup(ctx, {
+                  storeId: order.storeId,
+                  workflowType: ORDER_RETURN_EXCHANGE_WORKFLOW_TYPE,
+                  lookupType: ORDER_RETURN_EXCHANGE_LOOKUP_TYPES.subflowRef,
+                  lookupValue: `${order._id}:${safeRefundRef}`,
+                })
+              : undefined,
+          };
+        }),
+      ),
+    ]);
+
+    return {
+      ...order,
+      items: itemsWithImages,
+      refunds: refundsWithTraceIds,
+      workflowTraceId,
+    };
   },
 });
 
@@ -819,6 +900,13 @@ export const reserveRefundInternal = internalMutation({
           },
         ],
       });
+      await recordOnlineOrderReturnExchangeTraceBestEffort(ctx, {
+        amount: refundAmount,
+        operationRef: reservationId,
+        order,
+        reservationId,
+        stage: "refundReserved",
+      });
 
       return {
         customerProfileId: order.customerProfileId,
@@ -883,6 +971,15 @@ export const finalizeRefundInternal = internalMutation({
         status: "refund-submitted",
       },
     });
+    await recordOnlineOrderReturnExchangeTraceBestEffort(ctx, {
+      amount: args.refundAmount,
+      operationRef: args.reservationId,
+      order,
+      refundId: args.refundId,
+      reservationId: args.reservationId,
+      signedInAthenaUser: args.signedInAthenaUser,
+      stage: "refundFinalized",
+    });
 
     return true;
   },
@@ -909,6 +1006,12 @@ export const releaseRefundReservationInternal = internalMutation({
         (refund) => refund.id !== args.reservationId,
       ),
     });
+    await recordOnlineOrderReturnExchangeTraceBestEffort(ctx, {
+      operationRef: args.reservationId,
+      order,
+      reservationId: args.reservationId,
+      stage: "refundReleased",
+    });
 
     return true;
   },
@@ -927,6 +1030,7 @@ export const getReturnExchangeOverview = query({
         createdAt: v.number(),
         eventType: v.string(),
         message: v.string(),
+        workflowTraceId: v.optional(v.string()),
       }),
     ),
     refundTotal: v.number(),
@@ -971,19 +1075,27 @@ export const getReturnExchangeOverview = query({
           .take(MAX_PENDING_APPROVALS),
       ]);
 
-    const relevantEvents = operationalEvents
-      .filter(
-        (event) =>
-          event.eventType.includes("return") || event.eventType.includes("exchange"),
-      )
-      .sort((a, b) => b.createdAt - a.createdAt)
-      .slice(0, MAX_OPERATIONAL_EVENTS)
-      .map((event) => ({
-        _id: event._id,
-        createdAt: event.createdAt,
-        eventType: event.eventType,
-        message: event.message,
-      }));
+    const relevantEvents = await Promise.all(
+      operationalEvents
+        .filter(
+          (event) =>
+            event.eventType.includes("return") || event.eventType.includes("exchange"),
+        )
+        .sort((a, b) => b.createdAt - a.createdAt)
+        .slice(0, MAX_OPERATIONAL_EVENTS)
+        .map(async (event) => ({
+          _id: event._id,
+          createdAt: event.createdAt,
+          eventType: event.eventType,
+          message: event.message,
+          workflowTraceId: await getWorkflowTraceIdForLookup(ctx, {
+            storeId: order.storeId,
+            workflowType: ORDER_RETURN_EXCHANGE_WORKFLOW_TYPE,
+            lookupType: ORDER_RETURN_EXCHANGE_LOOKUP_TYPES.subflowRef,
+            lookupValue: `${order._id}:${event._id}`,
+          }),
+        })),
+    );
 
     return {
       balanceCollectedTotal: paymentAllocations
@@ -1128,7 +1240,7 @@ export const processReturnExchange = mutation({
           }),
         );
 
-        await recordOperationalEventWithCtx(ctx, {
+        const approvalEvent = await recordOperationalEventWithCtx(ctx, {
           actorUserId: args.signedInAthenaUser?.id,
           approvalRequestId,
           customerProfileId: order.customerProfileId,
@@ -1146,6 +1258,17 @@ export const processReturnExchange = mutation({
           subjectLabel: order.orderNumber,
           subjectType: "online_order",
         });
+        await recordOnlineOrderReturnExchangeTraceBestEffort(ctx, {
+          approvalRequestId,
+          eventRef: String(approvalEvent?._id ?? approvalRequestId),
+          itemCount: args.returnItemIds.length,
+          operationRef: String(approvalRequestId),
+          order,
+          organizationId: store?.organizationId,
+          replacementCount: replacementItems.length,
+          signedInAthenaUser: args.signedInAthenaUser,
+          stage: "approvalRequired",
+        });
 
         return ok({
           approvalRequestId,
@@ -1158,6 +1281,7 @@ export const processReturnExchange = mutation({
       }
 
       const now = Date.now();
+      const returnExchangeRefundId = `return-exchange-${now}`;
 
       await Promise.all(
         plan.selectedItems.map(async (item) => {
@@ -1280,7 +1404,7 @@ export const processReturnExchange = mutation({
               {
                 amount: plan.refundAmount,
                 date: now,
-                id: `return-exchange-${now}`,
+                id: returnExchangeRefundId,
               },
             ]
           : order.refunds;
@@ -1295,7 +1419,7 @@ export const processReturnExchange = mutation({
         ...exchangeMovementIds,
       ].filter((value): value is Id<"inventoryMovement"> => Boolean(value));
 
-      await recordOperationalEventWithCtx(ctx, {
+      const operationalEvent = await recordOperationalEventWithCtx(ctx, {
         actorUserId: args.signedInAthenaUser?.id,
         customerProfileId: order.customerProfileId,
         eventType: plan.eventType,
@@ -1320,6 +1444,71 @@ export const processReturnExchange = mutation({
         subjectId: order._id,
         subjectLabel: order.orderNumber,
         subjectType: "online_order",
+      });
+      const operationRef = String(operationalEvent?._id ?? `${order._id}:${now}`);
+
+      if (plan.returnMovements.length > 0) {
+        await recordOnlineOrderReturnExchangeTraceBestEffort(ctx, {
+          eventRef: `${operationRef}:restock`,
+          inventoryMovementIds,
+          itemCount: plan.returnMovements.length,
+          operationRef,
+          order,
+          organizationId: store?.organizationId,
+          signedInAthenaUser: args.signedInAthenaUser,
+          stage: "restocked",
+        });
+      }
+
+      if (plan.exchangeMovements.length > 0) {
+        await recordOnlineOrderReturnExchangeTraceBestEffort(ctx, {
+          eventRef: `${operationRef}:replacement`,
+          inventoryMovementIds,
+          itemCount: plan.exchangeMovements.length,
+          operationRef,
+          order,
+          organizationId: store?.organizationId,
+          replacementCount: plan.replacementItems.length,
+          signedInAthenaUser: args.signedInAthenaUser,
+          stage: "replacementIssued",
+        });
+      }
+
+      if (plan.balanceDueAmount > 0 && paymentAllocation?._id) {
+        await recordOnlineOrderReturnExchangeTraceBestEffort(ctx, {
+          amount: plan.balanceDueAmount,
+          operationRef,
+          order,
+          organizationId: store?.organizationId,
+          paymentAllocationId: paymentAllocation._id,
+          signedInAthenaUser: args.signedInAthenaUser,
+          stage: "balanceCollected",
+        });
+      }
+
+      if (plan.refundAmount > 0) {
+        await recordOnlineOrderReturnExchangeTraceBestEffort(ctx, {
+          amount: plan.refundAmount,
+          operationRef,
+          order,
+          organizationId: store?.organizationId,
+          paymentAllocationId: paymentAllocation?._id,
+          refundId: returnExchangeRefundId,
+          signedInAthenaUser: args.signedInAthenaUser,
+          stage: "refundFinalized",
+        });
+      }
+
+      await recordOnlineOrderReturnExchangeTraceBestEffort(ctx, {
+        amount: plan.refundAmount || plan.balanceDueAmount || undefined,
+        eventRef: operationRef,
+        itemCount: plan.selectedItems.length,
+        operationRef,
+        order,
+        organizationId: store?.organizationId,
+        replacementCount: plan.replacementItems.length,
+        signedInAthenaUser: args.signedInAthenaUser,
+        stage: plan.kind === "exchange" ? "exchangeProcessed" : "returnProcessed",
       });
 
       return ok({

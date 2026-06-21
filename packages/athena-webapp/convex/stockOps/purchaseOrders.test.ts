@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
+import { ok } from "../../shared/commandResult";
+import { assertConformsToExportedReturns } from "../lib/returnValidatorContract";
 
 const mockedAuthServer = vi.hoisted(() => ({
   getAuthUserId: vi.fn(),
@@ -14,8 +16,11 @@ vi.mock("@convex-dev/auth/server", () => ({
 import {
   assertValidPurchaseOrderStatusTransition,
   calculatePurchaseOrderTotals,
+  advancePurchaseOrderToOrderedCommand,
+  createPurchaseOrderCommand,
   createPurchaseOrderWithCtx,
   mapPurchaseOrderCommandError,
+  updatePurchaseOrderStatusCommand,
   updatePurchaseOrderStatusWithCtx,
 } from "./purchaseOrders";
 
@@ -54,6 +59,14 @@ function createPurchaseOrderMutationCtx() {
 }
 
 describe("stock ops purchase orders", () => {
+  it("accepts representative command return contracts", () => {
+    const result = ok({ purchaseOrderId: "purchase-order-1" });
+
+    assertConformsToExportedReturns(createPurchaseOrderCommand, result);
+    assertConformsToExportedReturns(updatePurchaseOrderStatusCommand, result);
+    assertConformsToExportedReturns(advancePurchaseOrderToOrderedCommand, result);
+  });
+
   it("calculates purchase-order totals from line items", () => {
     expect(
       calculatePurchaseOrderTotals([

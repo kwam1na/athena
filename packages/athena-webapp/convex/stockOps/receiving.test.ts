@@ -2,6 +2,8 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import type { MutationCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
+import { ok } from "../../shared/commandResult";
+import { assertConformsToExportedReturns } from "../lib/returnValidatorContract";
 
 const mockedAuthServer = vi.hoisted(() => ({
   getAuthUserId: vi.fn(),
@@ -17,6 +19,7 @@ import {
   assertReceivingLineQuantities,
   calculatePurchaseOrderReceivingStatus,
   calculateReceivingBatchTotals,
+  receivePurchaseOrderBatch,
   receivePurchaseOrderBatchCommandWithCtx,
   summarizeReceivingSkuDeltas,
 } from "./receiving";
@@ -221,6 +224,13 @@ function createReceivingMutationCtx(args?: {
 }
 
 describe("stock ops receiving", () => {
+  it("accepts the representative receive command return contract", () => {
+    assertConformsToExportedReturns(
+      receivePurchaseOrderBatch,
+      ok({ receivingBatchId: "receiving-batch-1" }),
+    );
+  });
+
   it("calculates batch totals from partial receiving line items", () => {
     expect(
       calculateReceivingBatchTotals([

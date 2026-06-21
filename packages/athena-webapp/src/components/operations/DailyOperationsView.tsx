@@ -149,6 +149,20 @@ type DailyOperationsReviewEvidence = NonNullable<
   DailyOperationsAutomationStatus["reviewEvidence"]
 >[number];
 
+type DailyOperationsScheduledRunSummary = {
+  candidateCount: number;
+  completedAt: number;
+  cronFamily: string;
+  failedCount: number;
+  id: string;
+  outcome: "applied" | "partial_failure" | "no_candidates";
+  processedCount: number;
+  skippedCount: number;
+  succeededCount: number;
+  windowEndAt: number;
+  windowStartAt: number;
+};
+
 export type DailyOperationsSnapshot = {
   automationStatuses?: DailyOperationsAutomationStatus[];
   attentionItems: Array<{
@@ -204,6 +218,7 @@ export type DailyOperationsSnapshot = {
     label: string;
     to: string;
   };
+  scheduledRunSummaries?: DailyOperationsScheduledRunSummary[];
   startAt?: number;
   storeId: Id<"store">;
   timeline: Array<{
@@ -1021,6 +1036,76 @@ function AutomationStatusPanel({
             </article>
           );
         })}
+      </div>
+    </section>
+  );
+}
+
+function formatScheduledRunLabel(cronFamily: string) {
+  switch (cronFamily) {
+    case "auto-verify-payments":
+      return "Payment verification";
+    case "clear-abandoned-sessions":
+      return "Abandoned checkout cleanup";
+    case "complete-checkout-sessions":
+      return "Checkout completion";
+    case "release-checkout-items":
+      return "Checkout item release";
+    case "release-pos-session-items":
+      return "POS item release";
+    default:
+      return cronFamily.replaceAll("-", " ");
+  }
+}
+
+function getScheduledRunMessage(run: DailyOperationsScheduledRunSummary) {
+  const label = formatScheduledRunLabel(run.cronFamily);
+
+  if (run.outcome === "partial_failure") {
+    return `${label} partially ran. ${run.succeededCount} applied, ${run.failedCount} ${
+      run.failedCount === 1 ? "needs" : "need"
+    } review.`;
+  }
+
+  if (run.outcome === "no_candidates") {
+    return `${label} ran. No eligible work found.`;
+  }
+
+  return `${label} ran. ${run.succeededCount} applied.`;
+}
+
+function ScheduledRunEvidencePanel({
+  snapshot,
+}: {
+  snapshot: DailyOperationsSnapshot;
+}) {
+  const runs = snapshot.scheduledRunSummaries ?? [];
+
+  if (runs.length === 0) return null;
+
+  return (
+    <section className="rounded-lg border border-border bg-surface-raised p-layout-md shadow-surface">
+      <h3 className="flex items-center gap-layout-xs text-base font-medium text-foreground">
+        <Clock3 aria-hidden="true" className="h-4 w-4" />
+        Scheduled runs
+      </h3>
+      <div className="mt-layout-sm space-y-layout-xs">
+        {runs.map((run) => (
+          <article
+            className="rounded-md border border-border/70 bg-background/60 px-layout-md py-layout-sm"
+            key={run.id}
+          >
+            <p className="text-sm text-foreground">
+              {getScheduledRunMessage(run)}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {formatEventTime(run.completedAt)}
+              {run.outcome === "partial_failure"
+                ? ` · ${run.processedCount} checked`
+                : null}
+            </p>
+          </article>
+        ))}
       </div>
     </section>
   );
@@ -1953,6 +2038,7 @@ export function DailyOperationsViewContent({
                         snapshot={snapshot}
                         storeUrlSlug={storeUrlSlug}
                       />
+                      <ScheduledRunEvidencePanel snapshot={snapshot} />
                       <div>
                         <h3 className="text-base font-medium text-foreground">
                           Workflow status

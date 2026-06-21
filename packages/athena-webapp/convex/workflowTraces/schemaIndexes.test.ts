@@ -27,6 +27,10 @@ describe("workflow trace schema indexes", () => {
       indexDescriptor: "by_storeId_traceId_sequence",
       fields: ["storeId", "traceId", "sequence"],
     });
+    expect(getTableIndexes("workflowTraceEvent")).toContainEqual({
+      indexDescriptor: "by_storeId_traceId_eventKey",
+      fields: ["storeId", "traceId", "eventKey"],
+    });
     expect(getTableIndexes("workflowTraceLookup")).toContainEqual({
       indexDescriptor: "by_storeId_workflowType_lookup",
       fields: ["storeId", "workflowType", "lookupType", "lookupValue"],

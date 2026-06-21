@@ -41,6 +41,10 @@ import {
   type PosSessionTraceStage,
   type PosSessionTraceableSession,
 } from "../pos/application/commands/posSessionTracing";
+import {
+  bestEffortRecordScheduledRunEvidence,
+  deriveScheduledRunOutcome,
+} from "../automation/scheduledRunLedger";
 
 const MAX_SESSION_ITEMS = 200;
 const SESSION_QUERY_CANDIDATE_LIMIT = 200;
@@ -50,6 +54,39 @@ const SESSION_CLEANUP_BATCH_SIZE = 100;
 const POS_SESSION_RELEASE_STATUS_VALUES = ["active", "held", "void"] as const;
 const SESSION_OPERATIONS_STATUS_VALUES = ["active", "held"] as const;
 const STAFF_ROLE_ASSIGNMENT_LIMIT = 25;
+
+type ScheduledRunStoreStats = {
+  candidateCount: number;
+  processedCount: number;
+  succeededCount: number;
+  failedCount: number;
+  skippedCount: number;
+  sampleSubjectIds: string[];
+};
+
+function addScheduledRunCandidate(
+  stats: Map<string, ScheduledRunStoreStats>,
+  storeId: Id<"store">,
+  subjectId: string,
+) {
+  const existing =
+    stats.get(storeId) ??
+    ({
+      candidateCount: 0,
+      processedCount: 0,
+      succeededCount: 0,
+      failedCount: 0,
+      skippedCount: 0,
+      sampleSubjectIds: [],
+    } satisfies ScheduledRunStoreStats);
+
+  existing.candidateCount += 1;
+  if (existing.sampleSubjectIds.length < 25) {
+    existing.sampleSubjectIds.push(subjectId);
+  }
+  stats.set(storeId, existing);
+  return existing;
+}
 
 const sessionOperationDataValidator = v.object({
   sessionId: v.id("posSession"),
@@ -1679,6 +1716,21 @@ export const releasePosSessionItems = internalMutation({
 
     if (expiredSessions.length === 0) {
       console.log("[POS] No expired sessions found");
+      await bestEffortRecordScheduledRunEvidence(ctx, {
+        cronFamily: "release-pos-session-items",
+        scope: "system",
+        visibility: "support",
+        outcome: "no_candidates",
+        candidateCount: 0,
+        processedCount: 0,
+        succeededCount: 0,
+        failedCount: 0,
+        sourceSubjectType: "posSession",
+        sampleSubjectIds: [],
+        snapshotCounts: { stores: 0 },
+        notes:
+          "Cross-store scheduled run summary. Store-scoped rows hold operator-visible evidence.",
+      });
       return { releasedCount: 0, sessionIds: [] };
     }
 
@@ -1687,16 +1739,33 @@ export const releasePosSessionItems = internalMutation({
     );
 
     const releasedSessionIds: string[] = [];
+    const storeStats = new Map<string, ScheduledRunStoreStats>();
+    const sampleSubjectIds: string[] = [];
+    let processedCount = 0;
+    let failedCount = 0;
 
     // Process each expired session
     for (const session of expiredSessions) {
+      const stats = addScheduledRunCandidate(
+        storeStats,
+        session.storeId,
+        session._id,
+      );
+      if (sampleSubjectIds.length < 25) {
+        sampleSubjectIds.push(session._id);
+      }
+      processedCount += 1;
+      stats.processedCount += 1;
       try {
         await expirePosSessionNow(ctx, session, now);
         releasedSessionIds.push(session._id);
+        stats.succeededCount += 1;
         console.log(
           `[POS] Released inventory holds for session ${session.sessionNumber}`,
         );
       } catch (error) {
+        failedCount += 1;
+        stats.failedCount += 1;
         console.error(`[POS] Error releasing session ${session._id}:`, error);
         // Continue processing other sessions even if one fails
       }
@@ -1705,6 +1774,41 @@ export const releasePosSessionItems = internalMutation({
     console.log(
       `[POS] Successfully released ${releasedSessionIds.length} sessions`,
     );
+    await bestEffortRecordScheduledRunEvidence(ctx, {
+      cronFamily: "release-pos-session-items",
+      scope: "system",
+      visibility: "support",
+      outcome:
+        failedCount > 0 && releasedSessionIds.length === 0
+          ? "failed"
+          : failedCount > 0
+            ? "partial_failure"
+            : "support_only",
+      candidateCount: expiredSessions.length,
+      processedCount,
+      succeededCount: releasedSessionIds.length,
+      failedCount,
+      sourceSubjectType: "posSession",
+      sampleSubjectIds,
+      snapshotCounts: { stores: storeStats.size },
+      notes:
+        "Cross-store scheduled run summary. Store-scoped rows hold operator-visible evidence.",
+    });
+    for (const [storeId, stats] of storeStats.entries()) {
+      await bestEffortRecordScheduledRunEvidence(ctx, {
+        cronFamily: "release-pos-session-items",
+        scope: "store",
+        storeId: storeId as Id<"store">,
+        outcome: deriveScheduledRunOutcome(stats),
+        candidateCount: stats.candidateCount,
+        processedCount: stats.processedCount,
+        succeededCount: stats.succeededCount,
+        failedCount: stats.failedCount,
+        skippedCount: stats.skippedCount,
+        sourceSubjectType: "posSession",
+        sampleSubjectIds: stats.sampleSubjectIds,
+      });
+    }
     return {
       releasedCount: releasedSessionIds.length,
       sessionIds: releasedSessionIds,

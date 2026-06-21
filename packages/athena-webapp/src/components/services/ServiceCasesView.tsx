@@ -12,6 +12,7 @@ import { EmptyState } from "../states/empty/empty-state";
 import { NoPermissionView } from "../states/no-permission/NoPermissionView";
 import { ProtectedAdminSignInView } from "../states/signed-out/ProtectedAdminSignInView";
 import { Button } from "../ui/button";
+import { WorkflowTraceRouteLink } from "../traces/WorkflowTraceRouteLink";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import {
@@ -56,6 +57,7 @@ type ServiceCaseListItem = {
   serviceCatalogName?: string | null;
   staffName?: string | null;
   status: string;
+  workflowTraceId?: string;
 };
 
 type ServiceCasePaymentAllocation = {
@@ -78,6 +80,7 @@ type ServiceCaseDetails = {
   paymentStatus: string;
   pendingApprovals: Array<{ _id: string }>;
   status: string;
+  workflowTraceId?: string;
 };
 
 type ServiceCaseStatus =
@@ -518,6 +521,22 @@ export function ServiceCasesViewContent({
                       <p className="mt-2 text-xs text-muted-foreground">
                         {serviceCase.paymentStatus} · balance{" "}
                         {serviceCase.balanceDueAmount}
+                        {serviceCase.workflowTraceId ? (
+                          <>
+                            {" "}
+                            ·{" "}
+                            <span
+                              onClick={(event) => event.stopPropagation()}
+                            >
+                              <WorkflowTraceRouteLink
+                                className="font-medium text-primary"
+                                traceId={serviceCase.workflowTraceId}
+                              >
+                                View trace
+                              </WorkflowTraceRouteLink>
+                            </span>
+                          </>
+                        ) : null}
                       </p>
                     </button>
                   ))
@@ -544,18 +563,34 @@ export function ServiceCasesViewContent({
                       ) : null}
 
                       <div>
-                        <h3 className="text-base font-medium">
-                          {selectedCaseSummary.serviceCatalogName ??
-                            "Service case"}
-                        </h3>
-                        <p className="text-sm text-muted-foreground">
-                          {[
-                            selectedCaseSummary.customerName,
-                            selectedCaseSummary.staffName,
-                          ]
-                            .filter(Boolean)
-                            .join(" · ")}
-                        </p>
+                        <div className="flex flex-col gap-layout-sm sm:flex-row sm:items-start sm:justify-between">
+                          <div className="min-w-0">
+                            <h3 className="text-base font-medium">
+                              {selectedCaseSummary.serviceCatalogName ??
+                                "Service case"}
+                            </h3>
+                            <p className="text-sm text-muted-foreground">
+                              {[
+                                selectedCaseSummary.customerName,
+                                selectedCaseSummary.staffName,
+                              ]
+                                .filter(Boolean)
+                                .join(" · ")}
+                            </p>
+                          </div>
+                          {selectedCaseDetails?.workflowTraceId ??
+                          selectedCaseSummary.workflowTraceId ? (
+                            <WorkflowTraceRouteLink
+                              className="shrink-0 text-xs font-medium text-primary"
+                              traceId={
+                                selectedCaseDetails?.workflowTraceId ??
+                                selectedCaseSummary.workflowTraceId!
+                              }
+                            >
+                              View trace
+                            </WorkflowTraceRouteLink>
+                          ) : null}
+                        </div>
                         <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
                           <span className="rounded-full border border-border bg-muted/30 px-2 py-1">
                             {selectedCaseSummary.paymentStatus}

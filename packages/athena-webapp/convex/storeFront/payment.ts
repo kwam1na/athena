@@ -1,6 +1,7 @@
 import { v } from "convex/values";
-import { action, internalAction } from "../_generated/server";
+import { action, ActionCtx, internalAction } from "../_generated/server";
 import { api, internal } from "../_generated/api";
+import { Id } from "../_generated/dataModel";
 import { commandResultValidator } from "../lib/commandResultValidators";
 import { CheckoutSession, OnlineOrder } from "../../types";
 import { orderDetailsSchema } from "../schemas/storeFront";
@@ -28,6 +29,10 @@ import {
   sendPaymentVerificationEmails,
 } from "../services/orderEmailService";
 import { ok, userError, type CommandResult } from "../../shared/commandResult";
+import {
+  deriveScheduledRunOutcome,
+  type ScheduledCronFamily,
+} from "../automation/scheduledRunLedger";
 
 const appUrl = process.env.APP_URL;
 
@@ -40,6 +45,114 @@ type RefundReservationResult = {
   storeId?: string;
   success: boolean;
 };
+
+type ScheduledRunStoreStats = {
+  candidateCount: number;
+  processedCount: number;
+  succeededCount: number;
+  failedCount: number;
+  skippedCount: number;
+  sampleSubjectIds: string[];
+};
+
+function addScheduledRunCandidate(
+  stats: Map<string, ScheduledRunStoreStats>,
+  storeId: Id<"store">,
+  subjectId: string,
+) {
+  const existing =
+    stats.get(storeId) ??
+    ({
+      candidateCount: 0,
+      processedCount: 0,
+      succeededCount: 0,
+      failedCount: 0,
+      skippedCount: 0,
+      sampleSubjectIds: [],
+    } satisfies ScheduledRunStoreStats);
+
+  existing.candidateCount += 1;
+  if (existing.sampleSubjectIds.length < 25) {
+    existing.sampleSubjectIds.push(subjectId);
+  }
+  stats.set(storeId, existing);
+  return existing;
+}
+
+async function recordPaymentScheduledRunEvidence(args: {
+  ctx: ActionCtx;
+  cronFamily: ScheduledCronFamily;
+  sourceSubjectType: string;
+  storeStats: Map<string, ScheduledRunStoreStats>;
+  totalCandidateCount: number;
+  totalProcessedCount: number;
+  totalSucceededCount: number;
+  totalFailedCount: number;
+  totalSkippedCount: number;
+  totalSampleSubjectIds: string[];
+}) {
+  try {
+    await args.ctx.runMutation(
+      internal.automation.scheduledRunLedger.recordScheduledRunEvidence,
+      {
+        cronFamily: args.cronFamily,
+        scope: "system",
+        visibility: "support",
+        outcome:
+          args.totalCandidateCount === 0
+            ? "no_candidates"
+            : args.totalFailedCount > 0 && args.totalSucceededCount === 0
+              ? "failed"
+              : args.totalFailedCount > 0
+                ? "partial_failure"
+                : "support_only",
+        candidateCount: args.totalCandidateCount,
+        processedCount: args.totalProcessedCount,
+        succeededCount: args.totalSucceededCount,
+        failedCount: args.totalFailedCount,
+        skippedCount: args.totalSkippedCount,
+        sourceSubjectType: args.sourceSubjectType,
+        sampleSubjectIds: args.totalSampleSubjectIds,
+        snapshotCounts: {
+          stores: args.storeStats.size,
+        },
+        notes:
+          "Cross-store scheduled run summary. Store-scoped rows hold operator-visible evidence.",
+      },
+    );
+  } catch (error) {
+    console.error("[SCHEDULED-RUN] Failed to record payment summary", error);
+  }
+
+  await Promise.all(
+    Array.from(args.storeStats.entries()).map(async ([storeId, stats]) => {
+      try {
+        await args.ctx.runMutation(
+          internal.automation.scheduledRunLedger.recordScheduledRunEvidence,
+          {
+            cronFamily: args.cronFamily,
+            scope: "store",
+            storeId: storeId as Id<"store">,
+            outcome: deriveScheduledRunOutcome(stats),
+            candidateCount: stats.candidateCount,
+            processedCount: stats.processedCount,
+            succeededCount: stats.succeededCount,
+            failedCount: stats.failedCount,
+            skippedCount: stats.skippedCount,
+            sourceSubjectType: args.sourceSubjectType,
+            sampleSubjectIds: stats.sampleSubjectIds,
+          },
+        );
+      } catch (error) {
+        console.error("[SCHEDULED-RUN] Failed to record payment store row", {
+          cronFamily: args.cronFamily,
+          storeId,
+          error,
+        });
+      }
+    }),
+  );
+}
 
 /**
  * Create a Paystack transaction for online payment
@@ -734,9 +847,27 @@ export const autoVerifyUnverifiedPayments = internalAction({
       internal.storeFront.onlineOrder.getUnverifiedPaidOrders,
       {},
     );
+    const storeStats = new Map<string, ScheduledRunStoreStats>();
+    const sampleSubjectIds: string[] = [];
+    let processedCount = 0;
+    let succeededCount = 0;
+    let failedCount = 0;
+    let skippedCount = 0;
 
     if (orders.length === 0) {
       console.log(`[AUTO-VERIFY] Found no unverified payment(s) to process.`);
+      await recordPaymentScheduledRunEvidence({
+        ctx,
+        cronFamily: "auto-verify-payments",
+        sourceSubjectType: "onlineOrder",
+        storeStats,
+        totalCandidateCount: 0,
+        totalProcessedCount: 0,
+        totalSucceededCount: 0,
+        totalFailedCount: 0,
+        totalSkippedCount: 0,
+        totalSampleSubjectIds: [],
+      });
       return;
     }
 
@@ -745,8 +876,23 @@ export const autoVerifyUnverifiedPayments = internalAction({
     );
 
     for (const order of orders) {
+      const stats = addScheduledRunCandidate(
+        storeStats,
+        order.storeId,
+        order._id,
+      );
+      if (sampleSubjectIds.length < 25) {
+        sampleSubjectIds.push(order._id);
+      }
+      processedCount += 1;
+      stats.processedCount += 1;
+
       const reference = order.externalReference;
-      if (!reference) continue;
+      if (!reference) {
+        skippedCount += 1;
+        stats.skippedCount += 1;
+        continue;
+      }
 
       try {
         const paystackResponse = await verifyTransaction(reference);
@@ -789,6 +935,8 @@ export const autoVerifyUnverifiedPayments = internalAction({
               `Paystack amount: ${paystackResponse.data.amount} | ` +
               `Expected: ${orderAmountLessDiscounts}`,
           );
+          skippedCount += 1;
+          stats.skippedCount += 1;
           continue;
         }
 
@@ -870,12 +1018,28 @@ export const autoVerifyUnverifiedPayments = internalAction({
         console.log(
           `[AUTO-VERIFY] Verified payment | Reference: ${reference} | Order: ${order._id}`,
         );
+        succeededCount += 1;
+        stats.succeededCount += 1;
       } catch (error) {
+        failedCount += 1;
+        stats.failedCount += 1;
         console.error(
           `[AUTO-VERIFY] Error processing order ${order._id}:`,
           error,
         );
       }
     }
+    await recordPaymentScheduledRunEvidence({
+      ctx,
+      cronFamily: "auto-verify-payments",
+      sourceSubjectType: "onlineOrder",
+      storeStats,
+      totalCandidateCount: orders.length,
+      totalProcessedCount: processedCount,
+      totalSucceededCount: succeededCount,
+      totalFailedCount: failedCount,
+      totalSkippedCount: skippedCount,
+      totalSampleSubjectIds: sampleSubjectIds,
+    });
   },
 });

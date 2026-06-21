@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Plan: Extend Workflow Investigation Evidence</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #1f2933;
+      --muted: #62707f;
+      --line: #d8dee6;
+      --panel: #f6f8fa;
+      --accent: #176d7a;
+      --accent-soft: #e8f5f7;
+      --warn-soft: #fff8e1;
+    }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--ink);
+      background: #fff;
+      line-height: 1.55;
+    }
+    main {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 32px 24px 64px;
+    }
+    header {
+      border-bottom: 1px solid var(--line);
+      margin-bottom: 28px;
+      padding-bottom: 20px;
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: 2rem;
+      letter-spacing: 0;
+    }
+    h2 {
+      margin-top: 34px;
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 8px;
+      font-size: 1.35rem;
+    }
+    h3 {
+      margin-top: 22px;
+      font-size: 1.05rem;
+    }
+    a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+    code {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      padding: 0 4px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.92em;
+    }
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+    .pill {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 4px 10px;
+      background: var(--panel);
+    }
+    .summary {
+      background: var(--accent-soft);
+      border-left: 4px solid var(--accent);
+      padding: 16px 18px;
+      margin: 18px 0;
+    }
+    .toc {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 8px 20px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      padding: 16px;
+      border-radius: 8px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 14px;
+    }
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px 16px;
+      background: #fff;
+    }
+    .card h3 {
+      margin-top: 0;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 14px 0;
+      font-size: 0.95rem;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 10px;
+      vertical-align: top;
+      text-align: left;
+    }
+    th {
+      background: var(--panel);
+    }
+    .callout {
+      background: var(--warn-soft);
+      border: 1px solid #ead48a;
+      border-radius: 8px;
+      padding: 14px 16px;
+    }
+    ul {
+      padding-left: 1.2rem;
+    }
+    li + li {
+      margin-top: 6px;
+    }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>feat: Extend Workflow Investigation Evidence</h1>
+    <div class="meta">
+      <span class="pill">type: feat</span>
+      <span class="pill">status: active</span>
+      <span class="pill">date: 2026-06-21</span>
+      <span class="pill">source: <a href="2026-06-21-001-feat-workflow-investigation-evidence-plan.md">markdown plan</a></span>
+    </div>
+  </header>
+
+  <section class="summary" id="summary">
+    <strong>Summary.</strong> Extend Athena's POS workflow-trace foundation into stock receiving, service cases, online orders, online returns/refunds/exchanges, and scheduled jobs. The work reuses existing trace infrastructure, keeps source ledgers authoritative, and adds investigation evidence without changing frontline workflow outcomes.
+  </section>
+
+  <nav class="toc" aria-label="Plan sections">
+    <a href="#requirements">Requirements</a>
+    <a href="#decisions">Key Decisions</a>
+    <a href="#units">Implementation Units</a>
+    <a href="#impact">System-Wide Impact</a>
+    <a href="#risks">Risks</a>
+    <a href="#validation">Validation</a>
+  </nav>
+
+  <section id="requirements">
+    <h2>Requirements Digest</h2>
+    <ul>
+      <li>Expose investigation evidence from relevant stock, service, online order, online return/refund/exchange, and scheduled-job surfaces.</li>
+      <li>Reuse the existing workflow trace core, presentation query, route, and link component when a durable lifecycle trace is appropriate.</li>
+      <li>Keep <code>operationalEvent</code>, inventory movement, SKU activity, payment allocation, <code>automationRun</code>, and source records as facts of record.</li>
+      <li>Make evidence writes best-effort and non-blocking for business mutations.</li>
+      <li>Add replay-safe persisted event-key dedupe for retry-prone milestones.</li>
+      <li>Enforce source-surface permission parity and minimize sensitive trace/run evidence.</li>
+      <li>Use explicit per-surface placement and state rules for trace links and scheduled-run summaries.</li>
+      <li>Avoid a new command center, recommendation engine, or blocking review workflow.</li>
+    </ul>
+  </section>
+
+  <section id="decisions">
+    <h2>Key Decisions</h2>
+    <table>
+      <thead>
+        <tr><th>Decision</th><th>Direction</th><th>Why</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Trace ownership</td><td>Only durable lifecycle owners get traces.</td><td>Preserves workflow traces as readable lifecycle stories, not generic audit rows.</td></tr>
+        <tr><td>Event dedupe</td><td>Replay-prone milestones use optional persisted event keys.</td><td>Retries should not create duplicate investigation milestones.</td></tr>
+        <tr><td>Failure boundary</td><td>Evidence writes are best-effort.</td><td>Investigation evidence must not block receiving, service, order, refund, or cron execution.</td></tr>
+        <tr><td>Cron evidence</td><td>Policy jobs stay on <code>automationRun</code>; generic cleanup gets scheduled-run evidence.</td><td>Not every cron is policy automation.</td></tr>
+        <tr><td>Returns/exchanges</td><td>Use linked subflows from the base order trace.</td><td>Keeps base order lifecycle readable while preserving return/refund branch detail.</td></tr>
+        <tr><td>Evidence minimization</td><td>Store ids/refs and normalized summaries, not raw sensitive payloads.</td><td>Investigation evidence must not widen exposure for customer, payment, provider, or service-note data.</td></tr>
+        <tr><td>Trace access contract</td><td>Use persisted access descriptors or workflow-type authorizers.</td><td>The reusable trace route cannot rely on store id alone once it exposes source-domain evidence.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="units">
+    <h2>Implementation Units</h2>
+    <div class="grid">
+      <article class="card">
+        <h3>U1 Shared Evidence Foundation</h3>
+        <p>Add optional persisted event-key dedupe, best-effort writer convention, adapter tests, source-permission trace read authorization, evidence minimization, and backward-compatible presentation behavior.</p>
+      </article>
+      <article class="card">
+        <h3>U2 Stock Receiving</h3>
+        <p>Add PO-centered lifecycle traces with receiving batch, SKU, inventory movement, vendor, and work-item refs.</p>
+      </article>
+      <article class="card">
+        <h3>U3 Online Orders</h3>
+        <p>Add order lifecycle traces for creation, payment, readiness, fulfillment, cancellation, and external references.</p>
+      </article>
+      <article class="card">
+        <h3>U4 Returns, Refunds, Exchanges</h3>
+        <p>Add linked subflow evidence for approvals, refund reservation/finalization/release, restock, and replacement branches.</p>
+      </article>
+      <article class="card">
+        <h3>U5 Service Cases</h3>
+        <p>Add service-case traces across intake, appointment conversion, approvals, payment, inventory use, completion, and cancel states.</p>
+      </article>
+      <article class="card">
+        <h3>U6 Scheduled Runs</h3>
+        <p>Add store-partitioned, authorized run evidence for applied, skipped, rerun, and partial-failure cron outcomes while preserving <code>automationRun</code> semantics.</p>
+      </article>
+      <article class="card">
+        <h3>U7 Surface Links</h3>
+        <p>Render trace/run links in explicit header, row action, metadata, and Daily Operations evidence placements with defined empty, loading, permission, unavailable, partial-failure, and zero-candidate states.</p>
+      </article>
+      <article class="card">
+        <h3>U8 Docs and Validation</h3>
+        <p>Capture the reusable pattern, refresh generated artifacts, rebuild Graphify, and run the Athena proof ladder.</p>
+      </article>
+    </div>
+  </section>
+
+  <section id="impact">
+    <h2>System-Wide Impact</h2>
+    <ul>
+      <li><strong>Data integrity:</strong> traces summarize and link; ledgers remain authoritative.</li>
+      <li><strong>Idempotency:</strong> receiving submission keys, status transitions, refund retries, and scheduled-run keys need duplicate protection, including cron reruns for the same scheduled window.</li>
+      <li><strong>Authorization:</strong> trace reads by id and lookup must assert store/org and source-domain permission before exposing broader customer, payment, service, and automation evidence.</li>
+      <li><strong>Trace access contract:</strong> U1 must provide an executable access descriptor or workflow-type authorizer path before sensitive domain traces ship.</li>
+      <li><strong>Operational copy:</strong> partial failures use normalized, operator-safe wording, and trace/run details avoid raw provider payloads, payment tokens, customer contact data, and service notes.</li>
+      <li><strong>Generated artifacts:</strong> schema/client changes may require Convex codegen, harness docs, and Graphify rebuild.</li>
+    </ul>
+  </section>
+
+  <section id="risks">
+    <h2>Risks and Mitigations</h2>
+    <table>
+      <thead>
+        <tr><th>Risk</th><th>Mitigation</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Evidence writes become blockers.</td><td>Use best-effort writers and tests that force evidence failures.</td></tr>
+        <tr><td>Duplicate trace events obscure timelines.</td><td>Add shared event-key dedupe before domain rollout.</td></tr>
+        <tr><td>Workflow traces overreach.</td><td>Restrict traces to durable lifecycle owners and keep command-only audit on operational events.</td></tr>
+        <tr><td>Cron evidence misstates policy semantics.</td><td>Keep policy automation on <code>automationRun</code> and create generic scheduled-run evidence separately.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="validation">
+    <h2>Validation Strategy</h2>
+    <div class="callout">
+      Focused domain tests come first, followed by generated artifact checks, <code>bun run graphify:rebuild</code>, and <code>bun run pr:athena</code> before merge.
+    </div>
+    <ul>
+      <li>Workflow trace adapter/core/presentation tests for event-key dedupe, lookups, and best-effort failure behavior.</li>
+      <li>Domain tests for stock receiving, service cases, online orders, return/refund/exchange, and scheduled jobs.</li>
+      <li>Component tests for trace-link rendering in changed operator surfaces.</li>
+      <li>Convex return-validator checks where public contracts change.</li>
+      <li>Production rollout deploys Convex first, then the Athena webapp surface.</li>
+    </ul>
+  </section>
+</main>
+</body>
+</html>

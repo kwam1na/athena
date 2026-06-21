@@ -31,6 +31,7 @@ import {
 } from "../operations/StockAdjustmentWorkspace";
 import { SkuSearchFilterBar } from "../stock-ops/SkuSearchFilterBar";
 import { ReceivingView } from "./ReceivingView";
+import { WorkflowTraceRouteLink } from "../traces/WorkflowTraceRouteLink";
 import { useProtectedAdminPageState } from "@/hooks/useProtectedAdminPageState";
 import { presentCommandToast } from "@/lib/errors/presentCommandToast";
 import { runCommand } from "@/lib/errors/runCommand";
@@ -70,6 +71,7 @@ type PurchaseOrderReference = {
   purchaseOrderId: Id<"purchaseOrder">;
   status: PurchaseOrderStatus;
   vendorName?: string;
+  workflowTraceId?: string;
 };
 
 type ReplenishmentRecommendation = {
@@ -104,6 +106,7 @@ type ProcurementOrderSummary = {
   poNumber: string;
   status: PurchaseOrderStatus;
   totalUnits: number;
+  workflowTraceId?: string;
 };
 
 type VendorSummary = {
@@ -1461,6 +1464,26 @@ export function ProcurementViewContent({
                                                 {formatStatus(
                                                   purchaseOrder.status,
                                                 )}
+                                                {purchaseOrder.workflowTraceId ? (
+                                                  <>
+                                                    {" "}
+                                                    ·{" "}
+                                                    <span
+                                                      onClick={(event) =>
+                                                        event.stopPropagation()
+                                                      }
+                                                    >
+                                                      <WorkflowTraceRouteLink
+                                                        className="font-medium text-primary"
+                                                        traceId={
+                                                          purchaseOrder.workflowTraceId
+                                                        }
+                                                      >
+                                                        View trace
+                                                      </WorkflowTraceRouteLink>
+                                                    </span>
+                                                  </>
+                                                ) : null}
                                               </div>
                                             </div>
                                             <div className="flex flex-wrap gap-2 sm:justify-end">
@@ -1640,6 +1663,7 @@ export function ProcurementViewContent({
                     onReceived={() => setSelectedReceivingOrderId(null)}
                     purchaseOrderId={receivingPurchaseOrder._id}
                     storeId={storeId}
+                    workflowTraceId={receivingPurchaseOrder.workflowTraceId}
                   />
                 ) : null}
               </section>
@@ -1694,6 +1718,22 @@ export function ProcurementViewContent({
                             <p className="text-xs text-muted-foreground">
                               {formatLineCount(purchaseOrder.lineItemCount)} ·{" "}
                               {formatUnitCount(purchaseOrder.totalUnits)}
+                              {purchaseOrder.workflowTraceId ? (
+                                <>
+                                  {" "}
+                                  ·{" "}
+                                  <span
+                                    onClick={(event) => event.stopPropagation()}
+                                  >
+                                    <WorkflowTraceRouteLink
+                                      className="font-medium text-primary"
+                                      traceId={purchaseOrder.workflowTraceId}
+                                    >
+                                      View trace
+                                    </WorkflowTraceRouteLink>
+                                  </span>
+                                </>
+                              ) : null}
                             </p>
                           </div>
                           <dl className="shrink-0 space-y-2 text-right text-xs">

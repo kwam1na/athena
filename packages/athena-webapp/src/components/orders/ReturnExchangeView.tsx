@@ -21,6 +21,7 @@ import { runCommand } from "~/src/lib/errors/runCommand";
 import { currencyFormatter, getRelativeTime } from "~/src/lib/utils";
 import { formatStoredAmount } from "~/src/lib/pos/displayAmounts";
 import type { Id } from "~/convex/_generated/dataModel";
+import { WorkflowTraceRouteLink } from "../traces/WorkflowTraceRouteLink";
 
 export type ReturnExchangePayload = {
   operationType: "exchange" | "return";
@@ -43,6 +44,7 @@ type ReturnExchangeOverview = {
     createdAt: number;
     eventType: string;
     message: string;
+    workflowTraceId?: string;
   }>;
   refundTotal: number;
 };
@@ -54,10 +56,12 @@ type ReturnExchangeOrderItem = {
   productName?: string;
   productSku?: string;
   quantity: number;
+  workflowTraceId?: string;
 };
 
 type ReturnExchangeOrder = {
   items?: ReturnExchangeOrderItem[];
+  workflowTraceId?: string;
 };
 
 type ReturnExchangeViewContentProps = {
@@ -94,6 +98,9 @@ export function ReturnExchangeViewContent({
   const [validationError, setValidationError] = useState<string | null>(null);
 
   const formatter = currencyFormatter(currency);
+  const latestReturnTraceId = activity.find(
+    (event) => event.workflowTraceId,
+  )?.workflowTraceId;
   const availableItems =
     order?.items?.filter(
       (item): item is ReturnExchangeOrderItem & { _id: string } =>
@@ -175,11 +182,21 @@ export function ReturnExchangeViewContent({
 
   return (
     <div className="space-y-6">
-      <div className="space-y-2">
-        <h3 className="text-base font-medium">Return & Exchange</h3>
-        <p className="text-sm text-muted-foreground">
-          Record completed storefront returns and exchange-to-new-item flows.
-        </p>
+      <div className="flex flex-col gap-layout-sm sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 space-y-2">
+          <h3 className="text-base font-medium">Return & Exchange</h3>
+          <p className="text-sm text-muted-foreground">
+            Record completed storefront returns and exchange-to-new-item flows.
+          </p>
+        </div>
+        {latestReturnTraceId ? (
+          <WorkflowTraceRouteLink
+            className="shrink-0 text-xs font-medium text-primary"
+            traceId={latestReturnTraceId}
+          >
+            View trace
+          </WorkflowTraceRouteLink>
+        ) : null}
       </div>
 
       <div className="grid gap-3 md:grid-cols-3">
@@ -240,9 +257,19 @@ export function ReturnExchangeViewContent({
                     {item.productName ?? item.productSku}
                   </Label>
                 </div>
-                <p className="text-sm text-muted-foreground">
-                  {item.quantity} x {formatStoredAmount(formatter, item.price)}
-                </p>
+                <div className="text-right">
+                  <p className="text-sm text-muted-foreground">
+                    {item.quantity} x {formatStoredAmount(formatter, item.price)}
+                  </p>
+                  {item.workflowTraceId ?? order.workflowTraceId ? (
+                    <WorkflowTraceRouteLink
+                      className="text-xs font-medium text-primary"
+                      traceId={item.workflowTraceId ?? order.workflowTraceId!}
+                    >
+                      View trace
+                    </WorkflowTraceRouteLink>
+                  ) : null}
+                </div>
               </div>
             );
           })}
@@ -365,9 +392,20 @@ export function ReturnExchangeViewContent({
                 )}
                 <div>
                   <p className="text-sm font-medium">{event.message}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {getRelativeTime(event.createdAt)}
-                  </p>
+                  <div className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
+                    <span>{getRelativeTime(event.createdAt)}</span>
+                    {event.workflowTraceId ? (
+                      <>
+                        <span>·</span>
+                        <WorkflowTraceRouteLink
+                          className="font-medium text-primary"
+                          traceId={event.workflowTraceId}
+                        >
+                          View trace
+                        </WorkflowTraceRouteLink>
+                      </>
+                    ) : null}
+                  </div>
                 </div>
               </div>
             </div>
