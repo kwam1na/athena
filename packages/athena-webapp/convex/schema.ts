@@ -122,6 +122,7 @@ import {
   scheduledRunLedgerSchema,
 } from "./schemas/automation";
 import {
+  contextEventImportRunSchema,
   contextEventSchema,
 } from "./schemas/contextTracking";
 import {
@@ -242,13 +243,36 @@ const schema = defineSchema({
       "sessionRefId",
       "occurredAt",
     ])
+    .index("by_storeId_surface_actor_status_occurredAt", [
+      "storeId",
+      "surface",
+      "actorRefKind",
+      "actorRefId",
+      "status",
+      "occurredAt",
+    ])
     .index("by_storeId_surface_status_occurredAt", [
       "storeId",
       "surface",
       "status",
       "occurredAt",
     ])
+    .index("by_storeId_historicalImportRunId_status", [
+      "storeId",
+      "historicalImportRunId",
+      "historicalImportStatus",
+    ])
+    .index("by_storeId_historicalImportBatchId_status", [
+      "storeId",
+      "historicalImportBatchId",
+      "historicalImportStatus",
+    ])
     .index("by_retentionClass_expiresAt", ["retentionClass", "expiresAt"]),
+  contextEventImportRun: defineTable(contextEventImportRunSchema)
+    .index("by_storeId_importRunId", ["storeId", "importRunId"])
+    .index("by_storeId_importBatchId", ["storeId", "importBatchId"])
+    .index("by_storeId_runKey", ["storeId", "runKey"])
+    .index("by_storeId_status_updatedAt", ["storeId", "status", "updatedAt"]),
   intelligenceRun: defineTable(intelligenceRunSchema)
     .index("by_storeId_capability_status", ["storeId", "capability", "status"])
     .index("by_storeId_capability_debugSubject_createdAt", [

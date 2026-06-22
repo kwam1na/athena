@@ -3,30 +3,39 @@ import { v } from "convex/values";
 import { internalQuery, type QueryCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import {
+  buildContextEventSourceRefs,
   buildSnapshotHash,
-  buildSourceRefs,
-  buildStoreInsightsPrompt,
-  buildUserInsightsPrompt,
+  buildStoreInsightsPromptFromContextEvents,
+  buildUserInsightsPromptFromContextEvents,
+  type ContextPromptRecord,
 } from "../intelligence/capabilities/insights";
-import { SYNTHETIC_MONITOR_ORIGIN } from "../storeFront/syntheticMonitor";
-import { compileLegacyStorefrontAnalyticsRowsWithReport } from "./legacyStorefrontAnalytics";
+import {
+  findRegisteredContextEvent,
+  validateRegisteredContextEventPayload,
+} from "./eventDefinitions";
 import type { CompiledContextBundle } from "./types";
 
-const MAX_CONTEXT_ANALYTICS = 250;
+const MAX_CONTEXT_EVENTS = 250;
+const UNSAFE_PAYLOAD_KEY_PATTERN =
+  /(email|phone|contact|payment|card|token|auth|proof|pin|password|secret|user.?agent|url|query|error|message|reason|text|note|comment)/i;
 
 export const compileStoreInsightsContextBundle = internalQuery({
   args: {
     storeId: v.id("store"),
   },
   handler: async (ctx, args): Promise<CompiledContextBundle> => {
-    const analytics = await ctx.db
-      .query("analytics")
-      .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
-      .filter((q) => q.neq(q.field("origin"), SYNTHETIC_MONITOR_ORIGIN))
+    const contextEvents = await ctx.db
+      .query("contextEvent")
+      .withIndex("by_storeId_surface_status_occurredAt", (q) =>
+        q
+          .eq("storeId", args.storeId)
+          .eq("surface", "storefront")
+          .eq("status", "recorded"),
+      )
       .order("desc")
-      .take(MAX_CONTEXT_ANALYTICS);
+      .take(MAX_CONTEXT_EVENTS);
 
-    return buildStoreInsightsContextBundleFromAnalytics(analytics);
+    return buildStoreInsightsContextBundleFromContextEvents(contextEvents);
   },
 });
 
@@ -37,60 +46,65 @@ export const compileUserInsightsContextBundle = internalQuery({
   },
   handler: async (ctx, args): Promise<CompiledContextBundle> => {
     await assertActorMatchesStore(ctx, args.storeFrontUserId, args.storeId);
+    const actorKind = getStorefrontActorTable(ctx, args.storeFrontUserId);
+    const actorId = String(args.storeFrontUserId);
 
-    const analytics = await ctx.db
-      .query("analytics")
-      .withIndex("by_storeFrontUserId_storeId", (q) =>
+    const contextEvents = await ctx.db
+      .query("contextEvent")
+      .withIndex("by_storeId_surface_actor_status_occurredAt", (q) =>
         q
-          .eq("storeFrontUserId", args.storeFrontUserId)
-          .eq("storeId", args.storeId),
+          .eq("storeId", args.storeId)
+          .eq("surface", "storefront")
+          .eq("actorRefKind", actorKind)
+          .eq("actorRefId", actorId)
+          .eq("status", "recorded"),
       )
-      .filter((q) => q.neq(q.field("origin"), SYNTHETIC_MONITOR_ORIGIN))
-      .take(MAX_CONTEXT_ANALYTICS);
+      .order("desc")
+      .take(MAX_CONTEXT_EVENTS);
 
-    return buildUserInsightsContextBundleFromAnalytics(analytics, {
-      table: getStorefrontActorTable(ctx, args.storeFrontUserId),
-      id: String(args.storeFrontUserId),
+    return buildUserInsightsContextBundleFromContextEvents(contextEvents, {
+      table: actorKind,
+      id: actorId,
     });
   },
 });
 
-export function buildStoreInsightsContextBundleFromAnalytics(
-  analytics: Doc<"analytics">[],
+export function buildStoreInsightsContextBundleFromContextEvents(
+  contextEvents: Doc<"contextEvent">[],
 ): CompiledContextBundle {
-  const compiled = compileLegacyStorefrontAnalyticsRowsWithReport(analytics);
-  const built = buildStoreInsightsPrompt(compiled.contextRows);
-  const sourceRefs = buildSourceRefs(compiled.contextRows);
+  const compiled = compileContextEventsWithReport(contextEvents);
+  const built = buildStoreInsightsPromptFromContextEvents(compiled.promptRows);
+  const sourceRefs = buildContextEventSourceRefs(compiled.promptRows);
 
   return buildCompiledContextBundle({
     bundleKind: "store_insights_context",
     promptSnapshot: built.snapshot,
     sourceRefs,
-    sourceRowCount: compiled.sourceRowCount,
-    compiledRowCount: compiled.contextRows.length,
+    sourceRowCount: contextEvents.length,
+    compiledRowCount: compiled.promptRows.length,
     omittedEvidenceCount: compiled.omittedEvidenceCount,
     qualityFlags: compiled.qualityFlags,
-    dataWindow: getDataWindow(compiled.contextRows),
+    dataWindow: getDataWindow(compiled.promptRows),
   });
 }
 
-export function buildUserInsightsContextBundleFromAnalytics(
-  analytics: Doc<"analytics">[],
+export function buildUserInsightsContextBundleFromContextEvents(
+  contextEvents: Doc<"contextEvent">[],
   actorSourceRef: { table: string; id: string },
 ): CompiledContextBundle {
-  const compiled = compileLegacyStorefrontAnalyticsRowsWithReport(analytics);
-  const built = buildUserInsightsPrompt(compiled.contextRows);
-  const analyticsRefs = buildSourceRefs(compiled.contextRows);
+  const compiled = compileContextEventsWithReport(contextEvents);
+  const built = buildUserInsightsPromptFromContextEvents(compiled.promptRows);
+  const contextEventRefs = buildContextEventSourceRefs(compiled.promptRows);
 
   return buildCompiledContextBundle({
     bundleKind: "user_insights_context",
     promptSnapshot: built.snapshot,
-    sourceRefs: [actorSourceRef, ...analyticsRefs],
-    sourceRowCount: compiled.sourceRowCount,
-    compiledRowCount: compiled.contextRows.length,
+    sourceRefs: [actorSourceRef, ...contextEventRefs],
+    sourceRowCount: contextEvents.length,
+    compiledRowCount: compiled.promptRows.length,
     omittedEvidenceCount: compiled.omittedEvidenceCount,
     qualityFlags: compiled.qualityFlags,
-    dataWindow: getDataWindow(compiled.contextRows),
+    dataWindow: getDataWindow(compiled.promptRows),
     sourceRefOffset: 1,
   });
 }
@@ -110,7 +124,7 @@ function buildCompiledContextBundle(input: {
   const qualityFlags =
     input.compiledRowCount === 0
       ? ["no_storefront_context", ...input.qualityFlags]
-      : ["legacy_analytics_compiled", ...input.qualityFlags];
+      : ["context_events_compiled", ...input.qualityFlags];
 
   return {
     bundleKind: input.bundleKind,
@@ -118,8 +132,7 @@ function buildCompiledContextBundle(input: {
     freshness: input.compiledRowCount === 0 ? "partial" : "current",
     snapshotHash: buildSnapshotHash(input.promptSnapshot),
     payloadSummary: input.promptSnapshot,
-    payloadRedaction:
-      "legacy storefront analytics compiled into context primitives; contact fields omitted",
+    payloadRedaction: "context events compacted; unsafe fields omitted",
     sourceRefs: input.sourceRefs,
     ...input.dataWindow,
     hiddenSourceCount: Math.max(0, input.sourceRowCount - evidenceRefCount),
@@ -128,6 +141,156 @@ function buildCompiledContextBundle(input: {
     qualityFlags: [...new Set(qualityFlags)],
     limitedEvidence: input.compiledRowCount === 0,
   };
+}
+
+function compileContextEventsWithReport(contextEvents: Doc<"contextEvent">[]) {
+  const promptRows: ContextPromptRecord[] = [];
+  let omittedEvidenceCount = 0;
+  let historicalContextCount = 0;
+
+  for (const event of contextEvents) {
+    const promptRow = compileContextEvent(event);
+    if (!promptRow) {
+      omittedEvidenceCount += 1;
+      continue;
+    }
+    if (isHistoricalContextEvent(event)) historicalContextCount += 1;
+    promptRows.push(promptRow);
+  }
+
+  const qualityFlags: string[] = [];
+  if (omittedEvidenceCount > 0) qualityFlags.push("context_events_omitted");
+  if (historicalContextCount > 0) qualityFlags.push("historical_context_included");
+  if (promptRows.length > 0 && promptRows.length < contextEvents.length) {
+    qualityFlags.push("limited_storefront_context");
+  }
+
+  return { promptRows, omittedEvidenceCount, qualityFlags };
+}
+
+function compileContextEvent(event: Doc<"contextEvent">): ContextPromptRecord | null {
+  if (
+    event.surface !== "storefront" ||
+    event.status !== "recorded" ||
+    event.nonCompilable ||
+    event.synthetic ||
+    event.historicalImportStatus === "quarantined" ||
+    event.historicalImportStatus === "revoked"
+  ) {
+    return null;
+  }
+
+  const registration = findRegisteredContextEvent({
+    surface: event.surface,
+    eventId: event.eventId,
+    schemaVersion: event.schemaVersion,
+  });
+  if (!registration) return null;
+
+  const payload = sanitizeContextEventPayload(event.payload, registration.allowedPayloadKeys);
+  if (!validateRegisteredContextEventPayload(registration, payload).ok) return null;
+
+  return {
+    _id: String(event._id),
+    occurredAt: event.occurredAt,
+    receivedAt: event.receivedAt,
+    eventId: event.eventId,
+    contextSchemaVersion: event.schemaVersion,
+    actorRef: event.actorRef
+      ? { kind: event.actorRef.kind, id: event.actorRef.id }
+      : undefined,
+    sessionRef:
+      event.sessionRefKind && event.sessionRefId
+        ? { kind: event.sessionRefKind, id: event.sessionRefId }
+        : undefined,
+    primarySubject:
+      event.primarySubjectType && event.primarySubjectId
+        ? { type: event.primarySubjectType, id: event.primarySubjectId }
+        : undefined,
+    payload,
+  };
+}
+
+function sanitizeContextEventPayload(
+  payload: Record<string, unknown>,
+  allowedPayloadKeys: readonly string[],
+) {
+  const sanitized: Record<string, string | number | boolean | null> = {};
+
+  for (const [key, value] of Object.entries(payload)) {
+    if (!allowedPayloadKeys.includes(key)) continue;
+    if (UNSAFE_PAYLOAD_KEY_PATTERN.test(key)) continue;
+    if (!isPromptSafePayloadValue(value)) continue;
+
+    const sanitizedValue = sanitizeContextEventPayloadValue(key, value);
+    if (sanitizedValue !== undefined) sanitized[key] = sanitizedValue;
+  }
+
+  return sanitized;
+}
+
+function sanitizeContextEventPayloadValue(key: string, value: unknown) {
+  if (typeof value === "string") {
+    if (key === "route") return sanitizePathname(value);
+    if (key === "referrer") return sanitizeOrigin(value);
+    return value.slice(0, 120);
+  }
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "boolean" || value === null) return value;
+
+  return undefined;
+}
+
+function sanitizePathname(value: string) {
+  const trimmed = value.trim();
+  try {
+    const parsed = new URL(trimmed, "https://storefront.local");
+    return parsed.pathname || "/";
+  } catch {
+    return trimmed.split(/[?#]/, 1)[0]?.slice(0, 120) || "/";
+  }
+}
+
+function sanitizeOrigin(value: string) {
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return undefined;
+    return parsed.origin;
+  } catch {
+    return undefined;
+  }
+}
+
+function isPromptSafePayloadValue(value: unknown) {
+  return (
+    typeof value === "string" ||
+    (typeof value === "number" && Number.isFinite(value)) ||
+    typeof value === "boolean" ||
+    value === null
+  );
+}
+
+function isHistoricalContextEvent(event: Doc<"contextEvent">) {
+  if (event.historicalImportRunId) return true;
+
+  return event.sourceRefs.some(
+    (sourceRef) =>
+      sourceRef.table === "analytics" ||
+      sourceRef.label === "historical_context_imported" ||
+      sourceRef.label === "historical_context_partial" ||
+      sourceRef.label === "historical_context_stale",
+  );
+}
+
+function contextEventMatchesActor(
+  event: Doc<"contextEvent">,
+  actorId: Id<"storeFrontUser"> | Id<"guest">,
+) {
+  const id = String(actorId);
+
+  if (event.actorRef?.id === id) return true;
+  if (event.primarySubjectId === id) return true;
+  return event.subjectRefs.some((subjectRef) => subjectRef.id === id);
 }
 
 async function assertActorMatchesStore(
@@ -166,10 +329,10 @@ async function getStoreFrontActorById(
   return null;
 }
 
-function getDataWindow(analytics: Array<Pick<Doc<"analytics">, "_creationTime">>) {
-  if (analytics.length === 0) return {};
+function getDataWindow(contextEvents: Array<Pick<ContextPromptRecord, "occurredAt">>) {
+  if (contextEvents.length === 0) return {};
 
-  const times = analytics.map((item) => item._creationTime);
+  const times = contextEvents.map((item) => item.occurredAt);
 
   return {
     dataWindowStartAt: Math.min(...times),

@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Plan: Roll out storefront context events</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f7f4;
+      --paper: #ffffff;
+      --ink: #1f2933;
+      --muted: #667085;
+      --line: #d9dee7;
+      --accent: #1f6f78;
+      --accent-soft: #e6f3f4;
+      --warn: #8a5a10;
+      --warn-soft: #fff5db;
+    }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.55;
+    }
+    main {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 32px 20px 56px;
+    }
+    header {
+      border: 1px solid var(--line);
+      background: var(--paper);
+      padding: 28px;
+      border-radius: 8px;
+    }
+    h1, h2, h3 {
+      line-height: 1.2;
+      margin: 0 0 12px;
+    }
+    h1 { font-size: 2rem; }
+    h2 {
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 8px;
+      margin-top: 32px;
+    }
+    p { margin: 0 0 14px; }
+    a { color: var(--accent); }
+    .meta {
+      color: var(--muted);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 14px;
+      font-size: 0.95rem;
+    }
+    .pill {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 4px 10px;
+      background: #fafafa;
+    }
+    nav, section {
+      border: 1px solid var(--line);
+      background: var(--paper);
+      border-radius: 8px;
+      padding: 22px;
+      margin-top: 20px;
+    }
+    nav ul {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 8px 20px;
+      padding-left: 18px;
+      margin: 0;
+    }
+    ul { padding-left: 22px; }
+    li { margin: 7px 0; }
+    .callout {
+      background: var(--accent-soft);
+      border-left: 4px solid var(--accent);
+      padding: 14px 16px;
+      border-radius: 6px;
+      margin: 16px 0;
+    }
+    .warn {
+      background: var(--warn-soft);
+      border-left-color: var(--warn);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+      font-size: 0.95rem;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 10px;
+      vertical-align: top;
+      text-align: left;
+    }
+    th { background: #f4f6f8; }
+    .units {
+      display: grid;
+      gap: 14px;
+    }
+    article {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+      background: #fcfcfb;
+    }
+    code {
+      background: #eef1f5;
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 0.92em;
+    }
+    .small { color: var(--muted); font-size: 0.95rem; }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>feat: Roll out storefront context events</h1>
+      <p>Roll out the new storefront context-event direction end to end: the storefront emits registered context-event envelopes, Athena validates and persists them, safe historical analytics are imported as context-event evidence, and intelligence readouts compile store/customer context from <code>contextEvent</code> rows only.</p>
+      <div class="meta">
+        <span class="pill">type: feat</span>
+        <span class="pill">status: active</span>
+        <span class="pill">date: 2026-06-22</span>
+        <span class="pill">source: <a href="./2026-06-22-001-feat-storefront-context-event-rollout-plan.md">markdown plan</a></span>
+      </div>
+    </header>
+
+    <nav aria-label="Plan contents">
+      <ul>
+        <li><a href="#scope">Scope</a></li>
+        <li><a href="#decisions">Key Decisions</a></li>
+        <li><a href="#units">Implementation Units</a></li>
+        <li><a href="#impact">System Impact</a></li>
+        <li><a href="#risks">Risks</a></li>
+        <li><a href="#verification">Verification Strategy</a></li>
+      </ul>
+    </nav>
+
+    <section id="scope">
+      <h2>Scope</h2>
+      <div class="callout">
+        <strong>Core direction:</strong> <code>contextEvent</code> becomes the sole durable evidence source for storefront intelligence. Legacy analytics remains out of the live runtime/compiler path; valuable historical rows are used only after bounded conversion into <code>contextEvent</code> evidence.
+      </div>
+      <p class="small">The markdown plan is the authoritative implementation artifact. This HTML is a browser-readable digest.</p>
+      <ul>
+        <li>Emit route, product, cart, and checkout context events through <code>/tracking-events</code>.</li>
+        <li>Derive trust-sensitive fields server-side: store, organization, actor, subject, synthetic, visibility, and retention. Browser session refs remain claims unless server-corroborated.</li>
+        <li>Import safe historical analytics through an internal/admin-only, dry-run-first, idempotent conversion path with reviewed mapping approval, batch lineage, omitted-evidence counts, freshness metadata, and quarantine support.</li>
+        <li>Compile store and customer readout bundles from <code>contextEvent</code> rows only.</li>
+        <li>Keep shopping flows non-blocking when telemetry fails.</li>
+      </ul>
+    </section>
+
+    <section id="decisions">
+      <h2>Key Decisions</h2>
+      <ul>
+        <li><strong>Context-event only:</strong> no dual-write or legacy fallback for intelligence context.</li>
+        <li><strong>Historical value preserved:</strong> safe legacy analytics rows are imported into <code>contextEvent</code> instead of read directly by compilers.</li>
+        <li><strong>Enum-coded checkout evidence:</strong> checkout state and blocker values are server-allowlisted codes, not raw error or payment/provider text.</li>
+        <li><strong>Narrow v1 event catalog:</strong> route viewed, product viewed, cart changed, checkout state changed.</li>
+        <li><strong>Server authority:</strong> the backend derives actor, subject, source, visibility, retention, and synthetic fields.</li>
+        <li><strong>Origin is not auth:</strong> the write route must verify server-issued storefront context or mutually consistent trusted cookies/session records.</li>
+        <li><strong>Diagnostics, not blockers:</strong> storefront events are evidence collection and cannot block customer workflows.</li>
+        <li><strong>Synthetic exclusion:</strong> diagnostics may record synthetic events, but store/customer intelligence excludes them by default.</li>
+      </ul>
+    </section>
+
+    <section id="units">
+      <h2>Implementation Units</h2>
+      <div class="units">
+        <article>
+          <h3>U1. Tighten the storefront context event contract</h3>
+          <p>Align storefront surface definitions and server event definitions around safe payload keys and registered event families.</p>
+          <p class="small">Key files: <code>packages/storefront-webapp/src/lib/storefrontContextEvents.ts</code>, <code>packages/athena-webapp/convex/contextTracking/eventDefinitions.ts</code>.</p>
+        </article>
+        <article>
+          <h3>U2. Wire storefront journey emitters to context events</h3>
+          <p>Use the context-event transport at route, product, bag, and checkout milestones while keeping customer actions non-blocking.</p>
+          <p class="small">Key files: <code>packages/storefront-webapp/src/api/trackingEvents.ts</code>, product, bag, and checkout components/routes.</p>
+        </article>
+        <article>
+          <h3>U3. Harden public context-event ingestion</h3>
+          <p>Make <code>/tracking-events</code> authoritative for origin policy, server-derived metadata, subject ownership, synthetic marking, write-abuse controls, and idempotent append.</p>
+          <p class="small">Key files: <code>packages/athena-webapp/convex/http/domains/core/routes/trackingEvents.ts</code>, <code>contextEvents.ts</code>.</p>
+        </article>
+        <article>
+          <h3>U7. Import safe historical analytics into contextEvent evidence</h3>
+          <p>Convert valuable historic storefront analytics into context-event rows through a bounded, internal/admin-only, dry-run-first, audited, privacy-safe import rather than keeping analytics as a live readout source.</p>
+          <p class="small">Depends on U1 and U3. Key files: <code>packages/athena-webapp/convex/contextTracking/legacyStorefrontAnalytics.ts</code>, <code>historicalStorefrontContextImport.ts</code>, <code>contextEvents.ts</code>.</p>
+        </article>
+        <article>
+          <h3>U4. Compile store and customer bundles from contextEvent rows only</h3>
+          <p>Replace legacy analytics reads in readout bundle compilation with indexed <code>contextEvent</code> reads and context-event source refs, including imported historical context.</p>
+          <p class="small">Depends on U3 and U7. Key files: <code>packages/athena-webapp/convex/contextTracking/contextBundles.ts</code>, intelligence capability tests.</p>
+        </article>
+        <article>
+          <h3>U5. Preserve readout trust and debug metadata on the new source</h3>
+          <p>Keep limited-evidence, data-window, quality-flag, source-count, and sanitized debug behavior intact for context-event-backed readouts.</p>
+          <p class="small">Depends on U4.</p>
+        </article>
+        <article>
+          <h3>U6. Update docs and validation ownership</h3>
+          <p>Document the context-event direction for future storefront and intelligence work, including historical import boundaries, validation, and Graphify expectations.</p>
+          <p class="small">Depends on U1, U2, U3, U7, U4, and U5.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="impact">
+      <h2>System Impact</h2>
+      <p>The rollout crosses the storefront SPA, the Hono tracking route, historical analytics import, Convex context-event persistence, context-bundle compilers, intelligence run/snapshot/artifact records, and readout UI trust metadata.</p>
+      <div class="callout warn">
+        <strong>Unchanged:</strong> provider invocation, artifact lifecycle, dismiss/rerun behavior, and approval/apply boundaries remain unchanged. Legacy analytics endpoints stay outside the live intelligence path.
+      </div>
+    </section>
+
+    <section id="risks">
+      <h2>Risks</h2>
+      <table>
+        <thead>
+          <tr><th>Risk</th><th>Mitigation</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Limited evidence immediately after switching sources.</td><td>Surface limited-evidence state honestly; do not fallback to analytics.</td></tr>
+          <tr><td>Historical analytics value is lost.</td><td>Import safe historic rows into <code>contextEvent</code> with lineage, idempotency, freshness, omitted-evidence metadata, and an import run/batch id.</td></tr>
+          <tr><td>Historical import pollutes the new model.</td><td>Treat rows as untrusted source material and map only registered, allowlisted event shapes.</td></tr>
+          <tr><td>Historical import runs too broadly or maps incorrectly.</td><td>Require dry-run discovery, reviewed mapping approval, explicit write enablement, store/window batches, stop thresholds, and quarantine/revoke support.</td></tr>
+          <tr><td>Sensitive browser-controlled text reaches snapshots.</td><td>Use strict server allowlists and scalar-only payloads.</td></tr>
+          <tr><td>Rerenders duplicate route/product events.</td><td>Use stable idempotency inputs and repeated-render tests.</td></tr>
+          <tr><td>Synthetic monitor traffic pollutes readouts.</td><td>Derive synthetic server-side and exclude by default in compilers.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="verification">
+      <h2>Verification Strategy</h2>
+      <ul>
+        <li>Storefront builder/API tests for context envelopes and non-blocking emission failures.</li>
+        <li>Backend route/registry/append tests for origin policy, server-derived metadata, enum-coded checkout/blocker values, payload allowlists, synthetic classification, and idempotency conflicts.</li>
+        <li>Historical import tests for internal/admin authorization, discovery reports, reviewed mapping approval, dry-run/reporting, resumable idempotency, import run/batch lineage, quarantine behavior, synthetic handling, and omitted unsafe fields.</li>
+        <li>Context bundle and intelligence capability tests proving readouts use <code>contextEvent</code> evidence only, including imported historical context, with no direct analytics compiler refs, analytics table queries, or legacy quality flags.</li>
+        <li>Readout UI tests for limited-evidence and sanitized debug metadata.</li>
+        <li>Cross-package integration checkpoint: storefront emitter to Hono route to <code>appendContextEvent</code> to context bundle to intelligence snapshot.</li>
+        <li>Checkout route/payment/verification tests for telemetry-failure non-blocking behavior.</li>
+        <li>Graphify rebuild after code changes so package navigation reflects the new path.</li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>

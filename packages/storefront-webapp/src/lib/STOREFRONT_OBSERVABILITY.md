@@ -2,6 +2,8 @@
 
 New storefront telemetry must use `useStorefrontObservability()` or the pure helpers in `storefrontObservability.ts`. New work should not introduce more direct `postAnalytics(...)` calls with ad hoc action names.
 
+Intelligence-bearing journey milestones use the context-event contract in `storefrontContextEvents.ts` and post through `src/api/trackingEvents.ts` to Athena's `/tracking-events` route. Use that path for route, product, cart, and checkout context that should back Athena readouts. Observability analytics remain operational diagnostics/reporting; they are not a live intelligence compiler source.
+
 ## Transport
 
 - `action`: always `storefront_observability`
@@ -64,3 +66,4 @@ The outcome belongs in `status`, not in a custom action name.
 - New storefront telemetry is intentionally forward-looking.
 - Backward compatibility with legacy storefront analytics event names is not required.
 - Historical analytics may remain as-is, but new instrumentation should emit the canonical payload above.
+- Historic analytics can inform intelligence only after Athena converts safe, allowlisted fields into durable `contextEvent` rows. Do not add analytics writes for readout compatibility or fallback.

@@ -60,7 +60,7 @@ describe("StoreInsights", () => {
         dataWindowStartAt: Date.UTC(2026, 5, 20, 0, 0, 0),
         dataWindowEndAt: Date.UTC(2026, 5, 21, 0, 0, 0),
         confidence: 0.75,
-        evidenceRefs: [{ table: "analytics", id: "event-1" }],
+        evidenceRefs: [{ table: "contextEvent", id: "event-1" }],
         limitedEvidence: true,
         payload: {
           activity_trend: "increasing",
@@ -179,12 +179,22 @@ describe("StoreInsights", () => {
         },
         snapshot: {
           _id: "snapshot-1",
+          bundleKind: "store_insights_context",
+          bundleVersion: 1,
           createdAt: Date.UTC(2026, 5, 21, 12, 0, 10),
-          payloadRedaction: "analytics rows compacted",
+          dataWindowStartAt: Date.UTC(2026, 5, 20, 12, 0, 0),
+          dataWindowEndAt: Date.UTC(2026, 5, 21, 12, 0, 0),
+          freshness: "partial",
+          hiddenSourceCount: 2,
+          limitedEvidence: true,
+          omittedEvidenceCount: 1,
+          payloadRedaction: "context events compacted; unsafe fields omitted",
           payloadSummary: {
-            totalEvents: 12,
             activityTrend: "steady",
+            compactContextEvents: { type: "array", count: 12 },
           },
+          qualityFlags: ["context_events_compiled", "limited_storefront_context"],
+          redactionMode: "compact_no_contact_fields",
           snapshotHash: "hash-1",
           sourceRefCount: 1,
         },
@@ -217,7 +227,9 @@ describe("StoreInsights", () => {
     expect(screen.getByText("Run error")).toBeTruthy();
     expect(screen.getAllByText("provider_failure").length).toBeGreaterThan(0);
     expect(screen.queryByText("Cannot find module @tanstack/ai")).toBeNull();
-    expect(screen.getByText(/analytics rows compacted/)).toBeTruthy();
+    expect(screen.getByText(/context events compacted/)).toBeTruthy();
+    expect(screen.getByText("1 refs · limited")).toBeTruthy();
+    expect(screen.getByText(/limited_storefront_context/)).toBeTruthy();
     expect(screen.getByText(/failureCode/)).toBeTruthy();
   });
 });

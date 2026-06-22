@@ -67,6 +67,40 @@ const EVENT_REGISTRY: ContextEventRegistration[] = [
   },
 ];
 
+const SAFE_PUBLIC_TEXT_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,119}$/;
+const SAFE_ROUTE_PATTERN = /^\/[A-Za-z0-9/_:.-]{0,119}$/;
+const SENSITIVE_TEXT_PATTERNS = [
+  /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i,
+  /\b(?:\+?\d[\d\s().-]{7,}\d)\b/,
+  /\b(?:token|secret|password|passwd|pwd|api[_-]?key|bearer|authorization|session|pin|otp)\b/i,
+  /\b(?:card|cvv|cvc|pan|payment|external[_-]?reference|transaction[_-]?id|stripe|paypal)\b/i,
+];
+const CHECKOUT_STATE_CODES = new Set([
+  "viewed",
+  "started",
+  "details_entered",
+  "reviewing",
+  "requires_action",
+  "verification_required",
+  "blocked",
+  "failed",
+  "canceled",
+  "completed",
+]);
+const CHECKOUT_BLOCKER_CODES = new Set([
+  "network",
+  "validation",
+  "authorization",
+  "server",
+  "client_render",
+  "inventory",
+  "stock",
+  "availability",
+  "payment_provider",
+  "verification",
+  "unknown",
+]);
+
 export function findRegisteredContextEvent(input: {
   surface: ContextTrackingSurface;
   eventId: string;
@@ -94,18 +128,41 @@ export function validateRegisteredContextEventPayload(
     if (!registration.allowedPayloadKeys.includes(key)) {
       return { ok: false as const, message: `Unexpected payload key: ${key}` };
     }
-    if (!isPublicContextValue(value)) {
-      return { ok: false as const, message: `Invalid payload value: ${key}` };
+    if (!validatePayloadValue(key, value)) {
+      return { ok: false as const, message: invalidPayloadMessage(key) };
     }
   }
 
   return { ok: true as const };
 }
 
+function invalidPayloadMessage(key: string) {
+  return key === "route"
+    ? "Unsafe payload value: route"
+    : `Invalid payload value: ${key}`;
+}
+
 function isPublicContextValue(value: unknown): boolean {
-  if (typeof value === "string") return value.length <= 500;
+  if (typeof value === "string") {
+    return value.length <= 120 && !containsSensitiveText(value);
+  }
   if (typeof value === "number") return Number.isFinite(value);
   if (typeof value === "boolean" || value === null) return true;
 
   return false;
+}
+
+function validatePayloadValue(key: string, value: unknown): boolean {
+  if (!isPublicContextValue(value)) return false;
+  if (typeof value !== "string") return true;
+
+  if (key === "route") return SAFE_ROUTE_PATTERN.test(value);
+  if (key === "state") return CHECKOUT_STATE_CODES.has(value);
+  if (key === "blocker") return CHECKOUT_BLOCKER_CODES.has(value);
+
+  return SAFE_PUBLIC_TEXT_PATTERN.test(value);
+}
+
+function containsSensitiveText(value: string) {
+  return SENSITIVE_TEXT_PATTERNS.some((pattern) => pattern.test(value));
 }

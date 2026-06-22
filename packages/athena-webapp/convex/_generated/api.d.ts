@@ -29,6 +29,8 @@ import type * as constants_payment from "../constants/payment.js";
 import type * as contextTracking_contextBundles from "../contextTracking/contextBundles.js";
 import type * as contextTracking_contextEvents from "../contextTracking/contextEvents.js";
 import type * as contextTracking_eventDefinitions from "../contextTracking/eventDefinitions.js";
+import type * as contextTracking_historicalStorefrontContextImport from "../contextTracking/historicalStorefrontContextImport.js";
+import type * as contextTracking_historicalStorefrontContextImportReport from "../contextTracking/historicalStorefrontContextImportReport.js";
 import type * as contextTracking_legacyStorefrontAnalytics from "../contextTracking/legacyStorefrontAnalytics.js";
 import type * as contextTracking_types from "../contextTracking/types.js";
 import type * as crons from "../crons.js";
@@ -433,6 +435,8 @@ declare const fullApi: ApiFromModules<{
   "contextTracking/contextBundles": typeof contextTracking_contextBundles;
   "contextTracking/contextEvents": typeof contextTracking_contextEvents;
   "contextTracking/eventDefinitions": typeof contextTracking_eventDefinitions;
+  "contextTracking/historicalStorefrontContextImport": typeof contextTracking_historicalStorefrontContextImport;
+  "contextTracking/historicalStorefrontContextImportReport": typeof contextTracking_historicalStorefrontContextImportReport;
   "contextTracking/legacyStorefrontAnalytics": typeof contextTracking_legacyStorefrontAnalytics;
   "contextTracking/types": typeof contextTracking_types;
   crons: typeof crons;

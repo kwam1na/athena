@@ -87,7 +87,7 @@ describe("UserInsightsSection", () => {
         _id: "artifact-1",
         confidence: 0.75,
         createdAt: Date.UTC(2026, 5, 21, 12, 0, 0),
-        evidenceRefs: [{ table: "analytics", id: "event-1" }],
+        evidenceRefs: [{ table: "contextEvent", id: "event-1" }],
         status: "ready",
         payload: {
           activity_status: "active",
@@ -155,8 +155,16 @@ describe("UserInsightsSection", () => {
         snapshot: {
           _id: "snapshot-1",
           createdAt: Date.UTC(2026, 5, 21, 12, 0, 0),
-          payloadRedaction: "analytics rows compacted",
-          payloadSummary: { analyticsCount: 4 },
+          dataWindowStartAt: Date.UTC(2026, 5, 20, 12, 0, 0),
+          dataWindowEndAt: Date.UTC(2026, 5, 21, 12, 0, 0),
+          freshness: "current",
+          hiddenSourceCount: 0,
+          limitedEvidence: false,
+          omittedEvidenceCount: 0,
+          payloadRedaction: "context events compacted; unsafe fields omitted",
+          payloadSummary: { contextEventCount: 4 },
+          qualityFlags: ["context_events_compiled"],
+          redactionMode: "compact_no_contact_fields",
           snapshotHash: "hash",
           sourceRefCount: 1,
         },
@@ -169,7 +177,8 @@ describe("UserInsightsSection", () => {
 
     expect(screen.getByText("Run error")).toBeTruthy();
     expect(screen.queryByText("Relative import path @tanstack/ai")).toBeNull();
-    expect(screen.getByText(/analytics rows compacted/)).toBeTruthy();
+    expect(screen.getByText(/context events compacted/)).toBeTruthy();
+    expect(screen.getByText(/context_events_compiled/)).toBeTruthy();
     expect(useQueryMock).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({

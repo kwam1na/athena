@@ -69,6 +69,13 @@ evidence refs or a limited-evidence state, and stale/superseded status. A stale
 or limited-evidence artifact can be useful context, but it must not render as
 current trusted guidance.
 
+Run debug payloads should expose bounded trust metadata: source counts, data
+windows, freshness, snapshot hash, provider status, quality flags,
+omitted/hidden counts, and limited-evidence state. They should not expose raw
+context-event payloads, raw prompts, browser-controlled URLs, user-agent values,
+contact/payment/auth/proof/PIN fields, provider secrets, or raw backend error
+text.
+
 ## Context Visibility And Prompt Safety
 
 Context capture is capability-owned and permission-aware. The model receives
@@ -76,6 +83,15 @@ only the same class of store data the initiating actor or scheduled policy is
 allowed to read. Record `principalKind`, `actorRef`, optional `policyRef`,
 `visibilityMode`, source subject refs, data window, snapshot hash, and compact
 evidence for every snapshot.
+
+Storefront store and customer readouts compile customer journey evidence from
+durable `contextEvent` rows only. Do not add direct `analytics` table reads,
+legacy storefront analytics compiler calls, mixed-source dedupe, or fallback
+paths to active readout capabilities. Imported historical analytics is usable
+only after the import writes a registered storefront `contextEvent` row with
+lineage; the compiler still exposes `contextEvent` source refs to snapshots and
+artifacts. Exclude rejected, synthetic, quarantined, or non-compilable context
+events and count omitted evidence so limited context does not look complete.
 
 All retrieved, customer-authored, store-authored, imported, and operational text
 is untrusted model context. Keep prompt instructions, tool definitions, policy,

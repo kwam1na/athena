@@ -46,9 +46,19 @@ export type IntelligenceRunDebug = {
   };
   snapshot: {
     _id: string;
+    bundleKind?: string;
+    bundleVersion?: number;
     createdAt: number;
+    dataWindowEndAt?: number;
+    dataWindowStartAt?: number;
+    freshness?: string;
+    hiddenSourceCount?: number;
+    limitedEvidence?: boolean;
+    omittedEvidenceCount?: number;
     payloadRedaction?: string;
     payloadSummary: Record<string, unknown>;
+    qualityFlags?: string[];
+    redactionMode?: string;
     snapshotHash: string;
     sourceRefCount: number;
   } | null;
@@ -211,6 +221,29 @@ export function IntelligenceDebugView({
                     ["Updated", formatDebugTime(debug.run.updatedAt)],
                     ["Completed", formatDebugTime(debug.run.completedAt)],
                     ["Snapshot", debug.run.snapshotHash ?? "Not captured"],
+                    [
+                      "Snapshot sources",
+                      debug.snapshot
+                        ? `${debug.snapshot.sourceRefCount} refs${
+                            debug.snapshot.limitedEvidence ? " · limited" : ""
+                          }`
+                        : "Not captured",
+                    ],
+                    [
+                      "Snapshot window",
+                      debug.snapshot
+                        ? formatDebugWindow(
+                            debug.snapshot.dataWindowStartAt,
+                            debug.snapshot.dataWindowEndAt,
+                          )
+                        : "Not captured",
+                    ],
+                    [
+                      "Snapshot quality",
+                      debug.snapshot?.qualityFlags?.length
+                        ? debug.snapshot.qualityFlags.join(", ")
+                        : debug.snapshot?.freshness ?? "Not captured",
+                    ],
                     ["Idempotency", debug.run.idempotencyKey],
                   ]}
                 />
@@ -282,6 +315,11 @@ export function IntelligenceDebugView({
       ) : null}
     </section>
   );
+}
+
+function formatDebugWindow(startAt?: number, endAt?: number) {
+  if (!startAt || !endAt) return "No data window";
+  return `${formatDebugTime(startAt)} - ${formatDebugTime(endAt)}`;
 }
 
 function DebugGrid({ rows }: { rows: Array<[string, string]> }) {

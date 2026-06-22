@@ -4,6 +4,8 @@
 
 The `useEnhancedTracking` hook has been redesigned to handle high-traffic e-commerce scenarios efficiently. This implementation addresses the key scalability challenges of the original version.
 
+This hook is a legacy analytics transport. Do not use it for new intelligence-bearing storefront journey context. Route, product, cart, and checkout milestones that should feed Athena readouts belong in the context-event helpers and `/tracking-events` API wrapper so Athena can derive trust metadata server-side and compile readouts from `contextEvent` rows only.
+
 ## Key Scalability Improvements
 
 ### 1. **Event Batching**
