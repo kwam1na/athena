@@ -23,8 +23,10 @@ import { toast } from "sonner";
 import { getOrigin } from "~/src/lib/navigationUtils";
 import { getProductName } from "~/src/lib/productUtils";
 import { formatStoredCurrencyAmount } from "~/src/lib/pos/displayAmounts";
+import { sortHomepageRankedItems } from "~/shared/homepageRanking";
 import type { Id } from "~/convex/_generated/dataModel";
 import type { ProductSku } from "~/types";
+import { HomepagePlacementProductImage } from "./HomepagePlacementProductImage";
 
 type BestSellerItem = {
   _id: Id<"bestSeller">;
@@ -51,9 +53,7 @@ export const BestSellers = () => {
       return;
     }
 
-    setBestSellers(
-      [...bestSellersQuery].sort((a, b) => (a.rank ?? 0) - (b.rank ?? 0)),
-    );
+    setBestSellers(sortHomepageRankedItems(bestSellersQuery));
   }, [bestSellersQuery]);
 
   const currency = activeStore?.currency || "USD";
@@ -192,10 +192,12 @@ export const BestSellers = () => {
                                 }}
                                 className="flex min-w-0 items-center gap-4"
                               >
-                                <img
-                                  src={bestSeller?.productSku?.images[0]}
-                                  alt={bestSeller?.productSku?.productName}
-                                  className="h-16 w-16 shrink-0 rounded-md object-cover"
+                                <HomepagePlacementProductImage
+                                  alt={
+                                    bestSeller?.productSku?.productName ||
+                                    itemLabel
+                                  }
+                                  sku={bestSeller?.productSku}
                                 />
                                 <div className="min-w-0 space-y-1">
                                   <p className="truncate text-sm">

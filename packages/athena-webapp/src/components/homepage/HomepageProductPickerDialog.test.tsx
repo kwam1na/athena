@@ -3,12 +3,14 @@ import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import { HomepageProductPickerDialog } from "./HomepageProductPickerDialog";
-import type { Product } from "~/types";
+import type { Category, Product, Subcategory } from "~/types";
 
 const products = [
   {
     _id: "product-1",
+    categoryId: "category-hair",
     name: "Lace Front Wig",
+    subcategoryId: "subcategory-closures",
     categoryName: "Hair",
     categorySlug: "hair",
     skus: [
@@ -24,7 +26,9 @@ const products = [
   },
   {
     _id: "product-2",
+    categoryId: "category-closures",
     name: "Closure Unit",
+    subcategoryId: "subcategory-closures",
     categoryName: "Closures",
     categorySlug: "closures",
     skus: [
@@ -39,6 +43,23 @@ const products = [
     ],
   },
 ] as unknown as Product[];
+
+const categories = [
+  {
+    _id: "category-hair",
+    name: "Hair",
+    slug: "hair",
+  },
+] as unknown as Category[];
+
+const subcategories = [
+  {
+    _id: "subcategory-closures",
+    categoryId: "category-hair",
+    name: "Closures",
+    slug: "closures",
+  },
+] as unknown as Subcategory[];
 
 function PickerHarness() {
   const [open, setOpen] = useState(true);
@@ -105,5 +126,94 @@ describe("HomepageProductPickerDialog", () => {
     expect(screen.getByText("Closure Unit")).toBeInTheDocument();
 
     consoleError.mockRestore();
+  });
+
+  it("resolves product taxonomy labels from category and subcategory ids", () => {
+    const productsWithoutDenormalizedTaxonomy = [
+      {
+        _id: "product-raw-taxonomy",
+        categoryId: "category-hair",
+        name: '8" Closure',
+        subcategoryId: "subcategory-closures",
+        skus: [
+          {
+            _id: "sku-raw-taxonomy",
+            productId: "product-raw-taxonomy",
+            productName: '8" Closure',
+            sku: "CLOSURE-8",
+            images: [],
+            price: 99_900,
+            quantityAvailable: 43,
+          },
+        ],
+      },
+      {
+        _id: "product-other-taxonomy",
+        categoryId: "category-books",
+        name: "Operating Manual",
+        subcategoryId: "subcategory-systems",
+        skus: [
+          {
+            _id: "sku-other-taxonomy",
+            productId: "product-other-taxonomy",
+            productName: "Operating Manual",
+            sku: "BOOK-1",
+            images: [],
+            price: 90_000,
+            quantityAvailable: 4,
+          },
+        ],
+      },
+    ] as unknown as Product[];
+    const categoriesForDerivedTaxonomy = [
+      ...categories,
+      {
+        _id: "category-books",
+        name: "Books",
+        slug: "books",
+      },
+    ] as unknown as Category[];
+    const subcategoriesForDerivedTaxonomy = [
+      ...subcategories,
+      {
+        _id: "subcategory-systems",
+        categoryId: "category-books",
+        name: "Systems",
+        slug: "systems",
+      },
+    ] as unknown as Subcategory[];
+
+    render(
+      <HomepageProductPickerDialog
+        categories={categoriesForDerivedTaxonomy}
+        currency="GHS"
+        description="Select a SKU"
+        onOpenChange={vi.fn()}
+        onSelectSku={vi.fn()}
+        open
+        products={productsWithoutDenormalizedTaxonomy}
+        searchId="homepage-picker-taxonomy-test"
+        selectLabel="Add SKU"
+        subcategories={subcategoriesForDerivedTaxonomy}
+        title="Add best seller"
+      />,
+    );
+
+    expect(screen.getByText('8" Closure')).toBeInTheDocument();
+    expect(screen.getByText("Hair / Closures")).toBeInTheDocument();
+    expect(screen.queryByText("Uncategorized")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Hair" }));
+
+    expect(screen.getByText('8" Closure')).toBeInTheDocument();
+    expect(screen.queryByText("Operating Manual")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Hair" }));
+    fireEvent.change(screen.getByPlaceholderText("Search product, SKU, or barcode"), {
+      target: { value: "systems" },
+    });
+
+    expect(screen.queryByText('8" Closure')).not.toBeInTheDocument();
+    expect(screen.getByText("Operating Manual")).toBeInTheDocument();
   });
 });

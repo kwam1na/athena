@@ -13,6 +13,7 @@ import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
 } from "../lib/athenaUserAuth";
+import { getNextHomepageRank } from "../../shared/homepageRanking";
 
 const entity = "bestSeller";
 
@@ -62,6 +63,17 @@ const validateBestSellerPlacement = async (
   }
 };
 
+const getNextBestSellerRank = async (
+  ctx: QueryCtx | MutationCtx,
+  storeId: Id<"store">,
+) => {
+  const rows = await ctx.db
+    .query(entity)
+    .filter((q) => q.eq(q.field("storeId"), storeId))
+    .collect();
+  return getNextHomepageRank(rows);
+};
+
 export const create = mutation({
   args: {
     productId: v.id("product"),
@@ -86,9 +98,12 @@ export const create = mutation({
       return;
     }
 
+    const rank = await getNextBestSellerRank(ctx, args.storeId);
+
     const id = await ctx.db.insert(entity, {
       productId: args.productId,
       productSkuId: args.productSkuId,
+      rank,
       storeId: args.storeId,
     });
 

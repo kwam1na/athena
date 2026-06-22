@@ -103,6 +103,7 @@ describe("best-seller product visibility", () => {
         }),
         query: vi.fn(() => ({
           filter: vi.fn(() => ({
+            collect: vi.fn(async () => []),
             first: vi.fn(async () => null),
           })),
         })),
@@ -137,6 +138,7 @@ describe("best-seller product visibility", () => {
         }),
         query: vi.fn(() => ({
           filter: vi.fn(() => ({
+            collect: vi.fn(async () => []),
             first: vi.fn(async () => null),
           })),
         })),
@@ -175,6 +177,7 @@ describe("best-seller product visibility", () => {
         }),
         query: vi.fn(() => ({
           filter: vi.fn(() => ({
+            collect: vi.fn(async () => []),
             first: vi.fn(async () => null),
           })),
         })),
@@ -195,6 +198,52 @@ describe("best-seller product visibility", () => {
       failureMessage: "You do not have access to manage homepage content.",
       organizationId: "org-1",
       userId: "athena-user-1",
+    });
+  });
+
+  it("appends newly created best sellers after the current ranked list", async () => {
+    const ctx = {
+      db: {
+        get: vi.fn(async (table: string, id: string) => {
+          if (table === "store") {
+            return { _id: id, organizationId: "org-1" };
+          }
+          if (table === "product") {
+            return { _id: id, storeId: "store123" };
+          }
+          if (table === "productSku") {
+            return { _id: id, storeId: "store123", productId: "product-1" };
+          }
+          if (table === "bestSeller") {
+            return { _id: id, storeId: "store123", rank: 5 };
+          }
+          return null;
+        }),
+        query: vi.fn(() => ({
+          filter: vi.fn(() => ({
+            collect: vi.fn(async () => [
+              { _id: "best-seller-1", storeId: "store123", rank: 0 },
+              { _id: "best-seller-2", storeId: "store123", rank: 4 },
+              { _id: "best-seller-legacy", storeId: "store123" },
+            ]),
+            first: vi.fn(async () => null),
+          })),
+        })),
+        insert: vi.fn(async () => "best-seller-3"),
+      },
+    } as any;
+
+    await getHandler(create)(ctx, {
+      storeId: "store123",
+      productId: "product-1",
+      productSkuId: "sku-1",
+    });
+
+    expect(ctx.db.insert).toHaveBeenCalledWith("bestSeller", {
+      productId: "product-1",
+      productSkuId: "sku-1",
+      rank: 5,
+      storeId: "store123",
     });
   });
 });

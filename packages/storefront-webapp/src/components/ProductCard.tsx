@@ -5,6 +5,7 @@ import {
   useProductDiscounts,
 } from "@/hooks/useProductDiscount";
 import { formatStoredAmount } from "@/lib/currency";
+import ImageWithFallback from "./ui/image-with-fallback";
 
 type ProductCardSku = Pick<
   ProductSku,
@@ -55,7 +56,7 @@ export function ProductCard({
   return (
     <div className="flex flex-col space-y-4">
       <div className="overflow-hidden relative">
-        <img
+        <ImageWithFallback
           alt={`${product?.name} image`}
           className="aspect-square md:aspect-auto md:w-[300px] md:h-[400px] object-cover rounded"
           decoding="async"
@@ -137,7 +138,7 @@ export function ProductSkuCard({
   return (
     <div className="flex flex-col">
       <div className="mb-2 overflow-hidden relative">
-        <img
+        <ImageWithFallback
           alt={`${sku?.productName} image`}
           className="aspect-square md:aspect-auto md:w-[300px] md:h-[400px] object-cover rounded"
           decoding="async"

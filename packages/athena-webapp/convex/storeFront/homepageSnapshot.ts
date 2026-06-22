@@ -6,15 +6,21 @@ import {
   presentPublicBannerMessage,
   publicBannerMessageValidator,
 } from "../inventory/bannerMessage";
+import {
+  compareHomepageRankedItems,
+  getPresentedHomepageRank,
+} from "../../shared/homepageRanking";
+import {
+  isStorefrontSelectableSubcategory,
+  isStorefrontVisibleCategory,
+  isStorefrontVisibleSubcategory,
+} from "../../shared/storefrontVisibility";
 
 export const HOMEPAGE_SNAPSHOT_CONTRACT_VERSION = "homepage_snapshot.v1" as const;
 export const BEST_SELLERS_LIMIT = 12;
 export const FEATURED_ITEMS_LIMIT = 12;
 export const FEATURED_ITEM_PRODUCTS_LIMIT = 5;
 export const HOMEPAGE_SNAPSHOT_SCAN_LIMIT = 100;
-
-const RESERVED_STOREFRONT_CATEGORY_SLUGS = new Set(["pos-quick-add"]);
-const RESERVED_STOREFRONT_SUBCATEGORY_SLUGS = new Set(["uncategorized"]);
 
 type AnyRecord = Record<string, any>;
 
@@ -46,6 +52,7 @@ const homepageCategoryValidator = v.object({
 const homepageSubcategoryValidator = v.object({
   subcategoryId: v.string(),
   categoryId: v.string(),
+  categorySlug: v.string(),
   name: v.string(),
   slug: v.string(),
   products: v.array(homepageProductSkuValidator),
@@ -107,37 +114,8 @@ const numberOrNull = (value: unknown): number | null => {
 
 const rowId = (row: AnyRecord) => String(row._id ?? row.id ?? "");
 
-const rowRank = (row: AnyRecord) => {
-  return typeof row.rank === "number" ? row.rank : 0;
-};
-
 const sortByRankThenId = <T extends AnyRecord>(rows: T[]): T[] => {
-  return [...rows].sort((a, b) => {
-    const rankDelta = rowRank(a) - rowRank(b);
-    if (rankDelta !== 0) {
-      return rankDelta;
-    }
-    return rowId(a).localeCompare(rowId(b));
-  });
-};
-
-const isCustomerVisibleCategory = (category: AnyRecord | null | undefined) => {
-  if (!category) {
-    return false;
-  }
-  if (category.showOnStorefront === false) {
-    return false;
-  }
-  return !RESERVED_STOREFRONT_CATEGORY_SLUGS.has(category.slug);
-};
-
-const isCustomerVisibleSubcategory = (
-  subcategory: AnyRecord | null | undefined,
-) => {
-  if (!subcategory) {
-    return false;
-  }
-  return !RESERVED_STOREFRONT_SUBCATEGORY_SLUGS.has(subcategory.slug);
+  return [...rows].sort(compareHomepageRankedItems);
 };
 
 const isCustomerVisibleProduct = (
@@ -178,8 +156,8 @@ const presentProductSku = (
   if (
     !isCustomerVisibleProduct(product, storeId) ||
     !isCustomerVisibleSku(sku, product, storeId) ||
-    !isCustomerVisibleCategory(category) ||
-    !isCustomerVisibleSubcategory(subcategory)
+    !isStorefrontVisibleCategory(category) ||
+    !isStorefrontVisibleSubcategory(subcategory)
   ) {
     return null;
   }
@@ -243,7 +221,7 @@ const presentCategory = (
   category: AnyRecord | null | undefined,
   storeId: string,
 ) => {
-  if (!isCustomerVisibleCategory(category) || category?.storeId !== storeId) {
+  if (!isStorefrontVisibleCategory(category) || category?.storeId !== storeId) {
     return null;
   }
 
@@ -269,9 +247,9 @@ const presentSubcategory = (
   storeId: string,
 ) => {
   if (
-    !isCustomerVisibleSubcategory(subcategory) ||
+    !isStorefrontVisibleSubcategory(subcategory) ||
     subcategory?.storeId !== storeId ||
-    !isCustomerVisibleCategory(subcategory?.category)
+    !isStorefrontSelectableSubcategory(subcategory, subcategory?.category)
   ) {
     return null;
   }
@@ -288,13 +266,18 @@ const presentSubcategory = (
   return {
     subcategoryId: String(subcategory._id),
     categoryId: String(subcategory.categoryId),
+    categorySlug: subcategory.category.slug,
     name: subcategory.name,
     slug: subcategory.slug,
     products,
   };
 };
 
-const presentFeaturedItem = (item: AnyRecord, storeId: string) => {
+const presentFeaturedItem = (
+  item: AnyRecord,
+  storeId: string,
+  fallbackRank: number,
+) => {
   const type: "regular" | "shop_look" =
     item.type === "shop_look" ? "shop_look" : "regular";
   const product = presentProduct(
@@ -307,7 +290,7 @@ const presentFeaturedItem = (item: AnyRecord, storeId: string) => {
   if (product) {
     return {
       id: rowId(item),
-      rank: rowRank(item),
+      rank: getPresentedHomepageRank(item, fallbackRank),
       type,
       targetKind: "product" as const,
       product,
@@ -320,7 +303,7 @@ const presentFeaturedItem = (item: AnyRecord, storeId: string) => {
   if (category) {
     return {
       id: rowId(item),
-      rank: rowRank(item),
+      rank: getPresentedHomepageRank(item, fallbackRank),
       type,
       targetKind: "category" as const,
       product: null,
@@ -333,7 +316,7 @@ const presentFeaturedItem = (item: AnyRecord, storeId: string) => {
   if (subcategory) {
     return {
       id: rowId(item),
-      rank: rowRank(item),
+      rank: getPresentedHomepageRank(item, fallbackRank),
       type,
       targetKind: "subcategory" as const,
       product: null,
@@ -362,7 +345,7 @@ export const buildHomepageSnapshotV1 = ({
   const config = normalizeStoreConfig(store.config);
 
   const bestSellerItems = sortByRankThenId(bestSellers ?? [])
-    .map((item) => {
+    .map((item, index) => {
       const productSku = presentProductSku(item.productSku, storeId);
       if (!productSku) {
         return null;
@@ -370,7 +353,7 @@ export const buildHomepageSnapshotV1 = ({
 
       return {
         id: rowId(item),
-        rank: rowRank(item),
+        rank: getPresentedHomepageRank(item, index),
         productSku,
       };
     })
@@ -378,7 +361,7 @@ export const buildHomepageSnapshotV1 = ({
     .slice(0, BEST_SELLERS_LIMIT);
 
   const presentedFeatured = sortByRankThenId(featuredItems ?? [])
-    .map((item) => presentFeaturedItem(item, storeId))
+    .map((item, index) => presentFeaturedItem(item, storeId, index))
     .filter((item): item is NonNullable<typeof item> => item !== null);
 
   const featuredRegular = presentedFeatured

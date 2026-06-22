@@ -18,6 +18,7 @@ export type HomepageSnapshotSkuV1 = {
 
 export type HomepageSnapshotCollectionV1 = {
   categoryId?: string;
+  categorySlug?: string;
   subcategoryId?: string;
   name: string;
   slug: string;

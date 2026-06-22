@@ -1,6 +1,11 @@
 import { useMutation, useQuery } from "convex/react";
+import { useMemo } from "react";
 import { api } from "~/convex/_generated/api";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
+import {
+  isStorefrontSelectableSubcategory,
+  isStorefrontVisibleCategory,
+} from "~/shared/storefrontVisibility";
 import { HomepageProductPickerDialog } from "./HomepageProductPickerDialog";
 import type { Category, Product, Subcategory } from "~/types";
 
@@ -29,6 +34,29 @@ export function FeaturedSectionDialog({
   );
 
   const addFeaturedItem = useMutation(api.inventory.featuredItem.create);
+
+  const storefrontVisibleCategories = useMemo(() => {
+    return (categories as Category[] | undefined)?.filter((category) =>
+      isStorefrontVisibleCategory(category),
+    );
+  }, [categories]);
+
+  const storefrontVisibleSubcategories = useMemo(() => {
+    const categoryById = new Map(
+      (categories as Category[] | undefined)?.map((category) => [
+        category._id,
+        category,
+      ]) ?? [],
+    );
+
+    return (subcategories as Subcategory[] | undefined)?.filter(
+      (subcategory) =>
+        isStorefrontSelectableSubcategory(
+          subcategory,
+          categoryById.get(subcategory.categoryId),
+        ),
+    );
+  }, [categories, subcategories]);
 
   const handleAddProduct = async (product: Product) => {
     if (!activeStore) return;
@@ -70,7 +98,7 @@ export function FeaturedSectionDialog({
 
   return (
     <HomepageProductPickerDialog
-      categories={categories as Category[] | undefined}
+      categories={storefrontVisibleCategories}
       currency={activeStore.currency}
       description="Select a product, category, or subcategory to feature below the homepage hero."
       onOpenChange={setDialogOpen}
@@ -82,7 +110,7 @@ export function FeaturedSectionDialog({
       searchId="homepage-highlighted-sku-search"
       selectLabel="Feature product"
       showCollections
-      subcategories={subcategories as Subcategory[] | undefined}
+      subcategories={storefrontVisibleSubcategories}
       title="Add highlighted content"
     />
   );
