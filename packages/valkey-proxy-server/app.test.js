@@ -50,6 +50,15 @@ function createInMemoryRedis() {
       values.set(key, value);
       return "OK";
     },
+    async scan(cursor, _match, pattern) {
+      const prefix = pattern.endsWith("*") ? pattern.slice(0, -1) : pattern;
+      return [
+        "0",
+        [...values.keys()].filter((key) =>
+          pattern.endsWith("*") ? key.startsWith(prefix) : key === pattern
+        ),
+      ];
+    },
     async del(key) {
       return values.delete(key) ? 1 : 0;
     },
@@ -162,6 +171,33 @@ test("invalidate rejects requests without a pattern", async () => {
 
   assert.equal(res.statusCode, 400);
   assert.deepEqual(res.body, { error: "Pattern is required" });
+});
+
+test("invalidate scans and deletes matching keys on standalone Valkey", async () => {
+  const redis = createInMemoryRedis();
+  await redis.set("all:products:{store-1}:availability:live", "live");
+  await redis.set("all:products:{store-1}:availability:draft", "draft");
+  await redis.set("all:products:{store-2}:availability:live", "other");
+  const handlers = createHandlers({ redis, logger: createSilentLogger() });
+  const res = createResponseRecorder();
+
+  await handlers.invalidate(
+    { body: { pattern: "all:products:{store-1}*" } },
+    res
+  );
+
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(res.body, {
+    success: true,
+    keysCleared: 2,
+    errors: undefined,
+  });
+  assert.equal(await redis.get("all:products:{store-1}:availability:live"), null);
+  assert.equal(await redis.get("all:products:{store-1}:availability:draft"), null);
+  assert.equal(
+    await redis.get("all:products:{store-2}:availability:live"),
+    "other"
+  );
 });
 
 test("health returns healthy when redis responds to ping", async () => {

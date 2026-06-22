@@ -24,6 +24,20 @@ type ColorOption = {
   name: string;
 };
 
+export function parseVariantAttributeValue(attribute: string, value: string) {
+  if (attribute !== "length") {
+    return value;
+  }
+
+  const trimmedValue = value.trim();
+  if (trimmedValue.length === 0) {
+    return undefined;
+  }
+
+  const parsedValue = Number(trimmedValue);
+  return Number.isFinite(parsedValue) ? parsedValue : undefined;
+}
+
 function AttributesTable({ selectedAttributes }: AttributesTableProps) {
   const {
     isLoading,
@@ -38,7 +52,9 @@ function AttributesTable({ selectedAttributes }: AttributesTableProps) {
     variantId: string,
     attribute: string
   ) => {
-    updateProductVariant(variantId, { [attribute]: e.target.value });
+    updateProductVariant(variantId, {
+      [attribute]: parseVariantAttributeValue(attribute, e.target.value),
+    });
   };
 
   const { activeStore } = useGetActiveStore();
