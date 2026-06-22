@@ -10,8 +10,8 @@ This key-folder index highlights the main directories agents are likely to need 
 - [`src/components`](../../src/components) — Reusable storefront UI and feature-specific checkout/catalog components. Currently 190 file(s); key children: DefaultCatchBoundary.tsx, EntityPage.tsx, HomePage.test.tsx, HomePage.tsx, ProductActionBar.tsx.
 - [`src/hooks`](../../src/hooks) — Client hooks for bag, routing, observability, and auth interactions. Currently 29 file(s); key children: TRACKING_SCALABILITY.md, use-store-modal.tsx, useAuth.ts, useCheckout.ts, useDiscountCodeAlert.tsx.
 - [`src/contexts`](../../src/contexts) — Shared client providers for store, navigation, and observability state. Currently 5 file(s); key children: FormSubmissionProvider.tsx, NavigationBarProvider.tsx, StoreContext.tsx, StorefrontObservabilityProvider.test.tsx, StorefrontObservabilityProvider.tsx.
-- [`src/lib`](../../src/lib) — Shared utilities, query helpers, schemas, and domain logic. Currently 49 file(s); key children: STOREFRONT_OBSERVABILITY.md, constants.ts, countries.ts, currency.ts, feeUtils.test.ts.
-- [`src/api`](../../src/api) — Backend-facing request wrappers and typed API helpers. Currently 29 file(s); key children: analytics.test.ts, analytics.ts, auth.ts, bag.ts, bannerMessage.ts.
+- [`src/lib`](../../src/lib) — Shared utilities, query helpers, schemas, and domain logic. Currently 50 file(s); key children: STOREFRONT_OBSERVABILITY.md, constants.ts, countries.ts, currency.ts, feeUtils.test.ts.
+- [`src/api`](../../src/api) — Backend-facing request wrappers and typed API helpers. Currently 31 file(s); key children: analytics.test.ts, analytics.ts, auth.ts, bag.ts, bannerMessage.ts.
 
 ## Validation and support surfaces
 

@@ -16,7 +16,7 @@ export const HeroSectionTabs: React.FC = () => {
   const { activeStore } = useGetActiveStore();
   const storeConfig = useMemo(
     () => getStoreConfigV2(activeStore),
-    [activeStore?.config],
+    [activeStore],
   );
   const [heroHeaderImage, setHeroHeaderImage] = useState<string | undefined>(
     storeConfig.media.homeHero.headerImage,
@@ -167,10 +167,21 @@ export const HeroSectionTabs: React.FC = () => {
   };
 
   return (
-    <div className="space-y-8">
-      {/* Display Type Selector */}
-      <div className="space-y-2">
-        <p className="text-sm font-medium">Homepage Hero Display</p>
+    <div className="space-y-layout-lg">
+      <div className="flex flex-wrap gap-layout-xs">
+        <span className="inline-flex rounded-full border border-border bg-background px-layout-sm py-layout-2xs text-sm text-muted-foreground">
+          {heroDisplayType === "image" ? "Hero image" : "Video reel"}
+        </span>
+        <span className="inline-flex rounded-full border border-border bg-background px-layout-sm py-layout-2xs text-sm text-muted-foreground">
+          {contentOptions.showText ? "Text visible" : "Text hidden"}
+        </span>
+        <span className="inline-flex rounded-full border border-border bg-background px-layout-sm py-layout-2xs text-sm text-muted-foreground">
+          {contentOptions.showOverlay ? "Overlay on" : "Overlay off"}
+        </span>
+      </div>
+
+      <div className="space-y-layout-xs">
+        <p className="text-sm font-medium text-foreground">Homepage hero display</p>
         <ToggleGroup
           type="single"
           value={heroDisplayType}
@@ -197,11 +208,10 @@ export const HeroSectionTabs: React.FC = () => {
         )}
       </div>
 
-      {/* Overlay and Text Controls */}
-      <div className="space-y-4 border-t pt-4">
-        <p className="text-sm font-medium">Hero Content Options</p>
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
+      <div className="space-y-layout-md border-t border-border pt-layout-md">
+        <p className="text-sm font-medium text-foreground">Hero content options</p>
+        <div className="grid gap-layout-sm md:grid-cols-2">
+          <div className="flex min-h-[5rem] items-center justify-between gap-layout-md rounded-md border border-border bg-background p-layout-sm">
             <div className="space-y-0.5">
               <label htmlFor="overlay-toggle" className="text-sm">
                 Show dark overlay
@@ -216,7 +226,7 @@ export const HeroSectionTabs: React.FC = () => {
               onCheckedChange={handleOverlayToggle}
             />
           </div>
-          <div className="flex items-center justify-between">
+          <div className="flex min-h-[5rem] items-center justify-between gap-layout-md rounded-md border border-border bg-background p-layout-sm">
             <div className="space-y-0.5">
               <label htmlFor="text-toggle" className="text-sm">
                 Show text content
@@ -235,7 +245,11 @@ export const HeroSectionTabs: React.FC = () => {
       </div>
 
       {heroDisplayType && (
-        <Tabs defaultValue={heroDisplayType} className="flex flex-col gap-4">
+        <Tabs
+          value={heroDisplayType}
+          onValueChange={handleDisplayTypeChange}
+          className="flex flex-col gap-layout-md border-t border-border pt-layout-md"
+        >
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="reel" className="flex items-center gap-2">
               <TvMinimalPlay className="h-4 w-4" />
@@ -247,7 +261,7 @@ export const HeroSectionTabs: React.FC = () => {
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="reel" className="space-y-4">
+          <TabsContent value="reel" className="space-y-layout-md">
             <LandingPageReelVersion />
             <div className="flex items-center gap-2 text-muted-foreground">
               <TvMinimalPlay className="h-4 w-4" />
@@ -259,7 +273,7 @@ export const HeroSectionTabs: React.FC = () => {
             <ReelUploader />
           </TabsContent>
 
-          <TabsContent value="image" className="space-y-4">
+          <TabsContent value="image" className="space-y-layout-md">
             <HeroHeaderImageUploader
               currentImageUrl={heroHeaderImage}
               onImageUpdate={handleImageUpdate}

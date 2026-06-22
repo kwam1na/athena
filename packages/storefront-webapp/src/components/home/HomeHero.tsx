@@ -1,8 +1,10 @@
 import { useStoreContext } from "@/contexts/StoreContext";
+import { Link } from "@tanstack/react-router";
 import { motion } from "framer-motion";
 import { lazy, Suspense } from "react";
 import { ScrollDownButton } from "../ui/ScrollDownButton";
 import { getStoreConfigV2 } from "@/lib/storeConfig";
+import { Button } from "../ui/button";
 
 interface HomeHeroProps {
   nextSectionRef?: React.RefObject<HTMLDivElement>;
@@ -36,6 +38,7 @@ export const HomeHero = ({ nextSectionRef }: HomeHeroProps) => {
   const shouldShowOverlay = storeConfig.media.homeHero.showOverlay === true;
 
   const shouldShowText = storeConfig.media.homeHero.showText === true;
+  const shouldShowFallback = !shouldShowImage && !shouldShowVideo;
 
   return (
     <section className="relative w-full h-screen flex items-center justify-center text-white text-center">
@@ -77,6 +80,31 @@ export const HomeHero = ({ nextSectionRef }: HomeHeroProps) => {
           }}
           className="absolute inset-0 bg-black"
         />
+      )}
+
+      {shouldShowFallback && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-primary px-6 text-accent5">
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.45, ease: "easeOut" }}
+            className="max-w-xl space-y-6"
+          >
+            <p className="text-sm uppercase tracking-[0.22em]">
+              {store?.name ?? "Storefront"}
+            </p>
+            <h1 className="font-lavish text-7xl md:text-9xl">
+              Find your next look
+            </h1>
+            <Link
+              to="/shop/$categorySlug"
+              params={{ categorySlug: "hair" }}
+              search={{ origin: "homepage_hero_fallback" }}
+            >
+              <Button variant="secondary">Shop hair</Button>
+            </Link>
+          </motion.div>
+        </div>
       )}
 
       {/* Text Content - conditionally shown */}

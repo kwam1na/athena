@@ -1,48 +1,29 @@
-import { getBestSellers, getFeatured } from "@/api/product";
-import { getStore } from "@/api/storefront";
+import {
+  getHomepageSnapshot,
+  type HomepageSnapshotV1,
+} from "@/api/homepageSnapshot";
 
 type LoaderData<T> = {
-  data?: T;
-  updatedAt?: number;
+  data: T;
+  updatedAt: number;
 };
 
 export type HomePageLoaderData = {
-  bestSellers?: LoaderData<any[]>;
-  featured?: LoaderData<any[]>;
+  snapshot: LoaderData<HomepageSnapshotV1>;
 };
 
 export async function loadHomePageData({
-  bestSellersRequest = getBestSellers,
-  featuredRequest = getFeatured,
-  storeRequest = getStore,
+  snapshotRequest = getHomepageSnapshot,
 }: {
-  bestSellersRequest?: typeof getBestSellers;
-  featuredRequest?: typeof getFeatured;
-  storeRequest?: typeof getStore;
+  snapshotRequest?: typeof getHomepageSnapshot;
 } = {}): Promise<HomePageLoaderData> {
   const updatedAt = Date.now();
-
-  await storeRequest(false);
-
-  const [bestSellersResult, featuredResult] = await Promise.allSettled([
-    bestSellersRequest(),
-    featuredRequest(),
-  ]);
+  const snapshot = await snapshotRequest({ asNewUser: false });
 
   return {
-    bestSellers:
-      bestSellersResult.status === "fulfilled"
-        ? {
-            data: bestSellersResult.value,
-            updatedAt,
-          }
-        : undefined,
-    featured:
-      featuredResult.status === "fulfilled"
-        ? {
-            data: featuredResult.value,
-            updatedAt,
-          }
-        : undefined,
+    snapshot: {
+      data: snapshot,
+      updatedAt,
+    },
   };
 }

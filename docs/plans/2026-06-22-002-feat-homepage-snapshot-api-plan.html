@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Plan: Add Typed Homepage Snapshot API</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f8fa;
+      --panel: #ffffff;
+      --ink: #172033;
+      --muted: #5f6b7a;
+      --line: #d9dee7;
+      --accent: #2663eb;
+      --accent-soft: #eef4ff;
+      --warn: #8a5a00;
+      --warn-soft: #fff6db;
+    }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font: 14px/1.55 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 40px 24px 64px;
+    }
+    header {
+      border-bottom: 1px solid var(--line);
+      margin-bottom: 28px;
+      padding-bottom: 20px;
+    }
+    h1 {
+      font-size: 30px;
+      line-height: 1.15;
+      margin: 0 0 10px;
+      letter-spacing: 0;
+    }
+    h2 {
+      font-size: 18px;
+      margin: 32px 0 12px;
+      letter-spacing: 0;
+    }
+    h3 {
+      font-size: 15px;
+      margin: 20px 0 8px;
+    }
+    p, li {
+      color: var(--ink);
+    }
+    a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+    .meta {
+      color: var(--muted);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .pill {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 3px 9px;
+      background: var(--panel);
+    }
+    .grid {
+      display: grid;
+      gap: 14px;
+    }
+    .cols {
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .callout {
+      background: var(--accent-soft);
+      border-color: #bed2ff;
+    }
+    .warn {
+      background: var(--warn-soft);
+      border-color: #f0d68a;
+      color: var(--warn);
+    }
+    ul, ol {
+      padding-left: 22px;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      display: table;
+    }
+    th, td {
+      border-bottom: 1px solid var(--line);
+      padding: 10px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      background: #f0f3f8;
+      font-weight: 650;
+    }
+    tr:last-child td {
+      border-bottom: 0;
+    }
+    code {
+      background: #eef1f6;
+      border-radius: 4px;
+      padding: 1px 4px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.92em;
+    }
+    nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 20px 0;
+    }
+    nav a {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      color: var(--ink);
+      padding: 6px 9px;
+    }
+    .unit {
+      margin-bottom: 14px;
+    }
+    .small {
+      color: var(--muted);
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>feat: Add Typed Homepage Snapshot API</h1>
+      <div class="meta">
+        <span class="pill">Type: feat</span>
+        <span class="pill">Status: active</span>
+        <span class="pill">Date: 2026-06-22</span>
+        <span class="pill">Source: <a href="2026-06-22-002-feat-homepage-snapshot-api-plan.md">Markdown plan</a></span>
+      </div>
+    </header>
+
+    <nav aria-label="Plan sections">
+      <a href="#summary">Summary</a>
+      <a href="#decisions">Decisions</a>
+      <a href="#units">Units</a>
+      <a href="#risks">Risks</a>
+      <a href="#validation">Validation</a>
+    </nav>
+
+    <section id="summary" class="panel callout">
+      <h2>Summary</h2>
+      <p>Add an additive typed homepage snapshot contract for storefront first-render content while preserving existing public endpoints. The work is a projection/API migration over existing store config, banner, best seller, and featured item data, not a storage migration.</p>
+    </section>
+
+    <section>
+      <h2>Scope</h2>
+      <div class="grid cols">
+        <article class="panel">
+          <h3>In Scope</h3>
+          <ul>
+            <li>Typed public homepage snapshot DTO and route.</li>
+            <li>Storefront loader and homepage rendering migration.</li>
+          <li>Bootstrap-compatible snapshot route and admin draft/public active banner split.</li>
+            <li>Homepage placement visibility and ownership hardening.</li>
+            <li>Generated artifacts, Graphify, reviewer loop, and browser validation.</li>
+          </ul>
+        </article>
+        <article class="panel">
+          <h3>Out of Scope</h3>
+          <ul>
+            <li>No new homepage storage table or data backfill.</li>
+            <li>No removal of existing public routes.</li>
+            <li>No engagement prompt, upsell, analytics, or footer hydration migration.</li>
+            <li>No production deploy.</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section id="decisions">
+      <h2>Key Decisions</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Decision Area</th>
+            <th>Chosen Direction</th>
+            <th>Rationale</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>API rollout</td>
+            <td>Additive snapshot route</td>
+            <td>Keeps existing routes stable for current wrappers and unknown consumers.</td>
+          </tr>
+          <tr>
+            <td>Contract ownership</td>
+            <td>Dedicated <code>HomepageSnapshotV1</code> DTO</td>
+            <td>Prevents raw Convex document shape and ambiguous money fields from becoming public contract.</td>
+          </tr>
+          <tr>
+            <td>Banner semantics</td>
+            <td>Admin draft read plus public active read</td>
+            <td>Supports admin editing without leaking inactive banners to shoppers.</td>
+          </tr>
+          <tr>
+            <td>Store bootstrap</td>
+            <td>Snapshot route owns bootstrap-compatible cookie behavior</td>
+            <td>The homepage has one authoritative first-render contract while downstream storefront requests keep store context.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="units">
+      <h2>Implementation Units</h2>
+      <div class="grid">
+        <article class="panel unit">
+          <h3>U1. Typed snapshot presenter and contract</h3>
+          <p>Create the read-only projection over store config, banner, best seller, featured, products, and SKUs. Prove active/draft banner behavior, read-time expiry, visibility filtering, reserved taxonomy exclusion, bounded section sizes, and minor-unit money naming.</p>
+          <p class="small">Primary files: <code>convex/storeFront/homepageSnapshot.ts</code>, <code>convex/inventory/bannerMessage.ts</code>, <code>convex/inventory/bestSeller.ts</code>, <code>convex/inventory/featuredItem.ts</code>.</p>
+        </article>
+        <article class="panel unit">
+          <h3>U2. Additive public route and bootstrap-safe boundary</h3>
+          <p>Expose the snapshot through a customer-channel route while keeping legacy endpoints unchanged and owning bootstrap-compatible store context cookie behavior.</p>
+          <p class="small">Primary files: <code>convex/http/domains/customerChannel/routes/homepageSnapshot.ts</code>, <code>convex/http.ts</code>.</p>
+        </article>
+        <article class="panel unit">
+          <h3>U3. Storefront loader and rendering migration</h3>
+          <p>Add the storefront snapshot API/query wrapper and move <code>-homePageLoader</code>, <code>HomePage</code>, and content derivation onto snapshot data while replacing the separate store-plus-merchandising fan-out and keeping the ready shell stable.</p>
+          <p class="small">Primary files: <code>packages/storefront-webapp/src/api/homepageSnapshot.ts</code>, <code>routes/-homePageLoader.ts</code>, <code>components/HomePage.tsx</code>.</p>
+        </article>
+        <article class="panel unit">
+          <h3>U4. Admin homepage workspace reliability</h3>
+          <p>Preserve the moved admin UI improvements while making single-slot shop-look behavior, banner draft semantics, product picker states, accessibility, and same-store placement integrity explicit requirements.</p>
+          <p class="small">Primary files: <code>packages/athena-webapp/src/components/homepage/*</code>.</p>
+        </article>
+        <article class="panel unit">
+          <h3>U5. Harness, generated artifacts, review, and browser validation</h3>
+          <p>Refresh generated Convex and Graphify artifacts, update storefront first-load fixtures if needed, loop reviewer agents to unanimous approval, validate admin and storefront in browser, then run the heavy Athena gate.</p>
+          <p class="small">Primary files: <code>convex/_generated/api.d.ts</code>, <code>scripts/harness-behavior-fixtures/storefront-runtime-api.ts</code>, <code>graphify-out/*</code>.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="risks">
+      <h2>Risks</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Risk</th>
+            <th>Mitigation</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Inactive banner draft leaks publicly</td>
+            <td>Split draft/admin reads from active public snapshot and test both consumers.</td>
+          </tr>
+          <tr>
+            <td>Store bootstrap cookies disappear</td>
+            <td>Make the snapshot route bootstrap-compatible and validate store context cookies.</td>
+          </tr>
+          <tr>
+            <td>Hidden POS-only taxonomy appears on homepage</td>
+            <td>Apply storefront-hidden filtering and add reserved taxonomy regression tests.</td>
+          </tr>
+          <tr>
+            <td>Generated artifacts drift</td>
+            <td>Run generated-artifact repair and Graphify rebuild after code edits.</td>
+          </tr>
+          <tr>
+            <td>Public response leaks hidden/internal content</td>
+            <td>Expose only customer-safe empty/null sections and keep detailed omission reasons server-side or admin-only.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="validation" class="panel warn">
+      <h2>Validation Strategy</h2>
+      <p>Run focused Convex, route, storefront loader/content, and admin homepage tests first. After reviewer agents unanimously approve, validate the authenticated admin homepage and storefront homepage in browser, then run <code>bun run pr:athena</code> before merge readiness.</p>
+    </section>
+  </main>
+</body>
+</html>

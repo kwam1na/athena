@@ -28,6 +28,7 @@ import {
   offersRoutes,
   userOffersRoutes,
   posTransactionRoutes,
+  homepageSnapshotRoutes,
 } from "./http/domains/customerChannel/routes";
 import { guestRoutes } from "./http/domains/customerChannel/routes/guest";
 import { colorRoutes } from "./http/domains/core/routes/colors";
@@ -64,6 +65,8 @@ app.route("/upsells", upsellRoutes);
 app.route("/stores", storeRoutes);
 
 app.route("/storefront", storefrontRoutes);
+
+app.route("/homepage-snapshot", homepageSnapshotRoutes);
 
 app.route("/webhooks/paystack", paystackRoutes);
 app.route("/webhooks/mtn-momo", mtnMomoRoutes);

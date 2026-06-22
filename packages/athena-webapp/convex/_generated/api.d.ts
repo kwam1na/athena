@@ -68,6 +68,7 @@ import type * as http_domains_core_routes_trackingEvents from "../http/domains/c
 import type * as http_domains_customerChannel_routes_bag from "../http/domains/customerChannel/routes/bag.js";
 import type * as http_domains_customerChannel_routes_checkout from "../http/domains/customerChannel/routes/checkout.js";
 import type * as http_domains_customerChannel_routes_guest from "../http/domains/customerChannel/routes/guest.js";
+import type * as http_domains_customerChannel_routes_homepageSnapshot from "../http/domains/customerChannel/routes/homepageSnapshot.js";
 import type * as http_domains_customerChannel_routes_index from "../http/domains/customerChannel/routes/index.js";
 import type * as http_domains_customerChannel_routes_me from "../http/domains/customerChannel/routes/me.js";
 import type * as http_domains_customerChannel_routes_offers from "../http/domains/customerChannel/routes/offers.js";
@@ -377,6 +378,7 @@ import type * as storeFront_helpers_orderOperations from "../storeFront/helpers/
 import type * as storeFront_helpers_orderUpdateEmails from "../storeFront/helpers/orderUpdateEmails.js";
 import type * as storeFront_helpers_paymentHelpers from "../storeFront/helpers/paymentHelpers.js";
 import type * as storeFront_helpers_returnExchangeOperations from "../storeFront/helpers/returnExchangeOperations.js";
+import type * as storeFront_homepageSnapshot from "../storeFront/homepageSnapshot.js";
 import type * as storeFront_offers from "../storeFront/offers.js";
 import type * as storeFront_onlineOrder from "../storeFront/onlineOrder.js";
 import type * as storeFront_onlineOrderItem from "../storeFront/onlineOrderItem.js";
@@ -474,6 +476,7 @@ declare const fullApi: ApiFromModules<{
   "http/domains/customerChannel/routes/bag": typeof http_domains_customerChannel_routes_bag;
   "http/domains/customerChannel/routes/checkout": typeof http_domains_customerChannel_routes_checkout;
   "http/domains/customerChannel/routes/guest": typeof http_domains_customerChannel_routes_guest;
+  "http/domains/customerChannel/routes/homepageSnapshot": typeof http_domains_customerChannel_routes_homepageSnapshot;
   "http/domains/customerChannel/routes/index": typeof http_domains_customerChannel_routes_index;
   "http/domains/customerChannel/routes/me": typeof http_domains_customerChannel_routes_me;
   "http/domains/customerChannel/routes/offers": typeof http_domains_customerChannel_routes_offers;
@@ -783,6 +786,7 @@ declare const fullApi: ApiFromModules<{
   "storeFront/helpers/orderUpdateEmails": typeof storeFront_helpers_orderUpdateEmails;
   "storeFront/helpers/paymentHelpers": typeof storeFront_helpers_paymentHelpers;
   "storeFront/helpers/returnExchangeOperations": typeof storeFront_helpers_returnExchangeOperations;
+  "storeFront/homepageSnapshot": typeof storeFront_homepageSnapshot;
   "storeFront/offers": typeof storeFront_offers;
   "storeFront/onlineOrder": typeof storeFront_onlineOrder;
   "storeFront/onlineOrderItem": typeof storeFront_onlineOrderItem;

@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import Footer from "./footer/Footer";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useNavigationBarContext } from "@/contexts/NavigationBarProvider";
-import { useProductQueries } from "@/lib/queries/product";
+import { useHomepageSnapshotQueries } from "@/lib/queries/homepageSnapshot";
 import { MARKER_KEY } from "@/lib/constants";
 import { ProductReminderBar } from "./ProductReminderBar";
 import { useProductReminder } from "@/hooks/useProductReminder";
@@ -86,25 +86,15 @@ export default function HomePage({
   const { upsell, setShowReminderBar, showReminderBar } =
     useProductReminder(homeHeroRef);
 
-  const productQueries = useProductQueries();
+  const homepageSnapshotQueries = useHomepageSnapshotQueries();
+  const initialSnapshot = initialData?.snapshot.data;
+  const initialSnapshotUpdatedAt = initialData?.snapshot.updatedAt;
 
-  const initialBestSellers = initialData?.bestSellers?.data;
-  const initialBestSellersUpdatedAt = initialData?.bestSellers?.updatedAt;
-  const initialFeatured = initialData?.featured?.data;
-  const initialFeaturedUpdatedAt = initialData?.featured?.updatedAt;
-
-  const { data: bestSellers, isLoading: isLoadingBestSellers } = useQuery({
-    ...productQueries.bestSellers(),
-    initialData: initialBestSellers,
-    initialDataUpdatedAt: initialBestSellersUpdatedAt,
-    refetchOnMount: initialBestSellers ? false : undefined,
-  });
-
-  const { data: featured, isLoading: isLoadingFeatured } = useQuery({
-    ...productQueries.featured(),
-    initialData: initialFeatured,
-    initialDataUpdatedAt: initialFeaturedUpdatedAt,
-    refetchOnMount: initialFeatured ? false : undefined,
+  const { data: homepageSnapshot, isLoading } = useQuery({
+    ...homepageSnapshotQueries.snapshot(),
+    initialData: initialSnapshot,
+    initialDataUpdatedAt: initialSnapshotUpdatedAt,
+    refetchOnMount: initialSnapshot ? false : undefined,
   });
 
   // Handle scroll events - now only runs after localStorage is loaded
@@ -201,11 +191,8 @@ export default function HomePage({
     shopLookProduct,
     hasHomepageData,
   } = resolveHomepageContent({
-    bestSellers: bestSellers as any,
-    featured: featured as any,
+    snapshot: homepageSnapshot,
   });
-
-  const isLoading = isLoadingBestSellers || isLoadingFeatured;
 
   return (
     <>

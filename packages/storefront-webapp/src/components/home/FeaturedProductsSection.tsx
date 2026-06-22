@@ -3,13 +3,27 @@ import { Link } from "@tanstack/react-router";
 import { Button } from "../ui/button";
 import { ProductCard } from "../ProductCard";
 import { useStoreContext } from "@/contexts/StoreContext";
-import { Product } from "@athena/webapp";
+import { Product, ProductSku } from "@athena/webapp";
 import { getProductName } from "@/lib/productUtils";
 import ImageWithFallback from "../ui/image-with-fallback";
 import { formatStoredAmount } from "@/lib/currency";
+import type { HomepageDisplayProduct } from "./homePageContent";
+
+type HomepageProduct = (Product & { skus: ProductSku[] }) | HomepageDisplayProduct;
+type FeaturedCollection = {
+  name: string;
+  products: HomepageProduct[];
+  slug: string;
+};
+type FeaturedHomepageItem = {
+  _id?: string;
+  category?: FeaturedCollection;
+  product?: HomepageProduct;
+  subcategory?: FeaturedCollection;
+};
 
 interface FeaturedProductsSectionProps {
-  featuredSectionSorted: any[] | undefined;
+  featuredSectionSorted: FeaturedHomepageItem[] | undefined;
   origin: string;
 }
 
@@ -25,9 +39,9 @@ export function FeaturedProductsSection({
 
   return (
     <div className="space-y-40 md:space-y-48">
-      {featuredSectionSorted.map((data: any) => (
+      {featuredSectionSorted.map((data, index) => (
         <motion.div
-          key={data._id}
+          key={data._id ?? `featured-homepage-item-${index}`}
           initial={{ opacity: 0, y: 16 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
@@ -43,7 +57,13 @@ export function FeaturedProductsSection({
 /**
  * Featured section component that can display different types of featured content
  */
-function FeaturedSection({ data, origin }: { data: any; origin: string }) {
+function FeaturedSection({
+  data,
+  origin,
+}: {
+  data: FeaturedHomepageItem;
+  origin: string;
+}) {
   const { formatter } = useStoreContext();
 
   if (data.subcategory) {
@@ -127,15 +147,15 @@ function FeaturedProduct({
   product,
   origin,
 }: {
-  product: any;
+  product: HomepageProduct;
   origin: string;
 }) {
   const { formatter } = useStoreContext();
+  if (!product.skus?.length) return null;
 
   // find the lowest price sku for the product
   const lowestPriceSku = product.skus.reduce(
-    (lowest: any, current: any) =>
-      current.price < lowest.price ? current : lowest,
+    (lowest, current) => (current.price < lowest.price ? current : lowest),
     product.skus[0],
   );
 
@@ -194,13 +214,15 @@ function ProductGrid({
   formatter,
   origin,
 }: {
-  products: Product[];
-  formatter: any;
+  products: HomepageProduct[];
+  formatter: Intl.NumberFormat;
   origin: string;
 }) {
+  const productsWithSkus = products.filter((product) => product.skus?.length);
+
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-8 md:gap-24 xl:gap-4">
-      {products?.slice(0, 4).map((product: Product) => (
+      {productsWithSkus.slice(0, 4).map((product) => (
         <Link
           to="/shop/product/$productSlug"
           key={product?._id}

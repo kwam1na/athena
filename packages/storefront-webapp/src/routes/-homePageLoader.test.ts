@@ -3,49 +3,49 @@ import { describe, expect, it, vi } from "vitest";
 import { loadHomePageData } from "./-homePageLoader";
 
 describe("loadHomePageData", () => {
-  it("keeps fulfilled merchandising data when the companion request fails", async () => {
-    const storeRequest = vi.fn().mockResolvedValue({ _id: "store" });
-    const bestSellersRequest = vi.fn().mockResolvedValue([{ _id: "best-seller" }]);
-    const featuredRequest = vi.fn().mockRejectedValue(new Error("featured failed"));
-
-    const result = await loadHomePageData({
-      storeRequest,
-      bestSellersRequest,
-      featuredRequest,
+  it("loads the homepage snapshot as the first-render content contract", async () => {
+    const snapshotRequest = vi.fn().mockResolvedValue({
+      contractVersion: "homepage_snapshot.v1",
+      bestSellers: [{ id: "best-seller" }],
+      featuredItems: [{ id: "highlighted" }],
+      shopLook: null,
     });
 
-    expect(storeRequest).toHaveBeenCalledBefore(bestSellersRequest);
-    expect(storeRequest).toHaveBeenCalledBefore(featuredRequest);
-    expect(result.bestSellers?.data).toEqual([{ _id: "best-seller" }]);
-    expect(result.bestSellers?.updatedAt).toEqual(expect.any(Number));
-    expect(result.featured).toBeUndefined();
-  });
-
-  it("records freshness timestamps for fulfilled loader data", async () => {
     const result = await loadHomePageData({
-      storeRequest: vi.fn().mockResolvedValue({ _id: "store" }),
-      bestSellersRequest: vi.fn().mockResolvedValue([{ _id: "best-seller" }]),
-      featuredRequest: vi.fn().mockResolvedValue([{ _id: "featured" }]),
+      snapshotRequest,
     });
 
-    expect(result.bestSellers?.updatedAt).toEqual(expect.any(Number));
-    expect(result.featured?.updatedAt).toEqual(expect.any(Number));
-    expect(result.bestSellers?.updatedAt).toBe(result.featured?.updatedAt);
+    expect(snapshotRequest).toHaveBeenCalledWith({ asNewUser: false });
+    expect(result.snapshot.data).toEqual({
+      contractVersion: "homepage_snapshot.v1",
+      bestSellers: [{ id: "best-seller" }],
+      featuredItems: [{ id: "highlighted" }],
+      shopLook: null,
+    });
+    expect(result.snapshot.updatedAt).toEqual(expect.any(Number));
   });
 
-  it("does not load merchandising when the storefront bootstrap fails", async () => {
-    const bestSellersRequest = vi.fn().mockResolvedValue([{ _id: "best-seller" }]);
-    const featuredRequest = vi.fn().mockResolvedValue([{ _id: "featured" }]);
+  it("preserves successful empty and null snapshot sections", async () => {
+    const result = await loadHomePageData({
+      snapshotRequest: vi.fn().mockResolvedValue({
+        contractVersion: "homepage_snapshot.v1",
+        bestSellers: [],
+        featuredItems: [],
+        shopLook: null,
+      }),
+    });
 
+    expect(result.snapshot.data.bestSellers).toEqual([]);
+    expect(result.snapshot.data.featuredItems).toEqual([]);
+    expect(result.snapshot.data.shopLook).toBeNull();
+    expect(result.snapshot.updatedAt).toEqual(expect.any(Number));
+  });
+
+  it("rejects when the snapshot request fails", async () => {
     await expect(
       loadHomePageData({
-        storeRequest: vi.fn().mockRejectedValue(new Error("store failed")),
-        bestSellersRequest,
-        featuredRequest,
+        snapshotRequest: vi.fn().mockRejectedValue(new Error("snapshot failed")),
       }),
-    ).rejects.toThrow("store failed");
-
-    expect(bestSellersRequest).not.toHaveBeenCalled();
-    expect(featuredRequest).not.toHaveBeenCalled();
+    ).rejects.toThrow("snapshot failed");
   });
 });
