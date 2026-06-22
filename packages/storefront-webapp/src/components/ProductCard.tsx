@@ -20,6 +20,22 @@ type ProductCardProduct = Pick<Product, "name"> & {
   skus: ProductCardSku[];
 };
 
+const hasSellableAvailability = (sku: Pick<ProductCardSku, "quantityAvailable">) =>
+  sku.quantityAvailable > 0;
+
+const getPreferredCardSku = (
+  skus: ProductCardSku[],
+  discountedSkuId?: string,
+) => {
+  const discountedSku = skus.find((sku) => sku._id === discountedSkuId);
+
+  if (discountedSku && hasSellableAvailability(discountedSku)) {
+    return discountedSku;
+  }
+
+  return skus.find(hasSellableAvailability) ?? discountedSku ?? skus[0];
+};
+
 export function ProductCard({
   product,
   currencyFormatter,
@@ -35,7 +51,7 @@ export function ProductCard({
     new Set(product.skus.map((sku) => sku.color)),
   ).length;
 
-  const isSoldOut = product.skus.every((sku) => sku.quantityAvailable === 0);
+  const isSoldOut = product.skus.every((sku) => !hasSellableAvailability(sku));
 
   const isSellingFast = product.skus.some(
     (sku) => sku.quantityAvailable > 0 && sku.quantityAvailable <= 2,
@@ -47,9 +63,7 @@ export function ProductCard({
       product.skus.map((sku) => ({ _id: sku._id, price: sku.price })),
     );
 
-  // Find the SKU to display (the one with discount, or the first one)
-  const displayedSku =
-    product.skus.find((sku) => sku._id === discountedSkuId) || product.skus[0];
+  const displayedSku = getPreferredCardSku(product.skus, discountedSkuId);
 
   const isFree = hasDiscount && discountedPrice === 0;
 
@@ -126,7 +140,7 @@ export function ProductSkuCard({
   currencyFormatter: Intl.NumberFormat;
   fallbackImageUrl?: string;
 }) {
-  const isSoldOut = sku.quantityAvailable === 0;
+  const isSoldOut = !hasSellableAvailability(sku);
 
   const { hasDiscount, discountedPrice, originalPrice } = useProductDiscount(
     sku._id,

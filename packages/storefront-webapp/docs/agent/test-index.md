@@ -42,6 +42,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/hooks/useQueryEnabled.test.ts`](../../src/hooks/useQueryEnabled.test.ts)
 - [`src/lib/feeUtils.test.ts`](../../src/lib/feeUtils.test.ts)
 - [`src/lib/maintenanceUtils.test.ts`](../../src/lib/maintenanceUtils.test.ts)
+- [`src/lib/productUtils.test.ts`](../../src/lib/productUtils.test.ts)
 - [`src/lib/storeConfig.test.ts`](../../src/lib/storeConfig.test.ts)
 - [`src/lib/storefrontContextEvents.test.ts`](../../src/lib/storefrontContextEvents.test.ts)
 - [`src/lib/storefrontFailureObservability.test.ts`](../../src/lib/storefrontFailureObservability.test.ts)

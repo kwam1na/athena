@@ -60,7 +60,7 @@ function toDisplaySku(sku: HomepageSnapshotSkuV1): HomepageDisplaySku {
     images: sku.imageUrls,
     price: sku.priceAmountMinor,
     netPrice: sku.netPriceAmountMinor ?? undefined,
-    quantityAvailable: 0,
+    quantityAvailable: sku.quantityAvailable,
     colorName: sku.colorName,
     size: sku.size ?? undefined,
     length: sku.length ?? undefined,

@@ -21,7 +21,7 @@ import {
   matchesSkuSearchTerms,
   normalizeSkuSearchQuery,
 } from "~/src/lib/stockOps/skuSearch";
-import { cn } from "~/src/lib/utils";
+import { capitalizeWords, cn } from "~/src/lib/utils";
 import { getProductName } from "~/src/lib/productUtils";
 import type { Category, Product, ProductSku, Subcategory } from "~/types";
 
@@ -349,6 +349,7 @@ export function HomepageProductPickerDialog({
                 <div className="divide-y divide-border">
                   {filteredProductOptions.map((product) => {
                     const primarySku = product.skus[0];
+                    const productName = capitalizeWords(product.name);
                     const productIsUnavailable =
                       getProductAvailableUnits(product) <= 0;
                     const selectionKey = `product-${product._id}`;
@@ -380,13 +381,13 @@ export function HomepageProductPickerDialog({
                         type="button"
                       >
                         <HomepageProductThumb
-                          alt={product.name}
+                          alt={productName}
                           src={primarySku?.images[0]}
                         />
                         <div className="min-w-0 space-y-layout-xs">
                           <div>
                             <p className="truncate text-sm font-medium text-foreground">
-                              {product.name}
+                              {productName}
                             </p>
                             <p className="truncate text-xs text-muted-foreground">
                               {taxonomyLabel}

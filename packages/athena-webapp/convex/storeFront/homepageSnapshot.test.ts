@@ -59,6 +59,7 @@ function sku(id: string, rank: number, overrides: Record<string, unknown> = {}) 
       images: [`https://cdn.example.com/${id}.webp`],
       isVisible: true,
       price: 12_500,
+      quantityAvailable: 4,
       product: {
         _id: `product-${id}`,
         storeId: "store-1",
@@ -314,6 +315,7 @@ describe("homepage snapshot presenter", () => {
     expect(snapshot.bestSellers).toHaveLength(BEST_SELLERS_LIMIT);
     expect(snapshot.bestSellers[0].rank).toBe(1);
     expect(snapshot.bestSellers[0].productSku.priceAmountMinor).toBe(12_500);
+    expect(snapshot.bestSellers[0].productSku.quantityAvailable).toBe(4);
     expect(snapshot.bestSellers[0].productSku).not.toHaveProperty("price");
     expect(snapshot.featuredItems.map((item) => item.id)).toEqual([
       "featured-product",
@@ -353,6 +355,58 @@ describe("homepage snapshot presenter", () => {
     expect(snapshot.bestSellers.map((item) => item.rank)).toEqual([0, 1]);
   });
 
+  it("uses a sellable sibling SKU when a best-seller placement points at a sold-out SKU", () => {
+    const placedSoldOutSku = sku("placed", 1, {
+      quantityAvailable: 0,
+      product: {
+        _id: "product-shared",
+        storeId: "store-1",
+        name: "Shared product",
+        slug: "shared-product",
+        currency: "GHS",
+        availability: "live",
+        isVisible: true,
+        categoryId: "category-1",
+        subcategoryId: "subcategory-1",
+        skus: [
+          {
+            _id: "sku-sold-out",
+            storeId: "store-1",
+            productId: "product-shared",
+            sku: "SOLD-OUT",
+            images: ["https://cdn.example.com/sold-out.webp"],
+            isVisible: true,
+            price: 12_500,
+            quantityAvailable: 0,
+          },
+          {
+            _id: "sku-in-stock",
+            storeId: "store-1",
+            productId: "product-shared",
+            sku: "IN-STOCK",
+            images: ["https://cdn.example.com/in-stock.webp"],
+            isVisible: true,
+            price: 13_500,
+            quantityAvailable: 3,
+          },
+        ],
+      },
+    });
+
+    const snapshot = buildHomepageSnapshotV1({
+      store,
+      nowMs: 1_000,
+      bestSellers: [placedSoldOutSku],
+      featuredItems: [],
+    });
+
+    expect(snapshot.bestSellers[0].productSku).toMatchObject({
+      skuId: "sku-in-stock",
+      sku: "IN-STOCK",
+      quantityAvailable: 3,
+    });
+  });
+
   it("presents contiguous ranks when explicit ranks are not zero-based", () => {
     const unranked = sku("unranked", 0);
     delete (unranked as { rank?: number }).rank;
@@ -386,6 +440,51 @@ describe("homepage snapshot presenter", () => {
 
     expect(snapshot.bannerMessage).toBeNull();
     expect(snapshot.bestSellers).toEqual([]);
+    expect(snapshot.featuredItems).toEqual([]);
+    expect(snapshot.shopLook).toBeNull();
+  });
+
+  it("does not publish legacy highlighted rows that have no explicit section type", () => {
+    const snapshot = buildHomepageSnapshotV1({
+      store,
+      nowMs: 2_000,
+      featuredItems: [
+        {
+          _id: "legacy-highlight",
+          rank: 0,
+          category: {
+            ...publicCategory,
+            products: [
+              {
+                _id: "legacy-product",
+                storeId: "store-1",
+                name: "Legacy product",
+                slug: "legacy-product",
+                currency: "GHS",
+                availability: "live",
+                isVisible: true,
+                categoryId: "category-1",
+                subcategoryId: "subcategory-1",
+                category: publicCategory,
+                subcategory: publicSubcategory,
+                skus: [
+                  {
+                    _id: "sku-legacy",
+                    storeId: "store-1",
+                    productId: "legacy-product",
+                    images: [],
+                    isVisible: true,
+                    price: 12_000,
+                    quantityAvailable: 2,
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      ],
+    });
+
     expect(snapshot.featuredItems).toEqual([]);
     expect(snapshot.shopLook).toBeNull();
   });
