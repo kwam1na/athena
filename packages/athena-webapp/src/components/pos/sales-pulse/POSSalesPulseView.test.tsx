@@ -35,6 +35,22 @@ vi.mock("@/components/ui/chart", () => ({
 }));
 
 function buildTodaySummary({
+  paymentMix = [
+    {
+      count: 1,
+      label: "Cash",
+      method: "cash",
+      share: 60,
+      total: 7_500,
+    },
+    {
+      count: 1,
+      label: "Card",
+      method: "card",
+      share: 40,
+      total: 5_000,
+    },
+  ],
   topItems = [
     {
       name: "Braiding hair",
@@ -70,22 +86,7 @@ function buildTodaySummary({
       },
       historyDays: 14,
       isLimited: false,
-      paymentMix: [
-        {
-          count: 1,
-          label: "Cash",
-          method: "cash",
-          share: 60,
-          total: 7_500,
-        },
-        {
-          count: 1,
-          label: "Card",
-          method: "card",
-          share: 40,
-          total: 5_000,
-        },
-      ],
+      paymentMix,
       topItems,
       trend: [
         {
@@ -167,10 +168,10 @@ describe("POSStorePulseSection", () => {
     expect(screen.queryByText("Busiest hour")).not.toBeInTheDocument();
     expect(screen.getByText("How customers paid")).toBeInTheDocument();
     expect(screen.getByText("Cash")).toBeInTheDocument();
-    expect(screen.getByText("60%")).toBeInTheDocument();
+    expect(screen.getAllByText("50%").length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText("Card")).toBeInTheDocument();
-    expect(screen.getByText("40%")).toBeInTheDocument();
     expect(screen.getByText("Braiding Hair")).toBeInTheDocument();
+    expect(screen.getByLabelText("Total items sold: 3")).toBeInTheDocument();
     expect(screen.getByText("2 units sold")).toBeInTheDocument();
     expect(screen.getByTestId("store-pulse-chart")).toBeInTheDocument();
     expect(screen.getByTestId("store-pulse-area")).toBeInTheDocument();
@@ -210,6 +211,41 @@ describe("POSStorePulseSection", () => {
     await user.click(screen.getByRole("tab", { name: "This month" }));
 
     expect(onPulseWindowChange).toHaveBeenCalledWith("this_month");
+  });
+
+  it("shows payment mix shares from transaction counts", () => {
+    renderStorePulse({
+      todaySummary: buildTodaySummary({
+        paymentMix: [
+          {
+            count: 2,
+            label: "Mobile money",
+            method: "mobile_money",
+            share: 65,
+            total: 2_450,
+          },
+          {
+            count: 1,
+            label: "Cash",
+            method: "cash",
+            share: 25,
+            total: 935,
+          },
+          {
+            count: 1,
+            label: "Card",
+            method: "card",
+            share: 11,
+            total: 400,
+          },
+        ],
+      }),
+    });
+
+    expect(screen.getByText("50%")).toBeInTheDocument();
+    expect(screen.getAllByText("25%")).toHaveLength(2);
+    expect(screen.queryByText("65%")).not.toBeInTheDocument();
+    expect(screen.queryByText("11%")).not.toBeInTheDocument();
   });
 
   it("uses a no-comparison helper for all time", () => {
