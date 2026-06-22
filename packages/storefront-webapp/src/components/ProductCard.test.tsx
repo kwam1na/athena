@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import { ProductSkuCard } from "./ProductCard";
+import { ProductCard, ProductSkuCard } from "./ProductCard";
 import { currencyFormatter } from "@/lib/utils";
 
 vi.mock("@/hooks/useProductDiscount", () => ({
@@ -21,6 +21,44 @@ vi.mock("@/hooks/useProductDiscount", () => ({
 vi.mock("@/contexts/StoreContext", () => ({
   useStoreContext: () => ({ store: undefined }),
 }));
+
+describe("ProductCard", () => {
+  it("does not show sold out when any sibling SKU has sellable availability", () => {
+    render(
+      <ProductCard
+        product={{
+          _id: "product_1",
+          name: "5x5 Glueless Closure Wig",
+          skus: [
+            {
+              _id: "sku_sold_out",
+              productName: "5x5 Glueless Closure Wig",
+              price: 178400,
+              quantityAvailable: 0,
+              images: ["https://images.example.com/sold-out.webp"],
+              sku: "SOLD-OUT",
+            },
+            {
+              _id: "sku_in_stock",
+              productName: "5x5 Glueless Closure Wig",
+              price: 178400,
+              quantityAvailable: 2,
+              images: ["https://images.example.com/in-stock.webp"],
+              sku: "IN-STOCK",
+            },
+          ],
+        } as any}
+        currencyFormatter={currencyFormatter("GHS")}
+      />,
+    );
+
+    expect(screen.queryByText("Sold Out")).not.toBeInTheDocument();
+    expect(screen.getByAltText("5x5 Glueless Closure Wig image")).toHaveAttribute(
+      "src",
+      "https://images.example.com/in-stock.webp",
+    );
+  });
+});
 
 describe("ProductSkuCard", () => {
   it("marks product imagery as lazy-loaded and async decoded", () => {

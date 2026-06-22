@@ -42,6 +42,24 @@ const products = [
       },
     ],
   },
+  {
+    _id: "product-3",
+    categoryId: "category-hair-care",
+    name: "enzo treatment",
+    subcategoryId: "subcategory-deep-conditioners",
+    categoryName: "Hair Care",
+    categorySlug: "hair-care",
+    skus: [
+      {
+        _id: "sku-3",
+        productName: "enzo treatment",
+        sku: "ENZO-1",
+        images: [],
+        price: 6_100,
+        quantityAvailable: 38,
+      },
+    ],
+  },
 ] as unknown as Product[];
 
 const categories = [
@@ -126,6 +144,25 @@ describe("HomepageProductPickerDialog", () => {
     expect(screen.getByText("Closure Unit")).toBeInTheDocument();
 
     consoleError.mockRestore();
+  });
+
+  it("capitalizes catalog product names in product selection rows", () => {
+    render(
+      <HomepageProductPickerDialog
+        currency="GHS"
+        description="Select a product"
+        onOpenChange={vi.fn()}
+        onSelectProduct={vi.fn()}
+        open
+        products={products}
+        searchId="homepage-picker-product-name-test"
+        selectLabel="Add"
+        title="Add product"
+      />,
+    );
+
+    expect(screen.getByText("Enzo Treatment")).toBeInTheDocument();
+    expect(screen.queryByText("enzo treatment")).not.toBeInTheDocument();
   });
 
   it("resolves product taxonomy labels from category and subcategory ids", () => {

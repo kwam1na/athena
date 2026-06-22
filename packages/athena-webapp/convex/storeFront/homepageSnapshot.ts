@@ -37,6 +37,7 @@ export const homepageProductSkuValidator = v.object({
   currency: v.string(),
   priceAmountMinor: v.number(),
   netPriceAmountMinor: nullableNumberValidator,
+  quantityAvailable: v.number(),
   colorName: nullableStringValidator,
   size: nullableStringValidator,
   length: nullableNumberValidator,
@@ -145,6 +146,24 @@ const isCustomerVisibleSku = (
   );
 };
 
+const quantityAvailableOf = (sku: AnyRecord | null | undefined) => {
+  return typeof sku?.quantityAvailable === "number" ? sku.quantityAvailable : 0;
+};
+
+const isSellableSku = (sku: AnyRecord | null | undefined) => {
+  return quantityAvailableOf(sku) > 0;
+};
+
+const sortSkusForPublicDisplay = <T extends AnyRecord>(skus: T[]) => {
+  return sortByRankThenId(skus).sort((a, b) => {
+    if (isSellableSku(a) === isSellableSku(b)) {
+      return 0;
+    }
+
+    return isSellableSku(a) ? -1 : 1;
+  });
+};
+
 const presentProductSku = (
   sku: AnyRecord | null | undefined,
   storeId: string,
@@ -179,6 +198,7 @@ const presentProductSku = (
     currency: publicProduct.currency,
     priceAmountMinor: publicSku.price,
     netPriceAmountMinor: numberOrNull(publicSku.netPrice),
+    quantityAvailable: quantityAvailableOf(publicSku),
     colorName: stringOrNull(publicSku.colorName),
     size: stringOrNull(publicSku.size),
     length: numberOrNull(publicSku.length),
@@ -200,7 +220,7 @@ const presentProduct = (
   }
 
   const publicProduct = product as AnyRecord;
-  const publicSkus = sortByRankThenId(skusFromProduct(publicProduct))
+  const publicSkus = sortSkusForPublicDisplay(skusFromProduct(publicProduct))
     .map((sku) =>
       presentProductSku(
         {
@@ -278,8 +298,11 @@ const presentFeaturedItem = (
   storeId: string,
   fallbackRank: number,
 ) => {
-  const type: "regular" | "shop_look" =
-    item.type === "shop_look" ? "shop_look" : "regular";
+  if (item.type !== "regular" && item.type !== "shop_look") {
+    return null;
+  }
+
+  const type = item.type;
   const product = presentProduct(
     item.product,
     storeId,
@@ -346,7 +369,16 @@ export const buildHomepageSnapshotV1 = ({
 
   const bestSellerItems = sortByRankThenId(bestSellers ?? [])
     .map((item, index) => {
-      const productSku = presentProductSku(item.productSku, storeId);
+      const productSku =
+        isSellableSku(item.productSku)
+          ? presentProductSku(item.productSku, storeId)
+          : presentProduct(
+              item.productSku?.product,
+              storeId,
+              item.productSku?.category,
+              item.productSku?.subcategory,
+            ) ?? presentProductSku(item.productSku, storeId);
+
       if (!productSku) {
         return null;
       }
@@ -495,16 +527,27 @@ async function hydrateBestSeller(ctx: QueryCtx, item: AnyRecord) {
     return { ...item, productSku: null };
   }
 
-  const [category, subcategory] = await Promise.all([
+  const [category, subcategory, skus] = await Promise.all([
     ctx.db.get("category", product.categoryId),
     ctx.db.get("subcategory", product.subcategoryId),
+    ctx.db
+      .query("productSku")
+      .withIndex("by_productId", (q) => q.eq("productId", product._id))
+      .take(HOMEPAGE_SNAPSHOT_SCAN_LIMIT),
   ]);
+
+  const hydratedProduct = {
+    ...product,
+    category,
+    subcategory,
+    skus: skus.filter((productSku) => productSku.storeId === item.storeId),
+  };
 
   return {
     ...item,
     productSku: {
       ...sku,
-      product,
+      product: hydratedProduct,
       category,
       subcategory,
     },

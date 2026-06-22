@@ -7,7 +7,7 @@ import { useGetProductQuery } from "@/hooks/useGetProduct";
 import { usePromoCodesQueries } from "@/lib/queries/promoCode";
 import { useQuery } from "@tanstack/react-query";
 import { postAnalytics } from "@/api/analytics";
-import { isSoldOut, hasLowStock, sortSkusByLength } from "@/lib/productUtils";
+import { isSoldOut, hasLowStock, getPreferredSku } from "@/lib/productUtils";
 import { useProductDiscount } from "@/hooks/useProductDiscount";
 import { useStorefrontObservability } from "@/hooks/useStorefrontObservability";
 import {
@@ -55,7 +55,7 @@ export function useProductPageLogic() {
       );
       selectedSku && setSelectedSku(selectedSku);
     } else if (product && !selectedSku) {
-      setSelectedSku(sortSkusByLength(product?.skus || [])[0]);
+      setSelectedSku(getPreferredSku(product?.skus || []) ?? null);
     }
   }, [variant, product, selectedSku]);
 
