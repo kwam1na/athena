@@ -45,6 +45,12 @@ export const intelligenceSourceRefValidator = v.object({
   table: v.string(),
   id: v.string(),
   label: v.optional(v.string()),
+  surface: v.optional(v.string()),
+  eventId: v.optional(v.string()),
+  schemaVersion: v.optional(v.number()),
+  redaction: v.optional(v.string()),
+  omitted: v.optional(v.boolean()),
+  synthetic: v.optional(v.boolean()),
 });
 
 export const intelligenceErrorValidator = v.object({
@@ -104,6 +110,21 @@ export const intelligenceContextSnapshotSchema = v.object({
   snapshotHash: v.string(),
   payloadSummary: v.record(v.string(), v.any()),
   payloadRedaction: v.optional(v.string()),
+  bundleKind: v.optional(v.string()),
+  bundleVersion: v.optional(v.number()),
+  freshness: v.optional(
+    v.union(
+      v.literal("current"),
+      v.literal("stale"),
+      v.literal("partial"),
+      v.literal("failed"),
+    ),
+  ),
+  hiddenSourceCount: v.optional(v.number()),
+  omittedEvidenceCount: v.optional(v.number()),
+  redactionMode: v.optional(v.string()),
+  qualityFlags: v.optional(v.array(v.string())),
+  limitedEvidence: v.optional(v.boolean()),
   createdAt: v.number(),
 });
 

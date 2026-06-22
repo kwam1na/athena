@@ -15,3 +15,17 @@ export const getStorefrontUserFromRequest = (c: Context) => {
 
   return userId || guestId;
 };
+
+export const getStorefrontActorFromRequest = (c: Context) => {
+  const userId = getCookie(c, "user_id") as Id<"storeFrontUser"> | undefined;
+  if (userId) {
+    return { kind: "storefrontUser" as const, id: userId };
+  }
+
+  const guestId = getCookie(c, "guest_id") as Id<"guest"> | undefined;
+  if (guestId) {
+    return { kind: "guest" as const, id: guestId };
+  }
+
+  return undefined;
+};

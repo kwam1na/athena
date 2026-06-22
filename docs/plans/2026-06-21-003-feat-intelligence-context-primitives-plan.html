@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Plan: Build context tracking primitives</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #172026;
+      --muted: #5b6670;
+      --line: #d8dee4;
+      --panel: #f7f9fb;
+      --accent: #0f766e;
+      --risk: #9f1239;
+    }
+    body {
+      margin: 0;
+      font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--ink);
+      background: #ffffff;
+    }
+    main {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 40px 28px 64px;
+    }
+    header {
+      border-bottom: 1px solid var(--line);
+      margin-bottom: 28px;
+      padding-bottom: 20px;
+    }
+    h1 {
+      font-size: 30px;
+      line-height: 1.2;
+      margin: 0 0 10px;
+      letter-spacing: 0;
+    }
+    h2 {
+      font-size: 20px;
+      margin: 30px 0 12px;
+      letter-spacing: 0;
+    }
+    h3 {
+      font-size: 16px;
+      margin: 20px 0 8px;
+      letter-spacing: 0;
+    }
+    p, li {
+      max-width: 88ch;
+    }
+    a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 14px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .summary, .callout {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 16px 18px;
+      margin: 18px 0 26px;
+    }
+    nav {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 14px 18px;
+      margin-bottom: 28px;
+    }
+    nav ul {
+      columns: 2;
+      margin: 0;
+      padding-left: 18px;
+    }
+    section {
+      border-top: 1px solid var(--line);
+      padding-top: 10px;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 12px 0 18px;
+      font-size: 14px;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 9px 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      background: var(--panel);
+    }
+    .unit {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 14px 16px;
+      margin: 14px 0;
+      background: #ffffff;
+    }
+    .unit h3 {
+      margin-top: 0;
+    }
+    code, pre {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 13px;
+    }
+    pre {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 14px;
+      overflow-x: auto;
+    }
+    @media (max-width: 720px) {
+      main { padding: 24px 18px 48px; }
+      nav ul { columns: 1; }
+      h1 { font-size: 24px; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>feat: Build context tracking primitives</h1>
+      <div class="meta">
+        <span>Type: feat</span>
+        <span>Status: active</span>
+        <span>Date: 2026-06-21</span>
+        <span>Markdown: <a href="./2026-06-21-003-feat-intelligence-context-primitives-plan.md">2026-06-21-003-feat-intelligence-context-primitives-plan.md</a></span>
+      </div>
+    </header>
+
+    <div class="summary">
+      Build a new Athena-owned context tracking foundation that turns surface-defined events into bounded, permission-aware context bundles for downstream consumers such as the intelligence layer. Shared browser-safe code lives under <code>packages/athena-webapp/shared/intelligence/</code>.
+    </div>
+
+    <nav aria-label="Plan contents">
+      <strong>Contents</strong>
+      <ul>
+        <li><a href="#requirements">Requirements</a></li>
+        <li><a href="#scope">Scope</a></li>
+        <li><a href="#decisions">Decisions</a></li>
+        <li><a href="#design">Design</a></li>
+        <li><a href="#units">Implementation Units</a></li>
+        <li><a href="#validation">Validation</a></li>
+        <li><a href="#risks">Risks</a></li>
+      </ul>
+    </nav>
+
+    <section id="problem">
+      <h2>Problem Frame</h2>
+      <p>Athena's intelligence layer has durable runs, snapshots, artifacts, visibility modes, and source refs. The missing foundation is upstream: surfaces can collect useful raw signals, but there is no shared way for those signals to become intelligence-ready context without coupling capabilities to one surface's raw analytics shape.</p>
+      <div class="callout">This plan builds new primitives only: no legacy analytics migration, no tracking-session read model, and no full Ask Athena UI.</div>
+    </section>
+
+    <section id="requirements">
+      <h2>Requirements</h2>
+      <ul>
+        <li>Define a shared context event envelope with surface, event id, schema version, scope, actor/session refs, source refs, visibility, origin, synthetic marker, and idempotency key.</li>
+        <li>Keep surface event definitions surface-owned, with adapter-specific payload validation and compiler behavior.</li>
+        <li>Persist new context events in a separate append-only Convex table; legacy analytics stays out of scope.</li>
+        <li>Make Convex/server validation authoritative.</li>
+        <li>Store minimized typed payloads and compact evidence, not broad raw data or sensitive material.</li>
+        <li>Compile bounded context bundles with source refs, data windows, snapshot hashes, freshness state, omitted-evidence markers, and redaction metadata.</li>
+        <li>Require storefront-derived intelligence to consume compiled bundles rather than raw storefront rows.</li>
+        <li>Enforce visibility and redaction at server compile/read boundaries.</li>
+        <li>Distinguish recorded, rejected, uncompiled, partial, stale, unavailable, and hidden-by-permission states.</li>
+        <li>Exclude synthetic monitor traffic from business/customer intelligence by default.</li>
+        <li>Use mutation-first Convex patterns and bounded public reads.</li>
+        <li>Treat client-supplied actor, session, customer, cart, checkout, order, and subject refs as claims until server-derived or corroborated.</li>
+        <li>Define v1 retention/deletion semantics before production writes: retention class, expiration/archive fields, and anonymization behavior.</li>
+      </ul>
+    </section>
+
+    <section id="scope">
+      <h2>Scope</h2>
+      <ul>
+        <li>No legacy storefront analytics normalization, migration, backfill, or compatibility taxonomy.</li>
+        <li>No generic tracking-session table or read model in v1.</li>
+        <li>No POS, inventory, operations, service, or automation adapter implementation beyond contract examples.</li>
+        <li>No autonomous domain mutations from intelligence output.</li>
+        <li>No provider SDK or model capability work beyond consuming the compiled bundle.</li>
+      </ul>
+    </section>
+
+    <section id="decisions">
+      <h2>Key Decisions</h2>
+      <ul>
+        <li>Place browser-safe primitives and tracker helpers in <code>packages/athena-webapp/shared/intelligence/</code>.</li>
+        <li>Place Convex persistence and compilers in <code>packages/athena-webapp/convex/contextTracking/</code>; <code>convex/intelligence/</code> consumes compiled bundles.</li>
+        <li>Create a separate append-only <code>contextEvent</code> table for new events.</li>
+        <li>Do not create <code>trackingSession</code> in v1; compilers group event streams for specific bundles.</li>
+        <li>For storefront v1, use a thin HTTP API wrapper and an Athena HTTP route that derives trusted scope before calling the append helper.</li>
+        <li>Make <code>appendContextEvent</code> the durable server helper, backed by registry validation, subject corroboration, and idempotency collision checks.</li>
+        <li>Keep indexes tenant/scope-first and tied to proven reads, including primary subject/session, status, occurred time, retention expiration, and idempotency.</li>
+        <li>Use source refs rich enough to explain surface/event version, subject refs, time window, redaction, omitted evidence, and synthetic marker.</li>
+        <li>Keep operational events, workflow traces, automation runs, and domain ledgers in their existing roles.</li>
+        <li>Use ephemeral <code>ContextBundle</code> compiler outputs copied into immutable <code>intelligenceContextSnapshot</code> rows in v1; do not add a durable bundle table yet.</li>
+      </ul>
+    </section>
+
+    <section id="design">
+      <h2>Design</h2>
+      <pre><code>packages/athena-webapp/
+  convex/
+    contextTracking/
+      contextEvents.ts
+      contextEventDefinitions.ts
+      contextCompilers.ts
+      contextBundles.ts
+      adapters/
+        athenaWebapp.ts
+        storefront.ts
+    schemas/intelligence.ts
+  src/contextTracking/
+    athenaWebappContextEvents.ts
+  shared/intelligence/
+    contextTracking.ts
+    contextTypes.ts
+    contextEventTypes.ts
+    contextBundleTypes.ts
+    eventBuilder.ts
+    surfaceDefinition.ts
+
+packages/storefront-webapp/src/
+  api/trackingEvents.ts
+  lib/storefrontContextEvents.ts</code></pre>
+      <table>
+        <thead>
+          <tr><th>Primitive</th><th>Purpose</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>ContextEventEnvelope</code></td><td>Stable cross-surface metadata required for every tracked event.</td></tr>
+          <tr><td><code>SurfaceContextDefinition</code></td><td>Adapter-owned event ids, versions, payload validators, visibility rules, and compiler hooks.</td></tr>
+          <tr><td><code>ContextSourceRef</code></td><td>Explainable source pointer with redaction, omitted evidence, and synthetic metadata.</td></tr>
+          <tr><td><code>ContextBundle</code></td><td>Bounded compiled context for one capability, surface, window, and subject.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="units">
+      <h2>Implementation Units</h2>
+
+      <div class="unit">
+        <h3>U1. Shared context primitive types and schema validators</h3>
+        <p>Define common envelope, refs, visibility, status, retention fields, idempotency hashes, denormalized compiler keys, and bundle vocabulary without surface-specific semantics. Modify <code>convex/schemas/intelligence.ts</code> and <code>convex/schema.ts</code>; add shared tests.</p>
+      </div>
+
+      <div class="unit">
+        <h3>U2. Surface definition registry and authoritative event append boundary</h3>
+        <p>Add the storefront HTTP route, <code>appendContextEvent</code>, registry entries, idempotency collision semantics, subject corroboration, schema version handling, and normalized non-compilable rejection behavior. Public functions stay thin; internal functions compile/project.</p>
+      </div>
+
+      <div class="unit">
+        <h3>U3. Context compiler and bundle contract</h3>
+        <p>Compile append-only events into permission-aware bundles with source refs, hidden counts, omitted evidence, freshness, quality flags, and snapshot hash. Storefront-derived insights consume these bundles.</p>
+      </div>
+
+      <div class="unit">
+        <h3>U4. Storefront first surface adapter</h3>
+        <p>Define a small v1 storefront event set for browse, product intent, cart/bag, checkout milestone, adapter failure, and synthetic health events. Emit through the storefront context HTTP API wrapper, not legacy analytics.</p>
+      </div>
+
+      <div class="unit">
+        <h3>U5. Intelligence snapshot and artifact integration</h3>
+        <p>Copy compiled bundle fields into <code>intelligenceContextSnapshot</code>, update <code>capabilities/actions.ts</code> away from raw storefront analytics reads, and enforce artifact reads against recorded visibility and source refs.</p>
+      </div>
+
+      <div class="unit">
+        <h3>U6. Adapter authoring documentation and gates</h3>
+        <p>Document the envelope, registry responsibilities, compiler responsibilities, visibility, synthetic handling, event versioning, and test checklist for future surfaces.</p>
+      </div>
+    </section>
+
+    <section id="validation">
+      <h2>Validation</h2>
+      <ul>
+        <li>Primitive validator and schema tests.</li>
+        <li>Registry version acceptance and unknown-event rejection tests.</li>
+        <li>Idempotent append tests.</li>
+        <li>Same-key/different-hash idempotency conflict tests.</li>
+        <li>Cross-customer/session/cart/checkout/order subject spoofing tests.</li>
+        <li>Retention class, expiration/archive, and deletion/anonymization tests.</li>
+        <li>Rejected or unauthorized rows are non-compilable and unauthorized payloads are not retained.</li>
+        <li>Compiler freshness, stale-state, and synthetic handling tests.</li>
+        <li>Permission/redaction and hidden-source tests.</li>
+        <li>Storefront browse, cart, checkout, failure, and synthetic fixture tests.</li>
+        <li>Non-storefront contract fixture proving the envelope is not storefront-shaped.</li>
+        <li>Integration test from storefront event append to compiled bundle to <code>intelligenceContextSnapshot</code>.</li>
+        <li><code>bun run graphify:rebuild</code> and <code>bun run graphify:check</code> after code changes.</li>
+      </ul>
+    </section>
+
+    <section id="risks">
+      <h2>Risks</h2>
+      <table>
+        <thead>
+          <tr><th>Risk</th><th>Mitigation</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Primitive layer becomes a second business ledger.</td><td>Store minimized event/evidence data and keep source ledgers authoritative.</td></tr>
+          <tr><td>Storefront taxonomy leaks into the base contract.</td><td>Put taxonomy and payload validators in adapter files only.</td></tr>
+          <tr><td>Event volume creates expensive reads.</td><td>Use bounded windows and tenant/scope-first indexes tied to proven reads.</td></tr>
+          <tr><td>Hidden customer, payment, staff, or support data leaks.</td><td>Enforce server-side visibility in append, compile, and read paths.</td></tr>
+          <tr><td>Client-supplied subjects poison another customer or order's context.</td><td>Treat refs as claims until server-derived or corroborated and test spoofing paths.</td></tr>
+          <tr><td>Append-only customer/session behavior becomes an indefinite ledger.</td><td>Add retention class, expiration/archive fields, deletion/anonymization semantics, and a retention index before production writes.</td></tr>
+          <tr><td>Bad client versions poison context.</td><td>Server registry rejects unsupported versions and payloads.</td></tr>
+          <tr><td>Stale context looks current.</td><td>Record windows, hashes, stale triggers, TTLs, and artifact stale/superseded state.</td></tr>
+        </tbody>
+      </table>
+    </section>
+  </main>
+</body>
+</html>

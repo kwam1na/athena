@@ -122,6 +122,9 @@ import {
   scheduledRunLedgerSchema,
 } from "./schemas/automation";
 import {
+  contextEventSchema,
+} from "./schemas/contextTracking";
+import {
   intelligenceArtifactSchema,
   intelligenceContextSnapshotSchema,
   intelligenceProviderInvocationSchema,
@@ -219,6 +222,33 @@ const schema = defineSchema({
     ])
     .index("by_expiresAt", ["expiresAt"]),
   athenaUser: defineTable(athenaUserSchema),
+  contextEvent: defineTable(contextEventSchema)
+    .index("by_storeId_surface_idempotencyKey", [
+      "storeId",
+      "surface",
+      "idempotencyKey",
+    ])
+    .index("by_storeId_surface_subject_occurredAt", [
+      "storeId",
+      "surface",
+      "primarySubjectType",
+      "primarySubjectId",
+      "occurredAt",
+    ])
+    .index("by_storeId_surface_session_occurredAt", [
+      "storeId",
+      "surface",
+      "sessionRefKind",
+      "sessionRefId",
+      "occurredAt",
+    ])
+    .index("by_storeId_surface_status_occurredAt", [
+      "storeId",
+      "surface",
+      "status",
+      "occurredAt",
+    ])
+    .index("by_retentionClass_expiresAt", ["retentionClass", "expiresAt"]),
   intelligenceRun: defineTable(intelligenceRunSchema)
     .index("by_storeId_capability_status", ["storeId", "capability", "status"])
     .index("by_storeId_capability_debugSubject_createdAt", [

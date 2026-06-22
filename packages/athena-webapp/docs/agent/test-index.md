@@ -29,6 +29,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`convex/cashControls/registerSessionTraceLifecycle.test.ts`](../../convex/cashControls/registerSessionTraceLifecycle.test.ts)
 - [`convex/cashControls/registerSessions.test.ts`](../../convex/cashControls/registerSessions.test.ts)
 - [`convex/cloudflare/r2.test.ts`](../../convex/cloudflare/r2.test.ts)
+- [`convex/contextTracking/eventDefinitions.test.ts`](../../convex/contextTracking/eventDefinitions.test.ts)
 - [`convex/convexAuditScript.test.ts`](../../convex/convexAuditScript.test.ts)
 - [`convex/convexPaginationAntiPatternCheck.test.ts`](../../convex/convexPaginationAntiPatternCheck.test.ts)
 - [`convex/crons.test.ts`](../../convex/crons.test.ts)
@@ -41,6 +42,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`convex/customerMessaging/whatsappConfig.test.ts`](../../convex/customerMessaging/whatsappConfig.test.ts)
 - [`convex/emails/PosReceiptEmail.test.tsx`](../../convex/emails/PosReceiptEmail.test.tsx)
 - [`convex/http/domains/core/routes/storefrontHidden.test.ts`](../../convex/http/domains/core/routes/storefrontHidden.test.ts)
+- [`convex/http/domains/core/routes/trackingEvents.test.ts`](../../convex/http/domains/core/routes/trackingEvents.test.ts)
 - [`convex/http/domains/customerChannel/routes/security.test.ts`](../../convex/http/domains/customerChannel/routes/security.test.ts)
 - [`convex/http/domains/customerChannel/routes/storefrontCors.test.ts`](../../convex/http/domains/customerChannel/routes/storefrontCors.test.ts)
 - [`convex/http/health.test.ts`](../../convex/http/health.test.ts)
@@ -187,6 +189,7 @@ This index enumerates the current automated test files and ties them back to the
 
 - [`shared/commandResult.test.ts`](../../shared/commandResult.test.ts)
 - [`shared/currencyFormatter.test.ts`](../../shared/currencyFormatter.test.ts)
+- [`shared/intelligence/contextTracking.test.ts`](../../shared/intelligence/contextTracking.test.ts)
 - [`shared/registerSessionStatus.test.ts`](../../shared/registerSessionStatus.test.ts)
 - [`shared/staffDisplayName.test.ts`](../../shared/staffDisplayName.test.ts)
 

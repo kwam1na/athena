@@ -12,6 +12,7 @@ import {
   productRoutes,
   storeRoutes,
   subcategoryRoutes,
+  trackingEventRoutes,
 } from "./http/domains/core/routes";
 import {
   onlineOrderRoutes,
@@ -69,6 +70,8 @@ app.route("/webhooks/mtn-momo", mtnMomoRoutes);
 app.route("/webhooks/whatsapp", whatsappMessagingRoutes);
 
 app.route("/analytics", analyticsRoutes);
+
+app.route("/tracking-events", trackingEventRoutes);
 
 app.route("/auth", authRoutes);
 

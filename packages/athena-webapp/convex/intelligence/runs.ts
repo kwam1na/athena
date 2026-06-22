@@ -249,6 +249,21 @@ export const recordContextSnapshot = internalMutation({
     snapshotHash: v.string(),
     payloadSummary: payloadValidator,
     payloadRedaction: v.optional(v.string()),
+    bundleKind: v.optional(v.string()),
+    bundleVersion: v.optional(v.number()),
+    freshness: v.optional(
+      v.union(
+        v.literal("current"),
+        v.literal("stale"),
+        v.literal("partial"),
+        v.literal("failed"),
+      ),
+    ),
+    hiddenSourceCount: v.optional(v.number()),
+    omittedEvidenceCount: v.optional(v.number()),
+    redactionMode: v.optional(v.string()),
+    qualityFlags: v.optional(v.array(v.string())),
+    limitedEvidence: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const run = await ctx.db.get("intelligenceRun", args.runId);
@@ -270,6 +285,14 @@ export const recordContextSnapshot = internalMutation({
       snapshotHash: args.snapshotHash,
       payloadSummary: args.payloadSummary,
       payloadRedaction: args.payloadRedaction,
+      bundleKind: args.bundleKind,
+      bundleVersion: args.bundleVersion,
+      freshness: args.freshness,
+      hiddenSourceCount: args.hiddenSourceCount,
+      omittedEvidenceCount: args.omittedEvidenceCount,
+      redactionMode: args.redactionMode,
+      qualityFlags: args.qualityFlags,
+      limitedEvidence: args.limitedEvidence,
       createdAt: now,
     });
 

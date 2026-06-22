@@ -18,12 +18,11 @@ import {
   createTanStackStructuredTextProvider,
 } from "../providers";
 import {
-  buildSnapshotHash,
-  buildSourceRefs,
-  buildStoreInsightsPrompt,
-  buildUserInsightsPrompt,
+  buildStoreInsightsPromptFromContextBundle,
+  buildUserInsightsPromptFromContextBundle,
   hasEvidenceBackedRecommendations,
   type IntelligenceSourceRef,
+  type InsightContextBundle,
   normalizeStoreInsightsOutput,
   normalizeUserInsightsOutput,
 } from "./insights";
@@ -149,13 +148,13 @@ export const generateStoreInsights = action({
       internal.intelligence.access.requireStoreFullAdmin,
       { storeId: args.storeId },
     );
-    const analytics = await ctx.runQuery(internal.storeFront.analytics.getAllInternal, {
-      storeId: args.storeId,
-    });
-    const built = buildStoreInsightsPrompt(analytics);
-    const snapshotHash = buildSnapshotHash(built.snapshot);
-    const sourceRefs = buildSourceRefs(analytics);
-    const dataWindow = getDataWindow(analytics);
+    const bundle: InsightContextBundle = await ctx.runQuery(
+      internal.contextTracking.contextBundles.compileStoreInsightsContextBundle,
+      { storeId: args.storeId },
+    );
+    const built = buildStoreInsightsPromptFromContextBundle(bundle);
+    const snapshotHash = bundle.snapshotHash;
+    const sourceRefs = bundle.sourceRefs;
 
     const runIdResult = await createIntelligenceRun(ctx, {
       storeId: args.storeId,
@@ -171,8 +170,8 @@ export const generateStoreInsights = action({
       debugSubjectTable: "store",
       debugSubjectId: String(args.storeId),
       sourceRefs,
-      dataWindowStartAt: dataWindow.startAt,
-      dataWindowEndAt: dataWindow.endAt,
+      dataWindowStartAt: bundle.dataWindowStartAt,
+      dataWindowEndAt: bundle.dataWindowEndAt,
     });
     if (runIdResult.kind === "error") return runIdResult;
     const runId = runIdResult.runId;
@@ -184,7 +183,8 @@ export const generateStoreInsights = action({
         runId,
         snapshotHash,
         payloadSummary: built.snapshot,
-        payloadRedaction: "analytics rows compacted; user contact fields omitted",
+        payloadRedaction: bundle.payloadRedaction,
+        ...getBundleSnapshotFields(bundle),
       },
     );
 
@@ -224,7 +224,8 @@ export const generateStoreInsights = action({
       device_distribution: built.snapshot.deviceDistribution,
       activity_trend: built.snapshot.activityTrend,
     });
-    const limitedEvidence = !hasEvidenceBackedRecommendations(payload, sourceRefs);
+    const limitedEvidence =
+      bundle.limitedEvidence || !hasEvidenceBackedRecommendations(payload, sourceRefs);
 
     await recordProviderSucceeded(ctx, {
       invocationId: providerInvocationId,
@@ -268,18 +269,13 @@ export const generateUserInsights = action({
       internal.intelligence.access.requireStoreFullAdmin,
       { storeId: args.storeId },
     );
-    const analytics = await ctx.runQuery(
-      internal.storeFront.user.getStoreUserActivityInternal,
-      { id: args.storeFrontUserId, storeId: args.storeId },
+    const bundle: InsightContextBundle = await ctx.runQuery(
+      internal.contextTracking.contextBundles.compileUserInsightsContextBundle,
+      { storeFrontUserId: args.storeFrontUserId, storeId: args.storeId },
     );
-    const built = buildUserInsightsPrompt(analytics);
-    const snapshotHash = buildSnapshotHash(built.snapshot);
-    const sourceRefs = buildSourceRefs(analytics);
-    const dataWindow = getDataWindow(analytics);
-    const actorSourceRef = {
-      table: "storeFrontActor",
-      id: String(args.storeFrontUserId),
-    };
+    const built = buildUserInsightsPromptFromContextBundle(bundle);
+    const snapshotHash = bundle.snapshotHash;
+    const sourceRefs = bundle.sourceRefs;
 
     const runIdResult = await createIntelligenceRun(ctx, {
       storeId: args.storeId,
@@ -292,11 +288,11 @@ export const generateUserInsights = action({
       principalKind: "athenaUser",
       actorRef: String(access.athenaUserId),
       visibilityMode: "store_admin",
-      debugSubjectTable: actorSourceRef.table,
-      debugSubjectId: actorSourceRef.id,
-      sourceRefs: [actorSourceRef, ...sourceRefs],
-      dataWindowStartAt: dataWindow.startAt,
-      dataWindowEndAt: dataWindow.endAt,
+      debugSubjectTable: "storeFrontActor",
+      debugSubjectId: String(args.storeFrontUserId),
+      sourceRefs,
+      dataWindowStartAt: bundle.dataWindowStartAt,
+      dataWindowEndAt: bundle.dataWindowEndAt,
     });
     if (runIdResult.kind === "error") return runIdResult;
     const runId = runIdResult.runId;
@@ -308,7 +304,8 @@ export const generateUserInsights = action({
         runId,
         snapshotHash,
         payloadSummary: built.snapshot,
-        payloadRedaction: "analytics rows compacted; contact fields omitted",
+        payloadRedaction: bundle.payloadRedaction,
+        ...getBundleSnapshotFields(bundle),
       },
     );
 
@@ -346,7 +343,8 @@ export const generateUserInsights = action({
     }
 
     const payload = normalizeUserInsightsOutput(providerResult.output);
-    const limitedEvidence = !hasEvidenceBackedRecommendations(payload, sourceRefs);
+    const limitedEvidence =
+      bundle.limitedEvidence || !hasEvidenceBackedRecommendations(payload, sourceRefs);
 
     await recordProviderSucceeded(ctx, {
       invocationId: providerInvocationId,
@@ -598,13 +596,15 @@ function defaultFakeOutput() {
   };
 }
 
-function getDataWindow(analytics: Array<{ _creationTime: number }>) {
-  if (analytics.length === 0) return {};
-
-  const times = analytics.map((item) => item._creationTime);
-
+function getBundleSnapshotFields(bundle: InsightContextBundle) {
   return {
-    startAt: Math.min(...times),
-    endAt: Math.max(...times),
+    bundleKind: bundle.bundleKind,
+    bundleVersion: bundle.bundleVersion,
+    freshness: bundle.freshness,
+    hiddenSourceCount: bundle.hiddenSourceCount,
+    omittedEvidenceCount: bundle.omittedEvidenceCount,
+    redactionMode: bundle.redactionMode,
+    qualityFlags: bundle.qualityFlags,
+    limitedEvidence: bundle.limitedEvidence,
   };
 }
