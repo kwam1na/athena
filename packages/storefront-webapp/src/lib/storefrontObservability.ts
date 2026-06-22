@@ -1,4 +1,8 @@
 import { postAnalytics } from "@/api/analytics";
+import {
+  getStorefrontContextEventInput,
+  trackStorefrontContextEvent,
+} from "@/lib/storefrontContextEvents";
 import { z } from "zod";
 
 export const STOREFRONT_OBSERVABILITY_ACTION = "storefront_observability";
@@ -107,6 +111,10 @@ type StorefrontObservabilityTransportPayload = Parameters<
 type StorefrontObservabilityTransport = (
   payload: StorefrontObservabilityTransportPayload,
 ) => Promise<unknown>;
+
+type StorefrontContextTransport = Parameters<
+  typeof trackStorefrontContextEvent
+>[0]["transport"];
 
 export function isSyntheticMonitorOrigin(origin?: string | null) {
   return origin === SYNTHETIC_MONITOR_ORIGIN;
@@ -237,11 +245,26 @@ export async function trackStorefrontEvent({
   event,
   baseContext,
   transport = postAnalytics,
+  contextTransport,
 }: {
   event: StorefrontObservabilityEvent;
   baseContext: StorefrontObservabilityBaseContext;
   transport?: StorefrontObservabilityTransport;
+  contextTransport?: StorefrontContextTransport;
 }) {
+  const contextEventInput = getStorefrontContextEventInput({
+    event,
+    baseContext,
+  });
+
+  if (contextEventInput) {
+    return trackStorefrontContextEvent({
+      eventInput: contextEventInput,
+      baseContext,
+      transport: contextTransport,
+    });
+  }
+
   const payload = createStorefrontObservabilityPayload(event, baseContext);
 
   return transport(payload);

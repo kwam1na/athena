@@ -427,22 +427,32 @@ describe("intelligence debug run selection", () => {
       } as any,
       snapshot: {
         _id: "snapshot-1",
+        bundleKind: "store_insights_context",
+        bundleVersion: 1,
         createdAt: 11,
-        payloadRedaction: "user contact omitted",
+        dataWindowEndAt: 15,
+        dataWindowStartAt: 10,
+        freshness: "current",
+        hiddenSourceCount: 0,
+        limitedEvidence: true,
+        omittedEvidenceCount: 1,
+        payloadRedaction: "context events compacted; unsafe fields omitted",
         payloadSummary: {
-          compactAnalytics: [{ action: "viewed" }],
+          compactContextEvents: [{ eventId: "storefront.product_viewed" }],
           nested: { hidden: "detail" },
         },
+        qualityFlags: ["context_events_compiled", "context_events_omitted"],
+        redactionMode: "compact_no_contact_fields",
         snapshotHash: "hash-1",
-        sourceRefs: [{ table: "store", id: "store-1" }],
+        sourceRefs: [{ table: "contextEvent", id: "context_event_1" }],
       } as any,
       artifact: {
         _id: "artifact-1",
         confidence: 0.7,
         createdAt: 12,
         evidenceRefs: [
-          { table: "storeFrontAnalytics", id: "event-1" },
-          { table: "storeFrontAnalytics", id: "event-2" },
+          { table: "contextEvent", id: "context_event_1" },
+          { table: "contextEvent", id: "context_event_2" },
         ],
         limitedEvidence: true,
         status: "ready",
@@ -478,8 +488,21 @@ describe("intelligence debug run selection", () => {
       retryable: true,
     });
     expect(payload.snapshot?.sourceRefCount).toBe(1);
+    expect(payload.snapshot).toMatchObject({
+      bundleKind: "store_insights_context",
+      bundleVersion: 1,
+      dataWindowEndAt: 15,
+      dataWindowStartAt: 10,
+      freshness: "current",
+      hiddenSourceCount: 0,
+      limitedEvidence: true,
+      omittedEvidenceCount: 1,
+      payloadRedaction: "context events compacted; unsafe fields omitted",
+      qualityFlags: ["context_events_compiled", "context_events_omitted"],
+      redactionMode: "compact_no_contact_fields",
+    });
     expect(payload.snapshot?.payloadSummary).toEqual({
-      compactAnalytics: { type: "array", count: 1 },
+      compactContextEvents: { type: "array", count: 1 },
       nested: { type: "object", keys: ["hidden"] },
     });
     expect(payload.artifact?.evidenceCount).toBe(2);

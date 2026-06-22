@@ -2,7 +2,9 @@ import { Hono } from "hono";
 import { HonoWithConvex } from "convex-helpers/server/hono";
 
 import { internal } from "../../../../_generated/api";
+import { Id } from "../../../../_generated/dataModel";
 import { ActionCtx } from "../../../../_generated/server";
+import { SYNTHETIC_MONITOR_ORIGIN } from "../../../../storeFront/syntheticMonitor";
 import {
   getStoreDataFromRequest,
   getStorefrontActorFromRequest,
@@ -26,33 +28,22 @@ trackingEventRoutes.post("/", async (c) => {
     return c.json({ error: "Tracking surface not available on this route" }, 400);
   }
 
-  const storefrontActor = getStorefrontActorFromRequest(c);
-  const actorRef = storefrontActor
-    ? { kind: storefrontActor.kind, id: String(storefrontActor.id) }
-    : undefined;
-  const primarySubject = derivePrimarySubject(body.eventId, body.payload ?? {});
+  const appendArgs = buildServerContextTrackingEnvelope({
+    body,
+    storeId,
+    organizationId,
+    originHeader: c.req.header("origin"),
+    syntheticHeader: c.req.header("x-athena-synthetic-monitor"),
+    ipAddress: readTrackingIpAddress(
+      c.req.header("x-forwarded-for"),
+      c.req.header("x-real-ip"),
+    ),
+    storefrontActor: getStorefrontActorFromRequest(c),
+  });
 
   const result = await c.env.runMutation(
     internal.contextTracking.contextEvents.appendContextEvent,
-    {
-      storeId,
-      organizationId,
-      surface: body.surface,
-      eventId: body.eventId,
-      schemaVersion: body.schemaVersion,
-      idempotencyKey: body.idempotencyKey,
-      occurredAt: body.occurredAt,
-      origin: body.origin,
-      payload: body.payload ?? {},
-      actorRef,
-      sessionRef: sanitizeSessionRef(body.sessionRef),
-      primarySubject,
-      subjectRefs: primarySubject ? [primarySubject] : undefined,
-      sourceRefs: [],
-      visibilityMode: "store_admin",
-      retentionClass: "standard",
-      synthetic: false,
-    },
+    appendArgs,
   );
 
   if (result.kind === "rejected") {
@@ -71,6 +62,50 @@ trackingEventRoutes.post("/", async (c) => {
 
 export { trackingEventRoutes };
 
+export function buildServerContextTrackingEnvelope(input: {
+  body: Record<string, unknown>;
+  storeId: Id<"store">;
+  organizationId?: Id<"organization">;
+  originHeader?: string;
+  syntheticHeader?: string;
+  ipAddress?: string;
+  storefrontActor?: { kind: "storefrontUser" | "guest"; id: unknown };
+}) {
+  const payload = readPayload(input.body.payload);
+  const primarySubject = derivePrimarySubject(input.body.eventId, payload);
+  const synthetic = isAcceptedSyntheticContext(input.body, input.syntheticHeader);
+  const actorRef = input.storefrontActor
+    ? {
+        kind: input.storefrontActor.kind,
+        id: String(input.storefrontActor.id),
+      }
+    : undefined;
+
+  return {
+    storeId: input.storeId,
+    organizationId: input.organizationId,
+    surface: "storefront" as const,
+    eventId: readRequiredString(input.body.eventId),
+    schemaVersion: readRequiredNumber(input.body.schemaVersion),
+    idempotencyKey: readRequiredString(input.body.idempotencyKey),
+    occurredAt: readRequiredNumber(input.body.occurredAt),
+    origin: synthetic ? SYNTHETIC_MONITOR_ORIGIN : input.originHeader,
+    payload,
+    actorRef,
+    sessionRef: undefined,
+    primarySubject,
+    subjectRefs: primarySubject ? [primarySubject] : undefined,
+    sourceRefs: [],
+    visibilityMode: "store_admin" as const,
+    retentionClass: "standard" as const,
+    synthetic,
+    abusePartitionKey: buildAbusePartitionKey({
+      storeId: input.storeId,
+      actorRef,
+    }),
+  };
+}
+
 export function isAllowedTrackingOrigin(origin?: string) {
   if (!origin) return false;
 
@@ -88,11 +123,44 @@ export function isAllowedTrackingOrigin(origin?: string) {
   }
 }
 
-function sanitizeSessionRef(value: unknown) {
-  if (!isRecord(value) || value.kind !== "storefront_session") return undefined;
-  if (typeof value.id !== "string" || value.id.length > 120) return undefined;
+function isAcceptedSyntheticContext(
+  body: Record<string, unknown>,
+  syntheticHeader?: string,
+) {
+  return (
+    body.origin === SYNTHETIC_MONITOR_ORIGIN &&
+    syntheticHeader === "true"
+  );
+}
 
-  return { kind: "storefront_session" as const, id: value.id };
+function readPayload(value: unknown) {
+  return isRecord(value) ? value : {};
+}
+
+function readRequiredString(value: unknown) {
+  return typeof value === "string" ? value : "";
+}
+
+function readRequiredNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+function readTrackingIpAddress(
+  forwardedFor?: string,
+  realIp?: string,
+) {
+  const firstForwarded = forwardedFor?.split(",", 1)[0]?.trim();
+  return firstForwarded || realIp;
+}
+
+function buildAbusePartitionKey(input: {
+  storeId: Id<"store">;
+  actorRef?: { kind: "storefrontUser" | "guest"; id: string };
+}) {
+  if (input.actorRef) {
+    return `${input.storeId}:actor:${input.actorRef.kind}:${input.actorRef.id}`;
+  }
+  return `${input.storeId}:anonymous`;
 }
 
 export function derivePrimarySubject(

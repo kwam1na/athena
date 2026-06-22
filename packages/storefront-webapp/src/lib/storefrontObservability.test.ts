@@ -185,8 +185,9 @@ describe("storefront observability", () => {
     ).toThrow(/step/i);
   });
 
-  it("emits representative events through the shared helper", async () => {
-    const transport = vi.fn().mockResolvedValue({ ok: true });
+  it("emits context-bearing events through the tracking-events helper", async () => {
+    const legacyTransport = vi.fn().mockResolvedValue({ ok: true });
+    const contextTransport = vi.fn().mockResolvedValue({ ok: true });
 
     await trackStorefrontEvent({
       event: {
@@ -194,7 +195,7 @@ describe("storefront observability", () => {
         step: "bag_view",
         status: "viewed",
         context: {
-          checkoutSessionId: "session_123",
+          bagId: "bag_123",
         },
       },
       baseContext: {
@@ -203,22 +204,64 @@ describe("storefront observability", () => {
         sessionId: "session_ctx_123",
         userType: "authenticated",
       },
-      transport,
+      transport: legacyTransport,
+      contextTransport,
     });
 
+    expect(legacyTransport).not.toHaveBeenCalled();
+    expect(contextTransport).toHaveBeenCalledWith(
+      expect.objectContaining({
+        surface: "storefront",
+        eventId: "storefront.cart_changed",
+        payload: {
+          cartId: "bag_123",
+          change: "viewed",
+        },
+        sessionRef: {
+          kind: "storefront_session",
+          id: "session_ctx_123",
+        },
+      }),
+    );
+  });
+
+  it("keeps non-context observability events on the legacy helper", async () => {
+    const transport = vi.fn().mockResolvedValue({ ok: true });
+    const contextTransport = vi.fn().mockResolvedValue({ ok: true });
+
+    await trackStorefrontEvent({
+      event: {
+        journey: "auth",
+        step: "login_entry",
+        status: "viewed",
+        context: {
+          entryOrigin: "guest-rewards",
+        },
+      },
+      baseContext: {
+        route: "/login",
+        origin: "homepage",
+        sessionId: "session_ctx_123",
+        userType: "authenticated",
+      },
+      transport,
+      contextTransport,
+    });
+
+    expect(contextTransport).not.toHaveBeenCalled();
     expect(transport).toHaveBeenCalledWith({
       action: STOREFRONT_OBSERVABILITY_ACTION,
       origin: "homepage",
       productId: undefined,
       data: {
         schemaVersion: 1,
-        journey: "bag",
-        step: "bag_view",
+        journey: "auth",
+        step: "login_entry",
         status: "viewed",
-        route: "/shop/bag",
+        route: "/login",
         userType: "authenticated",
         sessionId: "session_ctx_123",
-        checkoutSessionId: "session_123",
+        entryOrigin: "guest-rewards",
       },
     });
   });

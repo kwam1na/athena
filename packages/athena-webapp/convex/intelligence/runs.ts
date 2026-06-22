@@ -665,9 +665,19 @@ export function buildLatestRunDebugPayload({
     snapshot: snapshot
       ? {
           _id: snapshot._id,
+          bundleKind: snapshot.bundleKind,
+          bundleVersion: snapshot.bundleVersion,
           createdAt: snapshot.createdAt,
+          dataWindowEndAt: snapshot.dataWindowEndAt,
+          dataWindowStartAt: snapshot.dataWindowStartAt,
+          freshness: snapshot.freshness,
+          hiddenSourceCount: snapshot.hiddenSourceCount,
+          limitedEvidence: snapshot.limitedEvidence,
+          omittedEvidenceCount: snapshot.omittedEvidenceCount,
           payloadRedaction: snapshot.payloadRedaction,
           payloadSummary: summarizePayload(snapshot.payloadSummary),
+          qualityFlags: snapshot.qualityFlags,
+          redactionMode: snapshot.redactionMode,
           snapshotHash: snapshot.snapshotHash,
           sourceRefCount: snapshot.sourceRefs.length,
         }

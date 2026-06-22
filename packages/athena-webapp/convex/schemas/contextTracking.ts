@@ -21,6 +21,20 @@ export const contextRetentionClassValidator = v.union(
   v.literal("diagnostic"),
 );
 
+export const historicalContextImportStatusValidator = v.union(
+  v.literal("active"),
+  v.literal("quarantined"),
+  v.literal("revoked"),
+);
+
+export const historicalContextImportRunStatusValidator = v.union(
+  v.literal("dry_run_recorded"),
+  v.literal("write_planned"),
+  v.literal("write_applied"),
+  v.literal("quarantined"),
+  v.literal("revoked"),
+);
+
 export const contextActorRefValidator = v.object({
   kind: v.union(
     v.literal("athenaUser"),
@@ -66,6 +80,11 @@ export const contextEventAppendArgsValidator = {
   visibilityMode: intelligenceVisibilityModeValidator,
   retentionClass: contextRetentionClassValidator,
   synthetic: v.optional(v.boolean()),
+  abusePartitionKey: v.optional(v.string()),
+  historicalImportRunId: v.optional(v.string()),
+  historicalImportBatchId: v.optional(v.string()),
+  historicalImportStatus: v.optional(historicalContextImportStatusValidator),
+  nonCompilable: v.optional(v.boolean()),
 };
 
 export const contextEventSchema = v.object({
@@ -86,6 +105,8 @@ export const contextEventSchema = v.object({
   nonCompilable: v.boolean(),
   payload: v.record(v.string(), v.any()),
   actorRef: v.optional(contextActorRefValidator),
+  actorRefKind: v.optional(v.string()),
+  actorRefId: v.optional(v.string()),
   sessionRefKind: v.optional(v.string()),
   sessionRefId: v.optional(v.string()),
   primarySubjectType: v.optional(v.string()),
@@ -95,5 +116,35 @@ export const contextEventSchema = v.object({
   visibilityMode: intelligenceVisibilityModeValidator,
   retentionClass: contextRetentionClassValidator,
   synthetic: v.optional(v.boolean()),
+  abusePartitionKey: v.optional(v.string()),
+  historicalImportRunId: v.optional(v.string()),
+  historicalImportBatchId: v.optional(v.string()),
+  historicalImportStatus: v.optional(historicalContextImportStatusValidator),
+  importedAt: v.optional(v.number()),
   expiresAt: v.optional(v.number()),
+});
+
+export const contextEventImportRunSchema = v.object({
+  importRunId: v.string(),
+  importBatchId: v.optional(v.string()),
+  runKey: v.string(),
+  storeId: v.id("store"),
+  organizationId: v.optional(v.id("organization")),
+  mode: v.union(v.literal("dry_run"), v.literal("write")),
+  status: historicalContextImportRunStatusValidator,
+  windowStartAt: v.optional(v.number()),
+  windowEndAt: v.optional(v.number()),
+  cursor: v.optional(v.string()),
+  nextCursor: v.optional(v.string()),
+  reviewedMappingApproval: v.optional(
+    v.object({
+      approvedBy: v.string(),
+      approvedAt: v.number(),
+      mappingVersion: v.string(),
+    }),
+  ),
+  report: v.record(v.string(), v.any()),
+  quarantineReason: v.optional(v.string()),
+  createdAt: v.number(),
+  updatedAt: v.number(),
 });

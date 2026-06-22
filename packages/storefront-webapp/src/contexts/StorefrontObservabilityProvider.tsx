@@ -4,9 +4,13 @@ import {
   createStorefrontObservabilityContext,
   trackStorefrontEvent,
 } from "@/lib/storefrontObservability";
+import {
+  createStorefrontRouteViewedContextEvent,
+  trackStorefrontContextEvent,
+} from "@/lib/storefrontContextEvents";
 import { useAuth } from "@/hooks/useAuth";
 import { useRouterState, useSearch } from "@tanstack/react-router";
-import React, { createContext, useContext } from "react";
+import React, { createContext, useContext, useEffect, useRef } from "react";
 
 type StorefrontObservabilityContextValue = {
   baseContext: StorefrontObservabilityBaseContext;
@@ -27,6 +31,7 @@ export function StorefrontObservabilityProvider({
   });
   const { origin, utm_source } = useSearch({ strict: false });
   const { userId, guestId } = useAuth();
+  const trackedRoutes = useRef(new Set<string>());
 
   const baseContext = createStorefrontObservabilityContext({
     pathname,
@@ -39,6 +44,20 @@ export function StorefrontObservabilityProvider({
     storage:
       typeof window === "undefined" ? undefined : window.sessionStorage,
   });
+
+  useEffect(() => {
+    const routeKey = `${baseContext.sessionId}:${baseContext.route}`;
+    if (trackedRoutes.current.has(routeKey)) return;
+
+    trackedRoutes.current.add(routeKey);
+
+    void trackStorefrontContextEvent({
+      eventInput: createStorefrontRouteViewedContextEvent({
+        baseContext,
+      }),
+      baseContext,
+    });
+  }, [baseContext]);
 
   return (
     <StorefrontObservabilityContext.Provider

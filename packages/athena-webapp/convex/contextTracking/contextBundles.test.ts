@@ -1,44 +1,65 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  buildStoreInsightsContextBundleFromAnalytics,
-  buildUserInsightsContextBundleFromAnalytics,
+  buildStoreInsightsContextBundleFromContextEvents,
+  buildUserInsightsContextBundleFromContextEvents,
 } from "./contextBundles";
 
-type AnalyticsRow = Parameters<
-  typeof buildStoreInsightsContextBundleFromAnalytics
+type ContextEventRow = Parameters<
+  typeof buildStoreInsightsContextBundleFromContextEvents
 >[0][number];
 
-function analyticsRow(overrides: Partial<AnalyticsRow> = {}): AnalyticsRow {
+function contextEvent(
+  overrides: Partial<ContextEventRow> = {},
+): ContextEventRow {
   return {
-    _id: "analytics_1" as AnalyticsRow["_id"],
+    _id: "context_event_1" as ContextEventRow["_id"],
     _creationTime: 1_700_000_000_000,
-    storeId: "store_1" as AnalyticsRow["storeId"],
-    storeFrontUserId: "guest_1" as AnalyticsRow["storeFrontUserId"],
-    action: "viewed_product",
-    data: {},
-    device: "mobile",
-    productId: "product_1" as AnalyticsRow["productId"],
+    storeId: "store_1" as ContextEventRow["storeId"],
+    organizationId: "org_1" as ContextEventRow["organizationId"],
+    surface: "storefront",
+    eventId: "storefront.product_viewed",
+    schemaVersion: 1,
+    idempotencyKey: "key_1",
+    envelopeHash: "envelope_hash",
+    payloadHash: "payload_hash",
+    occurredAt: 1_700_000_000_000,
+    receivedAt: 1_700_000_000_100,
+    origin: "web",
+    status: "recorded",
+    nonCompilable: false,
+    payload: {
+      productId: "product_1",
+      categorySlug: "wigs",
+    },
+    actorRef: { kind: "guest", id: "guest_1" },
+    sessionRefKind: "storefront_session",
+    sessionRefId: "session_1",
+    primarySubjectType: "product",
+    primarySubjectId: "product_1",
+    subjectRefs: [{ type: "product", id: "product_1" }],
+    sourceRefs: [],
+    visibilityMode: "store_admin",
+    retentionClass: "standard",
+    synthetic: false,
     ...overrides,
   };
 }
 
-describe("context bundle storefront analytics compilation", () => {
-  it("builds store bundles from compiled historic analytics rows", () => {
-    const bundle = buildStoreInsightsContextBundleFromAnalytics([
-      analyticsRow({
-        _id: "analytics_valid" as AnalyticsRow["_id"],
-        _creationTime: 1_700_000_000_100,
-        data: { categorySlug: "wigs" },
+describe("contextEvent storefront bundle compilation", () => {
+  it("builds store bundles from recorded contextEvent rows only", () => {
+    const bundle = buildStoreInsightsContextBundleFromContextEvents([
+      contextEvent({
+        _id: "context_event_valid" as ContextEventRow["_id"],
+        occurredAt: 1_700_000_000_100,
       }),
-      analyticsRow({
-        _id: "analytics_invalid" as AnalyticsRow["_id"],
-        productId: undefined,
-        data: {},
+      contextEvent({
+        _id: "context_event_synthetic" as ContextEventRow["_id"],
+        synthetic: true,
       }),
-      analyticsRow({
-        _id: "analytics_synthetic" as AnalyticsRow["_id"],
-        origin: "synthetic_monitor",
+      contextEvent({
+        _id: "context_event_rejected" as ContextEventRow["_id"],
+        status: "rejected",
       }),
     ]);
 
@@ -47,39 +68,41 @@ describe("context bundle storefront analytics compilation", () => {
       freshness: "current",
       dataWindowStartAt: 1_700_000_000_100,
       dataWindowEndAt: 1_700_000_000_100,
-      hiddenSourceCount: 1,
-      omittedEvidenceCount: 1,
+      hiddenSourceCount: 2,
+      omittedEvidenceCount: 2,
       limitedEvidence: false,
     });
-    expect(bundle.qualityFlags).toEqual([
-      "legacy_analytics_compiled",
-      "legacy_analytics_omitted",
-    ]);
+    expect(bundle.qualityFlags).toContain("context_events_compiled");
+    expect(bundle.qualityFlags).toContain("context_events_omitted");
     expect(bundle.sourceRefs).toEqual([
       {
-        table: "analytics",
-        id: "analytics_valid",
+        table: "contextEvent",
+        id: "context_event_valid",
         label: "storefront.product_viewed",
       },
     ]);
-    expect(readCompactAnalytics(bundle)).toMatchObject([
+    expect(readCompactEvents(bundle)).toMatchObject([
       {
-        id: "analytics_valid",
-        contextEventId: "storefront.product_viewed",
+        id: "context_event_valid",
+        eventId: "storefront.product_viewed",
         contextSchemaVersion: 1,
         payload: { productId: "product_1", categorySlug: "wigs" },
       },
     ]);
   });
 
-  it("keeps user actor source refs separate from analytics evidence refs", () => {
-    const bundle = buildUserInsightsContextBundleFromAnalytics(
+  it("keeps user actor source refs separate from context evidence refs", () => {
+    const bundle = buildUserInsightsContextBundleFromContextEvents(
       [
-        analyticsRow({
-          _id: "analytics_user" as AnalyticsRow["_id"],
-          action: "added_product_to_bag",
-          productId: undefined,
-          data: { product: "product_1", quantity: 2 },
+        contextEvent({
+          _id: "context_event_user" as ContextEventRow["_id"],
+          eventId: "storefront.cart_changed",
+          payload: {
+            productId: "product_1",
+            quantity: 2,
+            change: "added",
+          },
+          actorRef: { kind: "guest", id: "guest_1" },
         }),
       ],
       { table: "guest", id: "guest_1" },
@@ -88,42 +111,84 @@ describe("context bundle storefront analytics compilation", () => {
     expect(bundle.sourceRefs).toEqual([
       { table: "guest", id: "guest_1" },
       {
-        table: "analytics",
-        id: "analytics_user",
+        table: "contextEvent",
+        id: "context_event_user",
         label: "storefront.cart_changed",
       },
     ]);
     expect(bundle.hiddenSourceCount).toBe(0);
-    expect(readCompactAnalytics(bundle)).toMatchObject([
+    expect(readCompactEvents(bundle)).toMatchObject([
       {
-        contextEventId: "storefront.cart_changed",
-        payload: { productId: "product_1", quantity: 2 },
+        eventId: "storefront.cart_changed",
+        payload: { productId: "product_1", quantity: 2, change: "added" },
       },
     ]);
   });
 
-  it("counts analytics evidence hidden behind the source-ref cap", () => {
-    const rows = Array.from({ length: 27 }, (_, index) =>
-      analyticsRow({
-        _id: `analytics_${index}` as AnalyticsRow["_id"],
-        _creationTime: 1_700_000_000_000 + index,
-        productId: `product_${index}` as AnalyticsRow["productId"],
+  it("includes imported historical context through contextEvent rows", () => {
+    const bundle = buildStoreInsightsContextBundleFromContextEvents([
+      contextEvent({
+        _id: "context_event_imported" as ContextEventRow["_id"],
+        historicalImportRunId: "import_1",
+        historicalImportStatus: "active",
+        sourceRefs: [
+          {
+            table: "analytics",
+            id: "analytics_1",
+            label: "storefront.product_viewed",
+          },
+        ],
       }),
-    );
+    ]);
 
-    const bundle = buildStoreInsightsContextBundleFromAnalytics(rows);
-
-    expect(bundle.sourceRefs).toHaveLength(25);
-    expect(bundle.hiddenSourceCount).toBe(2);
-    expect(bundle.omittedEvidenceCount).toBe(0);
+    expect(bundle.sourceRefs[0]).toMatchObject({
+      table: "contextEvent",
+      id: "context_event_imported",
+    });
+    expect(bundle.qualityFlags).toContain("historical_context_included");
   });
 
-  it("marks bundles partial when no storefront context can be compiled", () => {
-    const bundle = buildStoreInsightsContextBundleFromAnalytics([
-      analyticsRow({
-        productId: undefined,
-        data: {},
+  it("excludes quarantined historical import batches", () => {
+    const bundle = buildStoreInsightsContextBundleFromContextEvents([
+      contextEvent({
+        historicalImportRunId: "import_1",
+        historicalImportStatus: "quarantined",
       }),
+    ]);
+
+    expect(bundle).toMatchObject({
+      freshness: "partial",
+      limitedEvidence: true,
+      omittedEvidenceCount: 1,
+    });
+    expect(bundle.sourceRefs).toEqual([]);
+    expect(readCompactEvents(bundle)).toEqual([]);
+  });
+
+  it("omits unsafe payload keys and raw text from prompt snapshots", () => {
+    const bundle = buildStoreInsightsContextBundleFromContextEvents([
+      contextEvent({
+        payload: {
+          productId: "product_1",
+          rawUrl: "https://wigclub.store/?token=secret",
+          userAgent: "Mozilla/5.0",
+          note: "customer@example.com",
+          categorySlug: "wigs",
+        },
+      }),
+    ]);
+
+    const serialized = JSON.stringify(bundle.payloadSummary);
+    expect(serialized).toContain("product_1");
+    expect(serialized).toContain("wigs");
+    expect(serialized).not.toContain("token=secret");
+    expect(serialized).not.toContain("Mozilla");
+    expect(serialized).not.toContain("customer@example.com");
+  });
+
+  it("marks bundles partial when no context events can be compiled", () => {
+    const bundle = buildStoreInsightsContextBundleFromContextEvents([
+      contextEvent({ nonCompilable: true }),
     ]);
 
     expect(bundle).toMatchObject({
@@ -132,13 +197,11 @@ describe("context bundle storefront analytics compilation", () => {
       omittedEvidenceCount: 1,
       limitedEvidence: true,
     });
-    expect(bundle.qualityFlags).toEqual([
-      "no_storefront_context",
-      "legacy_analytics_omitted",
-    ]);
+    expect(bundle.qualityFlags).toContain("no_storefront_context");
+    expect(bundle.qualityFlags).toContain("context_events_omitted");
   });
 });
 
-function readCompactAnalytics(bundle: { payloadSummary: Record<string, unknown> }) {
-  return bundle.payloadSummary.compactAnalytics;
+function readCompactEvents(bundle: { payloadSummary: Record<string, unknown> }) {
+  return bundle.payloadSummary.compactContextEvents;
 }

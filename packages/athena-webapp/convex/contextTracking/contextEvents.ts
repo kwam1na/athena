@@ -11,6 +11,37 @@ import {
   validateRegisteredContextEventPayload,
 } from "./eventDefinitions";
 
+const ABUSE_WINDOW_MS = 60_000;
+const MAX_EVENTS_PER_ABUSE_WINDOW = 120;
+
+export function isContextEventWriteQuotaExceeded(recentEventCount: number) {
+  return recentEventCount >= MAX_EVENTS_PER_ABUSE_WINDOW;
+}
+
+export function selectContextEventAppendQuotaDecision(input: {
+  abusePartitionKey?: string;
+  recentEventCount: number;
+}) {
+  if (!input.abusePartitionKey) return "skip_quota_check";
+  return isContextEventWriteQuotaExceeded(input.recentEventCount)
+    ? "reject_quota_exceeded"
+    : "allow_write";
+}
+
+export function buildContextEventSemanticEnvelopeHash(args: {
+  payload: Record<string, unknown>;
+  [key: string]: unknown;
+}) {
+  const payloadHash = buildSnapshotHash(args.payload);
+
+  return buildSnapshotHash({
+    ...args,
+    occurredAt: undefined,
+    payloadHash,
+    payload: undefined,
+  });
+}
+
 export const appendContextEvent = internalMutation({
   args: contextEventAppendArgsValidator,
   returns: v.object({
@@ -39,11 +70,7 @@ export const appendContextEvent = internalMutation({
     }
 
     const payloadHash = buildSnapshotHash(args.payload);
-    const envelopeHash = buildSnapshotHash({
-      ...args,
-      payloadHash,
-      payload: undefined,
-    });
+    const envelopeHash = buildContextEventSemanticEnvelopeHash(args);
 
     const existing = await ctx.db
       .query("contextEvent")
@@ -75,6 +102,36 @@ export const appendContextEvent = internalMutation({
       };
     }
 
+    if (args.abusePartitionKey) {
+      const recentEvents = await ctx.db
+        .query("contextEvent")
+        .withIndex("by_storeId_surface_status_occurredAt", (q) =>
+          q
+            .eq("storeId", args.storeId)
+            .eq("surface", args.surface)
+            .eq("status", "recorded"),
+        )
+        .filter((q) =>
+          q.and(
+            q.eq(q.field("abusePartitionKey"), args.abusePartitionKey),
+            q.gte(q.field("receivedAt"), Date.now() - ABUSE_WINDOW_MS),
+          ),
+        )
+        .take(MAX_EVENTS_PER_ABUSE_WINDOW + 1);
+
+      if (
+        selectContextEventAppendQuotaDecision({
+          abusePartitionKey: args.abusePartitionKey,
+          recentEventCount: recentEvents.length,
+        }) === "reject_quota_exceeded"
+      ) {
+        return {
+          kind: "rejected" as const,
+          message: "Context event write quota exceeded.",
+        };
+      }
+    }
+
     const now = Date.now();
     const contextEventId = await ctx.db.insert("contextEvent", {
       storeId: args.storeId,
@@ -89,9 +146,11 @@ export const appendContextEvent = internalMutation({
       receivedAt: now,
       origin: args.origin,
       status: "recorded",
-      nonCompilable: false,
+      nonCompilable: args.nonCompilable ?? false,
       payload: args.payload,
       actorRef: args.actorRef,
+      actorRefKind: args.actorRef?.kind,
+      actorRefId: args.actorRef?.id,
       sessionRefKind: args.sessionRef?.kind,
       sessionRefId: args.sessionRef?.id,
       primarySubjectType: args.primarySubject?.type,
@@ -107,6 +166,11 @@ export const appendContextEvent = internalMutation({
       visibilityMode: registration.visibilityMode,
       retentionClass: registration.retentionClass,
       synthetic: args.synthetic,
+      abusePartitionKey: args.abusePartitionKey,
+      historicalImportRunId: args.historicalImportRunId,
+      historicalImportBatchId: args.historicalImportBatchId,
+      historicalImportStatus: args.historicalImportStatus,
+      importedAt: args.historicalImportRunId ? now : undefined,
       expiresAt:
         registration.retentionClass === "short_lived"
           ? now + 1000 * 60 * 60 * 24 * 30
