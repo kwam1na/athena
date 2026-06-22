@@ -4,6 +4,7 @@ import {
   screen,
   within,
 } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import React, {
   type AnchorHTMLAttributes,
   type ReactNode,
@@ -67,6 +68,36 @@ vi.mock("convex/react", () => ({
 
 vi.mock("@/hooks/useProtectedAdminPageState", () => ({
   useProtectedAdminPageState: mockedHooks.useProtectedAdminPageState,
+}));
+
+vi.mock("recharts", () => ({
+  Area: () => <path data-testid="store-pulse-area" />,
+  AreaChart: ({
+    children,
+    data = [],
+  }: {
+    children?: React.ReactNode;
+    data?: Array<{ displayDate?: string; displayLabel?: string }>;
+  }) => (
+    <svg
+      data-display-dates={data.map((day) => day.displayDate).join("|")}
+      data-display-labels={data.map((day) => day.displayLabel).join("|")}
+      data-testid="store-pulse-chart"
+    >
+      {children}
+    </svg>
+  ),
+  CartesianGrid: () => null,
+  XAxis: () => null,
+  YAxis: () => null,
+}));
+
+vi.mock("@/components/ui/chart", () => ({
+  ChartContainer: ({ children }: { children?: React.ReactNode }) => (
+    <div data-testid="store-pulse-chart-container">{children}</div>
+  ),
+  ChartTooltip: () => null,
+  ChartTooltipContent: () => null,
 }));
 
 vi.mock("~/convex/_generated/api", () => ({
@@ -156,6 +187,83 @@ const weekMetrics = [
     transactionCount: 0,
   },
 ] satisfies DailyOperationsSnapshot["weekMetrics"];
+
+function buildStorePulseSummary(): NonNullable<DailyOperationsSnapshot["storePulse"]> {
+  return {
+    averageTransaction: 6_250,
+    date: "2026-06-20",
+    operatorSnapshot: {
+      busiestHour: {
+        hour: 14,
+        label: "2 PM",
+        totalSales: 12_500,
+        transactionCount: 2,
+      },
+      comparison: {
+        averageTransactionDeltaPercent: 25,
+        currentAverageTransaction: 6_250,
+        currentItemsSold: 3,
+        currentSales: 12_500,
+        currentTransactions: 2,
+        itemsSoldDeltaPercent: 50,
+        salesDeltaPercent: 25,
+        transactionDeltaPercent: 0,
+        yesterdayAverageTransaction: 5_000,
+        yesterdayItemsSold: 2,
+        yesterdaySales: 10_000,
+        yesterdayTransactions: 2,
+      },
+      historyDays: 14,
+      isLimited: false,
+      paymentMix: [
+        {
+          count: 1,
+          label: "Cash",
+          method: "cash",
+          share: 60,
+          total: 7_500,
+        },
+        {
+          count: 1,
+          label: "Card",
+          method: "card",
+          share: 40,
+          total: 5_000,
+        },
+      ],
+      topItems: [
+        {
+          name: "Braiding hair",
+          productSku: "BRAID-1",
+          quantity: 2,
+          totalSales: 8_000,
+        },
+      ],
+      trend: [
+        {
+          averageTransaction: 0,
+          date: "2026-06-19",
+          label: "Jun 19",
+          totalItemsSold: 0,
+          totalSales: 0,
+          transactionCount: 0,
+        },
+        {
+          averageTransaction: 6_250,
+          date: "2026-06-20",
+          label: "Jun 20",
+          totalItemsSold: 3,
+          totalSales: 12_500,
+          transactionCount: 2,
+        },
+      ],
+      usableHistoryDays: 1,
+    },
+    totalItemsSold: 3,
+    totalSales: 12_500,
+    totalTransactions: 2,
+  };
+}
 
 const operatingSnapshot: DailyOperationsSnapshot = {
   automationStatuses: [],
@@ -736,6 +844,7 @@ function renderContent(
       isLoadingSnapshot={snapshot === undefined}
       orgUrlSlug="wigclub"
       snapshot={snapshot}
+      storePulseWindow="today"
       storeUrlSlug="osu"
       {...overrides}
     />,
@@ -1015,6 +1124,40 @@ describe("DailyOperationsViewContent", () => {
     expect(screen.queryByText(/provider|exception|stack/i)).not.toBeInTheDocument();
   });
 
+  it("renders store pulse visualizations in the main workspace when provided", () => {
+    vi.useRealTimers();
+
+    renderContent(
+      {
+        ...operatingSnapshot,
+        storePulse: buildStorePulseSummary(),
+      },
+      {
+        storePulseWindow: "this_week",
+      },
+    );
+
+    const storePulse = screen.getByRole("region", { name: "Store pulse" });
+
+    expect(within(storePulse).getByText("Sales trend")).toBeInTheDocument();
+    expect(within(storePulse).getByTestId("store-pulse-chart")).toBeInTheDocument();
+    expect(within(storePulse).getByText("Braiding Hair")).toBeInTheDocument();
+    expect(screen.getByLabelText("Store-day timeline")).toBeInTheDocument();
+    expect(within(storePulse).getByRole("tab", { name: "This week" })).toBeInTheDocument();
+  });
+
+  it("shows a bounded empty state when store pulse is omitted", () => {
+    renderContent(operatingSnapshot);
+
+    expect(screen.getByText("Store pulse unavailable")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Store pulse is not available for this view. Financially restricted or historical snapshots can omit POS pulse details.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText("Store pulse loading")).not.toBeInTheDocument();
+  });
+
   it("surfaces Opening auto-start review evidence for managers", () => {
     renderContent(automationReviewSnapshot);
 
@@ -1033,10 +1176,10 @@ describe("DailyOperationsViewContent", () => {
       screen.getByText("Cash variance reviewed at close"),
     ).toBeInTheDocument();
     expect(screen.getByText("Ebin tinted lace")).toBeInTheDocument();
-    expect(screen.getByText("Hooded dryer bonnet")).toBeInTheDocument();
+    expect(screen.queryByText("Hooded dryer bonnet")).not.toBeInTheDocument();
     expect(screen.queryByText("Eco lip balm")).not.toBeInTheDocument();
     expect(screen.queryByText("Hidden lace bond")).not.toBeInTheDocument();
-    expect(screen.getByText("2 more items in the full Opening workflow.")).toBeInTheDocument();
+    expect(screen.getByText("3 more items in the full Opening workflow.")).toBeInTheDocument();
     expect(
       screen.getByRole("link", {
         name: "Review all Opening Handoff review items",
@@ -1045,13 +1188,14 @@ describe("DailyOperationsViewContent", () => {
       "href",
       "/wigclub/store/osu/operations/opening?o=%252Fwigclub%252Fstore%252Fosu%252Foperations",
     );
-    expect(
-      screen.getByRole("link", {
-        name: "Open Register session still needs closeout review source",
-      }),
-    ).toHaveAttribute(
-      "href",
-      "/wigclub/store/osu/cash-controls/registers/session-1?o=%252Fwigclub%252Fstore%252Fosu%252Foperations",
+    const openingReview = screen
+      .getByRole("heading", { name: "Opening review" })
+      .closest("section");
+    const timeline = screen.getByLabelText("Store-day timeline");
+
+    expect(openingReview?.parentElement).toBe(timeline.parentElement);
+    expect(openingReview?.compareDocumentPosition(timeline)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
     );
   });
 
@@ -1641,6 +1785,7 @@ describe("DailyOperationsView", () => {
       expect.objectContaining({
         operatingTimezoneOffsetMinutes: expect.any(Number),
         storeId: "store-1",
+        storePulseWindow: "today",
         weekEndOperatingDate: getCurrentSaturdayWeekEndOperatingDate(),
       }),
     );
@@ -1663,9 +1808,87 @@ describe("DailyOperationsView", () => {
         operatingDate: "2026-05-07",
         operatingTimezoneOffsetMinutes: new Date(2026, 4, 7).getTimezoneOffset(),
         storeId: "store-1",
+        storePulseWindow: "today",
         weekEndOperatingDate: "2026-05-09",
       }),
     );
+  });
+
+  it("queries the daily operations snapshot for the selected store pulse window", () => {
+    mockedHooks.useSearch.mockReturnValue({
+      storePulseWindow: "this_month",
+    });
+
+    render(<DailyOperationsView />);
+
+    expect(mockedHooks.useQuery).toHaveBeenCalledWith(
+      mockedApi.getDailyOperationsSnapshot,
+      expect.objectContaining({
+        storePulseWindow: "this_month",
+      }),
+    );
+  });
+
+  it("updates store pulse search state from the store pulse tabs", async () => {
+    const user = userEvent.setup();
+
+    mockedHooks.useSearch.mockReturnValue({
+      storePulseWindow: "this_week",
+    });
+    mockedHooks.useQuery.mockReturnValue({
+      ...operatingSnapshot,
+      storePulse: buildStorePulseSummary(),
+    });
+
+    render(<DailyOperationsView />);
+
+    await user.click(screen.getByRole("tab", { name: "All time" }));
+
+    expect(mockedHooks.navigate).toHaveBeenCalledWith({
+      search: expect.any(Function),
+    });
+
+    const searchUpdater = mockedHooks.navigate.mock.calls.at(-1)?.[0]
+      .search as (current: Record<string, unknown>) => Record<string, unknown>;
+
+    expect(searchUpdater({ operatingDate: "2026-05-08" })).toEqual({
+      operatingDate: "2026-05-08",
+      storePulseWindow: "all_time",
+    });
+  });
+
+  it("removes store pulse search state when the Today tab is selected", async () => {
+    const user = userEvent.setup();
+
+    mockedHooks.useSearch.mockReturnValue({
+      storePulseWindow: "this_month",
+    });
+    mockedHooks.useQuery.mockReturnValue({
+      ...operatingSnapshot,
+      storePulse: buildStorePulseSummary(),
+    });
+
+    render(<DailyOperationsView />);
+
+    await user.click(screen.getByRole("tab", { name: "Today" }));
+
+    expect(mockedHooks.navigate).toHaveBeenCalledWith({
+      search: expect.any(Function),
+    });
+
+    const searchUpdater = mockedHooks.navigate.mock.calls.at(-1)?.[0]
+      .search as (current: Record<string, unknown>) => Record<string, unknown>;
+
+    expect(
+      searchUpdater({
+        operatingDate: "2026-05-08",
+        storePulseWindow: "this_month",
+        weekEndOperatingDate: "2026-05-09",
+      }),
+    ).toEqual({
+      operatingDate: "2026-05-08",
+      weekEndOperatingDate: "2026-05-09",
+    });
   });
 
   it("skips the protected query when access is not ready", () => {

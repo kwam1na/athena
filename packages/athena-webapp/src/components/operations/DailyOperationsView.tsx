@@ -55,6 +55,11 @@ import {
 } from "../ui/sheet";
 import { OperationsSummaryMetric } from "./OperationsSummaryMetric";
 import { formatOperationsMetricHelper } from "./operationsMetricFormatting";
+import {
+  StorePulseSummaryView,
+  type StorePulseSummary,
+  type StorePulseWindow,
+} from "../store-pulse/StorePulseSummaryView";
 
 type DailyOperationsApi = {
   getDailyOperationsSnapshot?: unknown;
@@ -219,6 +224,7 @@ export type DailyOperationsSnapshot = {
   priorDayMetric?: DailyOperationsSnapshot["weekMetrics"][number];
   scheduledRunSummaries?: DailyOperationsScheduledRunSummary[];
   startAt?: number;
+  storePulse?: StorePulseSummary | null;
   storeId: Id<"store">;
   timeline: Array<{
     createdAt: number;
@@ -276,8 +282,10 @@ type DailyOperationsViewContentProps = {
   isLoadingAccess: boolean;
   isLoadingSnapshot: boolean;
   onOperatingDateChange?: (date: Date) => void;
+  onStorePulseWindowChange?: (window: StorePulseWindow) => void;
   orgUrlSlug: string;
   snapshot?: DailyOperationsSnapshot;
+  storePulseWindow: StorePulseWindow;
   storeUrlSlug: string;
 };
 
@@ -425,14 +433,19 @@ function buildDailyCloseSearch(operatingDate: string) {
 
 function buildDailyOperationsSearch({
   operatingDate,
+  storePulseWindow,
   weekEndOperatingDate,
 }: {
   operatingDate: string;
+  storePulseWindow?: StorePulseWindow;
   weekEndOperatingDate?: string;
 }) {
   const currentOperatingDate = getLocalOperatingDate();
   const search = {
     ...(operatingDate !== currentOperatingDate ? { operatingDate } : {}),
+    ...(storePulseWindow && storePulseWindow !== "today"
+      ? { storePulseWindow }
+      : {}),
     ...(weekEndOperatingDate && weekEndOperatingDate !== currentOperatingDate
       ? { weekEndOperatingDate }
       : {}),
@@ -484,6 +497,20 @@ function getWeekEndOperatingDateFromSearch(weekEndOperatingDate?: unknown) {
   }
 
   return getSaturdayWeekEndOperatingDate(getLocalOperatingDate());
+}
+
+function getStorePulseWindowFromSearch(
+  storePulseWindow?: unknown,
+): StorePulseWindow {
+  if (
+    storePulseWindow === "this_week" ||
+    storePulseWindow === "this_month" ||
+    storePulseWindow === "all_time"
+  ) {
+    return storePulseWindow;
+  }
+
+  return "today";
 }
 
 function shouldShowPrimaryAction(snapshot: DailyOperationsSnapshot) {
@@ -1149,130 +1176,87 @@ function AutomationReviewEvidencePanel({
   return (
     <section
       aria-labelledby="daily-operations-opening-review-title"
-      className="rounded-lg border border-warning/25 bg-surface-raised shadow-surface"
+      className="rounded-lg border border-warning/25 bg-surface p-layout-md shadow-surface"
     >
-      <div className="flex flex-col gap-layout-sm sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0 px-layout-md pt-layout-md">
+      <div className="flex items-start justify-between gap-layout-sm">
+        <div className="min-w-0">
           <h3
-            className="flex items-center gap-layout-xs text-base font-medium text-foreground"
+            className="flex items-center gap-layout-xs text-sm font-medium text-foreground"
             id="daily-operations-opening-review-title"
           >
             <CircleAlert aria-hidden="true" className="h-4 w-4 text-warning" />
             Opening review
           </h3>
-          <p className="mt-layout-xs text-sm leading-6 text-foreground">
-            Store day started. Review the carried-forward items when a manager
-            is available.
-          </p>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">
-            POS stays open while these items remain visible in their owning
-            workflows.
-          </p>
         </div>
-        <div className="grid shrink-0 grid-cols-2 gap-layout-xs px-layout-md pt-layout-md sm:min-w-48">
-          <ReviewEvidenceCount
-            label="Pending checkout"
-            value={pendingCheckoutCount}
-          />
-          <ReviewEvidenceCount label="Other" value={otherReviewCount} />
-        </div>
-      </div>
-
-      <div className="mx-layout-md mt-layout-md flex flex-wrap items-center justify-between gap-layout-sm border-t border-border/70 pt-layout-sm">
         <Badge
-          className="border-warning/30 bg-warning/10 text-warning-foreground shadow-sm"
+          className="shrink-0 border-warning/30 bg-warning/10 text-warning-foreground shadow-sm"
           variant="outline"
         >
           {formatReviewEvidenceCount(evidenceItems.length)}
         </Badge>
-        <p className="text-xs leading-5 text-muted-foreground">
-          {getReviewEvidencePreviewMessage(evidenceItems.length)}
-        </p>
       </div>
 
-      <div className="mt-layout-sm border-t border-border/70">
+      <p className="mt-layout-xs text-sm leading-6 text-foreground">
+        Store day started. Review the carried-forward items when a manager is
+        available.
+      </p>
+      <p className="mt-1 text-xs leading-5 text-muted-foreground">
+        POS stays open while these items remain visible in their owning
+        workflows.
+      </p>
+
+      <div className="mt-layout-md grid grid-cols-2 gap-layout-xs">
+        <ReviewEvidenceCount
+          label="Pending checkout"
+          value={pendingCheckoutCount}
+        />
+        <ReviewEvidenceCount label="Other" value={otherReviewCount} />
+      </div>
+
+      <div className="mt-layout-md divide-y divide-border/70 border-y border-border/70">
         {previewItems.map((item) => (
           <article
-            className="grid gap-layout-sm border-b border-border/70 px-layout-md py-layout-sm transition-colors last:border-b-0 hover:bg-surface/80 md:grid-cols-[minmax(0,1fr)_minmax(10rem,0.35fr)_auto] md:items-center"
+            className="py-layout-sm"
             key={item.id}
           >
             <div className="min-w-0">
-              <p className="truncate text-sm font-medium text-foreground">
+              <p className="text-sm font-medium leading-5 text-foreground">
                 {getReviewEvidenceTitle(item)}
               </p>
               {getReviewEvidenceDetail(item) ? (
-                <p className="mt-0.5 line-clamp-1 text-xs leading-5 text-muted-foreground">
+                <p className="mt-0.5 line-clamp-2 text-xs leading-5 text-muted-foreground">
                   {getReviewEvidenceDetail(item)}
                 </p>
               ) : null}
-            </div>
-            <div className="min-w-0">
-              <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                Source
-              </p>
-              <p className="mt-0.5 truncate text-xs text-foreground">
+              <p className="mt-1 truncate text-xs text-muted-foreground">
                 {getReviewEvidenceContextLabel(item)}
               </p>
             </div>
-            {item.sourceLink?.to ? (
-              <Button
-                asChild
-                className="h-8 shrink-0 justify-self-start px-2 text-xs md:justify-self-end"
-                size="sm"
-                variant="ghost"
-              >
-                <Link
-                  aria-label={`Open ${item.label} review source`}
-                  params={buildParams(
-                    orgUrlSlug,
-                    storeUrlSlug,
-                    item.sourceLink.params,
-                  )}
-                  search={
-                    {
-                      o: getOrigin(),
-                      ...(item.sourceLink.search ?? {}),
-                    } as never
-                  }
-                  to={item.sourceLink.to}
-                >
-                  Open
-                  <ArrowUpRight aria-hidden="true" className="h-3.5 w-3.5" />
-                </Link>
-              </Button>
-            ) : null}
           </article>
         ))}
       </div>
       {hiddenItemCount > 0 ? (
-        <div className="flex flex-col gap-layout-sm border-t border-border/70 bg-background/60 px-layout-md py-layout-sm sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm text-muted-foreground">
-            {formatReviewEvidenceHiddenCount(hiddenItemCount)} in the full
-            Opening workflow.
-          </p>
-          <Button
-            asChild
-            className="h-8 shrink-0 self-start px-2 text-xs sm:self-center"
-            size="sm"
-            variant="outline"
-          >
-            <Link
-              aria-label="Review all Opening Handoff review items"
-              params={buildParams(orgUrlSlug, storeUrlSlug)}
-              search={
-                getWorkflowSearch(
-                  "/$orgUrlSlug/store/$storeUrlSlug/operations/opening",
-                  snapshot.operatingDate,
-                ) as never
-              }
-              to="/$orgUrlSlug/store/$storeUrlSlug/operations/opening"
-            >
-              Review all
-              <ArrowUpRight aria-hidden="true" className="h-3.5 w-3.5" />
-            </Link>
-          </Button>
-        </div>
+        <p className="mt-layout-sm text-xs leading-5 text-muted-foreground">
+          {formatReviewEvidenceHiddenCount(hiddenItemCount)} in the full Opening
+          workflow.
+        </p>
       ) : null}
+      <Button asChild className="mt-layout-md w-full" size="sm" variant="outline">
+        <Link
+          aria-label="Review all Opening Handoff review items"
+          params={buildParams(orgUrlSlug, storeUrlSlug)}
+          search={
+            getWorkflowSearch(
+              "/$orgUrlSlug/store/$storeUrlSlug/operations/opening",
+              snapshot.operatingDate,
+            ) as never
+          }
+          to="/$orgUrlSlug/store/$storeUrlSlug/operations/opening"
+        >
+          Review in Opening Handoff
+          <ArrowUpRight aria-hidden="true" className="h-3.5 w-3.5" />
+        </Link>
+      </Button>
     </section>
   );
 }
@@ -1280,7 +1264,7 @@ function AutomationReviewEvidencePanel({
 const PENDING_CHECKOUT_REVIEW_PREFIX = "Review pending checkout item:";
 const DEFAULT_CARRY_FORWARD_DETAIL =
   "This unresolved carry-forward item remains open and must be acknowledged for Opening.";
-const REVIEW_EVIDENCE_PREVIEW_LIMIT = 4;
+const REVIEW_EVIDENCE_PREVIEW_LIMIT = 3;
 
 function ReviewEvidenceCount({
   label,
@@ -1307,14 +1291,6 @@ function formatReviewEvidenceCount(count: number) {
 
 function formatReviewEvidenceHiddenCount(count: number) {
   return count === 1 ? "1 more item" : `${count} more items`;
-}
-
-function getReviewEvidencePreviewMessage(count: number) {
-  if (count <= REVIEW_EVIDENCE_PREVIEW_LIMIT) {
-    return "Use Opening Handoff for the full workflow.";
-  }
-
-  return `Showing the first ${REVIEW_EVIDENCE_PREVIEW_LIMIT}; use Opening Handoff for the full workflow.`;
 }
 
 function isPendingCheckoutReview(item: DailyOperationsReviewEvidence) {
@@ -1390,6 +1366,49 @@ function HistoricalWorkflowPanel({
           </>
         )}
       </div>
+    </section>
+  );
+}
+
+function DailyOperationsStorePulsePanel({
+  currency,
+  hasFullAdminAccess,
+  onStorePulseWindowChange,
+  snapshot,
+  storePulseWindow,
+}: {
+  currency: string;
+  hasFullAdminAccess: boolean;
+  onStorePulseWindowChange?: (window: StorePulseWindow) => void;
+  snapshot: DailyOperationsSnapshot;
+  storePulseWindow: StorePulseWindow;
+}) {
+  return (
+    <section className="space-y-layout-md">
+      <div>
+        <h3 className="text-base font-medium text-foreground">Store pulse</h3>
+        <p className="mt-1 text-sm text-muted-foreground">
+          POS sales activity for the selected reporting window.
+        </p>
+      </div>
+      {snapshot.storePulse ? (
+        <StorePulseSummaryView
+          canViewFinancialDetails={hasFullAdminAccess}
+          currencyFormatter={currencyFormatter(currency)}
+          onPulseWindowChange={(nextWindow) => {
+            onStorePulseWindowChange?.(nextWindow);
+          }}
+          pulseWindow={storePulseWindow}
+          summary={snapshot.storePulse}
+        />
+      ) : (
+        <div className="rounded-lg border border-border bg-surface p-layout-md shadow-surface">
+          <EmptyState
+            description="Store pulse is not available for this view. Financially restricted or historical snapshots can omit POS pulse details."
+            title="Store pulse unavailable"
+          />
+        </div>
+      )}
     </section>
   );
 }
@@ -1505,12 +1524,14 @@ function WeekMetricsStrip({
   hasFinancialDetailsAccess,
   metrics,
   orgUrlSlug,
+  storePulseWindow,
   storeUrlSlug,
 }: {
   currency: string;
   hasFinancialDetailsAccess: boolean;
   metrics: DailyOperationsSnapshot["weekMetrics"];
   orgUrlSlug: string;
+  storePulseWindow: StorePulseWindow;
   storeUrlSlug: string;
 }) {
   const scrollSelectedDayIntoView = useCallback((element: HTMLElement | null) => {
@@ -1579,6 +1600,7 @@ function WeekMetricsStrip({
                 params={buildParams(orgUrlSlug, storeUrlSlug)}
                 search={buildDailyOperationsSearch({
                   operatingDate: previousWeekStartOperatingDate,
+                  storePulseWindow,
                   weekEndOperatingDate: previousWeekEndOperatingDate,
                 })}
                 to="/$orgUrlSlug/store/$storeUrlSlug/operations"
@@ -1600,6 +1622,7 @@ function WeekMetricsStrip({
                   params={buildParams(orgUrlSlug, storeUrlSlug)}
                   search={buildDailyOperationsSearch({
                     operatingDate: nextWeekStartOperatingDate,
+                    storePulseWindow,
                     weekEndOperatingDate: nextWeekEndOperatingDate,
                   })}
                   to="/$orgUrlSlug/store/$storeUrlSlug/operations"
@@ -1702,6 +1725,7 @@ function WeekMetricsStrip({
                 ref={metric.isSelected ? scrollSelectedDayIntoView : undefined}
                 search={buildDailyOperationsSearch({
                   operatingDate: metric.operatingDate,
+                  storePulseWindow,
                   weekEndOperatingDate,
                 })}
                 to="/$orgUrlSlug/store/$storeUrlSlug/operations"
@@ -1724,8 +1748,10 @@ export function DailyOperationsViewContent({
   isLoadingAccess,
   isLoadingSnapshot,
   onOperatingDateChange,
+  onStorePulseWindowChange,
   orgUrlSlug,
   snapshot,
+  storePulseWindow,
   storeUrlSlug,
 }: DailyOperationsViewContentProps) {
   const [isTimelineSheetOpen, setIsTimelineSheetOpen] = useState(false);
@@ -2035,12 +2061,20 @@ export function DailyOperationsViewContent({
                   hasFinancialDetailsAccess={hasFinancialDetailsAccess}
                   metrics={snapshot.weekMetrics}
                   orgUrlSlug={orgUrlSlug}
+                  storePulseWindow={storePulseWindow}
                   storeUrlSlug={storeUrlSlug}
                 />
               </section>
 
               <PageWorkspaceGrid>
                 <PageWorkspaceMain>
+                  <DailyOperationsStorePulsePanel
+                    currency={snapshot.currency ?? currency}
+                    hasFullAdminAccess={hasFullAdminAccess}
+                    onStorePulseWindowChange={onStorePulseWindowChange}
+                    snapshot={snapshot}
+                    storePulseWindow={storePulseWindow}
+                  />
                   {isHistoricalDate ? (
                     <HistoricalWorkflowPanel
                       orgUrlSlug={orgUrlSlug}
@@ -2050,11 +2084,6 @@ export function DailyOperationsViewContent({
                   ) : (
                     <section className="space-y-layout-lg">
                       <AutomationStatusPanel
-                        orgUrlSlug={orgUrlSlug}
-                        snapshot={snapshot}
-                        storeUrlSlug={storeUrlSlug}
-                      />
-                      <AutomationReviewEvidencePanel
                         orgUrlSlug={orgUrlSlug}
                         snapshot={snapshot}
                         storeUrlSlug={storeUrlSlug}
@@ -2092,6 +2121,11 @@ export function DailyOperationsViewContent({
                 </PageWorkspaceMain>
 
                 <PageWorkspaceRail>
+                  <AutomationReviewEvidencePanel
+                    orgUrlSlug={orgUrlSlug}
+                    snapshot={snapshot}
+                    storeUrlSlug={storeUrlSlug}
+                  />
                   <section
                     aria-label="Store-day timeline"
                     className="rounded-lg border border-border bg-surface p-layout-md shadow-surface"
@@ -2213,6 +2247,7 @@ function DailyOperationsConnectedView({
   const navigate = useNavigate();
   const search = useSearch({ strict: false }) as {
     operatingDate?: unknown;
+    storePulseWindow?: unknown;
     weekEndOperatingDate?: unknown;
   };
   const operatingDateRange = useMemo(
@@ -2223,6 +2258,10 @@ function DailyOperationsConnectedView({
     () => getWeekEndOperatingDateFromSearch(search.weekEndOperatingDate),
     [search.weekEndOperatingDate],
   );
+  const storePulseWindow = useMemo(
+    () => getStorePulseWindowFromSearch(search.storePulseWindow),
+    [search.storePulseWindow],
+  );
   const snapshot = useExpectedDailyOperationsQuery(
     getDailyOperationsSnapshot,
     canQueryProtectedData
@@ -2232,6 +2271,7 @@ function DailyOperationsConnectedView({
             operatingDateRange.operatingDate,
           ),
           storeId: activeStore!._id,
+          storePulseWindow,
           weekEndOperatingDate,
         }
       : "skip",
@@ -2252,6 +2292,22 @@ function DailyOperationsConnectedView({
     });
   };
 
+  const handleStorePulseWindowChange = (nextWindow: StorePulseWindow) => {
+    void navigate({
+      search: ((current: Record<string, unknown>) => {
+        const nextSearch = { ...current };
+
+        if (nextWindow === "today") {
+          delete nextSearch.storePulseWindow;
+        } else {
+          nextSearch.storePulseWindow = nextWindow;
+        }
+
+        return nextSearch;
+      }) as never,
+    });
+  };
+
   return (
     <DailyOperationsViewContent
       currency={activeStore?.currency ?? "GHS"}
@@ -2261,8 +2317,10 @@ function DailyOperationsConnectedView({
       isLoadingAccess={isLoadingAccess}
       isLoadingSnapshot={snapshot === undefined}
       onOperatingDateChange={handleOperatingDateChange}
+      onStorePulseWindowChange={handleStorePulseWindowChange}
       orgUrlSlug={params?.orgUrlSlug ?? ""}
       snapshot={snapshot}
+      storePulseWindow={storePulseWindow}
       storeUrlSlug={params?.storeUrlSlug ?? ""}
     />
   );

@@ -11,6 +11,10 @@ import { toDisplayAmount } from "../lib/currency";
 import { currencyFormatter } from "../utils";
 import { listAutomationRunsForStoreDayActionWithCtx } from "../automation/runLedger";
 import {
+  getStorePulseSummaryForWindow,
+  type DailyOperationsStorePulseWindow,
+} from "../pos/application/queries/storePulse";
+import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
 } from "../lib/athenaUserAuth";
@@ -183,6 +187,13 @@ type DailyOperationsWeekMetric = DailyOperationsCloseSummary & {
   isSelected: boolean;
   operatingDate: string;
 };
+
+const storePulseWindowValidator = v.union(
+  v.literal("today"),
+  v.literal("this_week"),
+  v.literal("this_month"),
+  v.literal("all_time"),
+);
 
 function operatingDateRange(operatingDate: string) {
   const startAt = Date.parse(`${operatingDate}T00:00:00.000Z`);
@@ -1814,6 +1825,7 @@ export async function buildDailyOperationsSnapshotWithCtx(
     operatingTimezoneOffsetMinutes?: number;
     startAt?: number;
     storeId: Id<"store">;
+    storePulseWindow?: DailyOperationsStorePulseWindow;
     weekEndOperatingDate?: string;
   },
 ) {
@@ -1828,6 +1840,7 @@ export async function buildDailyOperationsSnapshotWithCtx(
     scheduledRunSummaries,
     timeline,
     store,
+    storePulse,
     weekMetrics,
   ] =
     await Promise.all([
@@ -1850,6 +1863,15 @@ export async function buildDailyOperationsSnapshotWithCtx(
         storeId: args.storeId,
       }),
       ctx.db.get("store", args.storeId),
+      includeFinancialDetails
+        ? getStorePulseSummaryForWindow(ctx as QueryCtx, {
+            currentDayEnd: range.endAt - 1,
+            currentDayStart: range.startAt,
+            currentOperatingDate: args.operatingDate,
+            pulseWindow: args.storePulseWindow ?? "today",
+            storeId: args.storeId,
+          })
+        : Promise.resolve(undefined),
       buildWeekMetrics(ctx, args),
     ]);
   const priorOperatingDate = shiftOperatingDate(args.operatingDate, -1);
@@ -1992,6 +2014,7 @@ export async function buildDailyOperationsSnapshotWithCtx(
     scheduledRunSummaries,
     startAt: range.startAt,
     storeId: args.storeId,
+    ...(storePulse ? { storePulse } : {}),
     timeline: includeFinancialDetails ? timeline : [],
     weekMetrics: includeFinancialDetails
       ? weekMetrics
@@ -2041,6 +2064,7 @@ export const getDailyOperationsSnapshot = query({
     operatingTimezoneOffsetMinutes: v.optional(v.number()),
     startAt: v.optional(v.number()),
     storeId: v.id("store"),
+    storePulseWindow: v.optional(storePulseWindowValidator),
     weekEndOperatingDate: v.optional(v.string()),
   },
   handler: async (ctx, args) => {

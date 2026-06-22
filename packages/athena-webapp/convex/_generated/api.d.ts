@@ -197,6 +197,7 @@ import type * as pos_application_queries_getTransactions from "../pos/applicatio
 import type * as pos_application_queries_listRegisterCatalog from "../pos/application/queries/listRegisterCatalog.js";
 import type * as pos_application_queries_searchCatalog from "../pos/application/queries/searchCatalog.js";
 import type * as pos_application_queries_searchCustomers from "../pos/application/queries/searchCustomers.js";
+import type * as pos_application_queries_storePulse from "../pos/application/queries/storePulse.js";
 import type * as pos_application_queries_terminals from "../pos/application/queries/terminals.js";
 import type * as pos_application_sync_ingestLocalEvents from "../pos/application/sync/ingestLocalEvents.js";
 import type * as pos_application_sync_projectLocalEvents from "../pos/application/sync/projectLocalEvents.js";
@@ -605,6 +606,7 @@ declare const fullApi: ApiFromModules<{
   "pos/application/queries/listRegisterCatalog": typeof pos_application_queries_listRegisterCatalog;
   "pos/application/queries/searchCatalog": typeof pos_application_queries_searchCatalog;
   "pos/application/queries/searchCustomers": typeof pos_application_queries_searchCustomers;
+  "pos/application/queries/storePulse": typeof pos_application_queries_storePulse;
   "pos/application/queries/terminals": typeof pos_application_queries_terminals;
   "pos/application/sync/ingestLocalEvents": typeof pos_application_sync_ingestLocalEvents;
   "pos/application/sync/projectLocalEvents": typeof pos_application_sync_projectLocalEvents;

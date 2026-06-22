@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Plan: Bring POS pulse visualizations into Daily Operations</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f8f7f4;
+        --ink: #1d1b18;
+        --muted: #68615a;
+        --panel: #ffffff;
+        --line: #ddd8cf;
+        --accent: #6f4e37;
+        --accent-soft: #efe6dc;
+        --warn: #8a5a00;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font: 15px/1.55 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      main {
+        max-width: 1040px;
+        margin: 0 auto;
+        padding: 48px 24px 72px;
+      }
+      header {
+        border-bottom: 1px solid var(--line);
+        margin-bottom: 28px;
+        padding-bottom: 24px;
+      }
+      .eyebrow {
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: .16em;
+        margin: 0 0 8px;
+        text-transform: uppercase;
+      }
+      h1 {
+        font-size: clamp(34px, 6vw, 56px);
+        line-height: 1;
+        margin: 0 0 14px;
+      }
+      h2 {
+        border-top: 1px solid var(--line);
+        font-size: 22px;
+        margin: 32px 0 14px;
+        padding-top: 28px;
+      }
+      h3 {
+        font-size: 16px;
+        margin: 22px 0 8px;
+      }
+      p {
+        margin: 0 0 12px;
+      }
+      a {
+        color: var(--accent);
+        text-decoration-thickness: 1px;
+        text-underline-offset: 3px;
+      }
+      nav {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        margin: 22px 0;
+        padding: 16px;
+      }
+      nav ul, .compact-list {
+        margin: 0;
+        padding-left: 20px;
+      }
+      section {
+        margin: 0 0 22px;
+      }
+      .meta {
+        color: var(--muted);
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+      .pill {
+        background: var(--accent-soft);
+        border: 1px solid #dfcdbb;
+        border-radius: 999px;
+        color: var(--accent);
+        display: inline-flex;
+        font-size: 13px;
+        font-weight: 650;
+        padding: 4px 10px;
+      }
+      .callout {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        box-shadow: 0 10px 30px rgba(29, 27, 24, .06);
+        padding: 18px;
+      }
+      .grid {
+        display: grid;
+        gap: 14px;
+      }
+      @media (min-width: 860px) {
+        .grid.two {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+      }
+      th, td {
+        border: 1px solid var(--line);
+        padding: 10px;
+        text-align: left;
+        vertical-align: top;
+      }
+      th {
+        background: #f0eee8;
+      }
+      code {
+        background: #f0eee8;
+        border-radius: 5px;
+        padding: 1px 5px;
+      }
+      .unit {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        margin: 14px 0;
+        padding: 18px;
+      }
+      .unit h3 {
+        margin-top: 0;
+      }
+      .risk {
+        color: var(--warn);
+        font-weight: 650;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <p class="eyebrow">Implementation Plan</p>
+        <h1>Bring POS pulse visualizations into Daily Operations</h1>
+        <p class="meta">
+          <span class="pill">feat</span>
+          <span class="pill">active</span>
+          <span>Created 2026-06-22</span>
+          <span>Source: <a href="./2026-06-22-003-feat-daily-ops-pos-visualizations-plan.md">markdown plan</a></span>
+        </p>
+      </header>
+
+      <nav aria-label="Plan sections">
+        <ul>
+          <li><a href="#summary">Summary</a></li>
+          <li><a href="#decisions">Key decisions</a></li>
+          <li><a href="#units">Implementation units</a></li>
+          <li><a href="#risks">Risks</a></li>
+          <li><a href="#verification">Verification</a></li>
+        </ul>
+      </nav>
+
+      <section id="summary" class="callout">
+        <h2>Summary</h2>
+        <p>This plan brings the POS hub's sales trend chart, top-items list, and payment-mix visualization into Daily Operations by extracting the POS pulse presentation into a shared store-operations component and feeding it from the Daily Operations read model.</p>
+        <p>The opening review panel moves into the desktop right rail above the store-day timeline, with a compact rail layout that preserves Opening Handoff as the owning workflow.</p>
+      </section>
+
+      <section>
+        <h2>Scope</h2>
+        <div class="grid two">
+          <div class="callout">
+            <h3>In scope</h3>
+            <ul class="compact-list">
+              <li>Reuse POS pulse chart, top items, payment mix, metrics, skeletons, and empty states.</li>
+              <li>Extend Daily Operations snapshot with selected store-day pulse data.</li>
+              <li>Move opening review into the right rail above the store-day timeline on desktop with a compact 320px rail variant.</li>
+              <li>Preserve server-side financial redaction and existing workflow ownership.</li>
+            </ul>
+          </div>
+          <div class="callout">
+            <h3>Out of scope</h3>
+            <ul class="compact-list">
+              <li>No new analytics route or charting library.</li>
+              <li>No client-only aggregation from raw transaction rows.</li>
+              <li>No change to manual Opening Handoff strictness.</li>
+              <li>No broad Daily Operations or POS hub redesign.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section id="decisions">
+        <h2>Key Decisions</h2>
+        <ul>
+          <li>Extract shared store-operations pulse presentation instead of importing POS-owned UI into Daily Operations.</li>
+          <li>Feed Daily Operations from its aggregate snapshot, not a second POS hub query.</li>
+          <li>Use centralized net payment allocation for shared payment mix, including cash-with-change and legacy fallback rows.</li>
+          <li>Make Daily Operations pulse window state explicit and server-scoped.</li>
+          <li>Keep POS hub behavior unchanged through the same shared presentation.</li>
+          <li>Use a compact right-rail Opening review panel as evidence and navigation, not a resolver.</li>
+          <li>Use existing `PageWorkspaceGrid` behavior for desktop rail placement and stacked mobile layout.</li>
+        </ul>
+      </section>
+
+      <section id="units">
+        <h2>Implementation Units</h2>
+        <article class="unit">
+          <h3>U1. Extract shared store pulse presentation</h3>
+          <p>Move reusable chart, metrics, top-items, payment-mix, skeleton, and empty-state rendering into a shared store-operations component while keeping POS hub behavior stable.</p>
+          <p><strong>Primary files:</strong> <code>src/components/pos/sales-pulse/POSSalesPulseView.tsx</code>, <code>src/components/operations/store-pulse/StorePulseView.tsx</code>, POS pulse tests.</p>
+        </article>
+        <article class="unit">
+          <h3>U2. Add Daily Operations POS pulse data to the snapshot</h3>
+          <p>Extend the Daily Operations server snapshot with selected operating-date pulse data, centralized net payment allocation, and Convex-boundary redaction.</p>
+          <p><strong>Primary files:</strong> <code>convex/operations/dailyOperations.ts</code>, <code>convex/pos/application/queries/getTransactions.ts</code>, related Convex tests.</p>
+        </article>
+        <article class="unit">
+          <h3>U3. Render shared pulse visualizations on Daily Operations</h3>
+          <p>Add the shared pulse section to the main Daily Operations workspace using snapshot data, explicit pulse-window state, and existing date/search helpers.</p>
+          <p><strong>Primary files:</strong> <code>src/components/operations/DailyOperationsView.tsx</code>, <code>DailyOperationsView.test.tsx</code>.</p>
+        </article>
+        <article class="unit">
+          <h3>U4. Move opening review into the desktop right rail</h3>
+          <p>Place Opening review above Store-day timeline in the rail at desktop width, with a single-column panel, two count chips, up to three preview rows, overflow copy, and a full-width Review all action into Opening Handoff.</p>
+          <p><strong>Primary files:</strong> <code>src/components/operations/DailyOperationsView.tsx</code>, <code>DailyOperationsView.test.tsx</code>.</p>
+        </article>
+        <article class="unit">
+          <h3>U5. Validate, document, and visually verify</h3>
+          <p>Run focused frontend and Convex tests, changed lints, TypeScript/build gates, Graphify rebuild after code edits, and one visual pass across desktop and mobile.</p>
+        </article>
+      </section>
+
+      <section id="risks">
+        <h2>Risks</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Risk</th>
+              <th>Mitigation</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>POS hub behavior changes during extraction.</td>
+              <td>Use POS tests as characterization and keep wrapper exports if useful.</td>
+            </tr>
+            <tr>
+              <td>Financial pulse data leaks to unauthorized users.</td>
+              <td>Add backend redaction tests; never rely on React hiding alone.</td>
+            </tr>
+            <tr>
+              <td>Historical Daily Operations view accidentally shows today's pulse.</td>
+              <td>Derive pulse data from Daily Operations operating-date ranges.</td>
+            </tr>
+            <tr>
+              <td>Opening review becomes cramped in the 320px rail.</td>
+              <td>Use compact counts, short preview rows, and a clear Review all link.</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="verification">
+        <h2>Verification Strategy</h2>
+        <ul>
+          <li>POS pulse and POS hub integration tests keep existing behavior stable.</li>
+          <li>Daily Operations UI tests cover pulse rendering, rail ordering, empty/loading states, and timeline overflow.</li>
+          <li>Convex tests cover snapshot pulse data, selected operating dates, server-scoped pulse windows, net payment allocation, legacy payment fallback, and redaction.</li>
+          <li>Run changed lints, TypeScript, build, relevant harness review, and Graphify rebuild after code changes.</li>
+          <li>Capture Daily Operations desktop with opening review above timeline, Daily Operations mobile stacking, and POS hub after shared pulse extraction.</li>
+          <li>Inspect chart labels, rail overflow, and Review all CTA visibility during visual verification.</li>
+        </ul>
+      </section>
+    </main>
+  </body>
+</html>

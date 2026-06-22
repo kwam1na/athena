@@ -166,7 +166,12 @@ describe("POSStorePulseSection", () => {
     expect(screen.getByText("Sales trend")).toBeInTheDocument();
     expect(screen.queryByText("Busiest hour")).not.toBeInTheDocument();
     expect(screen.getByText("How customers paid")).toBeInTheDocument();
+    expect(screen.getByText("Cash")).toBeInTheDocument();
+    expect(screen.getByText("60%")).toBeInTheDocument();
+    expect(screen.getByText("Card")).toBeInTheDocument();
+    expect(screen.getByText("40%")).toBeInTheDocument();
     expect(screen.getByText("Braiding Hair")).toBeInTheDocument();
+    expect(screen.getByText("2 units sold")).toBeInTheDocument();
     expect(screen.getByTestId("store-pulse-chart")).toBeInTheDocument();
     expect(screen.getByTestId("store-pulse-area")).toBeInTheDocument();
     expect(screen.queryByText("Transaction review")).not.toBeInTheDocument();
@@ -233,6 +238,24 @@ describe("POSStorePulseSection", () => {
       "data-display-dates",
       "Friday, Jun 19, 2026|Saturday, Jun 20, 2026",
     );
+  });
+
+  it("renders calm empty states for reusable store pulse detail panels", () => {
+    const todaySummary = buildTodaySummary({ topItems: [] });
+    todaySummary.operatorSnapshot.paymentMix = [];
+
+    renderStorePulse({ todaySummary });
+
+    expect(screen.getByText("No item history yet")).toBeInTheDocument();
+    expect(
+      screen.getByText("Completed POS sales will populate item movement here."),
+    ).toBeInTheDocument();
+    expect(screen.getByText("No payment mix yet")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Payment method shares will appear after completed sales sync.",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("hides financial sales cards when full admin access is not active", () => {

@@ -587,11 +587,12 @@ describe("getTodaySummary", () => {
         storeId: "store-1",
       },
     );
-    expect(listCompletedTransactionsSince).toHaveBeenCalledWith(
+    expect(listCompletedTransactionsForRange).toHaveBeenNthCalledWith(
+      3,
       expect.anything(),
       {
         completedFrom: Date.parse("2026-06-08T00:00:00.000Z"),
-        limit: 400,
+        completedTo: Date.parse("2026-06-20T23:59:59.999Z"),
         storeId: "store-1",
       },
     );
@@ -628,7 +629,7 @@ describe("getTodaySummary", () => {
     vi.mocked(listCompletedTransactionsForRange).mockResolvedValueOnce(
       [] as never,
     );
-    vi.mocked(listCompletedTransactionsSince).mockResolvedValue([
+    vi.mocked(listCompletedTransactionsForRange).mockResolvedValueOnce([
       {
         _id: "txn-before-midnight" as Id<"posTransaction">,
         completedAt: Date.parse("2026-06-21T12:00:00.000Z"),
@@ -1022,12 +1023,12 @@ describe("getTodaySummary", () => {
       },
     );
 
-    expect(listCompletedTransactionsSince).toHaveBeenNthCalledWith(
-      1,
+    expect(listCompletedTransactionsForRange).toHaveBeenNthCalledWith(
+      2,
       expect.anything(),
       {
         completedFrom: 0,
-        limit: 400,
+        completedTo: Date.parse("2026-06-20T23:59:59.999Z"),
         storeId: "store-1",
       },
     );
@@ -1171,6 +1172,74 @@ describe("getTodaySummary", () => {
         transactionCount: 1,
       }),
     );
+  });
+
+  it("uses net payment allocation semantics for POS pulse payment mix", async () => {
+    vi.setSystemTime(new Date("2026-06-20T15:30:00.000Z"));
+    vi.mocked(listCompletedTransactionsForDay).mockResolvedValue([
+      {
+        _id: "txn-cash-overpay" as Id<"posTransaction">,
+        storeId: "store-1" as Id<"store">,
+        total: 80_000,
+      },
+    ] as never);
+    vi.mocked(listCompletedTransactionsSince).mockResolvedValue([
+      {
+        _id: "txn-cash-overpay" as Id<"posTransaction">,
+        changeGiven: 5_000,
+        completedAt: Date.UTC(2026, 5, 20, 15),
+        paymentMethod: "cash",
+        payments: [{ amount: 85_000, method: "cash", timestamp: 1 }],
+        storeId: "store-1" as Id<"store">,
+        total: 80_000,
+        totalPaid: 85_000,
+      },
+      {
+        _id: "txn-legacy-card" as Id<"posTransaction">,
+        completedAt: Date.UTC(2026, 5, 19, 18),
+        paymentMethod: "card",
+        payments: [],
+        storeId: "store-1" as Id<"store">,
+        total: 12_000,
+        totalPaid: 12_000,
+      },
+    ] as never);
+    vi.mocked(listTransactionItems).mockResolvedValue([] as never);
+    const query = vi.fn(() => ({
+      withIndex: vi.fn(() => ({
+        collect: vi.fn().mockResolvedValue([]),
+        take: vi.fn().mockResolvedValue([]),
+        order: vi.fn(() => ({
+          take: vi.fn().mockResolvedValue([]),
+        })),
+      })),
+    }));
+
+    const result = await getTodaySummary(
+      {
+        db: { query },
+      } as never,
+      {
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(result.operatorSnapshot.paymentMix).toEqual([
+      {
+        count: 1,
+        label: "Cash",
+        method: "cash",
+        share: 87,
+        total: 80_000,
+      },
+      {
+        count: 1,
+        label: "Card",
+        method: "card",
+        share: 13,
+        total: 12_000,
+      },
+    ]);
   });
 });
 
