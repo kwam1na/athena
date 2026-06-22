@@ -6,12 +6,25 @@ import {
 } from "@/hooks/useProductDiscount";
 import { formatStoredAmount } from "@/lib/currency";
 
+type ProductCardSku = Pick<
+  ProductSku,
+  "images" | "price" | "productName" | "quantityAvailable" | "sku"
+> & {
+  _id: string;
+  color?: string;
+};
+
+type ProductCardProduct = Pick<Product, "name"> & {
+  _id: string;
+  skus: ProductCardSku[];
+};
+
 export function ProductCard({
   product,
   currencyFormatter,
   fallbackImageUrl,
 }: {
-  product: Product;
+  product: ProductCardProduct;
   currencyFormatter: Intl.NumberFormat;
   fallbackImageUrl?: string;
 }) {
@@ -108,7 +121,7 @@ export function ProductSkuCard({
   currencyFormatter,
   fallbackImageUrl,
 }: {
-  sku: ProductSku;
+  sku: ProductCardSku;
   currencyFormatter: Intl.NumberFormat;
   fallbackImageUrl?: string;
 }) {

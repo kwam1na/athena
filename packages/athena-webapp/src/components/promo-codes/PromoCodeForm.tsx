@@ -149,7 +149,6 @@ const PromoCodeForm = ({
                   mode="single"
                   selected={validFrom}
                   onSelect={setValidFrom}
-                  autoFocus
                 />
               </PopoverContent>
             </Popover>

@@ -6,7 +6,6 @@ import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Switch } from "../ui/switch";
 import { Id } from "~/convex/_generated/dataModel";
-import View from "../View";
 import { Button } from "../ui/button";
 import { DateTimePicker } from "../ui/date-time-picker";
 
@@ -50,11 +49,11 @@ export function BannerMessageEditor({ storeId }: BannerMessageEditorProps) {
         storeId,
         heading: heading.trim() || undefined,
         message: message.trim() || undefined,
-        active: true,
+        active,
         countdownEndsAt,
         currentTimeMs: Date.now(),
       });
-      toast.success("Banner message updated successfully");
+      toast.success(active ? "Banner message saved." : "Banner draft saved.");
     } catch (error) {
       toast.error("Failed to update banner message");
       console.error(error);
@@ -89,7 +88,13 @@ export function BannerMessageEditor({ storeId }: BannerMessageEditorProps) {
   };
 
   const handleActiveToggle = async (checked: boolean) => {
+    if (checked && !heading.trim() && !message.trim()) {
+      toast.error("Add a heading or message before activating the banner.");
+      return;
+    }
+
     setActive(checked);
+    setIsSaving(true);
     try {
       await upsertBannerMessage({
         storeId,
@@ -107,6 +112,8 @@ export function BannerMessageEditor({ storeId }: BannerMessageEditorProps) {
       console.error(error);
       // Revert the toggle on error
       setActive(!checked);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -146,19 +153,28 @@ export function BannerMessageEditor({ storeId }: BannerMessageEditorProps) {
 
   const areBothFieldsEmpty = !heading.trim() && !message.trim();
   const fieldsAreFilled = heading.trim() || message.trim();
+  const canActivateBanner = Boolean(fieldsAreFilled);
+  const cannotSaveActiveBanner = active && !canActivateBanner;
 
   return (
-    <View
-      hideBorder
-      hideHeaderBottomBorder
-      className="py-4"
-      header={<p className="text-sm text-muted-foreground">Site Banner</p>}
-    >
-      <div className="py-4 space-y-4">
-        <div className="space-y-2">
+    <div className="space-y-layout-lg">
+      <div className="flex flex-wrap gap-layout-xs">
+        <span className="inline-flex rounded-full border border-border bg-background px-layout-sm py-layout-2xs text-sm text-muted-foreground">
+          {active ? "Active" : "Inactive"}
+        </span>
+        <span className="inline-flex rounded-full border border-border bg-background px-layout-sm py-layout-2xs text-sm text-muted-foreground">
+          {countdownEndsAt
+            ? (getCountdownStatus() ?? "Countdown set")
+            : "No countdown"}
+        </span>
+      </div>
+
+      <div className="grid gap-layout-md md:grid-cols-2">
+        <div className="space-y-layout-xs">
           <Label htmlFor="heading">Heading (optional)</Label>
           <Input
             id="heading"
+            className="h-control-standard bg-background"
             placeholder="e.g., FLASH SALE"
             value={heading}
             onChange={(e) => setHeading(e.target.value)}
@@ -168,10 +184,11 @@ export function BannerMessageEditor({ storeId }: BannerMessageEditorProps) {
           </p>
         </div>
 
-        <div className="space-y-2">
+        <div className="space-y-layout-xs">
           <Label htmlFor="message">Message (optional)</Label>
           <Input
             id="message"
+            className="h-control-standard bg-background"
             placeholder="e.g., Get 50% off today only"
             value={message}
             onChange={(e) => setMessage(e.target.value)}
@@ -181,7 +198,7 @@ export function BannerMessageEditor({ storeId }: BannerMessageEditorProps) {
           </p>
         </div>
 
-        <div className="space-y-2">
+        <div className="space-y-layout-xs md:col-span-2">
           <Label htmlFor="countdown">Countdown (optional)</Label>
           <DateTimePicker
             value={countdownDate}
@@ -197,39 +214,48 @@ export function BannerMessageEditor({ storeId }: BannerMessageEditorProps) {
             Banner will automatically hide when countdown reaches zero
           </p> */}
         </div>
+      </div>
 
-        <div className="flex items-center justify-between py-2">
+      <div className="rounded-md border border-border bg-background p-layout-md">
+        <div className="flex items-center justify-between gap-layout-md">
           <div className="space-y-0.5">
             <Label htmlFor="active">Active</Label>
-            <p className="text-xs text-muted-foreground">
-              Banner message takes precedence over promo codes
+            <p
+              className="text-xs text-muted-foreground"
+              id="banner-active-description"
+            >
+              {canActivateBanner
+                ? "Banner message takes precedence over promo codes"
+                : "Add a heading or message before activating the banner."}
             </p>
           </div>
           <Switch
+            aria-describedby="banner-active-description"
             id="active"
             checked={active}
+            disabled={isSaving || (!canActivateBanner && !active)}
             onCheckedChange={handleActiveToggle}
           />
         </div>
-
-        <div className="flex gap-4">
-          <Button
-            onClick={handleSave}
-            disabled={areBothFieldsEmpty || isSaving}
-            variant={"outline"}
-          >
-            Save Banner Message
-          </Button>
-
-          <Button
-            onClick={handleClear}
-            disabled={isSaving || !fieldsAreFilled}
-            variant={"outline"}
-          >
-            Clear Banner Message
-          </Button>
-        </div>
       </div>
-    </View>
+
+      <div className="flex flex-wrap gap-layout-sm border-t border-border pt-layout-md">
+        <Button
+          onClick={handleSave}
+          disabled={areBothFieldsEmpty || cannotSaveActiveBanner || isSaving}
+          variant={"outline"}
+        >
+          {active ? "Save Banner Message" : "Save Banner Draft"}
+        </Button>
+
+        <Button
+          onClick={handleClear}
+          disabled={isSaving || !fieldsAreFilled}
+          variant={"outline"}
+        >
+          Clear Banner Message
+        </Button>
+      </div>
+    </div>
   );
 }

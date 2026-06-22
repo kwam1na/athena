@@ -1,25 +1,33 @@
-import {
-  DragDropContext,
-  Draggable,
-  Droppable,
-  DropResult,
-} from "@hello-pangea/dnd";
 import { useMutation, useQuery } from "convex/react";
 import { useEffect, useMemo, useState } from "react";
 import { api } from "~/convex/_generated/api";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
-import { capitalizeWords, currencyFormatter } from "~/src/lib/utils";
-import View from "../View";
+import { capitalizeWords } from "~/src/lib/utils";
 import { Link } from "@tanstack/react-router";
 import { Button } from "../ui/button";
 import { TrashIcon } from "@radix-ui/react-icons";
-import { Image, Info, PencilIcon, PlusIcon } from "lucide-react";
+import { PencilIcon, PlusIcon } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "../ui/tooltip";
 import { ShopLookDialog } from "./ShopLookDialog";
 import { getOrigin } from "~/src/lib/navigationUtils";
 
 import { ShopLookImageUploader } from "./ShopLookImageUploader";
 import { toast } from "sonner";
 import { getStoreConfigV2 } from "~/src/lib/storeConfig";
+import { formatStoredCurrencyAmount } from "~/src/lib/pos/displayAmounts";
+import type { Id } from "~/convex/_generated/dataModel";
+import type { Product } from "~/types";
+
+type ShopLookItem = {
+  _id: Id<"featuredItem">;
+  rank?: number;
+  product?: Product | null;
+};
 
 export const ShopLookSection = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -27,71 +35,52 @@ export const ShopLookSection = () => {
   const { activeStore } = useGetActiveStore();
   const storeConfig = useMemo(
     () => getStoreConfigV2(activeStore),
-    [activeStore?.config],
+    [activeStore],
   );
-
-  const [shopTheLookImage, setShopTheLookImage] = useState<
-    string | undefined
-  >();
 
   const featuredItemsQuery = useQuery(
     api.inventory.featuredItem.getAll,
     activeStore?._id ? { storeId: activeStore._id, type: "shop_look" } : "skip"
+  ) as ShopLookItem[] | undefined;
+
+  const [featuredItems, setFeaturedItems] = useState<ShopLookItem[] | null>(
+    null,
   );
 
-  const [featuredItems, setFeaturedItems] = useState<any[] | null>(null);
-
   useEffect(() => {
-    if (
-      (featuredItemsQuery && !featuredItems) ||
-      featuredItemsQuery?.length !== featuredItems?.length
-    ) {
-      const sortedItems = featuredItemsQuery?.sort(
-        (a: any, b: any) => a.rank - b.rank
-      );
-
-      sortedItems && setFeaturedItems(sortedItems);
+    if (!featuredItemsQuery) {
+      return;
     }
-  }, [featuredItemsQuery, featuredItems]);
 
-  useEffect(() => {
-    if (storeConfig.media.images.shopTheLookImage) {
-      setShopTheLookImage(storeConfig.media.images.shopTheLookImage);
-    }
-  }, [storeConfig.media.images.shopTheLookImage]);
+    setFeaturedItems(
+      [...featuredItemsQuery].sort((a, b) => (a.rank ?? 0) - (b.rank ?? 0)),
+    );
+  }, [featuredItemsQuery]);
 
   const removeHighlightedItem = useMutation(api.inventory.featuredItem.remove);
-  const updateRanks = useMutation(api.inventory.featuredItem.updateRanks);
   const patchConfig = useMutation(api.inventory.stores.patchConfigV2);
 
-  const handleHighlightedItem = async (featuredItem: any) => {
-    removeHighlightedItem({
-      id: featuredItem._id,
-    });
-  };
-
-  const onDragEnd = (result: DropResult) => {
-    if (!result.destination || !featuredItems) return;
-
-    const items = Array.from(featuredItems);
-    const [movedItem] = items.splice(result.source.index, 1);
-    items.splice(result.destination.index, 0, movedItem);
-
-    setFeaturedItems(items);
-
-    const newRanks = items.map((item: any, index) => ({
-      id: item._id,
-      rank: index,
-    }));
-
-    updateRanks({ ranks: newRanks });
+  const handleHighlightedItem = async (featuredItem: ShopLookItem) => {
+    try {
+      await removeHighlightedItem({
+        id: featuredItem._id,
+      });
+      toast.success("Shop the Look product removed");
+    } catch (error) {
+      console.error("Failed to remove Shop the Look product:", error);
+      toast.error("Shop the Look product was not removed. Try again.");
+    }
   };
 
   const handleImageUpdate = async (newImageUrl: string) => {
-    console.log("newImageUrl", newImageUrl);
+    if (!activeStore) {
+      toast.error("Select a store before updating the Shop the Look image");
+      return;
+    }
+
     try {
       await patchConfig({
-        id: activeStore?._id!,
+        id: activeStore._id,
         patch: {
           media: {
             images: {
@@ -100,7 +89,6 @@ export const ShopLookSection = () => {
           },
         },
       });
-      setShopTheLookImage(newImageUrl);
       toast.success("Shop the Look image updated");
     } catch (error) {
       console.error("Failed to update store configuration:", error);
@@ -109,7 +97,7 @@ export const ShopLookSection = () => {
     }
   };
 
-  const formatter = currencyFormatter(activeStore?.currency || "USD");
+  const currency = activeStore?.currency || "USD";
 
   const featuredItem = featuredItems?.[0];
 
@@ -124,122 +112,91 @@ export const ShopLookSection = () => {
   );
 
   return (
-    <View
-      hideBorder
-      hideHeaderBottomBorder
-      className="py-4"
-      header={<p className="text-sm text-muted-foreground">Shop The Look</p>}
-    >
+    <div className="space-y-layout-lg">
       <ShopLookDialog
         action={hasHighlightedItem ? "edit" : "add"}
         dialogOpen={dialogOpen}
         setDialogOpen={setDialogOpen}
         featuredItemId={featuredItem?._id}
       />
-      <div className="py-4 space-y-8">
+      <div className="space-y-layout-lg">
         <ShopLookImageUploader
           currentImageUrl={storeConfig.media.images.shopTheLookImage}
           onImageUpdate={handleImageUpdate}
           disabled={!activeStore}
         />
-        <DragDropContext onDragEnd={onDragEnd}>
-          <Droppable droppableId="featuredItemsList">
-            {(provided) => (
-              <div
-                {...provided.droppableProps}
-                ref={provided.innerRef}
-                className="w-full space-y-2"
+        <div className="w-full space-y-layout-sm">
+          <p className="text-sm font-medium text-foreground">
+            Highlighted product
+          </p>
+          {featuredItem?.product ? (
+            <div className="flex flex-col gap-layout-sm rounded-md border border-border bg-background p-layout-sm sm:flex-row sm:items-center sm:justify-between">
+              <Link
+                to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug"
+                params={(params) => ({
+                  ...params,
+                  orgUrlSlug: params.orgUrlSlug!,
+                  storeUrlSlug: params.storeUrlSlug!,
+                  productSlug: featuredItem.product!._id,
+                })}
+                search={{ o: getOrigin() }}
+                className="flex min-w-0 items-center gap-4"
               >
-                <p className="text-sm text-muted-foreground">
-                  Highlighted product
-                </p>
-                {featuredItems?.map((featuredItem: any, index: number) => (
-                  <Draggable
-                    key={featuredItem._id}
-                    draggableId={featuredItem._id}
-                    index={index}
-                  >
-                    {(provided) => (
-                      <div
-                        ref={provided.innerRef}
-                        {...provided.draggableProps}
-                        {...provided.dragHandleProps}
-                        className="flex items-center justify-between bg-background py-4"
-                      >
-                        <div className="flex items-center gap-4">
-                          {featuredItem?.product && (
-                            <Link
-                              to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug"
-                              params={(params) => ({
-                                ...params,
-                                orgUrlSlug: params.orgUrlSlug!,
-                                storeUrlSlug: params.storeUrlSlug!,
-                                productSlug: featuredItem.product._id,
-                              })}
-                              search={{ o: getOrigin() }}
-                              className="flex items-center gap-4"
-                            >
-                              <img
-                                src={
-                                  featuredItem?.product?.skus[0]?.images[0] ||
-                                  "/placeholder.jpg"
-                                }
-                                alt={featuredItem?.product?.name || "Product"}
-                                className="w-16 h-16 aspect-square object-cover rounded-md"
-                              />
-                              <div className="flex flex-col gap-2">
-                                <p className="text-sm">
-                                  {capitalizeWords(featuredItem?.product?.name)}
-                                </p>
-                                <p className="text-xs text-muted-foreground">
-                                  {formatter.format(
-                                    featuredItem?.product?.skus[0]?.price
-                                  )}
-                                </p>
-                              </div>
-                            </Link>
-                          )}
-                        </div>
-
-                        <Button
-                          variant={"ghost"}
-                          onClick={() => handleHighlightedItem(featuredItem)}
-                        >
-                          <TrashIcon className="w-4 h-4" />
-                        </Button>
-                      </div>
+                <img
+                  src={
+                    featuredItem.product.skus[0]?.images[0] ||
+                    "/placeholder.jpg"
+                  }
+                  alt={featuredItem.product.name || "Product"}
+                  className="h-16 w-16 aspect-square shrink-0 rounded-md object-cover"
+                />
+                <div className="min-w-0 space-y-1">
+                  <p className="truncate text-sm">
+                    {capitalizeWords(featuredItem.product.name)}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {formatStoredCurrencyAmount(
+                      currency,
+                      featuredItem.product.skus[0]?.price ?? 0,
+                      { revealMinorUnits: true },
                     )}
-                  </Draggable>
-                ))}
-                {provided.placeholder}
-              </div>
-            )}
-          </Droppable>
-        </DragDropContext>
+                  </p>
+                </div>
+              </Link>
+
+              <TooltipProvider delayDuration={150}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      aria-label={`Remove ${capitalizeWords(featuredItem.product.name)} from Shop the Look`}
+                      onClick={() => handleHighlightedItem(featuredItem)}
+                      size="icon"
+                      title={`Remove ${capitalizeWords(featuredItem.product.name)} from Shop the Look`}
+                      variant="ghost"
+                    >
+                      <TrashIcon className="w-4 h-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Remove</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
+          ) : (
+            <div className="rounded-md border border-dashed border-border bg-background p-layout-md text-sm text-muted-foreground">
+              Add the product customers should reach from this visual story.
+            </div>
+          )}
+        </div>
         <div className="flex items-center gap-1">
           <Button
-            variant="ghost"
+            variant="outline"
             onClick={() => setDialogOpen(true)}
-            // disabled={featuredItems?.length == 1}
           >
             {ctaIcon}
             <p className="text-xs">{ctaText}</p>
           </Button>
-
-          {/* {featuredItems?.length == 1 && (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Info className="h-4 w-4 text-muted-foreground" />
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Only one product can be highlighted</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )} */}
         </div>
       </div>
-    </View>
+    </div>
   );
 };

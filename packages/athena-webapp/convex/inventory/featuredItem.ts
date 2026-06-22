@@ -1,8 +1,111 @@
 import { v } from "convex/values";
-import { mutation, query } from "../_generated/server";
+import {
+  mutation,
+  query,
+  type MutationCtx,
+  type QueryCtx,
+} from "../_generated/server";
+import type { Id } from "../_generated/dataModel";
 import { api } from "../_generated/api";
+import {
+  requireAuthenticatedAthenaUserWithCtx,
+  requireOrganizationMemberRoleWithCtx,
+} from "../lib/athenaUserAuth";
 
 const entity = "featuredItem";
+
+const RESERVED_STOREFRONT_CATEGORY_SLUGS = new Set(["pos-quick-add"]);
+const RESERVED_STOREFRONT_SUBCATEGORY_SLUGS = new Set(["uncategorized"]);
+
+async function requireHomepageStoreAdmin(
+  ctx: QueryCtx | MutationCtx,
+  storeId: Id<"store">,
+) {
+  const store = await ctx.db.get("store", storeId);
+  if (!store) {
+    throw new Error("Store not found.");
+  }
+
+  const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+  await requireOrganizationMemberRoleWithCtx(ctx, {
+    allowedRoles: ["full_admin"],
+    failureMessage: "You do not have access to manage homepage content.",
+    organizationId: store.organizationId,
+    userId: athenaUser._id,
+  });
+
+  return store;
+}
+
+const isCustomerVisibleCategory = (
+  category: { showOnStorefront?: boolean; slug: string } | null,
+) => {
+  return Boolean(
+    category &&
+      category.showOnStorefront !== false &&
+      !RESERVED_STOREFRONT_CATEGORY_SLUGS.has(category.slug),
+  );
+};
+
+const countFeaturedTargets = (args: {
+  productId?: unknown;
+  categoryId?: unknown;
+  subcategoryId?: unknown;
+}) => {
+  return [args.productId, args.categoryId, args.subcategoryId].filter(Boolean)
+    .length;
+};
+
+const validateFeaturedPlacement = async (
+  ctx: QueryCtx | MutationCtx,
+  args: {
+    productId?: Id<"product">;
+    categoryId?: Id<"category">;
+    subcategoryId?: Id<"subcategory">;
+    storeId: Id<"store">;
+  },
+) => {
+  if (countFeaturedTargets(args) !== 1) {
+    throw new Error("Featured placement must reference exactly one target kind.");
+  }
+
+  if (args.productId) {
+    const product = await ctx.db.get("product", args.productId);
+    if (!product || product.storeId !== args.storeId) {
+      throw new Error("Featured product must belong to the same store.");
+    }
+    return;
+  }
+
+  if (args.categoryId) {
+    const category = await ctx.db.get("category", args.categoryId);
+    if (!category || category.storeId !== args.storeId) {
+      throw new Error("Featured category must belong to the same store.");
+    }
+    if (!isCustomerVisibleCategory(category)) {
+      throw new Error("Featured category must be customer-visible.");
+    }
+    return;
+  }
+
+  if (args.subcategoryId) {
+    const subcategory = await ctx.db.get("subcategory", args.subcategoryId);
+    if (!subcategory || subcategory.storeId !== args.storeId) {
+      throw new Error("Featured subcategory must belong to the same store.");
+    }
+    if (RESERVED_STOREFRONT_SUBCATEGORY_SLUGS.has(subcategory.slug)) {
+      throw new Error("Featured subcategory must be customer-visible.");
+    }
+
+    const category = await ctx.db.get("category", subcategory.categoryId);
+    if (!category || category.storeId !== args.storeId) {
+      throw new Error("Featured subcategory parent must belong to the same store.");
+    }
+    if (!isCustomerVisibleCategory(category)) {
+      throw new Error("Featured subcategory parent must be customer-visible.");
+    }
+  }
+};
 
 export const create = mutation({
   args: {
@@ -13,9 +116,19 @@ export const create = mutation({
     storeId: v.id("store"),
   },
   handler: async (ctx, args) => {
+    await requireHomepageStoreAdmin(ctx, args.storeId);
+    await validateFeaturedPlacement(ctx, args);
+
     const existing = await ctx.db
       .query(entity)
       .filter((q) => {
+        if (args.type === "shop_look") {
+          return q.and(
+            q.eq(q.field("storeId"), args.storeId),
+            q.eq(q.field("type"), "shop_look")
+          );
+        }
+
         return q.and(
           args.productId
             ? q.eq(q.field("productId"), args.productId)
@@ -53,6 +166,12 @@ export const remove = mutation({
     id: v.id(entity),
   },
   handler: async (ctx, args) => {
+    const existing = await ctx.db.get(entity, args.id);
+    if (!existing) {
+      return true;
+    }
+
+    await requireHomepageStoreAdmin(ctx, existing.storeId);
     await ctx.db.delete(entity, args.id);
 
     return true;
@@ -186,6 +305,21 @@ export const updateRanks = mutation({
     ranks: v.array(v.object({ id: v.id(entity), rank: v.number() })),
   },
   handler: async (ctx, args) => {
+    const rows = await Promise.all(
+      args.ranks.map((item) => ctx.db.get(entity, item.id))
+    );
+    const storeIds = new Set(
+      rows
+        .filter((row): row is NonNullable<typeof row> => row !== null)
+        .map((row) => row.storeId)
+    );
+
+    await Promise.all(
+      Array.from(storeIds).map((storeId) =>
+        requireHomepageStoreAdmin(ctx, storeId)
+      )
+    );
+
     await Promise.all(
       args.ranks.map(async (item) => {
         await ctx.db.patch(entity, item.id, {

@@ -1,13 +1,35 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import * as athenaUserAuth from "../lib/athenaUserAuth";
 import type { QueryCtx } from "../_generated/server";
-import { getAll } from "./bestSeller";
+import { create, getAll } from "./bestSeller";
+
+vi.mock("../lib/athenaUserAuth", () => ({
+  requireAuthenticatedAthenaUserWithCtx: vi.fn(),
+  requireOrganizationMemberRoleWithCtx: vi.fn(),
+}));
 
 function getHandler(definition: unknown) {
   return (definition as { _handler: Function })._handler;
 }
 
 describe("best-seller product visibility", () => {
+  beforeEach(() => {
+    vi.mocked(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).mockResolvedValue({
+      _id: "athena-user-1",
+      email: "admin@example.com",
+    } as any);
+    vi.mocked(
+      athenaUserAuth.requireOrganizationMemberRoleWithCtx,
+    ).mockResolvedValue({ _id: "member-1", role: "full_admin" } as any);
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
   it("filters archived product SKUs from public best-seller results", async () => {
     const bestSellers = [
       {
@@ -63,5 +85,116 @@ describe("best-seller product visibility", () => {
     expect(results).toHaveLength(1);
     expect(results[0]._id).toBe("bestSeller-live");
     expect(results[0].productSku._id).toBe("sku-live");
+  });
+
+  it("rejects best-seller product and SKU pairings outside the same store", async () => {
+    const ctx = {
+      db: {
+        get: vi.fn(async (table: string, id: string) => {
+          if (table === "store") {
+            return { _id: id, organizationId: "org-1" };
+          }
+
+          if (table === "product") {
+            return { _id: id, storeId: "store123" };
+          }
+
+          return { _id: id, storeId: "other-store", productId: "product-1" };
+        }),
+        query: vi.fn(() => ({
+          filter: vi.fn(() => ({
+            first: vi.fn(async () => null),
+          })),
+        })),
+        insert: vi.fn(),
+      },
+    } as any;
+
+    await expect(
+      getHandler(create)(ctx, {
+        storeId: "store123",
+        productId: "product-1",
+        productSkuId: "sku-1",
+      }),
+    ).rejects.toThrow("same store");
+
+    expect(ctx.db.insert).not.toHaveBeenCalled();
+  });
+
+  it("rejects best-seller SKU rows that do not belong to the selected product", async () => {
+    const ctx = {
+      db: {
+        get: vi.fn(async (table: string, id: string) => {
+          if (table === "store") {
+            return { _id: id, organizationId: "org-1" };
+          }
+
+          if (table === "product") {
+            return { _id: id, storeId: "store123" };
+          }
+
+          return { _id: id, storeId: "store123", productId: "other-product" };
+        }),
+        query: vi.fn(() => ({
+          filter: vi.fn(() => ({
+            first: vi.fn(async () => null),
+          })),
+        })),
+        insert: vi.fn(),
+      },
+    } as any;
+
+    await expect(
+      getHandler(create)(ctx, {
+        storeId: "store123",
+        productId: "product-1",
+        productSkuId: "sku-1",
+      }),
+    ).rejects.toThrow("selected product");
+
+    expect(ctx.db.insert).not.toHaveBeenCalled();
+  });
+
+  it("requires homepage full-admin access before creating best sellers", async () => {
+    const ctx = {
+      db: {
+        get: vi.fn(async (table: string, id: string) => {
+          if (table === "store") {
+            return { _id: id, organizationId: "org-1" };
+          }
+          if (table === "product") {
+            return { _id: id, storeId: "store123" };
+          }
+          if (table === "productSku") {
+            return { _id: id, storeId: "store123", productId: "product-1" };
+          }
+          if (table === "bestSeller") {
+            return { _id: id, storeId: "store123" };
+          }
+          return null;
+        }),
+        query: vi.fn(() => ({
+          filter: vi.fn(() => ({
+            first: vi.fn(async () => null),
+          })),
+        })),
+        insert: vi.fn(async () => "best-seller-1"),
+      },
+    } as any;
+
+    await getHandler(create)(ctx, {
+      storeId: "store123",
+      productId: "product-1",
+      productSkuId: "sku-1",
+    });
+
+    expect(
+      athenaUserAuth.requireOrganizationMemberRoleWithCtx,
+    ).toHaveBeenCalledWith(ctx, {
+      allowedRoles: ["full_admin"],
+      failureMessage: "You do not have access to manage homepage content.",
+      organizationId: "org-1",
+      userId: "athena-user-1",
+    });
   });
 });

@@ -1,12 +1,8 @@
 import { useMutation, useQuery } from "convex/react";
 import { api } from "~/convex/_generated/api";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
-import {
-  CommandDialog,
-  CommandGroup,
-  CommandItem,
-  CommandList,
-} from "../ui/command";
+import { HomepageProductPickerDialog } from "./HomepageProductPickerDialog";
+import type { Category, Product, Subcategory } from "~/types";
 
 export function FeaturedSectionDialog({
   dialogOpen,
@@ -34,35 +30,35 @@ export function FeaturedSectionDialog({
 
   const addFeaturedItem = useMutation(api.inventory.featuredItem.create);
 
-  const handleAddFeaturedItem = async (
-    item: any,
-    type: "category" | "subcategory" | "product"
-  ) => {
+  const handleAddProduct = async (product: Product) => {
     if (!activeStore) return;
 
-    let productId, categoryId, subcategoryId;
+    await addFeaturedItem({
+      productId: product._id,
+      storeId: activeStore._id,
+      type: "regular",
+    });
 
-    switch (type) {
-      case "category":
-        categoryId = item._id;
-        break;
+    setDialogOpen(false);
+  };
 
-      case "subcategory":
-        subcategoryId = item._id;
-        break;
+  const handleAddCategory = async (category: Category) => {
+    if (!activeStore) return;
 
-      case "product":
-        productId = item._id;
-        break;
+    await addFeaturedItem({
+      categoryId: category._id,
+      storeId: activeStore._id,
+      type: "regular",
+    });
 
-      default:
-        break;
-    }
+    setDialogOpen(false);
+  };
 
-    addFeaturedItem({
-      productId,
-      categoryId,
-      subcategoryId,
+  const handleAddSubcategory = async (subcategory: Subcategory) => {
+    if (!activeStore) return;
+
+    await addFeaturedItem({
+      subcategoryId: subcategory._id,
       storeId: activeStore._id,
       type: "regular",
     });
@@ -73,61 +69,21 @@ export function FeaturedSectionDialog({
   if (!activeStore) return null;
 
   return (
-    <>
-      <CommandDialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <CommandList>
-          <CommandGroup heading="Categories">
-            {categories?.map((category: any) => (
-              <CommandItem key={category._id}>
-                <div
-                  className="flex items-center gap-2 w-full"
-                  onClick={() => handleAddFeaturedItem(category, "category")}
-                >
-                  <p>{category.name}</p>
-                </div>
-              </CommandItem>
-            ))}
-          </CommandGroup>
-
-          <CommandGroup heading="Subcategories">
-            {subcategories?.map((subcategory: any) => (
-              <CommandItem key={subcategory._id}>
-                <div
-                  className="flex items-center gap-2 w-full"
-                  onClick={() =>
-                    handleAddFeaturedItem(subcategory, "subcategory")
-                  }
-                >
-                  <p>{subcategory.name}</p>
-                </div>
-              </CommandItem>
-            ))}
-          </CommandGroup>
-
-          <CommandGroup heading="Products">
-            {products?.map((product: any) => (
-              <CommandItem key={product._id}>
-                <div
-                  className="flex items-center gap-2 w-full"
-                  onClick={() => handleAddFeaturedItem(product, "product")}
-                >
-                  {product?.skus[0].images[0] ? (
-                    <img
-                      src={product?.skus[0].images[0]}
-                      alt={product?.name}
-                      className="w-16 h-16 rounded-md"
-                    />
-                  ) : (
-                    <div className="aspect-square w-16 h-16 bg-gray-100 rounded-md" />
-                  )}
-
-                  <p>{product.name}</p>
-                </div>
-              </CommandItem>
-            ))}
-          </CommandGroup>
-        </CommandList>
-      </CommandDialog>
-    </>
+    <HomepageProductPickerDialog
+      categories={categories as Category[] | undefined}
+      currency={activeStore.currency}
+      description="Select a product, category, or subcategory to feature below the homepage hero."
+      onOpenChange={setDialogOpen}
+      onSelectCategory={handleAddCategory}
+      onSelectProduct={handleAddProduct}
+      onSelectSubcategory={handleAddSubcategory}
+      open={dialogOpen}
+      products={products as Product[] | undefined}
+      searchId="homepage-highlighted-sku-search"
+      selectLabel="Feature product"
+      showCollections
+      subcategories={subcategories as Subcategory[] | undefined}
+      title="Add highlighted content"
+    />
   );
 }

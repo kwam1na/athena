@@ -4,9 +4,10 @@ import { Button } from "../ui/button";
 import { ProductSkuCard } from "../ProductCard";
 import { useStoreContext } from "@/contexts/StoreContext";
 import { ProductSku } from "@athena/webapp";
+import type { HomepageDisplaySku } from "./homePageContent";
 
 interface BestSellersSectionProps {
-  bestSellersProducts: ProductSku[];
+  bestSellersProducts: Array<ProductSku | HomepageDisplaySku>;
   origin: string;
 }
 
@@ -65,13 +66,13 @@ function ProductSkuGrid({
   formatter,
   origin,
 }: {
-  products: ProductSku[];
+  products: Array<ProductSku | HomepageDisplaySku>;
   formatter: any;
   origin: string;
 }) {
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-8 md:gap-24 xl:gap-4">
-      {products?.slice(0, 4).map((product: ProductSku) => (
+      {products?.slice(0, 4).map((product) => (
         <Link
           to="/shop/product/$productSlug"
           key={product?._id}

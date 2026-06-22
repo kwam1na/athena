@@ -27,5 +27,137 @@ describe("resolveHomepageContent", () => {
     expect(result.shopLookProduct?._id).toBe("featured-shop");
     expect(result.hasHomepageData).toBe(true);
   });
-});
 
+  it("resolves snapshot sections without converting minor-unit prices", () => {
+    const result = resolveHomepageContent({
+      snapshot: {
+        contractVersion: "homepage_snapshot.v1",
+        generatedAtMs: 1,
+        store: {} as any,
+        hero: {} as any,
+        bannerMessage: null,
+        bestSellers: [
+          {
+            rank: 1,
+            id: "best-seller-1",
+            productSku: {
+              productId: "product-1",
+              productSlug: "middle-part-bob",
+              productName: "Middle Part Bob",
+              skuId: "sku-1",
+              sku: "MPB-12",
+              imageUrls: ["image.jpg"],
+              currency: "GHS",
+              priceAmountMinor: 12999,
+              netPriceAmountMinor: null,
+            },
+          },
+        ],
+        featuredItems: [
+          {
+            id: "highlight-1",
+            rank: 1,
+            type: "regular",
+            targetKind: "product",
+            category: null,
+            subcategory: null,
+            product: {
+              productId: "product-2",
+              productSlug: "side-part-bob",
+              productName: "Side Part Bob",
+              skuId: "sku-2",
+              sku: "SPB-14",
+              imageUrls: ["featured.jpg"],
+              currency: "GHS",
+              priceAmountMinor: 6500,
+              netPriceAmountMinor: null,
+            },
+          },
+          {
+            id: "highlight-category",
+            rank: 2,
+            type: "regular",
+            targetKind: "category",
+            product: null,
+            subcategory: null,
+            category: {
+              categoryId: "category-1",
+              name: "Closures",
+              slug: "closures",
+              products: [
+                {
+                  productId: "product-3",
+                  productSlug: "closure-unit",
+                  productName: "Closure Unit",
+                  skuId: "sku-3",
+                  sku: "CLU-16",
+                  imageUrls: ["closure.jpg"],
+                  currency: "GHS",
+                  priceAmountMinor: 5000,
+                  netPriceAmountMinor: null,
+                },
+              ],
+            },
+          },
+        ],
+        shopLook: {
+          id: "shop-look",
+          rank: 1,
+          type: "shop_look",
+          targetKind: "product",
+          category: null,
+          subcategory: null,
+          product: {
+            productId: "product-shop-look",
+            productSlug: "shop-look-product",
+            productName: "Shop Look",
+            skuId: "sku-shop-look",
+            sku: null,
+            imageUrls: [],
+            currency: "GHS",
+            priceAmountMinor: 7000,
+            netPriceAmountMinor: null,
+          },
+        },
+      },
+    });
+
+    expect(result.bestSellersProducts).toMatchObject([
+      {
+        _id: "sku-1",
+        productId: "middle-part-bob",
+        price: 12999,
+      },
+    ]);
+    expect(result.featuredSectionSorted[0]?.product?.skus[0]?.price).toBe(6500);
+    expect(result.featuredSectionSorted.map((item) => item._id)).toEqual([
+      "highlight-1",
+      "highlight-category",
+    ]);
+    expect(
+      result.featuredSectionSorted[1]?.category?.products[0]?._id,
+    ).toBe("closure-unit");
+    expect(result.shopLookProduct?.productId).toBe("shop-look-product");
+    expect(result.hasHomepageData).toBe(true);
+  });
+
+  it("treats null snapshot sections as ready empty homepage content", () => {
+    const result = resolveHomepageContent({
+      snapshot: {
+        contractVersion: "homepage_snapshot.v1",
+        generatedAtMs: 1,
+        store: {} as any,
+        hero: {} as any,
+        bannerMessage: null,
+        bestSellers: [],
+        featuredItems: [],
+        shopLook: null,
+      },
+    });
+
+    expect(result.bestSellersProducts).toEqual([]);
+    expect(result.featuredSectionSorted).toEqual([]);
+    expect(result.shopLookProduct).toBeUndefined();
+    expect(result.hasHomepageData).toBe(false);
+  });
+});
