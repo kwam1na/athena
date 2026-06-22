@@ -72,6 +72,7 @@ function serializeRedisValue(value) {
 async function scanNodeForPattern(node, pattern, logger = console) {
   const matchedKeys = [];
   let cursor = "0";
+  const nodeLabel = node.options?.host || "standalone";
 
   do {
     try {
@@ -85,7 +86,7 @@ async function scanNodeForPattern(node, pattern, logger = console) {
       cursor = nextCursor;
       matchedKeys.push(...keys);
     } catch (error) {
-      logger.error(`Scan failed on node ${node.options.host}:`, error);
+      logger.error(`Scan failed on node ${nodeLabel}:`, error);
       return { keys: matchedKeys, errors: [error.message] };
     }
   } while (cursor !== "0");
@@ -109,11 +110,15 @@ async function deleteKeysIndividually(redis, keys, logger = console) {
   return { deletedCount, errors };
 }
 
+function getInvalidationNodes(redis) {
+  return typeof redis.nodes === "function" ? redis.nodes("all") : [redis];
+}
+
 async function invalidateAcrossCluster(redis, pattern, logger = console) {
   let deletedCount = 0;
   const errors = [];
 
-  for (const node of redis.nodes("all")) {
+  for (const node of getInvalidationNodes(redis)) {
     const { keys, errors: scanErrors } = await scanNodeForPattern(
       node,
       pattern,
@@ -135,7 +140,7 @@ async function invalidateAcrossCluster(redis, pattern, logger = console) {
 async function invalidateAcrossClusterWithPipeline(redis, pattern, logger = console) {
   const keys = new Set();
 
-  for (const node of redis.nodes("all")) {
+  for (const node of getInvalidationNodes(redis)) {
     const { keys: nodeKeys } = await scanNodeForPattern(node, pattern, logger);
     for (const key of nodeKeys) {
       keys.add(key);
