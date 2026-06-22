@@ -742,6 +742,8 @@ export async function getTodaySummary(
 
   if (args.pulseWindow) {
     return getPulseSummaryForWindow(ctx, {
+      currentDayEnd: summaryWindow.endOfDay,
+      currentDayStart: summaryWindow.startOfDay,
       currentOperatingDate: summaryWindow.operatingDate,
       pulseWindow: args.pulseWindow,
       storeId: args.storeId,
@@ -788,12 +790,16 @@ export async function getTodaySummary(
 async function getPulseSummaryForWindow(
   ctx: QueryCtx,
   args: {
+    currentDayEnd: number;
+    currentDayStart: number;
     currentOperatingDate: string;
     pulseWindow: PosPulseWindow;
     storeId: Id<"store">;
   },
 ) {
   const pulseWindow = resolvePosPulseWindow({
+    currentDayEnd: args.currentDayEnd,
+    currentDayStart: args.currentDayStart,
     currentOperatingDate: args.currentOperatingDate,
     pulseWindow: args.pulseWindow,
   });
@@ -835,8 +841,13 @@ async function getPulseSummaryForWindow(
           buildSummaryTrendBucket(
             pulseWindow.comparisonStart,
             comparisonSummary,
+            pulseWindow.comparisonOperatingDate,
           ),
-          buildSummaryTrendBucket(pulseWindow.rangeEnd, todaySummary),
+          buildSummaryTrendBucket(
+            pulseWindow.rangeStart,
+            todaySummary,
+            args.currentOperatingDate,
+          ),
         ]
       : operatorSnapshot.trend;
 
@@ -845,7 +856,10 @@ async function getPulseSummaryForWindow(
       todaySummary.totalTransactions > 0
         ? todaySummary.totalSales / todaySummary.totalTransactions
         : 0,
-    date: toIsoDate(pulseWindow.rangeEnd),
+    date:
+      args.pulseWindow === "today"
+        ? args.currentOperatingDate
+        : toIsoDate(pulseWindow.rangeEnd),
     operatorSnapshot: {
       ...operatorSnapshot,
       historyDays: Math.max(operatorSnapshot.historyDays, trend.length),
@@ -934,7 +948,10 @@ async function buildPosOperatorSnapshot(
   >();
 
   for (const transaction of transactions) {
-    const date = toIsoDate(transaction.completedAt);
+    const date =
+      args.historyBucketMode === "transaction_dates"
+        ? toIsoDate(transaction.completedAt)
+        : getFixedHistoryBucketDate(transaction.completedAt, historyStart);
     const dayBucket = dayBucketsByDate.get(date);
     if (dayBucket) {
       dayBucket.totalSales += transaction.total;
@@ -1106,11 +1123,19 @@ async function buildPosOperatorSnapshot(
 }
 
 function resolvePosPulseWindow(args: {
+  currentDayEnd: number;
+  currentDayStart: number;
   currentOperatingDate: string;
   pulseWindow: PosPulseWindow;
 }) {
-  const currentDayStart = parseOperatingDateStart(args.currentOperatingDate);
-  const currentDayEnd = currentDayStart + DAY_MS - 1;
+  const parsedCurrentDayStart = parseOperatingDateStart(args.currentOperatingDate);
+  const currentDayStart = Number.isFinite(args.currentDayStart)
+    ? args.currentDayStart
+    : parsedCurrentDayStart;
+  const currentDayEnd =
+    Number.isFinite(args.currentDayEnd) && args.currentDayEnd >= currentDayStart
+      ? args.currentDayEnd
+      : parsedCurrentDayStart + DAY_MS - 1;
 
   if (args.pulseWindow === "all_time") {
     return {
@@ -1122,9 +1147,12 @@ function resolvePosPulseWindow(args: {
   }
 
   if (args.pulseWindow === "today") {
+    const windowLength = currentDayEnd - currentDayStart + 1;
+
     return {
       comparisonEnd: currentDayStart - 1,
-      comparisonStart: currentDayStart - DAY_MS,
+      comparisonOperatingDate: toIsoDate(parsedCurrentDayStart - DAY_MS),
+      comparisonStart: currentDayStart - windowLength,
       dayCount: 1,
       rangeEnd: currentDayEnd,
       rangeStart: currentDayStart,
@@ -1248,8 +1276,9 @@ function buildRecentDayBuckets(startAt: number, dayCount: number) {
 function buildSummaryTrendBucket(
   dateAt: number,
   summary: PosPulseSummaryTotals,
+  operatingDate?: string,
 ): PosOperatorDayBucket {
-  const date = toIsoDate(dateAt);
+  const date = operatingDate ?? toIsoDate(dateAt);
 
   return {
     averageTransaction:
@@ -1295,6 +1324,15 @@ function buildTransactionDateBuckets(
     totalSales: 0,
     transactionCount: 0,
   }));
+}
+
+function getFixedHistoryBucketDate(timestamp: number, historyStart: number) {
+  const bucketIndex = Math.max(
+    0,
+    Math.floor((timestamp - historyStart) / DAY_MS),
+  );
+
+  return toIsoDate(historyStart + bucketIndex * DAY_MS);
 }
 
 function toIsoDate(timestamp: number) {
@@ -1361,9 +1399,20 @@ async function resolveCurrentPosSummaryWindow(
   const operatingDate =
     activeOpening?.operatingDate ??
     new Date(args.now).toISOString().slice(0, 10);
-  const startOfDay = Date.parse(`${operatingDate}T00:00:00.000Z`);
+  const fallbackStartOfDay = Date.parse(`${operatingDate}T00:00:00.000Z`);
+  const activeOpeningStartAt = activeOpening?.startAt;
+  const activeOpeningEndAt = activeOpening?.endAt;
+  const activeOpeningRange =
+    typeof activeOpeningStartAt === "number" &&
+    typeof activeOpeningEndAt === "number" &&
+    isValidPosSummaryWindowRange(activeOpeningStartAt, activeOpeningEndAt)
+      ? {
+          endOfDay: activeOpeningEndAt - 1,
+          startOfDay: activeOpeningStartAt,
+        }
+      : null;
 
-  if (!Number.isFinite(startOfDay)) {
+  if (!Number.isFinite(fallbackStartOfDay)) {
     const fallbackStart = Date.parse(
       `${new Date(args.now).toISOString().slice(0, 10)}T00:00:00.000Z`,
     );
@@ -1376,10 +1425,21 @@ async function resolveCurrentPosSummaryWindow(
   }
 
   return {
-    endOfDay: startOfDay + DAY_MS - 1,
+    endOfDay: activeOpeningRange?.endOfDay ?? fallbackStartOfDay + DAY_MS - 1,
     operatingDate,
-    startOfDay,
+    startOfDay: activeOpeningRange?.startOfDay ?? fallbackStartOfDay,
   };
+}
+
+function isValidPosSummaryWindowRange(startAt: unknown, endAt: unknown) {
+  return (
+    typeof startAt === "number" &&
+    typeof endAt === "number" &&
+    Number.isFinite(startAt) &&
+    Number.isFinite(endAt) &&
+    endAt > startAt &&
+    endAt - startAt <= 36 * 60 * 60 * 1000
+  );
 }
 
 async function findLatestOpenOperatingDay(

@@ -3,7 +3,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-REPO_ROOT="$(git -C "$ROOT_DIR" rev-parse --show-toplevel)"
+REPO_ROOT="$(cd "$ROOT_DIR/../.." && pwd)"
 
 resolve_base_ref() {
   local candidate

@@ -327,6 +327,143 @@ describe("getTodaySummary", () => {
     });
   });
 
+  it("honors the active opening time range for today's POS pulse summary", async () => {
+    vi.setSystemTime(new Date("2026-06-21T18:00:00.000Z"));
+    vi.mocked(listCompletedTransactionsForRange).mockResolvedValueOnce([
+      {
+        _id: "txn-in-window" as Id<"posTransaction">,
+        completedAt: Date.parse("2026-06-21T12:00:00.000Z"),
+        payments: [{ amount: 82_150, method: "cash", timestamp: 1 }],
+        storeId: "store-1" as Id<"store">,
+        total: 82_150,
+      },
+      {
+        _id: "txn-after-midnight" as Id<"posTransaction">,
+        completedAt: Date.parse("2026-06-22T01:30:00.000Z"),
+        payments: [{ amount: 10_000, method: "cash", timestamp: 1 }],
+        storeId: "store-1" as Id<"store">,
+        total: 10_000,
+      },
+    ] as never);
+    vi.mocked(listCompletedTransactionsForRange).mockResolvedValueOnce([
+      {
+        _id: "txn-prior-window" as Id<"posTransaction">,
+        completedAt: Date.parse("2026-06-20T12:00:00.000Z"),
+        payments: [{ amount: 50_000, method: "cash", timestamp: 1 }],
+        storeId: "store-1" as Id<"store">,
+        total: 50_000,
+      },
+    ] as never);
+    vi.mocked(listCompletedTransactionsSince).mockResolvedValue([
+      {
+        _id: "txn-before-opening" as Id<"posTransaction">,
+        completedAt: Date.parse("2026-06-21T02:00:00.000Z"),
+        payments: [{ amount: 99_999, method: "cash", timestamp: 1 }],
+        storeId: "store-1" as Id<"store">,
+        total: 99_999,
+      },
+      {
+        _id: "txn-in-window" as Id<"posTransaction">,
+        completedAt: Date.parse("2026-06-21T12:00:00.000Z"),
+        payments: [{ amount: 82_150, method: "cash", timestamp: 1 }],
+        storeId: "store-1" as Id<"store">,
+        total: 82_150,
+      },
+      {
+        _id: "txn-after-midnight" as Id<"posTransaction">,
+        completedAt: Date.parse("2026-06-22T01:30:00.000Z"),
+        payments: [{ amount: 10_000, method: "cash", timestamp: 1 }],
+        storeId: "store-1" as Id<"store">,
+        total: 10_000,
+      },
+    ] as never);
+    vi.mocked(listTransactionItems)
+      .mockResolvedValueOnce([{ quantity: 3 }] as never)
+      .mockResolvedValueOnce([{ quantity: 1 }] as never)
+      .mockResolvedValueOnce([{ quantity: 2 }] as never)
+      .mockResolvedValueOnce([{ quantity: 3 }] as never)
+      .mockResolvedValueOnce([{ quantity: 1 }] as never);
+    const query = vi.fn((tableName: string) => ({
+      withIndex: vi.fn(() => ({
+        collect: vi.fn().mockResolvedValue([]),
+        take: vi.fn().mockResolvedValue([]),
+        order: vi.fn(() => ({
+          take: vi.fn().mockResolvedValue(
+            tableName === "dailyOpening"
+              ? [
+                  {
+                    _id: "opening-2026-06-21",
+                    endAt: Date.parse("2026-06-22T04:00:00.000Z"),
+                    operatingDate: "2026-06-21",
+                    startAt: Date.parse("2026-06-21T04:00:00.000Z"),
+                    status: "started",
+                    storeId: "store-1",
+                  },
+                ]
+              : [],
+          ),
+        })),
+      })),
+    }));
+
+    const result = await getTodaySummary(
+      {
+        db: { query },
+      } as never,
+      {
+        pulseWindow: "today",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(listCompletedTransactionsForRange).toHaveBeenNthCalledWith(
+      1,
+      expect.anything(),
+      {
+        completedFrom: Date.parse("2026-06-21T04:00:00.000Z"),
+        completedTo: Date.parse("2026-06-22T03:59:59.999Z"),
+        storeId: "store-1",
+      },
+    );
+    expect(listCompletedTransactionsForRange).toHaveBeenNthCalledWith(
+      2,
+      expect.anything(),
+      {
+        completedFrom: Date.parse("2026-06-20T04:00:00.000Z"),
+        completedTo: Date.parse("2026-06-21T03:59:59.999Z"),
+        storeId: "store-1",
+      },
+    );
+    expect(result).toEqual(
+      expect.objectContaining({
+        averageTransaction: 46_075,
+        date: "2026-06-21",
+        totalItemsSold: 4,
+        totalSales: 92_150,
+        totalTransactions: 2,
+      }),
+    );
+    expect(result.operatorSnapshot.comparison).toMatchObject({
+      currentItemsSold: 4,
+      currentSales: 92_150,
+      currentTransactions: 2,
+      yesterdaySales: 50_000,
+      yesterdayTransactions: 1,
+    });
+    expect(result.operatorSnapshot.trend).toEqual([
+      expect.objectContaining({
+        date: "2026-06-20",
+        totalSales: 50_000,
+        transactionCount: 1,
+      }),
+      expect.objectContaining({
+        date: "2026-06-21",
+        totalSales: 92_150,
+        transactionCount: 2,
+      }),
+    ]);
+  });
+
   it("falls back to the server calendar day when the latest opening is already closed", async () => {
     vi.setSystemTime(new Date("2026-06-20T00:49:30.000Z"));
     vi.mocked(listCompletedTransactionsForDay).mockResolvedValue([] as never);
@@ -467,6 +604,120 @@ describe("getTodaySummary", () => {
       "2026-06-18",
       "2026-06-19",
       "2026-06-20",
+    ]);
+  });
+
+  it("buckets this week sales by store-day window instead of raw UTC date", async () => {
+    vi.setSystemTime(new Date("2026-06-21T18:00:00.000Z"));
+    vi.mocked(listCompletedTransactionsForRange).mockResolvedValueOnce([
+      {
+        _id: "txn-before-midnight" as Id<"posTransaction">,
+        completedAt: Date.parse("2026-06-21T12:00:00.000Z"),
+        payments: [{ amount: 82_150, method: "cash", timestamp: 1 }],
+        storeId: "store-1" as Id<"store">,
+        total: 82_150,
+      },
+      {
+        _id: "txn-after-midnight" as Id<"posTransaction">,
+        completedAt: Date.parse("2026-06-22T01:30:00.000Z"),
+        payments: [{ amount: 102_900, method: "cash", timestamp: 1 }],
+        storeId: "store-1" as Id<"store">,
+        total: 102_900,
+      },
+    ] as never);
+    vi.mocked(listCompletedTransactionsForRange).mockResolvedValueOnce(
+      [] as never,
+    );
+    vi.mocked(listCompletedTransactionsSince).mockResolvedValue([
+      {
+        _id: "txn-before-midnight" as Id<"posTransaction">,
+        completedAt: Date.parse("2026-06-21T12:00:00.000Z"),
+        payments: [{ amount: 82_150, method: "cash", timestamp: 1 }],
+        storeId: "store-1" as Id<"store">,
+        total: 82_150,
+      },
+      {
+        _id: "txn-after-midnight" as Id<"posTransaction">,
+        completedAt: Date.parse("2026-06-22T01:30:00.000Z"),
+        payments: [{ amount: 102_900, method: "cash", timestamp: 1 }],
+        storeId: "store-1" as Id<"store">,
+        total: 102_900,
+      },
+    ] as never);
+    vi.mocked(listTransactionItems)
+      .mockResolvedValueOnce([{ quantity: 15 }] as never)
+      .mockResolvedValueOnce([{ quantity: 23 }] as never)
+      .mockResolvedValueOnce([
+        {
+          productId: "product-1",
+          productName: "Wig cap",
+          productSku: "CAP",
+          productSkuId: "sku-1",
+          quantity: 15,
+          totalPrice: 82_150,
+        },
+      ] as never)
+      .mockResolvedValueOnce([
+        {
+          productId: "product-2",
+          productName: "Bundle",
+          productSku: "BUNDLE",
+          productSkuId: "sku-2",
+          quantity: 23,
+          totalPrice: 102_900,
+        },
+      ] as never);
+    const query = vi.fn((tableName: string) => ({
+      withIndex: vi.fn(() => ({
+        collect: vi.fn().mockResolvedValue([]),
+        take: vi.fn().mockResolvedValue([]),
+        order: vi.fn(() => ({
+          take: vi.fn().mockResolvedValue(
+            tableName === "dailyOpening"
+              ? [
+                  {
+                    _id: "opening-2026-06-21",
+                    endAt: Date.parse("2026-06-22T04:00:00.000Z"),
+                    operatingDate: "2026-06-21",
+                    startAt: Date.parse("2026-06-21T04:00:00.000Z"),
+                    status: "started",
+                    storeId: "store-1",
+                  },
+                ]
+              : [],
+          ),
+        })),
+      })),
+    }));
+
+    const result = await getTodaySummary(
+      {
+        db: { query },
+      } as never,
+      {
+        pulseWindow: "this_week",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(result.totalSales).toBe(185_050);
+    expect(result.totalTransactions).toBe(2);
+    expect(result.totalItemsSold).toBe(38);
+    expect(
+      result.operatorSnapshot.trend.find((day) => day.date === "2026-06-21"),
+    ).toMatchObject({
+      totalItemsSold: 38,
+      totalSales: 185_050,
+      transactionCount: 2,
+    });
+    expect(result.operatorSnapshot.trend.map((day) => day.date)).toEqual([
+      "2026-06-15",
+      "2026-06-16",
+      "2026-06-17",
+      "2026-06-18",
+      "2026-06-19",
+      "2026-06-20",
+      "2026-06-21",
     ]);
   });
 
