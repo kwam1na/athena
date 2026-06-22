@@ -8,7 +8,7 @@ type PaymentTotalTransaction = Pick<
 type CashDeltaTransaction = PaymentTotalTransaction &
   Pick<Doc<"posTransaction">, "changeGiven">;
 
-function listTransactionPayments(transaction: PaymentTotalTransaction) {
+export function listTransactionPayments(transaction: PaymentTotalTransaction) {
   if (transaction.payments.length > 0) return transaction.payments;
 
   return transaction.paymentMethod
@@ -22,7 +22,7 @@ function listTransactionPayments(transaction: PaymentTotalTransaction) {
     : [];
 }
 
-function transactionPaymentTotals(transaction: PaymentTotalTransaction) {
+export function transactionPaymentTotals(transaction: PaymentTotalTransaction) {
   const totals = new Map<string, number>();
 
   listTransactionPayments(transaction).forEach((payment) => {

@@ -28,6 +28,7 @@ type TableName =
   | "posTerminal"
   | "posTransactionAdjustment"
   | "posTransaction"
+  | "posTransactionItem"
   | "productSku"
   | "registerSession"
   | "scheduledRunLedger"
@@ -113,6 +114,11 @@ function createDb(seed: Partial<Record<TableName, Row[]>> = {}) {
         return chain;
       },
       take: async (limit: number) => filteredRows().slice(0, limit),
+      async *[Symbol.asyncIterator]() {
+        for (const row of filteredRows()) {
+          yield row;
+        }
+      },
       withIndex(
         _index: string,
         applyIndex: (builder: {
@@ -1181,6 +1187,312 @@ describe("daily operations overview read model", () => {
     ).toMatchObject({
       paymentTotals: [],
       salesTotal: 0,
+      transactionCount: 1,
+    });
+    expect(snapshot).not.toHaveProperty("storePulse");
+  });
+
+  it("adds a store pulse snapshot for financial viewers using the selected operating date window", async () => {
+    vi.setSystemTime(new Date("2026-06-22T18:00:00.000Z"));
+
+    const snapshot = await buildDailyOperationsSnapshotWithCtx(
+      buildCtx({
+        dailyOpening: [
+          {
+            ...startedOpening,
+            _id: "opening-current",
+            endAt: Date.parse("2026-06-22T04:00:00.000Z"),
+            operatingDate: "2026-06-21",
+            startAt: Date.parse("2026-06-21T04:00:00.000Z"),
+          },
+        ],
+        posTransaction: [
+          {
+            _id: "txn-before-selected-window",
+            changeGiven: 0,
+            completedAt: Date.parse("2026-06-21T02:00:00.000Z"),
+            paymentMethod: "cash",
+            payments: [{ amount: 99999, method: "cash", timestamp: 1 }],
+            status: "completed",
+            storeId: "store-1",
+            total: 99999,
+            totalPaid: 99999,
+            transactionNumber: "TXN-BEFORE",
+          },
+          {
+            _id: "txn-before-midnight",
+            changeGiven: 0,
+            completedAt: Date.parse("2026-06-21T12:00:00.000Z"),
+            paymentMethod: "cash",
+            payments: [{ amount: 18000, method: "cash", timestamp: 1 }],
+            status: "completed",
+            storeId: "store-1",
+            total: 18000,
+            totalPaid: 18000,
+            transactionNumber: "TXN-1",
+          },
+          {
+            _id: "txn-after-midnight",
+            changeGiven: 0,
+            completedAt: Date.parse("2026-06-22T01:30:00.000Z"),
+            paymentMethod: "mobile_money",
+            payments: [{ amount: 12000, method: "mobile_money", timestamp: 1 }],
+            status: "completed",
+            storeId: "store-1",
+            total: 12000,
+            totalPaid: 12000,
+            transactionNumber: "TXN-2",
+          },
+          {
+            _id: "txn-after-selected-window",
+            changeGiven: 0,
+            completedAt: Date.parse("2026-06-22T12:00:00.000Z"),
+            paymentMethod: "card",
+            payments: [{ amount: 45000, method: "card", timestamp: 1 }],
+            status: "completed",
+            storeId: "store-1",
+            total: 45000,
+            totalPaid: 45000,
+            transactionNumber: "TXN-AFTER",
+          },
+        ],
+        posTransactionItem: [
+          {
+            _id: "item-1",
+            productId: "product-1",
+            productName: "Wig cap",
+            productSku: "CAP",
+            productSkuId: "sku-1",
+            quantity: 2,
+            totalPrice: 18000,
+            transactionId: "txn-before-midnight",
+          },
+          {
+            _id: "item-2",
+            productId: "product-2",
+            productName: "Bundle",
+            productSku: "BUNDLE",
+            productSkuId: "sku-2",
+            quantity: 1,
+            totalPrice: 12000,
+            transactionId: "txn-after-midnight",
+          },
+        ],
+        store: [store],
+      }),
+      {
+        endAt: Date.parse("2026-06-22T04:00:00.000Z"),
+        operatingDate: "2026-06-21",
+        startAt: Date.parse("2026-06-21T04:00:00.000Z"),
+        storeId: "store-1" as Id<"store">,
+        storePulseWindow: "today",
+      },
+    );
+
+    expect(snapshot.storePulse).toBeDefined();
+    expect(snapshot.storePulse!).toMatchObject({
+      averageTransaction: 15000,
+      date: "2026-06-21",
+      totalItemsSold: 3,
+      totalSales: 30000,
+      totalTransactions: 2,
+    });
+    expect(snapshot.storePulse!.operatorSnapshot.paymentMix).toEqual([
+      expect.objectContaining({
+        method: "cash",
+        total: 18000,
+      }),
+      expect.objectContaining({
+        method: "mobile_money",
+        total: 12000,
+      }),
+    ]);
+    expect(snapshot.storePulse!.operatorSnapshot.trend.at(-1)).toMatchObject({
+      date: "2026-06-21",
+      totalItemsSold: 3,
+      totalSales: 30000,
+      transactionCount: 2,
+    });
+  });
+
+  it("honors the requested Daily Operations store pulse window without changing close or week totals", async () => {
+    const snapshot = await buildDailyOperationsSnapshotWithCtx(
+      buildCtx({
+        dailyOpening: [
+          {
+            ...startedOpening,
+            _id: "opening-current",
+            operatingDate: "2026-06-21",
+          },
+        ],
+        posTransaction: [
+          {
+            _id: "txn-current",
+            changeGiven: 0,
+            completedAt: Date.UTC(2026, 5, 21, 16),
+            paymentMethod: "cash",
+            payments: [{ amount: 20000, method: "cash", timestamp: 1 }],
+            status: "completed",
+            storeId: "store-1",
+            total: 20000,
+            totalPaid: 20000,
+            transactionNumber: "TXN-CURRENT",
+          },
+          {
+            _id: "txn-older",
+            changeGiven: 0,
+            completedAt: Date.UTC(2026, 4, 5, 16),
+            paymentMethod: "card",
+            payments: [],
+            status: "completed",
+            storeId: "store-1",
+            total: 10000,
+            totalPaid: 10000,
+            transactionNumber: "TXN-OLDER",
+          },
+        ],
+        posTransactionItem: [
+          {
+            _id: "item-current",
+            productId: "product-1",
+            productName: "Wig cap",
+            productSku: "CAP",
+            productSkuId: "sku-1",
+            quantity: 2,
+            totalPrice: 20000,
+            transactionId: "txn-current",
+          },
+          {
+            _id: "item-older",
+            productId: "product-2",
+            productName: "Comb",
+            productSku: "COMB",
+            productSkuId: "sku-2",
+            quantity: 1,
+            totalPrice: 10000,
+            transactionId: "txn-older",
+          },
+        ],
+        store: [store],
+      }),
+      {
+        operatingDate: "2026-06-21",
+        storeId: "store-1" as Id<"store">,
+        storePulseWindow: "all_time",
+        weekEndOperatingDate: "2026-06-27",
+      },
+    );
+
+    expect(snapshot.storePulse).toBeDefined();
+    expect(snapshot.storePulse!).toMatchObject({
+      totalItemsSold: 3,
+      totalSales: 30000,
+      totalTransactions: 2,
+    });
+    expect(snapshot.closeSummary).toMatchObject({
+      paymentTotals: [
+        {
+          amount: 20000,
+          method: "cash",
+          transactionCount: 1,
+        },
+      ],
+      salesTotal: 20000,
+      transactionCount: 1,
+    });
+    expect(
+      snapshot.weekMetrics.find((metric) => metric.operatingDate === "2026-06-21"),
+    ).toMatchObject({
+      salesTotal: 20000,
+      transactionCount: 1,
+    });
+  });
+
+  it("keeps historical store pulse detail rows when newer transactions exceed the snapshot cap", async () => {
+    const selectedCompletedAt = Date.parse("2026-04-15T15:00:00.000Z");
+    const newerTransactions = Array.from({ length: 401 }, (_, index) => ({
+      _id: `txn-newer-${index}`,
+      changeGiven: 0,
+      completedAt: Date.parse("2026-05-01T12:00:00.000Z") + index,
+      paymentMethod: "cash",
+      payments: [{ amount: 1000, method: "cash", timestamp: index }],
+      status: "completed",
+      storeId: "store-1",
+      total: 1000,
+      totalPaid: 1000,
+      transactionNumber: `TXN-NEWER-${index}`,
+    }));
+
+    const snapshot = await buildDailyOperationsSnapshotWithCtx(
+      buildCtx({
+        dailyOpening: [
+          {
+            ...startedOpening,
+            _id: "opening-historical",
+            endAt: Date.parse("2026-04-16T04:00:00.000Z"),
+            operatingDate: "2026-04-15",
+            startAt: Date.parse("2026-04-15T04:00:00.000Z"),
+          },
+        ],
+        posTransaction: [
+          ...newerTransactions,
+          {
+            _id: "txn-selected",
+            changeGiven: 0,
+            completedAt: selectedCompletedAt,
+            paymentMethod: "card",
+            payments: [{ amount: 25000, method: "card", timestamp: 1 }],
+            status: "completed",
+            storeId: "store-1",
+            total: 25000,
+            totalPaid: 25000,
+            transactionNumber: "TXN-SELECTED",
+          },
+        ],
+        posTransactionItem: [
+          {
+            _id: "item-selected",
+            productId: "product-1",
+            productName: "Historical bundle",
+            productSku: "HIST",
+            productSkuId: "sku-1",
+            quantity: 2,
+            totalPrice: 25000,
+            transactionId: "txn-selected",
+          },
+        ],
+        store: [store],
+      }),
+      {
+        endAt: Date.parse("2026-04-16T04:00:00.000Z"),
+        operatingDate: "2026-04-15",
+        startAt: Date.parse("2026-04-15T04:00:00.000Z"),
+        storeId: "store-1" as Id<"store">,
+        storePulseWindow: "today",
+      },
+    );
+
+    expect(snapshot.storePulse).toMatchObject({
+      totalItemsSold: 2,
+      totalSales: 25000,
+      totalTransactions: 1,
+    });
+    expect(snapshot.storePulse!.operatorSnapshot.paymentMix).toEqual([
+      expect.objectContaining({
+        method: "card",
+        total: 25000,
+      }),
+    ]);
+    expect(snapshot.storePulse!.operatorSnapshot.topItems).toEqual([
+      expect.objectContaining({
+        name: "Historical bundle",
+        quantity: 2,
+      }),
+    ]);
+    expect(snapshot.storePulse!.operatorSnapshot.trend.at(-1)).toMatchObject({
+      date: "2026-04-15",
+      totalItemsSold: 2,
+      totalSales: 25000,
       transactionCount: 1,
     });
   });
