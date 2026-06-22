@@ -4,7 +4,6 @@ import {
   screen,
   within,
 } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import React, {
   type AnchorHTMLAttributes,
   type ReactNode,
@@ -1142,8 +1141,20 @@ describe("DailyOperationsViewContent", () => {
     expect(within(storePulse).getByText("Sales trend")).toBeInTheDocument();
     expect(within(storePulse).getByTestId("store-pulse-chart")).toBeInTheDocument();
     expect(within(storePulse).getByText("Braiding Hair")).toBeInTheDocument();
+    expect(
+      within(storePulse).getByLabelText("Total items sold: 3"),
+    ).toBeInTheDocument();
     expect(screen.getByLabelText("Store-day timeline")).toBeInTheDocument();
-    expect(within(storePulse).getByRole("tab", { name: "This week" })).toBeInTheDocument();
+    expect(within(storePulse).queryByRole("tablist")).not.toBeInTheDocument();
+    expect(within(storePulse).queryByText("Average sale")).not.toBeInTheDocument();
+    expect(within(storePulse).queryByText("Items sold")).not.toBeInTheDocument();
+    expect(screen.queryByText("Store pulse")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("POS sales activity for the selected reporting window."),
+    ).not.toBeInTheDocument();
+    expect(
+      within(storePulse).getByText("Today's completed POS sales."),
+    ).toBeInTheDocument();
   });
 
   it("shows a bounded empty state when store pulse is omitted", () => {
@@ -1814,7 +1825,7 @@ describe("DailyOperationsView", () => {
     );
   });
 
-  it("queries the daily operations snapshot for the selected store pulse window", () => {
+  it("ignores store pulse search state and queries the today store pulse window", () => {
     mockedHooks.useSearch.mockReturnValue({
       storePulseWindow: "this_month",
     });
@@ -1824,14 +1835,12 @@ describe("DailyOperationsView", () => {
     expect(mockedHooks.useQuery).toHaveBeenCalledWith(
       mockedApi.getDailyOperationsSnapshot,
       expect.objectContaining({
-        storePulseWindow: "this_month",
+        storePulseWindow: "today",
       }),
     );
   });
 
-  it("updates store pulse search state from the store pulse tabs", async () => {
-    const user = userEvent.setup();
-
+  it("does not render store pulse window tabs on daily operations", () => {
     mockedHooks.useSearch.mockReturnValue({
       storePulseWindow: "this_week",
     });
@@ -1842,53 +1851,12 @@ describe("DailyOperationsView", () => {
 
     render(<DailyOperationsView />);
 
-    await user.click(screen.getByRole("tab", { name: "All time" }));
+    const storePulse = screen.getByRole("region", { name: "Store pulse" });
 
-    expect(mockedHooks.navigate).toHaveBeenCalledWith({
-      search: expect.any(Function),
-    });
-
-    const searchUpdater = mockedHooks.navigate.mock.calls.at(-1)?.[0]
-      .search as (current: Record<string, unknown>) => Record<string, unknown>;
-
-    expect(searchUpdater({ operatingDate: "2026-05-08" })).toEqual({
-      operatingDate: "2026-05-08",
-      storePulseWindow: "all_time",
-    });
-  });
-
-  it("removes store pulse search state when the Today tab is selected", async () => {
-    const user = userEvent.setup();
-
-    mockedHooks.useSearch.mockReturnValue({
-      storePulseWindow: "this_month",
-    });
-    mockedHooks.useQuery.mockReturnValue({
-      ...operatingSnapshot,
-      storePulse: buildStorePulseSummary(),
-    });
-
-    render(<DailyOperationsView />);
-
-    await user.click(screen.getByRole("tab", { name: "Today" }));
-
-    expect(mockedHooks.navigate).toHaveBeenCalledWith({
-      search: expect.any(Function),
-    });
-
-    const searchUpdater = mockedHooks.navigate.mock.calls.at(-1)?.[0]
-      .search as (current: Record<string, unknown>) => Record<string, unknown>;
-
+    expect(within(storePulse).queryByRole("tablist")).not.toBeInTheDocument();
     expect(
-      searchUpdater({
-        operatingDate: "2026-05-08",
-        storePulseWindow: "this_month",
-        weekEndOperatingDate: "2026-05-09",
-      }),
-    ).toEqual({
-      operatingDate: "2026-05-08",
-      weekEndOperatingDate: "2026-05-09",
-    });
+      within(storePulse).getByText("Today's completed POS sales."),
+    ).toBeInTheDocument();
   });
 
   it("skips the protected query when access is not ready", () => {

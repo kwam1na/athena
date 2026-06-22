@@ -17,6 +17,7 @@ import {
 import { toDisplayAmount } from "~/convex/lib/currency";
 import { FinancialValue } from "../common/FinancialValue";
 import { ListPagination } from "../common/ListPagination";
+import { formatOperationsMetricComparison } from "../operations/operationsMetricFormatting";
 import {
   PageWorkspaceGrid,
   PageWorkspaceMain,
@@ -160,13 +161,12 @@ function formatComparisonHelper({
   priorValue?: number;
   priorWindowLabel: string;
 }) {
-  if (!priorValue) return `No ${priorWindowLabel}`;
-  if (!deltaPercent) return `Even vs ${priorWindowLabel}`;
-
-  const absoluteDelta = Math.abs(deltaPercent);
-  const direction = deltaPercent > 0 ? "up" : "down";
-
-  return `${absoluteDelta}% ${direction} vs ${priorWindowLabel}`;
+  return formatOperationsMetricComparison({
+    deltaPercent,
+    missingComparisonLabel: `No ${priorWindowLabel}`,
+    priorValue,
+    priorWindowLabel,
+  });
 }
 
 function StorePulseMetric({
@@ -259,6 +259,12 @@ function getPaymentMethodIcon(payment: {
   if (key.includes("card")) return CreditCardIcon;
 
   return WalletCards;
+}
+
+function formatPaymentSharePercent(share: number) {
+  const roundedShare = Math.round(share * 10) / 10;
+
+  return `${Number.isInteger(roundedShare) ? roundedShare : roundedShare.toFixed(1)}%`;
 }
 
 function formatCompactChartValue({
@@ -479,13 +485,25 @@ function TopItemsPanel({
     pageStartIndex,
     pageStartIndex + topItemsPageSize,
   );
+  const totalItemsSold = snapshot.comparison.currentItemsSold;
 
   return (
     <section className="space-y-layout-md">
-      <div>
-        <h3 className="text-base font-medium text-foreground">Top items</h3>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Highest-volume items in the current history window.
+      <div className="flex flex-col gap-layout-xs sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h3 className="text-base font-medium text-foreground">Top items</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Highest-volume items in the current history window.
+          </p>
+        </div>
+        <p
+          aria-label={`Total items sold: ${totalItemsSold}`}
+          className="inline-flex items-baseline gap-1.5 text-sm text-muted-foreground sm:justify-end sm:text-right"
+        >
+          <span>Total items sold</span>
+          <span className="font-numeric font-medium tabular-nums text-foreground">
+            {totalItemsSold}
+          </span>
         </p>
       </div>
       <div
@@ -565,6 +583,11 @@ function PaymentMethodsPanel({
 }: {
   snapshot: StorePulseOperatorSnapshot;
 }) {
+  const totalPaymentTransactions = snapshot.paymentMix.reduce(
+    (total, payment) => total + payment.count,
+    0,
+  );
+
   return (
     <section aria-label="Payment methods" className="space-y-layout-md">
       <div>
@@ -580,6 +603,10 @@ function PaymentMethodsPanel({
           {snapshot.paymentMix.length ? (
             snapshot.paymentMix.map((payment) => {
               const PaymentIcon = getPaymentMethodIcon(payment);
+              const paymentShare =
+                totalPaymentTransactions > 0
+                  ? (payment.count / totalPaymentTransactions) * 100
+                  : 0;
 
               return (
                 <div
@@ -595,13 +622,13 @@ function PaymentMethodsPanel({
                       <span className="truncate">{payment.label}</span>
                     </span>
                     <span className="font-numeric tabular-nums text-muted-foreground">
-                      {payment.share}%
+                      {formatPaymentSharePercent(paymentShare)}
                     </span>
                   </div>
                   <div className="h-1.5 overflow-hidden rounded-full bg-action-workflow-soft">
                     <div
                       className="h-full rounded-full bg-action-workflow"
-                      style={{ width: `${Math.max(4, payment.share)}%` }}
+                      style={{ width: `${Math.max(4, paymentShare)}%` }}
                     />
                   </div>
                   <p className="text-xs text-muted-foreground">
@@ -710,8 +737,10 @@ function StorePulseDetailSkeleton({
 
 function StorePulseSkeleton({
   showFinancialSalesCards,
+  showSummaryMetrics,
 }: {
   showFinancialSalesCards: boolean;
+  showSummaryMetrics: boolean;
 }) {
   const visibleLoadingMetrics = showFinancialSalesCards
     ? loadingMetrics
@@ -723,16 +752,18 @@ function StorePulseSkeleton({
       className="min-w-0 space-y-layout-xl md:space-y-layout-2xl"
     >
       <section className="space-y-layout-2xl">
-        <div className="grid gap-layout-sm sm:grid-cols-2 xl:grid-cols-4">
-          {visibleLoadingMetrics.map((metric) => (
-            <StorePulseMetric
-              helper={metric.helper}
-              key={metric.label}
-              label={metric.label}
-              value="-"
-            />
-          ))}
-        </div>
+        {showSummaryMetrics ? (
+          <div className="grid gap-layout-sm sm:grid-cols-2 xl:grid-cols-4">
+            {visibleLoadingMetrics.map((metric) => (
+              <StorePulseMetric
+                helper={metric.helper}
+                key={metric.label}
+                label={metric.label}
+                value="-"
+              />
+            ))}
+          </div>
+        ) : null}
 
         {showFinancialSalesCards ? <StorePulseChartSkeleton /> : null}
       </section>
@@ -765,12 +796,16 @@ export function StorePulseSummaryView({
   currencyFormatter,
   onPulseWindowChange,
   pulseWindow,
+  showPulseWindowFilter = true,
+  showSummaryMetrics = true,
   summary,
 }: {
   canViewFinancialDetails: boolean;
   currencyFormatter: Intl.NumberFormat;
   onPulseWindowChange: (pulseWindow: StorePulseWindow) => void;
   pulseWindow: StorePulseWindow;
+  showPulseWindowFilter?: boolean;
+  showSummaryMetrics?: boolean;
   summary: StorePulseSummary | undefined;
 }) {
   const snapshot = summary?.operatorSnapshot;
@@ -786,7 +821,7 @@ export function StorePulseSummaryView({
       aria-label="Store pulse"
       className="space-y-layout-xl md:space-y-layout-2xl"
     >
-      {canViewFinancialDetails ? (
+      {canViewFinancialDetails && showPulseWindowFilter ? (
         <div className="flex justify-end">
           <Tabs
             onValueChange={(nextValue) => {
@@ -824,89 +859,93 @@ export function StorePulseSummaryView({
       {!snapshot ? (
         <StorePulseSkeleton
           showFinancialSalesCards={canViewFinancialDetails}
+          showSummaryMetrics={showSummaryMetrics}
         />
       ) : (
         <div className="min-w-0 space-y-layout-xl md:space-y-layout-2xl">
           <section className="space-y-layout-2xl">
-            <div className="grid gap-layout-sm sm:grid-cols-2 xl:grid-cols-4">
-              {canViewFinancialDetails ? (
-                <>
-                  <StorePulseMetric
-                    helper={
-                      copy.comparisonHelper
+            {showSummaryMetrics ? (
+              <div className="grid gap-layout-sm sm:grid-cols-2 xl:grid-cols-4">
+                {canViewFinancialDetails ? (
+                  <>
+                    <StorePulseMetric
+                      helper={
+                        copy.comparisonHelper
+                          ? formatComparisonHelper({
+                              deltaPercent: comparison?.salesDeltaPercent,
+                              priorValue: comparison?.yesterdaySales,
+                              priorWindowLabel: copy.comparisonHelper,
+                            })
+                          : "-"
+                      }
+                      label="Sales"
+                      value={
+                        <FinancialValue
+                          canView={canViewFinancialDetails}
+                          label="Sales"
+                        >
+                          {currencyFormatter.format(toDisplayAmount(totalSales))}
+                        </FinancialValue>
+                      }
+                    />
+                    <StorePulseMetric
+                      helper={
+                        copy.comparisonHelper
+                          ? formatComparisonHelper({
+                              deltaPercent:
+                                comparison?.averageTransactionDeltaPercent,
+                              priorValue:
+                                comparison?.yesterdayAverageTransaction,
+                              priorWindowLabel: copy.comparisonHelper,
+                            })
+                          : "-"
+                      }
+                      label="Average sale"
+                      value={
+                        <FinancialValue
+                          canView={canViewFinancialDetails}
+                          label="Average sale"
+                        >
+                          {currencyFormatter.format(
+                            toDisplayAmount(averageTransaction),
+                          )}
+                        </FinancialValue>
+                      }
+                    />
+                  </>
+                ) : null}
+                <StorePulseMetric
+                  helper={
+                    canViewFinancialDetails
+                      ? copy.comparisonHelper
                         ? formatComparisonHelper({
-                            deltaPercent: comparison?.salesDeltaPercent,
-                            priorValue: comparison?.yesterdaySales,
+                            deltaPercent: comparison?.transactionDeltaPercent,
+                            priorValue: comparison?.yesterdayTransactions,
                             priorWindowLabel: copy.comparisonHelper,
                           })
                         : "-"
-                    }
-                    label="Sales"
-                    value={
-                      <FinancialValue
-                        canView={canViewFinancialDetails}
-                        label="Sales"
-                      >
-                        {currencyFormatter.format(toDisplayAmount(totalSales))}
-                      </FinancialValue>
-                    }
-                  />
-                  <StorePulseMetric
-                    helper={
-                      copy.comparisonHelper
+                      : undefined
+                  }
+                  label="Transactions"
+                  value={totalTransactions}
+                />
+                <StorePulseMetric
+                  helper={
+                    canViewFinancialDetails
+                      ? copy.comparisonHelper
                         ? formatComparisonHelper({
-                            deltaPercent:
-                              comparison?.averageTransactionDeltaPercent,
-                            priorValue: comparison?.yesterdayAverageTransaction,
+                            deltaPercent: comparison?.itemsSoldDeltaPercent,
+                            priorValue: comparison?.yesterdayItemsSold,
                             priorWindowLabel: copy.comparisonHelper,
                           })
                         : "-"
-                    }
-                    label="Average sale"
-                    value={
-                      <FinancialValue
-                        canView={canViewFinancialDetails}
-                        label="Average sale"
-                      >
-                        {currencyFormatter.format(
-                          toDisplayAmount(averageTransaction),
-                        )}
-                      </FinancialValue>
-                    }
-                  />
-                </>
-              ) : null}
-              <StorePulseMetric
-                helper={
-                  canViewFinancialDetails
-                    ? copy.comparisonHelper
-                      ? formatComparisonHelper({
-                          deltaPercent: comparison?.transactionDeltaPercent,
-                          priorValue: comparison?.yesterdayTransactions,
-                          priorWindowLabel: copy.comparisonHelper,
-                        })
-                      : "-"
-                    : undefined
-                }
-                label="Transactions"
-                value={totalTransactions}
-              />
-              <StorePulseMetric
-                helper={
-                  canViewFinancialDetails
-                    ? copy.comparisonHelper
-                      ? formatComparisonHelper({
-                          deltaPercent: comparison?.itemsSoldDeltaPercent,
-                          priorValue: comparison?.yesterdayItemsSold,
-                          priorWindowLabel: copy.comparisonHelper,
-                        })
-                      : "-"
-                    : undefined
-                }
-                label="Items sold"
-                value={totalItemsSold}
-              />
-            </div>
+                      : undefined
+                  }
+                  label="Items sold"
+                  value={totalItemsSold}
+                />
+              </div>
+            ) : null}
 
             {canViewFinancialDetails ? (
               <StorePulseTimeline

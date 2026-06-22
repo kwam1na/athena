@@ -282,7 +282,6 @@ type DailyOperationsViewContentProps = {
   isLoadingAccess: boolean;
   isLoadingSnapshot: boolean;
   onOperatingDateChange?: (date: Date) => void;
-  onStorePulseWindowChange?: (window: StorePulseWindow) => void;
   orgUrlSlug: string;
   snapshot?: DailyOperationsSnapshot;
   storePulseWindow: StorePulseWindow;
@@ -497,20 +496,6 @@ function getWeekEndOperatingDateFromSearch(weekEndOperatingDate?: unknown) {
   }
 
   return getSaturdayWeekEndOperatingDate(getLocalOperatingDate());
-}
-
-function getStorePulseWindowFromSearch(
-  storePulseWindow?: unknown,
-): StorePulseWindow {
-  if (
-    storePulseWindow === "this_week" ||
-    storePulseWindow === "this_month" ||
-    storePulseWindow === "all_time"
-  ) {
-    return storePulseWindow;
-  }
-
-  return "today";
 }
 
 function shouldShowPrimaryAction(snapshot: DailyOperationsSnapshot) {
@@ -1373,32 +1358,22 @@ function HistoricalWorkflowPanel({
 function DailyOperationsStorePulsePanel({
   currency,
   hasFullAdminAccess,
-  onStorePulseWindowChange,
   snapshot,
-  storePulseWindow,
 }: {
   currency: string;
   hasFullAdminAccess: boolean;
-  onStorePulseWindowChange?: (window: StorePulseWindow) => void;
   snapshot: DailyOperationsSnapshot;
-  storePulseWindow: StorePulseWindow;
 }) {
   return (
     <section className="space-y-layout-md">
-      <div>
-        <h3 className="text-base font-medium text-foreground">Store pulse</h3>
-        <p className="mt-1 text-sm text-muted-foreground">
-          POS sales activity for the selected reporting window.
-        </p>
-      </div>
       {snapshot.storePulse ? (
         <StorePulseSummaryView
           canViewFinancialDetails={hasFullAdminAccess}
           currencyFormatter={currencyFormatter(currency)}
-          onPulseWindowChange={(nextWindow) => {
-            onStorePulseWindowChange?.(nextWindow);
-          }}
-          pulseWindow={storePulseWindow}
+          onPulseWindowChange={() => undefined}
+          pulseWindow="today"
+          showPulseWindowFilter={false}
+          showSummaryMetrics={false}
           summary={snapshot.storePulse}
         />
       ) : (
@@ -1748,7 +1723,6 @@ export function DailyOperationsViewContent({
   isLoadingAccess,
   isLoadingSnapshot,
   onOperatingDateChange,
-  onStorePulseWindowChange,
   orgUrlSlug,
   snapshot,
   storePulseWindow,
@@ -2071,9 +2045,7 @@ export function DailyOperationsViewContent({
                   <DailyOperationsStorePulsePanel
                     currency={snapshot.currency ?? currency}
                     hasFullAdminAccess={hasFullAdminAccess}
-                    onStorePulseWindowChange={onStorePulseWindowChange}
                     snapshot={snapshot}
-                    storePulseWindow={storePulseWindow}
                   />
                   {isHistoricalDate ? (
                     <HistoricalWorkflowPanel
@@ -2247,7 +2219,6 @@ function DailyOperationsConnectedView({
   const navigate = useNavigate();
   const search = useSearch({ strict: false }) as {
     operatingDate?: unknown;
-    storePulseWindow?: unknown;
     weekEndOperatingDate?: unknown;
   };
   const operatingDateRange = useMemo(
@@ -2258,10 +2229,7 @@ function DailyOperationsConnectedView({
     () => getWeekEndOperatingDateFromSearch(search.weekEndOperatingDate),
     [search.weekEndOperatingDate],
   );
-  const storePulseWindow = useMemo(
-    () => getStorePulseWindowFromSearch(search.storePulseWindow),
-    [search.storePulseWindow],
-  );
+  const storePulseWindow: StorePulseWindow = "today";
   const snapshot = useExpectedDailyOperationsQuery(
     getDailyOperationsSnapshot,
     canQueryProtectedData
@@ -2292,22 +2260,6 @@ function DailyOperationsConnectedView({
     });
   };
 
-  const handleStorePulseWindowChange = (nextWindow: StorePulseWindow) => {
-    void navigate({
-      search: ((current: Record<string, unknown>) => {
-        const nextSearch = { ...current };
-
-        if (nextWindow === "today") {
-          delete nextSearch.storePulseWindow;
-        } else {
-          nextSearch.storePulseWindow = nextWindow;
-        }
-
-        return nextSearch;
-      }) as never,
-    });
-  };
-
   return (
     <DailyOperationsViewContent
       currency={activeStore?.currency ?? "GHS"}
@@ -2317,7 +2269,6 @@ function DailyOperationsConnectedView({
       isLoadingAccess={isLoadingAccess}
       isLoadingSnapshot={snapshot === undefined}
       onOperatingDateChange={handleOperatingDateChange}
-      onStorePulseWindowChange={handleStorePulseWindowChange}
       orgUrlSlug={params?.orgUrlSlug ?? ""}
       snapshot={snapshot}
       storePulseWindow={storePulseWindow}

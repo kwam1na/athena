@@ -60,6 +60,22 @@ above the store-day timeline when it uses a rail-specific summary: status,
 count chips, three evidence rows, overflow text, and one full-width CTA back to
 Opening Handoff.
 
+When the same Store Pulse component appears on Daily Operations, keep the
+overview surface quieter than the POS hub:
+
+- Pin Daily Operations to the selected store-day `today` window and hide the
+  POS hub window tabs so store-day reporting stays deterministic.
+- Hide the repeated Store Pulse summary cards and section label when Daily
+  Operations already has equivalent top-level operations metrics.
+- Keep the sales trend, top items, and payment mix because they answer distinct
+  operator questions that the top metrics do not.
+- Show total item movement as a compact "Total items sold" header stat in the
+  Top items panel, with the value as a number only.
+- Treat payment mix percentages as a share of payment transaction counts, not
+  a share of payment tender totals. A day with two Mobile Money payments, one
+  cash payment, and one card payment should show 50% / 25% / 25%, even if the
+  tender amounts are uneven.
+
 ## Prevention
 
 - When sharing a POS visualization with another operations surface, extract the
@@ -68,6 +84,9 @@ Opening Handoff.
   Daily Operations pulse windows derive from client wall-clock state.
 - Keep role redaction in the snapshot contract. If a surface is financially
   restricted, the query should omit detailed pulse data.
+- Keep payment mix display tests anchored to the intended denominator. Tender
+  totals and transaction counts answer different questions, and both can look
+  plausible in small samples.
 - Add tests at all three layers: POS wrapper compatibility, Daily Operations
   rendering/window search behavior, and backend store pulse window/redaction
   behavior.
