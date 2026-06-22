@@ -221,6 +221,13 @@ const schema = defineSchema({
   athenaUser: defineTable(athenaUserSchema),
   intelligenceRun: defineTable(intelligenceRunSchema)
     .index("by_storeId_capability_status", ["storeId", "capability", "status"])
+    .index("by_storeId_capability_debugSubject_createdAt", [
+      "storeId",
+      "capability",
+      "debugSubjectTable",
+      "debugSubjectId",
+      "createdAt",
+    ])
     .index("by_storeId_idempotencyKey", ["storeId", "idempotencyKey"])
     .index("by_actorRef_status", ["actorRef", "status"])
     .index("by_contextSnapshotId", ["contextSnapshotId"])

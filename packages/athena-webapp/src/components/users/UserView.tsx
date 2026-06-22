@@ -5,38 +5,24 @@ import { api } from "~/convex/_generated/api";
 import { Id } from "~/convex/_generated/dataModel";
 import {
   AtSign,
-  Brain,
-  Calendar,
   CalendarPlus,
   Hash,
   IdCard,
   OctagonX,
   Phone,
-  Sparkle,
-  Trash2,
-  UserIcon,
-  UserRoundCheck,
 } from "lucide-react";
 import { FadeIn } from "../common/FadeIn";
-import { ComposedPageHeader, SimplePageHeader } from "../common/PageHeader";
+import { ComposedPageHeader } from "../common/PageHeader";
 import { UserActivity } from "./UserActivity";
 import { UserBag } from "./UserBag";
 import { UserOnlineOrders } from "./UserOnlineOrders";
 import { UserInsightsSection } from "./UserInsightsSection";
-import { LinkedAccounts } from "./LinkedAccounts";
-import { UserBehaviorInsights } from "./behavioral-insights";
 import { formatDate } from "~/convex/utils";
 import { formatUserId, getRelativeTime } from "~/src/lib/utils";
-import { Badge } from "../ui/badge";
-import CopyButton from "../ui/copy-button";
-import CopyWrapper from "../ui/copy-wrapper";
-import { useCopyText } from "~/src/hooks/useCopyText";
 import { LoadingButton } from "../ui/loading-button";
 import { useState } from "react";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import { toast } from "sonner";
-import { EmptyState } from "../states/empty/empty-state";
-import { CounterClockwiseClockIcon } from "@radix-ui/react-icons";
 import { UserStatus } from "./UserStatus";
 import { UserCheckoutSession } from "./UserCheckoutSession";
 
@@ -205,7 +191,7 @@ export const UserView = () => {
           </div>
 
           <div className="w-[40%] space-y-24">
-            {/* <UserInsightsSection /> */}
+            <UserInsightsSection />
             <UserActivity />
           </div>
         </div>

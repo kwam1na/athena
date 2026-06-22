@@ -50,6 +50,7 @@ export const intelligenceSourceRefValidator = v.object({
 export const intelligenceErrorValidator = v.object({
   code: v.string(),
   message: v.string(),
+  diagnostic: v.optional(v.string()),
   retryable: v.optional(v.boolean()),
 });
 
@@ -71,6 +72,8 @@ export const intelligenceRunSchema = v.object({
   actorRef: v.optional(v.string()),
   policyRef: v.optional(v.string()),
   visibilityMode: intelligenceVisibilityModeValidator,
+  debugSubjectTable: v.optional(v.string()),
+  debugSubjectId: v.optional(v.string()),
   sourceRefs: v.array(intelligenceSourceRefValidator),
   dataWindowStartAt: v.optional(v.number()),
   dataWindowEndAt: v.optional(v.number()),

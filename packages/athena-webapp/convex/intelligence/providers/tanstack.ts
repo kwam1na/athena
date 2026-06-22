@@ -1,12 +1,17 @@
+import { chat as tanStackChat } from "@tanstack/ai";
+import { createOpenaiChat, openaiText } from "@tanstack/ai-openai";
+
 import {
   ATHENA_STRUCTURED_TEXT_V1,
   type AthenaProviderConfigStatus,
   type AthenaStructuredTextProvider,
-  type AthenaStructuredTextRequest,
-  type AthenaStructuredTextResult,
   type JsonObject,
 } from "../types";
-import { createProviderFailureResult, isJsonObject } from "../registry";
+import {
+  createProviderFailureResult,
+  getProviderFailureDiagnostic,
+  isJsonObject,
+} from "../registry";
 
 type TanStackChat = (options: Record<string, unknown>) => Promise<unknown>;
 type TanStackProviderFactory = (
@@ -86,6 +91,7 @@ export function createTanStackStructuredTextProvider(
 
         const result = await chat({
           adapter,
+          abortController: request.abortController,
           messages: request.messages,
           outputSchema: request.outputSchema.jsonSchema,
           stream: false,
@@ -112,12 +118,13 @@ export function createTanStackStructuredTextProvider(
             capability: request.capability,
           },
         };
-      } catch {
+      } catch (error) {
         return createProviderFailureResult({
           code: "provider_failure",
           provider: createTanStackStructuredTextProvider(options),
           capability: request.capability,
           retryable: true,
+          diagnostic: getProviderFailureDiagnostic(error),
         });
       }
     },
@@ -134,8 +141,7 @@ function extractStructuredOutput(result: unknown): JsonObject | unknown {
 }
 
 async function loadTanStackAi(): Promise<{ chat?: TanStackChat }> {
-  const packageName = "@tanstack/ai";
-  return import(packageName) as Promise<{ chat?: TanStackChat }>;
+  return { chat: tanStackChat as TanStackChat };
 }
 
 async function loadOpenAiAdapter(): Promise<{
@@ -143,10 +149,8 @@ async function loadOpenAiAdapter(): Promise<{
   createOpenaiChat?: TanStackOpenAiExplicitFactory;
   provider?: TanStackProviderFactory;
 }> {
-  const packageName = "@tanstack/ai-openai";
-  return import(packageName) as Promise<{
-    openaiText?: TanStackProviderFactory;
-    createOpenaiChat?: TanStackOpenAiExplicitFactory;
-    provider?: TanStackProviderFactory;
-  }>;
+  return {
+    createOpenaiChat: createOpenaiChat as TanStackOpenAiExplicitFactory,
+    openaiText: openaiText as TanStackProviderFactory,
+  };
 }

@@ -14,7 +14,7 @@ import {
 } from "../common/PageLevelHeader";
 import { formatNumber } from "../../utils/formatNumber";
 import AnalyticsCombinedUsers from "./AnalyticsCombinedUsers";
-import StorefrontObservabilityPanel from "./StorefrontObservabilityPanel";
+import StoreInsights from "./StoreInsights";
 import { Badge } from "../ui/badge";
 import {
   Activity,
@@ -133,7 +133,7 @@ export default function AnalyticsView() {
                 </div>
               </section>
 
-              <StorefrontObservabilityPanel />
+              <StoreInsights storeId={activeStore._id} />
             </PageWorkspaceMain>
 
             <PageWorkspaceRail>
