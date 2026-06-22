@@ -24,17 +24,20 @@ export function createAthenaProviderError({
   capability,
   retryable,
   message,
+  diagnostic,
 }: {
   code: AthenaProviderErrorCode;
   providerId?: string;
   capability?: AthenaIntelligenceCapability;
   retryable?: boolean;
   message?: string;
+  diagnostic?: string;
 }): AthenaProviderError {
   return {
     code,
     status: code,
     message: message ?? SAFE_PROVIDER_ERROR_MESSAGES[code],
+    diagnostic,
     providerId,
     capability,
     retryable: retryable ?? code === "provider_failure",
@@ -47,12 +50,14 @@ export function createProviderFailureResult({
   capability,
   retryable,
   message,
+  diagnostic,
 }: {
   code: AthenaProviderErrorCode;
   provider?: AthenaStructuredTextProvider;
   capability?: AthenaIntelligenceCapability;
   retryable?: boolean;
   message?: string;
+  diagnostic?: string;
 }): AthenaStructuredTextResult {
   return {
     status: code,
@@ -62,6 +67,7 @@ export function createProviderFailureResult({
       capability,
       retryable,
       message,
+      diagnostic,
     }),
     metadata: provider
       ? {
@@ -157,14 +163,28 @@ export async function invokeStructuredTextProvider({
     }
 
     return result;
-  } catch {
+  } catch (error) {
     return createProviderFailureResult({
       code: "provider_failure",
       provider,
       capability: request.capability,
       retryable: true,
+      diagnostic: getProviderFailureDiagnostic(error),
     });
   }
+}
+
+export function getProviderFailureDiagnostic(error: unknown) {
+  if (!(error instanceof Error)) return undefined;
+
+  return sanitizeDiagnostic(error.message);
+}
+
+export function sanitizeDiagnostic(message: string) {
+  return message
+    .replace(/sk-[A-Za-z0-9_-]+/g, "[redacted]")
+    .replace(/sk-ant-[A-Za-z0-9_-]+/g, "[redacted]")
+    .slice(0, 500);
 }
 
 export function isJsonObject(value: unknown): value is JsonObject {
@@ -191,4 +211,3 @@ function isJsonValue(value: unknown): value is JsonValue {
 
   return isJsonObject(value);
 }
-

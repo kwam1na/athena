@@ -32,6 +32,8 @@ export type AthenaStructuredTextRequest = {
   readonly capability: typeof ATHENA_STRUCTURED_TEXT_V1;
   readonly messages: readonly AthenaStructuredTextMessage[];
   readonly outputSchema: AthenaStructuredTextSchema;
+  readonly abortController?: AbortController;
+  readonly signal?: AbortSignal;
   readonly modelId?: string;
   readonly temperature?: number;
   readonly maxTokens?: number;
@@ -58,6 +60,7 @@ export type AthenaProviderError = {
   readonly code: AthenaProviderErrorCode;
   readonly status: AthenaProviderErrorCode;
   readonly message: string;
+  readonly diagnostic?: string;
   readonly providerId?: string;
   readonly capability?: AthenaIntelligenceCapability;
   readonly retryable: boolean;
@@ -103,4 +106,3 @@ export type AthenaStructuredTextProvider = {
     request: AthenaStructuredTextRequest
   ) => Promise<AthenaStructuredTextResult>;
 };
-

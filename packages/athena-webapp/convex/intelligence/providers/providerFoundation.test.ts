@@ -3,6 +3,7 @@ import { ATHENA_STRUCTURED_TEXT_V1 } from "../types";
 import {
   createAthenaProviderRegistry,
   invokeStructuredTextProvider,
+  sanitizeDiagnostic,
 } from "../registry";
 import { createFakeStructuredTextProvider } from "./fake";
 import { createTanStackStructuredTextProvider } from "./tanstack";
@@ -120,6 +121,12 @@ describe("Athena intelligence provider foundation", () => {
     });
   });
 
+  it("redacts provider diagnostics before exposing them to debug surfaces", () => {
+    expect(sanitizeDiagnostic("OpenAI rejected key sk-testsecret123")).toBe(
+      "OpenAI rejected key [redacted]",
+    );
+  });
+
   it("rejects invalid structured output", async () => {
     const registry = createAthenaProviderRegistry([
       createFakeStructuredTextProvider({ mode: "invalid_output" }),
@@ -155,6 +162,16 @@ describe("Athena intelligence provider foundation", () => {
     expect(result.status).toBe("unavailable_config");
   });
 
+  it("can load the real TanStack structured text adapter modules", async () => {
+    const [{ chat }, adapterModule] = await Promise.all([
+      import("@tanstack/ai"),
+      import("@tanstack/ai-openai"),
+    ]);
+
+    expect(typeof chat).toBe("function");
+    expect(typeof adapterModule.createOpenaiChat).toBe("function");
+  });
+
   it("can wrap injected TanStack structured output without importing the package", async () => {
     const chat = vi.fn(async () => ({ object: { summary: "Injected adapter worked." } }));
     const openaiText = vi.fn(() => ({ provider: "openai" }));
@@ -188,5 +205,39 @@ describe("Athena intelligence provider foundation", () => {
       })
     );
   });
-});
 
+  it("threads AbortController cancellation into TanStack chat options", async () => {
+    const abortController = new AbortController();
+    const chat = vi.fn(async () => ({ object: { summary: "Abort-ready." } }));
+    const openaiText = vi.fn(() => ({ provider: "openai" }));
+    const provider = createTanStackStructuredTextProvider({
+      modelId: "gpt-4.1-nano",
+      apiKey: "test-key",
+      loadTanStackAi: async () => ({ chat }),
+      loadProviderAdapter: async () => ({ openaiText }),
+    });
+    const registry = createAthenaProviderRegistry([provider]);
+
+    const result = await invokeStructuredTextProvider({
+      registry,
+      providerId: "tanstack",
+      request: {
+        ...request,
+        abortController,
+        signal: abortController.signal,
+      },
+    });
+
+    expect(result.status).toBe("succeeded");
+    expect(chat).toHaveBeenCalledWith(
+      expect.objectContaining({
+        abortController,
+      })
+    );
+    expect(chat).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        signal: abortController.signal,
+      })
+    );
+  });
+});
