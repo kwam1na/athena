@@ -17,7 +17,7 @@ const EVENT_REGISTRY: ContextEventRegistration[] = [
     eventId: "storefront.route_viewed",
     schemaVersion: 1,
     requiredPayloadKeys: ["route"],
-    allowedPayloadKeys: ["route", "referrer", "utmSource"],
+    allowedPayloadKeys: ["route", "referrer", "utmSource", "promoCodeId"],
     visibilityMode: "store_admin",
     retentionClass: "standard",
   },

@@ -9,6 +9,7 @@ import {
   buildUserInsightsPrompt,
 } from "../intelligence/capabilities/insights";
 import { SYNTHETIC_MONITOR_ORIGIN } from "../storeFront/syntheticMonitor";
+import { compileLegacyStorefrontAnalyticsRowsWithReport } from "./legacyStorefrontAnalytics";
 import type { CompiledContextBundle } from "./types";
 
 const MAX_CONTEXT_ANALYTICS = 250;
@@ -25,24 +26,7 @@ export const compileStoreInsightsContextBundle = internalQuery({
       .order("desc")
       .take(MAX_CONTEXT_ANALYTICS);
 
-    const built = buildStoreInsightsPrompt(analytics);
-    const sourceRefs = buildSourceRefs(analytics);
-
-    return {
-      bundleKind: "store_insights_context",
-      bundleVersion: 1,
-      freshness: analytics.length === 0 ? "partial" : "current",
-      snapshotHash: buildSnapshotHash(built.snapshot),
-      payloadSummary: built.snapshot,
-      payloadRedaction: "analytics rows compacted; user contact fields omitted",
-      sourceRefs,
-      ...getDataWindow(analytics),
-      hiddenSourceCount: Math.max(0, analytics.length - sourceRefs.length),
-      omittedEvidenceCount: 0,
-      redactionMode: "compact_no_contact_fields",
-      qualityFlags: analytics.length === 0 ? ["no_context_events"] : [],
-      limitedEvidence: analytics.length === 0,
-    };
+    return buildStoreInsightsContextBundleFromAnalytics(analytics);
   },
 });
 
@@ -64,32 +48,87 @@ export const compileUserInsightsContextBundle = internalQuery({
       .filter((q) => q.neq(q.field("origin"), SYNTHETIC_MONITOR_ORIGIN))
       .take(MAX_CONTEXT_ANALYTICS);
 
-    const built = buildUserInsightsPrompt(analytics);
-    const analyticsRefs = buildSourceRefs(analytics);
-
-    return {
-      bundleKind: "user_insights_context",
-      bundleVersion: 1,
-      freshness: analytics.length === 0 ? "partial" : "current",
-      snapshotHash: buildSnapshotHash(built.snapshot),
-      payloadSummary: built.snapshot,
-      payloadRedaction: "analytics rows compacted; contact fields omitted",
-      sourceRefs: [
-        {
-          table: getStorefrontActorTable(ctx, args.storeFrontUserId),
-          id: String(args.storeFrontUserId),
-        },
-        ...analyticsRefs,
-      ],
-      ...getDataWindow(analytics),
-      hiddenSourceCount: Math.max(0, analytics.length - analyticsRefs.length),
-      omittedEvidenceCount: 0,
-      redactionMode: "compact_no_contact_fields",
-      qualityFlags: analytics.length === 0 ? ["no_context_events"] : [],
-      limitedEvidence: analytics.length === 0,
-    };
+    return buildUserInsightsContextBundleFromAnalytics(analytics, {
+      table: getStorefrontActorTable(ctx, args.storeFrontUserId),
+      id: String(args.storeFrontUserId),
+    });
   },
 });
+
+export function buildStoreInsightsContextBundleFromAnalytics(
+  analytics: Doc<"analytics">[],
+): CompiledContextBundle {
+  const compiled = compileLegacyStorefrontAnalyticsRowsWithReport(analytics);
+  const built = buildStoreInsightsPrompt(compiled.contextRows);
+  const sourceRefs = buildSourceRefs(compiled.contextRows);
+
+  return buildCompiledContextBundle({
+    bundleKind: "store_insights_context",
+    promptSnapshot: built.snapshot,
+    sourceRefs,
+    sourceRowCount: compiled.sourceRowCount,
+    compiledRowCount: compiled.contextRows.length,
+    omittedEvidenceCount: compiled.omittedEvidenceCount,
+    qualityFlags: compiled.qualityFlags,
+    dataWindow: getDataWindow(compiled.contextRows),
+  });
+}
+
+export function buildUserInsightsContextBundleFromAnalytics(
+  analytics: Doc<"analytics">[],
+  actorSourceRef: { table: string; id: string },
+): CompiledContextBundle {
+  const compiled = compileLegacyStorefrontAnalyticsRowsWithReport(analytics);
+  const built = buildUserInsightsPrompt(compiled.contextRows);
+  const analyticsRefs = buildSourceRefs(compiled.contextRows);
+
+  return buildCompiledContextBundle({
+    bundleKind: "user_insights_context",
+    promptSnapshot: built.snapshot,
+    sourceRefs: [actorSourceRef, ...analyticsRefs],
+    sourceRowCount: compiled.sourceRowCount,
+    compiledRowCount: compiled.contextRows.length,
+    omittedEvidenceCount: compiled.omittedEvidenceCount,
+    qualityFlags: compiled.qualityFlags,
+    dataWindow: getDataWindow(compiled.contextRows),
+    sourceRefOffset: 1,
+  });
+}
+
+function buildCompiledContextBundle(input: {
+  bundleKind: "store_insights_context" | "user_insights_context";
+  promptSnapshot: Record<string, unknown>;
+  sourceRefs: Array<{ table: string; id: string; label?: string }>;
+  sourceRowCount: number;
+  compiledRowCount: number;
+  omittedEvidenceCount: number;
+  qualityFlags: string[];
+  dataWindow: ReturnType<typeof getDataWindow>;
+  sourceRefOffset?: number;
+}): CompiledContextBundle {
+  const evidenceRefCount = Math.max(0, input.sourceRefs.length - (input.sourceRefOffset ?? 0));
+  const qualityFlags =
+    input.compiledRowCount === 0
+      ? ["no_storefront_context", ...input.qualityFlags]
+      : ["legacy_analytics_compiled", ...input.qualityFlags];
+
+  return {
+    bundleKind: input.bundleKind,
+    bundleVersion: 1,
+    freshness: input.compiledRowCount === 0 ? "partial" : "current",
+    snapshotHash: buildSnapshotHash(input.promptSnapshot),
+    payloadSummary: input.promptSnapshot,
+    payloadRedaction:
+      "legacy storefront analytics compiled into context primitives; contact fields omitted",
+    sourceRefs: input.sourceRefs,
+    ...input.dataWindow,
+    hiddenSourceCount: Math.max(0, input.sourceRowCount - evidenceRefCount),
+    omittedEvidenceCount: input.omittedEvidenceCount,
+    redactionMode: "compact_no_contact_fields",
+    qualityFlags: [...new Set(qualityFlags)],
+    limitedEvidence: input.compiledRowCount === 0,
+  };
+}
 
 async function assertActorMatchesStore(
   ctx: QueryCtx,

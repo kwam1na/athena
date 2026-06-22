@@ -220,10 +220,10 @@ export const generateStoreInsights = action({
       return failedGenerationResult(providerResult.error.message);
     }
 
-    const payload = normalizeStoreInsightsOutput(providerResult.output, {
-      device_distribution: built.snapshot.deviceDistribution,
-      activity_trend: built.snapshot.activityTrend,
-    });
+    const payload = normalizeStoreInsightsOutput(
+      providerResult.output,
+      getStoreInsightsSnapshotFallback(built.snapshot),
+    );
     const limitedEvidence =
       bundle.limitedEvidence || !hasEvidenceBackedRecommendations(payload, sourceRefs);
 
@@ -607,4 +607,42 @@ function getBundleSnapshotFields(bundle: InsightContextBundle) {
     qualityFlags: bundle.qualityFlags,
     limitedEvidence: bundle.limitedEvidence,
   };
+}
+
+function getStoreInsightsSnapshotFallback(snapshot: Record<string, unknown>) {
+  const deviceDistribution = snapshot.deviceDistribution;
+  const activityTrend = snapshot.activityTrend;
+
+  return {
+    device_distribution: isDeviceDistribution(deviceDistribution)
+      ? deviceDistribution
+      : { desktop: "0%", mobile: "0%", unknown: "100%" },
+    activity_trend: isActivityTrend(activityTrend) ? activityTrend : "unknown",
+  };
+}
+
+function isDeviceDistribution(
+  value: unknown,
+): value is ReturnType<typeof normalizeStoreInsightsOutput>["device_distribution"] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+
+  const record = value as Record<string, unknown>;
+  return (
+    typeof record.desktop === "string" &&
+    typeof record.mobile === "string" &&
+    typeof record.unknown === "string"
+  );
+}
+
+function isActivityTrend(
+  value: unknown,
+): value is ReturnType<typeof normalizeStoreInsightsOutput>["activity_trend"] {
+  return (
+    value === "increasing" ||
+    value === "steady" ||
+    value === "decreasing" ||
+    value === "unknown"
+  );
 }
