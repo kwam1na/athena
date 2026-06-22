@@ -38,10 +38,12 @@ export const HomeHero = ({ nextSectionRef }: HomeHeroProps) => {
   const shouldShowOverlay = storeConfig.media.homeHero.showOverlay === true;
 
   const shouldShowText = storeConfig.media.homeHero.showText === true;
-  const shouldShowFallback = !shouldShowImage && !shouldShowVideo;
+  const isStoreResolved = Boolean(store);
+  const shouldShowFallback =
+    isStoreResolved && !shouldShowImage && !shouldShowVideo;
 
   return (
-    <section className="relative w-full h-screen flex items-center justify-center text-white text-center">
+    <section className="relative w-full h-screen flex items-center justify-center bg-background text-white text-center">
       {/* Background Video - shown when heroDisplayType is "reel" or not set */}
       {shouldShowVideo && hlsUrl && (
         <Suspense fallback={null}>
@@ -105,6 +107,14 @@ export const HomeHero = ({ nextSectionRef }: HomeHeroProps) => {
             </Link>
           </motion.div>
         </div>
+      )}
+
+      {!isStoreResolved && (
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 bg-background"
+          data-testid="homepage-hero-media-pending"
+        />
       )}
 
       {/* Text Content - conditionally shown */}

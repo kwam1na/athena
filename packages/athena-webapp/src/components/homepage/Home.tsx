@@ -8,23 +8,31 @@ import { BestSellers } from "./BestSellers";
 import { FeaturedSection } from "./FeaturedSection";
 import { api } from "~/convex/_generated/api";
 import { EmptyState } from "../states/empty/empty-state";
-import { PackagePlus, Store as StoreIcon } from "lucide-react";
+import {
+  ArrowDown,
+  CheckCircle2,
+  CircleAlert,
+  PackagePlus,
+  Store as StoreIcon,
+} from "lucide-react";
 import { ShopLookSection } from "./ShopLook";
 import { FadeIn } from "../common/FadeIn";
 import { HeroSectionTabs } from "./HeroSectionTabs";
 import { BannerMessageEditor } from "./BannerMessageEditor";
-import type { ReactNode } from "react";
+import type { MouseEvent, ReactNode } from "react";
 import { Button } from "../ui/button";
 import { getOrigin } from "~/src/lib/navigationUtils";
 import { getStoreConfigV2 } from "~/src/lib/storeConfig";
 import type { Store as StoreDoc } from "~/types";
 
 function HomepageSettingsSection({
+  id,
   title,
   description,
   children,
   withTopBorder = false,
 }: {
+  id?: string;
   title: string;
   description: string;
   children: ReactNode;
@@ -32,16 +40,15 @@ function HomepageSettingsSection({
 }) {
   return (
     <section
+      id={id}
       className={[
-        "grid gap-layout-xl border-b border-border py-layout-2xl lg:grid-cols-[17rem_minmax(0,1fr)]",
+        "scroll-mt-layout-2xl grid gap-layout-xl border-b border-border py-layout-2xl lg:grid-cols-[17rem_minmax(0,1fr)]",
         withTopBorder ? "border-t" : "",
       ].join(" ")}
     >
       <div className="space-y-layout-sm">
         <h2 className="text-2xl font-medium text-foreground">{title}</h2>
-        <p className="text-sm leading-6 text-muted-foreground">
-          {description}
-        </p>
+        <p className="text-sm leading-6 text-muted-foreground">{description}</p>
       </div>
       <div className="min-w-0">{children}</div>
     </section>
@@ -52,13 +59,11 @@ function HomepageReadinessSummary({
   activeStore,
   bestSellersCount,
   highlightedCount,
-  isBannerActive,
   shopLookCount,
 }: {
   activeStore: StoreDoc;
   bestSellersCount: number;
   highlightedCount: number;
-  isBannerActive: boolean;
   shopLookCount: number;
 }) {
   const storeConfig = getStoreConfigV2(activeStore);
@@ -78,29 +83,52 @@ function HomepageReadinessSummary({
 
   const items = [
     {
-      label: "Hero",
-      value: heroIsReady ? "Ready" : "Needs media",
+      isReady: heroIsReady,
+      label: "Hero media",
+      sectionId: "homepage-hero-display",
+      value: heroIsReady ? "Ready" : "Add reel or image",
     },
     {
-      label: "Banner",
-      value: isBannerActive ? "Active" : "Inactive",
-    },
-    {
+      isReady: bestSellersCount > 0,
       label: "Best sellers",
+      sectionId: "homepage-best-sellers",
       value: `${bestSellersCount} selected`,
     },
     {
+      isReady: highlightedCount > 0,
       label: "Highlighted",
+      sectionId: "homepage-highlighted-content",
       value: `${highlightedCount} selected`,
     },
     {
+      isReady: shopLookIsReady,
       label: "Shop the Look",
+      sectionId: "homepage-shop-the-look",
       value: shopLookIsReady ? "Ready" : "Needs image and product",
     },
   ];
 
+  function handleReadinessJump(
+    event: MouseEvent<HTMLAnchorElement>,
+    sectionId: string,
+  ) {
+    const section = document.getElementById(sectionId);
+
+    if (!section) return;
+
+    event.preventDefault();
+
+    window.history.pushState(null, "", `#${sectionId}`);
+    section.scrollIntoView({
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+        ? "auto"
+        : "smooth",
+      block: "start",
+    });
+  }
+
   return (
-    <section className="border-b border-border pb-layout-xl">
+    <section className="py-layout-md">
       <div className="grid gap-layout-lg lg:grid-cols-[17rem_minmax(0,1fr)]">
         <div className="space-y-layout-sm">
           <h2 className="text-2xl font-medium text-foreground">
@@ -110,19 +138,36 @@ function HomepageReadinessSummary({
             {readyCount} of 4 required homepage areas are ready for customers.
           </p>
         </div>
-        <div className="grid gap-layout-sm md:grid-cols-2 xl:grid-cols-5">
+        <div className="flex flex-wrap items-center gap-x-layout-lg gap-y-layout-sm">
           {items.map((item) => (
-            <div
+            <a
+              aria-label={`Jump to ${item.label}`}
+              href={`#${item.sectionId}`}
               key={item.label}
-              className="rounded-md border border-border bg-background p-layout-sm"
+              onClick={(event) => handleReadinessJump(event, item.sectionId)}
+              className="group flex min-w-[11rem] items-start gap-layout-xs rounded-md outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
-              <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                {item.label}
-              </p>
-              <p className="mt-layout-xs text-sm font-medium leading-5 text-foreground">
-                {item.value}
-              </p>
-            </div>
+              {item.isReady ? (
+                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" />
+              ) : (
+                <CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground transition-colors group-hover:text-foreground" />
+              )}
+              <div className="min-w-0">
+                <p className="text-sm font-medium leading-5 text-foreground">
+                  {item.label}
+                </p>
+                <p className="text-xs leading-5 text-muted-foreground">
+                  {item.value}
+                </p>
+                <span className="mt-layout-xs inline-flex items-center gap-1 text-xs font-medium leading-5 underline-offset-4 group-hover:underline">
+                  Go to section
+                  <ArrowDown
+                    aria-hidden="true"
+                    className="h-3 w-3 transition-transform group-hover:translate-y-0.5"
+                  />
+                </span>
+              </div>
+            </a>
           ))}
         </div>
       </div>
@@ -135,7 +180,7 @@ export default function Home() {
 
   const products = useQuery(
     api.inventory.products.getAll,
-    activeStore?._id ? { storeId: activeStore._id } : "skip"
+    activeStore?._id ? { storeId: activeStore._id } : "skip",
   );
 
   const bestSellers = useQuery(
@@ -150,11 +195,6 @@ export default function Home() {
     api.inventory.featuredItem.getAll,
     activeStore?._id ? { storeId: activeStore._id, type: "shop_look" } : "skip",
   );
-  const bannerMessage = useQuery(
-    api.inventory.bannerMessage.get,
-    activeStore?._id ? { storeId: activeStore._id } : "skip",
-  );
-
   if (!activeStore || products === undefined) return null;
 
   const hasProducts = products.length > 0;
@@ -179,14 +219,13 @@ export default function Home() {
               activeStore={activeStore}
               bestSellersCount={bestSellers?.length ?? 0}
               highlightedCount={highlightedItems?.length ?? 0}
-              isBannerActive={Boolean(bannerMessage?.active)}
               shopLookCount={shopLookItems?.length ?? 0}
             />
 
             <HomepageSettingsSection
+              id="homepage-hero-display"
               title="Hero display"
               description="Choose the lead media, text treatment, and active reel or image for the top of the storefront."
-              withTopBorder
             >
               <HeroSectionTabs />
             </HomepageSettingsSection>
@@ -199,6 +238,7 @@ export default function Home() {
             </HomepageSettingsSection>
 
             <HomepageSettingsSection
+              id="homepage-best-sellers"
               title="Best sellers"
               description="Order the products that should anchor the customer's first shopping path."
             >
@@ -206,6 +246,7 @@ export default function Home() {
             </HomepageSettingsSection>
 
             <HomepageSettingsSection
+              id="homepage-highlighted-content"
               title="Highlighted content"
               description="Select the product, category, or collection callout shown after the hero."
             >
@@ -213,6 +254,7 @@ export default function Home() {
             </HomepageSettingsSection>
 
             <HomepageSettingsSection
+              id="homepage-shop-the-look"
               title="Shop the look"
               description="Pair one visual story with the product customers should move toward next."
             >

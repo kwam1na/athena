@@ -11,11 +11,14 @@ import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
 } from "../lib/athenaUserAuth";
+import { getNextHomepageRank } from "../../shared/homepageRanking";
+import {
+  isStorefrontSelectableSubcategory,
+  isStorefrontVisibleCategory,
+  isStorefrontVisibleSubcategory,
+} from "../../shared/storefrontVisibility";
 
 const entity = "featuredItem";
-
-const RESERVED_STOREFRONT_CATEGORY_SLUGS = new Set(["pos-quick-add"]);
-const RESERVED_STOREFRONT_SUBCATEGORY_SLUGS = new Set(["uncategorized"]);
 
 async function requireHomepageStoreAdmin(
   ctx: QueryCtx | MutationCtx,
@@ -36,16 +39,6 @@ async function requireHomepageStoreAdmin(
 
   return store;
 }
-
-const isCustomerVisibleCategory = (
-  category: { showOnStorefront?: boolean; slug: string } | null,
-) => {
-  return Boolean(
-    category &&
-      category.showOnStorefront !== false &&
-      !RESERVED_STOREFRONT_CATEGORY_SLUGS.has(category.slug),
-  );
-};
 
 const countFeaturedTargets = (args: {
   productId?: unknown;
@@ -82,7 +75,7 @@ const validateFeaturedPlacement = async (
     if (!category || category.storeId !== args.storeId) {
       throw new Error("Featured category must belong to the same store.");
     }
-    if (!isCustomerVisibleCategory(category)) {
+    if (!isStorefrontVisibleCategory(category)) {
       throw new Error("Featured category must be customer-visible.");
     }
     return;
@@ -93,7 +86,7 @@ const validateFeaturedPlacement = async (
     if (!subcategory || subcategory.storeId !== args.storeId) {
       throw new Error("Featured subcategory must belong to the same store.");
     }
-    if (RESERVED_STOREFRONT_SUBCATEGORY_SLUGS.has(subcategory.slug)) {
+    if (!isStorefrontVisibleSubcategory(subcategory)) {
       throw new Error("Featured subcategory must be customer-visible.");
     }
 
@@ -101,10 +94,26 @@ const validateFeaturedPlacement = async (
     if (!category || category.storeId !== args.storeId) {
       throw new Error("Featured subcategory parent must belong to the same store.");
     }
-    if (!isCustomerVisibleCategory(category)) {
+    if (!isStorefrontSelectableSubcategory(subcategory, category)) {
       throw new Error("Featured subcategory parent must be customer-visible.");
     }
   }
+};
+
+const getNextFeaturedItemRank = async (
+  ctx: QueryCtx | MutationCtx,
+  args: { storeId: Id<"store">; type?: string },
+) => {
+  const rows = await ctx.db
+    .query(entity)
+    .filter((q) =>
+      q.and(
+        q.eq(q.field("storeId"), args.storeId),
+        args.type ? q.eq(q.field("type"), args.type) : q.eq(1, 1),
+      ),
+    )
+    .take(100);
+  return getNextHomepageRank(rows);
 };
 
 export const create = mutation({
@@ -149,10 +158,16 @@ export const create = mutation({
       return;
     }
 
+    const rank = await getNextFeaturedItemRank(ctx, {
+      storeId: args.storeId,
+      type: args.type,
+    });
+
     const id = await ctx.db.insert(entity, {
       productId: args.productId,
       categoryId: args.categoryId,
       subcategoryId: args.subcategoryId,
+      rank,
       storeId: args.storeId,
       type: args.type,
     });

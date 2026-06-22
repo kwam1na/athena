@@ -326,10 +326,49 @@ describe("homepage snapshot presenter", () => {
     expect(snapshot.featuredItems[2].subcategory?.products.map((product) => product.productSlug)).toEqual([
       "subcategory-product",
     ]);
+    expect(snapshot.featuredItems[2].subcategory?.categorySlug).toBe(
+      "lace-fronts",
+    );
     expect(snapshot.shopLook?.id).toBe("shop-look");
     expect(JSON.stringify(snapshot)).not.toContain("omission");
     expect(JSON.stringify(snapshot)).not.toContain("_creationTime");
     expect(() => assertConformsToExportedReturns(get, snapshot)).not.toThrow();
+  });
+
+  it("sorts legacy unranked best sellers after ranked rows", () => {
+    const unranked = sku("unranked", 0);
+    delete (unranked as { rank?: number }).rank;
+
+    const snapshot = buildHomepageSnapshotV1({
+      store,
+      nowMs: 1_000,
+      bestSellers: [unranked, sku("ranked", 0)],
+      featuredItems: [],
+    });
+
+    expect(snapshot.bestSellers.map((item) => item.productSku.sku)).toEqual([
+      "SKU-ranked",
+      "SKU-unranked",
+    ]);
+    expect(snapshot.bestSellers.map((item) => item.rank)).toEqual([0, 1]);
+  });
+
+  it("presents contiguous ranks when explicit ranks are not zero-based", () => {
+    const unranked = sku("unranked", 0);
+    delete (unranked as { rank?: number }).rank;
+
+    const snapshot = buildHomepageSnapshotV1({
+      store,
+      nowMs: 1_000,
+      bestSellers: [unranked, sku("ranked", 5)],
+      featuredItems: [],
+    });
+
+    expect(snapshot.bestSellers.map((item) => item.productSku.sku)).toEqual([
+      "SKU-ranked",
+      "SKU-unranked",
+    ]);
+    expect(snapshot.bestSellers.map((item) => item.rank)).toEqual([0, 1]);
   });
 
   it("uses arrays and nulls for empty or ineligible public content", () => {

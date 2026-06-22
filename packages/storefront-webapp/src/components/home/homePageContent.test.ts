@@ -28,6 +28,20 @@ describe("resolveHomepageContent", () => {
     expect(result.hasHomepageData).toBe(true);
   });
 
+  it("sorts legacy unranked best sellers after ranked rows", () => {
+    const rankedSku = { _id: "sku-ranked", sku: "R" } as any;
+    const unrankedSku = { _id: "sku-unranked", sku: "U" } as any;
+
+    const result = resolveHomepageContent({
+      bestSellers: [
+        { productSku: unrankedSku },
+        { rank: 1, productSku: rankedSku },
+      ],
+    });
+
+    expect(result.bestSellersProducts).toEqual([rankedSku, unrankedSku]);
+  });
+
   it("resolves snapshot sections without converting minor-unit prices", () => {
     const result = resolveHomepageContent({
       snapshot: {
@@ -139,6 +153,55 @@ describe("resolveHomepageContent", () => {
     ).toBe("closure-unit");
     expect(result.shopLookProduct?.productId).toBe("shop-look-product");
     expect(result.hasHomepageData).toBe(true);
+  });
+
+  it("preserves parent category slug for snapshot subcategory highlights", () => {
+    const result = resolveHomepageContent({
+      snapshot: {
+        contractVersion: "homepage_snapshot.v1",
+        generatedAtMs: 1,
+        store: {} as any,
+        hero: {} as any,
+        bannerMessage: null,
+        bestSellers: [],
+        featuredItems: [
+          {
+            id: "highlight-subcategory",
+            rank: 1,
+            type: "regular",
+            targetKind: "subcategory",
+            product: null,
+            category: null,
+            subcategory: {
+              categoryId: "category-home-care",
+              categorySlug: "home-care",
+              subcategoryId: "subcategory-dispensers",
+              name: "Dispensers",
+              slug: "dispensers",
+              products: [
+                {
+                  productId: "product-dispenser",
+                  productSlug: "soap-dispenser",
+                  productName: "Soap Dispenser",
+                  skuId: "sku-dispenser",
+                  sku: null,
+                  imageUrls: ["soap.jpg"],
+                  currency: "GHS",
+                  priceAmountMinor: 4500,
+                  netPriceAmountMinor: null,
+                },
+              ],
+            },
+          },
+        ],
+        shopLook: null,
+      },
+    });
+
+    expect(result.featuredSectionSorted[0]?.subcategory).toMatchObject({
+      categorySlug: "home-care",
+      slug: "dispensers",
+    });
   });
 
   it("treats null snapshot sections as ready empty homepage content", () => {

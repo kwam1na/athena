@@ -11,6 +11,7 @@ import type { HomepageDisplayProduct } from "./homePageContent";
 
 type HomepageProduct = (Product & { skus: ProductSku[] }) | HomepageDisplayProduct;
 type FeaturedCollection = {
+  categorySlug?: string;
   name: string;
   products: HomepageProduct[];
   slug: string;
@@ -67,9 +68,9 @@ function FeaturedSection({
   const { formatter } = useStoreContext();
 
   if (data.subcategory) {
-    const { name, products, slug } = data.subcategory;
+    const { categorySlug, name, products, slug } = data.subcategory;
 
-    if (!products.length) return null;
+    if (!products.length || !categorySlug) return null;
 
     return (
       <div className="space-y-8">
@@ -85,11 +86,11 @@ function FeaturedSection({
             <Link
               to="/shop/$categorySlug/$subcategorySlug"
               params={{
-                categorySlug: "hair",
+                categorySlug,
                 subcategorySlug: slug,
               }}
               search={{
-                origin: "shop_hair",
+                origin: `shop_${categorySlug}`,
               }}
             >
               <Button className="p-0" variant={"link"}>

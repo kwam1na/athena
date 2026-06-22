@@ -23,8 +23,10 @@ import { FeaturedSectionDialog } from "./FeaturedSectionDialog";
 import { getOrigin } from "~/src/lib/navigationUtils";
 import { formatStoredCurrencyAmount } from "~/src/lib/pos/displayAmounts";
 import { toast } from "sonner";
+import { sortHomepageRankedItems } from "~/shared/homepageRanking";
 import type { Id } from "~/convex/_generated/dataModel";
 import type { Category, Product, Subcategory } from "~/types";
+import { HomepagePlacementProductImage } from "./HomepagePlacementProductImage";
 
 type FeaturedHomepageItem = {
   _id: Id<"featuredItem">;
@@ -54,9 +56,7 @@ export const FeaturedSection = () => {
       return;
     }
 
-    setFeaturedItems(
-      [...featuredItemsQuery].sort((a, b) => (a.rank ?? 0) - (b.rank ?? 0)),
-    );
+    setFeaturedItems(sortHomepageRankedItems(featuredItemsQuery));
   }, [featuredItemsQuery]);
 
   const removeHighlightedItem = useMutation(api.inventory.featuredItem.remove);
@@ -194,13 +194,9 @@ export const FeaturedSection = () => {
                                   search={{ o: getOrigin() }}
                                   className="flex min-w-0 items-center gap-4"
                                 >
-                                  <img
-                                    src={
-                                      product.skus[0]?.images[0] ||
-                                      "/placeholder.jpg"
-                                    }
+                                  <HomepagePlacementProductImage
                                     alt={product.name || "Product"}
-                                    className="h-16 w-16 aspect-square shrink-0 rounded-md object-cover"
+                                    product={product}
                                   />
                                   <div className="min-w-0 space-y-1">
                                     <p className="truncate text-sm">

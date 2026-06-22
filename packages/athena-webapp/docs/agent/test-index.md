@@ -198,9 +198,11 @@ This index enumerates the current automated test files and ties them back to the
 
 - [`shared/commandResult.test.ts`](../../shared/commandResult.test.ts)
 - [`shared/currencyFormatter.test.ts`](../../shared/currencyFormatter.test.ts)
+- [`shared/homepageRanking.test.ts`](../../shared/homepageRanking.test.ts)
 - [`shared/intelligence/contextTracking.test.ts`](../../shared/intelligence/contextTracking.test.ts)
 - [`shared/registerSessionStatus.test.ts`](../../shared/registerSessionStatus.test.ts)
 - [`shared/staffDisplayName.test.ts`](../../shared/staffDisplayName.test.ts)
+- [`shared/storefrontVisibility.test.ts`](../../shared/storefrontVisibility.test.ts)
 
 ## Section `src`
 
@@ -229,6 +231,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/components/cash-controls/formatReviewReason.test.ts`](../../src/components/cash-controls/formatReviewReason.test.ts)
 - [`src/components/common/PageHeader.test.tsx`](../../src/components/common/PageHeader.test.tsx)
 - [`src/components/common/PageLevelHeader.test.tsx`](../../src/components/common/PageLevelHeader.test.tsx)
+- [`src/components/homepage/HomepagePlacementProductImage.test.ts`](../../src/components/homepage/HomepagePlacementProductImage.test.ts)
 - [`src/components/homepage/HomepageProductPickerDialog.test.tsx`](../../src/components/homepage/HomepageProductPickerDialog.test.tsx)
 - [`src/components/join-team/index.test.tsx`](../../src/components/join-team/index.test.tsx)
 - [`src/components/operations/CommandApprovalDialog.test.tsx`](../../src/components/operations/CommandApprovalDialog.test.tsx)

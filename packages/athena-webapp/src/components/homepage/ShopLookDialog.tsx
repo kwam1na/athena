@@ -3,7 +3,7 @@ import { api } from "~/convex/_generated/api";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import { Id } from "~/convex/_generated/dataModel";
 import { HomepageProductPickerDialog } from "./HomepageProductPickerDialog";
-import type { Product } from "~/types";
+import type { Category, Product, Subcategory } from "~/types";
 
 export function ShopLookDialog({
   action,
@@ -20,6 +20,16 @@ export function ShopLookDialog({
 
   const products = useQuery(
     api.inventory.products.getAll,
+    activeStore?._id ? { storeId: activeStore._id } : "skip"
+  );
+
+  const categories = useQuery(
+    api.inventory.categories.getAll,
+    activeStore?._id ? { storeId: activeStore._id } : "skip"
+  );
+
+  const subcategories = useQuery(
+    api.inventory.subcategories.getAll,
     activeStore?._id ? { storeId: activeStore._id } : "skip"
   );
 
@@ -47,6 +57,7 @@ export function ShopLookDialog({
 
   return (
     <HomepageProductPickerDialog
+      categories={categories as Category[] | undefined}
       currency={activeStore.currency}
       description="Select the product that should anchor the Shop the Look story."
       onOpenChange={setDialogOpen}
@@ -55,6 +66,7 @@ export function ShopLookDialog({
       products={products as Product[] | undefined}
       searchId="homepage-shop-look-sku-search"
       selectLabel={action === "edit" ? "Replace product" : "Add product"}
+      subcategories={subcategories as Subcategory[] | undefined}
       title={action === "edit" ? "Replace Shop the Look product" : "Add Shop the Look product"}
     />
   );

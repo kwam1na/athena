@@ -58,8 +58,7 @@ export const VideoPlayer = ({ hlsUrl }: VideoPlayerProps) => {
       loop
       muted
     >
-      <source src={hlsUrl} type="video/mp4" />
-      Your browser does not support the video tag.
+      <source src={hlsUrl} type="application/x-mpegURL" />
     </motion.video>
   );
 };

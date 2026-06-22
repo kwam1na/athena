@@ -89,6 +89,16 @@ export function HomepageProductPickerDialog({
   const previousOpenRef = useRef(open);
   const isSkuSelection = !!onSelectSku;
 
+  const categoryById = useMemo(() => {
+    return new Map(categories.map((category) => [category._id, category]));
+  }, [categories]);
+
+  const subcategoryById = useMemo(() => {
+    return new Map(
+      subcategories.map((subcategory) => [subcategory._id, subcategory]),
+    );
+  }, [subcategories]);
+
   const skuOptions = useMemo(() => {
     return (products ?? []).flatMap((product) =>
       product.skus.map((sku) => ({ product, sku })),
@@ -99,7 +109,8 @@ export function HomepageProductPickerDialog({
     const counts = new Map<string, { itemCount: number; label: string }>();
 
     for (const product of products ?? []) {
-      const key = product.categorySlug || product.categoryName;
+      const category = categoryById.get(product.categoryId);
+      const key = product.categorySlug || category?.slug || product.categoryName;
       if (!key) continue;
 
       const existing = counts.get(key);
@@ -107,37 +118,48 @@ export function HomepageProductPickerDialog({
         itemCount:
           (existing?.itemCount ?? 0) +
           (isSkuSelection ? product.skus.length : 1),
-        label: product.categoryName ?? key,
+        label: product.categoryName ?? category?.name ?? key,
       });
     }
 
     return [...counts.entries()]
       .map(([key, value]) => ({ key, ...value }))
       .sort((a, b) => a.label.localeCompare(b.label));
-  }, [isSkuSelection, products]);
+  }, [categoryById, isSkuSelection, products]);
 
   const normalizedQuery = normalizeSkuSearchQuery(query);
   const productOptions = useMemo(() => products ?? [], [products]);
   const filteredSkuOptions = skuOptions.filter(({ product, sku }) => {
+    const categoryFilterKey = getProductCategoryFilterKey(
+      product,
+      categoryById,
+    );
+
     if (!skuMatchesAvailabilityFilter(sku, availabilityFilter)) {
       return false;
     }
 
     if (
       categoryFilter !== ALL_CATEGORY_FILTER_KEY &&
-      product.categorySlug !== categoryFilter &&
-      product.categoryName !== categoryFilter
+      categoryFilterKey !== categoryFilter
     ) {
       return false;
     }
 
-    return matchesSkuSearchTerms(getHomepageSkuSearchTerms(product, sku), normalizedQuery);
+    return matchesSkuSearchTerms(
+      getHomepageSkuSearchTerms(product, sku, categoryById, subcategoryById),
+      normalizedQuery,
+    );
   });
   const filteredProductOptions = productOptions.filter((product) => {
+    const categoryFilterKey = getProductCategoryFilterKey(
+      product,
+      categoryById,
+    );
+
     if (
       categoryFilter !== ALL_CATEGORY_FILTER_KEY &&
-      product.categorySlug !== categoryFilter &&
-      product.categoryName !== categoryFilter
+      categoryFilterKey !== categoryFilter
     ) {
       return false;
     }
@@ -152,7 +174,7 @@ export function HomepageProductPickerDialog({
     }
 
     return matchesSkuSearchTerms(
-      getHomepageProductSearchTerms(product),
+      getHomepageProductSearchTerms(product, categoryById, subcategoryById),
       normalizedQuery,
     );
   });
@@ -230,7 +252,7 @@ export function HomepageProductPickerDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="flex max-h-[min(92dvh,860px)] w-[min(calc(100vw-2rem),72rem)] max-w-none flex-col gap-0 overflow-hidden border-border bg-surface-raised p-0 shadow-overlay">
+      <DialogContent className="flex h-[min(92dvh,860px)] w-[min(calc(100vw-2rem),72rem)] max-w-none flex-col gap-0 overflow-hidden border-border bg-surface-raised p-0 shadow-overlay">
         <DialogHeader className="border-b border-border px-layout-lg py-layout-md text-left">
           <DialogTitle className="font-display text-2xl font-medium tracking-normal">
             {title}
@@ -331,6 +353,11 @@ export function HomepageProductPickerDialog({
                       getProductAvailableUnits(product) <= 0;
                     const selectionKey = `product-${product._id}`;
                     const productStatusId = `${searchId}-${selectionKey}-status`;
+                    const taxonomyLabel = getProductTaxonomyLabel(
+                      product,
+                      categoryById,
+                      subcategoryById,
+                    );
 
                     return (
                       <button
@@ -362,7 +389,7 @@ export function HomepageProductPickerDialog({
                               {product.name}
                             </p>
                             <p className="truncate text-xs text-muted-foreground">
-                              {product.categoryName ?? "Uncategorized"}
+                              {taxonomyLabel}
                             </p>
                           </div>
                           <div className="flex flex-wrap gap-1.5 text-xs text-muted-foreground">
@@ -421,6 +448,11 @@ export function HomepageProductPickerDialog({
                     const skuIsUnavailable = getSkuAvailableUnits(sku) <= 0;
                     const selectionKey = `sku-${sku._id}`;
                     const skuStatusId = `${searchId}-${selectionKey}-status`;
+                    const taxonomyLabel = getProductTaxonomyLabel(
+                      product,
+                      categoryById,
+                      subcategoryById,
+                    );
 
                     return (
                       <button
@@ -454,7 +486,7 @@ export function HomepageProductPickerDialog({
                               {getProductName(sku) || product.name}
                             </p>
                             <p className="truncate text-xs text-muted-foreground">
-                              {product.categoryName ?? "Uncategorized"}
+                              {taxonomyLabel}
                             </p>
                           </div>
                           <div className="flex flex-wrap gap-1.5 text-xs text-muted-foreground">
@@ -634,13 +666,47 @@ function MetadataPill({ children }: { children: ReactNode }) {
   );
 }
 
-function getHomepageSkuSearchTerms(product: Product, sku: ProductSku) {
+function getProductCategoryFilterKey(
+  product: Product,
+  categoryById: Map<Category["_id"], Category>,
+) {
+  const category = categoryById.get(product.categoryId);
+
+  return product.categorySlug || category?.slug || product.categoryName;
+}
+
+function getProductTaxonomyLabel(
+  product: Product,
+  categoryById: Map<Category["_id"], Category>,
+  subcategoryById: Map<Subcategory["_id"], Subcategory>,
+) {
+  const category = categoryById.get(product.categoryId);
+  const subcategory = subcategoryById.get(product.subcategoryId);
+  const categoryLabel = product.categoryName ?? category?.name;
+  const subcategoryLabel = product.subcategoryName ?? subcategory?.name;
+
+  if (categoryLabel && subcategoryLabel) {
+    return `${categoryLabel} / ${subcategoryLabel}`;
+  }
+
+  return categoryLabel ?? subcategoryLabel ?? "Uncategorized";
+}
+
+function getHomepageSkuSearchTerms(
+  product: Product,
+  sku: ProductSku,
+  categoryById: Map<Category["_id"], Category>,
+  subcategoryById: Map<Subcategory["_id"], Subcategory>,
+) {
+  const category = categoryById.get(product.categoryId);
+  const subcategory = subcategoryById.get(product.subcategoryId);
+
   return [
     product.name,
-    product.categoryName,
-    product.subcategoryName,
-    product.categorySlug,
-    product.subcategorySlug,
+    product.categoryName ?? category?.name,
+    product.subcategoryName ?? subcategory?.name,
+    product.categorySlug ?? category?.slug,
+    product.subcategorySlug ?? subcategory?.slug,
     sku.sku,
     sku.barcode,
     sku.productCategory,
@@ -653,14 +719,23 @@ function getHomepageSkuSearchTerms(product: Product, sku: ProductSku) {
   ];
 }
 
-function getHomepageProductSearchTerms(product: Product) {
+function getHomepageProductSearchTerms(
+  product: Product,
+  categoryById: Map<Category["_id"], Category>,
+  subcategoryById: Map<Subcategory["_id"], Subcategory>,
+) {
+  const category = categoryById.get(product.categoryId);
+  const subcategory = subcategoryById.get(product.subcategoryId);
+
   return [
     product.name,
-    product.categoryName,
-    product.subcategoryName,
-    product.categorySlug,
-    product.subcategorySlug,
-    ...product.skus.flatMap((sku) => getHomepageSkuSearchTerms(product, sku)),
+    product.categoryName ?? category?.name,
+    product.subcategoryName ?? subcategory?.name,
+    product.categorySlug ?? category?.slug,
+    product.subcategorySlug ?? subcategory?.slug,
+    ...product.skus.flatMap((sku) =>
+      getHomepageSkuSearchTerms(product, sku, categoryById, subcategoryById),
+    ),
   ];
 }
 

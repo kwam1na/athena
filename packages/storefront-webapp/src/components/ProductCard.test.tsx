@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { ProductSkuCard } from "./ProductCard";
@@ -16,6 +16,10 @@ vi.mock("@/hooks/useProductDiscount", () => ({
     originalPrice: 0,
     discountedSkuId: undefined,
   }),
+}));
+
+vi.mock("@/contexts/StoreContext", () => ({
+  useStoreContext: () => ({ store: undefined }),
 }));
 
 describe("ProductSkuCard", () => {
@@ -58,5 +62,28 @@ describe("ProductSkuCard", () => {
     );
 
     expect(screen.getByText("GH₵65")).toBeInTheDocument();
+  });
+
+  it("shows the storefront placeholder when product imagery fails", () => {
+    render(
+      <ProductSkuCard
+        sku={{
+          _id: "sku_1",
+          productName: "Banana",
+          price: 2000,
+          quantityAvailable: 0,
+          images: ["https://images.example.com/missing-banana.webp"],
+        } as any}
+        currencyFormatter={currencyFormatter("GHS")}
+      />,
+    );
+
+    const image = screen.getByAltText("Banana image");
+    fireEvent.error(image);
+
+    expect(image).toHaveAttribute(
+      "src",
+      expect.stringContaining("placeholder"),
+    );
   });
 });

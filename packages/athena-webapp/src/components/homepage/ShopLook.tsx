@@ -22,6 +22,7 @@ import { getStoreConfigV2 } from "~/src/lib/storeConfig";
 import { formatStoredCurrencyAmount } from "~/src/lib/pos/displayAmounts";
 import type { Id } from "~/convex/_generated/dataModel";
 import type { Product } from "~/types";
+import { HomepagePlacementProductImage } from "./HomepagePlacementProductImage";
 
 type ShopLookItem = {
   _id: Id<"featuredItem">;
@@ -142,13 +143,9 @@ export const ShopLookSection = () => {
                 search={{ o: getOrigin() }}
                 className="flex min-w-0 items-center gap-4"
               >
-                <img
-                  src={
-                    featuredItem.product.skus[0]?.images[0] ||
-                    "/placeholder.jpg"
-                  }
+                <HomepagePlacementProductImage
                   alt={featuredItem.product.name || "Product"}
-                  className="h-16 w-16 aspect-square shrink-0 rounded-md object-cover"
+                  product={featuredItem.product}
                 />
                 <div className="min-w-0 space-y-1">
                   <p className="truncate text-sm">

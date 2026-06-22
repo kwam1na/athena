@@ -13,8 +13,12 @@ function getHandler(definition: unknown) {
   return (definition as { _handler: Function })._handler;
 }
 
-function makeCreateCtx(records: Record<string, unknown> = {}) {
+function makeCreateCtx(
+  records: Record<string, unknown> = {},
+  rankedRows: unknown[] = [],
+) {
   const first = vi.fn(async () => null);
+  const take = vi.fn(async () => rankedRows);
 
   return {
     db: {
@@ -22,6 +26,7 @@ function makeCreateCtx(records: Record<string, unknown> = {}) {
       query: vi.fn(() => ({
         filter: vi.fn(() => ({
           first,
+          take,
         })),
       })),
       insert: vi.fn(async () => "featured-created"),
@@ -117,6 +122,46 @@ describe("featured homepage placement writes", () => {
       failureMessage: "You do not have access to manage homepage content.",
       organizationId: "org-1",
       userId: "athena-user-1",
+    });
+  });
+
+  it("appends regular highlighted items after the current ranked list", async () => {
+    const ctx = makeCreateCtx(
+      {
+        "store-1": {
+          _id: "store-1",
+          organizationId: "org-1",
+        },
+        "product-1": {
+          _id: "product-1",
+          storeId: "store-1",
+        },
+        "featured-created": {
+          _id: "featured-created",
+          storeId: "store-1",
+          rank: 5,
+        },
+      },
+      [
+        { _id: "featured-1", storeId: "store-1", type: "regular", rank: 0 },
+        { _id: "featured-2", storeId: "store-1", type: "regular", rank: 4 },
+        { _id: "featured-legacy", storeId: "store-1", type: "regular" },
+      ],
+    );
+
+    await getHandler(create)(ctx, {
+      storeId: "store-1",
+      type: "regular",
+      productId: "product-1",
+    });
+
+    expect(ctx.db.insert).toHaveBeenCalledWith("featuredItem", {
+      productId: "product-1",
+      categoryId: undefined,
+      subcategoryId: undefined,
+      rank: 5,
+      storeId: "store-1",
+      type: "regular",
     });
   });
 

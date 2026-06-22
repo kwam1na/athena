@@ -1,4 +1,5 @@
 import { Product, ProductSku } from "@athena/webapp";
+import { sortHomepageRankedItems } from "@athena/webapp/shared/homepageRanking";
 import type {
   HomepageSnapshotHighlightedItemV1,
   HomepageSnapshotSkuV1,
@@ -36,11 +37,18 @@ type FeaturedItem = {
     slug: string;
   };
   subcategory?: {
+    categorySlug?: string;
     name: string;
     products: Array<Product | HomepageDisplayProduct>;
     slug: string;
   };
   productId?: string;
+};
+
+type BestSellerItem = {
+  _id?: string;
+  rank?: number;
+  productSku: ProductSku | HomepageDisplaySku;
 };
 
 function toDisplaySku(sku: HomepageSnapshotSkuV1): HomepageDisplaySku {
@@ -82,6 +90,7 @@ function toFeaturedItem(item: HomepageSnapshotHighlightedItemV1): FeaturedItem {
       : undefined,
     subcategory: item.subcategory
       ? {
+          categorySlug: item.subcategory.categorySlug,
           name: item.subcategory.name,
           slug: item.subcategory.slug,
           products: item.subcategory.products.map(toDisplayProduct),
@@ -99,10 +108,13 @@ export function resolveHomepageContent({
   bestSellers?: Array<{ rank?: number; productSku: ProductSku }>;
   featured?: FeaturedItem[];
 }) {
-  const snapshotBestSellers = snapshot?.bestSellers?.map((item) => ({
-    rank: item.rank,
-    productSku: toDisplaySku(item.productSku),
-  }));
+  const snapshotBestSellers: BestSellerItem[] | undefined =
+    snapshot?.bestSellers?.map((item) => ({
+      _id: item.id,
+      rank: item.rank,
+      productSku: toDisplaySku(item.productSku),
+    }));
+  const legacyBestSellers: BestSellerItem[] | undefined = bestSellers;
 
   const snapshotFeatured = snapshot
     ? [
@@ -111,16 +123,16 @@ export function resolveHomepageContent({
       ].map(toFeaturedItem)
     : undefined;
 
-  const bestSellersSorted = [...(snapshotBestSellers ?? bestSellers ?? [])].sort(
-    (a, b) => (a.rank ?? 0) - (b.rank ?? 0),
+  const bestSellersSorted = sortHomepageRankedItems(
+    snapshotBestSellers ?? legacyBestSellers ?? [],
   );
 
   const bestSellersProducts = bestSellersSorted.map(
     (bestSeller) => bestSeller.productSku,
   );
 
-  const featuredSorted = [...(snapshotFeatured ?? featured ?? [])].sort(
-    (a, b) => (a.rank ?? 0) - (b.rank ?? 0),
+  const featuredSorted = sortHomepageRankedItems(
+    snapshotFeatured ?? featured ?? [],
   );
 
   const featuredSectionSorted = featuredSorted.filter(
