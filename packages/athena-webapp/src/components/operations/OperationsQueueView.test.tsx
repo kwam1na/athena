@@ -305,6 +305,85 @@ describe("OperationsQueueViewContent", () => {
     ).toBeInTheDocument();
   });
 
+  it("shows only the open work header while the queue is loading", () => {
+    render(
+      <OperationsQueueViewContent
+        {...baseProps}
+        activeWorkflow="queue"
+        isLoadingQueue
+      />,
+    );
+
+    expect(screen.getByText("Open work")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Service intake and stock review work that still needs progress or completion.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Loading open work summary"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Loading open work queue"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Work queue")).not.toBeInTheDocument();
+    expect(screen.queryByText("No open work items")).not.toBeInTheDocument();
+  });
+
+  it("shows only the stock adjustments header while stock data is loading", () => {
+    render(
+      <OperationsQueueViewContent
+        {...baseProps}
+        activeWorkflow="stock"
+        isLoadingQueue
+      />,
+    );
+
+    expect(screen.getByText("Stock adjustments")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Review store inventory, count physical stock, and record corrections before changes are applied.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /cycle count/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("All inventory is available."),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps the loaded stock header when inventory is ready but queue data is still loading", () => {
+    render(
+      <OperationsQueueViewContent
+        {...baseProps}
+        activeWorkflow="stock"
+        isLoadingQueue
+        isLoadingStock={false}
+      />,
+    );
+
+    const loadedHeading = screen.getByRole("heading", {
+      name: "1 SKU has reserved units.",
+    });
+
+    expect(loadedHeading).toBeInTheDocument();
+    expect(loadedHeading).not.toHaveAttribute("style");
+    expect(
+      screen.getByText(
+        "6 of 8 units are available to sell. Select a SKU, then record physical counts for its category.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        "Review store inventory, count physical stock, and record corrections before changes are applied.",
+      ),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("tab", { name: /cycle count/i }),
+    ).toBeInTheDocument();
+  });
+
   it("separates open work items from pending approvals", () => {
     const { rerender } = render(
       <OperationsQueueViewContent
@@ -391,6 +470,44 @@ describe("OperationsQueueViewContent", () => {
     expect(screen.getByText("Created")).toBeInTheDocument();
     expect(screen.getByText("Due")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /show details/i })).toBeInTheDocument();
+  });
+
+  it("paginates open work items five per page with the shared list controls", async () => {
+    const { default: userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+    const workItems = Array.from({ length: 12 }, (_, index) => ({
+      _id: `work-item-${index + 1}` as Id<"operationalWorkItem">,
+      approvalState: "not_required",
+      createdAt: Date.now() - index * 60 * 1000,
+      customerName: `Customer ${index + 1}`,
+      priority: "normal",
+      status: "open",
+      title: `Open work item ${index + 1}`,
+      type: "service_case",
+    }));
+
+    render(
+      <OperationsQueueViewContent
+        {...baseProps}
+        activeWorkflow="queue"
+        workItems={workItems}
+      />,
+    );
+
+    expect(screen.getByText("Open work item 1")).toBeInTheDocument();
+    expect(screen.getByText("Open work item 5")).toBeInTheDocument();
+    expect(screen.queryByText("Open work item 6")).not.toBeInTheDocument();
+    expect(screen.getByText("Showing 1-5 of 12")).toBeInTheDocument();
+    expect(screen.getByText("Page 1 of 3")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Go to next page" }));
+
+    expect(screen.queryByText("Open work item 1")).not.toBeInTheDocument();
+    expect(screen.getByText("Open work item 6")).toBeInTheDocument();
+    expect(screen.getByText("Open work item 10")).toBeInTheDocument();
+    expect(screen.queryByText("Open work item 11")).not.toBeInTheDocument();
+    expect(screen.getByText("Showing 6-10 of 12")).toBeInTheDocument();
+    expect(screen.getByText("Page 2 of 3")).toBeInTheDocument();
   });
 
   it("links synced sale inventory work items to manual stock adjustments", () => {

@@ -136,7 +136,7 @@ describe("CashControlsDashboardContent", () => {
     window.scrollTo = vi.fn();
   });
 
-  it("shows a loading state while the dashboard snapshot is loading", () => {
+  it("shows only the cash controls header while the dashboard snapshot is loading", () => {
     render(
       <CashControlsDashboardContent
         currency="USD"
@@ -147,12 +147,19 @@ describe("CashControlsDashboardContent", () => {
       />,
     );
 
+    expect(screen.getByText("Cash controls")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Track live drawers, review deposited totals, and move into session detail before shifting work into closeouts.",
+      ),
+    ).toBeInTheDocument();
     expect(
       screen.queryByLabelText("Loading cash controls workspace"),
     ).not.toBeInTheDocument();
     expect(
       screen.queryByText("Loading cash controls..."),
     ).not.toBeInTheDocument();
+    expect(screen.queryByText("Current control snapshot")).not.toBeInTheDocument();
   });
 
   it("renders overview metrics, register activity, and recent deposits", () => {

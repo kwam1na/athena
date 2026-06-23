@@ -193,6 +193,7 @@ type StockAdjustmentWorkspaceContentProps = {
   cycleCountDraftSummary?: CycleCountDraftSummary | null;
   inventoryItems: InventorySnapshotItem[];
   isCycleCountDraftSaving?: boolean;
+  isLoading?: boolean;
   isSubmitting: boolean;
   onDiscardCycleCountDraft?: () => Promise<NormalizedCommandResult<unknown>>;
   onSearchStateChange?: (patch: StockAdjustmentSearchPatch) => void;
@@ -1694,6 +1695,7 @@ export function StockAdjustmentWorkspaceContent({
   cycleCountDraftSummary,
   inventoryItems,
   isCycleCountDraftSaving = false,
+  isLoading = false,
   isSubmitting,
   onDiscardCycleCountDraft,
   onRefreshCycleCountDraftLineBaseline,
@@ -2880,23 +2882,37 @@ export function StockAdjustmentWorkspaceContent({
     setCycleCounts(buildCycleCountDrafts(inventoryItems));
     setSubmissionKey(buildStockAdjustmentSubmissionKey(adjustmentType));
   };
+  const modeInstruction =
+    adjustmentType === "cycle_count"
+      ? "Select a SKU, then record physical counts for its category."
+      : "Record known deltas when physical stock needs correction.";
+  const headerTitle = isLoading ? "Stock adjustments" : inventoryState.title;
+  const headerDescription = isLoading
+    ? "Review store inventory, count physical stock, and record corrections before changes are applied."
+    : `${inventoryState.description} ${modeInstruction}`;
+  const headerContentKey = isLoading ? "stock-loading" : "stock-loaded";
+  const hasRenderedLoadingHeaderRef = useRef(false);
+
+  if (isLoading) {
+    hasRenderedLoadingHeaderRef.current = true;
+  }
+
+  const shouldAnimateHeaderContent =
+    isLoading || hasRenderedLoadingHeaderRef.current;
 
   return (
     <PageWorkspace>
       <PageLevelHeader
+        animateContent={shouldAnimateHeaderContent}
+        contentKey={headerContentKey}
         eyebrow="Store Ops"
-        title={inventoryState.title}
+        title={headerTitle}
         showBackButton={showBackButton}
-        description={
-          <>
-            {inventoryState.description}{" "}
-            {adjustmentType === "cycle_count"
-              ? "Select a SKU, then record physical counts for its category."
-              : "Record known deltas when physical stock needs correction."}
-          </>
-        }
+        description={headerDescription}
       />
 
+      {isLoading ? null : (
+        <>
       <PageWorkspaceGrid>
         <PageWorkspaceMain>
           <div className="flex flex-wrap items-start justify-between gap-layout-xl">
@@ -3396,6 +3412,8 @@ export function StockAdjustmentWorkspaceContent({
         open={isQuickAddOpen}
         submitErrorMessage="Could not quick add this product. Try again."
       />
+        </>
+      )}
     </PageWorkspace>
   );
 }
