@@ -421,7 +421,6 @@ function drawerAuthorityEventKey(input: {
 
 export function isDrawerAuthorityLifecycleEvent(event: PosLocalEventRecord) {
   return (
-    event.type === "register.opened" ||
     event.type === "register.closeout_started" ||
     event.type === "register.reopened"
   );

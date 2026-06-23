@@ -1540,6 +1540,17 @@ function isDuplicateLocalIdRegisterSyncReviewItem(item: PosReconciliationItem) {
 }
 
 function getRegisterSyncReviewItemActionLabels(item: PosReconciliationItem) {
+  if (isRegisterCloseoutReviewItem(item)) {
+    return {
+      approveLabel: isClosedRegisterSyncedCloseoutReviewItem(item)
+        ? "Apply duplicate closeout"
+        : "Apply synced closeout",
+      rejectLabel: isClosedRegisterSyncedCloseoutReviewItem(item)
+        ? "Reject duplicate closeout"
+        : "Reject synced closeout",
+    };
+  }
+
   if (isDuplicateLocalIdRegisterSyncReviewItem(item)) {
     return {
       approveLabel: "Apply duplicate review item",
@@ -1673,12 +1684,19 @@ function RegisterSessionSyncNotice({
   const hasCloseoutReview = reconciliationItems.some(
     isRegisterCloseoutReviewItem,
   );
+  const closeoutReviewCount = reconciliationItems.filter(
+    isRegisterCloseoutReviewItem,
+  ).length;
+  const hasMixedReviewQueue =
+    hasCloseoutReview && reconciliationItems.length > closeoutReviewCount;
   const noticeLabel = hasClosedRegisterSyncedCloseout
     ? "Synced closeout cannot be applied"
     : hasOnlyRejectedReviewItems
       ? "Manager override available"
       : syncStatus.status === "locally_closed_pending_sync"
         ? "Pending reconciliation"
+        : hasMixedReviewQueue
+          ? "Review queue needs attention"
         : hasCloseoutReview
           ? "Closeout needs review"
           : syncStatus.label;
@@ -1686,19 +1704,10 @@ function RegisterSessionSyncNotice({
     ? "This register is already closed. Reject the duplicate synced activity to clear the review."
     : hasOnlyRejectedReviewItems
       ? "Rejected local activity can be synced from Cash Controls. A manager can override and apply these events without the cashier present."
+      : hasMixedReviewQueue
+        ? `${formatReviewItemCount(reconciliationItems.length)} need manager review before this drawer can be settled.`
       : syncStatus.description;
-  const closeoutReviewItem = hasCloseoutReview
-    ? reconciliationItems.find(isRegisterCloseoutReviewItem)
-    : null;
-  const reviewItems = hasCloseoutReview
-    ? closeoutReviewItem
-      ? [closeoutReviewItem]
-      : []
-    : reconciliationItems;
-  const closeoutVariance = closeoutReviewItem?.variance ?? null;
-  const closeoutNote = closeoutReviewItem?.notes?.trim();
-  const closeoutExpectedCash = closeoutReviewItem?.expectedCash;
-  const closeoutCountedCash = closeoutReviewItem?.countedCash;
+  const reviewItems = reconciliationItems;
   const canApproveSyncReview = !hasClosedRegisterSyncedCloseout;
   const shouldCombineReviewItems =
     syncStatus.status === "needs_review" &&
@@ -1727,7 +1736,15 @@ function RegisterSessionSyncNotice({
     syncStatus.status === "needs_review" &&
     !hasOnlyRejectedReviewItems &&
     Boolean(onReviewDecision) &&
-    hasUniformBatchReviewDecision;
+    hasUniformBatchReviewDecision &&
+    !hasMixedReviewQueue;
+  const shouldShowReviewItemActions =
+    syncStatus.status === "needs_review" &&
+    Boolean(onReviewDecision) &&
+    hasMixedReviewQueue;
+  const reviewItemDecisionHandler = shouldShowReviewItemActions
+    ? onReviewDecision
+    : undefined;
   const shouldShowSyncFooter =
     shouldShowRejectedReviewAction ||
     shouldShowRejectedReviewRetryLink ||
@@ -1754,14 +1771,18 @@ function RegisterSessionSyncNotice({
   const reviewReasonSummary = shouldCombineReviewItems
     ? formatReviewReasonSummary(reconciliationItems)
     : null;
+  const allSyncReviewSaleSummaries = getSyncReviewSaleSummaries(
+    reconciliationItems,
+  );
   const syncReviewSaleSummaries = shouldCombineReviewItems
-    ? getSyncReviewSaleSummaries(reconciliationItems)
+    ? allSyncReviewSaleSummaries
     : [];
   const actionCopy = getSyncReviewActionCopy({
     hasCloseoutReview,
     hasOnlyRejectedReviewItems,
     hasSaleReview:
       syncReviewSaleSummaries.length > 0 ||
+      allSyncReviewSaleSummaries.length > 0 ||
       rejectedSyncSaleSummaries.length > 0,
   });
   const rejectedSyncEvidenceDetails = hasOnlyRejectedReviewItems
@@ -1814,7 +1835,7 @@ function RegisterSessionSyncNotice({
           >
             {noticeLabel}
           </p>
-          <p className="text-sm leading-6 text-muted-foreground">
+          <p className="text-pretty text-sm leading-6 text-muted-foreground">
             {noticeDescription}
           </p>
           {hasOnlyRejectedReviewItems ? (
@@ -1882,7 +1903,7 @@ function RegisterSessionSyncNotice({
           ) : syncStatus.status === "needs_review" &&
             reconciliationItems.length > 0 ? (
             <div className="space-y-2 pt-layout-xs">
-              {!hasCloseoutReview ? (
+              {!hasCloseoutReview || hasMixedReviewQueue ? (
                 <p className="text-xs font-medium text-foreground">
                   {formatReviewItemCount(reconciliationItems.length)}
                 </p>
@@ -1891,11 +1912,15 @@ function RegisterSessionSyncNotice({
                 {reviewItems.map((item, index) => {
                   const reportedAt = formatReviewItemTimestamp(item.createdAt);
                   const isCloseoutItem = isRegisterCloseoutReviewItem(item);
+                  const itemVariance = item.variance ?? null;
+                  const itemExpectedCash = item.expectedCash;
+                  const itemCountedCash = item.countedCash;
+                  const itemNote = item.notes?.trim();
 
                   return (
                     <article
                       className={cn(
-                        "rounded-md border bg-background/80 p-layout-md",
+                        "rounded-md border bg-background/80 p-layout-md shadow-sm",
                         isCloseoutItem
                           ? "border-amber-200/80"
                           : "border-danger/15",
@@ -1909,13 +1934,13 @@ function RegisterSessionSyncNotice({
                             <p className="text-sm font-medium text-foreground">
                               Closeout variance review
                             </p>
-                            <p className="text-sm leading-6 text-muted-foreground">
+                            <p className="text-pretty text-sm leading-6 text-muted-foreground">
                               Review the synced count before applying this
                               closeout to the drawer.
                             </p>
                           </div>
                           <dl className="grid gap-layout-sm text-sm sm:grid-cols-3">
-                            {typeof closeoutExpectedCash === "number" ? (
+                            {typeof itemExpectedCash === "number" ? (
                               <div className="rounded-md border border-border/70 bg-muted/20 px-layout-sm py-layout-sm">
                                 <dt className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
                                   Expected
@@ -1923,12 +1948,12 @@ function RegisterSessionSyncNotice({
                                 <dd className="mt-1 font-numeric tabular-nums text-foreground">
                                   {formatCurrency(
                                     currency,
-                                    closeoutExpectedCash,
+                                    itemExpectedCash,
                                   )}
                                 </dd>
                               </div>
                             ) : null}
-                            {typeof closeoutCountedCash === "number" ? (
+                            {typeof itemCountedCash === "number" ? (
                               <div className="rounded-md border border-border/70 bg-muted/20 px-layout-sm py-layout-sm">
                                 <dt className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
                                   Counted
@@ -1936,7 +1961,7 @@ function RegisterSessionSyncNotice({
                                 <dd className="mt-1 font-numeric tabular-nums text-foreground">
                                   {formatCurrency(
                                     currency,
-                                    closeoutCountedCash,
+                                    itemCountedCash,
                                   )}
                                 </dd>
                               </div>
@@ -1948,24 +1973,24 @@ function RegisterSessionSyncNotice({
                               <dd
                                 className={cn(
                                   "mt-1 font-numeric tabular-nums",
-                                  typeof closeoutVariance === "number"
-                                    ? getVarianceTone(closeoutVariance)
+                                  typeof itemVariance === "number"
+                                    ? getVarianceTone(itemVariance)
                                     : "text-foreground",
                                 )}
                               >
-                                {typeof closeoutVariance === "number"
-                                  ? formatCurrency(currency, closeoutVariance)
+                                {typeof itemVariance === "number"
+                                  ? formatCurrency(currency, itemVariance)
                                   : "Needs review"}
                               </dd>
                             </div>
                           </dl>
-                          {closeoutNote ? (
+                          {itemNote ? (
                             <div className="space-y-2 border-t border-border/70 pt-layout-md">
                               <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
                                 Notes
                               </p>
-                              <p className="text-sm leading-6 text-muted-foreground">
-                                {closeoutNote}
+                              <p className="text-pretty text-sm leading-6 text-muted-foreground">
+                                {itemNote}
                               </p>
                             </div>
                           ) : null}
@@ -1977,15 +2002,14 @@ function RegisterSessionSyncNotice({
                               ? "Duplicate closeout"
                               : formatPosReconciliationType(item.type, item)}
                           </p>
-                          <p className="text-sm leading-6 text-muted-foreground">
+                          <p className="text-pretty text-sm leading-6 text-muted-foreground">
                             {isClosedRegisterSyncedCloseoutReviewItem(item)
                               ? "The synced closeout is from local activity for a register that is already closed."
-                              : item.summary?.trim() ||
-                                "Review synced register activity before closeout is settled."}
+                              : getRegisterSyncReviewItemSummary(item)}
                           </p>
                         </div>
                       )}
-                      {!isCloseoutItem &&
+                      {(!isCloseoutItem || hasMixedReviewQueue) &&
                       (item.localEventId ||
                         typeof item.sequence === "number" ||
                         reportedAt) ? (
@@ -2019,6 +2043,15 @@ function RegisterSessionSyncNotice({
                             </div>
                           ) : null}
                         </dl>
+                      ) : null}
+                      {reviewItemDecisionHandler && item.id ? (
+                        <div className="mt-layout-md border-t border-border/70 pt-layout-md">
+                          <RegisterSyncReviewItemDecisionList
+                            isResolving={isResolving}
+                            items={[item]}
+                            onReviewDecision={reviewItemDecisionHandler}
+                          />
+                        </div>
                       ) : null}
                     </article>
                   );

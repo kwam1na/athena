@@ -253,6 +253,7 @@ export interface RegisterDrawerGateState {
   canOpenCashControls?: boolean;
   cashControlsRegisterSessionId?: Id<"registerSession">;
   canOpenDrawer?: boolean;
+  hasSignedInStaff?: boolean;
   hasPendingCloseoutApproval?: boolean;
   notes?: string;
   errorMessage: string | null;

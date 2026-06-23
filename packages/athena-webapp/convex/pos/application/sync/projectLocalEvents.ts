@@ -2,11 +2,19 @@ import type { Id } from "../../../_generated/dataModel";
 import { normalizeInStorePayments } from "../../../cashControls/paymentAllocationAttribution";
 import { toDisplayAmount } from "../../../lib/currency";
 import { currencyFormatter, generateTransactionNumber } from "../../../utils";
+import {
+  canReuseCloudRegisterSessionForLocalOpen as canReuseCloudRegisterSessionForLocalOpenPolicy,
+  canSupersedeReviewedRegisterSessionForLocalOpen as canSupersedeReviewedRegisterSessionForLocalOpenPolicy,
+  isRegisterCloseoutReviewConflict,
+  isRegisterSessionSaleUsable,
+  REGISTER_CLOSEOUT_VARIANCE_SYNC_REVIEW_SUMMARY,
+} from "../../../../shared/registerSessionLifecyclePolicy";
 import type {
   LocalSyncConflictRecord,
   LocalSyncMappingRecord,
   LocalSyncMappingRecordInput,
   LocalSyncMappingProjectionInput,
+  LocalSyncRegisterReviewConflictFact,
   ParsedPosLocalSyncEventInput,
   PosLocalSalePayload,
   PosLocalSyncEventType,
@@ -55,6 +63,11 @@ type RegisterSessionRecord = NonNullable<
 type PosSessionRecord = Awaited<
   ReturnType<SyncProjectionRepository["getPosSessionByLocalId"]>
 >;
+
+type OpenRegisterCloseoutReviewState = {
+  hasOpenRegisterCloseoutReview: boolean;
+  latestReviewSequence?: number;
+};
 
 type CanonicalSaleItem = {
   barcode?: string;
@@ -166,8 +179,6 @@ async function persistRegisterSessionWorkflowTraceId(
     workflowTraceId: args.traceId,
   });
 }
-
-const POS_USABLE_REGISTER_SESSION_STATUSES = new Set(["open", "active"]);
 
 const INVENTORY_CONFLICT_SUMMARY =
   "Inventory needs manager review for a synced offline sale.";
@@ -768,11 +779,10 @@ async function canMapExistingCloudRegisterSession(
   const registerSession = await repository.getRegisterSession(
     directRegisterSessionId,
   );
-  return Boolean(
-    registerSession &&
-      registerSession.storeId === args.storeId &&
-      registerSession.terminalId === args.terminalId &&
-      isPosUsableRegisterSession(registerSession),
+  return canReuseCloudRegisterSessionForLocalOpen(
+    repository,
+    args,
+    registerSession,
   );
 }
 
@@ -782,6 +792,97 @@ type ProjectEventArgsFor<EventType extends PosLocalSyncEventType> = Omit<
 > & {
   event: Extract<ParsedPosLocalSyncEventInput, { eventType: EventType }>;
 };
+
+async function canReuseCloudRegisterSessionForLocalOpen(
+  repository: SyncProjectionRepository,
+  args: ProjectEventArgsFor<"register_opened">,
+  registerSession: Awaited<
+    ReturnType<SyncProjectionRepository["getRegisterSession"]>
+  >,
+) {
+  const hasOpenRegisterCloseoutReview =
+    registerSession === null || registerSession === undefined
+      ? { hasOpenRegisterCloseoutReview: false }
+      : await getOpenRegisterCloseoutReviewState(repository, args, {
+          registerSessionId: registerSession._id,
+        });
+
+  return canReuseCloudRegisterSessionForLocalOpenPolicy({
+    hasOpenRegisterCloseoutReview:
+      hasOpenRegisterCloseoutReview.hasOpenRegisterCloseoutReview,
+    registerSession,
+    storeId: args.storeId,
+    terminalId: args.terminalId,
+  });
+}
+
+async function canSupersedeReviewedRegisterSessionForLocalOpen(
+  repository: SyncProjectionRepository,
+  args: ProjectEventArgsFor<"register_opened">,
+  registerSession: Awaited<
+    ReturnType<SyncProjectionRepository["getRegisterSession"]>
+  >,
+) {
+  const hasOpenRegisterCloseoutReview =
+    registerSession === null || registerSession === undefined
+      ? { hasOpenRegisterCloseoutReview: false }
+      : await getOpenRegisterCloseoutReviewState(repository, args, {
+          registerSessionId: registerSession._id,
+        });
+
+  return canSupersedeReviewedRegisterSessionForLocalOpenPolicy({
+    hasOpenRegisterCloseoutReview:
+      hasOpenRegisterCloseoutReview.hasOpenRegisterCloseoutReview,
+    replacementLocalRegisterSessionId: args.event.localRegisterSessionId,
+    replacementSequence: args.event.sequence,
+    registerSession,
+    reviewSequence: hasOpenRegisterCloseoutReview.latestReviewSequence,
+    storeId: args.storeId,
+    terminalId: args.terminalId,
+  });
+}
+
+async function getOpenRegisterCloseoutReviewState(
+  repository: SyncProjectionRepository,
+  args: Pick<ProjectEventArgs, "storeId" | "terminalId">,
+  input: { registerSessionId: Id<"registerSession"> },
+): Promise<OpenRegisterCloseoutReviewState> {
+  const facts = await repository.listOpenRegisterReviewConflictFacts({
+    registerSessionId: input.registerSessionId,
+    storeId: args.storeId,
+    terminalId: args.terminalId,
+  });
+  const closeoutReviewConflicts = facts
+    .filter((fact) =>
+      factMatchesRegisterSessionCloseoutReview(fact, input.registerSessionId),
+    )
+    .map((fact) => fact.conflict);
+
+  return {
+    hasOpenRegisterCloseoutReview: closeoutReviewConflicts.length > 0,
+    latestReviewSequence: closeoutReviewConflicts
+      .map((conflict) => conflict.sequence)
+      .sort((left, right) => right - left)
+      .at(0),
+  };
+}
+
+function factMatchesRegisterSessionCloseoutReview(
+  fact: LocalSyncRegisterReviewConflictFact,
+  registerSessionId: Id<"registerSession">,
+) {
+  if (!isRegisterCloseoutReviewConflict(fact.conflict)) {
+    return false;
+  }
+  if (
+    fact.registerSessionMapping?.cloudTable === "registerSession" &&
+    fact.registerSessionMapping.cloudId === registerSessionId
+  ) {
+    return true;
+  }
+
+  return fact.directRegisterSession?._id === registerSessionId;
+}
 
 async function projectRegisterOpened(
   repository: SyncProjectionRepository,
@@ -807,9 +908,11 @@ async function projectRegisterOpened(
     );
     if (
       registerSession &&
-      registerSession.storeId === args.storeId &&
-      registerSession.terminalId === args.terminalId &&
-      isPosUsableRegisterSession(registerSession)
+      await canReuseCloudRegisterSessionForLocalOpen(
+        repository,
+        args,
+        registerSession,
+      )
     ) {
       const mapping = await createMapping(repository, args, {
         localIdKind: "registerSession",
@@ -862,7 +965,13 @@ async function projectRegisterOpened(
     registerNumber: terminalRegisterNumber,
   });
   if (blockingRegisterSession) {
-    if (isPosUsableRegisterSession(blockingRegisterSession)) {
+    if (
+      await canReuseCloudRegisterSessionForLocalOpen(
+        repository,
+        args,
+        blockingRegisterSession,
+      )
+    ) {
       const mapping = await createMapping(repository, args, {
         localIdKind: "registerSession",
         localId: args.event.localRegisterSessionId,
@@ -872,16 +981,25 @@ async function projectRegisterOpened(
       return { status: "projected", mappings: [mapping], conflicts: [] };
     }
 
-    const conflict = await createConflict(repository, args, {
-      conflictType: "permission",
-      summary: "A register session is already open for this terminal.",
-      details: {
-        blockingRegisterSessionId: blockingRegisterSession._id,
-        localRegisterSessionId: args.event.localRegisterSessionId,
-        registerNumber: terminalRegisterNumber,
-      },
-    });
-    return { status: "conflicted", mappings: [], conflicts: [conflict] };
+    const canSupersedeReviewedRegisterSession =
+      await canSupersedeReviewedRegisterSessionForLocalOpen(
+        repository,
+        args,
+        blockingRegisterSession,
+      );
+
+    if (!canSupersedeReviewedRegisterSession) {
+      const conflict = await createConflict(repository, args, {
+        conflictType: "permission",
+        summary: "A register session is already open for this terminal.",
+        details: {
+          blockingRegisterSessionId: blockingRegisterSession._id,
+          localRegisterSessionId: args.event.localRegisterSessionId,
+          registerNumber: terminalRegisterNumber,
+        },
+      });
+      return { status: "conflicted", mappings: [], conflicts: [conflict] };
+    }
   }
 
   const openingFloat = payload.openingFloat ?? 0;
@@ -1319,7 +1437,27 @@ async function resolveSaleRegisterAndSession(
     return conflictResult(conflict);
   }
 
-  if (!isPosUsableRegisterSession(registerSession)) {
+  if (
+    isRegisterSessionSaleUsable(registerSession) &&
+    (
+      await getOpenRegisterCloseoutReviewState(repository, args, {
+        registerSessionId: registerSession._id,
+      })
+    ).hasOpenRegisterCloseoutReview
+  ) {
+    const conflict = await createConflict(repository, args, {
+      conflictType: "permission",
+      summary: "Register session mapping points to a reviewed closeout.",
+      details: {
+        localRegisterSessionId: args.event.localRegisterSessionId,
+        localTransactionId: payload.localTransactionId,
+        registerSessionId: registerSession._id,
+      },
+    });
+    return conflictResult(conflict);
+  }
+
+  if (!isRegisterSessionSaleUsable(registerSession)) {
     if (
       args.options?.allowClosedRegisterSaleProjection === true &&
       registerSession.status === "closed"
@@ -3290,9 +3428,19 @@ async function projectRegisterClosed(
   const payload = args.event.payload;
   const countedCash = payload.countedCash ?? registerSession.expectedCash;
   const variance = countedCash - registerSession.expectedCash;
+  const isPendingReviewedCloseout =
+    registerSession.status === "closing" &&
+    typeof registerSession.countedCash === "number" &&
+    typeof registerSession.variance === "number" &&
+    roundMoney(registerSession.countedCash) === roundMoney(countedCash) &&
+    roundMoney(registerSession.variance) === roundMoney(variance);
   if (
     registerSession.status !== "open" &&
-    registerSession.status !== "active"
+    registerSession.status !== "active" &&
+    !(
+      isPendingReviewedCloseout &&
+      args.options?.allowRegisterCloseoutVarianceProjection === true
+    )
   ) {
     const isAlreadyAppliedCloseout =
       registerSession.status === "closed" &&
@@ -3309,6 +3457,28 @@ async function projectRegisterClosed(
         cloudId: registerSession._id,
       });
       return { status: "projected", mappings: [mapping], conflicts: [] };
+    }
+
+    if (isPendingReviewedCloseout) {
+      const existingVarianceConflict = (
+        await repository.listConflictsForEvent({
+          storeId: args.storeId,
+          terminalId: args.terminalId,
+          localEventId: args.event.localEventId,
+        })
+      ).find(
+        (conflict) =>
+          conflict.status === "needs_review" &&
+          conflict.summary === REGISTER_CLOSEOUT_VARIANCE_SYNC_REVIEW_SUMMARY,
+      );
+
+      if (existingVarianceConflict) {
+        return {
+          status: "conflicted",
+          mappings: [],
+          conflicts: [existingVarianceConflict],
+        };
+      }
     }
 
     const conflict = await createConflict(repository, args, {
@@ -3329,8 +3499,7 @@ async function projectRegisterClosed(
     const store = await repository.getStore(args.storeId);
     const conflict = await createConflict(repository, args, {
       conflictType: "permission",
-      summary:
-        "Register closeout variance requires manager review before synced closeout can be applied.",
+      summary: REGISTER_CLOSEOUT_VARIANCE_SYNC_REVIEW_SUMMARY,
       details: {
         countedCash,
         expectedCash: registerSession.expectedCash,
@@ -3362,6 +3531,12 @@ async function projectRegisterClosed(
       registerSessionId: registerSession._id,
       terminalId: args.terminalId,
       localEventId: args.event.localEventId,
+    });
+    await repository.patchRegisterSession(registerSession._id, {
+      status: "closing",
+      countedCash,
+      variance,
+      notes: payload.notes,
     });
     return { status: "conflicted", mappings: [], conflicts: [conflict] };
   }
@@ -3617,14 +3792,6 @@ function createMapping(
   };
 
   return repository.createMapping(scopedInput);
-}
-
-function isPosUsableRegisterSession(
-  registerSession: Pick<RegisterSessionRecord, "status"> | null | undefined,
-) {
-  return POS_USABLE_REGISTER_SESSION_STATUSES.has(
-    registerSession?.status ?? "",
-  );
 }
 
 function createConflict(

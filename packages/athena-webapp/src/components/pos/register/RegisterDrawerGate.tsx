@@ -98,6 +98,7 @@ export function RegisterDrawerGate({
   const isAuthorityRepair =
     drawerGate.mode === "terminalRepair" ||
     drawerGate.mode === "drawerAuthorityRepair";
+  const canSignOut = drawerGate.hasSignedInStaff !== false;
 
   if (isAuthorityRepair) {
     const isTerminalRepair = drawerGate.mode === "terminalRepair";
@@ -155,10 +156,16 @@ export function RegisterDrawerGate({
                 Retry sync
               </Button>
             ) : null}
-            <Button type="button" variant="outline" onClick={drawerGate.onSignOut}>
-              <LogOutIcon className="mr-2 h-4 w-4" />
-              Sign out
-            </Button>
+            {canSignOut ? (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={drawerGate.onSignOut}
+              >
+                <LogOutIcon className="mr-2 h-4 w-4" />
+                Sign out
+              </Button>
+            ) : null}
           </div>
         </div>
       </div>
@@ -362,16 +369,18 @@ export function RegisterDrawerGate({
                 </LoadingButton>
               ) : null}
 
-              <Button
-                className="w-full sm:w-auto"
-                disabled={drawerGate.isReopeningCloseout}
-                onClick={() => void drawerGate.onSignOut()}
-                type="button"
-                variant="outline"
-              >
-                <LogOutIcon className="mr-2 h-4 w-4" />
-                Sign out
-              </Button>
+              {canSignOut ? (
+                <Button
+                  className="w-full sm:w-auto"
+                  disabled={drawerGate.isReopeningCloseout}
+                  onClick={() => void drawerGate.onSignOut()}
+                  type="button"
+                  variant="outline"
+                >
+                  <LogOutIcon className="mr-2 h-4 w-4" />
+                  Sign out
+                </Button>
+              ) : null}
             </div>
 
             {drawerGate.errorMessage ? (
@@ -492,19 +501,21 @@ export function RegisterDrawerGate({
                   />
                 ) : null}
 
-                <Button
-                  className="w-full sm:w-auto"
-                  disabled={
-                    drawerGate.isCloseoutSubmitting ||
-                    drawerGate.isReopeningCloseout
-                  }
-                  onClick={() => void drawerGate.onSignOut()}
-                  type="button"
-                  variant="outline"
-                >
-                  <LogOutIcon className="mr-2 h-4 w-4" />
-                  Sign out
-                </Button>
+                {canSignOut ? (
+                  <Button
+                    className="w-full sm:w-auto"
+                    disabled={
+                      drawerGate.isCloseoutSubmitting ||
+                      drawerGate.isReopeningCloseout
+                    }
+                    onClick={() => void drawerGate.onSignOut()}
+                    type="button"
+                    variant="outline"
+                  >
+                    <LogOutIcon className="mr-2 h-4 w-4" />
+                    Sign out
+                  </Button>
+                ) : null}
               </div>
             </form>
           </>
@@ -590,16 +601,18 @@ export function RegisterDrawerGate({
             {drawerGate.isSubmitting ? "Opening drawer" : "Open drawer"}
           </Button>
 
-          <Button
-            className="w-full sm:w-auto"
-            disabled={drawerGate.isSubmitting}
-            onClick={() => void drawerGate.onSignOut()}
-            type="button"
-            variant="outline"
-          >
-            <LogOutIcon className="mr-2 h-4 w-4" />
-            Sign out
-          </Button>
+          {canSignOut ? (
+            <Button
+              className="w-full sm:w-auto"
+              disabled={drawerGate.isSubmitting}
+              onClick={() => void drawerGate.onSignOut()}
+              type="button"
+              variant="outline"
+            >
+              <LogOutIcon className="mr-2 h-4 w-4" />
+              Sign out
+            </Button>
+          ) : null}
 
           {drawerGate.canOpenCashControls ? (
             <CashControlsButton

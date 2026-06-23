@@ -3,6 +3,10 @@ import type {
   PosRegisterStateDto,
   PosTerminalDto,
 } from "@/lib/pos/application/dto";
+import {
+  getSaleBlockingDrawerAuthority,
+  isRegisterSessionSaleUsable,
+} from "~/shared/registerSessionLifecyclePolicy";
 
 import { derivePosLocalSyncStatus } from "./syncStatus";
 import {
@@ -422,22 +426,25 @@ export function projectLocalRegisterReadModel(input: {
   }
 
   const activeSale = [...sales.values()].at(-1) ?? null;
-  const saleBlockReason = getSaleBlockReason({
+  const drawerAuthority = getSaleBlockingDrawerAuthority({
     activeRegisterSession,
     drawerAuthority: input.drawerAuthority,
+  });
+  const saleBlockReason = getSaleBlockReason({
+    activeRegisterSession,
+    drawerAuthority,
     terminalIntegrity: input.terminalIntegrity,
   });
   const canSell =
-    Boolean(activeRegisterSession) &&
-    activeRegisterSession?.status !== "closing" &&
+    isRegisterSessionSaleUsable(activeRegisterSession) &&
     !saleBlockReason;
 
   return {
     activeRegisterSession,
     activeSale,
     canSell,
-    ...(input.drawerAuthority?.status === "blocked"
-      ? { drawerAuthorityReason: input.drawerAuthority.reason }
+    ...(drawerAuthority?.status === "blocked"
+      ? { drawerAuthorityReason: drawerAuthority.reason }
       : {}),
     ...(saleBlockReason ? { saleBlockReason } : {}),
     clearedSaleIds: [...clearedSaleIds],

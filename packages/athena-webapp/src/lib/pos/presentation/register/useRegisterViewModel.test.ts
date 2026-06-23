@@ -2479,7 +2479,7 @@ describe("useRegisterViewModel", () => {
     expect(onRetrySync).toHaveBeenCalled();
   });
 
-  it("blocks POS when the active drawer has a synced closeout review", async () => {
+  it("keeps POS usable when the active drawer has a closeout review conflict", async () => {
     mockRegisterState = {
       ...mockRegisterState!,
       activeRegisterSession: {
@@ -2502,7 +2502,26 @@ describe("useRegisterViewModel", () => {
           ],
         },
       },
+      activeSession: null,
     };
+    mockActiveSession = null;
+    mockListLocalEvents.mockResolvedValue({
+      ok: true,
+      value: [
+        buildLocalEvent({
+          sequence: 1,
+          type: "register.opened",
+          localRegisterSessionId: "local-register-new",
+          payload: {
+            expectedCash: 5_000,
+            localRegisterSessionId: "local-register-new",
+            openingFloat: 5_000,
+            status: "open",
+          },
+          sync: { status: "pending", uploaded: false },
+        }),
+      ],
+    });
 
     const { useRegisterViewModel } = await import("./useRegisterViewModel");
     const { result } = renderHook(() => useRegisterViewModel());
@@ -2512,22 +2531,50 @@ describe("useRegisterViewModel", () => {
         buildStaffAuthenticationResult(),
       );
     });
+    await waitForLocalRegisterEffects(result);
 
-    expect(result.current.drawerGate).not.toBeNull();
-    expect(result.current.drawerGate?.mode).toBe("closeoutBlocked");
-    expect(result.current.drawerGate?.hasPendingCloseoutApproval).toBe(true);
-    expect(result.current.drawerGate?.expectedCash).toBe(5_000);
-    expect(result.current.drawerGate?.closeoutSubmittedCountedCash).toBe(4_500);
-    expect(result.current.drawerGate?.closeoutSubmittedVariance).toBe(-500);
-    expect(result.current.drawerGate?.cashControlsRegisterSessionId).toBe(
-      "drawer-1",
+    expect(result.current.drawerGate).toBeNull();
+    expect(result.current.productEntry.disabled).toBe(false);
+    expect(result.current.syncStatus).toEqual(
+      expect.objectContaining({
+        label: "Pending sync",
+        pendingEventCount: 1,
+        status: "pending_sync",
+      }),
     );
-    expect(result.current.drawerGate?.onReopenRegister).toBeUndefined();
-    expect(
-      result.current.drawerGate?.onCloseoutSecondaryAction,
-    ).toBeUndefined();
-    expect(result.current.productEntry.disabled).toBe(true);
     expect(mockStartSession).not.toHaveBeenCalled();
+
+    let added = false;
+    await act(async () => {
+      added = await result.current.productEntry.onAddProduct({
+        id: "sku-2",
+        name: "Deep Wave",
+        price: 100,
+        barcode: "1234567890123",
+        productId: "product-2" as Id<"product">,
+        skuId: "sku-2" as Id<"productSku">,
+        sku: "DW-18",
+        category: "Hair",
+        description: "Deep wave bundle",
+        image: null,
+        inStock: true,
+        quantityAvailable: 5,
+      });
+    });
+
+    expect(added).toBe(true);
+    expect(mockAppendLocalEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        localRegisterSessionId: "local-register-new",
+        type: "session.started",
+      }),
+    );
+    expect(mockAppendLocalEvent).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        localRegisterSessionId: "drawer-1",
+        type: "session.started",
+      }),
+    );
   });
 
   it("holds the active POS session before signing the cashier out when session data is present", async () => {
@@ -3206,7 +3253,7 @@ describe("useRegisterViewModel", () => {
     expect(result.current.cashierCard?.cashierName).toBe("Offline Manager");
   });
 
-  it("holds bootstrap on a closing drawer and exposes the closeout-blocked gate", async () => {
+  it("holds bootstrap on a closing drawer and exposes the opening drawer gate", async () => {
     mockRegisterState = {
       phase: "readyToStart",
       terminal: { _id: "terminal-1", displayName: "Front Counter" },
@@ -3243,24 +3290,84 @@ describe("useRegisterViewModel", () => {
     });
 
     expect(result.current.drawerGate).not.toBeNull();
-    expect(result.current.drawerGate?.mode).toBe("closeoutBlocked");
+    expect(result.current.drawerGate?.mode).toBe("initialSetup");
     expect(result.current.drawerGate?.registerNumber).toBe("1");
     expect(result.current.productEntry.disabled).toBe(true);
     expect(mockStartSession).not.toHaveBeenCalled();
     expect(mockOpenDrawer).not.toHaveBeenCalled();
-    expect(result.current.drawerGate).not.toHaveProperty("onSubmit");
+    expect(result.current.drawerGate?.onSubmit).toEqual(expect.any(Function));
     expect(result.current.drawerGate?.onSubmitCloseout).toBeUndefined();
-    expect(result.current.drawerGate?.closeoutSubmittedReason).toBe(
-      "manager_review",
-    );
-    expect(result.current.drawerGate?.expectedCash).toBe(5_000);
-    expect(result.current.drawerGate?.hasPendingCloseoutApproval).toBe(true);
-    expect(result.current.drawerGate?.canOpenCashControls).toBe(true);
-    expect(result.current.drawerGate?.cashControlsRegisterSessionId).toBe(
-      "drawer-1",
-    );
-    expect(result.current.drawerGate?.closeoutSubmittedCountedCash).toBe(4_500);
-    expect(result.current.drawerGate?.closeoutSubmittedVariance).toBe(-500);
+    expect(result.current.drawerGate?.closeoutSubmittedReason).toBeUndefined();
+    expect(result.current.drawerGate?.expectedCash).toBeUndefined();
+    expect(
+      result.current.drawerGate?.hasPendingCloseoutApproval,
+    ).toBeUndefined();
+    expect(
+      result.current.drawerGate?.cashControlsRegisterSessionId,
+    ).toBeUndefined();
+    expect(
+      result.current.drawerGate?.closeoutSubmittedCountedCash,
+    ).toBeUndefined();
+    expect(result.current.drawerGate?.closeoutSubmittedVariance).toBeUndefined();
+  });
+
+  it("allows a newer local drawer to sell while a different cloud closeout awaits manager review", async () => {
+    mockRegisterState = {
+      phase: "readyToStart",
+      terminal: { _id: "terminal-1", displayName: "Front Counter" },
+      cashier: {
+        _id: "staff-1",
+        firstName: "Ama",
+        lastName: "Kusi",
+        activeRoles: ["cashier"],
+      },
+      activeRegisterSession: {
+        _id: "drawer-pending-approval",
+        status: "closing",
+        countedCash: 4_600,
+        managerApprovalRequestId: "approval-1" as Id<"approvalRequest">,
+        terminalId: "terminal-1",
+        registerNumber: "1",
+        openingFloat: 5_000,
+        expectedCash: 5_000,
+        openedAt: Date.now() - 60_000,
+        variance: -400,
+      },
+      activeSession: null,
+      activeSessionConflict: null,
+      resumableSession: null,
+    };
+    mockActiveSession = null;
+    mockListLocalEvents.mockResolvedValue({
+      ok: true,
+      value: [
+        buildLocalEvent({
+          sequence: 1,
+          type: "register.opened",
+          localRegisterSessionId: "local-register-new",
+          payload: {
+            expectedCash: 5_000,
+            localRegisterSessionId: "local-register-new",
+            openingFloat: 5_000,
+            status: "open",
+          },
+          sync: { status: "pending", uploaded: false },
+        }),
+      ],
+    });
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        buildStaffAuthenticationResult({ activeRoles: ["cashier"] }),
+      );
+    });
+    await waitForLocalRegisterEffects(result);
+
+    expect(result.current.drawerGate).toBeNull();
+    expect(result.current.productEntry.disabled).toBe(false);
   });
 
   it("submits closeout from the POS drawer gate with the current cashier", async () => {
@@ -3275,7 +3382,7 @@ describe("useRegisterViewModel", () => {
       },
       activeRegisterSession: {
         _id: "drawer-1",
-        status: "closing",
+        status: "open",
         terminalId: "terminal-1",
         registerNumber: "1",
         openingFloat: 5_000,
@@ -3294,6 +3401,10 @@ describe("useRegisterViewModel", () => {
       result.current.authDialog?.onAuthenticated(
         buildStaffAuthenticationResult(),
       );
+    });
+
+    act(() => {
+      result.current.closeoutControl?.onRequestCloseout();
     });
 
     act(() => {
@@ -3336,7 +3447,7 @@ describe("useRegisterViewModel", () => {
       },
       activeRegisterSession: {
         _id: "drawer-1",
-        status: "closing",
+        status: "open",
         terminalId: "terminal-1",
         registerNumber: "1",
         openingFloat: 5_000,
@@ -3365,6 +3476,10 @@ describe("useRegisterViewModel", () => {
       result.current.authDialog?.onAuthenticated(
         buildStaffAuthenticationResult(),
       );
+    });
+
+    act(() => {
+      result.current.closeoutControl?.onRequestCloseout();
     });
 
     act(() => {
@@ -3399,7 +3514,7 @@ describe("useRegisterViewModel", () => {
       cashier: { _id: "staff-1", firstName: "Ama", lastName: "Kusi" },
       activeRegisterSession: {
         _id: "drawer-1",
-        status: "closing",
+        status: "open",
         terminalId: "terminal-1",
         registerNumber: "1",
         openingFloat: 5_000,
@@ -3418,6 +3533,10 @@ describe("useRegisterViewModel", () => {
       result.current.authDialog?.onAuthenticated(
         buildStaffAuthenticationResult(),
       );
+    });
+
+    act(() => {
+      result.current.closeoutControl?.onRequestCloseout();
     });
 
     act(() => {
@@ -3441,7 +3560,7 @@ describe("useRegisterViewModel", () => {
         }),
       ),
     );
-    expect(result.current.drawerGate?.errorMessage).toBeNull();
+    expect(result.current.drawerGate?.errorMessage).toBeUndefined();
   });
 
   it("records closeout locally without waiting for a server approval response", async () => {
@@ -3456,7 +3575,7 @@ describe("useRegisterViewModel", () => {
       },
       activeRegisterSession: {
         _id: "drawer-1",
-        status: "closing",
+        status: "open",
         terminalId: "terminal-1",
         registerNumber: "1",
         openingFloat: 5_000,
@@ -3474,6 +3593,10 @@ describe("useRegisterViewModel", () => {
       result.current.authDialog?.onAuthenticated(
         buildStaffAuthenticationResult(),
       );
+    });
+
+    act(() => {
+      result.current.closeoutControl?.onRequestCloseout();
     });
 
     act(() => {
@@ -3511,7 +3634,7 @@ describe("useRegisterViewModel", () => {
       },
       activeRegisterSession: {
         _id: "drawer-1",
-        status: "closing",
+        status: "open",
         terminalId: "terminal-1",
         registerNumber: "1",
         openingFloat: 5_000,
@@ -3530,6 +3653,10 @@ describe("useRegisterViewModel", () => {
       result.current.authDialog?.onAuthenticated(
         buildStaffAuthenticationResult(),
       );
+    });
+
+    act(() => {
+      result.current.closeoutControl?.onRequestCloseout();
     });
 
     act(() => {
@@ -3871,7 +3998,7 @@ describe("useRegisterViewModel", () => {
     expect(toast.success).toHaveBeenCalledWith("Opening float corrected");
   });
 
-  it("reopens a closing register session from the POS drawer gate", async () => {
+  it("opens a fresh local drawer when the cloud register session is closing", async () => {
     mockRegisterState = {
       phase: "readyToStart",
       terminal: { _id: "terminal-1", displayName: "Front Counter" },
@@ -3900,30 +4027,42 @@ describe("useRegisterViewModel", () => {
 
     await act(async () => {
       result.current.authDialog?.onAuthenticated(
-        "staff-1" as Id<"staffProfile">,
+        buildStaffAuthenticationResult(),
       );
     });
 
+    expect(result.current.drawerGate?.mode).toBe("initialSetup");
+
+    act(() => {
+      result.current.drawerGate?.onOpeningFloatChange?.("50.00");
+      result.current.drawerGate?.onNotesChange?.("Fresh drawer");
+    });
+
     await act(async () => {
-      await result.current.drawerGate?.onReopenRegister?.();
+      await result.current.drawerGate?.onSubmit?.();
     });
 
     expect(mockReopenRegisterSessionCloseout).not.toHaveBeenCalled();
+    expect(mockAppendLocalEvent).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: "register.reopened" }),
+    );
     await waitFor(() =>
       expect(mockAppendLocalEvent).toHaveBeenCalledWith(
         expect.objectContaining({
-          type: "register.reopened",
-          localRegisterSessionId: "drawer-1",
+          type: "register.opened",
+          localRegisterSessionId: expect.not.stringMatching(/^drawer-1$/),
+          payload: expect.objectContaining({
+            notes: "Fresh drawer",
+            openingFloat: 5_000,
+          }),
         }),
       ),
     );
     expect(mockMarkLocalEventsSynced).not.toHaveBeenCalled();
-    expect(toast.success).toHaveBeenCalledWith(
-      "Register reopened. You can start selling.",
-    );
+    expect(toast.success).toHaveBeenCalledWith("Drawer open");
   });
 
-  it("does not expose local register reopen to non-manager cashiers", async () => {
+  it("does not expose local register reopen to non-manager cashiers for closing sessions", async () => {
     mockRegisterState = {
       phase: "readyToStart",
       terminal: { _id: "terminal-1", displayName: "Front Counter" },
@@ -3956,7 +4095,7 @@ describe("useRegisterViewModel", () => {
       );
     });
 
-    expect(result.current.drawerGate?.mode).toBe("closeoutBlocked");
+    expect(result.current.drawerGate?.mode).toBe("initialSetup");
     expect(result.current.drawerGate?.onReopenRegister).toBeUndefined();
     expect(result.current.productEntry.disabled).toBe(true);
     expect(mockAppendLocalEvent).not.toHaveBeenCalledWith(
@@ -3964,7 +4103,7 @@ describe("useRegisterViewModel", () => {
     );
   });
 
-  it("keeps closeout blocked when local register reopen persistence fails", async () => {
+  it("keeps the opening drawer gate when fresh drawer persistence fails after a closing session", async () => {
     mockRegisterState = {
       phase: "readyToStart",
       terminal: { _id: "terminal-1", displayName: "Front Counter" },
@@ -3988,7 +4127,7 @@ describe("useRegisterViewModel", () => {
     };
     mockActiveSession = null;
     mockAppendLocalEvent.mockImplementation(async (input: { type: string }) =>
-      input.type === "register.reopened"
+      input.type === "register.opened"
         ? {
             ok: false,
             error: {
@@ -4003,18 +4142,22 @@ describe("useRegisterViewModel", () => {
 
     await act(async () => {
       result.current.authDialog?.onAuthenticated(
-        "staff-1" as Id<"staffProfile">,
+        buildStaffAuthenticationResult(),
       );
     });
 
-    await act(async () => {
-      await result.current.drawerGate?.onReopenRegister?.();
+    act(() => {
+      result.current.drawerGate?.onOpeningFloatChange?.("50.00");
     });
 
-    expect(result.current.drawerGate?.mode).toBe("closeoutBlocked");
+    await act(async () => {
+      await result.current.drawerGate?.onSubmit?.();
+    });
+
+    expect(result.current.drawerGate?.mode).toBe("initialSetup");
     expect(result.current.productEntry.disabled).toBe(true);
     expect(result.current.drawerGate?.errorMessage).toBe(
-      "Unable to reopen this register. Try again.",
+      "Unable to open the drawer. Try again.",
     );
     expect(toast.success).not.toHaveBeenCalledWith(
       "Register reopened. You can start selling.",
@@ -4086,7 +4229,7 @@ describe("useRegisterViewModel", () => {
     );
   });
 
-  it("gates an active POS session assigned to a closing drawer with closeout guidance", async () => {
+  it("gates an active POS session assigned to a closing drawer with drawer recovery", async () => {
     mockRegisterState = {
       phase: "active",
       terminal: { _id: "terminal-1", displayName: "Front Counter" },
@@ -4114,16 +4257,14 @@ describe("useRegisterViewModel", () => {
     });
 
     expect(result.current.drawerGate).not.toBeNull();
-    expect(result.current.drawerGate?.mode).toBe("closeoutBlocked");
-    expect(result.current.drawerGate?.isRecovery).toBe(true);
+    expect(result.current.drawerGate?.mode).toBe("recovery");
     expect(result.current.productEntry.disabled).toBe(true);
     expect(mockStartSession).not.toHaveBeenCalled();
     expect(mockBindSessionToRegisterSession).not.toHaveBeenCalled();
     expect(mockOpenDrawer).not.toHaveBeenCalled();
-    expect(result.current.drawerGate).not.toHaveProperty("onSubmit");
-    expect(result.current.drawerGate?.onSubmitCloseout).toEqual(
-      expect.any(Function),
-    );
+    expect(result.current.drawerGate?.onSubmit).toEqual(expect.any(Function));
+    expect(result.current.drawerGate?.onSubmitCloseout).toBeUndefined();
+    expect(result.current.drawerGate?.closeoutSubmittedReason).toBeUndefined();
   });
 
   it("gates an active POS session assigned to a different open drawer", async () => {
@@ -7497,6 +7638,51 @@ describe("useRegisterViewModel", () => {
     expect(result.current.customerPanel.customerInfo.name).toBe("Ama Serwa");
   });
 
+  it("keeps a preserved active POS session usable after opening a local drawer before cloud binding", async () => {
+    mockRegisterState = {
+      phase: "active",
+      terminal: { _id: "terminal-1", displayName: "Front Counter" },
+      cashier: { _id: "staff-1", firstName: "Ama", lastName: "Kusi" },
+      activeRegisterSession: null,
+      activeSession: { _id: "session-1", sessionNumber: "POS-0001" },
+      resumableSession: null,
+    };
+    mockActiveSession = {
+      ...mockActiveSession!,
+      registerSessionId: undefined,
+      cartItems: [],
+      payments: [{ method: "cash", amount: 120, timestamp: 1_000 }],
+    };
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        buildStaffAuthenticationResult({ activeRoles: ["cashier"] }),
+      );
+    });
+
+    expect(result.current.drawerGate?.mode).toBe("recovery");
+
+    act(() => {
+      result.current.drawerGate?.onOpeningFloatChange?.("50.00");
+    });
+
+    await act(async () => {
+      await result.current.drawerGate?.onSubmit?.();
+    });
+
+    await waitFor(() => expect(result.current.drawerGate).toBeNull());
+    expect(result.current.productEntry.disabled).toBe(false);
+    expect(mockBindSessionToRegisterSession).not.toHaveBeenCalled();
+    expect(mockAppendLocalEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "register.opened",
+      }),
+    );
+  });
+
   it("keeps a preserved sale gated when drawer recovery binding fails", async () => {
     mockRegisterState = {
       phase: "active",
@@ -7898,7 +8084,7 @@ describe("useRegisterViewModel", () => {
     expect(toast.success).not.toHaveBeenCalledWith("Terminal setup repaired");
   });
 
-  it("routes lifecycle drawer authority blocks to the open-drawer gate", async () => {
+  it("keeps the drawer usable when stale lifecycle authority exists locally", async () => {
     mockListLocalEvents.mockResolvedValue({
       ok: true,
       value: [
@@ -7942,12 +8128,8 @@ describe("useRegisterViewModel", () => {
       );
     });
 
-    await waitFor(() =>
-      expect(result.current.drawerGate?.mode).toBe("recovery"),
-    );
-    expect(result.current.drawerGate?.canOpenDrawer).toBe(true);
-    expect(result.current.drawerGate?.onSubmit).toBeTypeOf("function");
-    expect(result.current.drawerGate?.onRetrySync).toBeUndefined();
+    await waitFor(() => expect(result.current.drawerGate).toBeNull());
+    expect(result.current.productEntry.disabled).toBe(false);
   });
 
   it("routes closed drawer authority blocks to the open-drawer gate", async () => {
@@ -8001,7 +8183,7 @@ describe("useRegisterViewModel", () => {
     expect(result.current.drawerGate?.onRetrySync).toBeUndefined();
   });
 
-  it("persists drawer authority when a mapped cloud drawer is no longer usable", async () => {
+  it("does not persist drawer authority from the register view hot path", async () => {
     mockRegisterState = {
       ...mockRegisterState!,
       activeRegisterSession: {
@@ -8053,16 +8235,8 @@ describe("useRegisterViewModel", () => {
     const { useRegisterViewModel } = await import("./useRegisterViewModel");
     renderHook(() => useRegisterViewModel());
 
-    await waitFor(() =>
-      expect(mockWriteDrawerAuthorityState).toHaveBeenCalledWith(
-        expect.objectContaining({
-          cloudRegisterSessionId: "drawer-1",
-          localRegisterSessionId: "local-register-1",
-          reason: "cloud_closed",
-          status: "blocked",
-        }),
-      ),
-    );
+    await waitFor(() => expect(mockListLocalCloudMappings).toHaveBeenCalled());
+    expect(mockWriteDrawerAuthorityState).not.toHaveBeenCalled();
   });
 
   it("requires a provisioned local sync seed before changing checkout state", async () => {
@@ -9374,7 +9548,7 @@ describe("useRegisterViewModel", () => {
     expect(result.current.checkout.payments).toEqual([]);
   });
 
-  it("keeps a locally closed register blocked until it is reopened", async () => {
+  it("opens the drawer gate after a local closeout is submitted", async () => {
     mockRegisterState = {
       phase: "readyToStart",
       terminal: { _id: "terminal-1", displayName: "Front Counter" },
@@ -9440,17 +9614,97 @@ describe("useRegisterViewModel", () => {
     });
 
     await waitFor(() =>
-      expect(result.current.drawerGate?.mode).toBe("closeoutBlocked"),
+      expect(result.current.drawerGate?.mode).toBe("initialSetup"),
     );
-    expect(result.current.drawerGate?.closeoutSubmittedReason).toBe(
-      "pending_sync",
-    );
-    expect(result.current.drawerGate?.closeoutSubmittedCountedCash).toBe(5_000);
-    expect(result.current.drawerGate?.closeoutSubmittedVariance).toBe(0);
+    expect(result.current.drawerGate?.closeoutSubmittedReason).toBeUndefined();
+    expect(
+      result.current.drawerGate?.closeoutSubmittedCountedCash,
+    ).toBeUndefined();
+    expect(
+      result.current.drawerGate?.closeoutSubmittedVariance,
+    ).toBeUndefined();
     expect(result.current.drawerGate?.onSubmitCloseout).toBeUndefined();
     expect(result.current.productEntry.disabled).toBe(true);
     expect(result.current.closeoutControl?.canCloseout).toBe(false);
-    expect(result.current.drawerGate?.onReopenRegister).toBeTypeOf("function");
+    expect(result.current.drawerGate?.onReopenRegister).toBeUndefined();
+  });
+
+  it("opens a new drawer when the cloud register closed before local closeout sync cleared", async () => {
+    mockRegisterState = {
+      phase: "readyToStart",
+      terminal: { _id: "terminal-1", displayName: "Front Counter" },
+      cashier: {
+        _id: "staff-1",
+        firstName: "Ama",
+        lastName: "Kusi",
+        activeRoles: ["manager"],
+      },
+      activeRegisterSession: {
+        _id: "drawer-1",
+        status: "closed",
+        terminalId: "terminal-1",
+        registerNumber: "1",
+        openingFloat: 5_000,
+        expectedCash: 5_000,
+        openedAt: Date.now(),
+      },
+      activeSession: null,
+      resumableSession: null,
+    };
+    mockActiveSession = null;
+    mockListLocalEvents.mockResolvedValue({
+      ok: true,
+      value: [
+        buildLocalEvent({
+          sequence: 1,
+          type: "register.opened",
+          localRegisterSessionId: "local-register-1",
+          payload: {
+            expectedCash: 5_000,
+            localRegisterSessionId: "local-register-1",
+            openingFloat: 5_000,
+          },
+          sync: { status: "synced", uploaded: true },
+        }),
+        buildLocalEvent({
+          sequence: 2,
+          type: "register.closeout_started",
+          localRegisterSessionId: "local-register-1",
+          payload: {
+            countedCash: 5_000,
+            notes: null,
+          },
+          sync: { status: "pending", uploaded: false },
+        }),
+      ],
+    });
+    mockListLocalCloudMappings.mockResolvedValue({
+      ok: true,
+      value: [
+        {
+          entity: "registerSession",
+          localId: "local-register-1",
+          cloudId: "drawer-1",
+          mappedAt: 1_100,
+        },
+      ],
+    });
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        buildStaffAuthenticationResult(),
+      );
+    });
+    await waitForLocalRegisterEffects(result);
+
+    expect(result.current.drawerGate).not.toBeNull();
+    expect(result.current.drawerGate?.mode).toBe("initialSetup");
+    expect(result.current.drawerGate?.closeoutSubmittedReason).toBeUndefined();
+    expect(result.current.drawerGate?.onSubmitCloseout).toBeUndefined();
+    expect(result.current.productEntry.disabled).toBe(true);
   });
 
   it("does not present a synced local closeout as pending sync or closeout in progress", async () => {

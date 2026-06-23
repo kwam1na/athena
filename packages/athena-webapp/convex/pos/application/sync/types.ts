@@ -266,6 +266,15 @@ export type LocalSyncConflictRecord = {
   resolvedByUserId?: Id<"athenaUser">;
 };
 
+export type LocalSyncRegisterReviewConflictFact = {
+  conflict: LocalSyncConflictRecord;
+  directRegisterSession: Pick<
+    Doc<"registerSession">,
+    "_id" | "storeId" | "terminalId"
+  > | null;
+  registerSessionMapping: LocalSyncMappingRecord | null;
+};
+
 export type LocalSyncCursorRecord = {
   _id: string;
   storeId: Id<"store">;
@@ -397,6 +406,11 @@ export type SyncProjectionRepository = {
     terminalId: Id<"posTerminal">;
     registerNumber?: string;
   }): Promise<Doc<"registerSession"> | null>;
+  listOpenRegisterReviewConflictFacts(args: {
+    registerSessionId: Id<"registerSession">;
+    storeId: Id<"store">;
+    terminalId: Id<"posTerminal">;
+  }): Promise<LocalSyncRegisterReviewConflictFact[]>;
   getRegisterSessionByLocalId(args: {
     storeId: Id<"store">;
     terminalId: Id<"posTerminal">;

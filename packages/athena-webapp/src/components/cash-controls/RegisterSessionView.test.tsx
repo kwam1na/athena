@@ -673,7 +673,9 @@ describe("RegisterSessionViewContent", () => {
         "Synced register closeout has a variance. Review it before this closeout can be applied.",
       ),
     ).toBeInTheDocument();
-    expect(screen.getByText("Closeout variance review")).toBeInTheDocument();
+    expect(screen.getAllByText("Closeout variance review").length).toBeGreaterThan(
+      0,
+    );
     expect(
       screen.getByText(
         "Review the synced count before applying this closeout to the drawer.",
@@ -716,7 +718,7 @@ describe("RegisterSessionViewContent", () => {
     ).toBeInTheDocument();
   });
 
-  it("resolves only the displayed synced closeout review item", async () => {
+  it("surfaces mixed review items and scopes each decision to its conflict", async () => {
     const user = userEvent.setup();
     const onAuthenticateStaff = vi.fn().mockResolvedValue(
       ok({
@@ -775,6 +777,24 @@ describe("RegisterSessionViewContent", () => {
       />,
     );
 
+    expect(screen.getByText("Review queue needs attention")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "2 review items need manager review before this drawer can be settled.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText("Closeout variance review").length).toBeGreaterThan(
+      0,
+    );
+    expect(
+      screen.getAllByText(
+        "Service customer attribution is missing. Reject this item, then recreate the service work with a customer if needed.",
+      ).length,
+    ).toBeGreaterThan(0);
+    expect(
+      screen.queryByRole("button", { name: "Apply reviewed activity" }),
+    ).not.toBeInTheDocument();
+
     await user.click(
       screen.getByRole("button", { name: "Apply synced closeout" }),
     );
@@ -789,6 +809,20 @@ describe("RegisterSessionViewContent", () => {
       decision: "approved",
       registerSessionId: "session-1",
       reviewConflictIds: ["sync_conflict_closeout"],
+    });
+
+    await user.click(screen.getByRole("button", { name: "Reject review item" }));
+    await user.click(
+      screen.getByRole("button", {
+        name: "Confirm staff for Reject review item",
+      }),
+    );
+
+    expect(onResolveSyncReview).toHaveBeenLastCalledWith({
+      actorStaffProfileId: "manager-1",
+      decision: "rejected",
+      registerSessionId: "session-1",
+      reviewConflictIds: ["sync_conflict_sale"],
     });
   });
 

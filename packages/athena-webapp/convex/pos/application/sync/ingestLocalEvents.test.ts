@@ -5,6 +5,7 @@ import {
   type PosLocalSyncBatchInput,
 } from "./ingestLocalEvents";
 import { createConvexLocalSyncRepository } from "../../infrastructure/repositories/localSyncRepository";
+import type { Id } from "../../../_generated/dataModel";
 import { hashPosLocalStaffProofToken } from "./staffProof";
 import type {
   LocalSyncConflictRecord,
@@ -2925,6 +2926,132 @@ describe("createLocalSyncIngestionService", () => {
     });
   });
 
+  it("returns direct and mapped register-session facts for open review conflicts in the production repository", async () => {
+    const ctx = createFakeConvexCtx({
+      registerSession: [
+        {
+          _id: "register-session-1",
+          storeId: "store-1",
+          terminalId: "terminal-1",
+          status: "active",
+        },
+        {
+          _id: "register-session-2",
+          storeId: "store-2",
+          terminalId: "terminal-1",
+          status: "active",
+        },
+        {
+          _id: "register-session-3",
+          storeId: "store-1",
+          terminalId: "terminal-2",
+          status: "active",
+        },
+      ],
+      posLocalSyncConflict: [
+        {
+          _id: "conflict-1",
+          storeId: "store-1",
+          terminalId: "terminal-1",
+          localRegisterSessionId: "register-session-1",
+          localEventId: "event-closeout-1",
+          sequence: 2,
+          conflictType: "permission",
+          status: "needs_review",
+          summary:
+            "Register closeout variance requires manager review before synced closeout can be applied.",
+          details: { countedCash: 100, expectedCash: 90, variance: 10 },
+          createdAt: 100,
+        },
+        {
+          _id: "conflict-mapped",
+          storeId: "store-1",
+          terminalId: "terminal-1",
+          localRegisterSessionId: "local-register-1",
+          localEventId: "event-closeout-mapped",
+          sequence: 5,
+          conflictType: "permission",
+          status: "needs_review",
+          summary:
+            "Register closeout variance requires manager review before synced closeout can be applied.",
+          details: { countedCash: 100, expectedCash: 90, variance: 10 },
+          createdAt: 103,
+        },
+        {
+          _id: "conflict-2",
+          storeId: "store-1",
+          terminalId: "terminal-1",
+          localRegisterSessionId: "register-session-2",
+          localEventId: "event-closeout-2",
+          sequence: 3,
+          conflictType: "permission",
+          status: "needs_review",
+          summary:
+            "Register closeout variance requires manager review before synced closeout can be applied.",
+          details: { countedCash: 100, expectedCash: 90, variance: 10 },
+          createdAt: 101,
+        },
+        {
+          _id: "conflict-3",
+          storeId: "store-1",
+          terminalId: "terminal-1",
+          localRegisterSessionId: "register-session-3",
+          localEventId: "event-closeout-3",
+          sequence: 4,
+          conflictType: "permission",
+          status: "needs_review",
+          summary:
+            "Register closeout variance requires manager review before synced closeout can be applied.",
+          details: { countedCash: 100, expectedCash: 90, variance: 10 },
+          createdAt: 102,
+        },
+      ],
+      posLocalSyncMapping: [
+        {
+          _id: "mapping-register",
+          storeId: "store-1",
+          terminalId: "terminal-1",
+          localRegisterSessionId: "local-register-1",
+          localEventId: "event-register-opened-1",
+          localIdKind: "registerSession",
+          localId: "local-register-1",
+          cloudTable: "registerSession",
+          cloudId: "register-session-1",
+          createdAt: 1,
+        },
+      ],
+    });
+    const repository = createConvexLocalSyncRepository(ctx as never);
+
+    const facts = await repository.listOpenRegisterReviewConflictFacts({
+      registerSessionId: "register-session-1" as never,
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+    });
+
+    expect(facts).toHaveLength(2);
+    expect(facts[0]).toEqual(
+      expect.objectContaining({
+        directRegisterSession: {
+          _id: "register-session-1",
+          storeId: "store-1",
+          terminalId: "terminal-1",
+        },
+        registerSessionMapping: null,
+      }),
+    );
+    expect(facts[1]).toEqual(
+      expect.objectContaining({
+        conflict: expect.objectContaining({ _id: "conflict-mapped" }),
+        directRegisterSession: null,
+        registerSessionMapping: expect.objectContaining({
+          cloudId: "register-session-1",
+          localRegisterSessionId: "local-register-1",
+        }),
+      }),
+    );
+  });
+
   it("sums only active unexpired inventory holds in the production repository", async () => {
     const ctx = createFakeConvexCtx({
       inventoryHold: [
@@ -3544,6 +3671,7 @@ function createFakeSyncRepository(
       terminalId: string;
     } | null;
     invalidCloudIds: Set<string>;
+    registerSessionsWithCloseoutReview: Set<string>;
     validCloudIds: Set<string>;
     validateLocalStaffProof: SyncProjectionRepository["validateLocalStaffProof"];
   }> = {},
@@ -3895,6 +4023,35 @@ function createFakeSyncRepository(
     },
     async findBlockingRegisterSession() {
       return null;
+    },
+    async listOpenRegisterReviewConflictFacts(args) {
+      return [...(overrides.registerSessionsWithCloseoutReview ?? new Set())]
+        .map((registerSessionId, index) => ({
+          conflict: {
+            _id: `review-conflict-${registerSessionId}`,
+            conflictType: "permission" as const,
+            createdAt: 1_700_000_000_000 + index,
+            details: {
+              countedCash: 100,
+              expectedCash: 90,
+              variance: 10,
+            },
+            localEventId: `review-event-${registerSessionId}`,
+            localRegisterSessionId: registerSessionId,
+            sequence: 0,
+            status: "needs_review" as const,
+            storeId: args.storeId,
+            summary:
+              "Register closeout variance requires manager review before synced closeout can be applied.",
+            terminalId: args.terminalId,
+          },
+          directRegisterSession: {
+            _id: registerSessionId as Id<"registerSession">,
+            storeId: args.storeId,
+            terminalId: args.terminalId,
+          },
+          registerSessionMapping: null,
+        }));
     },
     async getRegisterSessionByLocalId(args) {
       const mapping = mappings.find(

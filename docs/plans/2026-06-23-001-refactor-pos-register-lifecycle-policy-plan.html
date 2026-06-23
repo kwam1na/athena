@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Plan: Share POS Register Lifecycle Policy</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f8f8;
+      --panel: #ffffff;
+      --ink: #172026;
+      --muted: #5f6b74;
+      --line: #d9e0e4;
+      --accent: #1d6f8f;
+      --accent-soft: #e7f4f7;
+    }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 40px 24px 64px;
+    }
+    header {
+      border-bottom: 1px solid var(--line);
+      margin-bottom: 28px;
+      padding-bottom: 20px;
+    }
+    h1 {
+      font-size: 32px;
+      line-height: 1.15;
+      margin: 0 0 12px;
+    }
+    h2 {
+      border-top: 1px solid var(--line);
+      font-size: 22px;
+      margin: 32px 0 12px;
+      padding-top: 24px;
+    }
+    h3 {
+      font-size: 17px;
+      margin: 22px 0 8px;
+    }
+    a {
+      color: var(--accent);
+    }
+    code {
+      background: #eef2f3;
+      border-radius: 4px;
+      padding: 1px 5px;
+    }
+    .meta,
+    .summary,
+    .unit,
+    .callout {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .meta {
+      color: var(--muted);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .summary {
+      background: var(--accent-soft);
+      border-color: #c5e5ec;
+      font-size: 16px;
+    }
+    nav {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      margin: 20px 0 28px;
+      padding: 12px 16px;
+    }
+    nav ul {
+      columns: 2;
+      margin: 0;
+      padding-left: 18px;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+    }
+    th,
+    td {
+      border: 1px solid var(--line);
+      padding: 8px 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      background: #eef2f3;
+    }
+    .units {
+      display: grid;
+      gap: 14px;
+    }
+    .unit h3 {
+      margin-top: 0;
+    }
+    .tag {
+      background: #eef2f3;
+      border-radius: 999px;
+      color: var(--muted);
+      display: inline-block;
+      font-size: 12px;
+      margin-right: 6px;
+      padding: 2px 8px;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>refactor: Share POS Register Lifecycle Policy</h1>
+      <div class="meta">
+        <span>Type: refactor</span>
+        <span>Status: active</span>
+        <span>Date: 2026-06-23</span>
+        <span>Source: <a href="./2026-06-23-001-refactor-pos-register-lifecycle-policy-plan.md">markdown plan</a></span>
+      </div>
+    </header>
+
+    <section class="summary">
+      Extract the POS register and drawer lifecycle invariants into a shared policy layer consumed by browser-local POS and Convex projection. The work preserves multi-session drawer behavior while removing duplicated rules around closeout review, drawer authority, runtime evidence, and sale usability.
+    </section>
+
+    <nav aria-label="Plan sections">
+      <ul>
+        <li><a href="#problem">Problem Frame</a></li>
+        <li><a href="#requirements">Requirements</a></li>
+        <li><a href="#decisions">Key Decisions</a></li>
+        <li><a href="#units">Implementation Units</a></li>
+        <li><a href="#risks">Risks</a></li>
+        <li><a href="#validation">Validation Strategy</a></li>
+      </ul>
+    </nav>
+
+    <section id="problem">
+      <h2>Problem Frame</h2>
+      <p>The current POS register patch encodes drawer lifecycle invariants in local read-model projection, local command gating, runtime status, Convex sync projection, repository conflict lookup, and register review presentation. That can drift when a cashier closes one drawer and opens another while browser-local POS and server projection reconcile at different times.</p>
+    </section>
+
+    <section id="requirements">
+      <h2>Requirements</h2>
+      <ul>
+        <li>Define shared lifecycle policy once for browser and Convex consumers.</li>
+        <li>Keep <code>open</code> and <code>active</code> sale-usable; keep <code>closing</code> lifecycle-visible but not sale-usable.</li>
+        <li>Allow safe replacement drawers after settled closeout, submitted closeout review, or <code>cloud_closed</code> drawer authority.</li>
+        <li>Close the direct-cloud-id reviewed-closeout sale projection bypass.</li>
+        <li>Define scoped session as same store, terminal, and register-session scope.</li>
+        <li>Preserve truthful Cash Controls and Daily Close review surfaces.</li>
+        <li>Refresh Graphify after code changes.</li>
+      </ul>
+    </section>
+
+    <section id="decisions">
+      <h2>Key Decisions</h2>
+      <ul>
+        <li>Create a pure shared lifecycle policy module under <code>packages/athena-webapp/shared/</code>.</li>
+        <li>Expose separate decisions for sale usability, lifecycle visibility, replacement-open eligibility for later new register-session scopes, reviewed-closeout supersedability, and runtime evidence.</li>
+        <li>Keep repository data access outside the policy; repositories return facts and ordering evidence to application-layer policy callers.</li>
+        <li>Integrate Convex projection before frontend cleanup because projection guards stale clients.</li>
+        <li>Land as one coordinated integration PR to avoid repeated generated-artifact churn.</li>
+      </ul>
+    </section>
+
+    <section id="units">
+      <h2>Implementation Units</h2>
+      <div class="units">
+        <article class="unit">
+          <h3>U1. Shared Lifecycle Policy Foundation</h3>
+          <p><span class="tag">test-first</span>Create <code>shared/registerSessionLifecyclePolicy.ts</code> and focused tests for status, authority, closeout, and review decisions.</p>
+        </article>
+        <article class="unit">
+          <h3>U2. Browser-Local POS Policy Integration</h3>
+          <p>Replace duplicated predicates in the local read model, command gateway, sync runtime, runtime status, and register view model while preserving local-first command behavior.</p>
+        </article>
+        <article class="unit">
+          <h3>U3. Convex Projection and Repository Policy Integration</h3>
+          <p>Move pure interpretation into shared helpers, keep DB lookup in repositories, and fix direct-cloud-id sale projection against reviewed closeouts.</p>
+        </article>
+        <article class="unit">
+          <h3>U4. Review Surface and Daily Close Alignment</h3>
+          <p>Keep closeout review and mixed review queues visible and actionable even when POS can open a later drawer.</p>
+        </article>
+        <article class="unit">
+          <h3>U5. Harness, Generated Artifacts, and Delivery Documentation</h3>
+          <p>Regenerate Graphify, update validation-map coverage if needed, and document the new lifecycle policy boundary.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="risks">
+      <h2>Risks</h2>
+      <table>
+        <thead>
+          <tr><th>Risk</th><th>Mitigation</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>closing</code> accidentally becomes sale-usable</td><td>Policy table tests plus browser and Convex projection regressions.</td></tr>
+          <tr><td>Direct-cloud-id bypass remains open</td><td>Focused projection regression before changing projection logic.</td></tr>
+          <tr><td>UI hides closeout review after later drawer opens</td><td>Cash Controls mixed-review tests keep closeout review visible.</td></tr>
+          <tr><td>Generated artifacts drift</td><td>Run Graphify rebuild and inspect generated output before handoff.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="validation">
+      <h2>Validation Strategy</h2>
+      <p>Run focused shared policy, local POS, Convex projection, terminal runtime, Cash Controls, and Daily Close tests first. Then run Athena Convex audit, changed lint/type/build sensors, Graphify rebuild, and the full <code>bun run pr:athena</code> merge gate before PR delivery.</p>
+      <p>Post-merge production deploy should include <code>scripts/deploy-vps.sh convex-prod</code> and <code>scripts/deploy-vps.sh athena-local</code> from a clean root checkout.</p>
+      <p>Delivery stays limited to the owned POS register lifecycle dirty path set plus required plan, ticket, generated-artifact, and solution-doc updates. After merge, local root <code>main</code> must fast-forward to the merged remote state before production deploy.</p>
+    </section>
+  </main>
+</body>
+</html>

@@ -7,17 +7,17 @@ Graphify is the navigation layer for the repo graph. Use the entry docs below fo
 - [packages/AGENTS.md](../../packages/AGENTS.md) - package router plus the operational guides for each harnessed package
 
 ## Repo Summary
-- Code files discovered: 2100
-- Graph nodes: 7815
-- Graph edges: 9139
-- Communities: 2028
+- Code files discovered: 2102
+- Graph nodes: 7833
+- Graph edges: 9164
+- Communities: 2030
 
 ## Graph Hotspots
 - `DailyCloseView.tsx` (89 edges, Community 0) - [`packages/athena-webapp/src/components/operations/DailyCloseView.tsx`](../../packages/athena-webapp/src/components/operations/DailyCloseView.tsx)
 - `harness-inferential-review.ts` (85 edges, Community 1) - [`scripts/harness-inferential-review.ts`](../../scripts/harness-inferential-review.ts)
 - `dailyClose.ts` (74 edges, Community 2) - [`packages/athena-webapp/convex/operations/dailyClose.ts`](../../packages/athena-webapp/convex/operations/dailyClose.ts)
-- `dailyOperations.ts` (59 edges, Community 3) - [`packages/athena-webapp/convex/operations/dailyOperations.ts`](../../packages/athena-webapp/convex/operations/dailyOperations.ts)
-- `projectLocalEvents.ts` (57 edges, Community 4) - [`packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.ts`](../../packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.ts)
+- `projectLocalEvents.ts` (60 edges, Community 3) - [`packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.ts`](../../packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.ts)
+- `dailyOperations.ts` (59 edges, Community 4) - [`packages/athena-webapp/convex/operations/dailyOperations.ts`](../../packages/athena-webapp/convex/operations/dailyOperations.ts)
 - `ingestLocalEvents.ts` (54 edges, Community 5) - [`packages/athena-webapp/convex/pos/application/sync/ingestLocalEvents.ts`](../../packages/athena-webapp/convex/pos/application/sync/ingestLocalEvents.ts)
 - `terminalHealthPresentation.ts` (53 edges, Community 6) - [`packages/athena-webapp/src/components/pos/terminals/terminalHealthPresentation.ts`](../../packages/athena-webapp/src/components/pos/terminals/terminalHealthPresentation.ts)
 - `posLocalStore.ts` (48 edges, Community 7) - [`packages/athena-webapp/src/lib/pos/infrastructure/local/posLocalStore.ts`](../../packages/athena-webapp/src/lib/pos/infrastructure/local/posLocalStore.ts)

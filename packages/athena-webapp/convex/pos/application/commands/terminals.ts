@@ -13,7 +13,10 @@ import {
   normalizePosTerminalLoginMode,
   type PosTerminalLoginMode,
 } from "../../../../shared/posTerminalLoginMode";
-import { isPosUsableRegisterSessionStatus } from "../../../../shared/registerSessionStatus";
+import {
+  canInspectRuntimeCloudDrawerAuthority,
+  isRegisterSessionSaleUsable,
+} from "../../../../shared/registerSessionLifecyclePolicy";
 
 import {
   getTerminalByFingerprint,
@@ -560,7 +563,7 @@ async function buildRuntimeDrawerAuthorityDirective(
   if (
     !session ||
     !session.cloudRegisterSessionId ||
-    !isPosUsableRegisterSessionStatus(session.status)
+    !canInspectRuntimeCloudDrawerAuthority(session)
   ) {
     return undefined;
   }
@@ -589,7 +592,7 @@ async function buildRuntimeDrawerAuthorityDirective(
   if (
     !cloudRegisterSession ||
     cloudRegisterSession.storeId !== args.storeId ||
-    isPosUsableRegisterSessionStatus(cloudRegisterSession.status)
+    isRegisterSessionSaleUsable(cloudRegisterSession)
   ) {
     return undefined;
   }

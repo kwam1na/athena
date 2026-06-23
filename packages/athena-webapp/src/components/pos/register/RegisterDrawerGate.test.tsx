@@ -91,6 +91,23 @@ describe("RegisterDrawerGate", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("hides submitted closeout sign-out when no staff is signed in", () => {
+    renderGate({
+      closeoutSubmittedCountedCash: 780_000,
+      closeoutSubmittedVariance: 40_000,
+      expectedCash: 740_000,
+      hasPendingCloseoutApproval: true,
+      hasSignedInStaff: false,
+      mode: "closeoutBlocked",
+      onReopenRegister: vi.fn(),
+    });
+
+    expect(screen.getByText("Manager approval required")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Sign out" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("shows synced zero-variance closeouts as submitted instead of rendering the closeout form", () => {
     renderGate({
       closeoutSubmittedCountedCash: 10000,

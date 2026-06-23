@@ -1039,6 +1039,69 @@ describe("projectLocalRegisterReadModel", () => {
     expect(model.syncStatus.state).toBe("needs_review");
   });
 
+  it("ignores stale lifecycle drawer authority for an open local drawer", () => {
+    const model = projectLocalRegisterReadModel({
+      drawerAuthority: {
+        localRegisterSessionId: "local-register-1",
+        observedAt: 1_050,
+        reason: "lifecycle_rejected",
+        status: "blocked",
+        storeId: "store-1",
+        terminalId: "local-terminal-1",
+      },
+      events: [
+        event({
+          sequence: 1,
+          type: "register.opened",
+          payload: {
+            localRegisterSessionId: "local-register-1",
+            openingFloat: 100,
+          },
+        }),
+      ],
+    });
+
+    expect(model.canSell).toBe(true);
+    expect(model.saleBlockReason).toBeUndefined();
+    expect(model.drawerAuthorityReason).toBeUndefined();
+  });
+
+  it("treats lifecycle review authority on a submitted closeout as drawer closed", () => {
+    const model = projectLocalRegisterReadModel({
+      drawerAuthority: {
+        localRegisterSessionId: "local-register-1",
+        observedAt: 1_050,
+        reason: "lifecycle_rejected",
+        status: "blocked",
+        storeId: "store-1",
+        terminalId: "local-terminal-1",
+      },
+      events: [
+        event({
+          sequence: 1,
+          type: "register.opened",
+          localRegisterSessionId: "local-register-1",
+          payload: {
+            localRegisterSessionId: "local-register-1",
+            openingFloat: 100,
+          },
+        }),
+        event({
+          sequence: 2,
+          type: "register.closeout_started",
+          localRegisterSessionId: "local-register-1",
+          payload: { countedCash: 100 },
+          sync: { status: "needs_review", uploaded: true },
+        }),
+      ],
+    });
+
+    expect(model.canSell).toBe(false);
+    expect(model.activeRegisterSession?.status).toBe("closing");
+    expect(model.saleBlockReason).toBe("drawer_closed");
+    expect(model.drawerAuthorityReason).toBeUndefined();
+  });
+
   it("keeps the current drawer active when a later duplicate drawer open needs review", () => {
     const model = projectLocalRegisterReadModel({
       mappings: [

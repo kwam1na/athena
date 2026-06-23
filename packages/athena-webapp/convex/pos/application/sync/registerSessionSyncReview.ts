@@ -1,5 +1,9 @@
 import type { Doc, Id } from "../../../_generated/dataModel";
 import type { QueryCtx } from "../../../_generated/server";
+import {
+  isRegisterCloseoutReviewConflict,
+  REGISTER_CLOSEOUT_VARIANCE_SYNC_REVIEW_SUMMARY,
+} from "../../../../shared/registerSessionLifecyclePolicy";
 
 const SYNC_CONFLICT_LIMIT = 500;
 const MANAGER_REJECTED_SYNC_REVIEW_CODE = "manager_rejected";
@@ -13,8 +17,6 @@ export const SERVICE_CUSTOMER_ATTRIBUTION_SYNC_REVIEW_SUMMARY =
   "Service line is missing customer attribution.";
 export const CLOSED_REGISTER_SYNCED_CLOSEOUT_SUMMARY =
   "Register session is not open for synced POS closeout.";
-export const REGISTER_CLOSEOUT_VARIANCE_SYNC_REVIEW_SUMMARY =
-  "Register closeout variance requires manager review before synced closeout can be applied.";
 export const INVENTORY_SYNC_REVIEW_SUMMARY =
   "Inventory needs manager review for a synced offline sale.";
 
@@ -132,14 +134,8 @@ export function classifyRegisterSessionSyncReview(
     "conflictType" | "details" | "localEventId" | "status" | "summary"
   >,
 ): RegisterSessionSyncReviewClassification {
-  const localEventId = conflict.localEventId?.toLowerCase() ?? "";
   const summary = conflict.summary?.trim() ?? "";
-  const normalizedSummary = summary.toLowerCase();
   const details = conflict.details ?? {};
-  const hasVarianceDetails =
-    typeof details.countedCash === "number" ||
-    typeof details.expectedCash === "number" ||
-    typeof details.variance === "number";
 
   if (
     conflict.status === "rejected" ||
@@ -161,11 +157,12 @@ export function classifyRegisterSessionSyncReview(
   }
 
   if (
-    summary === REGISTER_CLOSEOUT_VARIANCE_SYNC_REVIEW_SUMMARY ||
-    localEventId.includes("register-closed") ||
-    localEventId.includes("register-closeout") ||
-    normalizedSummary.includes("register closeout") ||
-    hasVarianceDetails
+    isRegisterCloseoutReviewConflict({
+      details,
+      localEventId: conflict.localEventId,
+      status: conflict.status,
+      summary,
+    })
   ) {
     return {
       actionPolicy: "apply_or_reject",
@@ -554,8 +551,25 @@ export async function listOpenLocalSyncConflictsByRegisterSession(
   const activeNeedsReviewConflicts = projectedInventoryReviewResults
     .filter((result) => !result.hasInventoryWorkItem)
     .map((result) => result.conflict);
+  const varianceCloseoutEventKeys = new Set(
+    activeNeedsReviewConflicts
+      .filter(
+        (conflict) =>
+          classifyRegisterSessionSyncReview(conflict).reviewKind ===
+          "register_closeout_variance",
+      )
+      .map(syncConflictEventKey),
+  );
+  const reviewableNeedsReviewConflicts = activeNeedsReviewConflicts.filter(
+    (conflict) =>
+      !(
+        classifyRegisterSessionSyncReview(conflict).reviewKind ===
+          "duplicate_register_closeout" &&
+        varianceCloseoutEventKeys.has(syncConflictEventKey(conflict))
+      ),
+  );
   const openConflictEventKeys = new Set(
-    activeNeedsReviewConflicts.map(syncConflictEventKey),
+    reviewableNeedsReviewConflicts.map(syncConflictEventKey),
   );
   const staleResolvedConflicts = await Promise.all(
     resolvedConflicts.map(async (conflict) => {
@@ -600,7 +614,7 @@ export async function listOpenLocalSyncConflictsByRegisterSession(
     }),
   );
   const conflicts: RegisterSessionSyncConflict[] = [
-    ...activeNeedsReviewConflicts,
+    ...reviewableNeedsReviewConflicts,
     ...staleResolvedConflicts.filter(
       (conflict): conflict is Doc<"posLocalSyncConflict"> => conflict !== null,
     ),
