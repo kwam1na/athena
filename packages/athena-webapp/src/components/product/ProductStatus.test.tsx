@@ -73,4 +73,20 @@ describe("ProductStatus", () => {
 
     expect(screen.getByText("Archived")).toBeInTheDocument();
   });
+
+  it("shows draft status before stock status for provisional products", () => {
+    render(
+      <ProductStatus
+        product={makeProduct({
+          availability: "draft",
+          inventoryCount: 0,
+          isVisible: false,
+        })}
+        productVariant={makeVariant({ isVisible: false, stock: 0 })}
+      />,
+    );
+
+    expect(screen.getByText("Draft")).toBeInTheDocument();
+    expect(screen.queryByText("Out of stock")).not.toBeInTheDocument();
+  });
 });

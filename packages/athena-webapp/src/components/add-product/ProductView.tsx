@@ -3,13 +3,7 @@ import View from "../View";
 import { CheckCircledIcon, TrashIcon } from "@radix-ui/react-icons";
 import { ZodError } from "zod";
 import { toast } from "sonner";
-import {
-  Ban,
-  EyeOff,
-  PlusIcon,
-  RotateCcw,
-  Save,
-} from "lucide-react";
+import { Ban, EyeOff, PlusIcon, RotateCcw, Save } from "lucide-react";
 import { LoadingButton } from "../ui/loading-button";
 import { useEffect, useRef, useState } from "react";
 import { convertImagesToWebp, getUploadImagesData } from "@/lib/imageUtils";
@@ -25,46 +19,23 @@ import { Id } from "~/convex/_generated/dataModel";
 import { productSchema } from "../../lib/schemas/product";
 import { useAuth } from "../../hooks/useAuth";
 import { ComposedPageHeader } from "../common/PageHeader";
-import { PAYSTACK_PROCESSING_FEE } from "~/src/lib/constants";
-import { toDisplayAmount } from "~/convex/lib/currency";
 import { Badge } from "../ui/badge";
 import { ProductStatus } from "../product/ProductStatus";
 import { ProtectedRoute } from "../ProtectedRoute";
 import { presentUnexpectedErrorToast } from "~/src/lib/errors/presentUnexpectedErrorToast";
-import { parseDisplayAmountInput } from "~/src/lib/pos/displayAmounts";
 import type { ProductVariant } from "./ProductStock";
+import { buildTrustedInventoryMoneyPayload } from "./ProductStockInput";
 
 type VariantMoneyInput = {
   cost?: number;
   netPrice?: number;
 };
 
-function parseVariantDisplayMoney(value?: number): number {
-  if (value === undefined) {
-    return 0;
-  }
-
-  return parseDisplayAmountInput(String(value)) ?? 0;
-}
-
 export function buildVariantSkuMoneyPayload(
   variant: VariantMoneyInput,
   areProcessingFeesAbsorbed?: boolean,
 ): { netPrice: number; price: number; unitCost: number } {
-  const netPrice = parseVariantDisplayMoney(variant.netPrice);
-  const netPriceDisplay = toDisplayAmount(netPrice);
-  const processingFee =
-    (netPriceDisplay * PAYSTACK_PROCESSING_FEE) / 100;
-
-  const priceDisplay = areProcessingFeesAbsorbed
-    ? netPriceDisplay
-    : Math.round(netPriceDisplay + processingFee);
-
-  return {
-    netPrice,
-    price: parseDisplayAmountInput(String(priceDisplay)) ?? 0,
-    unitCost: parseVariantDisplayMoney(variant.cost),
-  };
+  return buildTrustedInventoryMoneyPayload(variant, areProcessingFeesAbsorbed);
 }
 
 function ProductViewContent() {

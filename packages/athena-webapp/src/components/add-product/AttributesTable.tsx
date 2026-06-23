@@ -14,6 +14,7 @@ import { Button } from "../ui/button";
 import { Ban, CheckCircle2, Plus } from "lucide-react";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { parseVariantAttributeValue } from "./ProductVariantAttributes";
 
 interface AttributesTableProps {
   selectedAttributes: string[];
@@ -23,20 +24,6 @@ type ColorOption = {
   id: string;
   name: string;
 };
-
-export function parseVariantAttributeValue(attribute: string, value: string) {
-  if (attribute !== "length") {
-    return value;
-  }
-
-  const trimmedValue = value.trim();
-  if (trimmedValue.length === 0) {
-    return undefined;
-  }
-
-  const parsedValue = Number(trimmedValue);
-  return Number.isFinite(parsedValue) ? parsedValue : undefined;
-}
 
 function AttributesTable({ selectedAttributes }: AttributesTableProps) {
   const {

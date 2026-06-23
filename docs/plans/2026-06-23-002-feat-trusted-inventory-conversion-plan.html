@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Plan: Trusted Inventory Conversion From Product Edit</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --text: #111827;
+      --muted: #64748b;
+      --border: #d9e2ec;
+      --accent: #2563eb;
+      --soft: #eff6ff;
+    }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 32px 24px 56px;
+    }
+    header, section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 16px;
+    }
+    h1, h2, h3 {
+      line-height: 1.2;
+      margin: 0 0 12px;
+    }
+    h1 {
+      font-size: 28px;
+    }
+    h2 {
+      font-size: 18px;
+      margin-top: 4px;
+    }
+    h3 {
+      font-size: 15px;
+      margin-top: 18px;
+    }
+    p {
+      margin: 0 0 12px;
+    }
+    a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+    ul, ol {
+      margin: 8px 0 0 20px;
+      padding: 0;
+    }
+    li {
+      margin: 6px 0;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 12px 0;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 9px 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      background: #f1f5f9;
+    }
+    code {
+      background: #f1f5f9;
+      border-radius: 4px;
+      padding: 1px 4px;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 12px;
+    }
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      color: var(--muted);
+      margin-top: 12px;
+    }
+    .pill {
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 4px 9px;
+      background: #f8fafc;
+    }
+    .callout {
+      background: var(--soft);
+      border: 1px solid #bfdbfe;
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin: 12px 0;
+    }
+    .unit {
+      border-top: 1px solid var(--border);
+      padding-top: 16px;
+      margin-top: 16px;
+    }
+    .toc {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 8px;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>feat: Add trusted inventory conversion from product edit</h1>
+      <p>This review artifact summarizes the canonical markdown plan at <a href="./2026-06-23-002-feat-trusted-inventory-conversion-plan.md">2026-06-23-002-feat-trusted-inventory-conversion-plan.md</a>.</p>
+      <div class="meta">
+        <span class="pill">Type: feat</span>
+        <span class="pill">Status: active</span>
+        <span class="pill">Date: 2026-06-23</span>
+      </div>
+    </header>
+
+    <section>
+      <h2>Contents</h2>
+      <nav class="toc">
+        <a href="#summary">Summary</a>
+        <a href="#decisions">Key Decisions</a>
+        <a href="#units">Implementation Units</a>
+        <a href="#risks">Risks</a>
+        <a href="#verification">Verification Focus</a>
+      </nav>
+    </section>
+
+    <section id="summary">
+      <h2>Summary</h2>
+      <p>The plan adds a product-edit finalization path for draft legacy-import SKUs. Staff make a SKU visible, review stock, quantity, price, and cost, then invoke a dedicated server-owned conversion command that finalizes the active provisional row and returns the SKU to normal trusted inventory behavior.</p>
+      <div class="callout">
+        <strong>Main boundary:</strong> conversion is not ordinary SKU save. It must update trusted SKU fields, provisional lifecycle state, POS availability behavior, stock-adjustment blockers, SKU activity/inventory movement evidence, and operational evidence together.
+      </div>
+      <h3>Explicit assumptions</h3>
+      <ul>
+        <li>Reviewed stock values are final trusted on-hand counts, not imported baseline counts before provisional sales.</li>
+        <li>Finalization submits reviewed fields atomically; staff should not need a separate Save first.</li>
+        <li>Finalization uses the stricter inventory import permission model.</li>
+        <li>SKU trust can be finalized without automatically publishing incomplete product merchandising.</li>
+        <li>Freshness checks cover both provisional sale evidence and the persisted trusted SKU baseline.</li>
+      </ul>
+    </section>
+
+    <section id="decisions">
+      <h2>Key Decisions</h2>
+      <table>
+        <thead>
+          <tr><th>Decision</th><th>Why it matters</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>One-SKU command in <code>catalogImport.ts</code></td><td>Keeps conversion inside the provisional import trust boundary.</td></tr>
+          <tr><td>Reviewed fields are final on-hand values</td><td>Avoids double-subtracting provisional sales after staff reviewed current stock.</td></tr>
+          <tr><td>Require exactly one active provisional row</td><td>Prevents silent conversion of the wrong import source.</td></tr>
+          <tr><td>Submit reviewed fields atomically</td><td>Avoids finalizing stale saved values.</td></tr>
+          <tr><td>Keep sale evidence</td><td>Provides audit and stale-review detection even when not used as a subtraction basis.</td></tr>
+          <tr><td>Use sale and trusted-SKU fingerprints plus idempotency</td><td>Prevents stale review conversion, stale SKU baseline writes, and duplicate stock evidence on retries.</td></tr>
+          <tr><td>Record through SKU activity ledger</td><td>Support review must see every trusted conversion in SKU activity; inventory movement is used only when there is a real stock delta.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="flow-states">
+      <h2>CTA and Copy Matrix</h2>
+      <table>
+        <thead>
+          <tr><th>State</th><th>CTA</th><th>Behavior</th><th>Inline copy</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Hidden provisional SKU</td><td>Make SKU visible</td><td>Enabled when row is editable</td><td>Make this SKU visible before reviewing trusted inventory.</td></tr>
+          <tr><td>Ready to finalize</td><td>Finalize trusted inventory</td><td>Enabled</td><td>Review stock, quantity, price, and cost before finalizing.</td></tr>
+          <tr><td>Invalid local values</td><td>Finalize trusted inventory</td><td>Disabled</td><td>Show the first concrete field issue.</td></tr>
+          <tr><td>Pending</td><td>Finalizing...</td><td>Loading and duplicate-submit safe</td><td>Finalizing this SKU as trusted inventory.</td></tr>
+          <tr><td>Finalized</td><td>Trusted inventory finalized or no CTA</td><td>Complete</td><td>Inventory finalized. Save remaining product changes separately.</td></tr>
+          <tr><td>Checkout/POS reservation</td><td>Finalize trusted inventory</td><td>Disabled</td><td>Clear active reservations or POS holds before finalizing.</td></tr>
+          <tr><td>Stale sale evidence</td><td>Refresh review</td><td>Enabled</td><td>Provisional sales changed. Refresh and review the counts again.</td></tr>
+          <tr><td>Missing or ambiguous provisional row</td><td>Review import source</td><td>Disabled or link action</td><td>Resolve the import row before finalizing.</td></tr>
+          <tr><td>Insufficient authority</td><td>Finalize trusted inventory</td><td>Disabled or failure state</td><td>Inventory import permission is required to finalize trusted inventory.</td></tr>
+        </tbody>
+      </table>
+      <p>Pending, success, and failure text should be announced through status semantics; failed commands return focus to the SKU review row, and disabled CTAs always have visible inline reason text.</p>
+    </section>
+
+    <section id="units">
+      <h2>Implementation Units</h2>
+      <article class="unit">
+        <h3>U1. Expose product-page provisional binding data</h3>
+        <p>Add active provisional row lookup state for product edit: none, unique, or ambiguous, including import metadata, review version context, a sale evidence fingerprint, and a trusted SKU baseline fingerprint.</p>
+      </article>
+      <article class="unit">
+        <h3>U2. Add atomic trusted inventory finalization command</h3>
+        <p>Add finalization idempotency fields and a <code>by_storeId_finalizationConversionRequestId</code> index on the provisional row schema, check the key after auth and before active-row lookup, validate authority, re-read product/SKU/provisional row/sale evidence/reservations, require exact sale and trusted-SKU freshness, patch trusted SKU values, finalize and hide the provisional row, always record SKU activity evidence, and record inventory movement only for a real stock delta.</p>
+      </article>
+      <article class="unit">
+        <h3>U3. Model product edit finalization state in UI</h3>
+        <p>Replace the disabled CTA with stateful make-visible, finalize, and blocked states that respect reservations, validation, and ambiguous provenance.</p>
+      </article>
+      <article class="unit">
+        <h3>U4. Wire action, refresh, and handoff</h3>
+        <p>Submit only the active SKU's reviewed values and conversion expectations, show pending state, handle command-result failures, use an explicit merge helper or per-field dirty tracking after success, update only the finalized SKU baseline, and preserve unrelated dirty product edits for the normal Save flow.</p>
+      </article>
+      <article class="unit">
+        <h3>U5. Add integration coverage</h3>
+        <p>Prove downstream behavior changes from provisional to trusted across stock adjustment, POS catalog lookup/search/snapshot, reservation race, trusted SKU baseline freshness, idempotency, zero-delta SKU activity, and dirty-state merge boundaries.</p>
+      </article>
+    </section>
+
+    <section id="risks">
+      <h2>Risks</h2>
+      <table>
+        <thead>
+          <tr><th>Risk</th><th>Mitigation</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Double-subtracting provisional sales</td><td>Keep product-page finalization distinct from batch import finalization and test both.</td></tr>
+          <tr><td>Partial trust conversion</td><td>Make trusted SKU patch and provisional row finalization one mutation.</td></tr>
+          <tr><td>Stale sale, SKU baseline, or reservation race</td><td>Re-read sale evidence, trusted SKU baseline, and reservations inside the mutation before the first write.</td></tr>
+          <tr><td>Duplicate retry writes</td><td>Store finalization request id, payload hash, and result metadata on the provisional row, then reject conflicting retries.</td></tr>
+          <tr><td>Zero-delta conversion hidden from activity</td><td>Always record SKU activity for finalization; only record inventory movement when stock delta is non-zero.</td></tr>
+          <tr><td>Ambiguous import provenance</td><td>Block unless exactly one active provisional row is bound to the SKU.</td></tr>
+          <tr><td>Unauthorized stock trust changes</td><td>Use inventory import access/elevation checks.</td></tr>
+          <tr><td>Customer-visible rough import product</td><td>Separate SKU trust from product publication unless product data is complete.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="verification">
+      <h2>Verification Focus</h2>
+      <ul>
+        <li>Backend conversion mutates trusted SKU and provisional row together.</li>
+        <li>Failed validation leaves SKU fields, product totals, provisional row, ledger evidence, and operational events unchanged.</li>
+        <li>Trusted SKU baseline changes block finalization unless current fields already match the submitted reviewed payload.</li>
+        <li>Active provisional SKUs block stock adjustments; finalized SKUs do not.</li>
+        <li>Active provisional POS policy disappears after finalization across barcode/SKU lookup, search, register snapshot, and local snapshot surfaces.</li>
+        <li>Conversion appears in SKU activity/support review, including zero-delta finalizations.</li>
+        <li>UI enables finalization only for visible, valid, uniquely bound, unreserved SKUs.</li>
+        <li>Finalize uses an explicit merge contract that preserves unrelated dirty product, image, category, attribute, and variant edits and disables during global save/context refresh.</li>
+        <li>Existing draft status, review row styling, stock/quantity mirroring, and legacy <code>NULL</code> normalization remain intact.</li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>

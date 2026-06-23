@@ -345,10 +345,18 @@ const schema = defineSchema({
     .index("by_storeId_hasCompletedCheckoutSession", [
       "storeId",
       "hasCompletedCheckoutSession",
+    ])
+    .index("by_storeId_hasCompletedCheckoutSession_expiresAt", [
+      "storeId",
+      "hasCompletedCheckoutSession",
+      "expiresAt",
     ]),
   checkoutSessionItem: defineTable(checkoutSessionItemSchema).index(
     "by_sessionId",
     ["sesionId"]
+  ).index(
+    "by_productSkuId",
+    ["productSkuId"]
   ),
   color: defineTable(colorSchema),
   complimentaryProductsCollection: defineTable(
@@ -422,6 +430,10 @@ const schema = defineSchema({
     ])
     .index("by_storeId_importKey_rowKey", ["storeId", "importKey", "rowKey"])
     .index("by_storeId_reviewVersionId", ["storeId", "reviewVersionId"])
+    .index("by_storeId_finalizationConversionRequestId", [
+      "storeId",
+      "finalizationConversionRequestId",
+    ])
     .index("by_storeId_normalizedImportedBarcode_status", [
       "storeId",
       "normalizedImportedBarcode",
