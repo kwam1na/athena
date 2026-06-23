@@ -375,6 +375,81 @@ export function createConvexLocalSyncRepository(
         ? latestByRegisterNumber
         : null;
     },
+    async listOpenRegisterReviewConflictFacts(args) {
+      const registerSessionMappings = await ctx.db
+        .query("posLocalSyncMapping")
+        .withIndex("by_store_terminal_cloud", (q) =>
+          q
+            .eq("storeId", args.storeId)
+            .eq("terminalId", args.terminalId)
+            .eq("cloudTable", "registerSession")
+            .eq("cloudId", args.registerSessionId),
+        )
+        .take(100);
+      const registerSessionMappingByLocalId = new Map(
+        registerSessionMappings.map((mapping) => [
+          mapping.localRegisterSessionId,
+          mapping,
+        ]),
+      );
+      const localRegisterSessionIds = new Set<string>([
+        args.registerSessionId,
+        ...registerSessionMappings.map(
+          (mapping) => mapping.localRegisterSessionId,
+        ),
+      ]);
+
+      const facts = [];
+      for (const localRegisterSessionId of localRegisterSessionIds) {
+        const conflicts = await ctx.db
+          .query("posLocalSyncConflict")
+          .withIndex("by_store_terminal_register_status_type", (q) =>
+            q
+              .eq("storeId", args.storeId)
+              .eq("terminalId", args.terminalId)
+              .eq("localRegisterSessionId", localRegisterSessionId)
+              .eq("status", "needs_review")
+              .eq("conflictType", "permission"),
+          )
+          .take(100);
+
+        for (const conflict of conflicts) {
+          if (!conflict.localRegisterSessionId) {
+            continue;
+          }
+
+          const registerSessionMapping = registerSessionMappingByLocalId.get(
+            conflict.localRegisterSessionId,
+          );
+          const directRegisterSessionId = normalizeCloudId(
+            "registerSession",
+            conflict.localRegisterSessionId,
+          );
+          const directRegisterSession = directRegisterSessionId
+            ? await ctx.db.get("registerSession", directRegisterSessionId)
+            : null;
+          facts.push({
+            conflict,
+            directRegisterSession:
+              directRegisterSession &&
+              directRegisterSession.storeId === args.storeId &&
+              directRegisterSession.terminalId === args.terminalId
+                ? {
+                    _id: directRegisterSession._id,
+                    storeId: directRegisterSession.storeId,
+                    terminalId: directRegisterSession.terminalId,
+                  }
+                : null,
+            registerSessionMapping:
+              registerSessionMapping?.cloudTable === "registerSession"
+                ? registerSessionMapping
+                : null,
+          });
+        }
+      }
+
+      return facts;
+    },
     async getRegisterSessionByLocalId(args) {
       const mapping = await ctx.db
         .query("posLocalSyncMapping")

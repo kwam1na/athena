@@ -1,0 +1,205 @@
+import {
+  isPosUsableRegisterSessionStatus,
+  isRegisterSessionConflictBlockingStatus,
+  type RegisterSessionStatus,
+} from "./registerSessionStatus";
+
+export const REGISTER_CLOSEOUT_VARIANCE_SYNC_REVIEW_SUMMARY =
+  "Register closeout variance requires manager review before synced closeout can be applied.";
+
+export type RegisterSessionLifecycleEventType =
+  | "register.opened"
+  | "register.closeout_started"
+  | string;
+
+export type RegisterSessionLifecycleReviewStatus =
+  | "needs_review"
+  | "pending"
+  | "syncing"
+  | "synced"
+  | "failed"
+  | string;
+
+export type RegisterSessionLifecycleDrawerAuthorityReason =
+  | "cloud_closed"
+  | "lifecycle_rejected"
+  | "authority_unknown"
+  | string;
+
+export type RegisterSessionLifecycleDrawerAuthority = {
+  cloudRegisterSessionId?: string;
+  localRegisterSessionId: string;
+  reason?: RegisterSessionLifecycleDrawerAuthorityReason;
+  status: "blocked" | "healthy" | string;
+};
+
+export type RegisterSessionLifecycleScopedSession = {
+  localRegisterSessionId?: string | null;
+  cloudRegisterSessionId?: string | null;
+  status?: RegisterSessionStatus | string | null;
+  storeId?: string | null;
+  terminalId?: string | null;
+};
+
+export type RegisterSessionLifecycleReviewConflict = {
+  details?: Record<string, unknown>;
+  localEventId?: string | null;
+  status?: string | null;
+  summary?: string | null;
+};
+
+export function isNonBlockingRegisterLifecycleReviewEvent(input: {
+  sync?: { status?: RegisterSessionLifecycleReviewStatus } | null;
+  type: RegisterSessionLifecycleEventType;
+}) {
+  return (
+    input.sync?.status === "needs_review" &&
+    (input.type === "register.opened" ||
+      input.type === "register.closeout_started")
+  );
+}
+
+export function isRegisterSessionSaleUsable(
+  session: Pick<RegisterSessionLifecycleScopedSession, "status"> | null | undefined,
+) {
+  return isPosUsableRegisterSessionStatus(session?.status);
+}
+
+export function isRegisterSessionConflictBlocking(
+  session: Pick<RegisterSessionLifecycleScopedSession, "status"> | null | undefined,
+) {
+  return isRegisterSessionConflictBlockingStatus(session?.status);
+}
+
+export function getSaleBlockingDrawerAuthority<
+  Authority extends RegisterSessionLifecycleDrawerAuthority,
+>(input: {
+  activeRegisterSession?: RegisterSessionLifecycleScopedSession | null;
+  drawerAuthority?: Authority | null;
+}): Authority | null {
+  const drawerAuthority = input.drawerAuthority;
+  if (!drawerAuthority) return null;
+  if (drawerAuthority.status !== "blocked") return null;
+  if (
+    drawerAuthority.reason === "lifecycle_rejected" &&
+    drawerAuthority.localRegisterSessionId ===
+      input.activeRegisterSession?.localRegisterSessionId
+  ) {
+    return null;
+  }
+
+  return drawerAuthority;
+}
+
+export function isDrawerAuthoritySaleBlocking(input: {
+  activeRegisterSession?: RegisterSessionLifecycleScopedSession | null;
+  drawerAuthority?: RegisterSessionLifecycleDrawerAuthority | null;
+}) {
+  return Boolean(getSaleBlockingDrawerAuthority(input));
+}
+
+export function canReuseCloudRegisterSessionForLocalOpen(input: {
+  hasOpenRegisterCloseoutReview: boolean;
+  registerSession?: RegisterSessionLifecycleScopedSession | null;
+  storeId: string;
+  terminalId: string;
+}) {
+  return (
+    isScopedRegisterSession(input) &&
+    isRegisterSessionSaleUsable(input.registerSession) &&
+    !input.hasOpenRegisterCloseoutReview
+  );
+}
+
+export function canSupersedeReviewedRegisterSessionForLocalOpen(input: {
+  hasOpenRegisterCloseoutReview: boolean;
+  replacementLocalRegisterSessionId: string;
+  replacementSequence: number;
+  registerSession?: RegisterSessionLifecycleScopedSession | null;
+  reviewSequence?: number | null;
+  storeId: string;
+  terminalId: string;
+}) {
+  const isDistinctReplacement =
+    input.replacementLocalRegisterSessionId !==
+      input.registerSession?.localRegisterSessionId &&
+    input.replacementLocalRegisterSessionId !==
+      input.registerSession?.cloudRegisterSessionId;
+  const isNewerThanReview =
+    input.reviewSequence === null ||
+    input.reviewSequence === undefined ||
+    input.replacementSequence > input.reviewSequence;
+
+  return (
+    isScopedRegisterSession(input) &&
+    isDistinctReplacement &&
+    isNewerThanReview &&
+    (isRegisterSessionSaleUsable(input.registerSession) ||
+      input.registerSession?.status === "closing") &&
+    input.hasOpenRegisterCloseoutReview
+  );
+}
+
+export function canOpenReplacementDrawerForLocalBlock(input: {
+  activeRegisterSession?: RegisterSessionLifecycleScopedSession | null;
+  drawerAuthorityReason?: RegisterSessionLifecycleDrawerAuthorityReason | null;
+  hasSettledCloseout: boolean;
+  saleBlockReason?: string | null;
+}) {
+  if (!input.saleBlockReason) return true;
+  if (
+    input.saleBlockReason === "drawer_authority" &&
+    input.drawerAuthorityReason === "cloud_closed"
+  ) {
+    return true;
+  }
+  if (
+    input.saleBlockReason === "drawer_closed" &&
+    (input.hasSettledCloseout ||
+      input.activeRegisterSession?.status === "closing")
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+export function canInspectRuntimeCloudDrawerAuthority(
+  session: Pick<RegisterSessionLifecycleScopedSession, "status"> | null | undefined,
+) {
+  return (
+    session?.status === "open" ||
+    session?.status === "active" ||
+    session?.status === "closing"
+  );
+}
+
+export function isRegisterCloseoutReviewConflict(
+  input: RegisterSessionLifecycleReviewConflict,
+) {
+  const summary = input.summary?.trim() ?? "";
+  const normalizedSummary = summary.toLowerCase();
+  const details = input.details ?? {};
+  const localEventId = input.localEventId?.toLowerCase() ?? "";
+
+  return (
+    summary === REGISTER_CLOSEOUT_VARIANCE_SYNC_REVIEW_SUMMARY ||
+    normalizedSummary.includes("register closeout") ||
+    localEventId.includes("register-closed") ||
+    localEventId.includes("register-closeout") ||
+    typeof details.countedCash === "number" ||
+    typeof details.expectedCash === "number" ||
+    typeof details.variance === "number"
+  );
+}
+
+function isScopedRegisterSession(input: {
+  registerSession?: RegisterSessionLifecycleScopedSession | null;
+  storeId: string;
+  terminalId: string;
+}) {
+  return (
+    input.registerSession?.storeId === input.storeId &&
+    input.registerSession.terminalId === input.terminalId
+  );
+}

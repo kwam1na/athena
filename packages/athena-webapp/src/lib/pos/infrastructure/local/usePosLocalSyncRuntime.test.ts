@@ -843,10 +843,13 @@ describe("usePosLocalSyncRuntimeStatus", () => {
     await waitFor(() =>
       expect(result.current).toEqual(
         expect.objectContaining({
-          status: "needs_review",
+          runtimeStatus: expect.objectContaining({
+            sync: expect.objectContaining({ status: "idle" }),
+          }),
         }),
       ),
     );
+    expect(result.current?.debug?.reviewEventCount).toBe(1);
     expect(mocks.ingestLocalEvents).not.toHaveBeenCalled();
 
     act(() => {
@@ -930,10 +933,13 @@ describe("usePosLocalSyncRuntimeStatus", () => {
     await waitFor(() =>
       expect(result.current).toEqual(
         expect.objectContaining({
-          status: "needs_review",
+          runtimeStatus: expect.objectContaining({
+            sync: expect.objectContaining({ status: "idle" }),
+          }),
         }),
       ),
     );
+    expect(result.current?.debug?.reviewEventCount).toBe(1);
     act(() => {
       result.current?.onRetrySync?.();
     });
@@ -1543,7 +1549,7 @@ describe("usePosLocalSyncRuntimeStatus", () => {
     });
   });
 
-  it("writes drawer authority when mapping persistence fails during runtime upload", async () => {
+  it("does not write drawer authority when drawer-open mapping persistence fails during runtime upload", async () => {
     mocks.ingestLocalEvents.mockResolvedValue({
       kind: "ok",
       data: {
@@ -1636,15 +1642,7 @@ describe("usePosLocalSyncRuntimeStatus", () => {
         ),
       { timeout: 3_000 },
     );
-    expect(store.writeDrawerAuthorityState).toHaveBeenCalledWith(
-      expect.objectContaining({
-        localRegisterSessionId: "register-1",
-        reason: "authority_unknown",
-        status: "blocked",
-        storeId: "store-1",
-        terminalId: "local-terminal-1",
-      }),
-    );
+    expect(store.writeDrawerAuthorityState).not.toHaveBeenCalled();
     expect(store.markEventsSynced).not.toHaveBeenCalled();
   });
 
@@ -3313,6 +3311,125 @@ describe("usePosLocalSyncRuntimeStatus", () => {
     expect(onLocalEventsChanged).toHaveBeenCalled();
   });
 
+  it("passively reconciles a pending local closeout when the mapped cloud drawer is closed", async () => {
+    mocks.reportTerminalRuntimeStatus.mockResolvedValue({
+      kind: "ok",
+      data: {
+        drawerAuthorityDirective: {
+          cloudRegisterSessionId: "cloud-register-1",
+          localRegisterSessionId: "local-register-1",
+          message:
+            "The mapped cloud register is closed. Open a register before selling.",
+          observedAt: 200,
+          reason: "cloud_closed",
+          registerNumber: "8",
+          status: "blocked",
+        },
+      },
+    });
+    const onLocalEventsChanged = vi.fn();
+    const store = {
+      listEvents: vi.fn(async () => ({
+        ok: true,
+        value: [
+          buildLocalEvent({
+            localEventId: "event-open",
+            localRegisterSessionId: "local-register-1",
+            payload: {
+              expectedCash: 5_000,
+              localRegisterSessionId: "local-register-1",
+              openingFloat: 5_000,
+            },
+            sequence: 1,
+            sync: { status: "synced", uploaded: true },
+            type: "register.opened",
+          }),
+          buildLocalEvent({
+            localEventId: "event-closeout",
+            localRegisterSessionId: "local-register-1",
+            payload: {
+              countedCash: 5_000,
+              notes: null,
+            },
+            sequence: 2,
+            sync: { status: "pending", uploaded: false },
+            type: "register.closeout_started",
+          }),
+        ],
+      })),
+      listLocalCloudMappings: vi.fn(async () => ({
+        ok: true,
+        value: [
+          {
+            entity: "registerSession",
+            localId: "local-register-1",
+            cloudId: "cloud-register-1",
+            mappedAt: 100,
+          },
+        ],
+      })),
+      readDrawerAuthorityState: vi.fn(async () => ({
+        ok: true,
+        value: null,
+      })),
+      readProvisionedTerminalSeed: vi.fn(async () => ({
+        ok: true,
+        value: {
+          cloudTerminalId: "terminal-cloud-1",
+          displayName: "Front",
+          provisionedAt: 1,
+          schemaVersion: 1,
+          syncSecretHash: "sync-secret-1",
+          storeId: "store-1",
+          terminalId: "local-terminal-1",
+        },
+      })),
+      writeDrawerAuthorityState: vi.fn(async () => ({
+        ok: true,
+        value: null,
+      })),
+    };
+
+    renderHook(() =>
+      usePosLocalSyncRuntimeStatus({
+        mode: "status-only",
+        onLocalEventsChanged,
+        storeFactory: () => store as never,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(mocks.reportTerminalRuntimeStatus).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: expect.objectContaining({
+            activeRegisterSession: expect.objectContaining({
+              cloudRegisterSessionId: "cloud-register-1",
+              localRegisterSessionId: "local-register-1",
+              status: "closing",
+            }),
+          }),
+        }),
+      ),
+    );
+    await waitFor(() =>
+      expect(store.writeDrawerAuthorityState).toHaveBeenCalledWith({
+        cloudRegisterSessionId: "cloud-register-1",
+        localRegisterSessionId: "local-register-1",
+        message:
+          "The mapped cloud register is closed. Open a register before selling.",
+        observedAt: 200,
+        reason: "cloud_closed",
+        registerNumber: "8",
+        status: "blocked",
+        storeId: "store-1",
+        terminalId: "local-terminal-1",
+      }),
+    );
+    expect(onLocalEventsChanged).toHaveBeenCalled();
+  });
+
   it("does not persist terminal integrity for generic runtime check-in rejections", async () => {
     mocks.reportTerminalRuntimeStatus.mockResolvedValue({
       kind: "user_error",
@@ -4211,7 +4328,7 @@ describe("usePosLocalSyncRuntimeStatus", () => {
     );
   });
 
-  it("presents closeout reconciliation conflicts as needs review", () => {
+  it("keeps closeout reconciliation conflicts out of POS runtime review status", () => {
     expect(
       derivePosLocalRuntimeSyncStatus(
         [
@@ -4223,12 +4340,22 @@ describe("usePosLocalSyncRuntimeStatus", () => {
         ],
         { isOnline: true },
       ),
-    ).toEqual(
-      expect.objectContaining({
-        pendingEventCount: 0,
-        status: "needs_review",
-      }),
-    );
+    ).toBeNull();
+  });
+
+  it("keeps drawer-open reconciliation conflicts out of POS runtime review status", () => {
+    expect(
+      derivePosLocalRuntimeSyncStatus(
+        [
+          buildLocalEvent({
+            localEventId: "event-open",
+            sync: { status: "needs_review", uploaded: true },
+            type: "register.opened",
+          }),
+        ],
+        { isOnline: true },
+      ),
+    ).toBeNull();
   });
 
   it("ignores local cart drafts that are not referenced by a pending completed sale", () => {
@@ -4285,15 +4412,15 @@ describe("usePosLocalSyncRuntimeStatus", () => {
     );
   });
 
-  it("presents terminal-blocking uploaded review events from another staff profile", () => {
+  it("presents terminal-blocking uploaded reopen review events from another staff profile", () => {
     expect(
       derivePosLocalRuntimeSyncStatus(
         [
           buildLocalEvent({
-            localEventId: "event-other-staff-open",
+            localEventId: "event-other-staff-reopen",
             staffProfileId: "staff-2",
             sync: { status: "needs_review", uploaded: true },
-            type: "register.opened",
+            type: "register.reopened",
           }),
         ],
         { isOnline: true, staffProfileId: "staff-1" },

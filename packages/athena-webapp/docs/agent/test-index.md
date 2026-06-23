@@ -200,6 +200,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`shared/currencyFormatter.test.ts`](../../shared/currencyFormatter.test.ts)
 - [`shared/homepageRanking.test.ts`](../../shared/homepageRanking.test.ts)
 - [`shared/intelligence/contextTracking.test.ts`](../../shared/intelligence/contextTracking.test.ts)
+- [`shared/registerSessionLifecyclePolicy.test.ts`](../../shared/registerSessionLifecyclePolicy.test.ts)
 - [`shared/registerSessionStatus.test.ts`](../../shared/registerSessionStatus.test.ts)
 - [`shared/staffDisplayName.test.ts`](../../shared/staffDisplayName.test.ts)
 - [`shared/storefrontVisibility.test.ts`](../../shared/storefrontVisibility.test.ts)

@@ -34,7 +34,7 @@ import {
   requireOrganizationMemberRoleWithCtx,
 } from "../lib/athenaUserAuth";
 import { ok, userError, type CommandResult } from "../../shared/commandResult";
-import { isPosUsableRegisterSessionStatus } from "../../shared/registerSessionStatus";
+import { isRegisterSessionSaleUsable } from "../../shared/registerSessionLifecyclePolicy";
 import { formatStaffDisplayName } from "../../shared/staffDisplayName";
 
 export { listOpenLocalSyncConflictsByRegisterSession } from "../pos/application/sync/registerSessionSyncReview";
@@ -557,7 +557,7 @@ export function buildCashControlsDashboardSnapshot(args: {
   return {
     registerSessions: sessionSummaries,
     openSessions: sessionSummaries.filter((registerSession) =>
-      isPosUsableRegisterSessionStatus(registerSession.status),
+      isRegisterSessionSaleUsable(registerSession),
     ),
     pendingCloseouts: sessionSummaries.filter(
       (registerSession) => registerSession.status === "closing",
@@ -1129,7 +1129,7 @@ export const recordRegisterSessionDeposit = mutation({
       });
     }
 
-    if (!isPosUsableRegisterSessionStatus(registerSession.status)) {
+    if (!isRegisterSessionSaleUsable(registerSession)) {
       return userError({
         code: "precondition_failed",
         message: "Register session is not accepting new deposits.",
@@ -1381,6 +1381,14 @@ export const resolveRegisterSessionSyncReview = mutation({
         ) {
           const conflictDetails = conflict.details ?? {};
           rejectedCloseoutLocalEventIds.add(syncEvent.localEventId);
+          if (review.reviewKind === "register_closeout_variance") {
+            await ctx.db.patch("registerSession", args.registerSessionId, {
+              countedCash: undefined,
+              notes: undefined,
+              status: "active",
+              variance: undefined,
+            });
+          }
           await recordOperationalEventWithCtx(ctx, {
             ...(args.actorStaffProfileId
               ? { actorStaffProfileId: args.actorStaffProfileId }

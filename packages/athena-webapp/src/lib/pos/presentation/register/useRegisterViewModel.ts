@@ -49,7 +49,7 @@ import {
   useConvexRegisterServiceCatalog,
 } from "@/lib/pos/infrastructure/convex/catalogGateway";
 import { useConvexRegisterState } from "@/lib/pos/infrastructure/convex/registerGateway";
-import { isPosUsableRegisterSessionStatus } from "~/shared/registerSessionStatus";
+import { isRegisterSessionSaleUsable } from "~/shared/registerSessionLifecyclePolicy";
 import { userError, type CommandResult } from "~/shared/commandResult";
 import type { ApprovalRequirement } from "~/shared/approvalPolicy";
 import {
@@ -147,7 +147,6 @@ import {
   findRegisterCloseoutReviewItem,
   getCloseoutCloudRegisterSessionId,
   getCloseoutLocalRegisterSessionId,
-  getLatestLocalRegisterLifecycleEvent,
   isKnownCloudRegisterSessionBlockingLocalProjection,
   readLocalSyncStatus,
 } from "./registerDrawerPresentation";
@@ -327,6 +326,7 @@ function hasSyncedSaleLocalEventsForStaff(
 }
 
 type LocalOperableRegisterSession = {
+  cloudRegisterSessionId?: string;
   expectedCash: number;
   localRegisterSessionId: string;
   openedAt: number;
@@ -335,6 +335,28 @@ type LocalOperableRegisterSession = {
   storeId: Id<"store">;
   terminalId: Id<"posTerminal">;
 };
+
+type CloseoutBlockedRegisterSession = {
+  _id?: Id<"registerSession"> | string;
+  countedCash?: number;
+  expectedCash: number;
+  localRegisterSessionId?: string;
+  localSyncStatus?: {
+    pendingEventCount?: number;
+    status: string;
+  };
+  managerApprovalRequestId?: Id<"approvalRequest">;
+  openedAt: number;
+  openingFloat: number;
+  registerNumber: string;
+  status: "closing";
+  terminalId: Id<"posTerminal">;
+  variance?: number;
+};
+
+function selectPassiveCloseoutBlockedRegisterSession(): CloseoutBlockedRegisterSession | null {
+  return null;
+}
 
 type LocalOperablePosSession = {
   localPosSessionId: string;
@@ -529,7 +551,6 @@ export function useRegisterViewModel(): RegisterViewModel {
   const exactAddKeyRef = useRef<string | null>(null);
   const pendingSessionStartKeyRef = useRef<string | null>(null);
   const seededRegisterSessionIdsRef = useRef<Set<string>>(new Set());
-  const persistedDrawerAuthorityBlockRef = useRef<string | null>(null);
   const autoTerminalRepairAttemptRef = useRef<string | null>(null);
   const activeCartItemsRef = useRef<CartItem[]>([]);
   const localRegisterReadModelRef = useRef<PosLocalRegisterReadModel | null>(
@@ -716,7 +737,7 @@ export function useRegisterViewModel(): RegisterViewModel {
   }, [activeSession?._id]);
   const usableActiveRegisterSession =
     registerState?.activeRegisterSession &&
-    isPosUsableRegisterSessionStatus(registerState.activeRegisterSession.status)
+    isRegisterSessionSaleUsable(registerState.activeRegisterSession)
       ? registerState.activeRegisterSession
       : null;
   const localStaffPendingUploadCount = countPendingSyncableLocalEventsForStaff(
@@ -731,11 +752,6 @@ export function useRegisterViewModel(): RegisterViewModel {
     localRegisterReadModel?.sourceEvents ?? [],
     staffProfileId,
   );
-  const latestLocalRegisterLifecycleEvent =
-    getLatestLocalRegisterLifecycleEvent(localRegisterReadModel);
-  const latestLocalCloseoutIsSynced =
-    latestLocalRegisterLifecycleEvent?.type === "register.closeout_started" &&
-    latestLocalRegisterLifecycleEvent.sync.status === "synced";
   const projectedLocalActiveSale = localRegisterReadModel?.activeSale ?? null;
   const projectedLocalActiveSaleStaffProfileId =
     projectedLocalActiveSale?.staffProfileId ?? null;
@@ -754,12 +770,12 @@ export function useRegisterViewModel(): RegisterViewModel {
     activeStoreId &&
     terminal?._id &&
     !cloudRegisterSessionBlocksLocalProjection &&
-    isPosUsableRegisterSessionStatus(
-      localRegisterReadModel.activeRegisterSession.status,
-    )
+    isRegisterSessionSaleUsable(localRegisterReadModel.activeRegisterSession)
       ? {
           expectedCash:
             localRegisterReadModel.activeRegisterSession.expectedCash,
+          cloudRegisterSessionId:
+            localRegisterReadModel.activeRegisterSession.cloudRegisterSessionId,
           localRegisterSessionId:
             localRegisterReadModel.activeRegisterSession.localRegisterSessionId,
           openedAt: localRegisterReadModel.activeRegisterSession.openedAt,
@@ -771,62 +787,6 @@ export function useRegisterViewModel(): RegisterViewModel {
           terminalId: terminal._id,
         }
       : null;
-  const projectedLocalCloseoutBlockedRegisterSession =
-    localRegisterReadModel?.activeRegisterSession?.status === "closing" &&
-    !latestLocalCloseoutIsSynced &&
-    activeStoreId &&
-    terminal?._id
-      ? {
-          localRegisterSessionId:
-            localRegisterReadModel.activeRegisterSession.localRegisterSessionId,
-          status: "closing" as const,
-          terminalId: terminal._id,
-          registerNumber:
-            localRegisterReadModel.activeRegisterSession.registerNumber ?? "",
-          openingFloat:
-            localRegisterReadModel.activeRegisterSession.openingFloat,
-          expectedCash:
-            localRegisterReadModel.activeRegisterSession.expectedCash,
-          countedCash: localRegisterReadModel.activeRegisterSession.countedCash,
-          managerApprovalRequestId: undefined,
-          openedAt: localRegisterReadModel.activeRegisterSession.openedAt,
-          variance:
-            localRegisterReadModel.activeRegisterSession.countedCash ===
-            undefined
-              ? undefined
-              : localRegisterReadModel.activeRegisterSession.countedCash -
-                localRegisterReadModel.activeRegisterSession.expectedCash,
-          localSyncStatus: {
-            status:
-              localRegisterReadModel.syncStatus.state === "synced"
-                ? "synced"
-                : localRegisterReadModel.syncStatus.state === "needs_review" ||
-                    localRegisterReadModel.syncStatus.state === "failed"
-                  ? "needs_review"
-                  : "locally_closed_pending_sync",
-            pendingEventCount: localStaffPendingUploadCount,
-          },
-        }
-      : null;
-  const activeRegisterCloseoutReviewItem = findRegisterCloseoutReviewItem(
-    usableActiveRegisterSession,
-  );
-  const syncedCloseoutReviewRegisterSession =
-    usableActiveRegisterSession && activeRegisterCloseoutReviewItem
-      ? {
-          ...usableActiveRegisterSession,
-          status: "closing" as const,
-          countedCash:
-            activeRegisterCloseoutReviewItem.countedCash ??
-            usableActiveRegisterSession.countedCash,
-          expectedCash:
-            activeRegisterCloseoutReviewItem.expectedCash ??
-            usableActiveRegisterSession.expectedCash,
-          variance:
-            activeRegisterCloseoutReviewItem.variance ??
-            usableActiveRegisterSession.variance,
-        }
-      : null;
   const locallyOperableRegisterSession =
     localOperableRegisterSession &&
     activeStoreId === localOperableRegisterSession.storeId &&
@@ -834,18 +794,22 @@ export function useRegisterViewModel(): RegisterViewModel {
       ? localOperableRegisterSession
       : projectedLocalRegisterSession;
   const closeoutBlockedRegisterSession =
-    registerState?.activeRegisterSession?.status === "closing"
-      ? registerState.activeRegisterSession
-      : syncedCloseoutReviewRegisterSession
-        ? syncedCloseoutReviewRegisterSession
-        : projectedLocalCloseoutBlockedRegisterSession;
+    selectPassiveCloseoutBlockedRegisterSession();
+  const activeCloudRegisterSessionHasCloseoutReview = Boolean(
+    findRegisterCloseoutReviewItem(usableActiveRegisterSession),
+  );
+  const saleUsableActiveRegisterSession =
+    usableActiveRegisterSession && !activeCloudRegisterSessionHasCloseoutReview
+      ? usableActiveRegisterSession
+      : null;
   const activeRegisterNumber =
     activeSession?.registerNumber ??
-    usableActiveRegisterSession?.registerNumber ??
+    locallyOperableRegisterSession?.registerNumber ??
+    saleUsableActiveRegisterSession?.registerNumber ??
     closeoutBlockedRegisterSession?.registerNumber ??
     registerState?.activeSession?.registerNumber ??
     registerState?.resumableSession?.registerNumber;
-  const activeRegisterSessionId = usableActiveRegisterSession?._id as
+  const activeRegisterSessionId = saleUsableActiveRegisterSession?._id as
     | Id<"registerSession">
     | undefined;
   const cloudRegisterSessionId = activeRegisterSessionId?.toString();
@@ -944,59 +908,6 @@ export function useRegisterViewModel(): RegisterViewModel {
     updateSession,
   } = useConvexSessionActions();
   const voidSessionRef = useRef<typeof voidSession>(voidSession);
-  useEffect(() => {
-    const localRegisterSession = localRegisterReadModel?.activeRegisterSession;
-    const cloudRegisterSessionId =
-      registerState?.activeRegisterSession?._id?.toString() ??
-      localRegisterSession?.cloudRegisterSessionId;
-    if (
-      !cloudRegisterSessionBlocksLocalProjection ||
-      !activeStoreId ||
-      !localRegisterSession ||
-      !cloudRegisterSessionId ||
-      localRegisterReadModel?.saleBlockReason === "drawer_authority"
-    ) {
-      return;
-    }
-    const blockKey = `${activeStoreId}:${localRegisterSession.localRegisterSessionId}:${cloudRegisterSessionId}`;
-    if (persistedDrawerAuthorityBlockRef.current === blockKey) {
-      return;
-    }
-
-    void localStore
-      .writeDrawerAuthorityState({
-        cloudRegisterSessionId,
-        localRegisterSessionId: localRegisterSession.localRegisterSessionId,
-        message:
-          "The drawer is already closed. Repair drawer setup before continuing.",
-        observedAt: Date.now(),
-        reason: "cloud_closed",
-        registerNumber: localRegisterSession.registerNumber,
-        status: "blocked",
-        storeId: activeStoreId,
-        terminalId:
-          localRegisterSession.terminalId ??
-          terminal?.localTerminalId ??
-          terminal?._id?.toString() ??
-          "",
-      })
-      .then((result) => {
-        if (result.ok) {
-          persistedDrawerAuthorityBlockRef.current = blockKey;
-          noteLocalRegisterEventChanged();
-        }
-      });
-  }, [
-    activeStoreId,
-    cloudRegisterSessionBlocksLocalProjection,
-    localRegisterReadModel?.activeRegisterSession,
-    localRegisterReadModel?.saleBlockReason,
-    localStore,
-    noteLocalRegisterEventChanged,
-    registerState?.activeRegisterSession?._id,
-    terminal?._id,
-    terminal?.localTerminalId,
-  ]);
   useEffect(() => {
     let cancelled = false;
 
@@ -1663,7 +1574,8 @@ export function useRegisterViewModel(): RegisterViewModel {
   );
   const activeSessionNeedsRegisterBinding = Boolean(
     isCloudOperableSession(operableActiveSession) &&
-    !operableActiveSession.registerSessionId,
+      !operableActiveSession.registerSessionId &&
+      !locallyOperableRegisterSession,
   );
   const activeSessionHasMismatchedRegisterBinding = Boolean(
     isCloudOperableSession(operableActiveSession) &&
@@ -1677,18 +1589,18 @@ export function useRegisterViewModel(): RegisterViewModel {
   const hasCloseoutBlockedDrawerState = Boolean(
     bootstrapState &&
     closeoutBlockedRegisterSession &&
-    (!usableActiveRegisterSession || syncedCloseoutReviewRegisterSession),
+    !saleUsableActiveRegisterSession,
   );
   const hasMissingDrawerStartupState = Boolean(
     bootstrapState &&
     (bootstrapState.phase === "readyToStart" ||
       bootstrapState.phase === "resumable") &&
-    !usableActiveRegisterSession &&
+    !saleUsableActiveRegisterSession &&
     !locallyOperableRegisterSession,
   );
   const hasMissingDrawerRecoveryState = Boolean(
     bootstrapState &&
-    !usableActiveRegisterSession &&
+    !saleUsableActiveRegisterSession &&
     !locallyOperableRegisterSession &&
     (bootstrapState.phase === "active" ||
       bootstrapState.phase === "resumable" ||
@@ -1696,7 +1608,7 @@ export function useRegisterViewModel(): RegisterViewModel {
   );
   const hasDraftDrawerRecoveryState = Boolean(
     hasInProgressSaleDraft &&
-    !usableActiveRegisterSession &&
+    !saleUsableActiveRegisterSession &&
     !locallyOperableRegisterSession &&
     !localEventRegisterSessionId &&
     !isTransactionCompleted,
@@ -1758,7 +1670,7 @@ export function useRegisterViewModel(): RegisterViewModel {
   const activeCloseoutRegisterSession =
     closeoutBlockedRegisterSession ??
     (isCloseoutRequested
-      ? (usableActiveRegisterSession ?? localCloseoutRegisterSession)
+      ? (localCloseoutRegisterSession ?? saleUsableActiveRegisterSession)
       : null);
   const activeCloseoutRegisterSessionHasSyncReview = Boolean(
     findRegisterCloseoutReviewItem(activeCloseoutRegisterSession),
@@ -5033,8 +4945,9 @@ export function useRegisterViewModel(): RegisterViewModel {
         }
       : null;
 
+  const hasSignedInStaff = Boolean(cashier || localAuthenticatedStaff);
   const cashierCard =
-    activeStoreId && terminal?._id && staffProfileId
+    activeStoreId && terminal?._id && staffProfileId && hasSignedInStaff
       ? {
           cashierName: cashier
             ? getCashierDisplayName(cashier)
@@ -5069,6 +4982,7 @@ export function useRegisterViewModel(): RegisterViewModel {
             expectedCash:
               activeOpeningFloatCorrectionRegisterSession?.expectedCash,
             errorMessage: drawerErrorMessage,
+            hasSignedInStaff,
             isCorrectingOpeningFloat,
             onCancelOpeningFloatCorrection: () => {
               setCorrectedOpeningFloat("");
@@ -5127,6 +5041,7 @@ export function useRegisterViewModel(): RegisterViewModel {
                 activeCloseoutRegisterSessionHasSyncReview,
               ),
               errorMessage: drawerErrorMessage,
+              hasSignedInStaff,
               isCloseoutSubmitting: isSubmittingCloseout,
               isReopeningCloseout,
               onCloseoutCountedCashChange: (value: string) => {
@@ -5160,6 +5075,7 @@ export function useRegisterViewModel(): RegisterViewModel {
                 (activeSessionHasMismatchedRegisterBinding
                   ? "Sale assigned to a different drawer. Open that drawer before continuing."
                   : null),
+              hasSignedInStaff,
               isSubmitting: isOpeningDrawer,
               isRepairingTerminalSetup,
               onOpeningFloatChange: (value: string) => {

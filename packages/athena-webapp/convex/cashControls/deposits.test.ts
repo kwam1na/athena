@@ -713,6 +713,80 @@ describe("cash control deposits", () => {
     );
   });
 
+  it("hides duplicate closeout shadows while the variance closeout review is open", async () => {
+    const ctx = createQueryCtx({
+      posLocalSyncConflict: [
+        {
+          _id: "sync_conflict_variance",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-1",
+          localEventId: "event_closeout",
+          sequence: 2,
+          conflictType: "permission",
+          status: "needs_review",
+          summary:
+            "Register closeout variance requires manager review before synced closeout can be applied.",
+          details: {
+            countedCash: 20000,
+            expectedCash: 23000,
+            variance: -3000,
+          },
+          createdAt: 1,
+        },
+        {
+          _id: "sync_conflict_duplicate",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-1",
+          localEventId: "event_closeout",
+          sequence: 2,
+          conflictType: "permission",
+          status: "needs_review",
+          summary: "Register session is not open for synced POS closeout.",
+          details: {
+            localRegisterSessionId: "local-register-1",
+            status: "closing",
+          },
+          createdAt: 2,
+        },
+      ],
+      posLocalSyncMapping: [
+        {
+          _id: "sync_mapping_1",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-1",
+          localIdKind: "registerSession",
+          localId: "local-register-1",
+          cloudTable: "registerSession",
+          cloudId: "session_closing",
+        },
+      ],
+      registerSession: [
+        {
+          _id: "session_closing",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+        },
+      ],
+    });
+
+    await expect(
+      listOpenLocalSyncConflictsByRegisterSession(
+        ctx as never,
+        "store_1" as Id<"store">,
+      ),
+    ).resolves.toEqual(
+      new Map([
+        [
+          "session_closing",
+          [expect.objectContaining({ _id: "sync_conflict_variance" })],
+        ],
+      ]),
+    );
+  });
+
   it("excludes resolved sync conflicts from register-session reconciliation", async () => {
     const ctx = createQueryCtx({
       posLocalSyncConflict: [
@@ -3501,6 +3575,150 @@ describe("cash control deposits", () => {
         }),
       ]),
     );
+  });
+
+  it("reopens drawers left closing by rejected variance closeout reviews", async () => {
+    const ctx = createAuthorizedRegisterDepositCtx({
+      operationalEvent: [],
+      posLocalSyncConflict: [
+        {
+          _id: "sync_conflict_closeout",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-1",
+          localEventId: "event_closeout",
+          sequence: 2,
+          conflictType: "permission",
+          status: "needs_review",
+          summary:
+            "Register closeout variance requires manager review before synced closeout can be applied.",
+          details: {
+            countedCash: 45000,
+            expectedCash: 50000,
+            notes: "cash count issue",
+            variance: -5000,
+          },
+          createdAt: 1,
+        },
+      ],
+      posLocalSyncEvent: [
+        {
+          _id: "sync_event_closeout",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-1",
+          localEventId: "event_closeout",
+          sequence: 2,
+          eventType: "register_closed",
+          occurredAt: 2,
+          staffProfileId: "staff_1",
+          payload: {
+            countedCash: 45000,
+            notes: "cash count issue",
+          },
+          status: "conflicted",
+          submittedAt: 4,
+          acceptedAt: 4,
+        },
+      ],
+      posLocalSyncMapping: [
+        {
+          _id: "sync_mapping_1",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-1",
+          localIdKind: "registerSession",
+          localId: "local-register-1",
+          cloudTable: "registerSession",
+          cloudId: "session_open",
+        },
+      ],
+      registerSession: [
+        {
+          _id: "session_open",
+          closeoutRecords: [],
+          countedCash: 45000,
+          expectedCash: 50000,
+          notes: "cash count issue",
+          openedAt: 1,
+          openingFloat: 50000,
+          organizationId: "org_1",
+          registerNumber: "1",
+          status: "closing",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          variance: -5000,
+        },
+      ],
+      staffProfile: [
+        {
+          _id: "manager_1",
+          organizationId: "org_1",
+          status: "active",
+          storeId: "store_1",
+        },
+        {
+          _id: "staff_1",
+          organizationId: "org_1",
+          status: "active",
+          storeId: "store_1",
+        },
+      ],
+      staffRoleAssignment: [
+        {
+          _id: "role_1",
+          organizationId: "org_1",
+          role: "manager",
+          staffProfileId: "manager_1",
+          status: "active",
+          storeId: "store_1",
+        },
+      ],
+    });
+
+    const result = await getHandler(resolveRegisterSessionSyncReview)(
+      ctx as never,
+      {
+        actorStaffProfileId: "manager_1" as Id<"staffProfile">,
+        decision: "rejected",
+        registerSessionId: "session_open" as Id<"registerSession">,
+        reviewConflictIds: [
+          "sync_conflict_closeout" as Id<"posLocalSyncConflict">,
+        ],
+        storeId: "store_1" as Id<"store">,
+      },
+    );
+
+    expect(result).toEqual(
+      ok({
+        action: "rejected",
+        projectedCount: 0,
+        registerSession: expect.objectContaining({ _id: "session_open" }),
+        resolvedCount: 1,
+      }),
+    );
+    expect(ctx.tables.get("registerSession")).toEqual([
+      expect.objectContaining({
+        _id: "session_open",
+        countedCash: undefined,
+        notes: undefined,
+        status: "active",
+        variance: undefined,
+      }),
+    ]);
+    expect(ctx.tables.get("posLocalSyncEvent")).toEqual([
+      expect.objectContaining({
+        _id: "sync_event_closeout",
+        rejectionCode: "manager_rejected",
+        status: "rejected",
+      }),
+    ]);
+    expect(ctx.tables.get("posLocalSyncConflict")).toEqual([
+      expect.objectContaining({
+        _id: "sync_conflict_closeout",
+        status: "resolved",
+      }),
+    ]);
   });
 
   it("does not report success when a scoped review id is no longer present", async () => {

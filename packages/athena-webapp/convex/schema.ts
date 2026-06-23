@@ -673,6 +673,12 @@ const schema = defineSchema({
       "terminalId",
       "localEventId",
     ])
+    .index("by_store_terminal_cloud", [
+      "storeId",
+      "terminalId",
+      "cloudTable",
+      "cloudId",
+    ])
     .index("by_localEventId", ["localEventId"]),
   posLocalSyncConflict: defineTable(posLocalSyncConflictSchema)
     .index("by_store_status", ["storeId", "status"])
@@ -688,6 +694,13 @@ const schema = defineSchema({
       "storeId",
       "terminalId",
       "localRegisterSessionId",
+    ])
+    .index("by_store_terminal_register_status_type", [
+      "storeId",
+      "terminalId",
+      "localRegisterSessionId",
+      "status",
+      "conflictType",
     ]),
   posLocalStaffProof: defineTable(posLocalStaffProofSchema)
     .index("by_tokenHash", ["tokenHash"])

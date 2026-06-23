@@ -521,6 +521,57 @@ describe("submitTerminalRuntimeStatus", () => {
     });
   });
 
+  it("returns a cloud-closed drawer authority directive for closing local runtime evidence", async () => {
+    vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
+    vi.mocked(upsertLatestRuntimeStatus).mockResolvedValue(
+      "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
+    );
+    const db = {
+      normalizeId: vi.fn(() => "cloud-register-1"),
+      get: vi.fn(async () => ({
+        _id: "cloud-register-1",
+        status: "closed",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      })),
+    };
+
+    const result = await submitTerminalRuntimeStatus(
+      { db } as never,
+      {
+        storeId: "store-1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+        status: {
+          ...buildRuntimeStatus(),
+          activeRegisterSession: {
+            cloudRegisterSessionId: "cloud-register-1",
+            localRegisterSessionId: "local-register-1",
+            observedAt: 120,
+            openedAt: 100,
+            registerNumber: "8",
+            status: "closing",
+          },
+        },
+      },
+    );
+
+    expect(db.get).toHaveBeenCalledWith(
+      "registerSession",
+      "cloud-register-1",
+    );
+    expect(result).toEqual({
+      kind: "ok",
+      data: expect.objectContaining({
+        drawerAuthorityDirective: expect.objectContaining({
+          cloudRegisterSessionId: "cloud-register-1",
+          localRegisterSessionId: "local-register-1",
+          reason: "cloud_closed",
+          status: "blocked",
+        }),
+      }),
+    });
+  });
+
   it("ignores malformed cloud register ids in runtime drawer authority evidence", async () => {
     vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
     vi.mocked(upsertLatestRuntimeStatus).mockResolvedValue(

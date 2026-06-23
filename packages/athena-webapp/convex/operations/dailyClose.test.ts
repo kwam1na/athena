@@ -7,6 +7,7 @@ import {
   completeDailyCloseForAutomationWithCtx,
   completeDailyCloseWithCtx,
   getCompletedDailyCloseHistoryDetailWithCtx,
+  getDailyCloseSnapshot,
   getDailyCloseOpeningContextWithCtx,
   listCompletedDailyCloseHistoryWithCtx,
   reopenDailyClose,
@@ -33,6 +34,11 @@ type TableName =
   | "store";
 
 type Row = Record<string, unknown> & { _id: string };
+
+function getHandler<TArgs, TResult>(definition: unknown) {
+  return (definition as { _handler: (ctx: unknown, args: TArgs) => TResult })
+    ._handler;
+}
 
 function createDb(seed: Partial<Record<TableName, Row[]>> = {}) {
   const tables = new Map<TableName, Map<string, Row>>();
@@ -1006,6 +1012,65 @@ describe("end-of-day review backend foundation", () => {
         },
       ]),
     );
+  });
+
+  it("keeps active register blocker metadata on the exported snapshot query", async () => {
+    const { db } = createDb({
+      posTerminal: [
+        {
+          _id: "terminal-1",
+          name: "Front counter terminal",
+          storeId: "store-1",
+        },
+      ],
+      registerSession: [
+        {
+          _id: "register-open",
+          expectedCash: 10000,
+          openedAt: Date.UTC(2026, 4, 7, 10),
+          openingFloat: 10000,
+          registerNumber: "A1",
+          status: "open",
+          storeId: "store-1",
+          terminalId: "terminal-1",
+        },
+      ],
+      store: [store],
+    });
+    const handler = getHandler<
+      {
+        operatingDate: string;
+        storeId: Id<"store">;
+      },
+      Promise<Awaited<ReturnType<typeof buildDailyCloseSnapshotWithCtx>>>
+    >(getDailyCloseSnapshot);
+
+    const snapshot = await handler(
+      { db } as unknown as QueryCtx,
+      {
+        operatingDate: "2026-05-07",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(snapshot.blockers).toHaveLength(1);
+    expect(snapshot.blockers[0]).toMatchObject({
+      category: "register_session",
+      link: {
+        label: "View session",
+        params: { sessionId: "register-open" },
+        to: "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId",
+      },
+      metadata: {
+        expectedCash: 10000,
+        openedAt: Date.UTC(2026, 4, 7, 10),
+        operatingScope: "Opened today",
+        register: "Register A1",
+        status: "open",
+        terminal: "terminal-1",
+      },
+      title: "Register session is still open",
+    });
   });
 
   it("adds explicit applied item-adjustment settlement totals without changing original sale totals", async () => {

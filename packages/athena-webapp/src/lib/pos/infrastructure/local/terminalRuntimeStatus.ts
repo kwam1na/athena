@@ -2,6 +2,7 @@ import type { FunctionArgs } from "convex/server";
 
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
+import { isNonBlockingRegisterLifecycleReviewEvent } from "~/shared/registerSessionLifecyclePolicy";
 
 import {
   POS_LOCAL_STORE_SCHEMA_VERSION,
@@ -676,15 +677,21 @@ function buildSyncMetrics(
   const failedEventCount =
     input.syncDebug?.failedEventCount ??
     input.events.filter((event) => event.sync.status === "failed").length;
+  const statusEvents = input.events.filter(
+    (event) => !isNonBlockingRegisterLifecycleReviewEvent(event),
+  );
   const reviewEventCount =
     input.syncDebug?.reviewEventCount ??
     input.events.filter((event) => event.sync.status === "needs_review").length;
+  const actionableReviewEventCount = statusEvents.filter(
+    (event) => event.sync.status === "needs_review",
+  ).length;
   const localOnlyEventCount =
     input.syncDebug?.localOnlyEventCount ?? localOnlyEvents.length;
   const uploadableEventCount =
     input.syncDebug?.pendingUploadEventCount ?? uploadableEvents.length;
   const status = derivePosLocalSyncStatus({
-    events: input.events,
+    events: statusEvents,
     isOnline: input.browserInfo?.online ?? true,
   });
   const oldestPendingEvent = input.events
@@ -714,9 +721,9 @@ function buildSyncMetrics(
       ? "syncing"
       : mapSyncStatus(status.state, {
           failedEventCount,
-          hasEvents: input.events.length > 0,
+          hasEvents: statusEvents.length > 0,
           localStoreFailureMessage: input.localStoreFailureMessage,
-          reviewEventCount,
+          reviewEventCount: actionableReviewEventCount,
         }),
     uploadableEventCount,
   };

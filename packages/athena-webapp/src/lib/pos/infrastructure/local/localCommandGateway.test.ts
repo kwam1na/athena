@@ -507,7 +507,7 @@ describe("createLocalCommandGateway", () => {
     });
   });
 
-  it("opens a replacement drawer when the active drawer is blocked by lifecycle review", async () => {
+  it("reuses the active local drawer when lifecycle review is still pending", async () => {
     const store = createPosLocalStore({
       adapter: createMemoryPosLocalStorageAdapter(),
       clock: () => 10_000,
@@ -552,8 +552,8 @@ describe("createLocalCommandGateway", () => {
     expect(result).toMatchObject({
       kind: "ok",
       data: {
-        localRegisterSessionId: "local-register-session-2",
-        openingFloat: 500,
+        localRegisterSessionId: "local-register-1",
+        openingFloat: 100,
       },
     });
     const started = await gateway.startSession({
@@ -561,14 +561,14 @@ describe("createLocalCommandGateway", () => {
       terminalId: "terminal-1" as never,
       staffProfileId: "staff-1" as never,
       registerNumber: "1",
-      localRegisterSessionId: "local-register-session-2",
+      localRegisterSessionId: "local-register-1",
     });
 
     expect(started).toMatchObject({
       kind: "ok",
       data: { localPosSessionId: "local-pos-session-2" },
     });
-    expect(onEventAppended).toHaveBeenCalledTimes(2);
+    expect(onEventAppended).toHaveBeenCalledTimes(1);
     await expect(store.listEvents()).resolves.toMatchObject({
       ok: true,
       value: [
@@ -577,11 +577,7 @@ describe("createLocalCommandGateway", () => {
           type: "register.opened",
         }),
         expect.objectContaining({
-          localRegisterSessionId: "local-register-session-2",
-          type: "register.opened",
-        }),
-        expect.objectContaining({
-          localRegisterSessionId: "local-register-session-2",
+          localRegisterSessionId: "local-register-1",
           type: "session.started",
         }),
       ],
@@ -647,6 +643,80 @@ describe("createLocalCommandGateway", () => {
         expect.objectContaining({
           localRegisterSessionId: "local-register-1",
           type: "register.opened",
+        }),
+        expect.objectContaining({
+          localRegisterSessionId: "local-register-session-2",
+          type: "register.opened",
+        }),
+      ],
+    });
+  });
+
+  it("opens a replacement drawer when a submitted closeout is under lifecycle review", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+      clock: () => 10_000,
+    });
+    await store.appendEvent({
+      type: "register.opened",
+      terminalId: "terminal-1",
+      storeId: "store-1",
+      registerNumber: "1",
+      localRegisterSessionId: "local-register-1",
+      staffProfileId: "staff-1",
+      payload: {
+        localRegisterSessionId: "local-register-1",
+        openingFloat: 100,
+      },
+    });
+    await store.appendEvent({
+      type: "register.closeout_started",
+      terminalId: "terminal-1",
+      storeId: "store-1",
+      registerNumber: "1",
+      localRegisterSessionId: "local-register-1",
+      staffProfileId: "staff-1",
+      payload: { countedCash: 100 },
+    });
+    await store.writeDrawerAuthorityState({
+      localRegisterSessionId: "local-register-1",
+      observedAt: 10_010,
+      reason: "lifecycle_rejected",
+      status: "blocked",
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    });
+    const gateway = createLocalCommandGateway({
+      store,
+      clock: () => 20_000,
+      createLocalId: (kind) => `${kind}-2`,
+    });
+
+    const result = await gateway.openDrawer({
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      staffProfileId: "staff-1" as never,
+      registerNumber: "1",
+      openingFloat: 500,
+    });
+
+    expect(result).toMatchObject({
+      kind: "ok",
+      data: {
+        localRegisterSessionId: "local-register-session-2",
+        openingFloat: 500,
+      },
+    });
+    await expect(store.listEvents()).resolves.toMatchObject({
+      ok: true,
+      value: [
+        expect.objectContaining({
+          localRegisterSessionId: "local-register-1",
+          type: "register.opened",
+        }),
+        expect.objectContaining({
+          localRegisterSessionId: "local-register-1",
+          type: "register.closeout_started",
         }),
         expect.objectContaining({
           localRegisterSessionId: "local-register-session-2",

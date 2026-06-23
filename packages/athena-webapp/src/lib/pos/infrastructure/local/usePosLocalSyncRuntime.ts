@@ -9,6 +9,7 @@ import {
   type AthenaWebappRuntimeBuildMetadata,
 } from "@/lib/runtimeBuildMetadata";
 import { isLocalPinVerifierMetadata } from "@/lib/security/localPinVerifier";
+import { isNonBlockingRegisterLifecycleReviewEvent } from "~/shared/registerSessionLifecyclePolicy";
 import {
   createIndexedDbPosLocalStorageAdapter,
   createPosLocalStore,
@@ -1978,6 +1979,10 @@ function collectRuntimeRelevantEvents(events: PosLocalEventRecord[]) {
 }
 
 function isRuntimeRelevantLocalEvent(event: PosLocalEventRecord) {
+  if (isNonBlockingRegisterLifecycleReviewEvent(event)) {
+    return false;
+  }
+
   return (
     isSyncablePosLocalEvent(event) ||
     event.type === "register.opened" ||

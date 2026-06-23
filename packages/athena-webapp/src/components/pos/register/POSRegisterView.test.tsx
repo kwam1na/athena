@@ -3263,6 +3263,7 @@ describe("POSRegisterView", () => {
         canOpenCashControls: true,
         cashControlsRegisterSessionId: "drawer-1",
         hasPendingCloseoutApproval: true,
+        hasSignedInStaff: false,
         isReopeningCloseout: false,
         onReopenRegister: vi.fn(),
         onSignOut,
@@ -3295,8 +3296,8 @@ describe("POSRegisterView", () => {
       screen.getByRole("button", { name: /reopen register/i }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /sign out/i }),
-    ).toBeInTheDocument();
+      screen.queryByRole("button", { name: /sign out/i }),
+    ).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/counted cash/i)).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/closeout notes/i)).not.toBeInTheDocument();
     expect(

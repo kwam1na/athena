@@ -3527,11 +3527,7 @@ export const getDailyCloseSnapshot = query({
     startAt: v.optional(v.number()),
     storeId: v.id("store"),
   },
-  handler: (ctx, args) =>
-    buildDailyCloseSnapshotWithCtx(ctx, {
-      ...args,
-      includeManagerReviewEvidence: false,
-    }),
+  handler: (ctx, args) => buildDailyCloseSnapshotWithCtx(ctx, args),
 });
 
 export const completeDailyClose = mutation({

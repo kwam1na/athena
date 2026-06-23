@@ -3,6 +3,10 @@ import type {
   PosOpenDrawerInput,
 } from "@/lib/pos/application/dto";
 import { ok, userError, type CommandResult } from "~/shared/commandResult";
+import {
+  canOpenReplacementDrawerForLocalBlock,
+  isDrawerAuthoritySaleBlocking,
+} from "~/shared/registerSessionLifecyclePolicy";
 import type { PosLocalSyncPendingCheckoutItemDefinedPayload } from "~/shared/posLocalSyncContract";
 
 import { readProjectedLocalRegisterModel } from "./localRegisterReader";
@@ -167,7 +171,12 @@ export function createLocalCommandGateway(
 
     return {
       ok: true as const,
-      blocked: drawerAuthority.value?.status === "blocked",
+      blocked: isDrawerAuthoritySaleBlocking({
+        activeRegisterSession: {
+          localRegisterSessionId: input.localRegisterSessionId,
+        },
+        drawerAuthority: drawerAuthority.value,
+      }),
     };
   }
 
@@ -440,23 +449,19 @@ export function createLocalCommandGateway(
       if (!existingModel.ok) {
         return toLocalUserError(existingModel.error.message);
       }
-      const isClosedCloudDrawerBlock =
-        existingModel.value.saleBlockReason === "drawer_authority" &&
-        existingModel.value.drawerAuthorityReason === "cloud_closed";
-      const isLifecycleReviewDrawerBlock =
-        existingModel.value.saleBlockReason === "drawer_authority" &&
-        existingModel.value.drawerAuthorityReason === "lifecycle_rejected";
-      const isSettledClosedDrawerBlock =
-        existingModel.value.saleBlockReason === "drawer_closed" &&
-        hasSettledRegisterCloseout({
-          events: existingModel.value.sourceEvents,
-          session: existingModel.value.activeRegisterSession,
-        });
+      const hasSettledCloseout = hasSettledRegisterCloseout({
+        events: existingModel.value.sourceEvents,
+        session: existingModel.value.activeRegisterSession,
+      });
+      const canOpenReplacementDrawer = canOpenReplacementDrawerForLocalBlock({
+        activeRegisterSession: existingModel.value.activeRegisterSession,
+        drawerAuthorityReason: existingModel.value.drawerAuthorityReason,
+        hasSettledCloseout,
+        saleBlockReason: existingModel.value.saleBlockReason,
+      });
       if (
         existingModel.value.saleBlockReason &&
-        !isClosedCloudDrawerBlock &&
-        !isLifecycleReviewDrawerBlock &&
-        !isSettledClosedDrawerBlock
+        !canOpenReplacementDrawer
       ) {
         return toLocalUserError(
           blockedSaleMessage(existingModel.value.saleBlockReason),
@@ -468,10 +473,7 @@ export function createLocalCommandGateway(
         activeRegisterSession &&
         isOpenLocalRegisterSessionStatus(activeRegisterSession.status)
       ) {
-        if (isClosedCloudDrawerBlock) {
-          return appendNewDrawer(input);
-        }
-        if (isLifecycleReviewDrawerBlock) {
+        if (canOpenReplacementDrawer && !existingModel.value.canSell) {
           return appendNewDrawer(input);
         }
         if (!existingModel.value.canSell) {
