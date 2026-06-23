@@ -1237,11 +1237,17 @@ describe("ProcurementViewContent", () => {
     ).toBeInTheDocument();
   });
 
-  it("keeps the workspace empty while procurement data loads", () => {
-    const { container } = render(
+  it("shows only the procurement header while procurement data loads", () => {
+    render(
       <ProcurementViewContent {...baseProps} isLoadingProcurement />,
     );
 
+    expect(screen.getByText("Procurement")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Review stock pressure, create vendor-backed orders, and track receiving in one workspace.",
+      ),
+    ).toBeInTheDocument();
     expect(
       screen.queryByRole("status", {
         name: /loading procurement workspace/i,
@@ -1250,7 +1256,10 @@ describe("ProcurementViewContent", () => {
     expect(
       screen.queryByText("Loading procurement workspace..."),
     ).not.toBeInTheDocument();
-    expect(container).toBeEmptyDOMElement();
+    expect(
+      screen.queryByLabelText("Procurement workspace controls"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Stock pressure")).not.toBeInTheDocument();
   });
 
   it("skips protected procurement queries while auth is still loading", () => {

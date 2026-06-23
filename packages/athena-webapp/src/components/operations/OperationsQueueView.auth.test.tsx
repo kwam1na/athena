@@ -5,6 +5,7 @@ import type { Id } from "~/convex/_generated/dataModel";
 import { OperationsQueueView } from "./OperationsQueueView";
 
 const mockedHooks = vi.hoisted(() => ({
+  useAuth: vi.fn(),
   useMutation: vi.fn(),
   useProtectedAdminPageState: vi.fn(),
   usePermissions: vi.fn(),
@@ -48,6 +49,10 @@ vi.mock("@/hooks/useProtectedAdminPageState", () => ({
   useProtectedAdminPageState: mockedHooks.useProtectedAdminPageState,
 }));
 
+vi.mock("@/hooks/useAuth", () => ({
+  useAuth: mockedHooks.useAuth,
+}));
+
 const readyProtectedState = {
   activeStore: { _id: "store-1" as Id<"store"> },
   canQueryProtectedData: true,
@@ -60,6 +65,10 @@ describe("OperationsQueueView auth readiness", () => {
   beforeEach(() => {
     window.scrollTo = vi.fn();
     vi.clearAllMocks();
+    mockedHooks.useAuth.mockReturnValue({
+      isLoading: false,
+      user: { _id: "user-1" as Id<"athenaUser"> },
+    });
     mockedHooks.useProtectedAdminPageState.mockReturnValue(readyProtectedState);
     mockedHooks.useMutation.mockReturnValue(vi.fn());
     mockedHooks.useQuery.mockReturnValue(undefined);

@@ -164,6 +164,16 @@ const MODE_OPTIONS = [
 
 type ProcurementMode = (typeof MODE_OPTIONS)[number]["value"];
 
+function ProcurementWorkspaceHeader() {
+  return (
+    <PageLevelHeader
+      eyebrow="Stock Ops"
+      title="Procurement"
+      description="Review stock pressure, create vendor-backed orders, and track receiving in one workspace."
+    />
+  );
+}
+
 const PROCUREMENT_MODE_FILTER_OPTIONS = MODE_OPTIONS.map((option) => ({
   label: option.label,
   value: option.value,
@@ -890,7 +900,19 @@ export function ProcurementViewContent({
   }
 
   if (isLoadingProcurement) {
-    return null;
+    return (
+      <View hideBorder hideHeaderBottomBorder>
+        <FadeIn className="container mx-auto h-full min-h-0 overflow-hidden py-layout-xl">
+          <PageWorkspaceGrid className="h-full min-h-0 xl:grid-cols-[minmax(0,1fr)_360px]">
+            <PageWorkspaceMain className="min-h-0 overflow-y-auto overscroll-contain pr-1 scrollbar-hide">
+              <PageWorkspace>
+                <ProcurementWorkspaceHeader />
+              </PageWorkspace>
+            </PageWorkspaceMain>
+          </PageWorkspaceGrid>
+        </FadeIn>
+      </View>
+    );
   }
 
   function addRecommendationToDraft(
@@ -1140,11 +1162,7 @@ export function ProcurementViewContent({
         <PageWorkspaceGrid className="h-full min-h-0 xl:grid-cols-[minmax(0,1fr)_360px]">
           <PageWorkspaceMain className="min-h-0 overflow-y-auto overscroll-contain pr-1 scrollbar-hide">
             <PageWorkspace>
-              <PageLevelHeader
-                eyebrow="Stock Ops"
-                title="Procurement"
-                description="Review stock pressure, create vendor-backed orders, and track receiving in one workspace."
-              />
+              <ProcurementWorkspaceHeader />
 
               <section
                 aria-label="Procurement workspace controls"

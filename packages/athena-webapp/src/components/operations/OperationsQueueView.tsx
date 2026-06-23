@@ -16,6 +16,7 @@ import {
   PageWorkspaceMain,
   PageWorkspaceRail,
 } from "../common/PageLevelHeader";
+import { ListPagination } from "../common/ListPagination";
 import { EmptyState } from "../states/empty/empty-state";
 import { NoPermissionView } from "../states/no-permission/NoPermissionView";
 import { ProtectedAdminSignInView } from "../states/signed-out/ProtectedAdminSignInView";
@@ -61,6 +62,7 @@ const stockOpsApi = api.stockOps;
 const ghsCurrencyFormatter = currencyFormatter("GHS");
 const APPROVAL_DECISION_ACTION_KEY = "operations.approval_request.decide";
 const APPROVAL_PAGE_UNLOCK_TTL_MS = 5 * 60 * 1000;
+const OPEN_WORK_ITEMS_PER_PAGE = 5;
 const UNCATEGORIZED_COUNT_SCOPE_KEY = "__uncategorized";
 
 type QueueWorkItem = {
@@ -588,6 +590,7 @@ type OperationsQueueViewContentProps = {
   isDecidingApprovalRequestId?: string | null;
   isLoadingPermissions: boolean;
   isLoadingQueue: boolean;
+  isLoadingStock?: boolean;
   isSubmittingStockBatch: boolean;
   onDecideApprovalRequest: (args: {
     approvalRequestId: string;
@@ -634,6 +637,7 @@ export function OperationsQueueViewContent({
   isDecidingApprovalRequestId,
   isLoadingPermissions,
   isLoadingQueue,
+  isLoadingStock = isLoadingQueue,
   isSubmittingStockBatch,
   onDecideApprovalRequest,
   onDiscardCycleCountDraft,
@@ -651,8 +655,30 @@ export function OperationsQueueViewContent({
   stockAdjustmentSearch,
   workItems,
 }: OperationsQueueViewContentProps) {
+  const [openWorkPage, setOpenWorkPage] = useState(1);
   const resolvedWorkflow =
     activeWorkflow ?? getDefaultWorkflow({ approvalRequests, workItems });
+  const openWorkPageCount = Math.max(
+    1,
+    Math.ceil(workItems.length / OPEN_WORK_ITEMS_PER_PAGE),
+  );
+  const clampedOpenWorkPage = Math.min(openWorkPage, openWorkPageCount);
+  const openWorkPageStart =
+    (clampedOpenWorkPage - 1) * OPEN_WORK_ITEMS_PER_PAGE;
+  const visibleWorkItems = workItems.slice(
+    openWorkPageStart,
+    openWorkPageStart + OPEN_WORK_ITEMS_PER_PAGE,
+  );
+
+  useEffect(() => {
+    setOpenWorkPage(1);
+  }, [resolvedWorkflow, workItems.length]);
+
+  useEffect(() => {
+    if (openWorkPage <= openWorkPageCount) return;
+
+    setOpenWorkPage(openWorkPageCount);
+  }, [openWorkPage, openWorkPageCount]);
 
   if (isLoadingPermissions) {
     return null;
@@ -662,7 +688,7 @@ export function OperationsQueueViewContent({
     return <NoPermissionView />;
   }
 
-  if (isLoadingQueue) {
+  if (isLoadingQueue && resolvedWorkflow === "approvals") {
     return null;
   }
 
@@ -686,6 +712,7 @@ export function OperationsQueueViewContent({
             cycleCountDraftSummary={cycleCountDraftSummary}
             inventoryItems={inventoryItems}
             isCycleCountDraftSaving={isCycleCountDraftSaving}
+            isLoading={isLoadingStock}
             isSubmitting={isSubmittingStockBatch}
             onDiscardCycleCountDraft={onDiscardCycleCountDraft}
             onRefreshCycleCountDraftLineBaseline={
@@ -709,7 +736,7 @@ export function OperationsQueueViewContent({
               showBackButton
             />
 
-            {workItems.length === 0 ? (
+            {isLoadingQueue ? null : workItems.length === 0 ? (
               <div className="flex min-h-[34rem] items-center justify-center">
                 <div className="max-w-md text-center">
                   <p className="font-display text-2xl font-medium tracking-tight text-foreground">
@@ -746,7 +773,7 @@ export function OperationsQueueViewContent({
 
                   <div className="p-layout-md">
                     <div className="space-y-layout-2xl">
-                      {workItems.map((item) => (
+                      {visibleWorkItems.map((item) => (
                         <QueueWorkItemCard
                           item={item}
                           key={item._id}
@@ -756,6 +783,16 @@ export function OperationsQueueViewContent({
                       ))}
                     </div>
                   </div>
+
+                  {workItems.length > OPEN_WORK_ITEMS_PER_PAGE ? (
+                    <ListPagination
+                      onPageChange={setOpenWorkPage}
+                      page={clampedOpenWorkPage}
+                      pageCount={openWorkPageCount}
+                      pageSize={OPEN_WORK_ITEMS_PER_PAGE}
+                      totalItems={workItems.length}
+                    />
+                  ) : null}
                 </PageWorkspaceMain>
               </PageWorkspaceGrid>
             )}
@@ -2204,6 +2241,7 @@ export function OperationsQueueView({
         isDecidingApprovalRequestId={decisioningApprovalRequestId}
         isLoadingPermissions={false}
         isLoadingQueue={queue === undefined || inventoryItems === undefined}
+        isLoadingStock={inventoryItems === undefined}
         onDiscardCycleCountDraft={handleDiscardCycleCountDraft}
         onDecideApprovalRequest={handleDecideApprovalRequest}
         onLockApprovalDecisions={() => setApprovalDecisionUnlock(null)}
