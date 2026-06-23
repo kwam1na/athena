@@ -8,6 +8,16 @@ Rules:
 - If graphify-out/wiki/index.md exists, navigate it instead of reading raw files
 - After modifying code files in this session, run `bun run graphify:rebuild` to keep the graph current
 
+## tracking
+
+- project_tracker: linear
+- linear_team: yaegars
+- linear_team_key: V26
+- linear_team_id: 1c947ba4-dd56-4973-b205-3424bfdede61
+- linear_project: athena
+- linear_project_id: 0a9f3894-fdbb-45dc-b3ff-000af5ba49cc
+- linear_project_url: https://linear.app/v26-labs/project/athena-22769268c360
+
 ## solutions
 
 Reusable implementation learnings live under docs/solutions/.

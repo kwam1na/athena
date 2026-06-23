@@ -17,12 +17,20 @@ export const ProductStatus = ({
   const inventoryCount = productVariant?.stock ?? product.inventoryCount;
   const quantityAvailable = productVariant?.quantityAvailable ?? inventoryCount;
   const isArchived = product.availability === "archived";
+  const isDraft = product.availability === "draft";
 
   const getBadgeStyles = () => {
     if (isArchived) {
       return {
         bg: "bg-zinc-100 text-zinc-700",
         text: "text-zinc-700",
+      };
+    }
+
+    if (isDraft) {
+      return {
+        bg: "bg-amber-100 text-amber-700",
+        text: "text-amber-700",
       };
     }
 
@@ -66,6 +74,17 @@ export const ProductStatus = ({
         <div className="flex items-center text-xs">
           <Archive className="w-3.5 h-3.5 mr-2 text-zinc-700" />
           <p className={text}>Archived</p>
+        </div>
+      </Badge>
+    );
+  }
+
+  if (isDraft) {
+    return (
+      <Badge variant="outline" className={`${bg}`}>
+        <div className="flex items-center text-xs">
+          <div className="h-2 w-2 mr-2 rounded bg-amber-700" />
+          <p className={text}>Draft</p>
         </div>
       </Badge>
     );

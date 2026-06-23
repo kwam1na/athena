@@ -16,7 +16,9 @@ import {
   getActiveManagerElevationByIdWithCtx,
   getActiveManagerElevationWithCtx,
 } from "../operations/managerElevations";
+import { recordInventoryMovementWithCtx } from "../operations/inventoryMovements";
 import { recordOperationalEventWithCtx } from "../operations/operationalEvents";
+import { recordSkuActivityEventWithCtx } from "../operations/skuActivity";
 import { toSlug } from "../utils";
 import { ok, userError, type CommandResult } from "../../shared/commandResult";
 
@@ -25,7 +27,11 @@ const DEFAULT_SUBCATEGORY_NAME = "Imported inventory";
 const IMPORT_EVENT_TYPE = "inventory_import_applied";
 const REVIEW_VERSION_EVENT_TYPE = "inventory_import_review_version_saved";
 const PROVISIONAL_STAGE_EVENT_TYPE = "inventory_import_provisional_pos_staged";
+const PROVISIONAL_TRUST_FINALIZATION_EVENT_TYPE =
+  "inventory_import_provisional_trusted_finalized";
 const PROVISIONAL_IMPORT_FINALIZATION_LIMIT = 5000;
+const TRUSTED_FINALIZATION_ACTIVE_CHECKOUT_SESSION_LIMIT = 200;
+const TRUSTED_FINALIZATION_CHECKOUT_SESSION_ITEM_LIMIT = 200;
 
 type ProvisionalImportIdentity = {
   productId: Id<"product">;
@@ -156,6 +162,70 @@ export type ProvisionalInventoryImportStageSummary = {
   rowsSkipped: number;
   rowsStaged: number;
   trustedStockRowsUpdated: 0;
+};
+
+export type ProductPageProvisionalSkuBinding =
+  | {
+      activeRowCount: 0;
+      state: "none";
+    }
+  | {
+      activeRowCount: number;
+      state: "ambiguous";
+    }
+  | {
+      activeRowCount: 0;
+      message: string;
+      state: "unauthorized";
+    }
+  | {
+      activeRowCount: 1;
+      row: {
+        _id: Id<"inventoryImportProvisionalSku">;
+        importKey: string;
+        importedQuantity: number;
+        lastPosTransactionId?: Id<"posTransaction">;
+        lastRegisterSessionId?: Id<"registerSession">;
+        lastSoldAt?: number;
+        posExposureStatus: "available" | "hidden";
+        provisionalSoldQuantity: number;
+        reviewVersionId: Id<"inventoryImportReviewVersion">;
+        reviewVersionNumber: number;
+        rowKey: string;
+        rowNumber: number;
+        saleCount: number;
+        updatedAt: number;
+      };
+      saleEvidenceFingerprint: string;
+      state: "unique";
+      trustedSkuFingerprint: string;
+    };
+
+export type ProductPageTrustedInventoryFinalizationArgs = {
+  conversionRequestId: string;
+  productId: Id<"product">;
+  productSkuId: Id<"productSku">;
+  provisionalSkuId: Id<"inventoryImportProvisionalSku">;
+  reviewedInventoryCount: number;
+  reviewedIsVisible: boolean;
+  reviewedNetPrice?: number;
+  reviewedPrice: number;
+  reviewedQuantityAvailable: number;
+  reviewedUnitCost?: number;
+  saleEvidenceFingerprint: string;
+  sourceSurface: "product_edit";
+  storeId: Id<"store">;
+  trustedSkuFingerprint: string;
+};
+
+export type ProductPageTrustedInventoryFinalizationResult = {
+  finalTrustedQuantity: number;
+  inventoryMovementId?: Id<"inventoryMovement">;
+  productId: Id<"product">;
+  productSkuId: Id<"productSku">;
+  provisionalSkuId: Id<"inventoryImportProvisionalSku">;
+  provisionalSoldQuantity: number;
+  quantityAvailable: number;
 };
 
 type ImportAccess = {
@@ -860,6 +930,688 @@ export const listInventoryImportReviewSkuContext = query({
   },
 });
 
+export const listProductPageProvisionalSkuBinding = query({
+  args: {
+    managerElevationId: v.optional(v.id("managerElevation")),
+    productSkuId: v.id("productSku"),
+    refreshNonce: v.optional(v.number()),
+    storeId: v.id("store"),
+    terminalId: v.optional(v.id("posTerminal")),
+  },
+  returns: v.any(),
+  async handler(ctx, args) {
+    try {
+      const access = await requireInventoryImportAccess(ctx, args);
+      return listProductPageProvisionalSkuBindingWithCtx(ctx, args, access);
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Inventory import permission is required to finalize trusted inventory.";
+
+      if (isInventoryImportAccessError(message)) {
+        return {
+          activeRowCount: 0,
+          message:
+            "Inventory import permission is required to finalize trusted inventory.",
+          state: "unauthorized" as const,
+        };
+      }
+
+      throw error;
+    }
+  },
+});
+
+export const finalizeTrustedInventoryFromProductPage = mutation({
+  args: {
+    conversionRequestId: v.string(),
+    managerElevationId: v.optional(v.id("managerElevation")),
+    productId: v.id("product"),
+    productSkuId: v.id("productSku"),
+    provisionalSkuId: v.id("inventoryImportProvisionalSku"),
+    reviewedInventoryCount: v.number(),
+    reviewedIsVisible: v.boolean(),
+    reviewedNetPrice: v.optional(v.number()),
+    reviewedPrice: v.number(),
+    reviewedQuantityAvailable: v.number(),
+    reviewedUnitCost: v.optional(v.number()),
+    saleEvidenceFingerprint: v.string(),
+    sourceSurface: v.literal("product_edit"),
+    storeId: v.id("store"),
+    terminalId: v.optional(v.id("posTerminal")),
+    trustedSkuFingerprint: v.string(),
+  },
+  returns: commandResultValidator(v.any()),
+  async handler(ctx, args) {
+    try {
+      const access = await requireInventoryImportAccess(ctx, args);
+      return finalizeTrustedInventoryFromProductPageWithCtx(ctx, args, access);
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Trusted inventory was not finalized.";
+
+      if (isInventoryImportAccessError(message)) {
+        return userError({ code: "authorization_failed", message });
+      }
+
+      throw error;
+    }
+  },
+});
+
+export async function listProductPageProvisionalSkuBindingWithCtx(
+  ctx: Pick<QueryCtx | MutationCtx, "db">,
+  args: {
+    productSkuId: Id<"productSku">;
+    storeId: Id<"store">;
+  },
+  _access: ImportAccess,
+): Promise<ProductPageProvisionalSkuBinding> {
+  const rows = await ctx.db
+    .query("inventoryImportProvisionalSku")
+    .withIndex("by_storeId_productSkuId_status", (q) =>
+      q
+        .eq("storeId", args.storeId)
+        .eq("productSkuId", args.productSkuId)
+        .eq("status", "active"),
+    )
+    .take(2);
+
+  if (rows.length === 0) {
+    return { activeRowCount: 0, state: "none" };
+  }
+
+  if (rows.length > 1) {
+    return { activeRowCount: rows.length, state: "ambiguous" };
+  }
+
+  const row = rows[0];
+  const productSku = row.productSkuId
+    ? await ctx.db.get("productSku", row.productSkuId)
+    : null;
+
+  if (!productSku || productSku.storeId !== args.storeId) {
+    return { activeRowCount: 0, state: "none" };
+  }
+
+  return {
+    activeRowCount: 1,
+    row: {
+      _id: row._id,
+      importKey: row.importKey,
+      importedQuantity: row.importedQuantity,
+      lastPosTransactionId: row.saleEvidence.lastPosTransactionId,
+      lastRegisterSessionId: row.saleEvidence.lastRegisterSessionId,
+      lastSoldAt: row.saleEvidence.lastSoldAt,
+      posExposureStatus: row.posExposureStatus,
+      provisionalSoldQuantity: row.saleEvidence.totalQuantitySold,
+      reviewVersionId: row.reviewVersionId,
+      reviewVersionNumber: row.reviewVersionNumber,
+      rowKey: row.rowKey,
+      rowNumber: row.rowNumber,
+      saleCount: row.saleEvidence.saleCount,
+      updatedAt: row.updatedAt,
+    },
+    saleEvidenceFingerprint: buildSaleEvidenceFingerprint(row),
+    state: "unique",
+    trustedSkuFingerprint: buildTrustedSkuFingerprint(productSku),
+  };
+}
+
+export async function finalizeTrustedInventoryFromProductPageWithCtx(
+  ctx: MutationCtx,
+  args: ProductPageTrustedInventoryFinalizationArgs,
+  access: ImportAccess,
+): Promise<CommandResult<ProductPageTrustedInventoryFinalizationResult>> {
+  const normalizedArgs = {
+    ...args,
+    conversionRequestId: args.conversionRequestId.trim(),
+  };
+  const payloadHash = buildProductPageFinalizationPayloadHash(normalizedArgs);
+
+  if (!normalizedArgs.conversionRequestId) {
+    return userError({
+      code: "validation_failed",
+      message: "Finalization request id is required.",
+    });
+  }
+
+  const existingFinalization = await findProvisionalRowByConversionRequestId(
+    ctx,
+    {
+      conversionRequestId: normalizedArgs.conversionRequestId,
+      storeId: normalizedArgs.storeId,
+    },
+  );
+
+  if (existingFinalization) {
+    if (existingFinalization.finalizationRequestPayloadHash !== payloadHash) {
+      return userError({
+        code: "conflict",
+        message:
+          "This trusted inventory finalization request was already used with different reviewed values.",
+      });
+    }
+
+    const storedResult = existingFinalization.finalizationResult as
+      | ProductPageTrustedInventoryFinalizationResult
+      | undefined;
+    if (storedResult) return ok(storedResult);
+  }
+
+  const validation = await validateProductPageTrustedInventoryFinalization(
+    ctx,
+    normalizedArgs,
+    access,
+  );
+
+  if (validation.kind === "user_error") return validation;
+
+  const {
+    activeRow,
+    finalizationResultBase,
+    metadata,
+    now,
+    previousInventoryCount,
+    productSkuPatch,
+  } = validation.data;
+
+  await ctx.db.patch("productSku", normalizedArgs.productSkuId, productSkuPatch);
+
+  let inventoryMovementId: Id<"inventoryMovement"> | undefined;
+  const stockDelta = normalizedArgs.reviewedInventoryCount - previousInventoryCount;
+  if (stockDelta !== 0) {
+    const movement = await recordInventoryMovementWithCtx(ctx, {
+      actorUserId: access.athenaUser._id,
+      movementType: "provisional_import_finalization",
+      notes: "Trusted inventory finalized from product edit.",
+      organizationId: access.store.organizationId,
+      productId: normalizedArgs.productId,
+      productSkuId: normalizedArgs.productSkuId,
+      quantityDelta: stockDelta,
+      reasonCode: "trusted_inventory_conversion",
+      sourceId: String(activeRow._id),
+      sourceType: "inventory_import_provisional_sku",
+      storeId: normalizedArgs.storeId,
+    });
+    inventoryMovementId = movement?._id;
+  }
+
+  const finalizationResult = {
+    ...finalizationResultBase,
+    ...(inventoryMovementId ? { inventoryMovementId } : null),
+  };
+
+  await ctx.db.patch("inventoryImportProvisionalSku", activeRow._id, {
+    finalQuantityAvailable: normalizedArgs.reviewedQuantityAvailable,
+    finalTrustedQuantity: normalizedArgs.reviewedInventoryCount,
+    finalizationConversionRequestId: normalizedArgs.conversionRequestId,
+    finalizationRequestPayloadHash: payloadHash,
+    finalizationResult,
+    finalizationSaleEvidenceFingerprint: normalizedArgs.saleEvidenceFingerprint,
+    finalizationSourceSurface: normalizedArgs.sourceSurface,
+    finalizationTrustedSkuFingerprint: normalizedArgs.trustedSkuFingerprint,
+    finalizedAt: now,
+    finalizedByUserId: access.athenaUser._id,
+    hiddenAt: now,
+    posExposureStatus: "hidden",
+    provisionalSoldQuantityAtFinalization: activeRow.saleEvidence.totalQuantitySold,
+    status: "finalized",
+    updatedAt: now,
+  });
+
+  await recomputeProductInventory(ctx, normalizedArgs.productId);
+
+  await recordSkuActivityEventWithCtx(ctx, {
+    actorUserId: access.athenaUser._id,
+    activityType: "provisional_import_trusted_finalization",
+    idempotencyKey: `inventoryImportProvisionalSku:${activeRow._id}:${normalizedArgs.conversionRequestId}`,
+    metadata,
+    occurredAt: now,
+    organizationId: access.store.organizationId,
+    productId: normalizedArgs.productId,
+    productSkuId: normalizedArgs.productSkuId,
+    sourceId: String(activeRow._id),
+    sourceLabel: "Product edit trusted inventory finalization",
+    sourceType: "inventory_import_provisional_sku",
+    status: "committed",
+    stockQuantityDelta: stockDelta,
+    storeId: normalizedArgs.storeId,
+  });
+
+  await recordOperationalEventWithCtx(ctx, {
+    actorUserId: access.athenaUser._id,
+    eventType: PROVISIONAL_TRUST_FINALIZATION_EVENT_TYPE,
+    message: `${getActorLabel(access.athenaUser)} finalized trusted inventory for one legacy import SKU.`,
+    metadata,
+    organizationId: access.store.organizationId,
+    storeId: normalizedArgs.storeId,
+    subjectId: String(activeRow._id),
+    subjectLabel: "Legacy import SKU",
+    subjectType: "inventory_import_provisional_sku",
+  });
+
+  return ok(finalizationResult);
+}
+
+async function validateProductPageTrustedInventoryFinalization(
+  ctx: MutationCtx,
+  args: ProductPageTrustedInventoryFinalizationArgs,
+  access: ImportAccess,
+): Promise<
+  CommandResult<{
+    activeRow: Doc<"inventoryImportProvisionalSku">;
+    finalizationResultBase: ProductPageTrustedInventoryFinalizationResult;
+    metadata: Record<string, unknown>;
+    now: number;
+    previousInventoryCount: number;
+    productSkuPatch: Partial<Doc<"productSku">>;
+  }>
+> {
+  if (args.storeId !== access.store._id) {
+    return userError({
+      code: "authorization_failed",
+      message: "Store access is required to finalize trusted inventory.",
+    });
+  }
+
+  const fieldError = validateReviewedTrustedInventoryFields(args);
+  if (fieldError) return fieldError;
+
+  const [product, productSku, submittedRow] = await Promise.all([
+    ctx.db.get("product", args.productId),
+    ctx.db.get("productSku", args.productSkuId),
+    ctx.db.get("inventoryImportProvisionalSku", args.provisionalSkuId),
+  ]);
+
+  if (!product || product.storeId !== args.storeId) {
+    return userError({
+      code: "not_found",
+      message: "Product could not be found for this store.",
+    });
+  }
+
+  if (
+    !productSku ||
+    productSku.storeId !== args.storeId ||
+    productSku.productId !== product._id
+  ) {
+    return userError({
+      code: "not_found",
+      message: "SKU could not be found for this product and store.",
+    });
+  }
+
+  if (
+    !submittedRow ||
+    submittedRow.storeId !== args.storeId ||
+    submittedRow.productId !== args.productId ||
+    submittedRow.productSkuId !== args.productSkuId ||
+    submittedRow.status !== "active"
+  ) {
+    return userError({
+      code: "precondition_failed",
+      message: "No active provisional import row is linked to this SKU.",
+    });
+  }
+
+  const binding = await listProductPageProvisionalSkuBindingWithCtx(
+    ctx,
+    {
+      productSkuId: args.productSkuId,
+      storeId: args.storeId,
+    },
+    access,
+  );
+
+  if (binding.state === "none") {
+    return userError({
+      code: "precondition_failed",
+      message: "No active provisional import row is linked to this SKU.",
+    });
+  }
+
+  if (binding.state === "ambiguous") {
+    return userError({
+      code: "precondition_failed",
+      message:
+        "Multiple active provisional import rows are linked to this SKU. Resolve the import rows before finalizing.",
+    });
+  }
+
+  if (binding.state === "unauthorized") {
+    return userError({
+      code: "authorization_failed",
+      message: binding.message,
+    });
+  }
+
+  if (binding.row._id !== args.provisionalSkuId) {
+    return userError({
+      code: "precondition_failed",
+      message: "The provisional import row no longer matches this SKU.",
+    });
+  }
+
+  if (binding.saleEvidenceFingerprint !== args.saleEvidenceFingerprint) {
+    return userError({
+      code: "conflict",
+      message: "Provisional sales changed. Refresh and review the counts again.",
+    });
+  }
+
+  const trustedFingerprintMatches =
+    binding.trustedSkuFingerprint === args.trustedSkuFingerprint;
+  const submittedValuesAlreadyPersisted = trustedSkuMatchesReviewedPayload(
+    productSku,
+    args,
+  );
+
+  if (!trustedFingerprintMatches && !submittedValuesAlreadyPersisted) {
+    return userError({
+      code: "conflict",
+      message: "Trusted SKU fields changed. Refresh and review the SKU again.",
+    });
+  }
+
+  const reservationBlock = await readFinalizationReservationBlock(ctx, args);
+  if (reservationBlock) return reservationBlock;
+
+  const now = Date.now();
+  const metadata = buildProductPageFinalizationMetadata({
+    access,
+    args,
+    product,
+    productSku,
+    provisionalSku: submittedRow,
+  });
+  const finalizationResultBase = {
+    finalTrustedQuantity: args.reviewedInventoryCount,
+    productId: args.productId,
+    productSkuId: args.productSkuId,
+    provisionalSkuId: args.provisionalSkuId,
+    provisionalSoldQuantity: submittedRow.saleEvidence.totalQuantitySold,
+    quantityAvailable: args.reviewedQuantityAvailable,
+  };
+
+  return ok({
+    activeRow: submittedRow,
+    finalizationResultBase,
+    metadata,
+    now,
+    previousInventoryCount: productSku.inventoryCount,
+    productSkuPatch: omitUndefined({
+      inventoryCount: args.reviewedInventoryCount,
+      isVisible: args.reviewedIsVisible,
+      netPrice: args.reviewedNetPrice,
+      price: args.reviewedPrice,
+      quantityAvailable: args.reviewedQuantityAvailable,
+      unitCost: args.reviewedUnitCost,
+    }),
+  });
+}
+
+function validateReviewedTrustedInventoryFields(
+  args: ProductPageTrustedInventoryFinalizationArgs,
+): CommandResult<never> | null {
+  if (!Number.isInteger(args.reviewedInventoryCount) || args.reviewedInventoryCount < 0) {
+    return userError({
+      code: "validation_failed",
+      message: "Stock must be a non-negative whole number.",
+    });
+  }
+
+  if (
+    !Number.isInteger(args.reviewedQuantityAvailable) ||
+    args.reviewedQuantityAvailable < 0
+  ) {
+    return userError({
+      code: "validation_failed",
+      message: "Quantity available must be a non-negative whole number.",
+    });
+  }
+
+  if (args.reviewedQuantityAvailable > args.reviewedInventoryCount) {
+    return userError({
+      code: "validation_failed",
+      message: "Quantity available cannot exceed stock.",
+    });
+  }
+
+  if (!args.reviewedIsVisible) {
+    return userError({
+      code: "precondition_failed",
+      message: "Make this SKU visible before finalizing trusted inventory.",
+    });
+  }
+
+  if (!Number.isFinite(args.reviewedPrice) || args.reviewedPrice <= 0) {
+    return userError({
+      code: "validation_failed",
+      message: "Price is required before finalizing trusted inventory.",
+    });
+  }
+
+  if (
+    args.reviewedNetPrice !== undefined &&
+    (!Number.isFinite(args.reviewedNetPrice) || args.reviewedNetPrice < 0)
+  ) {
+    return userError({
+      code: "validation_failed",
+      message: "Net price must be zero or greater.",
+    });
+  }
+
+  if (
+    args.reviewedUnitCost !== undefined &&
+    (!Number.isFinite(args.reviewedUnitCost) || args.reviewedUnitCost < 0)
+  ) {
+    return userError({
+      code: "validation_failed",
+      message: "Unit cost must be zero or greater.",
+    });
+  }
+
+  return null;
+}
+
+async function findProvisionalRowByConversionRequestId(
+  ctx: Pick<QueryCtx | MutationCtx, "db">,
+  args: {
+    conversionRequestId: string;
+    storeId: Id<"store">;
+  },
+) {
+  return ctx.db
+    .query("inventoryImportProvisionalSku")
+    .withIndex("by_storeId_finalizationConversionRequestId", (q) =>
+      q
+        .eq("storeId", args.storeId)
+        .eq("finalizationConversionRequestId", args.conversionRequestId),
+    )
+    .first();
+}
+
+async function readFinalizationReservationBlock(
+  ctx: MutationCtx,
+  args: Pick<ProductPageTrustedInventoryFinalizationArgs, "productSkuId" | "storeId">,
+): Promise<CommandResult<never> | null> {
+  const now = Date.now();
+  const activePosHold = await ctx.db
+    .query("inventoryHold")
+    .withIndex("by_storeId_productSkuId_status_expiresAt", (q) =>
+      q
+        .eq("storeId", args.storeId)
+        .eq("productSkuId", args.productSkuId)
+        .eq("status", "active")
+        .gt("expiresAt", now),
+    )
+    .first();
+
+  if (activePosHold) {
+    return userError({
+      code: "precondition_failed",
+      message: "Clear active POS holds before finalizing this SKU.",
+    });
+  }
+
+  const activeSessionCandidates = await ctx.db
+    .query("checkoutSession")
+    .withIndex("by_storeId_hasCompletedCheckoutSession_expiresAt", (q) =>
+      q
+        .eq("storeId", args.storeId)
+        .eq("hasCompletedCheckoutSession", false)
+        .gt("expiresAt", now),
+    )
+    .take(TRUSTED_FINALIZATION_ACTIVE_CHECKOUT_SESSION_LIMIT + 1);
+
+  if (
+    activeSessionCandidates.length >
+    TRUSTED_FINALIZATION_ACTIVE_CHECKOUT_SESSION_LIMIT
+  ) {
+    return userError({
+      code: "precondition_failed",
+      message:
+        "Clear active checkout reservations before finalizing this SKU.",
+    });
+  }
+
+  for (const session of activeSessionCandidates) {
+    const items = await ctx.db
+      .query("checkoutSessionItem")
+      .withIndex("by_sessionId", (q) => q.eq("sesionId", session._id))
+      .take(TRUSTED_FINALIZATION_CHECKOUT_SESSION_ITEM_LIMIT + 1);
+
+    if (items.length > TRUSTED_FINALIZATION_CHECKOUT_SESSION_ITEM_LIMIT) {
+      return userError({
+        code: "precondition_failed",
+        message: "Clear active checkout reservations before finalizing this SKU.",
+      });
+    }
+
+    if (items.some((item) => item.productSkuId === args.productSkuId)) {
+      return userError({
+        code: "precondition_failed",
+        message: "Clear active checkout reservations before finalizing this SKU.",
+      });
+    }
+  }
+
+  return null;
+}
+
+function trustedSkuMatchesReviewedPayload(
+  productSku: Doc<"productSku">,
+  args: ProductPageTrustedInventoryFinalizationArgs,
+) {
+  return (
+    productSku.inventoryCount === args.reviewedInventoryCount &&
+    productSku.quantityAvailable === args.reviewedQuantityAvailable &&
+    productSku.price === args.reviewedPrice &&
+    productSku.netPrice === args.reviewedNetPrice &&
+    productSku.unitCost === args.reviewedUnitCost &&
+    productSku.isVisible === args.reviewedIsVisible
+  );
+}
+
+function buildSaleEvidenceFingerprint(row: Doc<"inventoryImportProvisionalSku">) {
+  return stableStringify({
+    lastPosTransactionId: row.saleEvidence.lastPosTransactionId,
+    lastRegisterSessionId: row.saleEvidence.lastRegisterSessionId,
+    lastSoldAt: row.saleEvidence.lastSoldAt,
+    saleCount: row.saleEvidence.saleCount,
+    totalQuantitySold: row.saleEvidence.totalQuantitySold,
+    updatedAt: row.updatedAt,
+  });
+}
+
+function buildTrustedSkuFingerprint(productSku: Doc<"productSku">) {
+  return stableStringify({
+    inventoryCount: productSku.inventoryCount,
+    isVisible: productSku.isVisible,
+    netPrice: productSku.netPrice,
+    price: productSku.price,
+    quantityAvailable: productSku.quantityAvailable,
+    unitCost: productSku.unitCost,
+    updatedAt: (productSku as { updatedAt?: number }).updatedAt,
+  });
+}
+
+function buildProductPageFinalizationPayloadHash(
+  args: ProductPageTrustedInventoryFinalizationArgs,
+) {
+  return stableStringify({
+    productId: args.productId,
+    productSkuId: args.productSkuId,
+    provisionalSkuId: args.provisionalSkuId,
+    reviewedInventoryCount: args.reviewedInventoryCount,
+    reviewedIsVisible: args.reviewedIsVisible,
+    reviewedNetPrice: args.reviewedNetPrice,
+    reviewedPrice: args.reviewedPrice,
+    reviewedQuantityAvailable: args.reviewedQuantityAvailable,
+    reviewedUnitCost: args.reviewedUnitCost,
+    saleEvidenceFingerprint: args.saleEvidenceFingerprint,
+    sourceSurface: args.sourceSurface,
+    storeId: args.storeId,
+    trustedSkuFingerprint: args.trustedSkuFingerprint,
+  });
+}
+
+function buildProductPageFinalizationMetadata(args: {
+  access: ImportAccess;
+  args: ProductPageTrustedInventoryFinalizationArgs;
+  product: Doc<"product">;
+  productSku: Doc<"productSku">;
+  provisionalSku: Doc<"inventoryImportProvisionalSku">;
+}) {
+  return {
+    actorUserId: String(args.access.athenaUser._id),
+    conversionRequestId: args.args.conversionRequestId,
+    finalTrustedQuantity: args.args.reviewedInventoryCount,
+    importKey: args.provisionalSku.importKey,
+    lastPosTransactionId: args.provisionalSku.saleEvidence.lastPosTransactionId,
+    lastRegisterSessionId: args.provisionalSku.saleEvidence.lastRegisterSessionId,
+    lastSoldAt: args.provisionalSku.saleEvidence.lastSoldAt,
+    productId: args.product._id,
+    productSkuId: args.productSku._id,
+    provisionalSkuId: args.provisionalSku._id,
+    provisionalSoldQuantity:
+      args.provisionalSku.saleEvidence.totalQuantitySold,
+    quantityAvailable: args.args.reviewedQuantityAvailable,
+    reviewVersionId: args.provisionalSku.reviewVersionId,
+    reviewVersionNumber: args.provisionalSku.reviewVersionNumber,
+    saleCount: args.provisionalSku.saleEvidence.saleCount,
+    saleEvidenceFingerprint: args.args.saleEvidenceFingerprint,
+    sourceSurface: args.args.sourceSurface,
+    trustedSkuFingerprint: args.args.trustedSkuFingerprint,
+  };
+}
+
+function omitUndefined<T extends Record<string, unknown>>(value: T) {
+  return Object.fromEntries(
+    Object.entries(value).filter(([, entry]) => entry !== undefined),
+  ) as T;
+}
+
+function stableStringify(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => stableStringify(item)).join(",")}]`;
+  }
+
+  if (value && typeof value === "object") {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .filter(([, item]) => item !== undefined)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, item]) => `${JSON.stringify(key)}:${stableStringify(item)}`)
+      .join(",")}}`;
+  }
+
+  return JSON.stringify(value);
+}
+
 async function requireInventoryImportAccess(
   ctx: InventoryImportAccessCtx,
   args: {
@@ -924,6 +1676,18 @@ async function requireInventoryImportAccess(
   }
 
   return { athenaUser, store };
+}
+
+function isInventoryImportAccessError(message: string) {
+  return (
+    message === "Authentication required." ||
+    message === "Sign in again to continue." ||
+    message === "Manager elevation is required before importing inventory." ||
+    message === "Terminal context is required before using manager elevation." ||
+    message === "You do not have permission to import inventory." ||
+    message === "Athena user not found." ||
+    message === "Store not found."
+  );
 }
 
 function requireTerminalContextForManagerElevation(args: {

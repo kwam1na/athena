@@ -177,6 +177,71 @@ describe("SKU activity ledger helpers", () => {
     expect(tables.skuActivityEvent).toHaveLength(1);
   });
 
+  it("records product-page trusted conversion evidence for support review", async () => {
+    const { ctx, tables } = createIndexedDb({
+      productSku: new Map([
+        [
+          "sku-1",
+          {
+            _id: "sku-1",
+            inventoryCount: 10,
+            productId: "product-1",
+            quantityAvailable: 8,
+            sku: "CW-18",
+            storeId: "store-1",
+          },
+        ],
+      ]),
+    });
+
+    const event = await recordSkuActivityEventWithCtx(ctx, {
+      activityType: "legacy_import_trusted_inventory_finalized",
+      idempotencyKey: "product-page-conversion:request-1",
+      metadata: {
+        conversionRequestId: "request-1",
+        finalTrustedQuantity: 10,
+        importKey: "legacy-review-1",
+        lastPosTransactionId: "pos-transaction-1",
+        lastRegisterSessionId: "register-session-1",
+        provisionalSoldQuantity: 2,
+        reviewVersionId: "review-version-1",
+        reviewVersionNumber: 1,
+        saleCount: 1,
+        saleEvidenceFingerprint: "sale-evidence:v1",
+        sourceSurface: "product_edit",
+        trustedSkuFingerprint: "trusted-sku:v1",
+      },
+      occurredAt: 1_000,
+      productId: "product-1" as Id<"product">,
+      productSkuId: "sku-1" as Id<"productSku">,
+      quantityDelta: 0,
+      sourceId: "provisional-1",
+      sourceType: "inventoryImportProvisionalSku",
+      status: "committed",
+      stockQuantityDelta: 0,
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(event).toMatchObject({
+      activityType: "legacy_import_trusted_inventory_finalized",
+      idempotencyKey: "product-page-conversion:request-1",
+      productSkuId: "sku-1",
+      sourceId: "provisional-1",
+      sourceType: "inventoryImportProvisionalSku",
+      status: "committed",
+      metadata: expect.objectContaining({
+        conversionRequestId: "request-1",
+        finalTrustedQuantity: 10,
+        importKey: "legacy-review-1",
+        provisionalSoldQuantity: 2,
+        saleEvidenceFingerprint: "sale-evidence:v1",
+        sourceSurface: "product_edit",
+        trustedSkuFingerprint: "trusted-sku:v1",
+      }),
+    });
+    expect(tables.skuActivityEvent).toHaveLength(1);
+  });
+
   it("rejects events for SKUs outside the source store", async () => {
     const { ctx } = createIndexedDb({
       productSku: new Map([

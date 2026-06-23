@@ -686,6 +686,103 @@ describe("listRegisterCatalog", () => {
     );
   });
 
+  it("uses trusted POS policy after product-page provisional import finalization", async () => {
+    const { ctx } = createRegisterCatalogCtx({
+      category: [
+        {
+          _id: "category-store-a",
+          storeId: "store-a",
+          name: "Imports",
+          slug: "imports",
+        },
+      ],
+      inventoryImportProvisionalSku: [
+        {
+          _id: "provisional-finalized-product-page",
+          storeId: "store-a",
+          status: "finalized",
+          posExposureStatus: "hidden",
+          productId: "product-finalized",
+          productSkuId: "sku-finalized",
+          importedProductName: "Reviewed Closure",
+          importedSku: "LEGACY-CLOSURE",
+          importedBarcode: "123FINAL",
+          importedPrice: 85000,
+          importedQuantity: 12,
+          finalTrustedQuantity: 10,
+          provisionalSoldQuantityAtFinalization: 2,
+        },
+      ],
+      product: [
+        {
+          _id: "product-finalized",
+          storeId: "store-a",
+          categoryId: "category-store-a",
+          description: "Reviewed import anchor",
+          name: "Reviewed Closure",
+          availability: "live",
+          isVisible: true,
+        },
+      ],
+      productSku: [
+        {
+          _id: "sku-finalized",
+          storeId: "store-a",
+          productId: "product-finalized",
+          sku: "ATHENA-FINALIZED-CLOSURE",
+          barcode: "123FINAL",
+          images: [],
+          isVisible: true,
+          price: 85000,
+          quantityAvailable: 8,
+        },
+      ],
+    });
+
+    await expect(
+      listRegisterCatalog(ctx, {
+        storeId: "store-a" as Id<"store">,
+      }),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        productSkuId: "sku-finalized",
+        name: "Reviewed Closure",
+        sku: "ATHENA-FINALIZED-CLOSURE",
+        barcode: "123FINAL",
+        price: 85000,
+        availabilityPolicy: "trusted_inventory",
+      }),
+    ]);
+
+    const availability = await listRegisterCatalogAvailability(ctx, {
+      storeId: "store-a" as Id<"store">,
+      productSkuIds: ["sku-finalized"] as Array<Id<"productSku">>,
+    });
+    expect(availability).toEqual([
+      {
+        productSkuId: "sku-finalized",
+        skuId: "sku-finalized",
+        inStock: true,
+        quantityAvailable: 8,
+        availabilityPolicy: "trusted_inventory",
+      },
+    ]);
+    expect(availability[0]).not.toHaveProperty("inventoryImportProvisionalSkuId");
+
+    const snapshot = await listRegisterCatalogAvailabilitySnapshot(ctx, {
+      storeId: "store-a" as Id<"store">,
+    });
+    expect(snapshot).toEqual([
+      expect.objectContaining({
+        productSkuId: "sku-finalized",
+        availabilityPolicy: "trusted_inventory",
+        inStock: true,
+        quantityAvailable: 8,
+      }),
+    ]);
+    expect(snapshot[0]).not.toHaveProperty("inventoryImportProvisionalSkuId");
+  });
+
   it("does not rely on pagination for large register catalog snapshots", async () => {
     const products = Array.from({ length: 505 }, (_, index) => ({
       _id: `product-${index}`,

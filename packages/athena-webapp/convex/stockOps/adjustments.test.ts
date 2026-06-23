@@ -685,6 +685,33 @@ describe("stock ops adjustments", () => {
     ]);
   });
 
+  it("does not block stock adjustments after a legacy import SKU is finalized", async () => {
+    const { ctx, tables } = createInventorySnapshotQueryCtx();
+
+    tables.inventoryImportProvisionalSku.set("provisional-1", {
+      _id: "provisional-1",
+      finalTrustedQuantity: 10,
+      finalizedAt: 1_000,
+      posExposureStatus: "hidden",
+      productSkuId: "sku-1",
+      provisionalSoldQuantityAtFinalization: 2,
+      status: "finalized",
+      storeId: "store-1",
+    });
+
+    const rows = await listInventorySnapshotWithCtx(ctx, {
+      now: 1_000,
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(rows).toEqual([
+      expect.objectContaining({
+        stockAdjustmentBlockedMessage: null,
+        stockAdjustmentBlockedReason: null,
+      }),
+    ]);
+  });
+
   it("marks unresolved POS pending checkout SKUs as blocked for stock adjustments", async () => {
     const { ctx, tables } = createInventorySnapshotQueryCtx();
 
@@ -1039,6 +1066,55 @@ describe("stock ops adjustments", () => {
     });
     expect(tables.inventoryMovement.size).toBe(0);
     expect(tables.stockAdjustmentBatch.size).toBe(0);
+  });
+
+  it("allows normal stock adjustments once a legacy import SKU has been finalized", async () => {
+    const { ctx, tables } = createSubmissionMutationCtx({
+      authUserId: "auth-user-1",
+      membershipRole: "full_admin",
+    });
+
+    tables.inventoryImportProvisionalSku.set("provisional-1", {
+      _id: "provisional-1",
+      finalTrustedQuantity: 8,
+      finalizedAt: 1_000,
+      posExposureStatus: "hidden",
+      productSkuId: "sku-1",
+      provisionalSoldQuantityAtFinalization: 2,
+      status: "finalized",
+      storeId: "store-1",
+    });
+
+    await submitStockAdjustmentBatchWithCtx(ctx, {
+      adjustmentType: "manual",
+      lineItems: [
+        {
+          productSkuId: "sku-1" as Id<"productSku">,
+          quantityDelta: 1,
+        },
+      ],
+      reasonCode: "correction",
+      storeId: "store-1" as Id<"store">,
+      submissionKey: "legacy-import-finalized-adjustment",
+    });
+
+    expect(tables.productSku.get("sku-1")).toMatchObject({
+      inventoryCount: 9,
+      quantityAvailable: 7,
+    });
+    expect(Array.from(tables.stockAdjustmentBatch.values())).toEqual([
+      expect.objectContaining({
+        status: "applied",
+        submissionKey: "legacy-import-finalized-adjustment",
+      }),
+    ]);
+    expect(Array.from(tables.inventoryMovement.values())).toEqual([
+      expect.objectContaining({
+        movementType: "adjustment",
+        productSkuId: "sku-1",
+        quantityDelta: 1,
+      }),
+    ]);
   });
 
   it("rejects stock adjustments for unresolved POS pending checkout SKUs", async () => {

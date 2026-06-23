@@ -10,6 +10,7 @@ import {
 import { Label } from "../ui/label";
 import { Input } from "../ui/input";
 import { Button } from "../ui/button";
+import { Badge } from "../ui/badge";
 import {
   DotsHorizontalIcon,
   PlusCircledIcon,
@@ -28,6 +29,7 @@ import {
   Info,
   RefreshCw,
   RotateCcw,
+  ShieldCheck,
   ShoppingCart,
   TriangleAlert,
   X,
@@ -36,7 +38,7 @@ import {
 import useGetActiveProduct from "@/hooks/useGetActiveProduct";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import { BarcodeQRViewer } from "./BarcodeQRViewer";
-import { useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "~/convex/_generated/api";
 import { Id } from "~/convex/_generated/dataModel";
 import { toast } from "sonner";
@@ -54,15 +56,29 @@ import {
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
 import { useSheet } from "./SheetProvider";
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { CopyImagesView } from "./copy-images/CopyImagesView";
 import { useSkusReservedInCheckout } from "@/hooks/useSkusReservedInCheckout";
 import { useSkusReservedInPosSession } from "@/hooks/useSkusReservedInPosSession";
 import { AlertModal } from "../ui/modals/alert-modal";
 import { presentUnexpectedErrorToast } from "~/src/lib/errors/presentUnexpectedErrorToast";
 import { currencyDisplaySymbol } from "~/shared/currencyFormatter";
-import { toDisplayAmount } from "~/convex/lib/currency";
-import { parseDisplayAmountInput } from "~/src/lib/pos/displayAmounts";
+import type { Product } from "~/types";
+import type { FunctionReference } from "convex/server";
+import type { CommandResult } from "~/shared/commandResult";
+import {
+  buildTrustedInventoryFinalizationPayload,
+  parseVariantInputValue,
+  resolveTrustedInventoryCommandError,
+  resolveTrustedInventoryFinalizationPricingPolicy,
+  resolveTrustedInventoryRefreshReviewState,
+  resolveTrustedInventoryReviewClickAction,
+  resolveTrustedInventoryReviewState,
+  resolveStockInputUpdate,
+  type ProductPageProvisionalSkuBinding,
+  type ProductVariantInputField,
+  type TrustedInventoryFinalizationPayload,
+} from "./ProductStockInput";
 
 export type ProductVariant = {
   id: string;
@@ -85,6 +101,38 @@ export type ProductVariant = {
   markedForDeletion?: boolean;
   existsInDB?: boolean;
   images: ImageFile[];
+};
+
+type ProductPageTrustedInventoryFinalizationResult = {
+  finalTrustedQuantity: number;
+  productId: Id<"product">;
+  productSkuId: Id<"productSku">;
+  provisionalSkuId: Id<"inventoryImportProvisionalSku">;
+  provisionalSoldQuantity: number;
+  quantityAvailable: number;
+};
+
+type ProductPageProvisionalSkuBindingQuery = FunctionReference<
+  "query",
+  "public",
+  {
+    productSkuId: Id<"productSku">;
+    refreshNonce?: number;
+    storeId: Id<"store">;
+  },
+  ProductPageProvisionalSkuBinding
+>;
+
+type ProductPageTrustedInventoryFinalizationMutation = FunctionReference<
+  "mutation",
+  "public",
+  TrustedInventoryFinalizationPayload,
+  CommandResult<ProductPageTrustedInventoryFinalizationResult>
+>;
+
+const catalogImportApi = api.inventory.catalogImport as unknown as {
+  finalizeTrustedInventoryFromProductPage: ProductPageTrustedInventoryFinalizationMutation;
+  listProductPageProvisionalSkuBinding: ProductPageProvisionalSkuBindingQuery;
 };
 
 const StockHeader = ({
@@ -188,11 +236,7 @@ export function ProductStockView() {
       hideHeaderBottomBorder
       fullHeight={false}
       lockDocumentScroll={false}
-      header={
-        <StockHeader
-          isSkuReserved={isSkuReserved}
-        />
-      }
+      header={<StockHeader isSkuReserved={isSkuReserved} />}
     >
       <Stock
         isSkuReserved={isSkuReserved}
@@ -202,32 +246,253 @@ export function ProductStockView() {
   );
 }
 
-type ProductVariantInputField =
-  | "sku"
-  | "barcode"
-  | "stock"
-  | "cost"
-  | "netPrice"
-  | "quantityAvailable";
+function isLegacyImportDraftProduct(activeProduct?: Product | null) {
+  return (
+    activeProduct?.availability === "draft" &&
+    activeProduct?.categorySlug === "legacy-import"
+  );
+}
 
-export function parseVariantInputValue(
-  field: ProductVariantInputField,
-  rawValue: string,
-): string | number | undefined {
-  if (field === "sku" || field === "barcode") {
-    return rawValue;
-  }
+function LegacyImportTrustPreview({
+  activeProduct,
+  areProcessingFeesAbsorbed,
+  finalized,
+  isContextRefreshing,
+  onFinalized,
+  onMakeVisible,
+  reservationType,
+  storeId,
+  variant,
+}: {
+  activeProduct?: Product | null;
+  areProcessingFeesAbsorbed?: boolean;
+  finalized?: boolean;
+  isContextRefreshing?: boolean;
+  onFinalized: (result: {
+    sku: {
+      id: string;
+      stock: number;
+      quantityAvailable: number;
+      cost?: number;
+      price?: number;
+      netPrice?: number;
+      isVisible?: boolean;
+    };
+  }) => void;
+  onMakeVisible: (id: string) => void;
+  reservationType: "checkout" | "pos" | null;
+  storeId?: Id<"store">;
+  variant: ProductVariant;
+}) {
+  const rowRef = useRef<HTMLTableRowElement | null>(null);
+  const [conversionRequestIds, setConversionRequestIds] = useState<
+    Record<string, string>
+  >({});
+  const [isFinalizing, setIsFinalizing] = useState(false);
+  const [commandMessage, setCommandMessage] = useState<string | null>(null);
+  const [requiresReviewRefresh, setRequiresReviewRefresh] = useState(false);
+  const [bindingRefreshNonce, setBindingRefreshNonce] = useState(0);
 
-  if (rawValue.trim().length === 0) {
-    return undefined;
-  }
+  const binding = useQuery(
+    catalogImportApi.listProductPageProvisionalSkuBinding,
+    activeProduct && storeId && variant.existsInDB
+      ? {
+          productSkuId: variant.id as Id<"productSku">,
+          refreshNonce: bindingRefreshNonce,
+          storeId,
+        }
+      : "skip",
+  );
 
-  if (field === "cost" || field === "netPrice") {
-    const parsedAmount = parseDisplayAmountInput(rawValue);
-    return parsedAmount === undefined ? undefined : toDisplayAmount(parsedAmount);
-  }
+  const finalizeTrustedInventory = useMutation(
+    catalogImportApi.finalizeTrustedInventoryFromProductPage,
+  );
 
-  return Number.parseFloat(rawValue);
+  const reviewState = resolveTrustedInventoryReviewState({
+    binding,
+    finalized,
+    isFinalizing,
+    isRefreshing: isContextRefreshing,
+    reservationType,
+    variant,
+  });
+
+  useEffect(() => {
+    setRequiresReviewRefresh(false);
+    setCommandMessage(null);
+  }, [
+    binding?.state === "unique" ? binding.saleEvidenceFingerprint : binding?.state,
+    binding?.state === "unique" ? binding.trustedSkuFingerprint : undefined,
+  ]);
+
+  const getConversionRequestId = () => {
+    const existing = conversionRequestIds[variant.id];
+    if (existing) {
+      return existing;
+    }
+
+    const next =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `product-edit-${variant.id}-${Date.now()}`;
+
+    setConversionRequestIds((prev) => ({ ...prev, [variant.id]: next }));
+    return next;
+  };
+
+  const normalizeCommandMessage = (
+    result: Exclude<CommandResult<unknown>, { kind: "ok" }>,
+  ) => {
+    const resolved = resolveTrustedInventoryCommandError(result);
+    setRequiresReviewRefresh(resolved.requiresReviewRefresh);
+    return resolved.message;
+  };
+
+  const handleFinalize = async () => {
+    if (!activeProduct || !storeId || binding?.state !== "unique") {
+      return;
+    }
+
+    setIsFinalizing(true);
+    setCommandMessage(null);
+    setRequiresReviewRefresh(false);
+
+    try {
+      const payload = buildTrustedInventoryFinalizationPayload({
+        areProcessingFeesAbsorbed,
+        binding,
+        conversionRequestId: getConversionRequestId(),
+        productId: activeProduct._id,
+        storeId,
+        variant,
+      });
+
+      const result = await finalizeTrustedInventory(payload);
+      if (result.kind === "user_error") {
+        setCommandMessage(normalizeCommandMessage(result));
+        window.requestAnimationFrame(() => rowRef.current?.focus());
+        return;
+      }
+
+      onFinalized({
+        sku: {
+          id: result.data.productSkuId,
+          stock: result.data.finalTrustedQuantity,
+          quantityAvailable: result.data.quantityAvailable,
+          cost: variant.cost,
+          price: variant.price,
+          netPrice: variant.netPrice,
+          isVisible: variant.isVisible,
+        },
+      });
+      setCommandMessage(
+        "Inventory finalized. Save remaining product changes separately.",
+      );
+    } catch (error) {
+      console.error(error);
+      setCommandMessage("Trusted inventory was not finalized. Try again.");
+      presentUnexpectedErrorToast("Trusted inventory was not finalized");
+      window.requestAnimationFrame(() => rowRef.current?.focus());
+    } finally {
+      setIsFinalizing(false);
+    }
+  };
+
+  const handleClick = () => {
+    const action = resolveTrustedInventoryReviewClickAction({
+      requiresReviewRefresh,
+      reviewState,
+    });
+
+    if (action === "make_visible") {
+      onMakeVisible(variant.id);
+      return;
+    }
+
+    if (action === "refresh_review") {
+      const nextState = resolveTrustedInventoryRefreshReviewState({
+        conversionRequestIds,
+        refreshNonce: bindingRefreshNonce,
+        variantId: variant.id,
+      });
+      setRequiresReviewRefresh(false);
+      setCommandMessage(null);
+      setBindingRefreshNonce(nextState.refreshNonce);
+      setConversionRequestIds(nextState.conversionRequestIds);
+      return;
+    }
+
+    if (action === "finalize") {
+      void handleFinalize();
+    }
+  };
+
+  const statusMessage = commandMessage ?? reviewState.message;
+  const ctaLabel = requiresReviewRefresh
+    ? "Refresh review"
+    : reviewState.ctaLabel;
+  const isCtaDisabled = requiresReviewRefresh ? false : reviewState.disabled;
+
+  return (
+    <TableRow
+      ref={rowRef}
+      tabIndex={-1}
+      className="focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+    >
+      <TableCell colSpan={8} className="px-4 py-3">
+        <div
+          className={`flex flex-col gap-3 rounded-md border px-3 py-3 sm:flex-row sm:items-center sm:justify-between ${
+            reviewState.status === "success"
+              ? "border-emerald-200 bg-emerald-50/50"
+              : "border-border"
+          }`}
+        >
+          <div className="min-w-0 space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="outline" className="gap-1.5 text-foreground">
+                <ShieldCheck className="h-3.5 w-3.5" />
+                Trusted inventory review
+              </Badge>
+              <Badge
+                variant="outline"
+                className="border-border bg-muted/40 text-muted-foreground"
+              >
+                Provisional SKU
+              </Badge>
+            </div>
+            <p
+              className="max-w-3xl text-pretty text-xs leading-5 text-muted-foreground"
+              role="status"
+              aria-live="polite"
+            >
+              {statusMessage}
+            </p>
+            {binding?.state === "unique" && (
+              <p className="text-[11px] leading-4 text-muted-foreground">
+                Linked import row {binding.row.rowNumber}
+                {binding.row.provisionalSoldQuantity !== undefined
+                  ? ` · provisional sales ${binding.row.provisionalSoldQuantity}`
+                  : ""}
+              </p>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+            <Button
+              type="button"
+              size="sm"
+              variant="workflow-soft"
+              className="min-h-10 active:scale-[0.96] transition-transform"
+              disabled={isCtaDisabled}
+              onClick={handleClick}
+            >
+              {ctaLabel}
+            </Button>
+          </div>
+        </div>
+      </TableCell>
+    </TableRow>
+  );
 }
 
 function Stock({
@@ -239,6 +504,8 @@ function Stock({
 }) {
   const {
     error,
+    isLoading,
+    mergeTrustedInventoryFinalization,
     removeProductVariant,
     productVariants,
     updateProductVariants,
@@ -259,6 +526,8 @@ function Stock({
   const [clearBarcodeModalOpen, setClearBarcodeModalOpen] = useState(false);
   const [variantToClear, setVariantToClear] = useState<string | null>(null);
   const [isClearingBarcode, setIsClearingBarcode] = useState(false);
+  const [finalizedTrustedInventorySkuIds, setFinalizedTrustedInventorySkuIds] =
+    useState<Set<string>>(() => new Set());
   const generateBarcodeMutation = useMutation(
     api.inventory.products.generateUniqueBarcode,
   );
@@ -426,22 +695,9 @@ function Stock({
         if (variant.id !== variantId) return variant;
 
         if (field === "stock") {
-          // When updating stock, also adjust quantityAvailable to not exceed stock
-          const newStock = value as number;
-          const currentQuantityAvailable = variant.quantityAvailable || 0;
-          let adjustedQuantityAvailable = Math.min(
-            currentQuantityAvailable,
-            newStock,
-          );
-
-          if (currentQuantityAvailable === 0 && newStock > 0) {
-            adjustedQuantityAvailable = newStock;
-          }
-
           return {
             ...variant,
-            stock: newStock,
-            quantityAvailable: adjustedQuantityAvailable,
+            ...resolveStockInputUpdate(value as ProductVariant["stock"]),
           };
         } else {
           // For all other fields, use default behavior
@@ -535,6 +791,27 @@ function Stock({
     );
   };
 
+  const shouldShowTrustPreview = isLegacyImportDraftProduct(activeProduct);
+
+  const handleTrustedInventoryFinalized = (result: {
+    sku: {
+      id: string;
+      stock: number;
+      quantityAvailable: number;
+      cost?: number;
+      price?: number;
+      netPrice?: number;
+      isVisible?: boolean;
+    };
+  }) => {
+    mergeTrustedInventoryFinalization(result);
+    setFinalizedTrustedInventorySkuIds((prev) => {
+      const next = new Set(prev);
+      next.add(result.sku.id);
+      return next;
+    });
+  };
+
   const hasPriceError = (variant: ProductVariant) => {
     return (
       (variant.price === 0 || variant.price === undefined) && variant.existsInDB
@@ -579,112 +856,88 @@ function Stock({
 
           <TableBody>
             {productVariants.map((variant, index) => (
-              <TableRow
-                key={variant.id}
-                onClick={() => setActiveProductVariant(variant)}
-                className={variant.markedForDeletion ? "opacity-50" : ""}
-              >
-                <TableCell>
-                  <p>{index + 1}</p>
-                </TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1">
-                      {showLoaderForProduct ? null : !activeProduct ? (
-                        <Input
-                          id={`sku-${index}`}
-                          type="text"
-                          placeholder="SKU"
-                          onChange={(e) => handleChange(e, variant.id, "sku")}
-                          value={variant.sku || ""}
-                          readOnly
-                          disabled={shouldDisable(variant)}
-                        />
-                      ) : (
-                        <p
-                          className={`${variant.id == activeProductVariant.id ? "font-bold" : "text-muted-foreground"}`}
-                        >
-                          {variant.sku}
-                        </p>
+              <Fragment key={variant.id}>
+                <TableRow
+                  onClick={() => setActiveProductVariant(variant)}
+                  className={variant.markedForDeletion ? "opacity-50" : ""}
+                >
+                  <TableCell>
+                    <p>{index + 1}</p>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1">
+                        {showLoaderForProduct ? null : !activeProduct ? (
+                          <Input
+                            id={`sku-${index}`}
+                            type="text"
+                            placeholder="SKU"
+                            onChange={(e) => handleChange(e, variant.id, "sku")}
+                            value={variant.sku || ""}
+                            readOnly
+                            disabled={shouldDisable(variant)}
+                          />
+                        ) : (
+                          <p
+                            className={`${variant.id == activeProductVariant.id ? "font-bold" : "text-muted-foreground"}`}
+                          >
+                            {variant.sku}
+                          </p>
+                        )}
+                      </div>
+                      {isSkuReserved(variant.sku) && (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger>
+                              {getReservationType(variant.sku) ===
+                              "checkout" ? (
+                                <ShoppingCart className="w-4 h-4 text-green-500" />
+                              ) : (
+                                <ScanBarcode className="w-4 h-4 text-blue-500" />
+                              )}
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>
+                                {getReservationType(variant.sku) === "checkout"
+                                  ? "SKU is reserved in an active checkout session"
+                                  : "SKU is reserved in an active POS session"}
+                              </p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                       )}
                     </div>
-                    {isSkuReserved(variant.sku) && (
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger>
-                            {getReservationType(variant.sku) === "checkout" ? (
-                              <ShoppingCart className="w-4 h-4 text-green-500" />
-                            ) : (
-                              <ScanBarcode className="w-4 h-4 text-blue-500" />
-                            )}
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>
-                              {getReservationType(variant.sku) === "checkout"
-                                ? "SKU is reserved in an active checkout session"
-                                : "SKU is reserved in an active POS session"}
-                            </p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
+                    {error && getErrorForField(error, "sku") && (
+                      <p className="text-red-500 text-sm font-medium">
+                        {getErrorForField(error, "sku")?.message}
+                      </p>
                     )}
-                  </div>
-                  {error && getErrorForField(error, "sku") && (
-                    <p className="text-red-500 text-sm font-medium">
-                      {getErrorForField(error, "sku")?.message}
-                    </p>
-                  )}
-                </TableCell>
+                  </TableCell>
 
-                <TableCell>
-                  <Label htmlFor={`barcode-${index}`} className="sr-only">
-                    Barcode
-                  </Label>
-                  <div className="flex items-center gap-2">
-                    {showLoaderForProduct ? null : (
-                      <>
-                        <Input
-                          id={`barcode-${index}`}
-                          type="text"
-                          placeholder="Barcode"
-                          onChange={(e) =>
-                            handleChange(e, variant.id, "barcode")
-                          }
-                          value={variant.barcode || ""}
-                          readOnly={variant.barcodePersistedInDb === true}
-                          disabled={shouldDisable(variant)}
-                          className={
-                            variant.barcodePersistedInDb === true
-                              ? "bg-muted"
-                              : ""
-                          }
-                        />
-                        {!variant.barcode && variant.existsInDB && (
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() =>
-                                    handleGenerateBarcode(variant.id)
-                                  }
-                                  disabled={
-                                    isGeneratingBarcode ||
-                                    shouldDisable(variant)
-                                  }
-                                >
-                                  <Barcode className="w-4 h-4" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <p>Generate barcode</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                        )}
-                        {variant.barcode &&
-                          variant.barcodePersistedInDb === false && (
+                  <TableCell>
+                    <Label htmlFor={`barcode-${index}`} className="sr-only">
+                      Barcode
+                    </Label>
+                    <div className="flex items-center gap-2">
+                      {showLoaderForProduct ? null : (
+                        <>
+                          <Input
+                            id={`barcode-${index}`}
+                            type="text"
+                            placeholder="Barcode"
+                            onChange={(e) =>
+                              handleChange(e, variant.id, "barcode")
+                            }
+                            value={variant.barcode || ""}
+                            readOnly={variant.barcodePersistedInDb === true}
+                            disabled={shouldDisable(variant)}
+                            className={
+                              variant.barcodePersistedInDb === true
+                                ? "bg-muted"
+                                : ""
+                            }
+                          />
+                          {!variant.barcode && variant.existsInDB && (
                             <TooltipProvider>
                               <Tooltip>
                                 <TooltipTrigger asChild>
@@ -692,252 +945,300 @@ function Stock({
                                     size="sm"
                                     variant="outline"
                                     onClick={() =>
-                                      handleSaveBarcode(variant.id)
+                                      handleGenerateBarcode(variant.id)
                                     }
                                     disabled={
                                       isGeneratingBarcode ||
                                       shouldDisable(variant)
                                     }
                                   >
-                                    <Check className="w-4 h-4" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <p>Save barcode</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                          )}
-                        {variant.barcode && variant.barcodePersistedInDb && (
-                          <>
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() =>
-                                      handleClearBarcodeClick(variant.id)
-                                    }
-                                    disabled={isSkuReserved(variant.sku)}
-                                  >
-                                    <X className="w-4 h-4" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <p>Clear barcode</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() =>
-                                      handleViewBarcode(variant.id)
-                                    }
-                                  >
                                     <Barcode className="w-4 h-4" />
                                   </Button>
                                 </TooltipTrigger>
                                 <TooltipContent>
-                                  <p>View barcode QR</p>
+                                  <p>Generate barcode</p>
                                 </TooltipContent>
                               </Tooltip>
                             </TooltipProvider>
-                          </>
-                        )}
-                      </>
+                          )}
+                          {variant.barcode &&
+                            variant.barcodePersistedInDb === false && (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() =>
+                                        handleSaveBarcode(variant.id)
+                                      }
+                                      disabled={
+                                        isGeneratingBarcode ||
+                                        shouldDisable(variant)
+                                      }
+                                    >
+                                      <Check className="w-4 h-4" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>Save barcode</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            )}
+                          {variant.barcode && variant.barcodePersistedInDb && (
+                            <>
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() =>
+                                        handleClearBarcodeClick(variant.id)
+                                      }
+                                      disabled={isSkuReserved(variant.sku)}
+                                    >
+                                      <X className="w-4 h-4" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>Clear barcode</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() =>
+                                        handleViewBarcode(variant.id)
+                                      }
+                                    >
+                                      <Barcode className="w-4 h-4" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>View barcode QR</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            </>
+                          )}
+                        </>
+                      )}
+                    </div>
+                    {error && getErrorForField(error, "barcode") && (
+                      <p className="text-red-500 text-sm font-medium">
+                        {getErrorForField(error, "barcode")?.message}
+                      </p>
                     )}
-                  </div>
-                  {error && getErrorForField(error, "barcode") && (
-                    <p className="text-red-500 text-sm font-medium">
-                      {getErrorForField(error, "barcode")?.message}
-                    </p>
-                  )}
-                </TableCell>
+                  </TableCell>
 
-                <TableCell>
-                  <Label htmlFor={`stock-${index}`} className="sr-only">
-                    Stock
-                  </Label>
-                  {showLoaderForProduct ? null : (
-                    <Input
-                      id={`stock-${index}`}
-                      type="number"
-                      placeholder="0"
-                      onChange={(e) => handleChange(e, variant.id, "stock")}
-                      value={variant.stock || ""}
-                      disabled={shouldDisable(variant)}
-                    />
-                  )}
-                  {error && getErrorForField(error, "inventoryCount") && (
-                    <p className="text-red-500 text-sm font-medium">
-                      {getErrorForField(error, "inventoryCount")?.message}
-                    </p>
-                  )}
-                </TableCell>
+                  <TableCell>
+                    <Label htmlFor={`stock-${index}`} className="sr-only">
+                      Stock
+                    </Label>
+                    {showLoaderForProduct ? null : (
+                      <Input
+                        id={`stock-${index}`}
+                        type="number"
+                        placeholder="0"
+                        onChange={(e) => handleChange(e, variant.id, "stock")}
+                        value={variant.stock || ""}
+                        disabled={shouldDisable(variant)}
+                      />
+                    )}
+                    {error && getErrorForField(error, "inventoryCount") && (
+                      <p className="text-red-500 text-sm font-medium">
+                        {getErrorForField(error, "inventoryCount")?.message}
+                      </p>
+                    )}
+                  </TableCell>
 
-                <TableCell>
-                  <Label htmlFor={`stock-${index}`} className="sr-only">
-                    Quantity available
-                  </Label>
-                  {showLoaderForProduct ? null : (
-                    <Input
-                      id={`quantity-available-${index}`}
-                      type="number"
-                      placeholder="0"
-                      onChange={(e) =>
-                        handleChange(e, variant.id, "quantityAvailable")
-                      }
-                      value={variant.quantityAvailable || ""}
-                      disabled={shouldDisable(variant)}
-                      className={
-                        hasQuantityError(variant) ? "border-red-500" : ""
-                      }
-                    />
-                  )}
-                  {error && getErrorForField(error, "quantityAvailable") && (
-                    <p className="text-red-500 text-sm font-medium">
-                      {getErrorForField(error, "quantityAvailable")?.message}
-                    </p>
-                  )}
-                </TableCell>
+                  <TableCell>
+                    <Label htmlFor={`stock-${index}`} className="sr-only">
+                      Quantity available
+                    </Label>
+                    {showLoaderForProduct ? null : (
+                      <Input
+                        id={`quantity-available-${index}`}
+                        type="number"
+                        placeholder="0"
+                        onChange={(e) =>
+                          handleChange(e, variant.id, "quantityAvailable")
+                        }
+                        value={variant.quantityAvailable || ""}
+                        disabled={shouldDisable(variant)}
+                        className={
+                          hasQuantityError(variant) ? "border-red-500" : ""
+                        }
+                      />
+                    )}
+                    {error && getErrorForField(error, "quantityAvailable") && (
+                      <p className="text-red-500 text-sm font-medium">
+                        {getErrorForField(error, "quantityAvailable")?.message}
+                      </p>
+                    )}
+                  </TableCell>
 
-                <TableCell>
-                  <Label htmlFor={`price-${index}`} className="sr-only">
-                    Price{" "}
-                    {currencyDisplaySymbol(activeStore?.currency ?? "GHS")}
-                  </Label>
-                  {showLoaderForProduct ? null : (
-                    <Input
-                      id={`price-${index}`}
-                      type="number"
-                      placeholder="999"
-                      onChange={(e) => handleChange(e, variant.id, "netPrice")}
-                      value={variant.netPrice || ""}
-                      disabled={shouldDisable(variant)}
-                      className={hasPriceError(variant) ? "border-red-500" : ""}
-                    />
-                  )}
-                  {error && getErrorForField(error, "price") && (
-                    <p className="text-red-500 text-sm font-medium">
-                      {getErrorForField(error, "price")?.message}
-                    </p>
-                  )}
-                </TableCell>
+                  <TableCell>
+                    <Label htmlFor={`price-${index}`} className="sr-only">
+                      Price{" "}
+                      {currencyDisplaySymbol(activeStore?.currency ?? "GHS")}
+                    </Label>
+                    {showLoaderForProduct ? null : (
+                      <Input
+                        id={`price-${index}`}
+                        type="number"
+                        placeholder="999"
+                        onChange={(e) =>
+                          handleChange(e, variant.id, "netPrice")
+                        }
+                        value={variant.netPrice || ""}
+                        disabled={shouldDisable(variant)}
+                        className={
+                          hasPriceError(variant) ? "border-red-500" : ""
+                        }
+                      />
+                    )}
+                    {error && getErrorForField(error, "price") && (
+                      <p className="text-red-500 text-sm font-medium">
+                        {getErrorForField(error, "price")?.message}
+                      </p>
+                    )}
+                  </TableCell>
 
-                <TableCell>
-                  <Label htmlFor={`cost-${index}`} className="sr-only">
-                    Cost
-                  </Label>
-                  {showLoaderForProduct ? null : (
-                    <Input
-                      id={`cost-${index}`}
-                      type="number"
-                      placeholder="999"
-                      onChange={(e) => handleChange(e, variant.id, "cost")}
-                      value={variant.cost || ""}
-                      disabled={shouldDisable(variant)}
-                    />
-                  )}
-                </TableCell>
+                  <TableCell>
+                    <Label htmlFor={`cost-${index}`} className="sr-only">
+                      Cost
+                    </Label>
+                    {showLoaderForProduct ? null : (
+                      <Input
+                        id={`cost-${index}`}
+                        type="number"
+                        placeholder="999"
+                        onChange={(e) => handleChange(e, variant.id, "cost")}
+                        value={variant.cost || ""}
+                        disabled={shouldDisable(variant)}
+                      />
+                    )}
+                  </TableCell>
 
-                <TableCell>
-                  <div className="flex items-center gap-2">
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => setVisibility(variant.id)}
-                            disabled={
-                              (productVariants.length > 1 &&
-                                (isLastActiveVariant(index) ||
-                                  isLastVisibleVariant(index))) ||
-                              isSkuReserved(variant.sku)
-                            }
-                          >
-                            {(variant.isVisible == undefined ||
-                              variant.isVisible) && (
-                              <EyeOff className="w-4 h-4" />
-                            )}
-
-                            {variant.isVisible == false && (
-                              <Eye className="w-4 h-4 text-muted-foreground" />
-                            )}
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          {(variant.isVisible == undefined ||
-                            variant.isVisible) && <p>Hide</p>}
-
-                          {variant.isVisible == false && <p>Make visible</p>}
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => setOutOfStock(variant.id)}
-                            disabled={
-                              (variant.quantityAvailable == 0 &&
-                                variant.stock == 0) ||
-                              shouldDisable(variant)
-                            }
-                          >
-                            <TriangleAlert className="w-4 h-4 text-yellow-500" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>Set to out of stock</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-
-                    {productVariants.length > 1 && (
+                  <TableCell>
+                    <div className="flex items-center gap-2">
                       <TooltipProvider>
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <Button
                               size="sm"
                               variant="ghost"
-                              onClick={() =>
-                                handleDeleteAction(
-                                  variant.id,
-                                  variant.markedForDeletion,
-                                )
-                              }
+                              onClick={() => setVisibility(variant.id)}
                               disabled={
-                                isLastActiveVariant(index) ||
+                                (productVariants.length > 1 &&
+                                  (isLastActiveVariant(index) ||
+                                    isLastVisibleVariant(index))) ||
                                 isSkuReserved(variant.sku)
                               }
                             >
-                              {variant.markedForDeletion ? (
-                                <RotateCcw className="w-4 h-4" />
-                              ) : (
-                                <TrashIcon className="h-4 w-4 text-red-500" />
+                              {(variant.isVisible == undefined ||
+                                variant.isVisible) && (
+                                <EyeOff className="w-4 h-4" />
+                              )}
+
+                              {variant.isVisible == false && (
+                                <Eye className="w-4 h-4 text-muted-foreground" />
                               )}
                             </Button>
                           </TooltipTrigger>
-                          {!variant.markedForDeletion && (
-                            <TooltipContent>
-                              <p>Delete</p>
-                            </TooltipContent>
-                          )}
+                          <TooltipContent>
+                            {(variant.isVisible == undefined ||
+                              variant.isVisible) && <p>Hide</p>}
+
+                            {variant.isVisible == false && <p>Make visible</p>}
+                          </TooltipContent>
                         </Tooltip>
                       </TooltipProvider>
-                    )}
-                  </div>
-                </TableCell>
-              </TableRow>
+
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => setOutOfStock(variant.id)}
+                              disabled={
+                                (variant.quantityAvailable == 0 &&
+                                  variant.stock == 0) ||
+                                shouldDisable(variant)
+                              }
+                            >
+                              <TriangleAlert className="w-4 h-4 text-yellow-500" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Set to out of stock</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+
+                      {productVariants.length > 1 && (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() =>
+                                  handleDeleteAction(
+                                    variant.id,
+                                    variant.markedForDeletion,
+                                  )
+                                }
+                                disabled={
+                                  isLastActiveVariant(index) ||
+                                  isSkuReserved(variant.sku)
+                                }
+                              >
+                                {variant.markedForDeletion ? (
+                                  <RotateCcw className="w-4 h-4" />
+                                ) : (
+                                  <TrashIcon className="h-4 w-4 text-red-500" />
+                                )}
+                              </Button>
+                            </TooltipTrigger>
+                            {!variant.markedForDeletion && (
+                              <TooltipContent>
+                                <p>Delete</p>
+                              </TooltipContent>
+                            )}
+                          </Tooltip>
+                        </TooltipProvider>
+                      )}
+                    </div>
+                  </TableCell>
+                </TableRow>
+                {shouldShowTrustPreview && activeProduct && variant.existsInDB && (
+                  <LegacyImportTrustPreview
+                    activeProduct={activeProduct}
+                    areProcessingFeesAbsorbed={
+                      resolveTrustedInventoryFinalizationPricingPolicy({
+                        persistedAreProcessingFeesAbsorbed:
+                          activeProduct.areProcessingFeesAbsorbed,
+                      })
+                    }
+                    finalized={finalizedTrustedInventorySkuIds.has(variant.id)}
+                    isContextRefreshing={isLoading || showLoaderForProduct}
+                    onFinalized={handleTrustedInventoryFinalized}
+                    onMakeVisible={setVisibility}
+                    reservationType={getReservationType(variant.sku)}
+                    storeId={activeStore?._id}
+                    variant={variant}
+                  />
+                )}
+              </Fragment>
             ))}
           </TableBody>
         </Table>
