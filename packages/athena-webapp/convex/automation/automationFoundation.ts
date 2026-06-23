@@ -9,6 +9,7 @@ import {
   listAutomationRunsByIdempotencyKeyWithCtx,
   patchAutomationRunOutcomeWithCtx,
   recordAutomationRunWithCtx,
+  type AutomationDecisionEvidence,
   type AutomationSourceSubject,
 } from "./runLedger";
 
@@ -19,6 +20,7 @@ type AdapterDecision = {
   decisionReason?: string;
   sourceSubjects: AutomationSourceSubject[];
   snapshotCounts: Record<string, number>;
+  decisionEvidence?: AutomationDecisionEvidence;
 };
 
 type EvaluateAutomationActionArgs = {
@@ -124,6 +126,7 @@ export async function evaluateAutomationActionWithCtx(
     organizationId: args.organizationId,
     policyMode,
     policyVersion,
+    decisionEvidence: args.adapterDecision.decisionEvidence,
     snapshotCounts: args.adapterDecision.snapshotCounts,
     sourceSubjects: args.adapterDecision.sourceSubjects,
     storeId: args.storeId,
@@ -193,6 +196,7 @@ export async function evaluateAutomationActionWithCtx(
       applied.outcome === "applied" || !applied.outcome
         ? Date.now()
         : undefined,
+    decisionEvidence: args.adapterDecision.decisionEvidence,
     error: applied.error,
     eventIds: applied.eventIds,
     outcome: applied.outcome ?? "applied",

@@ -27,6 +27,35 @@ export const automationSourceSubjectValidator = v.object({
   label: v.optional(v.string()),
 });
 
+const automationDecisionEvidenceValueValidator = v.union(
+  v.string(),
+  v.number(),
+  v.boolean(),
+  v.array(v.string()),
+  v.null(),
+);
+
+export const automationDecisionEvidenceValidator = v.object({
+  kind: v.string(),
+  classification: v.optional(v.string()),
+  eligible: v.optional(v.boolean()),
+  observed: v.optional(
+    v.record(v.string(), automationDecisionEvidenceValueValidator),
+  ),
+  policy: v.optional(
+    v.record(v.string(), automationDecisionEvidenceValueValidator),
+  ),
+  gates: v.optional(
+    v.array(
+      v.object({
+        key: v.string(),
+        passed: v.boolean(),
+        reason: v.optional(v.string()),
+      }),
+    ),
+  ),
+});
+
 export const automationPolicySchema = v.object({
   storeId: v.id("store"),
   organizationId: v.optional(v.id("organization")),
@@ -36,6 +65,11 @@ export const automationPolicySchema = v.object({
   operatingTimezoneOffsetMinutes: v.optional(v.number()),
   openingLocalStartMinutes: v.optional(v.number()),
   openingBlockerHandling: v.optional(openingAutoStartBlockerHandlingValidator),
+  eodCleanDayAutoCompleteEnabled: v.optional(v.boolean()),
+  eodLocalCompletionWindowMinutes: v.optional(v.number()),
+  eodMaxAbsoluteCashVariance: v.optional(v.number()),
+  eodMaxVoidedSaleCount: v.optional(v.number()),
+  eodMaxVoidedSaleTotal: v.optional(v.number()),
   paused: v.optional(v.boolean()),
   policyVersion: v.string(),
   rolloutNotes: v.optional(v.string()),
@@ -59,6 +93,7 @@ export const automationRunSchema = v.object({
   sourceSubjects: v.array(automationSourceSubjectValidator),
   snapshotCounts: v.record(v.string(), v.number()),
   decisionReason: v.optional(v.string()),
+  decisionEvidence: v.optional(automationDecisionEvidenceValidator),
   eventIds: v.array(v.id("operationalEvent")),
   error: v.optional(
     v.object({

@@ -436,6 +436,8 @@ describe("daily operations overview read model", () => {
         lane: "close",
         occurredAt: Date.UTC(2026, 4, 8, 19),
         outcome: "prepared",
+        policyMode: "enabled",
+        policyVersion: "daily-operations-automation-v1",
         sourceLink: {
           search: { operatingDate: "2026-05-08" },
           to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",
@@ -446,11 +448,374 @@ describe("daily operations overview read model", () => {
         lane: "opening",
         occurredAt: Date.UTC(2026, 4, 8, 8),
         outcome: "applied",
+        policyMode: "enabled",
+        policyVersion: "daily-operations-automation-v1",
         sourceLink: {
           to: "/$orgUrlSlug/store/$storeUrlSlug/operations/opening",
         },
       },
     ]);
+  });
+
+  it("surfaces latest skipped EOD auto-complete evidence over EOD preparation", async () => {
+    const snapshot = await buildDailyOperationsSnapshotWithCtx(
+      buildCtx({
+        automationRun: [
+          {
+            _id: "automation-close-prepare",
+            action: "eod.prepare",
+            createdAt: Date.UTC(2026, 4, 8, 19),
+            domain: "daily_operations",
+            eventIds: [],
+            idempotencyKey: "daily_operations:eod.prepare:store-1:2026-05-08",
+            mutationBoundary: "daily_close",
+            operatingDate: "2026-05-08",
+            outcome: "prepared",
+            policyMode: "enabled",
+            policyVersion: "daily-operations-automation-v1",
+            snapshotCounts: {},
+            sourceSubjects: [],
+            storeId: "store-1",
+            triggerType: "scheduled",
+            updatedAt: Date.UTC(2026, 4, 8, 19),
+          },
+          {
+            _id: "automation-close-auto-skip",
+            action: "eod.auto_complete",
+            createdAt: Date.UTC(2026, 4, 8, 20),
+            decisionEvidence: {
+              classification: "outside_completion_window",
+              eligible: false,
+              kind: "eod_auto_complete",
+              observed: {
+                absoluteCashVariance: 0,
+                voidedSaleTotal: 0,
+              },
+              policy: {
+                localCompletionWindowMinutes: 1260,
+              },
+            },
+            decisionReason:
+              "EOD Review auto-complete is outside the configured local completion window.",
+            domain: "daily_operations",
+            eventIds: [],
+            idempotencyKey:
+              "daily_operations:eod.auto_complete:store-1:2026-05-08",
+            mutationBoundary: "daily_close",
+            operatingDate: "2026-05-08",
+            outcome: "skipped",
+            policyMode: "enabled",
+            policyVersion: "daily-operations.v1",
+            snapshotCounts: {},
+            sourceSubjects: [],
+            storeId: "store-1",
+            triggerType: "scheduled",
+            updatedAt: Date.UTC(2026, 4, 8, 20),
+          },
+        ],
+        dailyClose: [priorClose],
+        dailyOpening: [startedOpening],
+        store: [store],
+      }),
+      {
+        includeManagerReviewEvidence: true,
+        operatingDate: "2026-05-08",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(snapshot.automationStatuses.find((status) => status.lane === "close"))
+      .toMatchObject({
+        decisionEvidence: {
+          classification: "outside_completion_window",
+          kind: "eod_auto_complete",
+        },
+        id: "automation-close-auto-skip",
+        outcome: "skipped",
+        policyMode: "enabled",
+      });
+  });
+
+  it("prefers applied EOD auto-complete status for closed days over stale skipped dry-run runs", async () => {
+    const snapshot = await buildDailyOperationsSnapshotWithCtx(
+      buildCtx({
+        automationRun: [
+          {
+            _id: "automation-close-applied",
+            action: "eod.auto_complete",
+            appliedAt: Date.UTC(2026, 4, 8, 22),
+            createdAt: Date.UTC(2026, 4, 8, 22),
+            decisionEvidence: {
+              gates: [
+                {
+                  key: "absolute_cash_variance",
+                  passed: true,
+                  reason: "0 <= 5000",
+                },
+              ],
+              kind: "eod_auto_complete",
+              observed: {
+                absoluteCashVariance: 0,
+                voidedSaleTotal: 0,
+              },
+              policy: {
+                maxAbsoluteCashVariance: 5000,
+                maxVoidedSaleTotal: 0,
+              },
+            },
+            decisionReason: "EOD Review is clean and eligible for auto-complete.",
+            domain: "daily_operations",
+            idempotencyKey:
+              "daily_operations:eod.auto_complete:store-1:2026-05-08",
+            mutationBoundary: "daily_close",
+            operatingDate: "2026-05-08",
+            outcome: "applied",
+            policyMode: "enabled",
+            policyVersion: "daily-operations.v1",
+            snapshotCounts: {},
+            sourceSubjects: [],
+            storeId: "store-1",
+            triggerType: "scheduled",
+            updatedAt: Date.UTC(2026, 4, 8, 22),
+          },
+          {
+            _id: "automation-close-stale-skipped",
+            action: "eod.auto_complete",
+            createdAt: Date.UTC(2026, 4, 8, 23),
+            decisionReason: "EOD Review is already completed for this store day.",
+            domain: "daily_operations",
+            idempotencyKey:
+              "daily_operations:eod.auto_complete:store-1:2026-05-08:retry",
+            mutationBoundary: "daily_close",
+            operatingDate: "2026-05-08",
+            outcome: "skipped",
+            policyMode: "dry_run",
+            policyVersion: "daily-operations.v1",
+            snapshotCounts: {},
+            sourceSubjects: [],
+            storeId: "store-1",
+            triggerType: "scheduled",
+            updatedAt: Date.UTC(2026, 4, 8, 23),
+          },
+        ],
+        dailyClose: [
+          {
+            _id: "daily-close-automation",
+            actorType: "automation",
+            automationDecisionReason:
+              "EOD Review is clean and eligible for auto-complete.",
+            automationPolicyVersion: "daily-operations.v1",
+            automationRunId: "automation-close-applied",
+            carryForwardWorkItemIds: [],
+            completedAt: Date.UTC(2026, 4, 8, 22),
+            createdAt: Date.UTC(2026, 4, 8, 22),
+            isCurrent: true,
+            lifecycleStatus: "active",
+            operatingDate: "2026-05-08",
+            organizationId: "org-1",
+            readiness: {
+              blockerCount: 0,
+              carryForwardCount: 0,
+              readyCount: 1,
+              reviewCount: 0,
+              status: "ready",
+            },
+            reportSnapshot: {
+              closeMetadata: {
+                actorType: "automation",
+                automationDecisionReason:
+                  "EOD Review is clean and eligible for auto-complete.",
+                automationPolicyVersion: "daily-operations.v1",
+                automationRunId: "automation-close-applied",
+                carryForwardWorkItemIds: [],
+                completedAt: Date.UTC(2026, 4, 8, 22),
+                endAt: Date.UTC(2026, 4, 9),
+                operatingDate: "2026-05-08",
+                organizationId: "org-1",
+                startAt: Date.UTC(2026, 4, 8),
+                storeId: "store-1",
+              },
+              carryForwardItems: [],
+              readiness: {
+                blockerCount: 0,
+                carryForwardCount: 0,
+                readyCount: 1,
+                reviewCount: 0,
+                status: "ready",
+              },
+              readyItems: [],
+              reviewedItems: [],
+              sourceSubjects: [],
+              summary: {
+                salesTotal: 0,
+                transactionCount: 0,
+              },
+            },
+            sourceSubjects: [],
+            status: "completed",
+            storeId: "store-1",
+            summary: {
+              salesTotal: 0,
+              transactionCount: 0,
+            },
+            updatedAt: Date.UTC(2026, 4, 8, 22),
+          },
+        ],
+        dailyOpening: [startedOpening],
+        store: [store],
+      }),
+      {
+        includeManagerReviewEvidence: true,
+        operatingDate: "2026-05-08",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(snapshot.lifecycle.status).toBe("closed");
+    expect(snapshot.completedClose).toMatchObject({
+      actorType: "automation",
+      automationDecisionReason: "EOD Review is clean and eligible for auto-complete.",
+      automationRunId: "automation-close-applied",
+    });
+    expect(snapshot.automationStatuses.find((status) => status.lane === "close"))
+      .toMatchObject({
+        decisionEvidence: {
+          kind: "eod_auto_complete",
+        },
+        decisionReason: "EOD Review is clean and eligible for auto-complete.",
+        id: "automation-close-applied",
+        outcome: "applied",
+        policyMode: "enabled",
+        policyVersion: "daily-operations.v1",
+      });
+  });
+
+  it("redacts EOD auto-complete decision evidence for broad Daily Operations readers", async () => {
+    const snapshot = await buildDailyOperationsSnapshotWithCtx(
+      buildCtx({
+        automationRun: [
+          {
+            _id: "automation-close-applied",
+            action: "eod.auto_complete",
+            appliedAt: Date.UTC(2026, 4, 8, 22),
+            createdAt: Date.UTC(2026, 4, 8, 22),
+            decisionEvidence: {
+              kind: "eod_auto_complete",
+              observed: {
+                absoluteCashVariance: 2000,
+                voidedSaleTotal: 42000,
+              },
+              policy: {
+                maxAbsoluteCashVariance: 5000,
+                maxVoidedSaleTotal: 50000,
+              },
+            },
+            decisionReason:
+              "EOD Review has only low-risk review evidence within policy thresholds.",
+            domain: "daily_operations",
+            idempotencyKey:
+              "daily_operations:eod.auto_complete:store-1:2026-05-08",
+            mutationBoundary: "daily_close",
+            operatingDate: "2026-05-08",
+            outcome: "applied",
+            policyMode: "enabled",
+            policyVersion: "daily-operations.v1",
+            snapshotCounts: {},
+            sourceSubjects: [],
+            storeId: "store-1",
+            triggerType: "scheduled",
+            updatedAt: Date.UTC(2026, 4, 8, 22),
+          },
+        ],
+        dailyClose: [
+          {
+            _id: "daily-close-automation",
+            actorType: "automation",
+            automationDecisionReason:
+              "EOD Review has only low-risk review evidence within policy thresholds.",
+            automationPolicyVersion: "daily-operations.v1",
+            automationRunId: "automation-close-applied",
+            carryForwardWorkItemIds: [],
+            completedAt: Date.UTC(2026, 4, 8, 22),
+            createdAt: Date.UTC(2026, 4, 8, 22),
+            isCurrent: true,
+            lifecycleStatus: "active",
+            operatingDate: "2026-05-08",
+            organizationId: "org-1",
+            readiness: {
+              blockerCount: 0,
+              carryForwardCount: 0,
+              readyCount: 1,
+              reviewCount: 0,
+              status: "ready",
+            },
+            reportSnapshot: {
+              closeMetadata: {
+                actorType: "automation",
+                automationDecisionReason:
+                  "EOD Review has only low-risk review evidence within policy thresholds.",
+                automationPolicyVersion: "daily-operations.v1",
+                automationRunId: "automation-close-applied",
+                carryForwardWorkItemIds: [],
+                completedAt: Date.UTC(2026, 4, 8, 22),
+                endAt: Date.UTC(2026, 4, 9),
+                operatingDate: "2026-05-08",
+                organizationId: "org-1",
+                startAt: Date.UTC(2026, 4, 8),
+                storeId: "store-1",
+              },
+              carryForwardItems: [],
+              readiness: {
+                blockerCount: 0,
+                carryForwardCount: 0,
+                readyCount: 1,
+                reviewCount: 0,
+                status: "ready",
+              },
+              readyItems: [],
+              reviewedItems: [],
+              sourceSubjects: [],
+              summary: {
+                salesTotal: 0,
+                transactionCount: 0,
+              },
+            },
+            sourceSubjects: [],
+            status: "completed",
+            storeId: "store-1",
+            summary: {
+              salesTotal: 0,
+              transactionCount: 0,
+            },
+            updatedAt: Date.UTC(2026, 4, 8, 22),
+          },
+        ],
+        dailyOpening: [startedOpening],
+        store: [store],
+      }),
+      {
+        includeFinancialDetails: false,
+        includeManagerReviewEvidence: false,
+        operatingDate: "2026-05-08",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    const closeStatus = snapshot.automationStatuses.find(
+      (status) => status.lane === "close",
+    );
+    expect(closeStatus).toMatchObject({
+      decisionReason:
+        "EOD Review has only low-risk review evidence within policy thresholds.",
+      id: "automation-close-applied",
+      outcome: "applied",
+    });
+    expect(closeStatus).not.toHaveProperty("decisionEvidence");
+    expect(snapshot.completedClose).toMatchObject({
+      actorType: "automation",
+      automationRunId: "automation-close-applied",
+    });
+    expect(snapshot.completedClose).not.toHaveProperty("policyReviewedItemKeys");
   });
 
   it("exposes only operator-visible scheduled run evidence for the store day", async () => {

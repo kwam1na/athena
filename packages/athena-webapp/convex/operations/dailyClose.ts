@@ -1,4 +1,5 @@
 import {
+  internalMutation,
   mutation,
   query,
   type MutationCtx,
@@ -141,11 +142,17 @@ type DailyCloseSnapshot = {
   endAt: number;
   existingClose: Doc<"dailyClose"> | null;
   completedClose: {
+    actorType?: "human" | "automation";
+    automationDecisionReason?: string;
+    automationPolicyVersion?: string;
+    automationRunId?: Id<"automationRun">;
     completedAt?: number;
     completedByStaffProfileId?: Id<"staffProfile">;
     completedByStaffName?: string | null;
     completedByUserId?: Id<"athenaUser">;
     notes?: string;
+    policyReviewedItemKeys?: string[];
+    restrictedDetailsRedacted?: boolean;
   } | null;
   priorClose: Doc<"dailyClose"> | null;
   priorDaySummary?: DailyCloseSummary | null;
@@ -188,6 +195,11 @@ type DailyCloseReportSnapshot = {
     completedAt: number;
     completedByUserId?: Id<"athenaUser">;
     completedByStaffProfileId?: Id<"staffProfile">;
+    actorType?: "human" | "automation";
+    automationRunId?: Id<"automationRun">;
+    automationPolicyVersion?: string;
+    automationDecisionReason?: string;
+    policyReviewedItemKeys?: string[];
     notes?: string;
     reviewedItemKeys?: string[];
     carryForwardWorkItemIds: Id<"operationalWorkItem">[];
@@ -213,6 +225,10 @@ function normalizeCompletedDailyCloseSnapshot(args: {
   if (!reportSnapshot) {
     return null;
   }
+  const attribution = completionAttributionForDailyClose(
+    args.dailyClose,
+    args.completedByStaffProfileId,
+  );
 
   return {
     operatingDate: reportSnapshot.closeMetadata.operatingDate,
@@ -222,11 +238,24 @@ function normalizeCompletedDailyCloseSnapshot(args: {
     endAt: reportSnapshot.closeMetadata.endAt,
     existingClose: args.dailyClose,
     completedClose: {
+      ...(attribution.actorType ? { actorType: attribution.actorType } : {}),
+      ...(attribution.automationDecisionReason
+        ? { automationDecisionReason: attribution.automationDecisionReason }
+        : {}),
+      ...(attribution.automationPolicyVersion
+        ? { automationPolicyVersion: attribution.automationPolicyVersion }
+        : {}),
+      ...(attribution.automationRunId
+        ? { automationRunId: attribution.automationRunId }
+        : {}),
       completedAt: reportSnapshot.closeMetadata.completedAt,
-      completedByStaffProfileId: args.completedByStaffProfileId,
+      completedByStaffProfileId: attribution.completedByStaffProfileId,
       completedByStaffName: args.completedByStaffName ?? null,
-      completedByUserId: reportSnapshot.closeMetadata.completedByUserId,
+      completedByUserId: attribution.completedByUserId,
       notes: reportSnapshot.closeMetadata.notes,
+      ...(attribution.policyReviewedItemKeys
+        ? { policyReviewedItemKeys: attribution.policyReviewedItemKeys }
+        : {}),
     },
     priorClose: args.priorClose ?? null,
     priorDaySummary: args.priorClose?.summary
@@ -293,6 +322,10 @@ function normalizeDailyCloseSummary(
 type DailyCloseHistoryListItem = {
   dailyCloseId: Id<"dailyClose">;
   operatingDate: string;
+  actorType?: "human" | "automation";
+  automationDecisionReason?: string;
+  automationPolicyVersion?: string;
+  automationRunId?: Id<"automationRun">;
   completedAt?: number;
   completedByUserId?: Id<"athenaUser">;
   completedByStaffProfileId?: Id<"staffProfile">;
@@ -303,6 +336,16 @@ type DailyCloseHistoryListItem = {
   carryForwardCount: number;
   readyCount: number;
   summary: Record<string, unknown>;
+};
+
+type DailyCloseCompletionAttribution = {
+  actorType?: "human" | "automation";
+  automationDecisionReason?: string;
+  automationPolicyVersion?: string;
+  automationRunId?: Id<"automationRun">;
+  completedByStaffProfileId?: Id<"staffProfile">;
+  completedByUserId?: Id<"athenaUser">;
+  policyReviewedItemKeys?: string[];
 };
 
 type CompleteDailyCloseArgs = {
@@ -327,10 +370,23 @@ type CompleteDailyCloseArgs = {
   storeId: Id<"store">;
 };
 
+type CompleteDailyCloseForAutomationArgs = {
+  automationDecisionReason: string;
+  automationPolicyVersion: string;
+  automationRunId: Id<"automationRun">;
+  endAt?: number;
+  operatingDate: string;
+  organizationId?: Id<"organization">;
+  policyReviewedItemKeys: string[];
+  startAt?: number;
+  storeId: Id<"store">;
+};
+
 type CompleteDailyCloseResult = ApprovalCommandResult<{
   action: "completed" | "already_completed";
   dailyClose: Doc<"dailyClose">;
   carryForwardWorkItems: Array<Doc<"operationalWorkItem">>;
+  operationalEventId?: Id<"operationalEvent">;
 }>;
 
 type ReopenDailyCloseArgs = {
@@ -1363,12 +1419,17 @@ function uniqueDailyCloseItems(items: DailyCloseItem[]) {
 }
 
 function buildDailyCloseReportSnapshot(args: {
+  actorType?: "human" | "automation";
+  automationDecisionReason?: string;
+  automationPolicyVersion?: string;
+  automationRunId?: Id<"automationRun">;
   carryForwardWorkItemIds: Id<"operationalWorkItem">[];
   carryForwardWorkItems: Array<Doc<"operationalWorkItem">>;
   completedAt: number;
   completedByStaffProfileId?: Id<"staffProfile">;
   completedByUserId?: Id<"athenaUser">;
   notes?: string;
+  policyReviewedItemKeys?: string[];
   readiness: DailyCloseReadiness;
   reviewedItemKeys?: string[];
   snapshot: DailyCloseSnapshot;
@@ -1384,6 +1445,11 @@ function buildDailyCloseReportSnapshot(args: {
       completedAt: args.completedAt,
       completedByUserId: args.completedByUserId,
       completedByStaffProfileId: args.completedByStaffProfileId,
+      actorType: args.actorType,
+      automationRunId: args.automationRunId,
+      automationPolicyVersion: args.automationPolicyVersion,
+      automationDecisionReason: args.automationDecisionReason,
+      policyReviewedItemKeys: args.policyReviewedItemKeys,
       notes: args.notes,
       reviewedItemKeys: args.reviewedItemKeys,
       carryForwardWorkItemIds: args.carryForwardWorkItemIds,
@@ -1414,24 +1480,152 @@ function snapshotReviewedItems(
   );
 }
 
+function completionAttributionForDailyClose(
+  dailyClose: Doc<"dailyClose">,
+  completedByStaffProfileId = dailyClose.completedByStaffProfileId,
+): DailyCloseCompletionAttribution {
+  const reportSnapshot = dailyClose.reportSnapshot as
+    | DailyCloseReportSnapshot
+    | undefined;
+  const closeMetadata = reportSnapshot?.closeMetadata;
+
+  return {
+    actorType: dailyClose.actorType ?? closeMetadata?.actorType,
+    automationDecisionReason:
+      dailyClose.automationDecisionReason ??
+      closeMetadata?.automationDecisionReason,
+    automationPolicyVersion:
+      dailyClose.automationPolicyVersion ?? closeMetadata?.automationPolicyVersion,
+    automationRunId: dailyClose.automationRunId ?? closeMetadata?.automationRunId,
+    completedByStaffProfileId,
+    completedByUserId:
+      dailyClose.completedByUserId ?? closeMetadata?.completedByUserId,
+    policyReviewedItemKeys:
+      dailyClose.policyReviewedItemKeys ?? closeMetadata?.policyReviewedItemKeys,
+  };
+}
+
+function redactDailyCloseItemForBroadView(item: DailyCloseItem): DailyCloseItem {
+  return {
+    key: item.key,
+    severity: item.severity,
+    category: item.category,
+    title: item.title,
+    message: item.message,
+    subject: item.subject,
+  };
+}
+
+function redactDailyCloseSummaryForBroadView(
+  summary: Record<string, unknown>,
+): Record<string, unknown> {
+  const normalized = normalizeDailyCloseSummary(summary);
+
+  return {
+    carriedOverRegisterCount: normalized.carriedOverRegisterCount,
+    closedRegisterSessionCount: normalized.closedRegisterSessionCount,
+    currentDayCashTransactionCount: normalized.currentDayCashTransactionCount,
+    expenseStaffCount: normalized.expenseStaffCount,
+    expenseTransactionCount: normalized.expenseTransactionCount,
+    itemAdjustmentCount: normalized.itemAdjustmentCount,
+    openWorkItemCount: normalized.openWorkItemCount,
+    pendingApprovalCount: normalized.pendingApprovalCount,
+    registerCount: normalized.registerCount,
+    registerVarianceCount: normalized.registerVarianceCount,
+    transactionCount: normalized.transactionCount,
+  };
+}
+
+function redactDailyCloseReportSnapshotForBroadView(
+  snapshot: DailyCloseReportSnapshot,
+): DailyCloseReportSnapshot {
+  return {
+    closeMetadata: {
+      operatingDate: snapshot.closeMetadata.operatingDate,
+      storeId: snapshot.closeMetadata.storeId,
+      organizationId: snapshot.closeMetadata.organizationId,
+      startAt: snapshot.closeMetadata.startAt,
+      endAt: snapshot.closeMetadata.endAt,
+      completedAt: snapshot.closeMetadata.completedAt,
+      actorType: snapshot.closeMetadata.actorType,
+      automationRunId: snapshot.closeMetadata.automationRunId,
+      automationPolicyVersion: snapshot.closeMetadata.automationPolicyVersion,
+      automationDecisionReason: snapshot.closeMetadata.automationDecisionReason,
+      notes: snapshot.closeMetadata.notes,
+      carryForwardWorkItemIds: snapshot.closeMetadata.carryForwardWorkItemIds,
+    },
+    readiness: snapshot.readiness,
+    summary: redactDailyCloseSummaryForBroadView(snapshot.summary),
+    reviewedItems: snapshot.reviewedItems.map(redactDailyCloseItemForBroadView),
+    carryForwardItems: snapshot.carryForwardItems.map(
+      redactDailyCloseItemForBroadView,
+    ),
+    readyItems: snapshot.readyItems.map(redactDailyCloseItemForBroadView),
+    sourceSubjects: [],
+  };
+}
+
+function maybeRedactDailyCloseSnapshotForBroadView(
+  snapshot: DailyCloseSnapshot,
+  includeManagerReviewEvidence: boolean,
+): DailyCloseSnapshot {
+  if (includeManagerReviewEvidence) return snapshot;
+  const redactedCompletedClose = snapshot.completedClose
+    ? (({ policyReviewedItemKeys: _policyReviewedItemKeys, ...completedClose }) => ({
+        ...completedClose,
+        restrictedDetailsRedacted: Boolean(_policyReviewedItemKeys?.length),
+      }))(snapshot.completedClose)
+    : null;
+
+  return {
+    ...snapshot,
+    completedClose: redactedCompletedClose,
+    blockers: snapshot.blockers.map(redactDailyCloseItemForBroadView),
+    reviewItems: snapshot.reviewItems.map(redactDailyCloseItemForBroadView),
+    carryForwardItems: snapshot.carryForwardItems.map(
+      redactDailyCloseItemForBroadView,
+    ),
+    existingClose: null,
+    priorClose: null,
+    readyItems: snapshot.readyItems.map(redactDailyCloseItemForBroadView),
+    summary: {
+      ...emptySummary(),
+      ...redactDailyCloseSummaryForBroadView(snapshot.summary),
+    },
+    sourceSubjects: [],
+  };
+}
+
 function toDailyCloseHistoryListItem(
   dailyClose: Doc<"dailyClose">,
   completedByStaffName?: string | null,
   completedByStaffProfileId = dailyClose.completedByStaffProfileId,
+  includeManagerReviewEvidence = true,
 ): DailyCloseHistoryListItem {
+  const attribution = completionAttributionForDailyClose(
+    dailyClose,
+    completedByStaffProfileId,
+  );
+
   return {
     dailyCloseId: dailyClose._id,
     operatingDate: dailyClose.operatingDate,
+    actorType: attribution.actorType,
+    automationDecisionReason: attribution.automationDecisionReason,
+    automationPolicyVersion: attribution.automationPolicyVersion,
+    automationRunId: attribution.automationRunId,
     completedAt: dailyClose.completedAt,
-    completedByUserId: dailyClose.completedByUserId,
-    completedByStaffProfileId,
+    completedByUserId: attribution.completedByUserId,
+    completedByStaffProfileId: attribution.completedByStaffProfileId,
     completedByStaffName,
     readinessStatus: dailyClose.readiness.status,
     blockerCount: dailyClose.readiness.blockerCount,
     reviewCount: dailyClose.readiness.reviewCount,
     carryForwardCount: dailyClose.readiness.carryForwardCount,
     readyCount: dailyClose.readiness.readyCount,
-    summary: dailyClose.summary,
+    summary: includeManagerReviewEvidence
+      ? dailyClose.summary
+      : redactDailyCloseSummaryForBroadView(dailyClose.summary),
   };
 }
 
@@ -1498,11 +1692,13 @@ export async function buildDailyCloseSnapshotWithCtx(
   ctx: Pick<QueryCtx, "db">,
   args: {
     endAt?: number;
+    includeManagerReviewEvidence?: boolean;
     operatingDate: string;
     startAt?: number;
     storeId: Id<"store">;
   },
 ): Promise<DailyCloseSnapshot> {
+  const includeManagerReviewEvidence = args.includeManagerReviewEvidence ?? true;
   const range = resolveOperatingDateRange(args);
   const store = await getStore(ctx, args.storeId);
   const automationStatus =
@@ -1577,10 +1773,13 @@ export async function buildDailyCloseSnapshotWithCtx(
     });
 
     if (completedSnapshot) {
-      return {
-        ...completedSnapshot,
-        automationStatus,
-      };
+      return maybeRedactDailyCloseSnapshotForBroadView(
+        {
+          ...completedSnapshot,
+          automationStatus,
+        },
+        includeManagerReviewEvidence,
+      );
     }
   }
 
@@ -2252,15 +2451,42 @@ export async function buildDailyCloseSnapshotWithCtx(
   ];
   const completedClose =
     existingClose?.status === "completed"
-      ? {
-          completedAt: existingClose.completedAt,
-          completedByStaffProfileId,
-          completedByStaffName: completedByStaffProfileId
-            ? (staffNamesById.get(completedByStaffProfileId) ?? null)
-            : null,
-          completedByUserId: existingClose.completedByUserId,
-          notes: existingClose.notes,
-        }
+      ? (() => {
+          const attribution = completionAttributionForDailyClose(
+            existingClose,
+            completedByStaffProfileId,
+          );
+
+          return {
+            ...(attribution.actorType ? { actorType: attribution.actorType } : {}),
+            ...(attribution.automationDecisionReason
+              ? {
+                  automationDecisionReason:
+                    attribution.automationDecisionReason,
+                }
+              : {}),
+            ...(attribution.automationPolicyVersion
+              ? {
+                  automationPolicyVersion:
+                    attribution.automationPolicyVersion,
+                }
+              : {}),
+            ...(attribution.automationRunId
+              ? { automationRunId: attribution.automationRunId }
+              : {}),
+            ...(includeManagerReviewEvidence &&
+            attribution.policyReviewedItemKeys
+              ? { policyReviewedItemKeys: attribution.policyReviewedItemKeys }
+              : {}),
+            completedAt: existingClose.completedAt,
+            completedByStaffProfileId: attribution.completedByStaffProfileId,
+            completedByStaffName: completedByStaffProfileId
+              ? (staffNamesById.get(completedByStaffProfileId) ?? null)
+              : null,
+            completedByUserId: attribution.completedByUserId,
+            notes: existingClose.notes,
+          };
+        })()
       : null;
   const status = completedClose
     ? "completed"
@@ -2268,28 +2494,31 @@ export async function buildDailyCloseSnapshotWithCtx(
       ? "carry_forward"
       : readiness.status;
 
-  return {
-    operatingDate: args.operatingDate,
-    storeId: args.storeId,
-    organizationId: store?.organizationId ?? null,
-    automationStatus,
-    startAt: range.startAt,
-    endAt: range.endAt,
-    existingClose,
-    completedClose,
-    priorClose,
-    priorDaySummary: priorClose?.summary
-      ? normalizeDailyCloseSummary(priorClose.summary)
-      : null,
-    status,
-    blockers,
-    reviewItems,
-    carryForwardItems,
-    readyItems,
-    readiness,
-    summary,
-    sourceSubjects: uniqueSourceSubjects(allItems),
-  };
+  return maybeRedactDailyCloseSnapshotForBroadView(
+    {
+      operatingDate: args.operatingDate,
+      storeId: args.storeId,
+      organizationId: store?.organizationId ?? null,
+      automationStatus,
+      startAt: range.startAt,
+      endAt: range.endAt,
+      existingClose,
+      completedClose,
+      priorClose,
+      priorDaySummary: priorClose?.summary
+        ? normalizeDailyCloseSummary(priorClose.summary)
+        : null,
+      status,
+      blockers,
+      reviewItems,
+      carryForwardItems,
+      readyItems,
+      readiness,
+      summary,
+      sourceSubjects: uniqueSourceSubjects(allItems),
+    },
+    includeManagerReviewEvidence,
+  );
 }
 
 async function validateCarryForwardWorkItemIds(
@@ -2394,6 +2623,81 @@ async function markOtherDailyClosesNotCurrent(
         ctx.db.patch("dailyClose", dailyClose._id, { isCurrent: false }),
       ),
   );
+}
+
+async function getNonActiveDailyCloseForDate(
+  ctx: Pick<QueryCtx, "db">,
+  args: {
+    operatingDate: string;
+    storeId: Id<"store">;
+  },
+) {
+  const closes = await ctx.db
+    .query("dailyClose")
+    .withIndex("by_storeId_operatingDate", (q) =>
+      q.eq("storeId", args.storeId).eq("operatingDate", args.operatingDate),
+    )
+    .take(DAILY_CLOSE_QUERY_LIMIT);
+
+  return (
+    closes.find(
+      (dailyClose) =>
+        dailyClose.lifecycleStatus === "reopened" ||
+        dailyClose.lifecycleStatus === "superseded",
+    ) ?? null
+  );
+}
+
+async function recordDailyCloseCompletedEvent(
+  ctx: MutationCtx,
+  args: {
+    actorStaffProfileId?: Id<"staffProfile">;
+    actorType: "human" | "automation";
+    actorUserId?: Id<"athenaUser">;
+    approvedByStaffProfileId?: Id<"staffProfile">;
+    approvalProofId?: Id<"approvalProof">;
+    automationDecisionReason?: string;
+    automationPolicyVersion?: string;
+    automationRunId?: Id<"automationRun">;
+    dailyClose: Doc<"dailyClose">;
+    operatingDate: string;
+    organizationId: Id<"organization">;
+    policyReviewedItemKeys?: string[];
+    storeId: Id<"store">;
+  },
+) {
+  return recordOperationalEventWithCtx(ctx, {
+    storeId: args.storeId,
+    organizationId: args.organizationId,
+    eventType: "daily_close_completed",
+    subjectType: DAILY_CLOSE_SUBJECT_TYPE,
+    subjectId: args.dailyClose._id,
+    subjectLabel: `EOD Review ${args.operatingDate}`,
+    message:
+      args.actorType === "automation"
+        ? `Athena completed EOD Review for ${args.operatingDate}.`
+        : `EOD Review completed for ${args.operatingDate}.`,
+    actorUserId: args.actorUserId,
+    actorStaffProfileId: args.actorStaffProfileId,
+    actorType: args.actorType,
+    automationDecisionReason: args.automationDecisionReason,
+    automationPolicyVersion: args.automationPolicyVersion,
+    automationRunId: args.automationRunId,
+    metadata: {
+      ...(args.approvalProofId
+        ? { approvalProofId: args.approvalProofId }
+        : {}),
+      ...(args.approvedByStaffProfileId
+        ? { approvedByStaffProfileId: args.approvedByStaffProfileId }
+        : {}),
+      ...(args.policyReviewedItemKeys
+        ? { policyReviewedItemKeys: args.policyReviewedItemKeys }
+        : {}),
+      operatingDate: args.operatingDate,
+      readiness: args.dailyClose.readiness,
+      summary: args.dailyClose.summary,
+    },
+  });
 }
 
 export async function completeDailyCloseWithCtx(
@@ -2563,6 +2867,7 @@ export async function completeDailyCloseWithCtx(
       completedAt: now,
       completedByStaffProfileId,
       completedByUserId: args.actorUserId,
+      actorType: "human",
       notes,
       readiness,
       reviewedItemKeys: args.reviewedItemKeys,
@@ -2576,6 +2881,7 @@ export async function completeDailyCloseWithCtx(
     completedAt: now,
     completedByUserId: args.actorUserId,
     completedByStaffProfileId,
+    actorType: "human" as const,
   };
 
   let dailyCloseId = snapshot.existingClose?._id;
@@ -2613,23 +2919,16 @@ export async function completeDailyCloseWithCtx(
     });
   }
 
-  await recordOperationalEventWithCtx(ctx, {
+  const operationalEvent = await recordDailyCloseCompletedEvent(ctx, {
     storeId: args.storeId,
     organizationId: store.organizationId,
-    eventType: "daily_close_completed",
-    subjectType: DAILY_CLOSE_SUBJECT_TYPE,
-    subjectId: dailyClose._id,
-    subjectLabel: `EOD Review ${args.operatingDate}`,
-    message: `EOD Review completed for ${args.operatingDate}.`,
+    actorType: "human",
     actorUserId: args.actorUserId,
     actorStaffProfileId: completedByStaffProfileId,
-    metadata: {
-      approvalProofId: approvalProof.data.approvalProofId,
-      approvedByStaffProfileId: approvalProof.data.approvedByStaffProfileId,
-      operatingDate: args.operatingDate,
-      readiness: dailyClose.readiness,
-      summary: dailyClose.summary,
-    },
+    approvalProofId: approvalProof.data.approvalProofId,
+    approvedByStaffProfileId: approvalProof.data.approvedByStaffProfileId,
+    dailyClose,
+    operatingDate: args.operatingDate,
   });
 
   for (const workItem of createdWorkItemResult.workItems) {
@@ -2655,6 +2954,233 @@ export async function completeDailyCloseWithCtx(
     action: "completed",
     dailyClose,
     carryForwardWorkItems,
+    operationalEventId: operationalEvent?._id,
+  });
+}
+
+export async function completeDailyCloseForAutomationWithCtx(
+  ctx: MutationCtx,
+  args: CompleteDailyCloseForAutomationArgs,
+): Promise<CompleteDailyCloseResult> {
+  const store = await getStore(ctx, args.storeId);
+
+  if (!store) {
+    return userError({
+      code: "not_found",
+      message: "Store not found.",
+    });
+  }
+
+  if (args.organizationId && args.organizationId !== store.organizationId) {
+    return userError({
+      code: "authorization_failed",
+      message: "EOD Review store does not belong to this organization.",
+    });
+  }
+
+  const range = resolveOperatingDateRange(args);
+
+  if (!range) {
+    return userError({
+      code: "validation_failed",
+      message: "Operating date must use YYYY-MM-DD.",
+    });
+  }
+
+  const snapshot = await buildDailyCloseSnapshotWithCtx(ctx, {
+    endAt: args.endAt,
+    operatingDate: args.operatingDate,
+    startAt: args.startAt,
+    storeId: args.storeId,
+  });
+
+  if (snapshot.existingClose?.status === "completed") {
+    const carryForwardWorkItems = await Promise.all(
+      snapshot.existingClose.carryForwardWorkItemIds.map((workItemId) =>
+        ctx.db.get("operationalWorkItem", workItemId),
+      ),
+    );
+
+    return ok({
+      action: "already_completed",
+      dailyClose: snapshot.existingClose,
+      carryForwardWorkItems: carryForwardWorkItems.filter(Boolean) as Array<
+        Doc<"operationalWorkItem">
+      >,
+    });
+  }
+
+  if (!snapshot.existingClose) {
+    const nonActiveClose = await getNonActiveDailyCloseForDate(ctx, {
+      operatingDate: args.operatingDate,
+      storeId: args.storeId,
+    });
+
+    if (nonActiveClose) {
+      return userError({
+        code: "precondition_failed",
+        message:
+          "EOD Review automation cannot complete while a reopened or superseded close exists for this store day.",
+        metadata: {
+          dailyCloseId: nonActiveClose._id,
+          lifecycleStatus: nonActiveClose.lifecycleStatus,
+        },
+      });
+    }
+  }
+
+  if (
+    snapshot.existingClose?.lifecycleStatus === "reopened" ||
+    snapshot.existingClose?.lifecycleStatus === "superseded" ||
+    snapshot.existingClose?.reopenedFromDailyCloseId ||
+    snapshot.existingClose?.supersedesDailyCloseId
+  ) {
+    return userError({
+      code: "precondition_failed",
+      message:
+        "EOD Review automation cannot complete while a reopened or superseded close exists for this store day.",
+      metadata: {
+        dailyCloseId: snapshot.existingClose._id,
+        lifecycleStatus: snapshot.existingClose.lifecycleStatus,
+      },
+    });
+  }
+
+  if (snapshot.blockers.length > 0) {
+    return userError({
+      code: "precondition_failed",
+      message:
+        "EOD Review automation cannot complete while blocker items remain.",
+      metadata: {
+        blockerCount: snapshot.blockers.length,
+      },
+    });
+  }
+
+  if (snapshot.carryForwardItems.length > 0) {
+    return userError({
+      code: "precondition_failed",
+      message:
+        "EOD Review automation cannot complete while carry-forward items remain.",
+      metadata: {
+        carryForwardCount: snapshot.carryForwardItems.length,
+      },
+    });
+  }
+
+  const reviewedItemKeys = new Set(args.policyReviewedItemKeys);
+  const unreviewedItemKeys = snapshot.reviewItems
+    .map((item) => item.key)
+    .filter((key) => !reviewedItemKeys.has(key));
+
+  if (unreviewedItemKeys.length > 0) {
+    return userError({
+      code: "precondition_failed",
+      message:
+        "EOD Review automation cannot complete while review items are unreviewed by policy.",
+      metadata: {
+        reviewItemCount: snapshot.reviewItems.length,
+        unreviewedItemKeys,
+      },
+    });
+  }
+
+  const now = Date.now();
+  const readiness = {
+    ...snapshot.readiness,
+    carryForwardCount: 0,
+  };
+  const summary = {
+    ...snapshot.summary,
+    carryForwardWorkItemCount: 0,
+  };
+  const closeFields = {
+    storeId: args.storeId,
+    organizationId: store.organizationId,
+    operatingDate: args.operatingDate,
+    status: "completed" as const,
+    lifecycleStatus: "active" as const,
+    isCurrent: true,
+    readiness,
+    summary,
+    sourceSubjects: snapshot.sourceSubjects,
+    reportSnapshot: buildDailyCloseReportSnapshot({
+      actorType: "automation",
+      automationDecisionReason: args.automationDecisionReason,
+      automationPolicyVersion: args.automationPolicyVersion,
+      automationRunId: args.automationRunId,
+      carryForwardWorkItemIds: [],
+      carryForwardWorkItems: [],
+      completedAt: now,
+      policyReviewedItemKeys: args.policyReviewedItemKeys,
+      readiness,
+      reviewedItemKeys: args.policyReviewedItemKeys,
+      snapshot,
+      summary,
+    }),
+    carryForwardWorkItemIds: [],
+    reviewedItemKeys: args.policyReviewedItemKeys,
+    actorType: "automation" as const,
+    automationRunId: args.automationRunId,
+    automationPolicyVersion: args.automationPolicyVersion,
+    automationDecisionReason: args.automationDecisionReason,
+    policyReviewedItemKeys: args.policyReviewedItemKeys,
+    updatedAt: now,
+    completedAt: now,
+  };
+
+  let dailyCloseId = snapshot.existingClose?._id;
+
+  if (dailyCloseId) {
+    await ctx.db.patch("dailyClose", dailyCloseId, closeFields);
+  } else {
+    dailyCloseId = await ctx.db.insert("dailyClose", {
+      ...closeFields,
+      createdAt: now,
+    });
+  }
+
+  await markOtherDailyClosesNotCurrent(ctx, {
+    currentCloseId: dailyCloseId,
+    storeId: args.storeId,
+  });
+
+  const dailyClose = await ctx.db.get("dailyClose", dailyCloseId);
+
+  if (!dailyClose) {
+    return userError({
+      code: "unavailable",
+      message: "EOD Review could not be loaded after automation completion.",
+      retryable: true,
+    });
+  }
+
+  if (dailyClose.supersedesDailyCloseId) {
+    await ctx.db.patch("dailyClose", dailyClose.supersedesDailyCloseId, {
+      lifecycleStatus: "superseded",
+      isCurrent: false,
+      supersededByDailyCloseId: dailyClose._id,
+      updatedAt: now,
+    });
+  }
+
+  const operationalEvent = await recordDailyCloseCompletedEvent(ctx, {
+    storeId: args.storeId,
+    organizationId: store.organizationId,
+    actorType: "automation",
+    automationDecisionReason: args.automationDecisionReason,
+    automationPolicyVersion: args.automationPolicyVersion,
+    automationRunId: args.automationRunId,
+    dailyClose,
+    operatingDate: args.operatingDate,
+    policyReviewedItemKeys: args.policyReviewedItemKeys,
+  });
+
+  return ok({
+    action: "completed",
+    dailyClose,
+    carryForwardWorkItems: [],
+    operationalEventId: operationalEvent?._id,
   });
 }
 
@@ -2891,10 +3417,12 @@ export async function getDailyCloseOpeningContextWithCtx(
 export async function listCompletedDailyCloseHistoryWithCtx(
   ctx: Pick<QueryCtx, "db">,
   args: {
+    includeManagerReviewEvidence?: boolean;
     limit?: number;
     storeId: Id<"store">;
   },
 ) {
+  const includeManagerReviewEvidence = args.includeManagerReviewEvidence ?? true;
   const limit = Math.min(
     Math.max(Math.floor(args.limit ?? 50), 1),
     DAILY_CLOSE_QUERY_LIMIT,
@@ -2933,6 +3461,7 @@ export async function listCompletedDailyCloseHistoryWithCtx(
         ? (staffNamesById.get(completedByStaffProfileId) ?? null)
         : null,
       completedByStaffProfileId,
+      includeManagerReviewEvidence,
     );
   });
 }
@@ -2941,6 +3470,7 @@ export async function getCompletedDailyCloseHistoryDetailWithCtx(
   ctx: Pick<QueryCtx, "db">,
   args: {
     dailyCloseId: Id<"dailyClose">;
+    includeManagerReviewEvidence?: boolean;
     storeId: Id<"store">;
   },
 ) {
@@ -2964,17 +3494,29 @@ export async function getCompletedDailyCloseHistoryDetailWithCtx(
   const staffNamesById = await buildStaffNamesById(ctx, [
     completedByStaffProfileId,
   ]);
+  const attribution = completionAttributionForDailyClose(
+    dailyClose,
+    completedByStaffProfileId,
+  );
+  const reportSnapshot = dailyClose.reportSnapshot as DailyCloseReportSnapshot;
+  const includeManagerReviewEvidence = args.includeManagerReviewEvidence ?? true;
 
   return {
     dailyCloseId: dailyClose._id,
     operatingDate: dailyClose.operatingDate,
+    actorType: attribution.actorType,
+    automationDecisionReason: attribution.automationDecisionReason,
+    automationPolicyVersion: attribution.automationPolicyVersion,
+    automationRunId: attribution.automationRunId,
     completedAt: dailyClose.completedAt,
-    completedByUserId: dailyClose.completedByUserId,
-    completedByStaffProfileId,
-    completedByStaffName: completedByStaffProfileId
-      ? (staffNamesById.get(completedByStaffProfileId) ?? null)
+    completedByUserId: attribution.completedByUserId,
+    completedByStaffProfileId: attribution.completedByStaffProfileId,
+    completedByStaffName: attribution.completedByStaffProfileId
+      ? (staffNamesById.get(attribution.completedByStaffProfileId) ?? null)
       : null,
-    reportSnapshot: dailyClose.reportSnapshot,
+    reportSnapshot: includeManagerReviewEvidence
+      ? reportSnapshot
+      : redactDailyCloseReportSnapshotForBroadView(reportSnapshot),
   };
 }
 
@@ -2985,7 +3527,11 @@ export const getDailyCloseSnapshot = query({
     startAt: v.optional(v.number()),
     storeId: v.id("store"),
   },
-  handler: (ctx, args) => buildDailyCloseSnapshotWithCtx(ctx, args),
+  handler: (ctx, args) =>
+    buildDailyCloseSnapshotWithCtx(ctx, {
+      ...args,
+      includeManagerReviewEvidence: false,
+    }),
 });
 
 export const completeDailyClose = mutation({
@@ -3018,6 +3564,22 @@ export const completeDailyClose = mutation({
   handler: (ctx, args) => completeDailyCloseWithCtx(ctx, args),
 });
 
+export const completeDailyCloseForAutomation = internalMutation({
+  args: {
+    automationDecisionReason: v.string(),
+    automationPolicyVersion: v.string(),
+    automationRunId: v.id("automationRun"),
+    endAt: v.optional(v.number()),
+    operatingDate: v.string(),
+    organizationId: v.optional(v.id("organization")),
+    policyReviewedItemKeys: v.array(v.string()),
+    startAt: v.optional(v.number()),
+    storeId: v.id("store"),
+  },
+  returns: commandResultValidator(v.any()),
+  handler: (ctx, args) => completeDailyCloseForAutomationWithCtx(ctx, args),
+});
+
 export const reopenDailyClose = mutation({
   args: {
     actorUserId: v.optional(v.id("athenaUser")),
@@ -3045,7 +3607,11 @@ export const listCompletedDailyCloseHistory = query({
     limit: v.optional(v.number()),
     storeId: v.id("store"),
   },
-  handler: (ctx, args) => listCompletedDailyCloseHistoryWithCtx(ctx, args),
+  handler: (ctx, args) =>
+    listCompletedDailyCloseHistoryWithCtx(ctx, {
+      ...args,
+      includeManagerReviewEvidence: false,
+    }),
 });
 
 export const getCompletedDailyCloseHistoryDetail = query({
@@ -3053,5 +3619,9 @@ export const getCompletedDailyCloseHistoryDetail = query({
     dailyCloseId: v.id("dailyClose"),
     storeId: v.id("store"),
   },
-  handler: (ctx, args) => getCompletedDailyCloseHistoryDetailWithCtx(ctx, args),
+  handler: (ctx, args) =>
+    getCompletedDailyCloseHistoryDetailWithCtx(ctx, {
+      ...args,
+      includeManagerReviewEvidence: false,
+    }),
 });

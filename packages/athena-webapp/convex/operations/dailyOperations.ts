@@ -122,6 +122,8 @@ type DailyOperationsTimelineEvent = {
 
 type DailyOperationsAutomationStatus = {
   id: string;
+  decisionEvidence?: unknown;
+  decisionReason?: string;
   lane: "opening" | "close";
   occurredAt?: number | null;
   outcome:
@@ -132,6 +134,8 @@ type DailyOperationsAutomationStatus = {
     | "dry_run"
     | "disabled"
     | "eligible";
+  policyMode?: string;
+  policyVersion?: string;
   reviewEvidence?: Array<{
     id: string;
     label: string;
@@ -1430,15 +1434,45 @@ async function getLatestAutomationRunForAction(
   return runs.sort(compareAutomationRuns)[0] ?? null;
 }
 
+async function getLatestAppliedAutomationRunForAction(
+  ctx: Pick<QueryCtx, "db">,
+  args: {
+    action: string;
+    operatingDate: string;
+    storeId: Id<"store">;
+  },
+) {
+  const runs = await listAutomationRunsForStoreDayActionWithCtx(ctx, {
+    action: args.action,
+    domain: "daily_operations",
+    operatingDate: args.operatingDate,
+    storeId: args.storeId,
+  });
+
+  return runs
+    .filter((run) => run.outcome === "applied")
+    .sort(compareAutomationRuns)[0] ?? null;
+}
+
 async function listDailyOperationsAutomationStatuses(
   ctx: Pick<QueryCtx, "db">,
   args: {
+    closeCompletion?: {
+      actorType?: "human" | "automation";
+      automationRunId?: Id<"automationRun">;
+    } | null;
     includeManagerReviewEvidence?: boolean;
     operatingDate: string;
     storeId: Id<"store">;
   },
 ): Promise<DailyOperationsAutomationStatus[]> {
-  const [openingRun, closeRun, openingRecord] = await Promise.all([
+  const [
+    openingRun,
+    closePrepareRun,
+    closeAutoCompleteRun,
+    appliedCloseAutoCompleteRun,
+    openingRecord,
+  ] = await Promise.all([
     getLatestAutomationRunForAction(ctx, {
       action: "opening.auto_start",
       operatingDate: args.operatingDate,
@@ -1449,18 +1483,38 @@ async function listDailyOperationsAutomationStatuses(
       operatingDate: args.operatingDate,
       storeId: args.storeId,
     }),
+    getLatestAutomationRunForAction(ctx, {
+      action: "eod.auto_complete",
+      operatingDate: args.operatingDate,
+      storeId: args.storeId,
+    }),
+    getLatestAppliedAutomationRunForAction(ctx, {
+      action: "eod.auto_complete",
+      operatingDate: args.operatingDate,
+      storeId: args.storeId,
+    }),
     getDailyOpeningRecordForDate(ctx, args),
   ]);
   const statuses: DailyOperationsAutomationStatus[] = [];
+  const completedByAthena = args.closeCompletion?.actorType === "automation";
+  const closeRun =
+    completedByAthena && appliedCloseAutoCompleteRun
+      ? appliedCloseAutoCompleteRun
+      : closeAutoCompleteRun ?? closePrepareRun;
 
   if (openingRun) {
     const reviewEvidence = reviewEvidenceForDailyOperations(openingRecord);
 
     statuses.push({
       id: openingRun._id,
+      ...(openingRun.decisionReason
+        ? { decisionReason: openingRun.decisionReason }
+        : {}),
       lane: "opening",
       occurredAt: openingRun.appliedAt ?? openingRun.updatedAt,
       outcome: openingRun.outcome,
+      policyMode: openingRun.policyMode,
+      policyVersion: openingRun.policyVersion,
       ...(args.includeManagerReviewEvidence &&
       reviewEvidence &&
       reviewEvidence.length > 0
@@ -1475,9 +1529,17 @@ async function listDailyOperationsAutomationStatuses(
   if (closeRun) {
     statuses.push({
       id: closeRun._id,
+      ...(args.includeManagerReviewEvidence && closeRun.decisionEvidence
+        ? { decisionEvidence: closeRun.decisionEvidence }
+        : {}),
+      ...(closeRun.decisionReason
+        ? { decisionReason: closeRun.decisionReason }
+        : {}),
       lane: "close",
       occurredAt: closeRun.appliedAt ?? closeRun.updatedAt,
       outcome: closeRun.outcome,
+      policyMode: closeRun.policyMode,
+      policyVersion: closeRun.policyVersion,
       sourceLink: {
         search: {
           operatingDate: args.operatingDate,
@@ -1836,7 +1898,6 @@ export async function buildDailyOperationsSnapshotWithCtx(
     closeSnapshot,
     dailyCloseRecord,
     queueCounts,
-    automationStatuses,
     scheduledRunSummaries,
     timeline,
     store,
@@ -1848,7 +1909,6 @@ export async function buildDailyOperationsSnapshotWithCtx(
       buildDailyCloseSnapshotWithCtx(ctx, args),
       getDailyCloseRecordForDate(ctx, args),
       listOpenQueueSnapshot(ctx, args.storeId),
-      listDailyOperationsAutomationStatuses(ctx, args),
       args.includeScheduledRunSummaries &&
       (args.includeManagerReviewEvidence ?? true)
         ? listDailyOperationsScheduledRunSummaries(ctx, {
@@ -1874,6 +1934,10 @@ export async function buildDailyOperationsSnapshotWithCtx(
         : Promise.resolve(undefined),
       buildWeekMetrics(ctx, args),
     ]);
+  const automationStatuses = await listDailyOperationsAutomationStatuses(ctx, {
+    ...args,
+    closeCompletion: closeSnapshot.completedClose,
+  });
   const priorOperatingDate = shiftOperatingDate(args.operatingDate, -1);
   const priorDayMetric =
     weekMetrics.find((metric) => metric.operatingDate === priorOperatingDate) ??
@@ -1990,6 +2054,7 @@ export async function buildDailyOperationsSnapshotWithCtx(
   return {
     automationStatuses,
     attentionItems,
+    completedClose: closeSnapshot.completedClose,
     closeSummary,
     currency: store?.currency ?? "GHS",
     endAt: range.endAt,

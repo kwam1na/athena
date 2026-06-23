@@ -1106,6 +1106,47 @@ describe("DailyOperationsViewContent", () => {
     );
   });
 
+  it("shows Athena completion attribution for a closed store day", () => {
+    renderContent({
+      ...closedSnapshot,
+      completedClose: {
+        actorType: "automation",
+        automationDecisionReason:
+          "EOD Review has only low-risk review evidence within policy thresholds.",
+        completedAt: Date.UTC(2026, 4, 8, 22),
+      },
+    } as DailyOperationsSnapshot);
+
+    expect(
+      screen.getByText("Athena completed EOD Review under store policy."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Policy checked low-risk review evidence before completion."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/manager approved/i)).not.toBeInTheDocument();
+  });
+
+  it("shows safe Athena completion attribution when details are redacted", () => {
+    renderContent({
+      ...closedSnapshot,
+      completedClose: {
+        actorType: "automation",
+        completedAt: Date.UTC(2026, 4, 8, 22),
+        restrictedDetailsRedacted: true,
+      },
+    } as DailyOperationsSnapshot);
+
+    expect(
+      screen.getByText("Athena completed EOD Review under store policy."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Restricted close evidence is hidden for this account."),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("Policy checked low-risk review evidence before completion."),
+    ).not.toBeInTheDocument();
+  });
+
   it("shows compact scheduled-run evidence without backend details", () => {
     renderContent(scheduledRunsSnapshot);
 

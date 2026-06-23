@@ -2,11 +2,18 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import {
+  getEodAutoCompletePolicyConfigWithCtx,
+  upsertEodAutoCompletePolicyConfigWithCtx,
+} from "../automation/runLedger";
+import {
+  getEodAutoCompletePolicy,
   getOpeningAutoStartPolicy,
   prepareDailyCloseAutomationWithCtx,
+  runDailyCloseAutoCompleteEligibilityWithCtx,
   runConfiguredDailyOperationsAutomationWithCtx,
   runDailyOpeningAutomationWithCtx,
   runScheduledDailyOperationsAutomationWithCtx,
+  updateEodAutoCompletePolicy,
   updateOpeningAutoStartPolicy,
 } from "./dailyOperationsAutomation";
 
@@ -227,7 +234,7 @@ const store = {
 };
 
 function policy(
-  action: "opening.auto_start" | "eod.prepare",
+  action: "opening.auto_start" | "eod.prepare" | "eod.auto_complete",
   mode: "disabled" | "dry_run" | "enabled",
   overrides: Partial<Row> = {},
 ) {
@@ -240,6 +247,36 @@ function policy(
     policyVersion: "daily-operations.v1",
     storeId: "store-1",
     updatedAt: 1,
+    ...overrides,
+  };
+}
+
+function closedRegisterSession(overrides: Partial<Row> = {}): Row {
+  return {
+    _id: "register-1",
+    closedAt: Date.UTC(2026, 5, 8, 21),
+    countedCash: 25000,
+    expectedCash: 25000,
+    openedAt: Date.UTC(2026, 5, 8, 8),
+    registerNumber: "1",
+    status: "closed",
+    storeId: "store-1",
+    ...overrides,
+  };
+}
+
+function completedTransaction(overrides: Partial<Row> = {}): Row {
+  return {
+    _id: "txn-1",
+    completedAt: Date.UTC(2026, 5, 8, 14),
+    payments: [{ amount: 12000, method: "cash", timestamp: 1 }],
+    status: "completed",
+    storeId: "store-1",
+    subtotal: 12000,
+    tax: 0,
+    total: 12000,
+    totalPaid: 12000,
+    transactionNumber: "TXN-1",
     ...overrides,
   };
 }
@@ -308,6 +345,41 @@ describe("daily operations automation adapter", () => {
         storeId: "store-1" as Id<"store">,
       }),
     ).rejects.toThrow("Only full admins can access stock operations.");
+  });
+
+  it("requires full-admin access for EOD auto-complete policy reads", async () => {
+    const { db } = createDb({ store: [store] });
+    accessMocks.requireStoreFullAdminAccess.mockRejectedValue(
+      new Error("Only full admins can access stock operations."),
+    );
+
+    await expect(
+      getHandler(getEodAutoCompletePolicy)({ db } as unknown as MutationCtx, {
+        storeId: "store-1" as Id<"store">,
+      }),
+    ).rejects.toThrow("Only full admins can access stock operations.");
+  });
+
+  it("requires full-admin access for EOD auto-complete policy writes", async () => {
+    const { db, inserts, patches } = createDb({ store: [store] });
+    accessMocks.requireStoreFullAdminAccess.mockRejectedValue(
+      new Error("Only full admins can access stock operations."),
+    );
+
+    await expect(
+      getHandler(updateEodAutoCompletePolicy)({ db } as unknown as MutationCtx, {
+        cleanDayAutoCompleteEnabled: true,
+        localCompletionWindowMinutes: 1260,
+        maxAbsoluteCashVariance: 5000,
+        maxVoidedSaleCount: 2,
+        maxVoidedSaleTotal: 50000,
+        mode: "enabled",
+        operatingTimezoneOffsetMinutes: 0,
+        storeId: "store-1" as Id<"store">,
+      }),
+    ).rejects.toThrow("Only full admins can access stock operations.");
+    expect(inserts).toEqual([]);
+    expect(patches).toEqual([]);
   });
 
   it("maps Opening auto-start policy API values at the public handler boundary", async () => {
@@ -451,14 +523,42 @@ describe("daily operations automation adapter", () => {
   it("records dry-run Opening decisions without inserting dailyOpening", async () => {
     const { db, inserts } = createDb({
       automationPolicy: [policy("opening.auto_start", "dry_run")],
-      dailyClose: [completedDailyClose()],
+      dailyClose: [
+        completedDailyClose({
+          isCurrent: true,
+          reportSnapshot: {
+            closeMetadata: {
+              carryForwardWorkItemIds: [],
+              completedAt: Date.UTC(2026, 5, 7, 22),
+              completedByUserId: "user-1",
+              endAt: Date.UTC(2026, 5, 8),
+              operatingDate: "2026-06-07",
+              organizationId: "org-1",
+              startAt: Date.UTC(2026, 5, 7),
+              storeId: "store-1",
+            },
+            carryForwardItems: [],
+            readiness: {
+              blockerCount: 0,
+              carryForwardCount: 0,
+              readyCount: 1,
+              reviewCount: 0,
+              status: "ready",
+            },
+            readyItems: [],
+            reviewedItems: [],
+            sourceSubjects: [],
+            summary: { salesTotal: 12000 },
+          },
+        }),
+      ],
       store: [store],
     });
 
     const result = await runDailyOpeningAutomationWithCtx(
       { db } as unknown as MutationCtx,
       {
-        operatingDate: "2026-06-08",
+        operatingDate: "2026-06-07",
         storeId: "store-1" as Id<"store">,
       },
     );
@@ -635,6 +735,634 @@ describe("daily operations automation adapter", () => {
       outcome: "skipped",
     });
     expect(inserts.map((insert) => insert.table)).toEqual(["automationRun"]);
+  });
+
+  it("defaults absent EOD auto-complete policy to disabled", async () => {
+    const { db } = createDb({ store: [store] });
+
+    await expect(
+      getEodAutoCompletePolicyConfigWithCtx(
+        { db } as unknown as MutationCtx,
+        {
+          storeId: "store-1" as Id<"store">,
+        },
+      ),
+    ).resolves.toMatchObject({
+      cleanDayAutoCompleteEnabled: false,
+      configured: false,
+      localCompletionWindowMinutes: 0,
+      maxAbsoluteCashVariance: 0,
+      maxVoidedSaleCount: 0,
+      maxVoidedSaleTotal: 0,
+      mode: "disabled",
+      paused: false,
+      policy: null,
+    });
+  });
+
+  it("rejects invalid EOD auto-complete policy thresholds and completion window", async () => {
+    const { db } = createDb({ store: [store] });
+
+    await expect(
+      upsertEodAutoCompletePolicyConfigWithCtx(
+        { db } as unknown as MutationCtx,
+        {
+          cleanDayAutoCompleteEnabled: true,
+          localCompletionWindowMinutes: 24 * 60,
+          maxAbsoluteCashVariance: 0,
+          maxVoidedSaleCount: 0,
+          maxVoidedSaleTotal: 0,
+          mode: "enabled",
+          operatingTimezoneOffsetMinutes: 0,
+          storeId: "store-1" as Id<"store">,
+        },
+      ),
+    ).rejects.toThrow("EOD local completion window must be within one local day.");
+
+    await expect(
+      upsertEodAutoCompletePolicyConfigWithCtx(
+        { db } as unknown as MutationCtx,
+        {
+          cleanDayAutoCompleteEnabled: true,
+          localCompletionWindowMinutes: 0,
+          maxAbsoluteCashVariance: -1,
+          maxVoidedSaleCount: 0,
+          maxVoidedSaleTotal: 0,
+          mode: "enabled",
+          operatingTimezoneOffsetMinutes: 0,
+          storeId: "store-1" as Id<"store">,
+        },
+      ),
+    ).rejects.toThrow("EOD auto-complete thresholds must be non-negative.");
+  });
+
+  it("records structured evidence when EOD auto-complete is disabled by absent policy", async () => {
+    const { db, inserts } = createDb({
+      posTransaction: [completedTransaction()],
+      registerSession: [closedRegisterSession()],
+      store: [store],
+    });
+
+    const result = await runDailyCloseAutoCompleteEligibilityWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        operatingDate: "2026-06-08",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(result.run).toMatchObject({
+      action: "eod.auto_complete",
+      decisionEvidence: {
+        kind: "eod_auto_complete",
+        observed: {
+          absoluteCashVariance: 0,
+          blockerCount: 0,
+          carryForwardCount: 0,
+          reviewCount: 0,
+          voidedSaleCount: 0,
+          voidedSaleTotal: 0,
+        },
+        policy: {
+          cleanDayAutoCompleteEnabled: false,
+          localCompletionWindowMinutes: 0,
+          maxAbsoluteCashVariance: 0,
+          maxVoidedSaleCount: 0,
+          maxVoidedSaleTotal: 0,
+          mode: "disabled",
+        },
+      },
+      outcome: "disabled",
+      policyMode: "disabled",
+    });
+    expect(inserts.map((insert) => insert.table)).toEqual(["automationRun"]);
+  });
+
+  it("auto-completes clean EOD review days when clean-day policy is enabled", async () => {
+    const { db, inserts } = createDb({
+      automationPolicy: [
+        policy("eod.auto_complete", "enabled", {
+          eodCleanDayAutoCompleteEnabled: true,
+          eodLocalCompletionWindowMinutes: 0,
+          eodMaxAbsoluteCashVariance: 0,
+          eodMaxVoidedSaleCount: 0,
+          eodMaxVoidedSaleTotal: 0,
+          operatingTimezoneOffsetMinutes: 0,
+        }),
+      ],
+      posTransaction: [completedTransaction()],
+      registerSession: [closedRegisterSession()],
+      store: [store],
+    });
+
+    const result = await runDailyCloseAutoCompleteEligibilityWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        operatingDate: "2026-06-08",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(result.run).toMatchObject({
+      action: "eod.auto_complete",
+      decisionEvidence: {
+        classification: "clean_day",
+        eligible: true,
+      },
+      decisionReason: "EOD Review is clean and eligible for auto-complete.",
+      eventIds: ["operationalEvent-1"],
+      outcome: "applied",
+    });
+    expect(inserts.map((insert) => insert.table)).toEqual([
+      "automationRun",
+      "dailyClose",
+      "operationalEvent",
+    ]);
+    expect(inserts.at(-1)?.value).toMatchObject({
+      actorType: "automation",
+      automationRunId: "automationRun-1",
+      eventType: "daily_close_completed",
+      metadata: {
+        policyReviewedItemKeys: [],
+      },
+    });
+  });
+
+  it("skips clean EOD review days when clean-day auto-complete is disabled", async () => {
+    const { db, inserts } = createDb({
+      automationPolicy: [
+        policy("eod.auto_complete", "enabled", {
+          eodCleanDayAutoCompleteEnabled: false,
+          eodLocalCompletionWindowMinutes: 0,
+          eodMaxAbsoluteCashVariance: 0,
+          eodMaxVoidedSaleCount: 0,
+          eodMaxVoidedSaleTotal: 0,
+          operatingTimezoneOffsetMinutes: 0,
+        }),
+      ],
+      posTransaction: [completedTransaction()],
+      registerSession: [closedRegisterSession()],
+      store: [store],
+    });
+
+    const result = await runDailyCloseAutoCompleteEligibilityWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        operatingDate: "2026-06-08",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(result.run).toMatchObject({
+      decisionEvidence: {
+        classification: "clean_day",
+        eligible: false,
+      },
+      decisionReason:
+        "EOD Review is clean, but clean-day auto-complete is disabled by policy.",
+      outcome: "skipped",
+    });
+    expect(inserts.map((insert) => insert.table)).toEqual(["automationRun"]);
+  });
+
+  it("auto-completes low-risk EOD review days when review evidence stays within policy thresholds", async () => {
+    const { db, inserts } = createDb({
+      automationPolicy: [
+        policy("eod.auto_complete", "enabled", {
+          eodCleanDayAutoCompleteEnabled: false,
+          eodLocalCompletionWindowMinutes: 0,
+          eodMaxAbsoluteCashVariance: 500,
+          eodMaxVoidedSaleCount: 1,
+          eodMaxVoidedSaleTotal: 300,
+          operatingTimezoneOffsetMinutes: 0,
+        }),
+      ],
+      posTransaction: [
+        completedTransaction(),
+        completedTransaction({
+          _id: "txn-void",
+          status: "void",
+          total: 300,
+          totalPaid: 300,
+          transactionNumber: "TXN-VOID",
+          voidedAt: Date.UTC(2026, 5, 8, 16),
+        }),
+      ],
+      registerSession: [
+        closedRegisterSession({
+          countedCash: 25300,
+          expectedCash: 25000,
+          variance: 300,
+        }),
+      ],
+      store: [store],
+    });
+
+    const result = await runDailyCloseAutoCompleteEligibilityWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        operatingDate: "2026-06-08",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(result.run).toMatchObject({
+      decisionEvidence: {
+        classification: "low_risk_review",
+        eligible: true,
+        observed: {
+          absoluteCashVariance: 300,
+          reviewCount: 2,
+          voidedSaleCount: 1,
+          voidedSaleTotal: 300,
+        },
+      },
+      decisionReason:
+        "EOD Review has only low-risk review evidence within policy thresholds.",
+      eventIds: ["operationalEvent-1"],
+      outcome: "applied",
+    });
+    expect(inserts.map((insert) => insert.table)).toEqual([
+      "automationRun",
+      "dailyClose",
+      "operationalEvent",
+    ]);
+    expect(
+      inserts.find((insert) => insert.table === "dailyClose")?.value,
+    ).toMatchObject({
+      actorType: "automation",
+      automationRunId: "automationRun-1",
+      policyReviewedItemKeys: expect.arrayContaining([
+        "register_session:register-1:variance",
+        "pos_transaction:txn-void:void",
+      ]),
+    });
+  });
+
+  it("skips low-risk EOD review days when policy thresholds are exceeded", async () => {
+    const { db, inserts } = createDb({
+      automationPolicy: [
+        policy("eod.auto_complete", "enabled", {
+          eodCleanDayAutoCompleteEnabled: false,
+          eodLocalCompletionWindowMinutes: 0,
+          eodMaxAbsoluteCashVariance: 100,
+          eodMaxVoidedSaleCount: 1,
+          eodMaxVoidedSaleTotal: 300,
+          operatingTimezoneOffsetMinutes: 0,
+        }),
+      ],
+      posTransaction: [
+        completedTransaction(),
+        completedTransaction({
+          _id: "txn-void",
+          status: "void",
+          total: 300,
+          totalPaid: 300,
+          transactionNumber: "TXN-VOID",
+          voidedAt: Date.UTC(2026, 5, 8, 16),
+        }),
+      ],
+      registerSession: [
+        closedRegisterSession({
+          countedCash: 25300,
+          expectedCash: 25000,
+          variance: 300,
+        }),
+      ],
+      store: [store],
+    });
+
+    const result = await runDailyCloseAutoCompleteEligibilityWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        operatingDate: "2026-06-08",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(result.run).toMatchObject({
+      decisionEvidence: {
+        classification: "review_threshold_exceeded",
+        eligible: false,
+        gates: expect.arrayContaining([
+          {
+            key: "absolute_cash_variance",
+            passed: false,
+            reason: "300 <= 100",
+          },
+        ]),
+      },
+      decisionReason:
+        "EOD Review review evidence exceeds auto-complete policy thresholds.",
+      outcome: "skipped",
+    });
+    expect(inserts.map((insert) => insert.table)).toEqual(["automationRun"]);
+  });
+
+  it("skips EOD auto-complete when the review is already completed", async () => {
+    const { db, inserts } = createDb({
+      automationPolicy: [
+        policy("eod.auto_complete", "enabled", {
+          eodCleanDayAutoCompleteEnabled: true,
+          eodLocalCompletionWindowMinutes: 0,
+          operatingTimezoneOffsetMinutes: 0,
+        }),
+      ],
+      dailyClose: [
+        completedDailyClose({
+          isCurrent: true,
+          reportSnapshot: {
+            closeMetadata: {
+              carryForwardWorkItemIds: [],
+              completedAt: Date.UTC(2026, 5, 7, 22),
+              completedByUserId: "user-1",
+              endAt: Date.UTC(2026, 5, 8),
+              operatingDate: "2026-06-07",
+              organizationId: "org-1",
+              startAt: Date.UTC(2026, 5, 7),
+              storeId: "store-1",
+            },
+            carryForwardItems: [],
+            readiness: {
+              blockerCount: 0,
+              carryForwardCount: 0,
+              readyCount: 1,
+              reviewCount: 0,
+              status: "ready",
+            },
+            readyItems: [],
+            reviewedItems: [],
+            sourceSubjects: [],
+            summary: { salesTotal: 12000 },
+          },
+        }),
+      ],
+      store: [store],
+    });
+
+    const result = await runDailyCloseAutoCompleteEligibilityWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        operatingDate: "2026-06-07",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(result.run).toMatchObject({
+      decisionEvidence: {
+        classification: "completed",
+        eligible: false,
+      },
+      decisionReason: "EOD Review is already completed for this store day.",
+      outcome: "skipped",
+    });
+    expect(inserts.map((insert) => insert.table)).toEqual(["automationRun"]);
+  });
+
+  it("records configured EOD auto-complete skips before the local completion window", async () => {
+    const { db, inserts } = createDb({
+      automationPolicy: [
+        policy("eod.auto_complete", "enabled", {
+          eodCleanDayAutoCompleteEnabled: true,
+          eodLocalCompletionWindowMinutes: 17 * 60,
+          operatingTimezoneOffsetMinutes: 0,
+        }),
+      ],
+      posTransaction: [completedTransaction()],
+      registerSession: [closedRegisterSession()],
+      store: [store],
+    });
+
+    const result = await runConfiguredDailyOperationsAutomationWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        now: Date.UTC(2026, 5, 8, 16, 59),
+      },
+    );
+
+    expect(result.eodAutoCompleteResults).toHaveLength(1);
+    expect(result.eodAutoCompleteResults[0]?.run).toMatchObject({
+      action: "eod.auto_complete",
+      decisionEvidence: {
+        classification: "outside_completion_window",
+        eligible: false,
+        gates: [
+          {
+            key: "local_completion_window",
+            passed: false,
+            reason: "1019 >= 1020",
+          },
+        ],
+      },
+      outcome: "skipped",
+    });
+    expect(inserts.map((insert) => insert.table)).toEqual(["automationRun"]);
+  });
+
+  it("records explicit scheduled EOD auto-complete skips before the local completion window", async () => {
+    const { db, inserts } = createDb({
+      automationPolicy: [
+        policy("eod.auto_complete", "enabled", {
+          eodCleanDayAutoCompleteEnabled: true,
+          eodLocalCompletionWindowMinutes: 17 * 60,
+          operatingTimezoneOffsetMinutes: 0,
+        }),
+      ],
+      posTransaction: [completedTransaction()],
+      registerSession: [closedRegisterSession()],
+      store: [store],
+    });
+
+    const result = await runScheduledDailyOperationsAutomationWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        now: Date.UTC(2026, 5, 8, 16, 59),
+        operatingDate: "2026-06-08",
+      },
+    );
+
+    expect(result.eodAutoCompleteResults).toHaveLength(1);
+    expect(result.eodAutoCompleteResults[0]?.run).toMatchObject({
+      action: "eod.auto_complete",
+      decisionEvidence: {
+        classification: "outside_completion_window",
+        eligible: false,
+      },
+      outcome: "skipped",
+    });
+    expect(inserts.map((insert) => insert.table)).toEqual(["automationRun"]);
+  });
+
+  it("derives configured EOD auto-complete operating dates from policy local timezone", async () => {
+    const { db, inserts } = createDb({
+      automationPolicy: [
+        policy("eod.auto_complete", "dry_run", {
+          eodCleanDayAutoCompleteEnabled: true,
+          eodLocalCompletionWindowMinutes: 21 * 60,
+          operatingTimezoneOffsetMinutes: 240,
+        }),
+      ],
+      posTransaction: [completedTransaction()],
+      registerSession: [closedRegisterSession()],
+      store: [store],
+    });
+
+    const result = await runConfiguredDailyOperationsAutomationWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        now: Date.UTC(2026, 5, 9, 1),
+      },
+    );
+
+    expect(result.eodAutoCompleteResults).toHaveLength(1);
+    expect(inserts).toContainEqual(
+      expect.objectContaining({
+        table: "automationRun",
+        value: expect.objectContaining({
+          action: "eod.auto_complete",
+          operatingDate: "2026-06-08",
+          outcome: "dry_run",
+        }),
+      }),
+    );
+  });
+
+  it("catches up configured EOD auto-complete for the previous day before the local completion window", async () => {
+    const { db, inserts } = createDb({
+      automationPolicy: [
+        policy("eod.auto_complete", "enabled", {
+          eodCleanDayAutoCompleteEnabled: true,
+          eodLocalCompletionWindowMinutes: 21 * 60,
+          operatingTimezoneOffsetMinutes: 0,
+        }),
+      ],
+      posTransaction: [
+        completedTransaction({
+          completedAt: Date.UTC(2026, 5, 8, 14),
+        }),
+      ],
+      registerSession: [closedRegisterSession()],
+      store: [store],
+    });
+
+    const result = await runConfiguredDailyOperationsAutomationWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        now: Date.UTC(2026, 5, 9, 1),
+      },
+    );
+
+    expect(result.eodAutoCompleteResults).toHaveLength(1);
+    expect(result.eodAutoCompleteResults[0]?.run).toMatchObject({
+      action: "eod.auto_complete",
+      operatingDate: "2026-06-08",
+      outcome: "applied",
+    });
+    expect(
+      inserts.find((insert) => insert.table === "dailyClose")?.value,
+    ).toMatchObject({
+      actorType: "automation",
+      operatingDate: "2026-06-08",
+    });
+  });
+
+  it("hard-skips EOD auto-complete when v1 carry-forward evidence is present", async () => {
+    const { db } = createDb({
+      automationPolicy: [
+        policy("eod.auto_complete", "enabled", {
+          eodCleanDayAutoCompleteEnabled: true,
+          eodLocalCompletionWindowMinutes: 0,
+          eodMaxAbsoluteCashVariance: 500,
+          eodMaxVoidedSaleCount: 2,
+          eodMaxVoidedSaleTotal: 1000,
+          operatingTimezoneOffsetMinutes: 0,
+        }),
+      ],
+      operationalWorkItem: [
+        {
+          _id: "work-1",
+          createdAt: Date.UTC(2026, 5, 8, 12),
+          status: "open",
+          storeId: "store-1",
+          subjectId: "cycle-count-1",
+          subjectType: "stock_adjustment",
+          title: "Cycle count follow-up",
+        },
+      ],
+      posTransaction: [completedTransaction()],
+      registerSession: [closedRegisterSession()],
+      store: [store],
+    });
+
+    const result = await runDailyCloseAutoCompleteEligibilityWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        operatingDate: "2026-06-08",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(result.run).toMatchObject({
+      decisionEvidence: {
+        classification: "carry_forward",
+        eligible: false,
+      },
+      decisionReason:
+        "EOD Review has carry-forward evidence; v1 auto-complete requires human review.",
+      outcome: "skipped",
+    });
+  });
+
+  it("skips EOD auto-complete for review categories outside the low-risk policy", async () => {
+    const { db } = createDb({
+      approvalRequest: [
+        {
+          _id: "approval-1",
+          createdAt: Date.UTC(2026, 5, 8, 15),
+          reason: "Manager review required.",
+          requestType: "variance_review",
+          status: "pending",
+          storeId: "store-1",
+          subjectId: "register-1",
+          subjectType: "register_session",
+        },
+      ],
+      automationPolicy: [
+        policy("eod.auto_complete", "enabled", {
+          eodCleanDayAutoCompleteEnabled: true,
+          eodLocalCompletionWindowMinutes: 0,
+          eodMaxAbsoluteCashVariance: 500,
+          eodMaxVoidedSaleCount: 2,
+          eodMaxVoidedSaleTotal: 1000,
+          operatingTimezoneOffsetMinutes: 0,
+        }),
+      ],
+      posTransaction: [completedTransaction()],
+      registerSession: [closedRegisterSession()],
+      store: [store],
+    });
+
+    const result = await runDailyCloseAutoCompleteEligibilityWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        operatingDate: "2026-06-08",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(result.run).toMatchObject({
+      decisionEvidence: {
+        classification: "blocked",
+        eligible: false,
+        observed: {
+          blockerCount: 1,
+          disqualifyingCategories: ["approval"],
+        },
+      },
+      decisionReason:
+        "EOD Review has blockers or unsupported review evidence and requires human review.",
+      outcome: "skipped",
+    });
   });
 
   it("discovers dry-run and enabled policies for an explicit operating date", async () => {

@@ -166,6 +166,14 @@ type DailyOperationsScheduledRunSummary = {
   windowStartAt: number;
 };
 
+type DailyOperationsCompletedCloseAttribution = {
+  actorType?: "human" | "automation";
+  automationDecisionReason?: string | null;
+  completedAt?: number | null;
+  policyReviewedItemKeys?: string[] | null;
+  restrictedDetailsRedacted?: boolean | null;
+};
+
 export type DailyOperationsSnapshot = {
   automationStatuses?: DailyOperationsAutomationStatus[];
   attentionItems: Array<{
@@ -200,6 +208,7 @@ export type DailyOperationsSnapshot = {
     salesTotal: number;
     transactionCount: number;
   };
+  completedClose?: DailyOperationsCompletedCloseAttribution | null;
   currency: string;
   endAt?: number;
   lanes: Array<{
@@ -1060,6 +1069,50 @@ function AutomationStatusPanel({
         })}
       </div>
     </section>
+  );
+}
+
+function getDailyOperationsCompletionAttributionDetail(
+  completedClose?: DailyOperationsCompletedCloseAttribution | null,
+) {
+  if (completedClose?.actorType !== "automation") {
+    return null;
+  }
+
+  if (completedClose.restrictedDetailsRedacted) {
+    return "Restricted close evidence is hidden for this account.";
+  }
+
+  if (
+    completedClose.policyReviewedItemKeys?.length ||
+    completedClose.automationDecisionReason
+      ?.toLowerCase()
+      .includes("low-risk review")
+  ) {
+    return "Policy checked low-risk review evidence before completion.";
+  }
+
+  return "Policy checked the close before completion.";
+}
+
+function DailyOperationsCompletionAttributionNotice({
+  completedClose,
+}: {
+  completedClose?: DailyOperationsCompletedCloseAttribution | null;
+}) {
+  if (completedClose?.actorType !== "automation") {
+    return null;
+  }
+
+  return (
+    <div className="rounded-lg border border-success/25 bg-success/10 p-layout-md text-sm leading-6 shadow-surface">
+      <p className="font-medium text-success">
+        Athena completed EOD Review under store policy.
+      </p>
+      <p className="mt-1 text-muted-foreground">
+        {getDailyOperationsCompletionAttributionDetail(completedClose)}
+      </p>
+    </div>
   );
 }
 
@@ -2046,6 +2099,9 @@ export function DailyOperationsViewContent({
                     currency={snapshot.currency ?? currency}
                     hasFullAdminAccess={hasFullAdminAccess}
                     snapshot={snapshot}
+                  />
+                  <DailyOperationsCompletionAttributionNotice
+                    completedClose={snapshot.completedClose}
                   />
                   {isHistoricalDate ? (
                     <HistoricalWorkflowPanel

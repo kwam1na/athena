@@ -67,10 +67,16 @@ export type DailyCloseHistoryRecord = {
 
 type DailyCloseStoredSnapshot = {
   closeMetadata?: {
+    actorType?: "human" | "automation";
+    automationDecisionReason?: string | null;
+    automationPolicyVersion?: string | null;
+    automationRunId?: Id<"automationRun"> | string | null;
     completedAt?: number | null;
     completedByStaffName?: string | null;
     notes?: string | null;
     operatingDate: string;
+    policyReviewedItemKeys?: string[] | null;
+    restrictedDetailsRedacted?: boolean | null;
     startAt: number;
     endAt: number;
   };
@@ -176,9 +182,19 @@ function normalizeHistorySnapshot(
     blockers: [],
     carryForwardItems: storedSnapshot.carryForwardItems ?? [],
     completedClose: {
+      actorType: storedSnapshot.closeMetadata.actorType,
+      automationDecisionReason:
+        storedSnapshot.closeMetadata.automationDecisionReason,
+      automationPolicyVersion:
+        storedSnapshot.closeMetadata.automationPolicyVersion,
+      automationRunId: storedSnapshot.closeMetadata.automationRunId,
       completedAt: storedSnapshot.closeMetadata.completedAt,
       completedByStaffName: storedSnapshot.closeMetadata.completedByStaffName,
       notes: storedSnapshot.closeMetadata.notes,
+      policyReviewedItemKeys:
+        storedSnapshot.closeMetadata.policyReviewedItemKeys,
+      restrictedDetailsRedacted:
+        storedSnapshot.closeMetadata.restrictedDetailsRedacted,
     },
     endAt: storedSnapshot.closeMetadata.endAt,
     operatingDate: storedSnapshot.closeMetadata.operatingDate,
@@ -538,8 +554,14 @@ function DailyCloseHistoryConnectedView({
                             )}
                           </h2>
                           <p className="text-sm leading-6 text-muted-foreground">
-                            Completed by {selectedSnapshot.completedClose?.completedByStaffName ??
-                              getHistoryRecordCompletedBy(selectedRecord)}.
+                            {selectedSnapshot.completedClose?.actorType ===
+                            "automation"
+                              ? "Completed by Athena under store policy."
+                              : `Completed by ${
+                                  selectedSnapshot.completedClose
+                                    ?.completedByStaffName ??
+                                  getHistoryRecordCompletedBy(selectedRecord)
+                                }.`}
                             {" "}
                             {formatDailyCloseCompletedAt(
                               getHistoryRecordCompletedAt(selectedRecord) ??

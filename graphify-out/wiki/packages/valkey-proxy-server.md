@@ -17,11 +17,11 @@ Landing page for packages/valkey-proxy-server. Use this page to orient around gr
 - [validation-map.json](../../../packages/valkey-proxy-server/docs/agent/validation-map.json)
 
 ## Graph Hotspots
-- `app.js` (15 edges, Community 86) - [`packages/valkey-proxy-server/app.js`](../../../packages/valkey-proxy-server/app.js)
+- `app.js` (15 edges, Community 88) - [`packages/valkey-proxy-server/app.js`](../../../packages/valkey-proxy-server/app.js)
 - `app.test.js` (6 edges, Community 180) - [`packages/valkey-proxy-server/app.test.js`](../../../packages/valkey-proxy-server/app.test.js)
-- `createRedisClient()` (4 edges, Community 86) - [`packages/valkey-proxy-server/app.js`](../../../packages/valkey-proxy-server/app.js)
-- `invalidateAcrossCluster()` (4 edges, Community 86) - [`packages/valkey-proxy-server/app.js`](../../../packages/valkey-proxy-server/app.js)
-- `invalidateAcrossClusterWithPipeline()` (4 edges, Community 86) - [`packages/valkey-proxy-server/app.js`](../../../packages/valkey-proxy-server/app.js)
+- `createRedisClient()` (4 edges, Community 88) - [`packages/valkey-proxy-server/app.js`](../../../packages/valkey-proxy-server/app.js)
+- `invalidateAcrossCluster()` (4 edges, Community 88) - [`packages/valkey-proxy-server/app.js`](../../../packages/valkey-proxy-server/app.js)
+- `invalidateAcrossClusterWithPipeline()` (4 edges, Community 88) - [`packages/valkey-proxy-server/app.js`](../../../packages/valkey-proxy-server/app.js)
 
 ## Navigation
 - [wiki index](../index.md) - back to the wiki index

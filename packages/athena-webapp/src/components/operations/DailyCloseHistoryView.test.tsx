@@ -328,6 +328,75 @@ describe("DailyCloseHistoryView", () => {
     expect(within(detail).getByText("Completed sale")).toBeInTheDocument();
   });
 
+  it("renders Athena attribution for historical automation-completed closes", () => {
+    mockQueries([
+      historyRecord({
+        completedByStaffName: null,
+        reportSnapshot: snapshot({
+          completedClose: {
+            actorType: "automation",
+            automationDecisionReason:
+              "EOD Review has only low-risk review evidence within policy thresholds.",
+            automationPolicyVersion: "daily-close-auto-complete.v1",
+            completedAt: Date.UTC(2026, 4, 8, 22, 30),
+            notes: "Policy close.",
+          },
+        }),
+      }),
+    ]);
+
+    render(<DailyCloseHistoryView />);
+
+    const detail = screen.getByRole("region", {
+      name: "Historical Daily Close detail",
+    });
+
+    expect(
+      within(detail).getByText("Athena completed EOD Review under store policy."),
+    ).toBeInTheDocument();
+    expect(
+      within(detail).getByText(
+        "Policy checked low-risk review evidence before completion.",
+      ),
+    ).toBeInTheDocument();
+    expect(within(detail).queryByText(/manager approved/i)).not.toBeInTheDocument();
+  });
+
+  it("uses safe historical Athena attribution when restricted evidence is redacted", () => {
+    mockQueries([
+      historyRecord({
+        completedByStaffName: null,
+        reportSnapshot: snapshot({
+          completedClose: {
+            actorType: "automation",
+            completedAt: Date.UTC(2026, 4, 8, 22, 30),
+            restrictedDetailsRedacted: true,
+          },
+        }),
+      }),
+    ]);
+
+    render(<DailyCloseHistoryView />);
+
+    const detail = screen.getByRole("region", {
+      name: "Historical Daily Close detail",
+    });
+
+    expect(
+      within(detail).getByText("Athena completed EOD Review under store policy."),
+    ).toBeInTheDocument();
+    expect(
+      within(detail).getByText(
+        "Restricted close evidence is hidden for this account.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(detail).queryByText(
+        "Policy checked low-risk review evidence before completion.",
+      ),
+    ).not.toBeInTheDocument();
+  });
+
   it("uses the history record staff name when the stored snapshot has no name", () => {
     const reportSnapshot = storedReportSnapshot(
       snapshot({
