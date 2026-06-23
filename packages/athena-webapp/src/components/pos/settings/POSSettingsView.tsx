@@ -78,6 +78,7 @@ const STORE_DAY_AUTOMATION_MINUTES = Array.from({ length: 60 }, (_, index) =>
   String(index).padStart(2, "0"),
 );
 type StoreDayAutomationPeriod = "AM" | "PM";
+type AutomationPolicyMode = "disabled" | "dry_run" | "enabled";
 const terminalCapabilityOptions: Array<{
   value: PosTerminalTransactionCapability;
   label: string;
@@ -381,8 +382,18 @@ function formatRecoveryTimestamp(value?: number | null) {
 
 type StoreDayAutomationPolicy = {
   localStartMinutes?: number | null;
-  mode?: "disabled" | "dry_run" | "enabled" | null;
+  mode?: AutomationPolicyMode | null;
   openingBlockerHandling?: "skip_when_blocked" | "start_with_manager_review" | null;
+  operatingTimezoneOffsetMinutes?: number | null;
+};
+
+type EodAutoCompletePolicy = {
+  cleanDayAutoCompleteEnabled?: boolean | null;
+  localCompletionWindowMinutes?: number | null;
+  maxAbsoluteCashVariance?: number | null;
+  maxVoidedSaleCount?: number | null;
+  maxVoidedSaleTotal?: number | null;
+  mode?: AutomationPolicyMode | null;
   operatingTimezoneOffsetMinutes?: number | null;
 };
 
@@ -454,6 +465,414 @@ function parseLocalStartMinutes(value: string) {
   if (hours > 23 || minutes > 59) return null;
 
   return hours * 60 + minutes;
+}
+
+function normalizeAutomationPolicyMode(
+  value?: AutomationPolicyMode | null,
+): AutomationPolicyMode {
+  return value === "enabled" || value === "dry_run" ? value : "disabled";
+}
+
+function parseNonNegativeIntegerInput(value: string) {
+  if (!/^\d+$/.test(value.trim())) return null;
+
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;
+}
+
+function EodCompletionAutomationAdminPanel({
+  storeId,
+}: {
+  storeId?: Id<"store"> | null;
+}) {
+  const { hasFullAdminAccess, isLoading } = usePermissions();
+  const policy = useQuery(
+    api.operations.dailyOperationsAutomation.getEodAutoCompletePolicy,
+    !isLoading && hasFullAdminAccess && storeId
+      ? { storeId }
+      : "skip",
+  ) as EodAutoCompletePolicy | null | undefined;
+  const updateEodAutoCompletePolicy = useMutation(
+    api.operations.dailyOperationsAutomation.updateEodAutoCompletePolicy,
+  );
+  const [mode, setMode] = useState<AutomationPolicyMode>("disabled");
+  const [cleanDayAutoCompleteEnabled, setCleanDayAutoCompleteEnabled] =
+    useState(false);
+  const [localCompletionWindow, setLocalCompletionWindow] = useState(
+    formatLocalStartTime(0),
+  );
+  const [maxAbsoluteCashVariance, setMaxAbsoluteCashVariance] = useState("0");
+  const [maxVoidedSaleCount, setMaxVoidedSaleCount] = useState("0");
+  const [maxVoidedSaleTotal, setMaxVoidedSaleTotal] = useState("0");
+  const [isSaving, setIsSaving] = useState(false);
+  const [message, setMessage] = useState<{
+    kind: "error" | "success";
+    text: string;
+  } | null>(null);
+  const policyMode = policy?.mode;
+  const policyCleanDayAutoCompleteEnabled =
+    policy?.cleanDayAutoCompleteEnabled;
+  const policyLocalCompletionWindowMinutes =
+    policy?.localCompletionWindowMinutes;
+  const policyMaxAbsoluteCashVariance = policy?.maxAbsoluteCashVariance;
+  const policyMaxVoidedSaleCount = policy?.maxVoidedSaleCount;
+  const policyMaxVoidedSaleTotal = policy?.maxVoidedSaleTotal;
+
+  useEffect(() => {
+    if (
+      policyMode == null &&
+      policyCleanDayAutoCompleteEnabled == null &&
+      policyLocalCompletionWindowMinutes == null &&
+      policyMaxAbsoluteCashVariance == null &&
+      policyMaxVoidedSaleCount == null &&
+      policyMaxVoidedSaleTotal == null
+    ) {
+      return;
+    }
+
+    setMode(normalizeAutomationPolicyMode(policyMode));
+    setCleanDayAutoCompleteEnabled(
+      Boolean(policyCleanDayAutoCompleteEnabled),
+    );
+    setLocalCompletionWindow(
+      formatLocalStartTime(policyLocalCompletionWindowMinutes),
+    );
+    setMaxAbsoluteCashVariance(String(policyMaxAbsoluteCashVariance ?? 0));
+    setMaxVoidedSaleCount(String(policyMaxVoidedSaleCount ?? 0));
+    setMaxVoidedSaleTotal(String(policyMaxVoidedSaleTotal ?? 0));
+  }, [
+    policyCleanDayAutoCompleteEnabled,
+    policyLocalCompletionWindowMinutes,
+    policyMaxAbsoluteCashVariance,
+    policyMaxVoidedSaleCount,
+    policyMaxVoidedSaleTotal,
+    policyMode,
+  ]);
+
+  if (isLoading || !hasFullAdminAccess) {
+    return null;
+  }
+
+  const localCompletionWindowMinutes = parseLocalStartMinutes(
+    localCompletionWindow,
+  );
+  const parsedMaxAbsoluteCashVariance = parseNonNegativeIntegerInput(
+    maxAbsoluteCashVariance,
+  );
+  const parsedMaxVoidedSaleCount = parseNonNegativeIntegerInput(
+    maxVoidedSaleCount,
+  );
+  const parsedMaxVoidedSaleTotal = parseNonNegativeIntegerInput(
+    maxVoidedSaleTotal,
+  );
+  const localCompletionWindowParts = getLocalStartTimeParts(
+    localCompletionWindow,
+  );
+  const canSave =
+    Boolean(storeId) &&
+    localCompletionWindowMinutes !== null &&
+    parsedMaxAbsoluteCashVariance !== null &&
+    parsedMaxVoidedSaleCount !== null &&
+    parsedMaxVoidedSaleTotal !== null &&
+    !isSaving;
+
+  const updateLocalCompletionWindowPart = (
+    key: keyof typeof localCompletionWindowParts,
+    value: string,
+  ) => {
+    setLocalCompletionWindow(
+      formatLocalStartTimeFromParts({
+        ...localCompletionWindowParts,
+        [key]: value,
+      }),
+    );
+  };
+
+  const handleSave = async () => {
+    if (!storeId) {
+      setMessage({
+        kind: "error",
+        text: "Select a store before saving EOD completion automation.",
+      });
+      return;
+    }
+
+    if (
+      localCompletionWindowMinutes === null ||
+      parsedMaxAbsoluteCashVariance === null ||
+      parsedMaxVoidedSaleCount === null ||
+      parsedMaxVoidedSaleTotal === null
+    ) {
+      setMessage({
+        kind: "error",
+        text: "Enter valid EOD completion automation thresholds.",
+      });
+      return;
+    }
+
+    setIsSaving(true);
+    setMessage(null);
+    try {
+      await updateEodAutoCompletePolicy({
+        cleanDayAutoCompleteEnabled,
+        localCompletionWindowMinutes,
+        maxAbsoluteCashVariance: parsedMaxAbsoluteCashVariance,
+        maxVoidedSaleCount: parsedMaxVoidedSaleCount,
+        maxVoidedSaleTotal: parsedMaxVoidedSaleTotal,
+        mode,
+        operatingTimezoneOffsetMinutes: DEFAULT_STORE_DAY_TIMEZONE_OFFSET_MINUTES,
+        storeId,
+      });
+      setMessage({
+        kind: "success",
+        text: "EOD completion automation settings saved.",
+      });
+      toast.success("EOD completion automation settings saved.");
+    } catch (error) {
+      console.error(error);
+      setMessage({
+        kind: "error",
+        text: "EOD completion automation settings were not saved.",
+      });
+      toast.error("EOD completion automation settings were not saved.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <section className="grid gap-layout-xl border-b border-border py-layout-2xl lg:grid-cols-[17rem_minmax(0,1fr)]">
+      <div className="space-y-layout-sm">
+        <h2 className="text-2xl font-medium text-foreground">
+          EOD completion automation
+        </h2>
+        <p className="text-sm leading-6 text-muted-foreground">
+          Athena can complete clean or low-risk EOD Reviews under store policy.
+        </p>
+      </div>
+
+      <div className="space-y-layout-lg">
+        <div className="flex flex-wrap gap-layout-xs">
+          <span className="inline-flex rounded-full border border-border bg-background px-layout-sm py-layout-2xs text-sm text-muted-foreground">
+            {mode === "enabled"
+              ? "Enabled"
+              : mode === "dry_run"
+                ? "Dry run"
+                : "Disabled"}
+          </span>
+          <span className="inline-flex rounded-full border border-border bg-background px-layout-sm py-layout-2xs text-sm text-muted-foreground">
+            Review items are checked against policy, not resolved.
+          </span>
+        </div>
+
+        <RadioGroup
+          className="grid gap-layout-sm sm:grid-cols-3"
+          value={mode}
+          onValueChange={(value) =>
+            setMode(normalizeAutomationPolicyMode(value as AutomationPolicyMode))
+          }
+        >
+          {[
+            {
+              value: "disabled",
+              label: "Disable EOD completion",
+              description: "Athena will not complete EOD Reviews.",
+            },
+            {
+              value: "dry_run",
+              label: "Dry run EOD completion",
+              description: "Athena checks eligibility without completing.",
+            },
+            {
+              value: "enabled",
+              label: "Enable EOD completion",
+              description: "Athena completes eligible EOD Reviews under policy.",
+            },
+          ].map((option) => (
+            <label
+              className="flex min-h-[6.5rem] cursor-pointer flex-col gap-layout-xs rounded-md border border-border bg-background p-layout-sm text-sm transition-colors has-[:checked]:border-action-commit has-[:checked]:bg-action-neutral-soft"
+              key={option.value}
+              onMouseDown={() => setMode(option.value as AutomationPolicyMode)}
+            >
+              <span className="flex items-start gap-layout-xs">
+                <RadioGroupItem
+                  aria-label={option.label}
+                  onClick={() =>
+                    setMode(option.value as AutomationPolicyMode)
+                  }
+                  value={option.value}
+                />
+                <span className="font-medium text-foreground">
+                  {option.label}
+                </span>
+              </span>
+              <span className="text-xs leading-5 text-muted-foreground">
+                {option.description}
+              </span>
+            </label>
+          ))}
+        </RadioGroup>
+
+        <div className="grid gap-layout-md lg:grid-cols-[minmax(0,1fr)_14rem]">
+          <label className="flex min-h-[5rem] items-start gap-layout-sm rounded-md border border-border bg-background p-layout-sm text-sm">
+            <Checkbox
+              aria-label="Enable clean-day completion"
+              checked={cleanDayAutoCompleteEnabled}
+              className="mt-1"
+              onCheckedChange={(checked) =>
+                setCleanDayAutoCompleteEnabled(checked === true)
+              }
+            />
+            <span>
+              <span className="block font-medium text-foreground">
+                Enable clean-day completion
+              </span>
+              <span className="mt-1 block leading-5 text-muted-foreground">
+                Athena can complete days with no blockers, carry-forward items,
+                or review evidence when automation is enabled.
+              </span>
+            </span>
+          </label>
+
+          <div className="space-y-layout-xs">
+            <Label>Local completion window</Label>
+            <div className="grid grid-cols-[1fr_1fr_1fr] gap-layout-2xs">
+              <Select
+                onValueChange={(value) =>
+                  updateLocalCompletionWindowPart("hour", value)
+                }
+                value={localCompletionWindowParts.hour}
+              >
+                <SelectTrigger
+                  aria-label="EOD completion hour"
+                  className="bg-background"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {STORE_DAY_AUTOMATION_HOURS.map((hour) => (
+                    <SelectItem key={hour} value={hour}>
+                      {hour}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select
+                onValueChange={(value) =>
+                  updateLocalCompletionWindowPart("minute", value)
+                }
+                value={localCompletionWindowParts.minute}
+              >
+                <SelectTrigger
+                  aria-label="EOD completion minute"
+                  className="bg-background"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {STORE_DAY_AUTOMATION_MINUTES.map((minute) => (
+                    <SelectItem key={minute} value={minute}>
+                      {minute}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select
+                onValueChange={(value) =>
+                  updateLocalCompletionWindowPart(
+                    "period",
+                    value as StoreDayAutomationPeriod,
+                  )
+                }
+                value={localCompletionWindowParts.period}
+              >
+                <SelectTrigger
+                  aria-label="EOD completion period"
+                  className="bg-background"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="AM">AM</SelectItem>
+                  <SelectItem value="PM">PM</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Athena checks completion after this store-local time.
+            </p>
+          </div>
+        </div>
+
+        <div className="grid gap-layout-md sm:grid-cols-3">
+          <div className="space-y-layout-xs">
+            <Label htmlFor="eod-cash-variance-threshold">
+              Cash variance threshold
+            </Label>
+            <Input
+              id="eod-cash-variance-threshold"
+              min={0}
+              onChange={(event) =>
+                setMaxAbsoluteCashVariance(event.target.value)
+              }
+              type="number"
+              value={maxAbsoluteCashVariance}
+            />
+          </div>
+          <div className="space-y-layout-xs">
+            <Label htmlFor="eod-voided-sale-count-threshold">
+              Voided sale count threshold
+            </Label>
+            <Input
+              id="eod-voided-sale-count-threshold"
+              min={0}
+              onChange={(event) => setMaxVoidedSaleCount(event.target.value)}
+              type="number"
+              value={maxVoidedSaleCount}
+            />
+          </div>
+          <div className="space-y-layout-xs">
+            <Label htmlFor="eod-voided-sale-total-threshold">
+              Voided sale total threshold
+            </Label>
+            <Input
+              id="eod-voided-sale-total-threshold"
+              min={0}
+              onChange={(event) => setMaxVoidedSaleTotal(event.target.value)}
+              type="number"
+              value={maxVoidedSaleTotal}
+            />
+          </div>
+        </div>
+
+        {message ? (
+          <div
+            className={
+              message.kind === "error"
+                ? "rounded-md border border-danger/20 bg-danger/10 px-layout-md py-layout-sm text-sm text-danger"
+                : "rounded-md border border-success/20 bg-success/10 px-layout-md py-layout-sm text-sm text-success"
+            }
+            role={message.kind === "error" ? "alert" : "status"}
+          >
+            {message.text}
+          </div>
+        ) : null}
+
+        <div className="border-t border-border pt-layout-md">
+          <LoadingButton
+            disabled={!canSave}
+            isLoading={isSaving}
+            onClick={handleSave}
+            variant="default"
+          >
+            Save EOD completion automation
+          </LoadingButton>
+        </div>
+      </div>
+    </section>
+  );
 }
 
 function StoreDayAutomationAdminPanel({
@@ -1443,6 +1862,8 @@ export function POSSettingsView({
           </section>
 
           <StoreDayAutomationAdminPanel storeId={activeStore?._id ?? null} />
+
+          <EodCompletionAutomationAdminPanel storeId={activeStore?._id ?? null} />
 
           <POSRecoveryCodeAdminPanel storeId={activeStore?._id ?? null} />
 

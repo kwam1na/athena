@@ -661,6 +661,76 @@ describe("DailyCloseViewContent", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("renders Athena completion attribution without approval language", () => {
+    renderContent({
+      ...readySnapshot,
+      completedClose: {
+        actorType: "automation",
+        automationDecisionReason:
+          "EOD Review has only low-risk review evidence within policy thresholds.",
+        automationPolicyVersion: "daily-close-auto-complete.v1",
+        completedAt: Date.UTC(2026, 4, 7, 22, 30),
+        policyReviewedItemKeys: ["pos_transaction:txn-void:void"],
+      },
+      status: "completed",
+    });
+
+    expect(
+      screen.getByText("Athena completed EOD Review under store policy."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Policy checked low-risk review evidence before completion.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/manager approved/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/resolved review/i)).not.toBeInTheDocument();
+  });
+
+  it("does not add Athena attribution to human-completed closes", () => {
+    renderContent({
+      ...readySnapshot,
+      completedClose: {
+        completedAt: Date.UTC(2026, 4, 7, 22, 30),
+        completedByStaffName: "Ama Mensah",
+      },
+      status: "completed",
+    });
+
+    expect(screen.getByText(/Completed by Ama Mensah/)).toBeInTheDocument();
+    expect(
+      screen.queryByText("Athena completed EOD Review under store policy."),
+    ).not.toBeInTheDocument();
+  });
+
+  it("uses safe Athena attribution when automation review evidence is redacted", () => {
+    renderContent({
+      ...readySnapshot,
+      completedClose: {
+        actorType: "automation",
+        automationDecisionReason:
+          "EOD Review has only low-risk review evidence within policy thresholds.",
+        completedAt: Date.UTC(2026, 4, 7, 22, 30),
+        restrictedDetailsRedacted: true,
+      },
+      status: "completed",
+    });
+
+    expect(
+      screen.getByText("Athena completed EOD Review under store policy."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Restricted close evidence is hidden for this account.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        "Policy checked low-risk review evidence before completion.",
+      ),
+    ).not.toBeInTheDocument();
+  });
+
   it("does not claim zero payments for historical payment totals without counts", () => {
     renderContent({
       ...readySnapshot,

@@ -4,6 +4,7 @@ import type { MutationCtx, QueryCtx } from "../_generated/server";
 import {
   buildDailyCloseSnapshotWithCtx,
   completeDailyClose,
+  completeDailyCloseForAutomationWithCtx,
   completeDailyCloseWithCtx,
   getCompletedDailyCloseHistoryDetailWithCtx,
   getDailyCloseOpeningContextWithCtx,
@@ -2058,6 +2059,360 @@ describe("end-of-day review backend foundation", () => {
     });
   });
 
+  it("completes a ready day through automation with durable attribution and no approval proof metadata", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 4, 7, 22));
+    const { db, inserts } = createDb({
+      posTransaction: [
+        {
+          _id: "txn-1",
+          completedAt: Date.UTC(2026, 4, 7, 14),
+          payments: [{ amount: 12000, method: "cash", timestamp: 1 }],
+          status: "completed",
+          storeId: "store-1",
+          subtotal: 12000,
+          tax: 0,
+          total: 12000,
+          totalPaid: 12000,
+          transactionNumber: "TXN-1",
+        },
+      ],
+      store: [store],
+    });
+
+    const result = await completeDailyCloseForAutomationWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        automationDecisionReason: "EOD Review passed policy checks.",
+        automationPolicyVersion: "daily-close-auto-complete.v1",
+        automationRunId: "automation-run-1" as Id<"automationRun">,
+        operatingDate: "2026-05-07",
+        policyReviewedItemKeys: [],
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(result).toMatchObject({
+      kind: "ok",
+      data: {
+        action: "completed",
+        dailyClose: {
+          actorType: "automation",
+          automationDecisionReason: "EOD Review passed policy checks.",
+          automationPolicyVersion: "daily-close-auto-complete.v1",
+          automationRunId: "automation-run-1",
+          policyReviewedItemKeys: [],
+          status: "completed",
+        },
+      },
+    });
+    const completedClose = result.kind === "ok" ? result.data.dailyClose : null;
+    expect(completedClose).not.toHaveProperty("completedByStaffProfileId");
+    expect(completedClose).not.toHaveProperty("completedByUserId");
+    const reportSnapshot =
+      result.kind === "ok" ? result.data.dailyClose.reportSnapshot : null;
+    expect(reportSnapshot).toMatchObject({
+      closeMetadata: {
+        actorType: "automation",
+        automationDecisionReason: "EOD Review passed policy checks.",
+        automationPolicyVersion: "daily-close-auto-complete.v1",
+        automationRunId: "automation-run-1",
+        policyReviewedItemKeys: [],
+      },
+    });
+    expect(reportSnapshot?.closeMetadata).not.toHaveProperty(
+      "approvalProofId",
+    );
+    expect(reportSnapshot?.closeMetadata).not.toHaveProperty(
+      "approvedByStaffProfileId",
+    );
+    const completionEvent = inserts.find(
+      (insert) =>
+        insert.table === "operationalEvent" &&
+        insert.value.eventType === "daily_close_completed",
+    )?.value;
+    expect(completionEvent).toMatchObject({
+      actorType: "automation",
+      automationDecisionReason: "EOD Review passed policy checks.",
+      automationPolicyVersion: "daily-close-auto-complete.v1",
+      automationRunId: "automation-run-1",
+      metadata: {
+        operatingDate: "2026-05-07",
+        policyReviewedItemKeys: [],
+      },
+    });
+    expect(completionEvent?.metadata).not.toHaveProperty("approvalProofId");
+    expect(completionEvent?.metadata).not.toHaveProperty(
+      "approvedByStaffProfileId",
+    );
+    expect(inserts.map((insert) => insert.table)).toEqual([
+      "dailyClose",
+      "operationalEvent",
+    ]);
+    expect(result.kind === "ok" ? result.data.operationalEventId : null).toBe(
+      completionEvent?._id,
+    );
+  });
+
+  it("records policy-reviewed item keys when automation completes reviewed items", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 4, 7, 22));
+    const reviewKey = "pos_transaction:txn-void:void";
+    const { db } = createDb({
+      posTransaction: [
+        {
+          _id: "txn-void",
+          completedAt: Date.UTC(2026, 4, 7, 15),
+          payments: [],
+          status: "void",
+          storeId: "store-1",
+          subtotal: 5000,
+          tax: 0,
+          total: 5000,
+          totalPaid: 5000,
+          transactionNumber: "TXN-2",
+        },
+      ],
+      store: [store],
+    });
+
+    const result = await completeDailyCloseForAutomationWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        automationDecisionReason: "Policy reviewed voided-sale evidence.",
+        automationPolicyVersion: "daily-close-auto-complete.v1",
+        automationRunId: "automation-run-1" as Id<"automationRun">,
+        operatingDate: "2026-05-07",
+        policyReviewedItemKeys: [reviewKey],
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(result).toMatchObject({
+      kind: "ok",
+      data: {
+        dailyClose: {
+          actorType: "automation",
+          policyReviewedItemKeys: [reviewKey],
+          reviewedItemKeys: [reviewKey],
+        },
+      },
+    });
+    const reportSnapshot =
+      result.kind === "ok" ? result.data.dailyClose.reportSnapshot : null;
+    expect(reportSnapshot?.closeMetadata).toMatchObject({
+      policyReviewedItemKeys: [reviewKey],
+      reviewedItemKeys: [reviewKey],
+    });
+    expect(reportSnapshot?.reviewedItems.map((item) => item.key)).toEqual([
+      reviewKey,
+    ]);
+  });
+
+  it("keeps human completion attribution when automation retries an already completed close", async () => {
+    const { db, inserts, tables } = createDb({
+      dailyClose: [completedDailyCloseRow()],
+      store: [store],
+    });
+
+    const result = await completeDailyCloseForAutomationWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        automationDecisionReason: "Retry after timeout.",
+        automationPolicyVersion: "daily-close-auto-complete.v1",
+        automationRunId: "automation-run-retry" as Id<"automationRun">,
+        operatingDate: "2026-05-07",
+        policyReviewedItemKeys: [],
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(result).toMatchObject({
+      kind: "ok",
+      data: {
+        action: "already_completed",
+        dailyClose: {
+          completedByStaffProfileId: "staff-manager-1",
+          completedByUserId: "user-1",
+        },
+      },
+    });
+    const completedClose = result.kind === "ok" ? result.data.dailyClose : null;
+    expect(completedClose).not.toHaveProperty("actorType");
+    expect(completedClose).not.toHaveProperty("automationRunId");
+    expect(tables.get("dailyClose")?.get("daily-close-1")).toMatchObject({
+      completedByStaffProfileId: "staff-manager-1",
+      completedByUserId: "user-1",
+    });
+    expect(
+      tables.get("dailyClose")?.get("daily-close-1"),
+    ).not.toHaveProperty("automationRunId");
+    expect(inserts).toEqual([]);
+  });
+
+  it("fails automation completion when command-time blockers, carry-forward, or unreviewed items remain", async () => {
+    const blockerDb = createDb({
+      registerSession: [
+        {
+          _id: "register-open",
+          expectedCash: 10000,
+          openedAt: Date.UTC(2026, 4, 7, 9),
+          openingFloat: 10000,
+          status: "open",
+          storeId: "store-1",
+        },
+      ],
+      store: [store],
+    });
+    await expect(
+      completeDailyCloseForAutomationWithCtx(
+        { db: blockerDb.db } as unknown as MutationCtx,
+        {
+          automationDecisionReason: "Policy saw no blockers earlier.",
+          automationPolicyVersion: "daily-close-auto-complete.v1",
+          automationRunId: "automation-run-blocker" as Id<"automationRun">,
+          operatingDate: "2026-05-07",
+          policyReviewedItemKeys: [],
+          storeId: "store-1" as Id<"store">,
+        },
+      ),
+    ).resolves.toMatchObject({
+      kind: "user_error",
+      error: {
+        code: "precondition_failed",
+        metadata: { blockerCount: 1 },
+      },
+    });
+    expect(blockerDb.inserts).toEqual([]);
+
+    const carryForwardDb = createDb({
+      operationalWorkItem: [
+        {
+          _id: "work-1",
+          approvalState: "not_required",
+          createdAt: 4,
+          organizationId: "org-1",
+          priority: "normal",
+          status: "open",
+          storeId: "store-1",
+          title: "Call customer tomorrow",
+          type: "customer_follow_up",
+        },
+      ],
+      store: [store],
+    });
+    await expect(
+      completeDailyCloseForAutomationWithCtx(
+        { db: carryForwardDb.db } as unknown as MutationCtx,
+        {
+          automationDecisionReason: "Policy saw no carry-forward earlier.",
+          automationPolicyVersion: "daily-close-auto-complete.v1",
+          automationRunId: "automation-run-carry-forward" as Id<"automationRun">,
+          operatingDate: "2026-05-07",
+          policyReviewedItemKeys: [],
+          storeId: "store-1" as Id<"store">,
+        },
+      ),
+    ).resolves.toMatchObject({
+      kind: "user_error",
+      error: {
+        code: "precondition_failed",
+        metadata: { carryForwardCount: 1 },
+      },
+    });
+    expect(carryForwardDb.inserts).toEqual([]);
+
+    const reviewDb = createDb({
+      posTransaction: [
+        {
+          _id: "txn-void",
+          completedAt: Date.UTC(2026, 4, 7, 15),
+          payments: [],
+          status: "void",
+          storeId: "store-1",
+          subtotal: 5000,
+          tax: 0,
+          total: 5000,
+          totalPaid: 5000,
+          transactionNumber: "TXN-2",
+        },
+      ],
+      store: [store],
+    });
+    await expect(
+      completeDailyCloseForAutomationWithCtx(
+        { db: reviewDb.db } as unknown as MutationCtx,
+        {
+          automationDecisionReason: "Policy saw no review items earlier.",
+          automationPolicyVersion: "daily-close-auto-complete.v1",
+          automationRunId: "automation-run-review" as Id<"automationRun">,
+          operatingDate: "2026-05-07",
+          policyReviewedItemKeys: [],
+          storeId: "store-1" as Id<"store">,
+        },
+      ),
+    ).resolves.toMatchObject({
+      kind: "user_error",
+      error: {
+        code: "precondition_failed",
+        metadata: {
+          unreviewedItemKeys: ["pos_transaction:txn-void:void"],
+        },
+      },
+    });
+    expect(reviewDb.inserts).toEqual([]);
+
+    const reopenedDb = createDb({
+      dailyClose: [
+        {
+          _id: "daily-close-reopened",
+          carryForwardWorkItemIds: [],
+          createdAt: Date.UTC(2026, 4, 7, 22),
+          isCurrent: true,
+          lifecycleStatus: "active",
+          operatingDate: "2026-05-07",
+          organizationId: "org-1",
+          readiness: {
+            blockerCount: 0,
+            carryForwardCount: 0,
+            readyCount: 1,
+            reviewCount: 0,
+            status: "ready",
+          },
+          reopenedAt: Date.UTC(2026, 4, 8, 10),
+          reopenedFromDailyCloseId: "daily-close-original",
+          sourceSubjects: [],
+          status: "open",
+          storeId: "store-1",
+          summary: dailyCloseSummary(),
+          supersedesDailyCloseId: "daily-close-original",
+          updatedAt: Date.UTC(2026, 4, 8, 10),
+        },
+      ],
+      store: [store],
+    });
+    await expect(
+      completeDailyCloseForAutomationWithCtx(
+        { db: reopenedDb.db } as unknown as MutationCtx,
+        {
+          automationDecisionReason: "Policy saw a reopened day as ready.",
+          automationPolicyVersion: "daily-close-auto-complete.v1",
+          automationRunId: "automation-run-reopened" as Id<"automationRun">,
+          operatingDate: "2026-05-07",
+          policyReviewedItemKeys: [],
+          storeId: "store-1" as Id<"store">,
+        },
+      ),
+    ).resolves.toMatchObject({
+      kind: "user_error",
+      error: {
+        code: "precondition_failed",
+        metadata: {
+          dailyCloseId: "daily-close-reopened",
+        },
+      },
+    });
+    expect(reopenedDb.inserts).toEqual([]);
+  });
+
   it("requires manager approval and a reason before reopening a completed daily close", async () => {
     const { db, inserts } = createDb({
       dailyClose: [completedDailyCloseRow()],
@@ -2125,11 +2480,31 @@ describe("end-of-day review backend foundation", () => {
 
   it("reopens a completed close without mutating its report snapshot and makes live readiness active", async () => {
     vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 4, 8, 10));
-    const originalSnapshot = completedDailyCloseSnapshot();
+    const originalSnapshot = completedDailyCloseSnapshot({
+      closeMetadata: {
+        ...completedDailyCloseSnapshot().closeMetadata,
+        actorType: "automation",
+        automationDecisionReason: "EOD Review passed policy checks.",
+        automationPolicyVersion: "daily-close-auto-complete.v1",
+        automationRunId: "automation-run-1",
+        completedByStaffProfileId: undefined,
+        completedByUserId: undefined,
+        policyReviewedItemKeys: [],
+      },
+    });
     const { db, inserts, tables } = createDb({
       approvalProof: [dailyCloseReopenApprovalProof()],
       dailyClose: [
-        completedDailyCloseRow({ reportSnapshot: originalSnapshot }),
+        completedDailyCloseRow({
+          actorType: "automation",
+          automationDecisionReason: "EOD Review passed policy checks.",
+          automationPolicyVersion: "daily-close-auto-complete.v1",
+          automationRunId: "automation-run-1",
+          completedByStaffProfileId: undefined,
+          completedByUserId: undefined,
+          policyReviewedItemKeys: [],
+          reportSnapshot: originalSnapshot,
+        }),
       ],
       posTransaction: [
         {
@@ -2196,6 +2571,13 @@ describe("end-of-day review backend foundation", () => {
     expect(
       tables.get("dailyClose")?.get("daily-close-1")?.reportSnapshot,
     ).toEqual(originalSnapshot);
+    expect(tables.get("dailyClose")?.get("daily-close-1")).toMatchObject({
+      actorType: "automation",
+      automationDecisionReason: "EOD Review passed policy checks.",
+      automationPolicyVersion: "daily-close-auto-complete.v1",
+      automationRunId: "automation-run-1",
+      policyReviewedItemKeys: [],
+    });
 
     await db.patch("posTransaction", "txn-1", {
       total: 99000,
@@ -2654,6 +3036,253 @@ describe("end-of-day review backend foundation", () => {
         },
       ),
     ).resolves.toBeNull();
+  });
+
+  it("exposes Athena completion attribution while redacting restricted history detail for broad readers", async () => {
+    const automationSnapshot = completedDailyCloseSnapshot({
+      closeMetadata: {
+        actorType: "automation",
+        automationDecisionReason:
+          "EOD Review has only low-risk review evidence within policy thresholds.",
+        automationPolicyVersion: "daily-operations.v1",
+        automationRunId: "automation-run-1",
+        completedAt: Date.UTC(2026, 4, 7, 22),
+        operatingDate: "2026-05-07",
+        organizationId: "org-1",
+        policyReviewedItemKeys: ["pos_transaction:txn-void:void"],
+        startAt: Date.UTC(2026, 4, 7),
+        endAt: Date.UTC(2026, 4, 8),
+        storeId: "store-1",
+      },
+      reviewedItems: [
+        {
+          key: "pos_transaction:txn-void:void",
+          severity: "review",
+          category: "voided_sale",
+          title: "Voided sale needs review",
+          message:
+            "Review voided sales before completing the end of day review.",
+          subject: {
+            id: "txn-void",
+            label: "TXN-VOID",
+            type: "pos_transaction",
+          },
+          metadata: {
+            paymentMethods: "cash",
+            total: 42000,
+            totalPaid: 42000,
+          },
+        },
+      ],
+      sourceSubjects: [
+        {
+          id: "txn-void",
+          label: "TXN-VOID",
+          type: "pos_transaction",
+        },
+      ],
+      summary: dailyCloseSummary({
+        netCashVariance: -1200,
+        salesTotal: 42000,
+        transactionCount: 1,
+        voidedTransactionCount: 1,
+      }),
+    });
+    const { db, patches } = createDb({
+      automationRun: [
+        {
+          _id: "automation-run-1",
+          action: "eod.auto_complete",
+          appliedAt: Date.UTC(2026, 4, 7, 22),
+          createdAt: Date.UTC(2026, 4, 7, 21),
+          decisionEvidence: {
+            kind: "eod_auto_complete",
+            observed: {
+              absoluteCashVariance: 1200,
+              voidedSaleTotal: 42000,
+            },
+            policy: {
+              maxAbsoluteCashVariance: 5000,
+              maxVoidedSaleTotal: 50000,
+            },
+          },
+          decisionReason:
+            "EOD Review has only low-risk review evidence within policy thresholds.",
+          domain: "daily_operations",
+          idempotencyKey: "daily_operations:eod.auto_complete:store-1:2026-05-07",
+          mutationBoundary: "daily_close",
+          operatingDate: "2026-05-07",
+          outcome: "applied",
+          policyMode: "enabled",
+          policyVersion: "daily-operations.v1",
+          snapshotCounts: {},
+          sourceSubjects: [{ id: "txn-void", type: "pos_transaction" }],
+          storeId: "store-1",
+          triggerType: "scheduled",
+          updatedAt: Date.UTC(2026, 4, 7, 22),
+        },
+      ],
+      dailyClose: [
+        {
+          _id: "daily-close-automation",
+          actorType: "automation",
+          automationDecisionReason:
+            "EOD Review has only low-risk review evidence within policy thresholds.",
+          automationPolicyVersion: "daily-operations.v1",
+          automationRunId: "automation-run-1",
+          carryForwardWorkItemIds: [],
+          completedAt: Date.UTC(2026, 4, 7, 22),
+          createdAt: Date.UTC(2026, 4, 7, 22),
+          isCurrent: true,
+          lifecycleStatus: "active",
+          operatingDate: "2026-05-07",
+          organizationId: "org-1",
+          policyReviewedItemKeys: ["pos_transaction:txn-void:void"],
+          readiness: automationSnapshot.readiness,
+          reportSnapshot: automationSnapshot,
+          sourceSubjects: automationSnapshot.sourceSubjects,
+          status: "completed",
+          storeId: "store-1",
+          summary: automationSnapshot.summary,
+          updatedAt: Date.UTC(2026, 4, 7, 22),
+        },
+      ],
+      store: [store],
+    });
+
+    const snapshot = await buildDailyCloseSnapshotWithCtx(
+      { db } as unknown as QueryCtx,
+      {
+        operatingDate: "2026-05-07",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+    expect(snapshot.status).toBe("completed");
+    expect(snapshot.completedClose).toMatchObject({
+      actorType: "automation",
+      automationRunId: "automation-run-1",
+      policyReviewedItemKeys: ["pos_transaction:txn-void:void"],
+    });
+
+    const broadSnapshot = await buildDailyCloseSnapshotWithCtx(
+      { db } as unknown as QueryCtx,
+      {
+        includeManagerReviewEvidence: false,
+        operatingDate: "2026-05-07",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+    expect(broadSnapshot.completedClose).toMatchObject({
+      actorType: "automation",
+      automationRunId: "automation-run-1",
+      restrictedDetailsRedacted: true,
+    });
+    expect(broadSnapshot.completedClose).not.toHaveProperty(
+      "policyReviewedItemKeys",
+    );
+    expect(broadSnapshot.existingClose).toBeNull();
+    expect(broadSnapshot.priorClose).toBeNull();
+    expect(broadSnapshot.sourceSubjects).toEqual([]);
+    expect(broadSnapshot.reviewItems[0]).not.toHaveProperty("metadata");
+
+    const trustedDetail = await getCompletedDailyCloseHistoryDetailWithCtx(
+      { db } as unknown as QueryCtx,
+      {
+        dailyCloseId: "daily-close-automation" as Id<"dailyClose">,
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+    expect(trustedDetail).toMatchObject({
+      actorType: "automation",
+      automationRunId: "automation-run-1",
+    });
+    expect(trustedDetail?.reportSnapshot.reviewedItems[0].metadata).toMatchObject({
+      total: 42000,
+    });
+
+    const broadDetail = await getCompletedDailyCloseHistoryDetailWithCtx(
+      { db } as unknown as QueryCtx,
+      {
+        dailyCloseId: "daily-close-automation" as Id<"dailyClose">,
+        includeManagerReviewEvidence: false,
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+    expect(broadDetail).toMatchObject({
+      actorType: "automation",
+      automationDecisionReason:
+        "EOD Review has only low-risk review evidence within policy thresholds.",
+      automationRunId: "automation-run-1",
+    });
+    expect(broadDetail?.reportSnapshot.closeMetadata).not.toHaveProperty(
+      "policyReviewedItemKeys",
+    );
+    expect(broadDetail?.reportSnapshot.summary).toMatchObject({
+      registerVarianceCount: 0,
+      transactionCount: 1,
+    });
+    expect(broadDetail?.reportSnapshot.summary).not.toHaveProperty(
+      "netCashVariance",
+    );
+    expect(broadDetail?.reportSnapshot.summary).not.toHaveProperty("salesTotal");
+    expect(broadDetail?.reportSnapshot.reviewedItems[0]).not.toHaveProperty(
+      "metadata",
+    );
+    expect(broadDetail?.reportSnapshot.sourceSubjects).toEqual([]);
+    expect(patches).toEqual([]);
+  });
+
+  it("keeps human completion attribution when stale automation runs exist", async () => {
+    const humanSnapshot = completedDailyCloseSnapshot();
+    const { db } = createDb({
+      automationRun: [
+        {
+          _id: "automation-run-skipped",
+          action: "eod.auto_complete",
+          createdAt: Date.UTC(2026, 4, 7, 23),
+          decisionReason: "EOD Review is already completed for this store day.",
+          domain: "daily_operations",
+          idempotencyKey: "daily_operations:eod.auto_complete:store-1:2026-05-07",
+          mutationBoundary: "daily_close",
+          operatingDate: "2026-05-07",
+          outcome: "skipped",
+          policyMode: "dry_run",
+          policyVersion: "daily-operations.v1",
+          snapshotCounts: {},
+          sourceSubjects: [],
+          storeId: "store-1",
+          triggerType: "scheduled",
+          updatedAt: Date.UTC(2026, 4, 7, 23),
+        },
+      ],
+      dailyClose: [completedDailyCloseRow({ reportSnapshot: humanSnapshot })],
+      staffProfile: [
+        {
+          _id: "staff-manager-1",
+          fullName: "Kwamina Mensah",
+          organizationId: "org-1",
+          storeId: "store-1",
+        },
+      ],
+      store: [store],
+    });
+
+    const snapshot = await buildDailyCloseSnapshotWithCtx(
+      { db } as unknown as QueryCtx,
+      {
+        operatingDate: "2026-05-07",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(snapshot.status).toBe("completed");
+    expect(snapshot.completedClose).toMatchObject({
+      completedByStaffName: "Kwamina Mensah",
+      completedByStaffProfileId: "staff-manager-1",
+      completedByUserId: "user-1",
+    });
+    expect(snapshot.completedClose).not.toHaveProperty("actorType");
+    expect(snapshot.completedClose).not.toHaveProperty("automationRunId");
   });
 
   it("exposes prior completed close and carry-forward work for future opening", async () => {

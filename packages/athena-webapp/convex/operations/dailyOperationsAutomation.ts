@@ -5,11 +5,17 @@ import { v } from "convex/values";
 import { defineAutomationAction } from "../automation/actionRegistry";
 import { evaluateAutomationActionWithCtx } from "../automation/automationFoundation";
 import {
+  DEFAULT_EOD_LOCAL_COMPLETION_WINDOW_MINUTES,
   DEFAULT_OPENING_BLOCKER_HANDLING,
   DEFAULT_OPENING_LOCAL_START_MINUTES,
+  EOD_AUTO_COMPLETE_POLICY_ACTION,
+  getEodAutoCompletePolicyConfigWithCtx,
   getOpeningAutoStartPolicyConfigWithCtx,
   listAutomationRunsForStoreDayActionWithCtx,
   recordAutomationRunWithCtx,
+  type AutomationDecisionEvidence,
+  type EodAutoCompletePolicyConfig,
+  upsertEodAutoCompletePolicyConfigWithCtx,
   upsertOpeningAutoStartPolicyConfigWithCtx,
   type OpeningAutoStartBlockerHandling,
 } from "../automation/runLedger";
@@ -17,15 +23,23 @@ import {
   buildDailyOpeningSnapshotWithCtx,
   startStoreDayWithCtx,
 } from "./dailyOpening";
-import { buildDailyCloseSnapshotWithCtx } from "./dailyClose";
+import {
+  buildDailyCloseSnapshotWithCtx,
+  completeDailyCloseForAutomationWithCtx,
+} from "./dailyClose";
 import { requireStoreFullAdminAccess } from "../stockOps/access";
 
 export const DAILY_OPERATIONS_AUTOMATION_DOMAIN = "daily_operations";
 const OPENING_AUTO_START_ACTION = "opening.auto_start";
 const EOD_PREPARE_ACTION = "eod.prepare";
+const EOD_AUTO_COMPLETE_ACTION = EOD_AUTO_COMPLETE_POLICY_ACTION;
 const AUTOMATION_POLICY_CRON_LIMIT = 500;
 const DAILY_OPERATIONS_POLICY_VERSION = "daily-operations.v1";
 const CONFIGURED_AUTOMATION_LOOKBACK_MS = 2 * 60 * 60 * 1000;
+const EOD_AUTO_COMPLETE_LOW_RISK_REVIEW_CATEGORIES = new Set([
+  "cash_variance",
+  "voided_sale",
+]);
 
 export const dailyOperationsOpeningAutoStartAction = defineAutomationAction({
   action: OPENING_AUTO_START_ACTION,
@@ -54,6 +68,22 @@ export const dailyOperationsEodPrepareAction = defineAutomationAction({
   ],
   domain: DAILY_OPERATIONS_AUTOMATION_DOMAIN,
   mutationBoundary: "EOD Review preparation ledger only",
+  requiresSourceSubjects: true,
+  triggerType: "scheduled",
+});
+
+export const dailyOperationsEodAutoCompleteAction = defineAutomationAction({
+  action: EOD_AUTO_COMPLETE_ACTION,
+  allowedOutcomes: [
+    "disabled",
+    "dry_run",
+    "skipped",
+    "eligible",
+    "applied",
+    "failed",
+  ],
+  domain: DAILY_OPERATIONS_AUTOMATION_DOMAIN,
+  mutationBoundary: "EOD Review automation completion and audit event only",
   requiresSourceSubjects: true,
   triggerType: "scheduled",
 });
@@ -98,6 +128,28 @@ async function getOpeningAutoStartPolicyForApi(
     openingBlockerHandling: toApiOpeningBlockerHandling(
       config.openingBlockerHandling,
     ),
+    operatingTimezoneOffsetMinutes:
+      config.policy?.operatingTimezoneOffsetMinutes ?? null,
+    paused: config.paused,
+    policyVersion: config.policy?.policyVersion ?? DAILY_OPERATIONS_POLICY_VERSION,
+  };
+}
+
+async function getEodAutoCompletePolicyForApi(
+  ctx: QueryCtx,
+  args: { storeId: Id<"store"> },
+) {
+  await requireStoreFullAdminAccess(ctx, args.storeId);
+  const config = await getEodAutoCompletePolicyConfigWithCtx(ctx, args);
+
+  return {
+    cleanDayAutoCompleteEnabled: config.cleanDayAutoCompleteEnabled,
+    configured: config.configured,
+    localCompletionWindowMinutes: config.localCompletionWindowMinutes,
+    maxAbsoluteCashVariance: config.maxAbsoluteCashVariance,
+    maxVoidedSaleCount: config.maxVoidedSaleCount,
+    maxVoidedSaleTotal: config.maxVoidedSaleTotal,
+    mode: config.mode,
     operatingTimezoneOffsetMinutes:
       config.policy?.operatingTimezoneOffsetMinutes ?? null,
     paused: config.paused,
@@ -267,6 +319,202 @@ function eodDecision(
   };
 }
 
+function numberFromRecord(
+  record: Record<string, unknown> | undefined,
+  key: string,
+) {
+  const value = record?.[key];
+
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+function eodAutoCompleteDecision(
+  snapshot: Awaited<ReturnType<typeof buildDailyCloseSnapshotWithCtx>>,
+  policyConfig: EodAutoCompletePolicyConfig,
+  timing?: {
+    insideCompletionWindow: boolean;
+    localCompletionWindowMinutes: number;
+    localMinuteOfDay: number;
+  } | null,
+) {
+  const snapshotCounts = {
+    blockerCount: snapshot.readiness.blockerCount,
+    carryForwardCount: snapshot.readiness.carryForwardCount,
+    readyCount: snapshot.readiness.readyCount,
+    reviewCount: snapshot.readiness.reviewCount,
+  };
+  const sourceSubjects = sourceSubjectsOrStoreDay({
+    operatingDate: snapshot.operatingDate,
+    sourceSubjects: snapshot.sourceSubjects,
+    subjectType: "daily_close",
+  });
+  const voidedSaleTotal = snapshot.reviewItems
+    .filter((item) => item.category === "voided_sale")
+    .reduce((sum, item) => sum + numberFromRecord(item.metadata, "total"), 0);
+  const absoluteCashVariance = Math.abs(snapshot.summary.netCashVariance);
+  const unsupportedReviewCategories = Array.from(
+    new Set(
+      snapshot.reviewItems
+        .map((item) => item.category)
+        .filter(
+          (category) =>
+            !EOD_AUTO_COMPLETE_LOW_RISK_REVIEW_CATEGORIES.has(category),
+        ),
+    ),
+  );
+  const disqualifyingCategories = Array.from(
+    new Set([
+      ...snapshot.blockers.map((item) => item.category),
+      ...unsupportedReviewCategories,
+    ]),
+  ).sort();
+  const observed = {
+    absoluteCashVariance,
+    blockerCount: snapshot.readiness.blockerCount,
+    carryForwardCount: snapshot.readiness.carryForwardCount,
+    disqualifyingCategories,
+    reviewCount: snapshot.readiness.reviewCount,
+    voidedSaleCount: snapshot.summary.voidedTransactionCount,
+    voidedSaleTotal,
+  };
+  const evidenceBase = {
+    kind: "eod_auto_complete",
+    observed,
+    policy: {
+      cleanDayAutoCompleteEnabled: policyConfig.cleanDayAutoCompleteEnabled,
+      localCompletionWindowMinutes: policyConfig.localCompletionWindowMinutes,
+      maxAbsoluteCashVariance: policyConfig.maxAbsoluteCashVariance,
+      maxVoidedSaleCount: policyConfig.maxVoidedSaleCount,
+      maxVoidedSaleTotal: policyConfig.maxVoidedSaleTotal,
+      mode: policyConfig.paused ? "disabled" : policyConfig.mode,
+    },
+  } satisfies AutomationDecisionEvidence;
+  const decision = (args: {
+    classification: string;
+    decisionReason: string;
+    eligible: boolean;
+    gates?: AutomationDecisionEvidence["gates"];
+    outcome: "eligible" | "skipped";
+  }) => ({
+    decisionEvidence: {
+      ...evidenceBase,
+      classification: args.classification,
+      eligible: args.eligible,
+      ...(args.gates ? { gates: args.gates } : {}),
+    },
+    decisionReason: args.decisionReason,
+    outcome: args.outcome,
+    snapshotCounts,
+    sourceSubjects,
+  });
+
+  if (timing && !timing.insideCompletionWindow) {
+    return decision({
+      classification: "outside_completion_window",
+      decisionReason:
+        "EOD Review auto-complete is outside the configured local completion window.",
+      eligible: false,
+      gates: [
+        {
+          key: "local_completion_window",
+          passed: false,
+          reason: `${timing.localMinuteOfDay} >= ${timing.localCompletionWindowMinutes}`,
+        },
+      ],
+      outcome: "skipped",
+    });
+  }
+
+  if (snapshot.status === "completed") {
+    return decision({
+      classification: "completed",
+      decisionReason: "EOD Review is already completed for this store day.",
+      eligible: false,
+      outcome: "skipped",
+    });
+  }
+
+  if (
+    snapshot.status === "carry_forward" ||
+    snapshot.readiness.carryForwardCount > 0 ||
+    snapshot.carryForwardItems.length > 0
+  ) {
+    return decision({
+      classification: "carry_forward",
+      decisionReason:
+        "EOD Review has carry-forward evidence; v1 auto-complete requires human review.",
+      eligible: false,
+      outcome: "skipped",
+    });
+  }
+
+  if (snapshot.readiness.blockerCount > 0 || disqualifyingCategories.length > 0) {
+    return decision({
+      classification: "blocked",
+      decisionReason:
+        "EOD Review has blockers or unsupported review evidence and requires human review.",
+      eligible: false,
+      outcome: "skipped",
+    });
+  }
+
+  if (snapshot.readiness.reviewCount === 0) {
+    return policyConfig.cleanDayAutoCompleteEnabled
+      ? decision({
+          classification: "clean_day",
+          decisionReason: "EOD Review is clean and eligible for auto-complete.",
+          eligible: true,
+          outcome: "eligible",
+        })
+      : decision({
+          classification: "clean_day",
+          decisionReason:
+            "EOD Review is clean, but clean-day auto-complete is disabled by policy.",
+          eligible: false,
+          outcome: "skipped",
+        });
+  }
+
+  const gates = [
+    {
+      key: "absolute_cash_variance",
+      passed: absoluteCashVariance <= policyConfig.maxAbsoluteCashVariance,
+      reason: `${absoluteCashVariance} <= ${policyConfig.maxAbsoluteCashVariance}`,
+    },
+    {
+      key: "voided_sale_count",
+      passed:
+        snapshot.summary.voidedTransactionCount <=
+        policyConfig.maxVoidedSaleCount,
+      reason: `${snapshot.summary.voidedTransactionCount} <= ${policyConfig.maxVoidedSaleCount}`,
+    },
+    {
+      key: "voided_sale_total",
+      passed: voidedSaleTotal <= policyConfig.maxVoidedSaleTotal,
+      reason: `${voidedSaleTotal} <= ${policyConfig.maxVoidedSaleTotal}`,
+    },
+  ];
+  const lowRisk = gates.every((gate) => gate.passed);
+
+  return lowRisk
+    ? decision({
+        classification: "low_risk_review",
+        decisionReason:
+          "EOD Review has only low-risk review evidence within policy thresholds.",
+        eligible: true,
+        gates,
+        outcome: "eligible",
+      })
+    : decision({
+        classification: "review_threshold_exceeded",
+        decisionReason:
+          "EOD Review review evidence exceeds auto-complete policy thresholds.",
+        eligible: false,
+        gates,
+        outcome: "skipped",
+      });
+}
+
 export async function runDailyOpeningAutomationWithCtx(
   ctx: MutationCtx,
   args: {
@@ -368,6 +616,100 @@ export async function prepareDailyCloseAutomationWithCtx(
   });
 }
 
+export async function runDailyCloseAutoCompleteEligibilityWithCtx(
+  ctx: MutationCtx,
+  args: {
+    completionWindowSatisfied?: boolean;
+    endAt?: number;
+    now?: number;
+    operatingDate: string;
+    startAt?: number;
+    storeId: Id<"store">;
+  },
+) {
+  const snapshot = await buildDailyCloseSnapshotWithCtx(ctx, args);
+  const policyConfig = await getEodAutoCompletePolicyConfigWithCtx(ctx, {
+    storeId: args.storeId,
+  });
+  const adapterDecision = eodAutoCompleteDecision(
+    snapshot,
+    policyConfig,
+    args.completionWindowSatisfied
+      ? {
+          insideCompletionWindow: true,
+          localCompletionWindowMinutes: policyConfig.localCompletionWindowMinutes,
+          localMinuteOfDay: policyConfig.localCompletionWindowMinutes,
+        }
+      : args.now
+      ? eodAutoCompleteLocalTiming({
+          now: args.now,
+          policyConfig,
+        })
+      : null,
+  );
+  const policyReviewedItemKeys =
+    adapterDecision.decisionEvidence.classification === "low_risk_review"
+      ? snapshot.reviewItems.map((item) => item.key)
+      : [];
+
+  return evaluateAutomationActionWithCtx(ctx, {
+    action: dailyOperationsEodAutoCompleteAction,
+    adapterDecision,
+    apply: async ({ run }) => {
+      const result = await completeDailyCloseForAutomationWithCtx(ctx, {
+        automationDecisionReason:
+          run.decisionReason ?? "EOD Review completed by automation policy.",
+        automationPolicyVersion: run.policyVersion,
+        automationRunId: run._id,
+        endAt: args.endAt,
+        operatingDate: args.operatingDate,
+        organizationId: snapshot.organizationId ?? undefined,
+        policyReviewedItemKeys,
+        startAt: args.startAt,
+        storeId: args.storeId,
+      });
+
+      if (result.kind !== "ok") {
+        return {
+          error:
+            result.kind === "user_error"
+              ? {
+                  code: result.error.code,
+                  message: result.error.message,
+                }
+              : {
+                  code: "eod_auto_complete_failed",
+                  message: "EOD Review automation could not complete.",
+                },
+          outcome:
+            result.kind === "user_error"
+              ? ("skipped" as const)
+              : ("failed" as const),
+        };
+      }
+
+      return {
+        eventIds: result.data.operationalEventId
+          ? [result.data.operationalEventId]
+          : [],
+        outcome:
+          result.data.action === "already_completed"
+            ? ("skipped" as const)
+            : ("applied" as const),
+      };
+    },
+    idempotencyKey: automationIdempotencyKey({
+      action: EOD_AUTO_COMPLETE_ACTION,
+      domain: DAILY_OPERATIONS_AUTOMATION_DOMAIN,
+      operatingDate: args.operatingDate,
+      storeId: args.storeId,
+    }),
+    operatingDate: args.operatingDate,
+    organizationId: snapshot.organizationId ?? undefined,
+    storeId: args.storeId,
+  });
+}
+
 function operatingDateForPolicy(args: {
   now: number;
   operatingTimezoneOffsetMinutes?: number;
@@ -447,6 +789,70 @@ function openingPolicyCronWindow(args: {
 
   return {
     operatingDate: localDate.toISOString().slice(0, 10),
+  };
+}
+
+function eodAutoCompleteLocalTiming(args: {
+  now: number;
+  policyConfig: EodAutoCompletePolicyConfig;
+}) {
+  const localDate = localDateForPolicy({
+    now: args.now,
+    operatingTimezoneOffsetMinutes:
+      args.policyConfig.policy?.operatingTimezoneOffsetMinutes,
+  });
+
+  if (!localDate) return null;
+
+  const localMinuteOfDay =
+    localDate.getUTCHours() * 60 + localDate.getUTCMinutes();
+  const localCompletionWindowMinutes =
+    args.policyConfig.localCompletionWindowMinutes;
+
+  return {
+    insideCompletionWindow: localMinuteOfDay >= localCompletionWindowMinutes,
+    localCompletionWindowMinutes,
+    localMinuteOfDay,
+  };
+}
+
+function eodAutoCompletePolicyCronWindow(args: {
+  now: number;
+  policy: Doc<"automationPolicy">;
+}) {
+  const localDate = localDateForPolicy({
+    now: args.now,
+    operatingTimezoneOffsetMinutes: args.policy.operatingTimezoneOffsetMinutes,
+  });
+
+  if (!localDate) {
+    return null;
+  }
+
+  const localCompletionWindowMinutes =
+    typeof args.policy.eodLocalCompletionWindowMinutes === "number" &&
+    Number.isInteger(args.policy.eodLocalCompletionWindowMinutes)
+      ? args.policy.eodLocalCompletionWindowMinutes
+      : DEFAULT_EOD_LOCAL_COMPLETION_WINDOW_MINUTES;
+  const localMinuteOfDay =
+    localDate.getUTCHours() * 60 + localDate.getUTCMinutes();
+  const currentOperatingDate = localDate.toISOString().slice(0, 10);
+
+  if (
+    localMinuteOfDay < localCompletionWindowMinutes &&
+    localMinuteOfDay * 60_000 <= CONFIGURED_AUTOMATION_LOOKBACK_MS
+  ) {
+    const previousLocalDate = new Date(localDate.getTime() - 24 * 60 * 60_000);
+
+    return {
+      completionWindowSatisfied: true,
+      operatingDate: previousLocalDate.toISOString().slice(0, 10),
+    };
+  }
+
+  return {
+    completionWindowSatisfied: localMinuteOfDay >= localCompletionWindowMinutes,
+    operatingDate: currentOperatingDate,
   };
 }
 
@@ -556,12 +962,16 @@ async function listConfiguredAutomationPolicies(
 export async function runScheduledDailyOperationsAutomationWithCtx(
   ctx: MutationCtx,
   args: {
+    now?: number;
     operatingDate: string;
   },
 ) {
-  const [openingPolicies, eodPolicies] = await Promise.all([
+  const now = args.now ?? Date.now();
+  const [openingPolicies, eodPolicies, eodAutoCompletePolicies] =
+    await Promise.all([
     listConfiguredAutomationPolicies(ctx, { action: OPENING_AUTO_START_ACTION }),
     listConfiguredAutomationPolicies(ctx, { action: EOD_PREPARE_ACTION }),
+    listConfiguredAutomationPolicies(ctx, { action: EOD_AUTO_COMPLETE_ACTION }),
   ]);
   const openingResults = await Promise.all(
     openingPolicies.map((policy) =>
@@ -591,8 +1001,24 @@ export async function runScheduledDailyOperationsAutomationWithCtx(
       }),
     ),
   );
+  const eodAutoCompleteResults = await Promise.all(
+    eodAutoCompletePolicies.map((policy) =>
+      runConfiguredPolicySafely(ctx, {
+        action: EOD_AUTO_COMPLETE_ACTION,
+        operatingDate: args.operatingDate,
+        policy,
+        run: (operatingDate) =>
+          runDailyCloseAutoCompleteEligibilityWithCtx(ctx, {
+            now,
+            operatingDate,
+            storeId: policy.storeId,
+          }),
+      }),
+    ),
+  );
 
   return {
+    eodAutoCompleteResults,
     eodResults,
     openingResults,
   };
@@ -605,9 +1031,11 @@ export async function runConfiguredDailyOperationsAutomationWithCtx(
   } = {},
 ) {
   const now = args.now ?? Date.now();
-  const [openingPolicies, eodPolicies] = await Promise.all([
+  const [openingPolicies, eodPolicies, eodAutoCompletePolicies] =
+    await Promise.all([
     listConfiguredAutomationPolicies(ctx, { action: OPENING_AUTO_START_ACTION }),
     listConfiguredAutomationPolicies(ctx, { action: EOD_PREPARE_ACTION }),
+    listConfiguredAutomationPolicies(ctx, { action: EOD_AUTO_COMPLETE_ACTION }),
   ]);
   const openingResults = await Promise.all(
     openingPolicies.map((policy) => {
@@ -648,8 +1076,33 @@ export async function runConfiguredDailyOperationsAutomationWithCtx(
       });
     }),
   );
+  const eodAutoCompleteResults = await Promise.all(
+    eodAutoCompletePolicies.map((policy) => {
+      const cronWindow = eodAutoCompletePolicyCronWindow({
+        now,
+        policy,
+      });
+      const operatingDate = cronWindow?.operatingDate ?? null;
+
+      return runConfiguredPolicySafely(ctx, {
+        action: EOD_AUTO_COMPLETE_ACTION,
+        operatingDate,
+        policy,
+        run: (operatingDate) =>
+          runDailyCloseAutoCompleteEligibilityWithCtx(ctx, {
+            completionWindowSatisfied: cronWindow?.completionWindowSatisfied,
+            now,
+            operatingDate,
+            storeId: policy.storeId,
+          }),
+      });
+    }),
+  );
 
   return {
+    eodAutoCompleteResults: eodAutoCompleteResults.filter(
+      (result) => result !== null,
+    ),
     eodResults: eodResults.filter((result) => result !== null),
     openingResults: openingResults.filter((result) => result !== null),
   };
@@ -673,6 +1126,13 @@ export const getOpeningAutoStartPolicy = query({
     storeId: v.id("store"),
   },
   handler: (ctx, args) => getOpeningAutoStartPolicyForApi(ctx, args),
+});
+
+export const getEodAutoCompletePolicy = query({
+  args: {
+    storeId: v.id("store"),
+  },
+  handler: (ctx, args) => getEodAutoCompletePolicyForApi(ctx, args),
 });
 
 export const updateOpeningAutoStartPolicy = mutation({
@@ -718,6 +1178,60 @@ export const updateOpeningAutoStartPolicy = mutation({
           ? "manager_review"
           : "skip",
       ),
+      operatingTimezoneOffsetMinutes:
+        policy.operatingTimezoneOffsetMinutes ?? null,
+      paused: Boolean(policy.paused),
+      policyVersion: policy.policyVersion,
+    };
+  },
+});
+
+export const updateEodAutoCompletePolicy = mutation({
+  args: {
+    cleanDayAutoCompleteEnabled: v.boolean(),
+    localCompletionWindowMinutes: v.number(),
+    maxAbsoluteCashVariance: v.number(),
+    maxVoidedSaleCount: v.number(),
+    maxVoidedSaleTotal: v.number(),
+    mode: v.union(
+      v.literal("disabled"),
+      v.literal("dry_run"),
+      v.literal("enabled"),
+    ),
+    operatingTimezoneOffsetMinutes: v.optional(v.number()),
+    storeId: v.id("store"),
+  },
+  handler: async (ctx, args) => {
+    const { athenaUser, store } = await requireStoreFullAdminAccess(
+      ctx,
+      args.storeId,
+    );
+    const policy = await upsertEodAutoCompletePolicyConfigWithCtx(ctx, {
+      cleanDayAutoCompleteEnabled: args.cleanDayAutoCompleteEnabled,
+      localCompletionWindowMinutes: args.localCompletionWindowMinutes,
+      maxAbsoluteCashVariance: args.maxAbsoluteCashVariance,
+      maxVoidedSaleCount: args.maxVoidedSaleCount,
+      maxVoidedSaleTotal: args.maxVoidedSaleTotal,
+      mode: args.mode,
+      operatingTimezoneOffsetMinutes: args.operatingTimezoneOffsetMinutes,
+      organizationId: store.organizationId,
+      policyVersion: DAILY_OPERATIONS_POLICY_VERSION,
+      storeId: args.storeId,
+      updatedByUserId: athenaUser._id,
+    });
+
+    return {
+      cleanDayAutoCompleteEnabled: Boolean(
+        policy.eodCleanDayAutoCompleteEnabled,
+      ),
+      configured: true,
+      localCompletionWindowMinutes:
+        policy.eodLocalCompletionWindowMinutes ??
+        DEFAULT_EOD_LOCAL_COMPLETION_WINDOW_MINUTES,
+      maxAbsoluteCashVariance: policy.eodMaxAbsoluteCashVariance ?? 0,
+      maxVoidedSaleCount: policy.eodMaxVoidedSaleCount ?? 0,
+      maxVoidedSaleTotal: policy.eodMaxVoidedSaleTotal ?? 0,
+      mode: policy.mode,
       operatingTimezoneOffsetMinutes:
         policy.operatingTimezoneOffsetMinutes ?? null,
       paused: Boolean(policy.paused),

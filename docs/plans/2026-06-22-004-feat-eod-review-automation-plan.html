@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>feat: Add EOD Review Automation Completion</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f8f8;
+      --surface: #ffffff;
+      --ink: #18201f;
+      --muted: #5e6a67;
+      --line: #d9dfdd;
+      --accent: #0f766e;
+      --accent-soft: #e2f4f1;
+      --warn: #8a5a00;
+      --warn-soft: #fff3d6;
+      --code: #f1f4f3;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main {
+      max-width: 1040px;
+      margin: 0 auto;
+      padding: 40px 24px 64px;
+    }
+    header {
+      border-bottom: 1px solid var(--line);
+      margin-bottom: 28px;
+      padding-bottom: 20px;
+    }
+    h1, h2, h3 { line-height: 1.2; margin: 0; }
+    h1 { font-size: 32px; letter-spacing: 0; }
+    h2 { font-size: 22px; margin-top: 32px; }
+    h3 { font-size: 17px; margin-top: 22px; }
+    p { margin: 10px 0 0; }
+    a { color: var(--accent); text-decoration-thickness: 1px; }
+    nav {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px 18px;
+      margin: 24px 0;
+    }
+    nav ul, .unit-list { margin: 8px 0 0; padding-left: 22px; }
+    section {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      margin-top: 18px;
+      padding: 22px;
+    }
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 14px;
+    }
+    .pill {
+      background: var(--accent-soft);
+      border: 1px solid #b8dfd8;
+      border-radius: 999px;
+      color: #0a514b;
+      display: inline-flex;
+      font-size: 13px;
+      padding: 3px 10px;
+    }
+    .callout {
+      background: var(--warn-soft);
+      border: 1px solid #f2d48b;
+      border-radius: 8px;
+      color: var(--warn);
+      margin-top: 14px;
+      padding: 12px 14px;
+    }
+    code {
+      background: var(--code);
+      border-radius: 4px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.92em;
+      padding: 1px 5px;
+    }
+    table {
+      border-collapse: collapse;
+      margin-top: 14px;
+      width: 100%;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 9px 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: #eef2f1; }
+    ul { margin: 10px 0 0; padding-left: 22px; }
+    li + li { margin-top: 5px; }
+    .units article {
+      border-top: 1px solid var(--line);
+      margin-top: 18px;
+      padding-top: 18px;
+    }
+    .units article:first-of-type {
+      border-top: 0;
+      margin-top: 12px;
+      padding-top: 0;
+    }
+    .small { color: var(--muted); font-size: 13px; }
+    @media (max-width: 700px) {
+      main { padding: 24px 14px 48px; }
+      h1 { font-size: 26px; }
+      section { padding: 18px; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <p class="small">Athena implementation plan</p>
+      <h1>feat: Add EOD Review Automation Completion</h1>
+      <div class="meta">
+        <span class="pill">feat</span>
+        <span class="pill">active</span>
+        <span class="pill">2026-06-22</span>
+      </div>
+      <p class="small">Markdown source: <a href="2026-06-22-004-feat-eod-review-automation-plan.md">2026-06-22-004-feat-eod-review-automation-plan.md</a></p>
+    </header>
+
+    <nav aria-label="Plan sections">
+      <strong>Contents</strong>
+      <ul>
+        <li><a href="#summary">Summary</a></li>
+        <li><a href="#requirements">Requirements</a></li>
+        <li><a href="#decisions">Key Decisions</a></li>
+        <li><a href="#units">Implementation Units</a></li>
+        <li><a href="#impact">System Impact</a></li>
+        <li><a href="#risks">Risks</a></li>
+      </ul>
+    </nav>
+
+    <section id="summary">
+      <h2>Summary</h2>
+      <p>Add a policy-gated EOD Review completion path that lets Athena complete clean store days and narrowly-approved low-risk review days as an explicit automation actor.</p>
+      <div class="callout">
+        Manual EOD completion keeps the manager approval proof contract. Automation completion records policy evidence and Athena attribution instead of pretending a manager approved the close.
+      </div>
+    </section>
+
+    <section>
+      <h2>Problem Frame</h2>
+      <p>Daily Operations already prepares EOD Review through <code>eod.prepare</code>, but completion still requires a human manager proof even when the store day is clean or the only review items fall inside a configured low-risk policy. Athena needs a truthful automation completion boundary with durable evidence.</p>
+    </section>
+
+    <section id="requirements">
+      <h2>Requirements</h2>
+      <ul>
+        <li>Add a distinct Daily Operations automation action for EOD completion.</li>
+        <li>Complete clean EOD Reviews only when store policy is enabled, the local EOD completion window is open, and command-time snapshot checks pass.</li>
+        <li>Complete low-risk EOD Reviews only when every review item is policy-approved and within thresholds.</li>
+        <li>Keep blockers, carry-forward items, unknown review categories, invalid dates, reopened/superseded lifecycle conflicts, and pending approvals as hard stops.</li>
+        <li>Persist automation attribution on the completed close/report evidence and operational event.</li>
+        <li>Persist structured dry-run/skipped/applied decision evidence, including timing, threshold, item-key, and carry-forward status.</li>
+        <li>Preserve existing financial-detail redaction when returning policy-reviewed evidence to Daily Close, Daily Operations, and history views.</li>
+        <li>Expose full-admin policy controls and calm operator-facing attribution copy.</li>
+      </ul>
+    </section>
+
+    <section id="decisions">
+      <h2>Key Decisions</h2>
+      <table>
+        <thead>
+          <tr><th>Decision</th><th>Rationale</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>eod.auto_complete</code> is separate from <code>eod.prepare</code></td><td>Completion mutates lifecycle state and needs a distinct audit boundary.</td></tr>
+          <tr><td>Automation authorization is not manager approval</td><td>Manual proof semantics stay intact while Athena records policy evidence.</td></tr>
+          <tr><td>Store-local completion window gates action</td><td>Athena may evaluate earlier, but it cannot close before the configured EOD window opens.</td></tr>
+          <tr><td>Structured run evidence is required</td><td>Dry-run, skipped, and applied decisions need auditable item keys, thresholds, timing status, and carry-forward status.</td></tr>
+          <tr><td>Low-risk categories are narrow</td><td>Initial automation can cover clean days, thresholded cash variance, and thresholded voided sales.</td></tr>
+          <tr><td>Restricted evidence stays permissioned</td><td>Athena attribution may be visible broadly, but cash amounts, thresholds, item snapshots, and source evidence keep existing read-side redaction.</td></tr>
+          <tr><td>Carry-forward stays human-only in v1</td><td>Any existing carry-forward item or non-zero carry-forward count skips automation completion.</td></tr>
+          <tr><td>Snapshot revalidation happens at apply time</td><td>Prevents races from closing a day that became blocked after eligibility evaluation.</td></tr>
+          <tr><td>Lifecycle state remains primary in UI</td><td>Automation evidence explains attribution; it does not replace Daily Close state.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Policy Mode Matrix</h2>
+      <table>
+        <thead>
+          <tr><th>Policy mode</th><th>Clean day</th><th>Low-risk review day</th><th>Blocked/high-risk day</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Disabled</td><td>Record disabled/no mutation</td><td>Record disabled/no mutation</td><td>Record disabled/no mutation</td></tr>
+          <tr><td>Dry run</td><td>Record eligible evidence/no mutation after window opens; record outside-window evidence before then</td><td>Record eligible evidence/no mutation after window opens; record outside-window evidence before then</td><td>Record skipped reason/no mutation</td></tr>
+          <tr><td>Enabled</td><td>Complete with Athena attribution only after the window opens</td><td>Complete with policy-reviewed evidence only after the window opens</td><td>Record skipped/failure reason/no mutation</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="units" class="units">
+      <h2>Implementation Units</h2>
+      <article>
+        <h3>U1. Add EOD Completion Policy Shape</h3>
+        <p>Add typed store-scoped configuration for EOD completion, local completion-window settings, and structured run decision evidence without reusing Opening-specific policy fields.</p>
+        <p><strong>Core files:</strong> <code>convex/schemas/automation.ts</code>, <code>convex/automation/runLedger.ts</code>, <code>convex/operations/dailyOperationsAutomation.ts</code>.</p>
+      </article>
+      <article>
+        <h3>U2. Add EOD Auto-Complete Eligibility Decision</h3>
+        <p>Register a distinct action and define deterministic clean/low-risk eligibility from the server Daily Close snapshot, local EOD completion window, and carry-forward skip rules.</p>
+        <p><strong>Key tests:</strong> full hard-blocker matrix, local timezone/window boundaries, unknown review categories, and carry-forward skip.</p>
+      </article>
+      <article>
+        <h3>U3. Add Automation-Safe Daily Close Completion</h3>
+        <p>Share completion persistence while keeping human manager proof required and adding an internal automation path with policy evidence, command-time window validation, and carry-forward refusal.</p>
+        <p><strong>Key tests:</strong> duplicate scheduler replay, already-applied runs, and retry after close/event persistence before run patching.</p>
+      </article>
+      <article>
+        <h3>U4. Extend Daily Operations And Daily Close Read Models</h3>
+        <p>Expose automation completion attribution and permission-redacted policy-reviewed evidence from backend snapshots.</p>
+      </article>
+      <article>
+        <h3>U5. Add Operator UI And Settings For EOD Automation</h3>
+        <p>Add full-admin EOD policy settings and completed-by-Athena copy in Daily Close, Daily Operations, and history.</p>
+      </article>
+      <article>
+        <h3>U6. Round Out Validation, Generated Artifacts, And Solution Note</h3>
+        <p>Refresh generated artifacts, Graphify, tests, and reusable architecture learning after implementation.</p>
+      </article>
+    </section>
+
+    <section id="impact">
+      <h2>System-Wide Impact</h2>
+      <ul>
+        <li><strong>Interaction graph:</strong> scheduled automation, policies, run ledger, Daily Close completion, operational events, snapshots, settings, and UI attribution.</li>
+        <li><strong>Error propagation:</strong> safe automation outcomes and normalized UI copy; raw errors stay server-side.</li>
+        <li><strong>State lifecycle risks:</strong> command-time races, early completion, carry-forward ambiguity, duplicate retries, already-completed days, reopened/superseded closes, and partial run patching.</li>
+        <li><strong>Read-side access:</strong> widened automation evidence preserves existing financial-detail redaction.</li>
+        <li><strong>Unchanged invariants:</strong> manual manager proof, hard blockers, immutable completed snapshots, and server-owned Daily Operations state.</li>
+      </ul>
+    </section>
+
+    <section id="risks">
+      <h2>Risks &amp; Mitigations</h2>
+      <table>
+        <thead>
+          <tr><th>Risk</th><th>Mitigation</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Automation is mistaken for manager approval</td><td>Use Athena actor metadata and avoid approval wording.</td></tr>
+          <tr><td>Thresholds are too permissive</td><td>Start narrow, disabled by default, with dry-run evidence.</td></tr>
+          <tr><td>Athena closes before operators expect EOD</td><td>Require the configured store-local completion window before enabled completion can apply.</td></tr>
+          <tr><td>A race closes a blocked day</td><td>Rebuild the snapshot inside the apply path.</td></tr>
+          <tr><td>Dry-run or skipped evidence is too lossy</td><td>Add structured run decision evidence for thresholds, item keys, timing, and carry-forward status.</td></tr>
+          <tr><td>Carry-forward work appears resolved</td><td>Skip any day with existing carry-forward items in v1.</td></tr>
+          <tr><td>Policy-reviewed evidence leaks restricted details</td><td>Apply existing read-side redaction to cash amounts, thresholds, item snapshots, and source evidence.</td></tr>
+          <tr><td>Review evidence disappears after close</td><td>Persist policy-reviewed items in the report snapshot.</td></tr>
+          <tr><td>Return validator drift</td><td>Add sibling contract tests for widened Convex public returns.</td></tr>
+        </tbody>
+      </table>
+    </section>
+  </main>
+</body>
+</html>

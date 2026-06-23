@@ -5,7 +5,7 @@ import type {
   LabelHTMLAttributes,
   ReactNode,
 } from "react";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 const mocks = vi.hoisted(() => ({
@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   registerTerminalMutation: vi.fn(),
   rotateRecoveryCode: vi.fn(),
   revokeRecoveryCode: vi.fn(),
+  updateEodAutoCompletePolicy: vi.fn(),
   updateOpeningAutoStartPolicy: vi.fn(),
   unlockRecoveryCode: vi.fn(),
   useAuth: vi.fn(),
@@ -79,7 +80,9 @@ vi.mock("~/convex/_generated/api", () => ({
     },
     operations: {
       dailyOperationsAutomation: {
+        getEodAutoCompletePolicy: "getEodAutoCompletePolicy",
         getOpeningAutoStartPolicy: "getOpeningAutoStartPolicy",
+        updateEodAutoCompletePolicy: "updateEodAutoCompletePolicy",
         updateOpeningAutoStartPolicy: "updateOpeningAutoStartPolicy",
       },
     },
@@ -183,9 +186,20 @@ describe("registerAndProvisionPosTerminal", () => {
       mode: "enabled",
       openingBlockerHandling: "start_with_manager_review",
     });
+    mocks.updateEodAutoCompletePolicy.mockResolvedValue({
+      cleanDayAutoCompleteEnabled: true,
+      localCompletionWindowMinutes: 1110,
+      maxAbsoluteCashVariance: 500,
+      maxVoidedSaleCount: 1,
+      maxVoidedSaleTotal: 2500,
+      mode: "enabled",
+    });
     mocks.useMutation.mockImplementation((ref) => {
       if (ref === "updateOpeningAutoStartPolicy") {
         return mocks.updateOpeningAutoStartPolicy;
+      }
+      if (ref === "updateEodAutoCompletePolicy") {
+        return mocks.updateEodAutoCompletePolicy;
       }
       if (ref === "rotateRecoveryCode") return mocks.rotateRecoveryCode;
       if (ref === "revokeRecoveryCode") return mocks.revokeRecoveryCode;
@@ -215,6 +229,16 @@ describe("registerAndProvisionPosTerminal", () => {
               localStartMinutes: 510,
               mode: "enabled",
               openingBlockerHandling: "start_with_manager_review",
+              operatingTimezoneOffsetMinutes: -120,
+            }
+        : ref === "getEodAutoCompletePolicy"
+          ? {
+              cleanDayAutoCompleteEnabled: true,
+              localCompletionWindowMinutes: 1110,
+              maxAbsoluteCashVariance: 500,
+              maxVoidedSaleCount: 1,
+              maxVoidedSaleTotal: 2500,
+              mode: "dry_run",
               operatingTimezoneOffsetMinutes: -120,
             }
         : null,
@@ -479,6 +503,76 @@ describe("registerAndProvisionPosTerminal", () => {
     });
   });
 
+  it("shows full admins a distinct EOD completion automation policy", async () => {
+    render(<POSSettingsView />);
+
+    expect(
+      await screen.findByText("EOD completion automation"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Athena can complete clean or low-risk EOD Reviews under store policy.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Dry run EOD completion")).toBeChecked();
+    expect(screen.getByLabelText("Enable clean-day completion")).toBeChecked();
+    expect(screen.getByRole("combobox", { name: "EOD completion hour" }))
+      .toHaveTextContent("06");
+    expect(screen.getByRole("combobox", { name: "EOD completion minute" }))
+      .toHaveTextContent("30");
+    expect(screen.getByRole("combobox", { name: "EOD completion period" }))
+      .toHaveTextContent("PM");
+    expect(screen.getByLabelText("Cash variance threshold")).toHaveValue(500);
+    expect(screen.getByLabelText("Voided sale count threshold")).toHaveValue(1);
+    expect(screen.getByLabelText("Voided sale total threshold")).toHaveValue(2500);
+    expect(mocks.useQuery).toHaveBeenCalledWith("getEodAutoCompletePolicy", {
+      storeId: "store-1",
+    });
+  });
+
+  it("saves the EOD completion automation policy with thresholds", async () => {
+    const user = userEvent.setup();
+
+    render(<POSSettingsView />);
+
+    await screen.findByText("EOD completion automation");
+    await waitFor(() =>
+      expect(screen.getByLabelText("Dry run EOD completion")).toBeChecked(),
+    );
+    fireEvent.click(screen.getByLabelText("Enable EOD completion"));
+    fireEvent.click(screen.getByLabelText("Enable clean-day completion"));
+    fireEvent.change(screen.getByLabelText("Cash variance threshold"), {
+      target: { value: "750" },
+    });
+    fireEvent.change(screen.getByLabelText("Voided sale count threshold"), {
+      target: { value: "2" },
+    });
+    fireEvent.change(screen.getByLabelText("Voided sale total threshold"), {
+      target: { value: "9000" },
+    });
+    expect(screen.getByLabelText("Enable EOD completion")).toBeChecked();
+    expect(screen.getByLabelText("Enable clean-day completion")).not.toBeChecked();
+    expect(screen.getByLabelText("Cash variance threshold")).toHaveValue(750);
+    expect(screen.getByLabelText("Voided sale count threshold")).toHaveValue(2);
+    expect(screen.getByLabelText("Voided sale total threshold")).toHaveValue(9000);
+    await user.click(
+      screen.getByRole("button", { name: "Save EOD completion automation" }),
+    );
+
+    await waitFor(() =>
+      expect(mocks.updateEodAutoCompletePolicy).toHaveBeenCalledWith({
+        cleanDayAutoCompleteEnabled: false,
+        localCompletionWindowMinutes: 1110,
+        maxAbsoluteCashVariance: 750,
+        maxVoidedSaleCount: 2,
+        maxVoidedSaleTotal: 9000,
+        mode: "enabled",
+        operatingTimezoneOffsetMinutes: 0,
+        storeId: "store-1",
+      }),
+    );
+  });
+
   it("saves the store-day automation policy with local time and review handling", async () => {
     const user = userEvent.setup();
 
@@ -583,12 +677,17 @@ describe("registerAndProvisionPosTerminal", () => {
 
     expect(screen.queryByText("POS recovery code")).not.toBeInTheDocument();
     expect(screen.queryByText("Store day automation")).not.toBeInTheDocument();
+    expect(screen.queryByText("EOD completion automation")).not.toBeInTheDocument();
     expect(mocks.useQuery).toHaveBeenCalledWith(
       "getRecoveryCodeStatus",
       "skip",
     );
     expect(mocks.useQuery).toHaveBeenCalledWith(
       "getOpeningAutoStartPolicy",
+      "skip",
+    );
+    expect(mocks.useQuery).toHaveBeenCalledWith(
+      "getEodAutoCompletePolicy",
       "skip",
     );
   });
@@ -622,6 +721,37 @@ describe("registerAndProvisionPosTerminal", () => {
       }),
     );
     expect(screen.queryByText(/duplicate_policy/)).not.toBeInTheDocument();
+  });
+
+  it("shows a normalized error when EOD completion automation cannot save", async () => {
+    const user = userEvent.setup();
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    mocks.updateEodAutoCompletePolicy.mockRejectedValue(
+      new Error("internal threshold_policy stack"),
+    );
+
+    render(<POSSettingsView />);
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Save EOD completion automation",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(mocks.updateEodAutoCompletePolicy).toHaveBeenCalled(),
+    );
+    expect(
+      await screen.findByText("EOD completion automation settings were not saved."),
+    ).toBeInTheDocument();
+    expect(consoleError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: "internal threshold_policy stack",
+      }),
+    );
+    expect(screen.queryByText(/threshold_policy/)).not.toBeInTheDocument();
   });
 
   it("hands off roster and support work to terminal health", async () => {

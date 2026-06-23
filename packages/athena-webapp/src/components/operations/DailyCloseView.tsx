@@ -143,9 +143,15 @@ export type DailyCloseSnapshot = {
   blockers: DailyCloseItem[];
   carryForwardItems: DailyCloseItem[];
   completedClose?: {
+    actorType?: "human" | "automation";
+    automationDecisionReason?: string | null;
+    automationPolicyVersion?: string | null;
+    automationRunId?: Id<"automationRun"> | string | null;
     completedAt?: number | null;
     completedByStaffName?: string | null;
     notes?: string | null;
+    policyReviewedItemKeys?: string[] | null;
+    restrictedDetailsRedacted?: boolean | null;
   } | null;
   existingClose?: {
     _id?: Id<"dailyClose"> | string;
@@ -206,11 +212,17 @@ export type DailyCloseSnapshot = {
 
 type DailyCloseStoredReportSnapshot = {
   closeMetadata?: {
+    actorType?: "human" | "automation";
+    automationDecisionReason?: string | null;
+    automationPolicyVersion?: string | null;
+    automationRunId?: Id<"automationRun"> | string | null;
     completedAt?: number | null;
     completedByStaffName?: string | null;
     endAt: number;
     notes?: string | null;
     operatingDate: string;
+    policyReviewedItemKeys?: string[] | null;
+    restrictedDetailsRedacted?: boolean | null;
     startAt: number;
   };
   carryForwardItems?: DailyCloseSnapshot["carryForwardItems"];
@@ -548,6 +560,60 @@ function DailyCloseAutomationStatusPanel({
         </p>
       ) : null}
     </section>
+  );
+}
+
+export type DailyCloseCompletionAttribution = NonNullable<
+  DailyCloseSnapshot["completedClose"]
+>;
+
+export function getDailyCloseCompletionAttributionDetail(
+  completedClose?: DailyCloseCompletionAttribution | null,
+) {
+  if (completedClose?.actorType !== "automation") {
+    return null;
+  }
+
+  if (completedClose.restrictedDetailsRedacted) {
+    return "Restricted close evidence is hidden for this account.";
+  }
+
+  if (
+    completedClose.policyReviewedItemKeys &&
+    completedClose.policyReviewedItemKeys.length > 0
+  ) {
+    return "Policy checked low-risk review evidence before completion.";
+  }
+
+  if (
+    completedClose.automationDecisionReason
+      ?.toLowerCase()
+      .includes("low-risk review")
+  ) {
+    return "Policy checked low-risk review evidence before completion.";
+  }
+
+  return "Policy checked the close before completion.";
+}
+
+export function DailyCloseCompletionAttributionNotice({
+  completedClose,
+}: {
+  completedClose?: DailyCloseCompletionAttribution | null;
+}) {
+  if (completedClose?.actorType !== "automation") {
+    return null;
+  }
+
+  return (
+    <div className="mt-layout-md rounded-md border border-success/25 bg-success/10 p-layout-sm text-sm leading-6">
+      <p className="font-medium text-success">
+        Athena completed EOD Review under store policy.
+      </p>
+      <p className="mt-1 text-muted-foreground">
+        {getDailyCloseCompletionAttributionDetail(completedClose)}
+      </p>
+    </div>
   );
 }
 
@@ -1594,11 +1660,29 @@ function normalizeCompletedReportSnapshot(
       completedAt:
         storedSnapshot.closeMetadata.completedAt ??
         snapshot.completedClose?.completedAt,
+      actorType:
+        storedSnapshot.closeMetadata.actorType ??
+        snapshot.completedClose?.actorType,
+      automationDecisionReason:
+        storedSnapshot.closeMetadata.automationDecisionReason ??
+        snapshot.completedClose?.automationDecisionReason,
+      automationPolicyVersion:
+        storedSnapshot.closeMetadata.automationPolicyVersion ??
+        snapshot.completedClose?.automationPolicyVersion,
+      automationRunId:
+        storedSnapshot.closeMetadata.automationRunId ??
+        snapshot.completedClose?.automationRunId,
       completedByStaffName:
         storedSnapshot.closeMetadata.completedByStaffName ??
         snapshot.completedClose?.completedByStaffName,
       notes:
         storedSnapshot.closeMetadata.notes ?? snapshot.completedClose?.notes,
+      policyReviewedItemKeys:
+        storedSnapshot.closeMetadata.policyReviewedItemKeys ??
+        snapshot.completedClose?.policyReviewedItemKeys,
+      restrictedDetailsRedacted:
+        storedSnapshot.closeMetadata.restrictedDetailsRedacted ??
+        snapshot.completedClose?.restrictedDetailsRedacted,
     },
     endAt: storedSnapshot.closeMetadata.endAt,
     operatingDate: storedSnapshot.closeMetadata.operatingDate,
@@ -2568,6 +2652,10 @@ export function DailyCloseReadOnlyReport({
         </div>
       </section>
 
+      <DailyCloseCompletionAttributionNotice
+        completedClose={displaySnapshot.completedClose}
+      />
+
       {selectedBucket ? (
         <section className="space-y-layout-md">
           <Tabs
@@ -2840,11 +2928,16 @@ function CompletionRail({
               Close record saved
             </p>
             <p className="mt-1 text-sm leading-6 text-muted-foreground">
-              {snapshot.completedClose.completedByStaffName
-                ? `Completed by ${snapshot.completedClose.completedByStaffName}.`
-                : "Completed staff unavailable."}{" "}
+              {snapshot.completedClose.actorType === "automation"
+                ? "Completed by Athena under store policy."
+                : snapshot.completedClose.completedByStaffName
+                  ? `Completed by ${snapshot.completedClose.completedByStaffName}.`
+                  : "Completed staff unavailable."}{" "}
               {formatDailyCloseCompletedAt(snapshot.completedClose.completedAt)}
             </p>
+            <DailyCloseCompletionAttributionNotice
+              completedClose={snapshot.completedClose}
+            />
             {snapshot.completedClose.notes ? (
               <p className="mt-layout-sm text-sm leading-6 text-foreground">
                 {snapshot.completedClose.notes}
