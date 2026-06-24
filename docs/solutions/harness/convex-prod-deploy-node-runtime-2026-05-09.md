@@ -76,3 +76,7 @@ use the hanging nested binary.
   the package manager installs multiple esbuild copies.
 - When adding new deploy or generated-code commands for Athena Convex, test both
   the supported override path and the unsupported-node diagnostic.
+- When a test intentionally constrains `PATH` to expose only a fake `node`,
+  invoke the outer shell by absolute path, such as `/bin/bash`, so the command
+  runner can still start the probe while the sourced resolver sees the
+  constrained `PATH`.

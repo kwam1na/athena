@@ -6,6 +6,7 @@ import {
 } from "@hello-pangea/dnd";
 import { useMutation, useQuery } from "convex/react";
 import { useEffect, useState } from "react";
+import type { CSSProperties } from "react";
 import { api } from "~/convex/_generated/api";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import { capitalizeWords } from "~/src/lib/utils";
@@ -166,22 +167,29 @@ export const FeaturedSection = () => {
                         draggableId={featuredItem._id}
                         index={index}
                       >
-                        {(provided) => (
-                          <div
-                            ref={provided.innerRef}
-                            {...provided.draggableProps}
-                            className="flex flex-col gap-layout-sm rounded-md border border-border bg-background p-layout-sm sm:flex-row sm:items-center sm:justify-between"
-                          >
-                            <div className="flex min-w-0 items-center gap-layout-sm">
-                              <span
-                                {...provided.dragHandleProps}
-                                aria-label={`Drag ${itemLabel}`}
-                                className="inline-flex h-10 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                                role="button"
-                                tabIndex={0}
-                              >
-                                <GripVertical className="h-4 w-4" />
-                              </span>
+                        {(provided) => {
+                          const {
+                            style: draggableStyle,
+                            ...draggableProps
+                          } = provided.draggableProps;
+
+                          return (
+                            <div
+                              ref={provided.innerRef}
+                              {...draggableProps}
+                              style={draggableStyle as CSSProperties | undefined}
+                              className="flex flex-col gap-layout-sm rounded-md border border-border bg-background p-layout-sm sm:flex-row sm:items-center sm:justify-between"
+                            >
+                              <div className="flex min-w-0 items-center gap-layout-sm">
+                                <span
+                                  {...provided.dragHandleProps}
+                                  aria-label={`Drag ${itemLabel}`}
+                                  className="inline-flex h-10 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                  role="button"
+                                  tabIndex={0}
+                                >
+                                  <GripVertical className="h-4 w-4" />
+                                </span>
                               {product ? (
                                 <Link
                                   to="/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug"
@@ -287,9 +295,10 @@ export const FeaturedSection = () => {
                                 </TooltipTrigger>
                                 <TooltipContent>Remove</TooltipContent>
                               </Tooltip>
+                              </div>
                             </div>
-                          </div>
-                        )}
+                          );
+                        }}
                       </Draggable>
                     );
                   })}

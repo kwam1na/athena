@@ -19,6 +19,7 @@ import type { Id } from "~/convex/_generated/dataModel";
 
 const mockedHooks = vi.hoisted(() => ({
   navigate: vi.fn(),
+  useIsMobile: vi.fn(),
   useSearch: vi.fn(),
   useProtectedAdminPageState: vi.fn(),
   useQuery: vi.fn(),
@@ -69,6 +70,10 @@ vi.mock("@/hooks/useProtectedAdminPageState", () => ({
   useProtectedAdminPageState: mockedHooks.useProtectedAdminPageState,
 }));
 
+vi.mock("@/hooks/use-mobile", () => ({
+  useIsMobile: mockedHooks.useIsMobile,
+}));
+
 vi.mock("recharts", () => ({
   Area: () => <path data-testid="store-pulse-area" />,
   AreaChart: ({
@@ -90,7 +95,19 @@ vi.mock("recharts", () => ({
     </svg>
   ),
   CartesianGrid: () => null,
-  XAxis: () => null,
+  XAxis: ({
+    tickFormatter,
+    ticks,
+  }: {
+    tickFormatter?: (value: number) => string;
+    ticks?: number[];
+  }) => (
+    <g
+      data-testid="store-pulse-x-axis"
+      data-tick-labels={ticks?.map((tick) => tickFormatter?.(tick)).join("|") ?? ""}
+      data-ticks={ticks?.join("|") ?? ""}
+    />
+  ),
   YAxis: () => null,
 }));
 
@@ -868,6 +885,8 @@ describe("DailyOperationsViewContent", () => {
     HTMLElement.prototype.scrollIntoView = scrollIntoViewMock;
     window.history.pushState({}, "", "/wigclub/store/osu/operations");
     mockedHooks.navigate.mockReset();
+    mockedHooks.useIsMobile.mockReset();
+    mockedHooks.useIsMobile.mockReturnValue(false);
     mockedHooks.useSearch.mockReturnValue({});
   });
 
@@ -1134,6 +1153,16 @@ describe("DailyOperationsViewContent", () => {
       "href",
       "/wigclub/store/osu/operations/daily-close?o=%252Fwigclub%252Fstore%252Fosu%252Foperations&operatingDate=2026-05-10",
     );
+    const closeAutomationLink = screen.getByRole("link", {
+      name: "Open EOD Review automation source",
+    });
+    const closeAutomationRow = closeAutomationLink.closest("article");
+
+    expect(closeAutomationRow).toHaveClass(
+      "sm:flex-row",
+      "sm:justify-between",
+    );
+    expect(closeAutomationLink).toHaveClass("sm:ml-layout-md", "self-start");
   });
 
   it("shows Athena completion attribution for a closed store day", () => {
@@ -1207,12 +1236,24 @@ describe("DailyOperationsViewContent", () => {
 
     const storePulse = screen.getByRole("region", { name: "Store pulse" });
     const chart = within(storePulse).getByTestId("store-pulse-chart");
+    const chartContainer = within(storePulse).getByTestId(
+      "store-pulse-chart-container",
+    );
 
     expect(within(storePulse).getByText("Sales trend")).toBeInTheDocument();
     expect(chart).toBeInTheDocument();
+    expect(chartContainer.parentElement).toHaveClass(
+      "px-layout-sm",
+      "py-8",
+      "sm:p-8",
+    );
     expect(chart).toHaveAttribute(
       "data-display-labels",
       "Sun, May 3|Mon, May 4|Tue, May 5|Wed, May 6|Thu, May 7|Fri, May 8",
+    );
+    expect(within(storePulse).getByTestId("store-pulse-x-axis")).toHaveAttribute(
+      "data-ticks",
+      "0|1|2|3|4|5",
     );
     expect(chart).toHaveAttribute("data-margin-right", "72");
     expect(within(storePulse).getByText("Braiding Hair")).toBeInTheDocument();
@@ -1233,6 +1274,30 @@ describe("DailyOperationsViewContent", () => {
     expect(
       within(storePulse).getByText("This week's completed POS sales."),
     ).toBeInTheDocument();
+  });
+
+  it("uses evenly spaced store pulse trend ticks on mobile", () => {
+    vi.useRealTimers();
+    mockedHooks.useIsMobile.mockReturnValue(true);
+
+    renderContent(
+      {
+        ...operatingSnapshot,
+        storePulse: buildStorePulseSummary(),
+      },
+      {
+        storePulseWindow: "this_week",
+      },
+    );
+
+    const storePulse = screen.getByRole("region", { name: "Store pulse" });
+    const xAxis = within(storePulse).getByTestId("store-pulse-x-axis");
+
+    expect(xAxis).toHaveAttribute("data-ticks", "0|2.5|5");
+    expect(xAxis).toHaveAttribute(
+      "data-tick-labels",
+      "Sun, May 3|Wed, May 6|Fri, May 8",
+    );
   });
 
   it("shows a bounded empty state when store pulse is omitted", () => {

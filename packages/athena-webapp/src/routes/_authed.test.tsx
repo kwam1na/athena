@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import Layout from "./_authed";
+import Layout from "./-authed-layout";
 import { LOGGED_IN_USER_ID_KEY, POS_APP_ACCOUNT_ID_KEY } from "@/lib/constants";
 import { useAppShellFullscreenMode } from "@/contexts/AppShellFullscreenContext";
 

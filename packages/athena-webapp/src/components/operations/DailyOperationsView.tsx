@@ -1066,7 +1066,7 @@ function AutomationStatusPanel({
 
               return (
                 <article
-                  className="flex min-w-0 flex-col gap-layout-xs"
+                  className="flex min-w-0 flex-col gap-layout-xs sm:flex-row sm:items-start sm:justify-between"
                   key={status.id}
                 >
                   <div className="min-w-0">
@@ -1079,38 +1079,38 @@ function AutomationStatusPanel({
                           {formatEventTime(status.occurredAt)}
                         </p>
                       ) : null}
-                      {link?.to ? (
-                        <Button
-                          asChild
-                          className="h-7 shrink-0 px-2 text-xs"
-                          size="sm"
-                          variant="ghost"
-                        >
-                          <Link
-                            aria-label={`Open ${label} automation source`}
-                            params={buildParams(
-                              orgUrlSlug,
-                              storeUrlSlug,
-                              link.params,
-                            )}
-                            search={
-                              {
-                                o: getOrigin(),
-                                ...(link.search ?? {}),
-                              } as never
-                            }
-                            to={link.to}
-                          >
-                            Open
-                            <ArrowUpRight
-                              aria-hidden="true"
-                              className="h-3.5 w-3.5"
-                            />
-                          </Link>
-                        </Button>
-                      ) : null}
                     </div>
                   </div>
+                  {link?.to ? (
+                    <Button
+                      asChild
+                      className="h-7 shrink-0 self-start px-2 text-xs sm:ml-layout-md"
+                      size="sm"
+                      variant="ghost"
+                    >
+                      <Link
+                        aria-label={`Open ${label} automation source`}
+                        params={buildParams(
+                          orgUrlSlug,
+                          storeUrlSlug,
+                          link.params,
+                        )}
+                        search={
+                          {
+                            o: getOrigin(),
+                            ...(link.search ?? {}),
+                          } as never
+                        }
+                        to={link.to}
+                      >
+                        Open
+                        <ArrowUpRight
+                          aria-hidden="true"
+                          className="h-3.5 w-3.5"
+                        />
+                      </Link>
+                    </Button>
+                  ) : null}
                 </article>
               );
             })}

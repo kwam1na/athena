@@ -144,7 +144,9 @@ import {
 } from "./registerCheckoutProjection";
 import {
   buildOpenDrawerFailureMessage,
+  formatCloseoutCloudRegisterSessionCode,
   findRegisterCloseoutReviewItem,
+  getCloseoutCloudRegisterSessionCode,
   getCloseoutCloudRegisterSessionId,
   getCloseoutLocalRegisterSessionId,
   isKnownCloudRegisterSessionBlockingLocalProjection,
@@ -354,6 +356,7 @@ type LocalOperableRegisterSession = {
 
 type CloseoutBlockedRegisterSession = {
   _id?: Id<"registerSession"> | string;
+  cloudRegisterSessionId?: Id<"registerSession"> | string;
   countedCash?: number;
   expectedCash: number;
   localRegisterSessionId?: string;
@@ -1690,6 +1693,8 @@ export function useRegisterViewModel(): RegisterViewModel {
   );
   const localCloseoutRegisterSession = locallyOperableRegisterSession
     ? {
+        cloudRegisterSessionId:
+          locallyOperableRegisterSession.cloudRegisterSessionId,
         localRegisterSessionId:
           locallyOperableRegisterSession.localRegisterSessionId,
         status: "active" as const,
@@ -5072,6 +5077,23 @@ export function useRegisterViewModel(): RegisterViewModel {
       : null;
   const parsedCloseoutCountedCash =
     parseDisplayAmountInput(closeoutCountedCash);
+  const activeCloseoutCloudRegisterSessionId = getCloseoutCloudRegisterSessionId(
+    activeCloseoutRegisterSession,
+  );
+  const activeCloseoutCloudRegisterSessionCode =
+    getCloseoutCloudRegisterSessionCode(
+      activeCloseoutRegisterSession,
+      localRegisterReadModel,
+    );
+  const activeCloseoutRegisterSessionCode =
+    formatCloseoutCloudRegisterSessionCode(
+      activeCloseoutRegisterSession,
+      localRegisterReadModel,
+    ) ??
+    getCloseoutLocalRegisterSessionId(
+      activeCloseoutRegisterSession,
+      localRegisterReadModel,
+    );
   const shouldShowDrawerGate = Boolean(
     requiresDrawerGate ||
     activeCloseoutRegisterSession ||
@@ -5139,6 +5161,7 @@ export function useRegisterViewModel(): RegisterViewModel {
               closeoutSecondaryActionLabel: closeoutBlockedRegisterSession
                 ? "Reopen register"
                 : "Return to sale",
+              registerSessionCode: activeCloseoutRegisterSessionCode,
               onCloseoutSecondaryAction: closeoutBlockedRegisterSession
                 ? isCashierManager
                   ? activeCloseoutRegisterSessionHasSyncReview
@@ -5148,9 +5171,11 @@ export function useRegisterViewModel(): RegisterViewModel {
                 : handleCancelRegisterCloseout,
               expectedCash: activeCloseoutRegisterSession?.expectedCash,
               canOpenCashControls: isCashierManager,
-              cashControlsRegisterSessionId: getCloseoutCloudRegisterSessionId(
-                activeCloseoutRegisterSession,
-              ),
+              cashControlsRegisterSessionId:
+                activeCloseoutCloudRegisterSessionId ??
+                (activeCloseoutCloudRegisterSessionCode as
+                  | Id<"registerSession">
+                  | undefined),
               hasPendingCloseoutApproval: Boolean(
                 activeCloseoutRegisterSession?.managerApprovalRequestId ||
                 activeCloseoutRegisterSessionHasSyncReview,

@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { useProtectedAdminPageState } from "@/hooks/useProtectedAdminPageState";
 import { capitalizeWords, cn } from "@/lib/utils";
 import { formatStoredCurrencyAmount } from "@/lib/pos/displayAmounts";
+import { formatRegisterSessionCode } from "@/lib/pos/presentation/registerSessionCode";
 import { api } from "~/convex/_generated/api";
 import View from "../View";
 import { FadeIn } from "../common/FadeIn";
@@ -151,13 +152,9 @@ function formatRegisterName(registerNumber?: string | null) {
     : `Register ${trimmedRegisterNumber}`;
 }
 
-function formatSessionCode(sessionId: string) {
-  return sessionId.slice(-6).toUpperCase();
-}
-
 function formatSessionIdentifier(session: CashControlsDashboardSession) {
   const terminalLine = getSessionTerminalLine(session);
-  const sessionCode = formatSessionCode(session._id);
+  const sessionCode = formatRegisterSessionCode(session._id) ?? "n/a";
 
   return terminalLine ? `${terminalLine} / ${sessionCode}` : sessionCode;
 }

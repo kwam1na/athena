@@ -6,6 +6,8 @@ This route index enumerates the current files under `src/routes` so agents can o
 
 ## Top-level entries
 
+- [`src/routes/-authed-layout.tsx`](../../src/routes/-authed-layout.tsx)
+- [`src/routes/-index-route-view.tsx`](../../src/routes/-index-route-view.tsx)
 - [`src/routes/__root.tsx`](../../src/routes/__root.tsx)
 - [`src/routes/_authed.test.tsx`](../../src/routes/_authed.test.tsx)
 - [`src/routes/_authed.tsx`](../../src/routes/_authed.tsx)
@@ -97,6 +99,8 @@ This route index enumerates the current files under `src/routes` so agents can o
 
 ## Section `login`
 
+- [`src/routes/login/-login-layout.tsx`](../../src/routes/login/-login-layout.tsx)
+- [`src/routes/login/-login-ready-view.tsx`](../../src/routes/login/-login-ready-view.tsx)
 - [`src/routes/login/_layout.index.test.tsx`](../../src/routes/login/_layout.index.test.tsx)
 - [`src/routes/login/_layout.index.tsx`](../../src/routes/login/_layout.index.tsx)
 - [`src/routes/login/_layout.test.tsx`](../../src/routes/login/_layout.test.tsx)

@@ -8,6 +8,7 @@ import {
   isRegisterCloseoutReviewItem,
   type PosReconciliationItem,
 } from "@/lib/pos/presentation/syncStatusPresentation";
+import { formatRegisterSessionCode } from "@/lib/pos/presentation/registerSessionCode";
 
 export type LocalSyncStatusSource = {
   description?: string | null;
@@ -53,6 +54,52 @@ export function getCloseoutCloudRegisterSessionId(
   return session?.localRegisterSessionId
     ? undefined
     : (session?._id as Id<"registerSession"> | undefined);
+}
+
+export function getCloseoutCloudRegisterSessionCode(
+  session:
+    | {
+        _id?: Id<"registerSession"> | string;
+        cloudRegisterSessionId?: Id<"registerSession"> | string;
+        localRegisterSessionId?: string;
+      }
+    | null
+    | undefined,
+  localRegisterReadModel?: PosLocalRegisterReadModel | null,
+): string | undefined {
+  if (session?.cloudRegisterSessionId) {
+    return session.cloudRegisterSessionId.toString();
+  }
+
+  const localRegisterSessionId = session?.localRegisterSessionId;
+  const localActiveRegisterSession =
+    localRegisterReadModel?.activeRegisterSession;
+  if (
+    localRegisterSessionId &&
+    localActiveRegisterSession?.localRegisterSessionId ===
+      localRegisterSessionId &&
+    localActiveRegisterSession.cloudRegisterSessionId
+  ) {
+    return localActiveRegisterSession.cloudRegisterSessionId;
+  }
+
+  return getCloseoutCloudRegisterSessionId(session)?.toString();
+}
+
+export function formatCloseoutCloudRegisterSessionCode(
+  session:
+    | {
+        _id?: Id<"registerSession"> | string;
+        cloudRegisterSessionId?: Id<"registerSession"> | string;
+        localRegisterSessionId?: string;
+      }
+    | null
+    | undefined,
+  localRegisterReadModel?: PosLocalRegisterReadModel | null,
+): string | undefined {
+  return formatRegisterSessionCode(
+    getCloseoutCloudRegisterSessionCode(session, localRegisterReadModel),
+  );
 }
 
 export function isKnownCloudRegisterSessionBlockingLocalProjection(

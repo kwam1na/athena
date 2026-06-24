@@ -34,6 +34,10 @@ vi.mock("@/components/ui/chart", () => ({
   ChartTooltipContent: () => null,
 }));
 
+vi.mock("@/hooks/use-mobile", () => ({
+  useIsMobile: () => false,
+}));
+
 function buildTodaySummary({
   paymentMix = [
     {

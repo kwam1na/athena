@@ -10,6 +10,7 @@ import {
 import { AppContextMenu } from "./app-context-menu";
 import { ReloadIcon, TrashIcon } from "@radix-ui/react-icons";
 import { useEffect, useRef } from "react";
+import type { CSSProperties } from "react";
 
 export type ImageFile = {
   preview: string;
@@ -122,48 +123,56 @@ export default function ImageUploader({
                   index={index}
                   isDragDisabled={!!variantMarkedForDeletion}
                 >
-                  {(provided) => (
-                    <div
-                      ref={provided.innerRef}
-                      {...provided.draggableProps}
-                      {...provided.dragHandleProps}
-                      className={`relative aspect-square w-full h-full rounded-md overflow-hidden ${variantMarkedForDeletion ? "pointer-events-none" : ""}`}
-                    >
-                      <AppContextMenu
-                        menuItems={[
-                          ...(image.markedForDeletion
-                            ? [
-                                {
-                                  title: "Restore",
-                                  icon: <ReloadIcon className="w-4 h-4" />,
-                                  action: () => unmarkForDeletion(index),
-                                  disabled: variantMarkedForDeletion,
-                                },
-                              ]
-                            : [
-                                {
-                                  title: "Delete",
-                                  icon: <TrashIcon className="w-4 h-4" />,
-                                  action: () => removeImage(index),
-                                },
-                              ]),
-                        ]}
+                  {(provided) => {
+                    const {
+                      style: draggableStyle,
+                      ...draggableProps
+                    } = provided.draggableProps;
+
+                    return (
+                      <div
+                        ref={provided.innerRef}
+                        {...draggableProps}
+                        {...provided.dragHandleProps}
+                        style={draggableStyle as CSSProperties | undefined}
+                        className={`relative aspect-square w-full h-full rounded-md overflow-hidden ${variantMarkedForDeletion ? "pointer-events-none" : ""}`}
                       >
-                        <img
-                          alt="Uploaded image"
-                          className={`aspect-square w-full rounded-md object-cover transition-opacity duration-300 ${image.markedForDeletion ? "opacity-50" : ""}`}
-                          height="200"
-                          src={image.preview}
-                          width="200"
-                        />
-                        {image.markedForDeletion && (
-                          <div className="font-medium text-xs absolute top-0 left-0 m-2 text-white bg-black bg-opacity-50 px-2 py-1 rounded-lg">
-                            Marked for deletion
-                          </div>
-                        )}
-                      </AppContextMenu>
-                    </div>
-                  )}
+                        <AppContextMenu
+                          menuItems={[
+                            ...(image.markedForDeletion
+                              ? [
+                                  {
+                                    title: "Restore",
+                                    icon: <ReloadIcon className="w-4 h-4" />,
+                                    action: () => unmarkForDeletion(index),
+                                    disabled: variantMarkedForDeletion,
+                                  },
+                                ]
+                              : [
+                                  {
+                                    title: "Delete",
+                                    icon: <TrashIcon className="w-4 h-4" />,
+                                    action: () => removeImage(index),
+                                  },
+                                ]),
+                          ]}
+                        >
+                          <img
+                            alt="Uploaded image"
+                            className={`aspect-square w-full rounded-md object-cover transition-opacity duration-300 ${image.markedForDeletion ? "opacity-50" : ""}`}
+                            height="200"
+                            src={image.preview}
+                            width="200"
+                          />
+                          {image.markedForDeletion && (
+                            <div className="font-medium text-xs absolute top-0 left-0 m-2 text-white bg-black bg-opacity-50 px-2 py-1 rounded-lg">
+                              Marked for deletion
+                            </div>
+                          )}
+                        </AppContextMenu>
+                      </div>
+                    );
+                  }}
                 </Draggable>
               ))}
               {provided.placeholder}

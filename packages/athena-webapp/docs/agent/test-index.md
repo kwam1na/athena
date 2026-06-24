@@ -383,6 +383,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/lib/pos/presentation/register/useRegisterCheckoutDraftState.test.ts`](../../src/lib/pos/presentation/register/useRegisterCheckoutDraftState.test.ts)
 - [`src/lib/pos/presentation/register/useRegisterLocalRuntime.test.ts`](../../src/lib/pos/presentation/register/useRegisterLocalRuntime.test.ts)
 - [`src/lib/pos/presentation/register/useRegisterViewModel.test.ts`](../../src/lib/pos/presentation/register/useRegisterViewModel.test.ts)
+- [`src/lib/pos/presentation/registerSessionCode.test.ts`](../../src/lib/pos/presentation/registerSessionCode.test.ts)
 - [`src/lib/pos/presentation/syncStatusPresentation.test.ts`](../../src/lib/pos/presentation/syncStatusPresentation.test.ts)
 - [`src/lib/productUtils.test.ts`](../../src/lib/productUtils.test.ts)
 - [`src/lib/remote-assist/contract.test.ts`](../../src/lib/remote-assist/contract.test.ts)

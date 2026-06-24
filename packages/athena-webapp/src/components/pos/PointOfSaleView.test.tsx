@@ -59,6 +59,10 @@ vi.mock("@/components/ui/chart", () => ({
   ChartTooltipContent: () => null,
 }));
 
+vi.mock("@/hooks/use-mobile", () => ({
+  useIsMobile: () => false,
+}));
+
 vi.mock("@/hooks/useGetActiveStore", () => ({
   default: function UseGetActiveStoreMockAdapter() {
     return useGetActiveStoreMock();

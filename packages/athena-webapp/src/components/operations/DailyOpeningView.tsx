@@ -833,6 +833,17 @@ function normalizeBucketTab(value: unknown): BucketStatus | null {
     : null;
 }
 
+function normalizeBucketPage(value: unknown) {
+  const page =
+    typeof value === "number"
+      ? value
+      : typeof value === "string"
+        ? Number.parseInt(value, 10)
+        : 1;
+
+  return Number.isFinite(page) && page > 0 ? page : 1;
+}
+
 function getBucketConfigs(snapshot: DailyOpeningSnapshot): BucketConfig[] {
   return [
     {
@@ -1028,7 +1039,9 @@ function BucketSection({
   description,
   emptyText,
   items,
+  onPageChange,
   orgUrlSlug,
+  page,
   requiresAcknowledgement,
   status,
   storeUrlSlug,
@@ -1042,12 +1055,26 @@ function BucketSection({
   emptyText: string;
   items: DailyOpeningItem[];
   onAcknowledgedKeysChange: (keys: string[]) => void;
+  onPageChange: (page: number) => void;
   orgUrlSlug: string;
+  page: number;
   requiresAcknowledgement?: boolean;
   status: BucketStatus;
   storeUrlSlug: string;
   title: string;
 }) {
+  const pageCount = Math.max(
+    Math.ceil(items.length / OPENING_REVIEW_ITEMS_PER_PAGE),
+    1,
+  );
+  const clampedPage = Math.min(page, pageCount);
+  const visibleItems = items.slice(
+    (clampedPage - 1) * OPENING_REVIEW_ITEMS_PER_PAGE,
+    clampedPage * OPENING_REVIEW_ITEMS_PER_PAGE,
+  );
+  const handlePageChange = (nextPage: number) => {
+    onPageChange(Math.min(Math.max(nextPage, 1), pageCount));
+  };
   const iconClassName = cn(
     "flex h-10 w-10 shrink-0 items-center justify-center rounded-md",
     status === "blocked" && "bg-danger/10 text-danger",
@@ -1096,7 +1123,7 @@ function BucketSection({
             {emptyText}
           </p>
         ) : (
-          items.map((item) => {
+          visibleItems.map((item) => {
             const acknowledgementKey = getAcknowledgementKey(item);
 
             return (
@@ -1122,6 +1149,15 @@ function BucketSection({
           })
         )}
       </div>
+      {items.length > OPENING_REVIEW_ITEMS_PER_PAGE ? (
+        <ListPagination
+          onPageChange={handlePageChange}
+          page={clampedPage}
+          pageCount={pageCount}
+          pageSize={OPENING_REVIEW_ITEMS_PER_PAGE}
+          totalItems={items.length}
+        />
+      ) : null}
     </section>
   );
 }
@@ -1131,8 +1167,10 @@ function BucketTabs({
   buckets,
   currency,
   onAcknowledgedKeysChange,
+  onPageChange,
   onValueChange,
   orgUrlSlug,
+  page,
   storeUrlSlug,
   value,
 }: {
@@ -1140,8 +1178,10 @@ function BucketTabs({
   buckets: BucketConfig[];
   currency: string;
   onAcknowledgedKeysChange: (keys: string[]) => void;
+  onPageChange: (page: number) => void;
   onValueChange: (value: BucketStatus) => void;
   orgUrlSlug: string;
+  page: number;
   storeUrlSlug: string;
   value: BucketStatus;
 }) {
@@ -1189,7 +1229,9 @@ function BucketTabs({
             emptyText={bucket.emptyText}
             items={bucket.items}
             onAcknowledgedKeysChange={onAcknowledgedKeysChange}
+            onPageChange={onPageChange}
             orgUrlSlug={orgUrlSlug}
+            page={bucket.value === value ? page : 1}
             requiresAcknowledgement={false}
             status={bucket.status}
             storeUrlSlug={storeUrlSlug}
@@ -1544,7 +1586,10 @@ export function DailyOpeningViewContent({
     message: string;
   } | null>(null);
   const navigate = useNavigate();
-  const search = useSearch({ strict: false }) as { tab?: unknown };
+  const search = useSearch({ strict: false }) as {
+    page?: unknown;
+    tab?: unknown;
+  };
   const requiredAcknowledgementKeys = useMemo(
     () => getRequiredAcknowledgementKeys(snapshot),
     [snapshot],
@@ -1603,6 +1648,7 @@ export function DailyOpeningViewContent({
     defaultBucketValue,
     buckets,
   );
+  const selectedBucketPage = normalizeBucketPage(search.page);
   const acknowledgedRequiredCount = requiredAcknowledgementKeys.filter((key) =>
     acknowledgedKeys.includes(key),
   ).length;
@@ -1655,7 +1701,17 @@ export function DailyOpeningViewContent({
     void navigate({
       search: ((current: Record<string, unknown>) => ({
         ...current,
+        page: undefined,
         tab: value,
+      })) as never,
+    });
+  };
+  const handleBucketPageChange = (page: number) => {
+    void navigate({
+      search: ((current: Record<string, unknown>) => ({
+        ...current,
+        page: page === 1 ? undefined : page,
+        tab: selectedBucketValue,
       })) as never,
     });
   };
@@ -1693,8 +1749,10 @@ export function DailyOpeningViewContent({
               buckets={buckets}
               currency={currency}
               onAcknowledgedKeysChange={setAcknowledgedKeys}
+              onPageChange={handleBucketPageChange}
               onValueChange={handleBucketValueChange}
               orgUrlSlug={orgUrlSlug}
+              page={selectedBucketPage}
               storeUrlSlug={storeUrlSlug}
               value={selectedBucketValue}
             />

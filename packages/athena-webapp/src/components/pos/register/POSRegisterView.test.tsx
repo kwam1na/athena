@@ -3160,6 +3160,7 @@ describe("POSRegisterView", () => {
         closeoutCountedCash: "",
         closeoutDraftVariance: -500,
         closeoutNotes: "",
+        registerSessionCode: "8980ZC",
         expectedCash: 5000,
         errorMessage: null,
         isCloseoutSubmitting: false,
@@ -3183,13 +3184,15 @@ describe("POSRegisterView", () => {
     render(<POSRegisterView />);
 
     expect(
-      screen.getByText("Register 1 closeout in progress"),
+      screen.getByText("Front Counter / Register 1 closeout in progress"),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(
+      screen.queryByText(
         /Finish this register closeout in Cash Controls before selling here./i,
       ),
-    ).toBeInTheDocument();
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("Cloud session")).toBeInTheDocument();
+    expect(screen.getByText("8980ZC")).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: /cash controls/i }),
     ).toHaveAttribute(
@@ -3258,6 +3261,7 @@ describe("POSRegisterView", () => {
         closeoutSubmittedCountedCash: 300_000,
         closeoutSubmittedVariance: -568_100,
         closeoutSecondaryActionLabel: "Reopen register",
+        registerSessionCode: "8980ZC",
         expectedCash: 868_100,
         errorMessage: null,
         canOpenCashControls: true,
@@ -3281,8 +3285,10 @@ describe("POSRegisterView", () => {
 
     expect(screen.getByText("Manager approval required")).toBeInTheDocument();
     expect(
-      screen.getByText("Register 3 closeout submitted"),
+      screen.getByText("Front Counter / Register 3 closeout submitted"),
     ).toBeInTheDocument();
+    expect(screen.getByText("Cloud session")).toBeInTheDocument();
+    expect(screen.getByText("8980ZC")).toBeInTheDocument();
     expect(screen.getByText("GH₵8,681")).toBeInTheDocument();
     expect(screen.getByText("GH₵3,000")).toBeInTheDocument();
     expect(screen.getByText("GH₵-5,681")).toBeInTheDocument();
