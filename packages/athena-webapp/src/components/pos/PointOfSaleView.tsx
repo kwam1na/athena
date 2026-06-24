@@ -19,7 +19,6 @@ import {
   Receipt,
   Search,
   HandCoins,
-  ClipboardList,
   MonitorCheck,
 } from "lucide-react";
 import { useGetActiveOrganization } from "@/hooks/useGetOrganizations";
@@ -152,24 +151,6 @@ export default function PointOfSaleView() {
       available: Boolean(liveLinkParams),
     },
     {
-      title: "Active Sessions",
-      description: "Review active and held sales reserving inventory",
-      icon: ClipboardList,
-      href: "/$orgUrlSlug/store/$storeUrlSlug/pos/sessions" as const,
-      params: liveLinkParams,
-      color: "bg-cyan-600",
-      available: hasFullAdminAccess && Boolean(liveLinkParams),
-    },
-    {
-      title: "Terminal Health",
-      description: "Review checkout station sync, staff authority, and support signals",
-      icon: MonitorCheck,
-      href: "/$orgUrlSlug/store/$storeUrlSlug/pos/terminals" as const,
-      params: liveLinkParams,
-      color: "bg-emerald-600",
-      available: canAccessPOS() && Boolean(liveLinkParams),
-    },
-    {
       title: "Expense Reports",
       description: "View expense reports",
       icon: Receipt,
@@ -177,6 +158,16 @@ export default function PointOfSaleView() {
       params: liveLinkParams,
       color: "bg-yellow-500",
       available: Boolean(liveLinkParams),
+    },
+    {
+      title: "Terminal Health",
+      description:
+        "Review checkout station sync, staff authority, and support signals",
+      icon: MonitorCheck,
+      href: "/$orgUrlSlug/store/$storeUrlSlug/pos/terminals" as const,
+      params: liveLinkParams,
+      color: "bg-emerald-600",
+      available: canAccessPOS() && Boolean(liveLinkParams),
     },
     {
       title: "Customers",

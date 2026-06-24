@@ -1602,6 +1602,12 @@ export async function voidTransaction(
   }
 
   const reason = args.reason?.trim() || undefined;
+  if (!reason) {
+    return userError({
+      code: "validation_failed",
+      message: "Reason is required before voiding a completed sale.",
+    });
+  }
 
   const preconditions = await validateTransactionVoidPreconditions(
     ctx,

@@ -31,6 +31,7 @@ import { Tabs, TabsList, TabsTrigger } from "../ui/tabs";
 export type StorePulseTrendDay = {
   averageTransaction: number;
   date: string;
+  hasKnownItemCount?: boolean;
   label: string;
   totalItemsSold: number;
   totalSales: number;
@@ -138,6 +139,7 @@ const detailCardClassName =
   "overflow-hidden rounded-lg border border-border bg-surface-raised shadow-surface";
 const detailRowClassName = "px-layout-md py-layout-sm";
 const topItemsPageSize = 5;
+const salesTrendAxisInset = 72;
 const chartAxisDateFormatter = new Intl.DateTimeFormat("en-US", {
   day: "numeric",
   month: "short",
@@ -366,7 +368,7 @@ function StorePulseTimeline({
         >
           <AreaChart
             data={chartData}
-            margin={{ left: 0, right: 0, top: 0, bottom: 0 }}
+            margin={{ left: 0, right: salesTrendAxisInset, top: 0, bottom: 0 }}
           >
             <defs>
               <linearGradient
@@ -398,7 +400,7 @@ function StorePulseTimeline({
               ticks={xAxisTicks}
             />
             <YAxis
-              width={72}
+              width={salesTrendAxisInset}
               axisLine={false}
               tickLine={false}
               tickFormatter={(value) =>
@@ -439,8 +441,13 @@ function StorePulseTimeline({
                           {formatEntityCount(
                             day.transactionCount,
                             "transaction",
-                          )}{" "}
-                          · {formatEntityCount(day.totalItemsSold, "item")}
+                          )}
+                          {day.hasKnownItemCount === false ? null : (
+                            <>
+                              {" "}
+                              · {formatEntityCount(day.totalItemsSold, "item")}
+                            </>
+                          )}
                         </span>
                       </div>
                     );
@@ -470,10 +477,12 @@ function TopItemsPanel({
   canViewFinancialDetails,
   currencyFormatter,
   snapshot,
+  title = "Top items",
 }: {
   canViewFinancialDetails: boolean;
   currencyFormatter: Intl.NumberFormat;
   snapshot: StorePulseOperatorSnapshot;
+  title?: string;
 }) {
   const [page, setPage] = useState(1);
   const topItemCount = snapshot.topItems.length;
@@ -491,7 +500,7 @@ function TopItemsPanel({
     <section className="space-y-layout-md">
       <div className="flex flex-col gap-layout-xs sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h3 className="text-base font-medium text-foreground">Top items</h3>
+          <h3 className="text-base font-medium text-foreground">{title}</h3>
           <p className="mt-1 text-sm text-muted-foreground">
             Highest-volume items in the current history window.
           </p>
@@ -738,9 +747,11 @@ function StorePulseDetailSkeleton({
 function StorePulseSkeleton({
   showFinancialSalesCards,
   showSummaryMetrics,
+  topItemsTitle = "Top items",
 }: {
   showFinancialSalesCards: boolean;
   showSummaryMetrics: boolean;
+  topItemsTitle?: string;
 }) {
   const visibleLoadingMetrics = showFinancialSalesCards
     ? loadingMetrics
@@ -774,7 +785,7 @@ function StorePulseSkeleton({
             <StorePulseDetailSkeleton
               description="Highest-volume items in the current history window."
               rowCount={5}
-              title="Top items"
+              title={topItemsTitle}
             />
           </PageWorkspaceMain>
 
@@ -799,6 +810,7 @@ export function StorePulseSummaryView({
   showPulseWindowFilter = true,
   showSummaryMetrics = true,
   summary,
+  topItemsTitle = "Top items",
 }: {
   canViewFinancialDetails: boolean;
   currencyFormatter: Intl.NumberFormat;
@@ -807,6 +819,7 @@ export function StorePulseSummaryView({
   showPulseWindowFilter?: boolean;
   showSummaryMetrics?: boolean;
   summary: StorePulseSummary | undefined;
+  topItemsTitle?: string;
 }) {
   const snapshot = summary?.operatorSnapshot;
   const comparison = snapshot?.comparison;
@@ -860,6 +873,7 @@ export function StorePulseSummaryView({
         <StorePulseSkeleton
           showFinancialSalesCards={canViewFinancialDetails}
           showSummaryMetrics={showSummaryMetrics}
+          topItemsTitle={topItemsTitle}
         />
       ) : (
         <div className="min-w-0 space-y-layout-xl md:space-y-layout-2xl">
@@ -965,6 +979,7 @@ export function StorePulseSummaryView({
                   canViewFinancialDetails={canViewFinancialDetails}
                   currencyFormatter={currencyFormatter}
                   snapshot={snapshot}
+                  title={topItemsTitle}
                 />
               </PageWorkspaceMain>
 

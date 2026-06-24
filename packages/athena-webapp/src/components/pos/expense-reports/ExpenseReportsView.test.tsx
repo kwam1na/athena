@@ -133,6 +133,20 @@ describe("ExpenseReportsView", () => {
     vi.useRealTimers();
   });
 
+  it("keeps the workspace header visible while expense reports load", () => {
+    useQueryMock.mockReturnValue(undefined);
+
+    render(<ExpenseReportsView />);
+
+    expect(
+      screen.getByRole("heading", { name: "Expense Reports" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Today" })).toBeInTheDocument();
+    expect(
+      screen.queryByText("No expense reports today"),
+    ).not.toBeInTheDocument();
+  });
+
   it("renders expense reports in the workspace frame with back navigation", () => {
     useQueryMock.mockReturnValue([
       {
