@@ -55,6 +55,7 @@ Clearing or removing an uncompleted cart line restores that terminal-local avail
 Keep tests at the boundaries where this contract can drift:
 
 - Server query tests must prove the full snapshot uses the same register catalog scope as metadata and subtracts active inventory holds.
+- Full availability snapshot queries should avoid hydrating display metadata such as category names or color names. Normal live SKUs only need the trusted SKU, product ownership/status, holds, pending-checkout rows, and active provisional rows. Read category documents only for draft/hidden operational-category exceptions such as `pos-pending-checkout` and `legacy-import`.
 - Local store tests must keep catalog metadata and availability snapshots in separate tables so metadata never becomes accidental stock proof.
 - Gateway tests must cover online live-overlay precedence, offline full-snapshot fallback, and missing snapshot rows remaining unselectable.
 - Register view-model tests must cover terminal-local cart decrements, readiness messaging, and barcode/direct-add rejection for unknown availability.

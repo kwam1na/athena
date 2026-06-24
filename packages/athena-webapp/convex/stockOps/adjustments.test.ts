@@ -2,6 +2,8 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
+import { ok } from "../../shared/commandResult";
+import { assertConformsToExportedReturns } from "../lib/returnValidatorContract";
 
 const mockedAuthServer = vi.hoisted(() => ({
   getAuthUserId: vi.fn(),
@@ -16,11 +18,13 @@ import {
   assertDistinctStockAdjustmentLineItems,
   assertStockAdjustmentReasonCode,
   calculateCycleCountQuantityDelta,
+  getInventoryUnitSummaryWithCtx,
   hasHighStockAdjustmentVariance,
   listInventorySnapshotWithCtx,
   requiresStockAdjustmentApproval,
   resolveStockAdjustmentApprovalDecisionWithCtx,
   resolveStockAdjustmentQuantityDelta,
+  submitStockAdjustmentBatch,
   submitStockAdjustmentBatchCommandWithCtx,
   submitStockAdjustmentBatchWithCtx,
   summarizeStockAdjustmentLineItems,
@@ -580,6 +584,36 @@ function createSubmissionMutationCtx(args: {
 }
 
 describe("stock ops adjustments", () => {
+  it("accepts representative stock adjustment command return contracts", () => {
+    assertConformsToExportedReturns(
+      submitStockAdjustmentBatch,
+      ok({
+        _id: "stock-adjustment-batch-1",
+        adjustmentType: "manual",
+        approvalRequired: false,
+        createdAt: 1_700_000_000_000,
+        createdByUserId: "user-1",
+        lineItemCount: 1,
+        lineItems: [
+          {
+            inventoryAfter: 11,
+            inventoryBefore: 10,
+            productSkuId: "sku-1",
+            quantityDelta: 1,
+          },
+        ],
+        largestAbsoluteDelta: 1,
+        netQuantityDelta: 1,
+        organizationId: "org-1",
+        reasonCode: "manual_correction",
+        status: "applied",
+        storeId: "store-1",
+        submissionKey: "submission-1",
+        varianceThreshold: STOCK_ADJUSTMENT_APPROVAL_THRESHOLD,
+      }),
+    );
+  });
+
   it("returns hold-adjusted sellable availability while preserving durable SKU availability", async () => {
     const { ctx } = createInventorySnapshotQueryCtx();
 
@@ -600,6 +634,43 @@ describe("stock ops adjustments", () => {
         size: "Large",
       }),
     ]);
+  });
+
+  it("summarizes store-level inventory units without hydrating snapshot rows", async () => {
+    const { ctx, tables } = createInventorySnapshotQueryCtx();
+
+    tables.productSku.set("sku-2", {
+      _id: "sku-2",
+      images: [],
+      inventoryCount: 4,
+      productId: "product-1",
+      quantityAvailable: 1,
+      sku: "CW-20",
+      storeId: "store-1",
+    });
+    tables.productSku.set("other-store-sku", {
+      _id: "other-store-sku",
+      images: [],
+      inventoryCount: 100,
+      productId: "product-1",
+      quantityAvailable: 100,
+      sku: "OTHER",
+      storeId: "store-2",
+    });
+
+    const summary = await getInventoryUnitSummaryWithCtx(ctx, {
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(summary).toEqual({
+      availableUnits: 9,
+      hasMoreSkus: false,
+      onHandUnits: 14,
+      reservedUnits: 5,
+      skuCount: 2,
+      unavailableSkuCount: 2,
+      unavailableUnits: 5,
+    });
   });
 
   it("labels active checkout reservations without double subtracting availability", async () => {
@@ -704,12 +775,9 @@ describe("stock ops adjustments", () => {
       storeId: "store-1" as Id<"store">,
     });
 
-    expect(rows).toEqual([
-      expect.objectContaining({
-        stockAdjustmentBlockedMessage: null,
-        stockAdjustmentBlockedReason: null,
-      }),
-    ]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).not.toHaveProperty("stockAdjustmentBlockedMessage");
+    expect(rows[0]).not.toHaveProperty("stockAdjustmentBlockedReason");
   });
 
   it("marks unresolved POS pending checkout SKUs as blocked for stock adjustments", async () => {
@@ -782,6 +850,59 @@ describe("stock ops adjustments", () => {
         "Legacy import SKUs must be finalized before stock adjustments can update them.",
       stockAdjustmentBlockedReason: "provisional_import",
     });
+  });
+
+  it("keeps inventory snapshot rows bounded and sparse to stay below Convex response limits", async () => {
+    const { ctx, tables } = createInventorySnapshotQueryCtx();
+
+    tables.inventoryHold.clear();
+    tables.productSku.set("sku-1", {
+      ...(tables.productSku.get("sku-1") ?? {}),
+      images: [],
+      quantityAvailable: 10,
+      inventoryCount: 10,
+      netPrice: null,
+      barcode: null,
+      color: null,
+      length: null,
+      size: null,
+      sku: null,
+    });
+
+    for (let index = 2; index <= 1_000; index += 1) {
+      tables.productSku.set(`sku-${index}`, {
+        _id: `sku-${index}`,
+        barcode: null,
+        color: null,
+        images: [],
+        inventoryCount: 10,
+        length: null,
+        netPrice: null,
+        price: 1000,
+        productId: "product-1",
+        quantityAvailable: 10,
+        size: null,
+        sku: null,
+        storeId: "store-1",
+      });
+    }
+
+    const rows = await listInventorySnapshotWithCtx(ctx, {
+      limit: 1_000,
+      now: 1_000,
+      storeId: "store-1" as Id<"store">,
+    });
+    const firstRow = rows[0] as Record<string, unknown>;
+
+    expect(rows).toHaveLength(750);
+    expect(firstRow).not.toHaveProperty("barcode");
+    expect(firstRow).not.toHaveProperty("checkoutReservedQuantity");
+    expect(firstRow).not.toHaveProperty("durableQuantityAvailable");
+    expect(firstRow).not.toHaveProperty("imageUrl");
+    expect(firstRow).not.toHaveProperty("posReservedQuantity");
+    expect(firstRow).not.toHaveProperty("reservedQuantity");
+    expect(firstRow).not.toHaveProperty("stockAdjustmentBlockedMessage");
+    expect(JSON.stringify(rows).length).toBeLessThan(130_000);
   });
 
   it("calculates cycle-count deltas from the system quantity", () => {

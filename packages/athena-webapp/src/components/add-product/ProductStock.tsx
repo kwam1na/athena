@@ -432,6 +432,7 @@ function LegacyImportTrustPreview({
     ? "Refresh review"
     : reviewState.ctaLabel;
   const isCtaDisabled = requiresReviewRefresh ? false : reviewState.disabled;
+  const isFinalized = reviewState.status === "success";
 
   return (
     <TableRow
@@ -441,9 +442,9 @@ function LegacyImportTrustPreview({
     >
       <TableCell colSpan={8} className="px-4 py-3">
         <div
-          className={`flex flex-col gap-3 rounded-md border px-3 py-3 sm:flex-row sm:items-center sm:justify-between ${
-            reviewState.status === "success"
-              ? "border-emerald-200 bg-emerald-50/50"
+          className={`flex flex-col gap-3 rounded-md border bg-background px-3 py-3 transition-[border-color,box-shadow] duration-150 ease-out sm:flex-row sm:items-center sm:justify-between ${
+            isFinalized
+              ? "border-action-workflow-border shadow-sm"
               : "border-border"
           }`}
         >
@@ -459,6 +460,15 @@ function LegacyImportTrustPreview({
               >
                 Provisional SKU
               </Badge>
+              {isFinalized ? (
+                <Badge
+                  variant="outline"
+                  className="gap-1.5 border-action-workflow-border bg-background text-action-workflow"
+                >
+                  <Check className="h-3.5 w-3.5" />
+                  Finalized
+                </Badge>
+              ) : null}
             </div>
             <p
               className="max-w-3xl text-pretty text-xs leading-5 text-muted-foreground"
@@ -478,16 +488,27 @@ function LegacyImportTrustPreview({
           </div>
 
           <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-            <Button
-              type="button"
-              size="sm"
-              variant="workflow-soft"
-              className="min-h-10 active:scale-[0.96] transition-transform"
-              disabled={isCtaDisabled}
-              onClick={handleClick}
-            >
-              {ctaLabel}
-            </Button>
+            {isFinalized ? (
+              <div
+                className="inline-flex min-h-10 items-center gap-2 rounded-md px-3 text-xs font-medium text-muted-foreground"
+                role="status"
+                aria-live="polite"
+              >
+                <Check className="h-3.5 w-3.5 text-action-workflow" />
+                Trusted SKU ready
+              </div>
+            ) : (
+              <Button
+                type="button"
+                size="sm"
+                variant="workflow-soft"
+                className="min-h-10 active:scale-[0.96] transition-transform"
+                disabled={isCtaDisabled}
+                onClick={handleClick}
+              >
+                {ctaLabel}
+              </Button>
+            )}
           </div>
         </div>
       </TableCell>

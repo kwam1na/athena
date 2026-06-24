@@ -24,7 +24,6 @@ import {
   TableRow,
 } from "../../ui/table";
 
-import { DataTableToolbar } from "./data-table-toolbar";
 import { DataTablePagination } from "./data-table-pagination";
 import { usePaginationPersistence } from "~/src/hooks/use-pagination-persistence";
 import { cn } from "@/lib/utils";
@@ -35,6 +34,7 @@ interface DataTableProps<TData, TValue> {
   data: TData[];
   getRowClassName?: (row: Row<TData>) => string | undefined;
   pageIndex?: number;
+  onLoadMore?: () => void;
   onPageIndexChange?: (pageIndex: number) => void;
   onRowClick?: (row: Row<TData>) => void;
   paginationRangeItemLabel?: string;
@@ -48,6 +48,7 @@ export function GenericDataTable<TData, TValue>({
   data,
   getRowClassName,
   pageIndex,
+  onLoadMore,
   onPageIndexChange,
   onRowClick,
   paginationRangeItemLabel,
@@ -154,6 +155,7 @@ export function GenericDataTable<TData, TValue>({
         </Table>
       </div>
       <DataTablePagination
+        onLoadMore={onLoadMore}
         rangeItemLabel={paginationRangeItemLabel}
         rangeItemPluralLabel={paginationRangeItemPluralLabel}
         table={table}

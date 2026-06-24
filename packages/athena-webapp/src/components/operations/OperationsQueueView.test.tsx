@@ -15,6 +15,7 @@ const mockedHooks = vi.hoisted(() => ({
   useGetAuthedUser: vi.fn(),
   useGetActiveStore: vi.fn(),
   useMutation: vi.fn(),
+  usePaginatedQuery: vi.fn(),
   usePermissions: vi.fn(),
   useQuery: vi.fn(),
 }));
@@ -56,6 +57,7 @@ vi.mock("@tanstack/react-router", () => ({
 vi.mock("convex/react", () => ({
   useConvexAuth: mockedHooks.useConvexAuth,
   useMutation: mockedHooks.useMutation,
+  usePaginatedQuery: mockedHooks.usePaginatedQuery,
   useQuery: mockedHooks.useQuery,
 }));
 
@@ -238,6 +240,12 @@ describe("OperationsQueueViewContent", () => {
       unobserve() {}
     };
     vi.clearAllMocks();
+    mockedHooks.usePaginatedQuery.mockReturnValue({
+      isLoading: false,
+      loadMore: vi.fn(),
+      results: [],
+      status: "Exhausted",
+    });
     mockedToast.error.mockReset();
     mockedToast.success.mockReset();
     mockedHooks.useAuth.mockReturnValue({
@@ -263,12 +271,11 @@ describe("OperationsQueueViewContent", () => {
       approvalRequests: [],
       workItems: [],
     };
-    const inventorySnapshot: typeof baseProps.inventoryItems = [];
     let queryCallIndex = 0;
     mockedHooks.useQuery.mockImplementation(() => {
       queryCallIndex += 1;
 
-      return queryCallIndex % 2 === 1 ? queueSnapshot : inventorySnapshot;
+      return queryCallIndex === 1 ? queueSnapshot : undefined;
     });
   });
 
@@ -297,12 +304,56 @@ describe("OperationsQueueViewContent", () => {
     );
 
     expect(screen.queryByText("Operations lanes")).not.toBeInTheDocument();
+    expect(screen.getByText("0 open work items")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Service intake and stock review work that still needs progress or completion.",
+      ),
+    ).toBeInTheDocument();
     expect(screen.getByText("No open work items")).toBeInTheDocument();
     expect(
       screen.getByText(
         "New service intakes and approval-driven stock reviews will appear here",
       ),
     ).toBeInTheDocument();
+  });
+
+  it("uses the open work count in the loaded route header", () => {
+    render(
+      <OperationsQueueViewContent
+        {...baseProps}
+        activeWorkflow="queue"
+        workItems={[
+          {
+            _id: "work-item-1" as Id<"operationalWorkItem">,
+            approvalState: "pending",
+            createdAt: Date.now() - 5 * 60 * 1000,
+            priority: "normal",
+            status: "open",
+            title: "Review pending checkout item",
+            type: "pos_pending_checkout_item_review",
+          },
+          {
+            _id: "work-item-2" as Id<"operationalWorkItem">,
+            approvalState: "pending",
+            createdAt: Date.now() - 10 * 60 * 1000,
+            priority: "high",
+            status: "open",
+            title: "Follow up service intake",
+            type: "service_case",
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("2 open work items")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Service intake and stock review work that still needs progress or completion.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Review pending checkout item")).toBeInTheDocument();
+    expect(screen.getByText("Follow up service intake")).toBeInTheDocument();
   });
 
   it("shows only the open work header while the queue is loading", () => {
@@ -382,6 +433,72 @@ describe("OperationsQueueViewContent", () => {
     expect(
       screen.getByRole("tab", { name: /cycle count/i }),
     ).toBeInTheDocument();
+  });
+
+  it("shows the approvals header while approval data is loading", () => {
+    render(
+      <OperationsQueueViewContent
+        {...baseProps}
+        activeWorkflow="approvals"
+        isLoadingQueue
+      />,
+    );
+
+    expect(screen.getByText("Pending approvals")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Review manager approval requests before queued stock and payment changes are applied.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("No pending approvals")).not.toBeInTheDocument();
+  });
+
+  it("uses natural copy for the empty approvals header", () => {
+    render(
+      <OperationsQueueViewContent
+        {...baseProps}
+        activeWorkflow="approvals"
+        approvalRequests={[]}
+      />,
+    );
+
+    expect(screen.getAllByText("No pending approvals")).toHaveLength(1);
+    expect(screen.queryByText("0 pending approvals")).not.toBeInTheDocument();
+    expect(
+      screen.getByText("High-variance deposits and stock reviews will surface here."),
+    ).toBeInTheDocument();
+  });
+
+  it("uses the pending approval count in the loaded approvals header", () => {
+    render(
+      <OperationsQueueViewContent
+        {...baseProps}
+        activeWorkflow="approvals"
+        approvalRequests={[
+          {
+            _id: "approval-1" as Id<"approvalRequest">,
+            requestType: "inventory_adjustment_review",
+            status: "pending",
+            workItemTitle: "Cycle count review · 1 SKU",
+          },
+          {
+            _id: "approval-2" as Id<"approvalRequest">,
+            requestType: "service_deposit",
+            status: "pending",
+            workItemTitle: "Service deposit review",
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("2 pending approvals")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Review manager approval requests before queued stock and payment changes are applied.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Cycle count review · 1 SKU")).toBeInTheDocument();
+    expect(screen.getByText("Service deposit review")).toBeInTheDocument();
   });
 
   it("separates open work items from pending approvals", () => {
@@ -1093,7 +1210,7 @@ describe("OperationsQueueViewContent", () => {
   });
 
   it("renders the live operations page without the register closeout surface", () => {
-    render(<OperationsQueueView />);
+    render(<OperationsQueueView activeWorkflow="stock" />);
 
     expect(screen.getByText("No inventory loaded.")).toBeInTheDocument();
     expect(
@@ -1127,21 +1244,19 @@ describe("OperationsQueueViewContent", () => {
 
     mockedHooks.useMutation.mockReset();
     mockedHooks.useQuery.mockReset();
-    const mutationOrder = [
-      submitStockBatch,
-      decideApprovalRequest,
-      vi.fn(),
-      authenticateStaffCredential,
-      authenticateStaffCredentialForApproval,
-      vi.fn(),
-      vi.fn(),
-      vi.fn(),
-      vi.fn(),
-      vi.fn(),
-    ];
-    let mutationCallIndex = 0;
     mockedHooks.useMutation.mockImplementation(
-      () => mutationOrder[mutationCallIndex++ % mutationOrder.length],
+      () => async (args: Record<string, unknown>) => {
+        if ("actionKey" in args) {
+          return authenticateStaffCredentialForApproval(args);
+        }
+        if ("approvalRequestId" in args) {
+          return decideApprovalRequest(args);
+        }
+        if ("username" in args) {
+          return authenticateStaffCredential(args);
+        }
+        return submitStockBatch(args);
+      },
     );
     const queueSnapshot = {
       approvalRequests: [
@@ -1232,8 +1347,14 @@ describe("OperationsQueueViewContent", () => {
         approvalRequests: [],
         workItems: [],
       })
-      .mockReturnValueOnce(baseProps.inventoryItems)
+      .mockReturnValueOnce(undefined)
       .mockReturnValueOnce(null);
+    mockedHooks.usePaginatedQuery.mockReturnValue({
+      isLoading: false,
+      loadMore: vi.fn(),
+      results: baseProps.inventoryItems,
+      status: "Exhausted",
+    });
 
     render(
       <OperationsQueueView
@@ -1285,8 +1406,14 @@ describe("OperationsQueueViewContent", () => {
         approvalRequests: [],
         workItems: [],
       })
-      .mockReturnValueOnce(inventoryItems)
+      .mockReturnValueOnce(undefined)
       .mockReturnValueOnce(null);
+    mockedHooks.usePaginatedQuery.mockReturnValue({
+      isLoading: false,
+      loadMore: vi.fn(),
+      results: inventoryItems,
+      status: "Exhausted",
+    });
 
     render(
       <OperationsQueueView
@@ -1319,8 +1446,13 @@ describe("OperationsQueueViewContent", () => {
         approvalRequests: [],
         workItems: [],
       })
-      .mockReturnValueOnce(baseProps.inventoryItems)
       .mockReturnValueOnce(undefined);
+    mockedHooks.usePaginatedQuery.mockReturnValue({
+      isLoading: false,
+      loadMore: vi.fn(),
+      results: baseProps.inventoryItems,
+      status: "Exhausted",
+    });
 
     render(
       <OperationsQueueView
@@ -1363,21 +1495,19 @@ describe("OperationsQueueViewContent", () => {
 
     mockedHooks.useMutation.mockReset();
     mockedHooks.useQuery.mockReset();
-    const mutationOrder = [
-      submitStockBatch,
-      decideApprovalRequest,
-      vi.fn(),
-      authenticateStaffCredential,
-      authenticateStaffCredentialForApproval,
-      vi.fn(),
-      vi.fn(),
-      vi.fn(),
-      vi.fn(),
-      vi.fn(),
-    ];
-    let mutationCallIndex = 0;
     mockedHooks.useMutation.mockImplementation(
-      () => mutationOrder[mutationCallIndex++ % mutationOrder.length],
+      () => async (args: Record<string, unknown>) => {
+        if ("actionKey" in args) {
+          return authenticateStaffCredentialForApproval(args);
+        }
+        if ("approvalRequestId" in args) {
+          return decideApprovalRequest(args);
+        }
+        if ("username" in args) {
+          return authenticateStaffCredential(args);
+        }
+        return submitStockBatch(args);
+      },
     );
     const queueSnapshot = {
       approvalRequests: [
@@ -1399,7 +1529,7 @@ describe("OperationsQueueViewContent", () => {
         : baseProps.inventoryItems;
     });
 
-    render(<OperationsQueueView />);
+    render(<OperationsQueueView activeWorkflow="approvals" />);
 
     await user.click(screen.getByRole("button", { name: /unlock approvals/i }));
     await user.click(
@@ -1450,21 +1580,19 @@ describe("OperationsQueueViewContent", () => {
 
     mockedHooks.useMutation.mockReset();
     mockedHooks.useQuery.mockReset();
-    const mutationOrder = [
-      submitStockBatch,
-      decideApprovalRequest,
-      vi.fn(),
-      authenticateStaffCredential,
-      authenticateStaffCredentialForApproval,
-      vi.fn(),
-      vi.fn(),
-      vi.fn(),
-      vi.fn(),
-      vi.fn(),
-    ];
-    let mutationCallIndex = 0;
     mockedHooks.useMutation.mockImplementation(
-      () => mutationOrder[mutationCallIndex++ % mutationOrder.length],
+      () => async (args: Record<string, unknown>) => {
+        if ("actionKey" in args) {
+          return authenticateStaffCredentialForApproval(args);
+        }
+        if ("approvalRequestId" in args) {
+          return decideApprovalRequest(args);
+        }
+        if ("username" in args) {
+          return authenticateStaffCredential(args);
+        }
+        return submitStockBatch(args);
+      },
     );
     const queueSnapshot = {
       approvalRequests: [
@@ -1486,7 +1614,7 @@ describe("OperationsQueueViewContent", () => {
         : baseProps.inventoryItems;
     });
 
-    render(<OperationsQueueView />);
+    render(<OperationsQueueView activeWorkflow="approvals" />);
 
     await user.click(screen.getByRole("button", { name: /unlock approvals/i }));
     await user.click(

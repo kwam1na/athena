@@ -59,6 +59,19 @@ must set the provisional row to `status: "finalized"` and
 `posExposureStatus: "hidden"` so register catalog, availability reads, and local
 snapshots use `trusted_inventory`.
 
+Do not make POS visibility depend on customer storefront visibility for
+legacy-import cleanup anchors. Finalized legacy-import products can remain
+`draft` and hidden from the storefront while POS still needs to find the trusted
+SKU. POS catalog and search paths should treat `legacy-import` as a staff
+operational category after the active provisional row closes, while continuing
+to suppress the trusted row when an active provisional row still owns the sale
+policy.
+
+Do not require `netPrice` for POS search when register catalog rows already use
+`price` as the fallback. Finalized import SKUs created from product edit may
+only have `price`, and POS search, barcode lookup, and register snapshots must
+agree on the sellable price rule.
+
 Do not rely only on operational events for support review. Stock-affecting trust
 transitions need SKU activity evidence even when the trusted stock delta is zero
 and no inventory movement is written.

@@ -966,6 +966,31 @@ describe("StockAdjustmentWorkspaceContent", () => {
     expect(screen.getByText("Reserved")).toBeInTheDocument();
   });
 
+  it("uses the store-level inventory summary for header unit totals", () => {
+    renderStockAdjustmentWorkspace({
+      inventoryUnitSummary: {
+        availableUnits: 19,
+        onHandUnits: 24,
+        reservedUnits: 5,
+        skuCount: 12,
+        unavailableSkuCount: 3,
+        unavailableUnits: 5,
+      },
+    });
+
+    expect(
+      screen.getByRole("heading", {
+        name: "3 SKUs have reserved units.",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/19 of 24 units are available to sell\. 5 reserved\./i),
+    ).toBeInTheDocument();
+    expect(screen.getByText("24")).toBeInTheDocument();
+    expect(screen.getByText("19")).toBeInTheDocument();
+    expect(screen.getByText("5")).toBeInTheDocument();
+  });
+
   it("shows POS reserved units as reducing sellable availability", () => {
     renderStockAdjustmentWorkspace({
       inventoryItems: [
@@ -2047,6 +2072,20 @@ describe("StockAdjustmentWorkspaceContent", () => {
     await user.click(within(table).getByText("Inventory Item 11"));
 
     expect(screen.getByText("Showing 11-11 of 11 SKUs")).toBeInTheDocument();
+  });
+
+  it("loads more inventory rows from the paginated stock snapshot", async () => {
+    const user = userEvent.setup();
+    const onLoadMoreInventoryItems = vi.fn();
+
+    renderStockAdjustmentWorkspace({
+      canLoadMoreInventoryItems: true,
+      onLoadMoreInventoryItems,
+    });
+
+    await user.click(screen.getByRole("button", { name: /load more/i }));
+
+    expect(onLoadMoreInventoryItems).toHaveBeenCalledTimes(1);
   });
 
   it("keeps the current stock row page when a counted quantity changes", async () => {
