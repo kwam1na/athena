@@ -247,6 +247,7 @@ export type DailyOperationsSnapshot = {
     };
     registerLink?: {
       label?: string;
+      matchLabel?: string;
       params?: Record<string, string>;
       search?: Record<string, string>;
       to?: string;
@@ -569,7 +570,12 @@ function TimelineMessage({
   const inlineLink =
     event.transactionLink ?? event.registerLink ?? event.productLink;
   const linkLabel = inlineLink?.label?.trim();
-  const linkMatch = findTimelineLinkMatch(event.message, linkLabel);
+  const matchLabel = event.transactionLink ? undefined : event.registerLink?.matchLabel;
+  const linkMatch = findTimelineLinkMatch(
+    event.message,
+    linkLabel,
+    matchLabel,
+  );
 
   if (
     !inlineLink?.to ||
@@ -604,22 +610,32 @@ function TimelineMessage({
   );
 }
 
-function findTimelineLinkMatch(message: string, label: string | undefined) {
-  if (!label) return null;
+function findTimelineLinkMatch(
+  message: string,
+  label: string | undefined,
+  matchLabel?: string,
+) {
+  const labels = [label, matchLabel]
+    .map((value) => value?.trim())
+    .filter((value): value is string => Boolean(value));
 
-  const exactIndex = message.indexOf(label);
-  if (exactIndex >= 0) {
-    return { index: exactIndex, length: label.length };
+  for (const candidate of labels) {
+    const exactIndex = message.indexOf(candidate);
+    if (exactIndex >= 0) {
+      return { index: exactIndex, length: candidate.length };
+    }
+
+    if (!candidate.startsWith("#")) continue;
+
+    const plainLabel = candidate.slice(1);
+    const plainIndex = plainLabel ? message.indexOf(plainLabel) : -1;
+
+    if (plainIndex >= 0) {
+      return { index: plainIndex, length: plainLabel.length };
+    }
   }
 
-  if (!label.startsWith("#")) return null;
-
-  const plainLabel = label.slice(1);
-  const plainIndex = plainLabel ? message.indexOf(plainLabel) : -1;
-
-  if (plainIndex < 0) return null;
-
-  return { index: plainIndex, length: plainLabel.length };
+  return null;
 }
 
 function formatWeekdayLabel(operatingDate: string) {

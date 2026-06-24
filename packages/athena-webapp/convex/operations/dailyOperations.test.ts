@@ -2619,6 +2619,134 @@ describe("daily operations overview read model", () => {
     });
   });
 
+  it("normalizes synced closeout review requests with terminal register labels", async () => {
+    const snapshot = await buildDailyOperationsSnapshotWithCtx(
+      buildCtx({
+        dailyClose: [priorClose],
+        dailyOpening: [startedOpening],
+        operationalEvent: [
+          {
+            _id: "event-sync-closeout-review-requested",
+            actorStaffProfileId: "staff-1",
+            createdAt: Date.UTC(2026, 4, 8, 20, 45),
+            eventType: "register_session_sync_closeout_review_requested",
+            message:
+              "Register 8 closeout submitted with a cash variance of GH₵-10. Review before applying it.",
+            metadata: {
+              countedCash: 71_000,
+              expectedCash: 72_000,
+              registerNumber: "8",
+              variance: -1_000,
+            },
+            registerSessionId: "register-8",
+            storeId: "store-1",
+            subjectId: "register-8",
+            subjectLabel: "Register 8",
+            subjectType: "register_session",
+          },
+        ],
+        posTerminal: [
+          {
+            _id: "terminal-codex",
+            displayName: "Codex",
+            storeId: "store-1",
+          },
+        ],
+        registerSession: [
+          {
+            _id: "register-8",
+            expectedCash: 72_000,
+            openedAt: Date.UTC(2026, 4, 8, 8),
+            registerNumber: "8",
+            status: "closing",
+            storeId: "store-1",
+            terminalId: "terminal-codex",
+          },
+        ],
+        store: [store],
+      }),
+      { operatingDate: "2026-05-08", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(snapshot.timeline[0]).toMatchObject({
+      id: "event-sync-closeout-review-requested",
+      message:
+        "Codex / Register 8 closeout submitted with a cash variance of GH₵-10. Review before applying it.",
+      registerLink: {
+        label: "Codex / Register 8",
+        params: {
+          sessionId: "register-8",
+        },
+        to: "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId",
+      },
+      type: "register_session_sync_closeout_review_requested",
+    });
+  });
+
+  it("normalizes synced closeout recorded events with terminal register labels", async () => {
+    const snapshot = await buildDailyOperationsSnapshotWithCtx(
+      buildCtx({
+        dailyClose: [priorClose],
+        dailyOpening: [startedOpening],
+        operationalEvent: [
+          {
+            _id: "event-sync-closeout-recorded",
+            actorStaffProfileId: "staff-1",
+            createdAt: Date.UTC(2026, 4, 8, 20, 45),
+            eventType: "register_session_closed",
+            message:
+              "Register 8 closeout recorded with a cash variance of GH₵-270.",
+            metadata: {
+              countedCash: 45_000,
+              expectedCash: 72_000,
+              registerNumber: "8",
+              variance: -27_000,
+            },
+            registerSessionId: "register-8",
+            storeId: "store-1",
+            subjectId: "register-8",
+            subjectLabel: "Register 8",
+            subjectType: "register_session",
+          },
+        ],
+        posTerminal: [
+          {
+            _id: "terminal-codex",
+            displayName: "Codex",
+            storeId: "store-1",
+          },
+        ],
+        registerSession: [
+          {
+            _id: "register-8",
+            expectedCash: 72_000,
+            openedAt: Date.UTC(2026, 4, 8, 8),
+            registerNumber: "8",
+            status: "closed",
+            storeId: "store-1",
+            terminalId: "terminal-codex",
+          },
+        ],
+        store: [store],
+      }),
+      { operatingDate: "2026-05-08", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(snapshot.timeline[0]).toMatchObject({
+      id: "event-sync-closeout-recorded",
+      message:
+        "Codex / Register 8 closeout recorded with a cash variance of GH₵-270.",
+      registerLink: {
+        label: "Codex / Register 8",
+        params: {
+          sessionId: "register-8",
+        },
+        to: "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId",
+      },
+      type: "register_session_closed",
+    });
+  });
+
   it("normalizes manager approval audit events for the store-day timeline", async () => {
     const snapshot = await buildDailyOperationsSnapshotWithCtx(
       buildCtx({

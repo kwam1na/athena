@@ -2610,6 +2610,32 @@ function formatSaleTotal(currency: string | undefined, amount: number) {
   }
 }
 
+function formatTerminalRegisterLabel(args: {
+  registerNumber?: string;
+  terminalName?: string;
+}) {
+  const terminalName = args.terminalName?.trim();
+  const registerNumber = formatRegisterNumberValue(args.registerNumber);
+
+  if (terminalName && registerNumber) {
+    return `${terminalName} / Register ${registerNumber}`;
+  }
+
+  if (registerNumber) {
+    return `Register ${registerNumber}`;
+  }
+
+  return "Register";
+}
+
+function formatRegisterNumberValue(registerNumber?: string) {
+  const trimmed = registerNumber?.trim();
+  if (!trimmed) return undefined;
+
+  const withoutPrefix = trimmed.replace(/^register\b\s*/i, "").trim();
+  return withoutPrefix || trimmed;
+}
+
 function getPaymentMethodLabels(payments: PosLocalSalePayload["payments"]) {
   return Array.from(
     new Set(
@@ -3496,7 +3522,10 @@ async function projectRegisterClosed(
     roundMoney(variance) !== 0 &&
     args.options?.allowRegisterCloseoutVarianceProjection !== true
   ) {
-    const store = await repository.getStore(args.storeId);
+    const [store, terminal] = await Promise.all([
+      repository.getStore(args.storeId),
+      repository.getTerminal(args.terminalId),
+    ]);
     const conflict = await createConflict(repository, args, {
       conflictType: "permission",
       summary: REGISTER_CLOSEOUT_VARIANCE_SYNC_REVIEW_SUMMARY,
@@ -3507,15 +3536,17 @@ async function projectRegisterClosed(
         variance,
       },
     });
+    const registerLabel = formatTerminalRegisterLabel({
+      registerNumber: registerSession.registerNumber,
+      terminalName: terminal?.displayName,
+    });
     await repository.createOperationalEvent({
       storeId: args.storeId,
       organizationId: store?.organizationId,
       eventType: "register_session_sync_closeout_review_requested",
       subjectType: "register_session",
       subjectId: registerSession._id,
-      message: registerSession.registerNumber
-        ? `Register ${registerSession.registerNumber} closeout submitted with a cash variance of ${formatSaleTotal(store?.currency, variance)}. Review before applying it.`
-        : `Register closeout submitted with a cash variance of ${formatSaleTotal(store?.currency, variance)}. Review before applying it.`,
+      message: `${registerLabel} closeout submitted with a cash variance of ${formatSaleTotal(store?.currency, variance)}. Review before applying it.`,
       metadata: {
         countedCash,
         expectedCash: registerSession.expectedCash,
@@ -3541,7 +3572,10 @@ async function projectRegisterClosed(
     return { status: "conflicted", mappings: [], conflicts: [conflict] };
   }
 
-  const store = await repository.getStore(args.storeId);
+  const [store, terminal] = await Promise.all([
+    repository.getStore(args.storeId),
+    repository.getTerminal(args.terminalId),
+  ]);
 
   await repository.patchRegisterSession(registerSession._id, {
     status: "closed",
@@ -3587,6 +3621,10 @@ async function projectRegisterClosed(
       workflowTraceId: registerSession.workflowTraceId,
     });
   }
+  const registerLabel = formatTerminalRegisterLabel({
+    registerNumber: registerSession.registerNumber ?? registerSession._id,
+    terminalName: terminal?.displayName,
+  });
   await repository.createOperationalEvent({
     storeId: args.storeId,
     organizationId: store?.organizationId,
@@ -3595,8 +3633,8 @@ async function projectRegisterClosed(
     subjectId: registerSession._id,
     message:
       variance === 0
-        ? `Register ${registerSession.registerNumber ?? registerSession._id} closeout recorded with an exact cash match.`
-        : `Register ${registerSession.registerNumber ?? registerSession._id} closeout recorded with a cash variance of ${formatSaleTotal(store?.currency, variance)}.`,
+        ? `${registerLabel} closeout recorded with an exact cash match.`
+        : `${registerLabel} closeout recorded with a cash variance of ${formatSaleTotal(store?.currency, variance)}.`,
     metadata: {
       countedCash,
       expectedCash: registerSession.expectedCash,

@@ -4101,7 +4101,8 @@ describe("projectLocalSyncEvent", () => {
         actorStaffProfileId: "staff-1",
         createdAt: 30,
         eventType: "register_session_closed",
-        message: "Register 1 closeout recorded with an exact cash match.",
+        message:
+          "Front counter / Register 1 closeout recorded with an exact cash match.",
         metadata: expect.objectContaining({
           countedCash: 100,
           expectedCash: 100,
@@ -4176,7 +4177,7 @@ describe("projectLocalSyncEvent", () => {
         eventType: "register_session_sync_closeout_review_requested",
         localEventId: "event-register-closed-1",
         message:
-          "Register 1 closeout submitted with a cash variance of GH₵-0.1. Review before applying it.",
+          "Front counter / Register 1 closeout submitted with a cash variance of GH₵-0.1. Review before applying it.",
         metadata: expect.objectContaining({
           countedCash: 90,
           expectedCash: 100,
@@ -4223,7 +4224,7 @@ describe("projectLocalSyncEvent", () => {
       expect.objectContaining({
         eventType: "register_session_closed",
         message:
-          "Register 1 closeout recorded with a cash variance of GH₵-0.1.",
+          "Front counter / Register 1 closeout recorded with a cash variance of GH₵-0.1.",
         metadata: expect.objectContaining({
           countedCash: 90,
           expectedCash: 100,
@@ -5913,6 +5914,7 @@ function createProjectionRepository(
   const terminal = {
     _id: "terminal-1",
     storeId: "store-1",
+    displayName: "Front counter",
     registerNumber: "1",
     registeredByUserId: overrides.terminalRegisteredByUserId ?? "user-1",
     status: "active",

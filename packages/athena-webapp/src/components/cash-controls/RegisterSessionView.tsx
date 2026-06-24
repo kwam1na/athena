@@ -1815,7 +1815,7 @@ function RegisterSessionSyncNotice({
       className={cn(
         "rounded-lg border p-layout-md",
         hasCloseoutReview
-          ? "border-amber-300/70 bg-amber-50/35"
+          ? "border-warning-border bg-warning-soft"
           : syncStatus.tone === "danger"
             ? "border-danger/25 bg-danger/10"
             : "border-warning/30 bg-warning/10",
@@ -1827,7 +1827,7 @@ function RegisterSessionSyncNotice({
             className={cn(
               "text-[11px] font-medium uppercase tracking-[0.18em]",
               hasCloseoutReview
-                ? "text-amber-800"
+                ? "text-warning"
                 : syncStatus.tone === "danger"
                   ? "text-danger"
                   : "text-warning",
@@ -1922,7 +1922,7 @@ function RegisterSessionSyncNotice({
                       className={cn(
                         "rounded-md border bg-background/80 p-layout-md shadow-sm",
                         isCloseoutItem
-                          ? "border-amber-200/80"
+                          ? "border-warning-border bg-background/80"
                           : "border-danger/15",
                       )}
                       key={item.id ?? `${item.type ?? "review"}-${index}`}
@@ -2067,7 +2067,7 @@ function RegisterSessionSyncNotice({
           <div
             className={cn(
               "flex w-full flex-col gap-layout-sm border-t pt-layout-md sm:flex-row sm:flex-wrap sm:items-center",
-              hasCloseoutReview ? "border-amber-200/70" : "border-border/70",
+              hasCloseoutReview ? "border-warning-border" : "border-border/70",
             )}
           >
             {shouldShowRejectedReviewAction ? (
@@ -3285,10 +3285,10 @@ export function RegisterSessionViewContent({
       (correctionTimeline.length > 0 && !isClosedRegisterSession));
   const pendingCloseoutApprovalPanel =
     registerSession && hasPendingCloseoutApproval ? (
-      <section className="space-y-4 rounded-[calc(var(--radius)*1.2)] border border-amber-200 bg-amber-50/40 p-layout-lg shadow-surface">
+      <section className="space-y-4 rounded-[calc(var(--radius)*1.2)] border border-warning-border bg-warning-soft p-layout-lg shadow-surface">
         <div className="space-y-2">
           <div className="space-y-2">
-            <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-amber-800">
+            <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-warning">
               Manager approval required
             </p>
             <div className="space-y-1">
@@ -3304,7 +3304,7 @@ export function RegisterSessionViewContent({
           </div>
         </div>
 
-        <div className="rounded-lg border border-amber-200/80 bg-background/70 p-4">
+        <div className="rounded-lg border border-warning-border bg-background/70 p-4">
           <div className="grid gap-4 text-sm sm:grid-cols-3">
             <div className="space-y-1">
               <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
@@ -3333,7 +3333,7 @@ export function RegisterSessionViewContent({
               </p>
             </div>
           </div>
-          <div className="mt-4 space-y-3 border-t border-amber-200/70 pt-3 text-xs text-muted-foreground">
+          <div className="mt-4 space-y-3 border-t border-warning-border pt-3 text-xs text-muted-foreground">
             <p>
               Requested by{" "}
               {registerSession.pendingApprovalRequest?.requestedByStaffName
@@ -3345,8 +3345,8 @@ export function RegisterSessionViewContent({
                 : "staff not recorded"}
             </p>
             {closeoutRequestNotes ? (
-              <div className="space-y-1 rounded-md bg-amber-50/60 px-3 py-2 text-muted-foreground">
-                <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-amber-900/70">
+              <div className="space-y-1 rounded-md bg-warning-soft px-3 py-2 text-muted-foreground">
+                <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-warning">
                   Request notes
                 </p>
                 <p className="text-sm leading-5 text-foreground">

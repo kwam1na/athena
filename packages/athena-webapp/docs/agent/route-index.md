@@ -58,6 +58,7 @@ This route index enumerates the current files under `src/routes` so agents can o
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/refunded.index.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/orders/refunded.index.tsx)
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports.index.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports.index.tsx)
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/$reportId.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense-reports/$reportId.tsx)
+- [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense.index.test.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense.index.test.tsx)
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense.index.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/expense.index.tsx)
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/index.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/index.tsx)
 - [`src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/register.index.tsx`](../../src/routes/_authed/$orgUrlSlug/store/$storeUrlSlug/pos/register.index.tsx)
