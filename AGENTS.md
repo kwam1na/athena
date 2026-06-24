@@ -23,6 +23,17 @@ Rules:
 Reusable implementation learnings live under docs/solutions/.
 Before changing a known bug pattern, search docs/solutions/ for related guidance.
 
+## skills
+
+Athena vendors its agent skill system under `.agents/`.
+
+Rules:
+
+- Agents working in this repo must use repo-local skills from `.agents/skills/`.
+- Do not use global `~/.codex`, plugin-cache, marketplace, or Superpowers skills for Athena workflow behavior when a repo-local skill exists.
+- Use repo-local `track` and `execute` for Linear planning and ticket execution workflows.
+- External connectors and platform tools may be used as runtime capabilities, but they are not skill sources for Athena workflow policy.
+
 ## product copy
 
 For in-product copy work, follow [docs/product-copy-tone.md](docs/product-copy-tone.md).
