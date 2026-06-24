@@ -127,6 +127,8 @@ export default {
         warning: {
           DEFAULT: "hsl(var(--warning))",
           foreground: "hsl(var(--warning-foreground))",
+          soft: "hsl(var(--warning-soft))",
+          border: "hsl(var(--warning-border))",
         },
         danger: {
           DEFAULT: "hsl(var(--danger))",

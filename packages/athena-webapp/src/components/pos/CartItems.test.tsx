@@ -240,5 +240,34 @@ describe("CartItems service lines", () => {
     );
 
     expect(onUpdateQuantity).toHaveBeenCalledWith("item-1", 0);
+    expect(
+      screen.getByRole("spinbutton", { name: /quantity for amin uh/i }),
+    ).toHaveValue(1);
+  });
+
+  it("removes a product line with one click from the trash button", async () => {
+    const user = userEvent.setup();
+    const onRemoveItem = vi.fn();
+
+    render(
+      <CartItems
+        cartItems={[
+          {
+            id: "item-1" as never,
+            barcode: "4739394883944",
+            name: "Kang Fa",
+            price: 1500,
+            quantity: 1,
+            sku: "6N2Y-MQR-KG9",
+          },
+        ]}
+        onRemoveItem={onRemoveItem}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /remove kang fa/i }));
+
+    expect(onRemoveItem).toHaveBeenCalledOnce();
+    expect(onRemoveItem).toHaveBeenCalledWith("item-1");
   });
 });

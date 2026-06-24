@@ -44,6 +44,7 @@ const TIMELINE_PENDING_REGISTER_COUNT_STATUSES = [
 
 type LinkTarget = {
   label?: string;
+  matchLabel?: string;
   params?: Record<string, string>;
   search?: Record<string, string>;
   to?: string;
@@ -552,12 +553,20 @@ async function listTimelineEvents(
   const pendingRegisterCountsPromise = args.includeManagerReviewEvidence
     ? listPendingRegisterCountTimelineEvents(ctx, args)
     : Promise.resolve([]);
-  const [events, registerSessions, pendingRegisterCountEvents, store] =
+  const terminalNamesPromise = listTerminalNames(ctx, args.storeId);
+  const [
+    events,
+    registerSessions,
+    pendingRegisterCountEvents,
+    store,
+    terminalNamesById,
+  ] =
     await Promise.all([
       eventsPromise,
       registerSessionsPromise,
       pendingRegisterCountsPromise,
       storePromise,
+      terminalNamesPromise,
     ]);
   const operationalCloseoutKeys = new Set(
     events
@@ -571,6 +580,7 @@ async function listTimelineEvents(
           mapOperationalTimelineEvent(ctx, {
             currency: store?.currency ?? "GHS",
             event,
+            terminalNamesById,
           }),
         ),
       ),
@@ -581,6 +591,7 @@ async function listTimelineEvents(
           operationalCloseoutKeys,
           registerSessions,
           startAt: args.startAt,
+          terminalNamesById,
         }),
       ),
     ]);
@@ -678,7 +689,7 @@ async function mapPendingRegisterCountTimelineEvent(
 
   if (!registerSession) return null;
 
-  const [staffProfile, conflict] = await Promise.all([
+  const [staffProfile, conflict, terminal] = await Promise.all([
     ctx.db.get("staffProfile", args.event.staffProfileId),
     ctx.db
       .query("posLocalSyncConflict")
@@ -689,10 +700,12 @@ async function mapPendingRegisterCountTimelineEvent(
           .eq("localEventId", args.event.localEventId),
       )
       .first(),
+    ctx.db.get("posTerminal", args.event.terminalId),
   ]);
-  const registerLabel = formatRegisterSessionLabel(
-    registerSession.registerNumber,
-  );
+  const registerLabel = formatTerminalRegisterLinkLabel({
+    registerNumber: registerSession.registerNumber,
+    terminalName: terminal?.displayName,
+  });
   const countedCash = numberFromRecord(args.event.payload, "countedCash");
   const expectedCash =
     numberFromRecord(conflict?.details, "expectedCash") ??
@@ -744,6 +757,7 @@ async function mapOperationalTimelineEvent(
       subjectLabel?: string;
       subjectType: string;
     };
+    terminalNamesById: Map<Id<"posTerminal">, string>;
   },
 ): Promise<DailyOperationsTimelineEvent | null> {
   const event = args.event;
@@ -851,9 +865,15 @@ async function mapOperationalTimelineEvent(
     typeof metadata.registerNumber === "string"
       ? metadata.registerNumber
       : registerSession?.registerNumber;
+  const terminalName = registerSession?.terminalId
+    ? args.terminalNamesById.get(registerSession.terminalId)
+    : undefined;
   const registerLabel =
     isRegisterSessionEvent
-      ? formatRegisterSessionLabel(event.subjectLabel ?? registerNumber)
+      ? formatTerminalRegisterLinkLabel({
+          registerNumber: event.subjectLabel ?? registerNumber,
+          terminalName,
+        })
       : undefined;
   const approvalSubjectLabel = getApprovalTimelineSubjectLabel({
     event,
@@ -984,12 +1004,36 @@ function normalizeTimelineEventMessage(
     return `${context?.registerLabel ?? "Register session"} closed with an exact cash match.`;
   }
 
+  const recordedVarianceMatch = message.match(
+    /^Register\s+\S+\s+closeout recorded with a cash variance of (.+)\.$/i,
+  );
+  if (recordedVarianceMatch?.[1]) {
+    return `${context?.registerLabel ?? "Register"} closeout recorded with a cash variance of ${recordedVarianceMatch[1]}.`;
+  }
+
+  if (/^Register\s+\S+\s+closeout recorded with an exact cash match\.$/i.test(message)) {
+    return `${context?.registerLabel ?? "Register"} closeout recorded with an exact cash match.`;
+  }
+
   if (
     context?.eventType === "register_session_variance_review_requested" &&
     typeof context.variance === "number" &&
     context.variance !== 0
   ) {
     return `${context.registerLabel ?? "Register session"} closeout recorded with a cash variance of ${formatTimelineAmount(context.currency ?? "GHS", context.variance)}.`;
+  }
+
+  if (context?.eventType === "register_session_sync_closeout_review_requested") {
+    const amount =
+      typeof context.variance === "number" && context.variance !== 0
+        ? formatTimelineAmount(context.currency ?? "GHS", context.variance)
+        : message.match(
+            /closeout submitted with a cash variance of (.+?)\. Review before applying it\.$/i,
+          )?.[1];
+
+    if (amount) {
+      return `${context.registerLabel ?? "Register"} closeout submitted with a cash variance of ${amount}. Review before applying it.`;
+    }
   }
 
   const varianceMatch = message.match(
@@ -1144,12 +1188,30 @@ async function listTimelineRegisterSessions(
   return [...sessionsById.values()];
 }
 
+async function listTerminalNames(
+  ctx: Pick<QueryCtx, "db">,
+  storeId: Id<"store">,
+) {
+  const terminals = await ctx.db
+    .query("posTerminal")
+    .withIndex("by_storeId", (q) => q.eq("storeId", storeId))
+    .take(MAX_OPERATIONS_QUERY_LIMIT);
+
+  return new Map(
+    terminals.flatMap((terminal) => {
+      const name = terminal.displayName.trim();
+      return name ? [[terminal._id, name] as const] : [];
+    }),
+  );
+}
+
 function buildRegisterCloseoutTimelineEvents(args: {
   currency: string;
   endAt: number;
   operationalCloseoutKeys: Set<string>;
   registerSessions: Array<Doc<"registerSession">>;
   startAt: number;
+  terminalNamesById: Map<Id<"posTerminal">, string>;
 }): DailyOperationsTimelineEvent[] {
   return args.registerSessions.flatMap((session) =>
     (session.closeoutRecords ?? [])
@@ -1168,7 +1230,12 @@ function buildRegisterCloseoutTimelineEvents(args: {
           ),
       )
       .map((record) => {
-        const label = formatRegisterSessionLabel(session.registerNumber);
+        const label = formatTerminalRegisterLinkLabel({
+          registerNumber: session.registerNumber,
+          terminalName: session.terminalId
+            ? args.terminalNamesById.get(session.terminalId)
+            : undefined,
+        });
         const eventType =
           record.type === "closed"
             ? "register_session_closed"
@@ -1264,6 +1331,28 @@ function formatRegisterSessionLabel(registerNumber?: string) {
   if (!trimmed) return "Register session";
   if (/^register\b/i.test(trimmed)) return trimmed;
   return `Register ${trimmed}`;
+}
+
+function formatTerminalRegisterLinkLabel(args: {
+  registerNumber?: string;
+  terminalName?: string;
+}) {
+  const terminalName = args.terminalName?.trim();
+  const registerNumber = formatRegisterNumberValue(args.registerNumber);
+
+  if (terminalName && registerNumber) {
+    return `${terminalName} / Register ${registerNumber}`;
+  }
+
+  return formatRegisterSessionLabel(args.registerNumber);
+}
+
+function formatRegisterNumberValue(registerNumber?: string) {
+  const trimmed = registerNumber?.trim();
+  if (!trimmed) return undefined;
+
+  const withoutPrefix = trimmed.replace(/^register\b\s*/i, "").trim();
+  return withoutPrefix || trimmed;
 }
 
 function getOperationalRegisterCloseoutKey(event: {

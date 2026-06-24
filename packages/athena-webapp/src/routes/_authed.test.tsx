@@ -701,6 +701,26 @@ describe("Authed layout", () => {
     expect(mocked.navigate).not.toHaveBeenCalled();
   });
 
+  it("mounts the signed-in POS expense register through the POS-only shell when a terminal seed is ready", () => {
+    mocked.useAuth.mockReturnValue({
+      user: { _id: "user-1", email: "cashier@example.com" },
+      isLoading: false,
+    });
+    mocked.useLocalPosEntryContext.mockReturnValue(readyLocalPosEntryContext());
+    mocked.useRouterState.mockImplementation(({ select }) =>
+      select({ location: { pathname: "/wigclub/store/wigclub/pos/expense" } }),
+    );
+
+    render(<Layout />);
+
+    expect(screen.getByTestId("authed-outlet")).toBeInTheDocument();
+    expect(screen.queryByTestId("app-sidebar")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("app-header")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("store-modal")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("organization-modal")).not.toBeInTheDocument();
+    expect(mocked.navigate).not.toHaveBeenCalled();
+  });
+
   it.each([
     ["/wigclub/store/wigclub/pos", "POS hub"],
     ["/wigclub/store/wigclub/pos/register", "POS register child"],
@@ -1101,14 +1121,17 @@ describe("Authed layout", () => {
     ).toBeInTheDocument();
   });
 
-  it("starts fullscreen when the POS register route becomes active", () => {
+  it.each([
+    ["/wigclub/store/wigclub/pos/register", "POS register"],
+    ["/wigclub/store/wigclub/pos/expense", "POS expense register"],
+  ])("starts fullscreen when the %s route becomes active", (pathname) => {
     mocked.useAuth.mockReturnValue({
       user: { _id: "user-1", email: "operator@example.com" },
       isLoading: false,
     });
     mocked.useRouterState.mockImplementation(({ select }) =>
       select({
-        location: { pathname: "/wigclub/store/wigclub/pos/register" },
+        location: { pathname },
       }),
     );
 
@@ -1123,7 +1146,12 @@ describe("Authed layout", () => {
     );
   });
 
-  it("starts fullscreen from the browser pathname on first register render", () => {
+  it.each([
+    ["/wigclub/store/wigclub/pos/register", "POS register"],
+    ["/wigclub/store/wigclub/pos/expense", "POS expense register"],
+  ])(
+    "starts fullscreen from the browser pathname on first %s render",
+    (browserPathname) => {
     mocked.useAuth.mockReturnValue({
       user: { _id: "user-1", email: "operator@example.com" },
       isLoading: false,
@@ -1131,13 +1159,14 @@ describe("Authed layout", () => {
     mocked.useRouterState.mockImplementation(({ select }) =>
       select({ location: { pathname: "/" } }),
     );
-    window.history.replaceState({}, "", "/wigclub/store/wigclub/pos/register");
+    window.history.replaceState({}, "", browserPathname);
 
     render(<Layout />);
 
     expect(screen.queryByTestId("app-header")).not.toBeInTheDocument();
     expect(screen.getByTestId("app-sidebar")).toBeInTheDocument();
-  });
+    },
+  );
 
   it("toggles the mounted register flow with F", () => {
     mocked.useAuth.mockReturnValue({

@@ -378,6 +378,37 @@ export function cartItemSkuEntry(item: CartItem): readonly [string, CartItem][] 
   return skuId ? [[skuId.toString(), item]] : [];
 }
 
+function cartItemLineEventKey(input: {
+  productSkuId?: string | null;
+  pendingCheckoutItemId?: string | null;
+  inventoryImportProvisionalSkuId?: string | null;
+}) {
+  if (!input.productSkuId) return null;
+
+  return [
+    input.productSkuId,
+    productCartSourceKey({
+      inventoryImportProvisionalSkuId:
+        input.inventoryImportProvisionalSkuId ?? null,
+      pendingCheckoutItemId: input.pendingCheckoutItemId ?? null,
+    }),
+  ].join(":");
+}
+
+function cartItemLineKey(item: CartItem) {
+  return cartItemLineEventKey({
+    productSkuId: item.skuId?.toString(),
+    inventoryImportProvisionalSkuId:
+      "inventoryImportProvisionalSkuId" in item
+        ? (item.inventoryImportProvisionalSkuId?.toString() ?? null)
+        : null,
+    pendingCheckoutItemId:
+      "pendingCheckoutItemId" in item
+        ? (item.pendingCheckoutItemId?.toString() ?? null)
+        : null,
+  });
+}
+
 export function addLocalAvailabilityConsumption(
   quantities: Map<string, number>,
   item: PosLocalCartItemReadModel,
@@ -531,7 +562,7 @@ export function cartItemsFromLocalRegisterModel(
 
   const localItems = sale.items.map(mapLocalCartItemToCartItem);
   const localItemsBySku = new Map(localItems.flatMap(cartItemSkuEntry));
-  const removedProductSkuIds = new Set<string>();
+  const removedCartLineKeys = new Set<string>();
   const removedLocalItemIds = new Set<string>();
 
   for (const event of model.sourceEvents) {
@@ -544,16 +575,24 @@ export function cartItemsFromLocalRegisterModel(
 
     const productSkuId = stringFromPayload(payload, "productSkuId");
     const localItemId = stringFromPayload(payload, "localItemId");
+    const lineKey = cartItemLineEventKey({
+      productSkuId,
+      inventoryImportProvisionalSkuId: stringFromPayload(
+        payload,
+        "inventoryImportProvisionalSkuId",
+      ),
+      pendingCheckoutItemId: stringFromPayload(payload, "pendingCheckoutItemId"),
+    });
     const quantity = payload.quantity;
     if ((!productSkuId && !localItemId) || typeof quantity !== "number") {
       continue;
     }
 
-    if (quantity <= 0 && !localItemsBySku.has(productSkuId)) {
-      if (productSkuId) removedProductSkuIds.add(productSkuId);
+    if (quantity <= 0) {
+      if (lineKey) removedCartLineKeys.add(lineKey);
       if (localItemId) removedLocalItemIds.add(localItemId);
     } else {
-      removedProductSkuIds.delete(productSkuId);
+      if (lineKey) removedCartLineKeys.delete(lineKey);
       removedLocalItemIds.delete(localItemId);
     }
   }
@@ -562,12 +601,18 @@ export function cartItemsFromLocalRegisterModel(
     currentCartItems.flatMap((item) => {
       const skuId = item.skuId;
       if (!skuId) return [];
-      if (removedProductSkuIds.has(skuId.toString())) return [];
+      const lineKey = cartItemLineKey(item);
+      if (lineKey && removedCartLineKeys.has(lineKey)) return [];
       if (removedLocalItemIds.has(item.id.toString())) return [];
       return cartItemSkuEntry(item);
     }),
   );
   for (const [skuId, item] of localItemsBySku) {
+    const lineKey = cartItemLineKey(item);
+    if (lineKey && removedCartLineKeys.has(lineKey)) {
+      mergedItemsBySku.delete(skuId);
+      continue;
+    }
     mergedItemsBySku.set(skuId, item);
   }
 

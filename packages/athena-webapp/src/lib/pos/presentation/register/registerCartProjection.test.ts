@@ -104,6 +104,56 @@ describe("registerCartProjection", () => {
     expect(result).toEqual([]);
   });
 
+  it("lets the latest zero-quantity cart event suppress a stale projected local item", () => {
+    const result = cartItemsFromLocalRegisterModel(
+      readModel({
+        activeSale: ({
+          items: [
+            {
+              barcode: "111",
+              localItemId: "local-item-1",
+              price: 100,
+              productId: "product-1",
+              productName: "Trusted Wig",
+              productSku: "SKU-1",
+              productSkuId: "sku-1",
+              quantity: 1,
+            },
+          ],
+          localPosSessionId: "local-sale-1",
+        } as unknown) as PosLocalRegisterReadModel["activeSale"],
+        sourceEvents: [
+          localEvent({
+            localEventId: "event-add",
+            localPosSessionId: "local-sale-1",
+            payload: {
+              localItemId: "local-item-1",
+              localPosSessionId: "local-sale-1",
+              productSkuId: "sku-1",
+              quantity: 1,
+            },
+            sequence: 1,
+          }),
+          localEvent({
+            localEventId: "event-remove",
+            localPosSessionId: "local-sale-1",
+            payload: {
+              localItemId: "local-item-1",
+              localPosSessionId: "local-sale-1",
+              productSkuId: "sku-1",
+              quantity: 0,
+            },
+            sequence: 2,
+          }),
+        ],
+      }),
+      "local-sale-1",
+      [trustedCartItem],
+    );
+
+    expect(result).toEqual([]);
+  });
+
   it("rebuilds pending checkout products from local definition and cart events", () => {
     const products = mapLocalPendingCheckoutEventsToProducts([
       localEvent({

@@ -67,8 +67,8 @@ export const Route = createFileRoute("/_authed")({
   component: Layout,
 });
 
-const POS_REGISTER_PATH_PATTERN =
-  /^\/(?<orgUrlSlug>[^/]+)\/store\/(?<storeUrlSlug>[^/]+)\/pos\/register\/?$/;
+const POS_TERMINAL_FULLSCREEN_PATH_PATTERN =
+  /^\/(?<orgUrlSlug>[^/]+)\/store\/(?<storeUrlSlug>[^/]+)\/pos\/(?:register|expense)\/?$/;
 const POS_HUB_PATH_PATTERN =
   /^\/(?<orgUrlSlug>[^/]+)\/store\/(?<storeUrlSlug>[^/]+)\/pos(?:\/.*)?$/;
 const STORE_WORKSPACE_PATH_PATTERN =
@@ -108,8 +108,10 @@ function getRouteParamsForPattern(
   };
 }
 
-function isPosRegisterPath(pathname?: string) {
-  return Boolean(pathname && POS_REGISTER_PATH_PATTERN.test(pathname));
+function isPosTerminalFullscreenPath(pathname?: string) {
+  return Boolean(
+    pathname && POS_TERMINAL_FULLSCREEN_PATH_PATTERN.test(pathname),
+  );
 }
 
 function getBrowserPathname() {
@@ -550,8 +552,9 @@ export default function Layout() {
   const canRenderRehydratingPosShell =
     routeWantsPos && isLoading && isBrowserOffline() && hasStoredLocalSession();
   const routeWantsFullscreen =
-    isPosRegisterPath(pathname) ||
-    (isUnknownRouterPath(pathname) && isPosRegisterPath(browserPathname));
+    isPosTerminalFullscreenPath(pathname) ||
+    (isUnknownRouterPath(pathname) &&
+      isPosTerminalFullscreenPath(browserPathname));
   const canRenderSignedInPosRegisterShell =
     Boolean(user) &&
     routeWantsFullscreen &&

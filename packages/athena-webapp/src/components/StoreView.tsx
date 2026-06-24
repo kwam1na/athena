@@ -8,6 +8,8 @@ import { useStoreModal } from "@/hooks/use-store-modal";
 import { useGetActiveOrganization } from "@/hooks/useGetOrganizations";
 import { useEffect } from "react";
 import { useGetStores } from "../hooks/useGetActiveStore";
+import { usePermissions } from "../hooks/usePermissions";
+import { getStoreEntryRouteForRole } from "@/lib/navigation/storeEntryRoute";
 
 export default function StoreView() {
   const Navigation = () => {
@@ -25,13 +27,14 @@ export default function StoreView() {
   const { activeOrganization } = useGetActiveOrganization();
 
   const stores = useGetStores();
+  const { isLoading, role } = usePermissions();
 
   useEffect(() => {
-    if (stores && stores.length > 0) {
+    if (!isLoading && stores && stores.length > 0) {
       const s = stores?.[0];
 
       navigate({
-        to: "/$orgUrlSlug/store/$storeUrlSlug/operations",
+        to: getStoreEntryRouteForRole(role),
         params: (prev) => ({
           ...prev,
           orgUrlSlug: prev.orgUrlSlug!,
@@ -39,7 +42,7 @@ export default function StoreView() {
         }),
       });
     }
-  }, [stores, navigate]);
+  }, [isLoading, stores, navigate, role]);
 
   const noStoresPresent = stores && stores.length == 0;
 

@@ -472,7 +472,8 @@ const registerCloseoutTimelineSnapshot: DailyOperationsSnapshot = {
       id: "register_closeout:register-2:closed:1778273100000",
       message: "Register 2 closeout recorded with an exact cash match.",
       registerLink: {
-        label: "Register 2",
+        label: "Front counter / Register 2",
+        matchLabel: "Register 2",
         params: {
           sessionId: "register-2",
         },
@@ -496,7 +497,8 @@ const registerSessionClosedTimelineSnapshot: DailyOperationsSnapshot = {
       id: "event-register-session-closed",
       message: "Register 80 closed with an exact cash match.",
       registerLink: {
-        label: "Register 80",
+        label: "M Supplies / Register 80",
+        matchLabel: "Register 80",
         params: {
           sessionId: "register-session-80",
         },
@@ -520,7 +522,8 @@ const registerOpenedTimelineSnapshot: DailyOperationsSnapshot = {
       id: "event-register-opened",
       message: "Register 80 opened.",
       registerLink: {
-        label: "Register 80",
+        label: "M Supplies / Register 80",
+        matchLabel: "Register 80",
         params: {
           sessionId: "register-session-80",
         },
@@ -1654,7 +1657,9 @@ describe("DailyOperationsViewContent", () => {
   it("links register closeout timeline events to the register session", () => {
     renderContent(registerCloseoutTimelineSnapshot);
 
-    const registerLink = screen.getByRole("link", { name: "Register 2" });
+    const registerLink = screen.getByRole("link", {
+      name: "Front counter / Register 2",
+    });
 
     expect(registerLink).toHaveAttribute(
       "href",
@@ -1666,7 +1671,7 @@ describe("DailyOperationsViewContent", () => {
       screen.getByText((content, node) => {
         return (
           node?.textContent ===
-          "Register 2 closeout recorded with an exact cash match."
+          "Front counter / Register 2 closeout recorded with an exact cash match."
         );
       }),
     ).toBeInTheDocument();
@@ -1675,7 +1680,9 @@ describe("DailyOperationsViewContent", () => {
   it("links generic register session closed timeline events to the register session", () => {
     renderContent(registerSessionClosedTimelineSnapshot);
 
-    const registerLink = screen.getByRole("link", { name: "Register 80" });
+    const registerLink = screen.getByRole("link", {
+      name: "M Supplies / Register 80",
+    });
 
     expect(registerLink).toHaveAttribute(
       "href",
@@ -1687,7 +1694,7 @@ describe("DailyOperationsViewContent", () => {
       screen.getByText((content, node) => {
         return (
           node?.textContent ===
-          "Register 80 closed with an exact cash match."
+          "M Supplies / Register 80 closed with an exact cash match."
         );
       }),
     ).toBeInTheDocument();
@@ -1697,7 +1704,9 @@ describe("DailyOperationsViewContent", () => {
   it("links POS register opened timeline events to the register session", () => {
     renderContent(registerOpenedTimelineSnapshot);
 
-    const registerLink = screen.getByRole("link", { name: "Register 80" });
+    const registerLink = screen.getByRole("link", {
+      name: "M Supplies / Register 80",
+    });
 
     expect(registerLink).toHaveAttribute(
       "href",
@@ -1707,7 +1716,7 @@ describe("DailyOperationsViewContent", () => {
     );
     expect(
       screen.getByText((content, node) => {
-        return node?.textContent === "Register 80 opened.";
+        return node?.textContent === "M Supplies / Register 80 opened.";
       }),
     ).toBeInTheDocument();
     expect(registerLink.querySelector("svg")).toBeInTheDocument();

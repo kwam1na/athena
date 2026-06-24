@@ -85,7 +85,7 @@ function CartItemQuantityControl({
   }, [item.id, item.quantity]);
 
   const updateQuantity = (quantity: number) => {
-    setDraftQuantity(String(quantity));
+    setDraftQuantity(String(Math.max(1, quantity)));
     if (quantity !== item.quantity) {
       onUpdateQuantity(
         item.id as Id<"posSessionItem"> | Id<"expenseSessionItem">,
@@ -114,9 +114,7 @@ function CartItemQuantityControl({
         )}
         aria-label={`Decrease quantity for ${item.name}`}
         onClick={() =>
-          updateQuantity(
-            Math.max(0, normalizeCartQuantityInput(draftQuantity) - 1),
-          )
+          updateQuantity(normalizeCartQuantityInput(draftQuantity) - 1)
         }
       >
         <Minus className="h-4 w-4" />
@@ -554,6 +552,7 @@ export function CartItems({
                       <Button
                         variant="ghost"
                         size="default"
+                        aria-label={`Remove ${item.name}`}
                         className={cn(
                           "text-destructive hover:text-destructive hover:bg-destructive/10",
                           isCompact ? "h-10 w-10 p-0" : "h-10 w-10 p-8",

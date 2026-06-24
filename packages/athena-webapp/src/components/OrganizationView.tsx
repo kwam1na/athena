@@ -2,6 +2,8 @@ import { useEffect } from "react";
 import { useGetStores } from "../hooks/useGetActiveStore";
 import View from "./View";
 import { useNavigate, useParams } from "@tanstack/react-router";
+import { usePermissions } from "../hooks/usePermissions";
+import { getStoreEntryRouteForRole } from "@/lib/navigation/storeEntryRoute";
 
 export default function OrganizationView() {
   const Navigation = () => {
@@ -15,15 +17,16 @@ export default function OrganizationView() {
   const navigate = useNavigate();
 
   const stores = useGetStores();
+  const { isLoading, role } = usePermissions();
 
   const { orgUrlSlug } = useParams({ strict: false });
 
   useEffect(() => {
-    if (stores && stores.length > 0 && orgUrlSlug) {
+    if (!isLoading && stores && stores.length > 0 && orgUrlSlug) {
       const store = stores[0];
 
       navigate({
-        to: "/$orgUrlSlug/store/$storeUrlSlug/operations",
+        to: getStoreEntryRouteForRole(role),
         params: (prev) => ({
           ...prev,
           orgUrlSlug,
@@ -31,7 +34,7 @@ export default function OrganizationView() {
         }),
       });
     }
-  }, [stores, orgUrlSlug, navigate]);
+  }, [isLoading, stores, orgUrlSlug, navigate, role]);
 
   return (
     <View header={<Navigation />}>

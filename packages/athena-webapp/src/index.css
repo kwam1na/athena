@@ -89,6 +89,8 @@
     --success-foreground: 145 60% 96%;
     --warning: 35 79% 52%;
     --warning-foreground: 30 60% 12%;
+    --warning-soft: 35 86% 96%;
+    --warning-border: 35 72% 84%;
     --danger: 4 71% 54%;
     --danger-foreground: 0 0% 98%;
 
@@ -189,8 +191,10 @@
     --action-neutral-strong-border: 222 12% 28%;
     --success: 151 44% 34%;
     --success-foreground: 145 56% 94%;
-    --warning: 38 92% 61%;
+    --warning: 40 92% 66%;
     --warning-foreground: 30 60% 12%;
+    --warning-soft: 39 36% 17%;
+    --warning-border: 39 52% 34%;
     --danger: 6 79% 64%;
     --danger-foreground: 222 30% 12%;
 

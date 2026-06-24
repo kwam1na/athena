@@ -161,6 +161,22 @@ type LocalAuthenticatedStaff = {
   displayName: string;
 } | null;
 
+function removedCartLineKeyFromCartItem(item: CartItem) {
+  return [
+    item.skuId?.toString() ?? item.productId?.toString() ?? item.id.toString(),
+    renderedCartLineSourceKey(item),
+  ].join(":");
+}
+
+function removedCartLineKeyFromProduct(product: Product) {
+  return [
+    product.skuId?.toString() ??
+      product.productId?.toString() ??
+      product.id.toString(),
+    productCartSourceKey(product),
+  ].join(":");
+}
+
 type ServiceCatalogRow = {
   basePrice?: number;
   description?: string;
@@ -565,6 +581,10 @@ export function useRegisterViewModel(): RegisterViewModel {
   const [optimisticCartProducts, setOptimisticCartProducts] = useState<
     Record<string, CartItem>
   >({});
+  const [
+    optimisticallyRemovedCartLineKeys,
+    setOptimisticallyRemovedCartLineKeys,
+  ] = useState<Record<string, true>>({});
   const [localOperableRegisterSession, setLocalOperableRegisterSession] =
     useState<LocalOperableRegisterSession | null>(null);
   const [localOperablePosSession, setLocalOperablePosSession] =
@@ -731,6 +751,7 @@ export function useRegisterViewModel(): RegisterViewModel {
 
   useEffect(() => {
     isMountedRef.current = true;
+    setOptimisticallyRemovedCartLineKeys({});
     activeSessionIdRef.current = activeSession?._id
       ? (activeSession._id as Id<"posSession">)
       : null;
@@ -1246,6 +1267,12 @@ export function useRegisterViewModel(): RegisterViewModel {
   );
   const activeCartItems = useMemo(() => {
     const cartItems = serverCartItems
+      .filter(
+        (item) =>
+          !optimisticallyRemovedCartLineKeys[
+            removedCartLineKeyFromCartItem(item)
+          ],
+      )
       .map((item) => {
         const optimisticQuantity = optimisticCartQuantities[item.id];
         return optimisticQuantity === undefined
@@ -1255,6 +1282,14 @@ export function useRegisterViewModel(): RegisterViewModel {
       .filter((item) => item.quantity > 0);
 
     for (const optimisticProduct of Object.values(optimisticCartProducts)) {
+      if (
+        optimisticallyRemovedCartLineKeys[
+          removedCartLineKeyFromCartItem(optimisticProduct)
+        ]
+      ) {
+        continue;
+      }
+
       if (!optimisticProduct.skuId) {
         cartItems.push(optimisticProduct);
         continue;
@@ -1284,7 +1319,12 @@ export function useRegisterViewModel(): RegisterViewModel {
     }
 
     return cartItems;
-  }, [optimisticCartProducts, optimisticCartQuantities, serverCartItems]);
+  }, [
+    optimisticCartProducts,
+    optimisticCartQuantities,
+    optimisticallyRemovedCartLineKeys,
+    serverCartItems,
+  ]);
   activeCartItemsRef.current = activeCartItems;
   localRegisterReadModelRef.current = localRegisterReadModel;
   const localAvailabilityConsumptionBySkuId = useMemo(() => {
@@ -1847,6 +1887,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       setPaymentState([]);
       setOptimisticCartProducts({});
       setOptimisticCartQuantities({});
+      setOptimisticallyRemovedCartLineKeys({});
       setLocalOperablePosSession(null);
 
       if (!options?.keepTransactionCompletion) {
@@ -3712,6 +3753,9 @@ export function useRegisterViewModel(): RegisterViewModel {
           existingItem?.id.toString() ??
           createLocalFallbackId("local-item");
         const optimisticProductKey = product.id.toString();
+        const removedLineKey = removedCartLineKeyFromProduct(product);
+        const hadRemovedLine =
+          Boolean(optimisticallyRemovedCartLineKeys[removedLineKey]);
         const previousOptimisticProduct =
           optimisticCartProducts[optimisticProductKey];
         const isExistingOptimisticProduct = existingItem?.id
@@ -3725,6 +3769,11 @@ export function useRegisterViewModel(): RegisterViewModel {
           nextQuantity,
         );
         if (existingItem && !isExistingOptimisticProduct) {
+          setOptimisticallyRemovedCartLineKeys((current) => {
+            const next = { ...current };
+            delete next[removedLineKey];
+            return next;
+          });
           setOptimisticCartQuantities((current) => ({
             ...current,
             [existingItem.id]: nextQuantity,
@@ -3743,6 +3792,14 @@ export function useRegisterViewModel(): RegisterViewModel {
             ...fastCartItems.filter((item) => item.id !== optimisticItem.id),
             optimisticItem,
           ];
+        }
+
+        if (!existingItem || isExistingOptimisticProduct) {
+          setOptimisticallyRemovedCartLineKeys((current) => {
+            const next = { ...current };
+            delete next[removedLineKey];
+            return next;
+          });
         }
 
         if (nextLineSourceKey === "trusted_inventory") {
@@ -3776,6 +3833,12 @@ export function useRegisterViewModel(): RegisterViewModel {
           activeCartItemsRef.current = previousFastCartItems;
           localAvailabilityConsumptionBySkuIdRef.current =
             previousFastLocalAvailabilityConsumptionBySkuId;
+          if (hadRemovedLine) {
+            setOptimisticallyRemovedCartLineKeys((current) => ({
+              ...current,
+              [removedLineKey]: true,
+            }));
+          }
           if (existingItem && !isExistingOptimisticProduct) {
             setOptimisticCartQuantities((current) => {
               const next = { ...current };
@@ -3813,6 +3876,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       ensureLocalPosSessionId,
       noteLocalRegisterEventChanged,
       optimisticCartProducts,
+      optimisticallyRemovedCartLineKeys,
       registerCatalogAvailabilityBySkuId,
       registerCatalogSkuIds,
       staffProfileId,
@@ -3882,6 +3946,7 @@ export function useRegisterViewModel(): RegisterViewModel {
         if (!item) {
           return;
         }
+        const removedLineKey = removedCartLineKeyFromCartItem(item);
 
         const queuedReadModel = await readCurrentLocalRegisterModel();
         const queuedLocalItem = item.skuId
@@ -3916,6 +3981,10 @@ export function useRegisterViewModel(): RegisterViewModel {
           if (quantity <= 0) {
             const optimisticProductKey =
               optimisticCartProductKeyFromCartItem(item);
+            setOptimisticallyRemovedCartLineKeys((current) => ({
+              ...current,
+              [removedLineKey]: true,
+            }));
             setOptimisticCartProducts((current) => {
               const next = { ...current };
               delete next[optimisticProductKey];
@@ -3930,6 +3999,11 @@ export function useRegisterViewModel(): RegisterViewModel {
               }),
             });
             if (!savedLocally) {
+              setOptimisticallyRemovedCartLineKeys((current) => {
+                const next = { ...current };
+                delete next[removedLineKey];
+                return next;
+              });
               setOptimisticCartProducts((current) => ({
                 ...current,
                 [optimisticProductKey]: item,
@@ -3954,6 +4028,11 @@ export function useRegisterViewModel(): RegisterViewModel {
             return;
           }
           noteLocalRegisterEventChanged();
+          setOptimisticallyRemovedCartLineKeys((current) => {
+            const next = { ...current };
+            delete next[removedLineKey];
+            return next;
+          });
           setOptimisticCartProducts((current) => ({
             ...current,
             [optimisticCartProductKeyFromCartItem(item)]: {
@@ -3965,6 +4044,10 @@ export function useRegisterViewModel(): RegisterViewModel {
         }
 
         if (quantity <= 0) {
+          setOptimisticallyRemovedCartLineKeys((current) => ({
+            ...current,
+            [removedLineKey]: true,
+          }));
           setOptimisticCartQuantities((current) => ({
             ...current,
             [itemId]: 0,
@@ -3980,6 +4063,11 @@ export function useRegisterViewModel(): RegisterViewModel {
           });
 
           if (!savedLocally) {
+            setOptimisticallyRemovedCartLineKeys((current) => {
+              const next = { ...current };
+              delete next[removedLineKey];
+              return next;
+            });
             setOptimisticCartQuantities((current) => {
               const next = { ...current };
               delete next[itemId];
@@ -4001,6 +4089,11 @@ export function useRegisterViewModel(): RegisterViewModel {
           ...current,
           [itemId]: quantity,
         }));
+        setOptimisticallyRemovedCartLineKeys((current) => {
+          const next = { ...current };
+          delete next[removedLineKey];
+          return next;
+        });
 
         const savedLocally = await appendLocalCartItem({
           localPosSessionId: operableActiveSession._id.toString(),
@@ -4057,7 +4150,12 @@ export function useRegisterViewModel(): RegisterViewModel {
 
       const itemIsLocalOnly = item.id.toString().startsWith("optimistic:");
       const optimisticProductKey = optimisticCartProductKeyFromCartItem(item);
+      const removedLineKey = removedCartLineKeyFromCartItem(item);
 
+      setOptimisticallyRemovedCartLineKeys((current) => ({
+        ...current,
+        [removedLineKey]: true,
+      }));
       if (itemIsLocalOnly) {
         setOptimisticCartProducts((current) => {
           const next = { ...current };
@@ -4083,6 +4181,11 @@ export function useRegisterViewModel(): RegisterViewModel {
             }),
           });
           if (!savedLocally) {
+            setOptimisticallyRemovedCartLineKeys((current) => {
+              const next = { ...current };
+              delete next[removedLineKey];
+              return next;
+            });
             setOptimisticCartProducts((current) => ({
               ...current,
               [optimisticProductKey]: item,
@@ -4104,6 +4207,11 @@ export function useRegisterViewModel(): RegisterViewModel {
         });
 
         if (!savedLocally) {
+          setOptimisticallyRemovedCartLineKeys((current) => {
+            const next = { ...current };
+            delete next[removedLineKey];
+            return next;
+          });
           setOptimisticCartQuantities((current) => {
             const next = { ...current };
             delete next[itemId];
@@ -4178,6 +4286,13 @@ export function useRegisterViewModel(): RegisterViewModel {
         const next = { ...current };
         for (const item of operableActiveSession.cartItems) {
           next[item.id] = 0;
+        }
+        return next;
+      });
+      setOptimisticallyRemovedCartLineKeys((current) => {
+        const next = { ...current };
+        for (const item of activeCartItems) {
+          next[removedCartLineKeyFromCartItem(item)] = true;
         }
         return next;
       });
