@@ -2,6 +2,7 @@ import type { Doc, Id } from "../../../_generated/dataModel";
 import type { QueryCtx } from "../../../_generated/server";
 
 import {
+  findActiveProvisionalImportSkuForStoreSku,
   findStoreSkuByBarcode,
   findStoreSkuBySku,
   getCategoryById,
@@ -32,9 +33,16 @@ type CatalogResult = {
 };
 
 const POS_OPERATIONAL_CATEGORY_SLUGS = new Set([
+  "legacy-import",
   "pos-pending-checkout",
   "pos-quick-add",
 ]);
+
+function isDraftAllowedInTrustedCatalog(categorySlug?: string) {
+  return (
+    categorySlug === "legacy-import" || categorySlug === "pos-pending-checkout"
+  );
+}
 
 function isTrustedCatalogResult(args: {
   product: NonNullable<Awaited<ReturnType<typeof getProductById>>>;
@@ -44,14 +52,40 @@ function isTrustedCatalogResult(args: {
   const isReservedPosOperationalProduct = args.category?.slug
     ? POS_OPERATIONAL_CATEGORY_SLUGS.has(args.category.slug)
     : false;
-  const isPendingCheckoutProduct =
-    args.category?.slug === "pos-pending-checkout";
+  const isDraftAllowed = isDraftAllowedInTrustedCatalog(args.category?.slug);
 
   return (
     args.product.availability !== "archived" &&
-    (args.product.availability !== "draft" || isPendingCheckoutProduct) &&
+    (args.product.availability !== "draft" || isDraftAllowed) &&
     (args.product.isVisible !== false || isReservedPosOperationalProduct) &&
-    (args.sku.isVisible !== false || isPendingCheckoutProduct)
+    (args.sku.isVisible !== false || isDraftAllowed)
+  );
+}
+
+function getTrustedCatalogPrice(sku: Doc<"productSku">) {
+  return sku.netPrice ?? sku.price;
+}
+
+async function isSuppressedByActiveLegacyImportProvisionalRow(
+  ctx: QueryCtx,
+  args: {
+    category?: Awaited<ReturnType<typeof getCategoryById>>;
+    product: NonNullable<Awaited<ReturnType<typeof getProductById>>>;
+    sku: Doc<"productSku">;
+    storeId: Id<"store">;
+  },
+) {
+  return (
+    args.category?.slug === "legacy-import" &&
+    (args.product.availability === "draft" ||
+      args.product.isVisible === false ||
+      args.sku.isVisible === false) &&
+    Boolean(
+      await findActiveProvisionalImportSkuForStoreSku(ctx, {
+        storeId: args.storeId,
+        productSkuId: args.sku._id,
+      }),
+    )
   );
 }
 
@@ -75,7 +109,7 @@ async function mapSkuToCatalogResult(
       sku: args.sku,
       category,
     }) ||
-    !args.sku.netPrice
+    getTrustedCatalogPrice(args.sku) <= 0
   ) {
     return null;
   }
@@ -88,7 +122,7 @@ async function mapSkuToCatalogResult(
     name: args.product.name,
     sku: args.sku.sku || "",
     barcode: args.sku.barcode || "",
-    price: args.sku.netPrice || args.sku.price,
+    price: getTrustedCatalogPrice(args.sku),
     category: categoryName,
     description: args.product.description || "",
     inStock: args.sku.quantityAvailable > 0,
@@ -127,20 +161,27 @@ export async function searchProducts(
       product?.storeId === args.storeId &&
       product.availability !== "archived" &&
       (product.availability !== "draft" ||
-        category?.slug === "pos-pending-checkout") &&
+        isDraftAllowedInTrustedCatalog(category?.slug)) &&
       (product.isVisible !== false ||
         POS_OPERATIONAL_CATEGORY_SLUGS.has(category?.slug ?? ""))
     ) {
       const productSkus = await listProductSkusByProductId(ctx, product._id);
       const categoryName = category?.name || "";
       const results = await Promise.all(
-        productSkus.map((sku) =>
-          mapSkuToCatalogResult(ctx, {
+        productSkus.map(async (sku) =>
+          (await isSuppressedByActiveLegacyImportProvisionalRow(ctx, {
+            category,
             product,
             sku,
-            category,
-            categoryName,
-          }),
+            storeId: args.storeId,
+          }))
+            ? null
+            : mapSkuToCatalogResult(ctx, {
+                product,
+                sku,
+                category,
+                categoryName,
+              }),
         ),
       );
 
@@ -155,12 +196,29 @@ export async function searchProducts(
     searchQuery: query,
   });
   const results = await Promise.all(
-    matchingSkus.map(({ product, sku }) =>
-      mapSkuToCatalogResult(ctx, {
+    matchingSkus.map(async ({ product, sku }) => {
+      const category =
+        product?.storeId === args.storeId
+          ? await getCategoryById(ctx, product.categoryId)
+          : null;
+
+      if (
+        await isSuppressedByActiveLegacyImportProvisionalRow(ctx, {
+          category,
+          product,
+          sku,
+          storeId: args.storeId,
+        })
+      ) {
+        return null;
+      }
+
+      return mapSkuToCatalogResult(ctx, {
         product,
         sku,
-      }),
-    ),
+        category,
+      });
+    }),
   );
 
   return results.filter((result): result is CatalogResult => result !== null);
@@ -199,20 +257,27 @@ export async function lookupByBarcode(
       product?.storeId === args.storeId &&
       product.availability !== "archived" &&
       (product.availability !== "draft" ||
-        category?.slug === "pos-pending-checkout") &&
+        isDraftAllowedInTrustedCatalog(category?.slug)) &&
       (product.isVisible !== false ||
         POS_OPERATIONAL_CATEGORY_SLUGS.has(category?.slug ?? ""))
     ) {
       const allSkus = await listProductSkusByProductId(ctx, product._id);
       const categoryName = category?.name || "";
       const results = await Promise.all(
-        allSkus.map((productSku) =>
-          mapSkuToCatalogResult(ctx, {
+        allSkus.map(async (productSku) =>
+          (await isSuppressedByActiveLegacyImportProvisionalRow(ctx, {
+            category,
             product,
             sku: productSku,
-            category,
-            categoryName,
-          }),
+            storeId: args.storeId,
+          }))
+            ? null
+            : mapSkuToCatalogResult(ctx, {
+                product,
+                sku: productSku,
+                category,
+                categoryName,
+              }),
         ),
       );
 
@@ -235,9 +300,20 @@ export async function lookupByBarcode(
     !product ||
     product.availability === "archived" ||
     (product.availability === "draft" &&
-      category?.slug !== "pos-pending-checkout") ||
+      !isDraftAllowedInTrustedCatalog(category?.slug)) ||
     (product.isVisible === false &&
       !POS_OPERATIONAL_CATEGORY_SLUGS.has(category?.slug ?? ""))
+  ) {
+    return null;
+  }
+
+  if (
+    await isSuppressedByActiveLegacyImportProvisionalRow(ctx, {
+      category,
+      product,
+      sku,
+      storeId: args.storeId,
+    })
   ) {
     return null;
   }

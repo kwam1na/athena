@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Id } from "../../../_generated/dataModel";
 
 const mocks = vi.hoisted(() => ({
+  findActiveProvisionalImportSkuForStoreSku: vi.fn(),
   findStoreSkuByBarcode: vi.fn(),
   findStoreSkuBySku: vi.fn(),
   getCategoryById: vi.fn(),
@@ -14,6 +15,8 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("../../infrastructure/repositories/catalogRepository", () => ({
+  findActiveProvisionalImportSkuForStoreSku:
+    mocks.findActiveProvisionalImportSkuForStoreSku,
   findStoreSkuByBarcode: mocks.findStoreSkuByBarcode,
   findStoreSkuBySku: mocks.findStoreSkuBySku,
   getCategoryById: mocks.getCategoryById,
@@ -40,6 +43,7 @@ describe("searchCatalog", () => {
     mocks.isConvexProductId.mockReturnValue(false);
     mocks.findStoreSkuByBarcode.mockResolvedValue(null);
     mocks.findStoreSkuBySku.mockResolvedValue(null);
+    mocks.findActiveProvisionalImportSkuForStoreSku.mockResolvedValue(null);
     mocks.getProductById.mockImplementation(
       async (_ctx, productId) =>
         productById[productId as keyof typeof productById] ?? null,
@@ -47,6 +51,12 @@ describe("searchCatalog", () => {
   });
 
   it("excludes draft products, hidden products, and hidden SKUs from text search", async () => {
+    mocks.findActiveProvisionalImportSkuForStoreSku.mockImplementation(
+      async (_ctx, args) =>
+        args.productSkuId === "sku-active-legacy-import"
+          ? { _id: "provisional-active" }
+          : null,
+    );
     mocks.listMatchingStoreSkus.mockResolvedValue([
       { product: productById["product-live"], sku: skuById["sku-live"] },
       { product: productById["product-draft"], sku: skuById["sku-draft"] },
@@ -61,6 +71,14 @@ describe("searchCatalog", () => {
       {
         product: productById["product-pos-pending-checkout"],
         sku: skuById["sku-pos-pending-checkout"],
+      },
+      {
+        product: productById["product-finalized-legacy-import"],
+        sku: skuById["sku-finalized-legacy-import"],
+      },
+      {
+        product: productById["product-active-legacy-import"],
+        sku: skuById["sku-active-legacy-import"],
       },
       {
         product: productById["product-hidden-sku"],
@@ -86,7 +104,19 @@ describe("searchCatalog", () => {
         productId: "product-pos-pending-checkout",
         skuId: "sku-pos-pending-checkout",
       }),
+      expect.objectContaining({
+        id: "sku-finalized-legacy-import",
+        productId: "product-finalized-legacy-import",
+        skuId: "sku-finalized-legacy-import",
+        price: 4000,
+      }),
     ]);
+    expect(
+      mocks.findActiveProvisionalImportSkuForStoreSku,
+    ).toHaveBeenCalledWith(ctx, {
+      storeId,
+      productSkuId: "sku-active-legacy-import",
+    });
   });
 
   it("excludes hidden and draft rows from barcode and SKU lookup", async () => {
@@ -132,6 +162,36 @@ describe("searchCatalog", () => {
         productId: "product-pos-pending-checkout",
       }),
     );
+  });
+
+  it("includes finalized legacy-import rows in exact lookup after the provisional row closes", async () => {
+    mocks.findStoreSkuBySku.mockResolvedValueOnce(
+      skuById["sku-finalized-legacy-import"],
+    );
+
+    await expect(
+      lookupByBarcode(ctx, { storeId, barcode: "FINAL-LEGACY" }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        id: "sku-finalized-legacy-import",
+        category: "Legacy import",
+        productId: "product-finalized-legacy-import",
+        price: 4000,
+      }),
+    );
+  });
+
+  it("keeps active legacy-import trusted rows suppressed until provisional finalization closes", async () => {
+    mocks.findStoreSkuBySku.mockResolvedValueOnce(
+      skuById["sku-active-legacy-import"],
+    );
+    mocks.findActiveProvisionalImportSkuForStoreSku.mockResolvedValueOnce({
+      _id: "provisional-active",
+    });
+
+    await expect(
+      lookupByBarcode(ctx, { storeId, barcode: "ACTIVE-LEGACY" }),
+    ).resolves.toBeNull();
   });
 
   it("excludes hidden SKUs from exact product-id lookup", async () => {
@@ -198,6 +258,24 @@ const productById = {
     availability: "draft",
     isVisible: false,
   },
+  "product-finalized-legacy-import": {
+    _id: "product-finalized-legacy-import",
+    storeId,
+    categoryId: "category-legacy-import",
+    name: "Finalized Legacy Import",
+    description: "",
+    availability: "draft",
+    isVisible: false,
+  },
+  "product-active-legacy-import": {
+    _id: "product-active-legacy-import",
+    storeId,
+    categoryId: "category-legacy-import",
+    name: "Active Legacy Import",
+    description: "",
+    availability: "draft",
+    isVisible: false,
+  },
   "product-hidden-sku": {
     _id: "product-hidden-sku",
     storeId,
@@ -222,6 +300,11 @@ const categoryById = {
     _id: "category-pos-pending-checkout",
     name: "POS pending checkout",
     slug: "pos-pending-checkout",
+  },
+  "category-legacy-import": {
+    _id: "category-legacy-import",
+    name: "Legacy import",
+    slug: "legacy-import",
   },
 };
 
@@ -280,6 +363,28 @@ const skuById = {
     netPrice: 1000,
     price: 1000,
     quantityAvailable: 0,
+  },
+  "sku-finalized-legacy-import": {
+    _id: "sku-finalized-legacy-import",
+    storeId,
+    productId: "product-finalized-legacy-import",
+    sku: "FINAL-LEGACY",
+    barcode: "",
+    images: [],
+    isVisible: true,
+    price: 4000,
+    quantityAvailable: 20,
+  },
+  "sku-active-legacy-import": {
+    _id: "sku-active-legacy-import",
+    storeId,
+    productId: "product-active-legacy-import",
+    sku: "ACTIVE-LEGACY",
+    barcode: "",
+    images: [],
+    isVisible: true,
+    price: 4000,
+    quantityAvailable: 20,
   },
   "sku-hidden": {
     _id: "sku-hidden",

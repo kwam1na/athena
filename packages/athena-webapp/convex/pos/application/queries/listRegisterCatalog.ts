@@ -66,9 +66,16 @@ type PosPendingCheckoutItem = Pick<
 export const REGISTER_CATALOG_AVAILABILITY_LIMIT = 50;
 const REGISTER_CATALOG_PROVISIONAL_IMPORT_LIMIT = 5_000;
 const POS_OPERATIONAL_CATEGORY_SLUGS = new Set([
+  "legacy-import",
   "pos-pending-checkout",
   "pos-quick-add",
 ]);
+
+function isDraftAllowedInTrustedRegisterCatalog(categorySlug?: string) {
+  return (
+    categorySlug === "legacy-import" || categorySlug === "pos-pending-checkout"
+  );
+}
 
 async function readCategoryName(
   ctx: QueryCtx,
@@ -161,14 +168,15 @@ export function isTrustedRegisterCatalogSku(args: {
   const isReservedPosOperationalProduct = args.category?.slug
     ? POS_OPERATIONAL_CATEGORY_SLUGS.has(args.category.slug)
     : false;
-  const isPendingCheckoutProduct =
-    args.category?.slug === "pos-pending-checkout";
+  const isDraftAllowed = isDraftAllowedInTrustedRegisterCatalog(
+    args.category?.slug,
+  );
 
   return (
     args.product.availability !== "archived" &&
-    (args.product.availability !== "draft" || isPendingCheckoutProduct) &&
+    (args.product.availability !== "draft" || isDraftAllowed) &&
     (args.product.isVisible !== false || isReservedPosOperationalProduct) &&
-    (args.sku.isVisible !== false || isPendingCheckoutProduct)
+    (args.sku.isVisible !== false || isDraftAllowed)
   );
 }
 
@@ -199,12 +207,23 @@ async function listScopedRegisterCatalogSkus(
       continue;
     }
 
-    const category =
-      product.isVisible === false
-        ? await ctx.db.get("category", product.categoryId)
-        : null;
+    const category = await ctx.db.get("category", product.categoryId);
 
     if (!isTrustedRegisterCatalogSku({ product, sku, category })) {
+      continue;
+    }
+
+    if (
+      category?.slug === "legacy-import" &&
+      (product.availability === "draft" ||
+        product.isVisible === false ||
+        sku.isVisible === false) &&
+      (await readActiveProvisionalImportSkuForStoreSku(ctx, {
+        storeId: args.storeId,
+        productId: product._id,
+        productSkuId: sku._id,
+      }))
+    ) {
       continue;
     }
 
@@ -213,6 +232,63 @@ async function listScopedRegisterCatalogSkus(
     }
 
     rows.push({ product, sku });
+  }
+
+  return rows;
+}
+
+async function listScopedRegisterCatalogAvailabilitySkus(
+  ctx: QueryCtx,
+  args: {
+    activeProvisionalProductSkuIds: Set<Id<"productSku">>;
+    storeId: Id<"store">;
+  },
+) {
+  const rows: Array<Doc<"productSku">> = [];
+  const productCache = new Map<Id<"product">, Doc<"product"> | null>();
+  // Convex allows only one paginated query per function; this POS snapshot must read the store catalog in one query.
+  // eslint-disable-next-line @convex-dev/no-collect-in-query
+  const skus = await ctx.db
+    .query("productSku")
+    .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+    .collect();
+
+  for (const sku of skus) {
+    if (getRegisterCatalogPrice(sku) <= 0) {
+      continue;
+    }
+
+    let product = productCache.get(sku.productId);
+
+    if (product === undefined) {
+      product = (await ctx.db.get("product", sku.productId)) ?? null;
+      productCache.set(sku.productId, product);
+    }
+
+    if (!product || product.storeId !== args.storeId) {
+      continue;
+    }
+
+    const needsOperationalCategoryCheck =
+      product.availability === "draft" ||
+      product.isVisible === false ||
+      sku.isVisible === false;
+    const category = needsOperationalCategoryCheck
+      ? await ctx.db.get("category", product.categoryId)
+      : null;
+
+    if (!isTrustedRegisterCatalogSku({ product, sku, category })) {
+      continue;
+    }
+
+    if (
+      category?.slug === "legacy-import" &&
+      args.activeProvisionalProductSkuIds.has(sku._id)
+    ) {
+      continue;
+    }
+
+    rows.push(sku);
   }
 
   return rows;
@@ -356,6 +432,36 @@ async function readActivePendingCheckoutItemForStoreSku(
     : null;
 }
 
+async function readActiveLegacyImportProvisionalPolicyRow(
+  ctx: QueryCtx,
+  args: {
+    storeId: Id<"store">;
+    sku: Doc<"productSku">;
+  },
+) {
+  const product = await ctx.db.get("product", args.sku.productId);
+  const category =
+    product?.storeId === args.storeId
+      ? await ctx.db.get("category", product.categoryId)
+      : null;
+
+  if (
+    category?.slug !== "legacy-import" ||
+    !product ||
+    (product.availability !== "draft" &&
+      product.isVisible !== false &&
+      args.sku.isVisible !== false)
+  ) {
+    return null;
+  }
+
+  return readActiveProvisionalImportSkuForStoreSku(ctx, {
+    storeId: args.storeId,
+    productId: product._id,
+    productSkuId: args.sku._id,
+  });
+}
+
 type ProvisionalIndexBuilder<TField extends string> = {
   eq(field: TField, value: unknown): ProvisionalIndexBuilder<TField>;
 };
@@ -470,6 +576,24 @@ export async function listRegisterCatalogAvailability(
     );
     const quantityAvailable = availability.available ?? 0;
 
+    const activeLegacyImportProvisionalPolicy =
+      await readActiveLegacyImportProvisionalPolicyRow(ctx, {
+        storeId: args.storeId,
+        sku,
+      });
+    if (activeLegacyImportProvisionalPolicy) {
+      rows.push({
+        productSkuId: sku._id,
+        skuId: sku._id,
+        inventoryImportProvisionalSkuId:
+          activeLegacyImportProvisionalPolicy._id,
+        inStock: true,
+        quantityAvailable: 0,
+        availabilityPolicy: "active_provisional_import",
+      });
+      continue;
+    }
+
     if (quantityAvailable > 0) {
       rows.push({
         productSkuId: sku._id,
@@ -537,10 +661,20 @@ export async function listRegisterCatalogAvailabilitySnapshot(
     storeId: Id<"store">;
   },
 ) {
-  const catalogSkus = await listScopedRegisterCatalogSkus(ctx, args);
+  const activeProvisionalSkus = await queryActiveProvisionalImportSkusForStore(
+    ctx,
+    args,
+  );
+  const activeProvisionalProductSkuIds = new Set(
+    activeProvisionalSkus.map((row) => row.productSkuId),
+  );
+  const catalogSkus = await listScopedRegisterCatalogAvailabilitySkus(ctx, {
+    activeProvisionalProductSkuIds,
+    storeId: args.storeId,
+  });
   const heldQuantities = await readActiveHeldQuantitiesForStoreSkus(ctx.db, {
     storeId: args.storeId,
-    skuIds: catalogSkus.map(({ sku }) => sku._id),
+    skuIds: catalogSkus.map((sku) => sku._id),
   });
   const pendingCheckoutItemsBySkuId = new Map(
     (await queryActivePendingCheckoutItemsForStore(ctx, args)).flatMap(
@@ -550,38 +684,32 @@ export async function listRegisterCatalogAvailabilitySnapshot(
           : [],
     ),
   );
-  const activeProvisionalSkus = await queryActiveProvisionalImportSkusForStore(
-    ctx,
-    args,
-  );
 
-  const trustedRows = catalogSkus.map(
-    ({ sku }): RegisterCatalogAvailabilityRow => {
-      const pendingCheckoutItem = pendingCheckoutItemsBySkuId.get(sku._id);
-      if (pendingCheckoutItem) {
-        return {
-          productSkuId: sku._id,
-          skuId: sku._id,
-          inStock: true,
-          quantityAvailable: 0,
-          availabilityPolicy: "pending_checkout",
-        };
-      }
-
-      const quantityAvailable = Math.max(
-        0,
-        sku.quantityAvailable - (heldQuantities.get(sku._id) ?? 0),
-      );
-
+  const trustedRows = catalogSkus.map((sku): RegisterCatalogAvailabilityRow => {
+    const pendingCheckoutItem = pendingCheckoutItemsBySkuId.get(sku._id);
+    if (pendingCheckoutItem) {
       return {
         productSkuId: sku._id,
         skuId: sku._id,
-        inStock: quantityAvailable > 0,
-        quantityAvailable,
-        availabilityPolicy: "trusted_inventory",
+        inStock: true,
+        quantityAvailable: 0,
+        availabilityPolicy: "pending_checkout",
       };
-    },
-  );
+    }
+
+    const quantityAvailable = Math.max(
+      0,
+      sku.quantityAvailable - (heldQuantities.get(sku._id) ?? 0),
+    );
+
+    return {
+      productSkuId: sku._id,
+      skuId: sku._id,
+      inStock: quantityAvailable > 0,
+      quantityAvailable,
+      availabilityPolicy: "trusted_inventory",
+    };
+  });
 
   const trustedAvailableSkuIds = new Set(
     trustedRows

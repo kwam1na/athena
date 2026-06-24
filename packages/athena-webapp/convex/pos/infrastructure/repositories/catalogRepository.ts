@@ -89,6 +89,26 @@ export async function findStoreSkuBySku(
     .first();
 }
 
+export async function findActiveProvisionalImportSkuForStoreSku(
+  ctx: QueryCtx,
+  args: {
+    storeId: Id<"store">;
+    productSkuId: Id<"productSku">;
+  },
+) {
+  const row = await ctx.db
+    .query("inventoryImportProvisionalSku")
+    .withIndex("by_storeId_productSkuId_status", (q) =>
+      q
+        .eq("storeId", args.storeId)
+        .eq("productSkuId", args.productSkuId)
+        .eq("status", "active"),
+    )
+    .first();
+
+  return row?.posExposureStatus === "available" ? row : null;
+}
+
 export async function listMatchingStoreSkus(
   ctx: QueryCtx,
   args: {
@@ -119,9 +139,12 @@ export async function listMatchingStoreSkus(
 
     const barcodeMatches =
       sku.barcode?.toLowerCase().includes(args.searchQuery) ?? false;
-    const skuMatches = sku.sku?.toLowerCase().includes(args.searchQuery) ?? false;
+    const skuMatches =
+      sku.sku?.toLowerCase().includes(args.searchQuery) ?? false;
     const nameMatches = product.name.toLowerCase().includes(args.searchQuery);
-    const productIdMatches = product._id.toLowerCase().includes(args.searchQuery);
+    const productIdMatches = product._id
+      .toLowerCase()
+      .includes(args.searchQuery);
     const descriptionMatches =
       product.description?.toLowerCase().includes(args.searchQuery) ?? false;
 

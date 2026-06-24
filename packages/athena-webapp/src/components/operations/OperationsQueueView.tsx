@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams, useSearch } from "@tanstack/react-router";
-import { useMutation, useQuery } from "convex/react";
+import { useMutation, usePaginatedQuery, useQuery } from "convex/react";
 import {
   ArrowUpRight,
   ClipboardCheck,
@@ -44,6 +44,7 @@ import type {
   CycleCountDraftSummary,
   CycleCountDraftState,
   InventorySnapshotItem,
+  InventoryUnitSummary,
   StockAdjustmentSearchPatch,
   StockAdjustmentSearchState,
   SubmitStockAdjustmentArgs,
@@ -159,6 +160,16 @@ function getDefaultWorkflow(args: {
   if (args.approvalRequests.length > 0) return "approvals";
   if (args.workItems.length > 0) return "queue";
   return "stock";
+}
+
+function formatOpenWorkHeaderTitle(count: number) {
+  return `${count.toLocaleString()} open work ${count === 1 ? "item" : "items"}`;
+}
+
+function formatApprovalsHeaderTitle(count: number) {
+  if (count === 0) return "No pending approvals";
+
+  return `${count.toLocaleString()} pending ${count === 1 ? "approval" : "approvals"}`;
 }
 
 function formatQueueWorkItemValue(value: string) {
@@ -582,12 +593,15 @@ type OperationsQueueViewContentProps = {
   approvalDecisionUnlockRequired?: boolean;
   approvalDecisionUnlocked?: boolean;
   approvalRequests: QueueApprovalRequest[];
+  canLoadMoreInventoryItems?: boolean;
   cycleCountDraft?: CycleCountDraftState | null;
   cycleCountDraftSummary?: CycleCountDraftSummary | null;
   hasFullAdminAccess: boolean;
   inventoryItems: InventorySnapshotItem[];
+  inventoryUnitSummary?: InventoryUnitSummary | null;
   isCycleCountDraftSaving?: boolean;
   isDecidingApprovalRequestId?: string | null;
+  isLoadingMoreInventoryItems?: boolean;
   isLoadingPermissions: boolean;
   isLoadingQueue: boolean;
   isLoadingStock?: boolean;
@@ -599,6 +613,7 @@ type OperationsQueueViewContentProps = {
     requestType?: string;
   }) => Promise<void>;
   onLockApprovalDecisions?: () => void;
+  onLoadMoreInventoryItems?: () => void;
   onRequestApprovalDecisionUnlock?: () => void;
   onDiscardCycleCountDraft?: () => Promise<NormalizedCommandResult<unknown>>;
   onRefreshCycleCountDraftLineBaseline?: (args: {
@@ -629,12 +644,15 @@ export function OperationsQueueViewContent({
   approvalDecisionUnlockRequired = false,
   approvalDecisionUnlocked = true,
   approvalRequests,
+  canLoadMoreInventoryItems = false,
   cycleCountDraft,
   cycleCountDraftSummary,
   hasFullAdminAccess,
   inventoryItems,
+  inventoryUnitSummary,
   isCycleCountDraftSaving,
   isDecidingApprovalRequestId,
+  isLoadingMoreInventoryItems = false,
   isLoadingPermissions,
   isLoadingQueue,
   isLoadingStock = isLoadingQueue,
@@ -642,6 +660,7 @@ export function OperationsQueueViewContent({
   onDecideApprovalRequest,
   onDiscardCycleCountDraft,
   onLockApprovalDecisions,
+  onLoadMoreInventoryItems,
   onRequestApprovalDecisionUnlock,
   onRefreshCycleCountDraftLineBaseline,
   onSaveCycleCountDraftLine,
@@ -669,6 +688,40 @@ export function OperationsQueueViewContent({
     openWorkPageStart,
     openWorkPageStart + OPEN_WORK_ITEMS_PER_PAGE,
   );
+  const openWorkCount = workItems.length;
+  const openWorkHeaderTitle = isLoadingQueue
+    ? "Open work"
+    : formatOpenWorkHeaderTitle(openWorkCount);
+  const openWorkHeaderDescription =
+    "Service intake and stock review work that still needs progress or completion.";
+  const openWorkHeaderContentKey = isLoadingQueue
+    ? "open-work-loading"
+    : `open-work-${openWorkCount}`;
+  const hasRenderedOpenWorkLoadingHeaderRef = useRef(false);
+
+  if (resolvedWorkflow === "queue" && isLoadingQueue) {
+    hasRenderedOpenWorkLoadingHeaderRef.current = true;
+  }
+
+  const shouldAnimateOpenWorkHeader =
+    isLoadingQueue || hasRenderedOpenWorkLoadingHeaderRef.current;
+  const approvalCount = approvalRequests.length;
+  const approvalsHeaderTitle = isLoadingQueue
+    ? "Pending approvals"
+    : formatApprovalsHeaderTitle(approvalCount);
+  const approvalsHeaderDescription =
+    "Review manager approval requests before queued stock and payment changes are applied.";
+  const approvalsHeaderContentKey = isLoadingQueue
+    ? "approvals-loading"
+    : `approvals-${approvalCount}`;
+  const hasRenderedApprovalsLoadingHeaderRef = useRef(false);
+
+  if (resolvedWorkflow === "approvals" && isLoadingQueue) {
+    hasRenderedApprovalsLoadingHeaderRef.current = true;
+  }
+
+  const shouldAnimateApprovalsHeader =
+    isLoadingQueue || hasRenderedApprovalsLoadingHeaderRef.current;
 
   useEffect(() => {
     setOpenWorkPage(1);
@@ -688,10 +741,6 @@ export function OperationsQueueViewContent({
     return <NoPermissionView />;
   }
 
-  if (isLoadingQueue && resolvedWorkflow === "approvals") {
-    return null;
-  }
-
   if (!storeId) {
     return (
       <div className="container mx-auto py-8">
@@ -708,13 +757,17 @@ export function OperationsQueueViewContent({
       <PageWorkspace>
         {resolvedWorkflow === "stock" ? (
           <StockAdjustmentWorkspaceContent
+            canLoadMoreInventoryItems={canLoadMoreInventoryItems}
             cycleCountDraft={cycleCountDraft}
             cycleCountDraftSummary={cycleCountDraftSummary}
             inventoryItems={inventoryItems}
+            inventoryUnitSummary={inventoryUnitSummary}
             isCycleCountDraftSaving={isCycleCountDraftSaving}
+            isLoadingMoreInventoryItems={isLoadingMoreInventoryItems}
             isLoading={isLoadingStock}
             isSubmitting={isSubmittingStockBatch}
             onDiscardCycleCountDraft={onDiscardCycleCountDraft}
+            onLoadMoreInventoryItems={onLoadMoreInventoryItems}
             onRefreshCycleCountDraftLineBaseline={
               onRefreshCycleCountDraftLineBaseline
             }
@@ -730,9 +783,11 @@ export function OperationsQueueViewContent({
         {resolvedWorkflow === "queue" ? (
           <PageWorkspace>
             <PageLevelHeader
+              animateContent={shouldAnimateOpenWorkHeader}
+              contentKey={openWorkHeaderContentKey}
               eyebrow="Store Ops"
-              title="Open work"
-              description="Service intake and stock review work that still needs progress or completion."
+              title={openWorkHeaderTitle}
+              description={openWorkHeaderDescription}
               showBackButton
             />
 
@@ -801,19 +856,18 @@ export function OperationsQueueViewContent({
         {resolvedWorkflow === "approvals" ? (
           <PageWorkspace>
             <PageLevelHeader
+              animateContent={shouldAnimateApprovalsHeader}
+              contentKey={approvalsHeaderContentKey}
               eyebrow="Store Ops"
-              title="Pending approvals"
-              description="Review manager approval requests before queued stock and payment changes are applied."
+              title={approvalsHeaderTitle}
+              description={approvalsHeaderDescription}
               showBackButton={showBackButton}
             />
 
-            {approvalRequests.length === 0 ? (
+            {isLoadingQueue ? null : approvalRequests.length === 0 ? (
               <div className="flex min-h-[34rem] items-center justify-center">
                 <div className="max-w-md text-center">
-                  <p className="font-display text-2xl font-medium tracking-tight text-foreground">
-                    No pending approvals
-                  </p>
-                  <p className="mt-layout-sm text-sm leading-6 text-muted-foreground">
+                  <p className="text-sm leading-6 text-muted-foreground">
                     High-variance deposits and stock reviews will surface here.
                   </p>
                 </div>
@@ -1818,13 +1872,37 @@ export function OperationsQueueView({
         workItems: QueueWorkItem[];
       }
     | undefined;
-  const inventoryItems = useQuery(
-    stockOpsApi.adjustments.listInventorySnapshot,
-    canQueryProtectedData ? { storeId: activeStore!._id } : "skip",
-  ) as InventorySnapshotItem[] | undefined;
+  const shouldLoadStockWorkspace =
+    canQueryProtectedData &&
+    Boolean(activeStore?._id) &&
+    activeWorkflow !== "queue" &&
+    activeWorkflow !== "approvals";
+  const inventorySnapshotPage = usePaginatedQuery(
+    stockOpsApi.adjustments.listInventorySnapshotPage,
+    shouldLoadStockWorkspace
+      ? { storeId: activeStore!._id }
+      : "skip",
+    { initialNumItems: 100 },
+  );
+  const inventoryItems =
+    inventorySnapshotPage.results as InventorySnapshotItem[];
+  const inventoryUnitSummary = useQuery(
+    stockOpsApi.adjustments.getInventoryUnitSummary,
+    shouldLoadStockWorkspace
+      ? {
+          storeId: activeStore!._id,
+        }
+      : "skip",
+  ) as InventoryUnitSummary | undefined;
+  const isInventorySnapshotLoadingFirstPage =
+    shouldLoadStockWorkspace &&
+    inventorySnapshotPage.status === "LoadingFirstPage";
+  const isInventorySnapshotLoadingMore =
+    shouldLoadStockWorkspace && inventorySnapshotPage.status === "LoadingMore";
+  const canLoadMoreInventoryItems =
+    shouldLoadStockWorkspace && inventorySnapshotPage.status === "CanLoadMore";
   const selectedCycleCountScopeKey = useMemo(() => {
     if (stockAdjustmentSearch?.mode === "manual") return undefined;
-    if (!inventoryItems) return undefined;
 
     const selectedItem =
       stockAdjustmentSearch?.sku !== undefined
@@ -1858,9 +1936,9 @@ export function OperationsQueueView({
     | undefined;
   const activeCycleCountDraftSummary = useQuery(
     stockOpsApi.cycleCountDrafts.getActiveCycleCountDraftSummary,
-    canQueryProtectedData && activeStore?._id
+    shouldLoadStockWorkspace
       ? {
-          storeId: activeStore._id,
+          storeId: activeStore!._id,
         }
       : "skip",
   ) as CycleCountDraftSummary | undefined;
@@ -2233,17 +2311,21 @@ export function OperationsQueueView({
         approvalDecisionUnlockRequired
         approvalDecisionUnlocked={Boolean(activeApprovalDecisionUnlock)}
         approvalRequests={queue?.approvalRequests ?? []}
+        canLoadMoreInventoryItems={canLoadMoreInventoryItems}
         cycleCountDraft={cycleCountDraft}
         cycleCountDraftSummary={activeCycleCountDraftSummary ?? null}
         hasFullAdminAccess={canAccessSurface}
-        inventoryItems={inventoryItems ?? []}
+        inventoryItems={inventoryItems}
+        inventoryUnitSummary={inventoryUnitSummary ?? null}
         isCycleCountDraftSaving={isSavingCycleCountDraft}
         isDecidingApprovalRequestId={decisioningApprovalRequestId}
+        isLoadingMoreInventoryItems={isInventorySnapshotLoadingMore}
         isLoadingPermissions={false}
-        isLoadingQueue={queue === undefined || inventoryItems === undefined}
-        isLoadingStock={inventoryItems === undefined}
+        isLoadingQueue={queue === undefined || isInventorySnapshotLoadingFirstPage}
+        isLoadingStock={isInventorySnapshotLoadingFirstPage}
         onDiscardCycleCountDraft={handleDiscardCycleCountDraft}
         onDecideApprovalRequest={handleDecideApprovalRequest}
+        onLoadMoreInventoryItems={() => inventorySnapshotPage.loadMore(100)}
         onLockApprovalDecisions={() => setApprovalDecisionUnlock(null)}
         onRefreshCycleCountDraftLineBaseline={
           handleRefreshCycleCountDraftLineBaseline

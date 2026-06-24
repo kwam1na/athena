@@ -5,6 +5,7 @@ import {
   type QueryCtx,
 } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
+import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 import {
   requireAuthenticatedAthenaUserWithCtx,
@@ -73,6 +74,9 @@ const ACTIVE_CHECKOUT_ITEM_SUM_LIMIT = 5000;
 const STOCK_ADJUSTMENT_BLOCKER_POINT_LOOKUP_LIMIT = 50;
 const ACTIVE_PROVISIONAL_IMPORT_BLOCKER_SCAN_LIMIT = 1500;
 const ACTIVE_PENDING_CHECKOUT_BLOCKER_SCAN_LIMIT = 2000;
+const INVENTORY_SNAPSHOT_DEFAULT_LIMIT = 500;
+const INVENTORY_SNAPSHOT_MAX_LIMIT = 750;
+const INVENTORY_SUMMARY_SKU_LIMIT = 5000;
 const LEGACY_IMPORT_STOCK_ADJUSTMENT_BLOCK_MESSAGE =
   "Legacy import SKUs must be finalized before stock adjustments can update them.";
 const POS_PENDING_CHECKOUT_STOCK_ADJUSTMENT_BLOCK_MESSAGE =
@@ -708,16 +712,92 @@ async function readActiveCheckoutReservedQuantitiesForStockOpsSnapshot(
 export async function listInventorySnapshotWithCtx(
   ctx: QueryCtx,
   args: {
+    limit?: number;
     now?: number;
     storeId: Id<"store">;
   },
 ) {
   const now = args.now ?? Date.now();
-  // eslint-disable-next-line @convex-dev/no-collect-in-query -- This workspace needs the full store SKU snapshot so operators can reconcile counts across the entire catalog in one pass.
+  const limit = Math.min(
+    Math.max(1, Math.floor(args.limit ?? INVENTORY_SNAPSHOT_DEFAULT_LIMIT)),
+    INVENTORY_SNAPSHOT_MAX_LIMIT,
+  );
   const productSkus = await ctx.db
     .query("productSku")
     .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
-    .collect();
+    .take(limit);
+
+  return buildInventorySnapshotRowsForProductSkusWithCtx(ctx, {
+    now,
+    productSkus,
+    storeId: args.storeId,
+  });
+}
+
+export async function getInventoryUnitSummaryWithCtx(
+  ctx: QueryCtx,
+  args: {
+    storeId: Id<"store">;
+  },
+) {
+  const productSkus = await ctx.db
+    .query("productSku")
+    .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+    .take(INVENTORY_SUMMARY_SKU_LIMIT);
+
+  return productSkus.reduce(
+    (summary, productSku) => {
+      const onHandUnits = Math.max(0, productSku.inventoryCount);
+      const availableUnits = Math.max(0, productSku.quantityAvailable);
+      const reservedUnits = Math.max(0, onHandUnits - availableUnits);
+
+      return {
+        availableUnits: summary.availableUnits + availableUnits,
+        hasMoreSkus:
+          summary.hasMoreSkus || productSkus.length === INVENTORY_SUMMARY_SKU_LIMIT,
+        onHandUnits: summary.onHandUnits + onHandUnits,
+        reservedUnits: summary.reservedUnits + reservedUnits,
+        skuCount: summary.skuCount + 1,
+        unavailableSkuCount:
+          summary.unavailableSkuCount + (reservedUnits > 0 ? 1 : 0),
+        unavailableUnits: summary.unavailableUnits + reservedUnits,
+      };
+    },
+    {
+      availableUnits: 0,
+      hasMoreSkus: false,
+      onHandUnits: 0,
+      reservedUnits: 0,
+      skuCount: 0,
+      unavailableSkuCount: 0,
+      unavailableUnits: 0,
+    },
+  );
+}
+
+async function buildInventorySnapshotRowsForProductSkusWithCtx(
+  ctx: QueryCtx,
+  args: {
+    now: number;
+    productSkus: Array<{
+      _id: Id<"productSku">;
+      barcode?: string;
+      color?: Id<"color">;
+      images: string[];
+      inventoryCount: number;
+      length?: number;
+      netPrice?: number | null;
+      price?: number | null;
+      productId: Id<"product">;
+      productName?: string;
+      quantityAvailable: number;
+      size?: string;
+      sku?: string;
+    }>;
+    storeId: Id<"store">;
+  },
+) {
+  const { now, productSkus } = args;
   const heldQuantities = await readActiveHeldQuantitiesForStockOpsSnapshot(
     ctx,
     {
@@ -830,34 +910,42 @@ export async function listInventorySnapshotWithCtx(
 
       return {
         _id: productSku._id,
-        barcode: productSku.barcode ?? null,
-        colorName: color?.name ?? null,
-        durableQuantityAvailable,
-        imageUrl: productSku.images[0] ?? null,
+        ...(productSku.barcode ? { barcode: productSku.barcode } : {}),
+        ...(color?.name ? { colorName: color.name } : {}),
+        ...(durableQuantityAvailable !== quantityAvailable
+          ? { durableQuantityAvailable }
+          : {}),
+        ...(productSku.images[0] ? { imageUrl: productSku.images[0] } : {}),
         inventoryCount: productSku.inventoryCount,
-        length: productSku.length ?? null,
-        netPrice: productSku.netPrice,
-        price: productSku.price,
-        productCategoryId: product?.categoryId ?? null,
-        productCategory: category?.name ?? null,
-        productCategorySlug: category?.slug ?? null,
+        ...(productSku.length !== undefined && productSku.length !== null
+          ? { length: productSku.length }
+          : {}),
+        ...(productSku.netPrice !== undefined && productSku.netPrice !== null
+          ? { netPrice: productSku.netPrice }
+          : {}),
+        ...(productSku.price !== undefined && productSku.price !== null
+          ? { price: productSku.price }
+          : {}),
+        ...(category?.name ? { productCategory: category.name } : {}),
         productId: productSku.productId,
         productName:
           product?.name ??
           productSku.productName ??
           productSku.sku ??
           String(productSku._id),
-        productSubcategoryId: product?.subcategoryId ?? null,
-        productSubcategory: subcategory?.name ?? null,
-        productSubcategorySlug: subcategory?.slug ?? null,
-        stockAdjustmentBlockedReason: blockedStatus?.reason ?? null,
-        stockAdjustmentBlockedMessage: blockedStatus?.message ?? null,
-        checkoutReservedQuantity,
-        posReservedQuantity,
+        ...(subcategory?.name ? { productSubcategory: subcategory.name } : {}),
+        ...(blockedStatus
+          ? {
+              stockAdjustmentBlockedMessage: blockedStatus.message,
+              stockAdjustmentBlockedReason: blockedStatus.reason,
+            }
+          : {}),
+        ...(checkoutReservedQuantity > 0 ? { checkoutReservedQuantity } : {}),
+        ...(posReservedQuantity > 0 ? { posReservedQuantity } : {}),
         quantityAvailable,
-        reservedQuantity,
-        size: productSku.size ?? null,
-        sku: productSku.sku ?? null,
+        ...(reservedQuantity > 0 ? { reservedQuantity } : {}),
+        ...(productSku.size ? { size: productSku.size } : {}),
+        ...(productSku.sku ? { sku: productSku.sku } : {}),
       };
     }),
   );
@@ -874,10 +962,45 @@ export async function listInventorySnapshotWithCtx(
 
 export const listInventorySnapshot = query({
   args: {
+    limit: v.optional(v.number()),
     storeId: v.id("store"),
   },
   handler: async (ctx, args) => {
     return listInventorySnapshotWithCtx(ctx, args);
+  },
+});
+
+export const getInventoryUnitSummary = query({
+  args: {
+    storeId: v.id("store"),
+  },
+  handler: async (ctx, args) => {
+    return getInventoryUnitSummaryWithCtx(ctx, args);
+  },
+});
+
+export const listInventorySnapshotPage = query({
+  args: {
+    paginationOpts: paginationOptsValidator,
+    storeId: v.id("store"),
+  },
+  handler: async (ctx, args) => {
+    const productSkuPage = await ctx.db
+      .query("productSku")
+      .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+      .paginate({
+        ...args.paginationOpts,
+        numItems: Math.min(args.paginationOpts.numItems, 100),
+      });
+
+    return {
+      ...productSkuPage,
+      page: await buildInventorySnapshotRowsForProductSkusWithCtx(ctx, {
+        now: Date.now(),
+        productSkus: productSkuPage.page,
+        storeId: args.storeId,
+      }),
+    };
   },
 });
 

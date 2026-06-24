@@ -26,6 +26,19 @@ function createRegisterCatalogCtx(
   seed: Partial<Record<TableName, Row[]>>,
   options: { asyncIteratorLimit?: number; failOnPaginate?: boolean } = {},
 ) {
+  const readCounts = Object.fromEntries(
+    (
+      [
+        "category",
+        "color",
+        "inventoryHold",
+        "inventoryImportProvisionalSku",
+        "posPendingCheckoutItem",
+        "product",
+        "productSku",
+      ] as TableName[]
+    ).map((table) => [table, 0]),
+  ) as Record<TableName, number>;
   const tables: Record<TableName, Map<string, Row>> = {
     category: new Map(),
     color: new Map(),
@@ -49,6 +62,10 @@ function createRegisterCatalogCtx(
     );
   }
 
+  function countRead(table: TableName, count = 1) {
+    readCounts[table] += count;
+  }
+
   function createIndexedQuery(table: TableName, filters: IndexedFilter[]) {
     const matches = Array.from(tables[table].values()).filter((row) =>
       filters.every((filter) => filter.matches(row[filter.field])),
@@ -57,11 +74,19 @@ function createRegisterCatalogCtx(
     return {
       async *[Symbol.asyncIterator]() {
         for (const row of matches.slice(0, options.asyncIteratorLimit)) {
+          countRead(table);
           yield row;
         }
       },
-      collect: async () => matches,
-      first: async () => matches[0] ?? null,
+      collect: async () => {
+        countRead(table, matches.length);
+        return matches;
+      },
+      first: async () => {
+        const row = matches[0] ?? null;
+        if (row) countRead(table);
+        return row;
+      },
       paginate: async ({
         cursor,
         numItems,
@@ -74,6 +99,7 @@ function createRegisterCatalogCtx(
         }
         const offset = cursor ? Number(cursor) : 0;
         const page = matches.slice(offset, offset + numItems);
+        countRead(table, page.length);
         const nextOffset = offset + page.length;
         const isDone = nextOffset >= matches.length;
 
@@ -83,7 +109,11 @@ function createRegisterCatalogCtx(
           continueCursor: isDone ? "" : String(nextOffset),
         };
       },
-      take: async (limit: number) => matches.slice(0, limit),
+      take: async (limit: number) => {
+        const rows = matches.slice(0, limit);
+        countRead(table, rows.length);
+        return rows;
+      },
     };
   }
 
@@ -91,12 +121,17 @@ function createRegisterCatalogCtx(
     db: {
       async get(tableOrId: TableName | string, maybeId?: string) {
         if (maybeId !== undefined && tableOrId in tables) {
-          return tables[tableOrId as TableName].get(maybeId) ?? null;
+          const row = tables[tableOrId as TableName].get(maybeId) ?? null;
+          if (row) countRead(tableOrId as TableName);
+          return row;
         }
 
-        for (const table of Object.values(tables)) {
+        for (const [tableName, table] of Object.entries(tables) as Array<
+          [TableName, Map<string, Row>]
+        >) {
           const row = table.get(tableOrId);
           if (row) {
+            countRead(tableName);
             return row;
           }
         }
@@ -145,7 +180,7 @@ function createRegisterCatalogCtx(
     },
   } as unknown as QueryCtx;
 
-  return { ctx, tables };
+  return { ctx, readCounts, tables };
 }
 
 describe("listRegisterCatalog", () => {
@@ -475,6 +510,7 @@ describe("listRegisterCatalog", () => {
           _id: "category-store-a",
           storeId: "store-a",
           name: "Imports",
+          slug: "legacy-import",
         },
       ],
       inventoryImportProvisionalSku: [
@@ -586,9 +622,9 @@ describe("listRegisterCatalog", () => {
           sku: "ATHENA-PROVISIONAL-CLOSURE",
           barcode: "",
           images: [],
-          isVisible: false,
-          price: 0,
-          quantityAvailable: 0,
+          isVisible: true,
+          price: 85000,
+          quantityAvailable: 12,
         },
         {
           _id: "sku-finalized",
@@ -692,8 +728,8 @@ describe("listRegisterCatalog", () => {
         {
           _id: "category-store-a",
           storeId: "store-a",
-          name: "Imports",
-          slug: "imports",
+          name: "Legacy import",
+          slug: "legacy-import",
         },
       ],
       inventoryImportProvisionalSku: [
@@ -720,8 +756,8 @@ describe("listRegisterCatalog", () => {
           categoryId: "category-store-a",
           description: "Reviewed import anchor",
           name: "Reviewed Closure",
-          availability: "live",
-          isVisible: true,
+          availability: "draft",
+          isVisible: false,
         },
       ],
       productSku: [
@@ -767,7 +803,9 @@ describe("listRegisterCatalog", () => {
         availabilityPolicy: "trusted_inventory",
       },
     ]);
-    expect(availability[0]).not.toHaveProperty("inventoryImportProvisionalSkuId");
+    expect(availability[0]).not.toHaveProperty(
+      "inventoryImportProvisionalSkuId",
+    );
 
     const snapshot = await listRegisterCatalogAvailabilitySnapshot(ctx, {
       storeId: "store-a" as Id<"store">,
@@ -1157,5 +1195,45 @@ describe("listRegisterCatalog", () => {
       ]),
     );
     expect(rows).toHaveLength(4);
+  });
+
+  it("does not read category metadata for normal live SKUs in the full availability snapshot", async () => {
+    const productCount = 1_000;
+    const products = Array.from({ length: productCount }, (_, index) => ({
+      _id: `product-${index}`,
+      storeId: "store-a",
+      categoryId: "category-store-a",
+      name: `Product ${index}`,
+    }));
+    const productSkus = products.map((product, index) => ({
+      _id: `sku-${index}`,
+      storeId: "store-a",
+      productId: product._id,
+      sku: `SKU-${index}`,
+      price: 100,
+      quantityAvailable: 3,
+    }));
+    const { ctx, readCounts } = createRegisterCatalogCtx({
+      category: [
+        {
+          _id: "category-store-a",
+          storeId: "store-a",
+          name: "General",
+          slug: "general",
+        },
+      ],
+      product: products,
+      productSku: productSkus,
+    });
+
+    const rows = await listRegisterCatalogAvailabilitySnapshot(ctx, {
+      storeId: "store-a" as Id<"store">,
+    });
+
+    expect(rows).toHaveLength(productCount);
+    expect(readCounts.category).toBe(0);
+    expect(
+      Object.values(readCounts).reduce((total, count) => total + count, 0),
+    ).toBeLessThan(2_050);
   });
 });

@@ -114,6 +114,19 @@ export type InventorySnapshotItem = {
     | null;
 };
 
+export type InventoryUnitSummary = {
+  availableUnits: number;
+  checkoutReservedUnits?: number;
+  fallbackReservedUnits?: number;
+  hasMoreSkus?: boolean;
+  onHandUnits: number;
+  posReservedUnits?: number;
+  reservedUnits: number;
+  skuCount: number;
+  unavailableSkuCount: number;
+  unavailableUnits: number;
+};
+
 export type SubmitStockAdjustmentArgs = {
   adjustmentType: "manual" | "cycle_count";
   lineItems: Array<
@@ -191,9 +204,12 @@ type SaveCycleCountDraftLineArgs = {
 type StockAdjustmentWorkspaceContentProps = {
   cycleCountDraft?: CycleCountDraftState | null;
   cycleCountDraftSummary?: CycleCountDraftSummary | null;
+  canLoadMoreInventoryItems?: boolean;
   inventoryItems: InventorySnapshotItem[];
+  inventoryUnitSummary?: InventoryUnitSummary | null;
   isCycleCountDraftSaving?: boolean;
   isLoading?: boolean;
+  isLoadingMoreInventoryItems?: boolean;
   isSubmitting: boolean;
   onDiscardCycleCountDraft?: () => Promise<NormalizedCommandResult<unknown>>;
   onSearchStateChange?: (patch: StockAdjustmentSearchPatch) => void;
@@ -203,6 +219,7 @@ type StockAdjustmentWorkspaceContentProps = {
   onRefreshCycleCountDraftLineBaseline?: (args: {
     productSkuId: Id<"productSku">;
   }) => Promise<NormalizedCommandResult<unknown>>;
+  onLoadMoreInventoryItems?: () => void;
   onSubmitBatch: (
     args: SubmitStockAdjustmentArgs,
   ) => Promise<NormalizedCommandResult<unknown>>;
@@ -1693,12 +1710,16 @@ function StockAdjustmentBarcodeScannerDialog({
 export function StockAdjustmentWorkspaceContent({
   cycleCountDraft,
   cycleCountDraftSummary,
+  canLoadMoreInventoryItems = false,
   inventoryItems,
+  inventoryUnitSummary,
   isCycleCountDraftSaving = false,
   isLoading = false,
+  isLoadingMoreInventoryItems = false,
   isSubmitting,
   onDiscardCycleCountDraft,
   onRefreshCycleCountDraftLineBaseline,
+  onLoadMoreInventoryItems,
   onSearchStateChange,
   onSaveCycleCountDraftLine,
   onSubmitBatch,
@@ -2120,7 +2141,7 @@ export function StockAdjustmentWorkspaceContent({
     inventoryItems[0] ??
     null;
   const inventoryState = useMemo(() => {
-    const totals = inventoryItems.reduce(
+    const loadedTotals = inventoryItems.reduce(
       (current, item) => {
         const unavailableUnits = Math.max(
           0,
@@ -2146,6 +2167,7 @@ export function StockAdjustmentWorkspaceContent({
           onHandUnits: current.onHandUnits + item.inventoryCount,
           posReservedUnits: current.posReservedUnits + posReservedUnits,
           reservedUnits: current.reservedUnits + reservedUnits,
+          skuCount: current.skuCount + 1,
           unavailableSkuCount:
             current.unavailableSkuCount + (unavailableUnits > 0 ? 1 : 0),
           unavailableUnits: current.unavailableUnits + unavailableUnits,
@@ -2158,12 +2180,23 @@ export function StockAdjustmentWorkspaceContent({
         onHandUnits: 0,
         posReservedUnits: 0,
         reservedUnits: 0,
+        skuCount: 0,
         unavailableSkuCount: 0,
         unavailableUnits: 0,
       },
     );
 
-    const itemCount = inventoryItems.length;
+    const totals = inventoryUnitSummary
+      ? {
+          ...inventoryUnitSummary,
+          checkoutReservedUnits: inventoryUnitSummary.checkoutReservedUnits ?? 0,
+          fallbackReservedUnits:
+            inventoryUnitSummary.fallbackReservedUnits ??
+            inventoryUnitSummary.reservedUnits,
+          posReservedUnits: inventoryUnitSummary.posReservedUnits ?? 0,
+        }
+      : loadedTotals;
+    const itemCount = totals.skuCount;
     const hasUnavailableUnits = totals.unavailableUnits > 0;
     const reservationSummary = formatReservationSourceSummary(totals);
 
@@ -2193,7 +2226,7 @@ export function StockAdjustmentWorkspaceContent({
               } reserved units.`
             : "All inventory is available.",
     };
-  }, [inventoryItems]);
+  }, [inventoryItems, inventoryUnitSummary]);
   const totalDraftChangedLineCount =
     cycleCountDraftSummary?.changedLineCount ??
     cycleCountDraft?.changedLineCount ??
@@ -3103,6 +3136,11 @@ export function StockAdjustmentWorkspaceContent({
               }
               onRowClick={(row) =>
                 handleSelectInventoryItem(row.original.inventoryItem._id)
+              }
+              onLoadMore={
+                canLoadMoreInventoryItems && !isLoadingMoreInventoryItems
+                  ? onLoadMoreInventoryItems
+                  : undefined
               }
               pageIndex={
                 searchState?.page === undefined

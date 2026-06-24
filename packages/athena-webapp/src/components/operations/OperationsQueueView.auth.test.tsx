@@ -7,6 +7,7 @@ import { OperationsQueueView } from "./OperationsQueueView";
 const mockedHooks = vi.hoisted(() => ({
   useAuth: vi.fn(),
   useMutation: vi.fn(),
+  usePaginatedQuery: vi.fn(),
   useProtectedAdminPageState: vi.fn(),
   usePermissions: vi.fn(),
   useQuery: vi.fn(),
@@ -14,6 +15,7 @@ const mockedHooks = vi.hoisted(() => ({
 
 vi.mock("convex/react", () => ({
   useMutation: mockedHooks.useMutation,
+  usePaginatedQuery: mockedHooks.usePaginatedQuery,
   useQuery: mockedHooks.useQuery,
 }));
 
@@ -42,6 +44,7 @@ vi.mock("@tanstack/react-router", () => ({
     orgUrlSlug: "wigclub",
     storeUrlSlug: "wigclub",
   }),
+  useNavigate: () => vi.fn(),
   useSearch: () => ({}),
 }));
 
@@ -71,6 +74,12 @@ describe("OperationsQueueView auth readiness", () => {
     });
     mockedHooks.useProtectedAdminPageState.mockReturnValue(readyProtectedState);
     mockedHooks.useMutation.mockReturnValue(vi.fn());
+    mockedHooks.usePaginatedQuery.mockReturnValue({
+      isLoading: false,
+      loadMore: vi.fn(),
+      results: [],
+      status: "Exhausted",
+    });
     mockedHooks.useQuery.mockReturnValue(undefined);
   });
 
@@ -92,6 +101,7 @@ describe("OperationsQueueView auth readiness", () => {
       "skip",
       "skip",
     ]);
+    expect(mockedHooks.usePaginatedQuery.mock.calls[0]?.[1]).toBe("skip");
   });
 
   it("renders a sign-in fallback instead of subscribing when Convex auth is missing", () => {
@@ -110,6 +120,7 @@ describe("OperationsQueueView auth readiness", () => {
       "skip",
       "skip",
     ]);
+    expect(mockedHooks.usePaginatedQuery.mock.calls[0]?.[1]).toBe("skip");
   });
 
   it("subscribes to protected queries once the shared admin gate is ready", () => {
@@ -125,5 +136,45 @@ describe("OperationsQueueView auth readiness", () => {
       "skip",
       { storeId: "store-1" },
     ]);
+    expect(mockedHooks.usePaginatedQuery.mock.calls[0]?.[1]).toEqual({
+      storeId: "store-1",
+    });
+    expect(mockedHooks.usePaginatedQuery.mock.calls[0]?.[2]).toEqual({
+      initialNumItems: 100,
+    });
+  });
+
+  it("skips stock snapshot subscriptions on the open-work route", () => {
+    mockedHooks.useQuery.mockReturnValueOnce({
+      approvalRequests: [],
+      workItems: [],
+    });
+
+    render(<OperationsQueueView activeWorkflow="queue" />);
+
+    expect(mockedHooks.useQuery.mock.calls.map(([, args]) => args).slice(0, 4))
+      .toEqual([{ storeId: "store-1" }, "skip", "skip", "skip"]);
+    expect(mockedHooks.usePaginatedQuery.mock.calls[0]?.[1]).toBe("skip");
+  });
+
+  it("keeps stock snapshot subscriptions on the stock adjustments route", () => {
+    mockedHooks.useQuery
+      .mockReturnValueOnce({
+        approvalRequests: [],
+        workItems: [],
+      })
+      .mockReturnValueOnce(undefined);
+
+    render(<OperationsQueueView activeWorkflow="stock" />);
+
+    expect(mockedHooks.useQuery.mock.calls.map(([, args]) => args)).toEqual([
+      { storeId: "store-1" },
+      { storeId: "store-1" },
+      "skip",
+      { storeId: "store-1" },
+    ]);
+    expect(mockedHooks.usePaginatedQuery.mock.calls[0]?.[1]).toEqual({
+      storeId: "store-1",
+    });
   });
 });
