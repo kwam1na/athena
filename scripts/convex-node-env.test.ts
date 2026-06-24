@@ -26,7 +26,7 @@ async function writeNodeShim(dir: string, name: string, version: string) {
 function resolveWithEnv(env: Record<string, string>) {
   return Bun.spawnSync(
     [
-      "bash",
+      "/bin/bash",
       "-lc",
       "source scripts/convex-node-env.sh && resolve_convex_node_bin",
     ],
@@ -48,7 +48,7 @@ function resolveWithEnv(env: Record<string, string>) {
 function resolveEsbuildWithEnv(repoRoot: string, env: Record<string, string>) {
   return Bun.spawnSync(
     [
-      "bash",
+      "/bin/bash",
       "-lc",
       `source scripts/convex-node-env.sh && resolve_convex_esbuild_bin ${JSON.stringify(repoRoot)}`,
     ],

@@ -2,7 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { LoginLayout } from "./_layout";
+import { LoginLayout } from "./-login-layout";
 import {
   LOGGED_IN_USER_ID_KEY,
   POS_APP_ACCOUNT_ID_KEY,

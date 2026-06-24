@@ -70,6 +70,32 @@ function getVarianceTone(variance?: number) {
   return variance > 0 ? "text-success" : "text-danger";
 }
 
+function RegisterSessionCode({ code }: { code?: string }) {
+  if (!code) {
+    return null;
+  }
+
+  return (
+    <p className="text-xs leading-5 text-muted-foreground/80">
+      Cloud session{" "}
+      <span className="font-mono text-foreground/65">{code}</span>
+    </p>
+  );
+}
+
+function formatRegisterGateLabel({
+  registerLabel,
+  registerNumber,
+}: {
+  registerLabel?: string;
+  registerNumber: string;
+}) {
+  const terminalName = registerLabel?.trim();
+  const registerName = `Register ${registerNumber}`;
+
+  return terminalName ? `${terminalName} / ${registerName}` : registerName;
+}
+
 export function RegisterDrawerGate({
   drawerGate,
 }: {
@@ -282,11 +308,15 @@ export function RegisterDrawerGate({
     const isSubmittedCloseout = Boolean(closeoutSubmittedReason);
     const isManagerReviewCloseout =
       closeoutSubmittedReason === "manager_review";
+    const closeoutRegisterLabel = formatRegisterGateLabel({
+      registerLabel: drawerGate.registerLabel,
+      registerNumber: drawerGate.registerNumber,
+    });
 
     return (
-      <div className="mx-auto max-w-2xl rounded-lg border border-border bg-surface-raised p-8 shadow-surface">
+      <div className="mx-auto flex max-w-2xl flex-col rounded-lg border border-border bg-surface-raised p-8 shadow-surface">
         {isSubmittedCloseout ? (
-          <div className="space-y-8">
+          <div className="flex flex-col gap-8">
             <div className="flex flex-wrap items-start gap-5">
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-warning/15 text-warning">
                 <Clock3Icon className="h-5 w-5" />
@@ -299,7 +329,7 @@ export function RegisterDrawerGate({
                 </p>
                 <div className="space-y-2">
                   <h2 className="text-2xl font-semibold text-foreground">
-                    Register {drawerGate.registerNumber} closeout submitted
+                    {closeoutRegisterLabel} closeout submitted
                   </h2>
                   <p className="max-w-xl text-sm leading-6 text-muted-foreground">
                     {isManagerReviewCloseout
@@ -388,17 +418,17 @@ export function RegisterDrawerGate({
                 {drawerGate.errorMessage}
               </p>
             ) : null}
+
+            <div className="flex justify-end">
+              <RegisterSessionCode code={drawerGate.registerSessionCode} />
+            </div>
           </div>
         ) : (
           <>
             <div className="space-y-1">
               <h2 className="text-2xl font-semibold text-foreground">
-                Register {drawerGate.registerNumber} closeout in progress
+                {closeoutRegisterLabel} closeout in progress
               </h2>
-              <p className="text-sm text-muted-foreground">
-                Finish this register closeout in Cash Controls before selling
-                here.
-              </p>
             </div>
 
             <form className="mt-8 space-y-5" onSubmit={handleCloseoutSubmit}>
@@ -518,6 +548,10 @@ export function RegisterDrawerGate({
                 ) : null}
               </div>
             </form>
+
+            <div className="mt-6 flex justify-end">
+              <RegisterSessionCode code={drawerGate.registerSessionCode} />
+            </div>
           </>
         )}
       </div>

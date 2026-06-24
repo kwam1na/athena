@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import { AthenaLoginReadyView } from "./_layout.index";
+import { AthenaLoginReadyView } from "./-login-ready-view";
 
 vi.mock("~/src/components/auth/Login", () => ({
   Login: () => <div>Mock Login</div>,

@@ -90,3 +90,8 @@ overview surface quieter than the POS hub:
 - Add tests at all three layers: POS wrapper compatibility, Daily Operations
   rendering/window search behavior, and backend store pulse window/redaction
   behavior.
+- When the shared pulse surface uses responsive hooks such as `useIsMobile`,
+  jsdom tests that render POS or operations wrappers must provide the browser
+  API the hook expects, usually a local `window.matchMedia` stub. Keep that stub
+  in the wrapper tests that render the shared pulse rather than weakening the
+  production hook.

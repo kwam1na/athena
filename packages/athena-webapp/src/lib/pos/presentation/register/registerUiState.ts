@@ -249,6 +249,7 @@ export interface RegisterDrawerGateState {
   closeoutNotes?: string;
   closeoutSubmittedReason?: "manager_review" | "pending_sync";
   closeoutSecondaryActionLabel?: string;
+  registerSessionCode?: string;
   expectedCash?: number;
   canOpenCashControls?: boolean;
   cashControlsRegisterSessionId?: Id<"registerSession">;

@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { Index } from "./index";
+import { Index } from "./-index-route-view";
 
 const mocked = vi.hoisted(() => ({
   navigate: vi.fn(),

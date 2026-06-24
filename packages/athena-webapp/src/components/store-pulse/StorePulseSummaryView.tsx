@@ -15,6 +15,7 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart";
 import { toDisplayAmount } from "~/convex/lib/currency";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { FinancialValue } from "../common/FinancialValue";
 import { ListPagination } from "../common/ListPagination";
 import { formatOperationsMetricComparison } from "../operations/operationsMetricFormatting";
@@ -140,6 +141,7 @@ const detailCardClassName =
 const detailRowClassName = "px-layout-md py-layout-sm";
 const topItemsPageSize = 5;
 const salesTrendAxisInset = 72;
+const mobileSalesTrendTickCount = 3;
 const chartAxisDateFormatter = new Intl.DateTimeFormat("en-US", {
   day: "numeric",
   month: "short",
@@ -238,6 +240,16 @@ function getTrendAxisLabel({
   return formatChartAxisDate(date);
 }
 
+function getEvenlySpacedTickValues(length: number, count: number) {
+  if (length === 0) return undefined;
+  if (length <= count) return Array.from({ length }, (_, index) => index);
+
+  return Array.from(
+    { length: count },
+    (_, index) => (index * (length - 1)) / (count - 1),
+  );
+}
+
 function formatProductName(name: string) {
   return name
     .trim()
@@ -316,10 +328,12 @@ function StorePulseTimeline({
   pulseWindow: StorePulseWindow;
   snapshot: StorePulseOperatorSnapshot;
 }) {
+  const isMobile = useIsMobile();
   const chartData = useMemo(
     () =>
       snapshot.trend.map((day, index, trend) => ({
         ...day,
+        chartIndex: index,
         displayDate: formatChartTooltipDate(day.date),
         displayLabel: getTrendAxisLabel({
           date: day.date,
@@ -332,19 +346,31 @@ function StorePulseTimeline({
     [canViewFinancialDetails, pulseWindow, snapshot.trend],
   );
   const xAxisTicks = useMemo(() => {
+    if (isMobile) {
+      return getEvenlySpacedTickValues(
+        chartData.length,
+        mobileSalesTrendTickCount,
+      );
+    }
+
     if (
       (pulseWindow !== "this_month" && pulseWindow !== "all_time") ||
       chartData.length <= 7
     ) {
-      return undefined;
+      return getEvenlySpacedTickValues(chartData.length, chartData.length);
     }
 
-    return Array.from({ length: 7 }, (_, index) => {
-      const chartIndex = Math.round((index * (chartData.length - 1)) / (7 - 1));
+    return getEvenlySpacedTickValues(chartData.length, 7);
+  }, [chartData, isMobile, pulseWindow]);
+  const formatXAxisTick = (value: number | string) => {
+    const numericValue =
+      typeof value === "number" ? value : Number.parseFloat(value);
+    const labelIndex = Number.isFinite(numericValue)
+      ? Math.round(numericValue)
+      : 0;
 
-      return chartData[chartIndex]?.displayLabel;
-    }).filter((label): label is string => Boolean(label));
-  }, [chartData, pulseWindow]);
+    return chartData[labelIndex]?.displayLabel ?? "";
+  };
   const chartLabel = canViewFinancialDetails ? "Sales" : "Transactions";
 
   return (
@@ -361,7 +387,7 @@ function StorePulseTimeline({
           ) : null}
         </div>
       </div>
-      <div className="overflow-hidden rounded-lg border border-border bg-surface-raised p-8 shadow-surface">
+      <div className="overflow-hidden rounded-lg border border-border bg-surface-raised px-layout-sm py-8 shadow-surface sm:p-8">
         <ChartContainer
           config={salesPulseChartConfig}
           className="h-[22rem] w-full"
@@ -392,12 +418,15 @@ function StorePulseTimeline({
             </defs>
             <CartesianGrid vertical={false} />
             <XAxis
-              dataKey="displayLabel"
+              dataKey="chartIndex"
+              domain={[0, Math.max(0, chartData.length - 1)]}
               axisLine={false}
               interval="preserveStartEnd"
+              tickFormatter={formatXAxisTick}
               tickMargin={8}
               tickLine={false}
               ticks={xAxisTicks}
+              type="number"
             />
             <YAxis
               width={salesTrendAxisInset}

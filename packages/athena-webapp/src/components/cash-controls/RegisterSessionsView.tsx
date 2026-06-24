@@ -6,6 +6,7 @@ import { Landmark } from "lucide-react";
 import { useProtectedAdminPageState } from "@/hooks/useProtectedAdminPageState";
 import { capitalizeWords } from "@/lib/utils";
 import { formatStoredCurrencyAmount } from "@/lib/pos/displayAmounts";
+import { formatRegisterSessionCode } from "@/lib/pos/presentation/registerSessionCode";
 import { api } from "~/convex/_generated/api";
 import { formatStaffDisplayName } from "~/shared/staffDisplayName";
 import View from "../View";
@@ -156,10 +157,6 @@ function getStaffName(staffName?: string | null) {
     : "Staff not recorded";
 }
 
-function formatSessionCode(sessionId: string) {
-  return sessionId.slice(-6).toUpperCase();
-}
-
 export function RegisterSessionsViewContent({
   currency,
   hasFinancialDetailsAccess = true,
@@ -194,7 +191,7 @@ export function RegisterSessionsViewContent({
         openedAtSort: session.openedAt,
         openedByLabel: getStaffName(session.openedByStaffName),
         registerLabel: formatRegisterName(session.registerNumber),
-        sessionCode: formatSessionCode(session._id),
+        sessionCode: formatRegisterSessionCode(session._id) ?? "n/a",
         status: session.status,
         statusLabel: formatStatusLabel(session.status),
         timelineDateLabel: formatTimelineDate(session.openedAt),

@@ -548,6 +548,94 @@ describe("DailyOpeningViewContent", () => {
     });
   });
 
+  it("paginates opening tab content in five-item pages", async () => {
+    const user = userEvent.setup();
+    const carryForwardItems = Array.from({ length: 7 }, (_, index) => ({
+      category: "operational_work_item",
+      description: `Carry-forward detail ${index + 1}.`,
+      id: `carry-${index + 1}`,
+      key: `work-${index + 1}`,
+      statusLabel: "Open",
+      title: `Carry-forward item ${index + 1}`,
+    }));
+
+    window.history.pushState(
+      {},
+      "",
+      "/wigclub/store/osu/operations/opening?tab=carry-forward",
+    );
+    mockedRouter.search = { tab: "carry-forward" };
+
+    const view = renderContent({
+      ...attentionSnapshot,
+      carryForwardItems,
+      summary: {
+        ...attentionSnapshot.summary,
+        carryForwardCount: carryForwardItems.length,
+      },
+    });
+
+    const carryForwardRegion = screen.getByRole("region", {
+      name: "Carry-forward items",
+    });
+
+    expect(
+      within(carryForwardRegion).getByText("Carry-forward item 1"),
+    ).toBeInTheDocument();
+    expect(
+      within(carryForwardRegion).getByText("Carry-forward item 5"),
+    ).toBeInTheDocument();
+    expect(
+      within(carryForwardRegion).queryByText("Carry-forward item 6"),
+    ).not.toBeInTheDocument();
+    expect(within(carryForwardRegion).getByText("Showing 1-5 of 7")).toBeInTheDocument();
+
+    const nextPageButton = within(carryForwardRegion).getByRole("button", {
+      name: "Go to next page",
+    });
+
+    await user.click(nextPageButton);
+    expect(mockedRouter.navigate).toHaveBeenCalledWith({
+      search: expect.any(Function),
+    });
+    const nextSearch = mockedRouter.navigate.mock.calls.at(-1)?.[0].search({
+      tab: "carry-forward",
+    });
+
+    expect(nextSearch).toMatchObject({
+      page: 2,
+      tab: "carry-forward",
+    });
+
+    view.unmount();
+    mockedRouter.search = { page: 2, tab: "carry-forward" };
+    renderContent({
+      ...attentionSnapshot,
+      carryForwardItems,
+      summary: {
+        ...attentionSnapshot.summary,
+        carryForwardCount: carryForwardItems.length,
+      },
+    });
+
+    const restoredCarryForwardRegion = screen.getByRole("region", {
+      name: "Carry-forward items",
+    });
+
+    expect(
+      within(restoredCarryForwardRegion).queryByText("Carry-forward item 1"),
+    ).not.toBeInTheDocument();
+    expect(
+      within(restoredCarryForwardRegion).getByText("Carry-forward item 6"),
+    ).toBeInTheDocument();
+    expect(
+      within(restoredCarryForwardRegion).getByText("Carry-forward item 7"),
+    ).toBeInTheDocument();
+    expect(
+      within(restoredCarryForwardRegion).getByText("Showing 6-7 of 7"),
+    ).toBeInTheDocument();
+  });
+
   it("renders command-result user errors inline with operator-safe copy", async () => {
     const user = userEvent.setup();
 

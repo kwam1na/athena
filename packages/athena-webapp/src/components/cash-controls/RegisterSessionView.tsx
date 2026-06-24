@@ -44,6 +44,7 @@ import {
   formatStoredCurrencyAmount,
   parseDisplayAmountInput,
 } from "@/lib/pos/displayAmounts";
+import { formatRegisterSessionCode } from "@/lib/pos/presentation/registerSessionCode";
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
 import { toDisplayAmount } from "~/convex/lib/currency";
@@ -464,10 +465,6 @@ function formatRegisterHeaderName(registerNumber?: string | null) {
   }
 
   return `Register ${registerName}`;
-}
-
-function formatSessionCode(sessionId: string) {
-  return sessionId.slice(-6).toUpperCase();
 }
 
 function getVarianceTone(variance?: number) {
@@ -3196,7 +3193,7 @@ export function RegisterSessionViewContent({
     });
   }
   const sessionCode = registerSession
-    ? formatSessionCode(registerSession._id)
+    ? formatRegisterSessionCode(registerSession._id)
     : undefined;
   const openedByLine = registerSession?.openedByStaffName
     ? `By ${formatStaffDisplayName({ fullName: registerSession.openedByStaffName })}`

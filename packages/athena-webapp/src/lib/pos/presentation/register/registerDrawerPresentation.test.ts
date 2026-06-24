@@ -5,6 +5,8 @@ import type { PosLocalRegisterReadModel } from "@/lib/pos/infrastructure/local/r
 
 import {
   buildOpenDrawerFailureMessage,
+  formatCloseoutCloudRegisterSessionCode,
+  getCloseoutCloudRegisterSessionCode,
   getCloseoutCloudRegisterSessionId,
   getCloseoutLocalRegisterSessionId,
   getLatestLocalRegisterLifecycleEvent,
@@ -81,6 +83,40 @@ describe("registerDrawerPresentation", () => {
         localRegisterSessionId: "local-register-1",
       }),
     ).toBeUndefined();
+  });
+
+  it("resolves cloud closeout codes even when local ids are present", () => {
+    expect(
+      getCloseoutCloudRegisterSessionCode({
+        cloudRegisterSessionId: "cloud-register-1",
+        localRegisterSessionId: "local-register-1",
+      }),
+    ).toBe("cloud-register-1");
+
+    expect(
+      getCloseoutCloudRegisterSessionCode(
+        { localRegisterSessionId: "local-register-1" },
+        readModel({
+          activeRegisterSession: {
+            cloudRegisterSessionId: "cloud-register-1",
+            expectedCash: 10,
+            localRegisterSessionId: "local-register-1",
+            openedAt: 1,
+            openingFloat: 10,
+            status: "open",
+          },
+        }),
+      ),
+    ).toBe("cloud-register-1");
+  });
+
+  it("formats cloud closeout codes for operator display", () => {
+    expect(
+      formatCloseoutCloudRegisterSessionCode({
+        cloudRegisterSessionId: "th75c0qqzpk4n5mz2p8rrr5b9x8980zc",
+        localRegisterSessionId: "local-register-1",
+      }),
+    ).toBe("8980ZC");
   });
 
   it("treats non-usable cloud sessions as local projection blockers", () => {
