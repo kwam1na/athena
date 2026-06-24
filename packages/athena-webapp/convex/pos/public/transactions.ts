@@ -696,11 +696,19 @@ export const voidTransaction = mutation({
   returns: voidTransactionResultValidator,
   handler: async (ctx, args) => {
     const actorStaffProfileId = args.actorStaffProfileId ?? args.staffProfileId;
+    const reason = args.reason?.trim();
 
     if (!actorStaffProfileId) {
       return userError({
         code: "authentication_failed",
         message: "Staff sign-in is required before voiding a completed sale.",
+      });
+    }
+
+    if (!reason) {
+      return userError({
+        code: "validation_failed",
+        message: "Reason is required before voiding a completed sale.",
       });
     }
 
@@ -792,6 +800,7 @@ export const voidTransaction = mutation({
       ...commandArgs,
       actorStaffProfileId,
       actorUserId: athenaUser._id,
+      reason,
     });
 
     if (result.kind === "approval_required") {

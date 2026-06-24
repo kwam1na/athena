@@ -83,9 +83,8 @@ vi.mock("@/lib/pos/infrastructure/local/localPosEntryContext", () => ({
 }));
 
 vi.mock("@/lib/pos/infrastructure/convex/catalogGateway", () => ({
-  usePrewarmRegisterCatalogOfflineSnapshots: (
-    input: Record<string, unknown>,
-  ) => usePrewarmRegisterCatalogOfflineSnapshotsMock(input),
+  usePrewarmRegisterCatalogOfflineSnapshots: (input: Record<string, unknown>) =>
+    usePrewarmRegisterCatalogOfflineSnapshotsMock(input),
 }));
 
 vi.mock("~/src/hooks/usePermissions", () => ({
@@ -252,17 +251,6 @@ describe("PointOfSaleView", () => {
     });
   });
 
-  it("links managers to active POS session operations from the POS landing page", () => {
-    render(<PointOfSaleView />);
-
-    const link = screen.getByRole("link", { name: /Active Sessions/i });
-
-    expect(link).toHaveAttribute("href", "/acme/store/downtown/pos/sessions");
-    expect(
-      screen.getByText("Review active and held sales reserving inventory"),
-    ).toBeInTheDocument();
-  });
-
   it("embeds store pulse on the POS landing page instead of linking to a separate route", () => {
     render(<PointOfSaleView />);
 
@@ -276,7 +264,9 @@ describe("PointOfSaleView", () => {
       screen.queryByRole("link", { name: /Sales Reports/i }),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByText("Review store pulse trends and operator sales insights"),
+      screen.queryByText(
+        "Review store pulse trends and operator sales insights",
+      ),
     ).not.toBeInTheDocument();
     expect(screen.getByText("Sales trend")).toBeInTheDocument();
     expect(screen.getByTestId("store-pulse-chart")).toBeInTheDocument();
@@ -329,9 +319,7 @@ describe("PointOfSaleView", () => {
       "/acme/store/downtown/pos/transactions",
     );
     expect(screen.getByLabelText("Store pulse loading")).toBeInTheDocument();
-    expect(
-      screen.getAllByText("-").length,
-    ).toBeGreaterThanOrEqual(4);
+    expect(screen.getAllByText("-").length).toBeGreaterThanOrEqual(4);
   });
 
   it("links POS users to terminal health from the POS landing page", () => {
@@ -371,7 +359,6 @@ describe("PointOfSaleView", () => {
     const link = screen.getByRole("link", { name: /POS Settings/i });
 
     expect(link).toHaveAttribute("href", "/acme/store/downtown/pos/settings");
-    expect(screen.queryByRole("link", { name: /Active Sessions/i })).toBeNull();
   });
 
   it("renders the POS launcher from local entry context when live summary and store context are unavailable", () => {
@@ -405,9 +392,6 @@ describe("PointOfSaleView", () => {
       "href",
       "/acme/store/downtown/pos/register",
     );
-    expect(
-      screen.queryByRole("link", { name: /Active Sessions/i }),
-    ).not.toBeInTheDocument();
     expect(useQueryMock).toHaveBeenCalledWith(expect.anything(), {
       pulseWindow: "today",
       storeId: "store-1",

@@ -448,6 +448,7 @@ async function readActiveLegacyImportProvisionalPolicyRow(
   if (
     category?.slug !== "legacy-import" ||
     !product ||
+    product.availability === "archived" ||
     (product.availability !== "draft" &&
       product.isVisible !== false &&
       args.sku.isVisible !== false)
@@ -520,6 +521,7 @@ export async function listRegisterCatalog(
       !product ||
       !sku ||
       product.storeId !== args.storeId ||
+      product.availability === "archived" ||
       sku.storeId !== args.storeId ||
       sku.productId !== product._id ||
       trustedAvailableSkuIds.has(provisionalSku.productSkuId) ||
@@ -566,6 +568,15 @@ export async function listRegisterCatalogAvailability(
       continue;
     }
 
+    const product = await ctx.db.get("product", sku.productId);
+
+    if (
+      product &&
+      (product.storeId !== args.storeId || product.availability === "archived")
+    ) {
+      continue;
+    }
+
     const availability = await validateInventoryAvailability(
       ctx.db,
       sku._id,
@@ -609,7 +620,7 @@ export async function listRegisterCatalogAvailability(
       ctx,
       {
         storeId: args.storeId,
-        productId: sku.productId,
+        productId: product?._id ?? sku.productId,
         productSkuId: sku._id,
       },
     );
@@ -724,6 +735,13 @@ export async function listRegisterCatalogAvailabilitySnapshot(
 
     const sku = await ctx.db.get("productSku", provisionalSku.productSkuId);
     if (!sku || sku.storeId !== args.storeId) {
+      continue;
+    }
+    const product = await ctx.db.get("product", sku.productId);
+    if (
+      product &&
+      (product.storeId !== args.storeId || product.availability === "archived")
+    ) {
       continue;
     }
     provisionalRows.push({

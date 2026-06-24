@@ -272,6 +272,23 @@ function resolveRange(args: {
   return operatingDateRange(args.operatingDate);
 }
 
+function approvalRequestBelongsToOperationsDay(args: {
+  currentTime: number;
+  endAt: number;
+  request: Pick<Doc<"approvalRequest">, "createdAt">;
+  startAt: number;
+}) {
+  const isCurrentOperatingDay =
+    args.currentTime >= args.startAt && args.currentTime < args.endAt;
+  const requestIsBeforeDayEnd = args.request.createdAt < args.endAt;
+
+  if (isCurrentOperatingDay) {
+    return requestIsBeforeDayEnd;
+  }
+
+  return requestIsBeforeDayEnd && args.request.createdAt >= args.startAt;
+}
+
 function emptyCloseSummary(): DailyOperationsCloseSummary {
   return {
     adjustedSalesTotal: 0,
@@ -476,7 +493,11 @@ function openingNotStartedAttention(args: {
 
 async function listOpenQueueSnapshot(
   ctx: Pick<QueryCtx, "db">,
-  storeId: Id<"store">,
+  args: {
+    endAt: number;
+    startAt: number;
+    storeId: Id<"store">;
+  },
 ) {
   const [workItemBatches, pendingApprovalRequests] = await Promise.all([
     Promise.all(
@@ -484,7 +505,7 @@ async function listOpenQueueSnapshot(
         ctx.db
           .query("operationalWorkItem")
           .withIndex("by_storeId_status", (q) =>
-            q.eq("storeId", storeId).eq("status", status),
+            q.eq("storeId", args.storeId).eq("status", status),
           )
           .take(MAX_OPERATIONS_LOOKAHEAD_LIMIT),
       ),
@@ -492,7 +513,7 @@ async function listOpenQueueSnapshot(
     ctx.db
       .query("approvalRequest")
       .withIndex("by_storeId_status", (q) =>
-        q.eq("storeId", storeId).eq("status", "pending"),
+        q.eq("storeId", args.storeId).eq("status", "pending"),
       )
       .take(MAX_OPERATIONS_LOOKAHEAD_LIMIT),
   ]);
@@ -500,7 +521,16 @@ async function listOpenQueueSnapshot(
   const openWorkItems = workItemBatches
     .flatMap((batch) => batch)
     .slice(0, MAX_OPERATIONS_QUERY_LIMIT);
-  const approvalRequests = pendingApprovalRequests.slice(
+  const currentTime = Date.now();
+  const dayApprovalRequests = pendingApprovalRequests.filter(
+    (request) =>
+      approvalRequestBelongsToOperationsDay({
+        ...args,
+        currentTime,
+        request,
+      }),
+  );
+  const approvalRequests = dayApprovalRequests.slice(
     0,
     MAX_OPERATIONS_QUERY_LIMIT,
   );
@@ -511,7 +541,7 @@ async function listOpenQueueSnapshot(
     workItemBatches.reduce((total, batch) => total + batch.length, 0) >
       MAX_OPERATIONS_QUERY_LIMIT;
   const hasMoreApprovalRequests =
-    pendingApprovalRequests.length > MAX_OPERATIONS_QUERY_LIMIT;
+    dayApprovalRequests.length > MAX_OPERATIONS_QUERY_LIMIT;
 
   return {
     approvalRequests,
@@ -1997,7 +2027,10 @@ export async function buildDailyOperationsSnapshotWithCtx(
       buildDailyOpeningSnapshotWithCtx(ctx, args),
       buildDailyCloseSnapshotWithCtx(ctx, args),
       getDailyCloseRecordForDate(ctx, args),
-      listOpenQueueSnapshot(ctx, args.storeId),
+      listOpenQueueSnapshot(ctx, {
+        ...range,
+        storeId: args.storeId,
+      }),
       args.includeScheduledRunSummaries &&
       (args.includeManagerReviewEvidence ?? true)
         ? listDailyOperationsScheduledRunSummaries(ctx, {

@@ -144,6 +144,26 @@ describe("TransactionsView", () => {
     useSearchMock.mockReturnValue({});
   });
 
+  it("keeps the workspace header visible while completed transactions load", () => {
+    getActiveStoreMock.mockReturnValue({
+      activeStore: {
+        _id: "store-1",
+        currency: "GHS",
+      },
+    });
+    useQueryMock.mockReturnValue(undefined);
+
+    render(<TransactionsView />);
+
+    expect(
+      screen.getByRole("heading", { name: "Completed Transactions" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Today" })).toBeInTheDocument();
+    expect(
+      screen.queryByText("No completed transactions today"),
+    ).not.toBeInTheDocument();
+  });
+
   it("does not render session traces on the completed transactions surface", () => {
     getActiveStoreMock.mockReturnValue({
       activeStore: {

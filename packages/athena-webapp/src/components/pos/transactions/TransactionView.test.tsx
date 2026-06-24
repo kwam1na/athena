@@ -1029,7 +1029,7 @@ describe("TransactionView", () => {
     ).toBeDisabled();
   });
 
-  it("uses terminal staff proof when submitting completed sale voids without a reason", async () => {
+  it("requires a reason before submitting completed sale voids", async () => {
     const user = userEvent.setup();
     const authMutation = vi.fn().mockResolvedValue({
       kind: "ok",
@@ -1069,28 +1069,13 @@ describe("TransactionView", () => {
 
     await user.click(screen.getByRole("button", { name: "Void sale" }));
     await user.click(screen.getByRole("button", { name: "Submit void" }));
-    await user.click(screen.getByRole("button", { name: "Confirm" }));
 
     expect(authMutation).not.toHaveBeenCalled();
-    expect(terminalAuthMutation).toHaveBeenCalledWith({
-      allowedRoles: ["cashier", "manager"],
-      allowActiveSessionsOnOtherTerminals: true,
-      pinHash: "hashed:1234",
-      storeId: "store_1",
-      terminalId: "terminal_1",
-      username: "manager",
-    });
-    expect(voidMutation).toHaveBeenCalledWith({
-      actorStaffProfileId: "staff_terminal",
-      approvalProofId: undefined,
-      approvalRequestId: undefined,
-      staffProofToken: "proof-token-void",
-      transactionId: "txn_void_terminal",
-    });
-    expect(voidMutation.mock.calls[0]?.[0]).not.toHaveProperty("reason");
+    expect(terminalAuthMutation).not.toHaveBeenCalled();
+    expect(voidMutation).not.toHaveBeenCalled();
     expect(
-      screen.queryByText("Staff sign-in is required before voiding this sale"),
-    ).not.toBeInTheDocument();
+      screen.getByText("Reason is required before voiding this sale"),
+    ).toBeInTheDocument();
   });
 
   it("queues completed sale voids when the approval response includes an async request", async () => {

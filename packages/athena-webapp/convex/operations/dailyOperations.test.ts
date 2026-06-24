@@ -2112,6 +2112,16 @@ describe("daily operations overview read model", () => {
             subjectId: "register-2",
             subjectType: "register_session",
           },
+          {
+            _id: "approval-other-day",
+            createdAt: Date.UTC(2026, 4, 9, 10),
+            reason: "Next day variance review",
+            requestType: "variance_review",
+            status: "pending",
+            storeId: "store-1",
+            subjectId: "register-next",
+            subjectType: "register_session",
+          },
         ],
         dailyClose: [priorClose],
         dailyOpening: [startedOpening],
@@ -2177,11 +2187,76 @@ describe("daily operations overview read model", () => {
     expect(snapshot.attentionItems.map((item) => item.id)).not.toContain(
       "operational_work_item:work-completed:completed",
     );
+    expect(snapshot.attentionItems.map((item) => item.id)).not.toContain(
+      "approval_request:approval-other-day:pending",
+    );
     expect(
       snapshot.attentionItems.filter(
         (item) => item.owner === "operations_queue",
       ),
     ).toHaveLength(3);
+  });
+
+  it("carries prior-day pending approvals into the current operating day", async () => {
+    vi.setSystemTime(new Date("2026-05-08T12:00:00.000Z"));
+
+    const snapshot = await buildDailyOperationsSnapshotWithCtx(
+      buildCtx({
+        approvalRequest: [
+          {
+            _id: "approval-prior-day",
+            createdAt: Date.UTC(2026, 4, 7, 20),
+            reason: "Prior day variance review",
+            requestType: "variance_review",
+            status: "pending",
+            storeId: "store-1",
+            subjectId: "register-prior",
+            subjectType: "register_session",
+          },
+          {
+            _id: "approval-current-day",
+            createdAt: Date.UTC(2026, 4, 8, 10),
+            reason: "Current day variance review",
+            requestType: "variance_review",
+            status: "pending",
+            storeId: "store-1",
+            subjectId: "register-current",
+            subjectType: "register_session",
+          },
+          {
+            _id: "approval-future-day",
+            createdAt: Date.UTC(2026, 4, 9, 10),
+            reason: "Future day variance review",
+            requestType: "variance_review",
+            status: "pending",
+            storeId: "store-1",
+            subjectId: "register-future",
+            subjectType: "register_session",
+          },
+        ],
+        dailyClose: [priorClose],
+        dailyOpening: [startedOpening],
+        store: [store],
+      }),
+      { operatingDate: "2026-05-08", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(
+      snapshot.lanes.find((lane) => lane.key === "approvals"),
+    ).toMatchObject({
+      count: 2,
+      countLabel: "2",
+      status: "blocked",
+    });
+    expect(snapshot.attentionItems.map((item) => item.id)).toEqual(
+      expect.arrayContaining([
+        "approval_request:approval-prior-day:pending",
+        "approval_request:approval-current-day:pending",
+      ]),
+    );
+    expect(snapshot.attentionItems.map((item) => item.id)).not.toContain(
+      "approval_request:approval-future-day:pending",
+    );
   });
 
   it("keeps a completed store day reviewable and scopes timeline events to the day", async () => {

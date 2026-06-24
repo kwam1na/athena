@@ -58,6 +58,7 @@ import { formatOperationsMetricHelper } from "./operationsMetricFormatting";
 import {
   StorePulseSummaryView,
   type StorePulseSummary,
+  type StorePulseTrendDay,
   type StorePulseWindow,
 } from "../store-pulse/StorePulseSummaryView";
 
@@ -516,17 +517,37 @@ function shouldShowHistoricalEodReviewAction(
   snapshot: DailyOperationsSnapshot,
 ) {
   return (
-    snapshot.lifecycle.status === "closed" &&
+    snapshot.lifecycle.status !== "not_opened" &&
     isHistoricalOperatingDate(snapshot.operatingDate)
   );
 }
 
+function getPendingApprovalsLane(snapshot: DailyOperationsSnapshot) {
+  const approvalsLane = snapshot.lanes.find((lane) => lane.key === "approvals");
+
+  return approvalsLane && approvalsLane.count > 0 ? approvalsLane : null;
+}
+
+function getPendingApprovalsCountLabel(
+  lane: DailyOperationsSnapshot["lanes"][number],
+) {
+  return lane.countLabel ?? String(lane.count);
+}
+
+function formatPendingApprovalsLabel(
+  lane: DailyOperationsSnapshot["lanes"][number],
+) {
+  const countLabel = getPendingApprovalsCountLabel(lane);
+  return `${countLabel} pending approval${lane.count === 1 ? "" : "s"}`;
+}
+
 function getWorkflowSearch(to: string, operatingDate: string) {
+  const shouldCarryOperatingDate =
+    to.endsWith("/operations/daily-close") ||
+    to.endsWith("/operations/opening");
   const search = {
     o: getOrigin(),
-    ...(to.endsWith("/operations/daily-close")
-      ? buildDailyCloseSearch(operatingDate)
-      : {}),
+    ...(shouldCarryOperatingDate ? buildDailyCloseSearch(operatingDate) : {}),
   };
 
   return Object.keys(search).length > 0 ? search : undefined;
@@ -570,19 +591,12 @@ function TimelineMessage({
   const inlineLink =
     event.transactionLink ?? event.registerLink ?? event.productLink;
   const linkLabel = inlineLink?.label?.trim();
-  const matchLabel = event.transactionLink ? undefined : event.registerLink?.matchLabel;
-  const linkMatch = findTimelineLinkMatch(
-    event.message,
-    linkLabel,
-    matchLabel,
-  );
+  const matchLabel = event.transactionLink
+    ? undefined
+    : event.registerLink?.matchLabel;
+  const linkMatch = findTimelineLinkMatch(event.message, linkLabel, matchLabel);
 
-  if (
-    !inlineLink?.to ||
-    !inlineLink.params ||
-    !linkLabel ||
-    !linkMatch
-  ) {
+  if (!inlineLink?.to || !inlineLink.params || !linkLabel || !linkMatch) {
     return <>{formatTimelineMessage(event.message)}</>;
   }
 
@@ -702,7 +716,9 @@ function formatRegisterVarianceCount(value: number) {
   return `${value} register variances`;
 }
 
-function getOtherPaymentTotals(summary: DailyOperationsSnapshot["closeSummary"]) {
+function getOtherPaymentTotals(
+  summary: DailyOperationsSnapshot["closeSummary"],
+) {
   return (summary.paymentTotals ?? [])
     .filter((paymentTotal) => paymentTotal.method.toLowerCase() !== "cash")
     .sort((left, right) => right.amount - left.amount);
@@ -737,7 +753,9 @@ function getPreviousOperatingDate(operatingDate: string) {
 }
 
 function getPriorComparisonMetric(snapshot: DailyOperationsSnapshot) {
-  const previousOperatingDate = getPreviousOperatingDate(snapshot.operatingDate);
+  const previousOperatingDate = getPreviousOperatingDate(
+    snapshot.operatingDate,
+  );
 
   if (!previousOperatingDate) return undefined;
 
@@ -754,7 +772,9 @@ function getPriorWindowLabel(operatingDate: string) {
   return operatingDate === getLocalOperatingDate() ? "yesterday" : "prior day";
 }
 
-function shouldShowExpenseMetric(summary: DailyOperationsSnapshot["closeSummary"]) {
+function shouldShowExpenseMetric(
+  summary: DailyOperationsSnapshot["closeSummary"],
+) {
   if (summary.salesTotal <= 0) {
     return true;
   }
@@ -762,7 +782,9 @@ function shouldShowExpenseMetric(summary: DailyOperationsSnapshot["closeSummary"
   return summary.expenseTransactionCount > 0 || summary.expenseTotal !== 0;
 }
 
-function shouldShowVarianceMetric(summary: DailyOperationsSnapshot["closeSummary"]) {
+function shouldShowVarianceMetric(
+  summary: DailyOperationsSnapshot["closeSummary"],
+) {
   if (summary.salesTotal <= 0) {
     return true;
   }
@@ -1018,14 +1040,85 @@ function AutomationStatusPanel({
   orgUrlSlug,
   snapshot,
   storeUrlSlug,
+  variant = "default",
 }: {
   orgUrlSlug: string;
   snapshot: DailyOperationsSnapshot;
   storeUrlSlug: string;
+  variant?: "compact" | "default";
 }) {
   const statuses = getVisibleAutomationStatuses(snapshot);
 
   if (statuses.length === 0) return null;
+
+  if (variant === "compact") {
+    return (
+      <section className="rounded-md border border-border bg-surface-raised px-layout-md py-layout-sm shadow-surface">
+        <div className="flex flex-col gap-layout-sm">
+          <h3 className="flex shrink-0 items-center gap-layout-xs text-sm font-medium text-foreground">
+            <Bot aria-hidden="true" className="h-4 w-4 text-muted-foreground" />
+            Athena automation
+          </h3>
+          <div className="flex min-w-0 flex-col gap-layout-xs">
+            {statuses.map((status) => {
+              const label = getAutomationLaneLabel(status.lane);
+              const link = status.sourceLink;
+
+              return (
+                <article
+                  className="flex min-w-0 flex-col gap-layout-xs"
+                  key={status.id}
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm text-foreground">
+                      {getAutomationStatusMessage(status)}
+                    </p>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-layout-xs">
+                      {status.occurredAt ? (
+                        <p className="font-numeric text-xs tabular-nums text-muted-foreground">
+                          {formatEventTime(status.occurredAt)}
+                        </p>
+                      ) : null}
+                      {link?.to ? (
+                        <Button
+                          asChild
+                          className="h-7 shrink-0 px-2 text-xs"
+                          size="sm"
+                          variant="ghost"
+                        >
+                          <Link
+                            aria-label={`Open ${label} automation source`}
+                            params={buildParams(
+                              orgUrlSlug,
+                              storeUrlSlug,
+                              link.params,
+                            )}
+                            search={
+                              {
+                                o: getOrigin(),
+                                ...(link.search ?? {}),
+                              } as never
+                            }
+                            to={link.to}
+                          >
+                            Open
+                            <ArrowUpRight
+                              aria-hidden="true"
+                              className="h-3.5 w-3.5"
+                            />
+                          </Link>
+                        </Button>
+                      ) : null}
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="rounded-lg border border-border bg-surface-raised p-layout-md shadow-surface">
@@ -1062,11 +1155,7 @@ function AutomationStatusPanel({
                 >
                   <Link
                     aria-label={`Open ${label} automation source`}
-                    params={buildParams(
-                      orgUrlSlug,
-                      storeUrlSlug,
-                      link.params,
-                    )}
+                    params={buildParams(orgUrlSlug, storeUrlSlug, link.params)}
                     search={
                       {
                         o: getOrigin(),
@@ -1165,7 +1254,7 @@ function getScheduledRunMessage(run: DailyOperationsScheduledRunSummary) {
   return `${label} ran. ${run.succeededCount} applied.`;
 }
 
-function ScheduledRunEvidencePanel({
+export function ScheduledRunEvidencePanel({
   snapshot,
 }: {
   snapshot: DailyOperationsSnapshot;
@@ -1175,28 +1264,30 @@ function ScheduledRunEvidencePanel({
   if (runs.length === 0) return null;
 
   return (
-    <section className="rounded-lg border border-border bg-surface-raised p-layout-md shadow-surface">
-      <h3 className="flex items-center gap-layout-xs text-base font-medium text-foreground">
-        <Clock3 aria-hidden="true" className="h-4 w-4" />
-        Scheduled runs
-      </h3>
-      <div className="mt-layout-sm space-y-layout-xs">
-        {runs.map((run) => (
-          <article
-            className="rounded-md border border-border/70 bg-background/60 px-layout-md py-layout-sm"
-            key={run.id}
-          >
-            <p className="text-sm text-foreground">
-              {getScheduledRunMessage(run)}
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {formatEventTime(run.completedAt)}
-              {run.outcome === "partial_failure"
-                ? ` · ${run.processedCount} checked`
-                : null}
-            </p>
-          </article>
-        ))}
+    <section className="rounded-md border border-border bg-surface-raised px-layout-md py-layout-sm shadow-surface">
+      <div className="flex flex-col gap-layout-sm">
+        <h3 className="flex shrink-0 items-center gap-layout-xs text-sm font-medium text-foreground">
+          <Clock3 aria-hidden="true" className="h-4 w-4 text-muted-foreground" />
+          Scheduled runs
+        </h3>
+        <div className="flex min-w-0 flex-col gap-layout-xs">
+          {runs.map((run) => (
+            <article
+              className="flex min-w-0 flex-col gap-layout-xs"
+              key={run.id}
+            >
+              <p className="text-sm text-foreground">
+                {getScheduledRunMessage(run)}
+              </p>
+              <p className="mt-1.5 font-numeric text-xs tabular-nums text-muted-foreground">
+                {formatEventTime(run.completedAt)}
+                {run.outcome === "partial_failure"
+                  ? ` · ${run.processedCount} checked`
+                  : null}
+              </p>
+            </article>
+          ))}
+        </div>
       </div>
     </section>
   );
@@ -1219,7 +1310,9 @@ function AutomationReviewEvidencePanel({
 
   if (evidenceItems.length === 0) return null;
 
-  const pendingCheckoutCount = evidenceItems.filter(isPendingCheckoutReview).length;
+  const pendingCheckoutCount = evidenceItems.filter(
+    isPendingCheckoutReview,
+  ).length;
   const otherReviewCount = evidenceItems.length - pendingCheckoutCount;
   const previewItems = evidenceItems.slice(0, REVIEW_EVIDENCE_PREVIEW_LIMIT);
   const hiddenItemCount = Math.max(
@@ -1269,10 +1362,7 @@ function AutomationReviewEvidencePanel({
 
       <div className="mt-layout-md divide-y divide-border/70 border-y border-border/70">
         {previewItems.map((item) => (
-          <article
-            className="py-layout-sm"
-            key={item.id}
-          >
+          <article className="py-layout-sm" key={item.id}>
             <div className="min-w-0">
               <p className="text-sm font-medium leading-5 text-foreground">
                 {getReviewEvidenceTitle(item)}
@@ -1295,7 +1385,12 @@ function AutomationReviewEvidencePanel({
           workflow.
         </p>
       ) : null}
-      <Button asChild className="mt-layout-md w-full" size="sm" variant="outline">
+      <Button
+        asChild
+        className="mt-layout-md w-full"
+        size="sm"
+        variant="outline"
+      >
         <Link
           aria-label="Review all Opening Handoff review items"
           params={buildParams(orgUrlSlug, storeUrlSlug)}
@@ -1433,17 +1528,20 @@ function DailyOperationsStorePulsePanel({
   hasFullAdminAccess: boolean;
   snapshot: DailyOperationsSnapshot;
 }) {
+  const storePulseSummary = buildWeekToDateStorePulseSummary(snapshot);
+
   return (
     <section className="space-y-layout-md">
-      {snapshot.storePulse ? (
+      {storePulseSummary ? (
         <StorePulseSummaryView
           canViewFinancialDetails={hasFullAdminAccess}
           currencyFormatter={currencyFormatter(currency)}
           onPulseWindowChange={() => undefined}
-          pulseWindow="today"
+          pulseWindow="this_week"
           showPulseWindowFilter={false}
           showSummaryMetrics={false}
-          summary={snapshot.storePulse}
+          summary={storePulseSummary}
+          topItemsTitle="Today's top items"
         />
       ) : (
         <div className="rounded-lg border border-border bg-surface p-layout-md shadow-surface">
@@ -1455,6 +1553,56 @@ function DailyOperationsStorePulsePanel({
       )}
     </section>
   );
+}
+
+function buildWeekToDateStorePulseSummary(
+  snapshot: DailyOperationsSnapshot,
+): StorePulseSummary | null | undefined {
+  const summary = snapshot.storePulse;
+  const operatorSnapshot = summary?.operatorSnapshot;
+
+  if (!summary || !operatorSnapshot) return summary;
+
+  const knownTrendByDate = new Map(
+    operatorSnapshot.trend.map((day) => [day.date, day]),
+  );
+  const weekToDateTrend = snapshot.weekMetrics
+    .filter((metric) => metric.operatingDate <= snapshot.operatingDate)
+    .map((metric): StorePulseTrendDay => {
+      const knownTrendDay = knownTrendByDate.get(metric.operatingDate);
+
+      return {
+        averageTransaction:
+          metric.transactionCount > 0
+            ? metric.salesTotal / metric.transactionCount
+            : 0,
+        date: metric.operatingDate,
+        hasKnownItemCount: knownTrendDay ? true : false,
+        label:
+          knownTrendDay?.label ?? formatOperatingDate(metric.operatingDate),
+        totalItemsSold: knownTrendDay?.totalItemsSold ?? 0,
+        totalSales: metric.salesTotal,
+        transactionCount: metric.transactionCount,
+      };
+    });
+
+  if (weekToDateTrend.length === 0) return summary;
+
+  return {
+    ...summary,
+    operatorSnapshot: {
+      ...operatorSnapshot,
+      historyDays: Math.max(
+        operatorSnapshot.historyDays,
+        weekToDateTrend.length,
+      ),
+      trend: weekToDateTrend,
+      usableHistoryDays: Math.max(
+        operatorSnapshot.usableHistoryDays,
+        weekToDateTrend.filter((day) => day.transactionCount > 0).length,
+      ),
+    },
+  };
 }
 
 function SupportingWorkspaceLinks({
@@ -1578,13 +1726,16 @@ function WeekMetricsStrip({
   storePulseWindow: StorePulseWindow;
   storeUrlSlug: string;
 }) {
-  const scrollSelectedDayIntoView = useCallback((element: HTMLElement | null) => {
-    element?.scrollIntoView({
-      behavior: "auto",
-      block: "nearest",
-      inline: "center",
-    });
-  }, []);
+  const scrollSelectedDayIntoView = useCallback(
+    (element: HTMLElement | null) => {
+      element?.scrollIntoView({
+        behavior: "auto",
+        block: "nearest",
+        inline: "center",
+      });
+    },
+    [],
+  );
 
   if (metrics.length === 0) return null;
 
@@ -1625,7 +1776,10 @@ function WeekMetricsStrip({
           <p className="flex items-baseline justify-between gap-2 text-sm text-muted-foreground sm:justify-start">
             <span>Week sales</span>
             <span className="font-numeric text-base font-semibold tabular-nums text-foreground">
-              <FinancialValue canView={hasFinancialDetailsAccess} label="Week sales">
+              <FinancialValue
+                canView={hasFinancialDetailsAccess}
+                label="Week sales"
+              >
                 {formatMoney(currency, weekSalesTotal)}
               </FinancialValue>
             </span>
@@ -1724,16 +1878,16 @@ function WeekMetricsStrip({
                   {formatWeekdayDate(metric.operatingDate)}
                 </p>
                 <p className="mt-layout-sm font-numeric text-lg tabular-nums text-foreground">
-                  {isFutureDate
-                    ? "-"
-                    : (
-                        <FinancialValue
-                          canView={hasFinancialDetailsAccess}
-                          label={`${formatOperatingDate(metric.operatingDate)} sales`}
-                        >
-                          {formatMoney(currency, metric.salesTotal)}
-                        </FinancialValue>
-                      )}
+                  {isFutureDate ? (
+                    "-"
+                  ) : (
+                    <FinancialValue
+                      canView={hasFinancialDetailsAccess}
+                      label={`${formatOperatingDate(metric.operatingDate)} sales`}
+                    >
+                      {formatMoney(currency, metric.salesTotal)}
+                    </FinancialValue>
+                  )}
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">
                   {isFutureDate
@@ -1749,9 +1903,13 @@ function WeekMetricsStrip({
                   aria-disabled="true"
                   aria-label={`${formatOperatingDate(metric.operatingDate)} operations unavailable`}
                   className={cardClassName}
-                  data-week-metric-selected={metric.isSelected ? "true" : undefined}
+                  data-week-metric-selected={
+                    metric.isSelected ? "true" : undefined
+                  }
                   key={metric.operatingDate}
-                  ref={metric.isSelected ? scrollSelectedDayIntoView : undefined}
+                  ref={
+                    metric.isSelected ? scrollSelectedDayIntoView : undefined
+                  }
                 >
                   {content}
                 </div>
@@ -1763,7 +1921,9 @@ function WeekMetricsStrip({
                 aria-current={metric.isSelected ? "date" : undefined}
                 aria-label={`View ${formatOperatingDate(metric.operatingDate)} operations`}
                 className={cardClassName}
-                data-week-metric-selected={metric.isSelected ? "true" : undefined}
+                data-week-metric-selected={
+                  metric.isSelected ? "true" : undefined
+                }
                 key={metric.operatingDate}
                 params={buildParams(orgUrlSlug, storeUrlSlug)}
                 ref={metric.isSelected ? scrollSelectedDayIntoView : undefined}
@@ -1837,6 +1997,9 @@ export function DailyOperationsViewContent({
   const isHistoricalDate = snapshot
     ? isHistoricalOperatingDate(snapshot.operatingDate)
     : false;
+  const pendingApprovalsLane = snapshot
+    ? getPendingApprovalsLane(snapshot)
+    : null;
   const actionableLanes = snapshot
     ? snapshot.lanes.filter(isActionableLane)
     : [];
@@ -1854,7 +2017,46 @@ export function DailyOperationsViewContent({
           {isLoadingSnapshot || !snapshot ? null : (
             <PageWorkspace>
               <section className="space-y-layout-2xl">
-                <div className="flex flex-col gap-layout-sm lg:flex-row lg:items-center lg:justify-end">
+                <div className="flex flex-col gap-layout-sm lg:flex-row lg:items-center lg:justify-between">
+                  {pendingApprovalsLane ? (
+                    <div className="flex flex-col gap-layout-sm sm:flex-row sm:items-center">
+                      <Button
+                        asChild
+                        className="w-full sm:w-auto"
+                        variant="outline"
+                      >
+                        <Link
+                          aria-label={`Open ${formatPendingApprovalsLabel(
+                            pendingApprovalsLane,
+                          )}`}
+                          params={buildParams(orgUrlSlug, storeUrlSlug)}
+                          search={
+                            getWorkflowSearch(
+                              pendingApprovalsLane.to,
+                              snapshot.operatingDate,
+                            ) as never
+                          }
+                          to={pendingApprovalsLane.to}
+                        >
+                          <span className="font-numeric font-semibold tabular-nums text-foreground">
+                            {getPendingApprovalsCountLabel(
+                              pendingApprovalsLane,
+                            )}
+                          </span>
+                          <span className="text-muted-foreground">
+                            pending approval
+                            {pendingApprovalsLane.count === 1 ? "" : "s"}
+                          </span>
+                          <ArrowUpRight
+                            aria-hidden="true"
+                            className="ml-2 h-4 w-4"
+                          />
+                        </Link>
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="hidden lg:block" />
+                  )}
                   <div className="flex flex-col gap-layout-sm sm:flex-row sm:items-center">
                     <OperatingDatePicker
                       operatingDate={snapshot.operatingDate}
@@ -1913,6 +2115,15 @@ export function DailyOperationsViewContent({
                     ) : null}
                   </div>
                 </div>
+
+                {!isHistoricalDate ? (
+                  <AutomationStatusPanel
+                    orgUrlSlug={orgUrlSlug}
+                    snapshot={snapshot}
+                    storeUrlSlug={storeUrlSlug}
+                    variant="compact"
+                  />
+                ) : null}
 
                 <div className="grid gap-layout-sm sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
                   <OperationsSummaryMetric
@@ -2127,12 +2338,6 @@ export function DailyOperationsViewContent({
                     />
                   ) : (
                     <section className="space-y-layout-lg">
-                      <AutomationStatusPanel
-                        orgUrlSlug={orgUrlSlug}
-                        snapshot={snapshot}
-                        storeUrlSlug={storeUrlSlug}
-                      />
-                      <ScheduledRunEvidencePanel snapshot={snapshot} />
                       <div>
                         <h3 className="text-base font-medium text-foreground">
                           Workflow status

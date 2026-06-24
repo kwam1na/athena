@@ -721,6 +721,76 @@ describe("DailyOpeningViewContent", () => {
     expect(screen.queryByRole("tab", { name: /blocked/i })).toBeNull();
   });
 
+  it("paginates automation review evidence at five items per page", async () => {
+    const user = userEvent.setup();
+    const reviewEvidence = Array.from({ length: 12 }, (_, index) => ({
+      category: "operational_work_item",
+      description: `Carry-forward work item ${index + 1} needs review.`,
+      id: `review-evidence-${index + 1}`,
+      key: `review-evidence-${index + 1}`,
+      link: {
+        label: "View open work",
+        to: "/$orgUrlSlug/store/$storeUrlSlug/operations/open-work",
+      },
+      statusLabel: "Needs manager review",
+      title: `Carry-forward review ${index + 1}`,
+    }));
+
+    renderContent({
+      ...blockedSnapshot,
+      automationStatus: {
+        id: "automation-opening-started-with-many-review-items",
+        outcome: "applied",
+        occurredAt: Date.UTC(2026, 4, 8, 8, 30),
+        reviewEvidence,
+      },
+      startedOpening: {
+        startedAt: Date.UTC(2026, 4, 8, 8, 30),
+      },
+      status: "started",
+    });
+
+    const openingReview = screen
+      .getByRole("heading", { name: "Opening review" })
+      .closest("section")!;
+
+    expect(within(openingReview).getByText("Showing 1-5 of 12")).toBeInTheDocument();
+    expect(within(openingReview).getByText("Page 1 of 3")).toBeInTheDocument();
+    expect(
+      within(openingReview).getByText("Carry-forward review 5"),
+    ).toBeInTheDocument();
+    expect(
+      within(openingReview).queryByText("Carry-forward review 6"),
+    ).not.toBeInTheDocument();
+
+    await user.click(
+      within(openingReview).getByRole("button", {
+        name: /go to next page/i,
+      }),
+    );
+
+    expect(within(openingReview).getByText("Showing 6-10 of 12")).toBeInTheDocument();
+    expect(within(openingReview).getByText("Page 2 of 3")).toBeInTheDocument();
+    expect(
+      within(openingReview).getByText("Carry-forward review 6"),
+    ).toBeInTheDocument();
+    expect(
+      within(openingReview).queryByText("Carry-forward review 5"),
+    ).not.toBeInTheDocument();
+
+    await user.click(
+      within(openingReview).getByRole("button", {
+        name: /go to last page/i,
+      }),
+    );
+
+    expect(within(openingReview).getByText("Showing 11-12 of 12")).toBeInTheDocument();
+    expect(within(openingReview).getByText("Page 3 of 3")).toBeInTheDocument();
+    expect(
+      within(openingReview).getByText("Carry-forward review 12"),
+    ).toBeInTheDocument();
+  });
+
   it("keeps started Opening Handoff primary over stale skipped automation decisions", () => {
     renderContent({
       ...readySnapshot,

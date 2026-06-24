@@ -208,6 +208,8 @@ export const getAll = query({
     }
 
     const requestedAvailability = args.availability;
+    const includeHiddenSkus =
+      args.isVisible === false || requestedAvailability === "archived";
 
     // Filter by category/subcategory in memory
     const products = allProducts.filter((product) => {
@@ -249,7 +251,7 @@ export const getAll = query({
 
     // Filter by color and length in memory
     const skus = allSkus.filter((sku) => {
-      if (args.isVisible !== false && sku.isVisible === false) {
+      if (!includeHiddenSkus && sku.isVisible === false) {
         return false;
       }
       if (args.color && args.length) {

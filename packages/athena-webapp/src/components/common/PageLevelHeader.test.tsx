@@ -80,7 +80,7 @@ describe("PageLevelHeader", () => {
       }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText("27.7k of 27.7k units are available to sell."),
+      await screen.findByText("27.7k of 27.7k units are available to sell."),
     ).toBeInTheDocument();
   });
 

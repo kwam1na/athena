@@ -1360,6 +1360,11 @@ export function TransactionView() {
   }
 
   function requestVoidSubmit() {
+    if (!voidReason.trim()) {
+      setVoidError("Reason is required before voiding this sale");
+      return;
+    }
+
     setVoidError(null);
     setPendingCorrection("void");
   }
@@ -1646,8 +1651,7 @@ export function TransactionView() {
                           Void completed sale
                         </h2>
                         <p className="text-sm leading-6 text-muted-foreground">
-                          Staff sign-in and manager approval are required. The
-                          original sale stays visible for audit.
+                          Staff sign-in and manager approval are required.
                         </p>
                       </div>
                     </div>
@@ -1656,9 +1660,11 @@ export function TransactionView() {
                   <div className="space-y-3 p-5">
                     <Textarea
                       aria-label="Void reason"
+                      aria-required="true"
                       className="min-h-[90px] border-input bg-background"
                       onChange={(event) => setVoidReason(event.target.value)}
-                      placeholder="Optional reason for voiding this completed sale."
+                      placeholder="Reason for voiding this completed sale."
+                      required
                       value={voidReason}
                     />
                     {voidError ? (

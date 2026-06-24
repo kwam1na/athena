@@ -74,13 +74,16 @@ vi.mock("recharts", () => ({
   AreaChart: ({
     children,
     data = [],
+    margin,
   }: {
     children?: React.ReactNode;
     data?: Array<{ displayDate?: string; displayLabel?: string }>;
+    margin?: { bottom?: number; left?: number; right?: number; top?: number };
   }) => (
     <svg
       data-display-dates={data.map((day) => day.displayDate).join("|")}
       data-display-labels={data.map((day) => day.displayLabel).join("|")}
+      data-margin-right={margin?.right ?? ""}
       data-testid="store-pulse-chart"
     >
       {children}
@@ -969,15 +972,13 @@ describe("DailyOperationsViewContent", () => {
       screen.getByRole("heading", { name: "Historical store-day view" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(
-        "This historical operating date is view-only. Workflow actions are available only on the current operating date.",
-      ),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        "Metrics and timeline remain available for this historical day.",
-      ),
-    ).toBeInTheDocument();
+      screen.getByRole("link", {
+        name: "Review EOD Review for Friday, May 8, 2026",
+      }),
+    ).toHaveAttribute(
+      "href",
+      "/wigclub/store/osu/operations/daily-close?o=%252Fwigclub%252Fstore%252Fosu%252Foperations&operatingDate=2026-05-08",
+    );
     expect(screen.queryByText("Workflow status")).not.toBeInTheDocument();
     expect(screen.queryByText("Current day only")).not.toBeInTheDocument();
     expect(screen.queryByText("Needs attention")).not.toBeInTheDocument();
@@ -1094,6 +1095,32 @@ describe("DailyOperationsViewContent", () => {
     expect(
       screen.getByRole("heading", { name: "Athena automation" }),
     ).toBeInTheDocument();
+    const automationHeading = screen.getByRole("heading", {
+      name: "Athena automation",
+    });
+    const automationPanel = automationHeading.closest("section");
+    const netSalesMetric = screen.getByText(/^(Today's net sales|Net sales)$/);
+
+    expect(automationPanel).toHaveClass("py-layout-sm", "rounded-md");
+    expect(automationHeading).toHaveClass(
+      "text-sm",
+      "font-medium",
+      "text-foreground",
+    );
+    expect(automationHeading.parentElement).toHaveClass("gap-layout-sm");
+    const automationTime = within(automationPanel!).getByText(/[48]:30 AM/);
+
+    expect(automationTime).toHaveClass("tabular-nums");
+    expect(automationTime.parentElement).toHaveClass("mt-1.5");
+    expect(
+      automationHeading.compareDocumentPosition(netSalesMetric) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      automationHeading.compareDocumentPosition(
+        screen.getByRole("heading", { name: "Week at a glance" }),
+      ) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     expect(screen.getByText("Athena started Opening Handoff.")).toBeInTheDocument();
     expect(
       screen.getByText("Athena prepared EOD Review for manager review."),
@@ -1150,20 +1177,18 @@ describe("DailyOperationsViewContent", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("shows compact scheduled-run evidence without backend details", () => {
+  it("keeps scheduled-run evidence off the daily operations workspace", () => {
     renderContent(scheduledRunsSnapshot);
 
     expect(
-      screen.getByRole("heading", { name: "Scheduled runs" }),
-    ).toBeInTheDocument();
+      screen.queryByRole("heading", { name: "Scheduled runs" }),
+    ).not.toBeInTheDocument();
     expect(
-      screen.getByText(
-        "Payment verification partially ran. 2 applied, 1 needs review.",
-      ),
-    ).toBeInTheDocument();
+      screen.queryByText(/Payment verification partially ran/i),
+    ).not.toBeInTheDocument();
     expect(
-      screen.getByText("Checkout completion ran. No eligible work found."),
-    ).toBeInTheDocument();
+      screen.queryByText(/Checkout completion ran/i),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText(/provider|exception|stack/i)).not.toBeInTheDocument();
   });
 
@@ -1181,10 +1206,19 @@ describe("DailyOperationsViewContent", () => {
     );
 
     const storePulse = screen.getByRole("region", { name: "Store pulse" });
+    const chart = within(storePulse).getByTestId("store-pulse-chart");
 
     expect(within(storePulse).getByText("Sales trend")).toBeInTheDocument();
-    expect(within(storePulse).getByTestId("store-pulse-chart")).toBeInTheDocument();
+    expect(chart).toBeInTheDocument();
+    expect(chart).toHaveAttribute(
+      "data-display-labels",
+      "Sun, May 3|Mon, May 4|Tue, May 5|Wed, May 6|Thu, May 7|Fri, May 8",
+    );
+    expect(chart).toHaveAttribute("data-margin-right", "72");
     expect(within(storePulse).getByText("Braiding Hair")).toBeInTheDocument();
+    expect(
+      within(storePulse).getByText("Today's top items"),
+    ).toBeInTheDocument();
     expect(
       within(storePulse).getByLabelText("Total items sold: 3"),
     ).toBeInTheDocument();
@@ -1197,7 +1231,7 @@ describe("DailyOperationsViewContent", () => {
       screen.queryByText("POS sales activity for the selected reporting window."),
     ).not.toBeInTheDocument();
     expect(
-      within(storePulse).getByText("Today's completed POS sales."),
+      within(storePulse).getByText("This week's completed POS sales."),
     ).toBeInTheDocument();
   });
 
@@ -1251,6 +1285,22 @@ describe("DailyOperationsViewContent", () => {
     expect(openingReview?.parentElement).toBe(timeline.parentElement);
     expect(openingReview?.compareDocumentPosition(timeline)).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+  });
+
+  it("passes historical operating dates to Opening Handoff review links", () => {
+    renderContent({
+      ...automationReviewSnapshot,
+      operatingDate: "2026-05-08",
+    });
+
+    expect(
+      screen.getByRole("link", {
+        name: "Review all Opening Handoff review items",
+      }),
+    ).toHaveAttribute(
+      "href",
+      "/wigclub/store/osu/operations/opening?o=%252Fwigclub%252Fstore%252Fosu%252Foperations&operatingDate=2026-05-08",
     );
   });
 
@@ -1492,6 +1542,9 @@ describe("DailyOperationsViewContent", () => {
       screen.queryByRole("link", { name: "Start Opening Handoff" }),
     ).not.toBeInTheDocument();
     expect(
+      screen.queryByRole("link", { name: "Review EOD Review" }),
+    ).not.toBeInTheDocument();
+    expect(
       screen.getByRole("heading", { name: "Historical store-day view" }),
     ).toBeInTheDocument();
     expect(
@@ -1501,6 +1554,30 @@ describe("DailyOperationsViewContent", () => {
     ).toBeInTheDocument();
     expect(screen.queryByText("Needs attention")).not.toBeInTheDocument();
     expect(screen.queryByText("Workflow status")).not.toBeInTheDocument();
+  });
+
+  it("links historical started store days to EOD Review even before close", () => {
+    renderContent(operatingSnapshot);
+
+    expect(
+      screen.getByRole("heading", { name: "Historical store-day view" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", {
+        name: "Review EOD Review for Friday, May 8, 2026",
+      }),
+    ).toHaveAttribute(
+      "href",
+      "/wigclub/store/osu/operations/daily-close?o=%252Fwigclub%252Fstore%252Fosu%252Foperations&operatingDate=2026-05-08",
+    );
+    expect(
+      screen.queryByRole("link", { name: "Review EOD Review" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "This historical operating date is view-only. Workflow actions are available only on the current operating date.",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("keeps current-day opening actions available", () => {
@@ -1515,6 +1592,52 @@ describe("DailyOperationsViewContent", () => {
       "href",
       "/wigclub/store/osu/operations/opening?o=%252Fwigclub%252Fstore%252Fosu%252Foperations",
     );
+  });
+
+  it("surfaces pending approval requests on the leading side of the action strip", () => {
+    renderContent({
+      ...blockedSnapshot,
+      lanes: [
+        ...blockedSnapshot.lanes,
+        {
+          count: 2,
+          countLabel: "2",
+          description: "2 approvals pending.",
+          key: "approvals",
+          label: "Approvals",
+          status: "blocked",
+          to: "/$orgUrlSlug/store/$storeUrlSlug/operations/approvals",
+        },
+      ],
+      operatingDate: getCurrentLocalOperatingDate(),
+    });
+
+    const approvalLink = screen.getByRole("link", {
+      name: "Open 2 pending approvals",
+    });
+    const operatingDateButton = screen.getByRole("button", {
+      name: /Change operating date/,
+    });
+
+    expect(approvalLink).toHaveAttribute(
+      "href",
+      "/wigclub/store/osu/operations/approvals?o=%252Fwigclub%252Fstore%252Fosu%252Foperations",
+    );
+    expect(approvalLink).toHaveClass("w-full", "sm:w-auto");
+    expect(within(approvalLink).getByText("2")).toHaveClass(
+      "font-semibold",
+      "tabular-nums",
+    );
+    expect(within(approvalLink).getByText("pending approvals")).toHaveClass(
+      "text-muted-foreground",
+    );
+    expect(
+      approvalLink.compareDocumentPosition(operatingDateButton) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("link", { name: "Review close blockers" }),
+    ).toBeInTheDocument();
   });
 
   it("passes origin context to current-day blocker review actions", () => {
@@ -1875,7 +1998,7 @@ describe("DailyOperationsView", () => {
     );
   });
 
-  it("ignores store pulse search state and queries the today store pulse window", () => {
+  it("keeps the store pulse query scoped to the operating day", () => {
     mockedHooks.useSearch.mockReturnValue({
       storePulseWindow: "this_month",
     });
@@ -1905,7 +2028,7 @@ describe("DailyOperationsView", () => {
 
     expect(within(storePulse).queryByRole("tablist")).not.toBeInTheDocument();
     expect(
-      within(storePulse).getByText("Today's completed POS sales."),
+      within(storePulse).getByText("This week's completed POS sales."),
     ).toBeInTheDocument();
   });
 

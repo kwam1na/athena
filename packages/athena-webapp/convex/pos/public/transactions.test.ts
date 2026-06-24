@@ -980,7 +980,7 @@ describe("voidTransaction public mutation", () => {
     ).not.toHaveProperty("staffProofToken");
   });
 
-  it("allows completed sale voids without an operator reason", async () => {
+  it("requires an operator reason before voiding completed sales", async () => {
     vi.mocked(completeTransactionCommands.voidTransaction).mockResolvedValue({
       approval: {
         action: {
@@ -1009,15 +1009,14 @@ describe("voidTransaction public mutation", () => {
         transactionId: "txn-1" as Id<"posTransaction">,
       }),
     ).resolves.toMatchObject({
-      kind: "approval_required",
+      kind: "user_error",
+      error: {
+        code: "validation_failed",
+        message: "Reason is required before voiding a completed sale.",
+      },
     });
 
-    expect(completeTransactionCommands.voidTransaction).toHaveBeenCalledWith(
-      expect.any(Object),
-      expect.not.objectContaining({
-        reason: expect.anything(),
-      }),
-    );
+    expect(completeTransactionCommands.voidTransaction).not.toHaveBeenCalled();
   });
 
   it.each([

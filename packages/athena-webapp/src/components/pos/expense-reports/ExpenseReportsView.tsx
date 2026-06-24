@@ -152,8 +152,9 @@ export function ExpenseReportsView() {
     return tableData.filter((t) => isToday(t.completedAt));
   }, [tableData, filter, operatingDateStartAt]);
 
-  if (!activeStore || !expenseTransactions || !formatter) return null;
+  if (!activeStore || !formatter) return null;
 
+  const isLoadingExpenseReports = expenseTransactions === undefined;
   const hasReports = filteredData.length > 0;
 
   return (
@@ -207,7 +208,7 @@ export function ExpenseReportsView() {
               </TabsList>
             </Tabs>
 
-            {hasReports ? (
+            {isLoadingExpenseReports ? null : hasReports ? (
               <>
                 <div className="grid gap-layout-sm md:hidden">
                   {filteredData.map((report) => (

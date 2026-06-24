@@ -564,6 +564,18 @@ describe("listRegisterCatalog", () => {
           importedPrice: 85000,
           importedQuantity: 12,
         },
+        {
+          _id: "provisional-archived",
+          storeId: "store-a",
+          status: "active",
+          productId: "product-archived",
+          productSkuId: "sku-archived",
+          importedProductName: "Archived Legacy Import",
+          importedSku: "ARCHIVED-LEGACY",
+          importedBarcode: "ARCHIVED123",
+          importedPrice: 85000,
+          importedQuantity: 12,
+        },
       ],
       product: [
         {
@@ -600,6 +612,15 @@ describe("listRegisterCatalog", () => {
           description: "Hidden anchor",
           name: "Hidden Anchor",
           availability: "draft",
+          isVisible: false,
+        },
+        {
+          _id: "product-archived",
+          storeId: "store-a",
+          categoryId: "category-store-a",
+          description: "Archived anchor",
+          name: "Archived Anchor",
+          availability: "archived",
           isVisible: false,
         },
       ],
@@ -648,6 +669,17 @@ describe("listRegisterCatalog", () => {
           price: 0,
           quantityAvailable: 0,
         },
+        {
+          _id: "sku-archived",
+          storeId: "store-a",
+          productId: "product-archived",
+          sku: "ARCHIVED-ANCHOR",
+          barcode: "",
+          images: [],
+          isVisible: false,
+          price: 0,
+          quantityAvailable: 0,
+        },
       ],
     });
 
@@ -678,9 +710,11 @@ describe("listRegisterCatalog", () => {
     await expect(
       listRegisterCatalogAvailability(ctx, {
         storeId: "store-a" as Id<"store">,
-        productSkuIds: ["sku-trusted", "sku-provisional"] as Array<
-          Id<"productSku">
-        >,
+        productSkuIds: [
+          "sku-trusted",
+          "sku-provisional",
+          "sku-archived",
+        ] as Array<Id<"productSku">>,
       }),
     ).resolves.toEqual([
       {
@@ -717,6 +751,17 @@ describe("listRegisterCatalog", () => {
           inventoryImportProvisionalSkuId: "provisional-sku-1",
           availabilityPolicy: "active_provisional_import",
           inStock: true,
+        }),
+      ]),
+    );
+    await expect(
+      listRegisterCatalogAvailabilitySnapshot(ctx, {
+        storeId: "store-a" as Id<"store">,
+      }),
+    ).resolves.not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          productSkuId: "sku-archived",
         }),
       ]),
     );

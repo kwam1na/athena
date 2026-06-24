@@ -2,10 +2,12 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
+import { assertConformsToExportedReturns } from "../lib/returnValidatorContract";
 import { backfillUndefinedSkuVisibilityFromProducts } from "./productSku";
 import {
   archive,
   createSku,
+  generateUniqueBarcode,
   getAll,
   getByIdOrSlug,
   unarchive,
@@ -339,6 +341,17 @@ describe("product archiving", () => {
 });
 
 describe("product catalog visibility", () => {
+  it("keeps product mutation return contracts executable", () => {
+    assertConformsToExportedReturns(generateUniqueBarcode, {
+      success: true,
+      barcode: "123456789012",
+    });
+    assertConformsToExportedReturns(generateUniqueBarcode, {
+      success: false,
+      error: "Could not generate unique barcode after multiple attempts",
+    });
+  });
+
   it("excludes non-live products and hidden SKUs by default while preserving explicit archived queries", async () => {
     const seed = {
       product: [
@@ -355,7 +368,7 @@ describe("product catalog visibility", () => {
           _id: "product-archived",
           availability: "archived",
           categoryId: "category-1",
-          isVisible: true,
+          isVisible: false,
           name: "Archived Product",
           storeId: "storezzzz",
           subcategoryId: "subcategory-1",
@@ -393,6 +406,7 @@ describe("product catalog visibility", () => {
           _id: "sku-archived",
           images: ["archived.jpg"],
           inventoryCount: 1,
+          isVisible: false,
           price: 1000,
           productId: "product-archived",
           quantityAvailable: 1,
@@ -438,6 +452,11 @@ describe("product catalog visibility", () => {
 
     expect(archivedProducts.map((product: Row) => product._id)).toEqual([
       "product-archived",
+    ]);
+    expect(archivedProducts[0].skus).toEqual([
+      expect.objectContaining({
+        _id: "sku-archived",
+      }),
     ]);
 
     const draftHiddenCtx = createProductsQueryCtx(seed).ctx;

@@ -382,7 +382,7 @@ describe("voidTransaction", () => {
     expect(ctx.runMutation).not.toHaveBeenCalled();
   });
 
-  it("returns approval_required without an operator reason", async () => {
+  it("requires an operator reason before creating a void approval request", async () => {
     const ctx = createVoidCtx();
 
     await expect(
@@ -391,18 +391,17 @@ describe("voidTransaction", () => {
         transactionId: "txn-1" as Id<"posTransaction">,
       }),
     ).resolves.toMatchObject({
-      kind: "approval_required",
-      approval: {
-        metadata: expect.not.objectContaining({
-          reason: expect.anything(),
-        }),
+      kind: "user_error",
+      error: {
+        code: "validation_failed",
+        message: "Reason is required before voiding a completed sale.",
       },
     });
 
-    const approvalRequestPayload = vi.mocked(ctx.db.insert).mock.calls.find(
-      ([tableName]) => tableName === "approvalRequest",
-    )?.[1];
-    expect(approvalRequestPayload).not.toHaveProperty("notes");
+    expect(ctx.db.insert).not.toHaveBeenCalledWith(
+      "approvalRequest",
+      expect.anything(),
+    );
     expectNoVoidBusinessSideEffects();
   });
 

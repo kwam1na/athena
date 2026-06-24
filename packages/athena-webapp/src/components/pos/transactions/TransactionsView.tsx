@@ -487,8 +487,9 @@ export function TransactionsView() {
     transactions,
   ]);
 
-  if (!activeStore || !transactions || !formatter) return null;
+  if (!activeStore || !formatter) return null;
 
+  const isLoadingTransactions = transactions === undefined;
   const hasTransactions = filteredData.length > 0;
 
   return (
@@ -508,7 +509,7 @@ export function TransactionsView() {
                 Showing {activeFilterSummary}
               </div>
             ) : null}
-            {isTransactionBatchFull ? (
+            {!isLoadingTransactions && isTransactionBatchFull ? (
               <div className="flex flex-col gap-layout-sm rounded-md border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
                 <span>
                   Showing latest {loadedLimit.toLocaleString()} completed
@@ -542,7 +543,7 @@ export function TransactionsView() {
               </TabsList>
             </Tabs>
 
-            {hasTransactions ? (
+            {isLoadingTransactions ? null : hasTransactions ? (
               <>
                 <div className="grid gap-layout-sm md:hidden">
                   {filteredData.map((transaction) => (

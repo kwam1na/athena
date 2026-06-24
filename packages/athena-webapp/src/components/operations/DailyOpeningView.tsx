@@ -32,6 +32,7 @@ import type { ApprovalRequirement } from "~/shared/approvalPolicy";
 import type { CommandResult } from "~/shared/commandResult";
 import View from "../View";
 import { FadeIn } from "../common/FadeIn";
+import { ListPagination } from "../common/ListPagination";
 import {
   PageLevelHeader,
   PageWorkspace,
@@ -188,6 +189,7 @@ const bucketTabValues: BucketStatus[] = [
   "carry-forward",
   "ready",
 ];
+const OPENING_REVIEW_ITEMS_PER_PAGE = 5;
 
 const statusCopy: Record<
   DailyOpeningStatus,
@@ -683,6 +685,20 @@ function OpeningAutomationReviewPanel({
   orgUrlSlug: string;
   storeUrlSlug: string;
 }) {
+  const [page, setPage] = useState(1);
+  const pageCount = Math.max(
+    Math.ceil(items.length / OPENING_REVIEW_ITEMS_PER_PAGE),
+    1,
+  );
+  const clampedPage = Math.min(page, pageCount);
+  const paginatedItems = items.slice(
+    (clampedPage - 1) * OPENING_REVIEW_ITEMS_PER_PAGE,
+    clampedPage * OPENING_REVIEW_ITEMS_PER_PAGE,
+  );
+  const handlePageChange = (nextPage: number) => {
+    setPage(Math.min(Math.max(nextPage, 1), pageCount));
+  };
+
   if (items.length === 0) return null;
 
   return (
@@ -710,7 +726,7 @@ function OpeningAutomationReviewPanel({
         </Badge>
       </div>
       <div className="mt-layout-md space-y-layout-xs">
-        {items.map((item) => (
+        {paginatedItems.map((item) => (
           <OpeningItemCard
             currency={currency}
             item={item}
@@ -721,6 +737,15 @@ function OpeningAutomationReviewPanel({
           />
         ))}
       </div>
+      {items.length > OPENING_REVIEW_ITEMS_PER_PAGE ? (
+        <ListPagination
+          onPageChange={handlePageChange}
+          page={clampedPage}
+          pageCount={pageCount}
+          pageSize={OPENING_REVIEW_ITEMS_PER_PAGE}
+          totalItems={items.length}
+        />
+      ) : null}
     </section>
   );
 }
