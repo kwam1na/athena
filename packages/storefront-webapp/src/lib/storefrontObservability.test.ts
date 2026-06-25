@@ -4,11 +4,12 @@ import {
   SYNTHETIC_MONITOR_ORIGIN,
   STOREFRONT_OBSERVABILITY_ACTION,
   STOREFRONT_OBSERVABILITY_SESSION_KEY,
-  resolveStorefrontAnalyticsOrigin,
   createStorefrontObservabilityContext,
   createStorefrontObservabilityPayload,
   getOrCreateStorefrontObservabilitySessionId,
   isSyntheticMonitorOrigin,
+  resolveStorefrontAnalyticsOrigin,
+  resolveViewportBucket,
   trackStorefrontEvent,
 } from "./storefrontObservability";
 
@@ -90,6 +91,7 @@ describe("storefront observability", () => {
         utm_source: "instagram",
       },
       guestId: "guest_123",
+      viewportWidth: 390,
       storage,
     });
 
@@ -106,6 +108,7 @@ describe("storefront observability", () => {
       route: "/shop",
       origin: "instagram",
       userType: "guest",
+      viewportBucket: "sm",
     });
     expect(secondContext).toMatchObject({
       route: "/shop/bag",
@@ -119,6 +122,14 @@ describe("storefront observability", () => {
     expect(getOrCreateStorefrontObservabilitySessionId(storage)).toBe(
       firstContext.sessionId,
     );
+  });
+
+  it("buckets viewport widths without storing raw dimensions", () => {
+    expect(resolveViewportBucket(375)).toBe("sm");
+    expect(resolveViewportBucket(800)).toBe("md");
+    expect(resolveViewportBucket(1100)).toBe("lg");
+    expect(resolveViewportBucket(1440)).toBe("xl");
+    expect(resolveViewportBucket(Number.NaN)).toBe("unknown");
   });
 
   it("reserves a canonical origin for synthetic monitors in browser automation", () => {

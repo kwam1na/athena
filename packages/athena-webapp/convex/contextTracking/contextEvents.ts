@@ -32,10 +32,12 @@ export function buildContextEventSemanticEnvelopeHash(args: {
   payload: Record<string, unknown>;
   [key: string]: unknown;
 }) {
+  const hashArgs = { ...args };
+  delete hashArgs.environment;
   const payloadHash = buildSnapshotHash(args.payload);
 
   return buildSnapshotHash({
-    ...args,
+    ...hashArgs,
     occurredAt: undefined,
     payloadHash,
     payload: undefined,
@@ -165,6 +167,7 @@ export const appendContextEvent = internalMutation({
         })) ?? [],
       visibilityMode: registration.visibilityMode,
       retentionClass: registration.retentionClass,
+      environment: args.environment,
       synthetic: args.synthetic,
       abusePartitionKey: args.abusePartitionKey,
       historicalImportRunId: args.historicalImportRunId,

@@ -11,6 +11,7 @@ import {
 } from "../../../utils";
 
 const trackingEventRoutes: HonoWithConvex<ActionCtx> = new Hono();
+type ViewportBucket = "sm" | "md" | "lg" | "xl" | "unknown";
 
 trackingEventRoutes.post("/", async (c) => {
   if (!isAllowedTrackingOrigin(c.req.header("origin"))) {
@@ -34,6 +35,7 @@ trackingEventRoutes.post("/", async (c) => {
     organizationId,
     originHeader: c.req.header("origin"),
     syntheticHeader: c.req.header("x-athena-synthetic-monitor"),
+    userAgent: c.req.header("user-agent"),
     ipAddress: readTrackingIpAddress(
       c.req.header("x-forwarded-for"),
       c.req.header("x-real-ip"),
@@ -68,12 +70,17 @@ export function buildServerContextTrackingEnvelope(input: {
   organizationId?: Id<"organization">;
   originHeader?: string;
   syntheticHeader?: string;
+  userAgent?: string;
   ipAddress?: string;
   storefrontActor?: { kind: "storefrontUser" | "guest"; id: unknown };
 }) {
   const payload = readPayload(input.body.payload);
   const primarySubject = derivePrimarySubject(input.body.eventId, payload);
   const synthetic = isAcceptedSyntheticContext(input.body, input.syntheticHeader);
+  const environment = deriveContextEnvironment({
+    userAgent: input.userAgent,
+    viewportBucket: readViewportBucket(input.body),
+  });
   const actorRef = input.storefrontActor
     ? {
         kind: input.storefrontActor.kind,
@@ -98,12 +105,74 @@ export function buildServerContextTrackingEnvelope(input: {
     sourceRefs: [],
     visibilityMode: "store_admin" as const,
     retentionClass: "standard" as const,
+    environment,
     synthetic,
     abusePartitionKey: buildAbusePartitionKey({
       storeId: input.storeId,
       actorRef,
     }),
   };
+}
+
+export function deriveContextEnvironment(input: {
+  userAgent?: string;
+  viewportBucket?: ViewportBucket;
+}) {
+  const userAgent = input.userAgent ?? "";
+  const normalized = userAgent.toLowerCase();
+  const isBot =
+    /(bot|crawler|spider|crawling|preview|monitor|synthetic)/.test(
+      normalized,
+    );
+  const isIpad = /\bipad\b/.test(normalized);
+  const isTablet = isIpad || (/\bandroid\b/.test(normalized) && !/\bmobile\b/.test(normalized));
+  const isMobile =
+    !isTablet && /\b(mobile|iphone|ipod|android)\b/.test(normalized);
+
+  return {
+    deviceClass: isBot
+      ? "bot"
+      : isTablet
+        ? "tablet"
+        : isMobile
+          ? "mobile"
+          : userAgent
+            ? "desktop"
+            : "unknown",
+    browserFamily: deriveBrowserFamily(normalized),
+    osFamily: deriveOsFamily(normalized),
+    viewportBucket: input.viewportBucket ?? "unknown",
+  } as const;
+}
+
+function deriveBrowserFamily(normalizedUserAgent: string) {
+  if (!normalizedUserAgent) return "unknown";
+  if (/\bedg\//.test(normalizedUserAgent)) return "edge";
+  if (/\bfirefox\//.test(normalizedUserAgent)) return "firefox";
+  if (/\bchrome\//.test(normalizedUserAgent) || /\bcrios\//.test(normalizedUserAgent)) {
+    return "chrome";
+  }
+  if (/\bsafari\//.test(normalizedUserAgent)) return "safari";
+  return "other";
+}
+
+function deriveOsFamily(normalizedUserAgent: string) {
+  if (!normalizedUserAgent) return "unknown";
+  if (/\biphone\b|\bipad\b|\bipod\b/.test(normalizedUserAgent)) return "ios";
+  if (/\bandroid\b/.test(normalizedUserAgent)) return "android";
+  if (/\bmac os x\b|\bmacintosh\b/.test(normalizedUserAgent)) return "macos";
+  if (/\bwindows\b/.test(normalizedUserAgent)) return "windows";
+  if (/\blinux\b/.test(normalizedUserAgent)) return "linux";
+  return "other";
+}
+
+function readViewportBucket(body: Record<string, unknown>): ViewportBucket | undefined {
+  const environment = body.environment;
+  if (!isRecord(environment)) return undefined;
+  const value = environment.viewportBucket;
+  return value === "sm" || value === "md" || value === "lg" || value === "xl"
+    ? value
+    : undefined;
 }
 
 export function isAllowedTrackingOrigin(origin?: string) {

@@ -1,5 +1,6 @@
 import type {
   ContextActorRef,
+  ContextEnvironment,
   ContextPayload,
   ContextPrimitiveValue,
   ContextSessionRef,
@@ -14,6 +15,7 @@ import {
 
 type BuildContextEventOptions = {
   actorRef?: ContextActorRef;
+  environment?: ContextEnvironment;
   sessionRef?: ContextSessionRef;
   now?: () => number;
 };
@@ -66,6 +68,7 @@ export function buildContextEventEnvelope(
     sourceRefs: input.sourceRefs,
     visibilityMode: definition.visibilityMode,
     retentionClass: definition.retentionClass,
+    environment: input.environment ?? options.environment,
     synthetic: input.synthetic,
   };
 }

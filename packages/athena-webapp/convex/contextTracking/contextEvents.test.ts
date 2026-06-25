@@ -56,4 +56,34 @@ describe("context event append safeguards", () => {
       }),
     );
   });
+
+  it("keeps retry duplicate hashes stable when environment metadata changes", () => {
+    const base = {
+      storeId: "store_1",
+      surface: "storefront",
+      eventId: "storefront.route_viewed",
+      schemaVersion: 1,
+      idempotencyKey: "route:session:/shop",
+      occurredAt: 1_700_000_000_000,
+      payload: { route: "/shop" },
+    };
+
+    expect(
+      buildContextEventSemanticEnvelopeHash({
+        ...base,
+        environment: { deviceClass: "mobile" },
+      }),
+    ).toBe(
+      buildContextEventSemanticEnvelopeHash({
+        ...base,
+        environment: { deviceClass: "desktop" },
+      }),
+    );
+    expect(
+      buildContextEventSemanticEnvelopeHash({
+        ...base,
+        environment: { deviceClass: "mobile" },
+      }),
+    ).toBe(buildContextEventSemanticEnvelopeHash(base));
+  });
 });

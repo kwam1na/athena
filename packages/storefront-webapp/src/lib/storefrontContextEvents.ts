@@ -148,6 +148,9 @@ export function createStorefrontContextTrackingEnvelope({
   return buildStorefrontContextEvent(
     {
       ...input,
+      environment: baseContext.viewportBucket
+        ? { viewportBucket: baseContext.viewportBucket }
+        : undefined,
       origin: input.origin ?? baseContext.origin,
       synthetic:
         input.synthetic ??

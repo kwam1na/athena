@@ -29,7 +29,11 @@ const mockedProducts = vi.hoisted(() => ({
     productCount: number;
     updatedAt?: number;
   },
-  skuSearchResults: [] as unknown[],
+  skuSearchResults: [] as unknown[] | undefined,
+}));
+const routerMocks = vi.hoisted(() => ({
+  navigate: vi.fn(),
+  search: {} as Record<string, unknown>,
 }));
 
 class ResizeObserverStub {
@@ -44,7 +48,8 @@ vi.mock("@tanstack/react-router", () => ({
   Link: ({ children }: { children: React.ReactNode }) => (
     <a href="#products">{children}</a>
   ),
-  useSearch: () => ({}),
+  useNavigate: () => routerMocks.navigate,
+  useSearch: () => routerMocks.search,
 }));
 
 vi.mock("~/src/hooks/useGetCategories", () => ({
@@ -86,6 +91,10 @@ vi.mock("convex/react", () => ({
       "query" in args &&
       "limit" in args
     ) {
+      if (mockedProducts.skuSearchResults === undefined) {
+        return undefined;
+      }
+
       return {
         candidateOverflow: false,
         results: mockedProducts.skuSearchResults,
@@ -149,6 +158,8 @@ describe("Products", () => {
       productCount: 0,
     };
     mockedProducts.skuSearchResults = [];
+    routerMocks.navigate.mockReset();
+    routerMocks.search = {};
   });
 
   it("quick adds a product with variants from the products workspace", async () => {
@@ -484,6 +495,159 @@ describe("Products", () => {
     expect(screen.getByText("9")).toBeInTheDocument();
     expect(screen.getByText("4")).toBeInTheDocument();
     expect(repairCatalogSummaryMock).not.toHaveBeenCalled();
+  });
+
+  it("restores product search from the URL query", () => {
+    routerMocks.search = { query: "angeli" };
+    mockedProducts.skuSearchResults = [
+      makeSkuSearchResult(
+        makeProduct({
+          id: "product-angeli",
+          inventoryCount: 0,
+          name: "Angeli",
+          sku: "ANGELI-1",
+        }),
+      ),
+    ];
+
+    render(<Products />);
+
+    expect(
+      screen.getByRole("textbox", {
+        name: /search products, skus, or barcodes/i,
+      }),
+    ).toHaveValue("angeli");
+    expect(screen.getByText("Angeli")).toBeInTheDocument();
+  });
+
+  it("keeps product search changes in the URL", async () => {
+    const user = userEvent.setup();
+
+    render(<Products />);
+
+    await user.type(
+      screen.getByRole("textbox", {
+        name: /search products, skus, or barcodes/i,
+      }),
+      "bonnet",
+    );
+
+    expect(routerMocks.navigate).toHaveBeenLastCalledWith({
+      replace: true,
+      search: expect.any(Function),
+    });
+    const writeQuerySearch = routerMocks.navigate.mock.calls.at(-1)?.[0]
+      .search as (current: Record<string, unknown>) => Record<string, unknown>;
+    expect(writeQuerySearch({ o: "/return", page: 3 })).toEqual({
+      o: "/return",
+      query: "bonnet",
+    });
+
+    await user.clear(
+      screen.getByRole("textbox", {
+        name: /search products, skus, or barcodes/i,
+      }),
+    );
+
+    const clearQuerySearch = routerMocks.navigate.mock.calls.at(-1)?.[0]
+      .search as (current: Record<string, unknown>) => Record<string, unknown>;
+    expect(clearQuerySearch({ o: "/return", query: "bonnet" })).toEqual({
+      o: "/return",
+    });
+  });
+
+  it("restores product search pagination from the URL page", () => {
+    routerMocks.search = { page: 3, query: "mizani" };
+    mockedProducts.skuSearchResults = Array.from({ length: 25 }, (_, index) =>
+      makeSkuSearchResult(
+        makeProduct({
+          id: `product-mizani-${index + 1}`,
+          inventoryCount: 0,
+          name: `Mizani ${String(index + 1).padStart(2, "0")}`,
+          sku: `MIZANI-${index + 1}`,
+        }),
+      ),
+    );
+
+    render(<Products />);
+
+    expect(screen.getByText("Page 3 of 3")).toBeInTheDocument();
+    expect(screen.getByText("Mizani 21")).toBeInTheDocument();
+    expect(screen.queryByText("Mizani 01")).not.toBeInTheDocument();
+  });
+
+  it("clamps out-of-range product search pages from the URL", async () => {
+    routerMocks.search = { page: 999, query: "mizani" };
+    mockedProducts.skuSearchResults = Array.from({ length: 25 }, (_, index) =>
+      makeSkuSearchResult(
+        makeProduct({
+          id: `product-mizani-${index + 1}`,
+          inventoryCount: 0,
+          name: `Mizani ${String(index + 1).padStart(2, "0")}`,
+          sku: `MIZANI-${index + 1}`,
+        }),
+      ),
+    );
+
+    render(<Products />);
+
+    expect(screen.getByText("Page 3 of 3")).toBeInTheDocument();
+    expect(screen.getByText("Mizani 21")).toBeInTheDocument();
+    expect(screen.queryByText("Mizani 01")).not.toBeInTheDocument();
+
+    await waitFor(() => expect(routerMocks.navigate).toHaveBeenCalled());
+    const normalizePageSearch = routerMocks.navigate.mock.calls.at(-1)?.[0]
+      .search as (current: Record<string, unknown>) => Record<string, unknown>;
+    expect(normalizePageSearch({ query: "mizani", page: 999 })).toEqual({
+      query: "mizani",
+      page: 3,
+    });
+  });
+
+  it("preserves product search page URLs while search results are loading", () => {
+    routerMocks.search = { page: 3, query: "mizani" };
+    mockedProducts.skuSearchResults = undefined;
+
+    render(<Products />);
+
+    expect(
+      screen.getByRole("textbox", {
+        name: /search products, skus, or barcodes/i,
+      }),
+    ).toHaveValue("mizani");
+    expect(routerMocks.navigate).not.toHaveBeenCalled();
+  });
+
+  it("keeps product search pagination changes in the URL", async () => {
+    const user = userEvent.setup();
+    routerMocks.search = { query: "mizani" };
+    mockedProducts.skuSearchResults = Array.from({ length: 11 }, (_, index) =>
+      makeSkuSearchResult(
+        makeProduct({
+          id: `product-mizani-${index + 1}`,
+          inventoryCount: 0,
+          name: `Mizani ${index + 1}`,
+          sku: `MIZANI-${index + 1}`,
+        }),
+      ),
+    );
+
+    render(<Products />);
+
+    await user.click(
+      screen.getByRole("button", { name: /go to next page/i }),
+    );
+
+    expect(routerMocks.navigate).toHaveBeenLastCalledWith({
+      replace: true,
+      search: expect.any(Function),
+    });
+    const writePageSearch = routerMocks.navigate.mock.calls.at(-1)?.[0]
+      .search as (current: Record<string, unknown>) => Record<string, unknown>;
+    expect(writePageSearch({ query: "mizani" })).toEqual({
+      page: 2,
+      query: "mizani",
+    });
   });
 
   it("repairs an unbackfilled catalog summary instead of leaving metrics permanently pending", async () => {

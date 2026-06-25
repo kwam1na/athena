@@ -21,6 +21,12 @@ export type ContextPromptRecord = {
     type?: string;
     id?: string;
   };
+  environment?: {
+    deviceClass?: string;
+    browserFamily?: string;
+    osFamily?: string;
+    viewportBucket?: string;
+  };
   payload?: Record<string, string | number | boolean | null>;
 };
 
@@ -82,6 +88,7 @@ export function compactContextEventsForPrompt(contextEvents: ContextPromptRecord
     actorRef: item.actorRef,
     sessionRef: item.sessionRef,
     primarySubject: item.primarySubject,
+    environment: compactEnvironmentForPrompt(item.environment),
     payload: compactPayloadForPrompt(item.payload),
   }));
 }
@@ -123,7 +130,7 @@ export function buildStoreInsightsPromptFromContextEvents(
   const metricRows = contextEvents.map((item) => ({
     _creationTime: item.occurredAt,
     action: item.eventId,
-    device: "unknown",
+    device: normalizeDeviceClassForMetrics(item.environment?.deviceClass),
   }));
   const deviceDistribution = calculateDeviceDistribution(metricRows as any[]);
   const activityTrend = calculateActivityTrend(metricRows as any[]);
@@ -288,6 +295,63 @@ function compactPayloadForPrompt(
   );
 
   return Object.keys(compacted).length > 0 ? compacted : undefined;
+}
+
+function compactEnvironmentForPrompt(
+  environment: ContextPromptRecord["environment"],
+) {
+  if (!environment) return undefined;
+
+  const compacted = {
+    deviceClass: readAllowedEnvironmentValue(environment.deviceClass, [
+      "mobile",
+      "tablet",
+      "desktop",
+      "bot",
+      "unknown",
+    ]),
+    browserFamily: readAllowedEnvironmentValue(environment.browserFamily, [
+      "chrome",
+      "safari",
+      "firefox",
+      "edge",
+      "other",
+      "unknown",
+    ]),
+    osFamily: readAllowedEnvironmentValue(environment.osFamily, [
+      "ios",
+      "android",
+      "macos",
+      "windows",
+      "linux",
+      "other",
+      "unknown",
+    ]),
+    viewportBucket: readAllowedEnvironmentValue(environment.viewportBucket, [
+      "sm",
+      "md",
+      "lg",
+      "xl",
+      "unknown",
+    ]),
+  };
+
+  return Object.fromEntries(
+    Object.entries(compacted).filter(([, value]) => value !== undefined),
+  );
+}
+
+function readAllowedEnvironmentValue<T extends string>(
+  value: string | undefined,
+  allowedValues: readonly T[],
+) {
+  return allowedValues.includes(value as T) ? (value as T) : undefined;
+}
+
+function normalizeDeviceClassForMetrics(deviceClass: string | undefined) {
+  if (deviceClass === "desktop") return "desktop";
+  if (deviceClass === "mobile" || deviceClass === "tablet") return "mobile";
+  return "unknown";
 }
 
 function stableStringify(value: unknown): string {

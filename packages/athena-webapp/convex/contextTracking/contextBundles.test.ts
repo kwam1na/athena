@@ -41,6 +41,12 @@ function contextEvent(
     sourceRefs: [],
     visibilityMode: "store_admin",
     retentionClass: "standard",
+    environment: {
+      deviceClass: "mobile",
+      browserFamily: "safari",
+      osFamily: "ios",
+      viewportBucket: "sm",
+    },
     synthetic: false,
     ...overrides,
   };
@@ -86,7 +92,94 @@ describe("contextEvent storefront bundle compilation", () => {
         id: "context_event_valid",
         eventId: "storefront.product_viewed",
         contextSchemaVersion: 1,
+        environment: {
+          deviceClass: "mobile",
+          browserFamily: "safari",
+          osFamily: "ios",
+          viewportBucket: "sm",
+        },
         payload: { productId: "product_1", categorySlug: "wigs" },
+      },
+    ]);
+  });
+
+  it("uses context-event environment metadata for device distribution", () => {
+    const bundle = buildStoreInsightsContextBundleFromContextEvents([
+      contextEvent({
+        _id: "context_event_mobile" as ContextEventRow["_id"],
+        environment: {
+          deviceClass: "mobile",
+          browserFamily: "safari",
+          osFamily: "ios",
+          viewportBucket: "sm",
+        },
+      }),
+      contextEvent({
+        _id: "context_event_desktop" as ContextEventRow["_id"],
+        environment: {
+          deviceClass: "desktop",
+          browserFamily: "chrome",
+          osFamily: "macos",
+          viewportBucket: "xl",
+        },
+      }),
+      contextEvent({
+        _id: "context_event_tablet" as ContextEventRow["_id"],
+        environment: {
+          deviceClass: "tablet",
+          browserFamily: "safari",
+          osFamily: "ios",
+          viewportBucket: "lg",
+        },
+      }),
+      contextEvent({
+        _id: "context_event_bot" as ContextEventRow["_id"],
+        environment: {
+          deviceClass: "bot",
+          browserFamily: "other",
+          osFamily: "other",
+          viewportBucket: "unknown",
+        },
+      }),
+    ]);
+
+    expect(bundle.payloadSummary.deviceDistribution).toMatchObject({
+      mobile: "50%",
+      desktop: "25%",
+      unknown: "25%",
+    });
+    expect(readCompactEvents(bundle)).toMatchObject([
+      {
+        environment: {
+          deviceClass: "mobile",
+          browserFamily: "safari",
+          osFamily: "ios",
+          viewportBucket: "sm",
+        },
+      },
+      {
+        environment: {
+          deviceClass: "desktop",
+          browserFamily: "chrome",
+          osFamily: "macos",
+          viewportBucket: "xl",
+        },
+      },
+      {
+        environment: {
+          deviceClass: "tablet",
+          browserFamily: "safari",
+          osFamily: "ios",
+          viewportBucket: "lg",
+        },
+      },
+      {
+        environment: {
+          deviceClass: "bot",
+          browserFamily: "other",
+          osFamily: "other",
+          viewportBucket: "unknown",
+        },
       },
     ]);
   });

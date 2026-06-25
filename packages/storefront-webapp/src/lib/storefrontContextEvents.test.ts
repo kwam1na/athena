@@ -23,6 +23,7 @@ const baseContext = {
   origin: "homepage",
   sessionId: "session_ctx_123",
   userType: "guest" as const,
+  viewportBucket: "md" as const,
 };
 
 describe("storefront context events", () => {
@@ -65,6 +66,9 @@ describe("storefront context events", () => {
       sessionRef: {
         kind: "storefront_session",
         id: "session_ctx_123",
+      },
+      environment: {
+        viewportBucket: "md",
       },
     });
     expect(first.idempotencyKey).toBe(second.idempotencyKey);

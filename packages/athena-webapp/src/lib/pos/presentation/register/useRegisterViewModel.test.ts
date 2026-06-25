@@ -898,6 +898,7 @@ describe("useRegisterViewModel", () => {
     expect(result.current.customerPanel.customerInfo.name).toBe("Ama Serwa");
     expect(result.current.cashierCard?.cashierName).toBe("Ama K.");
     expect(result.current.productEntry.canQuickAddProduct).toBe(true);
+    expect(result.current.productEntry.canAddPendingCheckoutItem).toBe(true);
     expect(result.current.authDialog?.open).toBe(false);
     expect(result.current.syncStatus).toBeNull();
   });
@@ -7608,6 +7609,7 @@ describe("useRegisterViewModel", () => {
     );
     expect(result.current.closeoutControl?.canCorrectOpeningFloat).toBe(false);
     expect(result.current.productEntry.canQuickAddProduct).toBe(false);
+    expect(result.current.productEntry.canAddPendingCheckoutItem).toBe(false);
 
     act(() => {
       result.current.drawerGate?.onOpeningFloatChange?.("50.00");
