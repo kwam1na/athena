@@ -35,7 +35,7 @@ export type RegisterSessionTraceableSession = {
   organizationId?: Id<"organization">;
   terminalId?: Id<"posTerminal">;
   registerNumber?: string;
-  status: "open" | "active" | "closing" | "closed";
+  status: "open" | "active" | "closing" | "closeout_rejected" | "closed";
   openedByUserId?: Id<"athenaUser">;
   openedByStaffProfileId?: Id<"staffProfile">;
   openedAt: number;

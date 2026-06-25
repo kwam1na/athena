@@ -108,6 +108,12 @@ export function RegisterDrawerGate({
     }
     void drawerGate.onSubmit?.();
   };
+  const handleSubmitButtonClick = () => {
+    if (drawerGate.canOpenDrawer === false) {
+      return;
+    }
+    void drawerGate.onSubmit?.();
+  };
   const handleCloseoutSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     void drawerGate.onSubmitCloseout?.();
@@ -378,6 +384,23 @@ export function RegisterDrawerGate({
             </div>
 
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              {drawerGate.onSubmit ? (
+                <LoadingButton
+                  className="w-full sm:w-auto"
+                  disabled={
+                    drawerGate.canOpenDrawer === false ||
+                    Boolean(drawerGate.isSubmitting)
+                  }
+                  isLoading={Boolean(drawerGate.isSubmitting)}
+                  onClick={handleSubmitButtonClick}
+                  type="button"
+                  variant="default"
+                >
+                  {drawerGate.closeoutSecondaryActionLabel ??
+                    "Open replacement drawer"}
+                </LoadingButton>
+              ) : null}
+
               {drawerGate.canOpenCashControls ? (
                 <CashControlsButton
                   className="w-full sm:w-auto"

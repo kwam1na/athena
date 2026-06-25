@@ -141,4 +141,27 @@ describe("buildRegisterState", () => {
     expect(result.activeRegisterSession?.status).toBe("closing");
     expect(result.resumableSession?._id).toBe("session-2");
   });
+
+  it("keeps a rejected closeout drawer visible without making it sale-active", () => {
+    const result = buildRegisterState({
+      terminal: { _id: "terminal-1", displayName: "Front Counter" },
+      cashier: { _id: "cashier-1", firstName: "Ama", lastName: "K" },
+      activeRegisterSession: {
+        _id: "drawer-1" as Id<"registerSession">,
+        countedCash: 4_500,
+        expectedCash: 5_000,
+        openedAt: 1710000000000,
+        openingFloat: 5_000,
+        registerNumber: "A1",
+        status: "closeout_rejected",
+        variance: -500,
+      },
+      activeSession: null,
+      heldSessions: [],
+    });
+
+    expect(result.phase).toBe("readyToStart");
+    expect(result.activeRegisterSession?.status).toBe("closeout_rejected");
+    expect(result.activeSession).toBeNull();
+  });
 });

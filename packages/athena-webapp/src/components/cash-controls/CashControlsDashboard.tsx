@@ -1088,6 +1088,7 @@ function CashroomWorkflow({
   const needsAttention = sessions.filter(
     (session) =>
       session.status === "closing" ||
+      session.status === "closeout_rejected" ||
       Boolean(session.pendingApprovalRequest) ||
       getSessionSyncStatus(session).status !== "synced",
   );

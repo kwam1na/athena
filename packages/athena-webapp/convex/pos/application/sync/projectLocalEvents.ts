@@ -1458,22 +1458,6 @@ async function resolveSaleRegisterAndSession(
   }
 
   if (!isRegisterSessionSaleUsable(registerSession)) {
-    if (
-      args.options?.allowClosedRegisterSaleProjection === true &&
-      registerSession.status === "closed"
-    ) {
-      return {
-        registerSession,
-        existingPosSession: null,
-        existingPosSessionMapping: null,
-        resolvedRegisterNumber:
-          payload.registerNumber ??
-          registerSession.registerNumber ??
-          terminal?.registerNumber ??
-          "",
-      };
-    }
-
     const conflict = await createConflict(repository, args, {
       conflictType: "permission",
       summary: "Register was not open before this sale synced.",
@@ -2506,7 +2490,10 @@ async function persistPaymentAllocations(
     }
   }
 
-  if (payments.expectedCashDelta > 0) {
+  if (
+    payments.expectedCashDelta > 0 &&
+    isRegisterSessionSaleUsable(session.registerSession)
+  ) {
     const expectedCash =
       session.registerSession.expectedCash + payments.expectedCashDelta;
     const variance =

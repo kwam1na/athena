@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>fix: Add POS Closeout Rejected Lifecycle</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f8fa;
+      --panel: #ffffff;
+      --text: #17202a;
+      --muted: #5d6975;
+      --line: #d9dee5;
+      --accent: #176b87;
+      --accent-soft: #e6f3f6;
+      --warn-soft: #fff5df;
+      --code: #eef1f4;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 32px 20px 56px;
+    }
+    header, nav, section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 20px;
+      margin: 16px 0;
+    }
+    header { padding: 24px; margin-bottom: 18px; }
+    h1, h2, h3 { line-height: 1.2; margin: 0; }
+    h1 { font-size: 30px; }
+    h2 { font-size: 20px; margin-bottom: 12px; }
+    h3 { font-size: 16px; margin: 16px 0 8px; }
+    p { margin: 8px 0 0; }
+    a { color: var(--accent); }
+    code {
+      background: var(--code);
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.92em;
+    }
+    nav ul { columns: 2; margin: 10px 0 0; padding-left: 20px; }
+    ul { margin: 8px 0 0; padding-left: 20px; }
+    li { margin: 5px 0; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      font-size: 14px;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 8px 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: #f1f4f7; }
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 14px;
+    }
+    .pill {
+      background: var(--accent-soft);
+      color: #0f5068;
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .callout {
+      background: var(--warn-soft);
+      border: 1px solid #ead59e;
+      border-radius: 8px;
+      padding: 12px 14px;
+      margin-top: 10px;
+    }
+    .unit {
+      border-top: 1px solid var(--line);
+      padding-top: 14px;
+      margin-top: 14px;
+    }
+    .unit:first-child { border-top: 0; padding-top: 0; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 12px;
+    }
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px;
+      background: #fbfcfd;
+    }
+    .muted { color: var(--muted); }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>fix: Add POS Closeout Rejected Lifecycle</h1>
+      <p>Add a distinct <code>closeout_rejected</code> state so rejected variance closeouts stay reviewable while POS opens future sales against a replacement register session.</p>
+      <div class="meta">
+        <span class="pill">type: fix</span>
+        <span class="pill">status: active</span>
+        <span class="pill">date: 2026-06-24</span>
+        <span class="pill">deepened: 2026-06-24</span>
+      </div>
+      <p class="muted">Canonical source: <a href="./2026-06-24-001-fix-pos-closeout-rejected-lifecycle-plan.md">2026-06-24-001-fix-pos-closeout-rejected-lifecycle-plan.md</a></p>
+    </header>
+
+    <nav aria-label="Table of contents">
+      <h2>Contents</h2>
+      <ul>
+        <li><a href="#problem">Problem</a></li>
+        <li><a href="#requirements">Requirements</a></li>
+        <li><a href="#decisions">Key Decisions</a></li>
+        <li><a href="#matrix">Lifecycle Matrix</a></li>
+        <li><a href="#units">Implementation Units</a></li>
+        <li><a href="#impact">System Impact</a></li>
+        <li><a href="#risks">Risks</a></li>
+      </ul>
+    </nav>
+
+    <section id="problem">
+      <h2>Problem</h2>
+      <p>Rejected variance closeouts currently have a path that patches the register session back to <code>active</code>, clearing counted-cash evidence and making the drawer look usable in POS.</p>
+      <div class="callout">
+        <strong>Scope note:</strong> this plan supersedes the earlier no-new-status assumption. It deliberately does not implement settlement commands; <code>closeout_rejected</code> blocks Daily Close until explicit follow-up resolves it.
+      </div>
+    </section>
+
+    <section id="requirements">
+      <h2>Requirements</h2>
+      <ul>
+        <li>Rejected variance closeouts enter <code>closeout_rejected</code>, not <code>active</code>.</li>
+        <li>Review-only sessions are never POS-sale-usable and cannot receive ordinary sale/session bindings.</li>
+        <li>Evidence remains visible in Cash Controls, Daily Close, Daily Operations, workflow traces, and POS review gates.</li>
+        <li>POS offers opening a replacement register session after closeout submission, including variance closeouts still in review; the old register-session id remains non-reusable for sales.</li>
+        <li>Schema, DTO, public API, local read-model, and terminal-runtime compatibility ships before mutations write the new state.</li>
+        <li>Historical repair starts as a read-only dry-run audit, not an automatic write.</li>
+      </ul>
+    </section>
+
+    <section id="decisions">
+      <h2>Key Decisions</h2>
+      <div class="grid">
+        <article class="card">
+          <h3>Status Name</h3>
+          <p>Use <code>closeout_rejected</code> because it matches prior session context and existing trace language.</p>
+        </article>
+        <article class="card">
+          <h3>Sale Policy</h3>
+          <p>Only <code>open</code> and <code>active</code> remain sale-usable. Reviewed replay cannot create, bind, update, or cash-record sales against <code>closed</code> or <code>closeout_rejected</code>.</p>
+        </article>
+        <article class="card">
+          <h3>Replacement Drawer</h3>
+          <p>A submitted closeout in <code>closing</code> or a rejected closeout in <code>closeout_rejected</code> cannot sell, but a new register session may open for the same terminal/register.</p>
+        </article>
+        <article class="card">
+          <h3>Evidence</h3>
+          <p>Canonical evidence spans session status, approval decision, sync conflict/event, operational event, and trace context.</p>
+        </article>
+        <article class="card">
+          <h3>Synced Rejection</h3>
+          <p>General <code>active -> closeout_rejected</code> is invalid; the synced path requires scoped reviewed local closeout evidence.</p>
+        </article>
+        <article class="card">
+          <h3>Daily Close</h3>
+          <p><code>closeout_rejected</code> is an unresolved blocker, not active work or closed financial evidence.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="matrix">
+      <h2>Lifecycle Matrix</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Status</th>
+            <th>POS sale usable</th>
+            <th>Cash Controls visible</th>
+            <th>POS state visible</th>
+            <th>Blocks replacement drawer</th>
+            <th>Daily Close treatment</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><code>open</code></td><td>Yes</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Active register work</td></tr>
+          <tr><td><code>active</code></td><td>Yes</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Active register work</td></tr>
+          <tr><td><code>closing</code></td><td>No</td><td>Yes</td><td>Yes</td><td>No after closeout submission; yes only before the closeout packet exists</td><td>Closeout in progress / pending review</td></tr>
+          <tr><td><code>closeout_rejected</code></td><td>No</td><td>Yes</td><td>Review-only gate</td><td>No for a new register session</td><td>Blocking unresolved review work</td></tr>
+          <tr><td><code>closed</code></td><td>No</td><td>Historical/detail</td><td>Recent context only</td><td>No</td><td>Closed register evidence</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="units">
+      <h2>Implementation Units</h2>
+      <article class="unit">
+        <h3>U1. Define Closeout-Rejected Status Policy</h3>
+        <p>Add status policy plus schema, DTO, local read-model, public terminal/register, and terminal-runtime compatibility before writes, with tests proving submitted <code>closing</code> closeouts and <code>closeout_rejected</code> do not block replacement.</p>
+      </article>
+      <article class="unit">
+        <h3>U2. Persist Rejected Variance Closeouts As Review-Only</h3>
+        <p>Move rejection paths to <code>closeout_rejected</code> atomically while preserving approval, sync, operational, and trace evidence.</p>
+      </article>
+      <article class="unit">
+        <h3>U3. Expose Review-Only Sessions In Cash Controls, Daily Close, And Daily Operations</h3>
+        <p>Show rejected closeouts as unresolved review work and Daily Close blockers, not active drawers or settled closed sessions.</p>
+      </article>
+      <article class="unit">
+        <h3>U4. Make POS Gate Review-Only Sessions And Offer Replacement Opening</h3>
+        <p>Select submitted <code>closing</code> and rejected review-only sessions for drawer gate context while sale ids attach only to the replacement sale-usable session.</p>
+      </article>
+      <article class="unit">
+        <h3>U5. Harden Sale Attachment And Sync Projection Boundaries</h3>
+        <p>Route direct, stale, and local/offline sale paths through shared POS usability policy, including pending checkout, payment correction, and reviewed replay against closed/rejected sessions.</p>
+      </article>
+      <article class="unit">
+        <h3>U6. Address Historical Repair And Operational Handoff</h3>
+        <p>Document forward-only behavior or produce a read-only repair audit before any migration decision; rebuild Graphify after code changes.</p>
+      </article>
+    </section>
+
+    <section id="impact">
+      <h2>System Impact</h2>
+      <ul>
+        <li>Status policy affects schema validators, Cash Controls, POS register state, local sync projection, sale commands, Daily Close, Daily Operations, terminal runtime status, and traces.</li>
+        <li>Manager rejection must settle source sync event, conflict row, session status, operational event, and trace consistently.</li>
+        <li>Runtime status remains evidence, not authority.</li>
+      </ul>
+    </section>
+
+    <section id="risks">
+      <h2>Risks</h2>
+      <table>
+        <thead>
+          <tr><th>Risk</th><th>Mitigation</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>DTO/schema misses the new status</td><td>U1 updates schemas, DTOs, local read models, public APIs, terminal runtime validators, and tests.</td></tr>
+          <tr><td>Writers deploy before readers</td><td>Compatibility-first sequencing is an explicit requirement and implementation unit constraint.</td></tr>
+          <tr><td>Review-only sessions disappear from review surfaces</td><td>U3 adds Cash Controls, Daily Close, and Daily Operations tests.</td></tr>
+          <tr><td>Stale clients attach sales to rejected drawers</td><td>U5 hardens command and sync projection boundaries, including pending checkout and payment correction.</td></tr>
+          <tr><td>Evidence or atomicity is lost during rejection</td><td>U2 requires preserved evidence and split-brain regression tests.</td></tr>
+          <tr><td>Daily Close treats the rejected closeout as closed evidence</td><td>U3 defines it as a blocker outside closed counts and settled cash totals.</td></tr>
+        </tbody>
+      </table>
+    </section>
+  </main>
+</body>
+</html>

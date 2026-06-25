@@ -36,6 +36,7 @@ const DAILY_CLOSE_CARRY_FORWARD_TYPE = "daily_close_carry_forward";
 const TERMINAL_WORK_ITEM_STATUSES = new Set(["completed", "cancelled"]);
 const OPEN_OPERATIONAL_WORK_ITEM_STATUSES = ["open", "in_progress"] as const;
 const ACTIVE_REGISTER_STATUSES = ["open", "active", "closing"] as const;
+const REVIEW_ONLY_REGISTER_CLOSEOUT_STATUSES = ["closeout_rejected"] as const;
 const OPEN_POS_SESSION_STATUSES = ["active", "held"] as const;
 const DAILY_CLOSE_COMPLETION_ACTION = APPROVAL_ACTIONS.dailyCloseCompletion;
 const DAILY_CLOSE_REOPEN_ACTION = APPROVAL_ACTIONS.dailyCloseReopen;
@@ -545,13 +546,22 @@ function registerSessionCloseoutOperatingAt(
       record.type === "closed" && typeof record.occurredAt === "number",
   );
   const closeoutSubmittedAt =
-    session.status === "closing" &&
-    typeof session.countedCash === "number" &&
-    closeoutApproval?.requestType === "variance_review"
-      ? closeoutApproval.createdAt
+    isSubmittedVarianceCloseout(session, closeoutApproval)
+      ? closeoutApproval?.createdAt
       : undefined;
 
   return firstClosedRecord?.occurredAt ?? closeoutSubmittedAt ?? session.closedAt;
+}
+
+function isSubmittedVarianceCloseout(
+  session: RegisterSessionRangeCandidate,
+  closeoutApproval?: RegisterSessionCloseoutApproval,
+) {
+  return (
+    session.status === "closing" &&
+    typeof session.countedCash === "number" &&
+    closeoutApproval?.requestType === "variance_review"
+  );
 }
 
 function registerSessionLabel(
@@ -849,6 +859,24 @@ async function listActiveRegisterSessions(
 ) {
   const sessions = await Promise.all(
     ACTIVE_REGISTER_STATUSES.map((status) =>
+      ctx.db
+        .query("registerSession")
+        .withIndex("by_storeId_status", (q) =>
+          q.eq("storeId", storeId).eq("status", status),
+        )
+        .take(DAILY_CLOSE_QUERY_LIMIT),
+    ),
+  );
+
+  return sessions.flat();
+}
+
+async function listReviewOnlyRegisterCloseoutSessions(
+  ctx: Pick<QueryCtx, "db">,
+  storeId: Id<"store">,
+) {
+  const sessions = await Promise.all(
+    REVIEW_ONLY_REGISTER_CLOSEOUT_STATUSES.map((status) =>
       ctx.db
         .query("registerSession")
         .withIndex("by_storeId_status", (q) =>
@@ -1785,6 +1813,7 @@ export async function buildDailyCloseSnapshotWithCtx(
 
   const [
     activeRegisterSessionsForStore,
+    reviewOnlyRegisterCloseoutSessionsForStore,
     closedRegisterSessions,
     pendingApprovals,
     openPosSessions,
@@ -1797,6 +1826,7 @@ export async function buildDailyCloseSnapshotWithCtx(
     priorClose,
   ] = await Promise.all([
     listActiveRegisterSessions(ctx, args.storeId),
+    listReviewOnlyRegisterCloseoutSessions(ctx, args.storeId),
     listClosedRegisterSessionsForDay(ctx, { ...range, storeId: args.storeId }),
     listPendingCloseoutApprovals(ctx, { ...range, storeId: args.storeId }),
     listOpenPosSessions(ctx, { ...range, storeId: args.storeId }),
@@ -1820,11 +1850,55 @@ export async function buildDailyCloseSnapshotWithCtx(
     getPriorCompletedDailyClose(ctx, args),
   ]);
 
-  const activeRegisterSessions = await filterRegisterSessionsBelongingToRange(
+  const activeRegisterSessionsInRange =
+    await filterRegisterSessionsBelongingToRange(
+      ctx,
+      activeRegisterSessionsForStore,
+      range,
+    );
+  const reviewOnlyRegisterCloseoutSessionsInRange =
+    await filterRegisterSessionsBelongingToRange(
+      ctx,
+      reviewOnlyRegisterCloseoutSessionsForStore,
+      range,
+    );
+  const activeRegisterSessionApprovalsById = await buildApprovalRequestsById(
     ctx,
-    activeRegisterSessionsForStore,
-    range,
+    activeRegisterSessionsInRange.map(
+      (session) => session.managerApprovalRequestId,
+    ),
   );
+  const submittedVarianceCloseoutSessions = activeRegisterSessionsInRange.filter(
+    (session) =>
+      isSubmittedVarianceCloseout(
+        session,
+        closeoutApprovalForRegisterSession(
+          session,
+          activeRegisterSessionApprovalsById,
+        ),
+      ),
+  );
+  const activeRegisterSessions = activeRegisterSessionsInRange.filter(
+    (session) =>
+      !isSubmittedVarianceCloseout(
+        session,
+        closeoutApprovalForRegisterSession(
+          session,
+          activeRegisterSessionApprovalsById,
+        ),
+      ),
+  );
+  const reviewOnlyRegisterCloseoutSessions = [
+    ...reviewOnlyRegisterCloseoutSessionsInRange,
+    ...submittedVarianceCloseoutSessions,
+  ];
+  const reviewOnlyRegisterCloseoutApprovalsById =
+    await buildApprovalRequestsById(
+      ctx,
+      reviewOnlyRegisterCloseoutSessions.map(
+        (session) => session.managerApprovalRequestId,
+      ),
+    );
   const relevantRegisterSessions = [
     ...activeRegisterSessions,
     ...closedRegisterSessions,
@@ -1859,6 +1933,7 @@ export async function buildDailyCloseSnapshotWithCtx(
       : undefined;
   const terminalLabelsById = await buildTerminalLabelsById(ctx, [
     ...activeRegisterSessions.map((session) => session.terminalId),
+    ...reviewOnlyRegisterCloseoutSessions.map((session) => session.terminalId),
     ...closedRegisterSessions.map((session) => session.terminalId),
     ...approvalRegisterSessions.map((session) => session.terminalId),
     ...expenseSessions.map((session) => session.terminalId),
@@ -1869,6 +1944,12 @@ export async function buildDailyCloseSnapshotWithCtx(
   const staffNamesById = await buildStaffNamesById(ctx, [
     ...activeRegisterSessions.map((session) => session.openedByStaffProfileId),
     ...activeRegisterSessions.map((session) => session.closedByStaffProfileId),
+    ...reviewOnlyRegisterCloseoutSessions.map(
+      (session) => session.openedByStaffProfileId,
+    ),
+    ...reviewOnlyRegisterCloseoutSessions.map(
+      (session) => session.closedByStaffProfileId,
+    ),
     ...closedRegisterSessions.map((session) => session.openedByStaffProfileId),
     ...closedRegisterSessions.map((session) => session.closedByStaffProfileId),
     ...approvalRegisterSessions.map(
@@ -1951,6 +2032,80 @@ export async function buildDailyCloseSnapshotWithCtx(
           ? { closedAt: session.closedAt }
           : {}),
         ...(closedBy ? { closedBy } : {}),
+      },
+    });
+  });
+
+  reviewOnlyRegisterCloseoutSessions.forEach((session) => {
+    const terminalLabel = session.terminalId
+      ? terminalLabelsById.get(session.terminalId)
+      : undefined;
+    const registerLabel = trimOptional(session.registerNumber)
+      ? registerSessionLabel(session)
+      : undefined;
+    const registerMetadata = registerMetadataLabel(
+      terminalLabel,
+      registerLabel,
+    );
+    const openedBy = session.openedByStaffProfileId
+      ? staffNamesById.get(session.openedByStaffProfileId)
+      : undefined;
+    const closedBy = session.closedByStaffProfileId
+      ? staffNamesById.get(session.closedByStaffProfileId)
+      : undefined;
+    const isCarriedOver = session.openedAt < range.startAt;
+    const closeoutApproval = closeoutApprovalForRegisterSession(
+      session,
+      reviewOnlyRegisterCloseoutApprovalsById,
+    );
+    const isSubmittedVarianceReview = isSubmittedVarianceCloseout(
+      session,
+      closeoutApproval,
+    );
+
+    blockers.push({
+      key: `register_session:${session._id}:${
+        isSubmittedVarianceReview ? "variance_review" : session.status
+      }`,
+      severity: "blocker",
+      category: "register_session",
+      title: isSubmittedVarianceReview
+        ? "Register closeout variance needs review"
+        : "Register closeout needs review",
+      message: isSubmittedVarianceReview
+        ? "Resolve the submitted register closeout variance review before completing the end of day review."
+        : "Review or reopen the rejected register closeout before completing the end of day review.",
+      subject: {
+        type: "register_session",
+        id: session._id,
+        label: registerSessionLabel(session),
+      },
+      link: {
+        label: "View session",
+        params: { sessionId: session._id },
+        to: "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId",
+      },
+      metadata: {
+        ...(terminalLabel ? { terminal: terminalLabel } : {}),
+        ...(registerMetadata ? { register: registerMetadata } : {}),
+        operatingScope: isCarriedOver
+          ? "Carried over from prior day"
+          : "Opened today",
+        openedAt: session.openedAt,
+        ...(openedBy ? { openedBy } : {}),
+        expectedCash: session.expectedCash,
+        ...(typeof session.countedCash === "number"
+          ? { countedCash: session.countedCash }
+          : {}),
+        status: session.status,
+        ...nonZeroVarianceMetadata(session.variance),
+        ...(typeof session.closedAt === "number"
+          ? { closedAt: session.closedAt }
+          : {}),
+        ...(closedBy ? { closedBy } : {}),
+        ...(closeoutApproval
+          ? { reviewRequestedAt: closeoutApproval.createdAt }
+          : {}),
       },
     });
   });

@@ -71,6 +71,19 @@ export function isRegisterSessionConflictBlocking(
   return isRegisterSessionConflictBlockingStatus(session?.status);
 }
 
+export function isRegisterSessionReplacementBlocking(input: {
+  hasSubmittedCloseout?: boolean;
+  session: Pick<RegisterSessionLifecycleScopedSession, "status"> | null | undefined;
+}) {
+  if (!input.session) return false;
+  if (input.session.status === "closeout_rejected") return false;
+  if (input.session.status === "closing" && input.hasSubmittedCloseout) {
+    return false;
+  }
+
+  return isRegisterSessionConflictBlocking(input.session);
+}
+
 export function getSaleBlockingDrawerAuthority<
   Authority extends RegisterSessionLifecycleDrawerAuthority,
 >(input: {
@@ -135,7 +148,8 @@ export function canSupersedeReviewedRegisterSessionForLocalOpen(input: {
     isDistinctReplacement &&
     isNewerThanReview &&
     (isRegisterSessionSaleUsable(input.registerSession) ||
-      input.registerSession?.status === "closing") &&
+      input.registerSession?.status === "closing" ||
+      input.registerSession?.status === "closeout_rejected") &&
     input.hasOpenRegisterCloseoutReview
   );
 }

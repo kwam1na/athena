@@ -404,6 +404,7 @@ describe("correctTransactionPaymentMethod", () => {
       _id: "register-session-1",
       countedCash: 9000,
       expectedCash: 7000,
+      status: "active",
       storeId: "store-1",
     } as never);
     vi.mocked(getPosTransactionById).mockResolvedValue({
@@ -463,6 +464,7 @@ describe("correctTransactionPaymentMethod", () => {
     vi.mocked(ctx.db.get).mockResolvedValue({
       _id: "register-session-1",
       expectedCash: 7000,
+      status: "active",
       storeId: "store-1",
     } as never);
     vi.mocked(getPosTransactionById).mockResolvedValue({
@@ -508,40 +510,45 @@ describe("correctTransactionPaymentMethod", () => {
     );
   });
 
-  it("rejects payment method corrections while the register session is closing", async () => {
-    const ctx = createMutationCtx();
-    vi.mocked(ctx.db.get).mockResolvedValue({
-      _id: "register-session-1",
-      expectedCash: 7000,
-      status: "closing",
-      storeId: "store-1",
-    } as never);
-    vi.mocked(getPosTransactionById).mockResolvedValue({
-      _id: "txn-1" as Id<"posTransaction">,
-      registerSessionId: "register-session-1" as Id<"registerSession">,
-      storeId: "store-1" as Id<"store">,
-      transactionNumber: "POS-111111",
-      status: "completed",
-      total: 1000,
-      totalPaid: 1000,
-      paymentMethod: "card",
-      payments: [{ method: "card", amount: 1000, timestamp: 1 }],
-    } as never);
+  it.each(["closing", "closeout_rejected"] as const)(
+    "rejects payment method corrections while the register session is %s",
+    async (status) => {
+      const ctx = createMutationCtx();
+      vi.mocked(ctx.db.get).mockResolvedValue({
+        _id: "register-session-1",
+        expectedCash: 7000,
+        status,
+        storeId: "store-1",
+      } as never);
+      vi.mocked(getPosTransactionById).mockResolvedValue({
+        _id: "txn-1" as Id<"posTransaction">,
+        registerSessionId: "register-session-1" as Id<"registerSession">,
+        storeId: "store-1" as Id<"store">,
+        transactionNumber: "POS-111111",
+        status: "completed",
+        total: 1000,
+        totalPaid: 1000,
+        paymentMethod: "card",
+        payments: [{ method: "card", amount: 1000, timestamp: 1 }],
+      } as never);
 
-    await expect(
-      correctTransactionPaymentMethod(ctx as never, {
-        approvalProofId: "proof-1" as Id<"approvalProof">,
-        transactionId: "txn-1" as Id<"posTransaction">,
-        paymentMethod: "cash",
-        reason: "Till entry correction",
-      }),
-    ).rejects.toThrow(
-      "Register closeout is under review. Reopen the register before updating payment details.",
-    );
-    expect(correctSameAmountSinglePaymentAllocationWithCtx).not.toHaveBeenCalled();
-    expect(patchPosTransaction).not.toHaveBeenCalled();
-    expect(ctx.db.patch).not.toHaveBeenCalled();
-  });
+      await expect(
+        correctTransactionPaymentMethod(ctx as never, {
+          approvalProofId: "proof-1" as Id<"approvalProof">,
+          transactionId: "txn-1" as Id<"posTransaction">,
+          paymentMethod: "cash",
+          reason: "Till entry correction",
+        }),
+      ).rejects.toThrow(
+        "Register closeout is under review. Reopen the register before updating payment details.",
+      );
+      expect(
+        correctSameAmountSinglePaymentAllocationWithCtx,
+      ).not.toHaveBeenCalled();
+      expect(patchPosTransaction).not.toHaveBeenCalled();
+      expect(ctx.db.patch).not.toHaveBeenCalled();
+    },
+  );
 
   it("rejects split payments", async () => {
     vi.mocked(getPosTransactionById).mockResolvedValue({

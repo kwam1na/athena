@@ -1759,7 +1759,7 @@ export async function resolveTransactionVoidApprovalDecisionWithCtx(
     ctx,
     transaction,
     {
-      requireUsableRegisterSession: registerSession?.status !== "closing",
+      requireUsableRegisterSession: true,
     },
   );
   if (preconditions.kind !== "ok") {

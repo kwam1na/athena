@@ -106,7 +106,7 @@ export interface PosLocalCompletedSaleReadModel {
 export interface PosLocalCashDrawerReadModel {
   localRegisterSessionId: string;
   cloudRegisterSessionId?: string;
-  status: "open" | "active" | "closing" | "closed";
+  status: "open" | "active" | "closing" | "closeout_rejected" | "closed";
   terminalId?: string;
   registerNumber?: string;
   openingFloat: number;
@@ -274,7 +274,7 @@ export function projectLocalRegisterReadModel(input: {
       continue;
     }
 
-    if (activeRegisterSession.status === "closing") {
+    if (!isRegisterSessionSaleUsable(activeRegisterSession)) {
       errors.push(errorFor(event, "register_closed"));
       continue;
     }
@@ -1002,6 +1002,7 @@ function registerStatus(
   return value === "open" ||
     value === "active" ||
     value === "closing" ||
+    value === "closeout_rejected" ||
     value === "closed"
     ? value
     : undefined;

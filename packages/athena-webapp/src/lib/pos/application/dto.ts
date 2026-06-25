@@ -63,7 +63,7 @@ export interface PosCashierDto {
 
 export interface PosCashDrawerDto {
   _id: Id<"registerSession">;
-  status: "open" | "active" | "closing" | "closed";
+  status: "open" | "active" | "closing" | "closeout_rejected" | "closed";
   terminalId?: Id<"posTerminal">;
   registerNumber?: string;
   openingFloat: number;

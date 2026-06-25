@@ -549,6 +549,18 @@ describe("cash control deposits", () => {
           storeId: "store_1" as Id<"store">,
           variance: 0,
         },
+        {
+          _id: "session_rejected" as Id<"registerSession">,
+          countedCash: 8800,
+          expectedCash: 9500,
+          openedAt: 15,
+          openingFloat: 5000,
+          registerNumber: "D4",
+          status: "closeout_rejected",
+          storeId: "store_1" as Id<"store">,
+          terminalId: "terminal_3" as Id<"posTerminal">,
+          variance: -700,
+        },
       ],
       staffNamesById: new Map(),
       terminalNamesById: new Map([
@@ -557,9 +569,10 @@ describe("cash control deposits", () => {
       ]),
     });
 
-    expect(snapshot.registerSessions).toHaveLength(3);
+    expect(snapshot.registerSessions).toHaveLength(4);
     expect(snapshot.registerSessions.map((session) => session._id)).toEqual([
       "session_closing",
+      "session_rejected",
       "session_open",
       "session_closed",
     ]);
@@ -572,7 +585,7 @@ describe("cash control deposits", () => {
       totalDeposited: 1200,
     });
 
-    expect(snapshot.pendingCloseouts).toHaveLength(1);
+    expect(snapshot.pendingCloseouts).toHaveLength(2);
     expect(snapshot.pendingCloseouts[0]).toMatchObject({
       _id: "session_closing",
       pendingApprovalRequest: {
@@ -582,6 +595,11 @@ describe("cash control deposits", () => {
       },
       terminalName: "Back counter",
       totalDeposited: 500,
+    });
+    expect(snapshot.pendingCloseouts[1]).toMatchObject({
+      _id: "session_rejected",
+      status: "closeout_rejected",
+      terminalName: null,
     });
 
     expect(snapshot.openSessions[0]).toMatchObject({
@@ -605,10 +623,14 @@ describe("cash control deposits", () => {
       },
     });
 
-    expect(snapshot.unresolvedVariances).toHaveLength(2);
+    expect(snapshot.unresolvedVariances).toHaveLength(3);
     expect(snapshot.unresolvedVariances[0]).toMatchObject({
       _id: "session_closing",
       variance: -500,
+    });
+    expect(snapshot.unresolvedVariances[1]).toMatchObject({
+      _id: "session_rejected",
+      variance: -700,
     });
 
     expect(snapshot.recentDeposits).toEqual([
@@ -913,7 +935,7 @@ describe("cash control deposits", () => {
           openingFloat: 10000,
           organizationId: "org_1",
           registerNumber: "1",
-          status: "closed",
+          status: "active",
           storeId: "store_1",
           terminalId: "terminal_1",
         },
@@ -1024,6 +1046,7 @@ describe("cash control deposits", () => {
       expect.objectContaining({
         _id: "session_open",
         expectedCash: 65000,
+        status: "active",
       }),
     ]);
     expect(ctx.tables.get("operationalEvent")).toEqual(
@@ -1132,7 +1155,7 @@ describe("cash control deposits", () => {
           openingFloat: 15500,
           organizationId: "org_1",
           registerNumber: "1",
-          status: "closed",
+          status: "active",
           storeId: "store_1",
           terminalId: "terminal_1",
         },
@@ -1387,7 +1410,7 @@ describe("cash control deposits", () => {
           openingFloat: 15500,
           organizationId: "org_1",
           registerNumber: "1",
-          status: "closed",
+          status: "active",
           storeId: "store_1",
           terminalId: "terminal_1",
         },
@@ -2331,7 +2354,7 @@ describe("cash control deposits", () => {
           openingFloat: 10000,
           organizationId: "org_1",
           registerNumber: "1",
-          status: "closed",
+          status: "active",
           storeId: "store_1",
           terminalId: "terminal_1",
         },
@@ -3577,7 +3600,7 @@ describe("cash control deposits", () => {
     );
   });
 
-  it("reopens drawers left closing by rejected variance closeout reviews", async () => {
+  it("persists rejected variance closeout reviews without clearing evidence", async () => {
     const ctx = createAuthorizedRegisterDepositCtx({
       operationalEvent: [],
       posLocalSyncConflict: [
@@ -3700,10 +3723,11 @@ describe("cash control deposits", () => {
     expect(ctx.tables.get("registerSession")).toEqual([
       expect.objectContaining({
         _id: "session_open",
-        countedCash: undefined,
-        notes: undefined,
-        status: "active",
-        variance: undefined,
+        countedCash: 45000,
+        expectedCash: 50000,
+        notes: "cash count issue",
+        status: "closeout_rejected",
+        variance: -5000,
       }),
     ]);
     expect(ctx.tables.get("posLocalSyncEvent")).toEqual([

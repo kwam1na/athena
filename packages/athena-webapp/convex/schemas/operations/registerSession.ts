@@ -11,6 +11,7 @@ export const registerSessionSchema = v.object({
     v.literal("open"),
     v.literal("active"),
     v.literal("closing"),
+    v.literal("closeout_rejected"),
     v.literal("closed")
   ),
   openedByUserId: v.optional(v.id("athenaUser")),

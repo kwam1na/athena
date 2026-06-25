@@ -4,10 +4,78 @@ import type { PosLocalEventRecord } from "./posLocalStore";
 import {
   hasSettledRegisterCloseout,
   projectLocalRegisterReadModel,
+  type PosLocalCashDrawerReadModel,
   type PosLocalRegisterReadModelError,
 } from "./registerReadModel";
 
 describe("projectLocalRegisterReadModel", () => {
+  it("accepts review-only closeout status in local register drawer snapshots", () => {
+    const drawer = {
+      localRegisterSessionId: "local-register-1",
+      cloudRegisterSessionId: "cloud-register-1",
+      status: "closeout_rejected",
+      openingFloat: 100,
+      expectedCash: 100,
+      countedCash: 90,
+      openedAt: 1_000,
+      notes: "Manager rejected variance closeout.",
+    } satisfies PosLocalCashDrawerReadModel;
+
+    expect(drawer.status).toBe("closeout_rejected");
+  });
+
+  it("keeps closeout-rejected local drawers review-only during event replay", () => {
+    const model = projectLocalRegisterReadModel({
+      events: [
+        event({
+          sequence: 1,
+          type: "register.opened",
+          localRegisterSessionId: "local-register-1",
+          payload: {
+            localRegisterSessionId: "local-register-1",
+            openingFloat: 100,
+            expectedCash: 100,
+            status: "closeout_rejected",
+          },
+        }),
+        event({
+          sequence: 2,
+          type: "session.started",
+          localRegisterSessionId: "local-register-1",
+          localPosSessionId: "local-sale-1",
+          payload: { localPosSessionId: "local-sale-1", status: "active" },
+        }),
+        event({
+          sequence: 3,
+          type: "cart.item_added",
+          localRegisterSessionId: "local-register-1",
+          localPosSessionId: "local-sale-1",
+          payload: {
+            localItemId: "local-item-1",
+            productId: "product-1",
+            productSkuId: "sku-1",
+            productSku: "SKU-1",
+            productName: "Lace Front",
+            price: 75,
+            quantity: 1,
+          },
+        }),
+      ],
+      isOnline: true,
+    });
+
+    expect(model.activeRegisterSession).toMatchObject({
+      localRegisterSessionId: "local-register-1",
+      status: "closeout_rejected",
+    });
+    expect(model.canSell).toBe(false);
+    expect(model.activeSale).toBeNull();
+    expect(errorCodes(model.errors)).toEqual([
+      "register_closed",
+      "register_closed",
+    ]);
+  });
+
   it("replays a local drawer, sale, cart, payment, and receipt history", () => {
     const model = projectLocalRegisterReadModel({
       events: [

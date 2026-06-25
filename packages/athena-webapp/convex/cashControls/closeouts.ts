@@ -9,6 +9,10 @@ import {
 } from "../operations/approvalActions";
 import { consumeApprovalProofWithCtx } from "../operations/approvalProofs";
 import { recordOperationalEventWithCtx } from "../operations/operationalEvents";
+import {
+  rejectRegisterSessionCloseoutWithCtx,
+  reopenRejectedRegisterSessionCloseoutWithCtx,
+} from "../operations/registerSessions";
 import { recordRegisterSessionTraceBestEffort } from "../operations/registerSessionTracing";
 import { commandResultValidator } from "../lib/commandResultValidators";
 import { toDisplayAmount } from "../lib/currency";
@@ -720,6 +724,13 @@ export const submitRegisterSessionCloseout = mutation({
       });
     }
 
+    if (registerSession.status === "closeout_rejected") {
+      return userError({
+        code: "precondition_failed",
+        message: "Register closeout is already under review.",
+      });
+    }
+
     const config = getCashControlsConfig(store);
     const closeoutReview = buildRegisterSessionCloseoutReview({
       countedCash: args.countedCash,
@@ -1153,6 +1164,104 @@ export const reopenRegisterSessionCloseout = mutation({
       });
     }
 
+    if (registerSession.status === "closeout_rejected") {
+      if (!registerSession.organizationId || !args.approvalProofId) {
+        return userError({
+          code: "authentication_failed",
+          message: "Only managers can reopen a rejected register closeout.",
+        });
+      }
+
+      const proof = await consumeCommandApprovalProofWithCtx(ctx, {
+        action: REGISTER_CLOSEOUT_REOPEN_ACTION,
+        approvalProofId: args.approvalProofId,
+        requiredRole: "manager",
+        requestedByStaffProfileId: args.requestedByStaffProfileId,
+        storeId: args.storeId,
+        subject: {
+          type: "register_session",
+          id: registerSession._id,
+          label: registerSession.registerNumber,
+        },
+      });
+
+      if (proof.kind !== "ok") {
+        return proof;
+      }
+
+      const canReopenRejectedCloseout = await staffProfileCanReviewCloseoutVariance(ctx, {
+        organizationId: registerSession.organizationId,
+        staffProfileId: proof.data.approvedByStaffProfileId,
+        storeId: args.storeId,
+      });
+
+      if (!canReopenRejectedCloseout) {
+        return userError({
+          code: "authorization_failed",
+          message: "Only managers can reopen a rejected register closeout.",
+        });
+      }
+
+      const previousCloseout = omitUndefined({
+        countedCash: registerSession.countedCash,
+        expectedCash: registerSession.expectedCash,
+        notes: registerSession.notes,
+        variance: registerSession.variance,
+      });
+      const reopenedSession = await reopenRejectedRegisterSessionCloseoutWithCtx(
+        ctx,
+        {
+          actorStaffProfileId: proof.data.approvedByStaffProfileId,
+          actorUserId: args.actorUserId,
+          registerSessionId: args.registerSessionId,
+          reason: "Correction needed after manager rejection.",
+        },
+      );
+      const reopenedAt = Date.now();
+
+      await recordOperationalEventWithCtx(ctx, {
+        actorStaffProfileId: proof.data.approvedByStaffProfileId,
+        actorUserId: args.actorUserId,
+        eventType: "register_session_closeout_reopened",
+        message: "Rejected register closeout reopened for correction.",
+        metadata: previousCloseout,
+        organizationId: registerSession.organizationId,
+        reason: "Correction needed after manager rejection.",
+        registerSessionId: registerSession._id,
+        storeId: args.storeId,
+        subjectId: registerSession._id,
+        subjectLabel: registerSession.registerNumber,
+        subjectType: "register_session",
+      });
+
+      const traceResult = await recordRegisterSessionTraceBestEffort(ctx, {
+        stage: "closeout_reopened",
+        session: reopenedSession ?? {
+          ...registerSession,
+          status: "closing",
+        },
+        occurredAt: reopenedAt,
+        actorStaffProfileId: proof.data.approvedByStaffProfileId,
+        actorUserId: args.actorUserId,
+        countedCash: registerSession.countedCash,
+        reason: "Correction needed after manager rejection.",
+        variance: registerSession.variance,
+      });
+
+      await persistRegisterSessionWorkflowTraceIdBestEffort(ctx, {
+        registerSessionId: registerSession._id,
+        traceCreated: traceResult.traceCreated,
+        traceId: traceResult.traceId,
+        workflowTraceId: reopenedSession?.workflowTraceId,
+      });
+
+      return ok({
+        action: "reopened",
+        approvalRequest: null,
+        registerSession: reopenedSession,
+      });
+    }
+
     if (registerSession.status !== "closing") {
       if (registerSession.status !== "closed") {
         return userError({
@@ -1497,6 +1606,13 @@ export const reviewRegisterSessionCloseout = mutation({
       });
     }
 
+    if (registerSession.status !== "closing") {
+      return userError({
+        code: "precondition_failed",
+        message: "Register session is not in closeout.",
+      });
+    }
+
     const proof = await consumeApprovalProofWithCtx(ctx, {
       actionKey: REGISTER_VARIANCE_REVIEW_ACTION_KEY,
       approvalProofId: args.approvalProofId,
@@ -1622,6 +1738,10 @@ export const reviewRegisterSessionCloseout = mutation({
       });
     }
 
+    const rejectedSession = await rejectRegisterSessionCloseoutWithCtx(ctx, {
+      registerSessionId: registerSession._id,
+    });
+
     await recordOperationalEventWithCtx(ctx, {
       actorStaffProfileId: reviewedByStaffProfileId,
       actorUserId: args.reviewedByUserId,
@@ -1645,7 +1765,6 @@ export const reviewRegisterSessionCloseout = mutation({
       subjectType: "register_session",
     });
 
-    const rejectedSession = await ctx.db.get("registerSession", registerSession._id);
     const rejectionOccurredAt = Date.now();
     const rejectionTraceResult = await recordRegisterSessionTraceBestEffort(ctx, {
       stage: "closeout_rejected",

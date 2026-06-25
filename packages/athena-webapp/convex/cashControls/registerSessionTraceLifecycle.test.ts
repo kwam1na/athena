@@ -52,12 +52,14 @@ type RegisterSessionRecord = {
   countedCash?: number;
   expectedCash: number;
   managerApprovalRequestId?: Id<"approvalRequest">;
+  notes?: string;
   openedAt: number;
   organizationId?: Id<"organization">;
   registerNumber?: string;
-  status: "open" | "active" | "closing" | "closed";
+  status: "open" | "active" | "closing" | "closeout_rejected" | "closed";
   storeId: Id<"store">;
   terminalId?: Id<"posTerminal">;
+  variance?: number;
   workflowTraceId?: string;
 };
 
@@ -666,8 +668,11 @@ describe("register session trace lifecycle handlers", () => {
       registerSessions: [
         buildRegisterSession({
           countedCash: 16_050,
+          expectedCash: 10_000,
           managerApprovalRequestId: "approval-1" as Id<"approvalRequest">,
+          notes: "Counted after shift.",
           status: "closing",
+          variance: 6_050,
         }),
       ],
     });
@@ -686,9 +691,26 @@ describe("register session trace lifecycle handlers", () => {
         kind: "ok",
         data: expect.objectContaining({
           action: "rejected",
+          registerSession: expect.objectContaining({
+            countedCash: 16_050,
+            expectedCash: 10_000,
+            notes: "Counted after shift.",
+            status: "closeout_rejected",
+            variance: 6_050,
+          }),
         }),
       }),
     );
+    expect(ctx.registerSessions).toEqual([
+      expect.objectContaining({
+        countedCash: 16_050,
+        expectedCash: 10_000,
+        managerApprovalRequestId: undefined,
+        notes: "Counted after shift.",
+        status: "closeout_rejected",
+        variance: 6_050,
+      }),
+    ]);
     expect(mocks.traceRecord).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({

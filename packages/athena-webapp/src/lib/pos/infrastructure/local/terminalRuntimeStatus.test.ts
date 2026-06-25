@@ -583,6 +583,38 @@ describe("terminalRuntimeStatus", () => {
     );
   });
 
+  it("preserves review-only closeout register-session status in runtime evidence", () => {
+    const status = buildPosTerminalRuntimeStatus({
+      activeRegisterSession: {
+        cloudRegisterSessionId: "cloud-register-1",
+        localRegisterSessionId: "local-register-1",
+        openedAt: 1_000,
+        registerNumber: "8",
+        status: "closeout_rejected",
+      },
+      clock: () => 2_000,
+      events: [],
+      source: "register",
+      staffAuthorityStatus: "ready",
+      terminalSeed: {
+        cloudTerminalId: "terminal-cloud-1",
+        displayName: "Front register",
+        provisionedAt: 1_000,
+        schemaVersion: 5,
+        storeId: "store-1",
+        syncSecretHash: "sync-secret-hash",
+        terminalId: "local-terminal-1",
+      },
+    });
+
+    expect(status.activeRegisterSession).toMatchObject({
+      cloudRegisterSessionId: "cloud-register-1",
+      localRegisterSessionId: "local-register-1",
+      observedAt: 2_000,
+      status: "closeout_rejected",
+    });
+  });
+
   it("reports uncertainty metadata as support-safe counts without exposing payload details", () => {
     const input = {
       clock: () => 2_000,

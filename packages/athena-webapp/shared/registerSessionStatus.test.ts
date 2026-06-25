@@ -11,6 +11,7 @@ describe("register session status policies", () => {
     ["open", true],
     ["active", true],
     ["closing", false],
+    ["closeout_rejected", false],
     ["closed", false],
   ] as const)("classifies %s POS usability as %s", (status, expected) => {
     expect(isPosUsableRegisterSessionStatus(status)).toBe(expected);
@@ -20,6 +21,7 @@ describe("register session status policies", () => {
     ["open", true],
     ["active", true],
     ["closing", true],
+    ["closeout_rejected", false],
     ["closed", false],
   ] as const)("classifies %s duplicate-drawer blocking as %s", (status, expected) => {
     expect(isRegisterSessionConflictBlockingStatus(status)).toBe(expected);
@@ -29,6 +31,7 @@ describe("register session status policies", () => {
     ["open", true],
     ["active", true],
     ["closing", true],
+    ["closeout_rejected", true],
     ["closed", false],
   ] as const)("classifies %s cash-control visibility as %s", (status, expected) => {
     expect(isCashControlVisibleRegisterSessionStatus(status)).toBe(expected);
