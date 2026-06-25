@@ -4,6 +4,7 @@ import { v } from "convex/values";
 import { categorySchema } from "../schemas/inventory";
 import { Id } from "../_generated/dataModel";
 import { refreshProductSkuSearchForCategory } from "./skuSearch";
+import { markCatalogSummaryNeedsRefresh } from "./catalogSummary";
 
 const entity = "category";
 
@@ -77,6 +78,7 @@ export const create = mutation({
   args: categorySchema,
   handler: async (ctx, args) => {
     const id = await ctx.db.insert(entity, args);
+    await markCatalogSummaryNeedsRefresh(ctx, args.storeId);
 
     return await ctx.db.get("category", id);
   },
@@ -90,6 +92,7 @@ export const update = mutation({
     slug: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    const category = await ctx.db.get("category", args.id);
     const patch: Partial<{
       name: string;
       showOnStorefront: boolean;
@@ -110,6 +113,9 @@ export const update = mutation({
 
     await ctx.db.patch("category", args.id, patch);
     await refreshProductSkuSearchForCategory(ctx, args.id);
+    if (category) {
+      await markCatalogSummaryNeedsRefresh(ctx, category.storeId);
+    }
 
     return await ctx.db.get("category", args.id);
   },
@@ -120,8 +126,12 @@ export const remove = mutation({
     id: v.id(entity),
   },
   handler: async (ctx, args) => {
+    const category = await ctx.db.get("category", args.id);
     await ctx.db.delete("category", args.id);
     await refreshProductSkuSearchForCategory(ctx, args.id);
+    if (category) {
+      await markCatalogSummaryNeedsRefresh(ctx, category.storeId);
+    }
 
     return { message: "OK" };
   },

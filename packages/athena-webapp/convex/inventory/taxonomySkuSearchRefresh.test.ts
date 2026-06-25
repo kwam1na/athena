@@ -2,7 +2,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
-import { remove as removeCategory, update as updateCategory } from "./categories";
+import {
+  create as createCategory,
+  remove as removeCategory,
+  update as updateCategory,
+} from "./categories";
 import { remove as removeColor, update as updateColor } from "./colors";
 import {
   remove as removeSubcategory,
@@ -13,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   refreshProductSkuSearchForCategory: vi.fn(),
   refreshProductSkuSearchForColor: vi.fn(),
   refreshProductSkuSearchForSubcategory: vi.fn(),
+  markCatalogSummaryNeedsRefresh: vi.fn(),
 }));
 
 vi.mock("./skuSearch", () => ({
@@ -20,6 +25,10 @@ vi.mock("./skuSearch", () => ({
   refreshProductSkuSearchForColor: mocks.refreshProductSkuSearchForColor,
   refreshProductSkuSearchForSubcategory:
     mocks.refreshProductSkuSearchForSubcategory,
+}));
+
+vi.mock("./catalogSummary", () => ({
+  markCatalogSummaryNeedsRefresh: mocks.markCatalogSummaryNeedsRefresh,
 }));
 
 type Row = Record<string, unknown> & { _id: string };
@@ -48,6 +57,11 @@ function createCtx(seed: Partial<Record<TableName, Row[]>>) {
         }
 
         return tables[tableOrId as TableName].get(maybeId) ?? null;
+      },
+      async insert(table: TableName, value: Record<string, unknown>) {
+        const id = `${table}-${tables[table].size + 1}`;
+        tables[table].set(id, { _id: id, ...value });
+        return id;
       },
       async patch(
         tableOrId: TableName | string,
@@ -89,6 +103,23 @@ describe("taxonomy SKU search refresh", () => {
     mocks.refreshProductSkuSearchForCategory.mockReset();
     mocks.refreshProductSkuSearchForColor.mockReset();
     mocks.refreshProductSkuSearchForSubcategory.mockReset();
+    mocks.markCatalogSummaryNeedsRefresh.mockReset();
+  });
+
+  it("marks the catalog summary stale after category creation", async () => {
+    const { ctx } = createCtx({});
+
+    await getHandler(createCategory)(ctx, {
+      name: "Beverages",
+      showOnStorefront: true,
+      slug: "beverages",
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(mocks.markCatalogSummaryNeedsRefresh).toHaveBeenCalledWith(
+      ctx,
+      "store-1",
+    );
   });
 
   it("refreshes SKU search projections after category metadata changes", async () => {
@@ -104,6 +135,10 @@ describe("taxonomy SKU search refresh", () => {
     expect(mocks.refreshProductSkuSearchForCategory).toHaveBeenCalledWith(
       ctx,
       "category-1",
+    );
+    expect(mocks.markCatalogSummaryNeedsRefresh).toHaveBeenCalledWith(
+      ctx,
+      "store-1",
     );
   });
 
@@ -158,6 +193,10 @@ describe("taxonomy SKU search refresh", () => {
     expect(mocks.refreshProductSkuSearchForCategory).toHaveBeenCalledWith(
       ctx,
       "category-1",
+    );
+    expect(mocks.markCatalogSummaryNeedsRefresh).toHaveBeenCalledWith(
+      ctx,
+      "store-1",
     );
   });
 

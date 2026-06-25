@@ -2,6 +2,7 @@ export * from "./athenaUser";
 export * from "./appVerificationCode";
 export * from "./bannerMessage";
 export * from "./category";
+export * from "./catalogSummary";
 export * from "./inviteCode";
 export * from "./subcategory";
 export * from "./product";

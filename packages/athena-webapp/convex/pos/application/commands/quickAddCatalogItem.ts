@@ -1,5 +1,6 @@
 import type { Doc, Id } from "../../../_generated/dataModel";
 import type { MutationCtx } from "../../../_generated/server";
+import { markCatalogSummaryNeedsRefresh } from "../../../inventory/catalogSummary";
 import { upsertProductSkuSearchProjection } from "../../../inventory/skuSearch";
 import { recordOperationalEventWithCtx } from "../../../operations/operationalEvents";
 import { toSlug } from "../../../utils";
@@ -423,6 +424,8 @@ export async function quickAddCatalogItem(
     storeId: args.storeId,
     terminalId: args.terminalId,
   });
+
+  await markCatalogSummaryNeedsRefresh(ctx, args.storeId);
 
   return mapSkuToCatalogResult(ctx, {
     product,

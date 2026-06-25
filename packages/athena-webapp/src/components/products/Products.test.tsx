@@ -4,17 +4,32 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Product } from "~/types";
 import type { Id } from "~/convex/_generated/dataModel";
+import type { ProductSkuSearchResultLike } from "~/src/lib/skuSearch/productSkuSearchAdapters";
 
 import Products from "./Products";
 
 const quickAddProductSkuMock = vi.fn();
+const repairCatalogSummaryMock = vi.fn();
 const mockedProducts = vi.hoisted(() => ({
   allProducts: [] as Product[],
   categories: [] as Array<{ _id: string; name: string; slug: string }>,
   draftProducts: [] as Product[],
   hiddenDraftProducts: [] as Product[],
   hiddenLiveProducts: [] as Product[],
-  skuSearchResults: [] as Array<Record<string, unknown>>,
+  catalogSummary: {
+    categoryCount: 0,
+    missingInfoProductCount: 0,
+    outOfStockProductCount: 0,
+    productCount: 0,
+  } as {
+    categoryCount: number;
+    missingInfoProductCount: number;
+    needsRefresh?: boolean;
+    outOfStockProductCount: number;
+    productCount: number;
+    updatedAt?: number;
+  },
+  skuSearchResults: [] as unknown[],
 }));
 
 class ResizeObserverStub {
@@ -50,11 +65,21 @@ vi.mock("~/src/hooks/useGetProducts", () => ({
 
     return mockedProducts.allProducts;
   },
-  useGetUnresolvedProducts: () => [],
 }));
 
 vi.mock("convex/react", () => ({
+  useMutation: () => repairCatalogSummaryMock,
   useQuery: (_query: unknown, args: unknown) => {
+    if (
+      args &&
+      typeof args === "object" &&
+      "storeId" in args &&
+      !("query" in args) &&
+      !("id" in args)
+    ) {
+      return mockedProducts.catalogSummary;
+    }
+
     if (
       args &&
       typeof args === "object" &&
@@ -66,20 +91,6 @@ vi.mock("convex/react", () => ({
         results: mockedProducts.skuSearchResults,
         truncated: false,
       };
-    }
-
-    if (
-      args &&
-      typeof args === "object" &&
-      "storeId" in args &&
-      !("id" in args)
-    ) {
-      return productsToInventoryItems([
-        ...mockedProducts.allProducts,
-        ...mockedProducts.draftProducts,
-        ...mockedProducts.hiddenLiveProducts,
-        ...mockedProducts.hiddenDraftProducts,
-      ]);
     }
 
     if (
@@ -124,11 +135,19 @@ vi.mock("~/src/hooks/usePOSProducts", () => ({
 describe("Products", () => {
   beforeEach(() => {
     quickAddProductSkuMock.mockReset();
+    repairCatalogSummaryMock.mockReset();
+    repairCatalogSummaryMock.mockResolvedValue(undefined);
     mockedProducts.allProducts = [];
     mockedProducts.categories = [];
     mockedProducts.draftProducts = [];
     mockedProducts.hiddenDraftProducts = [];
     mockedProducts.hiddenLiveProducts = [];
+    mockedProducts.catalogSummary = {
+      categoryCount: 0,
+      missingInfoProductCount: 0,
+      outOfStockProductCount: 0,
+      productCount: 0,
+    };
     mockedProducts.skuSearchResults = [];
   });
 
@@ -227,79 +246,26 @@ describe("Products", () => {
     expect(within(dialog).getByLabelText(/barcode/i)).toHaveValue("");
   });
 
-  it("fuzzy matches product search across product and SKU fields", async () => {
+  it("renders fuzzy product matches returned by foundation search", async () => {
     const user = userEvent.setup();
-    mockedProducts.allProducts = [
-      {
-        _id: "product-1" as Id<"product">,
-        _creationTime: 1,
-        availability: "live",
-        categoryId: "category-1" as Id<"category">,
-        categoryName: "Home Care",
-        createdByUserId: "user-1" as Id<"athenaUser">,
-        currency: "GHS",
-        inventoryCount: 12,
-        isVisible: true,
-        name: "Mahogany Teakwood",
-        organizationId: "org-1" as Id<"organization">,
-        slug: "mahogany-teakwood",
-        skus: [
-          {
-            _id: "sku-1" as Id<"productSku">,
-            _creationTime: 1,
-            barcode: "839293889923",
-            colorName: "Amber",
-            images: [],
-            inventoryCount: 12,
-            length: undefined,
-            price: 2500,
-            productCategory: "Home Care",
-            productId: "product-1" as Id<"product">,
-            productName: "Mahogany Teakwood",
-            quantityAvailable: 12,
-            size: "Large",
-            sku: "6N2Y-9W1-PNN",
-            storeId: "store-1" as Id<"store">,
-          },
-        ],
-        storeId: "store-1" as Id<"store">,
-        subcategoryId: "subcategory-1" as Id<"subcategory">,
-      },
-      {
-        _id: "product-2" as Id<"product">,
-        _creationTime: 1,
-        availability: "live",
-        categoryId: "category-1" as Id<"category">,
-        categoryName: "Hair",
-        createdByUserId: "user-1" as Id<"athenaUser">,
-        currency: "GHS",
-        inventoryCount: 8,
-        isVisible: true,
-        name: "Closure Wig",
-        organizationId: "org-1" as Id<"organization">,
-        slug: "closure-wig",
-        skus: [
-          {
-            _id: "sku-2" as Id<"productSku">,
-            _creationTime: 1,
-            barcode: "1234567890123",
-            colorName: "Natural black",
-            images: [],
-            inventoryCount: 8,
-            length: 18,
-            price: 4500,
-            productCategory: "Hair",
-            productId: "product-2" as Id<"product">,
-            productName: "Closure Wig",
-            quantityAvailable: 8,
-            size: "Large",
-            sku: "CW-18",
-            storeId: "store-1" as Id<"store">,
-          },
-        ],
-        storeId: "store-1" as Id<"store">,
-        subcategoryId: "subcategory-1" as Id<"subcategory">,
-      },
+    const mahogany = makeProduct({
+      categoryName: "Home Care",
+      id: "product-1",
+      inventoryCount: 12,
+      name: "Mahogany Teakwood",
+      sku: "6N2Y-9W1-PNN",
+    });
+    const closure = makeProduct({
+      categoryName: "Hair",
+      id: "product-2",
+      inventoryCount: 8,
+      name: "Closure Wig",
+      sku: "CW-18",
+    });
+    mockedProducts.skuSearchResults = [
+      makeSkuSearchResult(mahogany, {
+        match: { kind: "text", matchedValue: "Mahogany Teakwood", rank: 1 },
+      }),
     ];
 
     render(<Products />);
@@ -310,6 +276,12 @@ describe("Products", () => {
     expect(screen.queryByText("Closure Wig")).not.toBeInTheDocument();
 
     await user.clear(screen.getByPlaceholderText(/search products/i));
+    mockedProducts.skuSearchResults = [
+      makeSkuSearchResult(closure, {
+        colorName: "Natural black",
+        match: { kind: "text", matchedValue: "Natural black", rank: 1 },
+      }),
+    ];
     await user.type(screen.getByPlaceholderText(/search products/i), "natrual");
 
     expect(screen.getByText("Closure Wig")).toBeInTheDocument();
@@ -358,70 +330,112 @@ describe("Products", () => {
 
     render(<Products />);
 
-    await user.type(screen.getByPlaceholderText(/search products/i), "GLOBAL-18");
+    await user.type(
+      screen.getByPlaceholderText(/search products/i),
+      "GLOBAL-18",
+    );
 
     expect(screen.getByText("Global Search Wig")).toBeInTheDocument();
     expect(screen.queryByText("Loaded Product")).not.toBeInTheDocument();
-    expect(screen.getByText("Showing 1 of 1 product.")).toBeInTheDocument();
+    expect(screen.getByText("Search results")).toBeInTheDocument();
   });
 
-  it("keeps local availability when a generic SKU search result overlaps a loaded product", async () => {
+  it("orders product search results by foundation SKU search rank", async () => {
     const user = userEvent.setup();
     mockedProducts.allProducts = [
       makeProduct({
-        id: "product-local",
+        id: "product-ampro",
         inventoryCount: 0,
-        name: "Loaded Product",
-        sku: "LOCAL-1",
+        name: "Ampro Gel Bucket",
+        sku: "AMPRO-352",
+      }),
+      makeProduct({
+        id: "product-angeli",
+        inventoryCount: 0,
+        name: "Angeli",
+        sku: "ANGELI-1",
       }),
     ];
     mockedProducts.skuSearchResults = [
       {
-        barcode: "123456789012",
+        barcode: "",
         categoryId: "category-1",
         categoryName: "Hair",
         categorySlug: "hair",
-        colorName: "Natural black",
+        colorName: "",
         images: [],
-        inventoryCount: 6,
+        inventoryCount: 0,
         isVisible: true,
-        length: 18,
-        match: { kind: "sku", matchedValue: "LOCAL-1", rank: 1 },
-        price: 5500,
+        length: null,
+        match: { kind: "text", matchedValue: "Angeli", rank: 1 },
+        price: 2500,
         productAvailability: "live",
-        productId: "product-local",
+        productId: "product-angeli",
         productIsVisible: true,
-        productName: "Loaded Product",
-        productSkuId: "product-local-sku",
-        productSlug: "loaded-product",
-        quantityAvailable: 6,
-        size: "M",
-        sku: "LOCAL-1",
+        productName: "Angeli",
+        productSkuId: "product-angeli-sku",
+        productSlug: "angeli",
+        quantityAvailable: 0,
+        size: "",
+        sku: "ANGELI-1",
         skuIsVisible: true,
         storeId: "store-1",
         subcategoryId: "subcategory-1",
-        subcategoryName: "Bundles",
-        subcategorySlug: "bundles",
+        subcategoryName: "Wigs",
+        subcategorySlug: "wigs",
+      },
+      {
+        barcode: "",
+        categoryId: "category-1",
+        categoryName: "Hair",
+        categorySlug: "hair",
+        colorName: "",
+        images: [],
+        inventoryCount: 0,
+        isVisible: true,
+        length: null,
+        match: { kind: "text", matchedValue: "Ampro Gel Bucket", rank: 2 },
+        price: 2500,
+        productAvailability: "live",
+        productId: "product-ampro",
+        productIsVisible: true,
+        productName: "Ampro Gel Bucket",
+        productSkuId: "product-ampro-sku",
+        productSlug: "ampro-gel-bucket",
+        quantityAvailable: 0,
+        size: "",
+        sku: "AMPRO-352",
+        skuIsVisible: true,
+        storeId: "store-1",
+        subcategoryId: "subcategory-1",
+        subcategoryName: "Wigs",
+        subcategorySlug: "wigs",
       },
     ];
 
     render(<Products />);
 
-    await user.type(screen.getByPlaceholderText(/search products/i), "LOCAL-1");
-    await user.click(
-      screen.getByRole("combobox", { name: /filter by availability/i }),
-    );
-    await user.click(await screen.findByRole("option", { name: "Available" }));
+    await user.type(screen.getByPlaceholderText(/search products/i), "angeli");
 
-    expect(screen.queryByText("Loaded Product")).not.toBeInTheDocument();
+    const angeli = screen.getByText("Angeli");
+    const ampro = screen.getByText("Ampro Gel Bucket");
+
+    expect(
+      angeli.compareDocumentPosition(ampro) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
-  it("uses the shared SKU filter bar for product search filters", async () => {
-    const user = userEvent.setup();
+  it("uses the shared SKU search bar without secondary filters", () => {
     mockedProducts.categories = [
       { _id: "category-1", name: "Hair", slug: "hair" },
       { _id: "category-2", name: "Home Care", slug: "home-care" },
     ];
+    mockedProducts.catalogSummary = {
+      categoryCount: 12,
+      missingInfoProductCount: 9,
+      outOfStockProductCount: 4,
+      productCount: 445,
+    };
     mockedProducts.allProducts = [
       makeProduct({
         id: "product-1",
@@ -451,51 +465,47 @@ describe("Products", () => {
       }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("combobox", { name: /filter by availability/i }),
-    ).toBeInTheDocument();
-    expect(screen.getByText("Showing 2 of 2 products.")).toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: /hair, 1 product/i }));
-
-    expect(screen.getByText("Closure Wig")).toBeInTheDocument();
-    expect(screen.queryByText("Mahogany Teakwood")).not.toBeInTheDocument();
-    expect(screen.getByText("Showing 1 of 2 products.")).toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: /^clear$/i }));
-
+      screen.queryByRole("combobox", { name: /filter by availability/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Filter by category"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("2 products in catalog."),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Showing 2 of 2 products."),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText("Search results")).not.toBeInTheDocument();
-    expect(screen.getAllByText("Categories").length).toBeGreaterThan(1);
+    expect(screen.getByText("Browse categories")).toBeInTheDocument();
+
+    expect(screen.getByText("445")).toBeInTheDocument();
+    expect(screen.getByText("12")).toBeInTheDocument();
+    expect(screen.getByText("9")).toBeInTheDocument();
+    expect(screen.getByText("4")).toBeInTheDocument();
+    expect(repairCatalogSummaryMock).not.toHaveBeenCalled();
   });
 
-  it("filters product search by availability", async () => {
-    const user = userEvent.setup();
-    mockedProducts.allProducts = [
-      makeProduct({
-        id: "product-1",
-        inventoryCount: 8,
-        name: "Closure Wig",
-        sku: "CW-18",
-      }),
-      makeProduct({
-        id: "product-2",
-        inventoryCount: 0,
-        name: "Mahogany Teakwood",
-        sku: "CANDLE-1",
-      }),
-    ];
+  it("repairs an unbackfilled catalog summary instead of leaving metrics permanently pending", async () => {
+    mockedProducts.catalogSummary = {
+      categoryCount: 0,
+      missingInfoProductCount: 0,
+      outOfStockProductCount: 0,
+      productCount: 0,
+      updatedAt: 0,
+    };
 
     render(<Products />);
 
-    await user.click(
-      screen.getByRole("combobox", { name: /filter by availability/i }),
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Products" }),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText("...")).toHaveLength(4);
+    await waitFor(() =>
+      expect(repairCatalogSummaryMock).toHaveBeenCalledWith({
+        storeId: "store-1",
+      }),
     );
-    await user.click(
-      await screen.findByRole("option", { name: "Out of stock" }),
-    );
-
-    expect(screen.getByText("Mahogany Teakwood")).toBeInTheDocument();
-    expect(screen.queryByText("Closure Wig")).not.toBeInTheDocument();
-    expect(screen.getByText("Showing 1 of 2 products.")).toBeInTheDocument();
   });
 
   it("searches draft products from the products workspace", async () => {
@@ -504,27 +514,30 @@ describe("Products", () => {
       { _id: "category-legacy", name: "Legacy import", slug: "legacy-import" },
       { _id: "category-books", name: "Books", slug: "books" },
     ];
-    mockedProducts.draftProducts = [
-      makeProduct({
-        availability: "draft",
-        categoryId: "category-legacy",
-        categoryName: "Legacy import",
-        categorySlug: "legacy-import",
-        id: "product-legacy",
-        inventoryCount: 3,
-        isVisible: false,
-        name: "Imported Bonnet",
-        sku: "OLD-BONNET",
-      }),
-      makeProduct({
-        availability: "draft",
-        categoryId: "category-books",
-        categoryName: "Books",
-        categorySlug: "books",
-        id: "product-draft-book",
-        inventoryCount: 2,
-        name: "Draft Book",
-        sku: "BOOK-DRAFT",
+    const importedBonnet = makeProduct({
+      availability: "draft",
+      categoryId: "category-legacy",
+      categoryName: "Legacy import",
+      categorySlug: "legacy-import",
+      id: "product-legacy",
+      inventoryCount: 3,
+      isVisible: false,
+      name: "Imported Bonnet",
+      sku: "OLD-BONNET",
+    });
+    const draftBook = makeProduct({
+      availability: "draft",
+      categoryId: "category-books",
+      categoryName: "Books",
+      categorySlug: "books",
+      id: "product-draft-book",
+      inventoryCount: 2,
+      name: "Draft Book",
+      sku: "BOOK-DRAFT",
+    });
+    mockedProducts.skuSearchResults = [
+      makeSkuSearchResult(importedBonnet, {
+        match: { kind: "text", matchedValue: "bonnet", rank: 1 },
       }),
     ];
 
@@ -538,16 +551,18 @@ describe("Products", () => {
     );
 
     expect(screen.getByText("Imported Bonnet")).toBeInTheDocument();
-    expect(screen.getByText("Showing 1 of 2 products.")).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /legacy import, 1 product/i }),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Search results")).toBeInTheDocument();
 
     await user.clear(
       screen.getByRole("textbox", {
         name: /search products, skus, or barcodes/i,
       }),
     );
+    mockedProducts.skuSearchResults = [
+      makeSkuSearchResult(draftBook, {
+        match: { kind: "text", matchedValue: "draft", rank: 1 },
+      }),
+    ];
     await user.type(
       screen.getByRole("textbox", {
         name: /search products, skus, or barcodes/i,
@@ -563,38 +578,26 @@ describe("Products", () => {
     mockedProducts.categories = [
       { _id: "category-legacy", name: "Legacy import", slug: "legacy-import" },
     ];
-    mockedProducts.draftProducts = [
-      makeProduct({
-        availability: "draft",
-        categoryId: "category-legacy",
-        categoryName: "Legacy import",
-        categorySlug: "legacy-import",
-        id: "product-hidden-draft",
-        inventoryCount: 0,
-        isVisible: false,
-        name: "Imported Cubic Wig",
-        sku: "",
-        skus: [],
-        subcategoryId: "subcategory-legacy",
-        subcategoryName: "Imported accessories",
-        subcategorySlug: "imported-accessories",
-      }),
-    ];
-    mockedProducts.hiddenDraftProducts = [
-      makeProduct({
-        availability: "draft",
-        categoryId: "category-legacy",
-        categoryName: "Legacy import",
-        categorySlug: "legacy-import",
-        id: "product-hidden-draft",
-        inventoryCount: 4,
-        isVisible: false,
-        name: "Imported Cubic Wig",
-        sku: "CUBIC-LEGACY",
+    const hiddenDraftProduct = makeProduct({
+      availability: "draft",
+      categoryId: "category-legacy",
+      categoryName: "Legacy import",
+      categorySlug: "legacy-import",
+      id: "product-hidden-draft",
+      inventoryCount: 4,
+      isVisible: false,
+      name: "Imported Cubic Wig",
+      sku: "CUBIC-LEGACY",
+      skuIsVisible: false,
+      subcategoryId: "subcategory-legacy",
+      subcategoryName: "Imported accessories",
+      subcategorySlug: "imported-accessories",
+    });
+    mockedProducts.skuSearchResults = [
+      makeSkuSearchResult(hiddenDraftProduct, {
+        match: { kind: "text", matchedValue: "cubic", rank: 1 },
+        productIsVisible: false,
         skuIsVisible: false,
-        subcategoryId: "subcategory-legacy",
-        subcategoryName: "Imported accessories",
-        subcategorySlug: "imported-accessories",
       }),
     ];
 
@@ -609,7 +612,7 @@ describe("Products", () => {
 
     expect(screen.getByText("Imported Cubic Wig")).toBeInTheDocument();
     expect(screen.getByText("Imported accessories")).toBeInTheDocument();
-    expect(screen.getByText("Showing 1 of 1 product.")).toBeInTheDocument();
+    expect(screen.getByText("Search results")).toBeInTheDocument();
   });
 });
 
@@ -686,32 +689,38 @@ function makeProduct({
   };
 }
 
-function productsToInventoryItems(products: Product[]) {
-  return products.flatMap((product) =>
-    product.skus.map((sku) => ({
-      _id: sku._id,
-      barcode: sku.barcode ?? null,
-      colorName: sku.colorName ?? null,
-      durableQuantityAvailable: sku.quantityAvailable,
-      imageUrl: sku.images[0] ?? null,
-      inventoryCount: sku.inventoryCount,
-      length: sku.length ?? null,
-      netPrice: sku.netPrice,
-      price: sku.price,
-      productCategory: product.categoryName ?? sku.productCategory ?? null,
-      productCategoryId: product.categoryId,
-      productCategorySlug: product.categorySlug ?? null,
-      productId: product._id,
-      productName: product.name,
-      productSubcategory: product.subcategoryName ?? null,
-      productSubcategoryId: product.subcategoryId,
-      productSubcategorySlug: product.subcategorySlug ?? null,
-      checkoutReservedQuantity: 0,
-      posReservedQuantity: 0,
-      quantityAvailable: sku.quantityAvailable,
-      reservedQuantity: 0,
-      size: sku.size ?? null,
-      sku: sku.sku ?? null,
-    })),
-  );
+function makeSkuSearchResult(
+  product: Product,
+  overrides: Partial<ProductSkuSearchResultLike> = {},
+): ProductSkuSearchResultLike {
+  const sku = product.skus[0];
+
+  return {
+    barcode: sku.barcode ?? null,
+    categoryId: product.categoryId,
+    categoryName: product.categoryName ?? null,
+    categorySlug: product.categorySlug ?? null,
+    colorName: sku.colorName ?? null,
+    images: sku.images,
+    inventoryCount: sku.inventoryCount,
+    isVisible: sku.isVisible ?? null,
+    length: sku.length ?? null,
+    match: { kind: "text", matchedValue: product.name, rank: 1 },
+    price: sku.price,
+    productAvailability: product.availability,
+    productId: product._id,
+    productIsVisible: product.isVisible ?? null,
+    productName: product.name,
+    productSkuId: sku._id,
+    productSlug: product.slug ?? null,
+    quantityAvailable: sku.quantityAvailable,
+    size: sku.size ?? null,
+    sku: sku.sku ?? null,
+    skuIsVisible: sku.isVisible ?? true,
+    storeId: sku.storeId,
+    subcategoryId: product.subcategoryId,
+    subcategoryName: product.subcategoryName ?? null,
+    subcategorySlug: product.subcategorySlug ?? null,
+    ...overrides,
+  };
 }

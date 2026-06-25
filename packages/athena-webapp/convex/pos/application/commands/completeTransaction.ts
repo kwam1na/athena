@@ -52,6 +52,7 @@ import {
   recordInventoryMovementWithCtx,
   recordInventoryMovementWithDispositionWithCtx,
 } from "../../../operations/inventoryMovements";
+import { markCatalogSummaryNeedsRefresh } from "../../../inventory/catalogSummary";
 import { recordSkuActivityEventWithCtx } from "../../../operations/skuActivity";
 import {
   recordPendingCheckoutItemEvidenceCorrection,
@@ -966,6 +967,8 @@ export async function completeTransaction(
     transactionNumber,
   });
 
+  await markCatalogSummaryNeedsRefresh(ctx, args.storeId);
+
   return ok({
     transactionId: completionResult.data.transactionId,
     transactionNumber: completionResult.data.transactionNumber,
@@ -1566,6 +1569,8 @@ async function applyApprovedTransactionVoid(
     voidApprovedByStaffProfileId: args.approverStaffProfileId,
     voidOperationalEventId: event?._id,
   });
+
+  await markCatalogSummaryNeedsRefresh(ctx, args.transaction.storeId);
 
   return ok({
     transactionId: args.transaction._id,
@@ -2214,6 +2219,8 @@ export async function createTransactionFromSessionHandler(
     total,
     transactionNumber,
   });
+
+  await markCatalogSummaryNeedsRefresh(ctx, session.storeId);
 
   return ok({
     transactionId: completionResult.data.transactionId,

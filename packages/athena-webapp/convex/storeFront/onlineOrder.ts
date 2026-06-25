@@ -20,6 +20,7 @@ import { buildApprovalRequest } from "../operations/approvalRequestHelpers";
 import { recordInventoryMovementWithCtx } from "../operations/inventoryMovements";
 import { recordOperationalEventWithCtx } from "../operations/operationalEvents";
 import { recordPaymentAllocationWithCtx } from "../operations/paymentAllocations";
+import { markCatalogSummaryNeedsRefresh } from "../inventory/catalogSummary";
 import { commandResultValidator } from "../lib/commandResultValidators";
 import {
   createOrderFromCheckoutSession,
@@ -1419,6 +1420,8 @@ export const processReturnExchange = mutation({
         ...exchangeMovementIds,
       ].filter((value): value is Id<"inventoryMovement"> => Boolean(value));
 
+      await markCatalogSummaryNeedsRefresh(ctx, order.storeId);
+
       const operationalEvent = await recordOperationalEventWithCtx(ctx, {
         actorUserId: args.signedInAthenaUser?.id,
         customerProfileId: order.customerProfileId,
@@ -1597,6 +1600,8 @@ export const returnItemsToStock = mutation({
             }
           }),
         );
+
+        await markCatalogSummaryNeedsRefresh(ctx, order.storeId);
 
         return true;
       }

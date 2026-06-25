@@ -84,6 +84,7 @@ function createReceivingMutationCtx(args?: {
         },
       ],
     ]),
+    catalogSummary: new Map<string, Record<string, unknown>>(),
     receivingBatch: new Map<string, Record<string, unknown>>(),
     store: new Map<string, Record<string, unknown>>([
       ["store-1", { _id: "store-1", organizationId: "org-1" }],
@@ -92,7 +93,11 @@ function createReceivingMutationCtx(args?: {
       ["auth-user-1", { _id: "auth-user-1", email: "manager@example.com" }],
     ]),
   };
-  const insertCounters: Record<"receivingBatch" | "inventoryMovement", number> = {
+  const insertCounters: Record<
+    "catalogSummary" | "receivingBatch" | "inventoryMovement",
+    number
+  > = {
+    catalogSummary: 0,
     inventoryMovement: 0,
     receivingBatch: 0,
   };
@@ -103,7 +108,7 @@ function createReceivingMutationCtx(args?: {
         return tables[table].get(id) ?? null;
       },
       async insert(
-        table: "inventoryMovement" | "receivingBatch",
+        table: "catalogSummary" | "inventoryMovement" | "receivingBatch",
         value: Record<string, unknown>
       ) {
         insertCounters[table] += 1;
@@ -209,7 +214,7 @@ function createReceivingMutationCtx(args?: {
 
             return {
               first: async () =>
-                Array.from(tables.receivingBatch.values()).find((record) =>
+                Array.from(tables[table].values()).find((record) =>
                   filters.every(([field, value]) => record[field] === value)
                 ) ?? null,
             };
@@ -218,6 +223,9 @@ function createReceivingMutationCtx(args?: {
       },
     },
     runMutation: vi.fn().mockResolvedValue(undefined),
+    scheduler: {
+      runAfter: vi.fn().mockResolvedValue(undefined),
+    },
   } as unknown as MutationCtx;
 
   return { ctx, tables };
@@ -228,6 +236,10 @@ describe("stock ops receiving", () => {
     assertConformsToExportedReturns(
       receivePurchaseOrderBatch,
       ok({ receivingBatchId: "receiving-batch-1" }),
+    );
+    assertConformsToExportedReturns(
+      receivePurchaseOrderBatch,
+      ok({ receivingBatchId: "receiving-batch-2" }),
     );
   });
 

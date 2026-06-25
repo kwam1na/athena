@@ -10,6 +10,7 @@ import { capitalizeWords, generateTransactionNumber } from "../utils";
 import { commandResultValidator } from "../lib/commandResultValidators";
 import { ok, userError } from "../../shared/commandResult";
 import { formatStaffDisplayName } from "../../shared/staffDisplayName";
+import { markCatalogSummaryNeedsRefresh } from "./catalogSummary";
 
 const expenseTransactionCreationValidator = v.object({
   transactionId: v.id("expenseTransaction"),
@@ -162,6 +163,8 @@ export async function createExpenseTransactionFromSessionHandler(
     completedAt,
     notes: args.notes,
   });
+
+  await markCatalogSummaryNeedsRefresh(ctx, session.storeId);
 
   // Create transaction items
   await Promise.all(
@@ -431,6 +434,8 @@ export const voidExpenseTransaction = mutation({
       voidedAt: Date.now(),
       notes: args.voidReason,
     });
+
+    await markCatalogSummaryNeedsRefresh(ctx, transaction.storeId);
 
     return ok({ transactionId: args.transactionId });
   },

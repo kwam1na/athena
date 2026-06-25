@@ -6,6 +6,7 @@ import {
   athenaUserSchema,
   bannerMessageSchema,
   bestSellerSchema,
+  catalogSummarySchema,
   categorySchema,
   colorSchema,
   featuredItemSchema,
@@ -339,6 +340,9 @@ const schema = defineSchema({
   category: defineTable(categorySchema).index("by_storeId_slug", [
     "storeId",
     "slug",
+  ]),
+  catalogSummary: defineTable(catalogSummarySchema).index("by_storeId", [
+    "storeId",
   ]),
   checkoutSession: defineTable(checkoutSessionSchema)
     .index("by_storeFrontUserId", ["storeFrontUserId"])

@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
+import { internal } from "../_generated/api";
 import { ok } from "../../shared/commandResult";
 import { assertConformsToExportedReturns } from "../lib/returnValidatorContract";
 
@@ -258,6 +259,18 @@ function createApprovalDecisionMutationCtx() {
     ]),
     inventoryMovement: new Map<string, Record<string, unknown>>(),
     inventoryImportProvisionalSku: new Map<string, Record<string, unknown>>(),
+    catalogSummary: new Map<string, Record<string, unknown>>(),
+    category: new Map<string, Record<string, unknown>>([
+      [
+        "category-1",
+        {
+          _id: "category-1",
+          name: "Hair",
+          slug: "hair",
+          storeId: "store-1",
+        },
+      ],
+    ]),
     posPendingCheckoutItem: new Map<string, Record<string, unknown>>(),
     operationalEvent: new Map<string, Record<string, unknown>>(),
     operationalWorkItem: new Map<string, Record<string, unknown>>([
@@ -283,6 +296,19 @@ function createApprovalDecisionMutationCtx() {
           quantityAvailable: 6,
           sku: "CW-18",
           storeId: "store-1",
+        },
+      ],
+    ]),
+    product: new Map<string, Record<string, unknown>>([
+      [
+        "product-1",
+        {
+          _id: "product-1",
+          availability: "live",
+          categoryId: "category-1",
+          name: "Closure wig",
+          storeId: "store-1",
+          subcategoryId: "subcategory-1",
         },
       ],
     ]),
@@ -322,16 +348,20 @@ function createApprovalDecisionMutationCtx() {
     ]),
   };
   const insertCounters: Record<
-    "inventoryMovement" | "operationalEvent" | "skuActivityEvent",
+    | "catalogSummary"
+    | "inventoryMovement"
+    | "operationalEvent"
+    | "skuActivityEvent",
     number
   > = {
+    catalogSummary: 0,
     inventoryMovement: 0,
     operationalEvent: 0,
     skuActivityEvent: 0,
   };
 
   const queryTable = (
-    table: "inventoryMovement" | "operationalEvent" | "skuActivityEvent",
+    table: keyof typeof tables,
   ) => ({
     withIndex(
       _index: string,
@@ -374,7 +404,11 @@ function createApprovalDecisionMutationCtx() {
         return tables[table].get(id) ?? null;
       },
       async insert(
-        table: "inventoryMovement" | "operationalEvent" | "skuActivityEvent",
+        table:
+          | "catalogSummary"
+          | "inventoryMovement"
+          | "operationalEvent"
+          | "skuActivityEvent",
         value: Record<string, unknown>,
       ) {
         insertCounters[table] += 1;
@@ -395,11 +429,12 @@ function createApprovalDecisionMutationCtx() {
 
         tables[table].set(id, { ...existingRecord, ...value });
       },
-      query(
-        table: "inventoryMovement" | "operationalEvent" | "skuActivityEvent",
-      ) {
+      query(table: keyof typeof tables) {
         return queryTable(table);
       },
+    },
+    scheduler: {
+      runAfter: vi.fn().mockResolvedValue(undefined),
     },
   } as unknown as MutationCtx;
 
@@ -423,6 +458,18 @@ function createSubmissionMutationCtx(args: {
         ]
       ).map((athenaUser) => [athenaUser._id, athenaUser]),
     ),
+    catalogSummary: new Map<string, Record<string, unknown>>(),
+    category: new Map<string, Record<string, unknown>>([
+      [
+        "category-1",
+        {
+          _id: "category-1",
+          name: "Hair",
+          slug: "hair",
+          storeId: "store-1",
+        },
+      ],
+    ]),
     inventoryMovement: new Map<string, Record<string, unknown>>(),
     inventoryImportProvisionalSku: new Map<string, Record<string, unknown>>(),
     operationalEvent: new Map<string, Record<string, unknown>>(),
@@ -442,6 +489,19 @@ function createSubmissionMutationCtx(args: {
           ]
         : [],
     ),
+    product: new Map<string, Record<string, unknown>>([
+      [
+        "product-1",
+        {
+          _id: "product-1",
+          availability: "live",
+          categoryId: "category-1",
+          name: "Closure wig",
+          storeId: "store-1",
+          subcategoryId: "subcategory-1",
+        },
+      ],
+    ]),
     productSku: new Map<string, Record<string, unknown>>([
       [
         "sku-1",
@@ -480,6 +540,7 @@ function createSubmissionMutationCtx(args: {
   };
   const insertCounters: Record<
     | "approvalRequest"
+    | "catalogSummary"
     | "inventoryMovement"
     | "operationalEvent"
     | "operationalWorkItem"
@@ -488,6 +549,7 @@ function createSubmissionMutationCtx(args: {
     number
   > = {
     approvalRequest: 0,
+    catalogSummary: 0,
     inventoryMovement: 0,
     operationalEvent: 0,
     operationalWorkItem: 0,
@@ -499,10 +561,14 @@ function createSubmissionMutationCtx(args: {
 
   const indexedQuery = (
     table:
+      | "catalogSummary"
+      | "category"
       | "inventoryMovement"
       | "inventoryImportProvisionalSku"
       | "operationalEvent"
       | "posPendingCheckoutItem"
+      | "product"
+      | "productSku"
       | "skuActivityEvent"
       | "stockAdjustmentBatch",
   ) => ({
@@ -554,6 +620,7 @@ function createSubmissionMutationCtx(args: {
       async insert(
         table:
           | "approvalRequest"
+          | "catalogSummary"
           | "inventoryMovement"
           | "operationalEvent"
           | "operationalWorkItem"
@@ -627,6 +694,10 @@ function createSubmissionMutationCtx(args: {
           table === "inventoryImportProvisionalSku" ||
           table === "operationalEvent" ||
           table === "posPendingCheckoutItem" ||
+          table === "catalogSummary" ||
+          table === "category" ||
+          table === "product" ||
+          table === "productSku" ||
           table === "skuActivityEvent" ||
           table === "stockAdjustmentBatch"
         ) {
@@ -635,6 +706,9 @@ function createSubmissionMutationCtx(args: {
 
         throw new Error(`Unexpected query table: ${table}`);
       },
+    },
+    scheduler: {
+      runAfter: vi.fn().mockResolvedValue(undefined),
     },
   } as unknown as MutationCtx;
 
@@ -768,6 +842,27 @@ describe("stock ops adjustments", () => {
       durableQuantityAvailable: 8,
       posReservedQuantity: 2,
       quantityAvailable: 6,
+    });
+  });
+
+  it("keeps the SKU-level product name as a search alias when the canonical product name differs", async () => {
+    const { ctx, tables } = createInventorySnapshotQueryCtx();
+
+    tables.productSku.set("sku-1", {
+      ...(tables.productSku.get("sku-1") ?? {}),
+      productName: "agya",
+    });
+
+    const rows = await listInventorySnapshotForProductSkusWithCtx(ctx, {
+      now: 1_000,
+      productSkuIds: ["sku-1"] as Id<"productSku">[],
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(rows[0]).toMatchObject({
+      _id: "sku-1",
+      productName: "Closure Wig",
+      productSkuProductName: "agya",
     });
   });
 
@@ -1358,6 +1453,11 @@ describe("stock ops adjustments", () => {
         quantityDelta: 1,
       }),
     ]);
+    expect(ctx.scheduler.runAfter).toHaveBeenCalledWith(
+      0,
+      internal.inventory.catalogSummary.markCatalogSummaryNeedsRefreshInternal,
+      { storeId: "store-1" },
+    );
   });
 
   it("rejects stock adjustments for unresolved POS pending checkout SKUs", async () => {
@@ -1507,6 +1607,11 @@ describe("stock ops adjustments", () => {
         }),
       }),
     ]);
+    expect(ctx.scheduler.runAfter).toHaveBeenCalledWith(
+      0,
+      internal.inventory.catalogSummary.markCatalogSummaryNeedsRefreshInternal,
+      { storeId: "store-1" },
+    );
   });
 
   it("applies approved stock adjustments and closes the review work item", async () => {
@@ -1542,6 +1647,11 @@ describe("stock ops adjustments", () => {
         workItemId: "work-item-1",
       }),
     ]);
+    expect(ctx.scheduler.runAfter).toHaveBeenCalledWith(
+      0,
+      internal.inventory.catalogSummary.markCatalogSummaryNeedsRefreshInternal,
+      { storeId: "store-1" },
+    );
   });
 
   it("rejects approval-gated stock adjustments without mutating inventory", async () => {
@@ -1566,5 +1676,10 @@ describe("stock ops adjustments", () => {
       status: "cancelled",
     });
     expect(Array.from(tables.inventoryMovement.values())).toHaveLength(0);
+    expect(ctx.scheduler.runAfter).not.toHaveBeenCalledWith(
+      0,
+      internal.inventory.catalogSummary.markCatalogSummaryNeedsRefreshInternal,
+      { storeId: "store-1" },
+    );
   });
 });

@@ -12,6 +12,7 @@ import {
   recordOnlineOrderRestockMovement,
   resolveCustomerProfileForStoreFrontActor,
 } from "./orderOperations";
+import { markCatalogSummaryNeedsRefresh } from "../../inventory/catalogSummary";
 import { recordOnlineOrderTraceBestEffort } from "../onlineOrderTracing";
 
 const MAX_BAG_ITEMS = 200;
@@ -106,6 +107,10 @@ export async function returnOrderItemsToStock(
       }
     })
   );
+
+  if (order) {
+    await markCatalogSummaryNeedsRefresh(ctx, order.storeId);
+  }
 }
 
 export async function createOrderFromCheckoutSession(

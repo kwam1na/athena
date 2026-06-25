@@ -9,6 +9,7 @@ import {
 import { recordInventoryMovementWithCtx } from "../../../operations/inventoryMovements";
 import { recordOperationalEventWithCtx } from "../../../operations/operationalEvents";
 import { recordPaymentAllocationWithCtx } from "../../../operations/paymentAllocations";
+import { markCatalogSummaryNeedsRefresh } from "../../../inventory/catalogSummary";
 import {
   recordRegisterSessionTraceBestEffort,
   type RegisterSessionTraceableSession,
@@ -1023,6 +1024,8 @@ async function applyApprovedAdjustment(
     stage: "item_adjustment_applied",
     transaction: args.transaction,
   });
+
+  await markCatalogSummaryNeedsRefresh(ctx, args.transaction.storeId);
 
   return {
     adjustmentId,

@@ -110,10 +110,7 @@ const CategoryWorkspaceActions = ({
   };
 
   return (
-    <section
-      aria-label="Category controls"
-      className="rounded-md border bg-background px-3 py-2"
-    >
+    <section aria-label="Category controls" className="flex justify-end">
       <div className="flex flex-wrap items-center justify-end gap-2">
         {category ? (
           <div className="flex min-h-9 items-center gap-2 rounded-md border px-3">
@@ -183,7 +180,7 @@ function Body() {
     return products;
   }, [selectedProductActions, products, outOfStockProducts]);
 
-  if (!filteredProducts) return null;
+  const isLoadingProducts = filteredProducts === undefined;
 
   return (
     <View hideBorder hideHeaderBottomBorder scrollMode="page">
@@ -196,7 +193,7 @@ function Body() {
           />
 
           <PageWorkspaceMain>
-            {categorySlug ? (
+            {categorySlug && !isLoadingProducts ? (
               <CategoryWorkspaceActions
                 categorySlug={categorySlug}
                 outOfStockProductsCount={outOfStockProducts?.length || 0}
@@ -205,7 +202,9 @@ function Body() {
                 hasProducts={products?.length != 0}
               />
             ) : null}
-            <StoreProducts products={filteredProducts} />
+            {isLoadingProducts ? null : (
+              <StoreProducts products={filteredProducts} />
+            )}
           </PageWorkspaceMain>
         </PageWorkspace>
       </FadeIn>

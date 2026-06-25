@@ -38,6 +38,13 @@ describe("online order checkout money wiring", () => {
       totalDiscounts: 0,
       totalOrders: 0,
     });
+    assertConformsToExportedReturns(update, {
+      kind: "user_error",
+      error: {
+        code: "not_found",
+        message: "Order not found.",
+      },
+    });
   });
 
   it("recomputes order item prices and totals from server SKU data", () => {

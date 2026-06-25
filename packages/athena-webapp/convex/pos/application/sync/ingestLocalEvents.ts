@@ -1554,9 +1554,11 @@ export async function ingestLocalEventsWithCtx(
   batch: PosLocalSyncBatchInput,
 ) {
   const repository = createConvexLocalSyncRepository(ctx);
-  return createLocalSyncIngestionService({
+  const result = await createLocalSyncIngestionService({
     repository,
     projectionRepository: repository,
     now: () => Date.now(),
   }).ingestBatch(batch);
+  await repository.flushCatalogSummaryRefreshes?.();
+  return result;
 }

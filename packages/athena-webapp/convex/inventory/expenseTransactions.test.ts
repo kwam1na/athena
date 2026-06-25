@@ -1,11 +1,51 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
+import { ok } from "../../shared/commandResult";
+import { assertConformsToExportedReturns } from "../lib/returnValidatorContract";
 import {
   createExpenseTransactionFromSessionHandler,
   formatExpenseStaffProfileName,
+  getExpenseTransactionById,
+  getExpenseTransactions,
+  voidExpenseTransaction,
 } from "./expenseTransactions";
 
 describe("formatExpenseStaffProfileName", () => {
+  it("accepts representative public return contracts", () => {
+    assertConformsToExportedReturns(getExpenseTransactions, [
+      {
+        _creationTime: 1,
+        _id: "expense-1",
+        completedAt: 2,
+        itemCount: 1,
+        sessionId: "session-1",
+        staffProfileId: "staff-1",
+        staffProfileName: "Ato K.",
+        status: "completed",
+        storeId: "store-1",
+        totalValue: 100,
+        transactionNumber: "EXP-1",
+      },
+    ]);
+    assertConformsToExportedReturns(getExpenseTransactionById, {
+      _creationTime: 1,
+      _id: "expense-1",
+      completedAt: 2,
+      items: [],
+      sessionId: "session-1",
+      staffProfile: null,
+      staffProfileId: "staff-1",
+      status: "completed",
+      storeId: "store-1",
+      totalValue: 100,
+      transactionNumber: "EXP-1",
+    });
+    assertConformsToExportedReturns(
+      voidExpenseTransaction,
+      ok({ transactionId: "expense-1" }),
+    );
+  });
+
   it("abbreviates the last name when structured staff names are available", () => {
     expect(
       formatExpenseStaffProfileName({
@@ -190,6 +230,10 @@ function createFakeMutationCtx(seed: Record<string, Array<Record<string, unknown
               indexField ? row[indexField] === indexValue : true,
             );
           },
+          async first() {
+            // eslint-disable-next-line @convex-dev/no-collect-in-query -- test fake, not a Convex query
+            return (await this.collect())[0] ?? null;
+          },
         };
       },
       async insert(tableName: string, input: Record<string, unknown>) {
@@ -206,6 +250,9 @@ function createFakeMutationCtx(seed: Record<string, Array<Record<string, unknown
           Object.assign(row, patch);
         }
       },
+    },
+    scheduler: {
+      runAfter: vi.fn().mockResolvedValue(undefined),
     },
   };
 

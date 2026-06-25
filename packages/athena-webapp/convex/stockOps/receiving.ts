@@ -3,6 +3,7 @@ import { mutation, type MutationCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { v } from "convex/values";
 import { recordInventoryMovementWithCtx } from "../operations/inventoryMovements";
+import { markCatalogSummaryNeedsRefresh } from "../inventory/catalogSummary";
 import { ok, userError, type CommandResult } from "../../shared/commandResult";
 import { commandResultValidator } from "../lib/commandResultValidators";
 import { requireStoreFullAdminAccess } from "./access";
@@ -315,6 +316,8 @@ export async function receivePurchaseOrderBatchWithCtx(
       sourceType: "purchase_order_receiving_batch",
     });
   }
+
+  await markCatalogSummaryNeedsRefresh(ctx, args.storeId);
 
   await Promise.all(
     normalizedLineItems.map(async (lineItem) => {
