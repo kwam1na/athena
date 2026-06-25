@@ -30,6 +30,7 @@ import { assertConformsToExportedReturns } from "../lib/returnValidatorContract"
 
 type TableName =
   | "athenaUser"
+  | "catalogSummary"
   | "category"
   | "checkoutSession"
   | "checkoutSessionItem"
@@ -53,6 +54,7 @@ beforeEach(() => {
 function createMutationCtx(seed: Partial<Record<TableName, Row[]>> = {}) {
   const tables: Record<TableName, Map<string, Row>> = {
     athenaUser: new Map(),
+    catalogSummary: new Map(),
     category: new Map(),
     checkoutSession: new Map(),
     checkoutSessionItem: new Map(),
@@ -953,6 +955,10 @@ describe("catalog import", () => {
         sku: "BW-18",
       },
     ]);
+    assertConformsToExportedReturns(listProductPageProvisionalSkuBinding, {
+      activeRowCount: 0,
+      state: "empty",
+    });
   });
 
   it("returns ambiguous product-page binding instead of choosing between active rows", async () => {

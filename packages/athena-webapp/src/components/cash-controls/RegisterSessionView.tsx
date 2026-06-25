@@ -1,6 +1,7 @@
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import * as AccordionPrimitive from "@radix-ui/react-accordion";
 import { useMutation, useQuery } from "convex/react";
+import { motion } from "framer-motion";
 import {
   ArrowUpRight,
   Banknote,
@@ -73,11 +74,7 @@ import {
 } from "../ui/table";
 import { Textarea } from "../ui/textarea";
 import { WorkflowTraceRouteLink } from "../traces/WorkflowTraceRouteLink";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-} from "../ui/accordion";
+import { Accordion, AccordionContent, AccordionItem } from "../ui/accordion";
 import {
   buildPosSyncStatusPresentation,
   formatPosReconciliationType,
@@ -95,6 +92,10 @@ const STAFF_ACCESS_SYNC_REVIEW_SUMMARY =
   "Staff access changed before this POS history synced.";
 const SERVICE_CUSTOMER_ATTRIBUTION_SYNC_REVIEW_SUMMARY =
   "Service line is missing customer attribution.";
+const HEADER_METADATA_TRANSITION = {
+  duration: 0.14,
+  ease: "easeOut" as const,
+};
 
 type RegisterSessionApprovalRequest = {
   _id: string;
@@ -558,6 +559,41 @@ function getSyncBadgeClass(tone: PosSyncStatusPresentation["tone"]) {
   }
 }
 
+function getSyncStatusTextClass(tone: PosSyncStatusPresentation["tone"]) {
+  switch (tone) {
+    case "success":
+      return "text-success";
+    case "danger":
+      return "text-danger";
+    case "warning":
+      return "text-warning";
+    default:
+      return "text-muted-foreground";
+  }
+}
+
+function getSyncStatusDotClass(tone: PosSyncStatusPresentation["tone"]) {
+  switch (tone) {
+    case "success":
+      return "bg-success";
+    case "danger":
+      return "bg-danger";
+    case "warning":
+      return "bg-warning";
+    default:
+      return "bg-muted-foreground/60";
+  }
+}
+
+function formatHeaderSyncStatus(syncStatus: PosSyncStatusPresentation) {
+  const label =
+    syncStatus.status === "locally_closed_pending_sync"
+      ? "Pending reconciliation"
+      : syncStatus.label;
+
+  return label.toLocaleLowerCase();
+}
+
 function formatReviewItemCount(count: number) {
   return `${count} review ${count === 1 ? "item" : "items"}`;
 }
@@ -845,10 +881,7 @@ function getSaleItemsTotal(sale: Pick<SyncReviewSaleSummary, "items">) {
 }
 
 function formatPaymentMismatchSummary(
-  sale: Pick<
-    SyncReviewSaleSummary,
-    "paymentMethods" | "total" | "totalPaid"
-  >,
+  sale: Pick<SyncReviewSaleSummary, "paymentMethods" | "total" | "totalPaid">,
   currency: string,
 ) {
   if (
@@ -1051,7 +1084,8 @@ function SalesUnderReviewList({
             Sales under review
           </p>
           <p className="text-xs leading-5 text-muted-foreground">
-            These synced sale details will affect this register session if applied.
+            These synced sale details will affect this register session if
+            applied.
           </p>
         </div>
         <div className="flex flex-wrap gap-x-layout-sm gap-y-1 text-xs text-muted-foreground">
@@ -1095,10 +1129,7 @@ function SalesUnderReviewList({
           );
           const reviewReasons =
             paymentMismatchSummary !== null
-              ? [
-                  `Payment mismatch: ${paymentMismatchSummary}`,
-                  ...sale.reasons,
-                ]
+              ? [`Payment mismatch: ${paymentMismatchSummary}`, ...sale.reasons]
               : sale.reasons;
 
           return (
@@ -1290,8 +1321,7 @@ function RegisterSyncReviewItemDecisionList({
   ) => void;
 }) {
   const duplicateItems = items.filter(isDuplicateLocalIdRegisterSyncReviewItem);
-  const decisionItems =
-    duplicateItems.length > 0 ? duplicateItems : items;
+  const decisionItems = duplicateItems.length > 0 ? duplicateItems : items;
   const actionableItems = decisionItems.filter((item) => item.id);
 
   if (actionableItems.length === 0) {
@@ -1694,16 +1724,16 @@ function RegisterSessionSyncNotice({
         ? "Pending reconciliation"
         : hasMixedReviewQueue
           ? "Review queue needs attention"
-        : hasCloseoutReview
-          ? "Closeout needs review"
-          : syncStatus.label;
+          : hasCloseoutReview
+            ? "Closeout needs review"
+            : syncStatus.label;
   const noticeDescription = hasClosedRegisterSyncedCloseout
     ? "This register is already closed. Reject the duplicate synced activity to clear the review."
     : hasOnlyRejectedReviewItems
       ? "Rejected local activity can be synced from Cash Controls. A manager can override and apply these events without the cashier present."
       : hasMixedReviewQueue
         ? `${formatReviewItemCount(reconciliationItems.length)} need manager review before this drawer can be settled.`
-      : syncStatus.description;
+        : syncStatus.description;
   const reviewItems = reconciliationItems;
   const canApproveSyncReview = !hasClosedRegisterSyncedCloseout;
   const shouldCombineReviewItems =
@@ -1768,9 +1798,8 @@ function RegisterSessionSyncNotice({
   const reviewReasonSummary = shouldCombineReviewItems
     ? formatReviewReasonSummary(reconciliationItems)
     : null;
-  const allSyncReviewSaleSummaries = getSyncReviewSaleSummaries(
-    reconciliationItems,
-  );
+  const allSyncReviewSaleSummaries =
+    getSyncReviewSaleSummaries(reconciliationItems);
   const syncReviewSaleSummaries = shouldCombineReviewItems
     ? allSyncReviewSaleSummaries
     : [];
@@ -1943,10 +1972,7 @@ function RegisterSessionSyncNotice({
                                   Expected
                                 </dt>
                                 <dd className="mt-1 font-numeric tabular-nums text-foreground">
-                                  {formatCurrency(
-                                    currency,
-                                    itemExpectedCash,
-                                  )}
+                                  {formatCurrency(currency, itemExpectedCash)}
                                 </dd>
                               </div>
                             ) : null}
@@ -1956,10 +1982,7 @@ function RegisterSessionSyncNotice({
                                   Counted
                                 </dt>
                                 <dd className="mt-1 font-numeric tabular-nums text-foreground">
-                                  {formatCurrency(
-                                    currency,
-                                    itemCountedCash,
-                                  )}
+                                  {formatCurrency(currency, itemCountedCash)}
                                 </dd>
                               </div>
                             ) : null}
@@ -2126,86 +2149,19 @@ function RegisterSessionSyncNotice({
               </>
             ) : null}
             {syncStatus.status !== "needs_review" ? (
-            <Badge
-              className={getSyncBadgeClass(syncStatus.tone)}
-              size="sm"
-              variant="outline"
-            >
-              {syncStatus.pendingEventCount
-                ? `${syncStatus.pendingEventCount} pending`
-                : syncStatus.label}
-            </Badge>
+              <Badge
+                className={getSyncBadgeClass(syncStatus.tone)}
+                size="sm"
+                variant="outline"
+              >
+                {syncStatus.pendingEventCount
+                  ? `${syncStatus.pendingEventCount} pending`
+                  : syncStatus.label}
+              </Badge>
             ) : null}
           </div>
         ) : null}
       </div>
-    </section>
-  );
-}
-
-function RegisterSessionSupportEvidence({
-  registerSession,
-  sessionCode,
-  syncStatus,
-}: {
-  registerSession: RegisterSessionDetail;
-  sessionCode?: string;
-  syncStatus: PosSyncStatusPresentation;
-}) {
-  const terminalName = registerSession.terminalName?.trim();
-
-  return (
-    <section className="rounded-lg border border-border bg-surface-raised p-layout-md shadow-surface">
-      <div className="flex flex-wrap items-start justify-between gap-layout-md">
-        <div className="space-y-1">
-          <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-            Support evidence
-          </p>
-          <p className="text-sm leading-6 text-muted-foreground">
-            Register, terminal, sync, and trace context for this drawer.
-          </p>
-        </div>
-        {registerSession.workflowTraceId ? (
-          <Button
-            asChild
-            className="border-border bg-background text-muted-foreground hover:bg-muted"
-            size="sm"
-            variant="outline"
-          >
-            <WorkflowTraceRouteLink traceId={registerSession.workflowTraceId}>
-              Open support trace
-            </WorkflowTraceRouteLink>
-          </Button>
-        ) : null}
-      </div>
-      <dl className="mt-layout-md grid gap-layout-sm sm:grid-cols-3">
-        <div>
-          <dt className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-            Terminal
-          </dt>
-          <dd className="mt-1 truncate text-sm text-foreground">
-            {terminalName || "Terminal not recorded"}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-            Session code
-          </dt>
-          <dd className="mt-1 font-mono text-sm text-foreground">
-            {sessionCode ?? "n/a"}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-            Sync status
-          </dt>
-          <dd className="mt-1 text-sm text-foreground">
-            {syncStatus.status === "locally_closed_pending_sync"
-              ? "Pending reconciliation"
-              : syncStatus.label}
-          </dd>
-        </div>
-      </dl>
     </section>
   );
 }
@@ -3273,8 +3229,6 @@ export function RegisterSessionViewContent({
     : registerSession
       ? formatStatusLabel(registerSession.status)
       : "";
-  const shouldShowHeaderSyncBadge =
-    syncStatus.status !== "synced" && !isRegisterCloseoutSyncReview;
   const shouldShowProminentCorrectionPanel =
     Boolean(registerSession) &&
     (isOpeningFloatCorrectionOpen ||
@@ -3398,37 +3352,73 @@ export function RegisterSessionViewContent({
         <ComposedPageHeader
           className="h-auto min-h-16 items-start gap-3 border-b border-border bg-background px-4 py-3 sm:items-center sm:border-0 sm:py-4"
           leadingContent={
-            <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-              <div className="flex min-w-0 flex-col gap-0.5 sm:flex-row sm:items-baseline sm:gap-2">
-                <h1 className="min-w-0 truncate text-base font-semibold leading-5 text-foreground sm:text-sm">
-                  {headerTitle}
-                </h1>
-                {headerTerminalName ? (
-                  <span className="min-w-0 truncate text-xs text-muted-foreground sm:text-sm">
-                    {headerTerminalName}
-                  </span>
+            <div className="flex min-w-0 flex-1 flex-col gap-2.5 sm:flex-row sm:items-baseline sm:gap-4">
+              <div className="flex min-w-0 flex-wrap items-baseline gap-x-4 gap-y-0.5">
+                <div className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+                  <h1 className="min-w-0 truncate text-base font-semibold leading-5 text-foreground sm:text-sm">
+                    {headerTitle}
+                  </h1>
+                  {headerTerminalName ? (
+                    <motion.span
+                      animate={{ opacity: 1, y: 0 }}
+                      className="min-w-0 truncate text-xs text-muted-foreground sm:text-sm"
+                      initial={{ opacity: 0, y: 2 }}
+                      key={`terminal-${registerSession?._id}-${headerTerminalName}`}
+                      transition={{
+                        ...HEADER_METADATA_TRANSITION,
+                      }}
+                    >
+                      / {headerTerminalName}
+                    </motion.span>
+                  ) : null}
+                </div>
+                {registerSession ? (
+                  <motion.span
+                    animate={{ opacity: 1, y: 0 }}
+                    className={cn(
+                      "inline-flex min-w-0 items-baseline gap-1.5 whitespace-nowrap text-xs font-medium leading-5 sm:text-sm",
+                      getSyncStatusTextClass(syncStatus.tone),
+                    )}
+                    initial={{ opacity: 0, y: 2 }}
+                    key={`sync-${registerSession._id}-${syncStatus.status}-${syncStatus.label}`}
+                    transition={{
+                      ...HEADER_METADATA_TRANSITION,
+                      delay: 0.01,
+                    }}
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={cn(
+                        "size-1.5 shrink-0 translate-y-[-0.08em] rounded-full",
+                        getSyncStatusDotClass(syncStatus.tone),
+                      )}
+                    />
+                    <span className="truncate">
+                      {formatHeaderSyncStatus(syncStatus)}
+                    </span>
+                  </motion.span>
                 ) : null}
               </div>
               {registerSession ? (
-                <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-                  <Badge
-                    className="border-border bg-muted text-muted-foreground"
-                    size="sm"
-                    variant="outline"
+                <div className="flex min-w-0 flex-wrap items-baseline gap-2.5">
+                  <motion.div
+                    animate={{ opacity: 1, y: 0 }}
+                    className="inline-flex items-baseline leading-5"
+                    initial={{ opacity: 0, y: 2 }}
+                    key={`register-status-${registerSession._id}-${registerStatusLabel}`}
+                    transition={{
+                      ...HEADER_METADATA_TRANSITION,
+                      delay: 0.02,
+                    }}
                   >
-                    {registerStatusLabel}
-                  </Badge>
-                  {shouldShowHeaderSyncBadge ? (
                     <Badge
-                      className={getSyncBadgeClass(syncStatus.tone)}
+                      className="border-border bg-muted text-muted-foreground"
                       size="sm"
                       variant="outline"
                     >
-                      {syncStatus.status === "locally_closed_pending_sync"
-                        ? "Pending reconciliation"
-                        : syncStatus.label}
+                      {registerStatusLabel}
                     </Badge>
-                  ) : null}
+                  </motion.div>
                 </div>
               ) : null}
             </div>
@@ -3581,13 +3571,6 @@ export function RegisterSessionViewContent({
               }
               orgUrlSlug={orgUrlSlug}
               storeUrlSlug={storeUrlSlug}
-              syncStatus={syncStatus}
-            />
-          ) : null}
-          {registerSession ? (
-            <RegisterSessionSupportEvidence
-              registerSession={registerSession}
-              sessionCode={sessionCode}
               syncStatus={syncStatus}
             />
           ) : null}

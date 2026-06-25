@@ -644,11 +644,12 @@ export type SyncProjectionRepository = {
     totalPrice: number;
     notes?: string;
   }): Promise<Id<"posTransactionServiceLine">>;
-	  patchProductSku(
-	    productSkuId: Id<"productSku">,
-	    patch: Partial<Omit<Doc<"productSku">, "_id" | "_creationTime">>,
-	  ): Promise<void>;
-	  recordSaleInventoryMovement(input: {
+		  patchProductSku(
+		    productSkuId: Id<"productSku">,
+		    patch: Partial<Omit<Doc<"productSku">, "_id" | "_creationTime">>,
+		  ): Promise<void>;
+  flushCatalogSummaryRefreshes?(): Promise<void>;
+		  recordSaleInventoryMovement(input: {
 	    storeId: Id<"store">;
 	    organizationId?: Id<"organization">;
 	    productId: Id<"product">;

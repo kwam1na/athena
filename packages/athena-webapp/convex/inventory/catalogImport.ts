@@ -21,6 +21,7 @@ import { recordOperationalEventWithCtx } from "../operations/operationalEvents";
 import { recordSkuActivityEventWithCtx } from "../operations/skuActivity";
 import { toSlug } from "../utils";
 import { ok, userError, type CommandResult } from "../../shared/commandResult";
+import { refreshCatalogSummaryWithCtx } from "./catalogSummary";
 import { upsertProductSkuSearchProjection } from "./skuSearch";
 
 const DEFAULT_CATEGORY_NAME = "Legacy import";
@@ -405,6 +406,8 @@ export async function importInventoryRowsWithCtx(
     subjectLabel: "Inventory import",
     subjectType: "inventory_import",
   });
+
+  await refreshCatalogSummaryWithCtx(ctx, args.storeId);
 
   return summary;
 }
@@ -1166,6 +1169,7 @@ export async function finalizeTrustedInventoryFromProductPageWithCtx(
     status: "finalized",
     updatedAt: now,
   });
+  await refreshCatalogSummaryWithCtx(ctx, normalizedArgs.storeId);
 
   await recomputeProductInventory(ctx, normalizedArgs.productId);
 

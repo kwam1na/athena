@@ -6,10 +6,14 @@ import { assertConformsToExportedReturns } from "../lib/returnValidatorContract"
 import { backfillUndefinedSkuVisibilityFromProducts } from "./productSku";
 import {
   archive,
+  batchUpdateSkuPrices,
+  create,
   createSku,
   generateUniqueBarcode,
   getAll,
+  getCatalogSummary,
   getByIdOrSlug,
+  repairCatalogSummary,
   removeAllProductsForStore,
   removeSku,
   unarchive,
@@ -19,6 +23,7 @@ import {
 
 const mocks = vi.hoisted(() => ({
   refreshProductSkuSearchForProduct: vi.fn(),
+  requireProductSkuSearchReadAccess: vi.fn(),
   requireStoreFullAdminAccess: vi.fn(),
   removeProductSkuSearchProjection: vi.fn(),
   upsertProductSkuSearchProjection: vi.fn(),
@@ -31,10 +36,12 @@ vi.mock("../stockOps/access", () => ({
 vi.mock("./skuSearch", () => ({
   refreshProductSkuSearchForProduct: mocks.refreshProductSkuSearchForProduct,
   removeProductSkuSearchProjection: mocks.removeProductSkuSearchProjection,
+  requireProductSkuSearchReadAccess: mocks.requireProductSkuSearchReadAccess,
   upsertProductSkuSearchProjection: mocks.upsertProductSkuSearchProjection,
 }));
 
 type TableName =
+  | "catalogSummary"
   | "category"
   | "inventoryHold"
   | "product"
@@ -51,19 +58,26 @@ function getHandler(definition: unknown) {
   return (definition as { _handler: Function })._handler;
 }
 
+function getTestScheduler(ctx: QueryCtx | MutationCtx) {
+  return (ctx as unknown as { scheduler: { runAfter: ReturnType<typeof vi.fn> } })
+    .scheduler;
+}
+
 function createSkuMutationCtx(seed: Partial<Record<TableName, Row[]>>) {
   const tables: Record<TableName, Map<string, Row>> = {
+    catalogSummary: new Map(
+      (seed.catalogSummary ?? []).map((row) => [row._id, row]),
+    ),
     category: new Map((seed.category ?? []).map((row) => [row._id, row])),
     inventoryHold: new Map(
       (seed.inventoryHold ?? []).map((row) => [row._id, row]),
     ),
     product: new Map((seed.product ?? []).map((row) => [row._id, row])),
     productSku: new Map((seed.productSku ?? []).map((row) => [row._id, row])),
-    subcategory: new Map(
-      (seed.subcategory ?? []).map((row) => [row._id, row]),
-    ),
+    subcategory: new Map((seed.subcategory ?? []).map((row) => [row._id, row])),
   };
   const counters: Record<TableName, number> = {
+    catalogSummary: seed.catalogSummary?.length ?? 0,
     category: 0,
     inventoryHold: seed.inventoryHold?.length ?? 0,
     product: 0,
@@ -71,10 +85,7 @@ function createSkuMutationCtx(seed: Partial<Record<TableName, Row[]>>) {
     subcategory: 0,
   };
 
-  function createIndexedQuery(
-    table: TableName,
-    filters: QueryFilter[],
-  ) {
+  function createIndexedQuery(table: TableName, filters: QueryFilter[]) {
     const matches = Array.from(tables[table].values()).filter((row) =>
       filters.every((filter) => {
         if (filter.op === "gt") {
@@ -103,7 +114,11 @@ function createSkuMutationCtx(seed: Partial<Record<TableName, Row[]>>) {
         tables[table].set(id, { _id: id, ...value });
         return id;
       },
-      async patch(table: TableName, id: string, value: Record<string, unknown>) {
+      async patch(
+        table: TableName,
+        id: string,
+        value: Record<string, unknown>,
+      ) {
         const existing = tables[table].get(id);
         if (!existing) {
           throw new Error(`Missing ${table}: ${id}`);
@@ -230,6 +245,7 @@ describe("inventory SKU generation", () => {
   beforeEach(() => {
     mocks.refreshProductSkuSearchForProduct.mockReset();
     mocks.removeProductSkuSearchProjection.mockReset();
+    mocks.requireProductSkuSearchReadAccess.mockReset();
     mocks.requireStoreFullAdminAccess.mockReset();
     mocks.upsertProductSkuSearchProjection.mockReset();
   });
@@ -263,10 +279,24 @@ describe("inventory SKU generation", () => {
       ctx,
       result._id,
     );
+    expect(Array.from(tables.catalogSummary.values())[0]).toMatchObject({
+      missingInfoProductCount: 1,
+      needsRefresh: false,
+      outOfStockProductCount: 0,
+      productCount: 1,
+      storeId: "storezzzz",
+    });
   });
 
   it("regenerates a standard SKU when updateSku receives an empty SKU", async () => {
-    const { ctx } = createSkuMutationCtx({
+    const { ctx, tables } = createSkuMutationCtx({
+      product: [
+        {
+          _id: "product001",
+          availability: "live",
+          storeId: "storezzzz",
+        },
+      ],
       productSku: [
         {
           _id: "productSku001",
@@ -298,6 +328,11 @@ describe("inventory SKU generation", () => {
       ctx,
       "productSku001",
     );
+    expect(Array.from(tables.catalogSummary.values())[0]).toMatchObject({
+      needsRefresh: false,
+      productCount: 1,
+      storeId: "storezzzz",
+    });
   });
 
   it("updates search projection lookup data after generating a barcode", async () => {
@@ -330,6 +365,13 @@ describe("inventory SKU generation", () => {
 
   it("removes search projections before deleting SKUs", async () => {
     const { ctx, tables } = createSkuMutationCtx({
+      product: [
+        {
+          _id: "product001",
+          availability: "live",
+          storeId: "storezzzz",
+        },
+      ],
       productSku: [
         {
           _id: "productSku001",
@@ -352,10 +394,44 @@ describe("inventory SKU generation", () => {
       "productSku001",
     );
     expect(tables.productSku.has("productSku001")).toBe(false);
+    expect(Array.from(tables.catalogSummary.values())[0]).toMatchObject({
+      needsRefresh: false,
+      outOfStockProductCount: 1,
+      productCount: 1,
+      storeId: "storezzzz",
+    });
   });
 });
 
 describe("product archiving", () => {
+  it("refreshes catalog summary after product creation", async () => {
+    const { ctx, tables } = createSkuMutationCtx({
+      category: [{ _id: "category001", slug: "hair", storeId: "storezzzz" }],
+      subcategory: [{ _id: "subcategory001", storeId: "storezzzz" }],
+    });
+
+    await getHandler(create)(ctx, {
+      availability: "live",
+      categoryId: "category001" as Id<"category">,
+      createdByUserId: "user001" as Id<"athenaUser">,
+      currency: "GHS",
+      inventoryCount: 0,
+      name: "New product",
+      organizationId: "org001" as Id<"organization">,
+      slug: "new-product",
+      storeId: "storezzzz" as Id<"store">,
+      subcategoryId: "subcategory001" as Id<"subcategory">,
+    });
+
+    expect(Array.from(tables.catalogSummary.values())[0]).toMatchObject({
+      categoryCount: 1,
+      needsRefresh: false,
+      outOfStockProductCount: 1,
+      productCount: 1,
+      storeId: "storezzzz",
+    });
+  });
+
   it("archives a product without deleting the product record", async () => {
     mocks.requireStoreFullAdminAccess.mockResolvedValue({});
 
@@ -391,6 +467,11 @@ describe("product archiving", () => {
       ctx,
       "product001",
     );
+    expect(Array.from(tables.catalogSummary.values())[0]).toMatchObject({
+      needsRefresh: false,
+      productCount: 0,
+      storeId: "storezzzz",
+    });
   });
 
   it("unarchives a product with store admin access", async () => {
@@ -426,10 +507,15 @@ describe("product archiving", () => {
       ctx,
       "product001",
     );
+    expect(Array.from(tables.catalogSummary.values())[0]).toMatchObject({
+      needsRefresh: false,
+      productCount: 1,
+      storeId: "storezzzz",
+    });
   });
 
   it("refreshes search projections when product metadata changes", async () => {
-    const { ctx } = createSkuMutationCtx({
+    const { ctx, tables } = createSkuMutationCtx({
       product: [
         {
           _id: "product001",
@@ -449,6 +535,53 @@ describe("product archiving", () => {
       ctx,
       "product001",
     );
+    expect(Array.from(tables.catalogSummary.values())[0]).toMatchObject({
+      needsRefresh: false,
+      productCount: 1,
+      storeId: "storezzzz",
+    });
+  });
+
+  it("refreshes catalog summary after batch SKU price updates", async () => {
+    const { ctx, tables } = createSkuMutationCtx({
+      product: [
+        {
+          _id: "product001",
+          availability: "live",
+          storeId: "storezzzz",
+        },
+      ],
+      productSku: [
+        {
+          _id: "productSku001",
+          images: ["sku.jpg"],
+          inventoryCount: 3,
+          price: 0,
+          productId: "product001",
+          quantityAvailable: 3,
+          sku: "SKU-1",
+          storeId: "storezzzz",
+        },
+      ],
+    });
+
+    await getHandler(batchUpdateSkuPrices)(ctx, {
+      updates: [
+        {
+          id: "productSku001" as Id<"productSku">,
+          netPrice: 900,
+          price: 1000,
+        },
+      ],
+    });
+
+    expect(Array.from(tables.catalogSummary.values())[0]).toMatchObject({
+      missingInfoProductCount: 0,
+      needsRefresh: false,
+      outOfStockProductCount: 0,
+      productCount: 1,
+      storeId: "storezzzz",
+    });
   });
 });
 
@@ -588,6 +721,229 @@ describe("product catalog visibility", () => {
         ],
       }),
     ]);
+  });
+
+  it("returns store catalog summary counts without returning product payloads", async () => {
+    const { ctx } = createProductsQueryCtx({
+      category: [
+        {
+          _id: "category-1",
+          name: "Hair",
+          slug: "hair",
+          storeId: "storezzzz",
+        },
+        {
+          _id: "category-2",
+          name: "Books",
+          slug: "books",
+          storeId: "storezzzz",
+        },
+        {
+          _id: "category-other-store",
+          name: "Other store",
+          slug: "other-store",
+          storeId: "store-other",
+        },
+      ],
+      product: [
+        {
+          _id: "product-live-stocked",
+          availability: "live",
+          categoryId: "category-1",
+          isVisible: true,
+          name: "Stocked",
+          storeId: "storezzzz",
+          subcategoryId: "subcategory-1",
+        },
+        {
+          _id: "product-live-out",
+          availability: "live",
+          categoryId: "category-1",
+          isVisible: true,
+          name: "Out",
+          storeId: "storezzzz",
+          subcategoryId: "subcategory-1",
+        },
+        {
+          _id: "product-live-missing-info",
+          availability: "live",
+          categoryId: "category-1",
+          isVisible: true,
+          name: "Missing",
+          storeId: "storezzzz",
+          subcategoryId: "subcategory-1",
+        },
+        {
+          _id: "product-hidden",
+          availability: "live",
+          categoryId: "category-1",
+          isVisible: false,
+          name: "Hidden",
+          storeId: "storezzzz",
+          subcategoryId: "subcategory-1",
+        },
+        {
+          _id: "product-archived",
+          availability: "archived",
+          categoryId: "category-1",
+          isVisible: false,
+          name: "Archived",
+          storeId: "storezzzz",
+          subcategoryId: "subcategory-1",
+        },
+        {
+          _id: "product-other-store",
+          availability: "live",
+          categoryId: "category-1",
+          isVisible: true,
+          name: "Other store",
+          storeId: "store-other",
+          subcategoryId: "subcategory-1",
+        },
+      ],
+      productSku: [
+        {
+          _id: "sku-stocked",
+          images: ["stocked.jpg"],
+          inventoryCount: 3,
+          price: 1000,
+          productId: "product-live-stocked",
+          quantityAvailable: 3,
+          storeId: "storezzzz",
+        },
+        {
+          _id: "sku-out",
+          images: ["out.jpg"],
+          inventoryCount: 0,
+          price: 1000,
+          productId: "product-live-out",
+          quantityAvailable: 0,
+          storeId: "storezzzz",
+        },
+        {
+          _id: "sku-missing-image",
+          images: [],
+          inventoryCount: 2,
+          price: 1000,
+          productId: "product-live-missing-info",
+          quantityAvailable: 2,
+          storeId: "storezzzz",
+        },
+        {
+          _id: "sku-zero-price-same-product",
+          images: ["missing-price.jpg"],
+          inventoryCount: 1,
+          price: 0,
+          productId: "product-live-missing-info",
+          quantityAvailable: 1,
+          storeId: "storezzzz",
+        },
+        {
+          _id: "sku-hidden-parent",
+          images: [],
+          inventoryCount: 0,
+          price: 0,
+          productId: "product-hidden",
+          quantityAvailable: 0,
+          storeId: "storezzzz",
+        },
+        {
+          _id: "sku-archived-parent",
+          images: [],
+          inventoryCount: 0,
+          price: 0,
+          productId: "product-archived",
+          quantityAvailable: 0,
+          storeId: "storezzzz",
+        },
+        {
+          _id: "sku-other-store",
+          images: [],
+          inventoryCount: 0,
+          price: 0,
+          productId: "product-other-store",
+          quantityAvailable: 0,
+          storeId: "store-other",
+        },
+      ],
+    });
+
+    await expect(
+      getHandler(getCatalogSummary)(ctx, {
+        storeId: "storezzzz" as Id<"store">,
+      }),
+    ).resolves.toMatchObject({
+      categoryCount: 0,
+      missingInfoProductCount: 0,
+      needsRefresh: true,
+      outOfStockProductCount: 0,
+      productCount: 0,
+      storeId: "storezzzz",
+      updatedAt: 0,
+    });
+    expect(getTestScheduler(ctx).runAfter).not.toHaveBeenCalled();
+
+    mocks.requireProductSkuSearchReadAccess.mockResolvedValue({});
+    const repairedSummary = await getHandler(repairCatalogSummary)(ctx, {
+      storeId: "storezzzz" as Id<"store">,
+    });
+
+    expect(repairedSummary).toMatchObject({
+      categoryCount: 2,
+      missingInfoProductCount: 2,
+      needsRefresh: false,
+      outOfStockProductCount: 2,
+      productCount: 4,
+    });
+    expect(mocks.requireProductSkuSearchReadAccess).toHaveBeenCalledWith(
+      ctx,
+      "storezzzz",
+      "You do not have access to repair catalog summaries.",
+    );
+    await expect(
+      getHandler(getCatalogSummary)(ctx, {
+        storeId: "storezzzz" as Id<"store">,
+      }),
+    ).resolves.toMatchObject({
+      categoryCount: 2,
+      missingInfoProductCount: 2,
+      needsRefresh: false,
+      outOfStockProductCount: 2,
+      productCount: 4,
+      storeId: "storezzzz",
+    });
+  });
+
+  it("returns stale catalog summary rows until the client requests repair", async () => {
+    const { ctx } = createProductsQueryCtx({
+      catalogSummary: [
+        {
+          _id: "catalog-summary-1",
+          categoryCount: 12,
+          missingInfoProductCount: 1,
+          needsRefresh: true,
+          outOfStockProductCount: 4,
+          productCount: 17,
+          storeId: "storezzzz",
+          updatedAt: 123,
+        },
+      ],
+    });
+
+    await expect(
+      getHandler(getCatalogSummary)(ctx, {
+        storeId: "storezzzz" as Id<"store">,
+      }),
+    ).resolves.toMatchObject({
+      categoryCount: 12,
+      missingInfoProductCount: 1,
+      needsRefresh: true,
+      outOfStockProductCount: 4,
+      productCount: 17,
+      storeId: "storezzzz",
+      updatedAt: 123,
+    });
+    expect(getTestScheduler(ctx).runAfter).not.toHaveBeenCalled();
   });
 });
 

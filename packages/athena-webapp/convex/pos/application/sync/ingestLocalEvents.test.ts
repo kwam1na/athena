@@ -2926,6 +2926,48 @@ describe("createLocalSyncIngestionService", () => {
     });
   });
 
+  it("flushes local-sync SKU patches into catalog summary invalidation", async () => {
+    const ctx = createFakeConvexCtx({
+      catalogSummary: [
+        {
+          _id: "catalog-summary-1",
+          categoryCount: 1,
+          missingInfoProductCount: 0,
+          needsRefresh: false,
+          outOfStockProductCount: 0,
+          productCount: 1,
+          storeId: "store-1",
+          updatedAt: 10,
+        },
+      ],
+      productSku: [
+        {
+          _id: "sku-1",
+          inventoryCount: 8,
+          productId: "product-1",
+          quantityAvailable: 8,
+          storeId: "store-1",
+        },
+      ],
+    });
+    const repository = createConvexLocalSyncRepository(ctx as never);
+
+    await repository.patchProductSku("sku-1" as never, {
+      inventoryCount: 7,
+      quantityAvailable: 7,
+    });
+    await repository.flushCatalogSummaryRefreshes?.();
+
+    await expect(
+      ctx.db.get("catalogSummary", "catalog-summary-1"),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        needsRefresh: true,
+        storeId: "store-1",
+      }),
+    );
+  });
+
   it("returns direct and mapped register-session facts for open review conflicts in the production repository", async () => {
     const ctx = createFakeConvexCtx({
       registerSession: [

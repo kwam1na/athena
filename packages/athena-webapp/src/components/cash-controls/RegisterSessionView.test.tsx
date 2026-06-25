@@ -339,8 +339,16 @@ describe("RegisterSessionViewContent", () => {
       />,
     );
 
+    const header = screen.getByTestId("register-session-page-header");
+    expect(header).toHaveTextContent(
+      /Register 3\s*\/\s*Front counter\s*synced\s*Closing/,
+    );
+    expect(header).toHaveTextContent("Closing");
+    expect(header).toHaveTextContent("synced");
+    expect(within(header).getByText("synced").parentElement).toHaveClass(
+      "text-success",
+    );
     expect(screen.getAllByText("Register 3").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Front counter").length).toBeGreaterThan(0);
     expect(screen.getByText("Session")).toBeInTheDocument();
     expect(screen.getByText("Code")).toBeInTheDocument();
     expect(screen.getAllByText("SION-1").length).toBeGreaterThan(0);
@@ -427,6 +435,16 @@ describe("RegisterSessionViewContent", () => {
       screen.getAllByText("Pending reconciliation")[0],
     ).toBeInTheDocument();
     expect(
+      screen.getByTestId("register-session-page-header"),
+    ).toHaveTextContent(
+      /Register 3\s*\/\s*Front counter\s*pending reconciliation/,
+    );
+    expect(
+      within(screen.getByTestId("register-session-page-header")).getByText(
+        "pending reconciliation",
+      ).parentElement,
+    ).toHaveClass("text-warning");
+    expect(
       screen.getByText(
         "This register was closed locally. Athena will reconcile the closeout after sync.",
       ),
@@ -454,11 +472,17 @@ describe("RegisterSessionViewContent", () => {
       />,
     );
 
-    expect(screen.getByText("Support evidence")).toBeInTheDocument();
-    expect(screen.getAllByText("Front counter").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Pending sync")[0]).toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: "Open support trace" }),
+      screen.getByTestId("register-session-page-header"),
+    ).toHaveTextContent(/Register 3\s*\/\s*Front counter\s*pending sync/);
+    expect(screen.queryByText("Support evidence")).not.toBeInTheDocument();
+    expect(
+      within(screen.getByTestId("register-session-page-header")).getByText(
+        "pending sync",
+      ).parentElement,
+    ).toHaveClass("text-warning");
+    expect(
+      screen.getByRole("link", { name: /view trace/i }),
     ).toBeInTheDocument();
     expect(screen.queryByText("Needs review")).not.toBeInTheDocument();
   });
@@ -673,9 +697,9 @@ describe("RegisterSessionViewContent", () => {
         "Synced register closeout has a variance. Review it before this closeout can be applied.",
       ),
     ).toBeInTheDocument();
-    expect(screen.getAllByText("Closeout variance review").length).toBeGreaterThan(
-      0,
-    );
+    expect(
+      screen.getAllByText("Closeout variance review").length,
+    ).toBeGreaterThan(0);
     expect(
       screen.getByText(
         "Review the synced count before applying this closeout to the drawer.",
@@ -777,15 +801,17 @@ describe("RegisterSessionViewContent", () => {
       />,
     );
 
-    expect(screen.getByText("Review queue needs attention")).toBeInTheDocument();
+    expect(
+      screen.getByText("Review queue needs attention"),
+    ).toBeInTheDocument();
     expect(
       screen.getByText(
         "2 review items need manager review before this drawer can be settled.",
       ),
     ).toBeInTheDocument();
-    expect(screen.getAllByText("Closeout variance review").length).toBeGreaterThan(
-      0,
-    );
+    expect(
+      screen.getAllByText("Closeout variance review").length,
+    ).toBeGreaterThan(0);
     expect(
       screen.getAllByText(
         "Service customer attribution is missing. Reject this item, then recreate the service work with a customer if needed.",
@@ -811,7 +837,9 @@ describe("RegisterSessionViewContent", () => {
       reviewConflictIds: ["sync_conflict_closeout"],
     });
 
-    await user.click(screen.getByRole("button", { name: "Reject review item" }));
+    await user.click(
+      screen.getByRole("button", { name: "Reject review item" }),
+    );
     await user.click(
       screen.getByRole("button", {
         name: "Confirm staff for Reject review item",
@@ -1082,8 +1110,9 @@ describe("RegisterSessionViewContent", () => {
     expect(screen.getByText("#12 and #13")).toBeInTheDocument();
     expect(screen.getAllByText(/2026/).length).toBeGreaterThan(0);
     expect(screen.getByText("Sales under review")).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: /Open transaction/i }))
-      .not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: /Open transaction/i }),
+    ).not.toBeInTheDocument();
     expect(screen.getByText(/Cashier Skank H\./)).toBeInTheDocument();
     expect(screen.getAllByText("GH₵22,000").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Cash").length).toBeGreaterThan(0);
@@ -1095,11 +1124,12 @@ describe("RegisterSessionViewContent", () => {
       }),
     );
 
-    expect(screen.getByRole("link", { name: /Open transaction/i }))
-      .toHaveAttribute(
-        "href",
-        "/wigclub/store/wigclub/pos/transactions/transaction-1001?o=%252F",
-      );
+    expect(
+      screen.getByRole("link", { name: /Open transaction/i }),
+    ).toHaveAttribute(
+      "href",
+      "/wigclub/store/wigclub/pos/transactions/transaction-1001?o=%252F",
+    );
     expect(screen.getByText("Lace Front Wig")).toBeInTheDocument();
     expect(screen.getByText("Wig Care Kit")).toBeInTheDocument();
     expect(screen.getByText("WIG-001")).toBeInTheDocument();
@@ -1231,7 +1261,8 @@ describe("RegisterSessionViewContent", () => {
                   },
                   sequence: 3,
                   status: "needs_review",
-                  summary: "Inventory needs manager review for a synced offline sale.",
+                  summary:
+                    "Inventory needs manager review for a synced offline sale.",
                   type: "inventory",
                 },
               ],

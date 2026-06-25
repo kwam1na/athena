@@ -6,7 +6,7 @@ import {
   mutation,
   query,
 } from "../_generated/server";
-import type { QueryCtx } from "../_generated/server";
+import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { v } from "convex/values";
 import { productSchema, productSkuSchema } from "../schemas/inventory";
 import { ProductSku } from "../../types";
@@ -18,8 +18,13 @@ import { readActiveHeldQuantitiesForSkus } from "./helpers/inventoryHolds";
 import {
   refreshProductSkuSearchForProduct,
   removeProductSkuSearchProjection,
+  requireProductSkuSearchReadAccess,
   upsertProductSkuSearchProjection,
 } from "./skuSearch";
+import {
+  EMPTY_CATALOG_SUMMARY,
+  refreshCatalogSummaryWithCtx,
+} from "./catalogSummary";
 
 const entity = "product";
 
@@ -85,7 +90,7 @@ async function adjustSkuAvailabilityForActiveHolds(
   args: {
     skus: ProductSku[];
     storeId: Id<"store">;
-  }
+  },
 ) {
   if (args.skus.length === 0) {
     return args.skus;
@@ -106,7 +111,7 @@ async function adjustSkuAvailabilityForActiveHolds(
       reservedQuantity,
       quantityAvailable: Math.max(
         0,
-        durableQuantityAvailable - reservedQuantity
+        durableQuantityAvailable - reservedQuantity,
       ),
     };
   });
@@ -121,7 +126,7 @@ export const getAll = query({
     subcategory: v.optional(v.array(v.string())),
     isVisible: v.optional(v.boolean()),
     availability: v.optional(
-      v.union(v.literal("draft"), v.literal("live"), v.literal("archived"))
+      v.union(v.literal("draft"), v.literal("live"), v.literal("archived")),
     ),
     excludeStorefrontHidden: v.optional(v.boolean()),
     filters: v.optional(
@@ -129,7 +134,7 @@ export const getAll = query({
         isMissingImages: v.optional(v.boolean()),
         isMissingPrice: v.optional(v.boolean()),
         isPriceZero: v.optional(v.boolean()),
-      })
+      }),
     ),
   },
   handler: async (ctx, args) => {
@@ -141,7 +146,7 @@ export const getAll = query({
       const s = await ctx.db
         .query("category")
         .withIndex("by_storeId_slug", (q) =>
-          q.eq("storeId", args.storeId).eq("slug", categorySlug)
+          q.eq("storeId", args.storeId).eq("slug", categorySlug),
         )
         .first();
       categoryId = s?._id;
@@ -161,7 +166,7 @@ export const getAll = query({
         s = await ctx.db
           .query("subcategory")
           .withIndex("by_categoryId_slug", (q) =>
-            q.eq("categoryId", categoryId).eq("slug", subcategorySlug)
+            q.eq("categoryId", categoryId).eq("slug", subcategorySlug),
           )
           .first();
       } else {
@@ -208,7 +213,7 @@ export const getAll = query({
       uncategorizedSubcategories
         .filter((subcategory) => subcategory.storeId === args.storeId)
         .forEach((subcategory) =>
-          storefrontHiddenSubcategoryIds.add(subcategory._id)
+          storefrontHiddenSubcategoryIds.add(subcategory._id),
         );
     }
 
@@ -284,7 +289,7 @@ export const getAll = query({
         acc[sku.productId].push(sku);
         return acc;
       },
-      {}
+      {},
     );
 
     // Filter by visibility if specified
@@ -326,6 +331,45 @@ export const getAll = query({
   },
 });
 
+export const getCatalogSummary = query({
+  args: {
+    storeId: v.id("store"),
+  },
+  handler: async (ctx, args) => {
+    const summary = await ctx.db
+      .query("catalogSummary")
+      .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
+      .first();
+
+    return (
+      summary ?? {
+        ...EMPTY_CATALOG_SUMMARY,
+        needsRefresh: true,
+        storeId: args.storeId,
+        updatedAt: 0,
+      }
+    );
+  },
+});
+
+export const repairCatalogSummary = mutation({
+  args: {
+    storeId: v.id("store"),
+  },
+  handler: async (ctx, args) => {
+    await requireProductSkuSearchReadAccess(
+      ctx,
+      args.storeId,
+      "You do not have access to repair catalog summaries.",
+    );
+
+    const id = await refreshCatalogSummaryWithCtx(ctx, args.storeId);
+    const summary = await ctx.db.get("catalogSummary", id);
+
+    return summary ?? EMPTY_CATALOG_SUMMARY;
+  },
+});
+
 export const getById = query({
   args: {
     id: v.id(entity),
@@ -344,7 +388,7 @@ export const getById = query({
       .filter((color): color is Id<"color"> => color !== undefined);
 
     const colors = await Promise.all(
-      colorIds.map((colorId) => ctx.db.get("color", colorId))
+      colorIds.map((colorId) => ctx.db.get("color", colorId)),
     );
 
     const colorMap = colors.reduce(
@@ -354,7 +398,7 @@ export const getById = query({
         }
         return acc;
       },
-      {} as Record<Id<"color">, string>
+      {} as Record<Id<"color">, string>,
     );
 
     let category: string | undefined;
@@ -369,7 +413,7 @@ export const getById = query({
       {
         skus,
         storeId: args.storeId,
-      }
+      },
     );
 
     const skusWithCategory = availabilityAdjustedSkus
@@ -407,7 +451,7 @@ export const getByIdInternal = internalQuery({
       .filter((color): color is Id<"color"> => color !== undefined);
 
     const colors = await Promise.all(
-      colorIds.map((colorId) => ctx.db.get("color", colorId))
+      colorIds.map((colorId) => ctx.db.get("color", colorId)),
     );
 
     const colorMap = colors.reduce(
@@ -417,7 +461,7 @@ export const getByIdInternal = internalQuery({
         }
         return acc;
       },
-      {} as Record<Id<"color">, string>
+      {} as Record<Id<"color">, string>,
     );
 
     let category: string | undefined;
@@ -432,7 +476,7 @@ export const getByIdInternal = internalQuery({
       {
         skus,
         storeId: args.storeId,
-      }
+      },
     );
 
     const skusWithCategory = availabilityAdjustedSkus
@@ -463,8 +507,8 @@ export const getBySlug = query({
       .filter((q) =>
         q.and(
           q.eq(q.field("slug"), args.slug),
-          q.eq(q.field("storeId"), args.storeId)
-        )
+          q.eq(q.field("storeId"), args.storeId),
+        ),
       )
       .first();
 
@@ -482,7 +526,7 @@ export const getBySlug = query({
       .filter((color): color is Id<"color"> => color !== undefined);
 
     const colors = await Promise.all(
-      colorIds.map((colorId) => ctx.db.get("color", colorId))
+      colorIds.map((colorId) => ctx.db.get("color", colorId)),
     );
 
     const colorMap = colors.reduce(
@@ -492,7 +536,7 @@ export const getBySlug = query({
         }
         return acc;
       },
-      {} as Record<Id<"color">, string>
+      {} as Record<Id<"color">, string>,
     );
 
     let category: string | undefined;
@@ -507,7 +551,7 @@ export const getBySlug = query({
       {
         skus,
         storeId: args.storeId,
-      }
+      },
     );
 
     const skusWithCategory = availabilityAdjustedSkus
@@ -535,7 +579,7 @@ export const getByIdOrSlug = query({
         isVisible: v.boolean(),
         excludeStorefrontHidden: v.optional(v.boolean()),
         includeArchived: v.optional(v.boolean()),
-      })
+      }),
     ),
     storeId: v.id("store"),
   },
@@ -546,13 +590,13 @@ export const getByIdOrSlug = query({
         q.or(
           q.and(
             q.eq(q.field("slug"), args.identifier),
-            q.eq(q.field("storeId"), args.storeId)
+            q.eq(q.field("storeId"), args.storeId),
           ),
           q.and(
             q.eq(q.field("_id"), args.identifier),
-            q.eq(q.field("storeId"), args.storeId)
-          )
-        )
+            q.eq(q.field("storeId"), args.storeId),
+          ),
+        ),
       )
       .first();
 
@@ -570,7 +614,7 @@ export const getByIdOrSlug = query({
       .filter((color): color is Id<"color"> => color !== undefined);
 
     const colors = await Promise.all(
-      colorIds.map((colorId) => ctx.db.get("color", colorId))
+      colorIds.map((colorId) => ctx.db.get("color", colorId)),
     );
 
     const colorMap = colors.reduce(
@@ -580,7 +624,7 @@ export const getByIdOrSlug = query({
         }
         return acc;
       },
-      {} as Record<Id<"color">, string>
+      {} as Record<Id<"color">, string>,
     );
 
     let category: string | undefined;
@@ -612,10 +656,7 @@ export const getByIdOrSlug = query({
       return null;
     }
 
-    if (
-      product.availability === "archived" &&
-      !args.filters?.includeArchived
-    ) {
+    if (product.availability === "archived" && !args.filters?.includeArchived) {
       return null;
     }
 
@@ -624,7 +665,7 @@ export const getByIdOrSlug = query({
       {
         skus,
         storeId: args.storeId,
-      }
+      },
     );
 
     const skusWithCategory = availabilityAdjustedSkus
@@ -643,7 +684,7 @@ export const getByIdOrSlug = query({
       .filter((sku) =>
         args.filters?.isVisible
           ? sku.isVisible || sku.isVisible === undefined
-          : true
+          : true,
       );
     // .filter((p) => p.price > 0);
 
@@ -672,9 +713,10 @@ export const create = mutation({
         internal.inventory.productUtil.invalidateProductCache,
         {
           storeId: product?.storeId,
-        }
+        },
       );
     }
+    await refreshCatalogSummaryWithCtx(ctx, args.storeId);
 
     return product;
   },
@@ -690,7 +732,7 @@ export const createSku = mutation({
       args.quantityAvailable > args.inventoryCount
     ) {
       throw new Error(
-        `Quantity available (${args.quantityAvailable}) cannot exceed stock (${args.inventoryCount})`
+        `Quantity available (${args.quantityAvailable}) cannot exceed stock (${args.inventoryCount})`,
       );
     }
 
@@ -713,13 +755,13 @@ export const createSku = mutation({
       const skuWithBarcode = await ctx.db
         .query("productSku")
         .withIndex("by_storeId_barcode", (q) =>
-          q.eq("storeId", product.storeId).eq("barcode", args.barcode)
+          q.eq("storeId", product.storeId).eq("barcode", args.barcode),
         )
         .first();
 
       if (skuWithBarcode) {
         throw new Error(
-          `Barcode ${args.barcode} already assigned to another SKU`
+          `Barcode ${args.barcode} already assigned to another SKU`,
         );
       }
     }
@@ -745,6 +787,7 @@ export const createSku = mutation({
     // Update the temporary SKU with the generated or provided SKU
     await ctx.db.patch("productSku", tempSkuId, { sku });
     await upsertProductSkuSearchProjection(ctx, tempSkuId);
+    await refreshCatalogSummaryWithCtx(ctx, product.storeId);
 
     return await ctx.db.get("productSku", tempSkuId);
   },
@@ -777,13 +820,16 @@ export const generateUniqueBarcode = mutation({
       const existing = await ctx.db
         .query("productSku")
         .withIndex("by_storeId_barcode", (q) =>
-          q.eq("storeId", args.storeId).eq("barcode", barcode)
+          q.eq("storeId", args.storeId).eq("barcode", barcode),
         )
         .first();
 
       if (!existing) {
         // Update the SKU with the barcode
-        await ctx.db.patch("productSku", args.skuId, { barcode, barcodeAutoGenerated: true });
+        await ctx.db.patch("productSku", args.skuId, {
+          barcode,
+          barcodeAutoGenerated: true,
+        });
         await upsertProductSkuSearchProjection(ctx, args.skuId);
         return { success: true, barcode };
       }
@@ -871,7 +917,7 @@ export const updateSku = mutation({
       const skuWithBarcode = await ctx.db
         .query("productSku")
         .withIndex("by_storeId_barcode", (q) =>
-          q.eq("storeId", currentSku.storeId).eq("barcode", args.barcode)
+          q.eq("storeId", currentSku.storeId).eq("barcode", args.barcode),
         )
         .first();
 
@@ -896,8 +942,8 @@ export const updateSku = mutation({
     // This automatically handles all fields without needing to list each one
     const patch = Object.fromEntries(
       Object.entries(args).filter(
-        ([key, value]) => key !== "id" && value !== undefined
-      )
+        ([key, value]) => key !== "id" && value !== undefined,
+      ),
     );
 
     if (generatedSku) {
@@ -906,6 +952,7 @@ export const updateSku = mutation({
 
     await ctx.db.patch("productSku", args.id, patch);
     await upsertProductSkuSearchProjection(ctx, args.id);
+    await refreshCatalogSummaryWithCtx(ctx, currentSku.storeId);
 
     return await ctx.db.get("productSku", args.id);
   },
@@ -915,7 +962,7 @@ export const update = mutation({
   args: {
     id: v.id(entity),
     availability: v.optional(
-      v.union(v.literal("draft"), v.literal("live"), v.literal("archived"))
+      v.union(v.literal("draft"), v.literal("live"), v.literal("archived")),
     ),
     areProcessingFeesAbsorbed: v.optional(v.boolean()),
     attributes: v.optional(v.record(v.string(), v.any())),
@@ -938,7 +985,9 @@ export const update = mutation({
         .collect();
 
       await Promise.all(
-        allSkus.map((sku) => ctx.db.patch("productSku", sku._id, { productName: args.name }))
+        allSkus.map((sku) =>
+          ctx.db.patch("productSku", sku._id, { productName: args.name }),
+        ),
       );
     }
 
@@ -953,8 +1002,9 @@ export const update = mutation({
         internal.inventory.productUtil.invalidateProductCache,
         {
           storeId: product?.storeId,
-        }
+        },
       );
+      await refreshCatalogSummaryWithCtx(ctx, product.storeId);
     }
 
     return product;
@@ -977,13 +1027,14 @@ export const archive = mutation({
 
     await ctx.db.patch("product", args.id, { availability: "archived" });
     await refreshProductSkuSearchForProduct(ctx, args.id);
+    await refreshCatalogSummaryWithCtx(ctx, product.storeId);
 
     await ctx.scheduler.runAfter(
       0,
       internal.inventory.productUtil.invalidateProductCache,
       {
         storeId: product.storeId,
-      }
+      },
     );
 
     return await ctx.db.get("product", args.id);
@@ -1006,6 +1057,7 @@ export const unarchive = mutation({
 
     await ctx.db.patch("product", args.id, { availability: "live" });
     await refreshProductSkuSearchForProduct(ctx, args.id);
+    await refreshCatalogSummaryWithCtx(ctx, product.storeId);
 
     await ctx.scheduler.runAfter(
       0,
@@ -1024,7 +1076,11 @@ export const remove = internalMutation({
     id: v.id(entity),
   },
   handler: async (ctx, args) => {
+    const product = await ctx.db.get("product", args.id);
     await ctx.db.delete("product", args.id);
+    if (product) {
+      await refreshCatalogSummaryWithCtx(ctx, product.storeId);
+    }
 
     return { message: "OK" };
   },
@@ -1043,6 +1099,7 @@ export const removeInternal = internalMutation({
     }
 
     await ctx.db.delete("product", args.id);
+    await refreshCatalogSummaryWithCtx(ctx, product.storeId);
 
     return { message: "OK" };
   },
@@ -1070,8 +1127,12 @@ export const removeSku = mutation({
     id: v.id("productSku"),
   },
   handler: async (ctx, args) => {
+    const sku = await ctx.db.get("productSku", args.id);
     await removeProductSkuSearchProjection(ctx, args.id);
     await ctx.db.delete("productSku", args.id);
+    if (sku) {
+      await refreshCatalogSummaryWithCtx(ctx, sku.storeId);
+    }
 
     return { message: "OK" };
   },
@@ -1101,7 +1162,10 @@ export const removeAllProductsForStore = mutation({
     );
 
     // Delete all products using Promise.all
-    await Promise.all(products.map((product) => ctx.db.delete("product", product._id)));
+    await Promise.all(
+      products.map((product) => ctx.db.delete("product", product._id)),
+    );
+    await refreshCatalogSummaryWithCtx(ctx, args.storeId);
   },
 });
 
@@ -1112,7 +1176,7 @@ export const batchUpdateSkuPrices = mutation({
         id: v.id("productSku"),
         price: v.number(),
         netPrice: v.number(),
-      })
+      }),
     ),
   },
   handler: async (ctx, args) => {
@@ -1123,21 +1187,27 @@ export const batchUpdateSkuPrices = mutation({
     const results = await Promise.allSettled(
       args.updates.map(async (update) => {
         if (update.price < 0 || update.netPrice < 0) {
-          throw new Error(`Invalid price for SKU ${update.id}: prices must be non-negative`);
+          throw new Error(
+            `Invalid price for SKU ${update.id}: prices must be non-negative`,
+          );
         }
         await ctx.db.patch("productSku", update.id, {
           price: update.price,
           netPrice: update.netPrice,
         });
-      })
+      }),
     );
 
     const failedCount = results.filter((r) => r.status === "rejected").length;
 
     if (failedCount > 0) {
       console.error(
-        `batchUpdateSkuPrices: ${failedCount} of ${args.updates.length} updates failed`
+        `batchUpdateSkuPrices: ${failedCount} of ${args.updates.length} updates failed`,
       );
+    }
+    const updatedSku = await ctx.db.get("productSku", args.updates[0].id);
+    if (updatedSku) {
+      await refreshCatalogSummaryWithCtx(ctx, updatedSku.storeId);
     }
 
     return {
@@ -1159,8 +1229,8 @@ export const batchGet = query({
         ctx.runQuery(internal.inventory.products.getByIdInternal, {
           id,
           storeId: args.storeId,
-        })
-      )
+        }),
+      ),
     );
 
     return res;

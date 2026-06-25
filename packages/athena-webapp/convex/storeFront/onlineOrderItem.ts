@@ -6,12 +6,29 @@ import {
   mutation,
 } from "../_generated/server";
 import { Id } from "../_generated/dataModel";
+import { internal } from "../_generated/api";
 import {
   recordOnlineOrderFulfillmentMovement,
   recordOnlineOrderRestockMovement,
 } from "./helpers/orderOperations";
 
 const entity = "onlineOrderItem";
+
+async function scheduleCatalogSummaryDirtyMarker(
+  ctx: Pick<MutationCtx, "scheduler">,
+  storeId: Id<"store">,
+) {
+  const scheduler = ctx.scheduler as
+    | { runAfter?: MutationCtx["scheduler"]["runAfter"] }
+    | undefined;
+  if (typeof scheduler?.runAfter !== "function") return;
+
+  await scheduler.runAfter(
+    0,
+    internal.inventory.catalogSummary.markCatalogSummaryNeedsRefreshInternal,
+    { storeId },
+  );
+}
 
 export const get = internalQuery({
   args: {
@@ -57,6 +74,7 @@ const updateOnlineOrderItem = async (
         item: orderItem,
         order,
       });
+      await scheduleCatalogSummaryDirtyMarker(ctx, order.storeId);
     }
   } else if (isReady === false && wasReady) {
     const orderItem = await ctx.db.get("onlineOrderItem", args.id);
@@ -78,6 +96,7 @@ const updateOnlineOrderItem = async (
         order,
         reasonCode: "online_order_item_unreadied",
       });
+      await scheduleCatalogSummaryDirtyMarker(ctx, order.storeId);
     }
   }
 };

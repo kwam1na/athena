@@ -2,6 +2,7 @@
 import { v } from "convex/values";
 import { action, internalQuery, mutation, query } from "../_generated/server";
 import { deleteFileInR2, uploadFileToR2 } from "../cloudflare/r2";
+import { refreshCatalogSummaryWithCtx } from "./catalogSummary";
 import { getProductName } from "../utils";
 
 export const generateUploadUrl = mutation({
@@ -103,9 +104,13 @@ export const update = mutation({
   args: { id: v.id("productSku"), update: v.record(v.string(), v.any()) },
   handler: async (ctx, args) => {
     if (args.update.images) {
+      const sku = await ctx.db.get("productSku", args.id);
+      if (!sku) return;
+
       await ctx.db.patch("productSku", args.id, {
         images: args.update.images,
       });
+      await refreshCatalogSummaryWithCtx(ctx, sku.storeId);
     }
   },
 });

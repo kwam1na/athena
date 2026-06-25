@@ -388,6 +388,53 @@ describe("SKU search foundation", () => {
     expect(result.results[0].productSkuId).toBe(skuId);
   });
 
+  it("does not scan canonical product text when the search sidecar is empty", async () => {
+    const { ctx } = createCtx(baseSeed());
+
+    const result = await getHandler(searchProductSkus)(ctx, {
+      query: "body wave",
+      storeId,
+    });
+
+    expect(result).toMatchObject({
+      candidateOverflow: false,
+      results: [],
+      truncated: false,
+    });
+  });
+
+  it("uses indexed canonical SKU and barcode matches when the search sidecar is empty", async () => {
+    const { ctx } = createCtx(baseSeed());
+
+    const skuResult = await getHandler(searchProductSkus)(ctx, {
+      query: "bw-18",
+      storeId,
+    });
+    const barcodeResult = await getHandler(searchProductSkus)(ctx, {
+      query: "ABC-123",
+      storeId,
+    });
+
+    expect(skuResult.results).toHaveLength(1);
+    expect(skuResult.results[0]).toMatchObject({
+      match: {
+        kind: "sku",
+        matchedValue: "BW-18",
+        rank: 1,
+      },
+      productSkuId: skuId,
+    });
+    expect(barcodeResult.results).toHaveLength(1);
+    expect(barcodeResult.results[0]).toMatchObject({
+      match: {
+        kind: "barcode",
+        matchedValue: "ABC-123",
+        rank: 2,
+      },
+      productSkuId: skuId,
+    });
+  });
+
   it("requires an authenticated full admin before repairing or cleaning search projections", async () => {
     const { ctx } = createCtx(baseSeed());
 

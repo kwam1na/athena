@@ -100,6 +100,7 @@ export type InventorySnapshotItem = {
   productCategorySlug?: string | null;
   productId?: Id<"product"> | null;
   productName: string;
+  productSkuProductName?: string | null;
   productSubcategory?: string | null;
   productSubcategoryId?: Id<"subcategory"> | null;
   productSubcategorySlug?: string | null;
@@ -471,6 +472,7 @@ function getStockAdjustmentSearchTerms(row: StockAdjustmentRow) {
   return [
     String(item._id),
     getInventoryItemDisplayName(item),
+    cleanInventoryMetadataValue(item.productSkuProductName),
     cleanInventoryMetadataValue(item.sku),
     cleanInventoryMetadataValue(item.barcode),
     cleanInventoryMetadataValue(item.colorName),
@@ -2048,7 +2050,11 @@ export function StockAdjustmentWorkspaceContent({
       .map((row, position) => ({
         position,
         row,
-        score: scoreStockAdjustmentSearchRow(row, normalizedFilterQuery),
+        score:
+          routeSkuFilterQuery &&
+          String(row.inventoryItem._id) === routeSkuFilterQuery
+            ? 100
+            : scoreStockAdjustmentSearchRow(row, normalizedFilterQuery),
       }))
       .filter(
         ({ row, score }) =>
@@ -2065,7 +2071,7 @@ export function StockAdjustmentWorkspaceContent({
         return left.position - right.position;
       })
       .map(({ row }) => row);
-  }, [filters.availability, normalizedFilterQuery, rows]);
+  }, [filters.availability, normalizedFilterQuery, routeSkuFilterQuery, rows]);
   const filteredRows = useMemo(
     () =>
       queryAvailabilityFilteredRows.filter((row) =>
@@ -2189,7 +2195,8 @@ export function StockAdjustmentWorkspaceContent({
     const totals = inventoryUnitSummary
       ? {
           ...inventoryUnitSummary,
-          checkoutReservedUnits: inventoryUnitSummary.checkoutReservedUnits ?? 0,
+          checkoutReservedUnits:
+            inventoryUnitSummary.checkoutReservedUnits ?? 0,
           fallbackReservedUnits:
             inventoryUnitSummary.fallbackReservedUnits ??
             inventoryUnitSummary.reservedUnits,
@@ -2946,511 +2953,524 @@ export function StockAdjustmentWorkspaceContent({
 
       {isLoading ? null : (
         <>
-      <PageWorkspaceGrid>
-        <PageWorkspaceMain>
-          <div className="flex flex-wrap items-start justify-between gap-layout-xl">
-            <div className="grid w-full max-w-3xl grid-cols-1 gap-layout-sm sm:grid-cols-3">
-              <OperationsSummaryMetric
-                label="On hand"
-                value={formatInventoryNumber(inventoryState.onHandUnits)}
-              />
-              <OperationsSummaryMetric
-                label="Available"
-                value={formatInventoryNumber(inventoryState.availableUnits)}
-              />
-              <OperationsSummaryMetric
-                ariaPressed={isUnavailableScopeSelectionActive}
-                className={
-                  isUnavailableScopeSelectionActive
-                    ? "border-action-workflow-border bg-action-workflow-soft"
-                    : undefined
-                }
-                disabled={inventoryState.unavailableUnits === 0}
-                label="Reserved"
-                onClick={handleUnavailableMetricClick}
-                value={formatInventoryNumber(inventoryState.unavailableUnits)}
-              />
-            </div>
-
-            <Tabs
-              onValueChange={(value) =>
-                handleModeChange(value as StockAdjustmentType)
-              }
-              value={adjustmentType}
-            >
-              <TabsList>
-                <TabsTrigger value="cycle_count">Cycle count</TabsTrigger>
-                <TabsTrigger value="manual">Manual adjustment</TabsTrigger>
-              </TabsList>
-            </Tabs>
-          </div>
-
-          <SkuSearchFilterBar
-            action={
-              <Button
-                disabled={!storeId || !user?._id}
-                onClick={() => setIsQuickAddOpen(true)}
-                type="button"
-                variant="workflow"
-              >
-                <PackagePlus className="h-4 w-4" />
-                Quick add
-              </Button>
-            }
-            ariaLabel="SKU search and filters"
-            filterId="stock-adjustment-availability-filter"
-            filterLabel="Filter by availability"
-            filterOptions={STOCK_ADJUSTMENT_AVAILABILITY_FILTER_OPTIONS}
-            filterValue={filters.availability}
-            hasActiveFilters={Boolean(
-              filters.query ||
-              routeSkuFilterQuery ||
-              filters.availability !== "all" ||
-              filters.category !== ALL_CATEGORY_FILTER_KEY,
-            )}
-            onClearFilters={handleClearFilters}
-            onFilterChange={(availability) =>
-              handleFilterChange({ availability })
-            }
-            onQueryChange={(query) => handleFilterChange({ query })}
-            query={filters.query}
-            scanAction={
-              <Button
-                aria-label="Scan barcode with camera"
-                className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                onClick={() => setIsBarcodeScannerOpen(true)}
-                size="icon"
-                type="button"
-                variant="ghost"
-              >
-                <ScanBarcode className="h-4 w-4" />
-              </Button>
-            }
-            searchId="stock-adjustment-sku-search"
-            searchLabel="Search products, SKUs, or barcodes"
-            searchPlaceholder="Search product, SKU, or barcode"
-            secondaryFilters={
-              <div
-                aria-label="Filter by category"
-                className="flex flex-col gap-2 sm:flex-row sm:items-center"
-                role="group"
-              >
-                <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                  Categories
-                </span>
-                <div className="flex min-w-0 flex-wrap gap-1.5">
-                  {[
-                    {
-                      itemCount: rows.length,
-                      key: ALL_CATEGORY_FILTER_KEY,
-                      label: "All categories",
-                    },
-                    ...categoryFilterOptions,
-                  ].map((category) => {
-                    const isSelected = filters.category === category.key;
-
-                    return (
-                      <button
-                        aria-label={`${category.label}, ${category.itemCount} ${pluralize(
-                          category.itemCount,
-                          "SKU",
-                        )}`}
-                        aria-pressed={isSelected}
-                        className={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${
-                          isSelected
-                            ? "border-action-workflow-border bg-action-workflow-soft text-foreground"
-                            : "border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground"
-                        }`}
-                        key={category.key}
-                        onClick={() =>
-                          handleFilterChange({
-                            category: isSelected
-                              ? ALL_CATEGORY_FILTER_KEY
-                              : category.key,
-                          })
-                        }
-                        type="button"
-                      >
-                        {category.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            }
-            summary={
-              isShowingCategoryMismatchRows ? (
-                <>
-                  No {activeCategoryFilterLabel} matches. Showing{" "}
-                  {formatInventoryNumber(tableRows.length)}{" "}
-                  {pluralize(tableRows.length, "match", "matches")} in{" "}
-                  {formatCategoryList(categoryMismatchCategoryLabels)}.
-                </>
-              ) : (
-                <>
-                  Showing {formatInventoryNumber(filteredRows.length)} of{" "}
-                  {formatInventoryNumber(rows.length)}{" "}
-                  {pluralize(rows.length, "SKU")}.
-                </>
-              )
-            }
-          />
-
-          <div className="flex min-h-0 flex-col">
-            {isShowingCategoryMismatchRows ? (
-              <section
-                aria-label="Search matches in other categories"
-                className="mb-layout-md flex flex-col gap-layout-sm rounded-md border border-action-workflow-border bg-action-workflow-soft px-layout-md py-layout-sm sm:flex-row sm:items-center sm:justify-between"
-              >
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-foreground">
-                    Matches are in{" "}
-                    {formatCategoryList(categoryMismatchCategoryLabels)}.
-                  </p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {activeCategoryFilterLabel} has no matching SKUs for this
-                    search.
-                  </p>
-                </div>
-                <Button
-                  className="shrink-0"
-                  onClick={handleCategoryMismatchAction}
-                  type="button"
-                  variant="outline"
-                >
-                  {categoryMismatchActionLabel}
-                </Button>
-              </section>
-            ) : null}
-            <GenericDataTable
-              autoResetPageIndex={false}
-              columns={columns}
-              data={tableRows}
-              getRowClassName={(row) =>
-                row.original.inventoryItem._id === activeInventoryItemId
-                  ? "bg-muted/60 hover:bg-muted/70"
-                  : undefined
-              }
-              onPageIndexChange={(nextPageIndex) =>
-                onSearchStateChange?.({ page: nextPageIndex + 1 })
-              }
-              onRowClick={(row) =>
-                handleSelectInventoryItem(row.original.inventoryItem._id)
-              }
-              onLoadMore={
-                canLoadMoreInventoryItems && !isLoadingMoreInventoryItems
-                  ? onLoadMoreInventoryItems
-                  : undefined
-              }
-              pageIndex={
-                searchState?.page === undefined
-                  ? undefined
-                  : Math.max(searchState.page - 1, 0)
-              }
-              paginationRangeItemLabel="SKU"
-              paginationRangeItemPluralLabel="SKUs"
-              tableId={`stock-adjustments-${adjustmentType}-${filters.category}-${filters.availability}-${isShowingCategoryMismatchRows ? "category-mismatch" : "exact"}-${normalizedFilterQuery || "all"}`}
-            />
-          </div>
-        </PageWorkspaceMain>
-
-        <PageWorkspaceRail>
-          <section className="rounded-lg border border-border bg-surface-raised px-layout-md py-layout-lg shadow-surface">
-            <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-              Batch summary
-            </p>
-            <div className="mt-layout-lg space-y-layout-lg">
-              {adjustmentType === "cycle_count" ? (
-                <div className="space-y-3">
-                  <div
-                    className={`space-y-layout-md rounded-md border px-layout-md py-layout-md ${cycleCountStatus.tone}`}
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-xs font-medium text-muted-foreground">
-                        Count status
-                      </p>
-                      <Badge
-                        className="inline-flex items-center gap-1.5 rounded-md border-border bg-background text-foreground"
-                        variant="outline"
-                      >
-                        <span>{cycleCountStatus.label}</span>
-                        {showDraftSavedTimestamp ? (
-                          <>
-                            <span
-                              aria-hidden="true"
-                              className="h-3 w-px bg-border"
-                            />
-                            <span>{draftLastSavedLabel}</span>
-                          </>
-                        ) : null}
-                      </Badge>
-                    </div>
-                    <p className="text-sm leading-6">
-                      {cycleCountStatus.description}
-                    </p>
-                    <div className="space-y-1.5">
-                      {cycleCountDraft && totalDraftChangedLineCount > 0 ? (
-                        <p className="text-xs leading-5 text-muted-foreground">
-                          Current:{" "}
-                          {currentScopeLabel ? `${currentScopeLabel}, ` : ""}
-                          {scopeDraftChangedLineCount}{" "}
-                          {pluralize(scopeDraftChangedLineCount, "SKU")}.
-                        </p>
-                      ) : null}
-                      {draftScopeNames.length > 0 ? (
-                        <p className="text-xs leading-5 text-muted-foreground">
-                          Categories: {draftScopeNames.join(", ")}.
-                        </p>
-                      ) : null}
-                    </div>
-                    {canDiscardCycleCountDraft && onDiscardCycleCountDraft ? (
-                      <Button
-                        className="mt-layout-xs h-8 px-2 text-xs"
-                        disabled={isCycleCountDraftSaving || isSubmitting}
-                        onClick={async () => {
-                          await awaitPendingCycleCountSaves();
-                          const result = await onDiscardCycleCountDraft();
-
-                          if (result.kind !== "ok") {
-                            presentCommandToast(result);
-                            return;
-                          }
-
-                          setCycleCounts(buildCycleCountDrafts(inventoryItems));
-                          setCycleCountSubmissionOutcome(null);
-                          setStaleDraftLines([]);
-                          toast.success("Draft discarded");
-                        }}
-                        type="button"
-                        variant="outline"
-                      >
-                        Discard draft
-                      </Button>
-                    ) : null}
-                  </div>
-                  {staleDraftLines.length > 0 ? (
-                    <div className="rounded-md border border-warning/30 bg-warning/10 px-layout-md py-layout-sm">
-                      <p className="text-sm font-medium text-foreground">
-                        Inventory changed since this count started.
-                      </p>
-                      <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
-                        {staleDraftLines.map((line) => (
-                          <li
-                            className="flex items-center justify-between gap-2"
-                            key={line.productSkuId}
-                          >
-                            <span>
-                              {line.productName ??
-                                line.sku ??
-                                line.productSkuId}
-                              : {line.baselineInventoryCount} to{" "}
-                              {line.currentInventoryCount} on hand.
-                            </span>
-                            {onRefreshCycleCountDraftLineBaseline ? (
-                              <Button
-                                className="h-7 shrink-0 px-2 text-[11px]"
-                                disabled={
-                                  isCycleCountDraftSaving || isSubmitting
-                                }
-                                onClick={async () => {
-                                  await awaitPendingCycleCountSaves();
-                                  const result =
-                                    await onRefreshCycleCountDraftLineBaseline({
-                                      productSkuId: line.productSkuId,
-                                    });
-
-                                  if (result.kind !== "ok") {
-                                    presentCommandToast(result);
-                                    return;
-                                  }
-
-                                  setStaleDraftLines((currentLines) =>
-                                    currentLines.filter(
-                                      (currentLine) =>
-                                        currentLine.productSkuId !==
-                                        line.productSkuId,
-                                    ),
-                                  );
-                                  setCycleCounts((currentCounts) => ({
-                                    ...currentCounts,
-                                    [line.productSkuId]: String(
-                                      line.currentInventoryCount,
-                                    ),
-                                  }));
-                                  toast.success("Baseline refreshed");
-                                }}
-                                type="button"
-                                variant="outline"
-                              >
-                                Use latest stock
-                              </Button>
-                            ) : null}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
-              {adjustmentType === "cycle_count" ? (
-                <div className="space-y-3 border-t border-border pt-layout-md">
-                  <p className="text-xs font-medium text-muted-foreground">
-                    Count metrics
-                  </p>
-                  <div className="grid gap-layout-sm">
-                    <OperationsSummaryMetric
-                      helper={`Net ${
-                        overallSummary.netQuantityDelta > 0
-                          ? `+${overallSummary.netQuantityDelta}`
-                          : overallSummary.netQuantityDelta
-                      } · variance ${overallSummary.largestAbsoluteDelta}`}
-                      label="All saved counts"
-                      value={overallSummary.lineItemCount}
-                    />
-                    <OperationsSummaryMetric
-                      helper={`Net ${
-                        summary.netQuantityDelta > 0
-                          ? `+${summary.netQuantityDelta}`
-                          : summary.netQuantityDelta
-                      } · variance ${summary.largestAbsoluteDelta}`}
-                      label="Active category"
-                      value={summary.lineItemCount}
-                    />
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  <p className="text-xs font-medium text-muted-foreground">
-                    Adjustment metrics
-                  </p>
+          <PageWorkspaceGrid>
+            <PageWorkspaceMain>
+              <div className="flex flex-wrap items-start justify-between gap-layout-xl">
+                <div className="grid w-full max-w-3xl grid-cols-1 gap-layout-sm sm:grid-cols-3">
                   <OperationsSummaryMetric
-                    helper={`Net ${
-                      summary.netQuantityDelta > 0
-                        ? `+${summary.netQuantityDelta}`
-                        : summary.netQuantityDelta
-                    } · variance ${summary.largestAbsoluteDelta}`}
-                    label="Manual batch"
-                    value={summary.lineItemCount}
+                    label="On hand"
+                    value={formatInventoryNumber(inventoryState.onHandUnits)}
+                  />
+                  <OperationsSummaryMetric
+                    label="Available"
+                    value={formatInventoryNumber(inventoryState.availableUnits)}
+                  />
+                  <OperationsSummaryMetric
+                    ariaPressed={isUnavailableScopeSelectionActive}
+                    className={
+                      isUnavailableScopeSelectionActive
+                        ? "border-action-workflow-border bg-action-workflow-soft"
+                        : undefined
+                    }
+                    disabled={inventoryState.unavailableUnits === 0}
+                    label="Reserved"
+                    onClick={handleUnavailableMetricClick}
+                    value={formatInventoryNumber(
+                      inventoryState.unavailableUnits,
+                    )}
                   />
                 </div>
-              )}
-              <div
-                className={`rounded-md border px-layout-md py-layout-sm text-sm leading-6 ${
-                  approvalRequired
-                    ? "border-warning/30 bg-warning/10 text-foreground"
-                    : adjustmentType === "cycle_count" && highVarianceFlag
-                      ? "border-warning/30 bg-warning/10 text-foreground"
-                      : "border-success/30 bg-success/10 text-foreground"
-                }`}
-              >
-                {approvalRequired
-                  ? "This batch will open an approval request before inventory changes are applied"
-                  : adjustmentType === "cycle_count" && highVarianceFlag
-                    ? "Submitting this count will apply inventory movements immediately and flag the high variance"
-                    : adjustmentType === "cycle_count"
-                      ? "Submitting this count will apply inventory movements immediately"
-                      : "This batch can apply immediately and will still write inventory movements"}
+
+                <Tabs
+                  onValueChange={(value) =>
+                    handleModeChange(value as StockAdjustmentType)
+                  }
+                  value={adjustmentType}
+                >
+                  <TabsList>
+                    <TabsTrigger value="cycle_count">Cycle count</TabsTrigger>
+                    <TabsTrigger value="manual">Manual adjustment</TabsTrigger>
+                  </TabsList>
+                </Tabs>
               </div>
-            </div>
-          </section>
 
-          <section className="space-y-layout-xl rounded-lg border border-border bg-surface-raised px-layout-md py-layout-md shadow-surface">
-            <SkuDetailPanel activeInventoryItem={activeInventoryItem} />
+              <SkuSearchFilterBar
+                action={
+                  <Button
+                    disabled={!storeId || !user?._id}
+                    onClick={() => setIsQuickAddOpen(true)}
+                    type="button"
+                    variant="workflow"
+                  >
+                    <PackagePlus className="h-4 w-4" />
+                    Quick add
+                  </Button>
+                }
+                ariaLabel="SKU search and filters"
+                filterId="stock-adjustment-availability-filter"
+                filterLabel="Filter by availability"
+                filterOptions={STOCK_ADJUSTMENT_AVAILABILITY_FILTER_OPTIONS}
+                filterValue={filters.availability}
+                hasActiveFilters={Boolean(
+                  filters.query ||
+                  routeSkuFilterQuery ||
+                  filters.availability !== "all" ||
+                  filters.category !== ALL_CATEGORY_FILTER_KEY,
+                )}
+                onClearFilters={handleClearFilters}
+                onFilterChange={(availability) =>
+                  handleFilterChange({ availability })
+                }
+                onQueryChange={(query) => handleFilterChange({ query })}
+                query={filters.query}
+                scanAction={
+                  <Button
+                    aria-label="Scan barcode with camera"
+                    className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    onClick={() => setIsBarcodeScannerOpen(true)}
+                    size="icon"
+                    type="button"
+                    variant="ghost"
+                  >
+                    <ScanBarcode className="h-4 w-4" />
+                  </Button>
+                }
+                searchId="stock-adjustment-sku-search"
+                searchLabel="Search products, SKUs, or barcodes"
+                searchPlaceholder="Search product, SKU, or barcode"
+                secondaryFilters={
+                  <div
+                    aria-label="Filter by category"
+                    className="flex flex-col gap-2 sm:flex-row sm:items-center"
+                    role="group"
+                  >
+                    <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                      Categories
+                    </span>
+                    <div className="flex min-w-0 flex-wrap gap-1.5">
+                      {[
+                        {
+                          itemCount: rows.length,
+                          key: ALL_CATEGORY_FILTER_KEY,
+                          label: "All categories",
+                        },
+                        ...categoryFilterOptions,
+                      ].map((category) => {
+                        const isSelected = filters.category === category.key;
 
-            <div className="space-y-2">
-              <Label htmlFor="reason-code">Reason code</Label>
-              <Select
-                disabled={adjustmentType === "cycle_count"}
-                onValueChange={(value) =>
-                  setReasonCode(
-                    value as (typeof MANUAL_STOCK_ADJUSTMENT_REASON_CODES)[number],
+                        return (
+                          <button
+                            aria-label={`${category.label}, ${category.itemCount} ${pluralize(
+                              category.itemCount,
+                              "SKU",
+                            )}`}
+                            aria-pressed={isSelected}
+                            className={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${
+                              isSelected
+                                ? "border-action-workflow-border bg-action-workflow-soft text-foreground"
+                                : "border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground"
+                            }`}
+                            key={category.key}
+                            onClick={() =>
+                              handleFilterChange({
+                                category: isSelected
+                                  ? ALL_CATEGORY_FILTER_KEY
+                                  : category.key,
+                              })
+                            }
+                            type="button"
+                          >
+                            {category.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                }
+                summary={
+                  isShowingCategoryMismatchRows ? (
+                    <>
+                      No {activeCategoryFilterLabel} matches. Showing{" "}
+                      {formatInventoryNumber(tableRows.length)}{" "}
+                      {pluralize(tableRows.length, "match", "matches")} in{" "}
+                      {formatCategoryList(categoryMismatchCategoryLabels)}.
+                    </>
+                  ) : (
+                    <>
+                      Showing {formatInventoryNumber(filteredRows.length)} of{" "}
+                      {formatInventoryNumber(rows.length)}{" "}
+                      {pluralize(rows.length, "SKU")}.
+                    </>
                   )
                 }
-                value={displayedReasonCode}
-              >
-                <SelectTrigger id="reason-code">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {adjustmentType === "cycle_count" ? (
-                    <SelectItem value={CYCLE_COUNT_REASON_CODE}>
-                      Cycle count reconciliation
-                    </SelectItem>
-                  ) : (
-                    MANUAL_STOCK_ADJUSTMENT_REASON_CODES.map((option) => (
-                      <SelectItem key={option} value={option}>
-                        {MANUAL_REASON_LABELS[option]}
-                      </SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="stock-adjustment-notes">Notes</Label>
-              <Textarea
-                id="stock-adjustment-notes"
-                onChange={(event) => setNotes(event.target.value)}
-                placeholder="Add notes, count context, or exception details."
-                value={notes}
+                variant="plain"
               />
-            </div>
 
-            <div className="space-y-layout-sm text-sm text-muted-foreground">
-              <p>
-                Variances of {STOCK_ADJUSTMENT_APPROVAL_THRESHOLD}+ units{" "}
-                {adjustmentType === "cycle_count"
-                  ? "are flagged after submission."
-                  : "go to review."}
-              </p>
-            </div>
+              <div className="flex min-h-0 flex-col">
+                {isShowingCategoryMismatchRows ? (
+                  <section
+                    aria-label="Search matches in other categories"
+                    className="mb-layout-md flex flex-col gap-layout-sm rounded-md border border-action-workflow-border bg-action-workflow-soft px-layout-md py-layout-sm sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-foreground">
+                        Matches are in{" "}
+                        {formatCategoryList(categoryMismatchCategoryLabels)}.
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {activeCategoryFilterLabel} has no matching SKUs for
+                        this search.
+                      </p>
+                    </div>
+                    <Button
+                      className="shrink-0"
+                      onClick={handleCategoryMismatchAction}
+                      type="button"
+                      variant="outline"
+                    >
+                      {categoryMismatchActionLabel}
+                    </Button>
+                  </section>
+                ) : null}
+                <GenericDataTable
+                  autoResetPageIndex={false}
+                  columns={columns}
+                  data={tableRows}
+                  getRowClassName={(row) =>
+                    row.original.inventoryItem._id === activeInventoryItemId
+                      ? "bg-muted/60 hover:bg-muted/70"
+                      : undefined
+                  }
+                  onPageIndexChange={(nextPageIndex) =>
+                    onSearchStateChange?.({ page: nextPageIndex + 1 })
+                  }
+                  onRowClick={(row) =>
+                    handleSelectInventoryItem(row.original.inventoryItem._id)
+                  }
+                  onLoadMore={
+                    canLoadMoreInventoryItems && !isLoadingMoreInventoryItems
+                      ? onLoadMoreInventoryItems
+                      : undefined
+                  }
+                  pageIndex={
+                    searchState?.page === undefined
+                      ? undefined
+                      : Math.max(searchState.page - 1, 0)
+                  }
+                  paginationRangeItemLabel="SKU"
+                  paginationRangeItemPluralLabel="SKUs"
+                  tableId={`stock-adjustments-${adjustmentType}-${filters.category}-${filters.availability}-${isShowingCategoryMismatchRows ? "category-mismatch" : "exact"}-${normalizedFilterQuery || "all"}`}
+                />
+              </div>
+            </PageWorkspaceMain>
 
-            <LoadingButton
-              variant={"workflow"}
-              className="w-full"
-              disabled={
-                adjustmentType === "cycle_count" &&
-                (isCycleCountDraftSaving || pendingCycleCountSaveCount > 0)
-              }
-              isLoading={
-                isSubmitting ||
-                (adjustmentType === "cycle_count" &&
-                  (isCycleCountDraftSaving || pendingCycleCountSaveCount > 0))
-              }
-              onClick={handleSubmit}
-              onMouseDown={(event) => {
-                if (adjustmentType === "cycle_count") {
-                  event.preventDefault();
-                }
-              }}
-            >
-              {adjustmentType === "manual"
-                ? "Submit adjustment"
-                : "Submit count"}
-            </LoadingButton>
-          </section>
-        </PageWorkspaceRail>
-      </PageWorkspaceGrid>
+            <PageWorkspaceRail>
+              <section className="rounded-lg border border-border bg-surface-raised px-layout-md py-layout-lg shadow-surface">
+                <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                  Batch summary
+                </p>
+                <div className="mt-layout-lg space-y-layout-lg">
+                  {adjustmentType === "cycle_count" ? (
+                    <div className="space-y-3">
+                      <div
+                        className={`space-y-layout-md rounded-md border px-layout-md py-layout-md ${cycleCountStatus.tone}`}
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-xs font-medium text-muted-foreground">
+                            Count status
+                          </p>
+                          <Badge
+                            className="inline-flex items-center gap-1.5 rounded-md border-border bg-background text-foreground"
+                            variant="outline"
+                          >
+                            <span>{cycleCountStatus.label}</span>
+                            {showDraftSavedTimestamp ? (
+                              <>
+                                <span
+                                  aria-hidden="true"
+                                  className="h-3 w-px bg-border"
+                                />
+                                <span>{draftLastSavedLabel}</span>
+                              </>
+                            ) : null}
+                          </Badge>
+                        </div>
+                        <p className="text-sm leading-6">
+                          {cycleCountStatus.description}
+                        </p>
+                        <div className="space-y-1.5">
+                          {cycleCountDraft && totalDraftChangedLineCount > 0 ? (
+                            <p className="text-xs leading-5 text-muted-foreground">
+                              Current:{" "}
+                              {currentScopeLabel
+                                ? `${currentScopeLabel}, `
+                                : ""}
+                              {scopeDraftChangedLineCount}{" "}
+                              {pluralize(scopeDraftChangedLineCount, "SKU")}.
+                            </p>
+                          ) : null}
+                          {draftScopeNames.length > 0 ? (
+                            <p className="text-xs leading-5 text-muted-foreground">
+                              Categories: {draftScopeNames.join(", ")}.
+                            </p>
+                          ) : null}
+                        </div>
+                        {canDiscardCycleCountDraft &&
+                        onDiscardCycleCountDraft ? (
+                          <Button
+                            className="mt-layout-xs h-8 px-2 text-xs"
+                            disabled={isCycleCountDraftSaving || isSubmitting}
+                            onClick={async () => {
+                              await awaitPendingCycleCountSaves();
+                              const result = await onDiscardCycleCountDraft();
 
-      <StockAdjustmentBarcodeScannerDialog
-        onBarcodeDetected={(barcode) => handleFilterChange({ query: barcode })}
-        onOpenChange={setIsBarcodeScannerOpen}
-        open={isBarcodeScannerOpen}
-      />
+                              if (result.kind !== "ok") {
+                                presentCommandToast(result);
+                                return;
+                              }
 
-      <QuickAddProductDialog
-        description="Add sellable stock without leaving stock adjustments."
-        existingSkuOptions={existingSkuOptions}
-        initialLookupCode={quickAddInitialLookupCode}
-        initialName={quickAddInitialName}
-        onAttachBarcode={handleAttachBarcodeSubmit}
-        onOpenChange={setIsQuickAddOpen}
-        onSubmit={handleQuickAddSubmit}
-        open={isQuickAddOpen}
-        skuSearchStoreId={storeId}
-        submitErrorMessage="Could not quick add this product. Try again."
-      />
+                              setCycleCounts(
+                                buildCycleCountDrafts(inventoryItems),
+                              );
+                              setCycleCountSubmissionOutcome(null);
+                              setStaleDraftLines([]);
+                              toast.success("Draft discarded");
+                            }}
+                            type="button"
+                            variant="outline"
+                          >
+                            Discard draft
+                          </Button>
+                        ) : null}
+                      </div>
+                      {staleDraftLines.length > 0 ? (
+                        <div className="rounded-md border border-warning/30 bg-warning/10 px-layout-md py-layout-sm">
+                          <p className="text-sm font-medium text-foreground">
+                            Inventory changed since this count started.
+                          </p>
+                          <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
+                            {staleDraftLines.map((line) => (
+                              <li
+                                className="flex items-center justify-between gap-2"
+                                key={line.productSkuId}
+                              >
+                                <span>
+                                  {line.productName ??
+                                    line.sku ??
+                                    line.productSkuId}
+                                  : {line.baselineInventoryCount} to{" "}
+                                  {line.currentInventoryCount} on hand.
+                                </span>
+                                {onRefreshCycleCountDraftLineBaseline ? (
+                                  <Button
+                                    className="h-7 shrink-0 px-2 text-[11px]"
+                                    disabled={
+                                      isCycleCountDraftSaving || isSubmitting
+                                    }
+                                    onClick={async () => {
+                                      await awaitPendingCycleCountSaves();
+                                      const result =
+                                        await onRefreshCycleCountDraftLineBaseline(
+                                          {
+                                            productSkuId: line.productSkuId,
+                                          },
+                                        );
+
+                                      if (result.kind !== "ok") {
+                                        presentCommandToast(result);
+                                        return;
+                                      }
+
+                                      setStaleDraftLines((currentLines) =>
+                                        currentLines.filter(
+                                          (currentLine) =>
+                                            currentLine.productSkuId !==
+                                            line.productSkuId,
+                                        ),
+                                      );
+                                      setCycleCounts((currentCounts) => ({
+                                        ...currentCounts,
+                                        [line.productSkuId]: String(
+                                          line.currentInventoryCount,
+                                        ),
+                                      }));
+                                      toast.success("Baseline refreshed");
+                                    }}
+                                    type="button"
+                                    variant="outline"
+                                  >
+                                    Use latest stock
+                                  </Button>
+                                ) : null}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  {adjustmentType === "cycle_count" ? (
+                    <div className="space-y-3 border-t border-border pt-layout-md">
+                      <p className="text-xs font-medium text-muted-foreground">
+                        Count metrics
+                      </p>
+                      <div className="grid gap-layout-sm">
+                        <OperationsSummaryMetric
+                          helper={`Net ${
+                            overallSummary.netQuantityDelta > 0
+                              ? `+${overallSummary.netQuantityDelta}`
+                              : overallSummary.netQuantityDelta
+                          } · variance ${overallSummary.largestAbsoluteDelta}`}
+                          label="All saved counts"
+                          value={overallSummary.lineItemCount}
+                        />
+                        <OperationsSummaryMetric
+                          helper={`Net ${
+                            summary.netQuantityDelta > 0
+                              ? `+${summary.netQuantityDelta}`
+                              : summary.netQuantityDelta
+                          } · variance ${summary.largestAbsoluteDelta}`}
+                          label="Active category"
+                          value={summary.lineItemCount}
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <p className="text-xs font-medium text-muted-foreground">
+                        Adjustment metrics
+                      </p>
+                      <OperationsSummaryMetric
+                        helper={`Net ${
+                          summary.netQuantityDelta > 0
+                            ? `+${summary.netQuantityDelta}`
+                            : summary.netQuantityDelta
+                        } · variance ${summary.largestAbsoluteDelta}`}
+                        label="Manual batch"
+                        value={summary.lineItemCount}
+                      />
+                    </div>
+                  )}
+                  <div
+                    className={`rounded-md border px-layout-md py-layout-sm text-sm leading-6 ${
+                      approvalRequired
+                        ? "border-warning/30 bg-warning/10 text-foreground"
+                        : adjustmentType === "cycle_count" && highVarianceFlag
+                          ? "border-warning/30 bg-warning/10 text-foreground"
+                          : "border-success/30 bg-success/10 text-foreground"
+                    }`}
+                  >
+                    {approvalRequired
+                      ? "This batch will open an approval request before inventory changes are applied"
+                      : adjustmentType === "cycle_count" && highVarianceFlag
+                        ? "Submitting this count will apply inventory movements immediately and flag the high variance"
+                        : adjustmentType === "cycle_count"
+                          ? "Submitting this count will apply inventory movements immediately"
+                          : "This batch can apply immediately and will still write inventory movements"}
+                  </div>
+                </div>
+              </section>
+
+              <section className="space-y-layout-xl rounded-lg border border-border bg-surface-raised px-layout-md py-layout-md shadow-surface">
+                <SkuDetailPanel activeInventoryItem={activeInventoryItem} />
+
+                <div className="space-y-2">
+                  <Label htmlFor="reason-code">Reason code</Label>
+                  <Select
+                    disabled={adjustmentType === "cycle_count"}
+                    onValueChange={(value) =>
+                      setReasonCode(
+                        value as (typeof MANUAL_STOCK_ADJUSTMENT_REASON_CODES)[number],
+                      )
+                    }
+                    value={displayedReasonCode}
+                  >
+                    <SelectTrigger id="reason-code">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {adjustmentType === "cycle_count" ? (
+                        <SelectItem value={CYCLE_COUNT_REASON_CODE}>
+                          Cycle count reconciliation
+                        </SelectItem>
+                      ) : (
+                        MANUAL_STOCK_ADJUSTMENT_REASON_CODES.map((option) => (
+                          <SelectItem key={option} value={option}>
+                            {MANUAL_REASON_LABELS[option]}
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="stock-adjustment-notes">Notes</Label>
+                  <Textarea
+                    id="stock-adjustment-notes"
+                    onChange={(event) => setNotes(event.target.value)}
+                    placeholder="Add notes, count context, or exception details."
+                    value={notes}
+                  />
+                </div>
+
+                <div className="space-y-layout-sm text-sm text-muted-foreground">
+                  <p>
+                    Variances of {STOCK_ADJUSTMENT_APPROVAL_THRESHOLD}+ units{" "}
+                    {adjustmentType === "cycle_count"
+                      ? "are flagged after submission."
+                      : "go to review."}
+                  </p>
+                </div>
+
+                <LoadingButton
+                  variant={"workflow"}
+                  className="w-full"
+                  disabled={
+                    adjustmentType === "cycle_count" &&
+                    (isCycleCountDraftSaving || pendingCycleCountSaveCount > 0)
+                  }
+                  isLoading={
+                    isSubmitting ||
+                    (adjustmentType === "cycle_count" &&
+                      (isCycleCountDraftSaving ||
+                        pendingCycleCountSaveCount > 0))
+                  }
+                  onClick={handleSubmit}
+                  onMouseDown={(event) => {
+                    if (adjustmentType === "cycle_count") {
+                      event.preventDefault();
+                    }
+                  }}
+                >
+                  {adjustmentType === "manual"
+                    ? "Submit adjustment"
+                    : "Submit count"}
+                </LoadingButton>
+              </section>
+            </PageWorkspaceRail>
+          </PageWorkspaceGrid>
+
+          <StockAdjustmentBarcodeScannerDialog
+            onBarcodeDetected={(barcode) =>
+              handleFilterChange({ query: barcode })
+            }
+            onOpenChange={setIsBarcodeScannerOpen}
+            open={isBarcodeScannerOpen}
+          />
+
+          <QuickAddProductDialog
+            description="Add sellable stock without leaving stock adjustments."
+            existingSkuOptions={existingSkuOptions}
+            initialLookupCode={quickAddInitialLookupCode}
+            initialName={quickAddInitialName}
+            onAttachBarcode={handleAttachBarcodeSubmit}
+            onOpenChange={setIsQuickAddOpen}
+            onSubmit={handleQuickAddSubmit}
+            open={isQuickAddOpen}
+            skuSearchStoreId={storeId}
+            submitErrorMessage="Could not quick add this product. Try again."
+          />
         </>
       )}
     </PageWorkspace>

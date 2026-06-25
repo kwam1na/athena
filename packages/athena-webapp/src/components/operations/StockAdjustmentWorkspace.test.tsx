@@ -1273,6 +1273,33 @@ describe("StockAdjustmentWorkspaceContent", () => {
     });
   });
 
+  it("matches generic-search aliases that stockOps keeps separate from the display product name", () => {
+    renderStockAdjustmentWorkspace({
+      inventoryItems: [
+        {
+          _id: "sku-agya" as Id<"productSku">,
+          inventoryCount: 4,
+          productName: "Current catalog name",
+          productSkuProductName: "agya",
+          quantityAvailable: 4,
+          sku: "6N2Y-RFF-1J1",
+        },
+      ],
+      searchState: {
+        mode: "cycle_count",
+        query: "agya",
+      },
+    });
+
+    const table = screen.getByRole("table");
+
+    expect(
+      screen.getByText("Showing 1 of 1 SKU."),
+    ).toBeInTheDocument();
+    expect(within(table).getByText("Current Catalog Name")).toBeInTheDocument();
+    expect(within(table).queryByText("No results.")).not.toBeInTheDocument();
+  });
+
   it("filters the table to the route-selected product SKU", () => {
     renderStockAdjustmentWorkspace({
       inventoryItems: [

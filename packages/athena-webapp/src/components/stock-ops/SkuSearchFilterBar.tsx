@@ -23,14 +23,14 @@ type SkuSearchFilterBarProps<TValue extends string> = {
   ariaLabel: string;
   className?: string;
   clearLabel?: string;
-  filterId: string;
-  filterLabel: string;
-  filterOptions: Array<SkuSearchFilterOption<TValue>>;
+  filterId?: string;
+  filterLabel?: string;
+  filterOptions?: Array<SkuSearchFilterOption<TValue>>;
   filterTriggerClassName?: string;
-  filterValue: TValue;
+  filterValue?: TValue;
   hasActiveFilters: boolean;
   onClearFilters: () => void;
-  onFilterChange: (value: TValue) => void;
+  onFilterChange?: (value: TValue) => void;
   onQueryChange: (query: string) => void;
   query: string;
   scanAction?: ReactNode;
@@ -38,7 +38,8 @@ type SkuSearchFilterBarProps<TValue extends string> = {
   searchLabel: string;
   searchPlaceholder: string;
   secondaryFilters?: ReactNode;
-  summary: ReactNode;
+  summary?: ReactNode;
+  variant?: "card" | "plain";
 };
 
 export function SkuSearchFilterBar<TValue extends string>({
@@ -62,12 +63,22 @@ export function SkuSearchFilterBar<TValue extends string>({
   searchPlaceholder,
   secondaryFilters,
   summary,
+  variant = "card",
 }: SkuSearchFilterBarProps<TValue>) {
+  const shouldShowFilter =
+    filterId &&
+    filterLabel &&
+    filterOptions &&
+    filterValue !== undefined &&
+    onFilterChange;
+
   return (
     <section
       aria-label={ariaLabel}
       className={cn(
-        "rounded-md border border-border bg-surface-raised px-layout-md py-layout-md",
+        variant === "card"
+          ? "rounded-md border border-border bg-surface-raised px-layout-md py-layout-md"
+          : "bg-transparent",
         className,
       )}
     >
@@ -89,24 +100,28 @@ export function SkuSearchFilterBar<TValue extends string>({
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Label className="sr-only" htmlFor={filterId}>
-            {filterLabel}
-          </Label>
-          <Select
-            onValueChange={(value) => onFilterChange(value as TValue)}
-            value={filterValue}
-          >
-            <SelectTrigger className={filterTriggerClassName} id={filterId}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {filterOptions.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {shouldShowFilter ? (
+            <>
+              <Label className="sr-only" htmlFor={filterId}>
+                {filterLabel}
+              </Label>
+              <Select
+                onValueChange={(value) => onFilterChange(value as TValue)}
+                value={filterValue}
+              >
+                <SelectTrigger className={filterTriggerClassName} id={filterId}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {filterOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </>
+          ) : null}
           {action}
           {hasActiveFilters ? (
             <Button
@@ -126,7 +141,9 @@ export function SkuSearchFilterBar<TValue extends string>({
           {secondaryFilters}
         </div>
       ) : null}
-      <p className="mt-layout-sm text-xs text-muted-foreground">{summary}</p>
+      {summary ? (
+        <p className="mt-layout-sm text-xs text-muted-foreground">{summary}</p>
+      ) : null}
     </section>
   );
 }

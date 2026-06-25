@@ -4,6 +4,7 @@ import {
   type MutationCtx,
   type QueryCtx,
 } from "../_generated/server";
+import { internal } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
 import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
@@ -82,6 +83,22 @@ const LEGACY_IMPORT_STOCK_ADJUSTMENT_BLOCK_MESSAGE =
   "Legacy import SKUs must be finalized before stock adjustments can update them.";
 const POS_PENDING_CHECKOUT_STOCK_ADJUSTMENT_BLOCK_MESSAGE =
   "POS pending checkout SKUs must be finalized before stock adjustments can update them.";
+
+async function scheduleCatalogSummaryDirtyMarker(
+  ctx: Pick<MutationCtx, "scheduler">,
+  storeId: Id<"store">,
+) {
+  const scheduler = ctx.scheduler as
+    | { runAfter?: MutationCtx["scheduler"]["runAfter"] }
+    | undefined;
+  if (typeof scheduler?.runAfter !== "function") return;
+
+  await scheduler.runAfter(
+    0,
+    internal.inventory.catalogSummary.markCatalogSummaryNeedsRefreshInternal,
+    { storeId },
+  );
+}
 
 type StockAdjustmentBlockedSkuReason =
   | "provisional_import"
@@ -326,6 +343,8 @@ async function applyStockAdjustmentBatchWithCtx(
       workItemId: args.workItemId,
     });
   }
+
+  await scheduleCatalogSummaryDirtyMarker(ctx, args.storeId);
 }
 
 async function readActiveProvisionalImportSkuIdsWithCtx(
@@ -964,6 +983,11 @@ async function buildInventorySnapshotRowsForProductSkusWithCtx(
           productSku.productName ??
           productSku.sku ??
           String(productSku._id),
+        ...(productSku.productName &&
+        productSku.productName.trim() &&
+        productSku.productName !== product?.name
+          ? { productSkuProductName: productSku.productName }
+          : {}),
         ...(subcategory?.name ? { productSubcategory: subcategory.name } : {}),
         ...(blockedStatus
           ? {

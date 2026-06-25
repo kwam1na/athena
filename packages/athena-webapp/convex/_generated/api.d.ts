@@ -102,6 +102,7 @@ import type * as inventory_auth from "../inventory/auth.js";
 import type * as inventory_bannerMessage from "../inventory/bannerMessage.js";
 import type * as inventory_bestSeller from "../inventory/bestSeller.js";
 import type * as inventory_catalogImport from "../inventory/catalogImport.js";
+import type * as inventory_catalogSummary from "../inventory/catalogSummary.js";
 import type * as inventory_categories from "../inventory/categories.js";
 import type * as inventory_colors from "../inventory/colors.js";
 import type * as inventory_complimentaryProduct from "../inventory/complimentaryProduct.js";
@@ -257,6 +258,7 @@ import type * as schemas_inventory_appVerificationCode from "../schemas/inventor
 import type * as schemas_inventory_athenaUser from "../schemas/inventory/athenaUser.js";
 import type * as schemas_inventory_bannerMessage from "../schemas/inventory/bannerMessage.js";
 import type * as schemas_inventory_bestSeller from "../schemas/inventory/bestSeller.js";
+import type * as schemas_inventory_catalogSummary from "../schemas/inventory/catalogSummary.js";
 import type * as schemas_inventory_category from "../schemas/inventory/category.js";
 import type * as schemas_inventory_color from "../schemas/inventory/color.js";
 import type * as schemas_inventory_complimentaryProduct from "../schemas/inventory/complimentaryProduct.js";
@@ -513,6 +515,7 @@ declare const fullApi: ApiFromModules<{
   "inventory/bannerMessage": typeof inventory_bannerMessage;
   "inventory/bestSeller": typeof inventory_bestSeller;
   "inventory/catalogImport": typeof inventory_catalogImport;
+  "inventory/catalogSummary": typeof inventory_catalogSummary;
   "inventory/categories": typeof inventory_categories;
   "inventory/colors": typeof inventory_colors;
   "inventory/complimentaryProduct": typeof inventory_complimentaryProduct;
@@ -668,6 +671,7 @@ declare const fullApi: ApiFromModules<{
   "schemas/inventory/athenaUser": typeof schemas_inventory_athenaUser;
   "schemas/inventory/bannerMessage": typeof schemas_inventory_bannerMessage;
   "schemas/inventory/bestSeller": typeof schemas_inventory_bestSeller;
+  "schemas/inventory/catalogSummary": typeof schemas_inventory_catalogSummary;
   "schemas/inventory/category": typeof schemas_inventory_category;
   "schemas/inventory/color": typeof schemas_inventory_color;
   "schemas/inventory/complimentaryProduct": typeof schemas_inventory_complimentaryProduct;

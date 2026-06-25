@@ -1934,12 +1934,15 @@ export function OperationsQueueView({
     () =>
       Array.from(
         new Set(
-          (stockSkuSearchResults?.results ?? []).map(
-            (result) => result.productSkuId,
-          ),
+          [
+            ...(stockSkuSearchResults?.results ?? []).map(
+              (result) => result.productSkuId,
+            ),
+            stockAdjustmentSearch?.sku,
+          ].filter(Boolean),
         ),
-      ),
-    [stockSkuSearchResults?.results],
+      ) as Id<"productSku">[],
+    [stockAdjustmentSearch?.sku, stockSkuSearchResults?.results],
   );
   const stockSearchInventoryItems = useQuery(
     stockOpsApi.adjustments.listInventorySnapshotForProductSkus,

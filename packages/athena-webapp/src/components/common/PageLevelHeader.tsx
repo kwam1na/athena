@@ -36,11 +36,11 @@ export function PageLevelHeader({
   const animatedContentKey = contentKey ?? title;
   const textTransition = {
     duration: 0.2,
-    ease: "easeIn" as const,
+    ease: "easeOut" as const,
   };
   const exitTransition = {
     duration: 0.15,
-    ease: "easeIn" as const,
+    ease: "easeOut" as const,
   };
 
   return (
@@ -52,7 +52,10 @@ export function PageLevelHeader({
       )}
     >
       {showBackButton ? (
-        <NavigateBackButton label={backButtonLabel} onNavigateBack={onNavigateBack} />
+        <NavigateBackButton
+          label={backButtonLabel}
+          onNavigateBack={onNavigateBack}
+        />
       ) : null}
       {eyebrow ? (
         <p className="text-xs font-semibold uppercase tracking-[0.28em] text-muted-foreground">
@@ -125,7 +128,10 @@ export function PageWorkspace({
 }: PageWorkspaceProps) {
   return (
     <Component
-      className={cn("min-w-0 space-y-layout-xl md:space-y-layout-2xl", className)}
+      className={cn(
+        "min-w-0 space-y-layout-xl md:space-y-layout-2xl",
+        className,
+      )}
     >
       {children}
     </Component>
@@ -166,7 +172,10 @@ export function PageWorkspaceMain({
 }: PageWorkspaceStackProps) {
   return (
     <Component
-      className={cn("min-w-0 space-y-layout-xl md:space-y-layout-3xl", className)}
+      className={cn(
+        "min-w-0 space-y-layout-xl md:space-y-layout-3xl",
+        className,
+      )}
     >
       {children}
     </Component>

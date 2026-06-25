@@ -10,6 +10,7 @@ import {
 } from "../../../serviceOps/serviceCases";
 import { summarizePaymentAllocations } from "../../../operations/paymentAllocations";
 import { recordInventoryMovementWithDispositionWithCtx } from "../../../operations/inventoryMovements";
+import { markCatalogSummaryNeedsRefresh } from "../../../inventory/catalogSummary";
 import { createPosSessionTraceRecorder } from "../../application/commands/posSessionTracing";
 import {
   createOrReusePendingCheckoutItem,
@@ -31,6 +32,23 @@ import { validatePosLocalStaffProofWithCtx } from "../../application/sync/staffP
 export function createConvexLocalSyncRepository(
   ctx: MutationCtx,
 ): LocalSyncRepository {
+  const catalogSummaryDirtyStoreIds = new Set<Id<"store">>();
+  const markCatalogSummaryDirtyForSkuPatch = async (
+    productSkuId: Id<"productSku">,
+    patch: Partial<Record<string, unknown>>,
+  ) => {
+    if (
+      patch.inventoryCount === undefined &&
+      patch.images === undefined &&
+      patch.price === undefined
+    ) {
+      return;
+    }
+
+    const sku = await ctx.db.get("productSku", productSkuId);
+    if (sku) catalogSummaryDirtyStoreIds.add(sku.storeId);
+  };
+
   const normalizeCloudId = <TableName extends TableNames>(
     tableName: TableName,
     value: string,
@@ -555,7 +573,9 @@ export function createConvexLocalSyncRepository(
       return ctx.db.insert("posSessionItem", input as never);
     },
     async createOrReusePendingCheckoutItem(input) {
-      return createOrReusePendingCheckoutItem(ctx, input);
+      const result = await createOrReusePendingCheckoutItem(ctx, input);
+      catalogSummaryDirtyStoreIds.add(input.storeId);
+      return result;
     },
     async recordPendingCheckoutItemSaleEvidence(input) {
       return recordPendingCheckoutItemSaleEvidence(ctx, input);
@@ -738,29 +758,36 @@ export function createConvexLocalSyncRepository(
     async createTransactionServiceLine(input) {
       return ctx.db.insert("posTransactionServiceLine", input);
     },
-	    async patchProductSku(productSkuId, patch) {
-	      await ctx.db.patch("productSku", productSkuId, patch);
-	    },
-	    async recordSaleInventoryMovement(input) {
-	      const result = await recordInventoryMovementWithDispositionWithCtx(ctx, {
-	        actorStaffProfileId: input.staffProfileId,
-	        customerProfileId: input.customerProfileId,
-	        movementType: "sale",
-	        notes: `POS sale ${input.transactionNumber}`,
-	        organizationId: input.organizationId,
-	        posTransactionId: input.posTransactionId,
-	        productId: input.productId,
-	        productSkuId: input.productSkuId,
-	        quantityDelta: -input.quantity,
-	        reasonCode: "pos_sale",
-	        registerSessionId: input.registerSessionId,
-	        sourceId: input.posTransactionId,
-	        sourceType: "posTransaction",
-	        storeId: input.storeId,
-	      });
-	      return result.disposition;
-	    },
-	    async createPaymentAllocation(input) {
+    async patchProductSku(productSkuId, patch) {
+      await markCatalogSummaryDirtyForSkuPatch(productSkuId, patch);
+      await ctx.db.patch("productSku", productSkuId, patch);
+    },
+    async flushCatalogSummaryRefreshes() {
+      for (const storeId of catalogSummaryDirtyStoreIds) {
+        await markCatalogSummaryNeedsRefresh(ctx, storeId);
+      }
+      catalogSummaryDirtyStoreIds.clear();
+    },
+    async recordSaleInventoryMovement(input) {
+      const result = await recordInventoryMovementWithDispositionWithCtx(ctx, {
+        actorStaffProfileId: input.staffProfileId,
+        customerProfileId: input.customerProfileId,
+        movementType: "sale",
+        notes: `POS sale ${input.transactionNumber}`,
+        organizationId: input.organizationId,
+        posTransactionId: input.posTransactionId,
+        productId: input.productId,
+        productSkuId: input.productSkuId,
+        quantityDelta: -input.quantity,
+        reasonCode: "pos_sale",
+        registerSessionId: input.registerSessionId,
+        sourceId: input.posTransactionId,
+        sourceType: "posTransaction",
+        storeId: input.storeId,
+      });
+      return result.disposition;
+    },
+    async createPaymentAllocation(input) {
       return ctx.db.insert("paymentAllocation", input);
     },
     async createOperationalEvent(input) {

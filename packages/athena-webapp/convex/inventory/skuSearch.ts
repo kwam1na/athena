@@ -165,7 +165,7 @@ async function requireProductSkuSearchAdmin(
   ]);
 }
 
-async function requireProductSkuSearchReadAccess(
+export async function requireProductSkuSearchReadAccess(
   ctx: AccessCtx,
   storeId: Id<"store">,
   failureMessage: string,
@@ -621,6 +621,12 @@ export const searchProductSkus = query({
       };
     }
 
+    const canonicalSkuLookupValues = [
+      queryText,
+      queryText.toUpperCase(),
+      queryText.toLowerCase(),
+    ].filter((value, index, values) => values.indexOf(value) === index);
+
     const exactCandidates = await Promise.all([
       (async () => {
         const productSkuId = ctx.db.normalizeId("productSku", queryText);
@@ -637,6 +643,26 @@ export const searchProductSkus = query({
           },
         ];
       })(),
+      (async () => {
+        const matches = await Promise.all(
+          canonicalSkuLookupValues.map((lookupValue) =>
+            ctx.db
+              .query("productSku")
+              .withIndex("by_storeId_sku", (q) =>
+                q.eq("storeId", args.storeId).eq("sku", lookupValue),
+              )
+              .take(EXACT_READ_LIMIT),
+          ),
+        );
+
+        return matches.flat();
+      })(),
+      ctx.db
+        .query("productSku")
+        .withIndex("by_storeId_barcode", (q) =>
+          q.eq("storeId", args.storeId).eq("barcode", queryText),
+        )
+        .take(EXACT_READ_LIMIT),
       ctx.db
         .query("productSkuSearch")
         .withIndex("by_storeId_productSkuId", (q) =>
@@ -678,6 +704,28 @@ export const searchProductSkus = query({
         },
       })),
       ...exactCandidates[1].map((row) => ({
+        row: {
+          productSkuId: row._id,
+          storeId: row.storeId,
+        },
+        match: {
+          kind: "sku" as const,
+          matchedValue: row.sku ?? null,
+          rank: 1,
+        },
+      })),
+      ...exactCandidates[2].map((row) => ({
+        row: {
+          productSkuId: row._id,
+          storeId: row.storeId,
+        },
+        match: {
+          kind: "barcode" as const,
+          matchedValue: row.barcode ?? null,
+          rank: 2,
+        },
+      })),
+      ...exactCandidates[3].map((row) => ({
         row,
         match: {
           kind: "productSkuId" as const,
@@ -685,7 +733,7 @@ export const searchProductSkus = query({
           rank: 0,
         },
       })),
-      ...exactCandidates[2].map((row) => ({
+      ...exactCandidates[4].map((row) => ({
         row,
         match: {
           kind: "sku" as const,
@@ -693,7 +741,7 @@ export const searchProductSkus = query({
           rank: 1,
         },
       })),
-      ...exactCandidates[3].map((row) => ({
+      ...exactCandidates[5].map((row) => ({
         row,
         match: {
           kind: "barcode" as const,

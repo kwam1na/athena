@@ -1,4 +1,10 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import type { AnchorHTMLAttributes, ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -1273,6 +1279,113 @@ describe("OperationsQueueViewContent", () => {
       storeId: "store-1",
     });
     expect(screen.getAllByText("Global Search Wig").length).toBeGreaterThan(0);
+  });
+
+  it("hydrates a stock-adjustment route SKU even when it is not in the first inventory page", async () => {
+    const linkedInventoryItem = {
+      _id: "sku-linked" as Id<"productSku">,
+      inventoryCount: 7,
+      productName: "Linked Register SKU",
+      quantityAvailable: 7,
+      sku: "LINKED-7",
+    };
+
+    mockedHooks.useQuery.mockReset();
+    mockedHooks.useQuery.mockImplementation((_query: unknown, args: unknown) => {
+      if (args === "skip") return undefined;
+      if (
+        args &&
+        typeof args === "object" &&
+        "productSkuIds" in args
+      ) {
+        return [linkedInventoryItem];
+      }
+      if (
+        args &&
+        typeof args === "object" &&
+        "query" in args &&
+        "limit" in args
+      ) {
+        return {
+          candidateOverflow: false,
+          results: [],
+          truncated: false,
+        };
+      }
+      if (args && typeof args === "object" && "storeId" in args) {
+        return {
+          approvalRequests: [],
+          availableUnits: 7,
+          checkoutReservedUnits: 0,
+          fallbackReservedUnits: 0,
+          hasMoreSkus: false,
+          onHandUnits: 7,
+          posReservedUnits: 0,
+          reservedUnits: 0,
+          skuCount: 1,
+          unavailableSkuCount: 0,
+          unavailableUnits: 0,
+          workItems: [],
+        };
+      }
+
+      return undefined;
+    });
+    mockedHooks.usePaginatedQuery.mockReturnValue({
+      isLoading: false,
+      loadMore: vi.fn(),
+      results: [],
+      status: "Exhausted",
+    });
+
+    render(
+      <OperationsQueueView
+        activeWorkflow="stock"
+        stockAdjustmentSearch={{
+          mode: "manual",
+          sku: "sku-linked",
+        }}
+      />,
+    );
+
+    expect(mockedHooks.useQuery.mock.calls[1]?.[1]).toBe("skip");
+    expect(mockedHooks.useQuery.mock.calls[2]?.[1]).toEqual({
+      productSkuIds: ["sku-linked"],
+      storeId: "store-1",
+    });
+    cleanup();
+
+    render(
+      <OperationsQueueViewContent
+        {...baseProps}
+        activeWorkflow="stock"
+        inventoryItems={[linkedInventoryItem]}
+        inventoryUnitSummary={{
+          availableUnits: 7,
+          checkoutReservedUnits: 0,
+          fallbackReservedUnits: 0,
+          hasMoreSkus: false,
+          onHandUnits: 7,
+          posReservedUnits: 0,
+          reservedUnits: 0,
+          skuCount: 1,
+          unavailableSkuCount: 0,
+          unavailableUnits: 0,
+        }}
+        stockAdjustmentSearch={{
+          mode: "manual",
+          sku: "sku-linked",
+        }}
+      />,
+    );
+    expect(screen.getAllByText("Linked Register Sku").length).toBeGreaterThan(
+      0,
+    );
+    expect(
+      screen.getByRole("spinbutton", {
+        name: /adjustment delta for linked register sku/i,
+      }),
+    ).toBeInTheDocument();
   });
 
   it("routes approval decisions without sending a raw Athena user id from the client", async () => {
