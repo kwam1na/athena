@@ -1,5 +1,6 @@
 import type { Doc, Id } from "../../../_generated/dataModel";
 import type { MutationCtx } from "../../../_generated/server";
+import { isPosUsableRegisterSessionStatus } from "../../../../shared/registerSessionStatus";
 import { recordOperationalEventWithCtx } from "../../../operations/operationalEvents";
 import { createOperationalWorkItemWithCtx } from "../../../operations/operationalWorkItems";
 import { toSlug } from "../../../utils";
@@ -131,6 +132,34 @@ async function findTrustedCatalogSkuForLookupCode(
   }
 
   return null;
+}
+
+async function requireOrdinarySaleUsableRegisterSession(
+  ctx: MutationCtx,
+  args: {
+    registerSessionId?: Id<"registerSession">;
+    source: "online" | "offline_sync";
+    storeId: Id<"store">;
+  },
+) {
+  if (!args.registerSessionId || args.source !== "online") {
+    return;
+  }
+
+  const registerSession = await ctx.db.get(
+    "registerSession",
+    args.registerSessionId,
+  );
+
+  if (
+    !registerSession ||
+    registerSession.storeId !== args.storeId ||
+    !isPosUsableRegisterSessionStatus(registerSession.status)
+  ) {
+    throw new Error(
+      "Open a replacement drawer before selling this pending checkout item.",
+    );
+  }
 }
 
 async function findOrCreatePendingCheckoutCategory(
@@ -708,6 +737,11 @@ export async function createOrReusePendingCheckoutItem(
   const normalizedLookupCode = normalizeLookupCode(lookupCode);
   const source = args.source ?? "online";
   const timestamp = args.timestamp ?? Date.now();
+  await requireOrdinarySaleUsableRegisterSession(ctx, {
+    registerSessionId: args.registerSessionId,
+    source,
+    storeId: args.storeId,
+  });
   const trustedCatalogSku = await findTrustedCatalogSkuForLookupCode(ctx, {
     lookupCode,
     storeId: args.storeId,

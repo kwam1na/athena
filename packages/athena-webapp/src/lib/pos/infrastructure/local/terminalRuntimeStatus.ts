@@ -109,7 +109,7 @@ export type PosTerminalRuntimeActiveRegisterSessionInput = {
   localRegisterSessionId: string;
   openedAt?: number;
   registerNumber?: string;
-  status: "open" | "active" | "closing" | "closed";
+  status: "open" | "active" | "closing" | "closeout_rejected" | "closed";
 };
 
 export type PosTerminalRuntimeActiveRegisterSessionDiagnostics =

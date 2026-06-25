@@ -2,6 +2,7 @@ export const REGISTER_SESSION_STATUSES = [
   "open",
   "active",
   "closing",
+  "closeout_rejected",
   "closed",
 ] as const;
 
@@ -18,8 +19,12 @@ export const REGISTER_SESSION_CONFLICT_BLOCKING_STATUSES = [
   "closing",
 ] as const satisfies readonly RegisterSessionStatus[];
 
-export const CASH_CONTROL_VISIBLE_REGISTER_SESSION_STATUSES =
-  REGISTER_SESSION_CONFLICT_BLOCKING_STATUSES;
+export const CASH_CONTROL_VISIBLE_REGISTER_SESSION_STATUSES = [
+  "open",
+  "active",
+  "closing",
+  "closeout_rejected",
+] as const satisfies readonly RegisterSessionStatus[];
 
 export function isRegisterSessionStatus(
   status: unknown,

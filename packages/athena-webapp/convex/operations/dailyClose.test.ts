@@ -1073,6 +1073,116 @@ describe("end-of-day review backend foundation", () => {
     });
   });
 
+  it("surfaces review-only closeouts as blockers without active or closed totals", async () => {
+    const { db } = createDb({
+      approvalRequest: [
+        {
+          _id: "approval-submitted",
+          createdAt: Date.UTC(2026, 4, 7, 19),
+          metadata: {
+            countedCash: 9200,
+            expectedCash: 10000,
+            variance: -800,
+          },
+          reason:
+            "Register closeout variance requires manager review before synced closeout can be applied.",
+          registerSessionId: "register-submitted",
+          requestType: "variance_review",
+          status: "pending",
+          storeId: "store-1",
+          subjectId: "register-submitted",
+          subjectType: "register_session",
+        },
+      ],
+      registerSession: [
+        {
+          _id: "register-rejected",
+          countedCash: 8500,
+          expectedCash: 10000,
+          openedAt: Date.UTC(2026, 4, 7, 9),
+          openingFloat: 10000,
+          registerNumber: "A1",
+          status: "closeout_rejected",
+          storeId: "store-1",
+          variance: -1500,
+        },
+        {
+          _id: "register-submitted",
+          countedCash: 9200,
+          expectedCash: 10000,
+          managerApprovalRequestId: "approval-submitted",
+          openedAt: Date.UTC(2026, 4, 7, 10),
+          openingFloat: 10000,
+          registerNumber: "A2",
+          status: "closing",
+          storeId: "store-1",
+          variance: -800,
+        },
+      ],
+      store: [store],
+    });
+
+    const snapshot = await buildDailyCloseSnapshotWithCtx(
+      { db } as unknown as QueryCtx,
+      { operatingDate: "2026-05-07", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(snapshot.readiness.status).toBe("blocked");
+    expect(snapshot.blockers.map((item) => item.key)).toEqual([
+      "approval_request:approval-submitted:pending",
+      "register_session:register-rejected:closeout_rejected",
+      "register_session:register-submitted:variance_review",
+    ]);
+    expect(snapshot.blockers.map((item) => item.key)).not.toContain(
+      "register_session:register-submitted:closing",
+    );
+    expect(
+      snapshot.blockers.find(
+        (item) =>
+          item.key === "register_session:register-rejected:closeout_rejected",
+      ),
+    ).toMatchObject({
+      message:
+        "Review or reopen the rejected register closeout before completing the end of day review.",
+      metadata: {
+        countedCash: 8500,
+        expectedCash: 10000,
+        status: "closeout_rejected",
+        variance: -1500,
+      },
+      title: "Register closeout needs review",
+    });
+    expect(
+      snapshot.blockers.find(
+        (item) =>
+          item.key === "register_session:register-submitted:variance_review",
+      ),
+    ).toMatchObject({
+      message:
+        "Resolve the submitted register closeout variance review before completing the end of day review.",
+      metadata: {
+        countedCash: 9200,
+        expectedCash: 10000,
+        status: "closing",
+        variance: -800,
+      },
+      title: "Register closeout variance needs review",
+    });
+    expect(snapshot.summary).toMatchObject({
+      closedRegisterSessionCount: 0,
+      expectedCashTotal: 0,
+      netCashVariance: 0,
+      registerCount: 0,
+      registerVarianceCount: 0,
+    });
+    expect(snapshot.readyItems.map((item) => item.key)).not.toContain(
+      "register_session:register-rejected:closed",
+    );
+    expect(snapshot.readyItems.map((item) => item.key)).not.toContain(
+      "register_session:register-submitted:closed",
+    );
+  });
+
   it("adds explicit applied item-adjustment settlement totals without changing original sale totals", async () => {
     const { db } = createDb({
       posTransaction: [

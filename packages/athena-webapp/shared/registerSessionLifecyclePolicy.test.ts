@@ -7,6 +7,7 @@ import {
   getSaleBlockingDrawerAuthority,
   isNonBlockingRegisterLifecycleReviewEvent,
   isRegisterCloseoutReviewConflict,
+  isRegisterSessionReplacementBlocking,
   isRegisterSessionSaleUsable,
   REGISTER_CLOSEOUT_VARIANCE_SYNC_REVIEW_SUMMARY,
 } from "./registerSessionLifecyclePolicy";
@@ -16,7 +17,37 @@ describe("registerSessionLifecyclePolicy", () => {
     expect(isRegisterSessionSaleUsable({ status: "open" })).toBe(true);
     expect(isRegisterSessionSaleUsable({ status: "active" })).toBe(true);
     expect(isRegisterSessionSaleUsable({ status: "closing" })).toBe(false);
+    expect(isRegisterSessionSaleUsable({ status: "closeout_rejected" })).toBe(
+      false,
+    );
     expect(isRegisterSessionSaleUsable({ status: "closed" })).toBe(false);
+  });
+
+  it("allows replacement for submitted closeouts without making them sale usable", () => {
+    expect(
+      isRegisterSessionReplacementBlocking({
+        hasSubmittedCloseout: false,
+        session: { status: "closing" },
+      }),
+    ).toBe(true);
+    expect(
+      isRegisterSessionReplacementBlocking({
+        hasSubmittedCloseout: true,
+        session: { status: "closing" },
+      }),
+    ).toBe(false);
+    expect(
+      isRegisterSessionReplacementBlocking({
+        hasSubmittedCloseout: true,
+        session: { status: "closeout_rejected" },
+      }),
+    ).toBe(false);
+    expect(
+      isRegisterSessionReplacementBlocking({
+        hasSubmittedCloseout: true,
+        session: { status: "active" },
+      }),
+    ).toBe(true);
   });
 
   it("treats same-drawer lifecycle rejection as recoverable for local sale blocking", () => {
@@ -130,6 +161,22 @@ describe("registerSessionLifecyclePolicy", () => {
         registerSession: {
           localRegisterSessionId: "reviewed-local-drawer",
           status: "closing",
+          storeId: "store-1",
+          terminalId: "terminal-1",
+        },
+        reviewSequence: 10,
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      }),
+    ).toBe(true);
+    expect(
+      canSupersedeReviewedRegisterSessionForLocalOpen({
+        hasOpenRegisterCloseoutReview: true,
+        replacementLocalRegisterSessionId: "replacement-local-drawer",
+        replacementSequence: 12,
+        registerSession: {
+          localRegisterSessionId: "reviewed-local-drawer",
+          status: "closeout_rejected",
           storeId: "store-1",
           terminalId: "terminal-1",
         },

@@ -91,6 +91,30 @@ describe("RegisterDrawerGate", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("offers replacement drawer opening for submitted review-only closeouts", async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+    renderGate({
+      closeoutSecondaryActionLabel: "Open replacement drawer",
+      closeoutSubmittedCountedCash: 12500,
+      closeoutSubmittedVariance: 2500,
+      expectedCash: 10000,
+      hasPendingCloseoutApproval: true,
+      mode: "closeoutBlocked",
+      onReopenRegister: undefined,
+      onSubmit,
+    });
+
+    await user.click(
+      screen.getByRole("button", { name: "Open replacement drawer" }),
+    );
+
+    expect(onSubmit).toHaveBeenCalledOnce();
+    expect(
+      screen.queryByRole("button", { name: "Reopen register" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("hides submitted closeout sign-out when no staff is signed in", () => {
     renderGate({
       closeoutSubmittedCountedCash: 780_000,

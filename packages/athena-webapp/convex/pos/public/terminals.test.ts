@@ -187,7 +187,7 @@ function buildTerminalHealthSummaryResult() {
     },
     registerSessionLink: {
       registerSessionId: "register-session-1",
-      status: "open",
+      status: "closeout_rejected",
     },
     syncEvidence: {
       latestEvent: {

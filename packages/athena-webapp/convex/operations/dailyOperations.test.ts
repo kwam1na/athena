@@ -2088,6 +2088,103 @@ describe("daily operations overview read model", () => {
     });
   });
 
+  it("surfaces review-only closeouts as close work instead of closed drawer health", async () => {
+    const snapshot = await buildDailyOperationsSnapshotWithCtx(
+      buildCtx({
+        approvalRequest: [
+          {
+            _id: "approval-submitted",
+            createdAt: Date.UTC(2026, 4, 8, 19),
+            metadata: {
+              countedCash: 9200,
+              expectedCash: 10000,
+              variance: -800,
+            },
+            reason:
+              "Register closeout variance requires manager review before synced closeout can be applied.",
+            registerSessionId: "register-submitted",
+            requestType: "variance_review",
+            status: "pending",
+            storeId: "store-1",
+            subjectId: "register-submitted",
+            subjectType: "register_session",
+          },
+        ],
+        dailyClose: [priorClose],
+        dailyOpening: [startedOpening],
+        registerSession: [
+          {
+            _id: "register-rejected",
+            countedCash: 8500,
+            expectedCash: 10000,
+            openedAt: Date.UTC(2026, 4, 8, 9),
+            openingFloat: 10000,
+            registerNumber: "1",
+            status: "closeout_rejected",
+            storeId: "store-1",
+            variance: -1500,
+          },
+          {
+            _id: "register-submitted",
+            countedCash: 9200,
+            expectedCash: 10000,
+            managerApprovalRequestId: "approval-submitted",
+            openedAt: Date.UTC(2026, 4, 8, 10),
+            openingFloat: 10000,
+            registerNumber: "2",
+            status: "closing",
+            storeId: "store-1",
+            variance: -800,
+          },
+        ],
+        store: [store],
+      }),
+      { operatingDate: "2026-05-08", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(snapshot.lifecycle.status).toBe("close_blocked");
+    expect(snapshot.closeSummary).toMatchObject({
+      registerVarianceCount: 0,
+    });
+    expect(snapshot.lanes.find((lane) => lane.key === "close")).toMatchObject({
+      count: 3,
+      status: "blocked",
+    });
+    expect(
+      snapshot.lanes.find((lane) => lane.key === "registers"),
+    ).toMatchObject({
+      count: 2,
+      status: "blocked",
+    });
+    expect(snapshot.attentionItems).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "register_session:register-rejected:closeout_rejected",
+          label: "Register closeout needs review",
+          owner: "daily_close",
+          source: {
+            id: "register-rejected",
+            label: "Register 1",
+            type: "register_session",
+          },
+        }),
+        expect.objectContaining({
+          id: "register_session:register-submitted:variance_review",
+          label: "Register closeout variance needs review",
+          owner: "daily_close",
+          source: {
+            id: "register-submitted",
+            label: "Register 2",
+            type: "register_session",
+          },
+        }),
+      ]),
+    );
+    expect(snapshot.attentionItems.map((item) => item.id)).not.toContain(
+      "register_session:register-submitted:closing",
+    );
+  });
+
   it("surfaces open queue work and pending approvals without counting terminal work", async () => {
     const snapshot = await buildDailyOperationsSnapshotWithCtx(
       buildCtx({

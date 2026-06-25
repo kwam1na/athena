@@ -851,7 +851,7 @@ describe("voidTransaction", () => {
     );
   });
 
-  it("applies a queued completed-sale void when the original drawer is closing", async () => {
+  it("blocks a queued completed-sale void when the original drawer is closing", async () => {
     vi.mocked(getRegisterSessionById).mockResolvedValue({
       _id: "register-1",
       status: "closing",
@@ -883,16 +883,9 @@ describe("voidTransaction", () => {
         reviewedByStaffProfileId: "manager-1" as Id<"staffProfile">,
         reviewedByUserId: "manager-user-1" as Id<"athenaUser">,
       }),
-    ).resolves.toMatchObject({
-      approvalRequestId: "approval-request-1",
-      transactionId: "txn-1",
-    });
-    expect(recordRetailVoidPaymentAllocations).toHaveBeenCalled();
-    expect(patchPosTransaction).toHaveBeenCalledWith(
-      expect.anything(),
-      "txn-1",
-      expect.objectContaining({ status: "void" }),
-    );
+    ).rejects.toThrow("Drawer closed. Open the drawer before voiding this sale.");
+    expect(recordRetailVoidPaymentAllocations).not.toHaveBeenCalled();
+    expect(patchPosTransaction).not.toHaveBeenCalled();
   });
 
   it("blocks a queued completed-sale void when the original drawer is closed", async () => {
@@ -3876,7 +3869,9 @@ describe("completeTransaction trace ordering", () => {
     expect(createPosTransaction).not.toHaveBeenCalled();
   });
 
-  it("fails safely when a session sale is bound to a closing drawer", async () => {
+  it.each(["closing", "closeout_rejected"] as const)(
+    "fails safely when a session sale is bound to a %s drawer",
+    async (status) => {
     const runMutation = vi.fn().mockResolvedValue(undefined);
     const ctx = {
       runMutation,
@@ -3898,7 +3893,7 @@ describe("completeTransaction trace ordering", () => {
     vi.mocked(getRegisterSessionById).mockResolvedValue({
       _id: "register-1",
       storeId: "store-1",
-      status: "closing",
+      status,
       terminalId: "terminal-1",
       registerNumber: "1",
     } as never);
@@ -3935,7 +3930,8 @@ describe("completeTransaction trace ordering", () => {
 
     expect(runMutation).not.toHaveBeenCalled();
     expectNoCompletionSideEffects();
-  });
+    },
+  );
 
   it("fails safely when a session sale drawer belongs to another store", async () => {
     const runMutation = vi.fn().mockResolvedValue(undefined);

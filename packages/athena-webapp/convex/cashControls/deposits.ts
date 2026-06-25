@@ -12,7 +12,10 @@ import {
 } from "./closeouts";
 import { recordOperationalEventWithCtx } from "../operations/operationalEvents";
 import { recordPaymentAllocationWithCtx } from "../operations/paymentAllocations";
-import { recordRegisterSessionDepositWithCtx } from "../operations/registerSessions";
+import {
+  recordRegisterSessionDepositWithCtx,
+  rejectRegisterSessionCloseoutWithCtx,
+} from "../operations/registerSessions";
 import { recordRegisterSessionTraceBestEffort } from "../operations/registerSessionTracing";
 import { toPesewas } from "../lib/currency";
 import {
@@ -560,7 +563,9 @@ export function buildCashControlsDashboardSnapshot(args: {
       isRegisterSessionSaleUsable(registerSession),
     ),
     pendingCloseouts: sessionSummaries.filter(
-      (registerSession) => registerSession.status === "closing",
+      (registerSession) =>
+        registerSession.status === "closing" ||
+        registerSession.status === "closeout_rejected",
     ),
     recentDeposits: [...args.deposits]
       .sort((left, right) => right.recordedAt - left.recordedAt)
@@ -587,6 +592,7 @@ export function buildCashControlsDashboardSnapshot(args: {
         registerSession.localSyncStatus?.status === "needs_review" ||
         (variance !== 0 &&
           (registerSession.status === "closing" ||
+            registerSession.status === "closeout_rejected" ||
             Boolean(registerSession.pendingApprovalRequest)))
       );
     }),
@@ -1363,6 +1369,37 @@ export const resolveRegisterSessionSyncReview = mutation({
           (syncEvent.status === "conflicted" ||
             syncEvent.status === "rejected")
         ) {
+          if (
+            syncEvent.eventType === "register_closed" &&
+            review.reviewKind === "register_closeout_variance" &&
+            !rejectedCloseoutLocalEventIds.has(syncEvent.localEventId)
+          ) {
+            const conflictDetails = conflict.details ?? {};
+            const syncPayload = recordDetail(syncEvent.payload);
+            const reviewedCountedCash =
+              numberDetail(conflictDetails, "countedCash") ??
+              numberDetail(syncPayload ?? undefined, "countedCash") ??
+              registerSession.countedCash;
+            const reviewedVariance =
+              numberDetail(conflictDetails, "variance") ??
+              (reviewedCountedCash !== undefined
+                ? reviewedCountedCash - registerSession.expectedCash
+                : registerSession.variance);
+            const reviewedNotes =
+              typeof conflictDetails.notes === "string"
+                ? conflictDetails.notes
+                : typeof syncPayload?.notes === "string"
+                  ? syncPayload.notes
+                  : undefined;
+
+            await rejectRegisterSessionCloseoutWithCtx(ctx, {
+              allowActiveReviewedCloseoutEvidence: true,
+              countedCash: reviewedCountedCash,
+              notes: reviewedNotes,
+              registerSessionId: args.registerSessionId,
+              variance: reviewedVariance,
+            });
+          }
           await localSyncRepository.patchEvent(syncEvent._id, {
             rejectionCode: "manager_rejected",
             rejectionMessage:
@@ -1381,14 +1418,6 @@ export const resolveRegisterSessionSyncReview = mutation({
         ) {
           const conflictDetails = conflict.details ?? {};
           rejectedCloseoutLocalEventIds.add(syncEvent.localEventId);
-          if (review.reviewKind === "register_closeout_variance") {
-            await ctx.db.patch("registerSession", args.registerSessionId, {
-              countedCash: undefined,
-              notes: undefined,
-              status: "active",
-              variance: undefined,
-            });
-          }
           await recordOperationalEventWithCtx(ctx, {
             ...(args.actorStaffProfileId
               ? { actorStaffProfileId: args.actorStaffProfileId }

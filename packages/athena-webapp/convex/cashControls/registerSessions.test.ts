@@ -8,10 +8,13 @@ import {
   buildRegisterSessionDepositPatch,
   buildRegisterSessionCloseoutPatch,
   buildRegisterSessionOpeningFloatCorrectionPatch,
+  buildRejectedRegisterSessionCloseoutPatch,
   buildReopenedRegisterSessionPatch,
   buildRegisterSession,
   buildRegisterSessionTransactionPatch,
+  openRegisterSession,
   calculateRegisterSessionCashDelta,
+  recordRegisterSessionDeposit,
   recordRegisterSessionTransaction,
 } from "../operations/registerSessions";
 import { recordRegisterSessionTraceBestEffort } from "../operations/registerSessionTracing";
@@ -211,6 +214,107 @@ describe("cash controls register sessions", () => {
     expect(recordRegisterSessionTraceBestEffort).not.toHaveBeenCalled();
   });
 
+  it("rejects sale writes against closeout-rejected sessions", async () => {
+    const session = {
+      ...buildRegisterSession({
+        storeId: "store_1" as Id<"store">,
+        openingFloat: 5000,
+        registerNumber: "A1",
+        terminalId: "terminal_1" as Id<"posTerminal">,
+      }),
+      _id: "register_session_1",
+      status: "closeout_rejected" as const,
+    };
+    const patch = vi.fn();
+    const ctx = {
+      db: {
+        get: vi.fn(async () => session),
+        patch,
+      },
+    };
+
+    await expect(
+      getHandler(recordRegisterSessionTransaction)(ctx, {
+        adjustmentKind: "sale",
+        payments: [{ amount: 9000, method: "cash", timestamp: 1 }],
+        registerSessionId: "register_session_1",
+        storeId: "store_1",
+        terminalId: "terminal_1",
+      }),
+    ).rejects.toThrow("Register session is not accepting new transactions.");
+
+    expect(patch).not.toHaveBeenCalled();
+    expect(recordRegisterSessionTraceBestEffort).not.toHaveBeenCalled();
+  });
+
+  it("opens replacement sessions after submitted or rejected closeouts", async () => {
+    const existingSessions = [
+      {
+        _id: "register_session_closing",
+        countedCash: 4500,
+        expectedCash: 5000,
+        status: "closing",
+        storeId: "store_1",
+        terminalId: "terminal_1",
+        registerNumber: "A1",
+        variance: -500,
+      },
+      {
+        _id: "register_session_rejected",
+        countedCash: 4500,
+        expectedCash: 5000,
+        status: "closeout_rejected",
+        storeId: "store_1",
+        terminalId: "terminal_2",
+        registerNumber: "B2",
+        variance: -500,
+      },
+    ];
+    const insertedSessions: unknown[] = [];
+    const ctx = {
+      db: {
+        get: vi.fn(async (_table: string, id: string) =>
+          insertedSessions.find((session) => (session as { _id: string })._id === id) ??
+          null,
+        ),
+        insert: vi.fn(async (_table: string, value: unknown) => {
+          const id = `register_session_new_${insertedSessions.length + 1}`;
+          insertedSessions.push({ ...(value as object), _id: id });
+          return id;
+        }),
+        patch: vi.fn(),
+        query: vi.fn(() => ({
+          withIndex: vi.fn((indexName: string) => ({
+            order: vi.fn(() => ({
+              first: vi.fn(async () =>
+                indexName === "by_terminalId"
+                  ? existingSessions.shift() ?? null
+                  : null,
+              ),
+            })),
+          })),
+        })),
+      },
+    };
+
+    await expect(
+      getHandler(openRegisterSession)(ctx, {
+        storeId: "store_1",
+        terminalId: "terminal_1",
+        registerNumber: "A1",
+        openingFloat: 1000,
+      }),
+    ).resolves.toMatchObject({ status: "open" });
+    await expect(
+      getHandler(openRegisterSession)(ctx, {
+        storeId: "store_1",
+        terminalId: "terminal_2",
+        registerNumber: "B2",
+        openingFloat: 1000,
+      }),
+    ).resolves.toMatchObject({ status: "open" });
+  });
+
   it("computes closeout variance before final signoff", () => {
     const registerSession = buildRegisterSession({
       storeId: "store_1" as Id<"store">,
@@ -261,6 +365,47 @@ describe("cash controls register sessions", () => {
     });
   });
 
+  it("moves rejected closeout reviews into review-only state without clearing evidence", () => {
+    expect(
+      buildRejectedRegisterSessionCloseoutPatch({
+        countedCash: 45000,
+        expectedCash: 50000,
+        managerApprovalRequestId: "approval-1" as Id<"approvalRequest">,
+        notes: "cash count issue",
+        status: "closing",
+        variance: -5000,
+      }),
+    ).toEqual({
+      managerApprovalRequestId: undefined,
+      status: "closeout_rejected",
+    });
+
+    expect(() =>
+      buildRejectedRegisterSessionCloseoutPatch({
+        expectedCash: 50000,
+        status: "active",
+      }),
+    ).toThrow(
+      "Active register sessions require reviewed closeout evidence before rejection.",
+    );
+
+    expect(
+      buildRejectedRegisterSessionCloseoutPatch(
+        {
+          countedCash: 45000,
+          expectedCash: 50000,
+          notes: "cash count issue",
+          status: "active",
+          variance: -5000,
+        },
+        { allowActiveReviewedCloseoutEvidence: true },
+      ),
+    ).toEqual({
+      managerApprovalRequestId: undefined,
+      status: "closeout_rejected",
+    });
+  });
+
   it("subtracts recorded deposits from expected cash without letting the drawer go negative", () => {
     const registerSession = {
       ...buildRegisterSession({
@@ -287,6 +432,36 @@ describe("cash controls register sessions", () => {
         amount: 15000,
       })
     ).toThrow("Register session expected cash cannot be negative.");
+  });
+
+  it("rejects deposits against closeout-rejected sessions", async () => {
+    const session = {
+      ...buildRegisterSession({
+        storeId: "store_1" as Id<"store">,
+        openingFloat: 5000,
+        registerNumber: "A1",
+        terminalId: "terminal_1" as Id<"posTerminal">,
+      }),
+      _id: "register_session_1",
+      status: "closeout_rejected" as const,
+    };
+    const patch = vi.fn();
+    const ctx = {
+      db: {
+        get: vi.fn(async () => session),
+        patch,
+      },
+    };
+
+    await expect(
+      getHandler(recordRegisterSessionDeposit)(ctx, {
+        amount: 2500,
+        registerSessionId: "register_session_1",
+      }),
+    ).rejects.toThrow(
+      "Cannot record a deposit for a closed register session.",
+    );
+    expect(patch).not.toHaveBeenCalled();
   });
 
   it("corrects opening float by applying only the float delta to expected cash", () => {

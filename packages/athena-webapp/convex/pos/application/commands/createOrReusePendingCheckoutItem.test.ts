@@ -16,6 +16,7 @@ type TableName =
   | "posPendingCheckoutItem"
   | "product"
   | "productSku"
+  | "registerSession"
   | "store"
   | "subcategory";
 type Row = Record<string, unknown> & { _id: string };
@@ -33,6 +34,7 @@ function createPendingCheckoutCtx(seed?: Partial<Record<TableName, Row[]>>) {
     posPendingCheckoutItem: new Map(),
     product: new Map(),
     productSku: new Map(),
+    registerSession: new Map(),
     store: new Map(),
     subcategory: new Map(),
   };
@@ -44,6 +46,7 @@ function createPendingCheckoutCtx(seed?: Partial<Record<TableName, Row[]>>) {
     posPendingCheckoutItem: 0,
     product: 0,
     productSku: 0,
+    registerSession: 0,
     store: 0,
     subcategory: 0,
   };
@@ -158,6 +161,37 @@ const baseSeed = {
 };
 
 describe("createOrReusePendingCheckoutItem", () => {
+  it("rejects ordinary pending checkout sale context for review-only drawers", async () => {
+    const { ctx, tables } = createPendingCheckoutCtx({
+      ...baseSeed,
+      registerSession: [
+        {
+          _id: "register-session-1",
+          expectedCash: 5_000,
+          status: "closeout_rejected",
+          storeId: "storezzzz",
+        },
+      ],
+    });
+
+    await expect(
+      createOrReusePendingCheckoutItem(ctx, {
+        createdByUserId: "user0001" as Id<"athenaUser">,
+        lookupCode: "123456789012",
+        name: "Loose wave bundle",
+        price: 125000,
+        quantitySold: 1,
+        registerSessionId: "register-session-1" as Id<"registerSession">,
+        storeId: "storezzzz" as Id<"store">,
+        timestamp: 1_000,
+      }),
+    ).rejects.toThrow(
+      "Open a replacement drawer before selling this pending checkout item.",
+    );
+
+    expect(tables.posPendingCheckoutItem.size).toBe(0);
+  });
+
   it("creates a reviewable pending checkout item without creating trusted catalog stock", async () => {
     const { ctx, tables } = createPendingCheckoutCtx(baseSeed);
 
@@ -495,7 +529,17 @@ describe("createOrReusePendingCheckoutItem", () => {
   });
 
   it("records sold evidence only after a pending checkout line is committed", async () => {
-    const { ctx, tables } = createPendingCheckoutCtx(baseSeed);
+    const { ctx, tables } = createPendingCheckoutCtx({
+      ...baseSeed,
+      registerSession: [
+        {
+          _id: "register-session-1",
+          expectedCash: 5_000,
+          status: "active",
+          storeId: "storezzzz",
+        },
+      ],
+    });
 
     const result = await createOrReusePendingCheckoutItem(ctx, {
       createdByUserId: "user0001" as Id<"athenaUser">,

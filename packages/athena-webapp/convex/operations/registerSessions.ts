@@ -2,10 +2,12 @@ import { internalMutation, internalQuery, MutationCtx } from "../_generated/serv
 import { Id } from "../_generated/dataModel";
 import { v } from "convex/values";
 import {
+  isCashControlVisibleRegisterSessionStatus,
   isPosUsableRegisterSessionStatus,
   isRegisterSessionConflictBlockingStatus,
   type RegisterSessionStatus,
 } from "../../shared/registerSessionStatus";
+import { isRegisterSessionReplacementBlocking } from "../../shared/registerSessionLifecyclePolicy";
 import { recordRegisterSessionTraceBestEffort } from "./registerSessionTracing";
 
 const registerSessionStatusSet = (
@@ -14,8 +16,9 @@ const registerSessionStatusSet = (
 
 const REGISTER_SESSION_TRANSITIONS = {
   active: registerSessionStatusSet("closing"),
+  closeout_rejected: registerSessionStatusSet("closing"),
   closed: registerSessionStatusSet(),
-  closing: registerSessionStatusSet("active", "closed"),
+  closing: registerSessionStatusSet("active", "closeout_rejected", "closed"),
   open: registerSessionStatusSet("active", "closing"),
 } satisfies Record<RegisterSessionStatus, ReadonlySet<RegisterSessionStatus>>;
 type RegisterSessionIdentity = {
@@ -244,6 +247,119 @@ export function buildReopenedRegisterSessionPatch(session: {
   };
 }
 
+export function buildReopenedRejectedRegisterSessionCloseoutPatch(
+  session: {
+    closeoutRecords?: RegisterSessionCloseoutRecord[];
+    countedCash?: number;
+    expectedCash: number;
+    notes?: string;
+    status: RegisterSessionStatus;
+    variance?: number;
+  },
+  args: {
+    actorStaffProfileId?: Id<"staffProfile">;
+    actorUserId?: Id<"athenaUser">;
+    reason?: string;
+  } = {}
+) {
+  assertValidRegisterSessionTransition(session.status, "closing");
+  const occurredAt = Date.now();
+  const reason =
+    trimOptional(args.reason) ??
+    "Rejected register closeout reopened for correction.";
+
+  return {
+    closeoutRecords: [
+      ...(session.closeoutRecords ?? []),
+      omitUndefined({
+        actorStaffProfileId: args.actorStaffProfileId,
+        actorUserId: args.actorUserId,
+        countedCash: session.countedCash,
+        expectedCash: session.expectedCash,
+        notes: session.notes,
+        occurredAt,
+        reason,
+        type: "reopened" as const,
+        variance: session.variance,
+      }),
+    ],
+    managerApprovalRequestId: undefined,
+    status: "closing" as const,
+  };
+}
+
+export function buildRejectedRegisterSessionCloseoutPatch(
+  session: {
+    countedCash?: number;
+    expectedCash: number;
+    managerApprovalRequestId?: Id<"approvalRequest">;
+    notes?: string;
+    status: RegisterSessionStatus;
+    variance?: number;
+  },
+  args: {
+    allowActiveReviewedCloseoutEvidence?: boolean;
+    countedCash?: number;
+    notes?: string;
+    variance?: number;
+  } = {}
+) {
+  if (session.status === "active") {
+    if (!args.allowActiveReviewedCloseoutEvidence) {
+      throw new Error(
+        "Active register sessions require reviewed closeout evidence before rejection."
+      );
+    }
+
+    const evidenceCountedCash = args.countedCash ?? session.countedCash;
+    const evidenceVariance =
+      args.variance ??
+      (evidenceCountedCash !== undefined
+        ? evidenceCountedCash - session.expectedCash
+        : session.variance);
+
+    if (
+      evidenceCountedCash === undefined ||
+      evidenceVariance === undefined
+    ) {
+      throw new Error(
+        "Active register sessions require reviewed closeout evidence before rejection."
+      );
+    }
+  } else {
+    assertValidRegisterSessionTransition(
+      session.status,
+      "closeout_rejected"
+    );
+  }
+
+  const patch: {
+    countedCash?: number;
+    managerApprovalRequestId: undefined;
+    notes?: string;
+    status: "closeout_rejected";
+    variance?: number;
+  } = {
+    managerApprovalRequestId: undefined,
+    status: "closeout_rejected",
+  };
+
+  if (args.countedCash !== undefined) {
+    patch.countedCash = args.countedCash;
+  }
+
+  const notes = trimOptional(args.notes);
+  if (notes !== undefined) {
+    patch.notes = notes;
+  }
+
+  if (args.variance !== undefined) {
+    patch.variance = args.variance;
+  }
+
+  return patch;
+}
+
 export function buildReopenedClosedRegisterSessionPatch(
   session: {
     closedAt?: number;
@@ -418,6 +534,12 @@ async function findConflictingRegisterSession(
     registerNumber?: string;
   }
 ) {
+  const hasSubmittedCloseout = (
+    session: { countedCash?: number; managerApprovalRequestId?: Id<"approvalRequest">; variance?: number }
+  ) =>
+    session.countedCash !== undefined ||
+    session.variance !== undefined ||
+    session.managerApprovalRequestId !== undefined;
   const latestByTerminal = await ctx.db
     .query("registerSession")
     .withIndex("by_terminalId", (q) => q.eq("terminalId", args.terminalId))
@@ -426,7 +548,10 @@ async function findConflictingRegisterSession(
 
   if (
     latestByTerminal &&
-    isRegisterSessionConflictBlockingStatus(latestByTerminal.status)
+    isRegisterSessionReplacementBlocking({
+      hasSubmittedCloseout: hasSubmittedCloseout(latestByTerminal),
+      session: latestByTerminal,
+    })
   ) {
     throw new Error("A register session is already open for this terminal.");
   }
@@ -447,7 +572,10 @@ async function findConflictingRegisterSession(
 
   if (
     latestByRegisterNumber &&
-    isRegisterSessionConflictBlockingStatus(latestByRegisterNumber.status)
+    isRegisterSessionReplacementBlocking({
+      hasSubmittedCloseout: hasSubmittedCloseout(latestByRegisterNumber),
+      session: latestByRegisterNumber,
+    })
   ) {
     throw new Error("A register session is already open for this register number.");
   }
@@ -580,7 +708,10 @@ export const getRegisterSessionForRegisterState = internalQuery({
           return latestByRegisterNumber;
         }
 
-        if (latestByRegisterNumber.status === "closed") {
+        if (
+          latestByRegisterNumber.status === "closed" ||
+          latestByRegisterNumber.status === "closeout_rejected"
+        ) {
           return latestByRegisterNumber;
         }
       }
@@ -596,7 +727,10 @@ export const getRegisterSessionForRegisterState = internalQuery({
       return null;
     }
 
-    if (isRegisterSessionConflictBlockingStatus(latestByTerminal.status)) {
+    if (
+      isRegisterSessionConflictBlockingStatus(latestByTerminal.status) ||
+      isCashControlVisibleRegisterSessionStatus(latestByTerminal.status)
+    ) {
       return latestByTerminal;
     }
 
@@ -640,7 +774,7 @@ export const recordRegisterSessionTransaction = internalMutation({
 
     if (
       args.adjustmentKind === "sale" &&
-      (session.status === "closing" || session.status === "closed")
+      !isPosUsableRegisterSessionStatus(session.status)
     ) {
       throw new Error("Register session is not accepting new transactions.");
     }
@@ -750,6 +884,53 @@ export const reopenRegisterSession = internalMutation({
   },
 });
 
+export async function rejectRegisterSessionCloseoutWithCtx(
+  ctx: MutationCtx,
+  args: {
+    allowActiveReviewedCloseoutEvidence?: boolean;
+    countedCash?: number;
+    notes?: string;
+    registerSessionId: Id<"registerSession">;
+    variance?: number;
+  }
+) {
+  const session = await ctx.db.get("registerSession", args.registerSessionId);
+  if (!session) {
+    throw new Error("Register session not found.");
+  }
+
+  await ctx.db.patch(
+    "registerSession",
+    args.registerSessionId,
+    buildRejectedRegisterSessionCloseoutPatch(session, args)
+  );
+
+  return ctx.db.get("registerSession", args.registerSessionId);
+}
+
+export async function reopenRejectedRegisterSessionCloseoutWithCtx(
+  ctx: MutationCtx,
+  args: {
+    actorStaffProfileId?: Id<"staffProfile">;
+    actorUserId?: Id<"athenaUser">;
+    registerSessionId: Id<"registerSession">;
+    reason?: string;
+  }
+) {
+  const session = await ctx.db.get("registerSession", args.registerSessionId);
+  if (!session) {
+    throw new Error("Register session not found.");
+  }
+
+  await ctx.db.patch(
+    "registerSession",
+    args.registerSessionId,
+    buildReopenedRejectedRegisterSessionCloseoutPatch(session, args)
+  );
+
+  return ctx.db.get("registerSession", args.registerSessionId);
+}
+
 export const reopenClosedRegisterSessionCloseout = internalMutation({
   args: {
     actorStaffProfileId: v.optional(v.id("staffProfile")),
@@ -798,8 +979,10 @@ export async function recordRegisterSessionDepositWithCtx(
     throw new Error("Register session not found.");
   }
 
-  if (session.status === "closed") {
-    throw new Error("Cannot record a deposit for a closed register session.");
+  if (session.status === "closed" || session.status === "closeout_rejected") {
+    throw new Error(
+      "Cannot record a deposit for a closed register session."
+    );
   }
 
   await ctx.db.patch(

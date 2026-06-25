@@ -28,6 +28,17 @@ describe("cash control closeouts", () => {
         message: "Counted cash cannot be negative.",
       },
     };
+    const rejectedCloseoutResult = {
+      kind: "ok" as const,
+      data: {
+        action: "rejected" as const,
+        approvalRequest: null,
+        registerSession: {
+          _id: "session-1",
+          status: "closeout_rejected",
+        },
+      },
+    };
 
     assertConformsToExportedReturns(
       submitRegisterSessionCloseout,
@@ -44,6 +55,10 @@ describe("cash control closeouts", () => {
     assertConformsToExportedReturns(
       reviewRegisterSessionCloseout,
       validationError,
+    );
+    assertConformsToExportedReturns(
+      reviewRegisterSessionCloseout,
+      rejectedCloseoutResult,
     );
   });
 
@@ -277,6 +292,37 @@ describe("cash control closeouts", () => {
     expect(runMutation).not.toHaveBeenCalled();
   });
 
+  it("returns user_error when submitting a closeout already under rejected review", async () => {
+    const runMutation = vi.fn();
+    const ctx = {
+      db: {
+        get: vi.fn(async () => ({
+          _id: "session-1",
+          expectedCash: 10000,
+          status: "closeout_rejected",
+          storeId: "store-1",
+        })),
+      },
+      runMutation,
+      runQuery: vi.fn(async () => ({ _id: "store-1" })),
+    };
+
+    const result = await getHandler(submitRegisterSessionCloseout)(ctx, {
+      countedCash: 9000,
+      registerSessionId: "session-1",
+      storeId: "store-1",
+    });
+
+    expect(result).toEqual({
+      kind: "user_error",
+      error: {
+        code: "precondition_failed",
+        message: "Register closeout is already under review.",
+      },
+    });
+    expect(runMutation).not.toHaveBeenCalled();
+  });
+
   it("returns user_error when reopening a non-closeout register session", async () => {
     const runMutation = vi.fn();
     const ctx = {
@@ -355,6 +401,238 @@ describe("cash control closeouts", () => {
       },
     });
     expect(runMutation).not.toHaveBeenCalled();
+  });
+
+  it("reopens rejected closeouts for correction without making them sale-usable", async () => {
+    let registerSession = {
+      _id: "session-1",
+      closeoutRecords: [],
+      countedCash: 9000,
+      expectedCash: 10000,
+      notes: "Variance counted at lane 1.",
+      openedAt: 1,
+      openingFloat: 5000,
+      organizationId: "org-1",
+      registerNumber: "A1",
+      status: "closeout_rejected",
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      variance: -1000,
+    };
+    const patch = vi.fn(async (table: string, id: string, updates: object) => {
+      if (table === "registerSession" && id === "session-1") {
+        registerSession = { ...registerSession, ...updates };
+      }
+    });
+    const insert = vi.fn(async () => "inserted");
+    const ctx = {
+      db: {
+        get: vi.fn(async (table: string) => {
+          if (table === "registerSession") return registerSession;
+          if (table === "approvalProof") {
+            return {
+              _id: "proof-1",
+              actionKey: "cash_controls.register_session.reopen_closeout",
+              approvedByStaffProfileId: "manager-1",
+              expiresAt: Date.now() + 60_000,
+              requestedByStaffProfileId: "staff-1",
+              requiredRole: "manager",
+              storeId: "store-1",
+              subjectId: "session-1",
+              subjectLabel: "A1",
+              subjectType: "register_session",
+            };
+          }
+          if (table === "store") return { _id: "store-1", currency: "GHS" };
+          if (table === "staffProfile") {
+            return {
+              _id: "manager-1",
+              organizationId: "org-1",
+              status: "active",
+              storeId: "store-1",
+            };
+          }
+          return null;
+        }),
+        insert,
+        patch,
+        query: vi.fn(() => ({
+          withIndex: vi.fn(() => ({
+            collect: vi.fn(async () => []),
+            order: vi.fn(() => ({
+              first: vi.fn(async () => null),
+            })),
+            take: vi.fn(async () => [
+              {
+                organizationId: "org-1",
+                role: "manager",
+                staffProfileId: "manager-1",
+                status: "active",
+                storeId: "store-1",
+              },
+            ]),
+            unique: vi.fn(async () => null),
+          })),
+        })),
+      },
+      runMutation: vi.fn(),
+    };
+
+    const result = await getHandler(reopenRegisterSessionCloseout)(ctx, {
+      actorUserId: "manager-user-1",
+      approvalProofId: "proof-1",
+      registerSessionId: "session-1",
+      requestedByStaffProfileId: "staff-1",
+      storeId: "store-1",
+    });
+
+    expect(result).toEqual({
+      kind: "ok",
+      data: {
+        action: "reopened",
+        approvalRequest: null,
+        registerSession: expect.objectContaining({
+          _id: "session-1",
+          status: "closing",
+          countedCash: 9000,
+          closeoutRecords: [
+            expect.objectContaining({
+              actorStaffProfileId: "manager-1",
+              actorUserId: "manager-user-1",
+              countedCash: 9000,
+              expectedCash: 10000,
+              notes: "Variance counted at lane 1.",
+              occurredAt: expect.any(Number),
+              reason: "Correction needed after manager rejection.",
+              type: "reopened",
+              variance: -1000,
+            }),
+          ],
+          variance: -1000,
+        }),
+      },
+    });
+    expect(patch).toHaveBeenCalledWith(
+      "registerSession",
+      "session-1",
+      expect.objectContaining({
+        closeoutRecords: [
+          expect.objectContaining({
+            actorStaffProfileId: "manager-1",
+            actorUserId: "manager-user-1",
+            countedCash: 9000,
+            expectedCash: 10000,
+            notes: "Variance counted at lane 1.",
+            occurredAt: expect.any(Number),
+            reason: "Correction needed after manager rejection.",
+            type: "reopened",
+            variance: -1000,
+          }),
+        ],
+        managerApprovalRequestId: undefined,
+        status: "closing",
+      }),
+    );
+    expect(ctx.runMutation).not.toHaveBeenCalled();
+  });
+
+  it("requires manager approval before reopening a rejected closeout", async () => {
+    const patch = vi.fn();
+    const ctx = {
+      db: {
+        get: vi.fn(async () => ({
+          _id: "session-1",
+          expectedCash: 10000,
+          organizationId: "org-1",
+          status: "closeout_rejected",
+          storeId: "store-1",
+        })),
+        patch,
+      },
+    };
+
+    const result = await getHandler(reopenRegisterSessionCloseout)(ctx, {
+      registerSessionId: "session-1",
+      storeId: "store-1",
+    });
+
+    expect(result).toEqual({
+      kind: "user_error",
+      error: {
+        code: "authentication_failed",
+        message: "Only managers can reopen a rejected register closeout.",
+      },
+    });
+    expect(patch).not.toHaveBeenCalled();
+  });
+
+  it("rejects rejected-closeout reopen approvals from staff without review permission", async () => {
+    const patch = vi.fn();
+    const ctx = {
+      db: {
+        get: vi.fn(async (table: string) => {
+          if (table === "registerSession") {
+            return {
+              _id: "session-1",
+              expectedCash: 10000,
+              organizationId: "org-1",
+              registerNumber: "A1",
+              status: "closeout_rejected",
+              storeId: "store-1",
+            };
+          }
+          if (table === "approvalProof") {
+            return {
+              _id: "proof-1",
+              actionKey: "cash_controls.register_session.reopen_closeout",
+              approvedByStaffProfileId: "staff-1",
+              expiresAt: Date.now() + 60_000,
+              requestedByStaffProfileId: "staff-1",
+              requiredRole: "manager",
+              storeId: "store-1",
+              subjectId: "session-1",
+              subjectLabel: "A1",
+              subjectType: "register_session",
+            };
+          }
+          if (table === "staffProfile") {
+            return {
+              _id: "staff-1",
+              organizationId: "org-1",
+              status: "active",
+              storeId: "store-1",
+            };
+          }
+          return null;
+        }),
+        patch,
+        query: vi.fn(() => ({
+          withIndex: vi.fn(() => ({
+            take: vi.fn(async () => []),
+          })),
+        })),
+      },
+    };
+
+    const result = await getHandler(reopenRegisterSessionCloseout)(ctx, {
+      approvalProofId: "proof-1",
+      registerSessionId: "session-1",
+      requestedByStaffProfileId: "staff-1",
+      storeId: "store-1",
+    });
+
+    expect(result).toEqual({
+      kind: "user_error",
+      error: {
+        code: "authorization_failed",
+        message: "Only managers can reopen a rejected register closeout.",
+      },
+    });
+    expect(patch).not.toHaveBeenCalledWith(
+      "registerSession",
+      "session-1",
+      expect.anything(),
+    );
   });
 
   it("requires the same manager to submit a reopened closeout correction", async () => {

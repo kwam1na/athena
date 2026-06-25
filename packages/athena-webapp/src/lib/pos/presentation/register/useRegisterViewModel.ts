@@ -368,13 +368,61 @@ type CloseoutBlockedRegisterSession = {
   openedAt: number;
   openingFloat: number;
   registerNumber: string;
-  status: "closing";
+  status: "closing" | "closeout_rejected";
   terminalId: Id<"posTerminal">;
   variance?: number;
 };
 
-function selectPassiveCloseoutBlockedRegisterSession(): CloseoutBlockedRegisterSession | null {
-  return null;
+function selectPassiveCloseoutBlockedRegisterSession(
+  session:
+    | {
+        _id?: Id<"registerSession"> | string;
+        countedCash?: number;
+        expectedCash?: number;
+        localSyncStatus?: CloseoutBlockedRegisterSession["localSyncStatus"] | null;
+        managerApprovalRequestId?: Id<"approvalRequest">;
+        openedAt?: number;
+        openingFloat?: number;
+        registerNumber?: string;
+        status?: string;
+        terminalId?: Id<"posTerminal">;
+        variance?: number;
+      }
+    | null
+    | undefined,
+): CloseoutBlockedRegisterSession | null {
+  if (
+    !session ||
+    (session.status !== "closing" && session.status !== "closeout_rejected") ||
+    !session.terminalId ||
+    session.expectedCash === undefined ||
+    session.openedAt === undefined ||
+    session.openingFloat === undefined
+  ) {
+    return null;
+  }
+  const hasSubmittedCloseoutEvidence =
+    session.status === "closeout_rejected" ||
+    session.countedCash !== undefined ||
+    Boolean(session.managerApprovalRequestId) ||
+    session.localSyncStatus?.status === "needs_review";
+  if (!hasSubmittedCloseoutEvidence) {
+    return null;
+  }
+
+  return {
+    _id: session._id,
+    countedCash: session.countedCash,
+    expectedCash: session.expectedCash,
+    localSyncStatus: session.localSyncStatus ?? undefined,
+    managerApprovalRequestId: session.managerApprovalRequestId,
+    openedAt: session.openedAt,
+    openingFloat: session.openingFloat,
+    registerNumber: session.registerNumber ?? "",
+    status: session.status,
+    terminalId: session.terminalId,
+    variance: session.variance,
+  };
 }
 
 type LocalOperablePosSession = {
@@ -818,7 +866,11 @@ export function useRegisterViewModel(): RegisterViewModel {
       ? localOperableRegisterSession
       : projectedLocalRegisterSession;
   const closeoutBlockedRegisterSession =
-    selectPassiveCloseoutBlockedRegisterSession();
+    locallyOperableRegisterSession === null
+      ? selectPassiveCloseoutBlockedRegisterSession(
+          registerState?.activeRegisterSession,
+        )
+      : null;
   const activeCloudRegisterSessionHasCloseoutReview = Boolean(
     findRegisterCloseoutReviewItem(usableActiveRegisterSession),
   );
@@ -1729,6 +1781,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     | "pending_sync"
     | undefined =
     activeCloseoutRegisterSessionHasSyncReview ||
+    activeCloseoutRegisterSession?.status === "closeout_rejected" ||
     Boolean(activeCloseoutRegisterSession?.managerApprovalRequestId)
       ? "manager_review"
       : activeCloseoutRegisterSessionHasSubmittedCount &&
@@ -5159,15 +5212,11 @@ export function useRegisterViewModel(): RegisterViewModel {
               closeoutNotes,
               closeoutSubmittedReason: activeCloseoutSubmittedReason,
               closeoutSecondaryActionLabel: closeoutBlockedRegisterSession
-                ? "Reopen register"
+                ? "Open replacement drawer"
                 : "Return to sale",
               registerSessionCode: activeCloseoutRegisterSessionCode,
               onCloseoutSecondaryAction: closeoutBlockedRegisterSession
-                ? isCashierManager
-                  ? activeCloseoutRegisterSessionHasSyncReview
-                    ? undefined
-                    : handleReopenRegisterCloseout
-                  : undefined
+                ? undefined
                 : handleCancelRegisterCloseout,
               expectedCash: activeCloseoutRegisterSession?.expectedCash,
               canOpenCashControls: isCashierManager,
@@ -5176,14 +5225,19 @@ export function useRegisterViewModel(): RegisterViewModel {
                 (activeCloseoutCloudRegisterSessionCode as
                   | Id<"registerSession">
                   | undefined),
+              canOpenDrawer: closeoutBlockedRegisterSession
+                ? canSignedInStaffOpenDrawer
+                : undefined,
               hasPendingCloseoutApproval: Boolean(
                 activeCloseoutRegisterSession?.managerApprovalRequestId ||
-                activeCloseoutRegisterSessionHasSyncReview,
+                activeCloseoutRegisterSessionHasSyncReview ||
+                activeCloseoutRegisterSession?.status === "closeout_rejected",
               ),
               errorMessage: drawerErrorMessage,
               hasSignedInStaff,
               isCloseoutSubmitting: isSubmittingCloseout,
               isReopeningCloseout,
+              isSubmitting: isOpeningDrawer,
               onCloseoutCountedCashChange: (value: string) => {
                 setCloseoutCountedCash(value);
                 setDrawerErrorMessage(null);
@@ -5192,11 +5246,15 @@ export function useRegisterViewModel(): RegisterViewModel {
                 setCloseoutNotes(value);
                 setDrawerErrorMessage(null);
               },
+              onSubmit: closeoutBlockedRegisterSession
+                ? handleOpenDrawer
+                : undefined,
               onSubmitCloseout: activeCloseoutSubmittedReason
                 ? undefined
                 : handleSubmitRegisterCloseout,
-              onReopenRegister:
-                isCashierManager && !activeCloseoutRegisterSessionHasSyncReview
+              onReopenRegister: closeoutBlockedRegisterSession
+                ? undefined
+                : isCashierManager && !activeCloseoutRegisterSessionHasSyncReview
                   ? handleReopenRegisterCloseout
                   : undefined,
               onSignOut: handleCashierSignOut,

@@ -1,5 +1,6 @@
 import type { Id } from "../../../_generated/dataModel";
 import type { MutationCtx } from "../../../_generated/server";
+import { isPosUsableRegisterSessionStatus } from "../../../../shared/registerSessionStatus";
 import type { ApprovalRequirement } from "../../../../shared/approvalPolicy";
 import { buildApprovalRequest } from "../../../operations/approvalRequestHelpers";
 import {
@@ -199,7 +200,7 @@ async function requireRegisterSessionAllowsPaymentCorrection(
     throw new Error("Register session not found for this transaction.");
   }
 
-  if (registerSession.status === "closing") {
+  if (!isPosUsableRegisterSessionStatus(registerSession.status)) {
     throw new Error(CLOSING_REGISTER_PAYMENT_UPDATE_MESSAGE);
   }
 }
@@ -232,6 +233,10 @@ async function adjustRegisterSessionExpectedCashForPaymentCorrection(
 
   if (!registerSession || registerSession.storeId !== args.storeId) {
     throw new Error("Register session not found for this transaction.");
+  }
+
+  if (!isPosUsableRegisterSessionStatus(registerSession.status)) {
+    throw new Error(CLOSING_REGISTER_PAYMENT_UPDATE_MESSAGE);
   }
 
   const nextExpectedCash = registerSession.expectedCash + expectedCashDelta;

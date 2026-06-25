@@ -722,6 +722,38 @@ describe("CashControlsDashboardContent", () => {
     expect(screen.getByText("Closed session history")).toBeInTheDocument();
   });
 
+  it("keeps rejected closeouts in the cashroom attention lane", () => {
+    render(
+      <CashControlsDashboardContent
+        currency="USD"
+        dashboardSnapshot={{
+          ...baseSnapshot,
+          registerSessions: [
+            {
+              _id: "session-rejected-register-2",
+              countedCash: 9000,
+              expectedCash: 10000,
+              openedAt: new Date("2026-04-29T07:40:00.000Z").getTime(),
+              openingFloat: 4000,
+              registerNumber: "Register 2",
+              status: "closeout_rejected",
+              totalDeposited: 0,
+              variance: -1000,
+            },
+          ],
+        }}
+        isLoading={false}
+        orgUrlSlug="v26"
+        storeUrlSlug="east-legon"
+      />,
+    );
+
+    expect(screen.getByText("Register 2")).toBeInTheDocument();
+    expect(screen.getByText("Needs action")).toBeInTheDocument();
+    expect(screen.queryByText("Live drawers")).not.toBeInTheDocument();
+    expect(screen.queryByText("Closed session history")).not.toBeInTheDocument();
+  });
+
   it("separates pending sync from reconciliation issues", () => {
     render(
       <CashControlsDashboardContent

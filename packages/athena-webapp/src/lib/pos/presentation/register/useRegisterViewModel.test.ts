@@ -84,7 +84,7 @@ let mockRegisterState:
       } | null;
       activeRegisterSession: {
         _id: string;
-        status: "open" | "active" | "closing" | "closed";
+        status: "open" | "active" | "closing" | "closeout_rejected" | "closed";
         terminalId?: string;
         registerNumber?: string;
         openingFloat: number;
@@ -3253,7 +3253,7 @@ describe("useRegisterViewModel", () => {
     expect(result.current.cashierCard?.cashierName).toBe("Offline Manager");
   });
 
-  it("holds bootstrap on a closing drawer and exposes the opening drawer gate", async () => {
+  it("holds submitted closing drawer as review-only and exposes replacement opening", async () => {
     mockRegisterState = {
       phase: "readyToStart",
       terminal: { _id: "terminal-1", displayName: "Front Counter" },
@@ -3290,25 +3290,79 @@ describe("useRegisterViewModel", () => {
     });
 
     expect(result.current.drawerGate).not.toBeNull();
-    expect(result.current.drawerGate?.mode).toBe("initialSetup");
+    expect(result.current.drawerGate?.mode).toBe("closeoutBlocked");
     expect(result.current.drawerGate?.registerNumber).toBe("1");
     expect(result.current.productEntry.disabled).toBe(true);
     expect(mockStartSession).not.toHaveBeenCalled();
     expect(mockOpenDrawer).not.toHaveBeenCalled();
     expect(result.current.drawerGate?.onSubmit).toEqual(expect.any(Function));
+    expect(result.current.drawerGate?.closeoutSecondaryActionLabel).toBe(
+      "Open replacement drawer",
+    );
     expect(result.current.drawerGate?.onSubmitCloseout).toBeUndefined();
-    expect(result.current.drawerGate?.closeoutSubmittedReason).toBeUndefined();
-    expect(result.current.drawerGate?.expectedCash).toBeUndefined();
+    expect(result.current.drawerGate?.onReopenRegister).toBeUndefined();
+    expect(result.current.drawerGate?.closeoutSubmittedReason).toBe(
+      "manager_review",
+    );
+    expect(result.current.drawerGate?.expectedCash).toBe(5_000);
     expect(
       result.current.drawerGate?.hasPendingCloseoutApproval,
-    ).toBeUndefined();
+    ).toBe(true);
     expect(
       result.current.drawerGate?.cashControlsRegisterSessionId,
-    ).toBeUndefined();
+    ).toBe("drawer-1");
     expect(
       result.current.drawerGate?.closeoutSubmittedCountedCash,
-    ).toBeUndefined();
-    expect(result.current.drawerGate?.closeoutSubmittedVariance).toBeUndefined();
+    ).toBe(4_500);
+    expect(result.current.drawerGate?.closeoutSubmittedVariance).toBe(-500);
+  });
+
+  it("holds rejected closeout drawers as review-only replacement context", async () => {
+    mockRegisterState = {
+      phase: "readyToStart",
+      terminal: { _id: "terminal-1", displayName: "Front Counter" },
+      cashier: {
+        _id: "staff-1",
+        firstName: "Ama",
+        lastName: "Kusi",
+        activeRoles: ["manager"],
+      },
+      activeRegisterSession: {
+        _id: "drawer-1",
+        status: "closeout_rejected",
+        countedCash: 4_500,
+        terminalId: "terminal-1",
+        registerNumber: "1",
+        openingFloat: 5_000,
+        expectedCash: 5_000,
+        openedAt: Date.now(),
+        variance: -500,
+      },
+      activeSession: null,
+      resumableSession: null,
+    };
+    mockActiveSession = null;
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        buildStaffAuthenticationResult(),
+      );
+    });
+
+    expect(result.current.drawerGate?.mode).toBe("closeoutBlocked");
+    expect(result.current.drawerGate?.onSubmit).toEqual(expect.any(Function));
+    expect(result.current.drawerGate?.onReopenRegister).toBeUndefined();
+    expect(result.current.drawerGate?.closeoutSubmittedReason).toBe(
+      "manager_review",
+    );
+    expect(result.current.drawerGate?.closeoutSecondaryActionLabel).toBe(
+      "Open replacement drawer",
+    );
+    expect(result.current.productEntry.disabled).toBe(true);
+    expect(mockStartSession).not.toHaveBeenCalled();
   });
 
   it("allows a newer local drawer to sell while a different cloud closeout awaits manager review", async () => {
