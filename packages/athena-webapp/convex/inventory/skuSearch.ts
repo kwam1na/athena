@@ -5,6 +5,10 @@ import { v } from "convex/values";
 import type { Doc, Id } from "../_generated/dataModel";
 import { mutation, query } from "../_generated/server";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
+import {
+  requireAuthenticatedAthenaUserWithCtx,
+  requireOrganizationMemberRoleWithCtx,
+} from "../lib/athenaUserAuth";
 
 const DEFAULT_LIMIT = 25;
 const MAX_LIMIT = 50;
@@ -145,10 +149,54 @@ export const repairProductSkuSearchResultValidator = v.object({
 });
 
 type DatabaseCtx = Pick<QueryCtx, "db"> | Pick<MutationCtx, "db">;
+type AccessCtx = QueryCtx | MutationCtx;
 type ProductSkuSearchProjection = Omit<
   Doc<"productSkuSearch">,
   "_id" | "_creationTime"
 >;
+
+async function requireProductSkuSearchAdmin(
+  ctx: AccessCtx,
+  storeId: Id<"store">,
+  failureMessage: string,
+) {
+  return requireProductSkuSearchAccess(ctx, storeId, failureMessage, [
+    "full_admin",
+  ]);
+}
+
+async function requireProductSkuSearchReadAccess(
+  ctx: AccessCtx,
+  storeId: Id<"store">,
+  failureMessage: string,
+) {
+  return requireProductSkuSearchAccess(ctx, storeId, failureMessage, [
+    "full_admin",
+    "pos_only",
+  ]);
+}
+
+async function requireProductSkuSearchAccess(
+  ctx: AccessCtx,
+  storeId: Id<"store">,
+  failureMessage: string,
+  allowedRoles: Array<"full_admin" | "pos_only">,
+) {
+  const store = await ctx.db.get("store", storeId);
+  if (!store) {
+    throw new Error("Store not found.");
+  }
+
+  const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+  await requireOrganizationMemberRoleWithCtx(ctx, {
+    allowedRoles,
+    failureMessage,
+    organizationId: store.organizationId,
+    userId: athenaUser._id,
+  });
+
+  return { athenaUser, store };
+}
 
 function normalizeLookup(value: string | undefined): string | undefined {
   const normalized = value?.trim().toLowerCase();
@@ -554,6 +602,12 @@ export const searchProductSkus = query({
   },
   returns: productSkuSearchResponseValidator,
   handler: async (ctx, args) => {
+    await requireProductSkuSearchReadAccess(
+      ctx,
+      args.storeId,
+      "You do not have access to search product SKUs.",
+    );
+
     const queryText = args.query.trim();
     const normalizedQuery = normalizeLookup(queryText);
     const limit = Math.min(Math.max(1, args.limit ?? DEFAULT_LIMIT), MAX_LIMIT);
@@ -690,6 +744,12 @@ export const repairProductSkuSearchPage = mutation({
   },
   returns: repairProductSkuSearchResultValidator,
   handler: async (ctx, args) => {
+    await requireProductSkuSearchAdmin(
+      ctx,
+      args.storeId,
+      "You do not have access to repair product SKU search.",
+    );
+
     const page = await ctx.db
       .query("productSku")
       .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
@@ -734,6 +794,12 @@ export const removeStaleProductSkuSearchPage = mutation({
   },
   returns: repairProductSkuSearchResultValidator,
   handler: async (ctx, args) => {
+    await requireProductSkuSearchAdmin(
+      ctx,
+      args.storeId,
+      "You do not have access to repair product SKU search.",
+    );
+
     const page = await ctx.db
       .query("productSkuSearch")
       .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))

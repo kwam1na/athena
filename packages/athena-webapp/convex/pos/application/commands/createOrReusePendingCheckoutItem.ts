@@ -1,6 +1,7 @@
 import type { Doc, Id } from "../../../_generated/dataModel";
 import type { MutationCtx } from "../../../_generated/server";
 import { isPosUsableRegisterSessionStatus } from "../../../../shared/registerSessionStatus";
+import { upsertProductSkuSearchProjection } from "../../../inventory/skuSearch";
 import { recordOperationalEventWithCtx } from "../../../operations/operationalEvents";
 import { createOperationalWorkItemWithCtx } from "../../../operations/operationalWorkItems";
 import { toSlug } from "../../../utils";
@@ -277,6 +278,7 @@ async function createProvisionalCatalogAnchors(
   });
 
   await ctx.db.patch("productSku", productSkuId, { sku });
+  await upsertProductSkuSearchProjection(ctx, productSkuId);
 
   return { productId, productSkuId, sku };
 }

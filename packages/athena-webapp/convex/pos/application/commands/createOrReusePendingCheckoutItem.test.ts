@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Id } from "../../../_generated/dataModel";
 import type { MutationCtx } from "../../../_generated/server";
@@ -7,6 +7,14 @@ import {
   recordPendingCheckoutItemSaleEvidence,
   recordPendingCheckoutItemEvidenceCorrection,
 } from "./createOrReusePendingCheckoutItem";
+
+const mocks = vi.hoisted(() => ({
+  upsertProductSkuSearchProjection: vi.fn(),
+}));
+
+vi.mock("../../../inventory/skuSearch", () => ({
+  upsertProductSkuSearchProjection: mocks.upsertProductSkuSearchProjection,
+}));
 
 type TableName =
   | "athenaUser"
@@ -161,6 +169,10 @@ const baseSeed = {
 };
 
 describe("createOrReusePendingCheckoutItem", () => {
+  beforeEach(() => {
+    mocks.upsertProductSkuSearchProjection.mockReset();
+  });
+
   it("rejects ordinary pending checkout sale context for review-only drawers", async () => {
     const { ctx, tables } = createPendingCheckoutCtx({
       ...baseSeed,
@@ -216,6 +228,10 @@ describe("createOrReusePendingCheckoutItem", () => {
       sku: "ZZZZ-1-1",
       status: "pending_review",
     });
+    expect(mocks.upsertProductSkuSearchProjection).toHaveBeenCalledWith(
+      ctx,
+      "productSku001",
+    );
 
     const item = Array.from(tables.posPendingCheckoutItem.values())[0];
     expect(item).toMatchObject({

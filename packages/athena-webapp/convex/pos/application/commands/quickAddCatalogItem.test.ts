@@ -1,8 +1,16 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Id } from "../../../_generated/dataModel";
 import type { MutationCtx } from "../../../_generated/server";
 import { quickAddCatalogItem } from "./quickAddCatalogItem";
+
+const mocks = vi.hoisted(() => ({
+  upsertProductSkuSearchProjection: vi.fn(),
+}));
+
+vi.mock("../../../inventory/skuSearch", () => ({
+  upsertProductSkuSearchProjection: mocks.upsertProductSkuSearchProjection,
+}));
 
 type TableName =
   | "athenaUser"
@@ -144,6 +152,10 @@ const baseSeed = {
 };
 
 describe("quickAddCatalogItem", () => {
+  beforeEach(() => {
+    mocks.upsertProductSkuSearchProjection.mockReset();
+  });
+
   it("creates hidden quick-add products, visible SKUs, and saves numeric lookup codes as barcodes", async () => {
     const { ctx, tables } = createQuickAddCtx(baseSeed);
 
@@ -181,6 +193,10 @@ describe("quickAddCatalogItem", () => {
       sku: sku.sku,
       inStock: true,
     });
+    expect(mocks.upsertProductSkuSearchProjection).toHaveBeenCalledWith(
+      ctx,
+      sku._id,
+    );
 
     expect(Array.from(tables.operationalEvent.values())).toEqual([
       expect.objectContaining({
@@ -346,6 +362,10 @@ describe("quickAddCatalogItem", () => {
       barcode: "111122223333",
       sku: "EXISTING-SKU",
     });
+    expect(mocks.upsertProductSkuSearchProjection).toHaveBeenCalledWith(
+      ctx,
+      "productSku001",
+    );
 
     expect(Array.from(tables.operationalEvent.values())).toEqual([
       expect.objectContaining({

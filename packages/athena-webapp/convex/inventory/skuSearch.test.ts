@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
@@ -11,13 +11,25 @@ import {
   upsertProductSkuSearchProjection,
 } from "./skuSearch";
 
+const mockedAuthServer = vi.hoisted(() => ({
+  getAuthUserId: vi.fn(),
+}));
+
+vi.mock("@convex-dev/auth/server", () => ({
+  getAuthUserId: mockedAuthServer.getAuthUserId,
+}));
+
 type TableName =
+  | "athenaUser"
   | "category"
   | "color"
+  | "organizationMember"
   | "product"
   | "productSku"
   | "productSkuSearch"
-  | "subcategory";
+  | "store"
+  | "subcategory"
+  | "users";
 type Row = Record<string, unknown> & { _id: string; _creationTime?: number };
 type QueryFilter = {
   field: string;
@@ -31,24 +43,34 @@ function getHandler(definition: unknown) {
 
 function createCtx(seed: Partial<Record<TableName, Row[]>>) {
   const tables: Record<TableName, Map<string, Row>> = {
+    athenaUser: new Map((seed.athenaUser ?? []).map((row) => [row._id, row])),
     category: new Map((seed.category ?? []).map((row) => [row._id, row])),
     color: new Map((seed.color ?? []).map((row) => [row._id, row])),
+    organizationMember: new Map(
+      (seed.organizationMember ?? []).map((row) => [row._id, row]),
+    ),
     product: new Map((seed.product ?? []).map((row) => [row._id, row])),
     productSku: new Map((seed.productSku ?? []).map((row) => [row._id, row])),
     productSkuSearch: new Map(
       (seed.productSkuSearch ?? []).map((row) => [row._id, row]),
     ),
+    store: new Map((seed.store ?? []).map((row) => [row._id, row])),
     subcategory: new Map(
       (seed.subcategory ?? []).map((row) => [row._id, row]),
     ),
+    users: new Map((seed.users ?? []).map((row) => [row._id, row])),
   };
   const counters: Record<TableName, number> = {
+    athenaUser: tables.athenaUser.size,
     category: tables.category.size,
     color: tables.color.size,
+    organizationMember: tables.organizationMember.size,
     product: tables.product.size,
     productSku: tables.productSku.size,
     productSkuSearch: tables.productSkuSearch.size,
+    store: tables.store.size,
     subcategory: tables.subcategory.size,
+    users: tables.users.size,
   };
 
   function matchesFilters(row: Row, filters: QueryFilter[]) {
@@ -74,6 +96,8 @@ function createCtx(seed: Partial<Record<TableName, Row[]>>) {
       filter(applyFilter?: (queryBuilder: unknown) => (row: Row) => boolean) {
         if (!applyFilter) return createQuery(table, rows);
         const predicate = applyFilter({
+          and: (...predicates: Array<(row: Row) => boolean>) => (row: Row) =>
+            predicates.every((predicate) => predicate(row)),
           field: (field: string) => field,
           eq: (field: string, value: unknown) => (row: Row) =>
             row[field] === value,
@@ -207,9 +231,22 @@ const skuId = "sku-1" as Id<"productSku">;
 const categoryId = "category-1" as Id<"category">;
 const subcategoryId = "subcategory-1" as Id<"subcategory">;
 const colorId = "color-1" as Id<"color">;
+const organizationId = "org-1" as Id<"organization">;
+const authUserId = "auth-user-1";
+const athenaUserId = "athena-user-1" as Id<"athenaUser">;
+
+beforeEach(() => {
+  mockedAuthServer.getAuthUserId.mockResolvedValue(authUserId);
+});
 
 function baseSeed() {
   return {
+    athenaUser: [
+      {
+        _id: athenaUserId,
+        email: "operator@example.com",
+      },
+    ],
     category: [
       {
         _id: categoryId,
@@ -226,6 +263,14 @@ function baseSeed() {
         storeId,
       },
     ],
+    organizationMember: [
+      {
+        _id: "organization-member-1",
+        organizationId,
+        role: "full_admin",
+        userId: athenaUserId,
+      },
+    ],
     product: [
       {
         _id: productId,
@@ -238,7 +283,7 @@ function baseSeed() {
         inventoryCount: 4,
         isVisible: false,
         name: "Body wave bundle",
-        organizationId: "org-1",
+        organizationId,
         quantityAvailable: 2,
         slug: "body-wave-bundle",
         storeId,
@@ -272,6 +317,16 @@ function baseSeed() {
         weight: "120g",
       },
     ],
+    store: [
+      {
+        _id: storeId,
+        organizationId,
+      },
+      {
+        _id: otherStoreId,
+        organizationId: "org-2",
+      },
+    ],
     subcategory: [
       {
         _id: subcategoryId,
@@ -282,10 +337,95 @@ function baseSeed() {
         storeId,
       },
     ],
+    users: [
+      {
+        _id: authUserId,
+        email: "operator@example.com",
+      },
+    ],
   };
 }
 
 describe("SKU search foundation", () => {
+  it("requires an authenticated operator before searching store SKUs", async () => {
+    const { ctx } = createCtx(baseSeed());
+
+    mockedAuthServer.getAuthUserId.mockResolvedValue(null);
+
+    await expect(
+      getHandler(searchProductSkus)(ctx, {
+        query: "ABC-123",
+        storeId,
+      }),
+    ).rejects.toThrow("Sign in again to continue.");
+  });
+
+  it("rejects SKU search for authenticated users outside the store organization", async () => {
+    const seed = baseSeed();
+    seed.organizationMember[0].organizationId = "other-org" as Id<"organization">;
+    const { ctx } = createCtx(seed);
+
+    await expect(
+      getHandler(searchProductSkus)(ctx, {
+        query: "ABC-123",
+        storeId,
+      }),
+    ).rejects.toThrow("You do not have access to search product SKUs.");
+  });
+
+  it("allows POS-only organization members to search store SKUs", async () => {
+    const seed = baseSeed();
+    seed.organizationMember[0].role = "pos_only";
+    const { ctx } = createCtx(seed);
+    await upsertProductSkuSearchProjection(ctx, skuId);
+
+    const result = await getHandler(searchProductSkus)(ctx, {
+      query: "ABC-123",
+      storeId,
+    });
+
+    expect(result.results).toHaveLength(1);
+    expect(result.results[0].productSkuId).toBe(skuId);
+  });
+
+  it("requires an authenticated full admin before repairing or cleaning search projections", async () => {
+    const { ctx } = createCtx(baseSeed());
+
+    mockedAuthServer.getAuthUserId.mockResolvedValue(null);
+
+    await expect(
+      getHandler(repairProductSkuSearchPage)(ctx, {
+        paginationOpts: { cursor: null, numItems: 10 },
+        storeId,
+      }),
+    ).rejects.toThrow("Sign in again to continue.");
+    await expect(
+      getHandler(removeStaleProductSkuSearchPage)(ctx, {
+        paginationOpts: { cursor: null, numItems: 10 },
+        storeId,
+      }),
+    ).rejects.toThrow("Sign in again to continue.");
+  });
+
+  it("keeps projection repair and cleanup restricted to full admins", async () => {
+    const seed = baseSeed();
+    seed.organizationMember[0].role = "pos_only";
+    const { ctx } = createCtx(seed);
+
+    await expect(
+      getHandler(repairProductSkuSearchPage)(ctx, {
+        paginationOpts: { cursor: null, numItems: 10 },
+        storeId,
+      }),
+    ).rejects.toThrow("You do not have access to repair product SKU search.");
+    await expect(
+      getHandler(removeStaleProductSkuSearchPage)(ctx, {
+        paginationOpts: { cursor: null, numItems: 10 },
+        storeId,
+      }),
+    ).rejects.toThrow("You do not have access to repair product SKU search.");
+  });
+
   it("returns archived and hidden SKUs with the generic result contract", async () => {
     const { ctx } = createCtx(baseSeed());
     await upsertProductSkuSearchProjection(ctx, skuId);

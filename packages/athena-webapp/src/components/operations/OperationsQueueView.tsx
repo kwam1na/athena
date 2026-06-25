@@ -36,6 +36,7 @@ import {
   type NormalizedCommandResult,
 } from "@/lib/errors/runCommand";
 import { getOrigin } from "@/lib/navigationUtils";
+import { normalizeSkuSearchQuery } from "@/lib/stockOps/skuSearch";
 import type { CommandResult } from "~/shared/commandResult";
 import { currencyFormatter } from "~/shared/currencyFormatter";
 import { capitalizeWords, cn, getRelativeTime } from "@/lib/utils";
@@ -65,6 +66,12 @@ const APPROVAL_DECISION_ACTION_KEY = "operations.approval_request.decide";
 const APPROVAL_PAGE_UNLOCK_TTL_MS = 5 * 60 * 1000;
 const OPEN_WORK_ITEMS_PER_PAGE = 5;
 const UNCATEGORIZED_COUNT_SCOPE_KEY = "__uncategorized";
+
+type ProductSkuSearchResponse = {
+  results: Array<{
+    productSkuId: Id<"productSku">;
+  }>;
+};
 
 type QueueWorkItem = {
   _id: Id<"operationalWorkItem">;
@@ -585,6 +592,30 @@ function getQuantityDeltaBadgeClass(delta?: number) {
 
 function getCountScopeKeyForInventoryItem(item: InventorySnapshotItem) {
   return item.productCategory?.trim() || UNCATEGORIZED_COUNT_SCOPE_KEY;
+}
+
+function mergeInventorySnapshotItems(
+  baseItems: InventorySnapshotItem[],
+  searchItems: InventorySnapshotItem[],
+) {
+  if (searchItems.length === 0) return baseItems;
+
+  const itemsById = new Map<Id<"productSku">, InventorySnapshotItem>();
+
+  for (const item of baseItems) {
+    itemsById.set(item._id, item);
+  }
+
+  for (const item of searchItems) {
+    itemsById.set(item._id, item);
+  }
+
+  return Array.from(itemsById.values()).sort((left, right) => {
+    const nameCompare = left.productName.localeCompare(right.productName);
+    if (nameCompare !== 0) return nameCompare;
+
+    return (left.sku ?? "").localeCompare(right.sku ?? "");
+  });
 }
 
 type OperationsQueueViewContentProps = {
@@ -1886,6 +1917,49 @@ export function OperationsQueueView({
   );
   const inventoryItems =
     inventorySnapshotPage.results as InventorySnapshotItem[];
+  const normalizedStockSearchQuery = normalizeSkuSearchQuery(
+    stockAdjustmentSearch?.query ?? "",
+  );
+  const stockSkuSearchResults = useQuery(
+    api.inventory.skuSearch.searchProductSkus,
+    shouldLoadStockWorkspace && normalizedStockSearchQuery
+      ? {
+          limit: 75,
+          query: stockAdjustmentSearch?.query ?? "",
+          storeId: activeStore!._id,
+        }
+      : "skip",
+  ) as ProductSkuSearchResponse | undefined;
+  const stockSearchProductSkuIds = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          (stockSkuSearchResults?.results ?? []).map(
+            (result) => result.productSkuId,
+          ),
+        ),
+      ),
+    [stockSkuSearchResults?.results],
+  );
+  const stockSearchInventoryItems = useQuery(
+    stockOpsApi.adjustments.listInventorySnapshotForProductSkus,
+    shouldLoadStockWorkspace && stockSearchProductSkuIds.length > 0
+      ? {
+          productSkuIds: stockSearchProductSkuIds,
+          storeId: activeStore!._id,
+        }
+      : "skip",
+  ) as InventorySnapshotItem[] | undefined;
+  const inventoryItemsForStockAdjustment = useMemo(
+    () =>
+      mergeInventorySnapshotItems(
+        inventoryItems,
+        Array.isArray(stockSearchInventoryItems)
+          ? stockSearchInventoryItems
+          : [],
+      ),
+    [inventoryItems, stockSearchInventoryItems],
+  );
   const inventoryUnitSummary = useQuery(
     stockOpsApi.adjustments.getInventoryUnitSummary,
     shouldLoadStockWorkspace
@@ -1906,15 +1980,19 @@ export function OperationsQueueView({
 
     const selectedItem =
       stockAdjustmentSearch?.sku !== undefined
-        ? inventoryItems.find(
+        ? inventoryItemsForStockAdjustment.find(
             (item) => String(item._id) === stockAdjustmentSearch.sku,
           )
-        : inventoryItems[0];
+        : inventoryItemsForStockAdjustment[0];
 
     return selectedItem
       ? getCountScopeKeyForInventoryItem(selectedItem)
       : undefined;
-  }, [inventoryItems, stockAdjustmentSearch?.mode, stockAdjustmentSearch?.sku]);
+  }, [
+    inventoryItemsForStockAdjustment,
+    stockAdjustmentSearch?.mode,
+    stockAdjustmentSearch?.sku,
+  ]);
   const canUseCycleCountDraft =
     canQueryProtectedData &&
     Boolean(activeStore?._id) &&
@@ -2315,7 +2393,7 @@ export function OperationsQueueView({
         cycleCountDraft={cycleCountDraft}
         cycleCountDraftSummary={activeCycleCountDraftSummary ?? null}
         hasFullAdminAccess={canAccessSurface}
-        inventoryItems={inventoryItems}
+        inventoryItems={inventoryItemsForStockAdjustment}
         inventoryUnitSummary={inventoryUnitSummary ?? null}
         isCycleCountDraftSaving={isSavingCycleCountDraft}
         isDecidingApprovalRequestId={decisioningApprovalRequestId}

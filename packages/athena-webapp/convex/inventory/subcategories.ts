@@ -2,8 +2,7 @@ import { mutation, query } from "../_generated/server";
 import { v } from "convex/values";
 import { subcategorySchema } from "../schemas/inventory";
 import { toSlug } from "../utils";
-
-const entity = "subcategory";
+import { refreshProductSkuSearchForSubcategory } from "./skuSearch";
 
 export const getAll = query({
   args: {
@@ -12,18 +11,18 @@ export const getAll = query({
   },
   handler: async (ctx, args) => {
     const subcategories = await ctx.db
-      .query(entity)
+      .query("subcategory")
       .filter((q) => {
         if (args.categoryId) {
           return q.and(
             q.eq(q.field("storeId"), args.storeId),
-            q.eq(q.field("categoryId"), args.categoryId)
+            q.eq(q.field("categoryId"), args.categoryId),
           );
         }
 
         return q.eq(q.field("storeId"), args.storeId);
       })
-      .collect();
+      .take(1000);
 
     return subcategories;
   },
@@ -31,26 +30,26 @@ export const getAll = query({
 
 export const getById = query({
   args: {
-    id: v.id(entity),
+    id: v.id("subcategory"),
     storeId: v.id("store"),
   },
   handler: async (ctx, args) => {
-    return await ctx.db.get(args.id);
+    return await ctx.db.get("subcategory", args.id);
   },
 });
 
 export const create = mutation({
   args: subcategorySchema,
   handler: async (ctx, args) => {
-    const id = await ctx.db.insert(entity, args);
+    const id = await ctx.db.insert("subcategory", args);
 
-    return await ctx.db.get(id);
+    return await ctx.db.get("subcategory", id);
   },
 });
 
 export const update = mutation({
   args: {
-    id: v.id(entity),
+    id: v.id("subcategory"),
     name: v.optional(v.string()),
     categoryId: v.optional(v.id("category")),
   },
@@ -67,19 +66,21 @@ export const update = mutation({
     }
 
     if (Object.keys(updates).length > 0) {
-      await ctx.db.patch(args.id, updates);
+      await ctx.db.patch("subcategory", args.id, updates);
+      await refreshProductSkuSearchForSubcategory(ctx, args.id);
     }
 
-    return await ctx.db.get(args.id);
+    return await ctx.db.get("subcategory", args.id);
   },
 });
 
 export const remove = mutation({
   args: {
-    id: v.id(entity),
+    id: v.id("subcategory"),
   },
   handler: async (ctx, args) => {
-    await ctx.db.delete(args.id);
+    await ctx.db.delete("subcategory", args.id);
+    await refreshProductSkuSearchForSubcategory(ctx, args.id);
 
     return { message: "OK" };
   },

@@ -47,15 +47,35 @@ function SkuActivityRouteContent({
   const trimmedSku = sku?.trim();
   const selectedProductSkuId = productSkuId?.trim();
   const hasSelection = Boolean(trimmedSku || selectedProductSkuId);
+  const skuSearch = useQuery(
+    api.inventory.skuSearch.searchProductSkus,
+    trimmedSku && !selectedProductSkuId
+      ? { limit: 5, query: trimmedSku, storeId }
+      : "skip",
+  ) as
+    | {
+        results: Array<{
+          productSkuId: Id<"productSku">;
+          sku: string | null;
+        }>;
+      }
+    | undefined;
+  const matchedProductSkuId = skuSearch?.results[0]?.productSkuId;
+  const canFallbackToDirectSku =
+    Boolean(trimmedSku) &&
+    !selectedProductSkuId &&
+    skuSearch !== undefined &&
+    !matchedProductSkuId;
+  const activityProductSkuId = selectedProductSkuId
+    ? (selectedProductSkuId as Id<"productSku">)
+    : matchedProductSkuId;
 
   const skuActivity = useQuery(
     api.operations.skuActivity.getSkuActivityForProductSku,
-    hasSelection
+    hasSelection && (activityProductSkuId || canFallbackToDirectSku)
       ? {
-          productSkuId: selectedProductSkuId
-            ? (selectedProductSkuId as Id<"productSku">)
-            : undefined,
-          sku: selectedProductSkuId ? undefined : trimmedSku,
+          productSkuId: activityProductSkuId,
+          sku: activityProductSkuId ? undefined : trimmedSku,
           storeId,
         }
       : "skip",
@@ -121,7 +141,11 @@ function SkuActivityRouteContent({
           </form>
 
           <SkuActivityTimeline
-            isLoading={hasSelection && skuActivity === undefined}
+            isLoading={
+              hasSelection &&
+              ((!selectedProductSkuId && skuSearch === undefined) ||
+                skuActivity === undefined)
+            }
             viewModel={viewModel}
           />
         </PageWorkspace>

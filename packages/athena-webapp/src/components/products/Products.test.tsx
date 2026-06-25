@@ -14,6 +14,7 @@ const mockedProducts = vi.hoisted(() => ({
   draftProducts: [] as Product[],
   hiddenDraftProducts: [] as Product[],
   hiddenLiveProducts: [] as Product[],
+  skuSearchResults: [] as Array<Record<string, unknown>>,
 }));
 
 class ResizeObserverStub {
@@ -54,6 +55,19 @@ vi.mock("~/src/hooks/useGetProducts", () => ({
 
 vi.mock("convex/react", () => ({
   useQuery: (_query: unknown, args: unknown) => {
+    if (
+      args &&
+      typeof args === "object" &&
+      "query" in args &&
+      "limit" in args
+    ) {
+      return {
+        candidateOverflow: false,
+        results: mockedProducts.skuSearchResults,
+        truncated: false,
+      };
+    }
+
     if (
       args &&
       typeof args === "object" &&
@@ -115,6 +129,7 @@ describe("Products", () => {
     mockedProducts.draftProducts = [];
     mockedProducts.hiddenDraftProducts = [];
     mockedProducts.hiddenLiveProducts = [];
+    mockedProducts.skuSearchResults = [];
   });
 
   it("quick adds a product with variants from the products workspace", async () => {
@@ -299,6 +314,106 @@ describe("Products", () => {
 
     expect(screen.getByText("Closure Wig")).toBeInTheDocument();
     expect(screen.queryByText("Mahogany Teakwood")).not.toBeInTheDocument();
+  });
+
+  it("shows product groups returned by generic SKU search outside the loaded snapshot", async () => {
+    const user = userEvent.setup();
+    mockedProducts.allProducts = [
+      makeProduct({
+        id: "product-local",
+        inventoryCount: 4,
+        name: "Loaded Product",
+        sku: "LOCAL-1",
+      }),
+    ];
+    mockedProducts.skuSearchResults = [
+      {
+        barcode: "123456789012",
+        categoryId: "category-1",
+        categoryName: "Hair",
+        categorySlug: "hair",
+        colorName: "Natural black",
+        images: [],
+        inventoryCount: 6,
+        isVisible: true,
+        length: 18,
+        match: { kind: "sku", matchedValue: "GLOBAL-18", rank: 1 },
+        price: 5500,
+        productAvailability: "live",
+        productId: "product-global",
+        productIsVisible: true,
+        productName: "Global Search Wig",
+        productSkuId: "sku-global",
+        productSlug: "global-search-wig",
+        quantityAvailable: 6,
+        size: "M",
+        sku: "GLOBAL-18",
+        skuIsVisible: true,
+        storeId: "store-1",
+        subcategoryId: "subcategory-1",
+        subcategoryName: "Bundles",
+        subcategorySlug: "bundles",
+      },
+    ];
+
+    render(<Products />);
+
+    await user.type(screen.getByPlaceholderText(/search products/i), "GLOBAL-18");
+
+    expect(screen.getByText("Global Search Wig")).toBeInTheDocument();
+    expect(screen.queryByText("Loaded Product")).not.toBeInTheDocument();
+    expect(screen.getByText("Showing 1 of 1 product.")).toBeInTheDocument();
+  });
+
+  it("keeps local availability when a generic SKU search result overlaps a loaded product", async () => {
+    const user = userEvent.setup();
+    mockedProducts.allProducts = [
+      makeProduct({
+        id: "product-local",
+        inventoryCount: 0,
+        name: "Loaded Product",
+        sku: "LOCAL-1",
+      }),
+    ];
+    mockedProducts.skuSearchResults = [
+      {
+        barcode: "123456789012",
+        categoryId: "category-1",
+        categoryName: "Hair",
+        categorySlug: "hair",
+        colorName: "Natural black",
+        images: [],
+        inventoryCount: 6,
+        isVisible: true,
+        length: 18,
+        match: { kind: "sku", matchedValue: "LOCAL-1", rank: 1 },
+        price: 5500,
+        productAvailability: "live",
+        productId: "product-local",
+        productIsVisible: true,
+        productName: "Loaded Product",
+        productSkuId: "product-local-sku",
+        productSlug: "loaded-product",
+        quantityAvailable: 6,
+        size: "M",
+        sku: "LOCAL-1",
+        skuIsVisible: true,
+        storeId: "store-1",
+        subcategoryId: "subcategory-1",
+        subcategoryName: "Bundles",
+        subcategorySlug: "bundles",
+      },
+    ];
+
+    render(<Products />);
+
+    await user.type(screen.getByPlaceholderText(/search products/i), "LOCAL-1");
+    await user.click(
+      screen.getByRole("combobox", { name: /filter by availability/i }),
+    );
+    await user.click(await screen.findByRole("option", { name: "Available" }));
+
+    expect(screen.queryByText("Loaded Product")).not.toBeInTheDocument();
   });
 
   it("uses the shared SKU filter bar for product search filters", async () => {

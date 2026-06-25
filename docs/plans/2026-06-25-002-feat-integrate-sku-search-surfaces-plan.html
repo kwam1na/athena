@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Integrate SKU Search Foundation Across Admin Surfaces</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f7f4;
+      --panel: #ffffff;
+      --ink: #1d2623;
+      --muted: #62706a;
+      --line: #d9ded8;
+      --accent: #245b4f;
+      --accent-soft: #e4efeb;
+      --warn-soft: #fff4dc;
+      --warn: #815b12;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.55;
+    }
+    main {
+      width: min(1120px, calc(100vw - 40px));
+      margin: 0 auto;
+      padding: 40px 0 64px;
+    }
+    header {
+      border-bottom: 1px solid var(--line);
+      margin-bottom: 28px;
+      padding-bottom: 20px;
+    }
+    .eyebrow {
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    h1 {
+      font-size: clamp(28px, 4vw, 44px);
+      line-height: 1.08;
+      margin: 8px 0 12px;
+      letter-spacing: 0;
+    }
+    h2 {
+      border-top: 1px solid var(--line);
+      font-size: 22px;
+      margin: 32px 0 12px;
+      padding-top: 24px;
+    }
+    h3 {
+      font-size: 16px;
+      margin: 22px 0 8px;
+    }
+    a { color: var(--accent); }
+    code {
+      background: #eef1ed;
+      border: 1px solid #dde3dd;
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-size: .92em;
+    }
+    ul { padding-left: 20px; }
+    li { margin: 6px 0; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0;
+      background: var(--panel);
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 10px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      background: #eef1ed;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 16px;
+    }
+    .pill {
+      background: var(--accent-soft);
+      border: 1px solid #c9ded7;
+      border-radius: 999px;
+      color: var(--accent);
+      font-size: 13px;
+      font-weight: 650;
+      padding: 5px 10px;
+    }
+    .grid {
+      display: grid;
+      gap: 14px;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .card h3 { margin-top: 0; }
+    .callout {
+      background: var(--warn-soft);
+      border: 1px solid #efd28a;
+      border-radius: 8px;
+      color: var(--warn);
+      padding: 14px 16px;
+    }
+    .toc {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px 16px;
+    }
+    .toc ul {
+      columns: 2;
+      margin: 8px 0 0;
+    }
+    .unit {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      margin: 14px 0;
+      padding: 16px;
+    }
+    .unit h3 {
+      color: var(--accent);
+      margin-bottom: 4px;
+    }
+    .muted { color: var(--muted); }
+    @media (max-width: 720px) {
+      main { width: min(100% - 24px, 1120px); padding-top: 24px; }
+      .toc ul { columns: 1; }
+      table { font-size: 14px; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div class="eyebrow">Feature Plan · Active · 2026-06-25</div>
+      <h1>Integrate SKU Search Foundation Across Admin Surfaces</h1>
+      <p>Integrate the generic SKU search foundation from PR #564 into Athena's non-POS admin search surfaces by first hardening access and projection freshness across canonical SKU writers, then adapting results into stock adjustments, products, quick-add recovery, admin product pickers, procurement, and SKU activity.</p>
+      <div class="meta">
+        <span class="pill">type: feat</span>
+        <span class="pill">status: active</span>
+        <span class="pill">origin: PR #564 foundation plan</span>
+        <span class="pill">POS excluded</span>
+      </div>
+      <p class="muted">Canonical markdown source: <a href="2026-06-25-002-feat-integrate-sku-search-surfaces-plan.md">2026-06-25-002-feat-integrate-sku-search-surfaces-plan.md</a></p>
+    </header>
+
+    <nav class="toc" aria-label="Plan table of contents">
+      <strong>Review Map</strong>
+      <ul>
+        <li><a href="#scope">Scope</a></li>
+        <li><a href="#research">Context</a></li>
+        <li><a href="#decisions">Decisions</a></li>
+        <li><a href="#units">Implementation Units</a></li>
+        <li><a href="#impact">System Impact</a></li>
+        <li><a href="#risks">Risks</a></li>
+      </ul>
+    </nav>
+
+    <section id="scope">
+      <h2>Scope</h2>
+      <div class="callout">
+        <strong>Assumption to review:</strong> generic SKU search should enforce store-scoped authorization before browser consumers adopt it. Stock adjustments and products are first, while procurement, quick-add recovery, homepage pickers, and SKU activity follow as relevant non-POS surfaces.
+      </div>
+      <h3>Requirements Digest</h3>
+      <ul>
+        <li>Preserve PR #564's generic contract and adapt locally in each consumer.</li>
+        <li>Wire authorization, projection refresh across canonical SKU discovery-field writers, protected repair/cleanup entry points, and stale drift handling before relying on text search.</li>
+        <li>Make stock adjustments and products globally searchable without widening capped snapshot queries.</li>
+        <li>Extend quick-add, homepage picker, promo-code selected-products, complimentary-product, procurement, and SKU activity lookup where they currently depend on local/domain-specific result sets.</li>
+        <li>Exclude POS register/local catalog search and local-index expense flows.</li>
+      </ul>
+      <h3>Out of Scope</h3>
+      <ul>
+        <li>Changing `searchProductSkus` response envelope, ordering, or limits.</li>
+        <li>Encoding stock, homepage, storefront, sellability, or procurement policy in the foundation.</li>
+        <li>Backend pagination in SKU search v1.</li>
+        <li>Inventory import review search unless a later decision makes it an interactive catalog lookup surface.</li>
+      </ul>
+    </section>
+
+    <section id="research">
+      <h2>Context</h2>
+      <div class="grid">
+        <article class="card">
+          <h3>Foundation</h3>
+          <p><code>packages/athena-webapp/convex/inventory/skuSearch.ts</code> owns the generic query, validators, exact-first ordering, canonical hydration, repair/backfill, stale cleanup, and projection helpers.</p>
+        </article>
+        <article class="card">
+          <h3>Primary Consumers</h3>
+          <p><code>StockAdjustmentWorkspace.tsx</code> and <code>Products.tsx</code> still filter loaded rows locally, which is exactly the limitation PR #564 set up the foundation to remove.</p>
+        </article>
+        <article class="card">
+          <h3>Secondary Consumers</h3>
+          <p>Quick-add recovery, homepage product pickers, procurement, and SKU activity lookup need generic identity search but must preserve their own eligibility and actionability rules.</p>
+        </article>
+        <article class="card">
+          <h3>Prior Sessions</h3>
+          <p>Prior work rejected widening product/stock queries and rejected coupling the foundation to products UI. Reviewers required performance, correctness, data integrity, and API-contract alignment.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="decisions">
+      <h2>Key Decisions</h2>
+      <table>
+        <thead>
+          <tr><th>Decision</th><th>Why</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Authorize search and protect repair/cleanup entry points.</td><td>Generic search and store-scoped repair operations can expose or mutate catalog search metadata if store id is the only guard.</td></tr>
+          <tr><td>Add adapters, not consumer fields, to the foundation.</td><td>The PR #564 contract is intentionally SKU-first and consumer-neutral.</td></tr>
+          <tr><td>Projection refresh for discovery fields is enabling work across canonical SKU writers.</td><td>Search results are only useful when sidecar lookup/search data stays fresh; POS and expense search consumers stay excluded, but their canonical SKU writes can still affect admin search. Quantity-only canonical fields are hydrated at read time.</td></tr>
+          <tr><td>Stock search overlays candidate identity with stock snapshot policy, then restores match order.</td><td>Reservation and blocker behavior already belongs to stock operations, but stock hydration sorts normal listings.</td></tr>
+          <tr><td>Products search groups by product and orders groups by best matched SKU rank.</td><td>The products workspace is product-shaped even though the foundation is SKU-shaped, and grouping must not erase exact-first relevance.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="units">
+      <h2>Implementation Units</h2>
+      <article class="unit">
+        <h3>U1. Backend Safety and Projection Freshness</h3>
+        <p>Enforce access, protect repair/cleanup entry points, wire refresh helpers into all canonical SKU write paths that affect sidecar discovery, and preserve repair/stale cleanup as rollout gates.</p>
+        <p><strong>Key tests:</strong> unauthorized search and repair, create/update/archive/delete/barcode refresh, taxonomy refresh, POS-origin SKU creation/barcode refresh, quantity-only canonical hydration proof, deleted-source stale row suppression, and drifted searchable-source refresh.</p>
+      </article>
+      <article class="unit">
+        <h3>U2. Shared Consumer Adapter Layer</h3>
+        <p>Add narrow mapping helpers for product grouping, stock candidates, quick-add options, homepage options, and procurement/activity summaries.</p>
+        <p><strong>Key tests:</strong> rich rows, sparse nullable rows, multi-SKU product grouping, truncation/refinement hints, browser import boundary.</p>
+      </article>
+      <article class="unit">
+        <h3>U3. Stock Adjustment Global Search</h3>
+        <p>Use generic search for global candidate lookup, then hydrate stock-owned reservation/blocker state, restore exact-first match order, and preserve URL/detail/filter behavior.</p>
+        <p><strong>Key tests:</strong> outside-page match, exact barcode ordering after hydration, outside-category recovery, blocker rows, auth failure, blank-query pagination regression.</p>
+      </article>
+      <article class="unit">
+        <h3>U4. Products Workspace Global Search</h3>
+        <p>Search all store SKUs, group results by product, order groups by best matched SKU rank, preserve matched SKU context, and keep products filters/quick-add behavior intact.</p>
+        <p><strong>Key tests:</strong> unloaded SKU match, exact SKU/barcode grouped product ordering, multiple matched SKUs, category exclusion, lifecycle filters, failure states.</p>
+      </article>
+      <article class="unit">
+        <h3>U5. Quick-Add Recovery and Admin Product Pickers</h3>
+        <p>Add async search for unbarcoded SKU recovery, homepage placement pickers, promo-code selected-products, and complimentary-product selectors while enforcing consumer eligibility.</p>
+        <p><strong>Key tests:</strong> attach unknown barcode to unbarcoded SKU, already-barcoded ineligible result, no-match vs no-eligible states, homepage eligible search, promo-code and complimentary selector search, hidden/draft/archive handling.</p>
+      </article>
+      <article class="unit">
+        <h3>U6. Procurement and SKU Activity Lookup Parity</h3>
+        <p>Resolve catalog identity through generic search while keeping procurement actionability and activity routing domain-owned.</p>
+        <p><strong>Key tests:</strong> recommendation match, catalog match without action, route state preservation, SKU activity navigation, stale/unauthorized result handling.</p>
+      </article>
+      <article class="unit">
+        <h3>U7. Rollout Validation and Harness Updates</h3>
+        <p>Refresh generated artifacts, graphify outputs, harness coverage, and rollout notes after implementation.</p>
+        <p><strong>Key tests:</strong> generated Convex API refs, validation-map coverage, cross-surface SKU/barcode parity excluding POS.</p>
+      </article>
+    </section>
+
+    <section id="impact">
+      <h2>System Impact</h2>
+      <ul>
+        <li><strong>Interaction graph:</strong> one generic foundation feeds several adapters; policy remains consumer-owned.</li>
+        <li><strong>Error propagation:</strong> no matches, no eligible matches, auth failures, loading, and truncated results need distinct states in every policy-filtered consumer.</li>
+        <li><strong>Lifecycle risk:</strong> deleted-source stale rows and drifted existing-source discovery fields are mitigated through write refresh, repair, and stale cleanup across canonical SKU writers, including POS-origin writers.</li>
+        <li><strong>Parity:</strong> exact SKU, barcode, and productSkuId queries should resolve recognizable identity across all non-POS consumers.</li>
+        <li><strong>Unchanged invariant:</strong> POS stays local-first and sellability-aware.</li>
+      </ul>
+    </section>
+
+    <section id="risks">
+      <h2>Risks</h2>
+      <table>
+        <thead>
+          <tr><th>Risk</th><th>Mitigation</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Catalog metadata leak through generic search or repair.</td><td>Add backend access enforcement or internal-only repair entry points and unauthorized tests before UI adoption.</td></tr>
+          <tr><td>Search results drift from source data.</td><td>Wire write-path refresh for sidecar discovery fields across canonical SKU writers and make repair/cleanup a rollout gate, including drifted existing-source searchable data.</td></tr>
+          <tr><td>Adapters erase exact-first relevance.</td><td>Restore foundation match order after stock hydration and order product groups by best matched SKU rank.</td></tr>
+          <tr><td>Consumer policy leaks into foundation.</td><td>Keep policy in adapters and reject consumer-specific foundation fields.</td></tr>
+          <tr><td>Product rows duplicate when many SKUs match.</td><td>Group by product and preserve matched SKU context.</td></tr>
+          <tr><td>Procurement confuses catalog match with actionability.</td><td>Render distinct no-current-action state.</td></tr>
+        </tbody>
+      </table>
+      <p class="muted">Related source: <a href="../solutions/performance/athena-generic-product-sku-search-sidecar-2026-06-25.md">athena-generic-product-sku-search-sidecar-2026-06-25.md</a></p>
+    </section>
+  </main>
+</body>
+</html>

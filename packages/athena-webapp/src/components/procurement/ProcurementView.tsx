@@ -40,6 +40,10 @@ import {
   matchesSkuSearchTerms,
   normalizeSkuSearchQuery,
 } from "@/lib/stockOps/skuSearch";
+import {
+  buildAdminSkuSearchOptions,
+  type ProductSkuSearchResultLike,
+} from "@/lib/skuSearch/productSkuSearchAdapters";
 import { cn } from "@/lib/utils";
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
@@ -146,6 +150,7 @@ type ProcurementViewContentProps = {
   onQueryChange?: (query: string | undefined) => void;
   onSelectedSkuChange?: (sku: string | null, page?: number) => void;
   page?: number;
+  productSkuSearchResults?: ProductSkuSearchResultLike[];
   purchaseOrders: ProcurementOrderSummary[];
   query?: string;
   recommendations: ReplenishmentRecommendation[];
@@ -575,6 +580,7 @@ export function ProcurementViewContent({
   onQueryChange,
   onSelectedSkuChange,
   page: controlledPage,
+  productSkuSearchResults = [],
   purchaseOrders,
   query: controlledQuery,
   recommendations,
@@ -710,10 +716,38 @@ export function ProcurementViewContent({
     [mode, recommendations],
   );
   const normalizedRecommendationQuery = normalizeSkuSearchQuery(query);
+  const searchedProductSkuIds = useMemo(
+    () =>
+      new Set(
+        productSkuSearchResults.map((result) => String(result.productSkuId)),
+      ),
+    [productSkuSearchResults],
+  );
+  const recommendationProductSkuIds = useMemo(
+    () =>
+      new Set(
+        recommendations.map((recommendation) => String(recommendation._id)),
+      ),
+    [recommendations],
+  );
+  const catalogOnlySearchOptions = useMemo(
+    () =>
+      buildAdminSkuSearchOptions(
+        productSkuSearchResults.filter(
+          (result) =>
+            !recommendationProductSkuIds.has(String(result.productSkuId)),
+        ),
+      ),
+    [productSkuSearchResults, recommendationProductSkuIds],
+  );
   const visibleRecommendations = useMemo(
     () =>
       modeRecommendations.filter((recommendation) => {
         const inventoryItem = inventoryItemsById.get(recommendation._id);
+
+        if (searchedProductSkuIds.has(String(recommendation._id))) {
+          return true;
+        }
 
         return matchesSkuSearchTerms(
           [
@@ -732,7 +766,12 @@ export function ProcurementViewContent({
           normalizedRecommendationQuery,
         );
       }),
-    [inventoryItemsById, modeRecommendations, normalizedRecommendationQuery],
+    [
+      inventoryItemsById,
+      modeRecommendations,
+      normalizedRecommendationQuery,
+      searchedProductSkuIds,
+    ],
   );
   const recommendationPageCount = Math.max(
     Math.ceil(visibleRecommendations.length / RECOMMENDATIONS_PER_PAGE),
@@ -1190,6 +1229,13 @@ export function ProcurementViewContent({
                       Showing {visibleRecommendations.length} of{" "}
                       {modeRecommendations.length} stock{" "}
                       {modeRecommendations.length === 1 ? "item" : "items"}.
+                      {catalogOnlySearchOptions.length > 0
+                        ? ` ${catalogOnlySearchOptions.length} catalog ${
+                            catalogOnlySearchOptions.length === 1
+                              ? "match has"
+                              : "matches have"
+                          } no procurement action.`
+                        : ""}
                     </>
                   }
                 />
@@ -1619,6 +1665,49 @@ export function ProcurementViewContent({
                   />
                 ) : null}
               </section>
+
+              {query.trim() && catalogOnlySearchOptions.length > 0 ? (
+                <section className="overflow-hidden rounded-lg border border-border bg-surface-raised shadow-surface">
+                  <div className="border-b border-border/70 px-layout-md py-layout-md">
+                    <h3 className="text-lg font-medium text-foreground">
+                      Catalog matches without procurement actions
+                    </h3>
+                    <p className="mt-1 max-w-xl text-sm text-muted-foreground">
+                      These SKUs match the search but are not currently in the
+                      procurement pressure queue.
+                    </p>
+                  </div>
+                  <div className="divide-y divide-border/70">
+                    {catalogOnlySearchOptions.map((option) => (
+                      <article
+                        className="bg-background px-layout-md py-layout-md"
+                        key={option.productSkuId}
+                      >
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="min-w-0">
+                            <h4 className="text-sm font-semibold capitalize text-foreground">
+                              {option.productName}
+                            </h4>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {option.subtitle || option.metadata}
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            {option.sku ? (
+                              <span className="rounded-md border border-border bg-surface px-2 py-1 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                                {option.sku}
+                              </span>
+                            ) : null}
+                            <span className="rounded-md border border-border bg-muted/50 px-2 py-1 text-[11px] font-medium text-muted-foreground">
+                              No procurement action
+                            </span>
+                          </div>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
             </PageWorkspace>
           </PageWorkspaceMain>
 
@@ -2004,6 +2093,12 @@ export function ProcurementView({
       ? { status: "active", storeId: activeStore!._id }
       : "skip",
   ) as VendorSummary[] | undefined;
+  const productSkuSearch = useQuery(
+    api.inventory.skuSearch.searchProductSkus,
+    canQueryProtectedData && query?.trim()
+      ? { limit: 20, query: query.trim(), storeId: activeStore!._id }
+      : "skip",
+  ) as { results: ProductSkuSearchResultLike[] } | undefined;
 
   if (isLoadingAccess) {
     return null;
@@ -2034,6 +2129,7 @@ export function ProcurementView({
       onQueryChange={onQueryChange}
       onSelectedSkuChange={onSelectedSkuChange}
       page={page}
+      productSkuSearchResults={productSkuSearch?.results ?? []}
       purchaseOrders={purchaseOrders ?? []}
       query={query}
       recommendations={recommendations ?? []}

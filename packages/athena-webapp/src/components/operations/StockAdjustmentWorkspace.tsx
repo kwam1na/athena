@@ -3448,6 +3448,7 @@ export function StockAdjustmentWorkspaceContent({
         onOpenChange={setIsQuickAddOpen}
         onSubmit={handleQuickAddSubmit}
         open={isQuickAddOpen}
+        skuSearchStoreId={storeId}
         submitErrorMessage="Could not quick add this product. Try again."
       />
         </>

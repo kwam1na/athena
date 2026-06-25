@@ -1,5 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Id } from "../_generated/dataModel";
+
+const mockedSkuSearch = vi.hoisted(() => ({
+  upsertProductSkuSearchProjection: vi.fn(),
+}));
+
+vi.mock("./skuSearch", () => ({
+  upsertProductSkuSearchProjection:
+    mockedSkuSearch.upsertProductSkuSearchProjection,
+}));
 
 import {
   finalizeTrustedInventoryFromProductPage,
@@ -36,6 +45,10 @@ type TableName =
   | "subcategory";
 
 type Row = Record<string, any> & { _id: string };
+
+beforeEach(() => {
+  mockedSkuSearch.upsertProductSkuSearchProjection.mockReset();
+});
 
 function createMutationCtx(seed: Partial<Record<TableName, Row[]>> = {}) {
   const tables: Record<TableName, Map<string, Row>> = {
@@ -336,6 +349,12 @@ describe("catalog import", () => {
       quantityAvailable: 6,
       sku: "BW-18",
     });
+    expect(
+      mockedSkuSearch.upsertProductSkuSearchProjection,
+    ).toHaveBeenCalledWith(
+      expect.anything(),
+      Array.from(tables.productSku.values())[0]._id,
+    );
     expect(Array.from(tables.operationalEvent.values())[0]).toMatchObject({
       eventType: "inventory_import_applied",
       subjectId: "legacy-smartpos-1",
@@ -1041,6 +1060,9 @@ describe("catalog import", () => {
       quantityAvailable: 8,
       unitCost: 25000,
     });
+    expect(
+      mockedSkuSearch.upsertProductSkuSearchProjection,
+    ).toHaveBeenCalledWith(expect.anything(), "sku-1");
     expect(tables.product.get("product-1")).toMatchObject({
       inventoryCount: 10,
       quantityAvailable: 8,

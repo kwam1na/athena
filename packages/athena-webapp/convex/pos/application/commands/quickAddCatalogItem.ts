@@ -1,5 +1,6 @@
 import type { Doc, Id } from "../../../_generated/dataModel";
 import type { MutationCtx } from "../../../_generated/server";
+import { upsertProductSkuSearchProjection } from "../../../inventory/skuSearch";
 import { recordOperationalEventWithCtx } from "../../../operations/operationalEvents";
 import { toSlug } from "../../../utils";
 
@@ -307,6 +308,7 @@ export async function quickAddCatalogItem(
       await ctx.db.patch("productSku", skuToAttach._id, {
         barcode: lookupCode,
       });
+      await upsertProductSkuSearchProjection(ctx, skuToAttach._id);
     }
 
     const attachedSku = (await ctx.db.get("productSku", skuToAttach._id)) ?? {
@@ -404,6 +406,7 @@ export async function quickAddCatalogItem(
     skuId,
   });
   await ctx.db.patch("productSku", skuId, { sku });
+  await upsertProductSkuSearchProjection(ctx, skuId);
 
   const productSku = (await ctx.db.get("productSku", skuId))!;
 

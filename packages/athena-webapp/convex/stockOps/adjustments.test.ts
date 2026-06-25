@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { ok } from "../../shared/commandResult";
@@ -19,6 +19,8 @@ import {
   assertStockAdjustmentReasonCode,
   calculateCycleCountQuantityDelta,
   getInventoryUnitSummaryWithCtx,
+  listInventorySnapshotForProductSkus,
+  listInventorySnapshotForProductSkusWithCtx,
   hasHighStockAdjustmentVariance,
   listInventorySnapshotWithCtx,
   requiresStockAdjustmentApproval,
@@ -34,8 +36,15 @@ function getSource(relativePath: string) {
   return readFileSync(new URL(relativePath, import.meta.url), "utf8");
 }
 
+function getHandler(definition: unknown) {
+  return (definition as { _handler: Function })._handler;
+}
+
 function createInventorySnapshotQueryCtx() {
   const tables = {
+    athenaUser: new Map<string, Record<string, unknown>>([
+      ["athena-user-1", { _id: "athena-user-1", email: "operator@example.com" }],
+    ]),
     category: new Map<string, Record<string, unknown>>([
       ["category-1", { _id: "category-1", name: "Hair" }],
     ]),
@@ -83,6 +92,17 @@ function createInventorySnapshotQueryCtx() {
       ],
     ]),
     inventoryImportProvisionalSku: new Map<string, Record<string, unknown>>(),
+    organizationMember: new Map<string, Record<string, unknown>>([
+      [
+        "organization-member-1",
+        {
+          _id: "organization-member-1",
+          organizationId: "org-1",
+          role: "pos_only",
+          userId: "athena-user-1",
+        },
+      ],
+    ]),
     posPendingCheckoutItem: new Map<string, Record<string, unknown>>(),
     product: new Map<string, Record<string, unknown>>([
       [
@@ -112,6 +132,13 @@ function createInventorySnapshotQueryCtx() {
         },
       ],
     ]),
+    store: new Map<string, Record<string, unknown>>([
+      ["store-1", { _id: "store-1", organizationId: "org-1" }],
+      ["store-2", { _id: "store-2", organizationId: "org-2" }],
+    ]),
+    users: new Map<string, Record<string, unknown>>([
+      ["auth-user-1", { _id: "auth-user-1", email: "operator@example.com" }],
+    ]),
   };
 
   function indexedQuery(table: keyof typeof tables) {
@@ -127,7 +154,33 @@ function createInventorySnapshotQueryCtx() {
 
     const query = {
       collect: async () => filteredRecords(),
+      first: async () => filteredRecords()[0] ?? null,
       take: async (limit: number) => filteredRecords().slice(0, limit),
+      filter(
+        applyFilter?: (queryBuilder: {
+          and: (...predicates: Array<(row: Record<string, unknown>) => boolean>) => (row: Record<string, unknown>) => boolean;
+          eq: (field: string, value: unknown) => (row: Record<string, unknown>) => boolean;
+          field: (field: string) => string;
+        }) => (row: Record<string, unknown>) => boolean,
+      ) {
+        if (!applyFilter) return query;
+        const predicate = applyFilter({
+          and:
+            (...predicates) =>
+            (row) =>
+              predicates.every((predicate) => predicate(row)),
+          eq: (field, value) => (row) => row[field] === value,
+          field: (field) => field,
+        });
+        const baseFilteredRecords = filteredRecords;
+        const scopedRecords = () => baseFilteredRecords().filter(predicate);
+
+        return {
+          collect: async () => scopedRecords(),
+          first: async () => scopedRecords()[0] ?? null,
+          take: async (limit: number) => scopedRecords().slice(0, limit),
+        };
+      },
       withIndex(
         _index: string,
         applyIndex: (builder: {
@@ -177,10 +230,15 @@ function createInventorySnapshotQueryCtx() {
         return indexedQuery(table);
       },
     },
+    auth: {},
   } as unknown as QueryCtx;
 
   return { ctx, tables };
 }
+
+beforeEach(() => {
+  mockedAuthServer.getAuthUserId.mockResolvedValue("auth-user-1");
+});
 
 function createApprovalDecisionMutationCtx() {
   const tables = {
@@ -671,6 +729,70 @@ describe("stock ops adjustments", () => {
       unavailableSkuCount: 2,
       unavailableUnits: 5,
     });
+  });
+
+  it("hydrates generic SKU search candidates through stock-owned snapshot rows", async () => {
+    const { ctx, tables } = createInventorySnapshotQueryCtx();
+
+    tables.productSku.set("sku-2", {
+      _id: "sku-2",
+      images: [],
+      inventoryCount: 5,
+      productId: "product-1",
+      quantityAvailable: 5,
+      sku: "CW-20",
+      storeId: "store-1",
+    });
+    tables.productSku.set("other-store-sku", {
+      _id: "other-store-sku",
+      images: [],
+      inventoryCount: 100,
+      productId: "product-1",
+      quantityAvailable: 100,
+      sku: "OTHER",
+      storeId: "store-2",
+    });
+
+    const rows = await listInventorySnapshotForProductSkusWithCtx(ctx, {
+      now: 1_000,
+      productSkuIds: [
+        "other-store-sku",
+        "sku-2",
+        "sku-1",
+      ] as Id<"productSku">[],
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(rows.map((row) => row._id)).toEqual(["sku-1", "sku-2"]);
+    expect(rows.find((row) => row._id === "sku-1")).toMatchObject({
+      durableQuantityAvailable: 8,
+      posReservedQuantity: 2,
+      quantityAvailable: 6,
+    });
+  });
+
+  it("requires authenticated store access before hydrating generic SKU search candidates", async () => {
+    const { ctx } = createInventorySnapshotQueryCtx();
+
+    mockedAuthServer.getAuthUserId.mockResolvedValue(null);
+
+    await expect(
+      getHandler(listInventorySnapshotForProductSkus)(ctx, {
+        productSkuIds: ["sku-1"] as Id<"productSku">[],
+        storeId: "store-1" as Id<"store">,
+      }),
+    ).rejects.toThrow("Sign in again to continue.");
+  });
+
+  it("allows POS-only store operators to hydrate generic SKU search candidates", async () => {
+    const { ctx } = createInventorySnapshotQueryCtx();
+
+    const rows = await getHandler(listInventorySnapshotForProductSkus)(ctx, {
+      productSkuIds: ["sku-1"] as Id<"productSku">[],
+      storeId: "store-1" as Id<"store">,
+    });
+
+    expect(rows.map((row: { _id: string }) => row._id)).toEqual(["sku-1"]);
   });
 
   it("labels active checkout reservations without double subtracting availability", async () => {

@@ -1,8 +1,7 @@
 import { mutation, query } from "../_generated/server";
 import { v } from "convex/values";
 import { colorSchema } from "../schemas/inventory";
-
-const entity = "color";
+import { refreshProductSkuSearchForColor } from "./skuSearch";
 
 export const getAll = query({
   args: {
@@ -10,9 +9,9 @@ export const getAll = query({
   },
   handler: async (ctx, args) => {
     const categories = await ctx.db
-      .query(entity)
+      .query("color")
       .filter((q) => q.eq(q.field("storeId"), args.storeId))
-      .collect();
+      .take(1000);
 
     return categories;
   },
@@ -20,40 +19,42 @@ export const getAll = query({
 
 export const getById = query({
   args: {
-    id: v.id(entity),
+    id: v.id("color"),
   },
   handler: async (ctx, args) => {
-    return await ctx.db.get(args.id);
+    return await ctx.db.get("color", args.id);
   },
 });
 
 export const create = mutation({
   args: colorSchema,
   handler: async (ctx, args) => {
-    const id = await ctx.db.insert(entity, args);
+    const id = await ctx.db.insert("color", args);
 
-    return await ctx.db.get(id);
+    return await ctx.db.get("color", id);
   },
 });
 
 export const update = mutation({
   args: {
-    id: v.id(entity),
+    id: v.id("color"),
     name: v.string(),
   },
   handler: async (ctx, args) => {
-    await ctx.db.patch(args.id, { name: args.name });
+    await ctx.db.patch("color", args.id, { name: args.name });
+    await refreshProductSkuSearchForColor(ctx, args.id);
 
-    return await ctx.db.get(args.id);
+    return await ctx.db.get("color", args.id);
   },
 });
 
 export const remove = mutation({
   args: {
-    id: v.id(entity),
+    id: v.id("color"),
   },
   handler: async (ctx, args) => {
-    await ctx.db.delete(args.id);
+    await ctx.db.delete("color", args.id);
+    await refreshProductSkuSearchForColor(ctx, args.id);
 
     return { message: "OK" };
   },
