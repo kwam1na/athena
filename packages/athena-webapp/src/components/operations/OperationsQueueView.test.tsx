@@ -1220,6 +1220,61 @@ describe("OperationsQueueViewContent", () => {
     expect(screen.queryByText(/register closeouts/i)).not.toBeInTheDocument();
   });
 
+  it("hydrates generic SKU search candidates into the stock adjustment workspace", () => {
+    const remoteInventoryItem = {
+      _id: "sku-global" as Id<"productSku">,
+      inventoryCount: 4,
+      productName: "Global Search Wig",
+      quantityAvailable: 4,
+      sku: "GLOBAL-18",
+    };
+
+    mockedHooks.useQuery.mockReset();
+    mockedHooks.useQuery
+      .mockReturnValueOnce({
+        approvalRequests: [],
+        workItems: [],
+      })
+      .mockReturnValueOnce({
+        results: [
+          {
+            productSkuId: remoteInventoryItem._id,
+          },
+        ],
+      })
+      .mockReturnValueOnce([remoteInventoryItem])
+      .mockReturnValueOnce(undefined)
+      .mockReturnValueOnce("skip")
+      .mockReturnValueOnce("skip");
+    mockedHooks.usePaginatedQuery.mockReturnValue({
+      isLoading: false,
+      loadMore: vi.fn(),
+      results: baseProps.inventoryItems,
+      status: "Exhausted",
+    });
+
+    render(
+      <OperationsQueueView
+        activeWorkflow="stock"
+        stockAdjustmentSearch={{
+          mode: "manual",
+          query: "GLOBAL-18",
+        }}
+      />,
+    );
+
+    expect(mockedHooks.useQuery.mock.calls[1]?.[1]).toEqual({
+      limit: 75,
+      query: "GLOBAL-18",
+      storeId: "store-1",
+    });
+    expect(mockedHooks.useQuery.mock.calls[2]?.[1]).toEqual({
+      productSkuIds: ["sku-global"],
+      storeId: "store-1",
+    });
+    expect(screen.getAllByText("Global Search Wig").length).toBeGreaterThan(0);
+  });
+
   it("routes approval decisions without sending a raw Athena user id from the client", async () => {
     const { default: userEvent } = await import("@testing-library/user-event");
     const user = userEvent.setup();
@@ -1348,6 +1403,8 @@ describe("OperationsQueueViewContent", () => {
         workItems: [],
       })
       .mockReturnValueOnce(undefined)
+      .mockReturnValueOnce(undefined)
+      .mockReturnValueOnce(undefined)
       .mockReturnValueOnce(null);
     mockedHooks.usePaginatedQuery.mockReturnValue({
       isLoading: false,
@@ -1364,11 +1421,11 @@ describe("OperationsQueueViewContent", () => {
       />,
     );
 
-    expect(mockedHooks.useQuery.mock.calls[2]?.[1]).toEqual({
+    expect(mockedHooks.useQuery.mock.calls[4]?.[1]).toEqual({
       scopeKey: "__uncategorized",
       storeId: "store-1",
     });
-    expect(mockedHooks.useQuery.mock.calls[3]?.[1]).toEqual({
+    expect(mockedHooks.useQuery.mock.calls[5]?.[1]).toEqual({
       storeId: "store-1",
     });
     await waitFor(() =>
@@ -1407,6 +1464,8 @@ describe("OperationsQueueViewContent", () => {
         workItems: [],
       })
       .mockReturnValueOnce(undefined)
+      .mockReturnValueOnce(undefined)
+      .mockReturnValueOnce(undefined)
       .mockReturnValueOnce(null);
     mockedHooks.usePaginatedQuery.mockReturnValue({
       isLoading: false,
@@ -1424,7 +1483,7 @@ describe("OperationsQueueViewContent", () => {
       />,
     );
 
-    expect(mockedHooks.useQuery.mock.calls[2]?.[1]).toEqual({
+    expect(mockedHooks.useQuery.mock.calls[4]?.[1]).toEqual({
       scopeKey: "POS quick add",
       storeId: "store-1",
     });
@@ -1462,7 +1521,7 @@ describe("OperationsQueueViewContent", () => {
       />,
     );
 
-    expect(mockedHooks.useQuery.mock.calls[2]?.[1]).toBe("skip");
+    expect(mockedHooks.useQuery.mock.calls[4]?.[1]).toBe("skip");
     expect(mockedHooks.useQuery.mock.calls[3]?.[1]).toEqual({
       storeId: "store-1",
     });

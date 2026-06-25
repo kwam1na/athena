@@ -21,8 +21,12 @@ import {
   matchesSkuSearchTerms,
   normalizeSkuSearchQuery,
 } from "~/src/lib/stockOps/skuSearch";
+import type { ProductSkuSearchResultLike } from "~/src/lib/skuSearch/productSkuSearchAdapters";
 import { capitalizeWords, cn } from "~/src/lib/utils";
 import { getProductName } from "~/src/lib/productUtils";
+import { api } from "~/convex/_generated/api";
+import type { Id } from "~/convex/_generated/dataModel";
+import { useQuery } from "convex/react";
 import type { Category, Product, ProductSku, Subcategory } from "~/types";
 
 const ALL_CATEGORY_FILTER_KEY = "all";
@@ -56,6 +60,9 @@ type HomepageProductPickerDialogProps = {
   searchId: string;
   selectLabel: string;
   showCollections?: boolean;
+  skuSearchResults?: ProductSkuSearchResultLike[];
+  isSkuSearchLoading?: boolean;
+  skuSearchStoreId?: Id<"store">;
   subcategories?: Subcategory[];
   title: string;
 };
@@ -75,6 +82,9 @@ export function HomepageProductPickerDialog({
   searchId,
   selectLabel,
   showCollections = false,
+  skuSearchResults,
+  isSkuSearchLoading = false,
+  skuSearchStoreId,
   subcategories = [],
   title,
 }: HomepageProductPickerDialogProps) {
@@ -99,16 +109,42 @@ export function HomepageProductPickerDialog({
     );
   }, [subcategories]);
 
+  const normalizedQuery = normalizeSkuSearchQuery(query);
+  const liveSkuSearchResults = useQuery(
+    api.inventory.skuSearch.searchProductSkus,
+    skuSearchStoreId && normalizedQuery
+      ? {
+          limit: 50,
+          query,
+          storeId: skuSearchStoreId,
+        }
+      : "skip",
+  ) as { results: ProductSkuSearchResultLike[] } | undefined;
+  const hasGenericSkuSearch =
+    Boolean(normalizedQuery) &&
+    (skuSearchResults !== undefined ||
+      isSkuSearchLoading ||
+      Boolean(skuSearchStoreId));
+  const resolvedSkuSearchResults =
+    skuSearchResults ?? liveSkuSearchResults?.results ?? [];
+  const genericSkuSearchProducts = useMemo(
+    () => buildProductsFromGenericSkuSearchResults(resolvedSkuSearchResults),
+    [resolvedSkuSearchResults],
+  );
+  const effectiveProducts = hasGenericSkuSearch
+    ? mergeHomepageProductSearchResults(products ?? [], genericSkuSearchProducts)
+    : (products ?? []);
+
   const skuOptions = useMemo(() => {
-    return (products ?? []).flatMap((product) =>
+    return effectiveProducts.flatMap((product) =>
       product.skus.map((sku) => ({ product, sku })),
     );
-  }, [products]);
+  }, [effectiveProducts]);
 
   const categoryFilterOptions = useMemo(() => {
     const counts = new Map<string, { itemCount: number; label: string }>();
 
-    for (const product of products ?? []) {
+    for (const product of effectiveProducts) {
       const category = categoryById.get(product.categoryId);
       const key = product.categorySlug || category?.slug || product.categoryName;
       if (!key) continue;
@@ -125,10 +161,9 @@ export function HomepageProductPickerDialog({
     return [...counts.entries()]
       .map(([key, value]) => ({ key, ...value }))
       .sort((a, b) => a.label.localeCompare(b.label));
-  }, [categoryById, isSkuSelection, products]);
+  }, [categoryById, effectiveProducts, isSkuSelection]);
 
-  const normalizedQuery = normalizeSkuSearchQuery(query);
-  const productOptions = useMemo(() => products ?? [], [products]);
+  const productOptions = useMemo(() => effectiveProducts, [effectiveProducts]);
   const filteredSkuOptions = skuOptions.filter(({ product, sku }) => {
     const categoryFilterKey = getProductCategoryFilterKey(
       product,
@@ -187,7 +222,11 @@ export function HomepageProductPickerDialog({
     query.trim().length > 0 ||
     availabilityFilter !== "all" ||
     categoryFilter !== ALL_CATEGORY_FILTER_KEY;
-  const isLoading = products === undefined;
+  const isLoading =
+    products === undefined ||
+    (hasGenericSkuSearch &&
+      (isSkuSearchLoading ||
+        (Boolean(skuSearchStoreId) && liveSkuSearchResults === undefined)));
   const isSelecting = pendingSelectionKey !== null;
 
   const handleClearFilters = useCallback(() => {
@@ -776,4 +815,86 @@ function getSkuAvailableUnits(sku: ProductSku) {
   return typeof sku.quantityAvailable === "number"
     ? sku.quantityAvailable
     : sku.inventoryCount;
+}
+
+function buildProductsFromGenericSkuSearchResults(
+  results: readonly ProductSkuSearchResultLike[],
+): Product[] {
+  const productsById = new Map<string, Product>();
+
+  for (const result of results) {
+    if (
+      result.productAvailability !== "live" ||
+      result.productIsVisible === false ||
+      result.skuIsVisible === false ||
+      result.isVisible === false
+    ) {
+      continue;
+    }
+
+    const productKey = String(result.productId);
+    const sku = {
+      _id: result.productSkuId,
+      barcode: result.barcode ?? undefined,
+      colorName: result.colorName,
+      images: result.images,
+      inventoryCount: result.inventoryCount,
+      isVisible: result.skuIsVisible ?? result.isVisible ?? undefined,
+      length: result.length ?? undefined,
+      price: result.price,
+      productCategory: result.categoryName ?? undefined,
+      productId: result.productId,
+      productName: result.productName,
+      quantityAvailable: result.quantityAvailable,
+      size: result.size ?? undefined,
+      sku: result.sku ?? undefined,
+      storeId: result.storeId,
+    } as unknown as ProductSku;
+    const existingProduct = productsById.get(productKey);
+
+    if (existingProduct) {
+      existingProduct.skus.push(sku);
+      continue;
+    }
+
+    productsById.set(productKey, {
+      _id: result.productId,
+      availability: result.productAvailability,
+      categoryId: result.categoryId ?? undefined,
+      categoryName: result.categoryName ?? undefined,
+      categorySlug: result.categorySlug ?? undefined,
+      inventoryCount: result.inventoryCount,
+      isVisible: result.productIsVisible ?? undefined,
+      name: result.productName,
+      skus: [sku],
+      slug: result.productSlug ?? undefined,
+      storeId: result.storeId,
+      subcategoryId: result.subcategoryId ?? undefined,
+      subcategoryName: result.subcategoryName ?? undefined,
+      subcategorySlug: result.subcategorySlug ?? undefined,
+    } as unknown as Product);
+  }
+
+  return Array.from(productsById.values());
+}
+
+function mergeHomepageProductSearchResults(
+  products: Product[],
+  searchProducts: Product[],
+) {
+  if (searchProducts.length === 0) return products;
+
+  const productsById = new Map<Product["_id"], Product>();
+
+  for (const product of products) {
+    productsById.set(product._id, product);
+  }
+
+  for (const product of searchProducts) {
+    if (!productsById.has(product._id)) {
+      productsById.set(product._id, product);
+    }
+  }
+
+  return Array.from(productsById.values());
 }

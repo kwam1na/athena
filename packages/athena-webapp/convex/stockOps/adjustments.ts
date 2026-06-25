@@ -76,6 +76,7 @@ const ACTIVE_PROVISIONAL_IMPORT_BLOCKER_SCAN_LIMIT = 1500;
 const ACTIVE_PENDING_CHECKOUT_BLOCKER_SCAN_LIMIT = 2000;
 const INVENTORY_SNAPSHOT_DEFAULT_LIMIT = 500;
 const INVENTORY_SNAPSHOT_MAX_LIMIT = 750;
+const INVENTORY_SNAPSHOT_SEARCH_LIMIT = 75;
 const INVENTORY_SUMMARY_SKU_LIMIT = 5000;
 const LEGACY_IMPORT_STOCK_ADJUSTMENT_BLOCK_MESSAGE =
   "Legacy import SKUs must be finalized before stock adjustments can update them.";
@@ -734,6 +735,36 @@ export async function listInventorySnapshotWithCtx(
   });
 }
 
+export async function listInventorySnapshotForProductSkusWithCtx(
+  ctx: QueryCtx,
+  args: {
+    now?: number;
+    productSkuIds: Id<"productSku">[];
+    storeId: Id<"store">;
+  },
+) {
+  const now = args.now ?? Date.now();
+  const productSkuIds = Array.from(new Set(args.productSkuIds)).slice(
+    0,
+    INVENTORY_SNAPSHOT_SEARCH_LIMIT,
+  );
+  const productSkuRecords = await Promise.all(
+    productSkuIds.map((productSkuId) => ctx.db.get("productSku", productSkuId)),
+  );
+  const productSkus = productSkuRecords.filter(
+    (
+      productSku,
+    ): productSku is NonNullable<(typeof productSkuRecords)[number]> =>
+      productSku !== null && productSku.storeId === args.storeId,
+  );
+
+  return buildInventorySnapshotRowsForProductSkusWithCtx(ctx, {
+    now,
+    productSkus,
+    storeId: args.storeId,
+  });
+}
+
 export async function getInventoryUnitSummaryWithCtx(
   ctx: QueryCtx,
   args: {
@@ -960,6 +991,24 @@ async function buildInventorySnapshotRowsForProductSkusWithCtx(
   });
 }
 
+async function requireInventorySnapshotForProductSkusAccess(
+  ctx: QueryCtx,
+  storeId: Id<"store">,
+) {
+  const store = await ctx.db.get("store", storeId);
+  if (!store) {
+    throw new Error("Store not found.");
+  }
+
+  const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+  await requireOrganizationMemberRoleWithCtx(ctx, {
+    allowedRoles: ["full_admin", "pos_only"],
+    failureMessage: "You do not have access to view stock inventory.",
+    organizationId: store.organizationId,
+    userId: athenaUser._id,
+  });
+}
+
 export const listInventorySnapshot = query({
   args: {
     limit: v.optional(v.number()),
@@ -967,6 +1016,18 @@ export const listInventorySnapshot = query({
   },
   handler: async (ctx, args) => {
     return listInventorySnapshotWithCtx(ctx, args);
+  },
+});
+
+export const listInventorySnapshotForProductSkus = query({
+  args: {
+    productSkuIds: v.array(v.id("productSku")),
+    storeId: v.id("store"),
+  },
+  handler: async (ctx, args) => {
+    await requireInventorySnapshotForProductSkusAccess(ctx, args.storeId);
+
+    return listInventorySnapshotForProductSkusWithCtx(ctx, args);
   },
 });
 

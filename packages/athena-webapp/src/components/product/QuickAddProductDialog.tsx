@@ -13,10 +13,14 @@ import { Switch } from "@/components/ui/switch";
 import { toOperatorMessage } from "@/lib/errors/operatorMessages";
 import { capitalizeWords, cn } from "@/lib/utils";
 import { parseDisplayAmountInput } from "@/lib/pos/displayAmounts";
+import { api } from "~/convex/_generated/api";
+import type { Id } from "~/convex/_generated/dataModel";
 import {
   matchesSkuSearchTerms,
   normalizeSkuSearchQuery,
 } from "@/lib/stockOps/skuSearch";
+import type { ProductSkuSearchResultLike } from "@/lib/skuSearch/productSkuSearchAdapters";
+import { useQuery } from "convex/react";
 import {
   BrowserMultiFormatReader,
   type IScannerControls,
@@ -92,6 +96,9 @@ type QuickAddProductDialogProps = {
     payload: QuickAddAttachBarcodePayload,
   ) => Promise<boolean | void> | boolean | void;
   existingSkuOptions?: QuickAddExistingSkuOption[];
+  skuSearchResults?: ProductSkuSearchResultLike[];
+  isSkuSearchLoading?: boolean;
+  skuSearchStoreId?: Id<"store">;
   initialName?: string;
   initialLookupCode?: string;
   lockProductName?: boolean;
@@ -157,6 +164,23 @@ function getExistingSkuMetadata(option: QuickAddExistingSkuOption) {
   ]
     .map((value) => value?.trim())
     .filter((value): value is string => Boolean(value));
+}
+
+function buildQuickAddExistingSkuOptionFromSearchResult(
+  result: ProductSkuSearchResultLike,
+): QuickAddExistingSkuOption {
+  return {
+    barcode: result.barcode ?? undefined,
+    category: result.categoryName ?? undefined,
+    name: result.productName,
+    productSkuId: String(result.productSkuId),
+    sku: result.sku?.trim() || String(result.productSkuId),
+    variantAttributes: [
+      result.colorName,
+      result.size,
+      result.length === null ? undefined : String(result.length),
+    ].filter((value): value is string => Boolean(value?.trim())),
+  };
 }
 
 function QuickAddBarcodeScannerDialog({
@@ -332,6 +356,9 @@ export function QuickAddProductDialog({
   onSubmit,
   onAttachBarcode,
   existingSkuOptions = [],
+  skuSearchResults,
+  isSkuSearchLoading = false,
+  skuSearchStoreId,
   initialName = "",
   initialLookupCode = "",
   lockProductName = false,
@@ -363,6 +390,17 @@ export function QuickAddProductDialog({
     string | null
   >(null);
   const nextQuickAddVariantIdRef = useRef(1);
+  const normalizedExistingSkuQuery = normalizeSkuSearchQuery(existingSkuQuery);
+  const liveSkuSearchResults = useQuery(
+    api.inventory.skuSearch.searchProductSkus,
+    skuSearchStoreId && normalizedExistingSkuQuery
+      ? {
+          limit: 20,
+          query: existingSkuQuery,
+          storeId: skuSearchStoreId,
+        }
+      : "skip",
+  ) as { results: ProductSkuSearchResultLike[] } | undefined;
 
   const resetQuickAddForm = useCallback(() => {
     setQuickAddName(initialName);
@@ -588,9 +626,31 @@ export function QuickAddProductDialog({
       !isAddingVariant,
   );
   const shouldShowBarcodeRecovery = canAttachBarcode && !isAddingVariant;
+  const hasAsyncExistingSkuSearch =
+    skuSearchResults !== undefined ||
+    isSkuSearchLoading ||
+    liveSkuSearchResults !== undefined ||
+    (Boolean(skuSearchStoreId) && existingSkuOptions.length === 0);
+  const resolvedSkuSearchResults =
+    skuSearchResults ?? liveSkuSearchResults?.results ?? [];
+  const resolvedSkuSearchLoading =
+    isSkuSearchLoading ||
+    (Boolean(skuSearchStoreId) &&
+      Boolean(normalizedExistingSkuQuery) &&
+      liveSkuSearchResults === undefined &&
+      existingSkuOptions.length === 0);
+  const searchableExistingSkuOptions = useMemo(() => {
+    if (!hasAsyncExistingSkuSearch) {
+      return existingSkuOptions;
+    }
+
+    return resolvedSkuSearchResults.map(
+      buildQuickAddExistingSkuOptionFromSearchResult,
+    );
+  }, [existingSkuOptions, hasAsyncExistingSkuSearch, resolvedSkuSearchResults]);
   const matchingExistingSkus = useMemo(() => {
     const normalizedQuery = normalizeSkuSearchQuery(existingSkuQuery);
-    const unbarcodedOptions = existingSkuOptions.filter(
+    const unbarcodedOptions = searchableExistingSkuOptions.filter(
       (option) => !option.barcode,
     );
 
@@ -612,9 +672,9 @@ export function QuickAddProductDialog({
         );
       })
       .slice(0, 6);
-  }, [existingSkuOptions, existingSkuQuery]);
+  }, [existingSkuQuery, searchableExistingSkuOptions]);
 
-  const selectedExistingSku = existingSkuOptions.find(
+  const selectedExistingSku = searchableExistingSkuOptions.find(
     (option) => option.productSkuId === selectedExistingSkuId,
   );
 
@@ -747,7 +807,11 @@ export function QuickAddProductDialog({
                     />
                   </div>
                   <div className="max-h-64 space-y-2 overflow-y-auto">
-                    {existingSkuQuery.trim() && matchingExistingSkus.length ? (
+                    {existingSkuQuery.trim() && resolvedSkuSearchLoading ? (
+                      <p className="rounded-md border border-dashed border-border px-2.5 py-2 text-xs text-muted-foreground">
+                        Searching SKUs...
+                      </p>
+                    ) : existingSkuQuery.trim() && matchingExistingSkus.length ? (
                       matchingExistingSkus.map((option) => {
                         const isSelected =
                           selectedExistingSkuId === option.productSkuId;

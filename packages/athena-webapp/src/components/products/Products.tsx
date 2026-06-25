@@ -30,6 +30,11 @@ import {
   matchesSkuSearchTerms,
   normalizeSkuSearchQuery,
 } from "~/src/lib/stockOps/skuSearch";
+import type { ProductSkuSearchResultLike } from "~/src/lib/skuSearch/productSkuSearchAdapters";
+import {
+  buildAdminSkuSearchOptions,
+  groupAdminSkuSearchOptionsByProduct,
+} from "~/src/lib/skuSearch/productSkuSearchAdapters";
 import type { Product } from "~/types";
 import type { Id } from "~/convex/_generated/dataModel";
 import { api } from "~/convex/_generated/api";
@@ -69,6 +74,18 @@ export default function Products() {
     api.stockOps.adjustments.listInventorySnapshot,
     activeStore?._id ? { storeId: activeStore._id } : "skip",
   ) as InventorySnapshotItem[] | undefined;
+  const skuSearchResults = useQuery(
+    api.inventory.skuSearch.searchProductSkus,
+    activeStore?._id && searchValue.trim()
+      ? { limit: 50, query: searchValue, storeId: activeStore._id }
+      : "skip",
+  ) as
+    | {
+        candidateOverflow: boolean;
+        results: ProductSkuSearchResultLike[];
+        truncated: boolean;
+      }
+    | undefined;
 
   const categorySlugById = useMemo(() => {
     return new Map(
@@ -84,12 +101,27 @@ export default function Products() {
       ),
     [activeStore?._id, categories, inventoryItems],
   );
+  const searchProducts = useMemo(
+    () =>
+      buildProductsFromSkuSearchResults(
+        skuSearchResults?.results ?? [],
+        activeStore?._id,
+      ),
+    [activeStore?._id, skuSearchResults?.results],
+  );
+  const searchProductIds = useMemo(
+    () => new Set(searchProducts.map((product) => product._id)),
+    [searchProducts],
+  );
   const filteredProducts = useMemo(() => {
     if (!inventoryItems) return null;
 
     const normalizedQuery = normalizeSkuSearchQuery(searchValue);
+    const sourceProducts = normalizedQuery
+      ? mergeProductSearchResults(products, searchProducts)
+      : products;
 
-    return products.filter((product) => {
+    return sourceProducts.filter((product) => {
       if (!productMatchesAvailabilityFilter(product, availabilityFilter)) {
         return false;
       }
@@ -100,7 +132,11 @@ export default function Products() {
         return false;
       }
 
-      return productMatchesCatalogSearch(product, normalizedQuery);
+      return (
+        !normalizedQuery ||
+        searchProductIds.has(product._id) ||
+        productMatchesCatalogSearch(product, normalizedQuery)
+      );
     });
   }, [
     availabilityFilter,
@@ -108,6 +144,8 @@ export default function Products() {
     categorySlugById,
     inventoryItems,
     products,
+    searchProductIds,
+    searchProducts,
     searchValue,
   ]);
 
@@ -496,6 +534,7 @@ export default function Products() {
         onSubmit={handleQuickAddSubmit}
         initialName={quickAddInitialName}
         initialLookupCode={quickAddInitialLookupCode}
+        skuSearchStoreId={activeStore?._id}
         description="Add a sellable product without opening the full product editor."
         submitErrorMessage="Could not quick add this product. Try again."
       />
@@ -626,6 +665,84 @@ function buildProductsFromInventorySnapshot(
       subcategoryName: item.productSubcategory ?? undefined,
       subcategorySlug: item.productSubcategorySlug ?? undefined,
     });
+  }
+
+  return [...productsById.values()].sort((left, right) =>
+    left.name.localeCompare(right.name),
+  );
+}
+
+function buildProductsFromSkuSearchResults(
+  results: ProductSkuSearchResultLike[],
+  storeId: Id<"store"> | undefined,
+) {
+  return groupAdminSkuSearchOptionsByProduct(
+    buildAdminSkuSearchOptions(results),
+  ).map((group) => {
+    const firstOption = group.skus[0];
+    const first = firstOption.searchResult;
+    const skus = group.skus.map((option) => ({
+      _id: option.productSkuId,
+      _creationTime: first.match.rank,
+      barcode: option.barcode ?? undefined,
+      colorName: option.colorName,
+      images: option.imageUrl ? [option.imageUrl] : [],
+      inventoryCount: option.searchResult.inventoryCount,
+      length: option.searchResult.length ?? undefined,
+      netPrice: undefined,
+      price: option.searchResult.price,
+      productCategory: option.categoryName ?? undefined,
+      productId: option.productId,
+      productName: option.productName,
+      quantityAvailable: option.quantityAvailable,
+      size: option.searchResult.size ?? undefined,
+      sku: option.sku ?? undefined,
+      storeId: option.searchResult.storeId,
+    }));
+
+    return {
+      _id: group.productId,
+      _creationTime: 0,
+      availability: first.productAvailability,
+      categoryId: first.categoryId ?? ("" as Id<"category">),
+      categoryName: first.categoryName ?? undefined,
+      categorySlug: first.categorySlug ?? undefined,
+      createdByUserId: "" as Id<"athenaUser">,
+      currency: "GHS",
+      inventoryCount: skus.reduce((total, sku) => total + sku.inventoryCount, 0),
+      isVisible: first.productIsVisible ?? true,
+      name: group.productName,
+      organizationId: "" as Id<"organization">,
+      quantityAvailable: skus.reduce(
+        (total, sku) => total + sku.quantityAvailable,
+        0,
+      ),
+      skus,
+      slug: group.productSlug ?? String(group.productId),
+      storeId: storeId ?? first.storeId,
+      subcategoryId: first.subcategoryId ?? ("" as Id<"subcategory">),
+      subcategoryName: first.subcategoryName ?? undefined,
+      subcategorySlug: first.subcategorySlug ?? undefined,
+    } satisfies Product;
+  });
+}
+
+function mergeProductSearchResults(
+  products: Product[],
+  searchProducts: Product[],
+) {
+  if (searchProducts.length === 0) return products;
+
+  const productsById = new Map<Product["_id"], Product>();
+
+  for (const product of products) {
+    productsById.set(product._id, product);
+  }
+
+  for (const product of searchProducts) {
+    if (!productsById.has(product._id)) {
+      productsById.set(product._id, product);
+    }
   }
 
   return [...productsById.values()].sort((left, right) =>

@@ -21,6 +21,7 @@ import { recordOperationalEventWithCtx } from "../operations/operationalEvents";
 import { recordSkuActivityEventWithCtx } from "../operations/skuActivity";
 import { toSlug } from "../utils";
 import { ok, userError, type CommandResult } from "../../shared/commandResult";
+import { upsertProductSkuSearchProjection } from "./skuSearch";
 
 const DEFAULT_CATEGORY_NAME = "Legacy import";
 const DEFAULT_SUBCATEGORY_NAME = "Imported inventory";
@@ -359,12 +360,14 @@ export async function importInventoryRowsWithCtx(
         existingSku._id,
         buildSkuPatch(row, product._id, finalTrustedQuantity),
       );
+      await upsertProductSkuSearchProjection(ctx, existingSku._id);
       summary.skusUpdated += 1;
     } else {
-      await ctx.db.insert(
+      const productSkuId = await ctx.db.insert(
         "productSku",
         buildSkuInsert(row, product._id, args.storeId, finalTrustedQuantity),
       );
+      await upsertProductSkuSearchProjection(ctx, productSkuId);
       summary.skusCreated += 1;
     }
 
@@ -1120,6 +1123,7 @@ export async function finalizeTrustedInventoryFromProductPageWithCtx(
   } = validation.data;
 
   await ctx.db.patch("productSku", normalizedArgs.productSkuId, productSkuPatch);
+  await upsertProductSkuSearchProjection(ctx, normalizedArgs.productSkuId);
 
   let inventoryMovementId: Id<"inventoryMovement"> | undefined;
   const stockDelta = normalizedArgs.reviewedInventoryCount - previousInventoryCount;
@@ -2089,6 +2093,7 @@ async function findOrCreateProvisionalCatalogIdentity(
       storeId: args.storeId,
     }),
   });
+  await upsertProductSkuSearchProjection(ctx, productSkuId);
   const productSku = await ctx.db.get("productSku", productSkuId);
   if (!productSku) {
     throw new Error(`Row ${args.row.rowNumber}: SKU could not be loaded.`);

@@ -3,10 +3,7 @@ import type { ComponentType } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Id } from "~/convex/_generated/dataModel";
-import {
-  Route,
-  SkuActivityRouteShell,
-} from "./sku-activity";
+import { Route, SkuActivityRouteShell } from "./sku-activity";
 
 const mockedHooks = vi.hoisted(() => ({
   useAuth: vi.fn(),
@@ -24,6 +21,7 @@ const mockedApi = vi.hoisted(() => ({
   getSkuActivityForProductSku: "getSkuActivityForProductSku",
   getOrganizations: "getOrganizations",
   getStores: "getStores",
+  searchProductSkus: "searchProductSkus",
 }));
 
 vi.mock("@tanstack/react-router", () => ({
@@ -60,6 +58,9 @@ vi.mock("~/convex/_generated/api", () => ({
     inventory: {
       organizations: {
         getAll: mockedApi.getOrganizations,
+      },
+      skuSearch: {
+        searchProductSkus: mockedApi.searchProductSkus,
       },
       stores: {
         getAll: mockedApi.getStores,
@@ -105,6 +106,17 @@ describe("SkuActivityRouteShell", () => {
         return [{ _id: "store-1" as Id<"store">, slug: "osu" }];
       }
 
+      if (query === mockedApi.searchProductSkus) {
+        return {
+          results: [
+            {
+              productSkuId: "sku-id-1" as Id<"productSku">,
+              sku: "KK38-X3C-MQE",
+            },
+          ],
+        };
+      }
+
       if (query === mockedApi.getSkuActivityForProductSku) {
         return null;
       }
@@ -146,6 +158,48 @@ describe("SkuActivityRouteShell", () => {
     expect(mockedHooks.useQuery.mock.calls.map(([, args]) => args)).toEqual([
       { userId: "user-1" },
       { organizationId: "org-1" },
+      { limit: 5, query: "KK38-X3C-MQE", storeId: "store-1" },
+      { productSkuId: "sku-id-1", sku: undefined, storeId: "store-1" },
+    ]);
+  });
+
+  it("falls back to the direct SKU activity lookup when catalog search has no match", () => {
+    mockedHooks.useQuery.mockImplementation((query, args) => {
+      if (args === "skip") {
+        return undefined;
+      }
+
+      if (query === mockedApi.getOrganizations) {
+        return [{ _id: "org-1", slug: "wigclub" }];
+      }
+
+      if (query === mockedApi.getStores) {
+        return [{ _id: "store-1" as Id<"store">, slug: "osu" }];
+      }
+
+      if (query === mockedApi.searchProductSkus) {
+        return { results: [] };
+      }
+
+      if (query === mockedApi.getSkuActivityForProductSku) {
+        return null;
+      }
+
+      return undefined;
+    });
+
+    render(
+      <SkuActivityRouteShell
+        orgUrlSlug="wigclub"
+        sku="KK38-X3C-MQE"
+        storeUrlSlug="osu"
+      />,
+    );
+
+    expect(mockedHooks.useQuery.mock.calls.map(([, args]) => args)).toEqual([
+      { userId: "user-1" },
+      { organizationId: "org-1" },
+      { limit: 5, query: "KK38-X3C-MQE", storeId: "store-1" },
       { productSkuId: undefined, sku: "KK38-X3C-MQE", storeId: "store-1" },
     ]);
   });
@@ -164,9 +218,7 @@ describe("SkuActivityRouteShell", () => {
       />,
     );
 
-    expect(
-      screen.getByRole("button", { name: "Go back" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Go back" })).toBeInTheDocument();
   });
 });
 

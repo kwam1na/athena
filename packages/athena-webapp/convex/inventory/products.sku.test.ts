@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
@@ -10,16 +10,28 @@ import {
   generateUniqueBarcode,
   getAll,
   getByIdOrSlug,
+  removeAllProductsForStore,
+  removeSku,
   unarchive,
+  update,
   updateSku,
 } from "./products";
 
 const mocks = vi.hoisted(() => ({
+  refreshProductSkuSearchForProduct: vi.fn(),
   requireStoreFullAdminAccess: vi.fn(),
+  removeProductSkuSearchProjection: vi.fn(),
+  upsertProductSkuSearchProjection: vi.fn(),
 }));
 
 vi.mock("../stockOps/access", () => ({
   requireStoreFullAdminAccess: mocks.requireStoreFullAdminAccess,
+}));
+
+vi.mock("./skuSearch", () => ({
+  refreshProductSkuSearchForProduct: mocks.refreshProductSkuSearchForProduct,
+  removeProductSkuSearchProjection: mocks.removeProductSkuSearchProjection,
+  upsertProductSkuSearchProjection: mocks.upsertProductSkuSearchProjection,
 }));
 
 type TableName =
@@ -215,6 +227,13 @@ function createProductsQueryCtx(seed: Partial<Record<TableName, Row[]>>) {
 }
 
 describe("inventory SKU generation", () => {
+  beforeEach(() => {
+    mocks.refreshProductSkuSearchForProduct.mockReset();
+    mocks.removeProductSkuSearchProjection.mockReset();
+    mocks.requireStoreFullAdminAccess.mockReset();
+    mocks.upsertProductSkuSearchProjection.mockReset();
+  });
+
   it("generates a standard SKU when createSku receives an empty SKU", async () => {
     const { ctx, tables } = createSkuMutationCtx({
       product: [
@@ -240,6 +259,10 @@ describe("inventory SKU generation", () => {
     expect(result.sku).not.toBe("TEMP_SKU");
     expect(result.sku).not.toBe("   ");
     expect(Array.from(tables.productSku.values())[0].sku).toBe(result.sku);
+    expect(mocks.upsertProductSkuSearchProjection).toHaveBeenCalledWith(
+      ctx,
+      result._id,
+    );
   });
 
   it("regenerates a standard SKU when updateSku receives an empty SKU", async () => {
@@ -271,6 +294,64 @@ describe("inventory SKU generation", () => {
       "productSku001",
       expect.objectContaining({ sku: result.sku }),
     );
+    expect(mocks.upsertProductSkuSearchProjection).toHaveBeenCalledWith(
+      ctx,
+      "productSku001",
+    );
+  });
+
+  it("updates search projection lookup data after generating a barcode", async () => {
+    const { ctx } = createSkuMutationCtx({
+      productSku: [
+        {
+          _id: "productSku001",
+          inventoryCount: 1,
+          price: 1000,
+          productId: "product001",
+          quantityAvailable: 1,
+          sku: "SKU-1",
+          storeId: "storezzzz",
+        },
+      ],
+    });
+
+    const result = await getHandler(generateUniqueBarcode)(ctx, {
+      productId: "product001" as Id<"product">,
+      skuId: "productSku001" as Id<"productSku">,
+      storeId: "storezzzz" as Id<"store">,
+    });
+
+    expect(result.success).toBe(true);
+    expect(mocks.upsertProductSkuSearchProjection).toHaveBeenCalledWith(
+      ctx,
+      "productSku001",
+    );
+  });
+
+  it("removes search projections before deleting SKUs", async () => {
+    const { ctx, tables } = createSkuMutationCtx({
+      productSku: [
+        {
+          _id: "productSku001",
+          inventoryCount: 1,
+          price: 1000,
+          productId: "product001",
+          quantityAvailable: 1,
+          sku: "SKU-1",
+          storeId: "storezzzz",
+        },
+      ],
+    });
+
+    await getHandler(removeSku)(ctx, {
+      id: "productSku001" as Id<"productSku">,
+    });
+
+    expect(mocks.removeProductSkuSearchProjection).toHaveBeenCalledWith(
+      ctx,
+      "productSku001",
+    );
+    expect(tables.productSku.has("productSku001")).toBe(false);
   });
 });
 
@@ -306,6 +387,10 @@ describe("product archiving", () => {
       availability: "archived",
     });
     expect(deleteSpy).not.toHaveBeenCalled();
+    expect(mocks.refreshProductSkuSearchForProduct).toHaveBeenCalledWith(
+      ctx,
+      "product001",
+    );
   });
 
   it("unarchives a product with store admin access", async () => {
@@ -337,6 +422,33 @@ describe("product archiving", () => {
     expect(tables.product.get("product001")).toMatchObject({
       availability: "live",
     });
+    expect(mocks.refreshProductSkuSearchForProduct).toHaveBeenCalledWith(
+      ctx,
+      "product001",
+    );
+  });
+
+  it("refreshes search projections when product metadata changes", async () => {
+    const { ctx } = createSkuMutationCtx({
+      product: [
+        {
+          _id: "product001",
+          availability: "live",
+          name: "Old name",
+          storeId: "storezzzz",
+        },
+      ],
+    });
+
+    await getHandler(update)(ctx, {
+      id: "product001" as Id<"product">,
+      name: "New name",
+    });
+
+    expect(mocks.refreshProductSkuSearchForProduct).toHaveBeenCalledWith(
+      ctx,
+      "product001",
+    );
   });
 });
 

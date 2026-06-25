@@ -3,6 +3,7 @@ import { mutation, query } from "../_generated/server";
 import { v } from "convex/values";
 import { categorySchema } from "../schemas/inventory";
 import { Id } from "../_generated/dataModel";
+import { refreshProductSkuSearchForCategory } from "./skuSearch";
 
 const entity = "category";
 
@@ -108,6 +109,7 @@ export const update = mutation({
     }
 
     await ctx.db.patch("category", args.id, patch);
+    await refreshProductSkuSearchForCategory(ctx, args.id);
 
     return await ctx.db.get("category", args.id);
   },
@@ -119,6 +121,7 @@ export const remove = mutation({
   },
   handler: async (ctx, args) => {
     await ctx.db.delete("category", args.id);
+    await refreshProductSkuSearchForCategory(ctx, args.id);
 
     return { message: "OK" };
   },

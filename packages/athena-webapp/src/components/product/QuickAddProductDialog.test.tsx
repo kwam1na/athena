@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { QuickAddProductDialog } from "./QuickAddProductDialog";
+import type { ProductSkuSearchResultLike } from "@/lib/skuSearch/productSkuSearchAdapters";
 
 class ResizeObserverStub {
   observe() {}
@@ -27,6 +28,8 @@ function renderQuickAddDialog(input?: {
   onOpenChange?: ReturnType<typeof vi.fn>;
   onAttachBarcode?: ReturnType<typeof vi.fn>;
   initialName?: string;
+  skuSearchResults?: ProductSkuSearchResultLike[];
+  isSkuSearchLoading?: boolean;
 }) {
   const onSubmit = input?.onSubmit ?? vi.fn(async () => true);
   const onOpenChange = input?.onOpenChange ?? vi.fn();
@@ -66,12 +69,51 @@ function renderQuickAddDialog(input?: {
           variantAttributes: ["Natural black", "20"],
         },
       ]}
+      skuSearchResults={input?.skuSearchResults}
+      isSkuSearchLoading={input?.isSkuSearchLoading}
       initialName={input?.initialName ?? "Quick item"}
       initialLookupCode="999999999999"
     />,
   );
 
   return { onOpenChange, onSubmit };
+}
+
+function buildSkuSearchResult(
+  overrides: Partial<ProductSkuSearchResultLike> = {},
+): ProductSkuSearchResultLike {
+  return {
+    barcode: null,
+    categoryName: "Extensions",
+    categoryId: "category-extensions" as ProductSkuSearchResultLike["categoryId"],
+    categorySlug: "extensions",
+    colorName: "Natural black",
+    images: [],
+    inventoryCount: 8,
+    isVisible: true,
+    length: 18,
+    match: {
+      kind: "text",
+      matchedValue: "body wave",
+      rank: 1,
+    },
+    price: 15_000,
+    productAvailability: "live",
+    productId: "product-async" as ProductSkuSearchResultLike["productId"],
+    productIsVisible: true,
+    productName: "Body Wave Closure",
+    productSkuId: "sku-async" as ProductSkuSearchResultLike["productSkuId"],
+    productSlug: "body-wave-closure",
+    quantityAvailable: 8,
+    size: "Medium",
+    sku: "BWC-18",
+    skuIsVisible: true,
+    storeId: "store-1" as ProductSkuSearchResultLike["storeId"],
+    subcategoryName: "Closures",
+    subcategoryId: "subcategory-closures" as ProductSkuSearchResultLike["subcategoryId"],
+    subcategorySlug: "closures",
+    ...overrides,
+  };
 }
 
 describe("QuickAddProductDialog", () => {
@@ -302,5 +344,58 @@ describe("QuickAddProductDialog", () => {
     expect(
       screen.queryByRole("button", { name: /body wave bundle/i }),
     ).not.toBeInTheDocument();
+  });
+
+  it("uses async generic SKU search results for barcode recovery when provided", async () => {
+    const user = userEvent.setup();
+    const onAttachBarcode = vi.fn(async () => true);
+    renderQuickAddDialog({
+      initialName: "",
+      onAttachBarcode,
+      skuSearchResults: [
+        buildSkuSearchResult(),
+        buildSkuSearchResult({
+          barcode: "123456789012",
+          productName: "Already Barcoded",
+          productSkuId: "sku-barcoded" as ProductSkuSearchResultLike["productSkuId"],
+          sku: "BARCODED-1",
+        }),
+      ],
+    });
+
+    await user.type(screen.getByLabelText(/search existing sku/i), "closure");
+
+    expect(
+      screen.getByRole("button", { name: /body wave closure/i }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Already Barcoded")).not.toBeInTheDocument();
+    expect(screen.queryByText("Amin Uh")).not.toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: /body wave closure/i }),
+    );
+    await user.click(screen.getByRole("button", { name: /attach barcode/i }));
+
+    await waitFor(() =>
+      expect(onAttachBarcode).toHaveBeenCalledWith({
+        lookupCode: "999999999999",
+        productSkuId: "sku-async",
+      }),
+    );
+  });
+
+  it("shows async generic SKU search loading without falling back to local options", async () => {
+    const user = userEvent.setup();
+    renderQuickAddDialog({
+      initialName: "",
+      isSkuSearchLoading: true,
+      onAttachBarcode: vi.fn(async () => true),
+      skuSearchResults: [],
+    });
+
+    await user.type(screen.getByLabelText(/search existing sku/i), "amin");
+
+    expect(screen.getByText("Searching SKUs...")).toBeInTheDocument();
+    expect(screen.queryByText("Amin Uh")).not.toBeInTheDocument();
   });
 });

@@ -1,6 +1,7 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Id } from "~/convex/_generated/dataModel";
+import type { ProductSkuSearchResultLike } from "@/lib/skuSearch/productSkuSearchAdapters";
 import { ProcurementView, ProcurementViewContent } from "./ProcurementView";
 
 const mockedHooks = vi.hoisted(() => ({
@@ -285,6 +286,35 @@ function makeRecommendation(index: number): typeof exposedRecommendation {
   };
 }
 
+function makeProductSkuSearchResult(
+  overrides: Partial<ProductSkuSearchResultLike> = {},
+): ProductSkuSearchResultLike {
+  return {
+    barcode: "BAR-CLIP-01",
+    categoryName: "Accessories",
+    colorName: "Black",
+    images: [],
+    inventoryCount: 12,
+    isVisible: true,
+    length: null,
+    match: { kind: "text", matchedValue: "clip", rank: 3 },
+    price: 2500,
+    productAvailability: "live",
+    productId: "product-catalog-only" as Id<"product">,
+    productIsVisible: true,
+    productName: "Sectioning Clips",
+    productSkuId: "sku-catalog-only" as Id<"productSku">,
+    productSlug: "sectioning-clips",
+    quantityAvailable: 12,
+    size: null,
+    sku: "CLIP-01",
+    skuIsVisible: true,
+    storeId: "store-1" as Id<"store">,
+    subcategoryName: "Tools",
+    ...overrides,
+  };
+}
+
 function installMutationMocks() {
   let mutationCallIndex = 0;
 
@@ -508,6 +538,35 @@ describe("ProcurementViewContent", () => {
 
     expect(screen.getByText("Closure Wig")).toBeInTheDocument();
     expect(screen.queryByText("Lace Adhesive")).not.toBeInTheDocument();
+  });
+
+  it("keeps procurement rows searchable by generic SKU search and separates catalog-only matches", () => {
+    render(
+      <ProcurementViewContent
+        {...baseProps}
+        productSkuSearchResults={[
+          makeProductSkuSearchResult({
+            productName: "Closure Wig",
+            productSkuId: "sku-1" as Id<"productSku">,
+            sku: "CW-18",
+          }),
+          makeProductSkuSearchResult(),
+        ]}
+        query="clip"
+      />,
+    );
+
+    expect(screen.getByText("Closure Wig")).toBeInTheDocument();
+    expect(
+      screen.getByText("Catalog matches without procurement actions"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Sectioning Clips")).toBeInTheDocument();
+    expect(screen.getByText("No procurement action")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Showing 1 of 2 stock items. 1 catalog match has no procurement action.",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("reports procurement search changes for route state", async () => {
@@ -1081,9 +1140,7 @@ describe("ProcurementViewContent", () => {
       .getByText("Active vendors")
       .closest(".rounded-lg") as HTMLElement;
 
-    expect(
-      within(activeVendorsMetric).getByText("2"),
-    ).toBeInTheDocument();
+    expect(within(activeVendorsMetric).getByText("2")).toBeInTheDocument();
     expect(screen.getByText("Open purchase orders")).toBeInTheDocument();
     expect(
       screen
@@ -1238,9 +1295,7 @@ describe("ProcurementViewContent", () => {
   });
 
   it("shows only the procurement header while procurement data loads", () => {
-    render(
-      <ProcurementViewContent {...baseProps} isLoadingProcurement />,
-    );
+    render(<ProcurementViewContent {...baseProps} isLoadingProcurement />);
 
     expect(screen.getByText("Procurement")).toBeInTheDocument();
     expect(
@@ -1281,6 +1336,7 @@ describe("ProcurementViewContent", () => {
       "skip",
       "skip",
       "skip",
+      "skip",
     ]);
   });
 
@@ -1307,6 +1363,7 @@ describe("ProcurementViewContent", () => {
       "skip",
       "skip",
       "skip",
+      "skip",
     ]);
   });
 
@@ -1324,6 +1381,7 @@ describe("ProcurementViewContent", () => {
       { storeId: "store-1" },
       { storeId: "store-1" },
       { status: "active", storeId: "store-1" },
+      "skip",
       "skip",
     ]);
   });

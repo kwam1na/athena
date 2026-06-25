@@ -100,6 +100,8 @@ describe("OperationsQueueView auth readiness", () => {
       "skip",
       "skip",
       "skip",
+      "skip",
+      "skip",
     ]);
     expect(mockedHooks.usePaginatedQuery.mock.calls[0]?.[1]).toBe("skip");
   });
@@ -119,6 +121,8 @@ describe("OperationsQueueView auth readiness", () => {
       "skip",
       "skip",
       "skip",
+      "skip",
+      "skip",
     ]);
     expect(mockedHooks.usePaginatedQuery.mock.calls[0]?.[1]).toBe("skip");
   });
@@ -132,9 +136,13 @@ describe("OperationsQueueView auth readiness", () => {
 
     expect(mockedHooks.useQuery.mock.calls.map(([, args]) => args)).toEqual([
       { storeId: "store-1" },
+      "skip",
+      "skip",
       { storeId: "store-1" },
       "skip",
       { storeId: "store-1" },
+      "skip",
+      "skip",
     ]);
     expect(mockedHooks.usePaginatedQuery.mock.calls[0]?.[1]).toEqual({
       storeId: "store-1",
@@ -169,9 +177,13 @@ describe("OperationsQueueView auth readiness", () => {
 
     expect(mockedHooks.useQuery.mock.calls.map(([, args]) => args)).toEqual([
       { storeId: "store-1" },
+      "skip",
+      "skip",
       { storeId: "store-1" },
       "skip",
       { storeId: "store-1" },
+      "skip",
+      "skip",
     ]);
     expect(mockedHooks.usePaginatedQuery.mock.calls[0]?.[1]).toEqual({
       storeId: "store-1",
