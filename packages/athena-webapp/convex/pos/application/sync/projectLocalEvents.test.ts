@@ -41,7 +41,6 @@ describe("projectLocalSyncEvent", () => {
       submittedByUserId: "athena-user-1" as never,
       now: 100,
     });
-
     expect(result.status).toBe("projected");
     expect(repository.createdPendingCheckoutItems).toEqual([
       expect.objectContaining({
@@ -1868,7 +1867,7 @@ describe("projectLocalSyncEvent", () => {
       event: {
         localEventId: "event-register-opened-cashier",
         localRegisterSessionId: "local-register-cashier",
-        sequence: 1,
+        sequence: 4,
         eventType: "register_opened",
         occurredAt: 20,
         staffProfileId: "staff-1" as never,
@@ -1909,7 +1908,7 @@ describe("projectLocalSyncEvent", () => {
       event: {
         localEventId: "event-register-opened-proof",
         localRegisterSessionId: "local-register-proof",
-        sequence: 1,
+        sequence: 4,
         eventType: "register_opened",
         occurredAt: 20,
         staffProfileId: "staff-1" as never,
@@ -1958,7 +1957,7 @@ describe("projectLocalSyncEvent", () => {
       event: {
         localEventId: "event-register-opened-seed",
         localRegisterSessionId: "register-session-1",
-        sequence: 1,
+        sequence: 2,
         eventType: "register_opened",
         occurredAt: 20,
         staffProfileId: "staff-1" as never,
@@ -3592,7 +3591,7 @@ describe("projectLocalSyncEvent", () => {
       event: {
         localEventId: "event-register-opened-2",
         localRegisterSessionId: "local-register-2",
-        sequence: 1,
+        sequence: 4,
         eventType: "register_opened",
         occurredAt: 10,
         staffProfileId: "staff-1" as never,
@@ -3661,7 +3660,7 @@ describe("projectLocalSyncEvent", () => {
     ]);
   });
 
-  it("creates a new register open when the active drawer has a closeout review", async () => {
+  it("conflicts a stale register open when the active drawer has a newer closeout review", async () => {
     const repository = createProjectionRepository({
       blockingRegisterSession: {
         _id: "register-session-reviewed",
@@ -3683,7 +3682,7 @@ describe("projectLocalSyncEvent", () => {
       event: {
         localEventId: "event-register-opened-2",
         localRegisterSessionId: "local-register-2",
-        sequence: 1,
+        sequence: 2,
         eventType: "register_opened",
         occurredAt: 10,
         staffProfileId: "staff-1" as never,
@@ -3697,23 +3696,14 @@ describe("projectLocalSyncEvent", () => {
       now: 100,
     });
 
-    expect(result.status).toBe("projected");
-    expect(result.conflicts).toEqual([]);
-    expect(result.mappings).toEqual([
+    expect(result.status).toBe("conflicted");
+    expect(result.conflicts).toEqual([
       expect.objectContaining({
-        localIdKind: "registerSession",
-        localId: "local-register-2",
-        cloudTable: "registerSession",
-        cloudId: "register-session-1",
+        summary: "A register session is already open for this terminal.",
       }),
     ]);
-    expect(repository.createdRegisterSessions).toEqual([
-      expect.objectContaining({
-        expectedCash: 250,
-        openingFloat: 250,
-        registerNumber: "1",
-      }),
-    ]);
+    expect(result.mappings).toEqual([]);
+    expect(repository.createdRegisterSessions).toEqual([]);
   });
 
   it("creates a new register open when the closing drawer has a closeout review", async () => {
@@ -3738,7 +3728,7 @@ describe("projectLocalSyncEvent", () => {
       event: {
         localEventId: "event-register-opened-closing-review",
         localRegisterSessionId: "local-register-2",
-        sequence: 1,
+        sequence: 4,
         eventType: "register_opened",
         occurredAt: 10,
         staffProfileId: "staff-1" as never,
@@ -6016,7 +6006,7 @@ function createProjectionRepository(
             },
             localEventId: `review-event-${registerSessionId}`,
             localRegisterSessionId: registerSessionId,
-            sequence: 0,
+            sequence: 3,
             status: "needs_review" as const,
             storeId: args.storeId,
             summary:

@@ -26,7 +26,7 @@ function CashControlsButton({
 }: {
   className?: string;
   registerSessionId?: string;
-  variant?: "default" | "ghost";
+  variant?: "default" | "ghost" | "workflow";
 }) {
   return (
     <Button asChild className={className} type="button" variant={variant}>
@@ -70,14 +70,22 @@ function getVarianceTone(variance?: number) {
   return variance > 0 ? "text-success" : "text-danger";
 }
 
-function RegisterSessionCode({ code }: { code?: string }) {
+function RegisterSessionCode({
+  code,
+  scope,
+}: {
+  code?: string;
+  scope?: "cloud" | "local";
+}) {
   if (!code) {
     return null;
   }
 
+  const label = scope === "local" ? "Local session" : "Cloud session";
+
   return (
     <p className="text-xs leading-5 text-muted-foreground/80">
-      Cloud session{" "}
+      {label}{" "}
       <span className="font-mono text-foreground/65">{code}</span>
     </p>
   );
@@ -394,7 +402,7 @@ export function RegisterDrawerGate({
                   isLoading={Boolean(drawerGate.isSubmitting)}
                   onClick={handleSubmitButtonClick}
                   type="button"
-                  variant="default"
+                  variant="workflow"
                 >
                   {drawerGate.closeoutSecondaryActionLabel ??
                     "Open replacement drawer"}
@@ -405,7 +413,7 @@ export function RegisterDrawerGate({
                 <CashControlsButton
                   className="w-full sm:w-auto"
                   registerSessionId={drawerGate.cashControlsRegisterSessionId}
-                  variant="default"
+                  variant="workflow"
                 />
               ) : null}
 
@@ -443,7 +451,10 @@ export function RegisterDrawerGate({
             ) : null}
 
             <div className="flex justify-end">
-              <RegisterSessionCode code={drawerGate.registerSessionCode} />
+              <RegisterSessionCode
+                code={drawerGate.registerSessionCode}
+                scope={drawerGate.registerSessionCodeScope}
+              />
             </div>
           </div>
         ) : (
@@ -475,9 +486,9 @@ export function RegisterDrawerGate({
                       {drawerGate.closeoutDraftVariance === undefined
                         ? "Pending count"
                         : formatCurrency(
-                            currency,
-                            drawerGate.closeoutDraftVariance,
-                          )}
+                          currency,
+                          drawerGate.closeoutDraftVariance,
+                        )}
                     </dd>
                   </div>
                 </dl>
@@ -573,7 +584,10 @@ export function RegisterDrawerGate({
             </form>
 
             <div className="mt-6 flex justify-end">
-              <RegisterSessionCode code={drawerGate.registerSessionCode} />
+              <RegisterSessionCode
+                code={drawerGate.registerSessionCode}
+                scope={drawerGate.registerSessionCodeScope}
+              />
             </div>
           </>
         )}

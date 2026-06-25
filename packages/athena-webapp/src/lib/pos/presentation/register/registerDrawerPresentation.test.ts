@@ -10,6 +10,7 @@ import {
   getCloseoutCloudRegisterSessionId,
   getCloseoutLocalRegisterSessionId,
   getLatestLocalRegisterLifecycleEvent,
+  getPendingLocalCloseoutRegisterSession,
   isKnownCloudRegisterSessionBlockingLocalProjection,
   readLocalSyncStatus,
 } from "./registerDrawerPresentation";
@@ -162,6 +163,64 @@ describe("registerDrawerPresentation", () => {
     );
 
     expect(latest?.type).toBe("register.reopened");
+  });
+
+  it("returns pending local closeout presentation evidence", () => {
+    const session = getPendingLocalCloseoutRegisterSession(
+      readModel({
+        activeRegisterSession: {
+          expectedCash: 5_000,
+          localRegisterSessionId: "local-register-1",
+          openedAt: 1,
+          openingFloat: 5_000,
+          countedCash: 4_800,
+          status: "closing",
+        },
+        sourceEvents: [
+          localEvent({
+            sequence: 2,
+            sync: { status: "pending" },
+            type: "register.closeout_started",
+          }),
+        ],
+      }),
+    );
+
+    expect(session).toEqual(
+      expect.objectContaining({
+        countedCash: 4_800,
+        expectedCash: 5_000,
+        localRegisterSessionId: "local-register-1",
+        status: "closing",
+        variance: -200,
+        localSyncStatus: {
+          status: "pending_sync",
+          pendingEventCount: 1,
+        },
+      }),
+    );
+
+    expect(
+      getPendingLocalCloseoutRegisterSession(
+        readModel({
+          activeRegisterSession: {
+            expectedCash: 5_000,
+            localRegisterSessionId: "local-register-1",
+            openedAt: 1,
+            openingFloat: 5_000,
+            countedCash: 5_000,
+            status: "closing",
+          },
+          sourceEvents: [
+            localEvent({
+              sequence: 2,
+              sync: { status: "synced" },
+              type: "register.closeout_started",
+            }),
+          ],
+        }),
+      ),
+    ).toBeNull();
   });
 
   it("preserves command user errors when the drawer cannot be opened", () => {

@@ -221,3 +221,39 @@ export function getLatestLocalRegisterLifecycleEvent(
       .at(-1) ?? null
   );
 }
+
+export function getPendingLocalCloseoutRegisterSession(
+  model: PosLocalRegisterReadModel | null,
+) {
+  const activeRegisterSession = model?.activeRegisterSession;
+  const latestLifecycleEvent = getLatestLocalRegisterLifecycleEvent(model);
+  if (
+    !activeRegisterSession ||
+    activeRegisterSession.status !== "closing" ||
+    latestLifecycleEvent?.type !== "register.closeout_started" ||
+    latestLifecycleEvent.sync.status === "synced"
+  ) {
+    return null;
+  }
+
+  return {
+    cloudRegisterSessionId: activeRegisterSession.cloudRegisterSessionId,
+    localRegisterSessionId: activeRegisterSession.localRegisterSessionId,
+    status: activeRegisterSession.status,
+    terminalId: activeRegisterSession.terminalId,
+    registerNumber: activeRegisterSession.registerNumber,
+    openingFloat: activeRegisterSession.openingFloat,
+    expectedCash: activeRegisterSession.expectedCash,
+    countedCash: activeRegisterSession.countedCash,
+    managerApprovalRequestId: undefined,
+    openedAt: activeRegisterSession.openedAt,
+    variance:
+      activeRegisterSession.countedCash === undefined
+        ? undefined
+        : activeRegisterSession.countedCash - activeRegisterSession.expectedCash,
+    localSyncStatus: {
+      status: "pending_sync" as const,
+      pendingEventCount: 1,
+    },
+  };
+}

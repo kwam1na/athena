@@ -393,6 +393,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
         syncSeed: NonNullable<typeof provisionedSeed>,
         options: {
           includeUploadedReviewEvents?: boolean;
+          onlyUploadedRegisterOpenReviewEvents?: boolean;
           onlyUploadedReviewEvents?: boolean;
         } = {},
       ) =>
@@ -437,6 +438,11 @@ export function usePosLocalSyncRuntimeStatus(input: {
                   options.includeUploadedReviewEvents === true &&
                   event.sync.status === "needs_review" &&
                   event.sync.uploaded;
+                const isUploadedRegisterOpenReviewEvent =
+                  isUploadedReviewEvent && event.type === "register.opened";
+                if (options.onlyUploadedRegisterOpenReviewEvents === true) {
+                  return isUploadedRegisterOpenReviewEvent;
+                }
                 if (options.onlyUploadedReviewEvents === true) {
                   return isUploadedReviewEvent;
                 }
@@ -719,6 +725,18 @@ export function usePosLocalSyncRuntimeStatus(input: {
             const scheduler = createDrainScheduler(provisionedSeed);
             stopSchedulers.push(() => scheduler.stop());
             scheduler.trigger(trigger, { priority: "high" });
+          }
+
+          if (
+            trigger !== "manual-retry" &&
+            hasUploadedRegisterOpenReviewEvents(eventsResult.value.events)
+          ) {
+            const scheduler = createDrainScheduler(provisionedSeed, {
+              includeUploadedReviewEvents: true,
+              onlyUploadedRegisterOpenReviewEvents: true,
+            });
+            stopSchedulers.push(() => scheduler.stop());
+            scheduler.trigger("manual-retry", { priority: "high" });
           }
 
           if (trigger === "manual-retry") {
@@ -2004,6 +2022,15 @@ function hasPendingSyncableExpenseEvents(
         event.sync.status === "syncing" ||
         event.sync.status === "failed") &&
       isSyncablePosLocalEvent(event, uploadSupport),
+  );
+}
+
+function hasUploadedRegisterOpenReviewEvents(events: PosLocalEventRecord[]) {
+  return events.some(
+    (event) =>
+      event.type === "register.opened" &&
+      event.sync.status === "needs_review" &&
+      event.sync.uploaded === true,
   );
 }
 

@@ -836,7 +836,7 @@ async function canSupersedeReviewedRegisterSessionForLocalOpen(
     replacementLocalRegisterSessionId: args.event.localRegisterSessionId,
     replacementSequence: args.event.sequence,
     registerSession,
-    reviewSequence: hasOpenRegisterCloseoutReview.latestReviewSequence,
+    reviewSequence: hasOpenRegisterCloseoutReview.latestReviewSequence ?? null,
     storeId: args.storeId,
     terminalId: args.terminalId,
   });
@@ -860,10 +860,11 @@ async function getOpenRegisterCloseoutReviewState(
 
   return {
     hasOpenRegisterCloseoutReview: closeoutReviewConflicts.length > 0,
-    latestReviewSequence: closeoutReviewConflicts
-      .map((conflict) => conflict.sequence)
-      .sort((left, right) => right - left)
-      .at(0),
+    latestReviewSequence: closeoutReviewConflicts.reduce<number | undefined>(
+      (latest, conflict) =>
+        latest === undefined ? conflict.sequence : Math.max(latest, conflict.sequence),
+      undefined,
+    ),
   };
 }
 

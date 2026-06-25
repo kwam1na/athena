@@ -183,6 +183,35 @@ describe("RegisterDrawerGate", () => {
     expect(onCloseoutSecondaryAction).toHaveBeenCalledTimes(1);
   });
 
+  it("labels compact cloud session codes", () => {
+    renderGate({
+      closeoutCountedCash: "100.00",
+      expectedCash: 10002,
+      mode: "closeoutBlocked",
+      registerSessionCode: "8980ZC",
+      registerSessionCodeScope: "cloud",
+    });
+
+    expect(screen.getByText("Cloud session")).toBeInTheDocument();
+    expect(screen.getByText("8980ZC")).toBeInTheDocument();
+  });
+
+  it("labels compact local session codes", () => {
+    renderGate({
+      closeoutCountedCash: "100.00",
+      expectedCash: 10002,
+      mode: "closeoutBlocked",
+      registerSessionCode: "F48D56",
+      registerSessionCodeScope: "local",
+    });
+
+    expect(screen.getByText("Local session")).toBeInTheDocument();
+    expect(screen.getByText("F48D56")).toBeInTheDocument();
+    expect(
+      screen.queryByText(/local-register-/i),
+    ).not.toBeInTheDocument();
+  });
+
   it("shows terminal repair copy and sign-out action", async () => {
     const user = userEvent.setup();
     const onSignOut = vi.fn();
