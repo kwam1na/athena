@@ -16,6 +16,7 @@ import {
   inventoryImportProvisionalSkuSchema,
   inventoryImportReviewVersionSchema,
   productSchema,
+  productSkuSearchSchema,
   productSkuSchema,
   promoCodeItemSchema,
   promoCodeSchema,
@@ -755,12 +756,30 @@ const schema = defineSchema({
     "by_transactionId",
     ["transactionId"]
   ),
-  product: defineTable(productSchema).index("by_storeId", ["storeId"]),
+  product: defineTable(productSchema)
+    .index("by_categoryId", ["categoryId"])
+    .index("by_storeId", ["storeId"])
+    .index("by_subcategoryId", ["subcategoryId"]),
   productSku: defineTable(productSkuSchema)
+    .index("by_color", ["color"])
     .index("by_productId", ["productId"])
     .index("by_storeId", ["storeId"])
     .index("by_storeId_barcode", ["storeId", "barcode"])
     .index("by_storeId_sku", ["storeId", "sku"]),
+  productSkuSearch: defineTable(productSkuSearchSchema)
+    .index("by_productSkuId", ["productSkuId"])
+    .index("by_storeId", ["storeId"])
+    .index("by_storeId_barcode", ["storeId", "normalizedBarcode"])
+    .index("by_storeId_categoryId", ["storeId", "categoryId"])
+    .index("by_storeId_colorId", ["storeId", "colorId"])
+    .index("by_storeId_productId", ["storeId", "productId"])
+    .index("by_storeId_productSkuId", ["storeId", "productSkuId"])
+    .index("by_storeId_sku", ["storeId", "normalizedSku"])
+    .index("by_storeId_subcategoryId", ["storeId", "subcategoryId"])
+    .searchIndex("searchText", {
+      searchField: "searchText",
+      filterFields: ["storeId"],
+    }),
   purchaseOrder: defineTable(purchaseOrderSchema)
     .index("by_storeId", ["storeId"])
     .index("by_storeId_status", ["storeId", "status"])

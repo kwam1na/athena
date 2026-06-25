@@ -5,6 +5,7 @@ export * from "./category";
 export * from "./inviteCode";
 export * from "./subcategory";
 export * from "./product";
+export * from "./productSkuSearch";
 export * from "./store";
 export * from "./organization";
 export * from "./organizationMember";

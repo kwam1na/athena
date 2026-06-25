@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Build Generic SKU Search Foundation</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f7f5;
+      --panel: #ffffff;
+      --text: #1f2933;
+      --muted: #5f6b76;
+      --border: #d8ddd8;
+      --accent: #256f63;
+      --accent-soft: #e7f2ef;
+      --warn-soft: #fff6db;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.55;
+    }
+    main {
+      width: min(1120px, calc(100vw - 32px));
+      margin: 32px auto 56px;
+    }
+    header, section {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 18px;
+    }
+    h1, h2, h3 { line-height: 1.2; margin: 0 0 12px; }
+    h1 { font-size: 30px; }
+    h2 { font-size: 20px; margin-top: 4px; }
+    h3 { font-size: 15px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+    p { margin: 0 0 12px; }
+    ul { margin: 8px 0 0 20px; padding: 0; }
+    li { margin: 6px 0; }
+    code {
+      background: #eef1ef;
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-size: 0.92em;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      font-size: 14px;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 10px;
+      vertical-align: top;
+      text-align: left;
+    }
+    th { background: #f1f4f2; }
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 16px;
+    }
+    .pill {
+      background: var(--accent-soft);
+      color: var(--accent);
+      border: 1px solid #c8e1db;
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .toc {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 8px;
+      margin-top: 16px;
+    }
+    .toc a {
+      color: var(--accent);
+      text-decoration: none;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 10px;
+      background: #fbfcfb;
+    }
+    .callout {
+      background: var(--warn-soft);
+      border: 1px solid #ecdca5;
+      border-radius: 6px;
+      padding: 12px;
+      color: #594714;
+    }
+    .unit {
+      border-top: 1px solid var(--border);
+      padding-top: 16px;
+      margin-top: 16px;
+    }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Build Generic SKU Search Foundation</h1>
+    <p>Build a reusable backend SKU search foundation for Athena admin surfaces. The foundation returns SKU-first, consumer-neutral search results for every SKU in a store while leaving product page and stock-adjustment integrations as follow-up work.</p>
+    <div class="meta">
+      <span class="pill">Type: feat</span>
+      <span class="pill">Status: active</span>
+      <span class="pill">Date: 2026-06-25</span>
+      <span class="pill">Canonical: 2026-06-25-001-feat-sku-search-foundation-plan.md</span>
+    </div>
+    <nav class="toc" aria-label="Plan sections">
+      <a href="#requirements">Requirements</a>
+      <a href="#scope">Scope</a>
+      <a href="#decisions">Key Decisions</a>
+      <a href="#contract">V1 Contract</a>
+      <a href="#design">Design</a>
+      <a href="#units">Implementation Units</a>
+      <a href="#risks">Risks</a>
+    </nav>
+  </header>
+
+  <section id="requirements">
+    <h2>Requirements</h2>
+    <ul>
+      <li>Provide a reusable Convex-owned SKU search foundation under inventory/catalog ownership.</li>
+      <li>Return SKU-first generic results for all SKUs, including draft, archived, hidden, zero-price, and out-of-stock rows.</li>
+      <li>Return relevant source SKU fields, joined product/taxonomy/color context, and match metadata.</li>
+      <li>Resolve exact SKU, barcode, and product SKU id matches before text search.</li>
+      <li>Support backend-backed text search without local-first/browser-index requirements.</li>
+      <li>Keep product page and stock-adjustment integration out of active scope.</li>
+      <li>Lock the public Convex args/result contract with named return validators and executable contract proof.</li>
+      <li>Provide idempotent repair/backfill as a deployment gate before follow-up consumers depend on text search.</li>
+    </ul>
+  </section>
+
+  <section id="scope">
+    <h2>Scope</h2>
+    <p>The active plan builds the backend search foundation only. Products, stock adjustments, procurement, quick-add, activity lookup, homepage picker, and POS remain unchanged until follow-up work.</p>
+    <div class="callout">
+      <strong>Important:</strong> This is not local-first work. Future frontend callers may debounce backend calls, but the shared contract lives in Convex.
+    </div>
+  </section>
+
+  <section id="decisions">
+    <h2>Key Technical Decisions</h2>
+    <ul>
+      <li>Use a SKU search sidecar/read-model table rather than a required search field on <code>productSku</code>.</li>
+      <li>Hydrate current source documents after search so the sidecar is lookup infrastructure, not catalog authority.</li>
+      <li>Use exact indexed lookup before full-text search.</li>
+      <li>Expose lifecycle and visibility fields instead of filtering them.</li>
+      <li>Return rich but bounded result rows.</li>
+      <li>Use a fixed v1 envelope with <code>results</code>, <code>limit</code>, <code>truncated</code>, and <code>candidateOverflow</code>; missing joined context returns <code>null</code>.</li>
+      <li>Hydrate only after deduping and slicing candidates to the effective limit.</li>
+    </ul>
+  </section>
+
+  <section id="contract">
+    <h2>V1 Contract</h2>
+    <p>The foundation exposes one bounded backend query with <code>storeId</code>, <code>query</code>, and optional <code>limit</code>. V1 does not include pagination args.</p>
+    <ul>
+      <li>Default result limit: 25; maximum result limit: 50.</li>
+      <li>Exact match read limit: 10; text candidate read limit: 61 before dedupe.</li>
+      <li>Ordering: product SKU id, exact SKU, exact barcode, then text matches.</li>
+      <li>Named return validators are mandatory, with <code>assertConformsToExportedReturns</code> coverage for rich and sparse envelopes.</li>
+      <li>Joined product, category, subcategory, and color fields are explicit and nullable, not full document passthrough.</li>
+    </ul>
+  </section>
+
+  <section id="design">
+    <h2>High-Level Design</h2>
+    <p>Future consumer surfaces call an inventory SKU search query. The query checks exact indexed paths, queries a store-scoped search sidecar for text results, dedupes candidates with exact matches first, hydrates current SKU/product/taxonomy/color data, and returns generic <code>ProductSkuSearchResult</code> rows.</p>
+  </section>
+
+  <section id="units">
+    <h2>Implementation Units</h2>
+    <article class="unit">
+      <h3>U1. Search Read Model Schema</h3>
+      <p>Add a store-scoped SKU search sidecar with a required search text field, search index, deterministic lookup indexes, and a hard projection-size contract.</p>
+    </article>
+    <article class="unit">
+      <h3>U2. Search Projection Maintenance</h3>
+      <p>Add reusable helpers to build, update, repair, and backfill sidecar rows from SKU, product, category, subcategory, color, and scalar attribute metadata. Repair/backfill is idempotent, cursor-safe, and reports detailed counts.</p>
+    </article>
+    <article class="unit">
+      <h3>U3. Generic Backend Search Query</h3>
+      <p>Add the bounded public query with multi-match exact lookup, search-index-only text matching, dedupe, pre-hydration slicing, hydration, and rich generic result rows.</p>
+    </article>
+    <article class="unit">
+      <h3>U4. Contract Tests And Consumer Handoff Notes</h3>
+      <p>Lock the result contract with tests and document how follow-up consumers should adapt results without coupling the foundation to a UI.</p>
+    </article>
+  </section>
+
+  <section id="risks">
+    <h2>Risks And Mitigations</h2>
+    <table>
+      <thead><tr><th>Risk</th><th>Mitigation</th></tr></thead>
+      <tbody>
+        <tr><td>Search sidecar drift</td><td>Centralize projection helpers, wire key write paths including taxonomy/color changes, and add deployment-gate repair/backfill coverage.</td></tr>
+        <tr><td>Large result payloads</td><td>Enforce conservative default and maximum result limits.</td></tr>
+        <tr><td>Consumer visibility mistakes</td><td>Return explicit lifecycle and visibility fields, and document consumer policy ownership.</td></tr>
+        <tr><td>Search index rollout complexity</td><td>Treat idempotent repair/backfill as a deployment gate before consumer integration.</td></tr>
+      </tbody>
+    </table>
+  </section>
+</main>
+</body>
+</html>
