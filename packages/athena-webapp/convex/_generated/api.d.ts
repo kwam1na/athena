@@ -127,6 +127,7 @@ import type * as inventory_productSku from "../inventory/productSku.js";
 import type * as inventory_productUtil from "../inventory/productUtil.js";
 import type * as inventory_products from "../inventory/products.js";
 import type * as inventory_promoCode from "../inventory/promoCode.js";
+import type * as inventory_skuSearch from "../inventory/skuSearch.js";
 import type * as inventory_stockValidation from "../inventory/stockValidation.js";
 import type * as inventory_storeConfigV2 from "../inventory/storeConfigV2.js";
 import type * as inventory_stores from "../inventory/stores.js";
@@ -268,6 +269,7 @@ import type * as schemas_inventory_inviteCode from "../schemas/inventory/inviteC
 import type * as schemas_inventory_organization from "../schemas/inventory/organization.js";
 import type * as schemas_inventory_organizationMember from "../schemas/inventory/organizationMember.js";
 import type * as schemas_inventory_product from "../schemas/inventory/product.js";
+import type * as schemas_inventory_productSkuSearch from "../schemas/inventory/productSkuSearch.js";
 import type * as schemas_inventory_promoCode from "../schemas/inventory/promoCode.js";
 import type * as schemas_inventory_redeemedPromoCode from "../schemas/inventory/redeemedPromoCode.js";
 import type * as schemas_inventory_store from "../schemas/inventory/store.js";
@@ -536,6 +538,7 @@ declare const fullApi: ApiFromModules<{
   "inventory/productUtil": typeof inventory_productUtil;
   "inventory/products": typeof inventory_products;
   "inventory/promoCode": typeof inventory_promoCode;
+  "inventory/skuSearch": typeof inventory_skuSearch;
   "inventory/stockValidation": typeof inventory_stockValidation;
   "inventory/storeConfigV2": typeof inventory_storeConfigV2;
   "inventory/stores": typeof inventory_stores;
@@ -677,6 +680,7 @@ declare const fullApi: ApiFromModules<{
   "schemas/inventory/organization": typeof schemas_inventory_organization;
   "schemas/inventory/organizationMember": typeof schemas_inventory_organizationMember;
   "schemas/inventory/product": typeof schemas_inventory_product;
+  "schemas/inventory/productSkuSearch": typeof schemas_inventory_productSkuSearch;
   "schemas/inventory/promoCode": typeof schemas_inventory_promoCode;
   "schemas/inventory/redeemedPromoCode": typeof schemas_inventory_redeemedPromoCode;
   "schemas/inventory/store": typeof schemas_inventory_store;

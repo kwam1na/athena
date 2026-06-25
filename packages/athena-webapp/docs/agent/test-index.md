@@ -72,6 +72,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`convex/inventory/products.sku.test.ts`](../../convex/inventory/products.sku.test.ts)
 - [`convex/inventory/promoCode.test.ts`](../../convex/inventory/promoCode.test.ts)
 - [`convex/inventory/sessionQueryIndexes.test.ts`](../../convex/inventory/sessionQueryIndexes.test.ts)
+- [`convex/inventory/skuSearch.test.ts`](../../convex/inventory/skuSearch.test.ts)
 - [`convex/inventory/storeConfigV2.test.ts`](../../convex/inventory/storeConfigV2.test.ts)
 - [`convex/lib/commandResultValidators.test.ts`](../../convex/lib/commandResultValidators.test.ts)
 - [`convex/lib/currency.test.ts`](../../convex/lib/currency.test.ts)
