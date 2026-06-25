@@ -97,6 +97,7 @@ import {
 } from "./catalogSearchPresentation";
 import { useRegisterCatalogIndex } from "./useRegisterCatalogIndex";
 import { buildPosSyncStatusPresentation } from "@/lib/pos/presentation/syncStatusPresentation";
+import { formatRegisterSessionCode } from "@/lib/pos/presentation/registerSessionCode";
 import {
   canOperateRegister,
   getStaffDisplayNameFromAuthResult,
@@ -149,6 +150,7 @@ import {
   getCloseoutCloudRegisterSessionCode,
   getCloseoutCloudRegisterSessionId,
   getCloseoutLocalRegisterSessionId,
+  getPendingLocalCloseoutRegisterSession,
   isKnownCloudRegisterSessionBlockingLocalProjection,
   readLocalSyncStatus,
 } from "./registerDrawerPresentation";
@@ -1764,11 +1766,17 @@ export function useRegisterViewModel(): RegisterViewModel {
         },
       }
     : null;
+  const pendingLocalCloseoutRegisterSession =
+    getPendingLocalCloseoutRegisterSession(localRegisterReadModel);
   const activeCloseoutRegisterSession =
     closeoutBlockedRegisterSession ??
+    pendingLocalCloseoutRegisterSession ??
     (isCloseoutRequested
       ? (localCloseoutRegisterSession ?? saleUsableActiveRegisterSession)
       : null);
+  const activeCloseoutCanOpenReplacementDrawer = Boolean(
+    closeoutBlockedRegisterSession || pendingLocalCloseoutRegisterSession,
+  );
   const activeCloseoutRegisterSessionHasSyncReview = Boolean(
     findRegisterCloseoutReviewItem(activeCloseoutRegisterSession),
   );
@@ -1810,6 +1818,8 @@ export function useRegisterViewModel(): RegisterViewModel {
         : localSaleAuthorityBlockReason === "drawer_authority" &&
             hasRecoverableDrawerAuthorityBlock
           ? "drawerAuthorityRepair"
+          : activeCloseoutCanOpenReplacementDrawer && canSignedInStaffOpenDrawer
+            ? "initialSetup"
           : hasCloseoutBlockedDrawerState || activeCloseoutRegisterSession
             ? "closeoutBlocked"
             : hasMissingDrawerRecoveryState ||
@@ -5143,10 +5153,20 @@ export function useRegisterViewModel(): RegisterViewModel {
       activeCloseoutRegisterSession,
       localRegisterReadModel,
     ) ??
-    getCloseoutLocalRegisterSessionId(
-      activeCloseoutRegisterSession,
-      localRegisterReadModel,
+    formatRegisterSessionCode(
+      getCloseoutLocalRegisterSessionId(
+        activeCloseoutRegisterSession,
+        localRegisterReadModel,
+      ),
     );
+  const activeCloseoutRegisterSessionCodeScope:
+    | "cloud"
+    | "local"
+    | undefined = activeCloseoutRegisterSessionCode
+    ? activeCloseoutCloudRegisterSessionCode
+      ? "cloud"
+      : "local"
+    : undefined;
   const shouldShowDrawerGate = Boolean(
     requiresDrawerGate ||
     activeCloseoutRegisterSession ||
@@ -5211,11 +5231,12 @@ export function useRegisterViewModel(): RegisterViewModel {
                 activeCloseoutRegisterSession?.variance,
               closeoutNotes,
               closeoutSubmittedReason: activeCloseoutSubmittedReason,
-              closeoutSecondaryActionLabel: closeoutBlockedRegisterSession
+              closeoutSecondaryActionLabel: activeCloseoutCanOpenReplacementDrawer
                 ? "Open replacement drawer"
                 : "Return to sale",
               registerSessionCode: activeCloseoutRegisterSessionCode,
-              onCloseoutSecondaryAction: closeoutBlockedRegisterSession
+              registerSessionCodeScope: activeCloseoutRegisterSessionCodeScope,
+              onCloseoutSecondaryAction: activeCloseoutCanOpenReplacementDrawer
                 ? undefined
                 : handleCancelRegisterCloseout,
               expectedCash: activeCloseoutRegisterSession?.expectedCash,
@@ -5225,7 +5246,7 @@ export function useRegisterViewModel(): RegisterViewModel {
                 (activeCloseoutCloudRegisterSessionCode as
                   | Id<"registerSession">
                   | undefined),
-              canOpenDrawer: closeoutBlockedRegisterSession
+              canOpenDrawer: activeCloseoutCanOpenReplacementDrawer
                 ? canSignedInStaffOpenDrawer
                 : undefined,
               hasPendingCloseoutApproval: Boolean(
@@ -5246,13 +5267,13 @@ export function useRegisterViewModel(): RegisterViewModel {
                 setCloseoutNotes(value);
                 setDrawerErrorMessage(null);
               },
-              onSubmit: closeoutBlockedRegisterSession
+              onSubmit: activeCloseoutCanOpenReplacementDrawer
                 ? handleOpenDrawer
                 : undefined,
               onSubmitCloseout: activeCloseoutSubmittedReason
                 ? undefined
                 : handleSubmitRegisterCloseout,
-              onReopenRegister: closeoutBlockedRegisterSession
+              onReopenRegister: activeCloseoutCanOpenReplacementDrawer
                 ? undefined
                 : isCashierManager && !activeCloseoutRegisterSessionHasSyncReview
                   ? handleReopenRegisterCloseout

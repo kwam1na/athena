@@ -124,29 +124,40 @@ export function canReuseCloudRegisterSessionForLocalOpen(input: {
   );
 }
 
+type RegisterSessionSupersedeFreshnessInput =
+  | {
+      replacementSequence: number;
+      reviewSequence: number | null | undefined;
+      allowUnknownReviewSequence?: never;
+    }
+  | {
+      allowUnknownReviewSequence: true;
+      replacementSequence?: number | null;
+      reviewSequence?: number | null;
+    };
+
 export function canSupersedeReviewedRegisterSessionForLocalOpen(input: {
   hasOpenRegisterCloseoutReview: boolean;
   replacementLocalRegisterSessionId: string;
-  replacementSequence: number;
   registerSession?: RegisterSessionLifecycleScopedSession | null;
-  reviewSequence?: number | null;
   storeId: string;
   terminalId: string;
-}) {
+} & RegisterSessionSupersedeFreshnessInput) {
   const isDistinctReplacement =
     input.replacementLocalRegisterSessionId !==
       input.registerSession?.localRegisterSessionId &&
     input.replacementLocalRegisterSessionId !==
       input.registerSession?.cloudRegisterSessionId;
-  const isNewerThanReview =
-    input.reviewSequence === null ||
+  const hasFreshReplacement =
+    input.allowUnknownReviewSequence === true ||
     input.reviewSequence === undefined ||
+    input.reviewSequence === null ||
     input.replacementSequence > input.reviewSequence;
 
   return (
     isScopedRegisterSession(input) &&
     isDistinctReplacement &&
-    isNewerThanReview &&
+    hasFreshReplacement &&
     (isRegisterSessionSaleUsable(input.registerSession) ||
       input.registerSession?.status === "closing" ||
       input.registerSession?.status === "closeout_rejected") &&

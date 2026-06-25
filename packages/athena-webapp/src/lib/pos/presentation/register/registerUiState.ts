@@ -250,6 +250,7 @@ export interface RegisterDrawerGateState {
   closeoutSubmittedReason?: "manager_review" | "pending_sync";
   closeoutSecondaryActionLabel?: string;
   registerSessionCode?: string;
+  registerSessionCodeScope?: "cloud" | "local";
   expectedCash?: number;
   canOpenCashControls?: boolean;
   cashControlsRegisterSessionId?: Id<"registerSession">;

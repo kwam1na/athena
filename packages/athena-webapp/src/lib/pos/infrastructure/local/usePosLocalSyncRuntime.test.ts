@@ -881,6 +881,135 @@ describe("usePosLocalSyncRuntimeStatus", () => {
     });
   });
 
+  it("self-heals uploaded register open reviews from status-only route entry", async () => {
+    mocks.ingestLocalEvents.mockResolvedValue({
+      kind: "ok",
+      data: {
+        accepted: [
+          {
+            localEventId: "event-open",
+            sequence: 1,
+            status: "projected",
+          },
+        ],
+        held: [],
+        mappings: [
+          {
+            _id: "mapping-open",
+            storeId: "store-1",
+            terminalId: "terminal-cloud-1",
+            localRegisterSessionId: "register-1",
+            localEventId: "event-open",
+            localIdKind: "registerSession",
+            localId: "register-1",
+            cloudTable: "registerSession",
+            cloudId: "register-session-1",
+            createdAt: 12,
+          },
+        ],
+        conflicts: [],
+        syncCursor: {
+          localRegisterSessionId: "register-1",
+          acceptedThroughSequence: 1,
+        },
+      },
+    });
+    const store = {
+      listEvents: vi.fn(async () => ({
+        ok: true,
+        value: [
+          buildLocalEvent({
+            localEventId: "event-open",
+            payload: {
+              openingFloat: 100,
+              registerNumber: "1",
+            },
+            sequence: 1,
+            sync: { status: "needs_review", uploaded: true },
+            type: "register.opened",
+          }),
+          buildLocalEvent({
+            localEventId: "event-closeout",
+            payload: {
+              countedCash: 90,
+            },
+            sequence: 2,
+            sync: { status: "needs_review", uploaded: true },
+            type: "register.closeout_started",
+          }),
+        ],
+      })),
+      markEventsSynced: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      markEventsNeedsReview: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      clearDrawerAuthorityState: vi.fn(async () => ({
+        ok: true,
+        value: null,
+      })),
+      readDrawerAuthorityState: vi.fn(async () => ({
+        ok: true,
+        value: {
+          localRegisterSessionId: "register-1",
+          observedAt: 1,
+          reason: "lifecycle_rejected",
+          status: "blocked",
+          storeId: "store-1",
+          terminalId: "local-terminal-1",
+        },
+      })),
+      writeLocalCloudMapping: vi.fn(async () => ({
+        ok: true,
+        value: {},
+      })),
+      readProvisionedTerminalSeed: vi.fn(async () => ({
+        ok: true,
+        value: {
+          cloudTerminalId: "terminal-cloud-1",
+          displayName: "Front",
+          provisionedAt: 1,
+          schemaVersion: 1,
+          syncSecretHash: "sync-secret-1",
+          storeId: "store-1",
+          terminalId: "local-terminal-1",
+        },
+      })),
+    };
+
+    renderHook(() =>
+      usePosLocalSyncRuntimeStatus({
+        mode: "status-only",
+        storeFactory: () => store as never,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(mocks.ingestLocalEvents).toHaveBeenCalledWith(
+        expect.objectContaining({
+          events: [
+            expect.objectContaining({
+              eventType: "register_opened",
+              localEventId: "event-open",
+            }),
+          ],
+        }),
+      ),
+    );
+    expect(mocks.ingestLocalEvents.mock.calls[0]?.[0].events).toHaveLength(1);
+    await waitFor(() =>
+      expect(store.markEventsSynced).toHaveBeenCalledWith(["event-open"], {
+        uploaded: true,
+      }),
+    );
+    expect(store.markEventsNeedsReview).not.toHaveBeenCalled();
+  });
+
   it("does not manually retry review events that were never uploaded", async () => {
     const store = {
       listEvents: vi.fn(async () => ({
