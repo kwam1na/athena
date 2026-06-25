@@ -60,6 +60,20 @@ export type ContextSourceRef = {
   synthetic?: boolean;
 };
 
+export type ContextEnvironment = {
+  deviceClass?: "mobile" | "tablet" | "desktop" | "bot" | "unknown";
+  browserFamily?: "chrome" | "safari" | "firefox" | "edge" | "other" | "unknown";
+  osFamily?:
+    | "ios"
+    | "android"
+    | "macos"
+    | "windows"
+    | "linux"
+    | "other"
+    | "unknown";
+  viewportBucket?: "sm" | "md" | "lg" | "xl" | "unknown";
+};
+
 export type ContextTrackingEnvelope = {
   surface: string;
   eventId: string;
@@ -75,5 +89,6 @@ export type ContextTrackingEnvelope = {
   sourceRefs?: ContextSourceRef[];
   visibilityMode: ContextVisibilityMode;
   retentionClass: ContextRetentionClass;
+  environment?: ContextEnvironment;
   synthetic?: boolean;
 };

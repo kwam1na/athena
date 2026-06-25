@@ -55,6 +55,7 @@ const storefrontObservabilityBaseContextSchema = z.object({
   origin: z.string().optional(),
   sessionId: z.string().min(1),
   userType: storefrontObservabilityUserTypeSchema,
+  viewportBucket: z.enum(["sm", "md", "lg", "xl", "unknown"]).optional(),
 });
 
 const storefrontObservabilityErrorSchema = z.object({
@@ -99,6 +100,7 @@ type StorefrontObservabilityRuntimeContext = {
     utm_source?: string;
   };
   isBrowserAutomation?: boolean;
+  viewportWidth?: number;
   userId?: string;
   guestId?: string;
   storage?: Pick<Storage, "getItem" | "setItem">;
@@ -202,7 +204,26 @@ export function createStorefrontObservabilityContext(
       runtimeContext.storage,
     ),
     userType,
+    viewportBucket: resolveViewportBucket(runtimeContext.viewportWidth),
   });
+}
+
+export function resolveViewportBucket(explicitViewportWidth?: number) {
+  const hasExplicitViewportWidth = explicitViewportWidth !== undefined;
+  const viewportWidth = hasExplicitViewportWidth
+    ? typeof explicitViewportWidth === "number" &&
+      Number.isFinite(explicitViewportWidth)
+      ? explicitViewportWidth
+      : undefined
+    : typeof window !== "undefined"
+      ? window.innerWidth
+      : undefined;
+
+  if (typeof viewportWidth !== "number") return "unknown";
+  if (viewportWidth < 640) return "sm";
+  if (viewportWidth < 1024) return "md";
+  if (viewportWidth < 1280) return "lg";
+  return "xl";
 }
 
 export function createStorefrontObservabilityPayload(

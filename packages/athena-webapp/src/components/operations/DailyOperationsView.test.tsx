@@ -1126,7 +1126,11 @@ describe("DailyOperationsViewContent", () => {
       "font-medium",
       "text-foreground",
     );
-    expect(automationHeading.parentElement).toHaveClass("gap-layout-sm");
+    expect(automationHeading.parentElement).toHaveClass("gap-layout-md");
+    expect(automationHeading.parentElement?.lastElementChild).toHaveClass(
+      "divide-y",
+      "divide-border/70",
+    );
     const automationTime = within(automationPanel!).getByText(/[48]:30 AM/);
 
     expect(automationTime).toHaveClass("tabular-nums");
@@ -1159,6 +1163,7 @@ describe("DailyOperationsViewContent", () => {
     const closeAutomationRow = closeAutomationLink.closest("article");
 
     expect(closeAutomationRow).toHaveClass(
+      "py-layout-sm",
       "sm:flex-row",
       "sm:justify-between",
     );
@@ -1319,21 +1324,24 @@ describe("DailyOperationsViewContent", () => {
       screen.getByRole("link", { name: "Start EOD Review" }),
     ).toBeInTheDocument();
     expect(
-      screen.getAllByText(
-        "Store day started. Review the carried-forward items when a manager is available.",
-      ).length,
-    ).toBeGreaterThan(0);
-    expect(
-      screen.getByText("Register session still needs closeout"),
+      screen.getByText("Opening Handoff has carry-forward review items."),
     ).toBeInTheDocument();
+    expect(screen.getByText("Pending checkout")).toBeInTheDocument();
+    expect(screen.getByText("4")).toBeInTheDocument();
+    expect(screen.getByText("2 other manager review items")).toBeInTheDocument();
     expect(
-      screen.getByText("Cash variance reviewed at close"),
-    ).toBeInTheDocument();
-    expect(screen.getByText("Ebin tinted lace")).toBeInTheDocument();
+      screen.queryByText("Register session still needs closeout"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Cash variance reviewed at close"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Ebin tinted lace")).not.toBeInTheDocument();
     expect(screen.queryByText("Hooded dryer bonnet")).not.toBeInTheDocument();
     expect(screen.queryByText("Eco lip balm")).not.toBeInTheDocument();
     expect(screen.queryByText("Hidden lace bond")).not.toBeInTheDocument();
-    expect(screen.getByText("3 more items in the full Opening workflow.")).toBeInTheDocument();
+    expect(
+      screen.queryByText("3 more items in the full Opening workflow."),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByRole("link", {
         name: "Review all Opening Handoff review items",

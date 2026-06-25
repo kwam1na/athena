@@ -62,6 +62,48 @@ export const contextSubjectRefValidator = v.object({
   label: v.optional(v.string()),
 });
 
+export const contextEnvironmentValidator = v.object({
+  deviceClass: v.optional(
+    v.union(
+      v.literal("mobile"),
+      v.literal("tablet"),
+      v.literal("desktop"),
+      v.literal("bot"),
+      v.literal("unknown"),
+    ),
+  ),
+  browserFamily: v.optional(
+    v.union(
+      v.literal("chrome"),
+      v.literal("safari"),
+      v.literal("firefox"),
+      v.literal("edge"),
+      v.literal("other"),
+      v.literal("unknown"),
+    ),
+  ),
+  osFamily: v.optional(
+    v.union(
+      v.literal("ios"),
+      v.literal("android"),
+      v.literal("macos"),
+      v.literal("windows"),
+      v.literal("linux"),
+      v.literal("other"),
+      v.literal("unknown"),
+    ),
+  ),
+  viewportBucket: v.optional(
+    v.union(
+      v.literal("sm"),
+      v.literal("md"),
+      v.literal("lg"),
+      v.literal("xl"),
+      v.literal("unknown"),
+    ),
+  ),
+});
+
 export const contextEventAppendArgsValidator = {
   storeId: v.id("store"),
   organizationId: v.optional(v.id("organization")),
@@ -79,6 +121,7 @@ export const contextEventAppendArgsValidator = {
   sourceRefs: v.optional(v.array(intelligenceSourceRefValidator)),
   visibilityMode: intelligenceVisibilityModeValidator,
   retentionClass: contextRetentionClassValidator,
+  environment: v.optional(contextEnvironmentValidator),
   synthetic: v.optional(v.boolean()),
   abusePartitionKey: v.optional(v.string()),
   historicalImportRunId: v.optional(v.string()),
@@ -115,6 +158,7 @@ export const contextEventSchema = v.object({
   sourceRefs: v.array(intelligenceSourceRefValidator),
   visibilityMode: intelligenceVisibilityModeValidator,
   retentionClass: contextRetentionClassValidator,
+  environment: v.optional(contextEnvironmentValidator),
   synthetic: v.optional(v.boolean()),
   abusePartitionKey: v.optional(v.string()),
   historicalImportRunId: v.optional(v.string()),

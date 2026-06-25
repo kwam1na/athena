@@ -1054,19 +1054,19 @@ function AutomationStatusPanel({
   if (variant === "compact") {
     return (
       <section className="rounded-md border border-border bg-surface-raised px-layout-md py-layout-sm shadow-surface">
-        <div className="flex flex-col gap-layout-sm">
+        <div className="flex flex-col gap-layout-md">
           <h3 className="flex shrink-0 items-center gap-layout-xs text-sm font-medium text-foreground">
             <Bot aria-hidden="true" className="h-4 w-4 text-muted-foreground" />
             Athena automation
           </h3>
-          <div className="flex min-w-0 flex-col gap-layout-xs">
+          <div className="flex min-w-0 flex-col divide-y divide-border/70">
             {statuses.map((status) => {
               const label = getAutomationLaneLabel(status.lane);
               const link = status.sourceLink;
 
               return (
                 <article
-                  className="flex min-w-0 flex-col gap-layout-xs sm:flex-row sm:items-start sm:justify-between"
+                  className="flex min-w-0 flex-col gap-layout-xs py-layout-sm first:pt-0 last:pb-0 sm:flex-row sm:items-start sm:justify-between"
                   key={status.id}
                 >
                   <div className="min-w-0">
@@ -1314,19 +1314,18 @@ function AutomationReviewEvidencePanel({
     isPendingCheckoutReview,
   ).length;
   const otherReviewCount = evidenceItems.length - pendingCheckoutCount;
-  const previewItems = evidenceItems.slice(0, REVIEW_EVIDENCE_PREVIEW_LIMIT);
-  const hiddenItemCount = Math.max(
-    evidenceItems.length - REVIEW_EVIDENCE_PREVIEW_LIMIT,
-    0,
-  );
+  const primaryBucketLabel =
+    pendingCheckoutCount > 0 ? "Pending checkout" : "Manager review";
+  const primaryBucketCount =
+    pendingCheckoutCount > 0 ? pendingCheckoutCount : otherReviewCount;
 
   return (
     <section
       aria-labelledby="daily-operations-opening-review-title"
-      className="rounded-lg border border-warning/25 bg-surface p-layout-md shadow-surface"
+      className="rounded-lg border border-warning/25 bg-surface-raised p-layout-md shadow-surface"
     >
       <div className="flex items-start justify-between gap-layout-sm">
-        <div className="min-w-0">
+        <div className="min-w-0 space-y-layout-xs">
           <h3
             className="flex items-center gap-layout-xs text-sm font-medium text-foreground"
             id="daily-operations-opening-review-title"
@@ -1334,6 +1333,9 @@ function AutomationReviewEvidencePanel({
             <CircleAlert aria-hidden="true" className="h-4 w-4 text-warning" />
             Opening review
           </h3>
+          <p className="text-xs leading-5 text-muted-foreground">
+            Opening Handoff has carry-forward review items.
+          </p>
         </div>
         <Badge
           className="shrink-0 border-warning/30 bg-warning/10 text-warning-foreground shadow-sm"
@@ -1343,48 +1345,23 @@ function AutomationReviewEvidencePanel({
         </Badge>
       </div>
 
-      <p className="mt-layout-xs text-sm leading-6 text-foreground">
-        Store day started. Review the carried-forward items when a manager is
-        available.
-      </p>
-      <p className="mt-1 text-xs leading-5 text-muted-foreground">
-        POS stays open while these items remain visible in their owning
-        workflows.
-      </p>
-
-      <div className="mt-layout-md grid grid-cols-2 gap-layout-xs">
-        <ReviewEvidenceCount
-          label="Pending checkout"
-          value={pendingCheckoutCount}
-        />
-        <ReviewEvidenceCount label="Other" value={otherReviewCount} />
+      <div className="mt-layout-md rounded-md border border-border/70 bg-background/60 px-layout-sm py-layout-xs">
+        <div className="flex items-baseline justify-between gap-layout-sm">
+          <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+            {primaryBucketLabel}
+          </p>
+          <p className="text-base font-medium tabular-nums text-foreground">
+            {primaryBucketCount}
+          </p>
+        </div>
+        {pendingCheckoutCount > 0 && otherReviewCount > 0 ? (
+          <p className="mt-1 text-xs text-muted-foreground">
+            {otherReviewCount} other manager review{" "}
+            {otherReviewCount === 1 ? "item" : "items"}
+          </p>
+        ) : null}
       </div>
 
-      <div className="mt-layout-md divide-y divide-border/70 border-y border-border/70">
-        {previewItems.map((item) => (
-          <article className="py-layout-sm" key={item.id}>
-            <div className="min-w-0">
-              <p className="text-sm font-medium leading-5 text-foreground">
-                {getReviewEvidenceTitle(item)}
-              </p>
-              {getReviewEvidenceDetail(item) ? (
-                <p className="mt-0.5 line-clamp-2 text-xs leading-5 text-muted-foreground">
-                  {getReviewEvidenceDetail(item)}
-                </p>
-              ) : null}
-              <p className="mt-1 truncate text-xs text-muted-foreground">
-                {getReviewEvidenceContextLabel(item)}
-              </p>
-            </div>
-          </article>
-        ))}
-      </div>
-      {hiddenItemCount > 0 ? (
-        <p className="mt-layout-sm text-xs leading-5 text-muted-foreground">
-          {formatReviewEvidenceHiddenCount(hiddenItemCount)} in the full Opening
-          workflow.
-        </p>
-      ) : null}
       <Button
         asChild
         className="mt-layout-md w-full"
@@ -1411,63 +1388,13 @@ function AutomationReviewEvidencePanel({
 }
 
 const PENDING_CHECKOUT_REVIEW_PREFIX = "Review pending checkout item:";
-const DEFAULT_CARRY_FORWARD_DETAIL =
-  "This unresolved carry-forward item remains open and must be acknowledged for Opening.";
-const REVIEW_EVIDENCE_PREVIEW_LIMIT = 3;
-
-function ReviewEvidenceCount({
-  label,
-  value,
-}: {
-  label: string;
-  value: number;
-}) {
-  return (
-    <div className="rounded-md border border-border/70 bg-background/60 px-layout-sm py-layout-xs">
-      <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-        {label}
-      </p>
-      <p className="mt-0.5 text-base font-medium tabular-nums text-foreground">
-        {value}
-      </p>
-    </div>
-  );
-}
 
 function formatReviewEvidenceCount(count: number) {
   return count === 1 ? "1 item to review" : `${count} items to review`;
 }
 
-function formatReviewEvidenceHiddenCount(count: number) {
-  return count === 1 ? "1 more item" : `${count} more items`;
-}
-
 function isPendingCheckoutReview(item: DailyOperationsReviewEvidence) {
   return item.label.startsWith(PENDING_CHECKOUT_REVIEW_PREFIX);
-}
-
-function getReviewEvidenceTitle(item: DailyOperationsReviewEvidence) {
-  if (isPendingCheckoutReview(item)) {
-    return item.label.slice(PENDING_CHECKOUT_REVIEW_PREFIX.length).trim();
-  }
-
-  return item.label;
-}
-
-function getReviewEvidenceContextLabel(item: DailyOperationsReviewEvidence) {
-  if (isPendingCheckoutReview(item)) {
-    return "Pending checkout item";
-  }
-
-  return item.source?.label ?? "Manager review item";
-}
-
-function getReviewEvidenceDetail(item: DailyOperationsReviewEvidence) {
-  if (!item.message || item.message === DEFAULT_CARRY_FORWARD_DETAIL) {
-    return null;
-  }
-
-  return item.message;
 }
 
 function HistoricalWorkflowPanel({

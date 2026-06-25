@@ -5597,7 +5597,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       isSearchLoading: isRegisterSearchLoading,
       isSearchReady: isRegisterCatalogReady,
       canQuickAddProduct: terminalCanTransactProducts && isCashierManager,
-      canAddPendingCheckoutItem: terminalCanTransactProducts,
+      canAddPendingCheckoutItem: terminalCanTransactProducts && isCashierManager,
       pendingCheckoutContext:
         staffProfileId && terminal?._id && activeRegisterSessionId
           ? {

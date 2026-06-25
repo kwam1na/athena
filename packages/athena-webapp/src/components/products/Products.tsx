@@ -1,4 +1,4 @@
-import { Link, useSearch } from "@tanstack/react-router";
+import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { useGetCategories } from "~/src/hooks/useGetCategories";
 import { getOrigin } from "~/src/lib/navigationUtils";
 import { Button } from "../ui/button";
@@ -35,9 +35,25 @@ import type { Id } from "~/convex/_generated/dataModel";
 import { api } from "~/convex/_generated/api";
 import { SkuSearchFilterBar } from "../stock-ops/SkuSearchFilterBar";
 
+const PRODUCT_SEARCH_PAGE_SIZE = 10;
+
+function getProductSearchPageIndex(page: number | string | undefined) {
+  const pageNumber =
+    typeof page === "number"
+      ? page
+      : typeof page === "string"
+        ? Number(page)
+        : 1;
+
+  if (!Number.isFinite(pageNumber) || pageNumber < 1) {
+    return 0;
+  }
+
+  return Math.floor(pageNumber) - 1;
+}
+
 export default function Products() {
   const categories = useGetCategories();
-  const [searchValue, setSearchValue] = useState("");
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
   const [quickAddInitialName, setQuickAddInitialName] = useState("");
   const [quickAddInitialLookupCode, setQuickAddInitialLookupCode] =
@@ -45,7 +61,13 @@ export default function Products() {
   const { hasFullAdminAccess } = usePermissions();
   const { activeStore } = useGetActiveStore();
   const { user } = useAuth();
-  const { o } = useSearch({ strict: false });
+  const navigate = useNavigate();
+  const { o, page, query } = useSearch({ strict: false }) as {
+    o?: string;
+    page?: number;
+    query?: string;
+  };
+  const [searchValue, setSearchValue] = useState(() => query ?? "");
   const quickAddProductSku = usePOSQuickAddProductSku();
   const repairCatalogSummary = useMutation(
     api.inventory.products.repairCatalogSummary,
@@ -77,9 +99,19 @@ export default function Products() {
     [activeStore?._id, skuSearchResults?.results],
   );
   const hasSearchInput = searchValue.trim().length > 0;
+  const isSearchLoading = hasSearchInput && skuSearchResults === undefined;
   const filteredProducts = hasSearchInput ? searchProducts : null;
   const hasActiveFilters = hasSearchInput;
   const showSearchResults = hasActiveFilters;
+  const requestedSearchPageIndex = getProductSearchPageIndex(page);
+  const searchResultPageCount = Math.max(
+    1,
+    Math.ceil((filteredProducts?.length ?? 0) / PRODUCT_SEARCH_PAGE_SIZE),
+  );
+  const searchPageIndex = Math.min(
+    requestedSearchPageIndex,
+    searchResultPageCount - 1,
+  );
   const unresolvedProductCount = catalogSummary?.missingInfoProductCount ?? 0;
   const categoryCount = catalogSummary?.categoryCount ?? 0;
   const productCount = catalogSummary?.productCount ?? 0;
@@ -90,6 +122,47 @@ export default function Products() {
     catalogSummary.needsRefresh === true;
   const formatCatalogMetric = (value: number) =>
     isCatalogSummaryPending ? "..." : value.toLocaleString();
+
+  useEffect(() => {
+    const nextSearchValue = query ?? "";
+    setSearchValue((currentSearchValue) =>
+      currentSearchValue === nextSearchValue
+        ? currentSearchValue
+        : nextSearchValue,
+    );
+  }, [query]);
+
+  useEffect(() => {
+    if (
+      !showSearchResults ||
+      isSearchLoading ||
+      requestedSearchPageIndex === searchPageIndex
+    ) {
+      return;
+    }
+
+    void navigate({
+      replace: true,
+      search: ((current: Record<string, unknown>) => {
+        const next = { ...current };
+        const nextPage = searchPageIndex + 1;
+
+        if (nextPage > 1) {
+          next.page = nextPage;
+        } else {
+          delete next.page;
+        }
+
+        return next;
+      }) as never,
+    });
+  }, [
+    isSearchLoading,
+    navigate,
+    requestedSearchPageIndex,
+    searchPageIndex,
+    showSearchResults,
+  ]);
 
   useEffect(() => {
     if (!activeStore?._id || catalogSummary === undefined) return;
@@ -157,8 +230,46 @@ export default function Products() {
     setIsQuickAddOpen(true);
   };
 
+  const handleQueryChange = (nextSearchValue: string) => {
+    setSearchValue(nextSearchValue);
+
+    void navigate({
+      replace: true,
+      search: ((current: Record<string, unknown>) => {
+        const next = { ...current };
+
+        if (nextSearchValue.trim()) {
+          next.query = nextSearchValue;
+        } else {
+          delete next.query;
+        }
+        delete next.page;
+
+        return next;
+      }) as never,
+    });
+  };
+
   const handleClearFilters = () => {
-    setSearchValue("");
+    handleQueryChange("");
+  };
+
+  const handleSearchPageIndexChange = (nextPageIndex: number) => {
+    void navigate({
+      replace: true,
+      search: ((current: Record<string, unknown>) => {
+        const next = { ...current };
+        const nextPage = nextPageIndex + 1;
+
+        if (nextPage > 1) {
+          next.page = nextPage;
+        } else {
+          delete next.page;
+        }
+
+        return next;
+      }) as never,
+    });
   };
 
   return (
@@ -205,7 +316,7 @@ export default function Products() {
               ariaLabel="Product search and filters"
               hasActiveFilters={hasActiveFilters}
               onClearFilters={handleClearFilters}
-              onQueryChange={setSearchValue}
+              onQueryChange={handleQueryChange}
               query={searchValue}
               searchId="product-sku-search"
               searchLabel="Search products, SKUs, or barcodes"
@@ -227,6 +338,8 @@ export default function Products() {
                   <GenericDataTable
                     data={filteredProducts}
                     columns={productColumns}
+                    pageIndex={searchPageIndex}
+                    onPageIndexChange={handleSearchPageIndexChange}
                     tableId="all-products-search"
                   />
                 ) : (

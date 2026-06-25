@@ -1,5 +1,6 @@
 import type {
   ContextPayload,
+  ContextEnvironment,
   ContextRetentionClass,
   ContextSourceRef,
   ContextSubjectRef,
@@ -31,6 +32,7 @@ export type ContextEventInput<
   primarySubject?: ContextSubjectRef;
   subjectRefs?: ContextSubjectRef[];
   sourceRefs?: ContextSourceRef[];
+  environment?: Pick<ContextEnvironment, "viewportBucket">;
   synthetic?: boolean;
 };
 

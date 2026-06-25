@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildServerContextTrackingEnvelope,
+  deriveContextEnvironment,
   derivePrimarySubject,
   isAllowedTrackingOrigin,
 } from "./trackingEvents";
@@ -76,7 +77,72 @@ describe("tracking event route subject derivation", () => {
       sessionRef: undefined,
       sourceRefs: [],
       synthetic: false,
+      environment: {
+        deviceClass: "unknown",
+        browserFamily: "unknown",
+        osFamily: "unknown",
+        viewportBucket: "unknown",
+      },
       abusePartitionKey: "store_1:actor:guest:guest_1",
+    });
+  });
+
+  it("derives coarse device context from request headers and client viewport buckets", () => {
+    expect(
+      buildServerContextTrackingEnvelope({
+        body: {
+          surface: "storefront",
+          eventId: "storefront.route_viewed",
+          schemaVersion: 1,
+          idempotencyKey: "route:mobile",
+          occurredAt: 1_700_000_000_000,
+          payload: { route: "/shop" },
+          environment: {
+            deviceClass: "desktop",
+            browserFamily: "firefox",
+            osFamily: "windows",
+            viewportBucket: "sm",
+          },
+        },
+        storeId: "store_1" as never,
+        organizationId: "org_1" as never,
+        originHeader: "https://wigclub.store",
+        userAgent:
+          "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+      }),
+    ).toMatchObject({
+      environment: {
+        deviceClass: "mobile",
+        browserFamily: "safari",
+        osFamily: "ios",
+        viewportBucket: "sm",
+      },
+    });
+  });
+
+  it("classifies tablets and bots without storing raw user-agent text", () => {
+    expect(
+      deriveContextEnvironment({
+        userAgent:
+          "Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Version/17.0 Safari/604.1",
+        viewportBucket: "lg",
+      }),
+    ).toEqual({
+      deviceClass: "tablet",
+      browserFamily: "safari",
+      osFamily: "ios",
+      viewportBucket: "lg",
+    });
+
+    expect(
+      deriveContextEnvironment({
+        userAgent: "AthenaSyntheticBot/1.0",
+      }),
+    ).toMatchObject({
+      deviceClass: "bot",
+      browserFamily: "other",
+      osFamily: "other",
+      viewportBucket: "unknown",
     });
   });
 

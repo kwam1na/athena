@@ -207,6 +207,7 @@ function compileContextEvent(event: Doc<"contextEvent">): ContextPromptRecord | 
       event.primarySubjectType && event.primarySubjectId
         ? { type: event.primarySubjectType, id: event.primarySubjectId }
         : undefined,
+    environment: event.environment,
     payload,
   };
 }
