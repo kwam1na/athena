@@ -1209,6 +1209,57 @@ describe("projectLocalRegisterReadModel", () => {
     expect(model.saleBlockReason).toBeUndefined();
     expect(model.syncStatus.state).toBe("needs_review");
   });
+
+  it("keeps the current drawer active when a later duplicate drawer open was synced to the same cloud drawer", () => {
+    const model = projectLocalRegisterReadModel({
+      mappings: [
+        {
+          entity: "registerSession",
+          localId: "local-register-1",
+          cloudId: "cloud-register-1",
+          mappedAt: 1_001,
+        },
+        {
+          entity: "registerSession",
+          localId: "local-register-2",
+          cloudId: "cloud-register-1",
+          mappedAt: 1_002,
+        },
+      ],
+      events: [
+        event({
+          sequence: 1,
+          type: "register.opened",
+          payload: { openingFloat: 130, expectedCash: 130 },
+          sync: { status: "synced", uploaded: true },
+        }),
+        event({
+          sequence: 2,
+          uploadSequence: 2,
+          type: "register.opened",
+          localEventId: "duplicate-open",
+          localRegisterSessionId: "local-register-2",
+          payload: {
+            localRegisterSessionId: "local-register-2",
+            openingFloat: 90,
+            expectedCash: 90,
+          },
+          sync: { status: "synced", uploaded: true },
+        }),
+      ],
+      isOnline: true,
+    });
+
+    expect(model.activeRegisterSession).toMatchObject({
+      localRegisterSessionId: "local-register-1",
+      cloudRegisterSessionId: "cloud-register-1",
+      openingFloat: 130,
+      expectedCash: 130,
+    });
+    expect(model.canSell).toBe(true);
+    expect(model.saleBlockReason).toBeUndefined();
+    expect(model.syncStatus.state).toBe("synced");
+  });
 });
 
 function errorCodes(errors: PosLocalRegisterReadModelError[]) {

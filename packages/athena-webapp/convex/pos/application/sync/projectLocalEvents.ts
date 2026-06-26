@@ -40,6 +40,7 @@ type ProjectEventArgs = {
   now: number;
   options?: {
     allowClosedRegisterSaleProjection?: boolean;
+    allowReviewedClosingRegisterSaleProjection?: boolean;
     applyExpectedTotalForReviewedNonCashOverpayment?: boolean;
     allowReviewedInventorySaleProjection?: boolean;
     allowRegisterCloseoutVarianceProjection?: boolean;
@@ -856,7 +857,13 @@ async function canReuseCloudRegisterSessionForLocalOpen(
   return canReuseCloudRegisterSessionForLocalOpenPolicy({
     hasOpenRegisterCloseoutReview:
       hasOpenRegisterCloseoutReview.hasOpenRegisterCloseoutReview,
-    registerSession,
+    localRegisterSessionId: args.event.localRegisterSessionId,
+    registerSession: registerSession
+      ? {
+          ...registerSession,
+          cloudRegisterSessionId: registerSession._id,
+        }
+      : registerSession,
     storeId: args.storeId,
     terminalId: args.terminalId,
   });
@@ -1484,8 +1491,13 @@ async function resolveSaleRegisterAndSession(
     return conflictResult(conflict);
   }
 
+  const registerSessionSaleUsable = isRegisterSessionSaleUsable(registerSession);
+  const reviewedClosingRegisterSaleAllowed =
+    args.options?.allowReviewedClosingRegisterSaleProjection === true &&
+    registerSession.status === "closing";
+
   if (
-    isRegisterSessionSaleUsable(registerSession) &&
+    registerSessionSaleUsable &&
     (
       await getOpenRegisterCloseoutReviewState(repository, args, {
         registerSessionId: registerSession._id,
@@ -1504,7 +1516,7 @@ async function resolveSaleRegisterAndSession(
     return conflictResult(conflict);
   }
 
-  if (!isRegisterSessionSaleUsable(registerSession)) {
+  if (!registerSessionSaleUsable && !reviewedClosingRegisterSaleAllowed) {
     const conflict = await createConflict(repository, args, {
       conflictType: "permission",
       summary: "Register was not open before this sale synced.",
@@ -2539,7 +2551,9 @@ async function persistPaymentAllocations(
 
   if (
     payments.expectedCashDelta > 0 &&
-    isRegisterSessionSaleUsable(session.registerSession)
+    (isRegisterSessionSaleUsable(session.registerSession) ||
+      (args.options?.allowReviewedClosingRegisterSaleProjection === true &&
+        session.registerSession.status === "closing"))
   ) {
     const expectedCash =
       session.registerSession.expectedCash + payments.expectedCashDelta;

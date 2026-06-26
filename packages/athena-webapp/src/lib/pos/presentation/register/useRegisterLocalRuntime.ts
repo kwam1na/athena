@@ -259,6 +259,7 @@ export function useRegisterLocalRuntime(input: {
     onLocalEventsChanged: noteLocalRegisterEventChanged,
     storeId: activeStoreId,
     staffProfileId,
+    staffProofToken,
     terminalId: terminal?._id,
     onRetrySync: onRetryBootstrap,
     storeFactory: localRuntimeStoreFactory,

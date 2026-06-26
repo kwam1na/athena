@@ -1297,6 +1297,17 @@ describe("POS terminal public mutations", () => {
     assertConformsToExportedReturns(submitTerminalRuntimeStatus as never, {
       kind: "ok",
       data: {
+        activeRegisterSessionDirective: {
+          cloudRegisterSessionId: "register-session-2",
+          expectedCash: 13_000,
+          localRegisterSessionId: "register-session-2",
+          observedAt: 200,
+          openedAt: 100,
+          openingFloat: 13_000,
+          registerNumber: "8",
+          staffProfileId: "staff-1",
+          status: "active",
+        },
         drawerAuthorityDirective: {
           cloudRegisterSessionId: "register-session-1",
           localRegisterSessionId: "local-register-session-1",

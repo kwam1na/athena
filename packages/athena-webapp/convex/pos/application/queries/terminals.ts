@@ -1,6 +1,12 @@
 import type { Doc, Id } from "../../../_generated/dataModel";
 import type { QueryCtx } from "../../../_generated/server";
-import { isPosUsableRegisterSessionStatus } from "../../../../shared/registerSessionStatus";
+import {
+  isPosUsableRegisterSessionStatus,
+  isRegisterSessionConflictBlockingStatus,
+} from "../../../../shared/registerSessionStatus";
+import {
+  isRegisterSessionReplacementBlocking,
+} from "../../../../shared/registerSessionLifecyclePolicy";
 
 import {
   getLatestRuntimeStatusForTerminal,
@@ -19,8 +25,17 @@ import {
 } from "../../infrastructure/repositories/terminalRecoveryRepository";
 import {
   buildTerminalCloudRepairPreview,
+  canProjectRegisterOpenForTerminalCloudRepair,
   classifyTerminalCloudRepairConflict,
+  skipTerminalCloudRepairConflict,
+  type TerminalCloudRepairConflictClassification,
+  type TerminalCloudRepairProjectionEligibilityRepository,
 } from "../terminalRecovery/cloudRepairPolicy";
+import { parseStoredLocalSyncEvent } from "../sync/ingestLocalEvents";
+import type {
+  LocalSyncIngestionRepository,
+  LocalSyncMappingRecord,
+} from "../sync/types";
 import type {
   TerminalRecoveryCommandPayload,
   TerminalRecoveryCommandType,
@@ -302,11 +317,16 @@ async function isCleanlyClosedDrawerAuthority(
   }
 
   const registerSession = await db.get("registerSession", registerSessionId);
-  return (
-    registerSession?.storeId === args.terminal.storeId &&
-    registerSession.terminalId === args.terminal._id &&
-    registerSession.status === "closed"
-  );
+  if (
+    registerSession?.storeId !== args.terminal.storeId ||
+    registerSession.terminalId !== args.terminal._id
+  ) {
+    return false;
+  }
+  return !isRegisterSessionReplacementBlocking({
+    hasSubmittedCloseout: registerSession.status === "closing",
+    session: registerSession,
+  });
 }
 
 async function buildTerminalHealthSummary(
@@ -851,20 +871,46 @@ async function buildTerminalRecoveryCloudRepairPreview(
     storeId: args.storeId,
     terminalId: args.terminalId,
   });
+  const repository = createTerminalCloudRepairQueryRepository(ctx);
   const classified = await Promise.all(
-    conflicts.map(async (conflict) =>
-      classifyTerminalCloudRepairConflict({
-        conflict,
-        now: args.now,
-        sourceEvent: await getTerminalRecoverySourceEvent(ctx, {
-          storeId: args.storeId,
-          terminalId: args.terminalId,
-          localEventId: conflict.localEventId,
-        }),
+    conflicts.map(async (conflict): Promise<TerminalCloudRepairConflictClassification> => {
+      const sourceEvent = await getTerminalRecoverySourceEvent(ctx, {
         storeId: args.storeId,
         terminalId: args.terminalId,
-      }),
-    ),
+        localEventId: conflict.localEventId,
+      });
+      const classification = classifyTerminalCloudRepairConflict({
+        conflict,
+        now: args.now,
+        sourceEvent,
+        storeId: args.storeId,
+        terminalId: args.terminalId,
+      });
+      if (classification.kind !== "safe_duplicate_register_opened") {
+        return classification;
+      }
+      if (!sourceEvent) {
+        return classification;
+      }
+
+      const parsed = parseStoredLocalSyncEvent(
+        repository as unknown as LocalSyncIngestionRepository,
+        sourceEvent,
+      );
+      if (
+        !parsed.ok ||
+        !(await canProjectRegisterOpenForTerminalCloudRepair(repository, {
+          event: parsed.event,
+          now: sourceEvent.acceptedAt ?? args.now,
+          storeId: args.storeId,
+          terminalId: args.terminalId,
+        }))
+      ) {
+        return skipTerminalCloudRepairConflict(classification, "not_projection_safe");
+      }
+
+      return classification;
+    }),
   );
   const preview = buildTerminalCloudRepairPreview({
     classified,
@@ -876,6 +922,171 @@ async function buildTerminalRecoveryCloudRepairPreview(
     preconditionHash: preview.preconditionHash,
     safeConflictIds: preview.safeConflictIds,
     skippedConflictIds: preview.skipped.map((item) => item.conflictId),
+  };
+}
+
+function createTerminalCloudRepairQueryRepository(
+  ctx: QueryCtx,
+): TerminalCloudRepairProjectionEligibilityRepository {
+  const normalizeCloudId = <TableName extends string>(
+    tableName: TableName,
+    value: string,
+  ) => {
+    const normalizeId = (
+      ctx.db as unknown as {
+        normalizeId?: (tableName: string, value: string) => unknown;
+      }
+    ).normalizeId;
+    if (typeof normalizeId !== "function") return null;
+    const normalized = normalizeId.call(ctx.db, tableName, value);
+    return typeof normalized === "string" ? normalized : null;
+  };
+
+  return {
+    async findBlockingRegisterSession(args) {
+      const terminalRows = await ctx.db
+        .query("registerSession")
+        .withIndex("by_terminalId", (q) => q.eq("terminalId", args.terminalId))
+        .order("desc")
+        .take(20);
+      const latestByTerminal = terminalRows
+        .filter(
+          (session) =>
+            session.storeId === args.storeId &&
+            session.terminalId === args.terminalId,
+        )
+        .sort((left, right) => right._creationTime - left._creationTime)[0];
+      if (
+        latestByTerminal &&
+        isRegisterSessionConflictBlockingStatus(latestByTerminal.status)
+      ) {
+        return latestByTerminal;
+      }
+
+      if (!args.registerNumber) {
+        return null;
+      }
+
+      const registerRows = await ctx.db
+        .query("registerSession")
+        .withIndex("by_storeId_registerNumber", (q) =>
+          q.eq("storeId", args.storeId).eq("registerNumber", args.registerNumber),
+        )
+        .order("desc")
+        .take(20);
+      const latestByRegisterNumber = registerRows
+        .filter(
+          (session) =>
+            session.storeId === args.storeId &&
+            session.registerNumber === args.registerNumber,
+        )
+        .sort((left, right) => right._creationTime - left._creationTime)[0];
+      return latestByRegisterNumber &&
+        isRegisterSessionConflictBlockingStatus(latestByRegisterNumber.status)
+        ? latestByRegisterNumber
+        : null;
+    },
+    getRegisterSession(registerSessionId) {
+      return ctx.db.get("registerSession", registerSessionId);
+    },
+    getStaffProfile(staffProfileId) {
+      return ctx.db.get("staffProfile", staffProfileId);
+    },
+    getTerminal(terminalId) {
+      return ctx.db.get("posTerminal", terminalId);
+    },
+    async hasActivePosRole(args) {
+      const assignments = await ctx.db
+        .query("staffRoleAssignment")
+        .withIndex("by_staffProfileId", (q) =>
+          q.eq("staffProfileId", args.staffProfileId),
+        )
+        .take(50);
+      return assignments.some(
+        (assignment) =>
+          assignment.storeId === args.storeId &&
+          assignment.status === "active" &&
+          (assignment.role === "cashier" || assignment.role === "manager") &&
+          args.allowedRoles.includes(assignment.role),
+      );
+    },
+    async listOpenRegisterReviewConflictFacts(args) {
+      const registerSessionMappings = await ctx.db
+        .query("posLocalSyncMapping")
+        .withIndex("by_store_terminal_cloud", (q) =>
+          q
+            .eq("storeId", args.storeId)
+            .eq("terminalId", args.terminalId)
+            .eq("cloudTable", "registerSession")
+            .eq("cloudId", args.registerSessionId),
+        )
+        .take(100);
+      const scopedMappings = registerSessionMappings.filter(
+        (mapping) =>
+          mapping.storeId === args.storeId &&
+          mapping.terminalId === args.terminalId &&
+          mapping.cloudTable === "registerSession" &&
+          mapping.cloudId === args.registerSessionId,
+      ) as LocalSyncMappingRecord[];
+      const mappingByLocalId = new Map(
+        scopedMappings.map((mapping) => [mapping.localRegisterSessionId, mapping]),
+      );
+      const localRegisterSessionIds = new Set<string>([
+        args.registerSessionId,
+        ...scopedMappings.map((mapping) => mapping.localRegisterSessionId),
+      ]);
+      const facts = [];
+      for (const localRegisterSessionId of localRegisterSessionIds) {
+        const conflicts = await ctx.db
+          .query("posLocalSyncConflict")
+          .withIndex("by_store_terminal_register_status_type", (q) =>
+            q
+              .eq("storeId", args.storeId)
+              .eq("terminalId", args.terminalId)
+              .eq("localRegisterSessionId", localRegisterSessionId)
+              .eq("status", "needs_review")
+              .eq("conflictType", "permission"),
+          )
+          .take(100);
+        for (const conflict of conflicts) {
+          if (
+            conflict.storeId !== args.storeId ||
+            conflict.terminalId !== args.terminalId ||
+            conflict.localRegisterSessionId !== localRegisterSessionId ||
+            conflict.status !== "needs_review" ||
+            conflict.conflictType !== "permission"
+          ) {
+            continue;
+          }
+
+          const directRegisterSessionId = normalizeCloudId(
+            "registerSession",
+            conflict.localRegisterSessionId,
+          ) as Id<"registerSession"> | null;
+          const directRegisterSession = directRegisterSessionId
+            ? await ctx.db.get("registerSession", directRegisterSessionId)
+            : null;
+          facts.push({
+            conflict,
+            directRegisterSession:
+              directRegisterSession &&
+              directRegisterSession.storeId === args.storeId &&
+              directRegisterSession.terminalId === args.terminalId
+                ? {
+                    _id: directRegisterSession._id,
+                    storeId: directRegisterSession.storeId,
+                    terminalId: directRegisterSession.terminalId,
+                  }
+                : null,
+            registerSessionMapping:
+              mappingByLocalId.get(conflict.localRegisterSessionId) ?? null,
+          });
+        }
+      }
+
+      return facts;
+    },
+    normalizeCloudId: normalizeCloudId as never,
   };
 }
 

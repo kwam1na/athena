@@ -45,6 +45,8 @@ type PosLocalCommandStore = {
 
 type CreateLocalCommandGatewayOptions = {
   allowExplicitRegisterSessionWithoutProjection?: boolean;
+  allowRegisterSessionSeedAfterSettledHistory?: boolean;
+  allowRegisterSessionSeedFromRuntimeDirective?: boolean;
   store: PosLocalCommandStore;
   clock?: () => number;
   createLocalId?: (kind: string) => string;
@@ -264,11 +266,33 @@ export function createLocalCommandGateway(
       terminalId: input.terminalId,
     });
     if (!model.ok) return false;
-    if (model.value.canSell) return true;
-    if (model.value.saleBlockReason) return false;
+    if (model.value.canSell) {
+      return (
+        model.value.activeRegisterSession?.localRegisterSessionId ===
+        input.localRegisterSessionId
+      );
+    }
+    const hasSettledCloseoutSession =
+      model.value.activeRegisterSession?.status === "closing" &&
+      hasSettledRegisterCloseout({
+        events: model.value.sourceEvents,
+        session: model.value.activeRegisterSession,
+      });
+    const canSeedAfterSettledHistory =
+      options.allowRegisterSessionSeedAfterSettledHistory &&
+      (!model.value.activeRegisterSession || hasSettledCloseoutSession);
+    const canSeedFromRuntimeDirective =
+      options.allowRegisterSessionSeedFromRuntimeDirective &&
+      input.runtimeDirectiveRepair === true &&
+      model.value.saleBlockReason !== "terminal_integrity";
+    const canSeedAfterExistingHistory =
+      canSeedAfterSettledHistory || canSeedFromRuntimeDirective;
+    if (model.value.saleBlockReason && !canSeedAfterExistingHistory) {
+      return false;
+    }
     if (
       !options.allowExplicitRegisterSessionWithoutProjection ||
-      model.eventCount > 0
+      (model.eventCount > 0 && !canSeedAfterExistingHistory)
     ) {
       return false;
     }
@@ -827,6 +851,7 @@ type SeedLocalRegisterSessionInput = LocalCommandContext & {
   expectedCash: number;
   notes?: string | null;
   openingFloat: number;
+  runtimeDirectiveRepair?: boolean;
   status: string;
 };
 

@@ -22,6 +22,7 @@ import {
   type PosTerminalIntegrityState,
   type PosProvisionedTerminalSeed,
 } from "./posLocalStore";
+import { createLocalCommandGateway } from "./localCommandGateway";
 import {
   clearRecoverableDrawerAuthorityForSyncedEvents,
   clearSupersededRecoverableDrawerAuthorityBlocks,
@@ -101,6 +102,16 @@ export type PosLocalRuntimeSyncStatusSource = {
 };
 
 export type PosLocalRuntimeSyncDebug = {
+  activeRegisterSessionRepair?: {
+    directive?: RuntimeActiveRegisterSessionDirective;
+    observedAt: number;
+    seedResult:
+      | "gateway_rejected"
+      | "missing_directive"
+      | "missing_staff_identity"
+      | "not_attempted"
+      | "seeded";
+  };
   checkInPublishAttemptedAt?: number;
   checkInPublishCompletedAt?: number;
   checkInPublishMessage?: string;
@@ -162,6 +173,17 @@ type RuntimeDrawerAuthorityDirective = Omit<
   PosDrawerAuthorityState,
   "storeId" | "terminalId"
 >;
+export type RuntimeActiveRegisterSessionDirective = {
+  cloudRegisterSessionId: string;
+  expectedCash: number;
+  localRegisterSessionId: string;
+  observedAt: number;
+  openedAt: number;
+  openingFloat: number;
+  registerNumber?: string;
+  staffProfileId?: string;
+  status: "active";
+};
 type IngestLocalEventsArgs = FunctionArgs<
   typeof api.pos.public.sync.ingestLocalEvents
 >;
@@ -185,6 +207,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
   appUpdateCoordinator?: PosAppUpdateCoordinatorAdapter | null;
   staffProfileId?: string | null;
   staffAuthorityStatus?: PosLocalStaffAuthorityReadiness | "unknown";
+  staffProofToken?: string | null;
   storeFactory?: (() => PosLocalRuntimeStore) | null;
 }): PosLocalRuntimeSyncStatusSource | null {
   const ingestLocalEvents = useMutation(api.pos.public.sync.ingestLocalEvents);
@@ -231,6 +254,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
   const onRetrySync = input.onRetrySync;
   const source = input.source ?? "sync-runtime";
   const staffProfileId = input.staffProfileId;
+  const staffProofToken = input.staffProofToken;
   const uploadSupport = useMemo(
     () => getAppSessionUploadSupport(input.appSessionRecovery),
     [input.appSessionRecovery],
@@ -988,6 +1012,18 @@ export function usePosLocalSyncRuntimeStatus(input: {
                   terminalSeed: runtimeReadiness.terminalSeed,
                 });
               if (!isCurrentPublishScope()) return;
+              const activeRegisterSessionDirective =
+                readRuntimeActiveRegisterSessionDirective(result.data);
+              const activeRegisterSessionSeed =
+                await seedRuntimeActiveRegisterSessionDirective({
+                  directive: activeRegisterSessionDirective,
+                  staffProfileId,
+                  staffProofToken,
+                  store: authorityStore,
+                  storeId: checkInStoreId,
+                  terminalId: checkInTerminalId,
+                });
+              if (!isCurrentPublishScope()) return;
 
               const cleared = await clearAcceptedTerminalIntegrityState({
                 checkInTerminalId,
@@ -1009,6 +1045,29 @@ export function usePosLocalSyncRuntimeStatus(input: {
                 setRuntimeStatusObservationToken((current) => current + 1);
                 onLocalEventsChanged?.();
               }
+              if (activeRegisterSessionSeed.seeded) {
+                const readiness = await refreshTerminalRuntimeReadiness({
+                  store: authorityStore,
+                  storeId: checkInStoreId,
+                  terminalId: checkInTerminalId,
+                  terminalSeed: runtimeReadiness.terminalSeed,
+                });
+                if (!isCurrentPublishScope()) return;
+                setRuntimeReadiness(readiness);
+                setRefreshToken((current) => current + 1);
+                setRuntimeStatusObservationToken((current) => current + 1);
+                onLocalEventsChanged?.();
+              }
+              setDebug((current) => ({
+                ...current,
+                activeRegisterSessionRepair: {
+                  ...(activeRegisterSessionDirective
+                    ? { directive: activeRegisterSessionDirective }
+                    : {}),
+                  observedAt: Date.now(),
+                  seedResult: activeRegisterSessionSeed.seedResult,
+                },
+              }));
             }
           }
 
@@ -1127,6 +1186,8 @@ export function usePosLocalSyncRuntimeStatus(input: {
     onLocalEventsChanged,
     storeFactory,
     storeId,
+    staffProfileId,
+    staffProofToken,
   ]);
 
   useEffect(() => {
@@ -1510,6 +1571,101 @@ function readRuntimeDrawerAuthorityDirective(
       ? { registerNumber: candidate.registerNumber }
       : {}),
     status: "blocked",
+  };
+}
+
+function readRuntimeActiveRegisterSessionDirective(
+  data: unknown,
+): RuntimeActiveRegisterSessionDirective | null {
+  if (!data || typeof data !== "object") return null;
+  const directive = (
+    data as { activeRegisterSessionDirective?: unknown }
+  ).activeRegisterSessionDirective;
+  if (!directive || typeof directive !== "object") return null;
+  const candidate =
+    directive as Partial<RuntimeActiveRegisterSessionDirective>;
+  if (
+    typeof candidate.cloudRegisterSessionId !== "string" ||
+    candidate.cloudRegisterSessionId.length === 0 ||
+    typeof candidate.localRegisterSessionId !== "string" ||
+    candidate.localRegisterSessionId.length === 0 ||
+    typeof candidate.expectedCash !== "number" ||
+    typeof candidate.openedAt !== "number" ||
+    typeof candidate.openingFloat !== "number" ||
+    candidate.status !== "active"
+  ) {
+    return null;
+  }
+
+  return {
+    cloudRegisterSessionId: candidate.cloudRegisterSessionId,
+    expectedCash: candidate.expectedCash,
+    localRegisterSessionId: candidate.localRegisterSessionId,
+    observedAt:
+      typeof candidate.observedAt === "number" ? candidate.observedAt : Date.now(),
+    openedAt: candidate.openedAt,
+    openingFloat: candidate.openingFloat,
+    ...(typeof candidate.registerNumber === "string"
+      ? { registerNumber: candidate.registerNumber }
+      : {}),
+    ...(typeof candidate.staffProfileId === "string"
+      ? { staffProfileId: candidate.staffProfileId }
+      : {}),
+    status: "active",
+  };
+}
+
+async function seedRuntimeActiveRegisterSessionDirective(input: {
+  directive: RuntimeActiveRegisterSessionDirective | null;
+  staffProfileId?: string | null;
+  staffProofToken?: string | null;
+  store: PosLocalRuntimeStore;
+  storeId: string;
+  terminalId: string;
+}): Promise<{
+  seeded: boolean;
+  seedResult: NonNullable<
+    PosLocalRuntimeSyncDebug["activeRegisterSessionRepair"]
+  >["seedResult"];
+}> {
+  if (!input.directive) {
+    return { seeded: false, seedResult: "missing_directive" };
+  }
+  const staffProfileId =
+    input.staffProfileId ?? input.directive.staffProfileId ?? null;
+  if (!staffProfileId) {
+    return { seeded: false, seedResult: "missing_staff_identity" };
+  }
+
+  const gateway = createLocalCommandGateway({
+    allowExplicitRegisterSessionWithoutProjection: true,
+    allowRegisterSessionSeedAfterSettledHistory: true,
+    allowRegisterSessionSeedFromRuntimeDirective: true,
+    staffProofToken:
+      staffProfileId === input.staffProfileId
+        ? (input.staffProofToken ?? undefined)
+        : undefined,
+    store: input.store,
+  });
+
+  const seeded = await gateway.seedRegisterSession({
+    expectedCash: input.directive.expectedCash,
+    localRegisterSessionId: input.directive.localRegisterSessionId,
+    openingFloat: input.directive.openingFloat,
+    registerNumber: input.directive.registerNumber,
+    staffProfileId,
+    storeId: input.storeId,
+    terminalId: input.terminalId,
+    validationMetadata: {
+      flags: ["cloud-validation-uncertain"],
+      observedAt: input.directive.observedAt,
+    },
+    runtimeDirectiveRepair: true,
+    status: input.directive.status,
+  });
+  return {
+    seeded,
+    seedResult: seeded ? "seeded" : "gateway_rejected",
   };
 }
 

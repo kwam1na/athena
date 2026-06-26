@@ -193,7 +193,7 @@ export function projectLocalRegisterReadModel(input: {
       if (
         activeRegisterSession &&
         isOpenLocalRegisterSessionStatus(activeRegisterSession.status) &&
-        isUploadedRegisterOpenReview(event) &&
+        isUploadedRegisterOpenLifecycleEvent(event) &&
         !registerLifecycleEventMatchesActiveSession(event, activeRegisterSession)
       ) {
         continue;
@@ -1014,8 +1014,11 @@ function isOpenLocalRegisterSessionStatus(
   return status === "open" || status === "active";
 }
 
-function isUploadedRegisterOpenReview(event: PosLocalEventRecord) {
-  return event.sync.status === "needs_review" && event.sync.uploaded === true;
+function isUploadedRegisterOpenLifecycleEvent(event: PosLocalEventRecord) {
+  return (
+    event.sync.uploaded === true &&
+    (event.sync.status === "needs_review" || event.sync.status === "synced")
+  );
 }
 
 function serviceModeField(

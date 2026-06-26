@@ -416,6 +416,33 @@ describe("terminalRepository active register-session evidence", () => {
     ).resolves.toBe(true);
   });
 
+  it("finds an older active register session when newer terminal history is closed", async () => {
+    const ctx = buildCtx({
+      registerSession: [
+        buildRegisterSession({
+          _creationTime: 30,
+          registerNumber: "8",
+          status: "closed",
+          terminalId: "terminal-1" as Id<"posTerminal">,
+        }),
+        buildRegisterSession({
+          _creationTime: 20,
+          registerNumber: "8",
+          status: "active",
+          terminalId: "terminal-1" as Id<"posTerminal">,
+        }),
+      ],
+    });
+
+    await expect(
+      hasActiveRegisterSessionForTerminal(ctx as never, {
+        registerNumber: "8",
+        storeId: "store-1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+      }),
+    ).resolves.toBe(true);
+  });
+
   it("falls back to latest register-number evidence when the terminal latest session is closed", async () => {
     const ctx = buildCtx({
       registerSession: [

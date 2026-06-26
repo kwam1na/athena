@@ -178,11 +178,13 @@ describe("registerSessionLifecyclePolicy", () => {
     ).toBe(false);
   });
 
-  it("reuses cloud register sessions only when scoped, sale usable, and without open closeout review", () => {
+  it("reuses cloud register sessions only for the same scoped sale-usable drawer identity", () => {
     expect(
       canReuseCloudRegisterSessionForLocalOpen({
         hasOpenRegisterCloseoutReview: false,
+        localRegisterSessionId: "local-drawer-1",
         registerSession: {
+          localRegisterSessionId: "local-drawer-1",
           status: "active",
           storeId: "store-1",
           terminalId: "terminal-1",
@@ -194,7 +196,9 @@ describe("registerSessionLifecyclePolicy", () => {
     expect(
       canReuseCloudRegisterSessionForLocalOpen({
         hasOpenRegisterCloseoutReview: true,
+        localRegisterSessionId: "local-drawer-1",
         registerSession: {
+          localRegisterSessionId: "local-drawer-1",
           status: "active",
           storeId: "store-1",
           terminalId: "terminal-1",
@@ -206,7 +210,9 @@ describe("registerSessionLifecyclePolicy", () => {
     expect(
       canReuseCloudRegisterSessionForLocalOpen({
         hasOpenRegisterCloseoutReview: false,
+        localRegisterSessionId: "local-drawer-1",
         registerSession: {
+          localRegisterSessionId: "local-drawer-1",
           status: "active",
           storeId: "store-1",
           terminalId: "terminal-2",
@@ -215,6 +221,34 @@ describe("registerSessionLifecyclePolicy", () => {
         terminalId: "terminal-1",
       }),
     ).toBe(false);
+    expect(
+      canReuseCloudRegisterSessionForLocalOpen({
+        hasOpenRegisterCloseoutReview: false,
+        localRegisterSessionId: "local-drawer-2",
+        registerSession: {
+          localRegisterSessionId: "local-drawer-1",
+          status: "active",
+          storeId: "store-1",
+          terminalId: "terminal-1",
+        },
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      }),
+    ).toBe(false);
+    expect(
+      canReuseCloudRegisterSessionForLocalOpen({
+        hasOpenRegisterCloseoutReview: false,
+        localRegisterSessionId: "cloud-drawer-1",
+        registerSession: {
+          cloudRegisterSessionId: "cloud-drawer-1",
+          status: "active",
+          storeId: "store-1",
+          terminalId: "terminal-1",
+        },
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      }),
+    ).toBe(true);
   });
 
   it("allows superseding reviewed sale-usable or closing sessions only in scope", () => {
@@ -246,6 +280,22 @@ describe("registerSessionLifecyclePolicy", () => {
           terminalId: "terminal-1",
         },
         reviewSequence: 2,
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      }),
+    ).toBe(true);
+    expect(
+      canSupersedeReviewedRegisterSessionForLocalOpen({
+        hasOpenRegisterCloseoutReview: false,
+        replacementLocalRegisterSessionId: "replacement-local-drawer",
+        replacementSequence: 1,
+        registerSession: {
+          localRegisterSessionId: "submitted-closeout-drawer",
+          status: "closing",
+          storeId: "store-1",
+          terminalId: "terminal-1",
+        },
+        reviewSequence: null,
         storeId: "store-1",
         terminalId: "terminal-1",
       }),

@@ -369,6 +369,18 @@ type DrawerAuthorityDirective = {
   status: DrawerAuthorityStatus;
 };
 
+type ActiveRegisterSessionDirective = {
+  cloudRegisterSessionId: string;
+  expectedCash: number;
+  localRegisterSessionId: string;
+  observedAt: number;
+  openedAt: number;
+  openingFloat: number;
+  registerNumber?: string;
+  staffProfileId?: Id<"staffProfile">;
+  status: "active";
+};
+
 type AppSessionRecoveryStatus =
   | "ready"
   | "recovering"
@@ -431,6 +443,7 @@ export async function submitTerminalRuntimeStatus(
   },
 ): Promise<
   CommandResult<{
+    activeRegisterSessionDirective?: ActiveRegisterSessionDirective;
     drawerAuthorityDirective?: DrawerAuthorityDirective;
     terminalId: Id<"posTerminal">;
     reportedAt: number;
@@ -539,13 +552,126 @@ export async function submitTerminalRuntimeStatus(
       receivedAt,
       storeId: args.storeId,
     });
+  const activeRegisterSessionDirective =
+    await buildRuntimeActiveRegisterSessionDirective(ctx, {
+      activeRegisterSession,
+      receivedAt,
+      runtimeStatus: args.status,
+      storeId: args.storeId,
+      terminal,
+    });
 
   return ok({
-    ...omitUndefined({ drawerAuthorityDirective }),
+    ...omitUndefined({
+      activeRegisterSessionDirective,
+      drawerAuthorityDirective,
+    }),
     terminalId: args.terminalId,
     reportedAt,
     receivedAt,
   });
+}
+
+async function buildRuntimeActiveRegisterSessionDirective(
+  ctx: MutationCtx,
+  args: {
+    activeRegisterSession:
+      | ReturnType<typeof cleanActiveRegisterSession>
+      | undefined;
+    receivedAt: number;
+    runtimeStatus: TerminalRuntimeStatusInput;
+    storeId: Id<"store">;
+    terminal: Doc<"posTerminal">;
+  },
+): Promise<ActiveRegisterSessionDirective | undefined> {
+  if (
+    args.activeRegisterSession ||
+    !args.runtimeStatus.localStore.available ||
+    !args.runtimeStatus.localStore.terminalSeedReady
+  ) {
+    return undefined;
+  }
+  if (!ctx.db || typeof (ctx.db as { query?: unknown }).query !== "function") {
+    return undefined;
+  }
+
+  const cloudRegisterSession = await getSaleUsableRegisterSessionForTerminal(ctx, {
+    registerNumber: args.terminal.registerNumber,
+    storeId: args.storeId,
+    terminalId: args.terminal._id,
+  });
+  if (!cloudRegisterSession) {
+    return undefined;
+  }
+
+  return omitUndefined({
+    cloudRegisterSessionId: cloudRegisterSession._id,
+    expectedCash: cloudRegisterSession.expectedCash,
+    localRegisterSessionId: cloudRegisterSession._id,
+    observedAt: args.receivedAt,
+    openedAt: cloudRegisterSession.openedAt,
+    openingFloat: cloudRegisterSession.openingFloat,
+    registerNumber: cloudRegisterSession.registerNumber,
+    staffProfileId: cloudRegisterSession.openedByStaffProfileId,
+    status: "active" as const,
+  });
+}
+
+async function getSaleUsableRegisterSessionForTerminal(
+  ctx: MutationCtx,
+  args: {
+    registerNumber?: string | null;
+    storeId: Id<"store">;
+    terminalId: Id<"posTerminal">;
+  },
+): Promise<Doc<"registerSession"> | null> {
+  const recentByTerminal = await ctx.db
+    .query("registerSession")
+    .withIndex("by_terminalId", (q) => q.eq("terminalId", args.terminalId))
+    .order("desc")
+    .take(25);
+  const directMatch = recentByTerminal.find((session) =>
+    isSaleUsableRegisterSessionForRuntimeTerminal(session, args),
+  );
+  if (directMatch) return directMatch;
+
+  const registerNumber = args.registerNumber?.trim();
+  if (!registerNumber) {
+    return null;
+  }
+
+  const recentByRegisterNumber = await ctx.db
+    .query("registerSession")
+    .withIndex("by_storeId_registerNumber", (q) =>
+      q.eq("storeId", args.storeId).eq("registerNumber", registerNumber),
+    )
+    .order("desc")
+    .take(25);
+
+  return (
+    recentByRegisterNumber.find((session) =>
+      isSaleUsableRegisterSessionForRuntimeTerminal(session, args),
+    ) ?? null
+  );
+}
+
+function isSaleUsableRegisterSessionForRuntimeTerminal(
+  session: Doc<"registerSession">,
+  args: {
+    registerNumber?: string | null;
+    storeId: Id<"store">;
+    terminalId: Id<"posTerminal">;
+  },
+) {
+  const registerNumber = args.registerNumber?.trim();
+  return (
+    session.storeId === args.storeId &&
+    session.terminalId === args.terminalId &&
+    (!registerNumber ||
+      !session.registerNumber ||
+      session.registerNumber === registerNumber) &&
+    isRegisterSessionSaleUsable(session)
+  );
 }
 
 async function buildRuntimeDrawerAuthorityDirective(
@@ -820,6 +946,7 @@ const activeRegisterSessionStatuses = new Set([
   "open",
   "active",
   "closing",
+  "closeout_rejected",
   "closed",
 ]);
 

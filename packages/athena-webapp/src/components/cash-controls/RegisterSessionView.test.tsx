@@ -345,7 +345,6 @@ describe("RegisterSessionViewContent", () => {
           registerSession: baseSnapshot.registerSession,
         }}
         orgUrlSlug="wigclub"
-        storeId="store-1"
         storeUrlSlug="wigclub"
       />,
     );
@@ -1280,6 +1279,7 @@ describe("RegisterSessionViewContent", () => {
             },
           },
         }}
+        storeId="store-1"
         storeUrlSlug="wigclub"
       />,
     );
@@ -1369,6 +1369,13 @@ describe("RegisterSessionViewContent", () => {
         staffProfileId: "manager-1",
       }),
     );
+    const onAuthenticateForApproval = vi.fn().mockResolvedValue(
+      ok({
+        approvalProofId: "approval-proof-1",
+        approvedByStaffProfileId: "manager-1",
+        expiresAt: Date.now() + 60_000,
+      }),
+    );
     const onResolveSyncReview = vi
       .fn()
       .mockResolvedValue(
@@ -1381,6 +1388,7 @@ describe("RegisterSessionViewContent", () => {
         isLoading={false}
         onRecordDeposit={vi.fn()}
         {...closeoutHandlers}
+        onAuthenticateForApproval={onAuthenticateForApproval}
         onAuthenticateStaff={onAuthenticateStaff}
         onResolveSyncReview={onResolveSyncReview}
         orgUrlSlug="wigclub"
@@ -1416,6 +1424,7 @@ describe("RegisterSessionViewContent", () => {
             },
           },
         }}
+        storeId="store-1"
         storeUrlSlug="wigclub"
       />,
     );
@@ -1446,10 +1455,28 @@ describe("RegisterSessionViewContent", () => {
       }),
     );
 
+    await waitFor(() =>
+      expect(onAuthenticateForApproval).toHaveBeenCalledWith({
+        actionKey: "cash_controls.register_session.resolve_sync_review",
+        pinHash: "hashed-pin",
+        requiredRole: "manager",
+        requestedByStaffProfileId: undefined,
+        storeId: "store-1",
+        subject: {
+          id: "session-1",
+          label: "Register 3",
+          type: "register_session",
+        },
+        username: "ato",
+      }),
+    );
+    expect(onAuthenticateStaff).not.toHaveBeenCalled();
     expect(onResolveSyncReview).toHaveBeenNthCalledWith(1, {
       actorStaffProfileId: "manager-1",
+      approvalProofId: "approval-proof-1",
       decision: "approved",
       registerSessionId: "session-1",
+      requestedByStaffProfileId: undefined,
       reviewConflictIds: ["sync_conflict_missing_mapping"],
     });
 
@@ -1464,8 +1491,10 @@ describe("RegisterSessionViewContent", () => {
 
     expect(onResolveSyncReview).toHaveBeenNthCalledWith(2, {
       actorStaffProfileId: "manager-1",
+      approvalProofId: "approval-proof-1",
       decision: "rejected",
       registerSessionId: "session-1",
+      requestedByStaffProfileId: undefined,
       reviewConflictIds: ["sync_conflict_missing_mapping"],
     });
   });
@@ -1643,7 +1672,10 @@ describe("RegisterSessionViewContent", () => {
               status: "needs_review",
               reconciliationItems: [
                 {
+                  actionPolicy: "apply_or_reject",
                   id: "sync_conflict_1",
+                  localEventId: "event_sale_1",
+                  reviewKind: "missing_register_session_mapping",
                   sale: {
                     cashAmount: 2200000,
                     itemCount: 1,
@@ -1663,7 +1695,19 @@ describe("RegisterSessionViewContent", () => {
                     totalPaid: 2200000,
                   },
                   status: "needs_review",
-                  summary: "Register was not open before this sale synced.",
+                  summary:
+                    "Register session mapping is missing for synced POS history.",
+                  type: "permission",
+                },
+                {
+                  actionPolicy: "apply_or_reject",
+                  id: "sync_conflict_closeout_mapping",
+                  localEventId: "event_closeout_1",
+                  reviewKind: "missing_register_session_mapping",
+                  sequence: 2,
+                  status: "needs_review",
+                  summary:
+                    "Register session mapping is missing for synced POS history.",
                   type: "permission",
                 },
               ],

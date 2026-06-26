@@ -423,6 +423,89 @@ export interface RegisterViewModel {
     online: boolean;
     staffSignedIn: boolean;
     storeId?: string;
+    runtimeState?: {
+      heartbeat?: {
+        activeRegisterSession?: {
+          cloudRegisterSessionId?: string;
+          localRegisterSessionId: string;
+          observedAt?: number;
+          openedAt?: number;
+          registerNumber?: string;
+          status: string;
+        };
+        drawerAuthority?: {
+          cloudRegisterSessionId?: string;
+          localRegisterSessionId: string;
+          reason?: string;
+          status: string;
+        };
+        localStore: {
+          available: boolean;
+          failureMessage?: string;
+          schemaVersion?: number;
+          terminalSeedReady: boolean;
+        };
+        reportedAt?: number;
+        saleAuthority?: {
+          staffProfileId?: string;
+          status: string;
+        };
+        source?: string;
+        staffAuthority: {
+          expiresAt?: number;
+          staffProfileId?: string;
+          status: string;
+        };
+        sync: {
+          failedEventCount?: number;
+          lastSyncedSequence?: number;
+          nextPendingUploadSequence?: number;
+          pendingEventCount?: number;
+          reviewEventCount?: number;
+          status: string;
+          uploadableEventCount?: number;
+        };
+        terminalIntegrity?: {
+          reason?: string;
+          status: string;
+        };
+      };
+      localReadModel?: {
+        activeRegisterSession?: {
+          cloudRegisterSessionId?: string;
+          expectedCash?: number;
+          localRegisterSessionId: string;
+          openedAt?: number;
+          openingFloat?: number;
+          registerNumber?: string;
+          status: string;
+        };
+        canSell: boolean;
+        saleBlockReason?: string | null;
+        sourceEventCount: number;
+        syncStatus: {
+          lastLocalSequence: number;
+          lastSyncedSequence?: number;
+          nextPendingSequence?: number | null;
+          state: string;
+        };
+      };
+      repair?: {
+        directive?: {
+          cloudRegisterSessionId: string;
+          expectedCash: number;
+          localRegisterSessionId: string;
+          observedAt: number;
+          openedAt: number;
+          openingFloat: number;
+          registerNumber?: string;
+          staffProfileId?: string;
+          status: string;
+        };
+        observedAt: number;
+        seedResult: string;
+      };
+    };
     syncFlow: {
       checkInPublishAttemptedAt?: number;
       checkInPublishCompletedAt?: number;

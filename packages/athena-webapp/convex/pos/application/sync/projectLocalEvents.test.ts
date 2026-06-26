@@ -3657,7 +3657,7 @@ describe("projectLocalSyncEvent", () => {
     ]);
   });
 
-  it("maps duplicate register opens to the terminal's existing active drawer", async () => {
+  it("conflicts duplicate register opens that do not match the existing drawer identity", async () => {
     const repository = createProjectionRepository({
       blockingRegisterSession: {
         _id: "register-session-open",
@@ -3690,16 +3690,19 @@ describe("projectLocalSyncEvent", () => {
       now: 100,
     });
 
-    expect(result.status).toBe("projected");
-    expect(result.conflicts).toEqual([]);
-    expect(result.mappings).toEqual([
+    expect(result.status).toBe("conflicted");
+    expect(result.conflicts).toEqual([
       expect.objectContaining({
-        localIdKind: "registerSession",
-        localId: "local-register-2",
-        cloudTable: "registerSession",
-        cloudId: "register-session-open",
+        conflictType: "permission",
+        summary: "A register session is already open for this terminal.",
+        details: expect.objectContaining({
+          blockingRegisterSessionId: "register-session-open",
+          localRegisterSessionId: "local-register-2",
+        }),
       }),
     ]);
+    expect(result.mappings).toEqual([]);
+    expect(repository.createdRegisterSessions).toEqual([]);
   });
 
   it("conflicts a stale register open when the active drawer has a newer closeout review", async () => {
@@ -3790,6 +3793,58 @@ describe("projectLocalSyncEvent", () => {
       expect.objectContaining({
         localIdKind: "registerSession",
         localId: "local-register-2",
+        cloudTable: "registerSession",
+        cloudId: "register-session-1",
+      }),
+    ]);
+    expect(repository.createdRegisterSessions).toEqual([
+      expect.objectContaining({
+        expectedCash: 250,
+        openingFloat: 250,
+        registerNumber: "1",
+      }),
+    ]);
+  });
+
+  it("creates a new register open when the blocking drawer already submitted closeout", async () => {
+    const repository = createProjectionRepository({
+      blockingRegisterSession: {
+        _id: "register-session-closing",
+        expectedCash: 100,
+        closeoutRecords: [],
+        registerNumber: "1",
+        status: "closing",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      },
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: {
+        localEventId: "event-register-opened-after-closeout",
+        localRegisterSessionId: "local-register-after-closeout",
+        sequence: 1,
+        eventType: "register_opened",
+        occurredAt: 10,
+        staffProfileId: "staff-1" as never,
+        staffProofToken: "proof-token-1",
+        payload: {
+          openingFloat: 250,
+          registerNumber: "1",
+        },
+      },
+      syncEventId: "sync-event-1",
+      now: 100,
+    });
+
+    expect(result.status).toBe("projected");
+    expect(result.conflicts).toEqual([]);
+    expect(result.mappings).toEqual([
+      expect.objectContaining({
+        localIdKind: "registerSession",
+        localId: "local-register-after-closeout",
         cloudTable: "registerSession",
         cloudId: "register-session-1",
       }),

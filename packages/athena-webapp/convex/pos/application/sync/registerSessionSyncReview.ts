@@ -311,6 +311,32 @@ async function hasInventoryReviewWorkItemForProjectedSale(
   });
 }
 
+async function isNonSaleMissingRegisterSessionMappingConflict(
+  ctx: Pick<QueryCtx, "db">,
+  storeId: Id<"store">,
+  conflict: Doc<"posLocalSyncConflict">,
+) {
+  if (
+    classifyRegisterSessionSyncReview(conflict).reviewKind !==
+      "missing_register_session_mapping" ||
+    !conflict.terminalId
+  ) {
+    return false;
+  }
+
+  const syncEvent = await ctx.db
+    .query("posLocalSyncEvent")
+    .withIndex("by_store_terminal_localEvent", (q) =>
+      q
+        .eq("storeId", conflict.storeId ?? storeId)
+        .eq("terminalId", conflict.terminalId!)
+        .eq("localEventId", conflict.localEventId),
+    )
+    .unique();
+
+  return Boolean(syncEvent && syncEvent.eventType !== "sale_completed");
+}
+
 function recordDetail(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -621,8 +647,22 @@ export async function listOpenLocalSyncConflictsByRegisterSession(
   const activeNeedsReviewConflicts = projectedInventoryReviewResults
     .filter((result) => !result.hasInventoryWorkItem)
     .map((result) => result.conflict);
+  const activeRegisterReviewResults = await Promise.all(
+    activeNeedsReviewConflicts.map(async (conflict) => ({
+      conflict,
+      isNonSaleMissingRegisterSessionMapping:
+        await isNonSaleMissingRegisterSessionMappingConflict(
+          ctx,
+          storeId,
+          conflict,
+        ),
+    })),
+  );
+  const activeRegisterReviewConflicts = activeRegisterReviewResults
+    .filter((result) => !result.isNonSaleMissingRegisterSessionMapping)
+    .map((result) => result.conflict);
   const varianceCloseoutEventKeys = new Set(
-    activeNeedsReviewConflicts
+    activeRegisterReviewConflicts
       .filter(
         (conflict) =>
           classifyRegisterSessionSyncReview(conflict).reviewKind ===
@@ -630,7 +670,7 @@ export async function listOpenLocalSyncConflictsByRegisterSession(
       )
       .map(syncConflictEventKey),
   );
-  const reviewableNeedsReviewConflicts = activeNeedsReviewConflicts.filter(
+  const reviewableNeedsReviewConflicts = activeRegisterReviewConflicts.filter(
     (conflict) =>
       !(
         classifyRegisterSessionSyncReview(conflict).reviewKind ===
@@ -662,6 +702,14 @@ export async function listOpenLocalSyncConflictsByRegisterSession(
         .unique();
 
       if (syncEvent?.status === "conflicted") {
+        if (
+          classifyRegisterSessionSyncReview(conflict).reviewKind ===
+            "missing_register_session_mapping" &&
+          syncEvent.eventType !== "sale_completed"
+        ) {
+          return null;
+        }
+
         return { ...conflict, status: "needs_review" };
       }
 

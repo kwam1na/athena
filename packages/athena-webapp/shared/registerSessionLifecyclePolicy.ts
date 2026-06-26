@@ -154,12 +154,18 @@ export function isDrawerAuthoritySaleBlocking(input: {
 
 export function canReuseCloudRegisterSessionForLocalOpen(input: {
   hasOpenRegisterCloseoutReview: boolean;
+  localRegisterSessionId: string;
   registerSession?: RegisterSessionLifecycleScopedSession | null;
   storeId: string;
   terminalId: string;
 }) {
+  const isSameDrawerIdentity =
+    input.localRegisterSessionId === input.registerSession?.localRegisterSessionId ||
+    input.localRegisterSessionId === input.registerSession?.cloudRegisterSessionId;
+
   return (
     isScopedRegisterSession(input) &&
+    isSameDrawerIdentity &&
     isRegisterSessionSaleUsable(input.registerSession) &&
     !input.hasOpenRegisterCloseoutReview
   );
@@ -194,6 +200,10 @@ export function canSupersedeReviewedRegisterSessionForLocalOpen(input: {
     input.reviewSequence === undefined ||
     input.reviewSequence === null ||
     input.replacementSequence > input.reviewSequence;
+  const hasSubmittedCloseout =
+    input.registerSession?.status === "closing";
+  const hasReplacementHold =
+    input.hasOpenRegisterCloseoutReview || hasSubmittedCloseout;
 
   return (
     isScopedRegisterSession(input) &&
@@ -202,7 +212,7 @@ export function canSupersedeReviewedRegisterSessionForLocalOpen(input: {
     (isRegisterSessionSaleUsable(input.registerSession) ||
       input.registerSession?.status === "closing" ||
       input.registerSession?.status === "closeout_rejected") &&
-    input.hasOpenRegisterCloseoutReview
+    hasReplacementHold
   );
 }
 
