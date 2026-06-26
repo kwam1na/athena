@@ -515,7 +515,7 @@ describe("registerAndProvisionPosTerminal", () => {
       ),
     ).toBeInTheDocument();
     expect(screen.getByLabelText("Dry run EOD completion")).toBeChecked();
-    expect(screen.getByLabelText("Enable clean-day completion")).toBeChecked();
+    expect(screen.getByLabelText("Enable blocker-free completion")).toBeChecked();
     expect(screen.getByRole("combobox", { name: "EOD completion hour" }))
       .toHaveTextContent("06");
     expect(screen.getByRole("combobox", { name: "EOD completion minute" }))
@@ -540,7 +540,7 @@ describe("registerAndProvisionPosTerminal", () => {
       expect(screen.getByLabelText("Dry run EOD completion")).toBeChecked(),
     );
     fireEvent.click(screen.getByLabelText("Enable EOD completion"));
-    fireEvent.click(screen.getByLabelText("Enable clean-day completion"));
+    fireEvent.click(screen.getByLabelText("Enable blocker-free completion"));
     fireEvent.change(screen.getByLabelText("Cash variance threshold"), {
       target: { value: "750" },
     });
@@ -551,7 +551,7 @@ describe("registerAndProvisionPosTerminal", () => {
       target: { value: "9000" },
     });
     expect(screen.getByLabelText("Enable EOD completion")).toBeChecked();
-    expect(screen.getByLabelText("Enable clean-day completion")).not.toBeChecked();
+    expect(screen.getByLabelText("Enable blocker-free completion")).not.toBeChecked();
     expect(screen.getByLabelText("Cash variance threshold")).toHaveValue(750);
     expect(screen.getByLabelText("Voided sale count threshold")).toHaveValue(2);
     expect(screen.getByLabelText("Voided sale total threshold")).toHaveValue(9000);

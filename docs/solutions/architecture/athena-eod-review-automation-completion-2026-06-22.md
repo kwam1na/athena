@@ -41,34 +41,45 @@ Model EOD completion as its own Daily Operations action:
 
 The action is disabled by default. Enabled policies can complete only after the
 configured store-local completion window opens. Clean days require zero
-blockers, zero review items, and zero carry-forward items. Low-risk days require
-every review item to be an allowlisted category inside configured thresholds.
+blockers and zero review items. Low-risk days require every review item to be an
+allowlisted category inside configured thresholds. Carry-forward work is not a
+completion approval signal: automation may complete the EOD boundary only when
+the blockers/review gates pass, and it must preserve carry-forward work as
+unresolved Opening Handoff evidence.
 
 ## Safety Boundary
 
-Carry-forward stays human-only in v1. Any existing carry-forward item or
-non-zero carry-forward count skips automation completion, even when the day is
-otherwise ready.
-
 Automation re-reads the command-time Daily Close snapshot before mutating. If a
-blocker, carry-forward item, unreviewed item, reopened/superseded lifecycle
-state, or already-human-completed close appears, the automation path fails safe
-or records a no-op without overwriting human attribution.
+blocker, unsupported review item, threshold-exceeding review item, unreviewed
+policy item, reopened/superseded lifecycle state, or already-human-completed
+close appears, the automation path fails safe or records a no-op without
+overwriting human attribution.
 
-Read models may expose safe Athena attribution broadly, but restricted
-financial/review evidence keeps the existing manager and financial-detail
-access boundary. Cash variance amounts, voided sale totals, threshold
-summaries, item snapshots, and source evidence must be redacted before reaching
-users without access.
+Carry-forward remains unresolved operational work. Automation must not create,
+resolve, approve, or hide it. The command-time snapshot must map every
+carry-forward item one-to-one to an existing same-store, same-organization,
+non-terminal `operationalWorkItem`; otherwise completion fails closed. Applied
+runs patch final `automationRun.decisionEvidence` from the command-time
+snapshot so the run, completed close, report snapshot, and Opening Handoff all
+describe the same preserved work.
+
+Read models may expose safe Athena attribution and neutral carry-forward counts
+broadly, but restricted financial/review evidence and raw carry-forward
+identifiers keep the existing manager/evidence access boundary. Cash variance
+amounts, voided sale totals, threshold summaries, policy-reviewed keys, raw
+work-item IDs, source-subject IDs, link parameters, decision evidence, item
+metadata, and source evidence must be redacted before reaching users without
+access.
 
 ## Prevention
 
 - Add completion automation as a distinct action; do not overload preparation.
 - Persist structured decision evidence on the run before patching terminal
-  outcomes, including applied outcomes.
+  outcomes, and replace it with command-time evidence for applied outcomes.
 - Keep event taxonomy stable and use actor metadata for automation attribution.
 - Test clean completion, low-risk completion, full hard-blocker matrix,
-  local-time window boundaries, idempotent retries, human attribution
-  preservation, and read-side redaction together.
+  preserved carry-forward work, local-time window boundaries, idempotent
+  retries, human attribution preservation, Opening Handoff continuity, and
+  read-side redaction together.
 - Refresh generated Convex APIs and Graphify whenever schema, backend API, or
   read-model surfaces change.

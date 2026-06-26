@@ -371,7 +371,11 @@ function eodAutoCompleteDecision(
   const observed = {
     absoluteCashVariance,
     blockerCount: snapshot.readiness.blockerCount,
+    carryForwardItemKeys: snapshot.carryForwardItems.map((item) => item.key),
     carryForwardCount: snapshot.readiness.carryForwardCount,
+    carryForwardPreserved:
+      snapshot.readiness.carryForwardCount > 0 ||
+      snapshot.carryForwardItems.length > 0,
     disqualifyingCategories,
     reviewCount: snapshot.readiness.reviewCount,
     voidedSaleCount: snapshot.summary.voidedTransactionCount,
@@ -429,20 +433,6 @@ function eodAutoCompleteDecision(
     return decision({
       classification: "completed",
       decisionReason: "EOD Review is already completed for this store day.",
-      eligible: false,
-      outcome: "skipped",
-    });
-  }
-
-  if (
-    snapshot.status === "carry_forward" ||
-    snapshot.readiness.carryForwardCount > 0 ||
-    snapshot.carryForwardItems.length > 0
-  ) {
-    return decision({
-      classification: "carry_forward",
-      decisionReason:
-        "EOD Review has carry-forward evidence; v1 auto-complete requires human review.",
       eligible: false,
       outcome: "skipped",
     });
@@ -661,6 +651,13 @@ export async function runDailyCloseAutoCompleteEligibilityWithCtx(
           run.decisionReason ?? "EOD Review completed by automation policy.",
         automationPolicyVersion: run.policyVersion,
         automationRunId: run._id,
+        eodAutoCompletePolicy: {
+          cleanDayAutoCompleteEnabled:
+            policyConfig.cleanDayAutoCompleteEnabled,
+          maxAbsoluteCashVariance: policyConfig.maxAbsoluteCashVariance,
+          maxVoidedSaleCount: policyConfig.maxVoidedSaleCount,
+          maxVoidedSaleTotal: policyConfig.maxVoidedSaleTotal,
+        },
         endAt: args.endAt,
         operatingDate: args.operatingDate,
         organizationId: snapshot.organizationId ?? undefined,
@@ -692,6 +689,7 @@ export async function runDailyCloseAutoCompleteEligibilityWithCtx(
         eventIds: result.data.operationalEventId
           ? [result.data.operationalEventId]
           : [],
+        decisionEvidence: result.data.automationDecisionEvidence,
         outcome:
           result.data.action === "already_completed"
             ? ("skipped" as const)

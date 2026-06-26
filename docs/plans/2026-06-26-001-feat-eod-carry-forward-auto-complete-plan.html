@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Plan: Preserve Carry-Forward Work During EOD Auto-Completion</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f8fafc;
+      --paper: #ffffff;
+      --ink: #172033;
+      --muted: #667085;
+      --line: #d9e2ec;
+      --accent: #0f766e;
+      --accent-soft: #e6f4f1;
+      --warn-soft: #fff7e6;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 32px 20px 56px;
+    }
+    header, section {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 18px;
+    }
+    h1, h2, h3 {
+      line-height: 1.2;
+      margin: 0 0 12px;
+    }
+    h1 { font-size: 2rem; }
+    h2 { font-size: 1.35rem; border-bottom: 1px solid var(--line); padding-bottom: 8px; }
+    h3 { font-size: 1.05rem; margin-top: 20px; }
+    p { margin: 0 0 12px; }
+    ul { margin: 0 0 0 1.2rem; padding: 0; }
+    li { margin: 0.35rem 0; }
+    a { color: var(--accent); text-decoration-thickness: 1px; }
+    code {
+      background: #eef2f7;
+      border-radius: 4px;
+      padding: 0.1rem 0.3rem;
+      font-size: 0.92em;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 12px 0;
+      font-size: 0.95rem;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 10px;
+      vertical-align: top;
+      text-align: left;
+    }
+    th { background: #f1f5f9; }
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 16px;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+    .pill {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 4px 10px;
+      background: #fbfdff;
+    }
+    .callout {
+      background: var(--accent-soft);
+      border-left: 4px solid var(--accent);
+      padding: 14px 16px;
+      border-radius: 6px;
+      margin: 14px 0;
+    }
+    .warning {
+      background: var(--warn-soft);
+      border-left-color: #b45309;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 14px;
+    }
+    .unit {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px;
+      background: #fbfdff;
+    }
+    .unit h3 { margin-top: 0; }
+    .small { color: var(--muted); font-size: 0.94rem; }
+    @media (max-width: 700px) {
+      header, section { padding: 18px; }
+      h1 { font-size: 1.55rem; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Preserve Carry-Forward Work During EOD Auto-Completion</h1>
+      <p>Extend EOD auto-completion so Athena can close blocker-free EOD Reviews with supported review evidence and carry-forward work, while preserving unresolved work for Opening Handoff.</p>
+      <div class="meta">
+        <span class="pill">Type: feat</span>
+        <span class="pill">Status: active</span>
+        <span class="pill">Date: 2026-06-26</span>
+        <span class="pill">Source: <a href="2026-06-26-001-feat-eod-carry-forward-auto-complete-plan.md">Markdown plan</a></span>
+      </div>
+    </header>
+
+    <section>
+      <h2>Scope</h2>
+      <div class="callout">
+        <p><strong>Core shift:</strong> carry-forward is no longer a hard EOD auto-completion blocker by itself. Athena may complete the EOD Review when blockers are zero and review policy passes, but carry-forward remains unresolved and visible for Opening.</p>
+      </div>
+      <ul>
+        <li>Keep blockers strict.</li>
+        <li>Keep supported review categories limited to <code>cash_variance</code> and <code>voided_sale</code>.</li>
+        <li>Preserve carry-forward work item IDs, counts, and snapshot evidence.</li>
+        <li>Do not create new carry-forward work items from automation.</li>
+        <li>Do not treat carry-forward as policy-reviewed review evidence.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Key Decisions</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Decision</th>
+            <th>Rationale</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Replace carry-forward skip with preserved evidence.</td>
+            <td>Carry-forward is already durable handoff work and should not block closing when the day has zero blockers.</td>
+          </tr>
+          <tr>
+            <td>Keep review and carry-forward semantics separate.</td>
+            <td><code>policyReviewedItemKeys</code> should only mean review evidence checked by policy, not work resolution.</td>
+          </tr>
+          <tr>
+            <td>Let command-time re-read win.</td>
+            <td>Daily Close is a store-day command boundary; the final server snapshot and policy check prevent races from closing blocked or over-threshold days.</td>
+          </tr>
+          <tr>
+            <td>Preserve IDs, stored snapshot evidence, and applied run evidence.</td>
+            <td>Opening Handoff needs durable IDs, history needs immutable report evidence, and the automation ledger must match the completed close.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Copy Direction</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>State</th>
+            <th>Approved direction</th>
+            <th>Avoid</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Settings capability</td>
+            <td>Athena can complete blocker-free EOD Reviews under store policy. Carry-forward work stays open for Opening Handoff.</td>
+            <td>Resolved, approved, clean-only capability wording.</td>
+          </tr>
+          <tr>
+            <td>Completed with carry-forward</td>
+            <td>Carry-forward work was preserved for Opening Handoff.</td>
+            <td>Cleared, completed, resolved.</td>
+          </tr>
+          <tr>
+            <td>Opening Handoff</td>
+            <td>Carry-forward work from the prior EOD Review remains open for this opening.</td>
+            <td>Any implication that the close resolved the work item.</td>
+          </tr>
+          <tr>
+            <td>Redacted attribution</td>
+            <td>Restricted close evidence is hidden for this account.</td>
+            <td>Variance totals, void totals, raw backend codes.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Implementation Units</h2>
+      <div class="grid">
+        <article class="unit">
+          <h3>U1. Eligibility Policy</h3>
+          <p>Update <code>dailyOperationsAutomation.ts</code> and run-ledger evidence so carry-forward is observed/preserved evidence, not an ineligible classification.</p>
+          <p class="small">Primary tests: <code>dailyOperationsAutomation.test.ts</code></p>
+        </article>
+        <article class="unit">
+          <h3>U2. Completion Persistence</h3>
+          <p>Update <code>dailyClose.ts</code> so automation-completed closes persist carry-forward IDs, counts, return payloads, and report snapshot items.</p>
+          <p class="small">Primary tests: <code>dailyClose.test.ts</code></p>
+        </article>
+        <article class="unit">
+          <h3>U3. Read Models and History</h3>
+          <p>Keep completed lifecycle primary, preserve stored-history rendering, and verify redaction for broad readers.</p>
+          <p class="small">Primary tests: <code>dailyOperations.test.ts</code>, <code>dailyClose.test.ts</code></p>
+        </article>
+        <article class="unit">
+          <h3>U4. Operator Copy</h3>
+          <p>Update POS settings, Daily Close, Daily Operations, history, and Opening Handoff copy so Athena completion does not imply manager approval or carry-forward resolution.</p>
+          <p class="small">Primary tests: component tests for settings and operations views</p>
+        </article>
+        <article class="unit">
+          <h3>U5. Opening Handoff</h3>
+          <p>Prove Opening consumes carry-forward IDs from an Athena-completed prior close and keeps acknowledgement semantics unchanged.</p>
+          <p class="small">Primary tests: <code>dailyOpening.test.ts</code>, <code>DailyOpeningView.test.tsx</code></p>
+        </article>
+        <article class="unit">
+          <h3>U6. Knowledge and Validation</h3>
+          <p>Update durable solution guidance and validation metadata if implementation changes generated harness artifacts.</p>
+          <p class="small">Primary docs: EOD automation solution note</p>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <h2>Critical Test Themes</h2>
+      <ul>
+        <li>Clean day plus carry-forward completes when clean-day policy is enabled.</li>
+        <li>Low-risk review plus carry-forward completes inside thresholds.</li>
+        <li>Unsupported review, mixed unsupported review, blockers, and threshold failures still skip.</li>
+        <li>Automation completion stores carry-forward IDs, counts, snapshot items, and Athena attribution.</li>
+        <li>Applied automation evidence matches the command-time completed close/report snapshot.</li>
+        <li>Wrong-store, wrong-organization, terminal, duplicate, missing, or unmappable carry-forward items fail closed.</li>
+        <li>Broad readers see safe attribution and carry-forward shells/counts but not restricted financial or review metadata.</li>
+        <li>Opening Handoff surfaces carry-forward work from an Athena-completed prior close.</li>
+        <li>Dry-run, skipped, redacted, no-carry-forward, and carry-forward-present copy states stay distinct.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Risks</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Risk</th>
+            <th>Mitigation</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Automation appears to resolve carry-forward work.</td>
+            <td>Keep copy and data model explicit: preserved for Opening, not resolved.</td>
+          </tr>
+          <tr>
+            <td>Opening loses carry-forward handoff.</td>
+            <td>Persist <code>carryForwardWorkItemIds</code> and test Opening context.</td>
+          </tr>
+          <tr>
+            <td>Restricted evidence leaks.</td>
+            <td>Keep redaction boundaries and add broad-reader tests.</td>
+          </tr>
+          <tr>
+            <td>A race closes a newly blocked day.</td>
+            <td>Command-time snapshot re-read wins and skips if blockers or unsupported review appear.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>References</h2>
+      <ul>
+        <li><a href="../brainstorms/2026-05-07-daily-operations-lifecycle-requirements.md">Daily Operations Lifecycle requirements</a></li>
+        <li><a href="2026-06-22-004-feat-eod-review-automation-plan.md">Prior EOD automation plan</a></li>
+        <li><a href="../solutions/architecture/athena-eod-review-automation-completion-2026-06-22.md">EOD automation solution note</a></li>
+        <li><a href="../solutions/logic-errors/athena-daily-close-store-day-boundary-2026-05-07.md">Daily Close store-day boundary</a></li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>

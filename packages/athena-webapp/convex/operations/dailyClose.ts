@@ -27,6 +27,7 @@ import {
   type DailyOperationsAutomationStatus,
 } from "./dailyOperationsAutomation";
 import { buildPaymentTotals, transactionCashDelta } from "./paymentTotals";
+import type { AutomationDecisionEvidence } from "../automation/runLedger";
 
 const DAILY_CLOSE_QUERY_LIMIT = 200;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -35,6 +36,10 @@ const DAILY_CLOSE_SUBJECT_TYPE = "daily_close";
 const DAILY_CLOSE_CARRY_FORWARD_TYPE = "daily_close_carry_forward";
 const TERMINAL_WORK_ITEM_STATUSES = new Set(["completed", "cancelled"]);
 const OPEN_OPERATIONAL_WORK_ITEM_STATUSES = ["open", "in_progress"] as const;
+const EOD_AUTO_COMPLETE_LOW_RISK_REVIEW_CATEGORIES = new Set([
+  "cash_variance",
+  "voided_sale",
+]);
 const ACTIVE_REGISTER_STATUSES = ["open", "active", "closing"] as const;
 const REVIEW_ONLY_REGISTER_CLOSEOUT_STATUSES = ["closeout_rejected"] as const;
 const OPEN_POS_SESSION_STATUSES = ["active", "held"] as const;
@@ -375,6 +380,12 @@ type CompleteDailyCloseForAutomationArgs = {
   automationDecisionReason: string;
   automationPolicyVersion: string;
   automationRunId: Id<"automationRun">;
+  eodAutoCompletePolicy: {
+    cleanDayAutoCompleteEnabled: boolean;
+    maxAbsoluteCashVariance: number;
+    maxVoidedSaleCount: number;
+    maxVoidedSaleTotal: number;
+  };
   endAt?: number;
   operatingDate: string;
   organizationId?: Id<"organization">;
@@ -386,6 +397,7 @@ type CompleteDailyCloseForAutomationArgs = {
 type CompleteDailyCloseResult = ApprovalCommandResult<{
   action: "completed" | "already_completed";
   dailyClose: Doc<"dailyClose">;
+  automationDecisionEvidence?: AutomationDecisionEvidence;
   carryForwardWorkItems: Array<Doc<"operationalWorkItem">>;
   operationalEventId?: Id<"operationalEvent">;
 }>;
@@ -1494,6 +1506,154 @@ function buildDailyCloseReportSnapshot(args: {
   };
 }
 
+function numberFromMetadata(
+  record: Record<string, unknown> | undefined,
+  key: string,
+) {
+  const value = record?.[key];
+
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+function buildEodAutomationDecisionEvidence(args: {
+  classification: string;
+  eligible: boolean;
+  policy: CompleteDailyCloseForAutomationArgs["eodAutoCompletePolicy"];
+  snapshot: DailyCloseSnapshot;
+}): AutomationDecisionEvidence {
+  const voidedSaleTotal = args.snapshot.reviewItems
+    .filter((item) => item.category === "voided_sale")
+    .reduce((sum, item) => sum + numberFromMetadata(item.metadata, "total"), 0);
+  const disqualifyingCategories = Array.from(
+    new Set([
+      ...args.snapshot.blockers.map((item) => item.category),
+      ...args.snapshot.reviewItems
+        .map((item) => item.category)
+        .filter(
+          (category) =>
+            !EOD_AUTO_COMPLETE_LOW_RISK_REVIEW_CATEGORIES.has(category),
+        ),
+    ]),
+  ).sort();
+
+  return {
+    kind: "eod_auto_complete",
+    classification: args.classification,
+    eligible: args.eligible,
+    observed: {
+      absoluteCashVariance: Math.abs(args.snapshot.summary.netCashVariance),
+      blockerCount: args.snapshot.readiness.blockerCount,
+      carryForwardCount: args.snapshot.readiness.carryForwardCount,
+      carryForwardItemKeys: args.snapshot.carryForwardItems.map(
+        (item) => item.key,
+      ),
+      carryForwardPreserved:
+        args.snapshot.carryForwardItems.length > 0 ||
+        args.snapshot.readiness.carryForwardCount > 0,
+      disqualifyingCategories,
+      reviewCount: args.snapshot.readiness.reviewCount,
+      voidedSaleCount: args.snapshot.summary.voidedTransactionCount,
+      voidedSaleTotal,
+    },
+    policy: {
+      cleanDayAutoCompleteEnabled: args.policy.cleanDayAutoCompleteEnabled,
+      maxAbsoluteCashVariance: args.policy.maxAbsoluteCashVariance,
+      maxVoidedSaleCount: args.policy.maxVoidedSaleCount,
+      maxVoidedSaleTotal: args.policy.maxVoidedSaleTotal,
+    },
+  };
+}
+
+function validateEodAutomationPolicyForSnapshot(args: {
+  policy: CompleteDailyCloseForAutomationArgs["eodAutoCompletePolicy"];
+  reviewedItemKeys: Set<string>;
+  snapshot: DailyCloseSnapshot;
+}) {
+  const unsupportedReviewCategories = Array.from(
+    new Set(
+      args.snapshot.reviewItems
+        .map((item) => item.category)
+        .filter(
+          (category) =>
+            !EOD_AUTO_COMPLETE_LOW_RISK_REVIEW_CATEGORIES.has(category),
+        ),
+    ),
+  );
+  const disqualifyingCategories = Array.from(
+    new Set([
+      ...args.snapshot.blockers.map((item) => item.category),
+      ...unsupportedReviewCategories,
+    ]),
+  ).sort();
+
+  if (disqualifyingCategories.length > 0) {
+    return {
+      classification: "blocked",
+      message:
+        "EOD Review automation cannot complete while blockers or unsupported review evidence remain.",
+      metadata: { disqualifyingCategories },
+    };
+  }
+
+  if (args.snapshot.reviewItems.length === 0) {
+    return args.policy.cleanDayAutoCompleteEnabled
+      ? null
+      : {
+          classification: "clean_day",
+          message:
+            "EOD Review automation cannot complete clean days while clean-day auto-complete is disabled.",
+          metadata: { cleanDayAutoCompleteEnabled: false },
+        };
+  }
+
+  const unreviewedItemKeys = args.snapshot.reviewItems
+    .map((item) => item.key)
+    .filter((key) => !args.reviewedItemKeys.has(key));
+
+  if (unreviewedItemKeys.length > 0) {
+    return {
+      classification: "review_unreviewed",
+      message:
+        "EOD Review automation cannot complete while review items are unreviewed by policy.",
+      metadata: {
+        reviewItemCount: args.snapshot.reviewItems.length,
+        unreviewedItemKeys,
+      },
+    };
+  }
+
+  const absoluteCashVariance = Math.abs(args.snapshot.summary.netCashVariance);
+  const voidedSaleTotal = args.snapshot.reviewItems
+    .filter((item) => item.category === "voided_sale")
+    .reduce((sum, item) => sum + numberFromMetadata(item.metadata, "total"), 0);
+  const thresholdFailures = [
+    absoluteCashVariance > args.policy.maxAbsoluteCashVariance
+      ? "absolute_cash_variance"
+      : null,
+    args.snapshot.summary.voidedTransactionCount >
+    args.policy.maxVoidedSaleCount
+      ? "voided_sale_count"
+      : null,
+    voidedSaleTotal > args.policy.maxVoidedSaleTotal
+      ? "voided_sale_total"
+      : null,
+  ].filter(Boolean);
+
+  return thresholdFailures.length === 0
+    ? null
+    : {
+        classification: "review_threshold_exceeded",
+        message:
+          "EOD Review automation cannot complete while review evidence exceeds policy thresholds.",
+        metadata: {
+          absoluteCashVariance,
+          thresholdFailures,
+          voidedSaleCount: args.snapshot.summary.voidedTransactionCount,
+          voidedSaleTotal,
+        },
+      };
+}
+
 function snapshotReviewedItems(
   snapshot: DailyCloseSnapshot,
   reviewedItemKeys?: string[],
@@ -1533,14 +1693,21 @@ function completionAttributionForDailyClose(
   };
 }
 
-function redactDailyCloseItemForBroadView(item: DailyCloseItem): DailyCloseItem {
+function redactDailyCloseItemForBroadView(
+  item: DailyCloseItem,
+  index = 0,
+): DailyCloseItem {
   return {
-    key: item.key,
+    key: `${item.severity}:${item.category}:${index}`,
     severity: item.severity,
     category: item.category,
     title: item.title,
     message: item.message,
-    subject: item.subject,
+    subject: {
+      type: item.subject.type,
+      id: "redacted",
+      label: item.subject.label,
+    },
   };
 }
 
@@ -1580,7 +1747,7 @@ function redactDailyCloseReportSnapshotForBroadView(
       automationPolicyVersion: snapshot.closeMetadata.automationPolicyVersion,
       automationDecisionReason: snapshot.closeMetadata.automationDecisionReason,
       notes: snapshot.closeMetadata.notes,
-      carryForwardWorkItemIds: snapshot.closeMetadata.carryForwardWorkItemIds,
+      carryForwardWorkItemIds: [],
     },
     readiness: snapshot.readiness,
     summary: redactDailyCloseSummaryForBroadView(snapshot.summary),
@@ -2704,6 +2871,89 @@ async function validateCarryForwardWorkItemIds(
   };
 }
 
+function carryForwardWorkItemIdFromItem(
+  item: DailyCloseItem,
+): Id<"operationalWorkItem"> | null {
+  if (item.subject.type !== "operational_work_item") {
+    return null;
+  }
+
+  return item.subject.id as Id<"operationalWorkItem">;
+}
+
+async function validateAutomationCarryForwardWorkItems(
+  ctx: Pick<MutationCtx, "db">,
+  args: {
+    organizationId: Id<"organization">;
+    snapshot: DailyCloseSnapshot;
+    storeId: Id<"store">;
+  },
+) {
+  const workItemIds = args.snapshot.carryForwardItems
+    .map(carryForwardWorkItemIdFromItem)
+    .filter(Boolean) as Id<"operationalWorkItem">[];
+  const uniqueWorkItemIds = Array.from(new Set(workItemIds));
+
+  if (
+    workItemIds.length !== args.snapshot.carryForwardItems.length ||
+    uniqueWorkItemIds.length !== workItemIds.length
+  ) {
+    return {
+      ok: false as const,
+      message:
+        "EOD Review automation cannot preserve unmapped or duplicated carry-forward work.",
+      metadata: {
+        carryForwardCount: args.snapshot.carryForwardItems.length,
+        mappedWorkItemCount: uniqueWorkItemIds.length,
+      },
+    };
+  }
+
+  const workItems: Array<Doc<"operationalWorkItem">> = [];
+
+  for (const workItemId of uniqueWorkItemIds) {
+    const workItem = await ctx.db.get("operationalWorkItem", workItemId);
+
+    if (!workItem) {
+      return {
+        ok: false as const,
+        message:
+          "EOD Review automation cannot preserve missing carry-forward work.",
+        metadata: { workItemId },
+      };
+    }
+
+    if (
+      workItem.storeId !== args.storeId ||
+      workItem.organizationId !== args.organizationId
+    ) {
+      return {
+        ok: false as const,
+        message:
+          "EOD Review automation cannot preserve carry-forward work outside this store.",
+        metadata: { workItemId },
+      };
+    }
+
+    if (TERMINAL_WORK_ITEM_STATUSES.has(workItem.status)) {
+      return {
+        ok: false as const,
+        message:
+          "EOD Review automation cannot preserve terminal carry-forward work.",
+        metadata: { status: workItem.status, workItemId },
+      };
+    }
+
+    workItems.push(workItem);
+  }
+
+  return {
+    ok: true as const,
+    workItemIds: uniqueWorkItemIds,
+    workItems,
+  };
+}
+
 async function createCarryForwardWorkItems(
   ctx: MutationCtx,
   args: {
@@ -3165,6 +3415,14 @@ export async function completeDailyCloseForAutomationWithCtx(
     });
   }
 
+  if (!args.eodAutoCompletePolicy) {
+    return userError({
+      code: "precondition_failed",
+      message:
+        "EOD Review automation requires policy evidence before completion.",
+    });
+  }
+
   if (!snapshot.existingClose) {
     const nonActiveClose = await getNonActiveDailyCloseForDate(ctx, {
       operatingDate: args.operatingDate,
@@ -3212,18 +3470,21 @@ export async function completeDailyCloseForAutomationWithCtx(
     });
   }
 
-  if (snapshot.carryForwardItems.length > 0) {
+  const reviewedItemKeys = new Set(args.policyReviewedItemKeys);
+  const policyError = validateEodAutomationPolicyForSnapshot({
+    policy: args.eodAutoCompletePolicy,
+    reviewedItemKeys,
+    snapshot,
+  });
+
+  if (policyError) {
     return userError({
       code: "precondition_failed",
-      message:
-        "EOD Review automation cannot complete while carry-forward items remain.",
-      metadata: {
-        carryForwardCount: snapshot.carryForwardItems.length,
-      },
+      message: policyError.message,
+      metadata: policyError.metadata,
     });
   }
 
-  const reviewedItemKeys = new Set(args.policyReviewedItemKeys);
   const unreviewedItemKeys = snapshot.reviewItems
     .map((item) => item.key)
     .filter((key) => !reviewedItemKeys.has(key));
@@ -3240,15 +3501,38 @@ export async function completeDailyCloseForAutomationWithCtx(
     });
   }
 
+  const carryForwardResult = await validateAutomationCarryForwardWorkItems(ctx, {
+    organizationId: store.organizationId,
+    snapshot,
+    storeId: args.storeId,
+  });
+
+  if (!carryForwardResult.ok) {
+    return userError({
+      code: "precondition_failed",
+      message: carryForwardResult.message,
+      metadata: carryForwardResult.metadata,
+    });
+  }
+
   const now = Date.now();
+  const carryForwardWorkItemIds = carryForwardResult.workItemIds;
+  const carryForwardWorkItems = carryForwardResult.workItems;
   const readiness = {
     ...snapshot.readiness,
-    carryForwardCount: 0,
+    carryForwardCount: carryForwardWorkItemIds.length,
   };
   const summary = {
     ...snapshot.summary,
-    carryForwardWorkItemCount: 0,
+    carryForwardWorkItemCount: carryForwardWorkItemIds.length,
   };
+  const automationDecisionEvidence = buildEodAutomationDecisionEvidence({
+    classification:
+      snapshot.reviewItems.length > 0 ? "low_risk_review" : "clean_day",
+    eligible: true,
+    policy: args.eodAutoCompletePolicy,
+    snapshot,
+  });
   const closeFields = {
     storeId: args.storeId,
     organizationId: store.organizationId,
@@ -3264,8 +3548,8 @@ export async function completeDailyCloseForAutomationWithCtx(
       automationDecisionReason: args.automationDecisionReason,
       automationPolicyVersion: args.automationPolicyVersion,
       automationRunId: args.automationRunId,
-      carryForwardWorkItemIds: [],
-      carryForwardWorkItems: [],
+      carryForwardWorkItemIds,
+      carryForwardWorkItems,
       completedAt: now,
       policyReviewedItemKeys: args.policyReviewedItemKeys,
       readiness,
@@ -3273,7 +3557,7 @@ export async function completeDailyCloseForAutomationWithCtx(
       snapshot,
       summary,
     }),
-    carryForwardWorkItemIds: [],
+    carryForwardWorkItemIds,
     reviewedItemKeys: args.policyReviewedItemKeys,
     actorType: "automation" as const,
     automationRunId: args.automationRunId,
@@ -3333,8 +3617,9 @@ export async function completeDailyCloseForAutomationWithCtx(
 
   return ok({
     action: "completed",
+    automationDecisionEvidence,
     dailyClose,
-    carryForwardWorkItems: [],
+    carryForwardWorkItems,
     operationalEventId: operationalEvent?._id,
   });
 }
@@ -3569,6 +3854,31 @@ export async function getDailyCloseOpeningContextWithCtx(
   };
 }
 
+function redactDailyCloseOpeningContextForBroadView(
+  context: Awaited<ReturnType<typeof getDailyCloseOpeningContextWithCtx>>,
+) {
+  return {
+    priorClose: context.priorClose
+      ? {
+          actorType: context.priorClose.actorType,
+          automationPolicyVersion: context.priorClose.automationPolicyVersion,
+          completedAt: context.priorClose.completedAt,
+          lifecycleStatus: context.priorClose.lifecycleStatus,
+          operatingDate: context.priorClose.operatingDate,
+          status: context.priorClose.status,
+        }
+      : null,
+    carryForwardWorkItems: context.carryForwardWorkItems.map((workItem) => ({
+      approvalState: workItem.approvalState,
+      ...(workItem.dueAt ? { dueAt: workItem.dueAt } : {}),
+      priority: workItem.priority,
+      status: workItem.status,
+      title: workItem.title,
+      type: workItem.type,
+    })),
+  };
+}
+
 export async function listCompletedDailyCloseHistoryWithCtx(
   ctx: Pick<QueryCtx, "db">,
   args: {
@@ -3682,7 +3992,11 @@ export const getDailyCloseSnapshot = query({
     startAt: v.optional(v.number()),
     storeId: v.id("store"),
   },
-  handler: (ctx, args) => buildDailyCloseSnapshotWithCtx(ctx, args),
+  handler: (ctx, args) =>
+    buildDailyCloseSnapshotWithCtx(ctx, {
+      ...args,
+      includeManagerReviewEvidence: false,
+    }),
 });
 
 export const completeDailyClose = mutation({
@@ -3720,6 +4034,12 @@ export const completeDailyCloseForAutomation = internalMutation({
     automationDecisionReason: v.string(),
     automationPolicyVersion: v.string(),
     automationRunId: v.id("automationRun"),
+    eodAutoCompletePolicy: v.object({
+      cleanDayAutoCompleteEnabled: v.boolean(),
+      maxAbsoluteCashVariance: v.number(),
+      maxVoidedSaleCount: v.number(),
+      maxVoidedSaleTotal: v.number(),
+    }),
     endAt: v.optional(v.number()),
     operatingDate: v.string(),
     organizationId: v.optional(v.id("organization")),
@@ -3750,7 +4070,10 @@ export const getDailyCloseOpeningContext = query({
     operatingDate: v.string(),
     storeId: v.id("store"),
   },
-  handler: (ctx, args) => getDailyCloseOpeningContextWithCtx(ctx, args),
+  handler: async (ctx, args) =>
+    redactDailyCloseOpeningContextForBroadView(
+      await getDailyCloseOpeningContextWithCtx(ctx, args),
+    ),
 });
 
 export const listCompletedDailyCloseHistory = query({

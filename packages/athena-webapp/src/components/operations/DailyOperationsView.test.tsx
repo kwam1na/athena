@@ -1193,7 +1193,31 @@ describe("DailyOperationsViewContent", () => {
     expect(
       screen.getByText("Policy checked low-risk review evidence before completion."),
     ).toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        "Policy checked low-risk review evidence and preserved carry-forward work for Opening.",
+      ),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText(/manager approved/i)).not.toBeInTheDocument();
+  });
+
+  it("shows preserved carry-forward copy when the completed close has carry-forward", () => {
+    renderContent({
+      ...closedSnapshot,
+      completedClose: {
+        actorType: "automation",
+        automationDecisionReason:
+          "EOD Review has only low-risk review evidence within policy thresholds.",
+        carryForwardCount: 1,
+        completedAt: Date.UTC(2026, 4, 8, 22),
+      },
+    } as DailyOperationsSnapshot);
+
+    expect(
+      screen.getByText(
+        "Policy checked low-risk review evidence and preserved carry-forward work for Opening.",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("shows safe Athena completion attribution when details are redacted", () => {
@@ -1213,7 +1237,7 @@ describe("DailyOperationsViewContent", () => {
       screen.getByText("Restricted close evidence is hidden for this account."),
     ).toBeInTheDocument();
     expect(
-      screen.queryByText("Policy checked low-risk review evidence before completion."),
+      screen.queryByText("Policy checked low-risk review evidence and preserved carry-forward work for Opening."),
     ).not.toBeInTheDocument();
   });
 
