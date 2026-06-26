@@ -38,7 +38,7 @@ filter but had a separate button layout from the read-only metric cards.
 
 ## Solution
 
-Use `OperationsSummaryMetric` as the shared metric contract for store-ops
+Use `OperationsSummaryMetric` as the shared metric contract for Store-ops
 workspace KPIs:
 
 ```tsx

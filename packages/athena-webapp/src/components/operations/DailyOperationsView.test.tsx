@@ -1148,6 +1148,12 @@ describe("DailyOperationsViewContent", () => {
     expect(
       screen.getByText("Athena prepared EOD Review for manager review."),
     ).toBeInTheDocument();
+    const closeAutomationMessage = screen.getByText(
+      "Athena prepared EOD Review for manager review.",
+    );
+
+    expect(closeAutomationMessage).not.toHaveClass("truncate");
+    expect(closeAutomationMessage).toHaveClass("break-words", "leading-5");
     expect(
       screen.getByRole("link", { name: "Open Opening Handoff automation source" }),
     ).toHaveAttribute("href", "/wigclub/store/osu/operations/opening?o=%252Fwigclub%252Fstore%252Fosu%252Foperations");
@@ -1354,9 +1360,41 @@ describe("DailyOperationsViewContent", () => {
       .getByRole("heading", { name: "Opening review" })
       .closest("section");
     const timeline = screen.getByLabelText("Store-day timeline");
+    const workflowSection = screen
+      .getByRole("heading", { name: "Workflow status" })
+      .closest("section");
 
     expect(openingReview?.parentElement).toBe(timeline.parentElement);
     expect(openingReview?.compareDocumentPosition(timeline)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    expect(openingReview?.compareDocumentPosition(workflowSection!)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+  });
+
+  it("places Opening review below automation on mobile", () => {
+    mockedHooks.useIsMobile.mockReturnValue(true);
+
+    renderContent(automationReviewSnapshot);
+
+    const automationPanel = screen
+      .getByRole("heading", { name: "Athena automation" })
+      .closest("section");
+    const openingReview = screen
+      .getByRole("heading", { name: "Opening review" })
+      .closest("section");
+    const netSalesMetric = screen
+      .getByText("Today's net sales")
+      .closest("a,article,div");
+
+    expect(screen.getAllByRole("heading", { name: "Opening review" })).toHaveLength(
+      1,
+    );
+    expect(automationPanel?.compareDocumentPosition(openingReview!)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    expect(openingReview?.compareDocumentPosition(netSalesMetric!)).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING,
     );
   });

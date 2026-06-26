@@ -23,6 +23,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 
 import { useProtectedAdminPageState } from "@/hooks/useProtectedAdminPageState";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { getOrigin } from "@/lib/navigationUtils";
 import { formatStoredAmount } from "@/lib/pos/displayAmounts";
 import { cn } from "@/lib/utils";
@@ -1070,7 +1071,7 @@ function AutomationStatusPanel({
                   key={status.id}
                 >
                   <div className="min-w-0">
-                    <p className="truncate text-sm text-foreground">
+                    <p className="break-words text-sm leading-5 text-foreground">
                       {getAutomationStatusMessage(status)}
                     </p>
                     <div className="mt-1.5 flex flex-wrap items-center gap-layout-xs">
@@ -1885,6 +1886,7 @@ export function DailyOperationsViewContent({
   storeUrlSlug,
 }: DailyOperationsViewContentProps) {
   const [isTimelineSheetOpen, setIsTimelineSheetOpen] = useState(false);
+  const isMobile = useIsMobile();
 
   if (isLoadingAccess) {
     return null;
@@ -2044,12 +2046,21 @@ export function DailyOperationsViewContent({
                 </div>
 
                 {!isHistoricalDate ? (
-                  <AutomationStatusPanel
-                    orgUrlSlug={orgUrlSlug}
-                    snapshot={snapshot}
-                    storeUrlSlug={storeUrlSlug}
-                    variant="compact"
-                  />
+                  <>
+                    <AutomationStatusPanel
+                      orgUrlSlug={orgUrlSlug}
+                      snapshot={snapshot}
+                      storeUrlSlug={storeUrlSlug}
+                      variant="compact"
+                    />
+                    {isMobile ? (
+                      <AutomationReviewEvidencePanel
+                        orgUrlSlug={orgUrlSlug}
+                        snapshot={snapshot}
+                        storeUrlSlug={storeUrlSlug}
+                      />
+                    ) : null}
+                  </>
                 ) : null}
 
                 <div className="grid gap-layout-sm sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
@@ -2248,7 +2259,7 @@ export function DailyOperationsViewContent({
               </section>
 
               <PageWorkspaceGrid>
-                <PageWorkspaceMain>
+                <PageWorkspaceMain className="xl:col-start-1 xl:row-start-1">
                   <DailyOperationsStorePulsePanel
                     currency={snapshot.currency ?? currency}
                     hasFullAdminAccess={hasFullAdminAccess}
@@ -2257,51 +2268,16 @@ export function DailyOperationsViewContent({
                   <DailyOperationsCompletionAttributionNotice
                     completedClose={snapshot.completedClose}
                   />
-                  {isHistoricalDate ? (
-                    <HistoricalWorkflowPanel
+                </PageWorkspaceMain>
+
+                <PageWorkspaceRail className="xl:col-start-2 xl:row-span-2 xl:row-start-1">
+                  {!isMobile ? (
+                    <AutomationReviewEvidencePanel
                       orgUrlSlug={orgUrlSlug}
                       snapshot={snapshot}
                       storeUrlSlug={storeUrlSlug}
                     />
-                  ) : (
-                    <section className="space-y-layout-lg">
-                      <div>
-                        <h3 className="text-base font-medium text-foreground">
-                          Workflow status
-                        </h3>
-                      </div>
-                      <div className="overflow-hidden rounded-lg border border-border bg-surface-raised shadow-surface">
-                        <div className="grid gap-layout-xs p-layout-sm md:grid-cols-2 xl:grid-cols-3">
-                          {actionableLanes.length > 0 ? (
-                            actionableLanes.map((lane) => (
-                              <LaneCard
-                                key={lane.key}
-                                lane={lane}
-                                operatingDate={snapshot.operatingDate}
-                                orgUrlSlug={orgUrlSlug}
-                                storeUrlSlug={storeUrlSlug}
-                              />
-                            ))
-                          ) : (
-                            <WorkflowAllClearPanel />
-                          )}
-                        </div>
-                        <SupportingWorkspaceLinks
-                          operatingDate={snapshot.operatingDate}
-                          orgUrlSlug={orgUrlSlug}
-                          storeUrlSlug={storeUrlSlug}
-                        />
-                      </div>
-                    </section>
-                  )}
-                </PageWorkspaceMain>
-
-                <PageWorkspaceRail>
-                  <AutomationReviewEvidencePanel
-                    orgUrlSlug={orgUrlSlug}
-                    snapshot={snapshot}
-                    storeUrlSlug={storeUrlSlug}
-                  />
+                  ) : null}
                   <section
                     aria-label="Store-day timeline"
                     className="rounded-lg border border-border bg-surface p-layout-md shadow-surface"
@@ -2340,6 +2316,46 @@ export function DailyOperationsViewContent({
                     ) : null}
                   </section>
                 </PageWorkspaceRail>
+
+                <PageWorkspaceMain className="xl:col-start-1 xl:row-start-2">
+                  {isHistoricalDate ? (
+                    <HistoricalWorkflowPanel
+                      orgUrlSlug={orgUrlSlug}
+                      snapshot={snapshot}
+                      storeUrlSlug={storeUrlSlug}
+                    />
+                  ) : (
+                    <section className="space-y-layout-lg">
+                      <div>
+                        <h3 className="text-base font-medium text-foreground">
+                          Workflow status
+                        </h3>
+                      </div>
+                      <div className="overflow-hidden rounded-lg border border-border bg-surface-raised shadow-surface">
+                        <div className="grid gap-layout-xs p-layout-sm md:grid-cols-2 xl:grid-cols-3">
+                          {actionableLanes.length > 0 ? (
+                            actionableLanes.map((lane) => (
+                              <LaneCard
+                                key={lane.key}
+                                lane={lane}
+                                operatingDate={snapshot.operatingDate}
+                                orgUrlSlug={orgUrlSlug}
+                                storeUrlSlug={storeUrlSlug}
+                              />
+                            ))
+                          ) : (
+                            <WorkflowAllClearPanel />
+                          )}
+                        </div>
+                        <SupportingWorkspaceLinks
+                          operatingDate={snapshot.operatingDate}
+                          orgUrlSlug={orgUrlSlug}
+                          storeUrlSlug={storeUrlSlug}
+                        />
+                      </div>
+                    </section>
+                  )}
+                </PageWorkspaceMain>
               </PageWorkspaceGrid>
 
               <Sheet

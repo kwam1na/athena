@@ -67,7 +67,7 @@ export function AppMessageHost() {
       closeButton: false,
       dismissible: false,
       duration: Number.POSITIVE_INFINITY,
-      position: "top-right",
+      position: "bottom-left",
       className: "min-w-80",
       classNames: {
         toast: "justify-between",
