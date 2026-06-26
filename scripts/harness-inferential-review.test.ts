@@ -3357,6 +3357,56 @@ describe("runHarnessInferentialReview", () => {
     expect(result.machine.findings).toEqual([]);
   });
 
+  it("accepts read-only queries in unchanged files that import changed mutation helpers for mutation paths", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      "packages/athena-webapp/convex/operations/operationalWorkItems.ts",
+      [
+        'import type { MutationCtx } from "../_generated/server";',
+        "",
+        "export async function createOperationalWorkItemWithCtx(ctx: MutationCtx) {",
+        "  const id = await ctx.db.insert(\"operationalWorkItem\", { createdAt: Date.now() });",
+        "  return ctx.db.get(\"operationalWorkItem\", id);",
+        "}",
+      ].join("\n"),
+      rootDir,
+    );
+    await write(
+      "packages/athena-webapp/convex/stockOps/purchaseOrders.ts",
+      [
+        'import { mutation, query } from "../_generated/server";',
+        'import { createOperationalWorkItemWithCtx } from "../operations/operationalWorkItems";',
+        "",
+        "export const getPurchaseOrder = query({",
+        "  args: {},",
+        "  handler: async (ctx) => {",
+        "    const purchaseOrder = await ctx.db.get(\"purchaseOrder\" as never);",
+        "    return purchaseOrder;",
+        "  },",
+        "});",
+        "",
+        "export const createPurchaseOrder = mutation({",
+        "  args: {},",
+        "  handler: async (ctx) => {",
+        "    return createOperationalWorkItemWithCtx(ctx);",
+        "  },",
+        "});",
+      ].join("\n"),
+      rootDir,
+    );
+
+    const result = await runHarnessInferentialReview(rootDir, {
+      getChangedFiles: async () => [
+        "packages/athena-webapp/convex/operations/operationalWorkItems.ts",
+      ],
+      nowIso: () => "2026-04-12T05:00:00.000Z",
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.machine.status).toBe("pass");
+    expect(result.machine.findings).toEqual([]);
+  });
+
   it("accepts read-only helpers that accept QueryCtx or MutationCtx", async () => {
     const rootDir = await createFixtureRepo();
     await write(

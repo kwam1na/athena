@@ -14,6 +14,8 @@ import {
   reopenRejectedRegisterSessionCloseoutWithCtx,
 } from "../operations/registerSessions";
 import { recordRegisterSessionTraceBestEffort } from "../operations/registerSessionTracing";
+import { authenticateStaffCredentialWithCtx } from "../operations/staffCredentials";
+import type { OperationalRole } from "../operations/staffRoles";
 import { commandResultValidator } from "../lib/commandResultValidators";
 import { toDisplayAmount } from "../lib/currency";
 import {
@@ -100,7 +102,15 @@ type CashControlsConfig = {
 
 type CloseoutApprovalRequestRecord = Pick<
   Doc<"approvalRequest">,
-  "_id" | "createdAt" | "notes" | "reason" | "registerSessionId" | "requestType" | "requestedByStaffProfileId" | "status"
+  | "_id"
+  | "createdAt"
+  | "metadata"
+  | "notes"
+  | "reason"
+  | "registerSessionId"
+  | "requestType"
+  | "requestedByStaffProfileId"
+  | "status"
 >;
 
 type CloseoutApprovalRequestSummary = {
@@ -135,6 +145,8 @@ type SubmitRegisterSessionCloseoutArgs = {
   notes?: string;
   registerSessionId: Id<"registerSession">;
   requestedByStaffProfileId?: Id<"staffProfile">;
+  staffPinHash?: string;
+  staffUsername?: string;
   storeId: Id<"store">;
 };
 
@@ -144,6 +156,8 @@ type FinalizeRegisterSessionCloseoutArgs = {
   approvalProofId?: Id<"approvalProof">;
   registerSessionId: Id<"registerSession">;
   requestedByStaffProfileId?: Id<"staffProfile">;
+  staffPinHash?: string;
+  staffUsername?: string;
   storeId: Id<"store">;
 };
 
@@ -649,8 +663,11 @@ async function requireCashControlsStoreAccess(
 async function resolveCloseoutActorStaffProfileId(
   ctx: Pick<MutationCtx, "db">,
   args: {
+    allowedCredentialRoles?: OperationalRole[];
     athenaUserId: Id<"athenaUser">;
     staffProfileId?: Id<"staffProfile">;
+    staffPinHash?: string;
+    staffUsername?: string;
     storeId: Id<"store">;
   },
 ): Promise<CommandResult<Id<"staffProfile"> | undefined>> {
@@ -662,8 +679,7 @@ async function resolveCloseoutActorStaffProfileId(
   if (
     !staffProfile ||
     staffProfile.storeId !== args.storeId ||
-    staffProfile.status !== "active" ||
-    staffProfile.linkedUserId !== args.athenaUserId
+    staffProfile.status !== "active"
   ) {
     return userError({
       code: "authorization_failed",
@@ -671,15 +687,41 @@ async function resolveCloseoutActorStaffProfileId(
     });
   }
 
-  return ok(staffProfile._id);
+  if (staffProfile.linkedUserId === args.athenaUserId) {
+    return ok(staffProfile._id);
+  }
+
+  if (args.staffPinHash && args.staffUsername) {
+    const authentication = await authenticateStaffCredentialWithCtx(ctx, {
+      allowedRoles: args.allowedCredentialRoles,
+      pinHash: args.staffPinHash,
+      storeId: args.storeId,
+      username: args.staffUsername,
+    });
+
+    if (authentication.kind !== "ok") {
+      return authentication;
+    }
+
+    if (authentication.data.staffProfileId === staffProfile._id) {
+      return ok(staffProfile._id);
+    }
+  }
+
+  return userError({
+    code: "authorization_failed",
+    message: "Closeout staff actor does not match the signed-in user.",
+  });
 }
 
 async function cancelPendingApprovalIfNeeded(args: {
-  ctx: Pick<MutationCtx, "db" | "runMutation">;
+  ctx: Pick<MutationCtx, "db">;
   approvalRequestId?: Id<"approvalRequest">;
   decisionNotes?: string;
+  registerSessionId?: Id<"registerSession">;
   reviewedByUserId?: Id<"athenaUser">;
   reviewedByStaffProfileId?: Id<"staffProfile">;
+  storeId?: Id<"store">;
 }): Promise<Doc<"approvalRequest"> | null> {
   if (!args.approvalRequestId) {
     return null;
@@ -694,14 +736,25 @@ async function cancelPendingApprovalIfNeeded(args: {
     return approvalRequest;
   }
 
-  return args.ctx.runMutation(internal.operations.approvalRequests.decideApprovalRequestInternal, {
-    approvalRequestId: approvalRequest._id,
-    decision: "cancelled",
+  if (
+    approvalRequest.requestType !== "variance_review" ||
+    (args.registerSessionId &&
+      approvalRequest.registerSessionId !== args.registerSessionId) ||
+    (args.storeId && approvalRequest.storeId !== args.storeId)
+  ) {
+    return approvalRequest;
+  }
+
+  await args.ctx.db.patch("approvalRequest", approvalRequest._id, {
+    status: "cancelled",
     reviewedByStaffProfileId: args.reviewedByStaffProfileId,
     reviewedByUserId: args.reviewedByUserId,
     decisionNotes:
       args.decisionNotes ?? "Superseded by a new register closeout submission.",
+    decidedAt: Date.now(),
   });
+
+  return args.ctx.db.get("approvalRequest", approvalRequest._id);
 }
 
 export const getCloseoutSnapshot = query({
@@ -811,6 +864,8 @@ export const submitRegisterSessionCloseout = mutation({
     notes: v.optional(v.string()),
     registerSessionId: v.id("registerSession"),
     requestedByStaffProfileId: v.optional(v.id("staffProfile")),
+    staffPinHash: v.optional(v.string()),
+    staffUsername: v.optional(v.string()),
     storeId: v.id("store"),
   },
   returns: submitRegisterSessionCloseoutResultValidator,
@@ -831,8 +886,11 @@ export const submitRegisterSessionCloseout = mutation({
     );
     const actorUserId = athenaUser._id;
     const submitActorStaffProfileResult = await resolveCloseoutActorStaffProfileId(ctx, {
+      allowedCredentialRoles: ["cashier", "manager"],
       athenaUserId: athenaUser._id,
       staffProfileId: args.actorStaffProfileId ?? args.requestedByStaffProfileId,
+      staffPinHash: args.staffPinHash,
+      staffUsername: args.staffUsername,
       storeId: args.storeId,
     });
     if (submitActorStaffProfileResult.kind !== "ok") {
@@ -858,7 +916,8 @@ export const submitRegisterSessionCloseout = mutation({
     if (registerSession.status === "closeout_rejected") {
       return userError({
         code: "precondition_failed",
-        message: "Register closeout is already under review.",
+        message:
+          "Register closeout must be reopened before submitting a corrected count.",
       });
     }
 
@@ -884,6 +943,58 @@ export const submitRegisterSessionCloseout = mutation({
     const latestReopenedCloseout = getLatestReopenedCloseoutRecord(registerSession);
     let closeoutSubmitActorStaffProfileId = submitActorStaffProfileId;
     let approvedByStaffProfileId: Id<"staffProfile"> | undefined;
+
+    if (
+      registerSession.status === "closing" &&
+      registerSession.managerApprovalRequestId &&
+      closeoutReview.requiresApproval
+    ) {
+      const pendingApprovalRequest = await ctx.db.get(
+        "approvalRequest",
+        registerSession.managerApprovalRequestId,
+      );
+
+      if (
+        pendingApprovalRequest?.status === "pending" &&
+        pendingApprovalRequest.requestType === "variance_review" &&
+        pendingApprovalRequest.registerSessionId === registerSession._id
+      ) {
+        const metadata = pendingApprovalRequest.metadata ?? {};
+        const pendingCountedCash =
+          typeof metadata.countedCash === "number"
+            ? metadata.countedCash
+            : undefined;
+        const pendingExpectedCash =
+          typeof metadata.expectedCash === "number"
+            ? metadata.expectedCash
+            : undefined;
+        const pendingVariance =
+          typeof metadata.variance === "number" ? metadata.variance : undefined;
+        const submittedNotes = trimOptional(args.notes);
+        const pendingNotes = trimOptional(pendingApprovalRequest.notes);
+
+        if (
+          pendingCountedCash === args.countedCash &&
+          pendingExpectedCash === registerSession.expectedCash &&
+          pendingVariance === closeoutReview.variance &&
+          pendingNotes === submittedNotes
+        ) {
+          return approvalRequired(
+            buildRegisterSessionVarianceApprovalRequirement({
+              approvalRequestId: pendingApprovalRequest._id,
+              closeoutReview,
+              countedCash: args.countedCash,
+              expectedCash: registerSession.expectedCash,
+              registerSession,
+            }),
+          );
+        }
+
+        // A changed count or note is a correction before review. Let the
+        // existing replacement flow cancel the stale approval and create a new
+        // request with the corrected closeout metadata.
+      }
+    }
 
     if (latestReopenedCloseout) {
       if (
@@ -1052,8 +1163,10 @@ export const submitRegisterSessionCloseout = mutation({
       await cancelPendingApprovalIfNeeded({
         approvalRequestId: registerSession.managerApprovalRequestId,
         ctx,
+        registerSessionId: registerSession._id,
         reviewedByStaffProfileId: closeoutSubmitActorStaffProfileId,
         reviewedByUserId: actorUserId,
+        storeId: args.storeId,
       });
 
       if (approvedByStaffProfileId) {
@@ -1237,8 +1350,10 @@ export const submitRegisterSessionCloseout = mutation({
     await cancelPendingApprovalIfNeeded({
       approvalRequestId: registerSession.managerApprovalRequestId,
       ctx,
+      registerSessionId: registerSession._id,
       reviewedByStaffProfileId: closeoutSubmitActorStaffProfileId,
       reviewedByUserId: actorUserId,
+      storeId: args.storeId,
     });
 
     const closedSession = await ctx.runMutation(
@@ -1304,6 +1419,8 @@ export const finalizeRegisterSessionCloseout = mutation({
     approvalProofId: v.optional(v.id("approvalProof")),
     registerSessionId: v.id("registerSession"),
     requestedByStaffProfileId: v.optional(v.id("staffProfile")),
+    staffPinHash: v.optional(v.string()),
+    staffUsername: v.optional(v.string()),
     storeId: v.id("store"),
   },
   returns: submitRegisterSessionCloseoutResultValidator,
@@ -1318,8 +1435,11 @@ export const finalizeRegisterSessionCloseout = mutation({
     const actorUserId = athenaUser._id;
     const requestedByStaffProfileResult =
       await resolveCloseoutActorStaffProfileId(ctx, {
+        allowedCredentialRoles: ["cashier", "manager"],
         athenaUserId: athenaUser._id,
         staffProfileId: args.requestedByStaffProfileId ?? args.actorStaffProfileId,
+        staffPinHash: args.staffPinHash,
+        staffUsername: args.staffUsername,
         storeId: args.storeId,
       });
     if (requestedByStaffProfileResult.kind !== "ok") {
@@ -1467,9 +1587,11 @@ export const finalizeRegisterSessionCloseout = mutation({
     await cancelPendingApprovalIfNeeded({
       approvalRequestId: registerSession.managerApprovalRequestId,
       ctx,
+      registerSessionId: registerSession._id,
       reviewedByStaffProfileId: closedByStaffProfileId,
       reviewedByUserId: actorUserId,
       decisionNotes: "Finalized after pending void approvals were resolved.",
+      storeId: args.storeId,
     });
 
     const closedSession = await ctx.runMutation(
@@ -1544,15 +1666,6 @@ export const reopenRegisterSessionCloseout = mutation({
   ): Promise<CommandResult<ReopenRegisterSessionResult>> => {
     const { athenaUser } = await requireCashControlsStoreAccess(ctx, args.storeId);
     const actorUserId = athenaUser._id;
-    const actorStaffProfileResult = await resolveCloseoutActorStaffProfileId(ctx, {
-      athenaUserId: athenaUser._id,
-      staffProfileId: args.actorStaffProfileId ?? args.requestedByStaffProfileId,
-      storeId: args.storeId,
-    });
-    if (actorStaffProfileResult.kind !== "ok") {
-      return actorStaffProfileResult;
-    }
-    const actorStaffProfileId = actorStaffProfileResult.data;
     const registerSession = await ctx.db.get("registerSession", args.registerSessionId);
 
     if (!registerSession || registerSession.storeId !== args.storeId) {
@@ -1574,7 +1687,7 @@ export const reopenRegisterSessionCloseout = mutation({
         action: REGISTER_CLOSEOUT_REOPEN_ACTION,
         approvalProofId: args.approvalProofId,
         requiredRole: "manager",
-        requestedByStaffProfileId: actorStaffProfileId,
+        requestedByStaffProfileId: args.requestedByStaffProfileId,
         storeId: args.storeId,
         subject: {
           type: "register_session",
@@ -1679,7 +1792,7 @@ export const reopenRegisterSessionCloseout = mutation({
         action: REGISTER_CLOSEOUT_REOPEN_ACTION,
         approvalProofId: args.approvalProofId,
         requiredRole: "manager",
-        requestedByStaffProfileId: actorStaffProfileId,
+        requestedByStaffProfileId: args.requestedByStaffProfileId,
         storeId: args.storeId,
         subject: {
           type: "register_session",
@@ -1767,12 +1880,24 @@ export const reopenRegisterSessionCloseout = mutation({
       });
     }
 
+    const actorStaffProfileResult = await resolveCloseoutActorStaffProfileId(ctx, {
+      athenaUserId: athenaUser._id,
+      staffProfileId: args.actorStaffProfileId ?? args.requestedByStaffProfileId,
+      storeId: args.storeId,
+    });
+    if (actorStaffProfileResult.kind !== "ok") {
+      return actorStaffProfileResult;
+    }
+    const actorStaffProfileId = actorStaffProfileResult.data;
+
     const approvalRequest = await cancelPendingApprovalIfNeeded({
       approvalRequestId: registerSession.managerApprovalRequestId,
       ctx,
       decisionNotes: "Register closeout reopened from POS.",
+      registerSessionId: registerSession._id,
       reviewedByStaffProfileId: actorStaffProfileId,
       reviewedByUserId: actorUserId,
+      storeId: args.storeId,
     });
 
     const reopenedSession = await ctx.runMutation(
