@@ -71,6 +71,18 @@ type DailyOpeningReadiness = {
   readyCount: number;
 };
 
+type DailyOpeningPriorClose =
+  | Doc<"dailyClose">
+  | {
+      _id?: Id<"dailyClose">;
+      actorType?: "human" | "automation";
+      automationPolicyVersion?: string;
+      completedAt?: number;
+      lifecycleStatus?: string;
+      operatingDate: string;
+      status: string;
+    };
+
 type DailyOpeningSnapshot = {
   endAt: number;
   operatingDate: string;
@@ -78,7 +90,7 @@ type DailyOpeningSnapshot = {
   organizationId: Id<"organization"> | null;
   automationStatus?: DailyOperationsAutomationStatus | null;
   existingOpening: Doc<"dailyOpening"> | null;
-  priorClose: Doc<"dailyClose"> | null;
+  priorClose: DailyOpeningPriorClose | null;
   status: DailyOpeningReadinessStatus | "started";
   blockers: DailyOpeningItem[];
   reviewItems: DailyOpeningItem[];
@@ -466,9 +478,26 @@ function invalidOperatingDateItem(operatingDate: string): DailyOpeningItem {
 }
 
 function missingCarryForwardItem(args: {
+  includeManagerReviewEvidence?: boolean;
   priorClose: Doc<"dailyClose">;
   workItemId: Id<"operationalWorkItem">;
 }): DailyOpeningItem {
+  if (args.includeManagerReviewEvidence === false) {
+    return {
+      key: "carry_forward:missing",
+      severity: "blocker",
+      category: "carry_forward",
+      title: "Carry-forward work is missing",
+      message:
+        "A carry-forward item referenced by the prior end of day review could not be loaded. Resolve the missing handoff before Opening Handoff can be acknowledged.",
+      subject: {
+        type: "operational_work_item",
+        id: "redacted",
+        label: "Missing carry-forward work",
+      },
+    };
+  }
+
   return {
     key: `operational_work_item:${args.workItemId}:missing`,
     severity: "blocker",
@@ -488,7 +517,34 @@ function missingCarryForwardItem(args: {
   };
 }
 
-function priorCloseReadyItem(priorClose: Doc<"dailyClose">): DailyOpeningItem {
+function priorCloseReadyItem(
+  priorClose: Doc<"dailyClose">,
+  options: {
+    includeManagerReviewEvidence?: boolean;
+  } = {},
+): DailyOpeningItem {
+  if (options.includeManagerReviewEvidence === false) {
+    return {
+      key: "prior_close:completed",
+      severity: "ready",
+      category: "prior_close",
+      title: "Prior EOD Review completed",
+      message: "The prior store day has a completed end of day review.",
+      subject: {
+        type: DAILY_CLOSE_SUBJECT_TYPE,
+        id: "redacted",
+        label: `EOD Review ${priorClose.operatingDate}`,
+      },
+      link: {
+        label: "View EOD Review",
+        search: {
+          operatingDate: priorClose.operatingDate,
+        },
+        to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",
+      },
+    };
+  }
+
   return {
     key: `daily_close:${priorClose._id}:completed`,
     severity: "ready",
@@ -514,7 +570,35 @@ function priorCloseReadyItem(priorClose: Doc<"dailyClose">): DailyOpeningItem {
   };
 }
 
-function priorCloseReopenedItem(priorClose: Doc<"dailyClose">): DailyOpeningItem {
+function priorCloseReopenedItem(
+  priorClose: Doc<"dailyClose">,
+  options: {
+    includeManagerReviewEvidence?: boolean;
+  } = {},
+): DailyOpeningItem {
+  if (options.includeManagerReviewEvidence === false) {
+    return {
+      key: "prior_close:reopened",
+      severity: "review",
+      category: "prior_close",
+      title: "Prior EOD Review reopened",
+      message:
+        "The prior store day was reopened. Complete the revised end of day review before treating the prior close as clean.",
+      subject: {
+        type: DAILY_CLOSE_SUBJECT_TYPE,
+        id: "redacted",
+        label: `EOD Review ${priorClose.operatingDate}`,
+      },
+      link: {
+        label: "Review EOD Review",
+        search: {
+          operatingDate: priorClose.operatingDate,
+        },
+        to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",
+      },
+    };
+  }
+
   return {
     key: `daily_close:${priorClose._id}:reopened`,
     severity: "review",
@@ -569,7 +653,27 @@ function priorCloseNotesItem(priorClose: Doc<"dailyClose">): DailyOpeningItem | 
 
 function carryForwardItem(
   workItem: Doc<"operationalWorkItem">,
+  options: {
+    includeManagerReviewEvidence?: boolean;
+    index?: number;
+  } = {},
 ): DailyOpeningItem {
+  if (options.includeManagerReviewEvidence === false) {
+    return {
+      key: `carry_forward:${options.index ?? 0}`,
+      severity: "carry_forward",
+      category: "carry_forward",
+      title: workItem.title,
+      message:
+        "This unresolved carry-forward item remains open and must be acknowledged for Opening.",
+      subject: {
+        type: "operational_work_item",
+        id: "redacted",
+        label: workItem.title,
+      },
+    };
+  }
+
   return {
     key: `operational_work_item:${workItem._id}:carry_forward`,
     severity: "carry_forward",
@@ -591,6 +695,21 @@ function carryForwardItem(
       status: workItem.status,
       type: workItem.type,
     },
+  };
+}
+
+function redactPriorCloseForBroadOpeningSnapshot(
+  priorClose: Doc<"dailyClose"> | null,
+): DailyOpeningPriorClose | null {
+  if (!priorClose) return null;
+
+  return {
+    actorType: priorClose.actorType,
+    automationPolicyVersion: priorClose.automationPolicyVersion,
+    completedAt: priorClose.completedAt,
+    lifecycleStatus: priorClose.lifecycleStatus,
+    operatingDate: priorClose.operatingDate,
+    status: priorClose.status,
   };
 }
 
@@ -652,6 +771,9 @@ function managerReviewEvidenceFromSnapshot(
 async function getMissingCarryForwardItems(
   ctx: Pick<QueryCtx, "db">,
   priorClose: Doc<"dailyClose">,
+  options: {
+    includeManagerReviewEvidence?: boolean;
+  } = {},
 ) {
   const carryForwardWorkItems = await Promise.all(
     priorClose.carryForwardWorkItemIds.map(async (workItemId) => ({
@@ -662,7 +784,13 @@ async function getMissingCarryForwardItems(
 
   return carryForwardWorkItems
     .filter(({ workItem }) => !workItem)
-    .map(({ workItemId }) => missingCarryForwardItem({ priorClose, workItemId }));
+    .map(({ workItemId }) =>
+      missingCarryForwardItem({
+        includeManagerReviewEvidence: options.includeManagerReviewEvidence,
+        priorClose,
+        workItemId,
+      }),
+    );
 }
 
 async function resolveOpeningActor(
@@ -823,22 +951,40 @@ export async function buildDailyOpeningSnapshotWithCtx(
     (await getPriorDailyCloseForOpeningReview(ctx, args));
 
   const blockers: DailyOpeningItem[] = openingContext.priorClose
-    ? await getMissingCarryForwardItems(ctx, openingContext.priorClose)
+    ? await getMissingCarryForwardItems(ctx, openingContext.priorClose, {
+        includeManagerReviewEvidence: args.includeManagerReviewEvidence,
+      })
     : [];
   const reviewItems: DailyOpeningItem[] = [];
   const carryForwardItems = openingContext.carryForwardWorkItems
     .filter((workItem) => !TERMINAL_WORK_ITEM_STATUSES.has(workItem.status))
-    .map(carryForwardItem);
+    .map((workItem, index) =>
+      carryForwardItem(workItem, {
+        includeManagerReviewEvidence: args.includeManagerReviewEvidence,
+        index,
+      }),
+    );
   const readyItems: DailyOpeningItem[] = [];
 
   if (priorClose) {
     if (priorClose.lifecycleStatus === "reopened") {
-      reviewItems.push(priorCloseReopenedItem(priorClose));
+      reviewItems.push(
+        priorCloseReopenedItem(priorClose, {
+          includeManagerReviewEvidence: args.includeManagerReviewEvidence,
+        }),
+      );
     } else {
-      readyItems.push(priorCloseReadyItem(priorClose));
+      readyItems.push(
+        priorCloseReadyItem(priorClose, {
+          includeManagerReviewEvidence: args.includeManagerReviewEvidence,
+        }),
+      );
     }
 
-    const notesItem = priorCloseNotesItem(priorClose);
+    const notesItem =
+      args.includeManagerReviewEvidence === false
+        ? null
+        : priorCloseNotesItem(priorClose);
 
     if (notesItem) {
       reviewItems.push(notesItem);
@@ -869,7 +1015,10 @@ export async function buildDailyOpeningSnapshotWithCtx(
     organizationId: store?.organizationId ?? null,
     automationStatus,
     existingOpening,
-    priorClose,
+    priorClose:
+      args.includeManagerReviewEvidence === false
+        ? redactPriorCloseForBroadOpeningSnapshot(priorClose)
+        : priorClose,
     status: existingOpening ? "started" : readiness.status,
     blockers,
     reviewItems,

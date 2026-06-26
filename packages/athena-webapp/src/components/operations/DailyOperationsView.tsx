@@ -171,6 +171,7 @@ type DailyOperationsScheduledRunSummary = {
 type DailyOperationsCompletedCloseAttribution = {
   actorType?: "human" | "automation";
   automationDecisionReason?: string | null;
+  carryForwardCount?: number | null;
   completedAt?: number | null;
   policyReviewedItemKeys?: string[] | null;
   restrictedDetailsRedacted?: boolean | null;
@@ -1180,6 +1181,7 @@ function AutomationStatusPanel({
 
 function getDailyOperationsCompletionAttributionDetail(
   completedClose?: DailyOperationsCompletedCloseAttribution | null,
+  carryForwardCount = completedClose?.carryForwardCount ?? 0,
 ) {
   if (completedClose?.actorType !== "automation") {
     return null;
@@ -1189,21 +1191,28 @@ function getDailyOperationsCompletionAttributionDetail(
     return "Restricted close evidence is hidden for this account.";
   }
 
+  const hasCarryForward = carryForwardCount > 0;
   if (
     completedClose.policyReviewedItemKeys?.length ||
     completedClose.automationDecisionReason
       ?.toLowerCase()
       .includes("low-risk review")
   ) {
-    return "Policy checked low-risk review evidence before completion.";
+    return hasCarryForward
+      ? "Policy checked low-risk review evidence and preserved carry-forward work for Opening."
+      : "Policy checked low-risk review evidence before completion.";
   }
 
-  return "Policy checked the close before completion.";
+  return hasCarryForward
+    ? "Policy checked the close and preserved carry-forward work for Opening."
+    : "Policy checked the close before completion.";
 }
 
 function DailyOperationsCompletionAttributionNotice({
+  carryForwardCount,
   completedClose,
 }: {
+  carryForwardCount?: number | null;
   completedClose?: DailyOperationsCompletedCloseAttribution | null;
 }) {
   if (completedClose?.actorType !== "automation") {
@@ -1216,7 +1225,10 @@ function DailyOperationsCompletionAttributionNotice({
         Athena completed EOD Review under store policy.
       </p>
       <p className="mt-1 text-muted-foreground">
-        {getDailyOperationsCompletionAttributionDetail(completedClose)}
+        {getDailyOperationsCompletionAttributionDetail(
+          completedClose,
+          carryForwardCount ?? completedClose.carryForwardCount ?? 0,
+        )}
       </p>
     </div>
   );
@@ -2266,6 +2278,7 @@ export function DailyOperationsViewContent({
                     snapshot={snapshot}
                   />
                   <DailyOperationsCompletionAttributionNotice
+                    carryForwardCount={snapshot.completedClose?.carryForwardCount}
                     completedClose={snapshot.completedClose}
                   />
                 </PageWorkspaceMain>

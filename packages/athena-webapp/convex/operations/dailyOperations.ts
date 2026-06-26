@@ -2176,7 +2176,12 @@ export async function buildDailyOperationsSnapshotWithCtx(
   return {
     automationStatuses,
     attentionItems,
-    completedClose: closeSnapshot.completedClose,
+    completedClose: closeSnapshot.completedClose
+      ? {
+          ...closeSnapshot.completedClose,
+          carryForwardCount: closeSnapshot.readiness?.carryForwardCount ?? 0,
+        }
+      : closeSnapshot.completedClose,
     closeSummary,
     currency: store?.currency ?? "GHS",
     endAt: range.endAt,

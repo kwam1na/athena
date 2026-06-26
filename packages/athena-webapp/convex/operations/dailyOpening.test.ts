@@ -3,8 +3,10 @@ import type { Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import {
   buildDailyOpeningSnapshotWithCtx,
+  startStoreDay,
   startStoreDayWithCtx,
 } from "./dailyOpening";
+import { assertConformsToExportedReturns } from "../lib/returnValidatorContract";
 
 type TableName =
   | "approvalRequest"
@@ -219,6 +221,35 @@ describe("daily opening backend foundation", () => {
     vi.restoreAllMocks();
   });
 
+  it("keeps daily opening command results aligned with exported return validators", () => {
+    expect(() =>
+      assertConformsToExportedReturns(startStoreDay, {
+        kind: "user_error",
+        error: {
+          code: "precondition_failed",
+          message:
+            "Opening Handoff cannot start while items still need attention.",
+        },
+      }),
+    ).not.toThrow();
+
+    expect(() =>
+      assertConformsToExportedReturns(startStoreDay, {
+        kind: "ok",
+        data: {
+          action: "started",
+          dailyOpening: {
+            _id: "daily-opening-1",
+            storeId: "store-1",
+            operatingDate: "2026-05-08",
+            status: "started",
+          },
+          operationalEventId: "operational-event-1",
+        },
+      }),
+    ).not.toThrow();
+  });
+
   it("returns a ready snapshot when the prior EOD Review completed cleanly", async () => {
     const { db } = createDb({
       dailyClose: [completedDailyClose()],
@@ -257,6 +288,203 @@ describe("daily opening backend foundation", () => {
         type: "daily_close",
       },
     ]);
+  });
+
+  it("redacts prior close carry-forward work for broad opening snapshot readers", async () => {
+    const { db } = createDb({
+      dailyClose: [
+        completedDailyClose({
+          carryForwardWorkItemIds: ["work-1"],
+          readiness: {
+            blockerCount: 0,
+            carryForwardCount: 1,
+            readyCount: 1,
+            reviewCount: 0,
+            status: "ready",
+          },
+        }),
+      ],
+      operationalWorkItem: [
+        {
+          _id: "work-1",
+          approvalState: "not_required",
+          createdAt: 4,
+          metadata: {
+            source: "manager_note",
+          },
+          organizationId: "org-1",
+          priority: "normal",
+          status: "open",
+          storeId: "store-1",
+          title: "Call customer tomorrow",
+          type: "customer_follow_up",
+        },
+      ],
+      store: [store],
+    });
+
+    const snapshot = await buildDailyOpeningSnapshotWithCtx(
+      { db } as unknown as QueryCtx,
+      {
+        includeManagerReviewEvidence: false,
+        operatingDate: "2026-05-08",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(snapshot.carryForwardItems).toEqual([
+      {
+        key: "carry_forward:0",
+        severity: "carry_forward",
+        category: "carry_forward",
+        title: "Call customer tomorrow",
+        message:
+          "This unresolved carry-forward item remains open and must be acknowledged for Opening.",
+        subject: {
+          type: "operational_work_item",
+          id: "redacted",
+          label: "Call customer tomorrow",
+        },
+      },
+    ]);
+    expect(snapshot.sourceSubjects).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "redacted",
+          type: "operational_work_item",
+        }),
+      ]),
+    );
+    expect(snapshot.carryForwardItems[0]).not.toHaveProperty("link");
+    expect(snapshot.carryForwardItems[0]).not.toHaveProperty("metadata");
+    expect(snapshot.readyItems).toEqual([
+      expect.objectContaining({
+        key: "prior_close:completed",
+        subject: {
+          type: "daily_close",
+          id: "redacted",
+          label: "EOD Review 2026-05-07",
+        },
+      }),
+    ]);
+    expect(snapshot.readyItems[0]).not.toHaveProperty("metadata");
+    expect(snapshot.priorClose).toMatchObject({
+      completedAt: Date.UTC(2026, 4, 7, 22),
+      operatingDate: "2026-05-07",
+      status: "completed",
+    });
+    expect(snapshot.priorClose).not.toHaveProperty("_id");
+    expect(snapshot.priorClose).not.toHaveProperty("carryForwardWorkItemIds");
+    expect(snapshot.priorClose).not.toHaveProperty("organizationId");
+    expect(snapshot.priorClose).not.toHaveProperty("reportSnapshot");
+    expect(snapshot.priorClose).not.toHaveProperty("sourceSubjects");
+    expect(snapshot.priorClose).not.toHaveProperty("storeId");
+  });
+
+  it("keeps prior close carry-forward evidence for trusted opening snapshot readers", async () => {
+    const { db } = createDb({
+      dailyClose: [
+        completedDailyClose({
+          carryForwardWorkItemIds: ["work-1"],
+          readiness: {
+            blockerCount: 0,
+            carryForwardCount: 1,
+            readyCount: 1,
+            reviewCount: 0,
+            status: "ready",
+          },
+        }),
+      ],
+      operationalWorkItem: [
+        {
+          _id: "work-1",
+          approvalState: "not_required",
+          createdAt: 4,
+          metadata: {
+            source: "manager_note",
+          },
+          organizationId: "org-1",
+          priority: "normal",
+          status: "open",
+          storeId: "store-1",
+          title: "Call customer tomorrow",
+          type: "customer_follow_up",
+        },
+      ],
+      store: [store],
+    });
+
+    const snapshot = await buildDailyOpeningSnapshotWithCtx(
+      { db } as unknown as QueryCtx,
+      {
+        includeManagerReviewEvidence: true,
+        operatingDate: "2026-05-08",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(snapshot.carryForwardItems[0]).toMatchObject({
+      key: "operational_work_item:work-1:carry_forward",
+      subject: {
+        id: "work-1",
+        type: "operational_work_item",
+      },
+      link: {
+        label: "View open work",
+      },
+      metadata: {
+        priority: "normal",
+        status: "open",
+        type: "customer_follow_up",
+      },
+    });
+  });
+
+  it("redacts missing carry-forward blockers for broad opening snapshot readers", async () => {
+    const { db } = createDb({
+      dailyClose: [
+        completedDailyClose({
+          carryForwardWorkItemIds: ["work-missing"],
+          readiness: {
+            blockerCount: 0,
+            carryForwardCount: 1,
+            readyCount: 1,
+            reviewCount: 0,
+            status: "ready",
+          },
+        }),
+      ],
+      store: [store],
+    });
+
+    const snapshot = await buildDailyOpeningSnapshotWithCtx(
+      { db } as unknown as QueryCtx,
+      {
+        includeManagerReviewEvidence: false,
+        operatingDate: "2026-05-08",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(snapshot.blockers).toEqual([
+      expect.objectContaining({
+        key: "carry_forward:missing",
+        subject: {
+          type: "operational_work_item",
+          id: "redacted",
+          label: "Missing carry-forward work",
+        },
+      }),
+    ]);
+    expect(snapshot.blockers[0]).not.toHaveProperty("metadata");
+    expect(snapshot.sourceSubjects).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "redacted",
+          type: "operational_work_item",
+        }),
+      ]),
+    );
   });
 
   it("includes the latest Opening automation status when present", async () => {

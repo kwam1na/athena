@@ -569,6 +569,7 @@ export type DailyCloseCompletionAttribution = NonNullable<
 
 export function getDailyCloseCompletionAttributionDetail(
   completedClose?: DailyCloseCompletionAttribution | null,
+  carryForwardCount = 0,
 ) {
   if (completedClose?.actorType !== "automation") {
     return null;
@@ -578,11 +579,14 @@ export function getDailyCloseCompletionAttributionDetail(
     return "Restricted close evidence is hidden for this account.";
   }
 
+  const hasCarryForward = carryForwardCount > 0;
   if (
     completedClose.policyReviewedItemKeys &&
     completedClose.policyReviewedItemKeys.length > 0
   ) {
-    return "Policy checked low-risk review evidence before completion.";
+    return hasCarryForward
+      ? "Policy checked low-risk review evidence and preserved carry-forward work for Opening."
+      : "Policy checked low-risk review evidence before completion.";
   }
 
   if (
@@ -590,15 +594,21 @@ export function getDailyCloseCompletionAttributionDetail(
       ?.toLowerCase()
       .includes("low-risk review")
   ) {
-    return "Policy checked low-risk review evidence before completion.";
+    return hasCarryForward
+      ? "Policy checked low-risk review evidence and preserved carry-forward work for Opening."
+      : "Policy checked low-risk review evidence before completion.";
   }
 
-  return "Policy checked the close before completion.";
+  return hasCarryForward
+    ? "Policy checked the close and preserved carry-forward work for Opening."
+    : "Policy checked the close before completion.";
 }
 
 export function DailyCloseCompletionAttributionNotice({
+  carryForwardCount,
   completedClose,
 }: {
+  carryForwardCount?: number | null;
   completedClose?: DailyCloseCompletionAttribution | null;
 }) {
   if (completedClose?.actorType !== "automation") {
@@ -611,7 +621,10 @@ export function DailyCloseCompletionAttributionNotice({
         Athena completed EOD Review under store policy.
       </p>
       <p className="mt-1 text-muted-foreground">
-        {getDailyCloseCompletionAttributionDetail(completedClose)}
+        {getDailyCloseCompletionAttributionDetail(
+          completedClose,
+          carryForwardCount ?? 0,
+        )}
       </p>
     </div>
   );
@@ -2653,6 +2666,7 @@ export function DailyCloseReadOnlyReport({
       </section>
 
       <DailyCloseCompletionAttributionNotice
+        carryForwardCount={displaySnapshot.readiness?.carryForwardCount ?? 0}
         completedClose={displaySnapshot.completedClose}
       />
 
@@ -2936,6 +2950,7 @@ function CompletionRail({
               {formatDailyCloseCompletedAt(snapshot.completedClose.completedAt)}
             </p>
             <DailyCloseCompletionAttributionNotice
+              carryForwardCount={snapshot.readiness?.carryForwardCount ?? 0}
               completedClose={snapshot.completedClose}
             />
             {snapshot.completedClose.notes ? (

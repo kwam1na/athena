@@ -333,6 +333,7 @@ describe("DailyCloseHistoryView", () => {
       historyRecord({
         completedByStaffName: null,
         reportSnapshot: snapshot({
+          carryForwardItems: [],
           completedClose: {
             actorType: "automation",
             automationDecisionReason:
@@ -340,6 +341,13 @@ describe("DailyCloseHistoryView", () => {
             automationPolicyVersion: "daily-close-auto-complete.v1",
             completedAt: Date.UTC(2026, 4, 8, 22, 30),
             notes: "Policy close.",
+          },
+          readiness: {
+            blockerCount: 0,
+            carryForwardCount: 0,
+            readyCount: 2,
+            reviewCount: 1,
+            status: "ready",
           },
         }),
       }),
@@ -359,7 +367,48 @@ describe("DailyCloseHistoryView", () => {
         "Policy checked low-risk review evidence before completion.",
       ),
     ).toBeInTheDocument();
+    expect(
+      within(detail).queryByText(
+        "Policy checked low-risk review evidence and preserved carry-forward work for Opening.",
+      ),
+    ).not.toBeInTheDocument();
     expect(within(detail).queryByText(/manager approved/i)).not.toBeInTheDocument();
+  });
+
+  it("renders historical Athena carry-forward preservation copy when present", () => {
+    mockQueries([
+      historyRecord({
+        completedByStaffName: null,
+        reportSnapshot: snapshot({
+          completedClose: {
+            actorType: "automation",
+            automationDecisionReason:
+              "EOD Review has only low-risk review evidence within policy thresholds.",
+            automationPolicyVersion: "daily-close-auto-complete.v1",
+            completedAt: Date.UTC(2026, 4, 8, 22, 30),
+          },
+          readiness: {
+            blockerCount: 0,
+            carryForwardCount: 1,
+            readyCount: 0,
+            reviewCount: 1,
+            status: "ready",
+          },
+        }),
+      }),
+    ]);
+
+    render(<DailyCloseHistoryView />);
+
+    const detail = screen.getByRole("region", {
+      name: "Historical Daily Close detail",
+    });
+
+    expect(
+      within(detail).getByText(
+        "Policy checked low-risk review evidence and preserved carry-forward work for Opening.",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("uses safe historical Athena attribution when restricted evidence is redacted", () => {
@@ -392,7 +441,7 @@ describe("DailyCloseHistoryView", () => {
     ).toBeInTheDocument();
     expect(
       within(detail).queryByText(
-        "Policy checked low-risk review evidence before completion.",
+        "Policy checked low-risk review evidence and preserved carry-forward work for Opening.",
       ),
     ).not.toBeInTheDocument();
   });

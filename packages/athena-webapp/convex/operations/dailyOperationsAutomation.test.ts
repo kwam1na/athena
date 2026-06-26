@@ -1266,8 +1266,8 @@ describe("daily operations automation adapter", () => {
     });
   });
 
-  it("hard-skips EOD auto-complete when v1 carry-forward evidence is present", async () => {
-    const { db } = createDb({
+  it("auto-completes blocker-free EOD reviews while preserving carry-forward work", async () => {
+    const { db, inserts } = createDb({
       automationPolicy: [
         policy("eod.auto_complete", "enabled", {
           eodCleanDayAutoCompleteEnabled: true,
@@ -1281,12 +1281,16 @@ describe("daily operations automation adapter", () => {
       operationalWorkItem: [
         {
           _id: "work-1",
+          approvalState: "not_required",
           createdAt: Date.UTC(2026, 5, 8, 12),
+          organizationId: "org-1",
+          priority: "normal",
           status: "open",
           storeId: "store-1",
           subjectId: "cycle-count-1",
           subjectType: "stock_adjustment",
           title: "Cycle count follow-up",
+          type: "stock_adjustment_follow_up",
         },
       ],
       posTransaction: [completedTransaction()],
@@ -1304,12 +1308,45 @@ describe("daily operations automation adapter", () => {
 
     expect(result.run).toMatchObject({
       decisionEvidence: {
-        classification: "carry_forward",
-        eligible: false,
+        classification: "clean_day",
+        eligible: true,
+        observed: {
+          carryForwardCount: 1,
+          carryForwardItemKeys: [
+            "operational_work_item:work-1:carry_forward",
+          ],
+          carryForwardPreserved: true,
+        },
       },
-      decisionReason:
-        "EOD Review has carry-forward evidence; v1 auto-complete requires human review.",
-      outcome: "skipped",
+      outcome: "applied",
+    });
+    const dailyClose = inserts.find(
+      (insert) => insert.table === "dailyClose",
+    )?.value;
+    expect(dailyClose).toMatchObject({
+      actorType: "automation",
+      carryForwardWorkItemIds: ["work-1"],
+      readiness: {
+        carryForwardCount: 1,
+      },
+      status: "completed",
+      summary: {
+        carryForwardWorkItemCount: 1,
+      },
+    });
+    expect(dailyClose?.reportSnapshot).toMatchObject({
+      carryForwardItems: [
+        {
+          key: "operational_work_item:work-1:carry_forward",
+          subject: {
+            id: "work-1",
+            type: "operational_work_item",
+          },
+        },
+      ],
+      closeMetadata: {
+        carryForwardWorkItemIds: ["work-1"],
+      },
     });
   });
 

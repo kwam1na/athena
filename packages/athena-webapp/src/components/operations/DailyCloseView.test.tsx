@@ -683,8 +683,40 @@ describe("DailyCloseViewContent", () => {
         "Policy checked low-risk review evidence before completion.",
       ),
     ).toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        "Policy checked low-risk review evidence and preserved carry-forward work for Opening.",
+      ),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText(/manager approved/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/resolved review/i)).not.toBeInTheDocument();
+  });
+
+  it("mentions preserved carry-forward work when Athena completed with carry-forward", () => {
+    renderContent({
+      ...readySnapshot,
+      completedClose: {
+        actorType: "automation",
+        automationDecisionReason:
+          "EOD Review has only low-risk review evidence within policy thresholds.",
+        completedAt: Date.UTC(2026, 4, 7, 22, 30),
+        policyReviewedItemKeys: ["pos_transaction:txn-void:void"],
+      },
+      readiness: {
+        blockerCount: 0,
+        carryForwardCount: 1,
+        readyCount: 1,
+        reviewCount: 1,
+        status: "ready",
+      },
+      status: "completed",
+    });
+
+    expect(
+      screen.getByText(
+        "Policy checked low-risk review evidence and preserved carry-forward work for Opening.",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("does not add Athena attribution to human-completed closes", () => {
@@ -726,7 +758,7 @@ describe("DailyCloseViewContent", () => {
     ).toBeInTheDocument();
     expect(
       screen.queryByText(
-        "Policy checked low-risk review evidence before completion.",
+        "Policy checked low-risk review evidence and preserved carry-forward work for Opening.",
       ),
     ).not.toBeInTheDocument();
   });

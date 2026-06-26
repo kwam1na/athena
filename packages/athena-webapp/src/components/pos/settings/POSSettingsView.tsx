@@ -716,7 +716,7 @@ function EodCompletionAutomationAdminPanel({
         <div className="grid gap-layout-md lg:grid-cols-[minmax(0,1fr)_14rem]">
           <label className="flex min-h-[5rem] items-start gap-layout-sm rounded-md border border-border bg-background p-layout-sm text-sm">
             <Checkbox
-              aria-label="Enable clean-day completion"
+              aria-label="Enable blocker-free completion"
               checked={cleanDayAutoCompleteEnabled}
               className="mt-1"
               onCheckedChange={(checked) =>
@@ -725,11 +725,11 @@ function EodCompletionAutomationAdminPanel({
             />
             <span>
               <span className="block font-medium text-foreground">
-                Enable clean-day completion
+                Enable blocker-free completion
               </span>
               <span className="mt-1 block leading-5 text-muted-foreground">
-                Athena can complete days with no blockers, carry-forward items,
-                or review evidence when automation is enabled.
+                Athena can complete blocker-free days and preserve
+                carry-forward work for Opening when automation is enabled.
               </span>
             </span>
           </label>

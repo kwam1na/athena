@@ -29,6 +29,7 @@ type EvaluateAutomationActionArgs = {
   apply?: (args: {
     run: Doc<"automationRun">;
   }) => Promise<{
+    decisionEvidence?: AutomationDecisionEvidence;
     eventIds?: Id<"operationalEvent">[];
     outcome?: "applied" | "prepared" | "skipped" | "failed";
     error?: { code: string; message: string };
@@ -196,7 +197,8 @@ export async function evaluateAutomationActionWithCtx(
       applied.outcome === "applied" || !applied.outcome
         ? Date.now()
         : undefined,
-    decisionEvidence: args.adapterDecision.decisionEvidence,
+    decisionEvidence:
+      applied.decisionEvidence ?? args.adapterDecision.decisionEvidence,
     error: applied.error,
     eventIds: applied.eventIds,
     outcome: applied.outcome ?? "applied",
