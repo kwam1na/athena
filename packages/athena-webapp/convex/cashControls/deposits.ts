@@ -120,6 +120,17 @@ type CashControlApprovalRequest = Pick<
   "_id" | "notes" | "reason" | "requestedByStaffProfileId" | "status"
 >;
 
+type CashControlPendingVoidApprovalSummary = {
+  count: number;
+  items: Array<{
+    approvalRequestId: Id<"approvalRequest">;
+    requestedAt: number;
+    transactionId: Id<"posTransaction"> | string;
+    transactionNumber?: string | null;
+    workItemId?: Id<"operationalWorkItem"> | null;
+  }>;
+};
+
 type CashControlDepositAllocation = Pick<
   Doc<"paymentAllocation">,
   | "_id"
@@ -446,6 +457,7 @@ export function buildRegisterSessionDepositTargetId(args: {
 
 function buildRegisterSessionSummary(args: {
   approvalRequest?: CashControlApprovalRequest | null;
+  pendingVoidApprovals?: CashControlPendingVoidApprovalSummary | null;
   registerSession: CashControlRegisterSession;
   staffNamesById: StaffNameMap;
   syncConflicts?: CashControlSyncConflict[];
@@ -479,6 +491,10 @@ function buildRegisterSessionSummary(args: {
           status: args.approvalRequest.status,
         }
       : null,
+    pendingVoidApprovals: args.pendingVoidApprovals ?? {
+      count: 0,
+      items: [],
+    },
     localSyncStatus: buildRegisterSessionLocalSyncStatus(syncConflicts, {
       staffNamesById: args.staffNamesById,
     }),
@@ -526,6 +542,10 @@ export function buildCashControlsDashboardSnapshot(args: {
     CashControlApprovalRequest
   >;
   deposits: CashControlDepositAllocation[];
+  pendingVoidApprovalsBySessionId?: Map<
+    Id<"registerSession">,
+    CashControlPendingVoidApprovalSummary
+  >;
   registerSessions: CashControlRegisterSession[];
   staffNamesById: StaffNameMap;
   syncConflictsBySessionId?: Map<
@@ -548,6 +568,9 @@ export function buildCashControlsDashboardSnapshot(args: {
       buildRegisterSessionSummary({
         approvalRequest:
           args.approvalRequestsBySessionId.get(registerSession._id) ?? null,
+        pendingVoidApprovals:
+          args.pendingVoidApprovalsBySessionId?.get(registerSession._id) ??
+          null,
         registerSession,
         staffNamesById: args.staffNamesById,
         syncConflicts:
@@ -713,6 +736,83 @@ async function listRegisterSessionTransactions(
   });
 }
 
+function buildPendingVoidApprovalSummary(
+  approvalRequests: Doc<"approvalRequest">[],
+): CashControlPendingVoidApprovalSummary {
+  const items = approvalRequests
+    .sort((left, right) => left.createdAt - right.createdAt)
+    .map((approvalRequest) => ({
+      approvalRequestId: approvalRequest._id,
+      requestedAt: approvalRequest.createdAt,
+      transactionId:
+        approvalRequest.posTransactionId ??
+        approvalRequest.subjectId ??
+        "",
+      transactionNumber:
+        typeof approvalRequest.metadata?.transactionNumber === "string"
+          ? approvalRequest.metadata.transactionNumber
+          : null,
+      workItemId: approvalRequest.workItemId ?? null,
+    }))
+    .filter((item) => item.transactionId);
+
+  return {
+    count: items.length,
+    items,
+  };
+}
+
+async function listPendingVoidApprovalsForRegisterSession(
+  ctx: Pick<QueryCtx | MutationCtx, "db">,
+  args: {
+    registerSessionId: Id<"registerSession">;
+    storeId: Id<"store">;
+  },
+) {
+  const approvalRequests =
+    // eslint-disable-next-line @convex-dev/no-collect-in-query -- Register-session scoped approval queues are bounded by manager-review workflow volume and must not be truncated by the store-wide pending approval limit.
+    await ctx.db
+      .query("approvalRequest")
+      .withIndex("by_registerSessionId", (q) =>
+        q.eq("registerSessionId", args.registerSessionId),
+      )
+      .collect();
+
+  return approvalRequests.filter(
+    (approvalRequest) =>
+      approvalRequest.storeId === args.storeId &&
+      approvalRequest.status === "pending" &&
+      approvalRequest.requestType === "pos_transaction_void" &&
+      approvalRequest.subjectType === "pos_transaction",
+  );
+}
+
+async function listPendingVoidApprovalSummariesBySessionId(
+  ctx: Pick<QueryCtx, "db">,
+  args: {
+    registerSessions: Array<Pick<Doc<"registerSession">, "_id">>;
+    storeId: Id<"store">;
+  },
+) {
+  const entries = await Promise.all(
+    args.registerSessions.map(async (registerSession) => {
+      const approvalRequests = await listPendingVoidApprovalsForRegisterSession(
+        ctx,
+        {
+          registerSessionId: registerSession._id,
+          storeId: args.storeId,
+        },
+      );
+      return [
+        registerSession._id,
+        buildPendingVoidApprovalSummary(approvalRequests),
+      ] as const;
+    }),
+  );
+
+  return new Map(entries);
+}
+
 function collectStaffProfileIds(args: {
   approvalRequests: CashControlApprovalRequest[];
   deposits: CashControlDepositAllocation[];
@@ -809,6 +909,11 @@ export const getDashboardSnapshot = query({
         ctx,
         dashboardRegisterSessions,
       );
+    const pendingVoidApprovalsBySessionId =
+      await listPendingVoidApprovalSummariesBySessionId(ctx, {
+        registerSessions: dashboardRegisterSessionsWithTraceIds,
+        storeId: args.storeId,
+      });
     const relevantApprovalRequests = pendingApprovalRequests.filter(
       (approvalRequest) =>
         approvalRequest.requestType === "variance_review" &&
@@ -841,6 +946,7 @@ export const getDashboardSnapshot = query({
     return buildCashControlsDashboardSnapshot({
       approvalRequestsBySessionId,
       deposits,
+      pendingVoidApprovalsBySessionId,
       registerSessions: dashboardRegisterSessionsWithTraceIds,
       staffNamesById,
       syncConflictsBySessionId,
@@ -870,6 +976,7 @@ export const getRegisterSessionSnapshot = query({
       timeline,
       transactions,
       approvalRequest,
+      pendingVoidApprovals,
       syncConflictsBySessionId,
       workflowTraceId,
     ] = await Promise.all([
@@ -885,6 +992,10 @@ export const getRegisterSessionSnapshot = query({
             registerSession.managerApprovalRequestId,
           )
         : Promise.resolve(null),
+      listPendingVoidApprovalsForRegisterSession(ctx, {
+        registerSessionId: args.registerSessionId,
+        storeId: args.storeId,
+      }),
       listRegisterSessionSyncReviewConflicts(ctx, args.storeId, {
         includeRejectedEvidence: true,
       }),
@@ -1008,6 +1119,8 @@ export const getRegisterSessionSnapshot = query({
       registerSession: {
         ...buildRegisterSessionSummary({
           approvalRequest,
+          pendingVoidApprovals:
+            buildPendingVoidApprovalSummary(pendingVoidApprovals),
           registerSession: registerSessionWithTraceId,
           staffNamesById,
           syncConflicts:
@@ -1142,6 +1255,21 @@ export const recordRegisterSessionDeposit = mutation({
       });
     }
 
+    const pendingVoidApprovals = await listPendingVoidApprovalsForRegisterSession(
+      ctx,
+      {
+        registerSessionId: registerSession._id,
+        storeId: args.storeId,
+      },
+    );
+
+    if (pendingVoidApprovals.length > 0) {
+      return userError({
+        code: "precondition_failed",
+        message: "Resolve pending void approvals before recording a deposit.",
+      });
+    }
+
     const deposit = await recordPaymentAllocationWithCtx(ctx, {
       actorStaffProfileId,
       actorUserId: athenaUserId,
@@ -1248,6 +1376,7 @@ export const resolveRegisterSessionSyncReview = mutation({
 
     const decision = args.decision ?? "approved";
     const isAutomaticResolution = !args.actorStaffProfileId;
+    let reviewActorStaffProfileId: Id<"staffProfile"> | undefined;
     if (decision === "rejected" && isAutomaticResolution) {
       return userError({
         code: "precondition_failed",
@@ -1256,9 +1385,21 @@ export const resolveRegisterSessionSyncReview = mutation({
       });
     }
     if (args.actorStaffProfileId) {
+      try {
+        reviewActorStaffProfileId = await resolveDepositActorStaffProfileId(ctx, {
+          athenaUserId: athenaUser._id,
+          staffProfileId: args.actorStaffProfileId,
+          storeId: args.storeId,
+        });
+      } catch {
+        return userError({
+          code: "authorization_failed",
+          message: "Only managers can resolve synced register reviews.",
+        });
+      }
       const canResolveReview = await staffProfileCanResolveSyncReview(ctx, {
         organizationId: store.organizationId,
-        staffProfileId: args.actorStaffProfileId,
+        staffProfileId: reviewActorStaffProfileId,
         storeId: args.storeId,
       });
       if (!canResolveReview) {
@@ -1419,8 +1560,8 @@ export const resolveRegisterSessionSyncReview = mutation({
           const conflictDetails = conflict.details ?? {};
           rejectedCloseoutLocalEventIds.add(syncEvent.localEventId);
           await recordOperationalEventWithCtx(ctx, {
-            ...(args.actorStaffProfileId
-              ? { actorStaffProfileId: args.actorStaffProfileId }
+            ...(reviewActorStaffProfileId
+              ? { actorStaffProfileId: reviewActorStaffProfileId }
               : {}),
             actorUserId: athenaUser._id,
             eventType: "register_session_sync_closeout_rejected",
@@ -1577,7 +1718,7 @@ export const resolveRegisterSessionSyncReview = mutation({
             requestedConflictIds.size > 0
               ? Array.from(requestedConflictIds)
               : conflicts.map((reviewConflict) => reviewConflict._id),
-          reviewActorStaffProfileId: args.actorStaffProfileId,
+          reviewActorStaffProfileId,
           trustStoredStaffProof: true,
         },
       });
@@ -1654,8 +1795,8 @@ export const resolveRegisterSessionSyncReview = mutation({
           conflictId,
           {
             resolvedAt,
-            ...(args.actorStaffProfileId
-              ? { resolvedByStaffProfileId: args.actorStaffProfileId }
+            ...(reviewActorStaffProfileId
+              ? { resolvedByStaffProfileId: reviewActorStaffProfileId }
               : {}),
             status: "resolved",
           },
@@ -1664,8 +1805,8 @@ export const resolveRegisterSessionSyncReview = mutation({
     );
 
     await recordOperationalEventWithCtx(ctx, {
-      ...(args.actorStaffProfileId
-        ? { actorStaffProfileId: args.actorStaffProfileId }
+      ...(reviewActorStaffProfileId
+        ? { actorStaffProfileId: reviewActorStaffProfileId }
         : {}),
       actorUserId: athenaUser._id,
       eventType: "register_session_sync_review_resolved",

@@ -486,6 +486,30 @@ describe("cash control deposits", () => {
           registerSessionId: "session_closing" as Id<"registerSession">,
         },
       ],
+      pendingVoidApprovalsBySessionId: new Map([
+        [
+          "session_closing" as Id<"registerSession">,
+          {
+            count: 2,
+            items: [
+              {
+                approvalRequestId: "void_approval_1" as Id<"approvalRequest">,
+                requestedAt: 25,
+                transactionId: "txn_1",
+                transactionNumber: "POS-1001",
+                workItemId: "work_item_1" as Id<"operationalWorkItem">,
+              },
+              {
+                approvalRequestId: "void_approval_2" as Id<"approvalRequest">,
+                requestedAt: 26,
+                transactionId: "txn_2",
+                transactionNumber: "POS-1002",
+                workItemId: null,
+              },
+            ],
+          },
+        ],
+      ]),
       syncConflictsBySessionId: new Map([
         [
           "session_open" as Id<"registerSession">,
@@ -592,6 +616,19 @@ describe("cash control deposits", () => {
         _id: "approval_1",
         notes: "Counted twice before manager review.",
         status: "pending",
+      },
+      pendingVoidApprovals: {
+        count: 2,
+        items: [
+          expect.objectContaining({
+            approvalRequestId: "void_approval_1",
+            transactionNumber: "POS-1001",
+          }),
+          expect.objectContaining({
+            approvalRequestId: "void_approval_2",
+            transactionNumber: "POS-1002",
+          }),
+        ],
       },
       terminalName: "Back counter",
       totalDeposited: 500,
@@ -970,6 +1007,7 @@ describe("cash control deposits", () => {
       staffProfile: [
         {
           _id: "manager_1",
+          linkedUserId: "athena_user_1",
           organizationId: "org_1",
           status: "active",
           storeId: "store_1",
@@ -1061,6 +1099,88 @@ describe("cash control deposits", () => {
         }),
       ]),
     );
+  });
+
+  it("rejects synced register review when the manager actor belongs to another user", async () => {
+    const ctx = createAuthorizedRegisterDepositCtx({
+      posLocalSyncConflict: [
+        {
+          _id: "sync_conflict_1",
+          conflictType: "permission",
+          createdAt: 1,
+          details: {},
+          localEventId: "event_1",
+          localRegisterSessionId: "local-register-1",
+          sequence: 1,
+          status: "needs_review",
+          storeId: "store_1",
+          summary: "Register was not open before this sale synced.",
+          terminalId: "terminal_1",
+        },
+      ],
+      posLocalSyncEvent: [
+        {
+          _id: "sync_event_1",
+          eventType: "sale_completed",
+          localEventId: "event_1",
+          localRegisterSessionId: "local-register-1",
+          occurredAt: 2,
+          payload: {},
+          sequence: 1,
+          status: "conflicted",
+          storeId: "store_1",
+          submittedAt: 4,
+          terminalId: "terminal_1",
+        },
+      ],
+      staffProfile: [
+        {
+          _id: "manager_1",
+          linkedUserId: "athena_user_2",
+          organizationId: "org_1",
+          status: "active",
+          storeId: "store_1",
+        },
+      ],
+      staffRoleAssignment: [
+        {
+          _id: "role_1",
+          organizationId: "org_1",
+          role: "manager",
+          staffProfileId: "manager_1",
+          status: "active",
+          storeId: "store_1",
+        },
+      ],
+    });
+
+    const result = await getHandler(resolveRegisterSessionSyncReview)(
+      ctx as never,
+      {
+        actorStaffProfileId: "manager_1" as Id<"staffProfile">,
+        registerSessionId: "session_open" as Id<"registerSession">,
+        storeId: "store_1" as Id<"store">,
+      },
+    );
+
+    expect(result).toEqual(
+      userError({
+        code: "authorization_failed",
+        message: "Only managers can resolve synced register reviews.",
+      }),
+    );
+    expect(ctx.tables.get("posLocalSyncConflict")).toEqual([
+      expect.objectContaining({
+        _id: "sync_conflict_1",
+        status: "needs_review",
+      }),
+    ]);
+    expect(ctx.tables.get("posLocalSyncEvent")).toEqual([
+      expect.objectContaining({
+        _id: "sync_event_1",
+        status: "conflicted",
+      }),
+    ]);
   });
 
   it("applies reviewed inventory sale activity without forcing a stock mutation", async () => {
@@ -1190,6 +1310,7 @@ describe("cash control deposits", () => {
       staffProfile: [
         {
           _id: "manager_1",
+          linkedUserId: "athena_user_1",
           organizationId: "org_1",
           status: "active",
           storeId: "store_1",
@@ -1445,6 +1566,7 @@ describe("cash control deposits", () => {
       staffProfile: [
         {
           _id: "manager_1",
+          linkedUserId: "athena_user_1",
           organizationId: "org_1",
           status: "active",
           storeId: "store_1",
@@ -1802,6 +1924,7 @@ describe("cash control deposits", () => {
       staffProfile: [
         {
           _id: "manager_1",
+          linkedUserId: "athena_user_1",
           organizationId: "org_1",
           status: "active",
           storeId: "store_1",
@@ -1955,6 +2078,7 @@ describe("cash control deposits", () => {
       staffProfile: [
         {
           _id: "manager_1",
+          linkedUserId: "athena_user_1",
           organizationId: "org_1",
           status: "active",
           storeId: "store_1",
@@ -2389,6 +2513,7 @@ describe("cash control deposits", () => {
       staffProfile: [
         {
           _id: "manager_1",
+          linkedUserId: "athena_user_1",
           organizationId: "org_1",
           status: "active",
           storeId: "store_1",
@@ -2586,6 +2711,7 @@ describe("cash control deposits", () => {
       staffProfile: [
         {
           _id: "manager_1",
+          linkedUserId: "athena_user_1",
           organizationId: "org_1",
           status: "active",
           storeId: "store_1",
@@ -2733,6 +2859,7 @@ describe("cash control deposits", () => {
       staffProfile: [
         {
           _id: "manager_1",
+          linkedUserId: "athena_user_1",
           organizationId: "org_1",
           status: "active",
           storeId: "store_1",
@@ -2854,6 +2981,7 @@ describe("cash control deposits", () => {
       staffProfile: [
         {
           _id: "manager_1",
+          linkedUserId: "athena_user_1",
           organizationId: "org_1",
           status: "active",
           storeId: "store_1",
@@ -3043,6 +3171,7 @@ describe("cash control deposits", () => {
       staffProfile: [
         {
           _id: "manager_1",
+          linkedUserId: "athena_user_1",
           organizationId: "org_1",
           status: "active",
           storeId: "store_1",
@@ -3239,6 +3368,7 @@ describe("cash control deposits", () => {
       staffProfile: [
         {
           _id: "manager_1",
+          linkedUserId: "athena_user_1",
           organizationId: "org_1",
           status: "active",
           storeId: "store_1",
@@ -3374,6 +3504,7 @@ describe("cash control deposits", () => {
       staffProfile: [
         {
           _id: "manager_1",
+          linkedUserId: "athena_user_1",
           organizationId: "org_1",
           status: "active",
           storeId: "store_1",
@@ -3505,6 +3636,7 @@ describe("cash control deposits", () => {
       staffProfile: [
         {
           _id: "manager_1",
+          linkedUserId: "athena_user_1",
           organizationId: "org_1",
           status: "active",
           storeId: "store_1",
@@ -3676,6 +3808,7 @@ describe("cash control deposits", () => {
       staffProfile: [
         {
           _id: "manager_1",
+          linkedUserId: "athena_user_1",
           organizationId: "org_1",
           status: "active",
           storeId: "store_1",
@@ -3792,6 +3925,7 @@ describe("cash control deposits", () => {
       staffProfile: [
         {
           _id: "manager_1",
+          linkedUserId: "athena_user_1",
           organizationId: "org_1",
           status: "active",
           storeId: "store_1",
@@ -4556,6 +4690,43 @@ describe("cash control deposits", () => {
         kind: "user_error",
       }),
     );
+  });
+
+  it("rejects new deposits while register-scoped void approvals are pending", async () => {
+    const ctx = createAuthorizedRegisterDepositCtx({
+      approvalRequest: [
+        {
+          _id: "void_approval_1",
+          createdAt: 1,
+          organizationId: "org_1",
+          posTransactionId: "transaction_1",
+          registerSessionId: "session_open",
+          requestType: "pos_transaction_void",
+          status: "pending",
+          storeId: "store_1",
+          subjectId: "transaction_1",
+          subjectType: "pos_transaction",
+        },
+      ],
+    });
+
+    await expect(
+      getHandler(recordRegisterSessionDeposit)(ctx as never, {
+        actorStaffProfileId: "staff_1" as Id<"staffProfile">,
+        amount: 100,
+        registerSessionId: "session_open" as Id<"registerSession">,
+        storeId: "store_1" as Id<"store">,
+        submissionKey: "deposit-1",
+      }),
+    ).resolves.toEqual({
+      kind: "user_error",
+      error: {
+        code: "precondition_failed",
+        message: "Resolve pending void approvals before recording a deposit.",
+      },
+    });
+
+    expect(ctx.tables.get("paymentAllocation")).toEqual([]);
   });
 
   it("records register-session deposits with authenticated actor refs", async () => {

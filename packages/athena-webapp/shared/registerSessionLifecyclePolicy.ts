@@ -65,6 +65,47 @@ export function isRegisterSessionSaleUsable(
   return isPosUsableRegisterSessionStatus(session?.status);
 }
 
+export type RegisterSessionVoidApplicationStatus =
+  | { allowed: true }
+  | {
+      allowed: false;
+      reason:
+        | "missing_session"
+        | "wrong_store"
+        | "wrong_terminal"
+        | "blocked_status";
+    };
+
+export function getRegisterSessionVoidApplicationStatus(input: {
+  registerSession?: RegisterSessionLifecycleScopedSession | null;
+  storeId: string;
+  terminalId: string;
+}): RegisterSessionVoidApplicationStatus {
+  const { registerSession } = input;
+
+  if (!registerSession) {
+    return { allowed: false, reason: "missing_session" };
+  }
+
+  if (registerSession.storeId !== input.storeId) {
+    return { allowed: false, reason: "wrong_store" };
+  }
+
+  if (!registerSession.terminalId || registerSession.terminalId !== input.terminalId) {
+    return { allowed: false, reason: "wrong_terminal" };
+  }
+
+  if (
+    registerSession.status === "open" ||
+    registerSession.status === "active" ||
+    registerSession.status === "closing"
+  ) {
+    return { allowed: true };
+  }
+
+  return { allowed: false, reason: "blocked_status" };
+}
+
 export function isRegisterSessionConflictBlocking(
   session: Pick<RegisterSessionLifecycleScopedSession, "status"> | null | undefined,
 ) {

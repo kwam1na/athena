@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>fix: Allow approved sale voids during register closeout review</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #1f2933;
+        --muted: #5c6b73;
+        --line: #d9e2e7;
+        --panel: #f7fafb;
+        --accent: #2f6f73;
+        --warn: #8a5a00;
+        --ok: #1f7a4d;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        color: var(--ink);
+        background: #ffffff;
+        font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      header {
+        border-bottom: 1px solid var(--line);
+        background: var(--panel);
+      }
+      .wrap {
+        max-width: 1080px;
+        margin: 0 auto;
+        padding: 28px 24px;
+      }
+      h1 {
+        margin: 0 0 8px;
+        font-size: 30px;
+        line-height: 1.2;
+        letter-spacing: 0;
+      }
+      h2 {
+        margin: 32px 0 12px;
+        font-size: 20px;
+        letter-spacing: 0;
+      }
+      h3 {
+        margin: 22px 0 8px;
+        font-size: 16px;
+      }
+      p {
+        margin: 0 0 12px;
+      }
+      a {
+        color: var(--accent);
+      }
+      code {
+        padding: 1px 5px;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        background: #f4f7f8;
+        font-size: 0.92em;
+      }
+      nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 18px;
+      }
+      nav a {
+        padding: 6px 10px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: #ffffff;
+        text-decoration: none;
+      }
+      .meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        color: var(--muted);
+      }
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 3px 8px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: #ffffff;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 12px;
+      }
+      .card {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 14px;
+        background: #ffffff;
+      }
+      .callout {
+        border-left: 4px solid var(--accent);
+        background: var(--panel);
+        padding: 12px 14px;
+        margin: 12px 0;
+      }
+      .warning {
+        border-left-color: var(--warn);
+      }
+      ul {
+        margin: 0 0 12px 20px;
+        padding: 0;
+      }
+      li {
+        margin: 5px 0;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 12px 0;
+      }
+      th,
+      td {
+        border: 1px solid var(--line);
+        padding: 9px;
+        text-align: left;
+        vertical-align: top;
+      }
+      th {
+        background: var(--panel);
+      }
+      .unit {
+        border-top: 1px solid var(--line);
+        padding-top: 16px;
+        margin-top: 16px;
+      }
+      .unit strong {
+        color: var(--accent);
+      }
+      footer {
+        border-top: 1px solid var(--line);
+        color: var(--muted);
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="wrap">
+        <h1>fix: Allow approved sale voids during register closeout review</h1>
+        <div class="meta">
+          <span class="badge">Type: fix</span>
+          <span class="badge">Status: active</span>
+          <span class="badge">Date: 2026-06-25</span>
+          <span class="badge">Source: <a href="./2026-06-25-003-fix-register-closeout-void-policy-plan.md">markdown plan</a></span>
+        </div>
+        <nav aria-label="Plan sections">
+          <a href="#summary">Summary</a>
+          <a href="#requirements">Requirements</a>
+          <a href="#decisions">Decisions</a>
+          <a href="#units">Units</a>
+          <a href="#risks">Risks</a>
+          <a href="#verification">Verification</a>
+        </nav>
+      </div>
+    </header>
+    <main class="wrap">
+      <section id="summary">
+        <h2>Summary</h2>
+        <p>Approved completed-sale voids should be able to apply while the original register session is in <code>closing</code>, so Cash Controls can update expected cash and variance before final closure.</p>
+        <div class="callout">
+          Closeout submission stays available. Final register closure waits while pending <code>pos_transaction_void</code> approvals exist.
+        </div>
+      </section>
+
+      <section id="requirements">
+        <h2>Requirements</h2>
+        <div class="grid">
+          <div class="card"><strong>Lifecycle</strong><br>Allow void application for <code>open</code>, <code>active</code>, and <code>closing</code>; keep <code>closed</code> blocked.</div>
+          <div class="card"><strong>Closeout</strong><br>Do not block cashier submission or counting; defer final closure until void approvals settle.</div>
+          <div class="card"><strong>Cash Controls</strong><br>Show a minimal pending void count, route managers to <code>/operations/approvals</code>, and expose authorized <code>Finalize closeout</code> after review clears.</div>
+          <div class="card"><strong>Policy</strong><br>Move void applicability into a named shared lifecycle policy instead of reusing sale usability.</div>
+        </div>
+      </section>
+
+      <section id="decisions">
+        <h2>Key Decisions</h2>
+        <ul>
+          <li>Add a named void-application policy in <code>shared/registerSessionLifecyclePolicy.ts</code>.</li>
+          <li>Allow <code>closing</code> only for approved void application, not for new sale creation.</li>
+          <li>Defer final closure, not closeout submission, when pending void approvals exist.</li>
+          <li>Start with the existing <code>approvalRequest.by_registerSessionId</code> index for pending-void lookup.</li>
+          <li>Extend the closeout result contract so submitted-but-unresolved does not masquerade as <code>closed</code>.</li>
+          <li>Finalize resolved closeouts through Cash Controls with <code>Finalize closeout</code> instead of hiding closure inside void approval resolution.</li>
+          <li>Use a shared closeout-finalization guard for every path that can mark a register <code>closed</code>, including async variance approval and local sync closeout projection.</li>
+          <li>Recompute variance at finalization after voids settle, and keep finalization server-authorized.</li>
+        </ul>
+      </section>
+
+      <section id="units">
+        <h2>Implementation Units</h2>
+        <article class="unit">
+          <h3>U1. Centralize void register-session lifecycle policy</h3>
+          <p><strong>Goal:</strong> Add and test a named policy for void applicability across register-session statuses.</p>
+          <p><strong>Files:</strong> <code>shared/registerSessionLifecyclePolicy.ts</code>, <code>shared/registerSessionLifecyclePolicy.test.ts</code></p>
+        </article>
+        <article class="unit">
+          <h3>U2. Apply queued void approvals through the void lifecycle policy</h3>
+          <p><strong>Goal:</strong> Allow queued approvals to apply in <code>closing</code> while preserving existing blockers.</p>
+          <p><strong>Files:</strong> <code>convex/pos/application/commands/completeTransaction.ts</code>, <code>convex/operations/approvalRequests.ts</code>, related tests.</p>
+        </article>
+        <article class="unit">
+          <h3>U3. Expose pending void approvals in Cash Controls read models</h3>
+          <p><strong>Goal:</strong> Project pending void review counts into dashboard and register-session snapshots with minimal, server-filtered review data.</p>
+          <p><strong>Files:</strong> <code>convex/cashControls/deposits.ts</code>, <code>convex/cashControls/deposits.test.ts</code></p>
+        </article>
+        <article class="unit">
+          <h3>U4. Defer final closeout closure while void approvals are pending</h3>
+          <p><strong>Goal:</strong> Begin closeout normally, then leave the register in <code>closing</code> until void approvals settle; gate every closure path, recompute variance, and provide manager/full-admin <code>Finalize closeout</code> once review clears.</p>
+          <p><strong>Files:</strong> <code>convex/cashControls/closeouts.ts</code>, <code>convex/pos/application/sync/projectLocalEvents.ts</code>, closeout, local sync, and trace lifecycle tests.</p>
+        </article>
+        <article class="unit">
+          <h3>U5. Surface pending void review in Cash Controls UI</h3>
+          <p><strong>Goal:</strong> Show managers why the register remains unresolved, link to <code>/operations/approvals</code> with return context, and expose <code>Finalize closeout</code> once pending void review clears.</p>
+          <p><strong>Files:</strong> <code>CashControlsDashboard.tsx</code>, <code>RegisterSessionView.tsx</code>, optional approval queue label tests.</p>
+        </article>
+      </section>
+
+      <section id="risks">
+        <h2>Risks</h2>
+        <table>
+          <thead>
+            <tr><th>Risk</th><th>Mitigation</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Accidentally allowing new sales on <code>closing</code></td><td>Keep sale usability unchanged and test it beside the new void policy.</td></tr>
+            <tr><td>Closeout contract drift</td><td>Update validators, command types, and React callers together.</td></tr>
+            <tr><td>Pending void approvals stay invisible</td><td>Add dashboard and detail-page read-model coverage.</td></tr>
+            <tr><td>Final closure remains blocked after review</td><td>Filter only pending approvals and cover resolved states.</td></tr>
+            <tr><td>A close path bypasses pending-void review</td><td>Use one shared closeout-finalization guard before any register status changes to <code>closed</code>.</td></tr>
+            <tr><td>Finalization closes under stale variance policy</td><td>Recompute variance after voids settle and require approval when the new variance crosses policy.</td></tr>
+            <tr><td>Deferred finalization bypasses approval controls</td><td>Require server-side store and manager/full-admin checks, plus proof lifecycle tests.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="verification">
+        <h2>Verification Strategy</h2>
+        <ul>
+          <li>Shared lifecycle tests enumerate all register-session statuses.</li>
+          <li>Command tests prove queued void approval succeeds for <code>closing</code> and fails for <code>closed</code>.</li>
+          <li>Cash Controls backend tests prove pending voids defer final closure but not submission.</li>
+          <li>Closeout tests cover submit, inline manager approval, async variance approval, and finalization paths.</li>
+          <li>UI tests prove pending void review copy and approval routing appear without hiding closeout submission.</li>
+          <li>After implementation, run the focused webapp tests, TypeScript, Convex audit, graph rebuild, and diff check.</li>
+        </ul>
+      </section>
+    </main>
+    <footer>
+      <div class="wrap">
+        Canonical source: docs/plans/2026-06-25-003-fix-register-closeout-void-policy-plan.md
+      </div>
+    </footer>
+  </body>
+</html>

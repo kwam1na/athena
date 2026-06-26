@@ -48,6 +48,17 @@ type DashboardApprovalRequest = {
   status: string;
 };
 
+type DashboardPendingVoidApprovals = {
+  count: number;
+  items: Array<{
+    approvalRequestId: string;
+    requestedAt: number;
+    transactionId: string;
+    transactionNumber?: string | null;
+    workItemId?: string | null;
+  }>;
+};
+
 export type CashControlsDashboardSession = {
   _id: string;
   closedAt?: number;
@@ -58,6 +69,7 @@ export type CashControlsDashboardSession = {
   openedAt: number;
   openingFloat: number;
   pendingApprovalRequest?: DashboardApprovalRequest | null;
+  pendingVoidApprovals?: DashboardPendingVoidApprovals | null;
   registerNumber?: string | null;
   status: string;
   terminalName?: string | null;
@@ -324,6 +336,10 @@ function CashPositionSummary({
 function getSessionActionLabel(session: CashControlsDashboardSession) {
   if (hasRegisterCloseoutSyncReview(session)) {
     return "Review closeout";
+  }
+
+  if ((session.pendingVoidApprovals?.count ?? 0) > 0) {
+    return "Review register";
   }
 
   if (session.pendingApprovalRequest || session.variance) {
@@ -1090,6 +1106,7 @@ function CashroomWorkflow({
       session.status === "closing" ||
       session.status === "closeout_rejected" ||
       Boolean(session.pendingApprovalRequest) ||
+      (session.pendingVoidApprovals?.count ?? 0) > 0 ||
       getSessionSyncStatus(session).status !== "synced",
   );
   const needsAttentionIds = new Set(
