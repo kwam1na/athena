@@ -7,17 +7,17 @@ Graphify is the navigation layer for the repo graph. Use the entry docs below fo
 - [packages/AGENTS.md](../../packages/AGENTS.md) - package router plus the operational guides for each harnessed package
 
 ## Repo Summary
-- Code files discovered: 2127
-- Graph nodes: 8002
-- Graph edges: 9400
-- Communities: 2055
+- Code files discovered: 2128
+- Graph nodes: 8032
+- Graph edges: 9450
+- Communities: 2056
 
 ## Graph Hotspots
 - `DailyCloseView.tsx` (89 edges, Community 0) - [`packages/athena-webapp/src/components/operations/DailyCloseView.tsx`](../../packages/athena-webapp/src/components/operations/DailyCloseView.tsx)
 - `harness-inferential-review.ts` (85 edges, Community 1) - [`scripts/harness-inferential-review.ts`](../../scripts/harness-inferential-review.ts)
 - `dailyClose.ts` (76 edges, Community 2) - [`packages/athena-webapp/convex/operations/dailyClose.ts`](../../packages/athena-webapp/convex/operations/dailyClose.ts)
 - `dailyOperations.ts` (63 edges, Community 3) - [`packages/athena-webapp/convex/operations/dailyOperations.ts`](../../packages/athena-webapp/convex/operations/dailyOperations.ts)
-- `projectLocalEvents.ts` (62 edges, Community 4) - [`packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.ts`](../../packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.ts)
+- `projectLocalEvents.ts` (63 edges, Community 4) - [`packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.ts`](../../packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.ts)
 - `ingestLocalEvents.ts` (54 edges, Community 5) - [`packages/athena-webapp/convex/pos/application/sync/ingestLocalEvents.ts`](../../packages/athena-webapp/convex/pos/application/sync/ingestLocalEvents.ts)
 - `terminalHealthPresentation.ts` (53 edges, Community 6) - [`packages/athena-webapp/src/components/pos/terminals/terminalHealthPresentation.ts`](../../packages/athena-webapp/src/components/pos/terminals/terminalHealthPresentation.ts)
 - `catalogImport.ts` (49 edges, Community 7) - [`packages/athena-webapp/convex/inventory/catalogImport.ts`](../../packages/athena-webapp/convex/inventory/catalogImport.ts)

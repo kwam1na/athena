@@ -29,6 +29,158 @@ function getHandler(definition: unknown) {
   return (definition as { _handler: Function })._handler;
 }
 
+function createCloseoutMappingHoldCtx() {
+  const rowsByTable = new Map<string, Array<Record<string, unknown>>>(
+    Object.entries({
+      approvalRequest: [],
+      posLocalSyncConflict: [
+        {
+          _id: "sync_conflict_missing_mapping",
+          conflictType: "permission",
+          createdAt: 1,
+          details: {
+            localTransactionId: "local-transaction-1",
+          },
+          localEventId: "event_sale_1",
+          localRegisterSessionId: "local-register-1",
+          sequence: 3,
+          status: "needs_review",
+          storeId: "store-1",
+          summary: "Register session mapping is missing for synced POS history.",
+          terminalId: "terminal-1",
+        },
+      ],
+      posLocalSyncEvent: [
+        {
+          _id: "sync_event_sale_1",
+          eventType: "sale_completed",
+          localEventId: "event_sale_1",
+          localRegisterSessionId: "local-register-1",
+          occurredAt: 2,
+          payload: {
+            localTransactionId: "local-transaction-1",
+            receiptNumber: "R-1001",
+          },
+          sequence: 3,
+          status: "conflicted",
+          storeId: "store-1",
+          submittedAt: 2,
+          terminalId: "terminal-1",
+        },
+      ],
+      posLocalSyncMapping: [
+        {
+          _id: "transaction_mapping_1",
+          cloudId: "transaction-1",
+          cloudTable: "posTransaction",
+          createdAt: 2,
+          localEventId: "event_sale_1",
+          localId: "local-transaction-1",
+          localIdKind: "transaction",
+          localRegisterSessionId: "local-register-1",
+          storeId: "store-1",
+          terminalId: "terminal-1",
+        },
+      ],
+      posTransaction: [
+        {
+          _id: "transaction-1",
+          completedAt: 2,
+          registerSessionId: "session-1",
+          status: "completed",
+          storeId: "store-1",
+          terminalId: "terminal-1",
+          total: 15000,
+          transactionNumber: "R-1001",
+        },
+      ],
+      registerSession: [
+        {
+          _id: "session-1",
+          countedCash: 30000,
+          expectedCash: 30000,
+          openedAt: 1,
+          organizationId: "org-1",
+          registerNumber: "A1",
+          status: "closing",
+          storeId: "store-1",
+          terminalId: "terminal-1",
+        },
+      ],
+      staffProfile: [
+        {
+          _id: "manager-1",
+          linkedUserId: "manager-user-1",
+          organizationId: "org-1",
+          status: "active",
+          storeId: "store-1",
+        },
+      ],
+      staffRoleAssignment: [
+        {
+          _id: "role-1",
+          organizationId: "org-1",
+          role: "manager",
+          staffProfileId: "manager-1",
+          status: "active",
+          storeId: "store-1",
+        },
+      ],
+      store: [
+        {
+          _id: "store-1",
+          currency: "GHS",
+          organizationId: "org-1",
+        },
+      ],
+    }).map(([table, rows]) => [table, rows.map((row) => ({ ...row }))]),
+  );
+  const getRows = (tableName: string) => rowsByTable.get(tableName) ?? [];
+  const matches = (
+    row: Record<string, unknown>,
+    filters: Array<[string, unknown]>,
+  ) => filters.every(([field, value]) => row[field] === value);
+
+  return {
+    db: {
+      get: vi.fn(async (tableName: string, id: string) =>
+        getRows(tableName).find((row) => row._id === id) ?? null,
+      ),
+      insert: vi.fn(),
+      patch: vi.fn(),
+      query: vi.fn((tableName: string) => {
+        const filters: Array<[string, unknown]> = [];
+        const query = {
+          withIndex: vi.fn((_indexName: string, build: (q: any) => unknown) => {
+            const indexQuery = {
+              eq(field: string, value: unknown) {
+                filters.push([field, value]);
+                return indexQuery;
+              },
+            };
+            build(indexQuery);
+            return query;
+          }),
+          collect: vi.fn(async () =>
+            getRows(tableName).filter((row) => matches(row, filters)),
+          ),
+          take: vi.fn(async (limit: number) =>
+            getRows(tableName)
+              .filter((row) => matches(row, filters))
+              .slice(0, limit),
+          ),
+          unique: vi.fn(async () =>
+            getRows(tableName).find((row) => matches(row, filters)) ?? null,
+          ),
+        };
+        return query;
+      }),
+    },
+    runMutation: vi.fn(),
+    runQuery: vi.fn(async () => ({ _id: "store-1" })),
+  };
+}
+
 describe("cash control closeouts", () => {
   it("validates representative public closeout command results against exported return validators", () => {
     const validationError = {
@@ -1666,6 +1818,28 @@ describe("cash control closeouts", () => {
     expect(runMutation).not.toHaveBeenCalled();
   });
 
+  it("rejects closeout approval proof payloads while mapping repair holds exist", async () => {
+    const ctx = createCloseoutMappingHoldCtx();
+
+    const result = await getHandler(submitRegisterSessionCloseout)(ctx, {
+      actorStaffProfileId: "manager-1",
+      approvalProofId: "proof-1",
+      countedCash: 30000,
+      registerSessionId: "session-1",
+      storeId: "store-1",
+    });
+
+    expect(result).toEqual({
+      kind: "user_error",
+      error: {
+        code: "precondition_failed",
+        message:
+          "Resolve pending register corrections before approving final closeout.",
+      },
+    });
+    expect(ctx.runMutation).not.toHaveBeenCalled();
+  });
+
   it("blocks final closeout while pending void approvals remain", async () => {
     const registerSession = {
       _id: "session-1",
@@ -1735,6 +1909,26 @@ describe("cash control closeouts", () => {
       },
     });
     expect(runMutation).not.toHaveBeenCalled();
+  });
+
+  it("blocks final closeout while mapping repair holds remain", async () => {
+    const ctx = createCloseoutMappingHoldCtx();
+
+    const result = await getHandler(finalizeRegisterSessionCloseout)(ctx, {
+      actorStaffProfileId: "manager-1",
+      registerSessionId: "session-1",
+      storeId: "store-1",
+    });
+
+    expect(result).toEqual({
+      kind: "user_error",
+      error: {
+        code: "precondition_failed",
+        message:
+          "Resolve pending register corrections before finalizing closeout.",
+      },
+    });
+    expect(ctx.runMutation).not.toHaveBeenCalled();
   });
 
   it("finalizes exact-match submitted closeouts without a variance approval proof", async () => {

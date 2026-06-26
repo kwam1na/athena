@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>fix: Repair missing register-session mappings for completed POS sales</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #1f2933;
+        --muted: #5f6f76;
+        --line: #d9e2e7;
+        --panel: #f7fafb;
+        --accent: #2f6f73;
+        --warn: #8a5a00;
+        --ok: #1f7a4d;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        color: var(--ink);
+        background: #fff;
+        font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      header {
+        border-bottom: 1px solid var(--line);
+        background: var(--panel);
+      }
+      .wrap {
+        max-width: 1080px;
+        margin: 0 auto;
+        padding: 28px 24px;
+      }
+      h1 {
+        margin: 0 0 8px;
+        font-size: 30px;
+        line-height: 1.2;
+        letter-spacing: 0;
+      }
+      h2 {
+        margin: 32px 0 12px;
+        font-size: 20px;
+        letter-spacing: 0;
+      }
+      h3 {
+        margin: 22px 0 8px;
+        font-size: 16px;
+      }
+      p { margin: 0 0 12px; }
+      code {
+        padding: 1px 5px;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        background: #f4f7f8;
+        font-size: 0.92em;
+      }
+      nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 18px;
+      }
+      nav a {
+        padding: 6px 10px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: #fff;
+        color: var(--accent);
+        text-decoration: none;
+      }
+      .meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        color: var(--muted);
+      }
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 3px 8px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: #fff;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 12px;
+      }
+      .card {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 14px;
+        background: #fff;
+      }
+      .callout {
+        border-left: 4px solid var(--accent);
+        background: var(--panel);
+        padding: 12px 14px;
+        margin: 12px 0;
+      }
+      .warning { border-left-color: var(--warn); }
+      ul {
+        margin: 0 0 12px 20px;
+        padding: 0;
+      }
+      li { margin: 5px 0; }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 12px 0;
+      }
+      th, td {
+        border: 1px solid var(--line);
+        padding: 9px;
+        text-align: left;
+        vertical-align: top;
+      }
+      th { background: var(--panel); }
+      .unit {
+        border-top: 1px solid var(--line);
+        padding-top: 16px;
+        margin-top: 16px;
+      }
+      footer {
+        border-top: 1px solid var(--line);
+        color: var(--muted);
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="wrap">
+        <h1>fix: Repair missing register-session mappings for completed POS sales</h1>
+        <div class="meta">
+          <span class="badge">Type: fix</span>
+          <span class="badge">Status: active</span>
+          <span class="badge">Date: 2026-06-26</span>
+          <span class="badge">Source: markdown plan</span>
+        </div>
+        <nav aria-label="Plan sections">
+          <a href="#summary">Summary</a>
+          <a href="#requirements">Requirements</a>
+          <a href="#design">Design</a>
+          <a href="#units">Units</a>
+          <a href="#risks">Risks</a>
+          <a href="#verification">Verification</a>
+        </nav>
+      </div>
+    </header>
+    <main class="wrap">
+      <section id="summary">
+        <h2>Summary</h2>
+        <p>Completed local POS sales that sync without a usable register-session mapping should be repairable, not reject-only. A manager-approved repair creates or reuses the missing local-to-cloud register-session mapping, replays the original sale idempotently, and keeps inventory, payment, and closeout consequences explicit.</p>
+        <div class="callout">
+          Field example: register session <code>th7dggy861qj04qm0rbk3xk635898wcv</code> shows completed receipts under review, but the current backend classifies the missing mapping as generic review and leaves rejection as the available action.
+        </div>
+      </section>
+
+      <section id="requirements">
+        <h2>Requirements</h2>
+        <div class="grid">
+	          <div class="card"><strong>Review kind</strong><br>Classify missing register-session mappings as first-class repair review, including ungrouped conflicts that validate against the current register session.</div>
+	          <div class="card"><strong>Evidence</strong><br>Show full receipt, cashier, tender, item, local event, and target-drawer facts only to store-scoped managers.</div>
+	          <div class="card"><strong>Repair</strong><br>Require manager staff proof, selected conflict ids, a freshness token, repair mapping reuse, sale replay, and exact conflict settlement.</div>
+	          <div class="card"><strong>Closeout</strong><br>Use a generic closeout hold helper so pending void approvals and repairable sale-mapping conflicts both block final closure without blocking submitted counts.</div>
+        </div>
+      </section>
+
+      <section id="design">
+        <h2>Key Design</h2>
+        <ul>
+          <li>Add <code>missing_register_session_mapping</code> review kind and repair-aware action policy.</li>
+	          <li>Validate the explicit current Cash Controls register session and detect the finalization hold; v1 does not add target search or Operations UI.</li>
+	          <li>Evaluate ungrouped store/terminal missing-mapping conflicts against the current register session so repairable sales do not depend on a mapping before they appear.</li>
+	          <li>Create or reuse an audited repair mapping with same-target reuse across source event ids, then reuse <code>projectLocalSyncEvent</code>.</li>
+	          <li>Require a freshness token covering conflicts, source events, local register session, target session, Daily Close state, mapping state, and eligibility facts.</li>
+	          <li>Use existing reviewed-sale inventory and payment semantics to retain the sale while routing unsafe stock correction to Operations.</li>
+	          <li>Generalize the pending-void closeout guard into typed hold providers, then add repairable sale-mapping conflicts as another provider.</li>
+	          <li>Allow reviewed sale repair while an unresolved closeout is held, refresh expected cash and variance evidence, and never reopen finalized drawers.</li>
+	          <li>Keep Terminal Health explanatory only for these business-fact conflicts.</li>
+        </ul>
+      </section>
+
+      <section id="units">
+        <h2>Implementation Units</h2>
+        <article class="unit">
+	          <h3>U1. Validate target and finalization hold</h3>
+	          <p>Validate only the current register session and detect the closeout finalization hold from persisted store, terminal, register, Daily Close date/status, mapping, lifecycle, and ungrouped missing-mapping conflict facts.</p>
+	        </article>
+	        <article class="unit">
+	          <h3>U2. Classify and enrich review evidence</h3>
+	          <p>Add <code>missing_register_session_mapping</code>, attach completed-sale evidence, target validation facts, and the freshness token.</p>
+	        </article>
+	        <article class="unit">
+	          <h3>U3. Add manager-approved mapping repair mutation</h3>
+	          <p>Require linked manager staff proof, recompute persisted preconditions, create or reuse the repair mapping, replay the sale, audit the action, and preserve rejection as explicit intent.</p>
+	        </article>
+	        <article class="unit">
+	          <h3>U4. Replay repaired sale events</h3>
+	          <p>Use existing sale projection with focused natural-key recovery for the repaired <code>sale_completed</code> path and settle exact selected conflicts only.</p>
+	        </article>
+	        <article class="unit">
+	          <h3>U5. Generalize closeout holds</h3>
+	          <p>Extract the pending-void finalization guard into a shared POS sync/review policy helper with typed hold providers, add repairable sale-mapping conflicts as a provider, guard every final-close and deposit boundary, and refresh closeout evidence after repair.</p>
+	        </article>
+	        <article class="unit">
+	          <h3>U6. Update Cash Controls surface</h3>
+	          <p>Show <code>Repair and apply sale activity</code> for scoped repairable rows, including submitted-closeout hold states.</p>
+	        </article>
+	        <article class="unit">
+	          <h3>U7. Validate the implementation slice</h3>
+	          <p>Run focused backend and Cash Controls UI tests, then graphify after implementation code changes.</p>
+	        </article>
+      </section>
+
+      <section id="risks">
+        <h2>Risks</h2>
+        <table>
+          <thead><tr><th>Risk</th><th>Mitigation</th></tr></thead>
+          <tbody>
+	            <tr><td>Wrong drawer attachment</td><td>Explicit current-target validation and server-side precondition recomputation from persisted records.</td></tr>
+	            <tr><td>Duplicate records</td><td>Focused natural-key recovery and retry tests for the repaired sale path.</td></tr>
+	            <tr><td>Inventory review hidden</td><td>Retain sale and create/preserve Operations inventory review.</td></tr>
+	            <tr><td>Closeout totals drift</td><td>Hold final closure and deposits through the generic helper while pending void approvals or repairable sale-mapping conflicts remain, then refresh expected cash/variance evidence after repair.</td></tr>
+	            <tr><td>Sensitive evidence leak</td><td>Gate full review evidence to store-scoped manager proof and minimize Operations/unauthorized payloads.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="verification">
+        <h2>Verification</h2>
+        <ul>
+          <li><code>bun test packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.test.ts</code></li>
+          <li><code>bun test packages/athena-webapp/convex/pos/application/sync/ingestLocalEvents.test.ts</code></li>
+          <li><code>bun test packages/athena-webapp/convex/cashControls/deposits.test.ts</code></li>
+          <li><code>bun test packages/athena-webapp/src/components/cash-controls/RegisterSessionView.test.tsx</code></li>
+	          <li><code>bun run graphify:rebuild</code> after implementation changes code.</li>
+        </ul>
+      </section>
+    </main>
+    <footer>
+      <div class="wrap">Generated from docs/plans/2026-06-26-001-register-sync-mapping-repair-plan.md</div>
+    </footer>
+  </body>
+</html>

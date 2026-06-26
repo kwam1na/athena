@@ -27,6 +27,7 @@ import type {
   LocalSyncRepository,
   PosSyncOperationalRole,
 } from "../../application/sync/types";
+import { listRegisterSessionCloseoutHolds } from "../../application/sync/registerSessionCloseoutHolds";
 import { validatePosLocalStaffProofWithCtx } from "../../application/sync/staffProofValidation";
 
 export function createConvexLocalSyncRepository(
@@ -150,23 +151,8 @@ export function createConvexLocalSyncRepository(
     getRegisterSession(registerSessionId) {
       return ctx.db.get("registerSession", registerSessionId);
     },
-    async countPendingVoidApprovalsForRegisterSession(args) {
-      const approvalRequests =
-        // eslint-disable-next-line @convex-dev/no-collect-in-query -- Register-session scoped pending void approvals are bounded by manager-review workflow volume and must be checked before synced closeout projection.
-        await ctx.db
-          .query("approvalRequest")
-          .withIndex("by_registerSessionId", (q) =>
-            q.eq("registerSessionId", args.registerSessionId),
-          )
-          .collect();
-
-      return approvalRequests.filter(
-        (approvalRequest) =>
-          approvalRequest.storeId === args.storeId &&
-          approvalRequest.status === "pending" &&
-          approvalRequest.requestType === "pos_transaction_void" &&
-          approvalRequest.subjectType === "pos_transaction",
-      ).length;
+    async listCloseoutHoldsForRegisterSession(args) {
+      return listRegisterSessionCloseoutHolds(ctx, args);
     },
     async getActiveHeldQuantity(args) {
       const holds = await ctx.db

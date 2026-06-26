@@ -1360,6 +1360,116 @@ describe("RegisterSessionViewContent", () => {
     });
   });
 
+  it("shows repair copy for completed sale register mapping reviews", async () => {
+    const user = userEvent.setup();
+    const onAuthenticateStaff = vi.fn().mockResolvedValue(
+      ok({
+        activeRoles: ["manager"],
+        staffProfile: { fullName: "Ato Kofi" },
+        staffProfileId: "manager-1",
+      }),
+    );
+    const onResolveSyncReview = vi
+      .fn()
+      .mockResolvedValue(
+        ok({ action: "resolved", projectedCount: 1, resolvedCount: 1 }),
+      );
+
+    render(
+      <RegisterSessionViewContent
+        currency="GHS"
+        isLoading={false}
+        onRecordDeposit={vi.fn()}
+        {...closeoutHandlers}
+        onAuthenticateStaff={onAuthenticateStaff}
+        onResolveSyncReview={onResolveSyncReview}
+        orgUrlSlug="wigclub"
+        registerSessionSnapshot={{
+          ...baseSnapshot,
+          registerSession: {
+            ...baseSnapshot.registerSession,
+            localSyncStatus: {
+              status: "needs_review",
+              reconciliationItems: [
+                {
+                  actionPolicy: "apply_or_reject",
+                  id: "sync_conflict_missing_mapping",
+                  localEventId: "event_sale_1",
+                  reviewKind: "missing_register_session_mapping",
+                  sale: {
+                    cashAmount: 3500,
+                    itemCount: 1,
+                    occurredAt: Date.parse("2026-06-23T03:38:00Z"),
+                    paymentMethods: ["cash"],
+                    receiptNumber: "003078",
+                    staffName: "Ato K.",
+                    total: 3500,
+                    totalPaid: 3500,
+                  },
+                  sequence: 2,
+                  status: "needs_review",
+                  summary:
+                    "Register session mapping is missing for synced POS history.",
+                  type: "permission",
+                },
+              ],
+            },
+          },
+        }}
+        storeUrlSlug="wigclub"
+      />,
+    );
+
+    expect(
+      screen.getByText(
+        "Manager sign-in repairs the completed sale link to this register session so the drawer can be settled.",
+      ),
+    ).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", {
+        name: /Receipt #003078/i,
+      }),
+    );
+
+    expect(screen.getByText("Repair sale mapping")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Completed sale needs its register-session link repaired before this drawer can be settled.",
+      ),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Repair sale mapping" }));
+    await user.click(
+      screen.getByRole("button", {
+        name: "Confirm staff for Repair sale mapping",
+      }),
+    );
+
+    expect(onResolveSyncReview).toHaveBeenNthCalledWith(1, {
+      actorStaffProfileId: "manager-1",
+      decision: "approved",
+      registerSessionId: "session-1",
+      reviewConflictIds: ["sync_conflict_missing_mapping"],
+    });
+
+    await user.click(
+      screen.getByRole("button", { name: "Reject sale mapping review" }),
+    );
+    await user.click(
+      screen.getByRole("button", {
+        name: "Confirm staff for Reject sale mapping review",
+      }),
+    );
+
+    expect(onResolveSyncReview).toHaveBeenNthCalledWith(2, {
+      actorStaffProfileId: "manager-1",
+      decision: "rejected",
+      registerSessionId: "session-1",
+      reviewConflictIds: ["sync_conflict_missing_mapping"],
+    });
+  });
+
   it("shows only the duplicate rejection decision for duplicate synced sale reviews", async () => {
     const user = userEvent.setup();
     const onAuthenticateStaff = vi.fn().mockResolvedValue(

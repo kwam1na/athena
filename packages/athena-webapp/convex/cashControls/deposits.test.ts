@@ -299,6 +299,169 @@ function createAuthorizedRegisterDepositCtx(
   });
 }
 
+function createMissingMappingRepairSeed(
+  options: {
+    existingRegisterMappingCloudId?: string;
+    localTransactionId?: string;
+    registerSessionStatus?: string;
+    saleSequence?: number;
+    transactionRegisterSessionId?: string;
+    transactionStatus?: string;
+    withCloseoutBeforeSale?: boolean;
+  } = {},
+) {
+  const localTransactionId =
+    options.localTransactionId === undefined
+      ? "local-transaction-1"
+      : options.localTransactionId;
+  const saleSequence = options.saleSequence ?? 3;
+  const mappings: Record<string, unknown>[] = [
+    ...(localTransactionId
+      ? [
+          {
+            _id: "transaction_mapping_1",
+            storeId: "store_1",
+            terminalId: "terminal_1",
+            localRegisterSessionId: "local-register-1",
+            localEventId: "event_sale_1",
+            localIdKind: "transaction",
+            localId: localTransactionId,
+            cloudTable: "posTransaction",
+            cloudId: "transaction_1",
+            createdAt: 2,
+          },
+        ]
+      : []),
+  ];
+  if (options.existingRegisterMappingCloudId) {
+    mappings.push({
+      _id: "register_mapping_1",
+      storeId: "store_1",
+      terminalId: "terminal_1",
+      localRegisterSessionId: "local-register-1",
+      localEventId: "event_open_1",
+      localIdKind: "registerSession",
+      localId: "local-register-1",
+      cloudTable: "registerSession",
+      cloudId: options.existingRegisterMappingCloudId,
+      createdAt: 1,
+    });
+  }
+
+  return {
+    operationalEvent: [],
+    posLocalSyncConflict: [
+      {
+        _id: "sync_conflict_missing_mapping",
+        storeId: "store_1",
+        terminalId: "terminal_1",
+        localRegisterSessionId: "local-register-1",
+        localEventId: "event_sale_1",
+        sequence: saleSequence,
+        conflictType: "permission",
+        status: "needs_review",
+        summary: "Register session mapping is missing for synced POS history.",
+        details: {
+          ...(localTransactionId ? { localTransactionId } : {}),
+        },
+        createdAt: 1,
+      },
+    ],
+    posLocalSyncEvent: [
+      ...(options.withCloseoutBeforeSale
+        ? [
+            {
+              _id: "sync_event_closeout_1",
+              storeId: "store_1",
+              terminalId: "terminal_1",
+              localRegisterSessionId: "local-register-1",
+              localEventId: "event_closeout_1",
+              sequence: saleSequence - 1,
+              eventType: "register_closed",
+              occurredAt: 1,
+              payload: {},
+              status: "projected",
+              submittedAt: 1,
+            },
+          ]
+        : []),
+      {
+        _id: "sync_event_sale_1",
+        storeId: "store_1",
+        terminalId: "terminal_1",
+        localRegisterSessionId: "local-register-1",
+        localEventId: "event_sale_1",
+        sequence: saleSequence,
+        eventType: "sale_completed",
+        occurredAt: 2,
+        staffProfileId: "staff_1",
+        payload: {
+          ...(localTransactionId ? { localTransactionId } : {}),
+          receiptNumber: "R-1001",
+          totals: {
+            total: 15000,
+          },
+        },
+        status: "conflicted",
+        submittedAt: 2,
+      },
+    ],
+    posLocalSyncMapping: mappings,
+    posTransaction: [
+      {
+        _id: "transaction_1",
+        completedAt: 2,
+        registerSessionId:
+          options.transactionRegisterSessionId ?? "session_open",
+        status: options.transactionStatus ?? "completed",
+        storeId: "store_1",
+        terminalId: "terminal_1",
+        total: 15000,
+        transactionNumber: "R-1001",
+      },
+    ],
+    registerSession: [
+      {
+        _id: "session_open",
+        closeoutRecords: [],
+        expectedCash: 50000,
+        openedAt: 1,
+        openingFloat: 50000,
+        organizationId: "org_1",
+        registerNumber: "1",
+        status: options.registerSessionStatus ?? "active",
+        storeId: "store_1",
+        terminalId: "terminal_1",
+      },
+    ],
+    staffProfile: [
+      {
+        _id: "manager_1",
+        linkedUserId: "athena_user_1",
+        organizationId: "org_1",
+        status: "active",
+        storeId: "store_1",
+      },
+      {
+        _id: "staff_1",
+        organizationId: "org_1",
+        status: "active",
+        storeId: "store_1",
+      },
+    ],
+    staffRoleAssignment: [
+      {
+        _id: "role_1",
+        organizationId: "org_1",
+        role: "manager",
+        staffProfileId: "manager_1",
+        status: "active",
+        storeId: "store_1",
+      },
+    ],
+  };
+}
+
 describe("cash control deposits", () => {
   beforeEach(() => {
     mockedAuthServer.getAuthUserId.mockResolvedValue("auth_user_1");
@@ -360,6 +523,19 @@ describe("cash control deposits", () => {
       actionPolicy: "apply_or_reject",
       conflictType: "inventory",
       reviewKind: "inventory_review",
+    });
+    expect(
+      classifyRegisterSessionSyncReview({
+        conflictType: "permission",
+        details: {},
+        localEventId: "event-sale-missing-register",
+        status: "needs_review",
+        summary: "Register session mapping is missing for synced POS history.",
+      }),
+    ).toEqual({
+      actionPolicy: "apply_or_reject",
+      conflictType: "permission",
+      reviewKind: "missing_register_session_mapping",
     });
   });
 
@@ -772,6 +948,99 @@ describe("cash control deposits", () => {
     );
   });
 
+  it("maps repairable missing register-session mapping conflicts through the completed sale", async () => {
+    const ctx = createQueryCtx({
+      posLocalSyncConflict: [
+        {
+          _id: "sync_conflict_missing_mapping",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-1",
+          localEventId: "event_sale_1",
+          sequence: 3,
+          conflictType: "permission",
+          status: "needs_review",
+          summary: "Register session mapping is missing for synced POS history.",
+          details: {
+            localTransactionId: "local-transaction-1",
+          },
+          createdAt: 1,
+        },
+      ],
+      posLocalSyncEvent: [
+        {
+          _id: "sync_event_sale_1",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-1",
+          localEventId: "event_sale_1",
+          sequence: 3,
+          eventType: "sale_completed",
+          occurredAt: 2,
+          staffProfileId: "staff_1",
+          payload: {
+            localTransactionId: "local-transaction-1",
+            receiptNumber: "R-1001",
+          },
+          status: "conflicted",
+          submittedAt: 2,
+        },
+      ],
+      posLocalSyncMapping: [
+        {
+          _id: "transaction_mapping_1",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-1",
+          localEventId: "event_sale_1",
+          localIdKind: "transaction",
+          localId: "local-transaction-1",
+          cloudTable: "posTransaction",
+          cloudId: "transaction_1",
+          createdAt: 2,
+        },
+      ],
+      posTransaction: [
+        {
+          _id: "transaction_1",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          registerSessionId: "session_open",
+          status: "completed",
+          transactionNumber: "R-1001",
+          total: 15000,
+          completedAt: 2,
+        },
+      ],
+      registerSession: [
+        {
+          _id: "session_open",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          status: "active",
+        },
+      ],
+    });
+
+    await expect(
+      listOpenLocalSyncConflictsByRegisterSession(
+        ctx as never,
+        "store_1" as Id<"store">,
+      ),
+    ).resolves.toEqual(
+      new Map([
+        [
+          "session_open",
+          [
+            expect.objectContaining({
+              _id: "sync_conflict_missing_mapping",
+            }),
+          ],
+        ],
+      ]),
+    );
+  });
+
   it("hides duplicate closeout shadows while the variance closeout review is open", async () => {
     const ctx = createQueryCtx({
       posLocalSyncConflict: [
@@ -1099,6 +1368,454 @@ describe("cash control deposits", () => {
         }),
       ]),
     );
+  });
+
+  it("repairs missing register-session mappings for completed synced sales", async () => {
+    const ctx = createAuthorizedRegisterDepositCtx({
+      operationalEvent: [],
+      posLocalSyncConflict: [
+        {
+          _id: "sync_conflict_missing_mapping",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-1",
+          localEventId: "event_sale_1",
+          sequence: 3,
+          conflictType: "permission",
+          status: "needs_review",
+          summary: "Register session mapping is missing for synced POS history.",
+          details: {
+            localTransactionId: "local-transaction-1",
+          },
+          createdAt: 1,
+        },
+      ],
+      posLocalSyncEvent: [
+        {
+          _id: "sync_event_sale_1",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-1",
+          localEventId: "event_sale_1",
+          sequence: 3,
+          eventType: "sale_completed",
+          occurredAt: 2,
+          staffProfileId: "staff_1",
+          payload: {
+            localTransactionId: "local-transaction-1",
+            receiptNumber: "R-1001",
+            totals: {
+              total: 15000,
+            },
+          },
+          status: "conflicted",
+          submittedAt: 2,
+        },
+      ],
+      posLocalSyncMapping: [
+        {
+          _id: "transaction_mapping_1",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-1",
+          localEventId: "event_sale_1",
+          localIdKind: "transaction",
+          localId: "local-transaction-1",
+          cloudTable: "posTransaction",
+          cloudId: "transaction_1",
+          createdAt: 2,
+        },
+      ],
+      posTransaction: [
+        {
+          _id: "transaction_1",
+          completedAt: 2,
+          registerSessionId: "session_open",
+          status: "completed",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          total: 15000,
+          transactionNumber: "R-1001",
+        },
+      ],
+      registerSession: [
+        {
+          _id: "session_open",
+          closeoutRecords: [],
+          expectedCash: 50000,
+          openedAt: 1,
+          openingFloat: 50000,
+          organizationId: "org_1",
+          registerNumber: "1",
+          status: "active",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+        },
+      ],
+      staffProfile: [
+        {
+          _id: "manager_1",
+          linkedUserId: "athena_user_1",
+          organizationId: "org_1",
+          status: "active",
+          storeId: "store_1",
+        },
+        {
+          _id: "staff_1",
+          organizationId: "org_1",
+          status: "active",
+          storeId: "store_1",
+        },
+      ],
+      staffRoleAssignment: [
+        {
+          _id: "role_1",
+          organizationId: "org_1",
+          role: "manager",
+          staffProfileId: "manager_1",
+          status: "active",
+          storeId: "store_1",
+        },
+      ],
+    });
+
+    const result = await getHandler(resolveRegisterSessionSyncReview)(
+      ctx as never,
+      {
+        actorStaffProfileId: "manager_1" as Id<"staffProfile">,
+        registerSessionId: "session_open" as Id<"registerSession">,
+        reviewConflictIds: ["sync_conflict_missing_mapping"],
+        storeId: "store_1" as Id<"store">,
+      },
+    );
+
+    expect(result).toEqual(
+      ok({
+        action: "resolved",
+        projectedCount: 1,
+        registerSession: expect.objectContaining({
+          _id: "session_open",
+          status: "active",
+        }),
+        resolvedCount: 1,
+      }),
+    );
+    expect(ctx.tables.get("posLocalSyncMapping")).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          cloudId: "session_open",
+          cloudTable: "registerSession",
+          localEventId: "event_sale_1",
+          localId: "local-register-1",
+          localIdKind: "registerSession",
+          localRegisterSessionId: "local-register-1",
+        }),
+      ]),
+    );
+    expect(ctx.tables.get("posLocalSyncEvent")).toEqual([
+      expect.objectContaining({
+        _id: "sync_event_sale_1",
+        projectedAt: expect.any(Number),
+        status: "projected",
+      }),
+    ]);
+    expect(ctx.tables.get("posLocalSyncConflict")).toEqual([
+      expect.objectContaining({
+        _id: "sync_conflict_missing_mapping",
+        resolvedByStaffProfileId: "manager_1",
+        status: "resolved",
+      }),
+    ]);
+  });
+
+  it("associates and repairs missing register mapping reviews for open register sessions", async () => {
+    const ctx = createAuthorizedRegisterDepositCtx(
+      createMissingMappingRepairSeed({ registerSessionStatus: "open" }),
+    );
+
+    await expect(
+      listOpenLocalSyncConflictsByRegisterSession(
+        ctx as never,
+        "store_1" as Id<"store">,
+      ),
+    ).resolves.toEqual(
+      new Map([
+        [
+          "session_open",
+          [
+            expect.objectContaining({
+              _id: "sync_conflict_missing_mapping",
+            }),
+          ],
+        ],
+      ]),
+    );
+
+    const result = await getHandler(resolveRegisterSessionSyncReview)(
+      ctx as never,
+      {
+        actorStaffProfileId: "manager_1" as Id<"staffProfile">,
+        registerSessionId: "session_open" as Id<"registerSession">,
+        reviewConflictIds: ["sync_conflict_missing_mapping"],
+        storeId: "store_1" as Id<"store">,
+      },
+    );
+
+    expect(result).toEqual(
+      ok({
+        action: "resolved",
+        projectedCount: 1,
+        registerSession: expect.objectContaining({
+          _id: "session_open",
+          status: "open",
+        }),
+        resolvedCount: 1,
+      }),
+    );
+    expect(ctx.tables.get("posLocalSyncMapping")).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          cloudId: "session_open",
+          cloudTable: "registerSession",
+          localIdKind: "registerSession",
+        }),
+      ]),
+    );
+  });
+
+  it("repairs missing register mapping reviews while the register is closing", async () => {
+    const ctx = createAuthorizedRegisterDepositCtx(
+      createMissingMappingRepairSeed({ registerSessionStatus: "closing" }),
+    );
+
+    const result = await getHandler(resolveRegisterSessionSyncReview)(
+      ctx as never,
+      {
+        actorStaffProfileId: "manager_1" as Id<"staffProfile">,
+        registerSessionId: "session_open" as Id<"registerSession">,
+        reviewConflictIds: ["sync_conflict_missing_mapping"],
+        storeId: "store_1" as Id<"store">,
+      },
+    );
+
+    expect(result).toEqual(
+      ok({
+        action: "resolved",
+        projectedCount: 1,
+        registerSession: expect.objectContaining({
+          _id: "session_open",
+          status: "closing",
+        }),
+        resolvedCount: 1,
+      }),
+    );
+  });
+
+  it("rejects missing register mapping repair after the local closeout event", async () => {
+    const ctx = createAuthorizedRegisterDepositCtx(
+      createMissingMappingRepairSeed({
+        registerSessionStatus: "closing",
+        withCloseoutBeforeSale: true,
+      }),
+    );
+
+    await expect(
+      getHandler(resolveRegisterSessionSyncReview)(ctx as never, {
+        actorStaffProfileId: "manager_1" as Id<"staffProfile">,
+        registerSessionId: "session_open" as Id<"registerSession">,
+        reviewConflictIds: ["sync_conflict_missing_mapping"],
+        storeId: "store_1" as Id<"store">,
+      }),
+    ).resolves.toEqual(
+      userError({
+        code: "precondition_failed",
+        message:
+          "This synced sale can no longer be repaired for this closeout.",
+      }),
+    );
+  });
+
+  it("rejects missing register mapping repair once the register is closed", async () => {
+    const ctx = createAuthorizedRegisterDepositCtx(
+      createMissingMappingRepairSeed({
+        existingRegisterMappingCloudId: "session_open",
+        registerSessionStatus: "closed",
+      }),
+    );
+
+    await expect(
+      getHandler(resolveRegisterSessionSyncReview)(ctx as never, {
+        actorStaffProfileId: "manager_1" as Id<"staffProfile">,
+        registerSessionId: "session_open" as Id<"registerSession">,
+        reviewConflictIds: ["sync_conflict_missing_mapping"],
+        storeId: "store_1" as Id<"store">,
+      }),
+    ).resolves.toEqual(
+      userError({
+        code: "precondition_failed",
+        message:
+          "This synced sale can only be repaired before the register session is closed.",
+      }),
+    );
+  });
+
+  it("rejects missing register mapping repair when the completed sale cannot be matched", async () => {
+    const ctx = createAuthorizedRegisterDepositCtx(
+      createMissingMappingRepairSeed({
+        existingRegisterMappingCloudId: "session_open",
+        transactionStatus: "void",
+      }),
+    );
+
+    await expect(
+      getHandler(resolveRegisterSessionSyncReview)(ctx as never, {
+        actorStaffProfileId: "manager_1" as Id<"staffProfile">,
+        registerSessionId: "session_open" as Id<"registerSession">,
+        reviewConflictIds: ["sync_conflict_missing_mapping"],
+        storeId: "store_1" as Id<"store">,
+      }),
+    ).resolves.toEqual(
+      userError({
+        code: "precondition_failed",
+        message:
+          "This synced sale could not be matched to a completed sale for this register session.",
+      }),
+    );
+  });
+
+  it("rejects automatic missing register mapping repair", async () => {
+    const ctx = createAuthorizedRegisterDepositCtx(
+      createMissingMappingRepairSeed({
+        existingRegisterMappingCloudId: "session_open",
+      }),
+    );
+
+    await expect(
+      getHandler(resolveRegisterSessionSyncReview)(ctx as never, {
+        registerSessionId: "session_open" as Id<"registerSession">,
+        reviewConflictIds: ["sync_conflict_missing_mapping"],
+        storeId: "store_1" as Id<"store">,
+      }),
+    ).resolves.toEqual(
+      userError({
+        code: "precondition_failed",
+        message:
+          "This register review is not eligible for automatic sync repair.",
+      }),
+    );
+  });
+
+  it("rejects missing register mapping repair when the local drawer already has a conflicting mapping", async () => {
+    const seed = createMissingMappingRepairSeed();
+    const ctx = createAuthorizedRegisterDepositCtx({
+      ...seed,
+      posLocalSyncMapping: [
+        ...(seed.posLocalSyncMapping as Record<string, unknown>[]),
+        {
+          _id: "corrupt_register_mapping",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-1",
+          localEventId: "event_open_1",
+          localIdKind: "registerSession",
+          localId: "local-register-1",
+          cloudTable: "posTransaction",
+          cloudId: "transaction_other",
+          createdAt: 1,
+        },
+      ],
+    });
+
+    await expect(
+      getHandler(resolveRegisterSessionSyncReview)(ctx as never, {
+        actorStaffProfileId: "manager_1" as Id<"staffProfile">,
+        registerSessionId: "session_open" as Id<"registerSession">,
+        reviewConflictIds: ["sync_conflict_missing_mapping"],
+        storeId: "store_1" as Id<"store">,
+      }),
+    ).resolves.toEqual(
+      userError({
+        code: "precondition_failed",
+        message:
+          "This synced sale is already mapped to a different register session.",
+      }),
+    );
+  });
+
+  it("keeps the source sync event conflicted when a sibling conflict remains open", async () => {
+    const seed = createMissingMappingRepairSeed();
+    const ctx = createAuthorizedRegisterDepositCtx({
+      ...seed,
+      posLocalSyncConflict: [
+        ...(seed.posLocalSyncConflict as Record<string, unknown>[]),
+        {
+          _id: "sync_conflict_inventory",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-1",
+          localEventId: "event_sale_1",
+          sequence: 3,
+          conflictType: "inventory",
+          status: "needs_review",
+          summary: "Inventory needs manager review for a synced offline sale.",
+          details: {
+            productSkuId: "product_sku_1",
+            requestedQuantity: 2,
+          },
+          createdAt: 2,
+        },
+      ],
+      posLocalSyncMapping: [
+        ...(seed.posLocalSyncMapping as Record<string, unknown>[]),
+        {
+          _id: "register_mapping_1",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-1",
+          localEventId: "event_open_1",
+          localIdKind: "registerSession",
+          localId: "local-register-1",
+          cloudTable: "registerSession",
+          cloudId: "session_open",
+          createdAt: 1,
+        },
+      ],
+    });
+
+    const result = await getHandler(resolveRegisterSessionSyncReview)(
+      ctx as never,
+      {
+        actorStaffProfileId: "manager_1" as Id<"staffProfile">,
+        registerSessionId: "session_open" as Id<"registerSession">,
+        reviewConflictIds: ["sync_conflict_missing_mapping"],
+        storeId: "store_1" as Id<"store">,
+      },
+    );
+
+    expect(result).toEqual(
+      ok({
+        action: "resolved",
+        projectedCount: 1,
+        registerSession: expect.objectContaining({ _id: "session_open" }),
+        resolvedCount: 1,
+      }),
+    );
+    expect(ctx.tables.get("posLocalSyncEvent")).toEqual([
+      expect.objectContaining({
+        _id: "sync_event_sale_1",
+        status: "conflicted",
+      }),
+    ]);
+    expect(ctx.tables.get("posLocalSyncConflict")).toEqual([
+      expect.objectContaining({
+        _id: "sync_conflict_missing_mapping",
+        status: "resolved",
+      }),
+      expect.objectContaining({
+        _id: "sync_conflict_inventory",
+        status: "needs_review",
+      }),
+    ]);
   });
 
   it("rejects synced register review when the manager actor belongs to another user", async () => {
@@ -4473,6 +5190,50 @@ describe("cash control deposits", () => {
     );
   });
 
+  it("sanitizes internal sync metadata from register-session timelines", async () => {
+    const ctx = createAuthorizedRegisterDepositCtx({
+      operationalEvent: [
+        {
+          _id: "event_sync_review",
+          actorStaffProfileId: "staff_1",
+          createdAt: 10,
+          eventType: "register_session_sync_review_resolved",
+          metadata: {
+            conflictIds: ["sync_conflict_missing_mapping"],
+            decision: "approved",
+            localEventIds: ["event_sale_1"],
+            managerOverride: false,
+            originalStatuses: ["conflicted"],
+            projectedTransactionIds: ["transaction_1"],
+            sequences: [3],
+          },
+          message: "Applied reviewed synced register sale.",
+          registerSessionId: "session_open",
+          storeId: "store_1",
+        },
+      ],
+    });
+
+    await expect(
+      getHandler(getRegisterSessionSnapshot)(ctx as never, {
+        registerSessionId: "session_open" as Id<"registerSession">,
+        storeId: "store_1" as Id<"store">,
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        timeline: [
+          expect.objectContaining({
+            _id: "event_sync_review",
+            metadata: {
+              decision: "approved",
+              managerOverride: false,
+            },
+          }),
+        ],
+      }),
+    );
+  });
+
   it("includes void status details on linked register-session transactions", async () => {
     const voidedAt = new Date("2026-04-21T17:45:00.000Z").getTime();
     const ctx = createAuthorizedRegisterDepositCtx({
@@ -4723,6 +5484,104 @@ describe("cash control deposits", () => {
       error: {
         code: "precondition_failed",
         message: "Resolve pending void approvals before recording a deposit.",
+      },
+    });
+
+    expect(ctx.tables.get("paymentAllocation")).toEqual([]);
+  });
+
+  it("rejects new deposits while repairable register mapping reviews are pending", async () => {
+    const ctx = createAuthorizedRegisterDepositCtx({
+      posLocalSyncConflict: [
+        {
+          _id: "sync_conflict_missing_mapping",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-1",
+          localEventId: "event_sale_1",
+          sequence: 3,
+          conflictType: "permission",
+          status: "needs_review",
+          summary: "Register session mapping is missing for synced POS history.",
+          details: {
+            localTransactionId: "local-transaction-1",
+          },
+          createdAt: 1,
+        },
+      ],
+      posLocalSyncEvent: [
+        {
+          _id: "sync_event_sale_1",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-1",
+          localEventId: "event_sale_1",
+          sequence: 3,
+          eventType: "sale_completed",
+          occurredAt: 2,
+          staffProfileId: "staff_1",
+          payload: {
+            localTransactionId: "local-transaction-1",
+            receiptNumber: "R-1001",
+          },
+          status: "conflicted",
+          submittedAt: 2,
+        },
+      ],
+      posLocalSyncMapping: [
+        {
+          _id: "transaction_mapping_1",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-1",
+          localEventId: "event_sale_1",
+          localIdKind: "transaction",
+          localId: "local-transaction-1",
+          cloudTable: "posTransaction",
+          cloudId: "transaction_1",
+          createdAt: 2,
+        },
+      ],
+      posTransaction: [
+        {
+          _id: "transaction_1",
+          completedAt: 2,
+          registerSessionId: "session_open",
+          status: "completed",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          total: 15000,
+          transactionNumber: "R-1001",
+        },
+      ],
+      registerSession: [
+        {
+          _id: "session_open",
+          expectedCash: 50000,
+          openedAt: 1,
+          openingFloat: 10000,
+          organizationId: "org_1",
+          registerNumber: "1",
+          status: "open",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+        },
+      ],
+    });
+
+    await expect(
+      getHandler(recordRegisterSessionDeposit)(ctx as never, {
+        actorStaffProfileId: "staff_1" as Id<"staffProfile">,
+        amount: 100,
+        registerSessionId: "session_open" as Id<"registerSession">,
+        storeId: "store_1" as Id<"store">,
+        submissionKey: "deposit-1",
+      }),
+    ).resolves.toEqual({
+      kind: "user_error",
+      error: {
+        code: "precondition_failed",
+        message: "Resolve pending register corrections before recording a deposit.",
       },
     });
 

@@ -49,6 +49,15 @@ type ProjectEventArgs = {
   };
 };
 
+export type RegisterSessionRepairMappingArgs = {
+  localEventId: string;
+  localRegisterSessionId: string;
+  now: number;
+  registerSessionId: Id<"registerSession">;
+  storeId: Id<"store">;
+  terminalId: Id<"posTerminal">;
+};
+
 type SaleCompletedArgs = ProjectEventArgsFor<"sale_completed">;
 type SaleClearedArgs = ProjectEventArgsFor<"sale_cleared">;
 type ExpenseRecordedArgs = ProjectEventArgsFor<"expense_recorded">;
@@ -265,6 +274,43 @@ export async function projectLocalSyncEvent(
   }
 
   assertNever(args.event);
+}
+
+export async function createOrReuseRegisterSessionRepairMapping(
+  repository: SyncProjectionRepository,
+  args: RegisterSessionRepairMappingArgs,
+) {
+  const existing = await repository.findMapping({
+    storeId: args.storeId,
+    terminalId: args.terminalId,
+    localRegisterSessionId: args.localRegisterSessionId,
+    localIdKind: "registerSession",
+    localId: args.localRegisterSessionId,
+  });
+  if (existing) {
+    if (
+      existing.cloudTable === "registerSession" &&
+      existing.cloudId === args.registerSessionId
+    ) {
+      return existing;
+    }
+
+    throw new Error(
+      "POS local sync register-session mapping already belongs to another projection.",
+    );
+  }
+
+  return repository.createMapping({
+    storeId: args.storeId,
+    terminalId: args.terminalId,
+    localRegisterSessionId: args.localRegisterSessionId,
+    localEventId: args.localEventId,
+    localIdKind: "registerSession",
+    localId: args.localRegisterSessionId,
+    cloudTable: "registerSession",
+    cloudId: args.registerSessionId,
+    createdAt: args.now,
+  });
 }
 
 async function projectExpenseRecorded(
@@ -3506,13 +3552,15 @@ async function projectRegisterClosed(
     return { status: "conflicted", mappings: [], conflicts: [conflict] };
   }
 
-  const pendingVoidApprovalCount =
-    (await repository.countPendingVoidApprovalsForRegisterSession?.({
+  const closeoutHolds =
+    (await repository.listCloseoutHoldsForRegisterSession?.({
       registerSessionId: registerSession._id,
       storeId: args.storeId,
-    })) ?? 0;
+    })) ?? [];
 
-  if (pendingVoidApprovalCount > 0) {
+  if (
+    closeoutHolds.some((hold) => hold.cashAffecting && hold.count > 0)
+  ) {
     await repository.patchRegisterSession(registerSession._id, {
       status: "closing",
       countedCash,

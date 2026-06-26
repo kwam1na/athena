@@ -88,6 +88,8 @@ const CLOSED_REGISTER_SYNCED_CLOSEOUT_SUMMARY =
   "register session is not open for synced pos closeout";
 const REGISTER_NOT_OPEN_SYNC_REVIEW_SUMMARY =
   "Register was not open before this sale synced.";
+const MISSING_REGISTER_SESSION_MAPPING_SYNC_REVIEW_SUMMARY =
+  "Register session mapping is missing for synced POS history.";
 const STAFF_ACCESS_SYNC_REVIEW_SUMMARY =
   "Staff access changed before this POS history synced.";
 const SERVICE_CUSTOMER_ATTRIBUTION_SYNC_REVIEW_SUMMARY =
@@ -1568,6 +1570,10 @@ function getCombinedReviewNextStep(items: PosReconciliationItem[]) {
     return "This synced activity needs correction before it can be applied. Reject it to clear this review, then correct the sale from the appropriate workflow if needed.";
   }
 
+  if (items.some(isMissingRegisterSessionMappingReviewItem)) {
+    return "Manager sign-in repairs the completed sale link to this register session so the drawer can be settled.";
+  }
+
   if (
     items.some(
       (item) =>
@@ -1587,6 +1593,15 @@ function isInventoryRegisterSyncReviewItem(item: PosReconciliationItem) {
     item.reviewKind === "inventory_review" ||
     item.type === "inventory" ||
     item.type === "inventory_conflict"
+  );
+}
+
+function isMissingRegisterSessionMappingReviewItem(
+  item: PosReconciliationItem,
+) {
+  return (
+    item.reviewKind === "missing_register_session_mapping" ||
+    item.summary?.trim() === MISSING_REGISTER_SESSION_MAPPING_SYNC_REVIEW_SUMMARY
   );
 }
 
@@ -1626,6 +1641,13 @@ function getRegisterSyncReviewItemActionLabels(item: PosReconciliationItem) {
     };
   }
 
+  if (isMissingRegisterSessionMappingReviewItem(item)) {
+    return {
+      approveLabel: "Repair sale mapping",
+      rejectLabel: "Reject sale mapping review",
+    };
+  }
+
   return {
     approveLabel: "Apply review item",
     rejectLabel: "Reject review item",
@@ -1639,6 +1661,10 @@ function getRegisterSyncReviewItemSummary(item: PosReconciliationItem) {
 
   if (isInventoryRegisterSyncReviewItem(item)) {
     return "Inventory needs manager review before this synced sale can be applied.";
+  }
+
+  if (isMissingRegisterSessionMappingReviewItem(item)) {
+    return "Completed sale needs its register-session link repaired before this drawer can be settled.";
   }
 
   if (item.reviewKind === "register_closeout_variance") {
@@ -1680,6 +1706,10 @@ function getRegisterSyncReviewDecisionScope(item: PosReconciliationItem) {
 
   if (isInventoryRegisterSyncReviewItem(item)) {
     return "inventory";
+  }
+
+  if (isMissingRegisterSessionMappingReviewItem(item)) {
+    return "missing_register_session_mapping";
   }
 
   if (isRegisterCloseoutReviewItem(item)) {
