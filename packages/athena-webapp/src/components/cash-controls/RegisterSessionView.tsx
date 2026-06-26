@@ -105,6 +105,17 @@ type RegisterSessionApprovalRequest = {
   status: string;
 };
 
+type RegisterSessionPendingVoidApprovals = {
+  count: number;
+  items: Array<{
+    approvalRequestId: string;
+    requestedAt: number;
+    transactionId: string;
+    transactionNumber?: string | null;
+    workItemId?: string | null;
+  }>;
+};
+
 type RegisterSessionDetail = {
   _id: string;
   closedAt?: number;
@@ -122,6 +133,7 @@ type RegisterSessionDetail = {
   openedByStaffName?: string | null;
   openingFloat: number;
   pendingApprovalRequest?: RegisterSessionApprovalRequest | null;
+  pendingVoidApprovals?: RegisterSessionPendingVoidApprovals | null;
   registerNumber?: string | null;
   status: string;
   terminalName?: string | null;
@@ -216,6 +228,13 @@ type RegisterCloseoutSubmitArgs = {
   requestedByStaffProfileId?: string;
 };
 
+type RegisterCloseoutFinalizeArgs = {
+  actorStaffProfileId: string;
+  approvalProofId?: string;
+  registerSessionId: string;
+  requestedByStaffProfileId?: string;
+};
+
 type RegisterCloseoutReviewArgs = {
   approvalProofId: string;
   decision: "approved" | "rejected";
@@ -224,7 +243,8 @@ type RegisterCloseoutReviewArgs = {
 };
 
 type RegisterCloseoutCommandPayload = {
-  action?: "closed" | "approved" | "rejected" | "reopened";
+  action?: "closed" | "approved" | "rejected" | "reopened" | "submitted";
+  pendingVoidApprovalCount?: number;
 };
 
 type RegisterCloseoutCommandResult =
@@ -312,6 +332,9 @@ type RegisterSessionViewContentProps = {
   onSubmitCloseout: (
     args: RegisterCloseoutSubmitArgs,
   ) => Promise<RegisterCloseoutCommandResult>;
+  onFinalizeCloseout?: (
+    args: RegisterCloseoutFinalizeArgs,
+  ) => Promise<RegisterCloseoutCommandResult>;
   orgUrlSlug?: string;
   registerSessionSnapshot: RegisterSessionSnapshot | null;
   storeId?: string;
@@ -329,6 +352,10 @@ type CloseoutStaffAuthIntent =
       decision: "approved" | "rejected";
       decisionNotes?: string;
       kind: "review";
+      registerSessionId: string;
+    }
+  | {
+      kind: "finalize";
       registerSessionId: string;
     }
   | {
@@ -2330,6 +2357,7 @@ export function RegisterSessionViewContent({
   onAuthenticateStaff,
   onAuthenticateCloseoutReviewApproval,
   onCorrectOpeningFloat,
+  onFinalizeCloseout,
   onRecordDeposit,
   onReopenCloseout,
   onReviewCloseout,
@@ -2352,7 +2380,7 @@ export function RegisterSessionViewContent({
   const [managerNotes, setManagerNotes] = useState("");
   const [closeoutErrorMessage, setCloseoutErrorMessage] = useState("");
   const [pendingCloseoutAction, setPendingCloseoutAction] = useState<
-    "approved" | "rejected" | "reopen" | "submit" | null
+    "approved" | "finalize" | "rejected" | "reopen" | "submit" | null
   >(null);
   const [syncReviewErrorMessage, setSyncReviewErrorMessage] = useState("");
   const [isResolvingSyncReview, setIsResolvingSyncReview] = useState(false);
@@ -2645,6 +2673,28 @@ export function RegisterSessionViewContent({
     });
   }
 
+  async function handleFinalizeCloseout() {
+    if (!registerSession?._id) {
+      setCloseoutErrorMessage(
+        "A register session is required before finalizing a closeout",
+      );
+      return;
+    }
+
+    if (!onFinalizeCloseout) {
+      setCloseoutErrorMessage(
+        "Closeout finalization is not available yet. Try again after the register tools refresh.",
+      );
+      return;
+    }
+
+    setCloseoutErrorMessage("");
+    setCloseoutStaffAuthIntent({
+      kind: "finalize",
+      registerSessionId: registerSession._id,
+    });
+  }
+
   async function handleReviewCloseout(decision: "approved" | "rejected") {
     if (!registerSession?._id) {
       setCloseoutErrorMessage(
@@ -2797,7 +2847,12 @@ export function RegisterSessionViewContent({
       return;
     }
 
-    const action = intent.kind === "submit" ? "submit" : intent.decision;
+    const action =
+      intent.kind === "submit"
+        ? "submit"
+        : intent.kind === "finalize"
+          ? "finalize"
+          : intent.decision;
 
     setCloseoutErrorMessage("");
     setPendingCloseoutAction(action);
@@ -2829,6 +2884,35 @@ export function RegisterSessionViewContent({
                 }),
               onResult: () => undefined,
             })
+          : intent.kind === "finalize"
+            ? onFinalizeCloseout
+              ? await closeoutApprovalRunner.run({
+                  requestedByStaffProfileId:
+                    result.staffProfileId as Id<"staffProfile">,
+                  sameSubmissionApproval: credentials
+                    ? {
+                        canAttemptInlineManagerProof: isManagerStaff(result),
+                        pinHash: credentials.pinHash,
+                        requestedByStaffProfileId:
+                          result.staffProfileId as Id<"staffProfile">,
+                        username: credentials.username,
+                      }
+                    : undefined,
+                  execute: (approvalArgs) =>
+                    onFinalizeCloseout({
+                      actorStaffProfileId: result.staffProfileId,
+                      approvalProofId:
+                        approvalArgs.approvalProofId ?? result.approvalProofId,
+                      registerSessionId: intent.registerSessionId,
+                      requestedByStaffProfileId: result.staffProfileId,
+                    }),
+                  onResult: () => undefined,
+                })
+              : userError({
+                  code: "precondition_failed",
+                  message:
+                    "Closeout finalization is not available yet. Try again after the register tools refresh.",
+                })
           : result.approvalProofId
             ? await onReviewCloseout({
                 approvalProofId: result.approvalProofId,
@@ -3021,6 +3105,9 @@ export function RegisterSessionViewContent({
       : (registerSession?.variance ?? null);
   const hasPendingCloseoutApproval =
     registerSession?.pendingApprovalRequest?.status === "pending";
+  const pendingVoidApprovalCount =
+    registerSession?.pendingVoidApprovals?.count ?? 0;
+  const hasPendingVoidApprovals = pendingVoidApprovalCount > 0;
   const formattedApprovalReason = formatReviewReason(
     reviewReasonFormatter,
     registerSession?.pendingApprovalRequest?.reason,
@@ -3043,6 +3130,26 @@ export function RegisterSessionViewContent({
   const needsCloseoutCorrection =
     !isClosedRegisterSession &&
     (hasRejectedCloseoutApproval || hasCloseoutRejectionHistory);
+  const canFinalizeCloseout =
+    Boolean(registerSession) &&
+    registerSession?.status === "closing" &&
+    registerSession.countedCash !== undefined &&
+    !hasPendingCloseoutApproval &&
+    !hasPendingVoidApprovals &&
+    !needsCloseoutCorrection &&
+    Boolean(onFinalizeCloseout);
+  const isWaitingOnVoidReview =
+    Boolean(registerSession) &&
+    registerSession?.status === "closing" &&
+    hasPendingVoidApprovals &&
+    !needsCloseoutCorrection;
+  const isDepositActionLocked =
+    Boolean(pendingCloseoutAction) ||
+    Boolean(hasPendingCloseoutApproval) ||
+    Boolean(hasPendingVoidApprovals) ||
+    registerSession?.status === "closing" ||
+    registerSession?.status === "closeout_rejected" ||
+    registerSession?.status === "closed";
   const headerTitle = registerSession
     ? formatRegisterHeaderName(registerSession.registerNumber)
     : "Register detail";
@@ -3105,6 +3212,12 @@ export function RegisterSessionViewContent({
                 ? closeoutStaffAuthIntent.approveLabel
                 : closeoutStaffAuthIntent.rejectLabel,
           }
+        : closeoutStaffAuthIntent?.kind === "finalize"
+          ? {
+              title: "Closeout sign-in required",
+              description: "Authenticate to finalize closeout",
+              submitLabel: "Finalize closeout",
+            }
         : {
             title: "Closeout sign-in required",
             description: "Authenticate to submit closeout",
@@ -3234,6 +3347,37 @@ export function RegisterSessionViewContent({
     (isOpeningFloatCorrectionOpen ||
       Boolean(openingFloatCorrectionSuccess) ||
       (correctionTimeline.length > 0 && !isClosedRegisterSession));
+  const pendingVoidApprovalPanel =
+    registerSession && hasPendingVoidApprovals ? (
+      <section className="space-y-3 rounded-lg border border-warning-border bg-warning-soft p-layout-md">
+        <div className="space-y-1">
+          <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-warning">
+            Void review pending
+          </p>
+          <h2 className="font-display text-lg font-semibold text-foreground">
+            Sale void review blocks final closeout
+          </h2>
+          <p className="text-sm leading-6 text-muted-foreground">
+            Review{" "}
+            {pendingVoidApprovalCount === 1
+              ? "the pending sale void"
+              : `${pendingVoidApprovalCount} pending sale voids`}{" "}
+            before final closeout can complete.
+          </p>
+        </div>
+        {orgUrlSlug && storeUrlSlug ? (
+          <Button asChild size="sm" variant="outline">
+            <Link
+              params={{ orgUrlSlug, storeUrlSlug }}
+              search={{ o: getOrigin() }}
+              to="/$orgUrlSlug/store/$storeUrlSlug/operations/approvals"
+            >
+              Review void approvals
+            </Link>
+          </Button>
+        ) : null}
+      </section>
+    ) : null;
   const pendingCloseoutApprovalPanel =
     registerSession && hasPendingCloseoutApproval ? (
       <section className="space-y-4 rounded-[calc(var(--radius)*1.2)] border border-warning-border bg-warning-soft p-layout-lg shadow-surface">
@@ -3471,7 +3615,8 @@ export function RegisterSessionViewContent({
             onAuthenticateStaff({
               allowedRoles:
                 closeoutStaffAuthIntent?.kind === "review" ||
-                closeoutStaffAuthIntent?.kind === "sync_review"
+                closeoutStaffAuthIntent?.kind === "sync_review" ||
+                closeoutStaffAuthIntent?.kind === "finalize"
                   ? ["manager"]
                   : ["cashier", "manager"],
               pinHash: args.pinHash,
@@ -3740,6 +3885,7 @@ export function RegisterSessionViewContent({
                 </aside>
 
                 <div className="flex flex-col gap-layout-md px-layout-md py-layout-md md:gap-layout-lg md:px-layout-lg md:py-layout-lg">
+                  {pendingVoidApprovalPanel}
                   {pendingCloseoutApprovalPanel}
 
                   {shouldShowProminentCorrectionPanel ? (
@@ -4493,73 +4639,102 @@ export function RegisterSessionViewContent({
                         </div>
                       ) : null}
 
-                      <label className="block space-y-2">
-                        <span className="text-sm font-medium text-foreground">
-                          Counted cash ({formattedCurrency})
-                        </span>
-                        <Input
-                          aria-label="Closeout counted cash"
-                          className="border-input bg-background"
-                          min={0}
-                          onChange={(event) =>
-                            setCountedCash(event.target.value)
-                          }
-                          step="0.01"
-                          type="number"
-                          value={countedCash}
-                        />
-                      </label>
-
-                      <div className="rounded-lg border border-border bg-muted/20 p-4">
-                        <dl className="grid grid-cols-2 gap-3 text-sm">
+                      {canFinalizeCloseout ? (
+                        <div className="space-y-3 rounded-lg border border-border bg-background p-4">
                           <div className="space-y-1">
-                            <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                              Expected
-                            </dt>
-                            <dd className="font-numeric tabular-nums text-foreground">
-                              {formatCurrency(currency, expectedCash)}
-                            </dd>
+                            <p className="text-sm font-medium text-foreground">
+                              Ready for final closeout
+                            </p>
+                            <p className="text-sm leading-6 text-muted-foreground">
+                              Pending sale void review is resolved. Finalize
+                              this submitted closeout against the current
+                              expected cash.
+                            </p>
                           </div>
-                          <div className="space-y-1">
-                            <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                              Draft variance
-                            </dt>
-                            <dd
-                              className={`font-numeric tabular-nums ${getVarianceTone(draftVariance ?? undefined)}`}
-                            >
-                              {draftVariance === null
-                                ? "Pending count"
-                                : formatCurrency(currency, draftVariance)}
-                            </dd>
+                          <LoadingButton
+                            className="w-full"
+                            disabled={Boolean(pendingCloseoutAction)}
+                            isLoading={pendingCloseoutAction === "finalize"}
+                            onClick={() => void handleFinalizeCloseout()}
+                            type="button"
+                            variant="workflow"
+                          >
+                            Finalize closeout
+                          </LoadingButton>
+                        </div>
+                      ) : null}
+
+                      {!canFinalizeCloseout && !isWaitingOnVoidReview ? (
+                        <>
+                          <label className="block space-y-2">
+                            <span className="text-sm font-medium text-foreground">
+                              Counted cash ({formattedCurrency})
+                            </span>
+                            <Input
+                              aria-label="Closeout counted cash"
+                              className="border-input bg-background"
+                              min={0}
+                              onChange={(event) =>
+                                setCountedCash(event.target.value)
+                              }
+                              step="0.01"
+                              type="number"
+                              value={countedCash}
+                            />
+                          </label>
+
+                          <div className="rounded-lg border border-border bg-muted/20 p-4">
+                            <dl className="grid grid-cols-2 gap-3 text-sm">
+                              <div className="space-y-1">
+                                <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                                  Expected
+                                </dt>
+                                <dd className="font-numeric tabular-nums text-foreground">
+                                  {formatCurrency(currency, expectedCash)}
+                                </dd>
+                              </div>
+                              <div className="space-y-1">
+                                <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                                  Draft variance
+                                </dt>
+                                <dd
+                                  className={`font-numeric tabular-nums ${getVarianceTone(draftVariance ?? undefined)}`}
+                                >
+                                  {draftVariance === null
+                                    ? "Pending count"
+                                    : formatCurrency(currency, draftVariance)}
+                                </dd>
+                              </div>
+                            </dl>
                           </div>
-                        </dl>
-                      </div>
 
-                      <label className="block space-y-2">
-                        <span className="text-sm font-medium text-foreground">
-                          Closeout notes
-                        </span>
-                        <Textarea
-                          aria-label="Closeout notes"
-                          className="min-h-[96px] border-input bg-background"
-                          onChange={(event) =>
-                            setCloseoutNotes(event.target.value)
-                          }
-                          placeholder="Add drawer notes if anything needs follow-up."
-                          value={closeoutNotes}
-                        />
-                      </label>
+                          <label className="block space-y-2">
+                            <span className="text-sm font-medium text-foreground">
+                              Closeout notes
+                            </span>
+                            <Textarea
+                              aria-label="Closeout notes"
+                              className="min-h-[96px] border-input bg-background"
+                              onChange={(event) =>
+                                setCloseoutNotes(event.target.value)
+                              }
+                              placeholder="Add drawer notes if anything needs follow-up."
+                              value={closeoutNotes}
+                            />
+                          </label>
 
-                      <LoadingButton
-                        className="w-full"
-                        disabled={pendingCloseoutAction === "submit"}
-                        isLoading={pendingCloseoutAction === "submit"}
-                        onClick={() => void handleSubmitCloseout()}
-                        type="button"
-                        variant="workflow"
-                      >
-                        Submit closeout
-                      </LoadingButton>
+                          <LoadingButton
+                            className="w-full"
+                            disabled={Boolean(pendingCloseoutAction)}
+                            isLoading={pendingCloseoutAction === "submit"}
+                            onClick={() => void handleSubmitCloseout()}
+                            type="button"
+                            variant="workflow"
+                          >
+                            Submit closeout
+                          </LoadingButton>
+                        </>
+                      ) : null}
                     </div>
                   )}
 
@@ -4598,6 +4773,7 @@ export function RegisterSessionViewContent({
                     <Input
                       aria-label="Deposit amount"
                       className="border-input bg-background"
+                      disabled={isDepositActionLocked}
                       min={0}
                       onChange={(event) => setAmount(event.target.value)}
                       step="1"
@@ -4613,6 +4789,7 @@ export function RegisterSessionViewContent({
                     <Input
                       aria-label="Deposit reference"
                       className="border-input bg-background"
+                      disabled={isDepositActionLocked}
                       onChange={(event) => setReference(event.target.value)}
                       placeholder="BANK-123"
                       value={reference}
@@ -4626,6 +4803,7 @@ export function RegisterSessionViewContent({
                     <Textarea
                       aria-label="Deposit notes"
                       className="min-h-[110px] border-input bg-background"
+                      disabled={isDepositActionLocked}
                       onChange={(event) => setNotes(event.target.value)}
                       placeholder="Optional handoff or safe-drop notes."
                       value={notes}
@@ -4640,7 +4818,7 @@ export function RegisterSessionViewContent({
 
                   <LoadingButton
                     className="w-full"
-                    disabled={isRecordingDeposit}
+                    disabled={isRecordingDeposit || isDepositActionLocked}
                     isLoading={isRecordingDeposit}
                     onClick={() => void handleRecordDeposit()}
                     type="button"
@@ -4716,6 +4894,9 @@ export function RegisterSessionView() {
   );
   const submitRegisterSessionCloseout = useMutation(
     api.cashControls.closeouts.submitRegisterSessionCloseout,
+  );
+  const finalizeRegisterSessionCloseout = useMutation(
+    api.cashControls.closeouts.finalizeRegisterSessionCloseout,
   );
   const reviewRegisterSessionCloseout = useMutation(
     api.cashControls.closeouts.reviewRegisterSessionCloseout,
@@ -4858,6 +5039,40 @@ export function RegisterSessionView() {
             | undefined,
         countedCash: args.countedCash,
         notes: args.notes,
+        registerSessionId: args.registerSessionId as Id<"registerSession">,
+        requestedByStaffProfileId: args.requestedByStaffProfileId as
+          | Id<"staffProfile">
+          | undefined,
+        storeId: activeStore._id,
+      }),
+    );
+
+    if (result.kind === "ok") {
+      toast.success(
+        result.data?.action === "submitted"
+          ? "Closeout submitted"
+          : "Register session closed",
+      );
+    }
+
+    return result;
+  }
+
+  async function onFinalizeCloseout(args: RegisterCloseoutFinalizeArgs) {
+    if (!activeStore?._id || !user?._id) {
+      return userError({
+        code: "authentication_failed",
+        message: "You must be logged in to finalize a register closeout",
+      });
+    }
+
+    const result = await runCommand(() =>
+      finalizeRegisterSessionCloseout({
+        actorStaffProfileId: args.actorStaffProfileId as Id<"staffProfile">,
+        actorUserId: user._id,
+        approvalProofId: args.approvalProofId as
+          | Id<"approvalProof">
+          | undefined,
         registerSessionId: args.registerSessionId as Id<"registerSession">,
         requestedByStaffProfileId: args.requestedByStaffProfileId as
           | Id<"staffProfile">
@@ -5109,6 +5324,7 @@ export function RegisterSessionView() {
       }
       onAuthenticateStaff={onAuthenticateStaff}
       onCorrectOpeningFloat={onCorrectOpeningFloat}
+      onFinalizeCloseout={onFinalizeCloseout}
       onRecordDeposit={onRecordDeposit}
       onReopenCloseout={onReopenCloseout}
       onReviewCloseout={onReviewCloseout}

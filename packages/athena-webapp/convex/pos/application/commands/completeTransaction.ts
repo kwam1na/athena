@@ -42,6 +42,7 @@ import {
   type CommandResult,
 } from "../../../../shared/commandResult";
 import { isPosUsableRegisterSessionStatus } from "../../../../shared/registerSessionStatus";
+import { getRegisterSessionVoidApplicationStatus } from "../../../../shared/registerSessionLifecyclePolicy";
 import {
   consumeInventoryHoldsForSession,
   readActiveInventoryHoldQuantitiesForSession,
@@ -1245,7 +1246,7 @@ async function validateTransactionVoidPreconditions(
   ctx: MutationCtx,
   transaction: NonNullable<Awaited<ReturnType<typeof getPosTransactionById>>>,
   options?: {
-    requireUsableRegisterSession?: boolean;
+    registerSessionPolicy?: "sale_usable" | "void_applicable";
   },
 ) {
   if (transaction.status === "void") {
@@ -1304,22 +1305,25 @@ async function validateTransactionVoidPreconditions(
     transaction.registerSessionId,
   );
 
-  if (
-    !registerSession ||
-    registerSession.storeId !== transaction.storeId ||
-    !registerSessionMatchesIdentity(registerSession, {
-      terminalId: transaction.terminalId,
-    })
-  ) {
-    return userError({
-      code: "precondition_failed",
-      message: "Drawer closed. Open the drawer before voiding this sale.",
-    });
-  }
-  if (
-    options?.requireUsableRegisterSession !== false &&
-    !isUsableRegisterSession(registerSession)
-  ) {
+  const registerSessionPolicy =
+    options?.registerSessionPolicy ?? "sale_usable";
+  const registerSessionAllowed =
+    registerSessionPolicy === "void_applicable"
+      ? getRegisterSessionVoidApplicationStatus({
+          registerSession,
+          storeId: transaction.storeId,
+          terminalId: transaction.terminalId,
+        }).allowed
+      : Boolean(
+          registerSession &&
+            registerSession.storeId === transaction.storeId &&
+            registerSessionMatchesIdentity(registerSession, {
+              terminalId: transaction.terminalId,
+            }) &&
+            isUsableRegisterSession(registerSession),
+        );
+
+  if (!registerSessionAllowed) {
     return userError({
       code: "precondition_failed",
       message: "Drawer closed. Open the drawer before voiding this sale.",
@@ -1756,15 +1760,11 @@ export async function resolveTransactionVoidApprovalDecisionWithCtx(
     throw new Error(matchingApprovalRequest.error.message);
   }
 
-  const registerSession = await getRegisterSessionById(
-    ctx,
-    transaction.registerSessionId as Id<"registerSession">,
-  );
   const preconditions = await validateTransactionVoidPreconditions(
     ctx,
     transaction,
     {
-      requireUsableRegisterSession: true,
+      registerSessionPolicy: "void_applicable",
     },
   );
   if (preconditions.kind !== "ok") {

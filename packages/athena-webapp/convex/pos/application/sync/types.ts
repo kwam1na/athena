@@ -312,6 +312,10 @@ export type SyncProjectionRepository = {
   getRegisterSession(
     registerSessionId: Id<"registerSession">,
   ): Promise<Doc<"registerSession"> | null>;
+  countPendingVoidApprovalsForRegisterSession?(args: {
+    registerSessionId: Id<"registerSession">;
+    storeId: Id<"store">;
+  }): Promise<number>;
   getCustomerProfile(
     customerProfileId: Id<"customerProfile">,
   ): Promise<Doc<"customerProfile"> | null>;

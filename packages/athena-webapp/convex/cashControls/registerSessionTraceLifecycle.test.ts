@@ -257,6 +257,19 @@ function createMutationCtx(seed?: {
           };
         }
 
+        if (
+          table === "approvalRequest" &&
+          indexName === "by_registerSessionId"
+        ) {
+          return {
+            collect: async () =>
+              approvalRequests.filter(
+                (request) =>
+                  request.registerSessionId === filters.registerSessionId,
+              ),
+          };
+        }
+
         throw new Error(`Unsupported query ${table}.${indexName}`);
       },
     })),

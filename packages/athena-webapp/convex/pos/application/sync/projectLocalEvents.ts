@@ -3506,6 +3506,28 @@ async function projectRegisterClosed(
     return { status: "conflicted", mappings: [], conflicts: [conflict] };
   }
 
+  const pendingVoidApprovalCount =
+    (await repository.countPendingVoidApprovalsForRegisterSession?.({
+      registerSessionId: registerSession._id,
+      storeId: args.storeId,
+    })) ?? 0;
+
+  if (pendingVoidApprovalCount > 0) {
+    await repository.patchRegisterSession(registerSession._id, {
+      status: "closing",
+      countedCash,
+      variance,
+      notes: payload.notes,
+    });
+    const mapping = await createMapping(repository, args, {
+      localIdKind: "closeout",
+      localId: args.event.localEventId,
+      cloudTable: "registerSession",
+      cloudId: registerSession._id,
+    });
+    return { status: "projected", mappings: [mapping], conflicts: [] };
+  }
+
   if (
     roundMoney(variance) !== 0 &&
     args.options?.allowRegisterCloseoutVarianceProjection !== true

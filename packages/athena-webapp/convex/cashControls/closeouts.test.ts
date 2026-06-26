@@ -4,12 +4,21 @@ import {
   buildRegisterSessionCloseoutReview,
   buildRegisterSessionVarianceApprovalRequirement,
   correctRegisterSessionOpeningFloat,
+  finalizeRegisterSessionCloseout,
   getCashControlsConfig,
   reopenRegisterSessionCloseout,
   reviewRegisterSessionCloseout,
   submitRegisterSessionCloseout,
 } from "./closeouts";
 import { assertConformsToExportedReturns } from "../lib/returnValidatorContract";
+
+vi.mock("../lib/athenaUserAuth", () => ({
+  requireAuthenticatedAthenaUserWithCtx: vi.fn(async () => ({
+    _id: "manager-user-1",
+    email: "manager@example.com",
+  })),
+  requireOrganizationMemberRoleWithCtx: vi.fn(async () => undefined),
+}));
 
 function getSource(relativePath: string) {
   return readFileSync(new URL(relativePath, import.meta.url), "utf8");
@@ -39,10 +48,49 @@ describe("cash control closeouts", () => {
         },
       },
     };
+    const submittedCloseoutResult = {
+      kind: "ok" as const,
+      data: {
+        action: "submitted" as const,
+        closeoutReview: {
+          hasVariance: true,
+          requiresApproval: false,
+          variance: -100,
+        },
+        pendingVoidApprovalCount: 1,
+        registerSession: {
+          _id: "session-1",
+          status: "closing",
+        },
+      },
+    };
+    const finalizedCloseoutResult = {
+      kind: "ok" as const,
+      data: {
+        action: "closed" as const,
+        closeoutReview: {
+          hasVariance: false,
+          requiresApproval: false,
+          variance: 0,
+        },
+        registerSession: {
+          _id: "session-1",
+          status: "closed",
+        },
+      },
+    };
 
     assertConformsToExportedReturns(
       submitRegisterSessionCloseout,
       validationError,
+    );
+    assertConformsToExportedReturns(
+      submitRegisterSessionCloseout,
+      submittedCloseoutResult,
+    );
+    assertConformsToExportedReturns(
+      finalizeRegisterSessionCloseout,
+      finalizedCloseoutResult,
     );
     assertConformsToExportedReturns(
       reopenRegisterSessionCloseout,
@@ -202,7 +250,7 @@ describe("cash control closeouts", () => {
     expect(source).toContain("buildRegisterSessionVarianceApprovalRequirement");
     expect(source).toContain("recordOperationalEventWithCtx");
     expect(source).toContain("consumeCommandApprovalProofWithCtx");
-    expect(source).toContain("requestedByStaffProfileId: args.actorStaffProfileId");
+    expect(source).toContain("resolveCloseoutActorStaffProfileId");
     expect(source).toContain("beginRegisterSessionCloseout");
     expect(source).toContain("closeRegisterSession");
     expect(source).toContain("decideApprovalRequest");
@@ -222,7 +270,7 @@ describe("cash control closeouts", () => {
     expect(source).toContain("internal.operations.registerSessions.correctRegisterSessionOpeningFloat");
     expect(source).toContain("register_session_opening_float_corrected");
     expect(source).toContain("opening_float_corrected");
-    expect(source).toContain("requestedByStaffProfileId: args.actorStaffProfileId");
+    expect(source).toContain("requestedByStaffProfileId: actorStaffProfileId");
   });
 
   it("exposes closed-closeout reopening as an append-only correction path", () => {
@@ -232,7 +280,7 @@ describe("cash control closeouts", () => {
     expect(source).toContain("register_session_closeout_reopened");
     expect(source).toContain("stage: \"closeout_reopened\"");
     expect(source).toContain("metadata: previousCloseout");
-    expect(source).toContain("requestedByStaffProfileId: args.requestedByStaffProfileId");
+    expect(source).toContain("requestedByStaffProfileId: actorStaffProfileId");
     expect(source).toContain("REGISTER_CLOSEOUT_MODIFICATION_SUBMIT_ACTION");
     expect(source).toContain("closeoutModificationApprovalProofId");
     expect(source).toContain(
@@ -367,9 +415,14 @@ describe("cash control closeouts", () => {
             };
           }
 
+          if (table === "store") {
+            return { _id: "store-1", organizationId: "org-1" };
+          }
+
           if (table === "staffProfile") {
             return {
               _id: "staff-1",
+              linkedUserId: "manager-user-1",
               organizationId: "org-1",
               status: "active",
               storeId: "store-1",
@@ -443,10 +496,13 @@ describe("cash control closeouts", () => {
               subjectType: "register_session",
             };
           }
-          if (table === "store") return { _id: "store-1", currency: "GHS" };
+          if (table === "store") {
+            return { _id: "store-1", currency: "GHS", organizationId: "org-1" };
+          }
           if (table === "staffProfile") {
             return {
-              _id: "manager-1",
+              _id: "staff-1",
+              linkedUserId: "manager-user-1",
               organizationId: "org-1",
               status: "active",
               storeId: "store-1",
@@ -581,6 +637,9 @@ describe("cash control closeouts", () => {
               storeId: "store-1",
             };
           }
+          if (table === "store") {
+            return { _id: "store-1", organizationId: "org-1" };
+          }
           if (table === "approvalProof") {
             return {
               _id: "proof-1",
@@ -598,6 +657,7 @@ describe("cash control closeouts", () => {
           if (table === "staffProfile") {
             return {
               _id: "staff-1",
+              linkedUserId: "manager-user-1",
               organizationId: "org-1",
               status: "active",
               storeId: "store-1",
@@ -677,6 +737,18 @@ describe("cash control closeouts", () => {
               subjectType: "register_session",
             };
           }
+          if (table === "store") {
+            return { _id: "store-1", currency: "GHS", organizationId: "org-1" };
+          }
+          if (table === "staffProfile") {
+            return {
+              _id: "staff-1",
+              linkedUserId: "manager-user-1",
+              organizationId: "org-1",
+              status: "active",
+              storeId: "store-1",
+            };
+          }
           return null;
         }),
         insert,
@@ -739,6 +811,7 @@ describe("cash control closeouts", () => {
           if (table === "staffProfile") {
             return {
               _id: "staff-1",
+              linkedUserId: "manager-user-1",
               organizationId: "org-1",
               status: "active",
               storeId: "store-1",
@@ -794,6 +867,751 @@ describe("cash control closeouts", () => {
       expect.objectContaining({ kind: "async_request" }),
     );
     expect(insert).not.toHaveBeenCalled();
+  });
+
+  it("submits closeout without final closure when pending void approvals exist", async () => {
+    const registerSession = {
+      _id: "session-1",
+      expectedCash: 30000,
+      openedAt: 1,
+      organizationId: "org-1",
+      registerNumber: "A1",
+      status: "open",
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    };
+    const closingSession = {
+      ...registerSession,
+      countedCash: 20000,
+      status: "closing",
+      variance: -10000,
+    };
+    const runMutation = vi.fn(async (_name: unknown, args: unknown) => {
+      expect(args).toMatchObject({
+        countedCash: 20000,
+        registerSessionId: "session-1",
+      });
+      return closingSession;
+    });
+    const insert = vi.fn();
+    const ctx = {
+      db: {
+        get: vi.fn(async (table: string) => {
+          if (table === "registerSession") return registerSession;
+          if (table === "store") {
+            return { _id: "store-1", currency: "GHS", organizationId: "org-1" };
+          }
+          if (table === "staffProfile") {
+            return {
+              _id: "manager-1",
+              linkedUserId: "manager-user-1",
+              organizationId: "org-1",
+              status: "active",
+              storeId: "store-1",
+            };
+          }
+          return null;
+        }),
+        insert,
+        patch: vi.fn(),
+        query: vi.fn((table: string) => ({
+          withIndex: vi.fn(() => ({
+            collect: vi.fn(async () =>
+              table === "approvalRequest"
+                ? [
+                    {
+                      _id: "void-approval-1",
+                      registerSessionId: "session-1",
+                      requestType: "pos_transaction_void",
+                      status: "pending",
+                      storeId: "store-1",
+                      subjectType: "pos_transaction",
+                    },
+                  ]
+                : [],
+            ),
+          })),
+        })),
+      },
+      runMutation,
+      runQuery: vi.fn(async () => ({ _id: "store-1" })),
+    };
+
+    const result = await getHandler(submitRegisterSessionCloseout)(ctx, {
+      actorStaffProfileId: "manager-1",
+      actorUserId: "user-1",
+      countedCash: 20000,
+      notes: "Count recorded before void review.",
+      registerSessionId: "session-1",
+      storeId: "store-1",
+    });
+
+    expect(result).toMatchObject({
+      kind: "ok",
+      data: {
+        action: "submitted",
+        pendingVoidApprovalCount: 1,
+        registerSession: closingSession,
+      },
+    });
+    expect(insert).not.toHaveBeenCalledWith(
+      "approvalRequest",
+      expect.anything(),
+    );
+    expect(runMutation).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects closeout submit when the staff actor belongs to another user", async () => {
+    const runMutation = vi.fn();
+    const ctx = {
+      db: {
+        get: vi.fn(async (table: string) => {
+          if (table === "store") {
+            return { _id: "store-1", currency: "GHS", organizationId: "org-1" };
+          }
+          if (table === "staffProfile") {
+            return {
+              _id: "manager-1",
+              linkedUserId: "other-user-1",
+              organizationId: "org-1",
+              status: "active",
+              storeId: "store-1",
+            };
+          }
+          return null;
+        }),
+      },
+      runMutation,
+    };
+
+    const result = await getHandler(submitRegisterSessionCloseout)(ctx, {
+      actorStaffProfileId: "manager-1",
+      countedCash: 20000,
+      registerSessionId: "session-1",
+      storeId: "store-1",
+    });
+
+    expect(result).toEqual({
+      kind: "user_error",
+      error: {
+        code: "authorization_failed",
+        message: "Closeout staff actor does not match the signed-in user.",
+      },
+    });
+    expect(runMutation).not.toHaveBeenCalled();
+  });
+
+  it("rejects closeout approval proof payloads while pending void approvals exist", async () => {
+    const registerSession = {
+      _id: "session-1",
+      expectedCash: 30000,
+      openedAt: 1,
+      organizationId: "org-1",
+      registerNumber: "A1",
+      status: "open",
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    };
+    const runMutation = vi.fn();
+    const ctx = {
+      db: {
+        get: vi.fn(async (table: string) => {
+          if (table === "registerSession") return registerSession;
+          if (table === "store") {
+            return { _id: "store-1", currency: "GHS", organizationId: "org-1" };
+          }
+          if (table === "staffProfile") {
+            return {
+              _id: "manager-1",
+              linkedUserId: "manager-user-1",
+              organizationId: "org-1",
+              status: "active",
+              storeId: "store-1",
+            };
+          }
+          return null;
+        }),
+        query: vi.fn((table: string) => ({
+          withIndex: vi.fn(() => ({
+            collect: vi.fn(async () =>
+              table === "approvalRequest"
+                ? [
+                    {
+                      _id: "void-approval-1",
+                      registerSessionId: "session-1",
+                      requestType: "pos_transaction_void",
+                      status: "pending",
+                      storeId: "store-1",
+                      subjectType: "pos_transaction",
+                    },
+                  ]
+                : [],
+            ),
+          })),
+        })),
+      },
+      runMutation,
+      runQuery: vi.fn(async () => ({ _id: "store-1" })),
+    };
+
+    const result = await getHandler(submitRegisterSessionCloseout)(ctx, {
+      actorStaffProfileId: "manager-1",
+      actorUserId: "user-1",
+      approvalProofId: "proof-1",
+      countedCash: 20000,
+      registerSessionId: "session-1",
+      storeId: "store-1",
+    });
+
+    expect(result).toEqual({
+      kind: "user_error",
+      error: {
+        code: "precondition_failed",
+        message:
+          "Resolve pending void approvals before approving final closeout.",
+      },
+    });
+    expect(runMutation).not.toHaveBeenCalled();
+  });
+
+  it("blocks final closeout while pending void approvals remain", async () => {
+    const registerSession = {
+      _id: "session-1",
+      countedCash: 30000,
+      expectedCash: 30000,
+      openedAt: 1,
+      organizationId: "org-1",
+      registerNumber: "A1",
+      status: "closing",
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    };
+    const runMutation = vi.fn();
+    const ctx = {
+      db: {
+        get: vi.fn(async (table: string) => {
+          if (table === "registerSession") return registerSession;
+          if (table === "store") {
+            return { _id: "store-1", currency: "GHS", organizationId: "org-1" };
+          }
+          if (table === "staffProfile") {
+            return {
+              _id: "manager-1",
+              linkedUserId: "manager-user-1",
+              organizationId: "org-1",
+              status: "active",
+              storeId: "store-1",
+            };
+          }
+          return null;
+        }),
+        query: vi.fn((table: string) => ({
+          withIndex: vi.fn(() => ({
+            collect: vi.fn(async () =>
+              table === "approvalRequest"
+                ? [
+                    {
+                      _id: "void-approval-1",
+                      registerSessionId: "session-1",
+                      requestType: "pos_transaction_void",
+                      status: "pending",
+                      storeId: "store-1",
+                      subjectType: "pos_transaction",
+                    },
+                  ]
+                : [],
+            ),
+          })),
+        })),
+      },
+      runMutation,
+      runQuery: vi.fn(async () => ({ _id: "store-1" })),
+    };
+
+    const result = await getHandler(finalizeRegisterSessionCloseout)(ctx, {
+      actorStaffProfileId: "manager-1",
+      actorUserId: "user-1",
+      registerSessionId: "session-1",
+      storeId: "store-1",
+    });
+
+    expect(result).toEqual({
+      kind: "user_error",
+      error: {
+        code: "precondition_failed",
+        message: "Resolve pending void approvals before finalizing closeout.",
+      },
+    });
+    expect(runMutation).not.toHaveBeenCalled();
+  });
+
+  it("finalizes exact-match submitted closeouts without a variance approval proof", async () => {
+    const registerSession = {
+      _id: "session-1",
+      countedCash: 30000,
+      expectedCash: 30000,
+      openedAt: 1,
+      organizationId: "org-1",
+      registerNumber: "A1",
+      status: "closing",
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    };
+    const closedSession = {
+      ...registerSession,
+      closedAt: 100,
+      closedByStaffProfileId: "staff-1",
+      closedByUserId: "manager-user-1",
+      status: "closed",
+    };
+    const runMutation = vi.fn(async () => closedSession);
+    const ctx = {
+      db: {
+        get: vi.fn(async (table: string) => {
+          if (table === "registerSession") return registerSession;
+          if (table === "store") {
+            return { _id: "store-1", currency: "GHS", organizationId: "org-1" };
+          }
+          if (table === "staffProfile") {
+            return {
+              _id: "staff-1",
+              linkedUserId: "manager-user-1",
+              organizationId: "org-1",
+              status: "active",
+              storeId: "store-1",
+            };
+          }
+          return null;
+        }),
+        insert: vi.fn(),
+        patch: vi.fn(),
+        query: vi.fn((table: string) => ({
+          withIndex: vi.fn(() => ({
+            collect: vi.fn(async () => []),
+            take: vi.fn(async () =>
+              table === "staffRoleAssignment"
+                ? [
+                    {
+                      organizationId: "org-1",
+                      role: "manager",
+                      status: "active",
+                      storeId: "store-1",
+                    },
+                  ]
+                : [],
+            ),
+          })),
+        })),
+      },
+      runMutation,
+      runQuery: vi.fn(async () => ({ _id: "store-1" })),
+    };
+
+    const result = await getHandler(finalizeRegisterSessionCloseout)(ctx, {
+      actorStaffProfileId: "staff-1",
+      registerSessionId: "session-1",
+      storeId: "store-1",
+    });
+
+    expect(result).toMatchObject({
+      kind: "ok",
+      data: {
+        action: "closed",
+        registerSession: closedSession,
+      },
+    });
+    expect(ctx.db.get).not.toHaveBeenCalledWith("approvalProof", expect.anything());
+    expect(runMutation).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        closedByStaffProfileId: "staff-1",
+        closedByUserId: "manager-user-1",
+        countedCash: 30000,
+        registerSessionId: "session-1",
+      }),
+    );
+  });
+
+  it("rejects exact-match finalization when the staff actor belongs to another user", async () => {
+    const runMutation = vi.fn();
+    const ctx = {
+      db: {
+        get: vi.fn(async (table: string) => {
+          if (table === "store") {
+            return { _id: "store-1", currency: "GHS", organizationId: "org-1" };
+          }
+          if (table === "staffProfile") {
+            return {
+              _id: "manager-1",
+              linkedUserId: "other-user-1",
+              organizationId: "org-1",
+              status: "active",
+              storeId: "store-1",
+            };
+          }
+          return null;
+        }),
+      },
+      runMutation,
+    };
+
+    const result = await getHandler(finalizeRegisterSessionCloseout)(ctx, {
+      actorStaffProfileId: "manager-1",
+      registerSessionId: "session-1",
+      storeId: "store-1",
+    });
+
+    expect(result).toEqual({
+      kind: "user_error",
+      error: {
+        code: "authorization_failed",
+        message: "Closeout staff actor does not match the signed-in user.",
+      },
+    });
+    expect(runMutation).not.toHaveBeenCalled();
+  });
+
+  it("rejects exact-match finalization when the signed-in staff actor is not a manager", async () => {
+    const registerSession = {
+      _id: "session-1",
+      countedCash: 30000,
+      expectedCash: 30000,
+      openedAt: 1,
+      organizationId: "org-1",
+      registerNumber: "A1",
+      status: "closing",
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    };
+    const runMutation = vi.fn();
+    const ctx = {
+      db: {
+        get: vi.fn(async (table: string) => {
+          if (table === "registerSession") return registerSession;
+          if (table === "store") {
+            return { _id: "store-1", currency: "GHS", organizationId: "org-1" };
+          }
+          if (table === "staffProfile") {
+            return {
+              _id: "staff-1",
+              linkedUserId: "manager-user-1",
+              organizationId: "org-1",
+              status: "active",
+              storeId: "store-1",
+            };
+          }
+          return null;
+        }),
+        query: vi.fn(() => ({
+          withIndex: vi.fn(() => ({
+            collect: vi.fn(async () => []),
+            take: vi.fn(async () => []),
+          })),
+        })),
+      },
+      runMutation,
+      runQuery: vi.fn(async () => ({ _id: "store-1" })),
+    };
+
+    const result = await getHandler(finalizeRegisterSessionCloseout)(ctx, {
+      actorStaffProfileId: "staff-1",
+      registerSessionId: "session-1",
+      storeId: "store-1",
+    });
+
+    expect(result).toEqual({
+      kind: "user_error",
+      error: {
+        code: "authorization_failed",
+        message: "Only managers can finalize register closeouts.",
+      },
+    });
+    expect(runMutation).not.toHaveBeenCalled();
+  });
+
+  it("requires manager proof when finalizing a submitted variance closeout", async () => {
+    const registerSession = {
+      _id: "session-1",
+      countedCash: 20000,
+      expectedCash: 30000,
+      openedAt: 1,
+      organizationId: "org-1",
+      registerNumber: "A1",
+      status: "closing",
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    };
+    const ctx = {
+      db: {
+        get: vi.fn(async (table: string) => {
+          if (table === "registerSession") return registerSession;
+          if (table === "store") {
+            return { _id: "store-1", currency: "GHS", organizationId: "org-1" };
+          }
+          if (table === "staffProfile") {
+            return {
+              _id: "manager-1",
+              linkedUserId: "manager-user-1",
+              organizationId: "org-1",
+              status: "active",
+              storeId: "store-1",
+            };
+          }
+          return null;
+        }),
+        query: vi.fn(() => ({
+          withIndex: vi.fn(() => ({
+            collect: vi.fn(async () => []),
+          })),
+        })),
+      },
+      runMutation: vi.fn(),
+      runQuery: vi.fn(async () => ({ _id: "store-1" })),
+    };
+
+    const result = await getHandler(finalizeRegisterSessionCloseout)(ctx, {
+      actorStaffProfileId: "manager-1",
+      actorUserId: "user-1",
+      registerSessionId: "session-1",
+      storeId: "store-1",
+    });
+
+    expect(result).toMatchObject({
+      kind: "approval_required",
+      approval: {
+        action: {
+          key: "cash_controls.register_session.review_variance",
+        },
+        requiredRole: "manager",
+      },
+    });
+  });
+
+  it("allows managers to finalize variance closeout after pending void approvals clear", async () => {
+    const registerSession = {
+      _id: "session-1",
+      countedCash: 20000,
+      expectedCash: 30000,
+      openedAt: 1,
+      organizationId: "org-1",
+      registerNumber: "A1",
+      status: "closing",
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    };
+    const closedSession = {
+      ...registerSession,
+      closedAt: 100,
+      closedByStaffProfileId: "manager-1",
+      status: "closed",
+    };
+    const runMutation = vi.fn(async () => closedSession);
+    const insert = vi.fn();
+    const ctx = {
+      db: {
+        get: vi.fn(async (table: string) => {
+          if (table === "registerSession") return registerSession;
+          if (table === "approvalProof") {
+            return {
+              _id: "proof-1",
+              actionKey: "cash_controls.register_session.review_variance",
+              approvedByStaffProfileId: "manager-1",
+              expiresAt: Date.now() + 60_000,
+              requestedByStaffProfileId: "manager-1",
+              requiredRole: "manager",
+              storeId: "store-1",
+              subjectId: "session-1",
+              subjectLabel: "A1",
+              subjectType: "register_session",
+            };
+          }
+          if (table === "store") {
+            return { _id: "store-1", currency: "GHS", organizationId: "org-1" };
+          }
+          if (table === "staffProfile") {
+            return {
+              _id: "manager-1",
+              linkedUserId: "manager-user-1",
+              organizationId: "org-1",
+              status: "active",
+              storeId: "store-1",
+            };
+          }
+          return null;
+        }),
+        insert,
+        patch: vi.fn(),
+        query: vi.fn((table: string) => ({
+          withIndex: vi.fn(() => ({
+            collect: vi.fn(async () => []),
+            take: vi.fn(async () =>
+              table === "staffRoleAssignment"
+                ? [
+                    {
+                      organizationId: "org-1",
+                      role: "manager",
+                      status: "active",
+                      storeId: "store-1",
+                    },
+                  ]
+                : [],
+            ),
+          })),
+        })),
+      },
+      runMutation,
+      runQuery: vi.fn(async () => ({ _id: "store-1" })),
+    };
+
+    const result = await getHandler(finalizeRegisterSessionCloseout)(ctx, {
+      actorStaffProfileId: "manager-1",
+      actorUserId: "user-1",
+      approvalProofId: "proof-1",
+      registerSessionId: "session-1",
+      requestedByStaffProfileId: "manager-1",
+      storeId: "store-1",
+    });
+
+    expect(result).toMatchObject({
+      kind: "ok",
+      data: {
+        action: "closed",
+        registerSession: closedSession,
+      },
+    });
+    expect(runMutation).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        closedByStaffProfileId: "manager-1",
+        countedCash: 20000,
+        registerSessionId: "session-1",
+      }),
+    );
+    expect(ctx.db.patch).toHaveBeenCalledWith("approvalProof", "proof-1", {
+      consumedAt: expect.any(Number),
+    });
+  });
+
+  it("keeps variance approval approved but unclosed while void approvals are pending", async () => {
+    const registerSession = {
+      _id: "session-1",
+      countedCash: 20000,
+      expectedCash: 30000,
+      managerApprovalRequestId: "approval-1",
+      openedAt: 1,
+      organizationId: "org-1",
+      registerNumber: "A1",
+      status: "closing",
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      variance: -10000,
+    };
+    const approvalRequest = {
+      _id: "approval-1",
+      registerSessionId: "session-1",
+      requestType: "variance_review",
+      status: "pending",
+      storeId: "store-1",
+      subjectId: "session-1",
+      subjectType: "register_session",
+    };
+    const reviewedApprovalRequest = {
+      ...approvalRequest,
+      status: "approved",
+    };
+    const runMutation = vi.fn(async () => reviewedApprovalRequest);
+    const ctx = {
+      db: {
+        get: vi.fn(async (table: string) => {
+          if (table === "registerSession") return registerSession;
+          if (table === "approvalRequest") return approvalRequest;
+          if (table === "approvalProof") {
+            return {
+              _id: "proof-1",
+              actionKey: "cash_controls.register_session.review_variance",
+              approvedByStaffProfileId: "manager-1",
+              expiresAt: Date.now() + 60_000,
+              requiredRole: "manager",
+              storeId: "store-1",
+              subjectId: "session-1",
+              subjectLabel: "A1",
+              subjectType: "register_session",
+            };
+          }
+          if (table === "store") {
+            return { _id: "store-1", currency: "GHS", organizationId: "org-1" };
+          }
+          if (table === "staffProfile") {
+            return {
+              _id: "manager-1",
+              linkedUserId: "manager-user-1",
+              organizationId: "org-1",
+              status: "active",
+              storeId: "store-1",
+            };
+          }
+          return null;
+        }),
+        insert: vi.fn(),
+        patch: vi.fn(),
+        query: vi.fn((table: string) => ({
+          withIndex: vi.fn(() => ({
+            collect: vi.fn(async () =>
+              table === "approvalRequest"
+                ? [
+                    {
+                      _id: "void-approval-1",
+                      registerSessionId: "session-1",
+                      requestType: "pos_transaction_void",
+                      status: "pending",
+                      storeId: "store-1",
+                      subjectType: "pos_transaction",
+                    },
+                  ]
+                : [],
+            ),
+            take: vi.fn(async () =>
+              table === "staffRoleAssignment"
+                ? [
+                    {
+                      organizationId: "org-1",
+                      role: "manager",
+                      status: "active",
+                      storeId: "store-1",
+                    },
+                  ]
+                : [],
+            ),
+          })),
+        })),
+      },
+      runMutation,
+    };
+
+    const result = await getHandler(reviewRegisterSessionCloseout)(ctx, {
+      approvalProofId: "proof-1",
+      decision: "approved",
+      registerSessionId: "session-1",
+      reviewedByUserId: "manager-user-1",
+      storeId: "store-1",
+    });
+
+    expect(result).toMatchObject({
+      kind: "ok",
+      data: {
+        action: "approved",
+        approvalRequest: reviewedApprovalRequest,
+        registerSession,
+      },
+    });
+    expect(runMutation).toHaveBeenCalledTimes(1);
+    expect(runMutation).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        approvalRequestId: "approval-1",
+        decision: "approved",
+      }),
+    );
   });
 
   it("requires manager approval for same opening float corrections", async () => {

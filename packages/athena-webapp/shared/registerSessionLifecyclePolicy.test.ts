@@ -4,6 +4,7 @@ import {
   canOpenReplacementDrawerForLocalBlock,
   canReuseCloudRegisterSessionForLocalOpen,
   canSupersedeReviewedRegisterSessionForLocalOpen,
+  getRegisterSessionVoidApplicationStatus,
   getSaleBlockingDrawerAuthority,
   isNonBlockingRegisterLifecycleReviewEvent,
   isRegisterCloseoutReviewConflict,
@@ -21,6 +22,70 @@ describe("registerSessionLifecyclePolicy", () => {
       false,
     );
     expect(isRegisterSessionSaleUsable({ status: "closed" })).toBe(false);
+  });
+
+  it("allows void application for open, active, and closing register sessions", () => {
+    for (const status of ["open", "active", "closing"] as const) {
+      expect(
+        getRegisterSessionVoidApplicationStatus({
+          registerSession: {
+            status,
+            storeId: "store-1",
+            terminalId: "terminal-1",
+          },
+          storeId: "store-1",
+          terminalId: "terminal-1",
+        }),
+      ).toEqual({ allowed: true });
+    }
+  });
+
+  it("blocks void application for closed and rejected closeout sessions", () => {
+    for (const status of ["closeout_rejected", "closed"] as const) {
+      expect(
+        getRegisterSessionVoidApplicationStatus({
+          registerSession: {
+            status,
+            storeId: "store-1",
+            terminalId: "terminal-1",
+          },
+          storeId: "store-1",
+          terminalId: "terminal-1",
+        }),
+      ).toEqual({ allowed: false, reason: "blocked_status" });
+    }
+  });
+
+  it("distinguishes void application scope failures", () => {
+    expect(
+      getRegisterSessionVoidApplicationStatus({
+        registerSession: null,
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      }),
+    ).toEqual({ allowed: false, reason: "missing_session" });
+    expect(
+      getRegisterSessionVoidApplicationStatus({
+        registerSession: {
+          status: "closing",
+          storeId: "store-2",
+          terminalId: "terminal-1",
+        },
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      }),
+    ).toEqual({ allowed: false, reason: "wrong_store" });
+    expect(
+      getRegisterSessionVoidApplicationStatus({
+        registerSession: {
+          status: "closing",
+          storeId: "store-1",
+          terminalId: "terminal-2",
+        },
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      }),
+    ).toEqual({ allowed: false, reason: "wrong_terminal" });
   });
 
   it("allows replacement for submitted closeouts without making them sale usable", () => {

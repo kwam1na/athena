@@ -851,7 +851,7 @@ describe("voidTransaction", () => {
     );
   });
 
-  it("blocks a queued completed-sale void when the original drawer is closing", async () => {
+  it("applies a queued completed-sale void when the original drawer is closing", async () => {
     vi.mocked(getRegisterSessionById).mockResolvedValue({
       _id: "register-1",
       status: "closing",
@@ -883,9 +883,42 @@ describe("voidTransaction", () => {
         reviewedByStaffProfileId: "manager-1" as Id<"staffProfile">,
         reviewedByUserId: "manager-user-1" as Id<"athenaUser">,
       }),
-    ).rejects.toThrow("Drawer closed. Open the drawer before voiding this sale.");
-    expect(recordRetailVoidPaymentAllocations).not.toHaveBeenCalled();
-    expect(patchPosTransaction).not.toHaveBeenCalled();
+    ).resolves.toMatchObject({
+      approvalProofId: "decision-proof-1",
+      approvalRequestId: "approval-request-1",
+      approverStaffProfileId: "manager-1",
+      transactionId: "txn-1",
+    });
+    expect(recordRetailVoidPaymentAllocations).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        posTransactionId: "txn-1",
+        registerSessionId: "register-1",
+      }),
+    );
+    expect(recordOperationalEventWithCtx).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        actorStaffProfileId: "manager-1",
+        actorUserId: "manager-user-1",
+        eventType: "pos_transaction_void_approval_proof_consumed",
+      }),
+    );
+    expect(patchPosTransaction).toHaveBeenCalledWith(
+      expect.anything(),
+      "txn-1",
+      expect.objectContaining({
+        status: "void",
+        voidApprovalProofId: "decision-proof-1",
+        voidApprovalRequestId: "approval-request-1",
+        voidApprovedByStaffProfileId: "manager-1",
+      }),
+    );
+    expect(ctx.db.patch).not.toHaveBeenCalledWith(
+      "approvalRequest",
+      "approval-request-1",
+      expect.any(Object),
+    );
   });
 
   it("blocks a queued completed-sale void when the original drawer is closed", async () => {

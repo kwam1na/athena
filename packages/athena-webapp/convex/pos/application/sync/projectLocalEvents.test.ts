@@ -4076,6 +4076,53 @@ describe("projectLocalSyncEvent", () => {
     ]);
   });
 
+  it("keeps synced register closeout unresolved when pending void approvals exist", async () => {
+    const repository = createProjectionRepository({
+      pendingVoidApprovalCount: 1,
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: {
+        localEventId: "event-register-closed-1",
+        localRegisterSessionId: "local-register-1",
+        sequence: 3,
+        eventType: "register_closed",
+        occurredAt: 30,
+        staffProfileId: "staff-1" as never,
+        staffProofToken: "proof-token-1",
+        payload: {
+          countedCash: 90,
+          notes: "Closed drawer with pending void review",
+        },
+      },
+      syncEventId: "sync-event-1",
+      now: 100,
+    });
+
+    expect(result.status).toBe("projected");
+    expect(result.mappings).toEqual([
+      expect.objectContaining({
+        localIdKind: "closeout",
+        localId: "event-register-closed-1",
+      }),
+    ]);
+    expect(repository.registerSessionPatches).toEqual([
+      {
+        registerSessionId: "register-session-1",
+        patch: expect.objectContaining({
+          status: "closing",
+          countedCash: 90,
+          notes: "Closed drawer with pending void review",
+          variance: -10,
+        }),
+      },
+    ]);
+    expect(repository.recordedRegisterSessionTraces).toEqual([]);
+    expect(repository.createdOperationalEvents).toEqual([]);
+  });
+
   it("conflicts non-zero offline closeout variance for manager review", async () => {
     const repository = createProjectionRepository();
 
@@ -5589,6 +5636,7 @@ function createProjectionRepository(
     hasActivePosRole:
       | boolean
       | ((args: Parameters<SyncProjectionRepository["hasActivePosRole"]>[0]) => boolean);
+    pendingVoidApprovalCount: number;
     validStaffProof: boolean;
   }> = {},
 ): SyncProjectionRepository & {
@@ -5881,6 +5929,9 @@ function createProjectionRepository(
       return registerSession && registerSessionId === registerSession._id
         ? (registerSession as never)
         : null;
+    },
+    async countPendingVoidApprovalsForRegisterSession() {
+      return overrides.pendingVoidApprovalCount ?? 0;
     },
     async getActiveHeldQuantity(args) {
       if (args.excludeSessionId && overrides.existingPosSession?._id === args.excludeSessionId) {

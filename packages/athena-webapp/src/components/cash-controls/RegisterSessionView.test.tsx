@@ -272,6 +272,17 @@ const baseSnapshot = {
   },
 };
 
+const activeSnapshot = {
+  ...baseSnapshot,
+  closeoutReview: null,
+  registerSession: {
+    ...baseSnapshot.registerSession,
+    countedCash: undefined,
+    status: "active",
+    variance: undefined,
+  },
+};
+
 describe("RegisterSessionViewContent", () => {
   beforeEach(() => {
     authMocks.useAuth.mockReset();
@@ -2157,6 +2168,129 @@ describe("RegisterSessionViewContent", () => {
     );
   });
 
+  it("finalizes a submitted closeout through staff authentication", async () => {
+    const user = userEvent.setup();
+    const onAuthenticateStaff = vi.fn().mockResolvedValue(
+      ok({
+        activeRoles: ["manager"],
+        staffProfile: { fullName: "Ato Kofi" },
+        staffProfileId: "staff-1",
+      }),
+    );
+    const onAuthenticateForApproval = vi.fn().mockResolvedValue(
+      ok({
+        approvalProofId: "approval-proof-1",
+        approvedByStaffProfileId: "staff-1",
+        expiresAt: Date.now() + 60_000,
+      }),
+    );
+    const onFinalizeCloseout = vi
+      .fn()
+      .mockResolvedValue(ok({ action: "closed" }));
+
+    render(
+      <RegisterSessionViewContent
+        actorUserId="user-1"
+        currency="GHS"
+        isLoading={false}
+        onAuthenticateForApproval={onAuthenticateForApproval}
+        onAuthenticateStaff={onAuthenticateStaff}
+        onFinalizeCloseout={onFinalizeCloseout}
+        onRecordDeposit={vi.fn()}
+        onReviewCloseout={vi.fn()}
+        onSubmitCloseout={vi.fn()}
+        registerSessionSnapshot={baseSnapshot}
+        storeId="store-1"
+      />,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Finalize closeout" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Submit closeout" }),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Finalize closeout" }));
+    await user.click(
+      screen.getByRole("button", {
+        name: "Confirm staff for Finalize closeout",
+      }),
+    );
+
+    expect(onAuthenticateStaff).toHaveBeenCalledWith({
+      allowedRoles: ["manager"],
+      pinHash: "hashed-pin",
+      username: "ato",
+    });
+    await waitFor(() =>
+      expect(onFinalizeCloseout).toHaveBeenCalledWith({
+        actorStaffProfileId: "staff-1",
+        approvalProofId: undefined,
+        registerSessionId: "session-1",
+        requestedByStaffProfileId: "staff-1",
+      }),
+    );
+    expect(onAuthenticateForApproval).not.toHaveBeenCalled();
+  });
+
+  it("holds pending-void closeouts without submit, finalize, or deposit actions", () => {
+    render(
+      <RegisterSessionViewContent
+        actorStaffProfileId="staff-1"
+        actorUserId="user-1"
+        currency="GHS"
+        isLoading={false}
+        onAuthenticateStaff={vi.fn()}
+        onFinalizeCloseout={vi.fn()}
+        onRecordDeposit={vi.fn()}
+        onReviewCloseout={vi.fn()}
+        onSubmitCloseout={vi.fn()}
+        orgUrlSlug="wigclub"
+        registerSessionSnapshot={{
+          ...baseSnapshot,
+          registerSession: {
+            ...baseSnapshot.registerSession,
+            pendingVoidApprovals: {
+              count: 1,
+              items: [
+                {
+                  approvalRequestId: "void-approval-1",
+                  requestedAt: new Date("2026-04-21T18:30:00.000Z").getTime(),
+                  transactionId: "transaction-1",
+                  transactionNumber: "TXN-0031",
+                },
+              ],
+            },
+          },
+        }}
+        storeId="store-1"
+        storeUrlSlug="wigclub"
+      />,
+    );
+
+    expect(screen.getByText("Void review pending")).toBeInTheDocument();
+    expect(
+      screen.getByText("Sale void review blocks final closeout"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Review void approvals" }),
+    ).toHaveAttribute(
+      "href",
+      "/wigclub/store/wigclub/operations/approvals?o=%252F",
+    );
+    expect(
+      screen.queryByRole("button", { name: "Submit closeout" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Finalize closeout" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Deposit amount")).toBeDisabled();
+    expect(screen.getByLabelText("Deposit reference")).toBeDisabled();
+    expect(screen.getByLabelText("Deposit notes")).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Record deposit" })).toBeDisabled();
+  });
+
   it("uses manager approval to submit a reopened closeout correction", async () => {
     const user = userEvent.setup();
     const onAuthenticateStaff = vi.fn();
@@ -2341,7 +2475,7 @@ describe("RegisterSessionViewContent", () => {
         onRecordDeposit={vi.fn()}
         onReviewCloseout={vi.fn()}
         onSubmitCloseout={onSubmitCloseout}
-        registerSessionSnapshot={baseSnapshot}
+        registerSessionSnapshot={activeSnapshot}
         storeId="store-1"
       />,
     );
@@ -2403,7 +2537,7 @@ describe("RegisterSessionViewContent", () => {
         onRecordDeposit={vi.fn()}
         onReviewCloseout={vi.fn()}
         onSubmitCloseout={onSubmitCloseout}
-        registerSessionSnapshot={baseSnapshot}
+        registerSessionSnapshot={activeSnapshot}
         storeId="store-1"
       />,
     );
@@ -3103,7 +3237,7 @@ describe("RegisterSessionViewContent", () => {
         isLoading={false}
         onRecordDeposit={onRecordDeposit}
         {...closeoutHandlers}
-        registerSessionSnapshot={baseSnapshot}
+        registerSessionSnapshot={activeSnapshot}
         storeId="store-1"
       />,
     );
@@ -3160,7 +3294,7 @@ describe("RegisterSessionViewContent", () => {
       }
 
       if ("registerSessionId" in args) {
-        return baseSnapshot;
+        return activeSnapshot;
       }
 
       return [
@@ -3204,7 +3338,7 @@ describe("RegisterSessionViewContent", () => {
         isLoading={false}
         onRecordDeposit={onRecordDeposit}
         {...closeoutHandlers}
-        registerSessionSnapshot={baseSnapshot}
+        registerSessionSnapshot={activeSnapshot}
         storeId="store-1"
       />,
     );
@@ -3235,7 +3369,7 @@ describe("RegisterSessionViewContent", () => {
         isLoading={false}
         onRecordDeposit={onRecordDeposit}
         {...closeoutHandlers}
-        registerSessionSnapshot={baseSnapshot}
+        registerSessionSnapshot={activeSnapshot}
         storeId="store-1"
       />,
     );
