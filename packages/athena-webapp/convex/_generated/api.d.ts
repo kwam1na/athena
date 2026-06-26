@@ -203,6 +203,7 @@ import type * as pos_application_queries_storePulse from "../pos/application/que
 import type * as pos_application_queries_terminals from "../pos/application/queries/terminals.js";
 import type * as pos_application_sync_ingestLocalEvents from "../pos/application/sync/ingestLocalEvents.js";
 import type * as pos_application_sync_projectLocalEvents from "../pos/application/sync/projectLocalEvents.js";
+import type * as pos_application_sync_registerSessionCloseoutHolds from "../pos/application/sync/registerSessionCloseoutHolds.js";
 import type * as pos_application_sync_registerSessionSyncReview from "../pos/application/sync/registerSessionSyncReview.js";
 import type * as pos_application_sync_staffProof from "../pos/application/sync/staffProof.js";
 import type * as pos_application_sync_staffProofValidation from "../pos/application/sync/staffProofValidation.js";
@@ -616,6 +617,7 @@ declare const fullApi: ApiFromModules<{
   "pos/application/queries/terminals": typeof pos_application_queries_terminals;
   "pos/application/sync/ingestLocalEvents": typeof pos_application_sync_ingestLocalEvents;
   "pos/application/sync/projectLocalEvents": typeof pos_application_sync_projectLocalEvents;
+  "pos/application/sync/registerSessionCloseoutHolds": typeof pos_application_sync_registerSessionCloseoutHolds;
   "pos/application/sync/registerSessionSyncReview": typeof pos_application_sync_registerSessionSyncReview;
   "pos/application/sync/staffProof": typeof pos_application_sync_staffProof;
   "pos/application/sync/staffProofValidation": typeof pos_application_sync_staffProofValidation;

@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import type { Id } from "../../../_generated/dataModel";
-import { projectLocalSyncEvent } from "./projectLocalEvents";
+import {
+  createOrReuseRegisterSessionRepairMapping,
+  projectLocalSyncEvent,
+} from "./projectLocalEvents";
 import type {
   LocalSyncConflictRecord,
   LocalSyncMappingRecord,
@@ -98,6 +101,45 @@ describe("projectLocalSyncEvent", () => {
       }),
     ]);
     expect(repository.createdPendingCheckoutItems).toHaveLength(1);
+  });
+
+  it("reuses an existing register-session repair mapping for the same cloud drawer", async () => {
+    const repository = createProjectionRepository();
+
+    const mapping = await createOrReuseRegisterSessionRepairMapping(repository, {
+      localEventId: "event-register-opened-1",
+      localRegisterSessionId: "local-register-1",
+      now: 100,
+      registerSessionId: "register-session-1" as Id<"registerSession">,
+      storeId: "store-1" as Id<"store">,
+      terminalId: "terminal-1" as Id<"posTerminal">,
+    });
+
+    expect(mapping).toEqual(
+      expect.objectContaining({
+        _id: "mapping-register",
+        cloudId: "register-session-1",
+        localId: "local-register-1",
+      }),
+    );
+    expect(repository.mappings).toHaveLength(1);
+  });
+
+  it("rejects register-session repair when the local drawer maps elsewhere", async () => {
+    const repository = createProjectionRepository();
+
+    await expect(
+      createOrReuseRegisterSessionRepairMapping(repository, {
+        localEventId: "event-sale-1",
+        localRegisterSessionId: "local-register-1",
+        now: 100,
+        registerSessionId: "other-register-session" as Id<"registerSession">,
+        storeId: "store-1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+      }),
+    ).rejects.toThrow(
+      "POS local sync register-session mapping already belongs to another projection.",
+    );
   });
 
   it("resolves offline pending sale lines through the pending item mapping before validating provisional anchors", async () => {
@@ -4123,6 +4165,52 @@ describe("projectLocalSyncEvent", () => {
     expect(repository.createdOperationalEvents).toEqual([]);
   });
 
+  it("keeps synced register closeout unresolved when repairable mapping holds exist", async () => {
+    const repository = createProjectionRepository({
+      closeoutHolds: [
+        {
+          kind: "repairable_missing_register_session_mapping_sales",
+          cashAffecting: true,
+          count: 1,
+        },
+      ],
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: {
+        localEventId: "event-register-closed-1",
+        localRegisterSessionId: "local-register-1",
+        sequence: 3,
+        eventType: "register_closed",
+        occurredAt: 30,
+        staffProfileId: "staff-1" as never,
+        staffProofToken: "proof-token-1",
+        payload: {
+          countedCash: 90,
+          notes: "Closed drawer with pending sale mapping repair",
+        },
+      },
+      syncEventId: "sync-event-1",
+      now: 100,
+    });
+
+    expect(result.status).toBe("projected");
+    expect(repository.registerSessionPatches).toEqual([
+      {
+        registerSessionId: "register-session-1",
+        patch: expect.objectContaining({
+          status: "closing",
+          countedCash: 90,
+          notes: "Closed drawer with pending sale mapping repair",
+          variance: -10,
+        }),
+      },
+    ]);
+    expect(repository.createdOperationalEvents).toEqual([]);
+  });
+
   it("conflicts non-zero offline closeout variance for manager review", async () => {
     const repository = createProjectionRepository();
 
@@ -5637,6 +5725,13 @@ function createProjectionRepository(
       | boolean
       | ((args: Parameters<SyncProjectionRepository["hasActivePosRole"]>[0]) => boolean);
     pendingVoidApprovalCount: number;
+    closeoutHolds: Array<{
+      cashAffecting: boolean;
+      count: number;
+      kind:
+        | "pending_completed_sale_void_approvals"
+        | "repairable_missing_register_session_mapping_sales";
+    }>;
     validStaffProof: boolean;
   }> = {},
 ): SyncProjectionRepository & {
@@ -5930,8 +6025,20 @@ function createProjectionRepository(
         ? (registerSession as never)
         : null;
     },
-    async countPendingVoidApprovalsForRegisterSession() {
-      return overrides.pendingVoidApprovalCount ?? 0;
+    async listCloseoutHoldsForRegisterSession() {
+      if (overrides.closeoutHolds) {
+        return overrides.closeoutHolds;
+      }
+      const count = overrides.pendingVoidApprovalCount ?? 0;
+      return count > 0
+        ? [
+            {
+              kind: "pending_completed_sale_void_approvals" as const,
+              cashAffecting: true,
+              count,
+            },
+          ]
+        : [];
     },
     async getActiveHeldQuantity(args) {
       if (args.excludeSessionId && overrides.existingPosSession?._id === args.excludeSessionId) {

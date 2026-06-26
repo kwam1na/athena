@@ -5,6 +5,7 @@ import type {
   PosLocalSyncEventStatus,
   PosLocalSyncEventType,
 } from "../../../../shared/posLocalSyncContract";
+import type { RegisterSessionCloseoutHold } from "./registerSessionCloseoutHolds";
 
 export type { PosLocalSyncEventStatus, PosLocalSyncEventType };
 
@@ -312,10 +313,10 @@ export type SyncProjectionRepository = {
   getRegisterSession(
     registerSessionId: Id<"registerSession">,
   ): Promise<Doc<"registerSession"> | null>;
-  countPendingVoidApprovalsForRegisterSession?(args: {
+  listCloseoutHoldsForRegisterSession?(args: {
     registerSessionId: Id<"registerSession">;
     storeId: Id<"store">;
-  }): Promise<number>;
+  }): Promise<RegisterSessionCloseoutHold[]>;
   getCustomerProfile(
     customerProfileId: Id<"customerProfile">,
   ): Promise<Doc<"customerProfile"> | null>;

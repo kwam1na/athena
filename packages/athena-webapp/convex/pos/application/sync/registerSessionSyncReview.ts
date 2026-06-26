@@ -19,6 +19,8 @@ export const CLOSED_REGISTER_SYNCED_CLOSEOUT_SUMMARY =
   "Register session is not open for synced POS closeout.";
 export const INVENTORY_SYNC_REVIEW_SUMMARY =
   "Inventory needs manager review for a synced offline sale.";
+export const MISSING_REGISTER_SESSION_MAPPING_SYNC_REVIEW_SUMMARY =
+  "Register session mapping is missing for synced POS history.";
 
 export type RegisterSessionSyncReviewActionPolicy =
   | "apply_or_reject"
@@ -29,6 +31,7 @@ export type RegisterSessionSyncReviewKind =
   | "duplicate_register_closeout"
   | "register_closeout_variance"
   | "register_not_open_sale"
+  | "missing_register_session_mapping"
   | "server_rejected"
   | "service_customer_attribution"
   | "inventory_review"
@@ -168,6 +171,14 @@ export function classifyRegisterSessionSyncReview(
       actionPolicy: "apply_or_reject",
       conflictType: conflict.conflictType,
       reviewKind: "register_closeout_variance",
+    };
+  }
+
+  if (summary === MISSING_REGISTER_SESSION_MAPPING_SYNC_REVIEW_SUMMARY) {
+    return {
+      actionPolicy: "apply_or_reject",
+      conflictType: conflict.conflictType,
+      reviewKind: "missing_register_session_mapping",
     };
   }
 
@@ -456,6 +467,65 @@ async function findTransactionIdForSyncEvent(
     : null;
 }
 
+async function findProjectedRegisterSessionIdForRepairableMissingMapping(
+  ctx: Pick<QueryCtx, "db">,
+  conflict: RegisterSessionSyncConflict,
+) {
+  if (
+    classifyRegisterSessionSyncReview(conflict).reviewKind !==
+      "missing_register_session_mapping" ||
+    !conflict.terminalId
+  ) {
+    return null;
+  }
+
+  const syncEvent = await ctx.db
+    .query("posLocalSyncEvent")
+    .withIndex("by_store_terminal_localEvent", (q) =>
+      q
+        .eq("storeId", conflict.storeId!)
+        .eq("terminalId", conflict.terminalId!)
+        .eq("localEventId", conflict.localEventId),
+    )
+    .unique();
+  if (syncEvent?.eventType !== "sale_completed") {
+    return null;
+  }
+
+  const transactionId = await findTransactionIdForSyncEvent(ctx, syncEvent);
+  if (!transactionId) {
+    return null;
+  }
+
+  const transaction = await ctx.db.get("posTransaction", transactionId);
+  if (
+    !transaction ||
+    transaction.storeId !== syncEvent.storeId ||
+    transaction.terminalId !== syncEvent.terminalId ||
+    transaction.status !== "completed" ||
+    !transaction.registerSessionId
+  ) {
+    return null;
+  }
+
+  const registerSession = await ctx.db.get(
+    "registerSession",
+    transaction.registerSessionId,
+  );
+  if (
+    !registerSession ||
+    registerSession.storeId !== syncEvent.storeId ||
+    registerSession.terminalId !== syncEvent.terminalId ||
+    (registerSession.status !== "open" &&
+      registerSession.status !== "active" &&
+      registerSession.status !== "closing")
+  ) {
+    return null;
+  }
+
+  return registerSession._id;
+}
+
 export function buildRegisterSessionLocalSyncStatus(
   conflicts: RegisterSessionSyncConflict[],
   options: { staffNamesById?: Map<Id<"staffProfile">, string> } = {},
@@ -731,6 +801,15 @@ export async function listOpenLocalSyncConflictsByRegisterSession(
         ) {
           return [cloudRegisterSessionId, conflict] as const;
         }
+      }
+
+      const repairableRegisterSessionId =
+        await findProjectedRegisterSessionIdForRepairableMissingMapping(ctx, {
+          ...conflict,
+          storeId: conflictStoreId,
+        });
+      if (repairableRegisterSessionId) {
+        return [repairableRegisterSessionId, conflict] as const;
       }
 
       return null;

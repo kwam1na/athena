@@ -31,7 +31,15 @@ import {
 } from "../pos/application/sync/registerSessionSyncReview";
 import { createConvexLocalSyncRepository } from "../pos/infrastructure/repositories/localSyncRepository";
 import { parseStoredLocalSyncEvent } from "../pos/application/sync/ingestLocalEvents";
-import { projectLocalSyncEvent } from "../pos/application/sync/projectLocalEvents";
+import {
+  createOrReuseRegisterSessionRepairMapping,
+  projectLocalSyncEvent,
+} from "../pos/application/sync/projectLocalEvents";
+import {
+  getCloseoutHoldOperatorMessage,
+  hasCashAffectingCloseoutHolds,
+  listRegisterSessionCloseoutHolds,
+} from "../pos/application/sync/registerSessionCloseoutHolds";
 import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
@@ -256,10 +264,47 @@ function numberDetail(
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
+function stringDetail(
+  details: Record<string, unknown> | undefined,
+  key: string,
+) {
+  const value = details?.[key];
+
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
 function recordDetail(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : null;
+}
+
+function sanitizeCashControlTimelineMetadata(
+  metadata?: Record<string, unknown> | null,
+) {
+  if (!metadata) {
+    return null;
+  }
+
+  const safeMetadata: Record<string, unknown> = {};
+  for (const key of [
+    "amount",
+    "countedCash",
+    "decision",
+    "expectedCash",
+    "managerOverride",
+    "managerOverrideCount",
+    "projectedCloseoutCount",
+    "reference",
+    "syncOrigin",
+    "variance",
+  ]) {
+    if (metadata[key] !== undefined) {
+      safeMetadata[key] = metadata[key];
+    }
+  }
+
+  return Object.keys(safeMetadata).length > 0 ? safeMetadata : null;
 }
 
 function arrayDetail(value: unknown): Record<string, unknown>[] {
@@ -340,6 +385,109 @@ function buildReviewedSaleProjectionEvent(syncEvent: StoredLocalSyncEvent) {
     ...syncEvent,
     payload: normalizeReviewedNonCashOverpaymentPayload(syncEvent.payload),
   };
+}
+
+function isRepairableRegisterSessionStatus(status?: string | null) {
+  return status === "open" || status === "active" || status === "closing";
+}
+
+async function getCompletedTransactionForRegisterMappingRepair(
+  ctx: Pick<QueryCtx | MutationCtx, "db">,
+  localSyncRepository: ReturnType<typeof createConvexLocalSyncRepository>,
+  args: {
+    conflict: RegisterSessionSyncConflict;
+    registerSessionId: Id<"registerSession">;
+    syncEvent: StoredLocalSyncEvent;
+    terminalId: Id<"posTerminal">;
+  },
+) {
+  const payload = recordDetail(args.syncEvent.payload) ?? {};
+  const localTransactionId =
+    stringDetail(args.conflict.details, "localTransactionId") ??
+    stringDetail(payload, "localTransactionId");
+
+  if (localTransactionId) {
+    const transactionMapping = await localSyncRepository.findMapping({
+      storeId: args.syncEvent.storeId,
+      terminalId: args.terminalId,
+      localRegisterSessionId: args.syncEvent.localRegisterSessionId,
+      localIdKind: "transaction",
+      localId: localTransactionId,
+    });
+    if (transactionMapping?.cloudTable === "posTransaction") {
+      const transaction = await ctx.db.get(
+        "posTransaction",
+        transactionMapping.cloudId as Id<"posTransaction">,
+      );
+      if (
+        transaction?.status === "completed" &&
+        transaction.storeId === args.syncEvent.storeId &&
+        transaction.terminalId === args.terminalId &&
+        transaction.registerSessionId === args.registerSessionId
+      ) {
+        return transaction;
+      }
+    }
+  }
+
+  const receiptNumbers = new Set(
+    [
+      stringDetail(payload, "receiptNumber"),
+      stringDetail(payload, "localReceiptNumber"),
+      args.conflict.sale?.receiptNumber ?? null,
+      args.conflict.sale?.localReceiptNumber ?? null,
+    ].filter((value): value is string => Boolean(value)),
+  );
+  if (receiptNumbers.size === 0) {
+    return null;
+  }
+
+  const totals = recordDetail(payload.totals);
+  const total = totals ? numberDetail(totals, "total") : null;
+  const candidates = await ctx.db
+    .query("posTransaction")
+    .withIndex("by_storeId_status_registerSessionId_completedAt", (q) =>
+      q
+        .eq("storeId", args.syncEvent.storeId)
+        .eq("status", "completed")
+        .eq("registerSessionId", args.registerSessionId),
+    )
+    .take(100);
+  const matches = candidates.filter((transaction) => {
+    if (transaction.terminalId !== args.terminalId) {
+      return false;
+    }
+    if (!receiptNumbers.has(transaction.transactionNumber)) {
+      return false;
+    }
+    return total === null || transaction.total === total;
+  });
+
+  return matches.length === 1 ? matches[0] : null;
+}
+
+async function salePrecedesLocalCloseoutIfPresent(
+  ctx: Pick<QueryCtx | MutationCtx, "db">,
+  args: {
+    storeId: Id<"store">;
+    syncEvent: StoredLocalSyncEvent;
+    terminalId: Id<"posTerminal">;
+  },
+) {
+  const localCloseoutEvents = await ctx.db
+    .query("posLocalSyncEvent")
+    .withIndex("by_store_terminal_register_sequence", (q) =>
+      q
+        .eq("storeId", args.storeId)
+        .eq("terminalId", args.terminalId)
+        .eq("localRegisterSessionId", args.syncEvent.localRegisterSessionId),
+    )
+    .take(100);
+  const closeoutEvent = localCloseoutEvents
+    .filter((event) => event.eventType === "register_closed")
+    .sort((left, right) => left.sequence - right.sequence)[0];
+
+  return !closeoutEvent || args.syncEvent.sequence < closeoutEvent.sequence;
 }
 
 async function staffProfileCanResolveSyncReview(
@@ -1137,7 +1285,7 @@ export const getRegisterSessionSnapshot = query({
           : null,
         createdAt: event.createdAt,
         eventType: event.eventType,
-        metadata: event.metadata ?? null,
+        metadata: sanitizeCashControlTimelineMetadata(event.metadata),
         message: event.message,
         reason: event.reason,
       })),
@@ -1255,18 +1403,17 @@ export const recordRegisterSessionDeposit = mutation({
       });
     }
 
-    const pendingVoidApprovals = await listPendingVoidApprovalsForRegisterSession(
-      ctx,
-      {
-        registerSessionId: registerSession._id,
-        storeId: args.storeId,
-      },
-    );
+    const closeoutHolds = await listRegisterSessionCloseoutHolds(ctx, {
+      registerSessionId: registerSession._id,
+      storeId: args.storeId,
+    });
 
-    if (pendingVoidApprovals.length > 0) {
+    if (hasCashAffectingCloseoutHolds(closeoutHolds)) {
       return userError({
         code: "precondition_failed",
-        message: "Resolve pending void approvals before recording a deposit.",
+        message:
+          getCloseoutHoldOperatorMessage(closeoutHolds, "deposit") ??
+          "Resolve pending register corrections before recording a deposit.",
       });
     }
 
@@ -1625,6 +1772,114 @@ export const resolveRegisterSessionSyncReview = mutation({
           review.reviewKind === "register_closeout_variance") ||
         (shouldApplyManagerOverride &&
           syncEvent.eventType === "register_closed");
+      const shouldRepairMissingRegisterSessionMapping =
+        syncEvent.eventType === "sale_completed" &&
+        matchesLocalRegisterSession &&
+        review.reviewKind === "missing_register_session_mapping";
+
+      if (shouldRepairMissingRegisterSessionMapping) {
+        if (isAutomaticResolution) {
+          return userError({
+            code: "precondition_failed",
+            message:
+              "This register review is not eligible for automatic sync repair.",
+          });
+        }
+
+        if (!isRepairableRegisterSessionStatus(registerSession.status)) {
+          return userError({
+            code: "precondition_failed",
+            message:
+              "This synced sale can only be repaired before the register session is closed.",
+          });
+        }
+
+        if (registerSession.status === "closing") {
+          const closeoutHolds = await listRegisterSessionCloseoutHolds(ctx, {
+            registerSessionId: registerSession._id,
+            storeId: args.storeId,
+          });
+          const hasMappingRepairHold = closeoutHolds.some(
+            (hold) =>
+              hold.kind === "repairable_missing_register_session_mapping_sales" &&
+              hold.count > 0,
+          );
+          const salePrecedesCloseout = await salePrecedesLocalCloseoutIfPresent(
+            ctx,
+            {
+              storeId: args.storeId,
+              syncEvent,
+              terminalId,
+            },
+          );
+          if (!hasMappingRepairHold || !salePrecedesCloseout) {
+            return userError({
+              code: "precondition_failed",
+              message:
+                "This synced sale can no longer be repaired for this closeout.",
+            });
+          }
+        }
+
+        const completedTransaction =
+          await getCompletedTransactionForRegisterMappingRepair(
+            ctx,
+            localSyncRepository,
+            {
+              conflict,
+              registerSessionId: args.registerSessionId,
+              syncEvent,
+              terminalId,
+            },
+          );
+        if (!completedTransaction) {
+          return userError({
+            code: "precondition_failed",
+            message:
+              "This synced sale could not be matched to a completed sale for this register session.",
+          });
+        }
+
+        try {
+          await createOrReuseRegisterSessionRepairMapping(localSyncRepository, {
+            localEventId: syncEvent.localEventId,
+            localRegisterSessionId: syncEvent.localRegisterSessionId,
+            now: resolvedAt,
+            registerSessionId: args.registerSessionId,
+            storeId: args.storeId,
+            terminalId,
+          });
+        } catch {
+          return userError({
+            code: "precondition_failed",
+            message:
+              "This synced sale is already mapped to a different register session.",
+          });
+        }
+
+        const hasUnselectedOpenConflictForEvent =
+          requestedConflictIds.size > 0 &&
+          allConflicts.some(
+            (candidate) =>
+              candidate.localEventId === syncEvent.localEventId &&
+              candidate.terminalId === terminalId &&
+              candidate.conflictType !== conflict.conflictType &&
+              candidate.status === "needs_review" &&
+              !requestedConflictIds.has(candidate._id) &&
+              !requestedConflictIds.has(candidate.localEventId),
+          );
+        if (!hasUnselectedOpenConflictForEvent) {
+          await localSyncRepository.patchEvent(syncEvent._id, {
+            status: "projected",
+            projectedAt: resolvedAt,
+          });
+        }
+        if (hasConflictRecord) {
+          resolvedConflictIds.add(conflict._id as Id<"posLocalSyncConflict">);
+        }
+        projectedTransactionIds.push(completedTransaction._id);
+        continue;
+      }
 
       if (isAutomaticResolution && !shouldApplyProoflessStaffAccessEvent) {
         return userError({

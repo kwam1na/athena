@@ -19,6 +19,11 @@ import type { OperationalRole } from "../operations/staffRoles";
 import { commandResultValidator } from "../lib/commandResultValidators";
 import { toDisplayAmount } from "../lib/currency";
 import {
+  getCloseoutHoldOperatorMessage,
+  hasCashAffectingCloseoutHolds,
+  listRegisterSessionCloseoutHolds,
+} from "../pos/application/sync/registerSessionCloseoutHolds";
+import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
 } from "../lib/athenaUserAuth";
@@ -511,40 +516,6 @@ export function buildRegisterSessionVarianceApprovalRequirement(args: {
   };
 }
 
-async function countPendingVoidApprovalsForRegisterSession(
-  ctx: Pick<MutationCtx, "db">,
-  args: {
-    registerSessionId: Id<"registerSession">;
-    storeId: Id<"store">;
-  },
-) {
-  if (typeof ctx.db.query !== "function") {
-    return 0;
-  }
-
-  const query = ctx.db
-    .query("approvalRequest")
-    .withIndex("by_registerSessionId", (q) =>
-      q.eq("registerSessionId", args.registerSessionId),
-    );
-
-  if (typeof query.collect !== "function") {
-    return 0;
-  }
-
-  const approvalRequests =
-    // eslint-disable-next-line @convex-dev/no-collect-in-query -- Register-session scoped pending void approvals are bounded by manager-review workflow volume and must be checked before final closure.
-    await query.collect();
-
-  return approvalRequests.filter(
-    (approvalRequest) =>
-      approvalRequest.storeId === args.storeId &&
-      approvalRequest.status === "pending" &&
-      approvalRequest.requestType === "pos_transaction_void" &&
-      approvalRequest.subjectType === "pos_transaction",
-  ).length;
-}
-
 function submittedCloseoutPendingVoidsResult(args: {
   closeoutReview: RegisterSessionCloseoutReview;
   pendingVoidApprovalCount: number;
@@ -927,17 +898,22 @@ export const submitRegisterSessionCloseout = mutation({
       config,
       expectedCash: registerSession.expectedCash,
     });
+    const closeoutHolds = await listRegisterSessionCloseoutHolds(ctx, {
+      registerSessionId: registerSession._id,
+      storeId: args.storeId,
+    });
     const pendingVoidApprovalCount =
-      await countPendingVoidApprovalsForRegisterSession(ctx, {
-        registerSessionId: registerSession._id,
-        storeId: args.storeId,
-      });
+      closeoutHolds.find(
+        (hold) => hold.kind === "pending_completed_sale_void_approvals",
+      )?.count ?? 0;
+    const hasFinalCloseoutHold = hasCashAffectingCloseoutHolds(closeoutHolds);
 
-    if (pendingVoidApprovalCount > 0 && args.approvalProofId) {
+    if (hasFinalCloseoutHold && args.approvalProofId) {
       return userError({
         code: "precondition_failed",
         message:
-          "Resolve pending void approvals before approving final closeout.",
+          getCloseoutHoldOperatorMessage(closeoutHolds, "approve") ??
+          "Resolve pending register corrections before approving final closeout.",
       });
     }
     const latestReopenedCloseout = getLatestReopenedCloseoutRecord(registerSession);
@@ -1044,7 +1020,7 @@ export const submitRegisterSessionCloseout = mutation({
     if (
       closeoutReview.requiresApproval &&
       args.approvalProofId &&
-      pendingVoidApprovalCount === 0
+      !hasFinalCloseoutHold
     ) {
       if (!registerSession.organizationId) {
         return userError({
@@ -1089,7 +1065,7 @@ export const submitRegisterSessionCloseout = mutation({
     if (
       closeoutReview.requiresApproval &&
       !args.approvalProofId &&
-      pendingVoidApprovalCount === 0 &&
+      !hasFinalCloseoutHold &&
       closeoutSubmitActorStaffProfileId &&
       !approvedByStaffProfileId &&
       registerSession.organizationId
@@ -1151,7 +1127,7 @@ export const submitRegisterSessionCloseout = mutation({
       workflowTraceId: registerSession.workflowTraceId,
     });
 
-    if (pendingVoidApprovalCount > 0) {
+    if (hasFinalCloseoutHold) {
       return submittedCloseoutPendingVoidsResult({
         closeoutReview,
         pendingVoidApprovalCount,
@@ -1476,16 +1452,17 @@ export const finalizeRegisterSessionCloseout = mutation({
       });
     }
 
-    const pendingVoidApprovalCount =
-      await countPendingVoidApprovalsForRegisterSession(ctx, {
-        registerSessionId: registerSession._id,
-        storeId: args.storeId,
-      });
+    const closeoutHolds = await listRegisterSessionCloseoutHolds(ctx, {
+      registerSessionId: registerSession._id,
+      storeId: args.storeId,
+    });
 
-    if (pendingVoidApprovalCount > 0) {
+    if (hasCashAffectingCloseoutHolds(closeoutHolds)) {
       return userError({
         code: "precondition_failed",
-        message: "Resolve pending void approvals before finalizing closeout.",
+        message:
+          getCloseoutHoldOperatorMessage(closeoutHolds, "finalize") ??
+          "Resolve pending register corrections before finalizing closeout.",
       });
     }
 
@@ -2200,13 +2177,12 @@ export const reviewRegisterSessionCloseout = mutation({
         });
       }
 
-      const pendingVoidApprovalCount =
-        await countPendingVoidApprovalsForRegisterSession(ctx, {
-          registerSessionId: registerSession._id,
-          storeId: args.storeId,
-        });
+      const closeoutHolds = await listRegisterSessionCloseoutHolds(ctx, {
+        registerSessionId: registerSession._id,
+        storeId: args.storeId,
+      });
 
-      if (pendingVoidApprovalCount > 0) {
+      if (hasCashAffectingCloseoutHolds(closeoutHolds)) {
         return ok({
           action: "approved" as const,
           approvalRequest: reviewedApprovalRequest,
