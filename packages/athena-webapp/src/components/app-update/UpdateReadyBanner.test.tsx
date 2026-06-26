@@ -231,7 +231,7 @@ describe("UpdateReadyBanner", () => {
     expect(updateButton.querySelector("svg")).toBeInTheDocument();
   });
 
-  it("uses a persistent top-right toast instead of the banner when a surface opts in", () => {
+  it("uses a persistent bottom-left toast instead of the banner when a surface opts in", () => {
     renderWithUpdateProviders(
       <>
         <CommunicationPreferenceProbe variant="toast" />
@@ -256,7 +256,7 @@ describe("UpdateReadyBanner", () => {
         dismissible: false,
         duration: Number.POSITIVE_INFINITY,
         id: "athena-update-ready-toast",
-        position: "top-right",
+        position: "bottom-left",
       }),
     );
   });
@@ -294,7 +294,9 @@ describe("UpdateReadyBanner", () => {
       name: "Finish this sale before refreshing.",
     });
     expect(updateButton).toBeDisabled();
-    expect(updateButton).toHaveTextContent("Finish this sale before refreshing.");
+    expect(updateButton).toHaveTextContent(
+      "Finish this sale before refreshing.",
+    );
     expect(updateButton).toHaveAttribute(
       "title",
       "Finish this sale before refreshing.",
