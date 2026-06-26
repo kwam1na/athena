@@ -298,12 +298,13 @@ export const getQueueSnapshot = query({
         posTransactionIds.add(transactionId);
       }
 
-      if (request.requestType === "variance_review") {
-        if (request.registerSessionId) {
-          registerSessionIds.add(request.registerSessionId);
-        } else if (request.subjectType === "register_session") {
-          registerSessionIds.add(request.subjectId);
-        }
+      if (request.registerSessionId) {
+        registerSessionIds.add(request.registerSessionId);
+      } else if (
+        request.requestType === "variance_review" &&
+        request.subjectType === "register_session"
+      ) {
+        registerSessionIds.add(request.subjectId);
       }
     }
 
@@ -393,11 +394,35 @@ export const getQueueSnapshot = query({
         [Id<"posTransaction">, Doc<"posTransaction">]
       >,
     );
+    const transactionRegisterSessionIds = new Set<Id<"registerSession">>();
+    for (const request of approvalRequests) {
+      const linkedTransactionId = approvalRequestTransactionId(request);
+      const linkedTransaction = linkedTransactionId
+        ? posTransactionMap.get(linkedTransactionId)
+        : null;
+      if (
+        linkedTransaction?.registerSessionId &&
+        !registerSessionIds.has(linkedTransaction.registerSessionId)
+      ) {
+        transactionRegisterSessionIds.add(linkedTransaction.registerSessionId);
+      }
+    }
+    const transactionRegisterSessions = await Promise.all(
+      Array.from(transactionRegisterSessionIds).map(async (registerSessionId) => {
+        const registerSession = await ctx.db.get(
+          "registerSession",
+          registerSessionId,
+        );
+        return registerSession ? [registerSession._id, registerSession] : null;
+      }),
+    );
     const registerSessionMap = new Map<
       Id<"registerSession">,
       Doc<"registerSession">
     >(
-      registerSessions.filter(Boolean) as Array<
+      [...registerSessions, ...transactionRegisterSessions].filter(
+        Boolean,
+      ) as Array<
         [Id<"registerSession">, Doc<"registerSession">]
       >,
     );
@@ -427,13 +452,24 @@ export const getQueueSnapshot = query({
         const linkedTransaction = linkedTransactionId
           ? posTransactionMap.get(linkedTransactionId)
           : null;
-        const linkedRegisterSession =
-          request.requestType === "variance_review"
-            ? registerSessionMap.get(
-                (request.registerSessionId ??
-                  request.subjectId) as Id<"registerSession">,
-              )
-            : null;
+        let linkedRegisterSession: Doc<"registerSession"> | null | undefined =
+          null;
+        if (request.registerSessionId) {
+          linkedRegisterSession = registerSessionMap.get(
+            request.registerSessionId,
+          );
+        } else if (linkedTransaction?.registerSessionId) {
+          linkedRegisterSession = registerSessionMap.get(
+            linkedTransaction.registerSessionId,
+          );
+        } else if (
+          request.requestType === "variance_review" &&
+          request.subjectType === "register_session"
+        ) {
+          linkedRegisterSession = registerSessionMap.get(
+            request.subjectId as Id<"registerSession">,
+          );
+        }
 
         return {
           _id: request._id,

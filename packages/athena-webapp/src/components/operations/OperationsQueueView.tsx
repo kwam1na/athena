@@ -487,6 +487,7 @@ function getTransactionVoidSummary(request: QueueApprovalRequest) {
   }
 
   return {
+    registerSession: request.registerSessionSummary ?? null,
     requestedAt: request.createdAt,
     transaction: request.transactionSummary ?? null,
   };
@@ -1237,6 +1238,31 @@ export function OperationsQueueViewContent({
                                     </p>
                                   </div>
                                   <div className="flex flex-wrap items-center gap-2">
+                                    {transactionVoidSummary.registerSession &&
+                                    orgUrlSlug &&
+                                    storeUrlSlug ? (
+                                      <Button
+                                        asChild
+                                        size="sm"
+                                        variant="utility"
+                                      >
+                                        <Link
+                                          params={{
+                                            orgUrlSlug,
+                                            sessionId:
+                                              transactionVoidSummary
+                                                .registerSession
+                                                .registerSessionId,
+                                            storeUrlSlug,
+                                          }}
+                                          search={{ o: getOrigin() }}
+                                          to="/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId"
+                                        >
+                                          <ArrowUpRight aria-hidden="true" />
+                                          View register session
+                                        </Link>
+                                      </Button>
+                                    ) : null}
                                     {transactionVoidSummary.transaction &&
                                     orgUrlSlug &&
                                     storeUrlSlug ? (
@@ -1307,6 +1333,42 @@ export function OperationsQueueViewContent({
                                         : "Unknown"}
                                     </dd>
                                   </div>
+                                  {transactionVoidSummary.registerSession ? (
+                                    <div>
+                                      <dt className="text-xs text-muted-foreground">
+                                        Register session
+                                      </dt>
+                                      <dd className="mt-1 font-medium text-foreground">
+                                        {orgUrlSlug && storeUrlSlug ? (
+                                          <Link
+                                            className="inline-flex items-center gap-1 underline-offset-4 hover:underline"
+                                            params={{
+                                              orgUrlSlug,
+                                              sessionId:
+                                                transactionVoidSummary
+                                                  .registerSession
+                                                  .registerSessionId,
+                                              storeUrlSlug,
+                                            }}
+                                            search={{ o: getOrigin() }}
+                                            to="/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId"
+                                          >
+                                            {formatRegisterSessionLabel(
+                                              transactionVoidSummary.registerSession,
+                                            )}
+                                            <ArrowUpRight
+                                              aria-hidden="true"
+                                              className="h-3 w-3"
+                                            />
+                                          </Link>
+                                        ) : (
+                                          formatRegisterSessionLabel(
+                                            transactionVoidSummary.registerSession,
+                                          )
+                                        )}
+                                      </dd>
+                                    </div>
+                                  ) : null}
                                   <div>
                                     <dt className="text-xs text-muted-foreground">
                                       Requested at

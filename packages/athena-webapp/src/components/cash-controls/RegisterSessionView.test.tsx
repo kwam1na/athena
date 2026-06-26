@@ -379,7 +379,7 @@ describe("RegisterSessionViewContent", () => {
     expect(screen.getByText("Closeout in progress")).toBeInTheDocument();
     expect(screen.getByText("Opening float")).toBeInTheDocument();
     expect(screen.getByText("$50")).toBeInTheDocument();
-    expect(screen.getByText("Counted")).toBeInTheDocument();
+    expect(screen.getAllByText("Counted").length).toBeGreaterThan(0);
     expect(screen.getAllByText("$171").length).toBeGreaterThan(0);
     expect(screen.getByText("Linked transactions")).toBeInTheDocument();
     const transactionRow = screen.getAllByRole("link", {
@@ -2091,6 +2091,7 @@ describe("RegisterSessionViewContent", () => {
               requestedByStaffName: "Kwamina Mensah",
               status: "rejected",
             },
+            status: "closeout_rejected",
           },
           timeline: [
             {
@@ -2109,15 +2110,21 @@ describe("RegisterSessionViewContent", () => {
       />,
     );
 
-    expect(screen.getByText("Closeout rejected")).toBeInTheDocument();
+    expect(screen.getAllByText("Closeout rejected").length).toBeGreaterThan(0);
     expect(
       screen.queryByText("Manager approval pending"),
     ).not.toBeInTheDocument();
     expect(
       screen.getByText(
-        "Manager rejected this closeout. Recount or correct the drawer before submitting again.",
+        "Manager approval is required to reopen this rejected closeout before a corrected count can be submitted.",
       ),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Reopen closeout" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Submit closeout" }),
+    ).not.toBeInTheDocument();
   });
 
   it("submits the closeout count from the register detail page", async () => {
@@ -2164,6 +2171,8 @@ describe("RegisterSessionViewContent", () => {
         countedCash: 18000,
         notes: "Final count after second safe drop.",
         registerSessionId: "session-1",
+        staffPinHash: "hashed-pin",
+        staffUsername: "ato",
       }),
     );
   });
@@ -2229,6 +2238,8 @@ describe("RegisterSessionViewContent", () => {
         approvalProofId: undefined,
         registerSessionId: "session-1",
         requestedByStaffProfileId: "staff-1",
+        staffPinHash: "hashed-pin",
+        staffUsername: "ato",
       }),
     );
     expect(onAuthenticateForApproval).not.toHaveBeenCalled();
@@ -2237,7 +2248,6 @@ describe("RegisterSessionViewContent", () => {
   it("holds pending-void closeouts without submit, finalize, or deposit actions", () => {
     render(
       <RegisterSessionViewContent
-        actorStaffProfileId="staff-1"
         actorUserId="user-1"
         currency="GHS"
         isLoading={false}
@@ -2358,7 +2368,7 @@ describe("RegisterSessionViewContent", () => {
     });
     await waitFor(() =>
       expect(onSubmitCloseout).toHaveBeenCalledWith({
-        actorStaffProfileId: "manager-1",
+        actorStaffProfileId: "staff-1",
         closeoutModificationApprovalProofId: "approval-proof-2",
         countedCash: 17600,
         notes: undefined,
@@ -2517,6 +2527,8 @@ describe("RegisterSessionViewContent", () => {
         countedCash: 18000,
         notes: "Manager counted the overage.",
         registerSessionId: "session-1",
+        staffPinHash: "hashed-pin",
+        staffUsername: "ato",
       }),
     );
   });
@@ -2565,6 +2577,8 @@ describe("RegisterSessionViewContent", () => {
         countedCash: 18000,
         notes: undefined,
         registerSessionId: "session-1",
+        staffPinHash: "hashed-pin",
+        staffUsername: "ato",
       }),
     );
   });
@@ -2604,6 +2618,8 @@ describe("RegisterSessionViewContent", () => {
         countedCash: 17600,
         notes: undefined,
         registerSessionId: "session-1",
+        staffPinHash: "hashed-pin",
+        staffUsername: "ato",
       }),
     );
   });
@@ -2813,9 +2829,65 @@ describe("RegisterSessionViewContent", () => {
     ).not.toBeInTheDocument();
     expect(
       screen.getByText(
-        "Opening float corrections are available before closeout starts.",
+        "Opening float corrections are unavailable after closeout starts.",
       ),
     ).toBeInTheDocument();
+  });
+
+  it("keeps prior submitted closeout data visible while showing the reopened correction form", () => {
+    render(
+      <RegisterSessionViewContent
+        actorStaffProfileId="staff-1"
+        actorUserId="user-1"
+        currency="GHS"
+        isLoading={false}
+        onRecordDeposit={vi.fn()}
+        {...closeoutHandlers}
+        registerSessionSnapshot={{
+          ...baseSnapshot,
+          closeoutReview: {
+            hasVariance: false,
+            reason: null,
+            requiresApproval: false,
+            variance: 0,
+          },
+          registerSession: {
+            ...baseSnapshot.registerSession,
+            closeoutRecords: [
+              {
+                actorStaffProfileId: "staff-1",
+                countedCash: 17100,
+                expectedCash: 17600,
+                occurredAt: 1,
+                type: "closed",
+                variance: -500,
+              },
+              {
+                actorStaffProfileId: "manager-1",
+                countedCash: 17100,
+                expectedCash: 17600,
+                occurredAt: 2,
+                type: "reopened",
+                variance: -500,
+              },
+            ],
+            countedCash: 17100,
+            status: "closing",
+            variance: -500,
+          },
+        }}
+        storeId="store-1"
+      />,
+    );
+
+    expect(screen.getByText("Previous submitted closeout")).toBeInTheDocument();
+    expect(screen.getAllByText("GH₵171").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("GH₵176").length).toBeGreaterThan(0);
+    expect(screen.getByLabelText("Closeout counted cash")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Submit closeout" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Ready for final closeout")).not.toBeInTheDocument();
   });
 
   it("labels closeout rejection history as closeout follow-up", () => {

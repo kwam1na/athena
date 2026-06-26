@@ -852,6 +852,15 @@ describe("OperationsQueueViewContent", () => {
             createdAt: 1_714_620_000_000,
             requestedByStaffName: "Skank Hunt",
             requestType: "pos_transaction_void",
+            registerSessionSummary: {
+              countedCash: null,
+              expectedCash: 50000,
+              registerNumber: "8",
+              registerSessionId: "register-session-8" as Id<"registerSession">,
+              status: "closed",
+              terminalName: "Codex",
+              variance: null,
+            },
             status: "pending",
             transactionSummary: {
               completedAt: 1_714_610_000_000,
@@ -878,9 +887,17 @@ describe("OperationsQueueViewContent", () => {
     expect(screen.getByText("#158503")).toBeInTheDocument();
     expect(screen.getByText("Cash")).toBeInTheDocument();
     expect(screen.getByText("GH₵3,960")).toBeInTheDocument();
+    expect(screen.getByText("Register session")).toBeInTheDocument();
+    expect(screen.getByText("Codex / Register 8")).toBeInTheDocument();
     expect(
       screen.getByText(/manager approval voids the completed sale/i),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /view register session/i }),
+    ).toHaveAttribute(
+      "href",
+      "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId?o=%252F",
+    );
     expect(
       screen.getByRole("link", { name: /view transaction/i }),
     ).toHaveAttribute(

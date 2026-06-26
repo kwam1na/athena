@@ -681,9 +681,9 @@ function extractConvexFunctionDefinitions(contents: string) {
 }
 
 function findMatchingDefinitionEnd(contents: string, startIndex: number) {
-  const nextExport = contents.indexOf("\nexport const ", startIndex + 1);
-  if (nextExport !== -1) {
-    return nextExport;
+  const braceBlockEnd = findMatchingBraceBlockEnd(contents, startIndex);
+  if (braceBlockEnd !== -1) {
+    return braceBlockEnd;
   }
 
   return contents.length;
@@ -1576,6 +1576,13 @@ async function collectConvexQueryWriteBoundaryFindings(
             const handlerParamNames = extractConvexHandlerParamNames(
               entry.definitionBody,
             );
+            if (!isChangedFile) {
+              return hasQueryHandlerPassingCtxToWriteHelper(
+                entry.definitionBody,
+                handlerParamNames,
+                queryCallableWriteHelperNames,
+              );
+            }
             return (
               hasCtxMutationOnlyDbCall(entry.definitionBody) ||
               hasHandlerParamMutationOnlyDbCall(

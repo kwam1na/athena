@@ -146,10 +146,25 @@ describe("getQueueSnapshot", () => {
               _id: "txn-void-1",
               completedAt: 1,
               paymentMethod: "cash",
+              registerSessionId: "register-session-1",
               total: 396000,
               totalPaid: 396000,
               transactionNumber: "158503",
             };
+          }
+          if (tableName === "registerSession" && id === "register-session-1") {
+            return {
+              _id: "register-session-1",
+              countedCash: null,
+              expectedCash: 50000,
+              registerNumber: "8",
+              status: "closed",
+              storeId: "store-1",
+              terminalId: "terminal-1",
+            };
+          }
+          if (tableName === "posTerminal" && id === "terminal-1") {
+            return { _id: "terminal-1", displayName: "Codex" };
           }
           return null;
         }),
@@ -180,6 +195,11 @@ describe("getQueueSnapshot", () => {
           total: 396000,
           transactionId: "txn-void-1",
           transactionNumber: "158503",
+        }),
+        registerSessionSummary: expect.objectContaining({
+          registerNumber: "8",
+          registerSessionId: "register-session-1",
+          terminalName: "Codex",
         }),
       }),
     ]);

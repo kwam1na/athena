@@ -122,8 +122,11 @@ type RegisterSessionDetail = {
   closedByStaffName?: string | null;
   closeoutRecords?: Array<{
     actorStaffProfileId?: string;
+    countedCash?: number;
+    expectedCash?: number;
     occurredAt: number;
     type: "closed" | "reopened";
+    variance?: number;
   }>;
   countedCash?: number;
   expectedCash: number;
@@ -219,13 +222,15 @@ type RegisterSessionDepositResult =
   NormalizedCommandResult<RegisterSessionDepositPayload>;
 
 type RegisterCloseoutSubmitArgs = {
-  actorStaffProfileId: string;
+  actorStaffProfileId?: string;
   approvalProofId?: string;
   closeoutModificationApprovalProofId?: string;
   countedCash: number;
   notes?: string;
   registerSessionId: string;
   requestedByStaffProfileId?: string;
+  staffPinHash?: string;
+  staffUsername?: string;
 };
 
 type RegisterCloseoutFinalizeArgs = {
@@ -233,6 +238,8 @@ type RegisterCloseoutFinalizeArgs = {
   approvalProofId?: string;
   registerSessionId: string;
   requestedByStaffProfileId?: string;
+  staffPinHash?: string;
+  staffUsername?: string;
 };
 
 type RegisterCloseoutReviewArgs = {
@@ -2518,6 +2525,8 @@ export function RegisterSessionViewContent({
     latestCloseoutRecord?.type === "reopened" ? latestCloseoutRecord : null;
   const requiresReopenedCloseoutSubmitApproval =
     registerSession?.status === "closing" && Boolean(reopenedCloseoutRecord);
+  const isReopenedCloseoutCorrection =
+    requiresReopenedCloseoutSubmitApproval;
 
   const reopenedCloseoutSubmitApproval =
     useMemo<ApprovalRequirement | null>(() => {
@@ -2881,6 +2890,8 @@ export function RegisterSessionViewContent({
                   countedCash: intent.countedCash,
                   notes: intent.notes,
                   registerSessionId: intent.registerSessionId,
+                  staffPinHash: credentials?.pinHash,
+                  staffUsername: credentials?.username,
                 }),
               onResult: () => undefined,
             })
@@ -2905,6 +2916,8 @@ export function RegisterSessionViewContent({
                         approvalArgs.approvalProofId ?? result.approvalProofId,
                       registerSessionId: intent.registerSessionId,
                       requestedByStaffProfileId: result.staffProfileId,
+                      staffPinHash: credentials?.pinHash,
+                      staffUsername: credentials?.username,
                     }),
                   onResult: () => undefined,
                 })
@@ -3065,7 +3078,7 @@ export function RegisterSessionViewContent({
 
     try {
       const commandResult = await onSubmitCloseout({
-        actorStaffProfileId: result.approvedByStaffProfileId,
+        actorStaffProfileId,
         closeoutModificationApprovalProofId: result.approvalProofId,
         countedCash: intent.countedCash,
         notes: intent.notes,
@@ -3127,9 +3140,13 @@ export function RegisterSessionViewContent({
   const isClosedRegisterSession = registerSession?.status === "closed";
   const hasRejectedCloseoutApproval =
     registerSession?.pendingApprovalRequest?.status === "rejected";
+  const isRejectedRegisterSession =
+    registerSession?.status === "closeout_rejected";
   const needsCloseoutCorrection =
     !isClosedRegisterSession &&
-    (hasRejectedCloseoutApproval || hasCloseoutRejectionHistory);
+    (isRejectedRegisterSession ||
+      hasRejectedCloseoutApproval ||
+      hasCloseoutRejectionHistory);
   const canFinalizeCloseout =
     Boolean(registerSession) &&
     registerSession?.status === "closing" &&
@@ -3137,12 +3154,14 @@ export function RegisterSessionViewContent({
     !hasPendingCloseoutApproval &&
     !hasPendingVoidApprovals &&
     !needsCloseoutCorrection &&
+    !isReopenedCloseoutCorrection &&
     Boolean(onFinalizeCloseout);
   const isWaitingOnVoidReview =
     Boolean(registerSession) &&
     registerSession?.status === "closing" &&
     hasPendingVoidApprovals &&
-    !needsCloseoutCorrection;
+    !needsCloseoutCorrection &&
+    !isReopenedCloseoutCorrection;
   const isDepositActionLocked =
     Boolean(pendingCloseoutAction) ||
     Boolean(hasPendingCloseoutApproval) ||
@@ -3275,6 +3294,8 @@ export function RegisterSessionViewContent({
     ? "Closeout review pending"
     : registerSession?.status === "closed"
       ? "Closed"
+      : registerSession?.status === "closeout_rejected"
+        ? "Closeout rejected"
       : registerSession?.status === "closing"
         ? needsCloseoutCorrection
           ? "Closeout rejected"
@@ -3304,7 +3325,7 @@ export function RegisterSessionViewContent({
     registerSession.status !== "closed";
   const openingFloatCorrectionUnavailableMessage = isRegisterCloseoutSyncReview
     ? "Opening float corrections are unavailable while synced closeout review is pending."
-    : "Opening float corrections are available before closeout starts.";
+    : "Opening float corrections are unavailable after closeout starts.";
   const correctedOpeningFloatAmount = parseDisplayAmountInput(
     correctedOpeningFloat,
   );
@@ -4541,18 +4562,23 @@ export function RegisterSessionViewContent({
                         </div>
                       </dl>
                     </div>
-                  ) : registerSession?.status === "closed" ? (
+                  ) : registerSession?.status === "closed" ||
+                    registerSession?.status === "closeout_rejected" ? (
                     <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-4">
                       <div className="flex items-center justify-between gap-3">
                         <p className="text-sm font-medium text-foreground">
-                          Closeout complete
+                          {registerSession.status === "closeout_rejected"
+                            ? "Closeout rejected"
+                            : "Closeout complete"}
                         </p>
                         <Badge
                           className="border-border bg-muted text-muted-foreground"
                           size="sm"
                           variant="outline"
                         >
-                          Closed
+                          {registerSession.status === "closeout_rejected"
+                            ? "Rejected"
+                            : "Closed"}
                         </Badge>
                       </div>
                       <dl className="grid gap-3 text-sm sm:grid-cols-3">
@@ -4591,8 +4617,9 @@ export function RegisterSessionViewContent({
                       </dl>
                       <div className="space-y-3 border-t border-border/70 pt-3">
                         <p className="text-sm leading-relaxed text-muted-foreground">
-                          Reopen the closeout to submit a corrected count. The
-                          saved closeout stays in the drawer history.
+                          {registerSession.status === "closeout_rejected"
+                            ? "Manager approval is required to reopen this rejected closeout before a corrected count can be submitted."
+                            : "Reopen the closeout to submit a corrected count. The saved closeout stays in the drawer history."}
                         </p>
                         <LoadingButton
                           className="w-full justify-center"
@@ -4611,19 +4638,47 @@ export function RegisterSessionViewContent({
                     <div className="space-y-4">
                       {registerSessionSnapshot?.closeoutReview ? (
                         <div className="space-y-2 rounded-lg border border-border bg-muted/20 p-4">
-                          <div className="flex items-start justify-between gap-3">
-                            <p className="text-sm font-medium text-foreground">
-                              Submitted count
-                            </p>
-                            <p
-                              className={`font-numeric tabular-nums text-lg ${getVarianceTone(registerSessionSnapshot.closeoutReview.variance)}`}
-                            >
-                              {formatCurrency(
-                                currency,
-                                registerSessionSnapshot.closeoutReview.variance,
-                              )}
-                            </p>
-                          </div>
+                          <p className="text-sm font-medium text-foreground">
+                            {isReopenedCloseoutCorrection
+                              ? "Previous submitted closeout"
+                              : "Submitted closeout"}
+                          </p>
+                          <dl className="grid gap-3 text-sm sm:grid-cols-3">
+                            <div className="space-y-1">
+                              <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                                Counted
+                              </dt>
+                              <dd className="font-numeric tabular-nums text-foreground">
+                                {formatCurrency(
+                                  currency,
+                                  registerSessionSnapshot.registerSession
+                                    .countedCash,
+                                )}
+                              </dd>
+                            </div>
+                            <div className="space-y-1">
+                              <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                                Expected
+                              </dt>
+                              <dd className="font-numeric tabular-nums text-foreground">
+                                {formatCurrency(currency, expectedCash)}
+                              </dd>
+                            </div>
+                            <div className="space-y-1">
+                              <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                                Variance
+                              </dt>
+                              <dd
+                                className={`font-numeric tabular-nums ${getVarianceTone(registerSessionSnapshot.closeoutReview.variance)}`}
+                              >
+                                {formatCurrency(
+                                  currency,
+                                  registerSessionSnapshot.closeoutReview
+                                    .variance,
+                                )}
+                              </dd>
+                            </div>
+                          </dl>
                           <p className="text-sm text-muted-foreground">
                             Approval required:{" "}
                             {registerSessionSnapshot.closeoutReview
@@ -5043,6 +5098,8 @@ export function RegisterSessionView() {
         requestedByStaffProfileId: args.requestedByStaffProfileId as
           | Id<"staffProfile">
           | undefined,
+        staffPinHash: args.staffPinHash,
+        staffUsername: args.staffUsername,
         storeId: activeStore._id,
       }),
     );
@@ -5077,6 +5134,8 @@ export function RegisterSessionView() {
         requestedByStaffProfileId: args.requestedByStaffProfileId as
           | Id<"staffProfile">
           | undefined,
+        staffPinHash: args.staffPinHash,
+        staffUsername: args.staffUsername,
         storeId: activeStore._id,
       }),
     );
