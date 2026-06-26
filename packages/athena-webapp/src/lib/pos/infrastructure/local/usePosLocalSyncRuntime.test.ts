@@ -3440,6 +3440,128 @@ describe("usePosLocalSyncRuntimeStatus", () => {
     expect(onLocalEventsChanged).toHaveBeenCalled();
   });
 
+  it("seeds a local active drawer from active register directives over stale local closeout history", async () => {
+    mocks.reportTerminalRuntimeStatus.mockResolvedValue({
+      kind: "ok",
+      data: {
+        activeRegisterSessionDirective: {
+          cloudRegisterSessionId: "cloud-register-1",
+          expectedCash: 13_000,
+          localRegisterSessionId: "cloud-register-1",
+          observedAt: 200,
+          openedAt: 100,
+          openingFloat: 13_000,
+          registerNumber: "8",
+          staffProfileId: "staff-1",
+          status: "active",
+        },
+      },
+    });
+    const events = [
+      buildLocalEvent({
+        localEventId: "event-open",
+        localRegisterSessionId: "old-register-1",
+        payload: {
+          expectedCash: 9_000,
+          localRegisterSessionId: "old-register-1",
+          openingFloat: 9_000,
+          status: "active",
+        },
+        sequence: 1,
+        sync: { status: "synced", uploaded: true },
+        type: "register.opened",
+      }),
+      {
+        createdAt: 2,
+        localEventId: "event-close",
+        localRegisterSessionId: "old-register-1",
+        payload: { countedCash: 9_000, notes: null },
+        schemaVersion: 1,
+        sequence: 2,
+        staffProfileId: "staff-1",
+        staffProofToken: "proof-token-1",
+        storeId: "store-1",
+        sync: { status: "pending" },
+        terminalId: "local-terminal-1",
+        type: "register.closeout_started",
+        uploadSequence: 2,
+      } satisfies PosLocalEventRecord,
+    ];
+    const onLocalEventsChanged = vi.fn();
+    const store = {
+      appendEvent: vi.fn(async (event) => {
+        const localEvent = buildLocalEvent({
+          ...event,
+          localEventId: "event-seeded-open",
+          sequence: events.length + 1,
+          sync: { status: "pending" },
+        });
+        events.push(localEvent);
+        return { ok: true, value: localEvent };
+      }),
+      listEvents: vi.fn(async () => ({
+        ok: true,
+        value: [...events],
+      })),
+      readDrawerAuthorityState: vi.fn(async () => ({
+        ok: true,
+        value: null,
+      })),
+      readProvisionedTerminalSeed: vi.fn(async () => ({
+        ok: true,
+        value: {
+          cloudTerminalId: "terminal-cloud-1",
+          displayName: "Front",
+          provisionedAt: 1,
+          registerNumber: "8",
+          schemaVersion: 1,
+          syncSecretHash: "sync-secret-1",
+          storeId: "store-1",
+          terminalId: "local-terminal-1",
+        },
+      })),
+    };
+
+    const { result } = renderHook(() =>
+      usePosLocalSyncRuntimeStatus({
+        mode: "status-only",
+        onLocalEventsChanged,
+        storeFactory: () => store as never,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(store.appendEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          localRegisterSessionId: "cloud-register-1",
+          registerNumber: "8",
+          staffProfileId: "staff-1",
+          storeId: "store-1",
+          terminalId: "terminal-cloud-1",
+          type: "register.opened",
+          payload: expect.objectContaining({
+            expectedCash: 13_000,
+            localRegisterSessionId: "cloud-register-1",
+            openingFloat: 13_000,
+            status: "active",
+          }),
+        }),
+      ),
+    );
+    expect(onLocalEventsChanged).toHaveBeenCalled();
+    await waitFor(() =>
+      expect(result.current?.debug?.activeRegisterSessionRepair).toMatchObject({
+        directive: expect.objectContaining({
+          localRegisterSessionId: "cloud-register-1",
+          status: "active",
+        }),
+        seedResult: "seeded",
+      }),
+    );
+  });
+
   it("passively reconciles a pending local closeout when the mapped cloud drawer is closed", async () => {
     mocks.reportTerminalRuntimeStatus.mockResolvedValue({
       kind: "ok",

@@ -862,11 +862,15 @@ export function useRegisterViewModel(): RegisterViewModel {
         }
       : null;
   const locallyOperableRegisterSession =
-    localOperableRegisterSession &&
-    activeStoreId === localOperableRegisterSession.storeId &&
-    terminal?._id === localOperableRegisterSession.terminalId
-      ? localOperableRegisterSession
-      : projectedLocalRegisterSession;
+    projectedLocalRegisterSession &&
+    localOperableRegisterSession?.localRegisterSessionId ===
+      projectedLocalRegisterSession.localRegisterSessionId
+      ? projectedLocalRegisterSession
+      : localOperableRegisterSession &&
+          activeStoreId === localOperableRegisterSession.storeId &&
+          terminal?._id === localOperableRegisterSession.terminalId
+        ? localOperableRegisterSession
+        : projectedLocalRegisterSession;
   const closeoutBlockedRegisterSession =
     locallyOperableRegisterSession === null
       ? selectPassiveCloseoutBlockedRegisterSession(
@@ -3022,6 +3026,13 @@ export function useRegisterViewModel(): RegisterViewModel {
       return;
     }
 
+    if (!(await ensureLocalRegisterSessionReady(registerSessionId))) {
+      setDrawerErrorMessage(
+        "Closeout unavailable. Refresh the register and try again.",
+      );
+      return;
+    }
+
     const expectedCloseoutCash = activeCloseoutRegisterSession?.expectedCash;
     const trimmedCloseoutNotes = trimOptional(closeoutNotes);
     const hasCloseoutVariance =
@@ -3093,6 +3104,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     activeCloseoutRegisterSession,
     closeoutCountedCash,
     closeoutNotes,
+    ensureLocalRegisterSessionReady,
     localCommandGateway,
     localSaleValidationMetadata,
     localStore,
@@ -5500,6 +5512,99 @@ export function useRegisterViewModel(): RegisterViewModel {
       online: globalThis.navigator?.onLine ?? true,
       staffSignedIn: Boolean(staffProfileId),
       ...(activeStoreId ? { storeId: activeStoreId } : {}),
+      runtimeState: {
+        ...(localRuntimeSyncSource?.runtimeStatus
+          ? {
+              heartbeat: {
+                ...(localRuntimeSyncSource.runtimeStatus.activeRegisterSession
+                  ? {
+                      activeRegisterSession:
+                        localRuntimeSyncSource.runtimeStatus
+                          .activeRegisterSession,
+                    }
+                  : {}),
+                ...(localRuntimeSyncSource.runtimeStatus.drawerAuthority
+                  ? {
+                      drawerAuthority:
+                        localRuntimeSyncSource.runtimeStatus.drawerAuthority,
+                    }
+                  : {}),
+                localStore: localRuntimeSyncSource.runtimeStatus.localStore,
+                reportedAt: localRuntimeSyncSource.runtimeStatus.reportedAt,
+                ...(localRuntimeSyncSource.runtimeStatus.saleAuthority
+                  ? {
+                      saleAuthority:
+                        localRuntimeSyncSource.runtimeStatus.saleAuthority,
+                    }
+                  : {}),
+                source: localRuntimeSyncSource.runtimeStatus.source,
+                staffAuthority:
+                  localRuntimeSyncSource.runtimeStatus.staffAuthority,
+                sync: localRuntimeSyncSource.runtimeStatus.sync,
+                ...(localRuntimeSyncSource.runtimeStatus.terminalIntegrity
+                  ? {
+                      terminalIntegrity:
+                        localRuntimeSyncSource.runtimeStatus.terminalIntegrity,
+                    }
+                  : {}),
+              },
+            }
+          : {}),
+        ...(localRegisterReadModel
+          ? {
+              localReadModel: {
+                ...(localRegisterReadModel.activeRegisterSession
+                  ? {
+                      activeRegisterSession: {
+                        ...(localRegisterReadModel.activeRegisterSession
+                          .cloudRegisterSessionId
+                          ? {
+                              cloudRegisterSessionId:
+                                localRegisterReadModel.activeRegisterSession
+                                  .cloudRegisterSessionId,
+                            }
+                          : {}),
+                        expectedCash:
+                          localRegisterReadModel.activeRegisterSession
+                            .expectedCash,
+                        localRegisterSessionId:
+                          localRegisterReadModel.activeRegisterSession
+                            .localRegisterSessionId,
+                        openedAt:
+                          localRegisterReadModel.activeRegisterSession.openedAt,
+                        openingFloat:
+                          localRegisterReadModel.activeRegisterSession
+                            .openingFloat,
+                        registerNumber:
+                          localRegisterReadModel.activeRegisterSession
+                            .registerNumber,
+                        status:
+                          localRegisterReadModel.activeRegisterSession.status,
+                      },
+                    }
+                  : {}),
+                canSell: localRegisterReadModel.canSell,
+                saleBlockReason: localRegisterReadModel.saleBlockReason ?? null,
+                sourceEventCount: localRegisterReadModel.sourceEvents.length,
+                syncStatus: {
+                  lastLocalSequence:
+                    localRegisterReadModel.syncStatus.lastLocalSequence,
+                  lastSyncedSequence:
+                    localRegisterReadModel.syncStatus.lastSyncedSequence,
+                  nextPendingSequence:
+                    localRegisterReadModel.syncStatus.nextPendingSequence,
+                  state: localRegisterReadModel.syncStatus.state,
+                },
+              },
+            }
+          : {}),
+        ...(localRuntimeSyncSource?.debug?.activeRegisterSessionRepair
+          ? {
+              repair:
+                localRuntimeSyncSource.debug.activeRegisterSessionRepair,
+            }
+          : {}),
+      },
       syncFlow: {
         checkInPublishAttemptedAt:
           localRuntimeSyncSource?.debug?.checkInPublishAttemptedAt,

@@ -1631,6 +1631,102 @@ describe("useRegisterViewModel", () => {
     );
   });
 
+  it("passes runtime heartbeat, local read model, and repair state through debug runtime state", async () => {
+    mockUsePosLocalSyncRuntimeStatus.mockReturnValue({
+      debug: {
+        activeRegisterSessionRepair: {
+          directive: {
+            cloudRegisterSessionId: "cloud-register-1",
+            expectedCash: 13_000,
+            localRegisterSessionId: "cloud-register-1",
+            observedAt: 200,
+            openedAt: 100,
+            openingFloat: 13_000,
+            registerNumber: "8",
+            staffProfileId: "staff-1",
+            status: "active",
+          },
+          observedAt: 300,
+          seedResult: "seeded",
+        },
+      },
+      runtimeStatus: {
+        activeRegisterSession: {
+          cloudRegisterSessionId: "cloud-register-1",
+          localRegisterSessionId: "cloud-register-1",
+          observedAt: 200,
+          openedAt: 100,
+          registerNumber: "8",
+          status: "active",
+        },
+        localStore: {
+          available: true,
+          schemaVersion: 1,
+          terminalSeedReady: true,
+        },
+        reportedAt: 400,
+        source: "runtime",
+        staffAuthority: {
+          staffProfileId: "staff-1",
+          status: "ready",
+        },
+        sync: {
+          pendingEventCount: 1,
+          status: "pending_sync",
+          uploadableEventCount: 1,
+        },
+      },
+      status: "pending",
+    });
+    mockListLocalEvents.mockResolvedValue({
+      ok: true,
+      value: [
+        buildLocalEvent({
+          localRegisterSessionId: "cloud-register-1",
+          payload: {
+            expectedCash: 13_000,
+            localRegisterSessionId: "cloud-register-1",
+            openingFloat: 13_000,
+            status: "active",
+          },
+          sequence: 1,
+          staffProofToken: "staff-proof-token",
+          sync: { status: "pending" },
+          type: "register.opened",
+        }),
+      ],
+    });
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await waitFor(() =>
+      expect(result.current.debug?.runtimeState).toEqual(
+        expect.objectContaining({
+          heartbeat: expect.objectContaining({
+            activeRegisterSession: expect.objectContaining({
+              localRegisterSessionId: "cloud-register-1",
+            }),
+            sync: expect.objectContaining({
+              status: "pending_sync",
+            }),
+          }),
+          localReadModel: expect.objectContaining({
+            activeRegisterSession: expect.objectContaining({
+              localRegisterSessionId: "cloud-register-1",
+              status: "active",
+            }),
+            canSell: true,
+            sourceEventCount: 1,
+          }),
+          repair: expect.objectContaining({
+            seedResult: "seeded",
+          }),
+        }),
+      ),
+    );
+  });
+
   it("does not show pending sync for local session-start records that cannot upload alone", async () => {
     mockUsePosLocalSyncRuntimeStatus.mockReturnValue({
       debug: {
@@ -9936,6 +10032,109 @@ describe("useRegisterViewModel", () => {
         payload: expect.objectContaining({ countedCash: 5_000 }),
       }),
     );
+  });
+
+  it("uses the projected local drawer cash total for closeout after local cash sales", async () => {
+    mockRegisterState = {
+      phase: "readyToStart",
+      terminal: { _id: "terminal-1", displayName: "Front Counter" },
+      cashier: { _id: "staff-1", firstName: "Ama", lastName: "Kusi" },
+      activeRegisterSession: null,
+      activeSession: null,
+      resumableSession: null,
+    };
+    mockActiveSession = null;
+
+    const localEvents: ReturnType<typeof buildLocalEvent>[] = [];
+    mockAppendLocalEvent.mockImplementation(async (event) => {
+      const sequence = localEvents.length + 1;
+      const localEvent = buildLocalEvent({
+        ...event,
+        localEventId: `local-event-${sequence}`,
+        sequence,
+        createdAt: 1_000 + sequence,
+        sync: { status: "pending" },
+      });
+      localEvents.push(localEvent);
+      return { ok: true, value: localEvent };
+    });
+    mockListLocalEvents.mockImplementation(async () => ({
+      ok: true,
+      value: [...localEvents],
+    }));
+    let notifyLocalEventsChanged: (() => void) | undefined;
+    mockUsePosLocalSyncRuntimeStatus.mockImplementation(
+      (input: { onLocalEventsChanged?: () => void }) => {
+        notifyLocalEventsChanged = input.onLocalEventsChanged;
+        return null;
+      },
+    );
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated({
+        activeRoles: ["manager"],
+        staffProfileId: "staff-1" as Id<"staffProfile">,
+        staffProfile: {
+          firstName: "Ama",
+          lastName: "Kusi",
+        },
+        posLocalStaffProof: {
+          expiresAt: Date.now() + 60_000,
+          token: "staff-proof-token",
+        },
+      });
+    });
+
+    act(() => {
+      result.current.drawerGate?.onOpeningFloatChange?.("90.00");
+    });
+    await act(async () => {
+      await result.current.drawerGate?.onSubmit?.();
+    });
+    await waitFor(() =>
+      expect(result.current.closeoutControl?.canCloseout).toBe(true),
+    );
+
+    const localRegisterSessionId = localEvents.find(
+      (event) => event.type === "register.opened",
+    )?.localRegisterSessionId;
+    expect(localRegisterSessionId).toEqual(expect.stringMatching(/^local-/));
+    localEvents.push(
+      buildLocalEvent({
+        sequence: localEvents.length + 1,
+        type: "transaction.completed",
+        localRegisterSessionId,
+        localPosSessionId: "local-sale-1",
+        localTransactionId: "local-txn-1",
+        payload: {
+          localPosSessionId: "local-sale-1",
+          localTransactionId: "local-txn-1",
+          receiptNumber: "R-1",
+          subtotal: 4_000,
+          tax: 0,
+          total: 4_000,
+          payments: [{ method: "cash", amount: 4_000, timestamp: 1_004 }],
+        },
+      }),
+    );
+    act(() => {
+      notifyLocalEventsChanged?.();
+    });
+    await waitFor(() =>
+      expect(result.current.closeoutControl?.canCloseout).toBe(true),
+    );
+
+    act(() => {
+      result.current.closeoutControl?.onRequestCloseout();
+    });
+
+    await waitFor(() =>
+      expect(result.current.drawerGate?.expectedCash).toBe(13_000),
+    );
+    expect(result.current.drawerGate?.mode).toBe("closeoutBlocked");
   });
 
   it("keeps a local sale active instead of claiming an unsupported local hold", async () => {

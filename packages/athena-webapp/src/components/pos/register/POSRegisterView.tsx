@@ -454,6 +454,16 @@ function formatDebugTimestamp(timestamp?: number) {
     : "n/a";
 }
 
+function formatDebugIdentifier(value?: string | null) {
+  if (!value) return "none";
+  if (value.length <= 12) return value;
+  return `${value.slice(0, 4)}...${value.slice(-6)}`;
+}
+
+function formatDebugStoredAmount(value?: number | null) {
+  return typeof value === "number" ? String(value) : "n/a";
+}
+
 function formatDebugStatus(value?: string | null) {
   if (!value) return "not ready";
 
@@ -553,6 +563,30 @@ function formatDebugCheckInPublishStatus(value?: string | null) {
     default:
       return "Not observed";
   }
+}
+
+function formatDebugRegisterSession(input?: {
+  cloudRegisterSessionId?: string;
+  localRegisterSessionId?: string;
+  registerNumber?: string;
+  status?: string;
+}) {
+  if (!input?.localRegisterSessionId && !input?.cloudRegisterSessionId) {
+    return "none";
+  }
+
+  return [
+    input.status ? formatDebugStatus(input.status) : "Unknown",
+    input.registerNumber ? `register ${input.registerNumber}` : null,
+    input.localRegisterSessionId
+      ? `local ${formatDebugIdentifier(input.localRegisterSessionId)}`
+      : null,
+    input.cloudRegisterSessionId
+      ? `cloud ${formatDebugIdentifier(input.cloudRegisterSessionId)}`
+      : null,
+  ]
+    .filter(Boolean)
+    .join(" ");
 }
 
 function getDebugSyncHoldUp(debug: NonNullable<RegisterViewModel["debug"]>) {
@@ -773,6 +807,149 @@ function POSLocalDebugStrip({
       ].join(" "),
     ],
   ];
+  const runtimeState = debug.runtimeState;
+  const heartbeat = runtimeState?.heartbeat;
+  const localReadModel = runtimeState?.localReadModel;
+  const repair = runtimeState?.repair;
+  const runtimeRows = runtimeState
+    ? [
+        [
+          "heartbeat source",
+          heartbeat?.source ? formatDebugStatus(heartbeat.source) : "none",
+        ],
+        ["heartbeat reported", formatDebugTimestamp(heartbeat?.reportedAt)],
+        [
+          "heartbeat local store",
+          heartbeat
+            ? [
+                heartbeat.localStore.available ? "available" : "unavailable",
+                heartbeat.localStore.terminalSeedReady
+                  ? "seed ready"
+                  : "seed missing",
+                heartbeat.localStore.schemaVersion
+                  ? `schema ${heartbeat.localStore.schemaVersion}`
+                  : null,
+              ]
+                .filter(Boolean)
+                .join(" ")
+            : "none",
+        ],
+        [
+          "heartbeat staff",
+          heartbeat
+            ? [
+                formatDebugStatus(heartbeat.staffAuthority.status),
+                heartbeat.staffAuthority.staffProfileId
+                  ? `staff ${formatDebugIdentifier(
+                      heartbeat.staffAuthority.staffProfileId,
+                    )}`
+                  : "no staff",
+              ].join(" ")
+            : "none",
+        ],
+        [
+          "heartbeat sale authority",
+          heartbeat?.saleAuthority
+            ? [
+                formatDebugStatus(heartbeat.saleAuthority.status),
+                heartbeat.saleAuthority.staffProfileId
+                  ? `staff ${formatDebugIdentifier(
+                      heartbeat.saleAuthority.staffProfileId,
+                    )}`
+                  : null,
+              ]
+                .filter(Boolean)
+                .join(" ")
+            : "not ready",
+        ],
+        [
+          "heartbeat drawer",
+          formatDebugRegisterSession(heartbeat?.activeRegisterSession),
+        ],
+        [
+          "heartbeat drawer authority",
+          heartbeat?.drawerAuthority
+            ? [
+                formatDebugStatus(heartbeat.drawerAuthority.status),
+                heartbeat.drawerAuthority.reason
+                  ? formatDebugStatus(heartbeat.drawerAuthority.reason)
+                  : null,
+                `local ${formatDebugIdentifier(
+                  heartbeat.drawerAuthority.localRegisterSessionId,
+                )}`,
+                heartbeat.drawerAuthority.cloudRegisterSessionId
+                  ? `cloud ${formatDebugIdentifier(
+                      heartbeat.drawerAuthority.cloudRegisterSessionId,
+                    )}`
+                  : null,
+              ]
+                .filter(Boolean)
+                .join(" ")
+            : "none",
+        ],
+        [
+          "heartbeat sync",
+          heartbeat
+            ? [
+                formatDebugStatus(heartbeat.sync.status),
+                `pending ${heartbeat.sync.pendingEventCount ?? 0}`,
+                `uploadable ${heartbeat.sync.uploadableEventCount ?? 0}`,
+                `review ${heartbeat.sync.reviewEventCount ?? 0}`,
+                `failed ${heartbeat.sync.failedEventCount ?? 0}`,
+              ].join(" ")
+            : "none",
+        ],
+        [
+          "local read model",
+          localReadModel
+            ? [
+                localReadModel.canSell ? "can sell" : "blocked",
+                formatDebugStatus(localReadModel.syncStatus.state),
+                `events ${localReadModel.sourceEventCount}`,
+              ].join(" ")
+            : "none",
+        ],
+        [
+          "local drawer",
+          formatDebugRegisterSession(localReadModel?.activeRegisterSession),
+        ],
+        [
+          "local block reason",
+          localReadModel?.saleBlockReason
+            ? formatDebugStatus(localReadModel.saleBlockReason)
+            : "none",
+        ],
+        [
+          "local read sequence",
+          localReadModel
+            ? [
+                `local ${localReadModel.syncStatus.lastLocalSequence}`,
+                `synced ${localReadModel.syncStatus.lastSyncedSequence ?? "n/a"}`,
+                `next ${localReadModel.syncStatus.nextPendingSequence ?? "n/a"}`,
+              ].join(" ")
+            : "none",
+        ],
+        [
+          "repair seed result",
+          repair ? formatDebugStatus(repair.seedResult) : "not observed",
+        ],
+        ["repair observed", formatDebugTimestamp(repair?.observedAt)],
+        [
+          "repair directive drawer",
+          formatDebugRegisterSession(repair?.directive),
+        ],
+        [
+          "repair directive staff",
+          repair?.directive?.staffProfileId
+            ? formatDebugIdentifier(repair.directive.staffProfileId)
+            : "none",
+        ],
+        [
+          "repair directive expected",
+          formatDebugStoredAmount(repair?.directive?.expectedCash),
+        ],
+      ]
+    : [];
   const flow = [
     {
       label: debug.online ? "Connected" : "Offline",
@@ -890,6 +1067,50 @@ function POSLocalDebugStrip({
             </Link>
           </Button>
         </div>
+      ) : null}
+      {runtimeRows.length > 0 ? (
+        <section className="mt-4 rounded-md border border-border bg-background/70 p-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Runtime state
+            </p>
+            <span
+              className={cn(
+                "inline-flex h-6 items-center rounded-full border px-2 font-medium",
+                localReadModel?.canSell
+                  ? "border-success/25 bg-success/10 text-success"
+                  : "border-warning/30 bg-warning/15 text-warning",
+              )}
+            >
+              {localReadModel?.canSell ? "local sale ready" : "local gate active"}
+            </span>
+            <span
+              className={cn(
+                "inline-flex h-6 items-center rounded-full border px-2 font-medium",
+                repair?.seedResult === "seeded"
+                  ? "border-success/25 bg-success/10 text-success"
+                  : repair?.seedResult === "gateway_rejected" ||
+                      repair?.seedResult === "missing_staff_identity"
+                    ? "border-warning/30 bg-warning/15 text-warning"
+                    : "border-border bg-muted/30 text-muted-foreground",
+              )}
+            >
+              repair {repair ? formatDebugStatus(repair.seedResult) : "not observed"}
+            </span>
+          </div>
+          <dl className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {runtimeRows.map(([label, value]) => (
+              <div key={label} className="min-w-0">
+                <dt className="uppercase tracking-wide text-muted-foreground">
+                  {label}
+                </dt>
+                <dd className="break-words font-mono text-foreground">
+                  {value}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </section>
       ) : null}
       <dl className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
         {rows.map(([label, value]) => (

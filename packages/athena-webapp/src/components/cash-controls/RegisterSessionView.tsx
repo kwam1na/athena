@@ -261,8 +261,10 @@ type RegisterCloseoutCommandResult =
 
 type ResolveSyncReviewArgs = {
   actorStaffProfileId: string;
+  approvalProofId?: string;
   decision: "approved" | "rejected";
   registerSessionId: string;
+  requestedByStaffProfileId?: string;
   reviewConflictIds?: string[];
 };
 
@@ -283,6 +285,7 @@ type StaffAuthenticationCommandResult =
 
 type CloseoutApprovalAuthenticationResult = StaffAuthenticationResult & {
   approvalProofId?: string;
+  requestedByStaffProfileId?: string;
 };
 
 type CloseoutApprovalAuthenticationCommandResult =
@@ -401,6 +404,9 @@ function isManagerStaff(staff: StaffAuthenticationResult) {
 function buildDepositSubmissionKey(registerSessionId: string) {
   return `register-session-deposit-${registerSessionId}-${Date.now().toString(36)}`;
 }
+
+const REGISTER_SESSION_SYNC_REVIEW_APPROVAL_ACTION_KEY =
+  "cash_controls.register_session.resolve_sync_review";
 
 function formatCurrency(currency: string, amount?: number | null) {
   if (amount === undefined || amount === null) {
@@ -2859,8 +2865,11 @@ export function RegisterSessionViewContent({
       try {
         const commandResult = await onResolveSyncReview({
           actorStaffProfileId: result.staffProfileId,
+          approvalProofId: result.approvalProofId,
           decision: intent.decision,
           registerSessionId: intent.registerSessionId,
+          requestedByStaffProfileId:
+            result.requestedByStaffProfileId ?? actorStaffProfileId,
           reviewConflictIds: intent.reviewConflictIds,
         });
 
@@ -3290,6 +3299,10 @@ export function RegisterSessionViewContent({
       hasSaleReview:
         getSyncReviewSaleSummaries(visibleSyncReviewItems).length > 0,
     });
+    const saleReviewConflictIds = visibleSyncReviewItems
+      .filter((item) => item.sale)
+      .map((item) => item.id)
+      .filter((id): id is string => Boolean(id));
     const visibleReviewConflictIds = visibleSyncReviewItems
       .map((item) => item.id)
       .filter((id): id is string => Boolean(id));
@@ -3305,6 +3318,8 @@ export function RegisterSessionViewContent({
         options.reviewConflictIds ??
         (isRegisterCloseoutSyncReview && pendingCloseoutReviewItem?.id
           ? [pendingCloseoutReviewItem.id]
+          : saleReviewConflictIds.length > 0
+            ? saleReviewConflictIds
           : visibleReviewConflictIds.length > 0
             ? visibleReviewConflictIds
             : undefined),
@@ -3650,6 +3665,43 @@ export function RegisterSessionViewContent({
             : "Staff credentials confirmed";
         }}
         onAuthenticate={(args) => {
+          if (
+            closeoutStaffAuthIntent?.kind === "sync_review" &&
+            onAuthenticateForApproval &&
+            storeId
+          ) {
+            return onAuthenticateForApproval({
+              actionKey: REGISTER_SESSION_SYNC_REVIEW_APPROVAL_ACTION_KEY,
+              pinHash: args.pinHash,
+              requiredRole: "manager",
+              requestedByStaffProfileId: actorStaffProfileId as
+                | Id<"staffProfile">
+                | undefined,
+              storeId: storeId as Id<"store">,
+              subject: {
+                id: closeoutStaffAuthIntent.registerSessionId,
+                label: registerSession?.registerNumber ?? undefined,
+                type: "register_session",
+              },
+              username: args.username,
+            }).then((result) => {
+              if (result.kind !== "ok") {
+                return result;
+              }
+
+              return {
+                kind: "ok" as const,
+                data: {
+                  approvalProofId: result.data.approvalProofId,
+                  requestedByStaffProfileId:
+                    result.data.requestedByStaffProfileId,
+                  staffProfile: {},
+                  staffProfileId: result.data.approvedByStaffProfileId,
+                },
+              };
+            });
+          }
+
           if (
             closeoutStaffAuthIntent?.kind === "review" &&
             onAuthenticateCloseoutReviewApproval
@@ -5093,8 +5145,12 @@ export function RegisterSessionView() {
     const result = await runCommand(() =>
       resolveRegisterSessionSyncReview({
         actorStaffProfileId: args.actorStaffProfileId as Id<"staffProfile">,
+        approvalProofId: args.approvalProofId as Id<"approvalProof"> | undefined,
         decision: args.decision,
         registerSessionId: args.registerSessionId as Id<"registerSession">,
+        requestedByStaffProfileId: args.requestedByStaffProfileId as
+          | Id<"staffProfile">
+          | undefined,
         reviewConflictIds: args.reviewConflictIds,
         storeId: activeStore._id,
       }),

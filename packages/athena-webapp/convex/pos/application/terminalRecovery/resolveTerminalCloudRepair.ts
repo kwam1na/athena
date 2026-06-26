@@ -6,18 +6,11 @@ import {
   type CommandResult,
 } from "../../../../shared/commandResult";
 import {
-  canReuseCloudRegisterSessionForLocalOpen as canReuseCloudRegisterSessionForLocalOpenPolicy,
-  canSupersedeReviewedRegisterSessionForLocalOpen as canSupersedeReviewedRegisterSessionForLocalOpenPolicy,
-  isRegisterCloseoutReviewConflict,
-} from "../../../../shared/registerSessionLifecyclePolicy";
+  canProjectRegisterOpenForTerminalCloudRepair,
+} from "./cloudRepairPolicy";
 import { createConvexLocalSyncRepository } from "../../infrastructure/repositories/localSyncRepository";
 import { parseStoredLocalSyncEvent } from "../sync/ingestLocalEvents";
 import { projectLocalSyncEvent } from "../sync/projectLocalEvents";
-import type {
-  LocalSyncRegisterReviewConflictFact,
-  ParsedPosLocalSyncEventInput,
-  SyncProjectionRepository,
-} from "../sync/types";
 import {
   buildTerminalCloudRepairPreview,
   classifyTerminalCloudRepairConflict,
@@ -119,7 +112,7 @@ export async function resolveTerminalCloudRepair(
       });
     }
     if (
-      !(await canRepairProjectRegisterOpen(localSyncRepository, {
+      !(await canProjectRegisterOpenForTerminalCloudRepair(localSyncRepository, {
         event: parsed.event,
         now: sourceEvent.acceptedAt ?? args.now,
         storeId: args.storeId,
@@ -204,134 +197,4 @@ function selectLatestSafeDuplicateOpenConflict(
       right.sequence - left.sequence ||
       String(right.conflictId).localeCompare(String(left.conflictId)),
   )[0];
-}
-
-async function canRepairProjectRegisterOpen(
-  repository: SyncProjectionRepository,
-  args: {
-    event: ParsedPosLocalSyncEventInput;
-    now: number;
-    storeId: Parameters<SyncProjectionRepository["getStore"]>[0];
-    terminalId: Parameters<SyncProjectionRepository["getTerminal"]>[0];
-  },
-) {
-  if (args.event.eventType !== "register_opened") return false;
-
-  const terminal = await repository.getTerminal(args.terminalId);
-  const staff = await repository.getStaffProfile(args.event.staffProfileId);
-  const terminalRegisterNumber = normalizeRepairString(terminal?.registerNumber);
-  const payloadRegisterNumber = normalizeRepairString(args.event.payload.registerNumber);
-  if (
-    !terminal ||
-    terminal.storeId !== args.storeId ||
-    terminal.status !== "active" ||
-    !terminalRegisterNumber ||
-    (payloadRegisterNumber && payloadRegisterNumber !== terminalRegisterNumber)
-  ) {
-    return false;
-  }
-
-  const hasActiveOpenRole = staff
-    ? await repository.hasActivePosRole({
-        staffProfileId: args.event.staffProfileId,
-        storeId: args.storeId,
-        allowedRoles: ["cashier", "manager"],
-      })
-    : false;
-  if (
-    !staff ||
-    staff.storeId !== args.storeId ||
-    staff.status !== "active" ||
-    !hasActiveOpenRole
-  ) {
-    return false;
-  }
-
-  const directRegisterSessionId = repository.normalizeCloudId(
-    "registerSession",
-    args.event.localRegisterSessionId,
-  );
-  if (directRegisterSessionId) {
-    const registerSession = await repository.getRegisterSession(directRegisterSessionId);
-    return canReuseCloudRegisterSessionForLocalOpenPolicy({
-      hasOpenRegisterCloseoutReview: false,
-      registerSession,
-      storeId: args.storeId,
-      terminalId: args.terminalId,
-    });
-  }
-
-  const blockingRegisterSession = await repository.findBlockingRegisterSession({
-    storeId: args.storeId,
-    terminalId: args.terminalId,
-    registerNumber: terminalRegisterNumber,
-  });
-  if (!blockingRegisterSession) return true;
-
-  const reviewState = await getRepairOpenRegisterCloseoutReviewState(repository, {
-    registerSessionId: blockingRegisterSession._id,
-    storeId: args.storeId,
-    terminalId: args.terminalId,
-  });
-
-  return canSupersedeReviewedRegisterSessionForLocalOpenPolicy({
-    hasOpenRegisterCloseoutReview: reviewState.hasOpenRegisterCloseoutReview,
-    replacementLocalRegisterSessionId: args.event.localRegisterSessionId,
-    replacementSequence: args.event.sequence,
-    registerSession: blockingRegisterSession,
-    reviewSequence: reviewState.latestReviewSequence ?? null,
-    storeId: args.storeId,
-    terminalId: args.terminalId,
-  });
-}
-
-async function getRepairOpenRegisterCloseoutReviewState(
-  repository: SyncProjectionRepository,
-  args: {
-    registerSessionId: Parameters<
-      SyncProjectionRepository["listOpenRegisterReviewConflictFacts"]
-    >[0]["registerSessionId"];
-    storeId: Parameters<SyncProjectionRepository["getStore"]>[0];
-    terminalId: Parameters<SyncProjectionRepository["getTerminal"]>[0];
-  },
-) {
-  const conflicts = (
-    await repository.listOpenRegisterReviewConflictFacts(args)
-  )
-    .filter((fact) =>
-      repairFactMatchesRegisterSessionCloseoutReview(fact, args.registerSessionId),
-    )
-    .map((fact) => fact.conflict);
-
-  return {
-    hasOpenRegisterCloseoutReview: conflicts.length > 0,
-    latestReviewSequence: conflicts.reduce<number | undefined>(
-      (latest, conflict) =>
-        latest === undefined ? conflict.sequence : Math.max(latest, conflict.sequence),
-      undefined,
-    ),
-  };
-}
-
-function repairFactMatchesRegisterSessionCloseoutReview(
-  fact: LocalSyncRegisterReviewConflictFact,
-  registerSessionId: Parameters<
-    SyncProjectionRepository["listOpenRegisterReviewConflictFacts"]
-  >[0]["registerSessionId"],
-) {
-  if (!isRegisterCloseoutReviewConflict(fact.conflict)) return false;
-  if (
-    fact.registerSessionMapping?.cloudTable === "registerSession" &&
-    fact.registerSessionMapping.cloudId === registerSessionId
-  ) {
-    return true;
-  }
-
-  return fact.directRegisterSession?._id === registerSessionId;
-}
-
-function normalizeRepairString(value: unknown) {
-  return typeof value === "string" && value.trim().length > 0
-    ? value.trim()
-    : undefined;
 }

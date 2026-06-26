@@ -319,16 +319,16 @@ export async function hasActiveRegisterSessionForTerminal(
     terminalId: Id<"posTerminal">;
   },
 ) {
-  const latestByTerminal = await ctx.db
+  const recentByTerminal = await ctx.db
     .query("registerSession")
     .withIndex("by_terminalId", (q) => q.eq("terminalId", args.terminalId))
     .order("desc")
-    .first();
+    .take(25);
 
   if (
-    latestByTerminal?.storeId === args.storeId &&
-    latestByTerminal.terminalId === args.terminalId &&
-    isPosUsableRegisterSessionStatus(latestByTerminal.status)
+    recentByTerminal.some((session) =>
+      isUsableRegisterSessionForTerminal(session, args),
+    )
   ) {
     return true;
   }
@@ -338,17 +338,35 @@ export async function hasActiveRegisterSessionForTerminal(
     return false;
   }
 
-  const latestByRegisterNumber = await ctx.db
+  const recentByRegisterNumber = await ctx.db
     .query("registerSession")
     .withIndex("by_storeId_registerNumber", (q) =>
       q.eq("storeId", args.storeId).eq("registerNumber", registerNumber),
     )
     .order("desc")
-    .first();
+    .take(25);
 
+  return recentByRegisterNumber.some((session) =>
+    isUsableRegisterSessionForTerminal(session, args),
+  );
+}
+
+function isUsableRegisterSessionForTerminal(
+  session: Doc<"registerSession">,
+  args: {
+    registerNumber?: string | null;
+    storeId: Id<"store">;
+    terminalId: Id<"posTerminal">;
+  },
+) {
+  const registerNumber = args.registerNumber?.trim();
   return (
-    latestByRegisterNumber?.terminalId === args.terminalId &&
-    isPosUsableRegisterSessionStatus(latestByRegisterNumber.status)
+    session.storeId === args.storeId &&
+    session.terminalId === args.terminalId &&
+    (!registerNumber ||
+      !session.registerNumber ||
+      session.registerNumber === registerNumber) &&
+    isPosUsableRegisterSessionStatus(session.status)
   );
 }
 

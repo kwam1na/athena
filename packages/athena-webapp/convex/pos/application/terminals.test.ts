@@ -436,6 +436,40 @@ describe("submitTerminalRuntimeStatus", () => {
     );
   });
 
+  it("preserves closeout-rejected active register status in runtime status", async () => {
+    vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
+    vi.mocked(upsertLatestRuntimeStatus).mockResolvedValue(
+      "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
+    );
+
+    await submitTerminalRuntimeStatus(
+      { db: null as never } as never,
+      {
+        storeId: "store-1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+        status: {
+          ...buildRuntimeStatus(),
+          activeRegisterSession: {
+            cloudRegisterSessionId: "cloud-register-1",
+            localRegisterSessionId: "local-register-1",
+            observedAt: 112,
+            status: "closeout_rejected",
+          },
+        } as never,
+      },
+    );
+
+    expect(vi.mocked(upsertLatestRuntimeStatus)).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        activeRegisterSession: expect.objectContaining({
+          localRegisterSessionId: "local-register-1",
+          status: "closeout_rejected",
+        }),
+      }),
+    );
+  });
+
   it("persists support-safe app-session recovery status in runtime status", async () => {
     vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
     vi.mocked(upsertLatestRuntimeStatus).mockResolvedValue(
@@ -516,6 +550,76 @@ describe("submitTerminalRuntimeStatus", () => {
           reason: "cloud_closed",
           registerNumber: "8",
           status: "blocked",
+        },
+      }),
+    });
+  });
+
+  it("returns an active register session directive when cloud has a usable drawer but runtime does not", async () => {
+    vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
+    vi.mocked(upsertLatestRuntimeStatus).mockResolvedValue(
+      "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
+    );
+    const registerSessions = [
+      {
+        _creationTime: 300,
+        _id: "cloud-register-closed",
+        expectedCash: 0,
+        openedAt: 300,
+        openingFloat: 0,
+        registerNumber: "A1",
+        status: "closed",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      },
+      {
+        _creationTime: 200,
+        _id: "cloud-register-1",
+        expectedCash: 13_000,
+        openedAt: 100,
+        openingFloat: 13_000,
+        openedByStaffProfileId: "staff-1",
+        registerNumber: "A1",
+        status: "active",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      },
+    ];
+    const db = {
+      query: vi.fn(() => buildTerminalHealthQuery(registerSessions)),
+    };
+
+    const result = await submitTerminalRuntimeStatus(
+      { db } as never,
+      {
+        storeId: "store-1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+        status: {
+          ...buildRuntimeStatus(),
+          activeRegisterSession: undefined,
+          localStore: {
+            available: true,
+            schemaVersion: 1,
+            terminalSeedReady: true,
+          },
+        },
+      },
+    );
+
+    expect(db.query).toHaveBeenCalledWith("registerSession");
+    expect(result).toEqual({
+      kind: "ok",
+      data: expect.objectContaining({
+        activeRegisterSessionDirective: {
+          cloudRegisterSessionId: "cloud-register-1",
+          expectedCash: 13_000,
+          localRegisterSessionId: "cloud-register-1",
+          observedAt: 200,
+          openedAt: 100,
+          openingFloat: 13_000,
+          registerNumber: "A1",
+          staffProfileId: "staff-1",
+          status: "active",
         },
       }),
     });
@@ -1883,7 +1987,30 @@ describe("terminal health summaries", () => {
     );
 
     const result = await getTerminalHealthSummary(
-      { db: null as never } as never,
+      {
+        db: buildTerminalHealthDb({
+          posTerminal: [existingTerminal],
+          registerSession: [],
+          staffProfile: [
+            {
+              _id: "staff-1" as Id<"staffProfile">,
+              _creationTime: 100,
+              status: "active",
+              storeId: "store-1" as Id<"store">,
+            } as Doc<"staffProfile">,
+          ],
+          staffRoleAssignment: [
+            {
+              _id: "role-1",
+              _creationTime: 100,
+              role: "cashier",
+              staffProfileId: "staff-1",
+              status: "active",
+              storeId: "store-1",
+            },
+          ],
+        }),
+      } as never,
       {
         storeId: "store-1" as Id<"store">,
         terminalId: "terminal-1" as Id<"posTerminal">,
@@ -2016,8 +2143,54 @@ function buildSyncEvent(
       openingFloat: 100,
       registerNumber: "A1",
     },
+    sequence: 1,
     status: "conflicted",
     submittedAt: 110,
     ...overrides,
   } as Doc<"posLocalSyncEvent">;
+}
+
+function buildTerminalHealthDb(
+  records: Partial<Record<string, Array<Record<string, unknown>>>>,
+) {
+  return {
+    get: vi.fn(async (tableName: string, id: string) => {
+      return records[tableName]?.find((record) => record._id === id) ?? null;
+    }),
+    normalizeId: vi.fn((tableName: string, value: string) => {
+      return records[tableName]?.some((record) => record._id === value)
+        ? value
+        : null;
+    }),
+    query: vi.fn((tableName: string) => buildTerminalHealthQuery(records[tableName] ?? [])),
+  };
+}
+
+function buildTerminalHealthQuery(records: Array<Record<string, unknown>>) {
+  let currentRecords = [...records];
+  const chain = {
+    first: vi.fn(async () => currentRecords[0] ?? null),
+    order: vi.fn((direction: "asc" | "desc") => {
+      currentRecords = [...currentRecords].sort((left, right) => {
+        const leftTime = Number(left._creationTime ?? 0);
+        const rightTime = Number(right._creationTime ?? 0);
+        return direction === "desc" ? rightTime - leftTime : leftTime - rightTime;
+      });
+      return chain;
+    }),
+    take: vi.fn(async (count: number) => currentRecords.slice(0, count)),
+    withIndex: vi.fn((_indexName: string, build: (q: {
+      eq: (field: string, value: unknown) => unknown;
+    }) => unknown) => {
+      const q = {
+        eq: vi.fn((field: string, value: unknown) => {
+          currentRecords = currentRecords.filter((record) => record[field] === value);
+          return q;
+        }),
+      };
+      build(q);
+      return chain;
+    }),
+  };
+  return chain;
 }

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { Doc, Id } from "../../../_generated/dataModel";
 import type { QueryCtx } from "../../../_generated/server";
+import { REGISTER_CLOSEOUT_VARIANCE_SYNC_REVIEW_SUMMARY } from "../../../../shared/registerSessionLifecyclePolicy";
 import {
   getTerminalHealthSummary,
   listTerminalHealthSummaries,
@@ -52,6 +53,53 @@ describe("terminal health queries", () => {
     expect(summary?.recoveryPreview?.readiness).toBe("healthy_idle");
     expect(summary?.recoveryPreview?.terminalActions).toEqual([]);
   });
+
+  it.each(["closing", "closeout_rejected"] as const)(
+    "treats a %s cloud drawer authority as ready for replacement",
+    async (status) => {
+      const ctx = buildQueryCtx({
+        posTerminal: [buildTerminal()],
+        posTerminalRuntimeStatus: [
+          buildRuntimeStatus({
+            drawerAuthority: {
+              cloudRegisterSessionId: "register-1",
+              localRegisterSessionId: "local-register-1",
+              observedAt: now - 2_000,
+              reason: "cloud_closed",
+              status: "blocked",
+            },
+            saleAuthority: {
+              observedAt: now - 1_000,
+              status: "ready",
+              transactionMode: "products_and_services",
+            },
+          }),
+        ],
+        registerSession: [
+          buildRegisterSession({
+            _id: "register-1" as Id<"registerSession">,
+            closeoutRecords: [],
+            closedAt: undefined,
+            status,
+          }),
+        ],
+      });
+
+      const summary = await getTerminalHealthSummary(ctx, {
+        now,
+        storeId,
+        terminalId,
+      });
+
+      expect(summary?.health).toBe("online");
+      expect(summary?.runtimeStatus?.drawerAuthority).toBeUndefined();
+      expect(summary?.attentionReasons.map((reason) => reason.type)).not.toContain(
+        "drawer_authority_blocked",
+      );
+      expect(summary?.recoveryPreview?.readiness).toBe("healthy_idle");
+      expect(summary?.recoveryPreview?.terminalActions).toEqual([]);
+    },
+  );
 
   it("includes latest terminal recovery command lifecycle metadata in the health preview", async () => {
     const ctx = buildQueryCtx({
@@ -502,6 +550,107 @@ describe("terminal health queries", () => {
     );
   });
 
+  it("offers cloud repair preview for a replacement open after submitted closeout review", async () => {
+    const duplicateOpenConflict = buildConflict({
+      _id: "duplicate-open-conflict" as Id<"posLocalSyncConflict">,
+      localEventId: "event-open-replacement",
+      localRegisterSessionId: "register-replacement",
+      sequence: 3,
+    });
+    const closeoutVarianceConflict = buildConflict({
+      _id: "closeout-conflict" as Id<"posLocalSyncConflict">,
+      conflictType: "permission",
+      details: {
+        countedCash: 95,
+        expectedCash: 100,
+        variance: -5,
+      },
+      localEventId: "event-register-closed",
+      localRegisterSessionId: "register-prior",
+      sequence: 2,
+      summary: REGISTER_CLOSEOUT_VARIANCE_SYNC_REVIEW_SUMMARY,
+    });
+    const ctx = buildQueryCtx({
+      posLocalSyncConflict: [closeoutVarianceConflict, duplicateOpenConflict],
+      posLocalSyncEvent: [
+        buildEvent({
+          _id: "event-open-replacement-id" as Id<"posLocalSyncEvent">,
+          localEventId: "event-open-replacement",
+          localRegisterSessionId: "register-replacement",
+          sequence: 3,
+        }),
+      ],
+      posTerminal: [buildTerminal({ registerNumber: "A1" })],
+      posTerminalRuntimeStatus: [buildRuntimeStatus()],
+      registerSession: [
+        buildRegisterSession({
+          _id: "register-prior" as Id<"registerSession">,
+          closedAt: undefined,
+          registerNumber: "A1",
+          status: "closing",
+        }),
+      ],
+      staffProfile: [buildStaffProfile()],
+      staffRoleAssignment: [buildStaffRoleAssignment()],
+    });
+
+    const summary = await getTerminalHealthSummary(ctx, {
+      now,
+      storeId,
+      terminalId,
+    });
+
+    expect(summary?.recoveryPreview?.cloudRepair.safeConflictIds).toEqual([
+      duplicateOpenConflict._id,
+    ]);
+    expect(summary?.recoveryPreview?.cloudRepair.skippedConflictIds).toEqual([
+      closeoutVarianceConflict._id,
+    ]);
+  });
+
+  it("does not offer cloud repair preview for duplicate open blocked by an active drawer", async () => {
+    const duplicateOpenConflict = buildConflict({
+      _id: "duplicate-active-open-conflict" as Id<"posLocalSyncConflict">,
+      localEventId: "event-open-replacement",
+      localRegisterSessionId: "register-replacement",
+      sequence: 2,
+    });
+    const ctx = buildQueryCtx({
+      posLocalSyncConflict: [duplicateOpenConflict],
+      posLocalSyncEvent: [
+        buildEvent({
+          _id: "event-open-replacement-id" as Id<"posLocalSyncEvent">,
+          localEventId: "event-open-replacement",
+          localRegisterSessionId: "register-replacement",
+          sequence: 2,
+        }),
+      ],
+      posTerminal: [buildTerminal({ registerNumber: "A1" })],
+      posTerminalRuntimeStatus: [buildRuntimeStatus()],
+      registerSession: [
+        buildRegisterSession({
+          _id: "register-active" as Id<"registerSession">,
+          closedAt: undefined,
+          registerNumber: "A1",
+          status: "active",
+        }),
+      ],
+      staffProfile: [buildStaffProfile()],
+      staffRoleAssignment: [buildStaffRoleAssignment()],
+    });
+
+    const summary = await getTerminalHealthSummary(ctx, {
+      now,
+      storeId,
+      terminalId,
+    });
+
+    expect(summary?.recoveryPreview?.cloudRepair.safeConflictIds).toEqual([]);
+    expect(summary?.recoveryPreview?.cloudRepair.skippedConflictIds).toEqual([
+      duplicateOpenConflict._id,
+    ]);
+  });
+
   it("keeps terminal health roster and detail recovery preview in parity", async () => {
     const ctx = buildQueryCtx({
       posTerminal: [buildTerminal()],
@@ -795,10 +944,13 @@ type TestTable =
   | "posLocalSyncConflict"
   | "posLocalSyncCursor"
   | "posLocalSyncEvent"
+  | "posLocalSyncMapping"
   | "posTerminal"
   | "posTerminalRecoveryCommand"
   | "posTerminalRuntimeStatus"
-  | "registerSession";
+  | "registerSession"
+  | "staffProfile"
+  | "staffRoleAssignment";
 
 function buildQueryCtx(
   records: Partial<Record<TestTable, Array<Record<string, unknown>>>>,
@@ -809,6 +961,9 @@ function buildQueryCtx(
         return Promise.resolve(
           records[table]?.find((record) => record._id === id) ?? null,
         );
+      },
+      normalizeId(table: TestTable, id: string) {
+        return records[table]?.some((record) => record._id === id) ? id : null;
       },
       query(table: TestTable) {
         return buildQuery(records[table] ?? []);
@@ -900,6 +1055,74 @@ function buildRegisterSession(
     terminalId,
     ...overrides,
   };
+}
+
+function buildStaffProfile(
+  overrides: Partial<Doc<"staffProfile">> = {},
+): Doc<"staffProfile"> {
+  return {
+    _id: "staff-1" as Id<"staffProfile">,
+    _creationTime: now - 50_000,
+    status: "active",
+    storeId,
+    ...overrides,
+  } as Doc<"staffProfile">;
+}
+
+function buildStaffRoleAssignment(overrides: Record<string, unknown> = {}) {
+  return {
+    _id: "role-1",
+    _creationTime: now - 50_000,
+    role: "cashier",
+    staffProfileId: "staff-1",
+    status: "active",
+    storeId,
+    ...overrides,
+  };
+}
+
+function buildConflict(
+  overrides: Partial<Doc<"posLocalSyncConflict">> = {},
+): Doc<"posLocalSyncConflict"> {
+  return {
+    _id: "conflict-1" as Id<"posLocalSyncConflict">,
+    _creationTime: now - 20 * 60 * 1000,
+    conflictType: "duplicate_local_id",
+    createdAt: now - 20 * 60 * 1000,
+    details: { reason: "duplicate_register_opened" },
+    localEventId: "event-1",
+    localRegisterSessionId: "register-1",
+    sequence: 1,
+    status: "needs_review",
+    storeId,
+    summary: "Duplicate register-open attempt for an already opened drawer.",
+    terminalId,
+    ...overrides,
+  } as Doc<"posLocalSyncConflict">;
+}
+
+function buildEvent(
+  overrides: Partial<Doc<"posLocalSyncEvent">> = {},
+): Doc<"posLocalSyncEvent"> {
+  return {
+    _id: "event-1-id" as Id<"posLocalSyncEvent">,
+    _creationTime: now - 20 * 60 * 1000,
+    eventType: "register_opened",
+    localEventId: "event-1",
+    localRegisterSessionId: "register-1",
+    occurredAt: now - 20 * 60 * 1000,
+    payload: {
+      openingFloat: 100,
+      registerNumber: "A1",
+    },
+    sequence: 1,
+    staffProfileId: "staff-1" as Id<"staffProfile">,
+    status: "conflicted",
+    storeId,
+    submittedAt: now - 19 * 60 * 1000,
+    terminalId,
+    ...overrides,
+  } as Doc<"posLocalSyncEvent">;
 }
 
 function buildQuery(records: Array<Record<string, unknown>>) {

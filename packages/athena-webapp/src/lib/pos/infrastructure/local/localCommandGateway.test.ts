@@ -1468,6 +1468,77 @@ describe("createLocalCommandGateway", () => {
     await expect(store.listEvents()).resolves.toEqual({ ok: true, value: [] });
   });
 
+  it("allows runtime directive register seeding over stale closeout history", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+    });
+    await appendOpenDrawer(store);
+    await store.appendEvent({
+      type: "register.closeout_started",
+      terminalId: "terminal-1",
+      storeId: "store-1",
+      registerNumber: "1",
+      localRegisterSessionId: "drawer-1",
+      staffProfileId: "staff-1",
+      payload: { countedCash: 100 },
+    });
+    const gateway = createLocalCommandGateway({
+      allowExplicitRegisterSessionWithoutProjection: true,
+      allowRegisterSessionSeedFromRuntimeDirective: true,
+      store,
+    });
+
+    await expect(
+      gateway.seedRegisterSession({
+        terminalId: "terminal-1",
+        storeId: "store-1",
+        registerNumber: "1",
+        localRegisterSessionId: "cloud-drawer-1",
+        staffProfileId: "staff-1",
+        openingFloat: 100,
+        expectedCash: 100,
+        runtimeDirectiveRepair: true,
+        status: "active",
+      }),
+    ).resolves.toBe(true);
+
+    await expect(store.listEvents()).resolves.toMatchObject({
+      ok: true,
+      value: expect.arrayContaining([
+        expect.objectContaining({
+          localRegisterSessionId: "cloud-drawer-1",
+          type: "register.opened",
+        }),
+      ]),
+    });
+  });
+
+  it("rejects runtime directive register seeding when a different local drawer is already operable", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+    });
+    await appendOpenDrawer(store);
+    const gateway = createLocalCommandGateway({
+      allowExplicitRegisterSessionWithoutProjection: true,
+      allowRegisterSessionSeedFromRuntimeDirective: true,
+      store,
+    });
+
+    await expect(
+      gateway.seedRegisterSession({
+        terminalId: "terminal-1",
+        storeId: "store-1",
+        registerNumber: "1",
+        localRegisterSessionId: "cloud-drawer-1",
+        staffProfileId: "staff-1",
+        openingFloat: 100,
+        expectedCash: 100,
+        runtimeDirectiveRepair: true,
+        status: "active",
+      }),
+    ).resolves.toBe(false);
+  });
+
   it("blocks explicit sale start when drawer authority is blocked before projection", async () => {
     const store = createPosLocalStore({
       adapter: createMemoryPosLocalStorageAdapter(),

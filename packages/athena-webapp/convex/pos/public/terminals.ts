@@ -145,6 +145,19 @@ const runtimeStatusInputValidator = v.object({
 });
 
 const runtimeStatusWriteResultValidator = v.object({
+  activeRegisterSessionDirective: v.optional(
+    v.object({
+      cloudRegisterSessionId: v.string(),
+      expectedCash: v.number(),
+      localRegisterSessionId: v.string(),
+      observedAt: v.number(),
+      openedAt: v.number(),
+      openingFloat: v.number(),
+      registerNumber: v.optional(v.string()),
+      staffProfileId: v.optional(v.id("staffProfile")),
+      status: v.literal("active"),
+    }),
+  ),
   drawerAuthorityDirective: v.optional(
     v.object({
       cloudRegisterSessionId: v.optional(v.string()),

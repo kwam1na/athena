@@ -17,6 +17,7 @@ import {
   rejectRegisterSessionCloseoutWithCtx,
 } from "../operations/registerSessions";
 import { recordRegisterSessionTraceBestEffort } from "../operations/registerSessionTracing";
+import { consumeApprovalProofWithCtx } from "../operations/approvalProofs";
 import { toPesewas } from "../lib/currency";
 import {
   listCompletedTransactions,
@@ -52,6 +53,8 @@ export { listOpenLocalSyncConflictsByRegisterSession } from "../pos/application/
 
 const CASH_DEPOSIT_ALLOCATION_TYPE = "cash_deposit";
 const CASH_DEPOSIT_SUBJECT_TYPE = "register_cash_deposit";
+const REGISTER_SESSION_SYNC_REVIEW_APPROVAL_ACTION_KEY =
+  "cash_controls.register_session.resolve_sync_review";
 const RECENT_DEPOSIT_LIMIT = 10;
 const SESSION_LIMIT = 100;
 const STAFF_ROLE_LOOKUP_LIMIT = 20;
@@ -400,11 +403,16 @@ async function getCompletedTransactionForRegisterMappingRepair(
     syncEvent: StoredLocalSyncEvent;
     terminalId: Id<"posTerminal">;
   },
-) {
+): Promise<
+  | { kind: "matched"; transaction: Doc<"posTransaction"> }
+  | { kind: "unprojected" }
+  | { kind: "mismatch" }
+> {
   const payload = recordDetail(args.syncEvent.payload) ?? {};
   const localTransactionId =
     stringDetail(args.conflict.details, "localTransactionId") ??
     stringDetail(payload, "localTransactionId");
+  let sawTransactionMapping = false;
 
   if (localTransactionId) {
     const transactionMapping = await localSyncRepository.findMapping({
@@ -414,6 +422,7 @@ async function getCompletedTransactionForRegisterMappingRepair(
       localIdKind: "transaction",
       localId: localTransactionId,
     });
+    sawTransactionMapping = Boolean(transactionMapping);
     if (transactionMapping?.cloudTable === "posTransaction") {
       const transaction = await ctx.db.get(
         "posTransaction",
@@ -425,8 +434,9 @@ async function getCompletedTransactionForRegisterMappingRepair(
         transaction.terminalId === args.terminalId &&
         transaction.registerSessionId === args.registerSessionId
       ) {
-        return transaction;
+        return { kind: "matched", transaction };
       }
+      return { kind: "mismatch" };
     }
   }
 
@@ -439,7 +449,7 @@ async function getCompletedTransactionForRegisterMappingRepair(
     ].filter((value): value is string => Boolean(value)),
   );
   if (receiptNumbers.size === 0) {
-    return null;
+    return { kind: "unprojected" };
   }
 
   const totals = recordDetail(payload.totals);
@@ -463,7 +473,11 @@ async function getCompletedTransactionForRegisterMappingRepair(
     return total === null || transaction.total === total;
   });
 
-  return matches.length === 1 ? matches[0] : null;
+  if (matches.length === 1) {
+    return { kind: "matched", transaction: matches[0] };
+  }
+
+  return { kind: sawTransactionMapping ? "mismatch" : "unprojected" };
 }
 
 async function salePrecedesLocalCloseoutIfPresent(
@@ -1496,8 +1510,10 @@ export const recordRegisterSessionDeposit = mutation({
 export const resolveRegisterSessionSyncReview = mutation({
   args: {
     actorStaffProfileId: v.optional(v.id("staffProfile")),
+    approvalProofId: v.optional(v.id("approvalProof")),
     decision: v.optional(v.union(v.literal("approved"), v.literal("rejected"))),
     registerSessionId: v.id("registerSession"),
+    requestedByStaffProfileId: v.optional(v.id("staffProfile")),
     reviewConflictIds: v.optional(v.array(v.string())),
     storeId: v.id("store"),
   },
@@ -1531,7 +1547,26 @@ export const resolveRegisterSessionSyncReview = mutation({
           "Automatic sync repair can only apply eligible register activity.",
       });
     }
-    if (args.actorStaffProfileId) {
+    if (args.approvalProofId) {
+      const approvalProof = await consumeApprovalProofWithCtx(ctx, {
+        actionKey: REGISTER_SESSION_SYNC_REVIEW_APPROVAL_ACTION_KEY,
+        approvalProofId: args.approvalProofId,
+        requestedByStaffProfileId: args.requestedByStaffProfileId,
+        requiredRole: "manager",
+        storeId: args.storeId,
+        subject: {
+          id: args.registerSessionId,
+          label: registerSession.registerNumber,
+          type: "register_session",
+        },
+      });
+
+      if (approvalProof.kind !== "ok") {
+        return approvalProof;
+      }
+
+      reviewActorStaffProfileId = approvalProof.data.approvedByStaffProfileId;
+    } else if (args.actorStaffProfileId) {
       try {
         reviewActorStaffProfileId = await resolveDepositActorStaffProfileId(ctx, {
           athenaUserId: athenaUser._id,
@@ -1832,7 +1867,7 @@ export const resolveRegisterSessionSyncReview = mutation({
               terminalId,
             },
           );
-        if (!completedTransaction) {
+        if (completedTransaction.kind === "mismatch") {
           return userError({
             code: "precondition_failed",
             message:
@@ -1868,17 +1903,26 @@ export const resolveRegisterSessionSyncReview = mutation({
               !requestedConflictIds.has(candidate._id) &&
               !requestedConflictIds.has(candidate.localEventId),
           );
-        if (!hasUnselectedOpenConflictForEvent) {
-          await localSyncRepository.patchEvent(syncEvent._id, {
-            status: "projected",
-            projectedAt: resolvedAt,
-          });
+        if (completedTransaction.kind === "matched") {
+          if (!hasUnselectedOpenConflictForEvent) {
+            await localSyncRepository.patchEvent(syncEvent._id, {
+              status: "projected",
+              projectedAt: resolvedAt,
+            });
+          }
+          if (hasConflictRecord) {
+            resolvedConflictIds.add(conflict._id as Id<"posLocalSyncConflict">);
+          }
+          projectedTransactionIds.push(completedTransaction.transaction._id);
+          continue;
         }
-        if (hasConflictRecord) {
-          resolvedConflictIds.add(conflict._id as Id<"posLocalSyncConflict">);
+
+        if (hasUnselectedOpenConflictForEvent) {
+          if (hasConflictRecord) {
+            resolvedConflictIds.add(conflict._id as Id<"posLocalSyncConflict">);
+          }
+          continue;
         }
-        projectedTransactionIds.push(completedTransaction._id);
-        continue;
       }
 
       if (isAutomaticResolution && !shouldApplyProoflessStaffAccessEvent) {
@@ -1892,7 +1936,8 @@ export const resolveRegisterSessionSyncReview = mutation({
       if (
         !shouldApplyReviewedSale &&
         !shouldApplyReviewedCloseout &&
-        !shouldApplyProoflessStaffAccessEvent
+        !shouldApplyProoflessStaffAccessEvent &&
+        !shouldRepairMissingRegisterSessionMapping
       ) {
         if (
           syncEvent.eventType === "register_closed" &&
@@ -1942,6 +1987,8 @@ export const resolveRegisterSessionSyncReview = mutation({
         !parsedEvent.ok ||
         (shouldApplyReviewedSale &&
           parsedEvent.event.eventType !== "sale_completed") ||
+        (shouldRepairMissingRegisterSessionMapping &&
+          parsedEvent.event.eventType !== "sale_completed") ||
         (shouldApplyProoflessStaffAccessEvent &&
           parsedEvent.event.eventType !== "register_opened" &&
           parsedEvent.event.eventType !== "sale_completed") ||
@@ -1964,6 +2011,8 @@ export const resolveRegisterSessionSyncReview = mutation({
         now: resolvedAt,
         options: {
           allowClosedRegisterSaleProjection: true,
+          allowReviewedClosingRegisterSaleProjection:
+            shouldRepairMissingRegisterSessionMapping,
           applyExpectedTotalForReviewedNonCashOverpayment:
             shouldApplyManagerOverride || shouldApplyReviewedSale,
           allowReviewedInventorySaleProjection:
@@ -2096,6 +2145,9 @@ export const resolveRegisterSessionSyncReview = mutation({
                 ? "Applied reviewed synced register sale."
                 : `Applied ${projectedTransactionIds.length} reviewed synced register sales.`,
       metadata: {
+        ...(args.approvalProofId
+          ? { approvalProofId: args.approvalProofId }
+          : {}),
         conflictIds: conflicts.map((conflict) => conflict._id),
         conflictTypes: conflicts.map((conflict) => conflict.conflictType),
         decision,

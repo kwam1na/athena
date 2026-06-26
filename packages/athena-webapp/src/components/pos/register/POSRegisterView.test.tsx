@@ -823,6 +823,77 @@ describe("POSRegisterView", () => {
         localStaffAuthorityStatus: "ready",
         localEntryStatus: "ready",
         online: true,
+        runtimeState: {
+          heartbeat: {
+            activeRegisterSession: {
+              cloudRegisterSessionId: "cloud-register-1",
+              localRegisterSessionId: "cloud-register-1",
+              observedAt: Date.UTC(2026, 4, 15, 12, 34, 59),
+              registerNumber: "8",
+              status: "active",
+            },
+            drawerAuthority: {
+              cloudRegisterSessionId: "cloud-register-1",
+              localRegisterSessionId: "cloud-register-1",
+              reason: "cloud_active",
+              status: "active",
+            },
+            localStore: {
+              available: true,
+              schemaVersion: 1,
+              terminalSeedReady: true,
+            },
+            reportedAt: Date.UTC(2026, 4, 15, 12, 35, 2),
+            saleAuthority: {
+              staffProfileId: "staff-1",
+              status: "ready",
+            },
+            source: "runtime",
+            staffAuthority: {
+              staffProfileId: "staff-1",
+              status: "ready",
+            },
+            sync: {
+              failedEventCount: 0,
+              pendingEventCount: 1,
+              reviewEventCount: 2,
+              status: "pending_sync",
+              uploadableEventCount: 1,
+            },
+          },
+          localReadModel: {
+            activeRegisterSession: {
+              cloudRegisterSessionId: "cloud-register-1",
+              expectedCash: 13_000,
+              localRegisterSessionId: "cloud-register-1",
+              registerNumber: "8",
+              status: "active",
+            },
+            canSell: true,
+            sourceEventCount: 4,
+            syncStatus: {
+              lastLocalSequence: 4,
+              lastSyncedSequence: 3,
+              nextPendingSequence: 4,
+              state: "pending_sync",
+            },
+          },
+          repair: {
+            directive: {
+              cloudRegisterSessionId: "cloud-register-1",
+              expectedCash: 13_000,
+              localRegisterSessionId: "cloud-register-1",
+              observedAt: Date.UTC(2026, 4, 15, 12, 35, 1),
+              openedAt: Date.UTC(2026, 4, 15, 12, 0, 0),
+              openingFloat: 13_000,
+              registerNumber: "8",
+              staffProfileId: "staff-1",
+              status: "active",
+            },
+            observedAt: Date.UTC(2026, 4, 15, 12, 35, 3),
+            seedResult: "seeded",
+          },
+        },
         staffSignedIn: true,
         storeId: "store-1",
         syncFlow: {
@@ -952,7 +1023,16 @@ describe("POSRegisterView", () => {
     expect(screen.getByText("oldest 2 next 2")).toBeInTheDocument();
     expect(screen.getByText("scheduler")).toBeInTheDocument();
     expect(screen.getByText("last failure")).toBeInTheDocument();
-    expect(screen.getByText("none")).toBeInTheDocument();
+    expect(screen.getAllByText("none")).not.toHaveLength(0);
+    expect(screen.getByText("Runtime state")).toBeInTheDocument();
+    expect(screen.getByText("heartbeat drawer")).toBeInTheDocument();
+    expect(screen.getByText("local read model")).toBeInTheDocument();
+    expect(screen.getByText("can sell Pending Sync events 4")).toBeInTheDocument();
+    expect(screen.getByText("repair seed result")).toBeInTheDocument();
+    expect(screen.getByText("repair Seeded")).toBeInTheDocument();
+    expect(screen.getByText("repair directive drawer")).toBeInTheDocument();
+    expect(screen.getByText("repair directive expected")).toBeInTheDocument();
+    expect(screen.getByText("13000")).toBeInTheDocument();
 
     pressDebugPanelShortcut();
     expect(
