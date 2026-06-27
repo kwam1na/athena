@@ -2284,13 +2284,6 @@ export function DailyOperationsViewContent({
                 </PageWorkspaceMain>
 
                 <PageWorkspaceRail className="xl:col-start-2 xl:row-span-2 xl:row-start-1">
-                  {!isMobile ? (
-                    <AutomationReviewEvidencePanel
-                      orgUrlSlug={orgUrlSlug}
-                      snapshot={snapshot}
-                      storeUrlSlug={storeUrlSlug}
-                    />
-                  ) : null}
                   <section
                     aria-label="Store-day timeline"
                     className="rounded-lg border border-border bg-surface p-layout-md shadow-surface"
@@ -2328,6 +2321,13 @@ export function DailyOperationsViewContent({
                       </Button>
                     ) : null}
                   </section>
+                  {!isMobile ? (
+                    <AutomationReviewEvidencePanel
+                      orgUrlSlug={orgUrlSlug}
+                      snapshot={snapshot}
+                      storeUrlSlug={storeUrlSlug}
+                    />
+                  ) : null}
                 </PageWorkspaceRail>
 
                 <PageWorkspaceMain className="xl:col-start-1 xl:row-start-2">

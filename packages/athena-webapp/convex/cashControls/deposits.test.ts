@@ -5483,6 +5483,275 @@ describe("cash control deposits", () => {
     );
   });
 
+  it("includes the target session sync review when the store-level review backlog is capped", async () => {
+    const olderConflicts = Array.from({ length: 500 }, (_, index) => ({
+      _id: `sync_conflict_${index}`,
+      storeId: "store_1",
+      terminalId: "terminal_backlog",
+      localRegisterSessionId: `local-register-${index}`,
+      localEventId: `event_${index}`,
+      sequence: index + 1,
+      conflictType: "permission",
+      status: "needs_review",
+      summary: "Backlogged register activity needs review.",
+      details: {},
+      createdAt: index + 1,
+    }));
+    const ctx = createAuthorizedRegisterDepositCtx({
+      posLocalSyncConflict: [
+        ...olderConflicts,
+        {
+          _id: "sync_conflict_target",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-target",
+          localEventId: "event_target_closeout",
+          sequence: 501,
+          conflictType: "permission",
+          status: "needs_review",
+          summary:
+            "Register closeout variance requires manager review before synced closeout can be applied.",
+          details: {
+            countedCash: 4000,
+            expectedCash: 3000,
+            variance: 1000,
+          },
+          createdAt: 501,
+        },
+      ],
+      posLocalSyncEvent: [
+        {
+          _id: "sync_event_target",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-target",
+          localEventId: "event_target_closeout",
+          sequence: 501,
+          eventType: "register_closed",
+          occurredAt: 501,
+          staffProfileId: "staff_1",
+          payload: { countedCash: 4000 },
+          status: "conflicted",
+          submittedAt: 501,
+        },
+      ],
+      posLocalSyncMapping: [
+        {
+          _id: "sync_mapping_target",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-target",
+          localIdKind: "registerSession",
+          localId: "local-register-target",
+          cloudTable: "registerSession",
+          cloudId: "session_open",
+        },
+      ],
+      registerSession: [
+        {
+          _id: "session_open",
+          countedCash: 4000,
+          expectedCash: 3000,
+          openedAt: 1,
+          openingFloat: 3000,
+          organizationId: "org_1",
+          registerNumber: "1",
+          status: "closing",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          variance: 1000,
+        },
+      ],
+    });
+
+    await expect(
+      getHandler(getRegisterSessionSnapshot)(ctx as never, {
+        registerSessionId: "session_open" as Id<"registerSession">,
+        storeId: "store_1" as Id<"store">,
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        registerSession: expect.objectContaining({
+          localSyncStatus: expect.objectContaining({
+            reconciliationItems: [
+              expect.objectContaining({
+                id: "sync_conflict_target",
+                reviewKind: "register_closeout_variance",
+              }),
+            ],
+            status: "needs_review",
+          }),
+        }),
+      }),
+    );
+  });
+
+  it("applies the target session sync review when the store-level review backlog is capped", async () => {
+    const olderConflicts = Array.from({ length: 500 }, (_, index) => ({
+      _id: `sync_conflict_${index}`,
+      storeId: "store_1",
+      terminalId: "terminal_backlog",
+      localRegisterSessionId: `local-register-${index}`,
+      localEventId: `event_${index}`,
+      sequence: index + 1,
+      conflictType: "permission",
+      status: "needs_review",
+      summary: "Backlogged register activity needs review.",
+      details: {},
+      createdAt: index + 1,
+    }));
+    const ctx = createAuthorizedRegisterDepositCtx({
+      operationalEvent: [],
+      posLocalSyncConflict: [
+        ...olderConflicts,
+        {
+          _id: "sync_conflict_target",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-target",
+          localEventId: "event_target_closeout",
+          sequence: 501,
+          conflictType: "permission",
+          status: "needs_review",
+          summary:
+            "Register closeout variance requires manager review before synced closeout can be applied.",
+          details: {
+            countedCash: 4000,
+            expectedCash: 3000,
+            variance: 1000,
+          },
+          createdAt: 501,
+        },
+      ],
+      posLocalSyncEvent: [
+        {
+          _id: "sync_event_target",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-target",
+          localEventId: "event_target_closeout",
+          sequence: 501,
+          eventType: "register_closed",
+          occurredAt: 501,
+          staffProfileId: "staff_1",
+          payload: { countedCash: 4000 },
+          status: "conflicted",
+          submittedAt: 501,
+        },
+      ],
+      posLocalSyncMapping: [
+        {
+          _id: "sync_mapping_target",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-target",
+          localIdKind: "registerSession",
+          localId: "local-register-target",
+          cloudTable: "registerSession",
+          cloudId: "session_open",
+        },
+      ],
+      posTerminal: [
+        {
+          _id: "terminal_1",
+          registerNumber: "1",
+          registeredByUserId: "athena_user_1",
+          status: "active",
+          storeId: "store_1",
+        },
+      ],
+      registerSession: [
+        {
+          _id: "session_open",
+          closeoutRecords: [],
+          countedCash: 4000,
+          expectedCash: 3000,
+          openedAt: 1,
+          openingFloat: 3000,
+          organizationId: "org_1",
+          registerNumber: "1",
+          status: "closing",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          variance: 1000,
+        },
+      ],
+      staffProfile: [
+        {
+          _id: "manager_1",
+          linkedUserId: "athena_user_1",
+          organizationId: "org_1",
+          status: "active",
+          storeId: "store_1",
+        },
+        {
+          _id: "staff_1",
+          organizationId: "org_1",
+          status: "active",
+          storeId: "store_1",
+        },
+      ],
+      staffRoleAssignment: [
+        {
+          _id: "role_1",
+          organizationId: "org_1",
+          role: "manager",
+          staffProfileId: "manager_1",
+          status: "active",
+          storeId: "store_1",
+        },
+        {
+          _id: "role_2",
+          organizationId: "org_1",
+          role: "cashier",
+          staffProfileId: "staff_1",
+          status: "active",
+          storeId: "store_1",
+        },
+      ],
+    });
+
+    const result = await getHandler(resolveRegisterSessionSyncReview)(
+      ctx as never,
+      {
+        actorStaffProfileId: "manager_1" as Id<"staffProfile">,
+        registerSessionId: "session_open" as Id<"registerSession">,
+        reviewConflictIds: [
+          "sync_conflict_target" as Id<"posLocalSyncConflict">,
+        ],
+        storeId: "store_1" as Id<"store">,
+      },
+    );
+
+    expect(result).toEqual(
+      ok({
+        action: "resolved",
+        projectedCount: 0,
+        registerSession: expect.objectContaining({
+          _id: "session_open",
+          status: "closed",
+        }),
+        resolvedCount: 1,
+      }),
+    );
+    expect(ctx.tables.get("posLocalSyncEvent")).toEqual([
+      expect.objectContaining({
+        _id: "sync_event_target",
+        projectedAt: expect.any(Number),
+        status: "projected",
+      }),
+    ]);
+    expect(ctx.tables.get("posLocalSyncConflict")).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          _id: "sync_conflict_target",
+          resolvedAt: expect.any(Number),
+          status: "resolved",
+        }),
+      ]),
+    );
+  });
+
   it("sanitizes internal sync metadata from register-session timelines", async () => {
     const ctx = createAuthorizedRegisterDepositCtx({
       operationalEvent: [

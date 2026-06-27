@@ -23,6 +23,16 @@ Rules:
 Reusable implementation learnings live under docs/solutions/.
 Before changing a known bug pattern, search docs/solutions/ for related guidance.
 
+## testing
+
+Athena webapp tests use Vitest. Do not run test files directly with `bun test`; it does not provide Vitest globals such as `vi.hoisted` and can produce false harness failures. For focused webapp tests, run from `packages/athena-webapp` with:
+
+```bash
+bun run test -- path/to/file.test.ts -t "test name"
+```
+
+Use package-relative paths with that command, for example `convex/cashControls/deposits.test.ts`.
+
 ## skills
 
 Athena vendors its agent skill system under `.agents/`.
@@ -38,3 +48,17 @@ Rules:
 
 For in-product copy work, follow [docs/product-copy-tone.md](docs/product-copy-tone.md).
 Keep operator-facing language calm, clear, restrained, and operational, and normalize raw backend wording before it reaches the UI.
+
+<!-- convex-ai-start -->
+
+This project uses [Convex](https://convex.dev) as its backend.
+
+When working on Convex code, **always read
+`convex/_generated/ai/guidelines.md` first** for important guidelines on
+how to correctly use Convex APIs and patterns. The file contains rules that
+override what you may have learned about Convex from training data.
+
+Convex agent skills for common tasks can be installed by running
+`npx convex ai-files install`.
+
+<!-- convex-ai-end -->
