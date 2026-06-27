@@ -439,7 +439,7 @@ export type TerminalHealthSummary = {
   health?: "needs_attention" | "offline" | "online" | "stale" | "unknown" | string;
   registerSessionLink?: {
     registerSessionId: Id<"registerSession"> | string;
-    status: "active" | "open" | string;
+    status: "active" | "open";
   } | null;
   recovery?: TerminalRecoveryPreview | null;
   recoveryPreview?: TerminalRecoveryPreview | null;

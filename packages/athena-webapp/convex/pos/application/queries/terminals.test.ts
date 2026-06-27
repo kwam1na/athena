@@ -846,6 +846,50 @@ describe("terminal health queries", () => {
     expect(summary?.recoveryPreview?.readiness).toBe("drawer_open");
   });
 
+  it("does not report sale-ready when runtime drawer evidence conflicts with closed cloud lifecycle", async () => {
+    const ctx = buildQueryCtx({
+      posTerminal: [buildTerminal()],
+      posTerminalRuntimeStatus: [
+        buildRuntimeStatus({
+          activeRegisterSession: {
+            localRegisterSessionId: "local-register-1",
+            observedAt: now - 1_000,
+            openedAt: now - 20_000,
+            registerNumber: "8",
+            status: "open",
+          },
+          saleAuthority: {
+            observedAt: now - 1_000,
+            status: "ready",
+            transactionMode: "products_and_services",
+          },
+        }),
+      ],
+      registerSession: [
+        buildRegisterSession({
+          _id: "register-closed" as Id<"registerSession">,
+          closedAt: now - 1_000,
+          openedAt: now - 20_000,
+          registerNumber: "8",
+          status: "closed",
+        }),
+      ],
+    });
+
+    const summary = await getTerminalHealthSummary(ctx, {
+      now,
+      storeId,
+      terminalId,
+    });
+
+    expect(summary?.recoveryPreview?.evidence).toEqual(
+      expect.objectContaining({
+        activeRegisterSession: true,
+      }),
+    );
+    expect(summary?.recoveryPreview?.readiness).toBe("drawer_open");
+  });
+
   it("links terminal cards to the active register session for the terminal", async () => {
     const ctx = buildQueryCtx({
       posTerminal: [

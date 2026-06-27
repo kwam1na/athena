@@ -209,6 +209,10 @@ import type * as pos_application_sync_staffProof from "../pos/application/sync/s
 import type * as pos_application_sync_staffProofValidation from "../pos/application/sync/staffProofValidation.js";
 import type * as pos_application_sync_terminalSyncSecret from "../pos/application/sync/terminalSyncSecret.js";
 import type * as pos_application_sync_types from "../pos/application/sync/types.js";
+import type * as pos_application_terminalOperationalState_collectTerminalOperationalFacts from "../pos/application/terminalOperationalState/collectTerminalOperationalFacts.js";
+import type * as pos_application_terminalOperationalState_facts from "../pos/application/terminalOperationalState/facts.js";
+import type * as pos_application_terminalOperationalState_policy from "../pos/application/terminalOperationalState/policy.js";
+import type * as pos_application_terminalOperationalState_types from "../pos/application/terminalOperationalState/types.js";
 import type * as pos_application_terminalRecovery_cloudRepairPolicy from "../pos/application/terminalRecovery/cloudRepairPolicy.js";
 import type * as pos_application_terminalRecovery_resolveTerminalCloudRepair from "../pos/application/terminalRecovery/resolveTerminalCloudRepair.js";
 import type * as pos_application_terminalRecovery_terminalCommandService from "../pos/application/terminalRecovery/terminalCommandService.js";
@@ -216,6 +220,7 @@ import type * as pos_application_terminalRecovery_types from "../pos/application
 import type * as pos_application_terminalRuntime_postRuntimeStatusSideEffects from "../pos/application/terminalRuntime/postRuntimeStatusSideEffects.js";
 import type * as pos_domain_errors from "../pos/domain/errors.js";
 import type * as pos_domain_sessionRules from "../pos/domain/sessionRules.js";
+import type * as pos_domain_terminalSyncEvidence from "../pos/domain/terminalSyncEvidence.js";
 import type * as pos_domain_types from "../pos/domain/types.js";
 import type * as pos_infrastructure_integrations_inventoryHoldGateway from "../pos/infrastructure/integrations/inventoryHoldGateway.js";
 import type * as pos_infrastructure_integrations_paymentAllocationService from "../pos/infrastructure/integrations/paymentAllocationService.js";
@@ -623,6 +628,10 @@ declare const fullApi: ApiFromModules<{
   "pos/application/sync/staffProofValidation": typeof pos_application_sync_staffProofValidation;
   "pos/application/sync/terminalSyncSecret": typeof pos_application_sync_terminalSyncSecret;
   "pos/application/sync/types": typeof pos_application_sync_types;
+  "pos/application/terminalOperationalState/collectTerminalOperationalFacts": typeof pos_application_terminalOperationalState_collectTerminalOperationalFacts;
+  "pos/application/terminalOperationalState/facts": typeof pos_application_terminalOperationalState_facts;
+  "pos/application/terminalOperationalState/policy": typeof pos_application_terminalOperationalState_policy;
+  "pos/application/terminalOperationalState/types": typeof pos_application_terminalOperationalState_types;
   "pos/application/terminalRecovery/cloudRepairPolicy": typeof pos_application_terminalRecovery_cloudRepairPolicy;
   "pos/application/terminalRecovery/resolveTerminalCloudRepair": typeof pos_application_terminalRecovery_resolveTerminalCloudRepair;
   "pos/application/terminalRecovery/terminalCommandService": typeof pos_application_terminalRecovery_terminalCommandService;
@@ -630,6 +639,7 @@ declare const fullApi: ApiFromModules<{
   "pos/application/terminalRuntime/postRuntimeStatusSideEffects": typeof pos_application_terminalRuntime_postRuntimeStatusSideEffects;
   "pos/domain/errors": typeof pos_domain_errors;
   "pos/domain/sessionRules": typeof pos_domain_sessionRules;
+  "pos/domain/terminalSyncEvidence": typeof pos_domain_terminalSyncEvidence;
   "pos/domain/types": typeof pos_domain_types;
   "pos/infrastructure/integrations/inventoryHoldGateway": typeof pos_infrastructure_integrations_inventoryHoldGateway;
   "pos/infrastructure/integrations/paymentAllocationService": typeof pos_infrastructure_integrations_paymentAllocationService;

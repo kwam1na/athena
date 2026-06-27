@@ -433,9 +433,6 @@ const terminalHealthSummaryReturnValidator = v.object({
       status: v.union(
         v.literal("open"),
         v.literal("active"),
-        v.literal("closing"),
-        v.literal("closeout_rejected"),
-        v.literal("closed"),
       ),
     }),
     v.null(),

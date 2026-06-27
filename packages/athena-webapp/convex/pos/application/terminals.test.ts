@@ -16,6 +16,9 @@ import {
   type TerminalRecoveryCommandRepository,
 } from "./terminalRecovery/terminalCommandService";
 import {
+  getActiveRegisterSessionForTerminal,
+  getDrawerAuthorityRegisterSession,
+  getLatestRegisterSessionForTerminal,
   getLatestRuntimeStatusForTerminal,
   getTerminalByFingerprint,
   getTerminalById,
@@ -71,6 +74,9 @@ vi.mock("../infrastructure/repositories/terminalRepository", () => ({
   getTerminalByFingerprint: vi.fn(),
   getTerminalById: vi.fn(),
   getTerminalByStoreIdAndRegisterNumber: vi.fn(),
+  getActiveRegisterSessionForTerminal: vi.fn(),
+  getDrawerAuthorityRegisterSession: vi.fn(),
+  getLatestRegisterSessionForTerminal: vi.fn(),
   getLatestRuntimeStatusForTerminal: vi.fn(),
   getTerminalSyncEvidence: vi.fn(),
   hasActiveRegisterSessionForTerminal: vi.fn(),
@@ -876,6 +882,9 @@ describe("terminal health summaries", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     vi.mocked(resolveTerminalRegisterSessionActionTarget).mockResolvedValue(null);
+    vi.mocked(getActiveRegisterSessionForTerminal).mockResolvedValue(null);
+    vi.mocked(getDrawerAuthorityRegisterSession).mockResolvedValue(null);
+    vi.mocked(getLatestRegisterSessionForTerminal).mockResolvedValue(null);
     vi.mocked(hasActiveRegisterSessionForTerminal).mockResolvedValue(false);
     vi.mocked(listTerminalRecoveryConflictsForRepair).mockResolvedValue([]);
     vi.mocked(getTerminalRecoverySourceEvent).mockResolvedValue(null);
@@ -1848,7 +1857,12 @@ describe("terminal health summaries", () => {
     );
     expect(healthyIdle?.recoveryPreview?.readiness).toBe("healthy_idle");
 
-    vi.mocked(hasActiveRegisterSessionForTerminal).mockResolvedValue(true);
+    vi.mocked(getActiveRegisterSessionForTerminal).mockResolvedValue(
+      buildRegisterSession({
+        _id: "register-1" as Id<"registerSession">,
+        status: "active",
+      }),
+    );
     vi.mocked(getLatestRuntimeStatusForTerminal).mockResolvedValue(
       buildPersistedRuntimeStatus({
         receivedAt: 230,
@@ -2148,6 +2162,25 @@ function buildSyncEvent(
     submittedAt: 110,
     ...overrides,
   } as Doc<"posLocalSyncEvent">;
+}
+
+function buildRegisterSession(
+  overrides: Partial<Doc<"registerSession">> = {},
+): Doc<"registerSession"> {
+  return {
+    _id: "register-1" as Id<"registerSession">,
+    _creationTime: 100,
+    closeoutRecords: [],
+    closedAt: undefined,
+    expectedCash: 0,
+    openedAt: 100,
+    openingFloat: 0,
+    registerNumber: "A1",
+    status: "open",
+    storeId: "store-1" as Id<"store">,
+    terminalId: "terminal-1" as Id<"posTerminal">,
+    ...overrides,
+  };
 }
 
 function buildTerminalHealthDb(
