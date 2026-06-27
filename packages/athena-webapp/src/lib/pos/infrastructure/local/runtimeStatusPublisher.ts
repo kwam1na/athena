@@ -2,6 +2,23 @@ import type { PosTerminalRuntimeStatusPayload } from "./terminalRuntimeStatus";
 
 export const RUNTIME_STATUS_FRESHNESS_PUBLISH_INTERVAL_MS = 30_000;
 
+export function startRuntimeStatusFreshnessHeartbeat(
+  onHeartbeat: () => void,
+  timers: {
+    clearIntervalFn?: typeof clearInterval;
+    setIntervalFn?: typeof setInterval;
+  } = {},
+) {
+  const setIntervalFn = timers.setIntervalFn ?? setInterval;
+  const clearIntervalFn = timers.clearIntervalFn ?? clearInterval;
+  const heartbeatTimer = setIntervalFn(
+    onHeartbeat,
+    RUNTIME_STATUS_FRESHNESS_PUBLISH_INTERVAL_MS,
+  );
+
+  return () => clearIntervalFn(heartbeatTimer);
+}
+
 export type RuntimeCheckInNotReadyReason =
   | "missing_store"
   | "missing_sync_secret"

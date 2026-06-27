@@ -65,6 +65,7 @@ import {
   getRuntimeCheckInNotReadyReason,
   getRuntimeStatusPublishSignature,
   shouldPublishRuntimeStatus,
+  startRuntimeStatusFreshnessHeartbeat,
   withRuntimeCheckInPublishDebug as withCheckInPublishDebug,
 } from "./runtimeStatusPublisher";
 import {
@@ -968,6 +969,16 @@ export function usePosLocalSyncRuntimeStatus(input: {
     api.pos.public.terminals.listTerminalRecoveryCommands,
     recoveryCommandArgs,
   );
+
+  useEffect(() => {
+    if (!storeId || !runtimeStatusTerminalId || !runtimeStatusSyncSecretHash) {
+      return;
+    }
+
+    return startRuntimeStatusFreshnessHeartbeat(() => {
+      setRuntimeStatusObservationToken((current) => current + 1);
+    });
+  }, [runtimeStatusSyncSecretHash, runtimeStatusTerminalId, storeId]);
 
   useEffect(() => {
     const notReadyReason = getRuntimeCheckInNotReadyReason({

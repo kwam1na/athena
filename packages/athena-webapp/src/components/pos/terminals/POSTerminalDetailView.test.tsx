@@ -1367,6 +1367,45 @@ describe("POSTerminalDetailViewContent", () => {
     ).toHaveAttribute("href", "/wigclub/store/osu/operations/open-work");
   });
 
+  it("limits long recovery blocker groups until expanded", () => {
+    const blockers = Array.from({ length: 8 }, (_, index) => ({
+      actionTarget: { type: "open_work" as const },
+      category: "manual_review" as const,
+      id: `manual-review-${index + 1}`,
+      summary: `Manual review summary ${index + 1}`,
+      title: "Manual review required",
+    }));
+
+    render(
+      <POSTerminalDetailViewContent
+        detail={{
+          ...detail,
+          attentionReasons: [],
+          recovery: {
+            blockers,
+            readiness: {
+              status: "needs_manual_review",
+            },
+          },
+        }}
+        isLoading={false}
+        orgUrlSlug="wigclub"
+        storeUrlSlug="osu"
+      />,
+    );
+
+    expect(screen.getByText("Manual review summary 5")).toBeInTheDocument();
+    expect(screen.queryByText("Manual review summary 6")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Show 3 more" }));
+
+    expect(screen.getByText("Manual review summary 8")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Show fewer" }));
+
+    expect(screen.queryByText("Manual review summary 6")).not.toBeInTheDocument();
+  });
+
   it("routes attention reasons to the available action surfaces", () => {
     render(
       <POSTerminalDetailViewContent
@@ -1642,6 +1681,47 @@ describe("POSTerminalDetailViewContent", () => {
     expect(
       screen.getByText("Terminal detail is not available right now"),
     ).toBeInTheDocument();
+  });
+
+  it("limits long conflict review lists until expanded", () => {
+    const conflicts = Array.from({ length: 8 }, (_, index) => ({
+      _id: `conflict-${index + 1}`,
+      conflictType: "inventory_review",
+      createdAt: Date.now() - index * 60_000,
+      localEventId: `local-conflict-${index + 1}`,
+      localRegisterSessionId: "local-session-1",
+      sequence: index + 1,
+      summary: `Inventory review summary ${index + 1}`,
+    }));
+
+    render(
+      <POSTerminalDetailViewContent
+        detail={{
+          ...detail,
+          syncEvidence: {
+            ...detail.syncEvidence,
+            unresolvedConflictCount: conflicts.length,
+            unresolvedConflicts: conflicts,
+          },
+        }}
+        isLoading={false}
+      />,
+    );
+
+    expect(screen.getByText("Inventory review summary 5")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Inventory review summary 6"),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Show 3 more" }));
+
+    expect(screen.getByText("Inventory review summary 8")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Show fewer" }));
+
+    expect(
+      screen.queryByText("Inventory review summary 6"),
+    ).not.toBeInTheDocument();
   });
 
   it("renders the current aggregate sync evidence query shape", () => {
