@@ -1160,6 +1160,7 @@ export const getRegisterSessionSnapshot = query({
       }),
       listRegisterSessionSyncReviewConflicts(ctx, args.storeId, {
         includeRejectedEvidence: true,
+        registerSessionIds: [args.registerSessionId],
       }),
       resolveRegisterSessionWorkflowTraceId(ctx, registerSession),
     ]);
@@ -1595,7 +1596,10 @@ export const resolveRegisterSessionSyncReview = mutation({
     const conflictsBySessionId = await listRegisterSessionSyncReviewConflicts(
       ctx,
       args.storeId,
-      { includeRejectedEvidence: true },
+      {
+        includeRejectedEvidence: true,
+        registerSessionIds: [args.registerSessionId],
+      },
     );
     const allConflicts = conflictsBySessionId.get(args.registerSessionId) ?? [];
     const requestedConflictIds = new Set(args.reviewConflictIds ?? []);

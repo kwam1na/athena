@@ -108,6 +108,11 @@ export type RegisterSessionLocalSyncStatus = {
   }>;
 };
 
+type ListOpenLocalSyncConflictsOptions = {
+  includeRejectedEvidence?: boolean;
+  registerSessionIds?: Array<Id<"registerSession">>;
+};
+
 function getSyncConflictReconciliationType(
   review: RegisterSessionSyncReviewClassification,
 ) {
@@ -552,6 +557,100 @@ async function findProjectedRegisterSessionIdForRepairableMissingMapping(
   return registerSession._id;
 }
 
+function uniqueById<T extends { _id: string }>(rows: T[]) {
+  const seen = new Set<string>();
+  return rows.filter((row) => {
+    if (seen.has(row._id)) return false;
+    seen.add(row._id);
+    return true;
+  });
+}
+
+async function listTargetRegisterSessionSyncFacts(
+  ctx: Pick<QueryCtx, "db">,
+  storeId: Id<"store">,
+  options: Required<
+    Pick<ListOpenLocalSyncConflictsOptions, "registerSessionIds">
+  > &
+    Pick<ListOpenLocalSyncConflictsOptions, "includeRejectedEvidence">,
+) {
+  const needsReviewConflicts: Doc<"posLocalSyncConflict">[] = [];
+  const resolvedConflicts: Doc<"posLocalSyncConflict">[] = [];
+  const rejectedEvents: Doc<"posLocalSyncEvent">[] = [];
+
+  for (const registerSessionId of new Set(options.registerSessionIds)) {
+    const registerSession = await ctx.db.get(
+      "registerSession",
+      registerSessionId,
+    );
+    if (
+      !registerSession ||
+      registerSession.storeId !== storeId ||
+      !registerSession.terminalId
+    ) {
+      continue;
+    }
+
+    const terminalId = registerSession.terminalId;
+    const registerSessionMappings = await ctx.db
+      .query("posLocalSyncMapping")
+      .withIndex("by_store_terminal_cloud", (q) =>
+        q
+          .eq("storeId", storeId)
+          .eq("terminalId", terminalId)
+          .eq("cloudTable", "registerSession")
+          .eq("cloudId", registerSessionId),
+      )
+      .take(SYNC_CONFLICT_LIMIT);
+    const localRegisterSessionIds = new Set<string>([
+      registerSessionId,
+      ...registerSessionMappings
+        .map((mapping) => mapping.localRegisterSessionId)
+        .filter((localId): localId is string => Boolean(localId)),
+    ]);
+
+    for (const localRegisterSessionId of localRegisterSessionIds) {
+      const conflicts = await ctx.db
+        .query("posLocalSyncConflict")
+        .withIndex("by_store_terminal_register", (q) =>
+          q
+            .eq("storeId", storeId)
+            .eq("terminalId", terminalId)
+            .eq("localRegisterSessionId", localRegisterSessionId),
+        )
+        .take(SYNC_CONFLICT_LIMIT);
+      for (const conflict of conflicts) {
+        if (conflict.status === "needs_review") {
+          needsReviewConflicts.push(conflict);
+        } else if (conflict.status === "resolved") {
+          resolvedConflicts.push(conflict);
+        }
+      }
+
+      if (options.includeRejectedEvidence) {
+        const localEvents = await ctx.db
+          .query("posLocalSyncEvent")
+          .withIndex("by_store_terminal_register_sequence", (q) =>
+            q
+              .eq("storeId", storeId)
+              .eq("terminalId", terminalId)
+              .eq("localRegisterSessionId", localRegisterSessionId),
+          )
+          .take(SYNC_CONFLICT_LIMIT);
+        rejectedEvents.push(
+          ...localEvents.filter((event) => event.status === "rejected"),
+        );
+      }
+    }
+  }
+
+  return {
+    needsReviewConflicts: uniqueById(needsReviewConflicts),
+    rejectedEvents: uniqueById(rejectedEvents),
+    resolvedConflicts: uniqueById(resolvedConflicts),
+  };
+}
+
 export function buildRegisterSessionLocalSyncStatus(
   conflicts: RegisterSessionSyncConflict[],
   options: { staffNamesById?: Map<Id<"staffProfile">, string> } = {},
@@ -607,9 +706,19 @@ export function buildRegisterSessionLocalSyncStatus(
 export async function listOpenLocalSyncConflictsByRegisterSession(
   ctx: Pick<QueryCtx, "db">,
   storeId: Id<"store">,
-  options: { includeRejectedEvidence?: boolean } = {},
+  options: ListOpenLocalSyncConflictsOptions = {},
 ) {
-  const [needsReviewConflicts, resolvedConflicts, rejectedEvents] =
+  const targetedFacts = options.registerSessionIds?.length
+    ? await listTargetRegisterSessionSyncFacts(ctx, storeId, {
+        includeRejectedEvidence: options.includeRejectedEvidence,
+        registerSessionIds: options.registerSessionIds,
+      })
+    : { needsReviewConflicts: [], rejectedEvents: [], resolvedConflicts: [] };
+  const [
+    cappedNeedsReviewConflicts,
+    cappedResolvedConflicts,
+    cappedRejectedEvents,
+  ] =
     await Promise.all([
       ctx.db
         .query("posLocalSyncConflict")
@@ -632,6 +741,18 @@ export async function listOpenLocalSyncConflictsByRegisterSession(
             .take(SYNC_CONFLICT_LIMIT)
         : Promise.resolve([]),
     ]);
+  const needsReviewConflicts = uniqueById([
+    ...cappedNeedsReviewConflicts,
+    ...targetedFacts.needsReviewConflicts,
+  ]);
+  const resolvedConflicts = uniqueById([
+    ...cappedResolvedConflicts,
+    ...targetedFacts.resolvedConflicts,
+  ]);
+  const rejectedEvents = uniqueById([
+    ...cappedRejectedEvents,
+    ...targetedFacts.rejectedEvents,
+  ]);
   const projectedInventoryReviewResults = await Promise.all(
     needsReviewConflicts.map(async (conflict) => ({
       conflict,

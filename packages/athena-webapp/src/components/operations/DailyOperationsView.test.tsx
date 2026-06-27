@@ -1389,7 +1389,7 @@ describe("DailyOperationsViewContent", () => {
       .closest("section");
 
     expect(openingReview?.parentElement).toBe(timeline.parentElement);
-    expect(openingReview?.compareDocumentPosition(timeline)).toBe(
+    expect(timeline.compareDocumentPosition(openingReview!)).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING,
     );
     expect(openingReview?.compareDocumentPosition(workflowSection!)).toBe(

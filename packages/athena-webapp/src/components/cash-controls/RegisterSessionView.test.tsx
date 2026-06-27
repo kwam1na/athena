@@ -398,7 +398,7 @@ describe("RegisterSessionViewContent", () => {
     expect(screen.getByText("Variance review required.")).toBeInTheDocument();
     expect(screen.getByText("Closeout workflow")).toBeInTheDocument();
     expect(screen.getByText("Counted cash ($)")).toBeInTheDocument();
-    expect(screen.getByLabelText("Closeout counted cash")).toHaveValue(171);
+    expect(screen.getByLabelText("Closeout counted cash")).toHaveValue("171");
     expect(screen.getByRole("button", { name: "Submit closeout" })).toHaveClass(
       "bg-action-workflow",
     );
@@ -2735,6 +2735,34 @@ describe("RegisterSessionViewContent", () => {
         staffUsername: "ato",
       }),
     );
+  });
+
+  it("uses a decimal text input for closeout counted cash", async () => {
+    const user = userEvent.setup();
+
+    render(
+      <RegisterSessionViewContent
+        actorUserId="user-1"
+        currency="GHS"
+        isLoading={false}
+        onAuthenticateStaff={vi.fn()}
+        onRecordDeposit={vi.fn()}
+        onReviewCloseout={vi.fn()}
+        onSubmitCloseout={vi.fn()}
+        registerSessionSnapshot={activeSnapshot}
+        storeId="store-1"
+      />,
+    );
+
+    const input = screen.getByLabelText("Closeout counted cash");
+
+    expect(input).toHaveAttribute("type", "text");
+    expect(input).toHaveAttribute("inputmode", "decimal");
+    expect(input).toHaveAttribute("pattern", "[0-9]*[.]?[0-9]*");
+
+    await user.type(input, "30");
+
+    expect(input).toHaveValue("30");
   });
 
   it("allows closeout without notes when counted cash matches expected cash", async () => {

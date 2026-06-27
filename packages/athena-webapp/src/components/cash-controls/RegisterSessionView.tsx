@@ -4810,12 +4810,12 @@ export function RegisterSessionViewContent({
                             <Input
                               aria-label="Closeout counted cash"
                               className="border-input bg-background"
-                              min={0}
+                              inputMode="decimal"
                               onChange={(event) =>
                                 setCountedCash(event.target.value)
                               }
-                              step="0.01"
-                              type="number"
+                              pattern="[0-9]*[.]?[0-9]*"
+                              type="text"
                               value={countedCash}
                             />
                           </label>
