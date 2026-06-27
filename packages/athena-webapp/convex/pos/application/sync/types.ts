@@ -227,6 +227,7 @@ type LocalSyncMappingRecordBase = {
   localRegisterSessionId: string;
   localExpenseSessionId?: string;
   localEventId: string;
+  sourceEventType?: PosLocalSyncEventType | "repair";
   localId: string;
   createdAt: number;
 };

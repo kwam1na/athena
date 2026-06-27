@@ -211,8 +211,15 @@ export async function canProjectRegisterOpenForTerminalCloudRepair(
   );
   if (directRegisterSessionId) {
     const registerSession = await repository.getRegisterSession(directRegisterSessionId);
+    const reviewState = registerSession
+      ? await getRepairOpenRegisterCloseoutReviewState(repository, {
+          registerSessionId: registerSession._id,
+          storeId: args.storeId,
+          terminalId: args.terminalId,
+        })
+      : { hasOpenRegisterCloseoutReview: false };
     return canReuseCloudRegisterSessionForLocalOpenPolicy({
-      hasOpenRegisterCloseoutReview: false,
+      hasOpenRegisterCloseoutReview: reviewState.hasOpenRegisterCloseoutReview,
       localRegisterSessionId: args.event.localRegisterSessionId,
       registerSession: registerSession
         ? {
@@ -239,11 +246,13 @@ export async function canProjectRegisterOpenForTerminalCloudRepair(
   });
 
   return canSupersedeReviewedRegisterSessionForLocalOpenPolicy({
+    closeoutReviewBoundaryAt:
+      reviewState.latestReviewBoundaryAt ??
+      getRepairRegisterSessionCloseoutBoundaryAt(blockingRegisterSession),
     hasOpenRegisterCloseoutReview: reviewState.hasOpenRegisterCloseoutReview,
     replacementLocalRegisterSessionId: args.event.localRegisterSessionId,
-    replacementSequence: args.event.sequence,
+    replacementOpenedAt: args.event.occurredAt,
     registerSession: blockingRegisterSession,
-    reviewSequence: reviewState.latestReviewSequence ?? null,
     storeId: args.storeId,
     terminalId: args.terminalId,
   });
@@ -267,12 +276,47 @@ async function getRepairOpenRegisterCloseoutReviewState(
 
   return {
     hasOpenRegisterCloseoutReview: conflicts.length > 0,
-    latestReviewSequence: conflicts.reduce<number | undefined>(
+    latestReviewBoundaryAt: conflicts.reduce<number | undefined>(
       (latest, conflict) =>
-        latest === undefined ? conflict.sequence : Math.max(latest, conflict.sequence),
+        latest === undefined
+          ? getRepairConflictCloseoutReviewBoundaryAt(conflict)
+          : Math.max(latest, getRepairConflictCloseoutReviewBoundaryAt(conflict)),
       undefined,
     ),
   };
+}
+
+function getRepairConflictCloseoutReviewBoundaryAt(
+  conflict: LocalSyncRegisterReviewConflictFact["conflict"],
+) {
+  return typeof conflict.details.closeoutOccurredAt === "number"
+    ? conflict.details.closeoutOccurredAt
+    : conflict.createdAt;
+}
+
+function getRepairRegisterSessionCloseoutBoundaryAt(
+  registerSession: Awaited<
+    ReturnType<TerminalCloudRepairProjectionEligibilityRepository["findBlockingRegisterSession"]>
+  >,
+) {
+  const latestCloseoutRecord = registerSession?.closeoutRecords?.reduce<
+    number | undefined
+  >((latest, record) => {
+    const occurredAt =
+      typeof record === "object" &&
+      record !== null &&
+      "occurredAt" in record &&
+      typeof record.occurredAt === "number"
+        ? record.occurredAt
+        : undefined;
+    if (occurredAt === undefined) return latest;
+    return latest === undefined ? occurredAt : Math.max(latest, occurredAt);
+  }, undefined);
+  if (latestCloseoutRecord !== undefined) return latestCloseoutRecord;
+
+  return typeof registerSession?.closedAt === "number"
+    ? registerSession.closedAt
+    : null;
 }
 
 function repairFactMatchesRegisterSessionCloseoutReview(

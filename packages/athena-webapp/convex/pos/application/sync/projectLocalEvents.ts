@@ -76,7 +76,7 @@ type PosSessionRecord = Awaited<
 
 type OpenRegisterCloseoutReviewState = {
   hasOpenRegisterCloseoutReview: boolean;
-  latestReviewSequence?: number;
+  latestReviewBoundaryAt?: number;
 };
 
 type CanonicalSaleItem = {
@@ -306,6 +306,7 @@ export async function createOrReuseRegisterSessionRepairMapping(
     terminalId: args.terminalId,
     localRegisterSessionId: args.localRegisterSessionId,
     localEventId: args.localEventId,
+    sourceEventType: "repair",
     localIdKind: "registerSession",
     localId: args.localRegisterSessionId,
     cloudTable: "registerSession",
@@ -884,12 +885,14 @@ async function canSupersedeReviewedRegisterSessionForLocalOpen(
         });
 
   return canSupersedeReviewedRegisterSessionForLocalOpenPolicy({
+    closeoutReviewBoundaryAt:
+      hasOpenRegisterCloseoutReview.latestReviewBoundaryAt ??
+      getRegisterSessionCloseoutBoundaryAt(registerSession),
     hasOpenRegisterCloseoutReview:
       hasOpenRegisterCloseoutReview.hasOpenRegisterCloseoutReview,
     replacementLocalRegisterSessionId: args.event.localRegisterSessionId,
-    replacementSequence: args.event.sequence,
+    replacementOpenedAt: args.event.occurredAt,
     registerSession,
-    reviewSequence: hasOpenRegisterCloseoutReview.latestReviewSequence ?? null,
     storeId: args.storeId,
     terminalId: args.terminalId,
   });
@@ -913,12 +916,46 @@ async function getOpenRegisterCloseoutReviewState(
 
   return {
     hasOpenRegisterCloseoutReview: closeoutReviewConflicts.length > 0,
-    latestReviewSequence: closeoutReviewConflicts.reduce<number | undefined>(
+    latestReviewBoundaryAt: closeoutReviewConflicts.reduce<number | undefined>(
       (latest, conflict) =>
-        latest === undefined ? conflict.sequence : Math.max(latest, conflict.sequence),
+        latest === undefined
+          ? getConflictCloseoutReviewBoundaryAt(conflict)
+          : Math.max(latest, getConflictCloseoutReviewBoundaryAt(conflict)),
       undefined,
     ),
   };
+}
+
+function getConflictCloseoutReviewBoundaryAt(conflict: LocalSyncConflictRecord) {
+  return typeof conflict.details.closeoutOccurredAt === "number"
+    ? conflict.details.closeoutOccurredAt
+    : conflict.createdAt;
+}
+
+function getRegisterSessionCloseoutBoundaryAt(
+  registerSession:
+    | Awaited<ReturnType<SyncProjectionRepository["getRegisterSession"]>>
+    | null
+    | undefined,
+) {
+  const latestCloseoutRecord = registerSession?.closeoutRecords?.reduce<
+    number | undefined
+  >((latest, record) => {
+    const occurredAt =
+      typeof record === "object" &&
+      record !== null &&
+      "occurredAt" in record &&
+      typeof record.occurredAt === "number"
+        ? record.occurredAt
+        : undefined;
+    if (occurredAt === undefined) return latest;
+    return latest === undefined ? occurredAt : Math.max(latest, occurredAt);
+  }, undefined);
+  if (latestCloseoutRecord !== undefined) return latestCloseoutRecord;
+
+  return typeof registerSession?.closedAt === "number"
+    ? registerSession.closedAt
+    : null;
 }
 
 function factMatchesRegisterSessionCloseoutReview(
@@ -947,6 +984,22 @@ async function projectRegisterOpened(
     localId: args.event.localRegisterSessionId,
   });
   if (existing) {
+    if (
+      existing.localEventId !== args.event.localEventId &&
+      existing.sourceEventType === "register_opened"
+    ) {
+      const conflict = await createConflict(repository, args, {
+        conflictType: "duplicate_local_id",
+        summary: "Local register session id was reused by a different synced register open.",
+        details: {
+          existingLocalEventId: existing.localEventId,
+          localIdKind: "registerSession",
+          localRegisterSessionId: args.event.localRegisterSessionId,
+          reason: "duplicate_register_opened",
+        },
+      });
+      return { status: "conflicted", mappings: [], conflicts: [conflict] };
+    }
     return { status: "projected", mappings: [existing], conflicts: [] };
   }
 
@@ -3602,6 +3655,7 @@ async function projectRegisterClosed(
       conflictType: "permission",
       summary: REGISTER_CLOSEOUT_VARIANCE_SYNC_REVIEW_SUMMARY,
       details: {
+        closeoutOccurredAt: args.event.occurredAt,
         countedCash,
         expectedCash: registerSession.expectedCash,
         notes: payload.notes,
@@ -3897,6 +3951,7 @@ function createMapping(
     terminalId: args.terminalId,
     localRegisterSessionId: args.event.localRegisterSessionId ?? "",
     localEventId: args.event.localEventId,
+    sourceEventType: args.event.eventType,
     createdAt: args.now,
     ...input,
   };

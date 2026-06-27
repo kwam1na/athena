@@ -194,7 +194,13 @@ export function projectLocalRegisterReadModel(input: {
         activeRegisterSession &&
         isOpenLocalRegisterSessionStatus(activeRegisterSession.status) &&
         isUploadedRegisterOpenLifecycleEvent(event) &&
-        !registerLifecycleEventMatchesActiveSession(event, activeRegisterSession)
+        !registerLifecycleEventMatchesActiveSession(event, activeRegisterSession) &&
+        !canUploadedRegisterOpenReplaceBlockedDrawer({
+          activeRegisterSession,
+          drawerAuthority: input.drawerAuthority,
+          event,
+          mappings,
+        })
       ) {
         continue;
       }
@@ -1018,6 +1024,35 @@ function isUploadedRegisterOpenLifecycleEvent(event: PosLocalEventRecord) {
   return (
     event.sync.uploaded === true &&
     (event.sync.status === "needs_review" || event.sync.status === "synced")
+  );
+}
+
+function canUploadedRegisterOpenReplaceBlockedDrawer(input: {
+  activeRegisterSession: PosLocalCashDrawerReadModel;
+  drawerAuthority?: PosDrawerAuthorityState | null;
+  event: PosLocalEventRecord;
+  mappings: ReturnType<typeof createMappingIndex>;
+}) {
+  const activeDrawerAuthority = getSaleBlockingDrawerAuthority({
+    activeRegisterSession: input.activeRegisterSession,
+    drawerAuthority: input.drawerAuthority,
+  });
+
+  const replacementLocalRegisterSessionId =
+    input.event.localRegisterSessionId ??
+    stringField(input.event.payload, "localRegisterSessionId");
+  const replacementCloudRegisterSessionId = replacementLocalRegisterSessionId
+    ? input.mappings.registerSession.get(replacementLocalRegisterSessionId)
+    : undefined;
+
+  return Boolean(
+    input.event.sync.status === "synced" &&
+      replacementCloudRegisterSessionId &&
+      input.activeRegisterSession.cloudRegisterSessionId &&
+      replacementCloudRegisterSessionId !==
+        input.activeRegisterSession.cloudRegisterSessionId &&
+      (!activeDrawerAuthority ||
+        activeDrawerAuthority.reason === "cloud_closed"),
   );
 }
 

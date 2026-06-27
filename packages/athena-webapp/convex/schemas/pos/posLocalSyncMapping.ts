@@ -1,5 +1,7 @@
 import { v } from "convex/values";
 
+import { posLocalSyncEventTypeValidator } from "./posLocalSyncEvent";
+
 export const posLocalSyncMappingKindValidator = v.union(
   v.literal("registerSession"),
   v.literal("posSession"),
@@ -23,6 +25,9 @@ export const posLocalSyncMappingSchema = v.object({
   localRegisterSessionId: v.string(),
   localExpenseSessionId: v.optional(v.string()),
   localEventId: v.string(),
+  sourceEventType: v.optional(
+    v.union(posLocalSyncEventTypeValidator, v.literal("repair")),
+  ),
   localIdKind: posLocalSyncMappingKindValidator,
   localId: v.string(),
   cloudTable: v.string(),

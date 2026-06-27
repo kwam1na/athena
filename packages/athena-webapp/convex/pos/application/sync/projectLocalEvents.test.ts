@@ -125,6 +125,47 @@ describe("projectLocalSyncEvent", () => {
     expect(repository.mappings).toHaveLength(1);
   });
 
+  it("replays register open idempotently after a repair-created register mapping", async () => {
+    const repository = createProjectionRepository();
+    repository.mappings[0] = {
+      ...repository.mappings[0],
+      localEventId: "event-sale-repaired-1",
+      sourceEventType: "repair",
+    };
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: {
+        localEventId: "event-register-opened-1",
+        localRegisterSessionId: "local-register-1",
+        sequence: 1,
+        eventType: "register_opened",
+        occurredAt: 10,
+        staffProfileId: "staff-1" as never,
+        staffProofToken: "proof-token-1",
+        payload: {
+          openingFloat: 100,
+          registerNumber: "1",
+        },
+      },
+      syncEventId: "sync-event-1",
+      now: 100,
+    });
+
+    expect(result.status).toBe("projected");
+    expect(result.mappings).toEqual([
+      expect.objectContaining({
+        cloudId: "register-session-1",
+        localId: "local-register-1",
+        localEventId: "event-sale-repaired-1",
+        sourceEventType: "repair",
+      }),
+    ]);
+    expect(result.conflicts).toEqual([]);
+    expect(repository.createdRegisterSessions).toEqual([]);
+  });
+
   it("rejects register-session repair when the local drawer maps elsewhere", async () => {
     const repository = createProjectionRepository();
 
@@ -3705,6 +3746,45 @@ describe("projectLocalSyncEvent", () => {
     expect(repository.createdRegisterSessions).toEqual([]);
   });
 
+  it("conflicts duplicate register opens that reuse the same local drawer id from another source event", async () => {
+    const repository = createProjectionRepository();
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: {
+        localEventId: "event-register-opened-reused",
+        localRegisterSessionId: "local-register-1",
+        sequence: 2,
+        eventType: "register_opened",
+        occurredAt: 20,
+        staffProfileId: "staff-1" as never,
+        staffProofToken: "proof-token-1",
+        payload: {
+          openingFloat: 100,
+          registerNumber: "1",
+        },
+      },
+      syncEventId: "sync-event-1",
+      now: 100,
+    });
+
+    expect(result.status).toBe("conflicted");
+    expect(result.mappings).toEqual([]);
+    expect(result.conflicts).toEqual([
+      expect.objectContaining({
+        conflictType: "duplicate_local_id",
+        summary:
+          "Local register session id was reused by a different synced register open.",
+        details: expect.objectContaining({
+          existingLocalEventId: "event-register-opened-1",
+          localRegisterSessionId: "local-register-1",
+          reason: "duplicate_register_opened",
+        }),
+      }),
+    ]);
+  });
+
   it("conflicts a stale register open when the active drawer has a newer closeout review", async () => {
     const repository = createProjectionRepository({
       blockingRegisterSession: {
@@ -3716,9 +3796,12 @@ describe("projectLocalSyncEvent", () => {
         storeId: "store-1",
         terminalId: "terminal-1",
       },
-      registerSessionsWithCloseoutReview: new Set([
-        "register-session-reviewed",
-      ]),
+      registerReviewConflictFacts: [
+        buildRegisterCloseoutReviewFact({
+          closeoutOccurredAt: 50,
+          registerSessionId: "register-session-reviewed",
+        }),
+      ],
     });
 
     const result = await projectLocalSyncEvent(repository, {
@@ -3773,7 +3856,7 @@ describe("projectLocalSyncEvent", () => {
       event: {
         localEventId: "event-register-opened-closing-review",
         localRegisterSessionId: "local-register-2",
-        sequence: 4,
+        sequence: 1,
         eventType: "register_opened",
         occurredAt: 10,
         staffProfileId: "staff-1" as never,
@@ -3811,7 +3894,7 @@ describe("projectLocalSyncEvent", () => {
       blockingRegisterSession: {
         _id: "register-session-closing",
         expectedCash: 100,
-        closeoutRecords: [],
+        closeoutRecords: [{ occurredAt: 5 }],
         registerNumber: "1",
         status: "closing",
         storeId: "store-1",
@@ -3900,6 +3983,56 @@ describe("projectLocalSyncEvent", () => {
         localId: "register-session-1",
         cloudTable: "registerSession",
         cloudId: "register-session-1",
+      }),
+    ]);
+  });
+
+  it("conflicts direct cloud register opens while the mapped drawer has closeout review", async () => {
+    const repository = createProjectionRepository({
+      registerSession: {
+        _id: "register-session-1",
+        expectedCash: 100,
+        closeoutRecords: [],
+        registerNumber: "1",
+        status: "active",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      } as never,
+      registerSessionsWithCloseoutReview: new Set(["register-session-1"]),
+      validCloudIds: new Set(["register-session-1"]),
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: {
+        localEventId: "event-register-opened-cloud",
+        localRegisterSessionId: "register-session-1",
+        sequence: 1,
+        eventType: "register_opened",
+        occurredAt: 10,
+        staffProfileId: "staff-1" as never,
+        staffProofToken: "proof-token-1",
+        payload: {
+          openingFloat: 100,
+          registerNumber: "1",
+        },
+      },
+      syncEventId: "sync-event-1",
+      now: 100,
+    });
+
+    expect(result.status).toBe("conflicted");
+    expect(result.mappings).toEqual([]);
+    expect(result.conflicts).toEqual([
+      expect.objectContaining({
+        conflictType: "permission",
+        summary: "Register session mapping is not usable for synced POS history.",
+        details: expect.objectContaining({
+          cloudRegisterSessionId: "register-session-1",
+          localRegisterSessionId: "register-session-1",
+          status: "active",
+        }),
       }),
     ]);
   });
@@ -5827,6 +5960,7 @@ function createProjectionRepository(
       terminalId: "terminal-1" as never,
       localRegisterSessionId: "local-register-1",
       localEventId: "event-register-opened-1",
+      sourceEventType: "register_opened",
       localIdKind: "registerSession",
       localId: "local-register-1",
       cloudTable: "registerSession",
@@ -6213,6 +6347,7 @@ function createProjectionRepository(
             conflictType: "permission" as const,
             createdAt: 1_700_000_000_000 + index,
             details: {
+              closeoutOccurredAt: 5,
               countedCash: 100,
               expectedCash: 90,
               variance: 10,
@@ -6425,5 +6560,41 @@ function createProjectionRepository(
         traceId: `register-trace-${recordedRegisterSessionTraces.length}`,
       };
     },
+  };
+}
+
+function buildRegisterCloseoutReviewFact(args: {
+  closeoutOccurredAt?: number;
+  registerSessionId: string;
+  sequence?: number;
+}): LocalSyncRegisterReviewConflictFact {
+  return {
+    conflict: {
+      _id: `review-conflict-${args.registerSessionId}`,
+      conflictType: "permission",
+      createdAt: 1_700_000_000_000,
+      details: {
+        ...(args.closeoutOccurredAt === undefined
+          ? {}
+          : { closeoutOccurredAt: args.closeoutOccurredAt }),
+        countedCash: 100,
+        expectedCash: 90,
+        variance: 10,
+      },
+      localEventId: `review-event-${args.registerSessionId}`,
+      localRegisterSessionId: args.registerSessionId,
+      sequence: args.sequence ?? 3,
+      status: "needs_review",
+      storeId: "store-1" as never,
+      summary:
+        "Register closeout variance requires manager review before synced closeout can be applied.",
+      terminalId: "terminal-1" as never,
+    },
+    directRegisterSession: {
+      _id: args.registerSessionId as Id<"registerSession">,
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+    },
+    registerSessionMapping: null,
   };
 }

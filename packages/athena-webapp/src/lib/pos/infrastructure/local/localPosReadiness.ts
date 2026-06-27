@@ -3,11 +3,13 @@ import { useEffect, useMemo, useState } from "react";
 import type { PosLocalEntryContext } from "./localPosEntryContext";
 import type { RegisterServiceCatalogSnapshotState } from "./registerServiceCatalogSnapshot";
 import { readProjectedLocalRegisterModel } from "./localRegisterReader";
-import type { PosLocalRegisterReadModel } from "./registerReadModel";
+import {
+  hasSettledRegisterCloseout,
+  type PosLocalRegisterReadModel,
+} from "./registerReadModel";
 import {
   createIndexedDbPosLocalStorageAdapter,
   createPosLocalStore,
-  type PosLocalEventRecord,
   type PosLocalStoreDayReadiness,
   type PosLocalStoreResult,
 } from "./posLocalStore";
@@ -241,15 +243,10 @@ function hasSettledLocalCloseout(model: PosLocalRegisterReadModel) {
   const localRegisterSessionId = model.closeoutState?.localRegisterSessionId;
   if (!localRegisterSessionId) return false;
 
-  const latestCloseout = [...(model.sourceEvents ?? [])]
-    .reverse()
-    .find(
-      (event: PosLocalEventRecord) =>
-        event.type === "register.closeout_started" &&
-        event.localRegisterSessionId === localRegisterSessionId,
-    );
-
-  return latestCloseout?.sync.status === "synced";
+  return hasSettledRegisterCloseout({
+    events: model.sourceEvents ?? [],
+    session: model.activeRegisterSession ?? { localRegisterSessionId },
+  });
 }
 
 export function evaluateLocalPosServiceCatalogReadiness(

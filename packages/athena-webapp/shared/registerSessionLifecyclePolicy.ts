@@ -135,6 +135,14 @@ export function getSaleBlockingDrawerAuthority<
   if (!drawerAuthority) return null;
   if (drawerAuthority.status !== "blocked") return null;
   if (
+    !drawerAuthorityMatchesActiveRegisterSession({
+      activeRegisterSession: input.activeRegisterSession,
+      drawerAuthority,
+    })
+  ) {
+    return null;
+  }
+  if (
     drawerAuthority.reason === "lifecycle_rejected" &&
     drawerAuthority.localRegisterSessionId ===
       input.activeRegisterSession?.localRegisterSessionId
@@ -173,14 +181,14 @@ export function canReuseCloudRegisterSessionForLocalOpen(input: {
 
 type RegisterSessionSupersedeFreshnessInput =
   | {
-      replacementSequence: number;
-      reviewSequence: number | null | undefined;
-      allowUnknownReviewSequence?: never;
+      closeoutReviewBoundaryAt: number | null | undefined;
+      replacementOpenedAt: number;
+      allowUnknownCloseoutReviewBoundary?: never;
     }
   | {
-      allowUnknownReviewSequence: true;
-      replacementSequence?: number | null;
-      reviewSequence?: number | null;
+      allowUnknownCloseoutReviewBoundary: true;
+      closeoutReviewBoundaryAt?: number | null;
+      replacementOpenedAt?: number | null;
     };
 
 export function canSupersedeReviewedRegisterSessionForLocalOpen(input: {
@@ -195,13 +203,12 @@ export function canSupersedeReviewedRegisterSessionForLocalOpen(input: {
       input.registerSession?.localRegisterSessionId &&
     input.replacementLocalRegisterSessionId !==
       input.registerSession?.cloudRegisterSessionId;
-  const hasFreshReplacement =
-    input.allowUnknownReviewSequence === true ||
-    input.reviewSequence === undefined ||
-    input.reviewSequence === null ||
-    input.replacementSequence > input.reviewSequence;
   const hasSubmittedCloseout =
     input.registerSession?.status === "closing";
+  const hasFreshReplacement =
+    input.allowUnknownCloseoutReviewBoundary === true ||
+    (typeof input.closeoutReviewBoundaryAt === "number" &&
+      input.replacementOpenedAt > input.closeoutReviewBoundaryAt);
   const hasReplacementHold =
     input.hasOpenRegisterCloseoutReview || hasSubmittedCloseout;
 
@@ -278,4 +285,22 @@ function isScopedRegisterSession(input: {
     input.registerSession?.storeId === input.storeId &&
     input.registerSession.terminalId === input.terminalId
   );
+}
+
+function drawerAuthorityMatchesActiveRegisterSession(input: {
+  activeRegisterSession?: RegisterSessionLifecycleScopedSession | null;
+  drawerAuthority: RegisterSessionLifecycleDrawerAuthority;
+}) {
+  const activeIds = new Set(
+    [
+      input.activeRegisterSession?.localRegisterSessionId,
+      input.activeRegisterSession?.cloudRegisterSessionId,
+    ].filter((id): id is string => Boolean(id)),
+  );
+  if (activeIds.size === 0) return true;
+
+  return [
+    input.drawerAuthority.localRegisterSessionId,
+    input.drawerAuthority.cloudRegisterSessionId,
+  ].some((id) => id !== undefined && activeIds.has(id));
 }

@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>fix: Stabilize POS local/cloud sync contract</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f8fa;
+      --panel: #ffffff;
+      --ink: #18202a;
+      --muted: #617080;
+      --line: #d8dee7;
+      --accent: #235ea9;
+      --risk: #7c3f00;
+    }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 32px 24px 56px;
+    }
+    header, section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 22px 24px;
+      margin-bottom: 18px;
+    }
+    h1, h2, h3 {
+      line-height: 1.2;
+      margin: 0 0 12px;
+    }
+    h1 { font-size: 28px; }
+    h2 { font-size: 20px; }
+    h3 { font-size: 16px; color: var(--muted); }
+    p { margin: 0 0 12px; }
+    a { color: var(--accent); }
+    .meta {
+      color: var(--muted);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 18px;
+      margin-top: 12px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 12px;
+    }
+    .callout {
+      border-left: 4px solid var(--accent);
+      background: #eef5ff;
+      padding: 12px 14px;
+      border-radius: 6px;
+    }
+    .risk {
+      border-left-color: var(--risk);
+      background: #fff5e8;
+    }
+    ul, ol { margin: 8px 0 0 20px; padding: 0; }
+    li { margin: 5px 0; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 8px 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: #f1f4f8; }
+    code {
+      background: #eef1f5;
+      border-radius: 4px;
+      padding: 1px 4px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.92em;
+    }
+    .unit {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin-top: 12px;
+    }
+    .unit strong { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>fix: Stabilize POS local/cloud sync contract</h1>
+      <p>Stabilize Athena POS drawer lifecycle and sync settlement in two stacked delivery PRs. PR1 tightens drawer authority, replacement freshness, and local/cloud register identity; PR2 builds on that contract to repair broader sync settlement, cursor, reopen, closeout, and Cash Controls presentation behavior.</p>
+      <div class="meta">
+        <span>Type: fix</span>
+        <span>Status: active</span>
+        <span>Date: 2026-06-27</span>
+        <span>Source: <a href="2026-06-27-002-fix-pos-sync-contract-plan.md">Markdown plan</a></span>
+      </div>
+    </header>
+
+    <section>
+      <h2>Delivery Shape</h2>
+      <div class="grid">
+        <div class="callout">
+          <h3>PR1</h3>
+          <p>Drawer lifecycle authority, replacement freshness, local/cloud drawer identity, duplicate register opens, and closeout readiness.</p>
+        </div>
+        <div class="callout">
+          <h3>PR2</h3>
+          <p>Sync cursor identity, rejected/held/conflicted settlement, reopen policy, closeout failure truthfulness, and Cash Controls presentation.</p>
+        </div>
+        <div class="callout risk">
+          <h3>Execution Constraint</h3>
+          <p>All work happens in delivery worktrees. Root is reserved for final fast-forward alignment after merge.</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Requirements Digest</h2>
+      <ul>
+        <li>Replacement drawers cannot become sale-usable from uploaded <code>needs_review</code> opens.</li>
+        <li>Drawer authority and closeout settlement must compare local and cloud register-session identity consistently.</li>
+        <li>Duplicate <code>register_opened</code> reuse must conflict unless it is a true idempotent retry.</li>
+        <li>POS and expense sync cursors must batch independently and in upload-sequence order.</li>
+        <li><code>projected</code>, <code>conflicted</code>, <code>held</code>, and <code>rejected</code> must remain distinct local settlement states.</li>
+        <li><code>register_reopened</code> is deferred from uploadable local sync until a manager-review replay contract exists; existing uploaded review rows stay visible/rejectable and are not retried into projection.</li>
+        <li>Closeout and Cash Controls copy must present pending/review state truthfully.</li>
+        <li>Manager/runtime repair must be freshness-checked, idempotent, and unable to override current drawer authority.</li>
+        <li>Repair/review authorization must never persist raw PINs or proof tokens; server mutations authorize fresh active same-store manager proof at action time.</li>
+        <li>Old open browsers and queued offline events must remain safe through Convex-first rollout.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Settlement Contract</h2>
+      <table>
+        <thead>
+          <tr><th>Server outcome</th><th>Local row state</th><th>Precursor handling</th><th>Operator label</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>projected</code></td>
+            <td>Synced/uploaded</td>
+            <td>Eligible local-only precursors may settle when the projected parent proves them.</td>
+            <td>Synced</td>
+          </tr>
+          <tr>
+            <td><code>conflicted</code></td>
+            <td>Needs review/uploaded</td>
+            <td>Precursors remain unsettled unless the conflict proves a specific local-only precursor is obsolete.</td>
+            <td>Needs manager review</td>
+          </tr>
+          <tr>
+            <td><code>held</code></td>
+            <td>Pending or held, not synced</td>
+            <td>No precursor settlement.</td>
+            <td>Waiting for earlier POS history</td>
+          </tr>
+          <tr>
+            <td><code>rejected</code></td>
+            <td>Failed or needs review with server reason, not synced</td>
+            <td>No precursor settlement unless explicitly local-settled by a named policy.</td>
+            <td>Sync rejected; review required</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Implementation Units</h2>
+      <div class="unit">
+        <strong>U1. PR1 Shared Drawer Lifecycle Contract</strong>
+        <p>Make shared policy authoritative for sale usability, replacement eligibility, review evidence, and freshness.</p>
+      </div>
+      <div class="unit">
+        <strong>U2. PR1 Browser-Local Authority and Readiness</strong>
+        <p>Normalize local/cloud drawer identity for read model, drawer authority lookup, and local POS readiness.</p>
+      </div>
+      <div class="unit">
+        <strong>U3. PR1 Cloud Projection Freshness and Duplicate Opens</strong>
+        <p>Enforce same lifecycle contract in Convex projection and terminal repair preview.</p>
+      </div>
+      <div class="unit">
+        <strong>U4. PR2 Sync Cursor and Settlement Vocabulary</strong>
+        <p>Separate POS/expense cursors and keep rejected, held, conflicted, and projected outcomes visible. Public sync result changes must be additive and old-client safe for open browsers and queued offline events.</p>
+      </div>
+      <div class="unit">
+        <strong>U5. PR2 Reopen, Closeout, and Cash Controls Truthfulness</strong>
+        <p>Defer <code>register_reopened</code> cloud upload, keep existing uploaded reopen review rows manager-visible/rejectable, enforce fresh same-store manager proof without persisting raw PINs or proof tokens, and make closeout failure presentation and Cash Controls target context truthful.</p>
+        <p>Runtime directives require issued-at, directive id/nonce, max age, terminal/store/register scope, and drawer-authority freshness. Expired, replayed, or stale directives fail before local event append at server issue/claim/ack, public terminal mutation, local terminal recovery execution, sync runtime, and command-gateway boundaries.</p>
+      </div>
+      <div class="unit">
+        <strong>U6. Integration, Tracking, Review, Merge, and Deploy</strong>
+        <p>Track Linear tickets, execute two stacked PRs, run reviewer loops, merge, align root, and deploy Convex then Athena. Include the Markdown and HTML plan artifacts in final delivery.</p>
+        <p>Each worker subagent must leave a handoff artifact in the related Linear issue or PR comment with scope, changed files, tests/sensors run, blockers or assumptions, integrator disposition, and any follow-up owner before the worker is closed.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>Validation Strategy</h2>
+      <table>
+        <thead>
+          <tr><th>Phase</th><th>Primary sensors</th><th>Deployment surface</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>PR1</td>
+            <td>Shared policy, local register/readiness, drawer authority, projection tests; Graphify rebuild; <code>bun run pr:athena</code></td>
+            <td>Convex and Athena webapp</td>
+          </tr>
+          <tr>
+            <td>PR2</td>
+            <td>Scheduler, runtime, ingest, Cash Controls, register view-model, legacy compatibility tests; Graphify rebuild; <code>bun run pr:athena</code></td>
+            <td>Convex and Athena webapp</td>
+          </tr>
+          <tr>
+            <td>Final</td>
+            <td>Reviewer unanimity, merged PRs, clean root fast-forward, deploy status</td>
+            <td>From clean root: <code>convex-prod</code> then <code>athena-local</code></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Risks</h2>
+      <ul>
+        <li>PR2 could accidentally redefine drawer authority; mitigate by landing PR1 first and reviewing PR2 against shared policy only.</li>
+        <li>Freshness checks can compare unrelated sequence streams; mitigate with closeout/review boundary evidence and scoped identity tests.</li>
+        <li>Rejected outcomes can disappear as synced; mitigate by replacing current test expectations with visible failed/review semantics.</li>
+        <li>Deploy order can strand clients; mitigate with old-client-safe Convex responses, then deploy Convex before Athena webapp from clean root.</li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>
