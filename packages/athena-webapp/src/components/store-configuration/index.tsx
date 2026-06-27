@@ -6,19 +6,24 @@ import { TaxView } from "./components/TaxView";
 import { MaintenanceView } from "./components/MaintenanceView";
 import { FulfillmentView } from "./components/FulfillmentView";
 import { MtnMomoView } from "./components/MtnMomoView";
+import { StoreHoursView } from "./components/StoreHoursView";
 
 export const StoreConfiguration = () => {
   return (
     <View hideBorder hideHeaderBottomBorder header={<Header />}>
-      <div className="container mx-auto h-full w-full py-8 grid grid-cols-1 gap-8 lg:grid-cols-2 lg:gap-40">
-        <FeesView />
-        <ContactView />
-        <MtnMomoView />
+      <div className="container mx-auto h-full w-full py-8">
+        <StoreHoursView />
 
-        <TaxView />
-        <MaintenanceView />
+        <div className="grid grid-cols-1 gap-8 pt-8 lg:grid-cols-2 lg:gap-40">
+          <FeesView />
+          <ContactView />
+          <MtnMomoView />
 
-        <FulfillmentView />
+          <TaxView />
+          <MaintenanceView />
+
+          <FulfillmentView />
+        </div>
       </div>
     </View>
   );

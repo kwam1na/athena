@@ -95,6 +95,12 @@ const useExpectedDailyCloseMutation = useMutation as unknown as (
 ) => (args: Record<string, unknown>) => Promise<unknown>;
 
 type DailyCloseAutomationStatus = {
+  bucket?:
+    | "failed"
+    | "action_taken"
+    | "needs_review"
+    | "policy_skipped"
+    | "scheduled_later";
   id: string;
   occurredAt?: number | null;
   outcome: "applied" | "prepared" | "skipped" | "failed" | "dry_run" | "disabled";
@@ -500,6 +506,18 @@ function DailyCloseStatusTitle({
 }
 
 function getDailyCloseAutomationMessage(status: DailyCloseAutomationStatus) {
+  if (status.bucket === "scheduled_later") {
+    return "EOD completion check is scheduled for later.";
+  }
+
+  if (status.bucket === "needs_review") {
+    return "EOD Review needs manager review.";
+  }
+
+  if (status.bucket === "policy_skipped") {
+    return "EOD automation did not change the workflow. Review EOD manually.";
+  }
+
   if (status.outcome === "prepared") {
     return "Athena prepared EOD Review for manager review.";
   }
@@ -530,6 +548,8 @@ function getVisibleDailyCloseAutomationStatus(
   const automationStatus = snapshot.automationStatus;
 
   if (!automationStatus) return null;
+
+  if (automationStatus.bucket === "scheduled_later") return null;
 
   if (status === "completed" && automationStatus.outcome !== "applied") {
     return null;

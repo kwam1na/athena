@@ -392,6 +392,17 @@ describe("end-of-day review backend foundation", () => {
     ).not.toThrow();
 
     expect(() =>
+      assertConformsToExportedReturns(completeDailyClose, {
+        kind: "ok",
+        data: {
+          dailyCloseId: "daily-close-1",
+          operatingDate: "2026-05-07",
+          status: "completed",
+        },
+      }),
+    ).not.toThrow();
+
+    expect(() =>
       assertConformsToExportedReturns(reopenDailyClose, {
         kind: "approval_required",
         approval: {
@@ -419,6 +430,17 @@ describe("end-of-day review backend foundation", () => {
             label: "EOD Review 2026-05-07",
             type: "daily_close",
           },
+        },
+      }),
+    ).not.toThrow();
+
+    expect(() =>
+      assertConformsToExportedReturns(reopenDailyClose, {
+        kind: "ok",
+        data: {
+          dailyCloseId: "daily-close-1",
+          operatingDate: "2026-05-07",
+          status: "reopened",
         },
       }),
     ).not.toThrow();

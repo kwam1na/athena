@@ -1449,6 +1449,28 @@ describe("DailyOperationsViewContent", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("keeps scheduled-later EOD automation checks quiet", () => {
+    renderContent({
+      ...operatingSnapshot,
+      automationStatuses: [
+        {
+          bucket: "scheduled_later",
+          id: "automation-close-scheduled-later",
+          lane: "close",
+          outcome: "skipped",
+          sourceLink: {
+            to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",
+          },
+        },
+      ],
+    });
+
+    expect(screen.queryByText("Athena automation")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Athena checked EOD Review. No change was made."),
+    ).not.toBeInTheDocument();
+  });
+
   it("keeps opened lifecycle state primary over stale Opening automation decisions", () => {
     renderContent(staleOpeningAutomationSnapshot);
 

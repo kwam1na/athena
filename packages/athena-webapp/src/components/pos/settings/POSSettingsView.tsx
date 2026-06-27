@@ -1,19 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
+import type { FunctionReference } from "convex/server";
 import type { ComponentType, ReactNode } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LoadingButton } from "@/components/ui/loading-button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { FadeIn } from "../../common/FadeIn";
 import { PageLevelHeader, PageWorkspace } from "../../common/PageLevelHeader";
 import View from "../../View";
@@ -69,16 +63,9 @@ type HealthLinkProps = {
 };
 
 const HealthLink = Link as unknown as ComponentType<HealthLinkProps>;
-const DEFAULT_STORE_DAY_AUTO_START_MINUTES = 8 * 60;
-const DEFAULT_STORE_DAY_TIMEZONE_OFFSET_MINUTES = 0;
-const STORE_DAY_AUTOMATION_HOURS = Array.from({ length: 12 }, (_, index) =>
-  String(index + 1).padStart(2, "0"),
-);
-const STORE_DAY_AUTOMATION_MINUTES = Array.from({ length: 60 }, (_, index) =>
-  String(index).padStart(2, "0"),
-);
-type StoreDayAutomationPeriod = "AM" | "PM";
 type AutomationPolicyMode = "disabled" | "dry_run" | "enabled";
+const DEFAULT_OPENING_LOCAL_START_MINUTES = 8 * 60;
+const DEFAULT_EOD_LOCAL_COMPLETION_WINDOW_MINUTES = 22 * 60;
 const terminalCapabilityOptions: Array<{
   value: PosTerminalTransactionCapability;
   label: string;
@@ -397,75 +384,24 @@ type EodAutoCompletePolicy = {
   operatingTimezoneOffsetMinutes?: number | null;
 };
 
-function formatLocalStartTime(minutes?: number | null) {
-  const safeMinutes =
-    typeof minutes === "number" && minutes >= 0 && minutes < 24 * 60
-      ? minutes
-      : DEFAULT_STORE_DAY_AUTO_START_MINUTES;
-  const hours = Math.floor(safeMinutes / 60);
-  const remainder = safeMinutes % 60;
+type UpdateEodAutoCompletePolicy = (args: {
+  cleanDayAutoCompleteEnabled: boolean;
+  localCompletionWindowMinutes: number;
+  maxAbsoluteCashVariance: number;
+  maxVoidedSaleCount: number;
+  maxVoidedSaleTotal: number;
+  mode: AutomationPolicyMode;
+  operatingTimezoneOffsetMinutes?: number;
+  storeId: Id<"store">;
+}) => Promise<unknown>;
 
-  return `${String(hours).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
-}
-
-function getLocalStartTimeParts(value: string) {
-  const parsedMinutes = parseLocalStartMinutes(value);
-  const safeMinutes = parsedMinutes ?? DEFAULT_STORE_DAY_AUTO_START_MINUTES;
-  const hour24 = Math.floor(safeMinutes / 60);
-  const minute = safeMinutes % 60;
-  const period: StoreDayAutomationPeriod = hour24 >= 12 ? "PM" : "AM";
-  const hour12 = hour24 % 12 || 12;
-
-  return {
-    hour: String(hour12).padStart(2, "0"),
-    minute: String(minute).padStart(2, "0"),
-    period,
-  };
-}
-
-function formatLocalStartTimeFromParts(args: {
-  hour: string;
-  minute: string;
-  period: StoreDayAutomationPeriod;
-}) {
-  const hour12 = Number(args.hour);
-  const minute = Number(args.minute);
-
-  if (
-    !Number.isInteger(hour12) ||
-    hour12 < 1 ||
-    hour12 > 12 ||
-    !Number.isInteger(minute) ||
-    minute < 0 ||
-    minute > 59
-  ) {
-    return formatLocalStartTime(DEFAULT_STORE_DAY_AUTO_START_MINUTES);
-  }
-
-  const hour24 =
-    args.period === "PM"
-      ? hour12 === 12
-        ? 12
-        : hour12 + 12
-      : hour12 === 12
-        ? 0
-        : hour12;
-
-  return `${String(hour24).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
-}
-
-function parseLocalStartMinutes(value: string) {
-  const match = /^(\d{2}):(\d{2})$/.exec(value);
-
-  if (!match) return null;
-
-  const hours = Number(match[1]);
-  const minutes = Number(match[2]);
-
-  if (hours > 23 || minutes > 59) return null;
-
-  return hours * 60 + minutes;
-}
+type UpdateOpeningAutoStartPolicy = (args: {
+  localStartMinutes: number;
+  mode: Extract<AutomationPolicyMode, "disabled" | "enabled">;
+  openingBlockerHandling: "start_with_manager_review";
+  operatingTimezoneOffsetMinutes?: number;
+  storeId: Id<"store">;
+}) => Promise<unknown>;
 
 function normalizeAutomationPolicyMode(
   value?: AutomationPolicyMode | null,
@@ -478,6 +414,127 @@ function parseNonNegativeIntegerInput(value: string) {
 
   const parsed = Number(value);
   return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;
+}
+
+type StoreScheduleSummary = {
+  context?: {
+    currentWindow?: {
+      localEndLabel: string;
+      localStartLabel: string;
+    } | null;
+    isOpen?: boolean;
+    nextWindow?: {
+      localEndLabel: string;
+      localStartLabel: string;
+    } | null;
+    phase?: string;
+    timezone?: string | null;
+  } | null;
+  schedule?: {
+    timezone?: string | null;
+  } | null;
+};
+
+type StoreScheduleSummaryQuery = FunctionReference<
+  "query",
+  "public",
+  { storeId: Id<"store"> },
+  StoreScheduleSummary | null
+>;
+
+const storeScheduleApi = (
+  api as unknown as {
+    inventory: {
+      storeSchedule: {
+        getStoreScheduleSummary: StoreScheduleSummaryQuery;
+      };
+    };
+  }
+).inventory.storeSchedule;
+
+function StoreHoursTimingReadout({
+  orgUrlSlug,
+  storeId,
+  storeUrlSlug,
+}: {
+  orgUrlSlug?: string;
+  storeId?: Id<"store"> | null;
+  storeUrlSlug?: string;
+}) {
+  const { hasFullAdminAccess, isLoading } = usePermissions();
+  const scheduleSummary = useQuery(
+    storeScheduleApi.getStoreScheduleSummary,
+    storeId ? { storeId } : "skip",
+  ) as StoreScheduleSummary | null | undefined;
+  const scheduleContext = scheduleSummary?.context;
+  const currentOrNextWindow =
+    scheduleContext?.currentWindow ?? scheduleContext?.nextWindow ?? null;
+  const openingTiming =
+    currentOrNextWindow?.localStartLabel
+      ? `Opening at ${currentOrNextWindow.localStartLabel}`
+      : scheduleContext?.phase === "closed"
+        ? "Store is closed today."
+        : "Opening timing is waiting for Store Hours.";
+  const eodTiming =
+    currentOrNextWindow?.localEndLabel
+      ? `EOD after ${currentOrNextWindow.localEndLabel}`
+      : "EOD timing is waiting for Store Hours.";
+  const timezone =
+    scheduleContext?.timezone ??
+    scheduleSummary?.schedule?.timezone ??
+    "Store timezone not configured";
+
+  return (
+    <section className="grid gap-layout-xl border-b border-border py-layout-2xl lg:grid-cols-[17rem_minmax(0,1fr)]">
+      <div className="space-y-layout-sm">
+        <h2 className="text-2xl font-medium text-foreground">
+          Store Hours timing
+        </h2>
+        <p className="text-sm leading-6 text-muted-foreground">
+          Athena uses Store Hours to time Opening and EOD automation.
+        </p>
+      </div>
+
+      <div className="space-y-layout-lg">
+        <div className="flex flex-wrap gap-layout-xs">
+          <span className="inline-flex rounded-full border border-border bg-background px-layout-sm py-layout-2xs text-sm text-muted-foreground">
+            Timing comes from Store Hours
+          </span>
+          <span className="inline-flex rounded-full border border-border bg-background px-layout-sm py-layout-2xs text-sm text-muted-foreground">
+            {timezone}
+          </span>
+        </div>
+
+        <dl className="grid gap-layout-sm text-sm sm:grid-cols-2">
+          <div>
+            <dt className="font-medium text-foreground">Opening</dt>
+            <dd className="mt-layout-2xs text-muted-foreground">
+              {openingTiming}
+            </dd>
+          </div>
+          <div>
+            <dt className="font-medium text-foreground">EOD</dt>
+            <dd className="mt-layout-2xs text-muted-foreground">
+              {eodTiming}
+            </dd>
+          </div>
+        </dl>
+
+        {!isLoading && hasFullAdminAccess && orgUrlSlug && storeUrlSlug ? (
+          <HealthLink
+            className="inline-flex h-control-compact items-center rounded-md bg-signal px-layout-md text-sm font-medium text-signal-foreground"
+            params={{
+              orgUrlSlug,
+              storeUrlSlug,
+            }}
+            to="/$orgUrlSlug/store/$storeUrlSlug/configuration"
+          >
+            Open Store Hours
+          </HealthLink>
+        ) : null}
+      </div>
+    </section>
+  );
 }
 
 function EodCompletionAutomationAdminPanel({
@@ -494,13 +551,10 @@ function EodCompletionAutomationAdminPanel({
   ) as EodAutoCompletePolicy | null | undefined;
   const updateEodAutoCompletePolicy = useMutation(
     api.operations.dailyOperationsAutomation.updateEodAutoCompletePolicy,
-  );
+  ) as unknown as UpdateEodAutoCompletePolicy;
   const [mode, setMode] = useState<AutomationPolicyMode>("disabled");
   const [cleanDayAutoCompleteEnabled, setCleanDayAutoCompleteEnabled] =
     useState(false);
-  const [localCompletionWindow, setLocalCompletionWindow] = useState(
-    formatLocalStartTime(0),
-  );
   const [maxAbsoluteCashVariance, setMaxAbsoluteCashVariance] = useState("0");
   const [maxVoidedSaleCount, setMaxVoidedSaleCount] = useState("0");
   const [maxVoidedSaleTotal, setMaxVoidedSaleTotal] = useState("0");
@@ -512,8 +566,6 @@ function EodCompletionAutomationAdminPanel({
   const policyMode = policy?.mode;
   const policyCleanDayAutoCompleteEnabled =
     policy?.cleanDayAutoCompleteEnabled;
-  const policyLocalCompletionWindowMinutes =
-    policy?.localCompletionWindowMinutes;
   const policyMaxAbsoluteCashVariance = policy?.maxAbsoluteCashVariance;
   const policyMaxVoidedSaleCount = policy?.maxVoidedSaleCount;
   const policyMaxVoidedSaleTotal = policy?.maxVoidedSaleTotal;
@@ -522,7 +574,6 @@ function EodCompletionAutomationAdminPanel({
     if (
       policyMode == null &&
       policyCleanDayAutoCompleteEnabled == null &&
-      policyLocalCompletionWindowMinutes == null &&
       policyMaxAbsoluteCashVariance == null &&
       policyMaxVoidedSaleCount == null &&
       policyMaxVoidedSaleTotal == null
@@ -534,15 +585,11 @@ function EodCompletionAutomationAdminPanel({
     setCleanDayAutoCompleteEnabled(
       Boolean(policyCleanDayAutoCompleteEnabled),
     );
-    setLocalCompletionWindow(
-      formatLocalStartTime(policyLocalCompletionWindowMinutes),
-    );
     setMaxAbsoluteCashVariance(String(policyMaxAbsoluteCashVariance ?? 0));
     setMaxVoidedSaleCount(String(policyMaxVoidedSaleCount ?? 0));
     setMaxVoidedSaleTotal(String(policyMaxVoidedSaleTotal ?? 0));
   }, [
     policyCleanDayAutoCompleteEnabled,
-    policyLocalCompletionWindowMinutes,
     policyMaxAbsoluteCashVariance,
     policyMaxVoidedSaleCount,
     policyMaxVoidedSaleTotal,
@@ -553,9 +600,6 @@ function EodCompletionAutomationAdminPanel({
     return null;
   }
 
-  const localCompletionWindowMinutes = parseLocalStartMinutes(
-    localCompletionWindow,
-  );
   const parsedMaxAbsoluteCashVariance = parseNonNegativeIntegerInput(
     maxAbsoluteCashVariance,
   );
@@ -565,28 +609,12 @@ function EodCompletionAutomationAdminPanel({
   const parsedMaxVoidedSaleTotal = parseNonNegativeIntegerInput(
     maxVoidedSaleTotal,
   );
-  const localCompletionWindowParts = getLocalStartTimeParts(
-    localCompletionWindow,
-  );
   const canSave =
     Boolean(storeId) &&
-    localCompletionWindowMinutes !== null &&
     parsedMaxAbsoluteCashVariance !== null &&
     parsedMaxVoidedSaleCount !== null &&
     parsedMaxVoidedSaleTotal !== null &&
     !isSaving;
-
-  const updateLocalCompletionWindowPart = (
-    key: keyof typeof localCompletionWindowParts,
-    value: string,
-  ) => {
-    setLocalCompletionWindow(
-      formatLocalStartTimeFromParts({
-        ...localCompletionWindowParts,
-        [key]: value,
-      }),
-    );
-  };
 
   const handleSave = async () => {
     if (!storeId) {
@@ -598,7 +626,6 @@ function EodCompletionAutomationAdminPanel({
     }
 
     if (
-      localCompletionWindowMinutes === null ||
       parsedMaxAbsoluteCashVariance === null ||
       parsedMaxVoidedSaleCount === null ||
       parsedMaxVoidedSaleTotal === null
@@ -615,12 +642,15 @@ function EodCompletionAutomationAdminPanel({
     try {
       await updateEodAutoCompletePolicy({
         cleanDayAutoCompleteEnabled,
-        localCompletionWindowMinutes,
+        localCompletionWindowMinutes:
+          policy?.localCompletionWindowMinutes ??
+          DEFAULT_EOD_LOCAL_COMPLETION_WINDOW_MINUTES,
         maxAbsoluteCashVariance: parsedMaxAbsoluteCashVariance,
         maxVoidedSaleCount: parsedMaxVoidedSaleCount,
         maxVoidedSaleTotal: parsedMaxVoidedSaleTotal,
         mode,
-        operatingTimezoneOffsetMinutes: DEFAULT_STORE_DAY_TIMEZONE_OFFSET_MINUTES,
+        operatingTimezoneOffsetMinutes:
+          policy?.operatingTimezoneOffsetMinutes ?? undefined,
         storeId,
       });
       setMessage({
@@ -713,7 +743,7 @@ function EodCompletionAutomationAdminPanel({
           ))}
         </RadioGroup>
 
-        <div className="grid gap-layout-md lg:grid-cols-[minmax(0,1fr)_14rem]">
+        <div className="grid gap-layout-md">
           <label className="flex min-h-[5rem] items-start gap-layout-sm rounded-md border border-border bg-background p-layout-sm text-sm">
             <Checkbox
               aria-label="Enable blocker-free completion"
@@ -733,77 +763,6 @@ function EodCompletionAutomationAdminPanel({
               </span>
             </span>
           </label>
-
-          <div className="space-y-layout-xs">
-            <Label>Local completion window</Label>
-            <div className="grid grid-cols-[1fr_1fr_1fr] gap-layout-2xs">
-              <Select
-                onValueChange={(value) =>
-                  updateLocalCompletionWindowPart("hour", value)
-                }
-                value={localCompletionWindowParts.hour}
-              >
-                <SelectTrigger
-                  aria-label="EOD completion hour"
-                  className="bg-background"
-                >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {STORE_DAY_AUTOMATION_HOURS.map((hour) => (
-                    <SelectItem key={hour} value={hour}>
-                      {hour}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Select
-                onValueChange={(value) =>
-                  updateLocalCompletionWindowPart("minute", value)
-                }
-                value={localCompletionWindowParts.minute}
-              >
-                <SelectTrigger
-                  aria-label="EOD completion minute"
-                  className="bg-background"
-                >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {STORE_DAY_AUTOMATION_MINUTES.map((minute) => (
-                    <SelectItem key={minute} value={minute}>
-                      {minute}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Select
-                onValueChange={(value) =>
-                  updateLocalCompletionWindowPart(
-                    "period",
-                    value as StoreDayAutomationPeriod,
-                  )
-                }
-                value={localCompletionWindowParts.period}
-              >
-                <SelectTrigger
-                  aria-label="EOD completion period"
-                  className="bg-background"
-                >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="AM">AM</SelectItem>
-                  <SelectItem value="PM">PM</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Athena checks completion after this store-local time.
-            </p>
-          </div>
         </div>
 
         <div className="grid gap-layout-md sm:grid-cols-3">
@@ -887,52 +846,30 @@ function StoreDayAutomationAdminPanel({
   ) as StoreDayAutomationPolicy | null | undefined;
   const updateOpeningAutoStartPolicy = useMutation(
     api.operations.dailyOperationsAutomation.updateOpeningAutoStartPolicy,
-  );
+  ) as unknown as UpdateOpeningAutoStartPolicy;
   const [isEnabled, setIsEnabled] = useState(false);
-  const [localStartTime, setLocalStartTime] = useState(
-    formatLocalStartTime(DEFAULT_STORE_DAY_AUTO_START_MINUTES),
-  );
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<{
     kind: "error" | "success";
     text: string;
   } | null>(null);
-  const policyLocalStartMinutes = policy?.localStartMinutes;
   const policyMode = policy?.mode;
 
   useEffect(() => {
-    if (policyLocalStartMinutes == null && policyMode == null) {
+    if (policyMode == null) {
       return;
     }
 
     setIsEnabled(policyMode === "enabled");
-    setLocalStartTime(formatLocalStartTime(policyLocalStartMinutes));
-  }, [policyLocalStartMinutes, policyMode]);
+  }, [policyMode]);
 
   if (isLoading || !hasFullAdminAccess) {
     return null;
   }
 
-  const localStartMinutes = parseLocalStartMinutes(localStartTime);
-  const canSave =
-    Boolean(storeId) && localStartMinutes !== null && !isSaving;
-  const localStartTimeParts = getLocalStartTimeParts(localStartTime);
-
-  const updateLocalStartTimePart = (
-    key: keyof typeof localStartTimeParts,
-    value: string,
-  ) => {
-    setLocalStartTime(
-      formatLocalStartTimeFromParts({
-        ...localStartTimeParts,
-        [key]: value,
-      }),
-    );
-  };
+  const canSave = Boolean(storeId) && !isSaving;
 
   const handleSave = async () => {
-    const parsedStartMinutes = parseLocalStartMinutes(localStartTime);
-
     if (!storeId) {
       setMessage({
         kind: "error",
@@ -941,22 +878,16 @@ function StoreDayAutomationAdminPanel({
       return;
     }
 
-    if (parsedStartMinutes === null) {
-      setMessage({
-        kind: "error",
-        text: "Enter a valid local start time.",
-      });
-      return;
-    }
-
     setIsSaving(true);
     setMessage(null);
     try {
       await updateOpeningAutoStartPolicy({
-        localStartMinutes: parsedStartMinutes,
+        localStartMinutes:
+          policy?.localStartMinutes ?? DEFAULT_OPENING_LOCAL_START_MINUTES,
         mode: isEnabled ? "enabled" : "disabled",
         openingBlockerHandling: "start_with_manager_review",
-        operatingTimezoneOffsetMinutes: DEFAULT_STORE_DAY_TIMEZONE_OFFSET_MINUTES,
+        operatingTimezoneOffsetMinutes:
+          policy?.operatingTimezoneOffsetMinutes ?? undefined,
         storeId,
       });
       setMessage({
@@ -998,7 +929,7 @@ function StoreDayAutomationAdminPanel({
           </span>
         </div>
 
-        <div className="grid gap-layout-md sm:grid-cols-[minmax(0,1fr)_12rem]">
+        <div className="grid gap-layout-md">
           <label className="flex min-h-[5rem] items-start gap-layout-sm rounded-md border border-border bg-background p-layout-sm text-sm">
             <Checkbox
               aria-label="Enable store-day auto-start"
@@ -1011,82 +942,11 @@ function StoreDayAutomationAdminPanel({
                 Enable store-day auto-start
               </span>
               <span className="mt-1 block leading-5 text-muted-foreground">
-                Athena starts Opening Handoff at the saved local time. Review
+                Athena starts Opening Handoff from Store Hours timing. Review
                 items are not resolved by automation.
               </span>
             </span>
           </label>
-
-          <div className="space-y-layout-xs">
-            <Label>Local start time</Label>
-            <div className="grid grid-cols-[1fr_1fr_1fr] gap-layout-2xs">
-              <Select
-                onValueChange={(value) =>
-                  updateLocalStartTimePart("hour", value)
-                }
-                value={localStartTimeParts.hour}
-              >
-                <SelectTrigger
-                  aria-label="Store day start hour"
-                  className="bg-background"
-                >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {STORE_DAY_AUTOMATION_HOURS.map((hour) => (
-                    <SelectItem key={hour} value={hour}>
-                      {hour}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Select
-                onValueChange={(value) =>
-                  updateLocalStartTimePart("minute", value)
-                }
-                value={localStartTimeParts.minute}
-              >
-                <SelectTrigger
-                  aria-label="Store day start minute"
-                  className="bg-background"
-                >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {STORE_DAY_AUTOMATION_MINUTES.map((minute) => (
-                    <SelectItem key={minute} value={minute}>
-                      {minute}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Select
-                onValueChange={(value) =>
-                  updateLocalStartTimePart(
-                    "period",
-                    value as StoreDayAutomationPeriod,
-                  )
-                }
-                value={localStartTimeParts.period}
-              >
-                <SelectTrigger
-                  aria-label="Store day start period"
-                  className="bg-background"
-                >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="AM">AM</SelectItem>
-                  <SelectItem value="PM">PM</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Saved as store-local minutes for the scheduled automation check.
-            </p>
-          </div>
         </div>
 
         {message ? (
@@ -1862,6 +1722,12 @@ export function POSSettingsView({
           </section>
 
           <StoreDayAutomationAdminPanel storeId={activeStore?._id ?? null} />
+
+          <StoreHoursTimingReadout
+            orgUrlSlug={routeParams?.orgUrlSlug}
+            storeId={activeStore?._id ?? null}
+            storeUrlSlug={routeParams?.storeUrlSlug}
+          />
 
           <EodCompletionAutomationAdminPanel storeId={activeStore?._id ?? null} />
 

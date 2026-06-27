@@ -28,6 +28,7 @@ import {
   completeDailyCloseForAutomationWithCtx,
 } from "./dailyClose";
 import { requireStoreFullAdminAccess } from "../stockOps/access";
+import { getStoreScheduleContextForStoreAtWithCtx } from "../inventory/storeSchedule";
 
 export const DAILY_OPERATIONS_AUTOMATION_DOMAIN = "daily_operations";
 const OPENING_AUTO_START_ACTION = "opening.auto_start";
@@ -99,6 +100,37 @@ export type DailyOperationsAutomationStatus = {
 type OpeningAutoStartApiBlockerHandling =
   | "skip_when_blocked"
   | "start_with_manager_review";
+
+export type DailyOperationsAutomationStoreDayContext = {
+  source: "canonical_schedule";
+  operatingDate: string;
+  storeScheduleId: string;
+  scheduleVersion: string;
+  openedAt?: number;
+  closedAt?: number;
+  openingEvaluationAt?: number;
+  eodEvaluationAt?: number;
+};
+
+type DailyOperationsAutomationTimingEvidence = {
+  evaluationAt?: number;
+  openedAt?: number;
+  closedAt?: number;
+  scheduleVersion?: string;
+  source: "canonical_schedule" | "compatibility_policy";
+  storeScheduleId?: string;
+};
+
+type ConfiguredStoreScheduleContext = {
+  phase:
+    | "before_first_window"
+    | "during_window"
+    | "between_windows"
+    | "after_last_window"
+    | "closed"
+    | "unavailable";
+  storeDayContext?: DailyOperationsAutomationStoreDayContext;
+};
 
 function toApiOpeningBlockerHandling(
   value: OpeningAutoStartBlockerHandling,
@@ -335,6 +367,7 @@ function eodAutoCompleteDecision(
     insideCompletionWindow: boolean;
     localCompletionWindowMinutes: number;
     localMinuteOfDay: number;
+    scheduleEvidence?: DailyOperationsAutomationTimingEvidence;
   } | null,
 ) {
   const snapshotCounts = {
@@ -368,7 +401,7 @@ function eodAutoCompleteDecision(
       ...unsupportedReviewCategories,
     ]),
   ).sort();
-  const observed = {
+  const observed: NonNullable<AutomationDecisionEvidence["observed"]> = {
     absoluteCashVariance,
     blockerCount: snapshot.readiness.blockerCount,
     carryForwardItemKeys: snapshot.carryForwardItems.map((item) => item.key),
@@ -393,6 +426,29 @@ function eodAutoCompleteDecision(
       mode: policyConfig.paused ? "disabled" : policyConfig.mode,
     },
   } satisfies AutomationDecisionEvidence;
+
+  if (timing?.scheduleEvidence) {
+    evidenceBase.observed = {
+      ...evidenceBase.observed,
+      scheduleEvidenceSource: timing.scheduleEvidence.source,
+      ...(timing.scheduleEvidence.storeScheduleId
+        ? { storeScheduleId: timing.scheduleEvidence.storeScheduleId }
+        : {}),
+      ...(timing.scheduleEvidence.scheduleVersion
+        ? { scheduleVersion: timing.scheduleEvidence.scheduleVersion }
+        : {}),
+      ...(typeof timing.scheduleEvidence.openedAt === "number"
+        ? { scheduleOpenedAt: timing.scheduleEvidence.openedAt }
+        : {}),
+      ...(typeof timing.scheduleEvidence.closedAt === "number"
+        ? { scheduleClosedAt: timing.scheduleEvidence.closedAt }
+        : {}),
+      ...(typeof timing.scheduleEvidence.evaluationAt === "number"
+        ? { scheduleEvaluationAt: timing.scheduleEvidence.evaluationAt }
+        : {}),
+    };
+  }
+
   const decision = (args: {
     classification: string;
     decisionReason: string;
@@ -614,6 +670,7 @@ export async function runDailyCloseAutoCompleteEligibilityWithCtx(
     now?: number;
     operatingDate: string;
     startAt?: number;
+    storeDayContext?: DailyOperationsAutomationStoreDayContext;
     storeId: Id<"store">;
   },
 ) {
@@ -629,11 +686,16 @@ export async function runDailyCloseAutoCompleteEligibilityWithCtx(
           insideCompletionWindow: true,
           localCompletionWindowMinutes: policyConfig.localCompletionWindowMinutes,
           localMinuteOfDay: policyConfig.localCompletionWindowMinutes,
+          scheduleEvidence: scheduleEvidenceForStoreDayContext(
+            args.storeDayContext,
+            "eod.auto_complete",
+          ),
         }
       : args.now
-      ? eodAutoCompleteLocalTiming({
+      ? eodAutoCompleteTiming({
           now: args.now,
           policyConfig,
+          storeDayContext: args.storeDayContext,
         })
       : null,
   );
@@ -658,6 +720,10 @@ export async function runDailyCloseAutoCompleteEligibilityWithCtx(
           maxVoidedSaleCount: policyConfig.maxVoidedSaleCount,
           maxVoidedSaleTotal: policyConfig.maxVoidedSaleTotal,
         },
+        automationScheduleEvidence: scheduleEvidenceForStoreDayContext(
+          args.storeDayContext,
+          "eod.auto_complete",
+        ),
         endAt: args.endAt,
         operatingDate: args.operatingDate,
         organizationId: snapshot.organizationId ?? undefined,
@@ -790,10 +856,47 @@ function openingPolicyCronWindow(args: {
   };
 }
 
-function eodAutoCompleteLocalTiming(args: {
+function scheduleEvidenceForStoreDayContext(
+  storeDayContext: DailyOperationsAutomationStoreDayContext | undefined,
+  action: "opening.auto_start" | "eod.auto_complete",
+): DailyOperationsAutomationTimingEvidence | undefined {
+  if (!storeDayContext) return undefined;
+
+  return {
+    closedAt: storeDayContext.closedAt,
+    evaluationAt:
+      action === "opening.auto_start"
+        ? storeDayContext.openingEvaluationAt
+        : storeDayContext.eodEvaluationAt,
+    openedAt: storeDayContext.openedAt,
+    scheduleVersion: storeDayContext.scheduleVersion,
+    source: "canonical_schedule",
+    storeScheduleId: storeDayContext.storeScheduleId,
+  };
+}
+
+function eodAutoCompleteTiming(args: {
   now: number;
   policyConfig: EodAutoCompletePolicyConfig;
+  storeDayContext?: DailyOperationsAutomationStoreDayContext;
 }) {
+  if (args.storeDayContext) {
+    const evaluationAt =
+      args.storeDayContext.eodEvaluationAt ?? args.storeDayContext.closedAt;
+
+    return {
+      insideCompletionWindow:
+        typeof evaluationAt === "number" ? args.now >= evaluationAt : false,
+      localCompletionWindowMinutes:
+        args.policyConfig.localCompletionWindowMinutes,
+      localMinuteOfDay: args.policyConfig.localCompletionWindowMinutes,
+      scheduleEvidence: scheduleEvidenceForStoreDayContext(
+        args.storeDayContext,
+        "eod.auto_complete",
+      ),
+    };
+  }
+
   const localDate = localDateForPolicy({
     now: args.now,
     operatingTimezoneOffsetMinutes:
@@ -811,6 +914,48 @@ function eodAutoCompleteLocalTiming(args: {
     insideCompletionWindow: localMinuteOfDay >= localCompletionWindowMinutes,
     localCompletionWindowMinutes,
     localMinuteOfDay,
+    scheduleEvidence: {
+      source: "compatibility_policy" as const,
+    },
+  };
+}
+
+async function resolveConfiguredStoreScheduleContext(
+  ctx: MutationCtx,
+  args: {
+    now: number;
+    storeId: Id<"store">;
+  },
+): Promise<ConfiguredStoreScheduleContext> {
+  const { context } = await getStoreScheduleContextForStoreAtWithCtx(ctx, {
+    at: args.now,
+    storeId: args.storeId,
+  });
+
+  if (context.kind !== "resolved" || !context.scheduleVersionId) {
+    return { phase: "unavailable" };
+  }
+
+  const relevantWindow = context.currentWindow ?? context.nextWindow ?? null;
+
+  return {
+    phase: context.phase,
+    storeDayContext: {
+      closedAt:
+        context.phase === "after_last_window"
+          ? args.now
+          : relevantWindow?.endsAt,
+      eodEvaluationAt:
+        context.phase === "after_last_window"
+          ? args.now
+          : relevantWindow?.endsAt,
+      openedAt: relevantWindow?.startsAt,
+      openingEvaluationAt: relevantWindow?.startsAt,
+      operatingDate: context.operatingDate,
+      scheduleVersion: context.scheduleVersionId,
+      source: "canonical_schedule",
+      storeScheduleId: context.scheduleVersionId,
+    },
   };
 }
 
@@ -1036,12 +1181,25 @@ export async function runConfiguredDailyOperationsAutomationWithCtx(
     listConfiguredAutomationPolicies(ctx, { action: EOD_AUTO_COMPLETE_ACTION }),
   ]);
   const openingResults = await Promise.all(
-    openingPolicies.map((policy) => {
+    openingPolicies.map(async (policy) => {
+      const scheduleContext = await resolveConfiguredStoreScheduleContext(ctx, {
+        now,
+        storeId: policy.storeId,
+      });
       const cronWindow = openingPolicyCronWindow({
         now,
         policy,
       });
-      const operatingDate = cronWindow?.operatingDate ?? null;
+      const operatingDate =
+        scheduleContext.storeDayContext &&
+        (scheduleContext.phase === "during_window" ||
+          scheduleContext.phase === "between_windows")
+          ? scheduleContext.storeDayContext.operatingDate
+          : scheduleContext.phase === "closed" ||
+              scheduleContext.phase === "before_first_window" ||
+              scheduleContext.phase === "after_last_window"
+            ? null
+            : cronWindow?.operatingDate ?? null;
 
       return runConfiguredPolicySafely(ctx, {
         action: OPENING_AUTO_START_ACTION,
@@ -1056,11 +1214,21 @@ export async function runConfiguredDailyOperationsAutomationWithCtx(
     }),
   );
   const eodResults = await Promise.all(
-    eodPolicies.map((policy) => {
-      const operatingDate = operatingDateForPolicy({
+    eodPolicies.map(async (policy) => {
+      const scheduleContext = await resolveConfiguredStoreScheduleContext(ctx, {
         now,
-        operatingTimezoneOffsetMinutes: policy.operatingTimezoneOffsetMinutes,
+        storeId: policy.storeId,
       });
+      const operatingDate =
+        scheduleContext.storeDayContext && scheduleContext.phase !== "closed"
+          ? scheduleContext.storeDayContext.operatingDate
+          : scheduleContext.phase === "closed"
+            ? null
+            : operatingDateForPolicy({
+                now,
+                operatingTimezoneOffsetMinutes:
+                  policy.operatingTimezoneOffsetMinutes,
+              });
 
       return runConfiguredPolicySafely(ctx, {
         action: EOD_PREPARE_ACTION,
@@ -1075,12 +1243,23 @@ export async function runConfiguredDailyOperationsAutomationWithCtx(
     }),
   );
   const eodAutoCompleteResults = await Promise.all(
-    eodAutoCompletePolicies.map((policy) => {
+    eodAutoCompletePolicies.map(async (policy) => {
+      const scheduleContext = await resolveConfiguredStoreScheduleContext(ctx, {
+        now,
+        storeId: policy.storeId,
+      });
       const cronWindow = eodAutoCompletePolicyCronWindow({
         now,
         policy,
       });
-      const operatingDate = cronWindow?.operatingDate ?? null;
+      const operatingDate =
+        scheduleContext.storeDayContext
+          ? scheduleContext.phase === "after_last_window"
+            ? scheduleContext.storeDayContext.operatingDate
+            : null
+          : cronWindow?.completionWindowSatisfied === false
+          ? null
+          : cronWindow?.operatingDate ?? null;
 
       return runConfiguredPolicySafely(ctx, {
         action: EOD_AUTO_COMPLETE_ACTION,
@@ -1088,9 +1267,12 @@ export async function runConfiguredDailyOperationsAutomationWithCtx(
         policy,
         run: (operatingDate) =>
           runDailyCloseAutoCompleteEligibilityWithCtx(ctx, {
-            completionWindowSatisfied: cronWindow?.completionWindowSatisfied,
+            completionWindowSatisfied: scheduleContext.storeDayContext
+              ? scheduleContext.phase === "after_last_window"
+              : cronWindow?.completionWindowSatisfied,
             now,
             operatingDate,
+            storeDayContext: scheduleContext.storeDayContext,
             storeId: policy.storeId,
           }),
       });
