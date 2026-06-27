@@ -39,7 +39,10 @@ import {
   createPosLocalSyncScheduler,
   type PosLocalSyncTrigger,
 } from "./syncScheduler";
-import { derivePosLocalSyncStatus } from "./syncStatus";
+import {
+  derivePosLocalSyncStatus,
+  mapServerSettlementOutcomeToLocalState,
+} from "./syncStatus";
 import { readScopedPosLocalEvents } from "./localRegisterReader";
 import {
   isPosLocalEventInTerminalScope,
@@ -492,9 +495,15 @@ export function usePosLocalSyncRuntimeStatus(input: {
             return uploadableEvents.map((event) => ({
               id: event.localEventId,
               terminalId: event.terminalId,
+              syncScope:
+                event.type === "expense.completed"
+                  ? ("expense" as const)
+                  : ("pos" as const),
               localRegisterSessionId: event.localRegisterSessionId ?? "",
+              localExpenseSessionId: event.localExpenseSessionId,
               createdAt: event.createdAt,
               sequence: event.sequence,
+              uploadSequence: event.uploadSequence,
             }));
           },
           onStatusChange: (status) => {
@@ -653,14 +662,22 @@ export function usePosLocalSyncRuntimeStatus(input: {
             const reviewEventIds = collectServerReviewLocalEventIds(
               result.data.accepted,
             );
+            const rejectedEventIds = collectServerRejectedLocalEventIds(
+              result.data.accepted,
+            );
             setDebug((current) => ({
               ...current,
               lastHeldEventCount: result.data.held.length,
-              lastReviewEventCount: reviewEventIds.length,
+              lastReviewEventCount:
+                reviewEventIds.length + rejectedEventIds.length,
             }));
             const localReviewEventIds = collectReviewLocalEventIds(
               latestEvents.value.events,
               reviewEventIds,
+            );
+            const localRejectedEventIds = collectReviewLocalEventIds(
+              latestEvents.value.events,
+              rejectedEventIds,
             );
             await persistDrawerAuthorityBlockForReviewEvents({
               events: latestEvents.value.events,
@@ -692,6 +709,10 @@ export function usePosLocalSyncRuntimeStatus(input: {
 
             return {
               heldEventIds: collectServerHeldLocalEventIds(result.data.held),
+              rejectedEventIds: withoutEventIds(
+                localRejectedEventIds,
+                locallySettledEventIds,
+              ),
               syncedEventIds: localSyncedEventIds,
               reviewEventIds: withoutEventIds(
                 localReviewEventIds,
@@ -704,6 +725,25 @@ export function usePosLocalSyncRuntimeStatus(input: {
             const result = await store.markEventsNeedsReview(
               eventIds,
               "Cloud sync needs review before this local event can finish.",
+              { uploaded: true },
+            );
+            if (shouldStop()) {
+              return;
+            }
+            assertPosLocalStoreOk(result);
+            if (!(await refreshEvents())) {
+              return;
+            }
+            if (shouldStop()) {
+              return;
+            }
+            onLocalEventsChanged?.();
+          },
+          markRejected: async (eventIds) => {
+            if (eventIds.length === 0) return;
+            const result = await store.markEventsNeedsReview(
+              eventIds,
+              mapServerSettlementOutcomeToLocalState("rejected").label,
               { uploaded: true },
             );
             if (shouldStop()) {
@@ -1883,9 +1923,7 @@ export function collectServerSettledLocalEventIds(
   }>,
 ) {
   return acceptedEvents
-    .filter(
-      (event) => event.status === "projected" || event.status === "rejected",
-    )
+    .filter((event) => event.status === "projected")
     .map((event) => event.localEventId);
 }
 
@@ -1897,6 +1935,17 @@ export function collectServerReviewLocalEventIds(
 ) {
   return acceptedEvents
     .filter((event) => event.status === "conflicted")
+    .map((event) => event.localEventId);
+}
+
+export function collectServerRejectedLocalEventIds(
+  acceptedEvents: Array<{
+    localEventId: string;
+    status: string;
+  }>,
+) {
+  return acceptedEvents
+    .filter((event) => event.status === "rejected")
     .map((event) => event.localEventId);
 }
 

@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { derivePosLocalSyncStatus } from "./syncStatus";
+import {
+  derivePosLocalSyncStatus,
+  mapServerSettlementOutcomeToLocalState,
+} from "./syncStatus";
 import type { PosLocalEventRecord } from "./posLocalStore";
 
 function event(
@@ -145,6 +148,31 @@ describe("derivePosLocalSyncStatus", () => {
       failedCount: 0,
       lastLocalSequence: 3,
       nextPendingSequence: null,
+    });
+  });
+});
+
+describe("mapServerSettlementOutcomeToLocalState", () => {
+  it("keeps server settlement outcomes distinct for local status presentation", () => {
+    expect(mapServerSettlementOutcomeToLocalState("projected")).toEqual({
+      state: "synced",
+      label: "Synced",
+      settlesLocalPrecursors: true,
+    });
+    expect(mapServerSettlementOutcomeToLocalState("conflicted")).toEqual({
+      state: "needs_review",
+      label: "Needs manager review",
+      settlesLocalPrecursors: false,
+    });
+    expect(mapServerSettlementOutcomeToLocalState("held")).toEqual({
+      state: "pending",
+      label: "Waiting for earlier POS history",
+      settlesLocalPrecursors: false,
+    });
+    expect(mapServerSettlementOutcomeToLocalState("rejected")).toEqual({
+      state: "needs_review",
+      label: "Sync rejected; review required",
+      settlesLocalPrecursors: false,
     });
   });
 });

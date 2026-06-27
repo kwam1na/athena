@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { assertConformsToExportedReturns } from "../../lib/returnValidatorContract";
 
 const mocks = vi.hoisted(() => ({
   requireAuthenticatedAthenaUserWithCtx: vi.fn(),
@@ -185,7 +186,10 @@ describe("POS local sync public mutation", () => {
           },
         ],
         syncCursor: {
+          syncScope: "expense",
+          localSyncCursorId: "expense-session-1",
           localRegisterSessionId: "local-register-1",
+          localExpenseSessionId: "expense-session-1",
           acceptedThroughSequence: 1,
         },
       },
@@ -199,9 +203,17 @@ describe("POS local sync public mutation", () => {
       events: [buildEvent()],
     });
 
+    assertConformsToExportedReturns(ingestLocalEvents, result);
     expect(result).toMatchObject({
       kind: "ok",
       data: {
+        syncCursor: {
+          syncScope: "expense",
+          localSyncCursorId: "expense-session-1",
+          localRegisterSessionId: "local-register-1",
+          localExpenseSessionId: "expense-session-1",
+          acceptedThroughSequence: 1,
+        },
         conflicts: [
           expect.objectContaining({
             conflictType: "duplicate_local_id",

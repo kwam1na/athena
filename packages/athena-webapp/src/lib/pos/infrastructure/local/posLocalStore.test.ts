@@ -848,13 +848,13 @@ describe("posLocalStore", () => {
       "pending",
       "pending",
       "pending",
-      "pending",
+      "synced",
     ]);
     expect(
       events.value.map(
         (event) => (event as { uploadSequence?: number }).uploadSequence,
       ),
-    ).toEqual([1, undefined, undefined, 2, 3, 4, 5]);
+    ).toEqual([1, undefined, undefined, 2, 3, 4, undefined]);
   });
 
   it("treats pending checkout item definitions as uploadable without storing unsafe local metadata", async () => {

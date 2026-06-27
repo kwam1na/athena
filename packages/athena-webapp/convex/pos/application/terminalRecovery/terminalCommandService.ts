@@ -196,10 +196,7 @@ export async function claimTerminalRecoveryCommand(
   }
 
   if (command.status === "pending") {
-    const executionId =
-      command.commandType === "update_app"
-        ? buildExecutionId(command._id, args.claimedAt)
-        : undefined;
+    const executionId = buildExecutionId(command._id, args.claimedAt);
     await repository.patchCommand(command._id, pruneUndefined({
       claimedAt: args.claimedAt,
       executionId,
@@ -217,9 +214,7 @@ export async function claimTerminalRecoveryCommand(
 
   const executionId =
     command.executionId ??
-    (command.commandType === "update_app"
-      ? buildExecutionId(command._id, args.claimedAt)
-      : undefined);
+    buildExecutionId(command._id, args.claimedAt);
   const expectedEvidence =
     command.commandType === "update_app" &&
     command.expectedEvidence.appUpdateCommandExecutionId === undefined
@@ -253,25 +248,17 @@ export async function acknowledgeTerminalRecoveryCommand(
   if (!command) {
     return notFound();
   }
-  if (command.status !== "claimed" && command.status !== "pending") {
+  if (command.status !== "claimed") {
     return userError({
       code: "precondition_failed",
       message: "This terminal recovery command cannot be acknowledged.",
     });
   }
-  if (command.commandType === "update_app") {
-    if (command.status !== "claimed") {
-      return userError({
-        code: "precondition_failed",
-        message: "This terminal recovery command must be claimed before acknowledgement.",
-      });
-    }
-    if (!command.executionId || args.executionId !== command.executionId) {
-      return userError({
-        code: "precondition_failed",
-        message: "This terminal recovery command claim is stale.",
-      });
-    }
+  if (!command.executionId || args.executionId !== command.executionId) {
+    return userError({
+      code: "precondition_failed",
+      message: "This terminal recovery command claim is stale.",
+    });
   }
 
   const status = args.result;

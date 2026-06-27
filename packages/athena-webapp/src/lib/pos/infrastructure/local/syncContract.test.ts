@@ -14,11 +14,11 @@ describe("syncContract", () => {
       buildLocalEvent({ type: "transaction.completed" }),
       buildLocalEvent({ type: "cart.cleared" }),
       buildLocalEvent({ type: "register.closeout_started" }),
-      buildLocalEvent({ type: "register.reopened" }),
     ];
     const localOnlyEvents = [
       buildLocalEvent({ type: "session.started" }),
       buildLocalEvent({ type: "cart.item_added" }),
+      buildLocalEvent({ type: "register.reopened" }),
       buildLocalEvent({ localRegisterSessionId: undefined }),
       buildLocalEvent({ staffProfileId: undefined }),
     ];
@@ -30,9 +30,9 @@ describe("syncContract", () => {
       true,
       true,
       true,
-      true,
     ]);
     expect(localOnlyEvents.map(isSyncablePosLocalEvent)).toEqual([
+      false,
       false,
       false,
       false,
@@ -50,7 +50,7 @@ describe("syncContract", () => {
     ]);
   });
 
-  it("maps register lifecycle events to server upload events with syncable sequence numbers", () => {
+  it("maps syncable register lifecycle events to server upload events with syncable sequence numbers", () => {
     const events: PosLocalEventRecord[] = [
       buildLocalEvent({
         localEventId: "event-open",
@@ -99,15 +99,19 @@ describe("syncContract", () => {
           notes: "Closed",
         }),
       }),
-      expect.objectContaining({
-        localEventId: "event-reopen",
-        sequence: 3,
-        eventType: "register_reopened",
-        payload: expect.objectContaining({
-          reason: "Corrected count",
-        }),
-      }),
     ]);
+  });
+
+  it("does not select local reopen events for upload before manager-review replay exists", () => {
+    const event = buildLocalEvent({
+      localEventId: "event-reopen",
+      sequence: 1,
+      type: "register.reopened",
+      payload: { reason: "Corrected count" },
+    });
+
+    expect(isSyncablePosLocalEvent(event)).toBe(false);
+    expect(buildPosLocalSyncUploadEvents([event], [event])).toEqual([]);
   });
 
   it("maps clear-only sales to syncable sale clear events", () => {
@@ -882,6 +886,41 @@ describe("syncContract", () => {
     ]);
   });
 
+  it("orders upload payloads by stored upload sequence when local event order disagrees", () => {
+    const events: PosLocalEventRecord[] = [
+      buildLocalEvent({
+        localEventId: "event-created-first-upload-second",
+        sequence: 10,
+        type: "register.closeout_started",
+        uploadSequence: 2,
+      }),
+      buildLocalEvent({
+        localEventId: "event-created-second-upload-first",
+        sequence: 20,
+        type: "register.opened",
+        uploadSequence: 1,
+      }),
+    ];
+
+    expect(
+      buildPosLocalSyncUploadEvents([events[0], events[1]], events).map(
+        (event) => ({
+          localEventId: event.localEventId,
+          sequence: event.sequence,
+        }),
+      ),
+    ).toEqual([
+      {
+        localEventId: "event-created-second-upload-first",
+        sequence: 1,
+      },
+      {
+        localEventId: "event-created-first-upload-second",
+        sequence: 2,
+      },
+    ]);
+  });
+
   it("normalizes local payment payloads before upload", () => {
     const events: PosLocalEventRecord[] = [
       buildLocalEvent({
@@ -1067,7 +1106,6 @@ function isUploadSequenceEventType(type: PosLocalEventRecord["type"]) {
     type === "cart.cleared" ||
     type === "transaction.completed" ||
     type === "register.closeout_started" ||
-    type === "register.reopened" ||
     type === "expense.completed"
   );
 }

@@ -27,6 +27,7 @@ function buildCommand(
 ): PosTerminalRecoveryCommand {
   return {
     commandId: "command-1",
+    executionId: "command-1:1000",
     storeId: "store-1",
     terminalId: "terminal-cloud-1",
     type: "report_diagnostics",
@@ -58,6 +59,23 @@ function buildLocalEvent(
 }
 
 describe("terminalRecoveryCommands", () => {
+  it("does not execute unclaimed commands without a server-issued execution id", async () => {
+    const result = await executeTerminalRecoveryCommand({
+      command: buildCommand({ executionId: undefined }),
+      store: createPosLocalStore({
+        adapter: createMemoryPosLocalStorageAdapter(),
+      }),
+      storeId: "store-1",
+      terminalId: "terminal-cloud-1",
+      terminalSeed: seed,
+    });
+
+    expect(result).toMatchObject({
+      message: "Terminal evidence changed before this recovery command could run.",
+      status: "precondition_failed",
+    });
+  });
+
   it("repairs the terminal seed and clears terminal integrity only after the seed write succeeds", async () => {
     const store = createPosLocalStore({
       adapter: createMemoryPosLocalStorageAdapter(),
@@ -656,6 +674,7 @@ describe("terminalRecoveryCommands", () => {
       command: {
         _id: "backend-command-1",
         commandType: "clear_stale_drawer_authority",
+        executionId: "backend-command-1:1000",
         payload: {
           cloudRegisterSessionId: "register-cloud-1",
           expectedBlockerType: "cloud_closed",
@@ -714,6 +733,7 @@ describe("terminalRecoveryCommands", () => {
           drawerAuthorityStatus: "healthy",
           localRegisterSessionId: "register-local-1",
         },
+        executionId: "backend-command-1:1000",
         storeId: "store-1",
         terminalId: "terminal-cloud-1",
       },

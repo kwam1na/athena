@@ -3061,7 +3061,10 @@ export function useRegisterViewModel(): RegisterViewModel {
     const cloudRegisterSessionId = getCloseoutCloudRegisterSessionId(
       activeCloseoutRegisterSession,
     );
+    let attemptedDirectCloudCloseout = false;
+    let directCloudCloseoutMarkedSynced = false;
     if (!hasCloseoutVariance && cloudRegisterSessionId) {
+      attemptedDirectCloudCloseout = true;
       const closeoutResult = await runCommand(() =>
         submitRegisterSessionCloseout({
           actorStaffProfileId: staffProfileId,
@@ -3079,6 +3082,7 @@ export function useRegisterViewModel(): RegisterViewModel {
           { uploaded: true },
         );
         if (markSyncedResult.ok) {
+          directCloudCloseoutMarkedSynced = true;
           noteLocalRegisterEventChanged();
         }
       }
@@ -3098,7 +3102,11 @@ export function useRegisterViewModel(): RegisterViewModel {
       setLocalOperableRegisterSession(null);
     }
     requestBootstrap();
-    toast.success("Register closed.");
+    toast.success(
+      attemptedDirectCloudCloseout && !directCloudCloseoutMarkedSynced
+        ? "Closeout saved locally. Athena will finish it after sync."
+        : "Register closed.",
+    );
   }, [
     activeStoreId,
     activeCloseoutRegisterSession,
@@ -5298,6 +5306,11 @@ export function useRegisterViewModel(): RegisterViewModel {
               registerNumber,
               currency: activeStoreCurrency,
               canOpenCashControls: isCashierManager,
+              cashControlsRegisterSessionId:
+                activeCloseoutCloudRegisterSessionId ??
+                (activeCloseoutCloudRegisterSessionCode as
+                  | Id<"registerSession">
+                  | undefined),
               canOpenDrawer: canSignedInStaffOpenDrawer,
               openingFloat: drawerOpeningFloat,
               notes: drawerNotes,

@@ -148,6 +148,9 @@ export async function executeTerminalRecoveryCommand(
       type: commandType,
     };
   }
+  if (typeof command.executionId !== "string" || command.executionId.length === 0) {
+    return preconditionFailed(command);
+  }
 
   try {
     switch (commandType) {
