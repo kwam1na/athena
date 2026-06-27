@@ -7,10 +7,10 @@ Graphify is the navigation layer for the repo graph. Use the entry docs below fo
 - [packages/AGENTS.md](../../packages/AGENTS.md) - package router plus the operational guides for each harnessed package
 
 ## Repo Summary
-- Code files discovered: 2128
-- Graph nodes: 8055
-- Graph edges: 9481
-- Communities: 2056
+- Code files discovered: 2135
+- Graph nodes: 8083
+- Graph edges: 9510
+- Communities: 2063
 
 ## Graph Hotspots
 - `DailyCloseView.tsx` (89 edges, Community 0) - [`packages/athena-webapp/src/components/operations/DailyCloseView.tsx`](../../packages/athena-webapp/src/components/operations/DailyCloseView.tsx)

@@ -3,19 +3,15 @@ import type { MutationCtx, QueryCtx } from "../../../_generated/server";
 
 import type { PosLocalSyncEventStatus } from "../../../../shared/posLocalSyncContract";
 import { isPosUsableRegisterSessionStatus } from "../../../../shared/registerSessionStatus";
+import type {
+  TerminalSyncEvidence,
+  TerminalSyncReviewEvent,
+} from "../../domain/terminalSyncEvidence";
 import type { PosTerminalSummary } from "../../domain/types";
 
 const MANAGER_REJECTED_SYNC_REVIEW_CODE = "manager_rejected";
 
 type PosTerminalReadCtx = QueryCtx | MutationCtx;
-
-type TerminalSyncReviewEvent = {
-  localEventId: string;
-  localRegisterSessionId: string;
-  sequence: number;
-  eventType: Doc<"posLocalSyncEvent">["eventType"];
-  status: PosLocalSyncEventStatus;
-};
 
 export function mapTerminalRecord(
   terminal: Doc<"posTerminal">,
@@ -140,49 +136,6 @@ function omitUndefined<T extends Record<string, unknown>>(input: T) {
     Object.entries(input).filter((entry) => entry[1] !== undefined),
   ) as T;
 }
-
-export type TerminalSyncEvidence = {
-  latestEvent: {
-    localEventId: string;
-    localRegisterSessionId: string;
-    sequence: number;
-    eventType: Doc<"posLocalSyncEvent">["eventType"];
-    status: PosLocalSyncEventStatus;
-    occurredAt: number;
-    submittedAt: number;
-    acceptedAt?: number;
-    projectedAt?: number;
-  } | null;
-  latestReviewEvent?: TerminalSyncReviewEvent | null;
-  latestReviewEventsByStatus?: {
-    conflicted?: TerminalSyncReviewEvent | null;
-    held?: TerminalSyncReviewEvent | null;
-    rejected?: TerminalSyncReviewEvent | null;
-  };
-  sampledEventCount: number;
-  acceptedCount: number;
-  projectedCount: number;
-  conflictedCount: number;
-  heldCount: number;
-  rejectedCount: number;
-  unresolvedConflictCount?: number;
-  unresolvedConflicts?: Array<{
-    _id: Id<"posLocalSyncConflict">;
-    conflictType: Doc<"posLocalSyncConflict">["conflictType"];
-    createdAt: number;
-    localEventId: string;
-    localRegisterSessionId: string;
-    reviewTarget?: {
-      type: "open_work";
-      workItemId: Id<"operationalWorkItem">;
-      workItemType: "synced_sale_inventory_review";
-    };
-    sequence: number;
-    summary: string;
-  }>;
-  acceptedThroughSequence?: number;
-  cursorUpdatedAt?: number;
-};
 
 const EMPTY_TERMINAL_SYNC_EVIDENCE: TerminalSyncEvidence = {
   latestEvent: null,
@@ -351,6 +304,126 @@ export async function hasActiveRegisterSessionForTerminal(
   );
 }
 
+export async function getLatestRegisterSessionForTerminal(
+  ctx: QueryCtx | MutationCtx,
+  args: {
+    registerNumber?: string | null;
+    storeId: Id<"store">;
+    terminalId: Id<"posTerminal">;
+  },
+): Promise<Doc<"registerSession"> | null> {
+  const recentByTerminal = await ctx.db
+    .query("registerSession")
+    .withIndex("by_terminalId", (q) => q.eq("terminalId", args.terminalId))
+    .order("desc")
+    .take(25);
+  const terminalSession = recentByTerminal
+    .filter((session) => isScopedRegisterSessionForTerminal(session, args))
+    .sort((left, right) => right.openedAt - left.openedAt)[0];
+  if (terminalSession) {
+    return terminalSession;
+  }
+
+  const registerNumber = args.registerNumber?.trim();
+  if (!registerNumber) {
+    return null;
+  }
+
+  const recentByRegisterNumber = await ctx.db
+    .query("registerSession")
+    .withIndex("by_storeId_registerNumber", (q) =>
+      q.eq("storeId", args.storeId).eq("registerNumber", registerNumber),
+    )
+    .order("desc")
+    .take(25);
+
+  return (
+    recentByRegisterNumber
+      .filter((session) => isScopedRegisterSessionForTerminal(session, args))
+      .sort((left, right) => right.openedAt - left.openedAt)[0] ?? null
+  );
+}
+
+export async function getActiveRegisterSessionForTerminal(
+  ctx: QueryCtx | MutationCtx,
+  args: {
+    registerNumber?: string | null;
+    storeId: Id<"store">;
+    terminalId: Id<"posTerminal">;
+  },
+): Promise<Doc<"registerSession"> | null> {
+  const recentByTerminal = await ctx.db
+    .query("registerSession")
+    .withIndex("by_terminalId", (q) => q.eq("terminalId", args.terminalId))
+    .order("desc")
+    .take(25);
+  const terminalSession = recentByTerminal
+    .filter((session) => isUsableRegisterSessionForTerminal(session, args))
+    .sort((left, right) => right.openedAt - left.openedAt)[0];
+  if (terminalSession) {
+    return terminalSession;
+  }
+
+  const registerNumber = args.registerNumber?.trim();
+  if (!registerNumber) {
+    return null;
+  }
+
+  const recentByRegisterNumber = await ctx.db
+    .query("registerSession")
+    .withIndex("by_storeId_registerNumber", (q) =>
+      q.eq("storeId", args.storeId).eq("registerNumber", registerNumber),
+    )
+    .order("desc")
+    .take(25);
+
+  return (
+    recentByRegisterNumber
+      .filter((session) => isUsableRegisterSessionForTerminal(session, args))
+      .sort((left, right) => right.openedAt - left.openedAt)[0] ?? null
+  );
+}
+
+export async function getDrawerAuthorityRegisterSession(
+  ctx: QueryCtx | MutationCtx,
+  args: {
+    runtimeStatus: Doc<"posTerminalRuntimeStatus"> | null;
+    storeId: Id<"store">;
+    terminalId: Id<"posTerminal">;
+  },
+): Promise<Doc<"registerSession"> | null> {
+  const cloudRegisterSessionId =
+    args.runtimeStatus?.drawerAuthority?.cloudRegisterSessionId;
+  if (!cloudRegisterSessionId) {
+    return null;
+  }
+
+  const normalizeId = (
+    ctx.db as unknown as {
+      normalizeId?: (
+        tableName: "registerSession",
+        id: string,
+      ) => Id<"registerSession"> | null;
+    }
+  ).normalizeId;
+  const registerSessionId =
+    normalizeId?.call(ctx.db, "registerSession", cloudRegisterSessionId) ??
+    (cloudRegisterSessionId as Id<"registerSession">);
+  if (!registerSessionId) {
+    return null;
+  }
+
+  const registerSession = await ctx.db.get("registerSession", registerSessionId);
+  if (
+    registerSession?.storeId === args.storeId &&
+    registerSession.terminalId === args.terminalId
+  ) {
+    return registerSession;
+  }
+
+  return null;
+}
+
 function isUsableRegisterSessionForTerminal(
   session: Doc<"registerSession">,
   args: {
@@ -367,6 +440,24 @@ function isUsableRegisterSessionForTerminal(
       !session.registerNumber ||
       session.registerNumber === registerNumber) &&
     isPosUsableRegisterSessionStatus(session.status)
+  );
+}
+
+function isScopedRegisterSessionForTerminal(
+  session: Doc<"registerSession">,
+  args: {
+    registerNumber?: string | null;
+    storeId: Id<"store">;
+    terminalId: Id<"posTerminal">;
+  },
+) {
+  const registerNumber = args.registerNumber?.trim();
+  return (
+    session.storeId === args.storeId &&
+    session.terminalId === args.terminalId &&
+    (!registerNumber ||
+      !session.registerNumber ||
+      session.registerNumber === registerNumber)
   );
 }
 

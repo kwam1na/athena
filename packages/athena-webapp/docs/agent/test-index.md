@@ -126,6 +126,8 @@ This index enumerates the current automated test files and ties them back to the
 - [`convex/pos/application/sessionCommands.test.ts`](../../convex/pos/application/sessionCommands.test.ts)
 - [`convex/pos/application/sync/ingestLocalEvents.test.ts`](../../convex/pos/application/sync/ingestLocalEvents.test.ts)
 - [`convex/pos/application/sync/projectLocalEvents.test.ts`](../../convex/pos/application/sync/projectLocalEvents.test.ts)
+- [`convex/pos/application/terminalOperationalState/collectTerminalOperationalFacts.test.ts`](../../convex/pos/application/terminalOperationalState/collectTerminalOperationalFacts.test.ts)
+- [`convex/pos/application/terminalOperationalState/policy.test.ts`](../../convex/pos/application/terminalOperationalState/policy.test.ts)
 - [`convex/pos/application/terminalRecovery/cloudRepairPolicy.test.ts`](../../convex/pos/application/terminalRecovery/cloudRepairPolicy.test.ts)
 - [`convex/pos/application/terminalRecovery/resolveTerminalCloudRepair.test.ts`](../../convex/pos/application/terminalRecovery/resolveTerminalCloudRepair.test.ts)
 - [`convex/pos/application/terminalRecovery/terminalCommandService.test.ts`](../../convex/pos/application/terminalRecovery/terminalCommandService.test.ts)
