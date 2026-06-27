@@ -17,6 +17,7 @@ import {
   listCompletedTransactionsForDay,
   listTransactionItems,
 } from "../infrastructure/repositories/transactionRepository";
+import { getTerminalById } from "../infrastructure/repositories/terminalRepository";
 
 vi.mock("../infrastructure/repositories/transactionRepository", () => ({
   getCashierById: vi.fn(),
@@ -31,9 +32,14 @@ vi.mock("../infrastructure/repositories/transactionRepository", () => ({
   listTransactionsByStore: vi.fn(),
 }));
 
+vi.mock("../infrastructure/repositories/terminalRepository", () => ({
+  getTerminalById: vi.fn(),
+}));
+
 beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(getRegisterSessionById).mockResolvedValue(null as never);
+  vi.mocked(getTerminalById).mockResolvedValue(null as never);
   vi.mocked(listCompletedTransactionsForRange).mockResolvedValue([] as never);
   vi.mocked(listCompletedTransactionsSince).mockResolvedValue([] as never);
 });
@@ -1244,6 +1250,48 @@ describe("getTodaySummary", () => {
 });
 
 describe("getTransactionById", () => {
+  it("returns the terminal display name for transaction summaries", async () => {
+    vi.mocked(getPosTransactionById).mockResolvedValue({
+      _id: "txn-terminal" as Id<"posTransaction">,
+      storeId: "store-1" as Id<"store">,
+      transactionNumber: "POS-584065",
+      subtotal: 210000,
+      tax: 0,
+      total: 210000,
+      paymentMethod: "cash",
+      payments: [],
+      totalPaid: 210000,
+      status: "completed",
+      completedAt: 100,
+      customerId: undefined,
+      customerInfo: undefined,
+      notes: undefined,
+      registerNumber: "8",
+      terminalId: "terminal-1" as Id<"posTerminal">,
+    } as never);
+    vi.mocked(getTerminalById).mockResolvedValue({
+      _id: "terminal-1" as Id<"posTerminal">,
+      displayName: "Codex",
+    } as never);
+    vi.mocked(getCashierById).mockResolvedValue(null as never);
+    vi.mocked(getPosSessionById).mockResolvedValue(null as never);
+    vi.mocked(listTransactionItems).mockResolvedValue([] as never);
+
+    const result = await getTransactionById(
+      { db: mockCorrectionHistoryDb() } as never,
+      {
+        transactionId: "txn-terminal" as Id<"posTransaction">,
+      },
+    );
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        registerNumber: "8",
+        terminalName: "Codex",
+      }),
+    );
+  });
+
   it("ignores legacy transaction workflow trace ids when no session trace is available", async () => {
     vi.mocked(getPosTransactionById).mockResolvedValue({
       _id: "txn-1" as Id<"posTransaction">,

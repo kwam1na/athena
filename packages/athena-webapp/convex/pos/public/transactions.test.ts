@@ -88,6 +88,49 @@ describe("POS public transaction query validators", () => {
     assertConformsToExportedReturns(completeTransaction, validationError);
     assertConformsToExportedReturns(getCompletedTransactions, []);
     assertConformsToExportedReturns(getTransactionById, null);
+    assertConformsToExportedReturns(getTransactionById, {
+      _id: "txn-1" as Id<"posTransaction">,
+      adjustmentSummary: {
+        appliedCount: 0,
+        effectiveNetTotal: 210000,
+        hasAdjustments: false,
+        originalTotal: 210000,
+        pendingCount: 0,
+        totalAppliedAdjustmentDelta: 0,
+      },
+      adjustments: [],
+      cashier: null,
+      changeGiven: 0,
+      completedAt: 1,
+      correctionHistory: [],
+      customer: null,
+      customerInfo: undefined,
+      effectiveNetTotal: 210000,
+      hasTrace: false,
+      items: [],
+      notes: undefined,
+      originalTotal: 210000,
+      paymentMethod: "cash",
+      payments: [{ amount: 210000, method: "cash", timestamp: 1 }],
+      pendingVoidApprovalRequest: null,
+      receiptDeliveryHistory: [],
+      registerNumber: "8",
+      registerSessionId: "register-session-1" as Id<"registerSession">,
+      registerSessionStatus: "closed",
+      serviceLineCount: 0,
+      serviceLines: [],
+      servicePaymentTotal: 0,
+      sessionTraceId: null,
+      status: "completed",
+      subtotal: 210000,
+      tax: 0,
+      terminalId: "terminal-1" as Id<"posTerminal">,
+      terminalName: "Codex",
+      total: 210000,
+      totalAppliedAdjustmentDelta: 0,
+      totalPaid: 210000,
+      transactionNumber: "584065",
+    });
     assertConformsToExportedReturns(voidTransaction, validationError);
     assertConformsToExportedReturns(createTransactionFromSession, validationError);
     assertConformsToExportedReturns(correctTransactionCustomer, validationError);

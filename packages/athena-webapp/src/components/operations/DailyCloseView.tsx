@@ -1149,6 +1149,68 @@ function getMetadataValue(metadata: Record<string, unknown>, label: string) {
   );
 }
 
+const sourceLinkMetadataLabels = new Set([
+  "approval",
+  "session",
+]);
+
+function renderItemSourceLink({
+  children,
+  item,
+  orgUrlSlug,
+  storeUrlSlug,
+}: {
+  children: ReactNode;
+  item: DailyCloseItem;
+  orgUrlSlug: string;
+  storeUrlSlug: string;
+}) {
+  if (!item.link) return children;
+
+  const className =
+    "inline-flex min-w-0 items-center gap-1 text-foreground underline-offset-4 transition-colors hover:text-primary hover:underline";
+
+  if (item.link.href) {
+    return (
+      <a className={className} href={item.link.href}>
+        <span className="truncate">{children}</span>
+        <ArrowUpRight aria-hidden="true" className="h-3 w-3 shrink-0" />
+      </a>
+    );
+  }
+
+  if (item.link.to) {
+    return (
+      <Link
+        className={className}
+        params={
+          {
+            orgUrlSlug,
+            storeUrlSlug,
+            ...(item.link.params ?? {}),
+          } as never
+        }
+        search={
+          {
+            o: getOrigin(),
+            ...(item.link.search ?? {}),
+          } as never
+        }
+        to={item.link.to as never}
+      >
+        <span className="truncate">{children}</span>
+        <ArrowUpRight aria-hidden="true" className="h-3 w-3 shrink-0" />
+      </Link>
+    );
+  }
+
+  return children;
+}
+
+function isUsableRouteIdentifier(value?: string) {
+  return Boolean(value && value !== "redacted");
+}
+
 function formatMetadataValue(label: string, value: unknown, currency: string) {
   if (value === null || value === undefined || value === "") return "Not set";
 
@@ -1234,14 +1296,25 @@ function formatMetadataDisplayValue({
   ) : (
     formattedValue
   );
-  const transactionId =
-    getMetadataStringValue(item.metadata, "transactionId") ??
-    (item.subject?.type === "pos_transaction" ? item.subject.id : undefined);
-  const reportId =
-    getMetadataStringValue(item.metadata, "reportId") ??
-    (item.subject?.type === "expense_transaction"
-      ? item.subject.id
-      : undefined);
+  const transactionMetadataId = getMetadataStringValue(
+    item.metadata,
+    "transactionId",
+  );
+  const subjectTransactionId =
+    item.subject?.type === "pos_transaction" ? item.subject.id : undefined;
+  const transactionId = isUsableRouteIdentifier(transactionMetadataId)
+    ? transactionMetadataId
+    : isUsableRouteIdentifier(subjectTransactionId)
+      ? subjectTransactionId
+      : undefined;
+  const reportMetadataId = getMetadataStringValue(item.metadata, "reportId");
+  const subjectReportId =
+    item.subject?.type === "expense_transaction" ? item.subject.id : undefined;
+  const reportId = isUsableRouteIdentifier(reportMetadataId)
+    ? reportMetadataId
+    : isUsableRouteIdentifier(subjectReportId)
+      ? subjectReportId
+      : undefined;
 
   if (normalizeMetadataLabel(label) === "transaction" && transactionId) {
     return (
@@ -1263,6 +1336,15 @@ function formatMetadataDisplayValue({
     );
   }
 
+  if (normalizeMetadataLabel(label) === "transaction" && item.link) {
+    return renderItemSourceLink({
+      children: visibleValue,
+      item,
+      orgUrlSlug,
+      storeUrlSlug,
+    });
+  }
+
   if (normalizeMetadataLabel(label) === "report" && reportId) {
     return (
       <Link
@@ -1281,6 +1363,27 @@ function formatMetadataDisplayValue({
         <ArrowUpRight aria-hidden="true" className="h-3 w-3" />
       </Link>
     );
+  }
+
+  if (normalizeMetadataLabel(label) === "report" && item.link) {
+    return renderItemSourceLink({
+      children: visibleValue,
+      item,
+      orgUrlSlug,
+      storeUrlSlug,
+    });
+  }
+
+  if (
+    item.link &&
+    sourceLinkMetadataLabels.has(normalizeMetadataLabel(label))
+  ) {
+    return renderItemSourceLink({
+      children: visibleValue,
+      item,
+      orgUrlSlug,
+      storeUrlSlug,
+    });
   }
 
   if (normalizeMetadataLabel(label) === "variance") {
@@ -1346,11 +1449,19 @@ function getMetadataEntries(
     const hasExplicitRegister = entries.some(
       (entry) => normalizeMetadataLabel(entry.label) === "register",
     );
-    const appendRegister = (value: ReactNode, nextRegisterLabel: ReactNode) => (
-      <>
-        {value} / {nextRegisterLabel}
-      </>
-    );
+    const withSourceLink = (value: ReactNode) =>
+      renderItemSourceLink({
+        children: value,
+        item,
+        orgUrlSlug,
+        storeUrlSlug,
+      });
+    const appendRegister = (value: ReactNode, nextRegisterLabel: ReactNode) =>
+      withSourceLink(
+        <>
+          {value} / {nextRegisterLabel}
+        </>,
+      );
 
     let combinedEntries = entries.map((entry) =>
       registerLabel &&
@@ -1396,7 +1507,7 @@ function getMetadataEntries(
         ...combinedEntries,
         {
           label: "Register",
-          value: registerLabel,
+          value: withSourceLink(registerLabel),
         },
       ];
     }

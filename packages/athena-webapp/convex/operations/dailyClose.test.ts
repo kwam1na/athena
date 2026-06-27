@@ -1022,7 +1022,7 @@ describe("end-of-day review backend foundation", () => {
     );
   });
 
-  it("redacts active register blocker metadata on the exported snapshot query", async () => {
+  it("preserves active register blocker context on the exported snapshot query", async () => {
     const { db } = createDb({
       posTerminal: [
         {
@@ -1065,6 +1065,18 @@ describe("end-of-day review backend foundation", () => {
     expect(snapshot.blockers[0]).toMatchObject({
       category: "register_session",
       key: "blocker:register_session:0",
+      link: {
+        label: "View session",
+        params: { sessionId: "register-open" },
+        to: "/$orgUrlSlug/store/$storeUrlSlug/cash-controls/registers/$sessionId",
+      },
+      metadata: {
+        openedAt: Date.UTC(2026, 4, 7, 10),
+        operatingScope: "Opened today",
+        register: "Register A1",
+        status: "open",
+        terminal: "terminal-1",
+      },
       subject: {
         id: "redacted",
         label: "Register A1",
@@ -1072,8 +1084,9 @@ describe("end-of-day review backend foundation", () => {
       },
       title: "Register session is still open",
     });
-    expect(snapshot.blockers[0]).not.toHaveProperty("link");
-    expect(snapshot.blockers[0]).not.toHaveProperty("metadata");
+    expect(snapshot.blockers[0].metadata).not.toHaveProperty("expectedCash");
+    expect(snapshot.blockers[0].metadata).not.toHaveProperty("countedCash");
+    expect(snapshot.blockers[0].metadata).not.toHaveProperty("variance");
   });
 
   it("redacts completed automation review evidence on the exported snapshot query", async () => {
@@ -1182,17 +1195,22 @@ describe("end-of-day review backend foundation", () => {
     expect(snapshot.reviewItems).toEqual([
       expect.objectContaining({
         key: "review:voided_sale:0",
+        metadata: {
+          voidedAt: Date.UTC(2026, 4, 7, 15),
+        },
         subject: expect.objectContaining({ id: "redacted" }),
       }),
     ]);
-    expect(snapshot.reviewItems[0]).not.toHaveProperty("metadata");
+    expect(snapshot.reviewItems[0].metadata).not.toHaveProperty("total");
     expect(snapshot.carryForwardItems).toEqual([
       expect.objectContaining({
         key: "carry_forward:operational_work_item:0",
+        metadata: {
+          workItemId: "work-1",
+        },
         subject: expect.objectContaining({ id: "redacted" }),
       }),
     ]);
-    expect(snapshot.carryForwardItems[0]).not.toHaveProperty("metadata");
     expect(snapshot.sourceSubjects).toEqual([]);
   });
 
@@ -3934,15 +3952,26 @@ describe("end-of-day review backend foundation", () => {
     expect(broadSnapshot.existingClose).toBeNull();
     expect(broadSnapshot.priorClose).toBeNull();
     expect(broadSnapshot.sourceSubjects).toEqual([]);
-    expect(broadSnapshot.reviewItems[0]).not.toHaveProperty("metadata");
+    const redactedReviewedSale = broadSnapshot.reviewItems.find(
+      (item) => item.category === "voided_sale",
+    );
+    expect(redactedReviewedSale?.metadata).toMatchObject({
+      paymentMethods: "cash",
+    });
+    expect(redactedReviewedSale?.metadata).not.toHaveProperty("total");
+    expect(redactedReviewedSale?.metadata).not.toHaveProperty("totalPaid");
     expect(broadSnapshot.carryForwardItems[0]).toMatchObject({
       key: "carry_forward:open_work:0",
+      metadata: {
+        priority: "normal",
+        status: "open",
+        type: "customer_follow_up",
+      },
       subject: {
         id: "redacted",
         type: "operational_work_item",
       },
     });
-    expect(broadSnapshot.carryForwardItems[0]).not.toHaveProperty("metadata");
 
     const trustedDetail = await getCompletedDailyCloseHistoryDetailWithCtx(
       { db } as unknown as QueryCtx,
@@ -3981,14 +4010,16 @@ describe("end-of-day review backend foundation", () => {
     ).toEqual([]);
     expect(broadDetail?.reportSnapshot.carryForwardItems[0]).toMatchObject({
       key: "carry_forward:open_work:0",
+      metadata: {
+        priority: "normal",
+        status: "open",
+        type: "customer_follow_up",
+      },
       subject: {
         id: "redacted",
         type: "operational_work_item",
       },
     });
-    expect(broadDetail?.reportSnapshot.carryForwardItems[0]).not.toHaveProperty(
-      "metadata",
-    );
     expect(broadDetail?.reportSnapshot.summary).toMatchObject({
       registerVarianceCount: 0,
       transactionCount: 1,
@@ -3997,9 +4028,15 @@ describe("end-of-day review backend foundation", () => {
       "netCashVariance",
     );
     expect(broadDetail?.reportSnapshot.summary).not.toHaveProperty("salesTotal");
-    expect(broadDetail?.reportSnapshot.reviewedItems[0]).not.toHaveProperty(
-      "metadata",
-    );
+    expect(broadDetail?.reportSnapshot.reviewedItems[0].metadata).toMatchObject({
+      paymentMethods: "cash",
+    });
+    expect(
+      broadDetail?.reportSnapshot.reviewedItems[0].metadata,
+    ).not.toHaveProperty("total");
+    expect(
+      broadDetail?.reportSnapshot.reviewedItems[0].metadata,
+    ).not.toHaveProperty("totalPaid");
     expect(broadDetail?.reportSnapshot.sourceSubjects).toEqual([]);
     expect(patches).toEqual([]);
   });

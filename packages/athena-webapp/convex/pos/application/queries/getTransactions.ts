@@ -10,6 +10,7 @@ import {
   listTransactionItems,
   listTransactionsByStore,
 } from "../../infrastructure/repositories/transactionRepository";
+import { getTerminalById } from "../../infrastructure/repositories/terminalRepository";
 import { formatStaffDisplayName } from "../../../../shared/staffDisplayName";
 import { listReceiptDeliveriesForTransaction } from "../../../customerMessaging/repository";
 import { statusIsRetryable } from "../../../customerMessaging/domain";
@@ -432,6 +433,7 @@ export async function getTransactionById(
     registerSession?.registerNumber;
   const terminalId =
     transaction.terminalId ?? session?.terminalId ?? registerSession?.terminalId;
+  const terminal = terminalId ? await getTerminalById(ctx, terminalId) : null;
   const items = await listTransactionItems(ctx, transaction._id);
   const serviceLines = await listMixedServiceLinesForTransaction(ctx, {
     _id: transaction._id,
@@ -536,6 +538,7 @@ export async function getTransactionById(
     registerSessionId,
     registerSessionStatus: registerSession?.status,
     terminalId,
+    terminalName: terminal?.displayName,
     paymentMethod: transaction.paymentMethod,
     payments: transaction.payments,
     totalPaid: transaction.totalPaid ?? transaction.total,
