@@ -320,6 +320,8 @@ vi.mock("../OrderSummary", () => ({
     completedAdjustmentSummary,
     completedTransactionData,
     onReceiptPrinted,
+    registerNumber,
+    terminalName,
   }: {
     completedAdjustmentSummary?: {
       originalTotal: number;
@@ -329,8 +331,15 @@ vi.mock("../OrderSummary", () => ({
     } | null;
     completedTransactionData?: { total: number; transactionId?: string } | null;
     onReceiptPrinted?: (transactionId: string) => void | Promise<void>;
+    registerNumber?: string;
+    terminalName?: string;
   }) => (
     <div data-testid="order-summary">
+      {terminalName || registerNumber ? (
+        <span>
+          register summary {terminalName} / {registerNumber}
+        </span>
+      ) : null}
       {completedTransactionData?.transactionId && onReceiptPrinted ? (
         <button
           onClick={() =>
@@ -1565,6 +1574,19 @@ describe("TransactionView", () => {
     expect(
       screen.queryByLabelText("Payment method update reason"),
     ).not.toBeInTheDocument();
+  });
+
+  it("passes terminal context to the completed transaction summary", () => {
+    useParamsMock.mockReturnValue({ transactionId: "txn_terminal" });
+    useQueryMock.mockReturnValue({
+      ...baseTransaction,
+      registerNumber: "8",
+      terminalName: "Codex",
+    });
+
+    render(<TransactionView />);
+
+    expect(screen.getByText("register summary Codex / 8")).toBeInTheDocument();
   });
 
   it("disables payment method correction when change was given", async () => {

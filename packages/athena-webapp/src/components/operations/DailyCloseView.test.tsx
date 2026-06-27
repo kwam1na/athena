@@ -374,8 +374,18 @@ describe("DailyCloseViewContent", () => {
     expect(screen.getByText("Register Session")).toBeInTheDocument();
     expect(screen.queryByText("Register 1")).not.toBeInTheDocument();
     expect(
-      screen.getAllByText("Front counter terminal / Register 1"),
+      screen.getAllByText((_, element) =>
+        Boolean(
+          element?.textContent?.includes("Front counter terminal / Register 1"),
+        ),
+      ),
     ).not.toHaveLength(0);
+    expect(
+      screen.getByRole("link", { name: "Front counter terminal / Register 1" }),
+    ).toHaveAttribute(
+      "href",
+      "/wigclub/store/osu/cash-controls/registers/session-1?o=%252F",
+    );
     expect(screen.getAllByText("Operating Scope")).not.toHaveLength(0);
     expect(screen.getByText("Carried over from prior day")).toBeInTheDocument();
     expect(screen.getByText("Opened At")).toBeInTheDocument();
@@ -392,6 +402,12 @@ describe("DailyCloseViewContent", () => {
       "/wigclub/store/osu/operations/approvals?o=%252F",
     );
     expect(screen.getByText("Payment method correction")).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Payment method correction" }),
+    ).toHaveAttribute(
+      "href",
+      "/wigclub/store/osu/operations/approvals?o=%252F",
+    );
     expect(screen.getByText("Ato Kwamina")).toBeInTheDocument();
     expect(
       screen.getAllByText((_, element) =>
@@ -1073,6 +1089,44 @@ describe("DailyCloseViewContent", () => {
     ).toHaveAttribute(
       "href",
       "/wigclub/store/osu/pos/expense-reports/expense-1?o=%252F",
+    );
+  });
+
+  it("uses the preserved item link when redacted sale rows expose only a transaction number", () => {
+    renderContent({
+      ...readySnapshot,
+      readyItems: [
+        {
+          category: "sale",
+          description: "Completed sale is included in the end of day review.",
+          id: "ready-redacted-sale",
+          link: {
+            label: "View transaction",
+            params: { transactionId: "txn-real-584065" },
+            to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId",
+          },
+          metadata: {
+            paymentMethods: "Cash",
+            terminal: "Codex / Register 8",
+            transaction: "584065",
+          },
+          subject: {
+            id: "redacted",
+            label: "TXN-584065",
+            type: "pos_transaction",
+          },
+          title: "Completed sale",
+        },
+      ],
+      blockers: [],
+      carryForwardItems: [],
+      reviewItems: [],
+      status: "ready",
+    });
+
+    expect(screen.getByRole("link", { name: "#584065" })).toHaveAttribute(
+      "href",
+      "/wigclub/store/osu/pos/transactions/txn-real-584065?o=%252F",
     );
   });
 

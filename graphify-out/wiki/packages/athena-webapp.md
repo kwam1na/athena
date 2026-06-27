@@ -17,8 +17,8 @@ Landing page for packages/athena-webapp. Use this page to orient around graph ho
 - [validation-map.json](../../../packages/athena-webapp/docs/agent/validation-map.json)
 
 ## Graph Hotspots
-- `DailyCloseView.tsx` (89 edges, Community 0) - [`packages/athena-webapp/src/components/operations/DailyCloseView.tsx`](../../../packages/athena-webapp/src/components/operations/DailyCloseView.tsx)
-- `dailyClose.ts` (82 edges, Community 2) - [`packages/athena-webapp/convex/operations/dailyClose.ts`](../../../packages/athena-webapp/convex/operations/dailyClose.ts)
+- `dailyClose.ts` (83 edges, Community 1) - [`packages/athena-webapp/convex/operations/dailyClose.ts`](../../../packages/athena-webapp/convex/operations/dailyClose.ts)
+- `DailyCloseView.tsx` (66 edges, Community 2) - [`packages/athena-webapp/src/components/operations/DailyCloseView.tsx`](../../../packages/athena-webapp/src/components/operations/DailyCloseView.tsx)
 - `projectLocalEvents.ts` (65 edges, Community 3) - [`packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.ts`](../../../packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.ts)
 - `dailyOperations.ts` (63 edges, Community 4) - [`packages/athena-webapp/convex/operations/dailyOperations.ts`](../../../packages/athena-webapp/convex/operations/dailyOperations.ts)
 - `ingestLocalEvents.ts` (54 edges, Community 5) - [`packages/athena-webapp/convex/pos/application/sync/ingestLocalEvents.ts`](../../../packages/athena-webapp/convex/pos/application/sync/ingestLocalEvents.ts)

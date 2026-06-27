@@ -109,6 +109,7 @@ interface OrderSummaryProps {
     phone?: string;
   };
   registerNumber?: string;
+  terminalName?: string;
   subtotal?: number;
   tax?: number;
   total?: number;
@@ -183,10 +184,28 @@ export function clearAttemptedOrderSummaryAutoPrintReceiptKeysForTest() {
   attemptedAutoPrintReceiptKeys.clear();
 }
 
+function formatRegisterSummaryValue({
+  registerNumber,
+  terminalName,
+}: {
+  registerNumber?: string | null;
+  terminalName?: string | null;
+}) {
+  const register = registerNumber?.trim();
+  const terminal = terminalName?.trim();
+
+  if (terminal && register) {
+    return `${terminal} / ${register}`;
+  }
+
+  return register || terminal || "Unassigned";
+}
+
 export function OrderSummary({
   cartItems,
   customerInfo,
   registerNumber,
+  terminalName,
   subtotal: propSubtotal,
   total: propTotal,
   payments = [],
@@ -383,7 +402,10 @@ export function OrderSummary({
     },
     {
       label: "Register",
-      value: registerNumber ? `${registerNumber}` : "Unassigned",
+      value: formatRegisterSummaryValue({
+        registerNumber,
+        terminalName,
+      }),
     },
     {
       label: "Cashier",

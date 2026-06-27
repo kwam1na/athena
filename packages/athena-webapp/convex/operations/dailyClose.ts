@@ -1693,10 +1693,35 @@ function completionAttributionForDailyClose(
   };
 }
 
+const broadViewRestrictedMetadataLabels = new Set([
+  "amount",
+  "changegiven",
+  "countedcash",
+  "expectedcash",
+  "total",
+  "totalpaid",
+  "variance",
+]);
+
+function normalizeBroadViewMetadataLabel(label: string) {
+  return label.replace(/[\s_-]+/g, "").toLowerCase();
+}
+
 function redactDailyCloseItemForBroadView(
   item: DailyCloseItem,
   index = 0,
 ): DailyCloseItem {
+  const safeMetadata = item.metadata
+    ? Object.fromEntries(
+        Object.entries(item.metadata).filter(
+          ([label]) =>
+            !broadViewRestrictedMetadataLabels.has(
+              normalizeBroadViewMetadataLabel(label),
+            ),
+        ),
+      )
+    : undefined;
+
   return {
     key: `${item.severity}:${item.category}:${index}`,
     severity: item.severity,
@@ -1708,6 +1733,10 @@ function redactDailyCloseItemForBroadView(
       id: "redacted",
       label: item.subject.label,
     },
+    ...(item.link ? { link: item.link } : {}),
+    ...(safeMetadata && Object.keys(safeMetadata).length > 0
+      ? { metadata: safeMetadata }
+      : {}),
   };
 }
 

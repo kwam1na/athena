@@ -550,6 +550,7 @@ export const getTransactionById = query({
       registerSessionId: v.optional(v.id("registerSession")),
       registerSessionStatus: v.optional(v.string()),
       terminalId: v.optional(v.id("posTerminal")),
+      terminalName: v.optional(v.string()),
       paymentMethod: v.optional(v.string()),
       payments: v.array(paymentValidator),
       totalPaid: v.number(),

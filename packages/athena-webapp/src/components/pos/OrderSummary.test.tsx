@@ -358,6 +358,33 @@ describe("OrderSummary completed transaction summary", () => {
     expect(screen.queryByText("Tax")).not.toBeInTheDocument();
   });
 
+  it("shows terminal context with the register number in completed sale summaries", () => {
+    render(
+      <OrderSummary
+        cartItems={[]}
+        completedOrderNumber="404923"
+        completedTransactionData={{
+          paymentMethod: "cash",
+          completedAt: new Date("2026-04-25T18:08:00.000Z"),
+          cartItems: [],
+          customerInfo: undefined,
+          subtotal: 115000,
+          tax: 0,
+          total: 115000,
+        }}
+        isTransactionCompleted
+        payments={[
+          { id: "payment-1", method: "cash", amount: 115000, timestamp: 1 },
+        ]}
+        registerNumber="8"
+        terminalName="Codex"
+      />,
+    );
+
+    expect(screen.getByText("Register")).toBeInTheDocument();
+    expect(screen.getByText("Codex / 8")).toBeInTheDocument();
+  });
+
   it("shows completed subtotal and total in rail summaries", () => {
     render(
       <OrderSummary

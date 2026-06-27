@@ -2450,6 +2450,7 @@ export function TransactionView() {
                 readOnly
                 presentation="rail"
                 registerNumber={transaction.registerNumber}
+                terminalName={transaction.terminalName}
                 completedOrderNumber={transaction.transactionNumber}
                 completedTransactionData={completedData}
                 completedAdjustmentSummary={
