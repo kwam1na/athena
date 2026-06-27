@@ -60,9 +60,11 @@ import {
 } from "./localSyncDrainCoordinator";
 import { refreshAndStoreTerminalStaffAuthority } from "./terminalStaffAuthorityRefresh";
 import {
+  getRuntimeStatusPublishMaterialSignature,
   getRuntimeBrowserInfo,
   getRuntimeCheckInNotReadyReason,
   getRuntimeStatusPublishSignature,
+  shouldPublishRuntimeStatus,
   withRuntimeCheckInPublishDebug as withCheckInPublishDebug,
 } from "./runtimeStatusPublisher";
 import {
@@ -263,8 +265,11 @@ export function usePosLocalSyncRuntimeStatus(input: {
     [input.appSessionRecovery],
   );
   const lastRuntimeStatusSignatureRef = useRef<string | null>(null);
+  const lastRuntimeStatusMaterialSignatureRef = useRef<string | null>(null);
+  const lastRuntimeStatusPublishedAtRef = useRef<number | null>(null);
   const runtimeStatusPublishInFlightRef = useRef(false);
   const queuedRuntimeStatusSignatureRef = useRef<string | null>(null);
+  const forceNextRuntimeStatusPublishRef = useRef(false);
   const isRuntimeStatusPublisherMountedRef = useRef(true);
   const observedRecoveryCommandIdsRef = useRef<Set<string>>(new Set());
   const requestRetry = useCallback(() => {
@@ -998,15 +1003,36 @@ export function usePosLocalSyncRuntimeStatus(input: {
       storeId: checkInStoreId,
       terminalId: checkInTerminalId,
     });
-    if (signature === lastRuntimeStatusSignatureRef.current) return;
+    const materialSignature = getRuntimeStatusPublishMaterialSignature({
+      runtimeStatus,
+      storeId: checkInStoreId,
+      terminalId: checkInTerminalId,
+    });
     if (runtimeStatusPublishInFlightRef.current) {
       queuedRuntimeStatusSignatureRef.current = signature;
       return;
     }
+    const forcePublish = forceNextRuntimeStatusPublishRef.current;
+    if (
+      !forcePublish &&
+      !shouldPublishRuntimeStatus({
+        lastMaterialSignature: lastRuntimeStatusMaterialSignatureRef.current,
+        lastPublishedAt: lastRuntimeStatusPublishedAtRef.current,
+        lastPublishSignature: lastRuntimeStatusSignatureRef.current,
+        materialSignature,
+        now: Date.now(),
+        publishSignature: signature,
+      })
+    ) {
+      return;
+    }
+    forceNextRuntimeStatusPublishRef.current = false;
     lastRuntimeStatusSignatureRef.current = signature;
+    lastRuntimeStatusMaterialSignatureRef.current = materialSignature;
     runtimeStatusPublishInFlightRef.current = true;
 
     const attemptedAt = Date.now();
+    lastRuntimeStatusPublishedAtRef.current = attemptedAt;
     setDebug((current) =>
       withCheckInPublishDebug(current, {
         checkInPublishAttemptedAt: attemptedAt,
@@ -1157,6 +1183,15 @@ export function usePosLocalSyncRuntimeStatus(input: {
                   storeId: checkInStoreId,
                   terminalId: checkInTerminalId,
                 });
+              lastRuntimeStatusMaterialSignatureRef.current =
+                getRuntimeStatusPublishMaterialSignature({
+                  runtimeStatus: buildPosTerminalRuntimeStatus({
+                    ...runtimeStatusInput,
+                    terminalIntegrity,
+                  }),
+                  storeId: checkInStoreId,
+                  terminalId: checkInTerminalId,
+                });
               setRuntimeReadiness((current) => ({
                 ...current,
                 terminalIntegrity,
@@ -1200,10 +1235,12 @@ export function usePosLocalSyncRuntimeStatus(input: {
         const queuedSignature = queuedRuntimeStatusSignatureRef.current;
         queuedRuntimeStatusSignatureRef.current = null;
         if (
-          queuedSignature &&
-          queuedSignature !== lastRuntimeStatusSignatureRef.current &&
+          ((queuedSignature &&
+            queuedSignature !== lastRuntimeStatusSignatureRef.current) ||
+            isStale) &&
           isRuntimeStatusPublisherMountedRef.current
         ) {
+          forceNextRuntimeStatusPublishRef.current = true;
           setRuntimeStatusObservationToken((current) => current + 1);
         }
       });
