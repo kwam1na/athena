@@ -3,8 +3,10 @@ import { describe, expect, it } from "vitest";
 import type { Doc, Id } from "../../../_generated/dataModel";
 import {
   buildTerminalCloudRepairPreview,
+  canProjectRegisterOpenForTerminalCloudRepair,
   classifyTerminalCloudRepairConflict,
 } from "./cloudRepairPolicy";
+import type { TerminalCloudRepairProjectionEligibilityRepository } from "./cloudRepairPolicy";
 
 const now = 1_000_000;
 const storeId = "store-1" as Id<"store">;
@@ -112,7 +114,127 @@ describe("terminal cloud repair policy", () => {
       }).preconditionHash,
     ).not.toBe(preview.preconditionHash);
   });
+
+  it("rejects direct cloud register repair projection while closeout review is open", async () => {
+    const repository = createRepairProjectionRepository({
+      registerSession: {
+        _id: "register-1",
+        status: "active",
+        storeId,
+        terminalId,
+      },
+      reviewRegisterSessionIds: new Set(["register-1"]),
+      validCloudIds: new Set(["register-1"]),
+    });
+
+    await expect(
+      canProjectRegisterOpenForTerminalCloudRepair(repository, {
+        event: {
+          localEventId: "event-1",
+          localRegisterSessionId: "register-1",
+          sequence: 2,
+          eventType: "register_opened",
+          occurredAt: 20,
+          staffProfileId: "staff-1" as Id<"staffProfile">,
+          staffProofToken: "proof-token-1",
+          payload: {
+            openingFloat: 100,
+            registerNumber: "A1",
+          },
+        },
+        now,
+        storeId,
+        terminalId,
+      }),
+    ).resolves.toBe(false);
+  });
 });
+
+function createRepairProjectionRepository(overrides: {
+  registerSession?: {
+    _id: string;
+    status: string;
+    storeId: Id<"store">;
+    terminalId: Id<"posTerminal">;
+  } | null;
+  reviewRegisterSessionIds?: Set<string>;
+  validCloudIds?: Set<string>;
+} = {}): TerminalCloudRepairProjectionEligibilityRepository {
+  return {
+    async findBlockingRegisterSession() {
+      return null;
+    },
+    async getRegisterSession(registerSessionId) {
+      return overrides.registerSession &&
+        overrides.registerSession._id === registerSessionId
+        ? ({
+            closeoutRecords: [],
+            expectedCash: 100,
+            registerNumber: "A1",
+            ...overrides.registerSession,
+          } as never)
+        : null;
+    },
+    async getStaffProfile(staffProfileId) {
+      return staffProfileId === "staff-1"
+        ? ({
+            _id: "staff-1",
+            status: "active",
+            storeId,
+          } as never)
+        : null;
+    },
+    async getTerminal(id) {
+      return id === terminalId
+        ? ({
+            _id: terminalId,
+            registerNumber: "A1",
+            status: "active",
+            storeId,
+          } as never)
+        : null;
+    },
+    async hasActivePosRole() {
+      return true;
+    },
+    async listOpenRegisterReviewConflictFacts(args) {
+      return overrides.reviewRegisterSessionIds?.has(args.registerSessionId) === true
+        ? [
+            {
+              conflict: {
+                _id: "conflict-1",
+                conflictType: "permission",
+                createdAt: now - 1_000,
+                details: {
+                  closeoutOccurredAt: now - 2_000,
+                  countedCash: 100,
+                  expectedCash: 90,
+                  variance: 10,
+                },
+                localEventId: "event-closeout-1",
+                localRegisterSessionId: args.registerSessionId,
+                sequence: 1,
+                status: "needs_review",
+                storeId: args.storeId,
+                summary:
+                  "Register closeout variance requires manager review before synced closeout can be applied.",
+                terminalId: args.terminalId,
+              },
+              directRegisterSession: {
+                _id: args.registerSessionId,
+                storeId: args.storeId,
+                terminalId: args.terminalId,
+              },
+              registerSessionMapping: null,
+            },
+          ]
+        : [];
+    },
+    normalizeCloudId(_tableName, value) {
+      return overrides.validCloudIds?.has(value) ? (value as never) : null;
+    },
+  };
+}
 
 function buildConflict(
   overrides: Partial<Doc<"posLocalSyncConflict">> = {},

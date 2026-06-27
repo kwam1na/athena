@@ -689,6 +689,7 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
     },
 
     async readDrawerAuthorityState(input: {
+      cloudRegisterSessionId?: string;
       localRegisterSessionId: string;
       storeId: string;
       terminalId: string;
@@ -704,11 +705,7 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
               states
                 .filter(isDrawerAuthorityState)
                 .filter(
-                  (state) =>
-                    state.storeId === input.storeId &&
-                    state.terminalId === input.terminalId &&
-                    state.localRegisterSessionId ===
-                      input.localRegisterSessionId,
+                  (state) => drawerAuthorityMatchesReadInput(state, input),
                 )
                 .sort((left, right) => right.observedAt - left.observedAt)
                 .at(0) ?? null
@@ -723,6 +720,7 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
     },
 
     async clearDrawerAuthorityState(input: {
+      cloudRegisterSessionId?: string;
       localRegisterSessionId: string;
       storeId: string;
       terminalId: string;
@@ -737,9 +735,7 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
             for (const state of states) {
               if (
                 isDrawerAuthorityState(state) &&
-                state.storeId === input.storeId &&
-                state.terminalId === input.terminalId &&
-                state.localRegisterSessionId === input.localRegisterSessionId
+                drawerAuthorityMatchesExactLocalInput(state, input)
               ) {
                 await transaction.delete("authority", drawerAuthorityKey(state));
               }
@@ -1588,6 +1584,46 @@ function drawerAuthorityKey(input: {
   localRegisterSessionId: string;
 }) {
   return `${DRAWER_AUTHORITY_PREFIX}${input.storeId}:${input.terminalId}:${input.localRegisterSessionId}`;
+}
+
+function drawerAuthorityMatchesReadInput(
+  state: PosDrawerAuthorityState,
+  input: {
+    cloudRegisterSessionId?: string;
+    localRegisterSessionId: string;
+    storeId: string;
+    terminalId: string;
+  },
+) {
+  const registerSessionIds = new Set(
+    [input.localRegisterSessionId, input.cloudRegisterSessionId].filter(
+      (id): id is string => typeof id === "string" && id.length > 0,
+    ),
+  );
+
+  return (
+    state.storeId === input.storeId &&
+    state.terminalId === input.terminalId &&
+    (registerSessionIds.has(state.localRegisterSessionId) ||
+      (state.cloudRegisterSessionId
+        ? registerSessionIds.has(state.cloudRegisterSessionId)
+        : false))
+  );
+}
+
+function drawerAuthorityMatchesExactLocalInput(
+  state: PosDrawerAuthorityState,
+  input: {
+    localRegisterSessionId: string;
+    storeId: string;
+    terminalId: string;
+  },
+) {
+  return (
+    state.storeId === input.storeId &&
+    state.terminalId === input.terminalId &&
+    state.localRegisterSessionId === input.localRegisterSessionId
+  );
 }
 
 function readinessKey(storeId: string, operatingDate: string) {

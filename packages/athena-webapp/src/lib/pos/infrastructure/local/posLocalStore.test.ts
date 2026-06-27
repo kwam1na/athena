@@ -318,6 +318,123 @@ describe("posLocalStore", () => {
     });
   });
 
+  it("projects drawer authority written under the mapped cloud register id for the active local drawer", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+      clock: () => 3_000,
+    });
+
+    await store.writeProvisionedTerminalSeed({
+      terminalId: "local-terminal-1",
+      cloudTerminalId: "terminal-cloud-1",
+      syncSecretHash: "sync-secret-1",
+      storeId: "store-1",
+      registerNumber: "1",
+      displayName: "Front register",
+      provisionedAt: 1_000,
+      schemaVersion: POS_LOCAL_STORE_SCHEMA_VERSION,
+    });
+    await store.writeLocalCloudMapping({
+      entity: "registerSession",
+      localId: "local-register-1",
+      cloudId: "cloud-register-1",
+      mappedAt: 1_500,
+    });
+    await store.appendEvent({
+      type: "register.opened",
+      terminalId: "local-terminal-1",
+      storeId: "store-1",
+      registerNumber: "1",
+      localRegisterSessionId: "local-register-1",
+      payload: {
+        localRegisterSessionId: "local-register-1",
+        openingFloat: 100,
+        expectedCash: 100,
+        status: "open",
+      },
+      initialSyncStatus: "synced",
+    });
+    await store.writeDrawerAuthorityState({
+      cloudRegisterSessionId: "cloud-register-1",
+      localRegisterSessionId: "cloud-register-1",
+      observedAt: 2_900,
+      reason: "cloud_closed",
+      status: "blocked",
+      storeId: "store-1",
+      terminalId: "local-terminal-1",
+    });
+
+    await expect(
+      readProjectedLocalRegisterModel({
+        store,
+        storeId: "store-1",
+        terminalId: "local-terminal-1",
+      }),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: {
+        canSell: false,
+        drawerAuthorityReason: "cloud_closed",
+        saleBlockReason: "drawer_authority",
+      },
+    });
+  });
+
+  it("clears drawer authority by exact local drawer id without deleting cloud-id aliases", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+    });
+
+    await store.writeDrawerAuthorityState({
+      cloudRegisterSessionId: "cloud-register-1",
+      localRegisterSessionId: "local-register-1",
+      observedAt: 2_000,
+      reason: "cloud_closed",
+      status: "blocked",
+      storeId: "store-1",
+      terminalId: "local-terminal-1",
+    });
+    await store.writeDrawerAuthorityState({
+      cloudRegisterSessionId: "cloud-register-1",
+      localRegisterSessionId: "local-register-2",
+      observedAt: 2_100,
+      reason: "authority_unknown",
+      status: "blocked",
+      storeId: "store-1",
+      terminalId: "local-terminal-1",
+    });
+
+    await expect(
+      store.clearDrawerAuthorityState({
+        cloudRegisterSessionId: "cloud-register-1",
+        localRegisterSessionId: "local-register-1",
+        storeId: "store-1",
+        terminalId: "local-terminal-1",
+      }),
+    ).resolves.toEqual({ ok: true, value: null });
+
+    await expect(
+      store.readDrawerAuthorityState({
+        localRegisterSessionId: "local-register-1",
+        storeId: "store-1",
+        terminalId: "local-terminal-1",
+      }),
+    ).resolves.toEqual({ ok: true, value: null });
+    await expect(
+      store.readDrawerAuthorityState({
+        localRegisterSessionId: "local-register-2",
+        storeId: "store-1",
+        terminalId: "local-terminal-1",
+      }),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: {
+        localRegisterSessionId: "local-register-2",
+        reason: "authority_unknown",
+      },
+    });
+  });
+
   it("atomically writes repaired terminal seed and clears stale integrity state", async () => {
     const store = createPosLocalStore({
       adapter: createMemoryPosLocalStorageAdapter(),

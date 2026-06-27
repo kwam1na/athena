@@ -22,6 +22,7 @@ describe("registerSessionLifecyclePolicy", () => {
       false,
     );
     expect(isRegisterSessionSaleUsable({ status: "closed" })).toBe(false);
+    expect(isRegisterSessionSaleUsable({ status: "needs_review" })).toBe(false);
   });
 
   it("allows void application for open, active, and closing register sessions", () => {
@@ -149,6 +150,23 @@ describe("registerSessionLifecyclePolicy", () => {
     ).toBe("cloud_closed");
   });
 
+  it("ignores drawer authority that belongs to a superseded drawer identity", () => {
+    expect(
+      getSaleBlockingDrawerAuthority({
+        activeRegisterSession: {
+          cloudRegisterSessionId: "cloud-drawer-2",
+          localRegisterSessionId: "local-drawer-2",
+        },
+        drawerAuthority: {
+          cloudRegisterSessionId: "cloud-drawer-1",
+          localRegisterSessionId: "local-drawer-1",
+          reason: "cloud_closed",
+          status: "blocked",
+        },
+      }),
+    ).toBeNull();
+  });
+
   it("allows local replacement drawers only for cloud-closed, settled closeout, or submitted closeout blocks", () => {
     expect(
       canOpenReplacementDrawerForLocalBlock({
@@ -254,55 +272,71 @@ describe("registerSessionLifecyclePolicy", () => {
   it("allows superseding reviewed sale-usable or closing sessions only in scope", () => {
     expect(
       canSupersedeReviewedRegisterSessionForLocalOpen({
+        closeoutReviewBoundaryAt: 20,
         hasOpenRegisterCloseoutReview: true,
         replacementLocalRegisterSessionId: "replacement-local-drawer",
-        replacementSequence: 2,
+        replacementOpenedAt: 30,
         registerSession: {
           localRegisterSessionId: "reviewed-local-drawer",
           status: "closing",
           storeId: "store-1",
           terminalId: "terminal-1",
         },
-        reviewSequence: 2,
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      }),
+    ).toBe(true);
+    expect(
+      canSupersedeReviewedRegisterSessionForLocalOpen({
+        closeoutReviewBoundaryAt: 50,
+        hasOpenRegisterCloseoutReview: true,
+        replacementLocalRegisterSessionId: "replacement-local-drawer",
+        replacementOpenedAt: 10,
+        registerSession: {
+          localRegisterSessionId: "reviewed-local-drawer",
+          status: "closing",
+          storeId: "store-1",
+          terminalId: "terminal-1",
+        },
         storeId: "store-1",
         terminalId: "terminal-1",
       }),
     ).toBe(false);
     expect(
       canSupersedeReviewedRegisterSessionForLocalOpen({
+        closeoutReviewBoundaryAt: 20,
         hasOpenRegisterCloseoutReview: true,
         replacementLocalRegisterSessionId: "replacement-local-drawer",
-        replacementSequence: 3,
+        replacementOpenedAt: 30,
         registerSession: {
           localRegisterSessionId: "reviewed-local-drawer",
           status: "closing",
           storeId: "store-1",
           terminalId: "terminal-1",
         },
-        reviewSequence: 2,
         storeId: "store-1",
         terminalId: "terminal-1",
       }),
     ).toBe(true);
     expect(
       canSupersedeReviewedRegisterSessionForLocalOpen({
+        closeoutReviewBoundaryAt: null,
         hasOpenRegisterCloseoutReview: false,
         replacementLocalRegisterSessionId: "replacement-local-drawer",
-        replacementSequence: 1,
+        replacementOpenedAt: 20,
         registerSession: {
           localRegisterSessionId: "submitted-closeout-drawer",
           status: "closing",
           storeId: "store-1",
           terminalId: "terminal-1",
         },
-        reviewSequence: null,
         storeId: "store-1",
         terminalId: "terminal-1",
       }),
-    ).toBe(true);
+    ).toBe(false);
     expect(
       canSupersedeReviewedRegisterSessionForLocalOpen({
-        allowUnknownReviewSequence: true,
+        allowUnknownCloseoutReviewBoundary: true,
         hasOpenRegisterCloseoutReview: true,
         replacementLocalRegisterSessionId: "replacement-local-drawer",
         registerSession: {
@@ -317,7 +351,7 @@ describe("registerSessionLifecyclePolicy", () => {
     ).toBe(true);
     expect(
       canSupersedeReviewedRegisterSessionForLocalOpen({
-        allowUnknownReviewSequence: true,
+        allowUnknownCloseoutReviewBoundary: true,
         hasOpenRegisterCloseoutReview: true,
         replacementLocalRegisterSessionId: "replacement-local-drawer",
         registerSession: {
@@ -332,7 +366,7 @@ describe("registerSessionLifecyclePolicy", () => {
     ).toBe(false);
     expect(
       canSupersedeReviewedRegisterSessionForLocalOpen({
-        allowUnknownReviewSequence: true,
+        allowUnknownCloseoutReviewBoundary: true,
         hasOpenRegisterCloseoutReview: true,
         replacementLocalRegisterSessionId: "reviewed-local-drawer",
         registerSession: {
@@ -347,7 +381,7 @@ describe("registerSessionLifecyclePolicy", () => {
     ).toBe(false);
     expect(
       canSupersedeReviewedRegisterSessionForLocalOpen({
-        allowUnknownReviewSequence: true,
+        allowUnknownCloseoutReviewBoundary: true,
         hasOpenRegisterCloseoutReview: true,
         replacementLocalRegisterSessionId: "replacement-local-drawer",
         registerSession: {
@@ -362,7 +396,7 @@ describe("registerSessionLifecyclePolicy", () => {
     ).toBe(true);
     expect(
       canSupersedeReviewedRegisterSessionForLocalOpen({
-        allowUnknownReviewSequence: true,
+        allowUnknownCloseoutReviewBoundary: true,
         hasOpenRegisterCloseoutReview: true,
         replacementLocalRegisterSessionId: "replacement-local-drawer",
         registerSession: {
@@ -377,7 +411,7 @@ describe("registerSessionLifecyclePolicy", () => {
     ).toBe(false);
     expect(
       canSupersedeReviewedRegisterSessionForLocalOpen({
-        allowUnknownReviewSequence: true,
+        allowUnknownCloseoutReviewBoundary: true,
         hasOpenRegisterCloseoutReview: true,
         replacementLocalRegisterSessionId: "replacement-local-drawer",
         registerSession: {

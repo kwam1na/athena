@@ -1088,6 +1088,234 @@ describe("projectLocalRegisterReadModel", () => {
     expect(model.drawerAuthorityReason).toBe("cloud_closed");
   });
 
+  it("keeps a synced replacement drawer active after the previous drawer was cloud-closed", () => {
+    const model = projectLocalRegisterReadModel({
+      drawerAuthority: {
+        cloudRegisterSessionId: "cloud-register-1",
+        localRegisterSessionId: "local-register-1",
+        observedAt: 1_050,
+        reason: "cloud_closed",
+        status: "blocked",
+        storeId: "store-1",
+        terminalId: "local-terminal-1",
+      },
+      mappings: [
+        {
+          entity: "registerSession",
+          localId: "local-register-1",
+          cloudId: "cloud-register-1",
+          mappedAt: 1_001,
+        },
+        {
+          entity: "registerSession",
+          localId: "local-register-2",
+          cloudId: "cloud-register-2",
+          mappedAt: 1_002,
+        },
+      ],
+      events: [
+        event({
+          sequence: 1,
+          type: "register.opened",
+          localRegisterSessionId: "local-register-1",
+          payload: {
+            localRegisterSessionId: "local-register-1",
+            openingFloat: 100,
+          },
+          sync: { status: "synced", uploaded: true },
+        }),
+        event({
+          sequence: 2,
+          type: "register.opened",
+          localRegisterSessionId: "local-register-2",
+          payload: {
+            localRegisterSessionId: "local-register-2",
+            openingFloat: 250,
+            expectedCash: 250,
+          },
+          sync: { status: "synced", uploaded: true },
+        }),
+      ],
+    });
+
+    expect(model.activeRegisterSession).toMatchObject({
+      localRegisterSessionId: "local-register-2",
+      cloudRegisterSessionId: "cloud-register-2",
+      openingFloat: 250,
+      expectedCash: 250,
+    });
+    expect(model.canSell).toBe(true);
+    expect(model.saleBlockReason).toBeUndefined();
+    expect(model.drawerAuthorityReason).toBeUndefined();
+  });
+
+  it("does not use an uploaded review replacement open to bypass active drawer authority", () => {
+    const model = projectLocalRegisterReadModel({
+      drawerAuthority: {
+        cloudRegisterSessionId: "cloud-register-1",
+        localRegisterSessionId: "local-register-1",
+        observedAt: 1_050,
+        reason: "cloud_closed",
+        status: "blocked",
+        storeId: "store-1",
+        terminalId: "local-terminal-1",
+      },
+      mappings: [
+        {
+          entity: "registerSession",
+          localId: "local-register-1",
+          cloudId: "cloud-register-1",
+          mappedAt: 1_001,
+        },
+        {
+          entity: "registerSession",
+          localId: "local-register-2",
+          cloudId: "cloud-register-2",
+          mappedAt: 1_002,
+        },
+      ],
+      events: [
+        event({
+          sequence: 1,
+          type: "register.opened",
+          localRegisterSessionId: "local-register-1",
+          payload: {
+            localRegisterSessionId: "local-register-1",
+            openingFloat: 100,
+          },
+          sync: { status: "synced", uploaded: true },
+        }),
+        event({
+          sequence: 2,
+          type: "register.opened",
+          localRegisterSessionId: "local-register-2",
+          payload: {
+            localRegisterSessionId: "local-register-2",
+            openingFloat: 250,
+            expectedCash: 250,
+          },
+          sync: { status: "needs_review", uploaded: true },
+        }),
+      ],
+    });
+
+    expect(model.activeRegisterSession).toMatchObject({
+      localRegisterSessionId: "local-register-1",
+      cloudRegisterSessionId: "cloud-register-1",
+    });
+    expect(model.canSell).toBe(false);
+    expect(model.saleBlockReason).toBe("drawer_authority");
+    expect(model.drawerAuthorityReason).toBe("cloud_closed");
+  });
+
+  it("does not let synced replacement drawers bypass non-recoverable active authority", () => {
+    const model = projectLocalRegisterReadModel({
+      drawerAuthority: {
+        cloudRegisterSessionId: "cloud-register-1",
+        localRegisterSessionId: "local-register-1",
+        observedAt: 1_050,
+        reason: "authority_unknown",
+        status: "blocked",
+        storeId: "store-1",
+        terminalId: "local-terminal-1",
+      },
+      mappings: [
+        {
+          entity: "registerSession",
+          localId: "local-register-1",
+          cloudId: "cloud-register-1",
+          mappedAt: 1_001,
+        },
+        {
+          entity: "registerSession",
+          localId: "local-register-2",
+          cloudId: "cloud-register-2",
+          mappedAt: 1_002,
+        },
+      ],
+      events: [
+        event({
+          sequence: 1,
+          type: "register.opened",
+          localRegisterSessionId: "local-register-1",
+          payload: {
+            localRegisterSessionId: "local-register-1",
+            openingFloat: 100,
+          },
+          sync: { status: "synced", uploaded: true },
+        }),
+        event({
+          sequence: 2,
+          type: "register.opened",
+          localRegisterSessionId: "local-register-2",
+          payload: {
+            localRegisterSessionId: "local-register-2",
+            openingFloat: 250,
+            expectedCash: 250,
+          },
+          sync: { status: "synced", uploaded: true },
+        }),
+      ],
+    });
+
+    expect(model.activeRegisterSession).toMatchObject({
+      localRegisterSessionId: "local-register-1",
+      cloudRegisterSessionId: "cloud-register-1",
+    });
+    expect(model.canSell).toBe(false);
+    expect(model.saleBlockReason).toBe("drawer_authority");
+    expect(model.drawerAuthorityReason).toBe("authority_unknown");
+  });
+
+  it("keeps a synced replacement drawer active after stale authority is cleared", () => {
+    const model = projectLocalRegisterReadModel({
+      mappings: [
+        {
+          entity: "registerSession",
+          localId: "local-register-1",
+          cloudId: "cloud-register-1",
+          mappedAt: 1_001,
+        },
+        {
+          entity: "registerSession",
+          localId: "local-register-2",
+          cloudId: "cloud-register-2",
+          mappedAt: 1_002,
+        },
+      ],
+      events: [
+        event({
+          sequence: 1,
+          type: "register.opened",
+          localRegisterSessionId: "local-register-1",
+          payload: {
+            localRegisterSessionId: "local-register-1",
+            openingFloat: 100,
+          },
+          sync: { status: "synced", uploaded: true },
+        }),
+        event({
+          sequence: 2,
+          type: "register.opened",
+          localRegisterSessionId: "local-register-2",
+          payload: {
+            localRegisterSessionId: "local-register-2",
+            openingFloat: 250,
+            expectedCash: 250,
+          },
+          sync: { status: "synced", uploaded: true },
+        }),
+      ],
+    });
+
+    expect(model.activeRegisterSession).toMatchObject({
+      localRegisterSessionId: "local-register-2",
+      cloudRegisterSessionId: "cloud-register-2",
+    });
+    expect(model.canSell).toBe(true);
+    expect(model.saleBlockReason).toBeUndefined();
+  });
+
   it("keeps selling available when uploaded lifecycle review does not invalidate local authority", () => {
     const model = projectLocalRegisterReadModel({
       events: [

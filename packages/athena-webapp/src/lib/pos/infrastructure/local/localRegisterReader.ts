@@ -20,6 +20,7 @@ export type PosLocalRegisterReaderStore = {
   listEvents(): Promise<PosLocalStoreResult<PosLocalEventRecord[]>>;
   listLocalCloudMappings?(): Promise<PosLocalStoreResult<PosLocalCloudMapping[]>>;
   readDrawerAuthorityState?(input: {
+    cloudRegisterSessionId?: string;
     localRegisterSessionId: string;
     storeId: string;
     terminalId: string;
@@ -118,11 +119,14 @@ export async function readProjectedLocalRegisterModel(input: {
   });
   const activeLocalRegisterSessionId =
     baseModel.activeRegisterSession?.localRegisterSessionId;
+  const activeCloudRegisterSessionId =
+    baseModel.activeRegisterSession?.cloudRegisterSessionId;
   const drawerAuthority =
     input.store.readDrawerAuthorityState &&
     scope.storeId &&
     activeLocalRegisterSessionId
       ? await readLatestDrawerAuthorityState({
+          cloudRegisterSessionId: activeCloudRegisterSessionId,
           localRegisterSessionId: activeLocalRegisterSessionId,
           store: input.store,
           storeId: scope.storeId,
@@ -145,6 +149,7 @@ export async function readProjectedLocalRegisterModel(input: {
 }
 
 async function readLatestDrawerAuthorityState(input: {
+  cloudRegisterSessionId?: string;
   localRegisterSessionId: string;
   store: PosLocalRegisterReaderStore;
   storeId: string;
@@ -157,6 +162,9 @@ async function readLatestDrawerAuthorityState(input: {
   const states: PosDrawerAuthorityState[] = [];
   for (const terminalId of input.terminalIds) {
     const result = await input.store.readDrawerAuthorityState({
+      ...(input.cloudRegisterSessionId
+        ? { cloudRegisterSessionId: input.cloudRegisterSessionId }
+        : {}),
       localRegisterSessionId: input.localRegisterSessionId,
       storeId: input.storeId,
       terminalId,

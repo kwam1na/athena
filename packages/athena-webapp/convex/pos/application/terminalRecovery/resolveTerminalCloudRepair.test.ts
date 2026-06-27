@@ -66,6 +66,7 @@ describe("resolveTerminalCloudRepair", () => {
       _id: "closeout-conflict" as Id<"posLocalSyncConflict">,
       conflictType: "permission",
       details: {
+        closeoutOccurredAt: now - 21 * 60 * 1000,
         countedCash: 95,
         expectedCash: 100,
         variance: -5,
