@@ -23,6 +23,7 @@ import {
   promoCodeSchema,
   redeemedPromoCodeSchema,
   storeAssetSchema,
+  storeScheduleSchema,
   storeSchema,
   subcategorySchema,
   complimentaryProductsCollectionSchema,
@@ -905,6 +906,14 @@ const schema = defineSchema({
     .index("by_productSkuId", ["productSkuId"]),
   store: defineTable(storeSchema),
   storeAsset: defineTable(storeAssetSchema),
+  storeSchedule: defineTable(storeScheduleSchema)
+    .index("by_storeId_status_effectiveFrom", ["storeId", "status", "effectiveFrom"])
+    .index("by_organizationId_storeId_status", [
+      "organizationId",
+      "storeId",
+      "status",
+    ])
+    .index("by_source_status", ["source", "status"]),
   storeFrontSession: defineTable(storeFrontSessionSchema),
   storeFrontUser: defineTable(storeFrontUserSchema),
   storeFrontVerificationCode: defineTable(storeFrontVerificationCode),

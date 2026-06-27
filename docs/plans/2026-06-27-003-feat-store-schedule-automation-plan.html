@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>feat: Add foundational store schedule domain</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f8fafc;
+      --panel: #ffffff;
+      --ink: #172033;
+      --muted: #5b667a;
+      --line: #dbe3ef;
+      --accent: #0f766e;
+      --accent-soft: #e6f4f1;
+      --warn-soft: #fff7ed;
+      --code: #0f172a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 40px 24px 64px;
+    }
+    header {
+      margin-bottom: 28px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--line);
+    }
+    h1 {
+      margin: 0 0 12px;
+      font-size: clamp(30px, 5vw, 48px);
+      line-height: 1.05;
+      letter-spacing: 0;
+    }
+    h2 {
+      margin: 0 0 14px;
+      font-size: 22px;
+      letter-spacing: 0;
+    }
+    h3 {
+      margin: 18px 0 8px;
+      font-size: 17px;
+      letter-spacing: 0;
+    }
+    p { margin: 0 0 12px; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    code {
+      color: var(--code);
+      background: #eef2f7;
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-size: 0.93em;
+    }
+    section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      margin: 18px 0;
+      padding: 22px;
+    }
+    ul, ol { padding-left: 22px; margin: 8px 0 0; }
+    li { margin: 6px 0; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      font-size: 14px;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 10px;
+      vertical-align: top;
+      text-align: left;
+    }
+    th { background: #f1f5f9; }
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 4px 10px;
+      background: var(--panel);
+    }
+    .summary {
+      background: var(--accent-soft);
+      border-color: #a7d8d0;
+    }
+    .decision {
+      border-left: 4px solid var(--accent);
+    }
+    .unit {
+      border-left: 4px solid #64748b;
+    }
+    .warning {
+      background: var(--warn-soft);
+      border-color: #fed7aa;
+    }
+    .toc {
+      display: grid;
+      gap: 8px;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    }
+    .diagram {
+      overflow-x: auto;
+      background: #f8fafc;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 14px;
+      white-space: pre;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>feat: Add foundational store schedule domain</h1>
+      <div class="meta">
+        <span class="pill">Type: feat</span>
+        <span class="pill">Status: active</span>
+        <span class="pill">Date: 2026-06-27</span>
+        <span class="pill">Source: <a href="./2026-06-27-003-feat-store-schedule-automation-plan.md">Markdown plan</a></span>
+      </div>
+    </header>
+
+    <section class="summary" id="summary">
+      <h2>Summary</h2>
+      <p>Build an effective-dated canonical store schedule domain that can serve every store-local time use case in Athena. Opening and EOD automation are the first consumers because they exposed the boundary problem, but the schedule model, resolver, and read APIs should be reusable by Daily Operations, POS, appointments, storefront display, analytics, intelligence context, support diagnostics, and future workflows.</p>
+    </section>
+
+    <section id="toc">
+      <h2>Review Map</h2>
+      <div class="toc">
+        <a href="#requirements">Requirements</a>
+        <a href="#decisions">Key Decisions</a>
+        <a href="#design">Design Shape</a>
+        <a href="#units">Implementation Units</a>
+        <a href="#risks">Risks</a>
+        <a href="#verification">Verification Strategy</a>
+      </div>
+    </section>
+
+    <section id="problem">
+      <h2>Problem Frame</h2>
+      <p>Daily Operations currently can show pre-window EOD automation checks as “Athena checked EOD Review. No change was made.” That copy is scheduler noise, not an operator action. The symptom points at the broader missing primitive: Athena does not have one canonical domain for store-local business time. The long-term fix is to make store schedule own business time, let consumers adapt schedule context to their workflows, keep automation policy focused on automation judgment, and read raw ledger outcomes through operator-facing state buckets.</p>
+    </section>
+
+    <section id="requirements">
+      <h2>Requirements</h2>
+      <ul>
+        <li>Canonical store schedule must cover timezone, weekly hours, closed days, exceptions, and overnight windows.</li>
+        <li>Store schedule must provide reusable store-day context for consumers to derive timing windows, not rely on browser timezone or action-specific static offsets.</li>
+        <li>Automation policy keeps mode, blocker handling, EOD thresholds, pause state, versions, and automation-specific grace settings.</li>
+        <li>Routine pre-window scheduler wakeups must not surface as operator-facing “Athena checked…” rows.</li>
+        <li>EOD preparation and completion remain separate audit concepts.</li>
+        <li>Migration preserves current behavior while treating existing timezone offsets as hints, not canonical truth.</li>
+        <li>Schedule changes are versioned so completed closes and automation evidence are not reinterpreted by later edits.</li>
+        <li>Schedule APIs and resolver outputs stay consumer-neutral: store-local operating date, schedule phase, open/closed state, effective version, current/next windows, and derived UTC timestamps.</li>
+      </ul>
+    </section>
+
+    <section class="decision" id="decisions">
+      <h2>Key Decisions</h2>
+      <ul>
+        <li><strong>First-class effective-dated schedule table:</strong> schedule is indexed, validated, versioned, cross-domain business truth.</li>
+        <li><strong>Consumer-neutral core vocabulary:</strong> the schedule schema stores business hours, closed days, exceptions, effective versions, and timezone, not EOD, Opening, grace periods, or automation thresholds.</li>
+        <li><strong>Policy owns judgment:</strong> automation policy is not the canonical source of store hours.</li>
+        <li><strong>IANA timezone with native <code>Intl</code>:</strong> static offsets are migration hints only, and resolver tests cover DST and overnight windows without adding a package dependency.</li>
+        <li><strong>Scheduled-later is quiet context:</strong> pre-window checks do not become automation cards.</li>
+        <li><strong>Daily Close guard stays strict:</strong> schedule-derived eligibility must still revalidate at mutation time.</li>
+      </ul>
+    </section>
+
+    <section id="design">
+      <h2>Design Shape</h2>
+      <div class="diagram">Store schedule versions
+  -> Store-day calendar resolver
+    -> Store-day context API
+      -> Daily Operations automation adapter
+      -> Daily Close store-day guard
+      -> POS and store settings summaries
+      -> Future storefront, appointments, analytics, intelligence
+Automation policy
+  -> Daily Operations automation adapter
+Daily Operations automation adapter
+  -> Automation run ledger
+  -> Daily Operations read model
+Daily Close store-day guard
+  -> Daily Operations read model
+Daily Operations read model
+  -> Operator UI status</div>
+      <h3>Status Buckets</h3>
+      <table>
+        <thead>
+          <tr><th>Bucket</th><th>Visibility</th><th>Copy and CTA</th><th>Redaction</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>scheduled_later</code></td><td>Usually hidden; quiet timing context only when useful.</td><td>“EOD completion check scheduled after 10:00 PM.” Link only to owning workflow.</td><td>No source IDs, raw ledger reasons, operator IDs, or exception reason text.</td></tr>
+          <tr><td><code>action_taken</code></td><td>Visible as meaningful Athena action.</td><td>“Athena completed EOD Review.” Link to workflow or permissioned evidence.</td><td>Summarize evidence; keep raw review details permissioned.</td></tr>
+          <tr><td><code>needs_review</code></td><td>Visible after the window opens when human action is needed.</td><td>“EOD Review needs manager review.” CTA opens the owning workflow.</td><td>Broad surfaces show counts/categories only.</td></tr>
+          <tr><td><code>policy_skipped</code></td><td>Visible only when policy changes the operator’s next action.</td><td>“EOD automation is paused. Review EOD manually.”</td><td>No raw threshold evidence or rollout notes on broad surfaces.</td></tr>
+          <tr><td><code>failed</code></td><td>Visible as an attention state.</td><td>“Athena could not finish the automation. Open the workflow to review.”</td><td>No stack traces, source IDs, operator IDs, or exception reason text.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="units">
+      <h2>Implementation Units</h2>
+      <article class="unit">
+        <h3>U1. Create the canonical store schedule domain</h3>
+        <p>Add consumer-neutral schedule version schema/table, effective-range indexes, overlap invariants, native <code>Intl</code> resolver, reusable store-day context APIs, and tests for timezone, DST, weekly windows, closed days, exceptions, overnight windows, phase/window output, and missing-schedule fallback. Consumers decide how to persist resolved schedule versions in their own evidence.</p>
+      </article>
+      <article class="unit">
+        <h3>U2. Expose store-hours administration</h3>
+        <p>Add a full-admin store-hours editor under store configuration with schedule-specific Convex commands, <code>getStoreDayContext</code>, and <code>useStoreScheduleUpdate</code>; do not write schedule data through <code>store.config</code>. Define read-only permissions, candidate/admin-confirmed states, save/cancel/dirty states, responsive layout, accessibility behavior, POS timing summary, and a foundational “Store Hours define this store’s local business day” readout.</p>
+      </article>
+      <article class="unit">
+        <h3>U3. Adopt store schedule in Daily Operations automation</h3>
+        <p>Refactor Daily Operations automation as the first consumer of the foundational schedule domain. Automation adapters convert generic store-day context into Opening and EOD evaluation windows, then persist resolved schedule version and derived timestamp evidence while preserving policy and ledger responsibilities.</p>
+      </article>
+      <article class="unit">
+        <h3>U4. Clean up automation read model and operator status</h3>
+        <p>Introduce schedule-aware status buckets with explicit precedence, copy, CTA, source-link behavior, and redaction. Suppress routine no-op scheduler rows from Daily Operations and EOD UI.</p>
+      </article>
+      <article class="unit">
+        <h3>U5. Migrate existing automation timing safely</h3>
+        <p>Backfill candidate schedules through an idempotent, bounded, dry-run-capable migration. Preserve current timing behavior, skip admin-confirmed schedules, require deterministic IANA timezone or admin confirmation before canonical use, and keep compatibility fallback otherwise.</p>
+      </article>
+      <article class="unit">
+        <h3>U6. Refresh generated artifacts and validation coverage</h3>
+        <p>Refresh Convex generated refs, harness metadata, Graphify output, and solution documentation after implementation.</p>
+      </article>
+    </section>
+
+    <section id="risks">
+      <h2>Risks</h2>
+      <table>
+        <thead>
+          <tr><th>Risk</th><th>Mitigation</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Schedule changes alter automation timing or future consumers unexpectedly.</td><td>Use effective-dated versions, keep the schema consumer-neutral, seed schedules conservatively, persist resolved schedule evidence, and keep compatibility reads during rollout.</td></tr>
+          <tr><td>Timezone handling regresses around UTC boundaries.</td><td>Use native <code>Intl</code> IANA timezone helpers and resolver tests for DST, crossing, and overnight cases.</td></tr>
+          <tr><td>Pre-window diagnostics disappear from audit needs.</td><td>Keep support-only diagnostics if needed, but exclude them from operator status.</td></tr>
+          <tr><td>Financial/review evidence or schedule diagnostics leak through richer status.</td><td>Preserve redaction and component tests for broad-reader copy, support diagnostics, migration notes, operator IDs, and exception reason text.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="verification">
+      <h2>Verification Strategy</h2>
+      <ul>
+        <li>Focused Convex tests for schedule resolver, automation timing, Daily Close guard parity, migration fallback, and read-model status semantics.</li>
+        <li>Component tests for store-hours admin permissions, responsive/accessibility behavior, POS settings summary, Daily Operations, Daily Close, and Opening status copy.</li>
+        <li>Convex artifact refresh through <code>bunx convex dev --once</code> when functions change.</li>
+        <li>Repo validation after implementation: focused Vitest slices, Convex audit/lint, TypeScript, build, Graphify rebuild, and the Athena PR gate.</li>
+      </ul>
+    </section>
+
+    <section class="warning" id="handoff">
+      <h2>Reviewer Focus</h2>
+      <p>The main architectural decision to review is the first-class, consumer-neutral schedule domain. Reject it only if store schedule should intentionally remain presentation config; otherwise it gives the cleanest boundary for cross-domain business time with automation as the first consumer.</p>
+    </section>
+  </main>
+</body>
+</html>

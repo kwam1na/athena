@@ -380,6 +380,14 @@ type CompleteDailyCloseForAutomationArgs = {
   automationDecisionReason: string;
   automationPolicyVersion: string;
   automationRunId: Id<"automationRun">;
+  automationScheduleEvidence?: {
+    closedAt?: number;
+    evaluationAt?: number;
+    openedAt?: number;
+    scheduleVersion?: string;
+    source: "canonical_schedule" | "compatibility_policy";
+    storeScheduleId?: string;
+  };
   eodAutoCompletePolicy: {
     cleanDayAutoCompleteEnabled: boolean;
     maxAbsoluteCashVariance: number;
@@ -1516,6 +1524,9 @@ function numberFromMetadata(
 }
 
 function buildEodAutomationDecisionEvidence(args: {
+  automationScheduleEvidence?: CompleteDailyCloseForAutomationArgs[
+    "automationScheduleEvidence"
+  ];
   classification: string;
   eligible: boolean;
   policy: CompleteDailyCloseForAutomationArgs["eodAutoCompletePolicy"];
@@ -1552,6 +1563,35 @@ function buildEodAutomationDecisionEvidence(args: {
         args.snapshot.readiness.carryForwardCount > 0,
       disqualifyingCategories,
       reviewCount: args.snapshot.readiness.reviewCount,
+      ...(args.automationScheduleEvidence
+        ? {
+            scheduleEvidenceSource: args.automationScheduleEvidence.source,
+            ...(args.automationScheduleEvidence.storeScheduleId
+              ? {
+                  storeScheduleId:
+                    args.automationScheduleEvidence.storeScheduleId,
+                }
+              : {}),
+            ...(args.automationScheduleEvidence.scheduleVersion
+              ? {
+                  scheduleVersion:
+                    args.automationScheduleEvidence.scheduleVersion,
+                }
+              : {}),
+            ...(typeof args.automationScheduleEvidence.openedAt === "number"
+              ? { scheduleOpenedAt: args.automationScheduleEvidence.openedAt }
+              : {}),
+            ...(typeof args.automationScheduleEvidence.closedAt === "number"
+              ? { scheduleClosedAt: args.automationScheduleEvidence.closedAt }
+              : {}),
+            ...(typeof args.automationScheduleEvidence.evaluationAt === "number"
+              ? {
+                  scheduleEvaluationAt:
+                    args.automationScheduleEvidence.evaluationAt,
+                }
+              : {}),
+          }
+        : {}),
       voidedSaleCount: args.snapshot.summary.voidedTransactionCount,
       voidedSaleTotal,
     },
@@ -3556,6 +3596,7 @@ export async function completeDailyCloseForAutomationWithCtx(
     carryForwardWorkItemCount: carryForwardWorkItemIds.length,
   };
   const automationDecisionEvidence = buildEodAutomationDecisionEvidence({
+    automationScheduleEvidence: args.automationScheduleEvidence,
     classification:
       snapshot.reviewItems.length > 0 ? "low_risk_review" : "clean_day",
     eligible: true,
@@ -4063,6 +4104,19 @@ export const completeDailyCloseForAutomation = internalMutation({
     automationDecisionReason: v.string(),
     automationPolicyVersion: v.string(),
     automationRunId: v.id("automationRun"),
+    automationScheduleEvidence: v.optional(
+      v.object({
+        closedAt: v.optional(v.number()),
+        evaluationAt: v.optional(v.number()),
+        openedAt: v.optional(v.number()),
+        scheduleVersion: v.optional(v.string()),
+        source: v.union(
+          v.literal("canonical_schedule"),
+          v.literal("compatibility_policy"),
+        ),
+        storeScheduleId: v.optional(v.string()),
+      }),
+    ),
     eodAutoCompletePolicy: v.object({
       cleanDayAutoCompleteEnabled: v.boolean(),
       maxAbsoluteCashVariance: v.number(),

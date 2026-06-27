@@ -432,6 +432,7 @@ describe("daily operations overview read model", () => {
 
     expect(snapshot.automationStatuses).toEqual([
       {
+        bucket: "needs_review",
         id: "automation-close",
         lane: "close",
         occurredAt: Date.UTC(2026, 4, 8, 19),
@@ -444,6 +445,7 @@ describe("daily operations overview read model", () => {
         },
       },
       {
+        bucket: "action_taken",
         id: "automation-opening",
         lane: "opening",
         occurredAt: Date.UTC(2026, 4, 8, 8),
@@ -457,7 +459,7 @@ describe("daily operations overview read model", () => {
     ]);
   });
 
-  it("surfaces latest skipped EOD auto-complete evidence over EOD preparation", async () => {
+  it("keeps EOD preparation visible over pre-window auto-complete checks", async () => {
     const snapshot = await buildDailyOperationsSnapshotWithCtx(
       buildCtx({
         automationRun: [
@@ -526,12 +528,9 @@ describe("daily operations overview read model", () => {
 
     expect(snapshot.automationStatuses.find((status) => status.lane === "close"))
       .toMatchObject({
-        decisionEvidence: {
-          classification: "outside_completion_window",
-          kind: "eod_auto_complete",
-        },
-        id: "automation-close-auto-skip",
-        outcome: "skipped",
+        bucket: "needs_review",
+        id: "automation-close-prepare",
+        outcome: "prepared",
         policyMode: "enabled",
       });
   });

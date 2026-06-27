@@ -122,6 +122,12 @@ type DailyOperationsTimelineEvent = {
 };
 
 type DailyOperationsAutomationStatus = {
+  bucket:
+    | "failed"
+    | "action_taken"
+    | "needs_review"
+    | "policy_skipped"
+    | "scheduled_later";
   id: string;
   decisionEvidence?: unknown;
   decisionReason?: string;
@@ -146,6 +152,9 @@ type DailyOperationsAutomationStatus = {
   }>;
   sourceLink: LinkTarget;
 };
+
+type DailyOperationsAutomationStatusBucket =
+  DailyOperationsAutomationStatus["bucket"];
 
 type DailyOperationsScheduledRunSummary = {
   candidateCount: number;
@@ -1573,6 +1582,61 @@ async function getLatestAppliedAutomationRunForAction(
     .sort(compareAutomationRuns)[0] ?? null;
 }
 
+function automationRunClassification(run: Doc<"automationRun">) {
+  return typeof run.decisionEvidence?.classification === "string"
+    ? run.decisionEvidence.classification
+    : undefined;
+}
+
+function automationStatusBucketForRun(
+  run: Doc<"automationRun">,
+): DailyOperationsAutomationStatusBucket {
+  if (run.outcome === "failed") return "failed";
+  if (run.outcome === "applied") return "action_taken";
+
+  const classification = automationRunClassification(run);
+
+  if (classification === "outside_completion_window") {
+    return "scheduled_later";
+  }
+
+  if (run.outcome === "prepared" || classification === "blocked") {
+    return "needs_review";
+  }
+
+  return "policy_skipped";
+}
+
+const AUTOMATION_BUCKET_PRECEDENCE: Record<
+  DailyOperationsAutomationStatusBucket,
+  number
+> = {
+  failed: 0,
+  action_taken: 1,
+  needs_review: 2,
+  policy_skipped: 3,
+  scheduled_later: 4,
+};
+
+function compareAutomationRunsByBucket(
+  left: Doc<"automationRun">,
+  right: Doc<"automationRun">,
+) {
+  const bucketDelta =
+    AUTOMATION_BUCKET_PRECEDENCE[automationStatusBucketForRun(left)] -
+    AUTOMATION_BUCKET_PRECEDENCE[automationStatusBucketForRun(right)];
+
+  if (bucketDelta !== 0) return bucketDelta;
+
+  return compareAutomationRuns(left, right);
+}
+
+function isAutomationRun(
+  run: Doc<"automationRun"> | null | undefined,
+): run is Doc<"automationRun"> {
+  return Boolean(run);
+}
+
 async function listDailyOperationsAutomationStatuses(
   ctx: Pick<QueryCtx, "db">,
   args: {
@@ -1619,12 +1683,21 @@ async function listDailyOperationsAutomationStatuses(
   const closeRun =
     completedByAthena && appliedCloseAutoCompleteRun
       ? appliedCloseAutoCompleteRun
-      : closeAutoCompleteRun ?? closePrepareRun;
+      : ([closeAutoCompleteRun, closePrepareRun]
+          .filter(isAutomationRun)
+          .sort(compareAutomationRunsByBucket)[0] ?? null);
 
-  if (openingRun) {
+  if (
+    openingRun &&
+    !(
+      openingRecord?.status === "started" &&
+      automationStatusBucketForRun(openingRun) !== "action_taken"
+    )
+  ) {
     const reviewEvidence = reviewEvidenceForDailyOperations(openingRecord);
 
     statuses.push({
+      bucket: automationStatusBucketForRun(openingRun),
       id: openingRun._id,
       ...(openingRun.decisionReason
         ? { decisionReason: openingRun.decisionReason }
@@ -1645,8 +1718,15 @@ async function listDailyOperationsAutomationStatuses(
     });
   }
 
-  if (closeRun) {
+  if (
+    closeRun &&
+    !(
+      args.closeCompletion &&
+      automationStatusBucketForRun(closeRun) !== "action_taken"
+    )
+  ) {
     statuses.push({
+      bucket: automationStatusBucketForRun(closeRun),
       id: closeRun._id,
       ...(args.includeManagerReviewEvidence && closeRun.decisionEvidence
         ? { decisionEvidence: closeRun.decisionEvidence }

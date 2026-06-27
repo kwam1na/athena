@@ -8,6 +8,7 @@ export * from "./subcategory";
 export * from "./product";
 export * from "./productSkuSearch";
 export * from "./store";
+export * from "./storeSchedule";
 export * from "./organization";
 export * from "./organizationMember";
 export * from "./color";

@@ -124,6 +124,12 @@ type DailyOperationsAutomationOutcome =
   | "eligible";
 
 type DailyOperationsAutomationStatus = {
+  bucket?:
+    | "failed"
+    | "action_taken"
+    | "needs_review"
+    | "policy_skipped"
+    | "scheduled_later";
   id: string;
   lane: "opening" | "close";
   occurredAt?: number | null;
@@ -971,6 +977,20 @@ function getAutomationLaneLabel(lane: DailyOperationsAutomationStatus["lane"]) {
 function getAutomationStatusMessage(status: DailyOperationsAutomationStatus) {
   const label = getAutomationLaneLabel(status.lane);
 
+  if (status.bucket === "scheduled_later") {
+    return status.lane === "close"
+      ? "EOD completion check is scheduled for later."
+      : "Opening automation is scheduled for later.";
+  }
+
+  if (status.bucket === "needs_review" && status.lane === "close") {
+    return "EOD Review needs manager review.";
+  }
+
+  if (status.bucket === "policy_skipped" && status.lane === "close") {
+    return "EOD automation did not change the workflow. Review EOD manually.";
+  }
+
   if (
     status.outcome === "applied" &&
     status.lane === "opening" &&
@@ -1018,6 +1038,10 @@ function getVisibleAutomationStatuses(snapshot: DailyOperationsSnapshot) {
   const statuses = snapshot.automationStatuses ?? [];
 
   return statuses.filter((status) => {
+    if (status.bucket === "scheduled_later") {
+      return false;
+    }
+
     if (
       status.lane === "opening" &&
       snapshot.lifecycle.status !== "not_opened" &&

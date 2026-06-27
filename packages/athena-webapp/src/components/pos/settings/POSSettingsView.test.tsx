@@ -77,6 +77,9 @@ vi.mock("~/convex/_generated/api", () => ({
         getTerminalByFingerprint: "getTerminalByFingerprint",
         registerTerminal: "registerTerminal",
       },
+      storeSchedule: {
+        getStoreScheduleSummary: "getStoreScheduleSummary",
+      },
     },
     operations: {
       dailyOperationsAutomation: {
@@ -240,6 +243,22 @@ describe("registerAndProvisionPosTerminal", () => {
               maxVoidedSaleTotal: 2500,
               mode: "dry_run",
               operatingTimezoneOffsetMinutes: -120,
+            }
+        : ref === "getStoreScheduleSummary"
+          ? {
+              context: {
+                currentWindow: {
+                  localEndLabel: "6:30 PM",
+                  localStartLabel: "8:30 AM",
+                },
+                isOpen: true,
+                nextWindow: null,
+                phase: "during_window",
+                timezone: "America/New_York",
+              },
+              schedule: {
+                timezone: "America/New_York",
+              },
             }
         : null,
     );
@@ -488,12 +507,9 @@ describe("registerAndProvisionPosTerminal", () => {
       ),
     ).toBeInTheDocument();
     expect(screen.getByLabelText("Enable store-day auto-start")).toBeChecked();
-    expect(screen.getByRole("combobox", { name: "Store day start hour" }))
-      .toHaveTextContent("08");
-    expect(screen.getByRole("combobox", { name: "Store day start minute" }))
-      .toHaveTextContent("30");
-    expect(screen.getByRole("combobox", { name: "Store day start period" }))
-      .toHaveTextContent("AM");
+    expect(
+      screen.queryByRole("combobox", { name: "Store day start hour" }),
+    ).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Store UTC offset")).not.toBeInTheDocument();
     expect(
       screen.getByText("Blockers stay available for manager review."),
@@ -516,12 +532,9 @@ describe("registerAndProvisionPosTerminal", () => {
     ).toBeInTheDocument();
     expect(screen.getByLabelText("Dry run EOD completion")).toBeChecked();
     expect(screen.getByLabelText("Enable blocker-free completion")).toBeChecked();
-    expect(screen.getByRole("combobox", { name: "EOD completion hour" }))
-      .toHaveTextContent("06");
-    expect(screen.getByRole("combobox", { name: "EOD completion minute" }))
-      .toHaveTextContent("30");
-    expect(screen.getByRole("combobox", { name: "EOD completion period" }))
-      .toHaveTextContent("PM");
+    expect(
+      screen.queryByRole("combobox", { name: "EOD completion hour" }),
+    ).not.toBeInTheDocument();
     expect(screen.getByLabelText("Cash variance threshold")).toHaveValue(500);
     expect(screen.getByLabelText("Voided sale count threshold")).toHaveValue(1);
     expect(screen.getByLabelText("Voided sale total threshold")).toHaveValue(2500);
@@ -567,36 +580,28 @@ describe("registerAndProvisionPosTerminal", () => {
         maxVoidedSaleCount: 2,
         maxVoidedSaleTotal: 9000,
         mode: "enabled",
-        operatingTimezoneOffsetMinutes: 0,
+        operatingTimezoneOffsetMinutes: -120,
         storeId: "store-1",
       }),
     );
   });
 
-  it("saves the store-day automation policy with local time and review handling", async () => {
+  it("saves the store-day automation policy without owning business hours", async () => {
     const user = userEvent.setup();
 
     render(<POSSettingsView />);
 
     await user.click(await screen.findByLabelText("Enable store-day auto-start"));
     await user.click(
-      screen.getByRole("combobox", { name: "Store day start hour" }),
-    );
-    await user.click(await screen.findByRole("option", { name: "07" }));
-    await user.click(
-      screen.getByRole("combobox", { name: "Store day start minute" }),
-    );
-    await user.click(await screen.findByRole("option", { name: "45" }));
-    await user.click(
       screen.getByRole("button", { name: "Save store-day automation" }),
     );
 
     await waitFor(() =>
       expect(mocks.updateOpeningAutoStartPolicy).toHaveBeenCalledWith({
-        localStartMinutes: 465,
+        localStartMinutes: 510,
         mode: "disabled",
         openingBlockerHandling: "start_with_manager_review",
-        operatingTimezoneOffsetMinutes: 0,
+        operatingTimezoneOffsetMinutes: -120,
         storeId: "store-1",
       }),
     );
@@ -616,11 +621,25 @@ describe("registerAndProvisionPosTerminal", () => {
           }
         : ref === "getOpeningAutoStartPolicy"
           ? {
-              localStartMinutes: 480,
               mode: "disabled",
               openingBlockerHandling: "start_with_manager_review",
-              operatingTimezoneOffsetMinutes: 0,
             }
+          : ref === "getStoreScheduleSummary"
+            ? {
+                context: {
+                  currentWindow: {
+                    localEndLabel: "6:30 PM",
+                    localStartLabel: "8:30 AM",
+                  },
+                  isOpen: true,
+                  nextWindow: null,
+                  phase: "during_window",
+                  timezone: "America/New_York",
+                },
+                schedule: {
+                  timezone: "America/New_York",
+                },
+              }
           : null,
     );
 
@@ -628,22 +647,35 @@ describe("registerAndProvisionPosTerminal", () => {
 
     await user.click(await screen.findByLabelText("Enable store-day auto-start"));
     await user.click(
-      screen.getByRole("combobox", { name: "Store day start minute" }),
-    );
-    await user.click(await screen.findByRole("option", { name: "15" }));
-    await user.click(
       screen.getByRole("button", { name: "Save store-day automation" }),
     );
 
     await waitFor(() =>
       expect(mocks.updateOpeningAutoStartPolicy).toHaveBeenCalledWith({
-        localStartMinutes: 495,
+        localStartMinutes: 480,
         mode: "enabled",
         openingBlockerHandling: "start_with_manager_review",
-        operatingTimezoneOffsetMinutes: 0,
+        operatingTimezoneOffsetMinutes: undefined,
         storeId: "store-1",
       }),
     );
+  });
+
+  it("summarizes POS automation timing from Store Hours", async () => {
+    render(<POSSettingsView />);
+
+    expect(await screen.findByText("Store Hours timing")).toBeInTheDocument();
+    expect(screen.getByText("Timing comes from Store Hours")).toBeInTheDocument();
+    expect(
+      screen.getByText("Athena uses Store Hours to time Opening and EOD automation."),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Opening at 8:30 AM")).toBeInTheDocument();
+    expect(screen.getByText("EOD after 6:30 PM")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open Store Hours" }))
+      .toHaveAttribute("href", "/acme/store/downtown/configuration");
+    expect(mocks.useQuery).toHaveBeenCalledWith("getStoreScheduleSummary", {
+      storeId: "store-1",
+    });
   });
 
   it("disables revoke for revoked POS recovery codes", async () => {
@@ -678,6 +710,10 @@ describe("registerAndProvisionPosTerminal", () => {
     expect(screen.queryByText("POS recovery code")).not.toBeInTheDocument();
     expect(screen.queryByText("Store day automation")).not.toBeInTheDocument();
     expect(screen.queryByText("EOD completion automation")).not.toBeInTheDocument();
+    expect(screen.getByText("Store Hours timing")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "Open Store Hours" }),
+    ).not.toBeInTheDocument();
     expect(mocks.useQuery).toHaveBeenCalledWith(
       "getRecoveryCodeStatus",
       "skip",

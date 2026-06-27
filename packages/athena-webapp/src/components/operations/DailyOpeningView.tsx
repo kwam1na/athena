@@ -70,6 +70,12 @@ const useExpectedDailyOpeningMutation = useMutation as unknown as (
 type DailyOpeningStatus = "blocked" | "needs_attention" | "ready" | "started";
 
 type DailyOpeningAutomationStatus = {
+  bucket?:
+    | "failed"
+    | "action_taken"
+    | "needs_review"
+    | "policy_skipped"
+    | "scheduled_later";
   id: string;
   occurredAt?: number | null;
   outcome: "applied" | "prepared" | "skipped" | "failed" | "dry_run" | "disabled";
@@ -589,6 +595,18 @@ function DailyOpeningStatusTitle({
 }
 
 function getOpeningAutomationMessage(status: DailyOpeningAutomationStatus) {
+  if (status.bucket === "scheduled_later") {
+    return "Opening automation is scheduled for later.";
+  }
+
+  if (status.bucket === "needs_review") {
+    return "Opening Handoff needs manager review.";
+  }
+
+  if (status.bucket === "policy_skipped") {
+    return "Opening automation did not change the workflow. Review Opening Handoff manually.";
+  }
+
   if (status.outcome === "applied") {
     return "Athena started Opening Handoff.";
   }
@@ -619,6 +637,8 @@ function getVisibleOpeningAutomationStatus(
   const automationStatus = snapshot.automationStatus;
 
   if (!automationStatus) return null;
+
+  if (automationStatus.bucket === "scheduled_later") return null;
 
   if (status === "started" && automationStatus.outcome !== "applied") {
     return null;
