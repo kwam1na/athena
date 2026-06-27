@@ -664,6 +664,12 @@ const schema = defineSchema({
     .index("by_store_status", ["storeId", "status"])
     .index("by_localEventId", ["localEventId"]),
   posLocalSyncCursor: defineTable(posLocalSyncCursorSchema)
+    .index("by_store_terminal_scope_cursor", [
+      "storeId",
+      "terminalId",
+      "syncScope",
+      "localSyncCursorId",
+    ])
     .index("by_store_terminal_register", [
       "storeId",
       "terminalId",

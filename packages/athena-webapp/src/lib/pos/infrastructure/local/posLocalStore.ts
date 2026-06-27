@@ -76,7 +76,6 @@ export function canUploadPosLocalEventType(type: PosLocalEventType): boolean {
     type === "transaction.completed" ||
     type === "cart.cleared" ||
     type === "register.closeout_started" ||
-    type === "register.reopened" ||
     type === "expense.completed"
   );
 }

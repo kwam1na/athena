@@ -110,6 +110,78 @@ describe("syncScheduler", () => {
     expect(markSynced).toHaveBeenNthCalledWith(2, ["newer-1"]);
   });
 
+  it("orders batches by upload sequence before created time", async () => {
+    const uploadBatch = vi.fn().mockResolvedValue({ syncedEventIds: [] });
+    const scheduler = createPosLocalSyncScheduler({
+      loadPendingEvents: vi.fn().mockResolvedValue([
+        baseEvent({
+          id: "upload-2-created-first",
+          createdAt: 1_000,
+          sequence: 20,
+          uploadSequence: 2,
+        }),
+        baseEvent({
+          id: "upload-1-created-later",
+          createdAt: 2_000,
+          sequence: 10,
+          uploadSequence: 1,
+        }),
+      ]),
+      uploadBatch,
+      markSynced: vi.fn().mockResolvedValue(undefined),
+      isOnline: () => true,
+      maxBatchSize: 10,
+    });
+
+    scheduler.trigger("route-entry");
+    await vi.runAllTimersAsync();
+
+    expect(
+      uploadBatch.mock.calls[0]?.[0].map(
+        (event: PosLocalPendingEvent) => event.id,
+      ),
+    ).toEqual(["upload-1-created-later", "upload-2-created-first"]);
+  });
+
+  it("keeps expense sessions in separate cursor batches", async () => {
+    const uploadBatch = vi.fn().mockResolvedValue({ syncedEventIds: [] });
+    const scheduler = createPosLocalSyncScheduler({
+      loadPendingEvents: vi.fn().mockResolvedValue([
+        baseEvent({
+          id: "expense-1",
+          syncScope: "expense",
+          localRegisterSessionId: "",
+          localExpenseSessionId: "expense-session-1",
+          sequence: 1,
+          uploadSequence: 1,
+        }),
+        baseEvent({
+          id: "expense-2",
+          syncScope: "expense",
+          localRegisterSessionId: "",
+          localExpenseSessionId: "expense-session-2",
+          sequence: 2,
+          uploadSequence: 1,
+        }),
+      ]),
+      uploadBatch,
+      markSynced: vi.fn().mockResolvedValue(undefined),
+      isOnline: () => true,
+      maxBatchSize: 10,
+    });
+
+    scheduler.trigger("route-entry");
+    await vi.runAllTimersAsync();
+
+    expect(uploadBatch).toHaveBeenCalledTimes(2);
+    expect(uploadBatch.mock.calls[0]?.[0]).toEqual([
+      expect.objectContaining({ id: "expense-1" }),
+    ]);
+    expect(uploadBatch.mock.calls[1]?.[0]).toEqual([
+      expect.objectContaining({ id: "expense-2" }),
+    ]);
+  });
+
   it("keeps events pending after failure, applies backoff, and lets manual retry bypass it", async () => {
     const uploadBatch = vi
       .fn()
@@ -225,6 +297,31 @@ describe("syncScheduler", () => {
     await vi.runAllTimersAsync();
 
     expect(markNeedsReview).toHaveBeenCalledWith(["event-conflicted"]);
+    expect(markSynced).toHaveBeenCalledWith(["event-1"]);
+  });
+
+  it("marks server-rejected events through the rejected settlement path", async () => {
+    const markRejected = vi.fn().mockResolvedValue(undefined);
+    const markNeedsReview = vi.fn().mockResolvedValue(undefined);
+    const markSynced = vi.fn().mockResolvedValue(undefined);
+    const scheduler = createPosLocalSyncScheduler({
+      loadPendingEvents: vi.fn().mockResolvedValue([baseEvent({})]),
+      uploadBatch: vi.fn().mockResolvedValue({
+        rejectedEventIds: ["event-rejected"],
+        reviewEventIds: ["event-conflicted"],
+        syncedEventIds: ["event-1"],
+      }),
+      markRejected,
+      markNeedsReview,
+      markSynced,
+      isOnline: () => true,
+    });
+
+    scheduler.trigger("route-entry");
+    await vi.runAllTimersAsync();
+
+    expect(markNeedsReview).toHaveBeenCalledWith(["event-conflicted"]);
+    expect(markRejected).toHaveBeenCalledWith(["event-rejected"]);
     expect(markSynced).toHaveBeenCalledWith(["event-1"]);
   });
 

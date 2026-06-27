@@ -16,6 +16,54 @@ export interface PosLocalSyncStatus {
   nextPendingSequence: number | null;
 }
 
+export type PosLocalServerSettlementOutcome =
+  | "projected"
+  | "conflicted"
+  | "held"
+  | "rejected";
+
+export type PosLocalSettlementState = Pick<
+  PosLocalSyncStatus,
+  "state"
+> & {
+  label: string;
+  settlesLocalPrecursors: boolean;
+};
+
+export function mapServerSettlementOutcomeToLocalState(
+  outcome: PosLocalServerSettlementOutcome,
+): PosLocalSettlementState {
+  if (outcome === "projected") {
+    return {
+      state: "synced",
+      label: "Synced",
+      settlesLocalPrecursors: true,
+    };
+  }
+
+  if (outcome === "conflicted") {
+    return {
+      state: "needs_review",
+      label: "Needs manager review",
+      settlesLocalPrecursors: false,
+    };
+  }
+
+  if (outcome === "held") {
+    return {
+      state: "pending",
+      label: "Waiting for earlier POS history",
+      settlesLocalPrecursors: false,
+    };
+  }
+
+  return {
+    state: "needs_review",
+    label: "Sync rejected; review required",
+    settlesLocalPrecursors: false,
+  };
+}
+
 export function derivePosLocalSyncStatus(input: {
   events: PosLocalEventRecord[];
   lastSyncedSequence?: number;

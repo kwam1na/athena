@@ -59,6 +59,7 @@ import {
   collectLocallySettledSkippedReviewEventIds,
   collectSyncedLocalEventIds,
   collectServerHeldLocalEventIds,
+  collectServerRejectedLocalEventIds,
   collectServerReviewLocalEventIds,
   collectServerSettledLocalEventIds,
   collectServerSyncedLocalEventIds,
@@ -4258,7 +4259,7 @@ describe("usePosLocalSyncRuntimeStatus", () => {
     ).toEqual([1, 2]);
   });
 
-  it("keeps server-conflicted events in review and settles server-rejected events locally", () => {
+  it("maps projected, conflicted, held, and rejected server outcomes distinctly", () => {
     expect(
       collectServerSyncedLocalEventIds([
         { localEventId: "event-checkout", status: "conflicted" },
@@ -4276,13 +4277,21 @@ describe("usePosLocalSyncRuntimeStatus", () => {
       ]),
     ).toEqual(["event-checkout"]);
     expect(
+      collectServerRejectedLocalEventIds([
+        { localEventId: "event-checkout", status: "conflicted" },
+        { localEventId: "event-open", status: "projected" },
+        { localEventId: "event-held", status: "held" },
+        { localEventId: "event-rejected", status: "rejected" },
+      ]),
+    ).toEqual(["event-rejected"]);
+    expect(
       collectServerSettledLocalEventIds([
         { localEventId: "event-checkout", status: "conflicted" },
         { localEventId: "event-open", status: "projected" },
         { localEventId: "event-held", status: "held" },
         { localEventId: "event-rejected", status: "rejected" },
       ]),
-    ).toEqual(["event-open", "event-rejected"]);
+    ).toEqual(["event-open"]);
     expect(
       collectServerHeldLocalEventIds([
         { localEventId: "event-held" },
@@ -4433,7 +4442,156 @@ describe("usePosLocalSyncRuntimeStatus", () => {
     });
   });
 
-  it("marks rejected runtime sale responses and embedded local events as settled", async () => {
+  it("uploads completed expense events with different local sessions in separate ingest calls", async () => {
+    const expenseOne = buildLocalEvent({
+      localEventId: "event-expense-1",
+      localExpenseSessionId: "expense-session-1",
+      localRegisterSessionId: undefined,
+      payload: {
+        localExpenseSessionId: "expense-session-1",
+        localExpenseEventId: "expense-event-1",
+        subtotal: 25,
+        tax: 0,
+        total: 25,
+        items: [
+          {
+            localItemId: "expense-line-1",
+            productId: "product-1",
+            productSkuId: "sku-1",
+            productName: "Repair kit",
+            productSku: "KIT-1",
+            quantity: 1,
+            price: 25,
+          },
+        ],
+      },
+      sequence: 42,
+      type: "expense.completed",
+      uploadSequence: 1,
+    });
+    const expenseTwo = buildLocalEvent({
+      localEventId: "event-expense-2",
+      localExpenseSessionId: "expense-session-2",
+      localRegisterSessionId: undefined,
+      payload: {
+        localExpenseSessionId: "expense-session-2",
+        localExpenseEventId: "expense-event-2",
+        subtotal: 10,
+        tax: 0,
+        total: 10,
+        items: [
+          {
+            localItemId: "expense-line-2",
+            productId: "product-1",
+            productSkuId: "sku-1",
+            productName: "Repair kit",
+            productSku: "KIT-1",
+            quantity: 1,
+            price: 10,
+          },
+        ],
+      },
+      sequence: 43,
+      type: "expense.completed",
+      uploadSequence: 1,
+    });
+    const store = {
+      listEvents: vi.fn(async () => ({
+        ok: true,
+        value: [expenseOne, expenseTwo],
+      })),
+      listEventsForUpload: vi.fn(async () => ({
+        ok: true,
+        value: [expenseOne, expenseTwo],
+      })),
+      markEventsNeedsReview: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      markEventsSynced: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      readProvisionedTerminalSeed: vi.fn(async () => ({
+        ok: true,
+        value: {
+          cloudTerminalId: "terminal-cloud-1",
+          displayName: "Front",
+          provisionedAt: 1,
+          schemaVersion: 1,
+          syncSecretHash: "sync-secret-1",
+          storeId: "store-1",
+          terminalId: "local-terminal-1",
+        },
+      })),
+    };
+    mocks.ingestLocalEvents
+      .mockResolvedValueOnce({
+        kind: "ok",
+        data: {
+          accepted: [
+            { localEventId: "event-expense-1", sequence: 1, status: "projected" },
+          ],
+          held: [],
+          mappings: [],
+          conflicts: [],
+          syncCursor: {
+            syncScope: "expense",
+            localSyncCursorId: "expense-session-1",
+            localRegisterSessionId: "expense-session-1",
+            localExpenseSessionId: "expense-session-1",
+            acceptedThroughSequence: 1,
+          },
+        },
+      })
+      .mockResolvedValueOnce({
+        kind: "ok",
+        data: {
+          accepted: [
+            { localEventId: "event-expense-2", sequence: 1, status: "projected" },
+          ],
+          held: [],
+          mappings: [],
+          conflicts: [],
+          syncCursor: {
+            syncScope: "expense",
+            localSyncCursorId: "expense-session-2",
+            localRegisterSessionId: "expense-session-2",
+            localExpenseSessionId: "expense-session-2",
+            acceptedThroughSequence: 1,
+          },
+        },
+      });
+
+    renderHook(() =>
+      usePosLocalSyncRuntimeStatus({
+        mode: "drain-enabled",
+        storeFactory: () => store as never,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(mocks.ingestLocalEvents.mock.calls.length).toBeGreaterThanOrEqual(2),
+    );
+    expect(mocks.ingestLocalEvents.mock.calls[0]?.[0].events).toEqual([
+      expect.objectContaining({
+        localEventId: "event-expense-1",
+        localExpenseSessionId: "expense-session-1",
+        sequence: 1,
+      }),
+    ]);
+    expect(mocks.ingestLocalEvents.mock.calls[1]?.[0].events).toEqual([
+      expect.objectContaining({
+        localEventId: "event-expense-2",
+        localExpenseSessionId: "expense-session-2",
+        sequence: 1,
+      }),
+    ]);
+  });
+
+  it("marks rejected runtime sale responses reviewable without settling embedded local events", async () => {
     mocks.ingestLocalEvents.mockResolvedValue({
       kind: "ok",
       data: {
@@ -4552,12 +4710,13 @@ describe("usePosLocalSyncRuntimeStatus", () => {
 
     await waitFor(() => expect(mocks.ingestLocalEvents).toHaveBeenCalled());
     await waitFor(() =>
-      expect(store.markEventsSynced).toHaveBeenCalledWith(
+      expect(store.markEventsNeedsReview).toHaveBeenCalledWith(
         ["event-checkout", "event-session", "event-cart", "event-payment"],
+        "Sync rejected; review required",
         { uploaded: true },
       ),
     );
-    expect(store.markEventsNeedsReview).not.toHaveBeenCalled();
+    expect(store.markEventsSynced).not.toHaveBeenCalled();
   });
 
   it("presents unsynced closeout events as locally closed pending sync", () => {
@@ -5100,6 +5259,7 @@ describe("usePosLocalSyncRuntimeStatus", () => {
     await waitFor(() =>
       expect(mocks.acknowledgeTerminalRecoveryCommand).toHaveBeenCalledWith({
         commandId: "command-1",
+        executionId: "command-1:2000100",
         message: undefined,
         result: "completed",
         storeId: "store-1",
@@ -5420,6 +5580,7 @@ describe("usePosLocalSyncRuntimeStatus", () => {
     await waitFor(() =>
       expect(mocks.acknowledgeTerminalRecoveryCommand).toHaveBeenCalledWith({
         commandId: "command-1",
+        executionId: "command-1:2000100",
         message: undefined,
         result: "completed",
         storeId: "store-1",
@@ -5520,6 +5681,7 @@ describe("usePosLocalSyncRuntimeStatus", () => {
     await waitFor(() =>
       expect(mocks.acknowledgeTerminalRecoveryCommand).toHaveBeenCalledWith({
         commandId: "command-1",
+        executionId: "command-1:2000100",
         message: "Staff authority refreshed.",
         result: "completed",
         storeId: "store-1",
@@ -5570,6 +5732,7 @@ describe("usePosLocalSyncRuntimeStatus", () => {
     await waitFor(() =>
       expect(mocks.acknowledgeTerminalRecoveryCommand).toHaveBeenCalledWith({
         commandId: "command-1",
+        executionId: "command-1:2000100",
         message:
           "Drawer repair expected a blocked drawer authority record, but this terminal no longer reported that same block.",
         result: "precondition_failed",
@@ -5614,6 +5777,7 @@ describe("usePosLocalSyncRuntimeStatus", () => {
     );
     expect(mocks.acknowledgeTerminalRecoveryCommand).toHaveBeenCalledWith({
       commandId: "command-1",
+      executionId: "command-1:2000100",
       message: undefined,
       result: "completed",
       storeId: "store-1",
@@ -5684,6 +5848,7 @@ function buildRecoveryCommand(overrides: Record<string, unknown> = {}) {
     commandType: "retry_sync",
     expectedEvidence: {},
     expiresAt: Date.now() + 60_000,
+    executionId: "command-1:2000100",
     issuedAt: 1,
     issuedByUserId: "user-1",
     status: "pending",

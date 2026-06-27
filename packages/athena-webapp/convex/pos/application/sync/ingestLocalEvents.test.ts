@@ -51,6 +51,8 @@ describe("createLocalSyncIngestionService", () => {
       }),
     ]);
     expect(result.data.syncCursor).toEqual({
+      syncScope: "pos",
+      localSyncCursorId: "local-register-1",
       localRegisterSessionId: "local-register-1",
       acceptedThroughSequence: 2,
     });
@@ -94,6 +96,8 @@ describe("createLocalSyncIngestionService", () => {
       }),
     ]);
     expect(result.data.syncCursor).toEqual({
+      syncScope: "pos",
+      localSyncCursorId: "local-register-1",
       localRegisterSessionId: "local-register-1",
       acceptedThroughSequence: 1,
     });
@@ -502,7 +506,7 @@ describe("createLocalSyncIngestionService", () => {
         code: "out_of_order",
       }),
     ]);
-    expect(result.data.syncCursor).toEqual({
+    expect(result.data.syncCursor).toMatchObject({
       localRegisterSessionId: "local-register-1",
       acceptedThroughSequence: 0,
     });
@@ -533,7 +537,7 @@ describe("createLocalSyncIngestionService", () => {
       kind: "user_error",
       error: {
         code: "validation_failed",
-        message: "POS sync batches must contain one local register session.",
+        message: "POS sync batches must contain one local sync cursor.",
       },
     });
     expect(repository.events).toEqual([]);
@@ -563,7 +567,10 @@ describe("createLocalSyncIngestionService", () => {
       },
     ]);
     expect(result.data.syncCursor).toEqual({
+      syncScope: "expense",
+      localSyncCursorId: "local-expense-session-1",
       localRegisterSessionId: "local-expense-session-1",
+      localExpenseSessionId: "local-expense-session-1",
       acceptedThroughSequence: 1,
     });
     expect(repository.events).toEqual([
@@ -627,7 +634,10 @@ describe("createLocalSyncIngestionService", () => {
       }),
     ]);
     expect(retry.data.syncCursor).toEqual({
+      syncScope: "expense",
+      localSyncCursorId: "local-expense-session-1",
       localRegisterSessionId: "local-expense-session-1",
+      localExpenseSessionId: "local-expense-session-1",
       acceptedThroughSequence: 1,
     });
     expect(repository.events).toEqual([
@@ -638,6 +648,56 @@ describe("createLocalSyncIngestionService", () => {
       }),
     ]);
     expect(repository.createdExpenseTransactions).toHaveLength(1);
+  });
+
+  it("keeps POS register and expense cursors separate when their local ids match", async () => {
+    const repository = createFakeSyncRepository();
+    const service = createLocalSyncIngestionService({
+      repository,
+      projectionRepository: repository,
+      now: () => 100,
+    });
+    const sharedLocalId = "shared-local-session";
+
+    const posResult = await service.ingestBatch(
+      buildBatch({
+        events: [
+          buildRegisterOpenedEvent({
+            localRegisterSessionId: sharedLocalId,
+            sequence: 1,
+          }),
+        ],
+      }),
+    );
+    const expenseResult = await service.ingestBatch(
+      buildBatch({
+        events: [
+          buildExpenseRecordedEvent({
+            localExpenseSessionId: sharedLocalId,
+            sequence: 1,
+          }),
+        ],
+      }),
+    );
+
+    expect(posResult.kind).toBe("ok");
+    expect(expenseResult.kind).toBe("ok");
+    if (posResult.kind !== "ok" || expenseResult.kind !== "ok") {
+      throw new Error("Expected ok results");
+    }
+    expect(posResult.data.syncCursor).toEqual({
+      syncScope: "pos",
+      localSyncCursorId: sharedLocalId,
+      localRegisterSessionId: sharedLocalId,
+      acceptedThroughSequence: 1,
+    });
+    expect(expenseResult.data.syncCursor).toEqual({
+      syncScope: "expense",
+      localSyncCursorId: sharedLocalId,
+      localRegisterSessionId: sharedLocalId,
+      localExpenseSessionId: sharedLocalId,
+      acceptedThroughSequence: 1,
+    });
   });
 
   it("rejects mixed POS and expense sync batches before recording events", async () => {
@@ -861,7 +921,7 @@ describe("createLocalSyncIngestionService", () => {
         status: "projected",
       }),
     ]);
-    expect(retry.data.syncCursor).toEqual({
+    expect(retry.data.syncCursor).toMatchObject({
       localRegisterSessionId: "local-register-1",
       acceptedThroughSequence: 2,
     });
@@ -1030,7 +1090,7 @@ describe("createLocalSyncIngestionService", () => {
         }),
       ]),
     );
-    expect(result.data.syncCursor).toEqual({
+    expect(result.data.syncCursor).toMatchObject({
       localRegisterSessionId: "local-register-1",
       acceptedThroughSequence: 2,
     });
@@ -1129,7 +1189,7 @@ describe("createLocalSyncIngestionService", () => {
       expect.objectContaining({ sequence: 2, status: "projected" }),
       expect.objectContaining({ sequence: 3, status: "projected" }),
     ]);
-    expect(result.data.syncCursor).toEqual({
+    expect(result.data.syncCursor).toMatchObject({
       localRegisterSessionId: "local-register-1",
       acceptedThroughSequence: 3,
     });
@@ -1264,7 +1324,7 @@ describe("createLocalSyncIngestionService", () => {
     ]);
     expect(repository.createdRegisterSessions).toHaveLength(0);
     expect(repository.createdTransactions).toHaveLength(1);
-    expect(result.data.syncCursor).toEqual({
+    expect(result.data.syncCursor).toMatchObject({
       localRegisterSessionId: "local-register-1",
       acceptedThroughSequence: 1,
     });
@@ -2833,25 +2893,129 @@ describe("createLocalSyncIngestionService", () => {
     await repository.updateAcceptedThroughSequence({
       storeId: "store-1" as never,
       terminalId: "terminal-1" as never,
-      localRegisterSessionId: "local-register-1",
+      cursor: {
+        syncScope: "pos",
+        localSyncCursorId: "local-register-1",
+        localRegisterSessionId: "local-register-1",
+      },
       acceptedThroughSequence: 42,
       updatedAt: 100,
     });
     await repository.updateAcceptedThroughSequence({
       storeId: "store-1" as never,
       terminalId: "terminal-1" as never,
-      localRegisterSessionId: "local-register-1",
+      cursor: {
+        syncScope: "pos",
+        localSyncCursorId: "local-register-1",
+        localRegisterSessionId: "local-register-1",
+      },
       acceptedThroughSequence: 64,
       updatedAt: 200,
+    });
+    await repository.updateAcceptedThroughSequence({
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      cursor: {
+        syncScope: "expense",
+        localSyncCursorId: "local-register-1",
+        localExpenseSessionId: "local-register-1",
+      },
+      acceptedThroughSequence: 7,
+      updatedAt: 250,
     });
 
     await expect(
       repository.getAcceptedThroughSequence({
         storeId: "store-1" as never,
         terminalId: "terminal-1" as never,
-        localRegisterSessionId: "local-register-1",
+        cursor: {
+          syncScope: "pos",
+          localSyncCursorId: "local-register-1",
+          localRegisterSessionId: "local-register-1",
+        },
       }),
     ).resolves.toBe(64);
+    await expect(
+      repository.getAcceptedThroughSequence({
+        storeId: "store-1" as never,
+        terminalId: "terminal-1" as never,
+        cursor: {
+          syncScope: "expense",
+          localSyncCursorId: "local-register-1",
+          localExpenseSessionId: "local-register-1",
+        },
+      }),
+    ).resolves.toBe(7);
+
+    const crowdedCursorCtx = createFakeConvexCtx({
+      posLocalSyncCursor: [
+        ...Array.from({ length: 101 }, (_, index) => ({
+          _id: `cursor-old-${index}`,
+          storeId: "store-1",
+          terminalId: "terminal-1",
+          syncScope: "pos",
+          localSyncCursorId: `old-local-register-${index}`,
+          localRegisterSessionId: `old-local-register-${index}`,
+          acceptedThroughSequence: index,
+          updatedAt: index,
+        })),
+        {
+          _id: "cursor-target",
+          storeId: "store-1",
+          terminalId: "terminal-1",
+          syncScope: "pos",
+          localSyncCursorId: "target-local-register",
+          localRegisterSessionId: "target-local-register",
+          acceptedThroughSequence: 91,
+          updatedAt: 200,
+        },
+        {
+          _id: "cursor-legacy-pos",
+          storeId: "store-1",
+          terminalId: "terminal-1",
+          localRegisterSessionId: "shared-local-id",
+          acceptedThroughSequence: 33,
+          updatedAt: 100,
+        },
+      ],
+    });
+    const crowdedRepository = createConvexLocalSyncRepository(
+      crowdedCursorCtx as never,
+    );
+
+    await expect(
+      crowdedRepository.getAcceptedThroughSequence({
+        storeId: "store-1" as never,
+        terminalId: "terminal-1" as never,
+        cursor: {
+          syncScope: "pos",
+          localSyncCursorId: "target-local-register",
+          localRegisterSessionId: "target-local-register",
+        },
+      }),
+    ).resolves.toBe(91);
+    await expect(
+      crowdedRepository.getAcceptedThroughSequence({
+        storeId: "store-1" as never,
+        terminalId: "terminal-1" as never,
+        cursor: {
+          syncScope: "pos",
+          localSyncCursorId: "shared-local-id",
+          localRegisterSessionId: "shared-local-id",
+        },
+      }),
+    ).resolves.toBe(33);
+    await expect(
+      crowdedRepository.getAcceptedThroughSequence({
+        storeId: "store-1" as never,
+        terminalId: "terminal-1" as never,
+        cursor: {
+          syncScope: "expense",
+          localSyncCursorId: "shared-local-id",
+          localExpenseSessionId: "shared-local-id",
+        },
+      }),
+    ).resolves.toBe(0);
     await expect(
       repository.findMapping({
         storeId: "store-1" as never,
@@ -3757,7 +3921,7 @@ function createFakeSyncRepository(
 	    registerSessionId: string;
 	    patch: unknown;
 	  }> = [];
-  const acceptedThroughSequenceByRegister = new Map<string, number>();
+  const acceptedThroughSequenceByCursor = new Map<string, number>();
   const terminal = overrides.terminal ?? {
     _id: "terminal-1",
     storeId: "store-1",
@@ -3963,12 +4127,14 @@ function createFakeSyncRepository(
     },
     async getAcceptedThroughSequence(args) {
       return (
-        acceptedThroughSequenceByRegister.get(args.localRegisterSessionId) ?? 0
+        acceptedThroughSequenceByCursor.get(
+          `${args.cursor.syncScope}:${args.cursor.localSyncCursorId}`,
+        ) ?? 0
       );
     },
     async updateAcceptedThroughSequence(args) {
-      acceptedThroughSequenceByRegister.set(
-        args.localRegisterSessionId,
+      acceptedThroughSequenceByCursor.set(
+        `${args.cursor.syncScope}:${args.cursor.localSyncCursorId}`,
         args.acceptedThroughSequence,
       );
     },

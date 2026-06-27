@@ -281,9 +281,19 @@ export type LocalSyncCursorRecord = {
   _id: string;
   storeId: Id<"store">;
   terminalId: Id<"posTerminal">;
+  syncScope?: "pos" | "expense";
+  localSyncCursorId?: string;
   localRegisterSessionId: string;
+  localExpenseSessionId?: string;
   acceptedThroughSequence: number;
   updatedAt: number;
+};
+
+export type LocalSyncCursorIdentity = {
+  syncScope: "pos" | "expense";
+  localSyncCursorId: string;
+  localRegisterSessionId?: string;
+  localExpenseSessionId?: string;
 };
 
 export type PosSyncOperationalRole = "cashier" | "manager";
@@ -751,12 +761,12 @@ export type LocalSyncIngestionRepository = {
   getAcceptedThroughSequence(args: {
     storeId: Id<"store">;
     terminalId: Id<"posTerminal">;
-    localRegisterSessionId: string;
+    cursor: LocalSyncCursorIdentity;
   }): Promise<number>;
   updateAcceptedThroughSequence(args: {
     storeId: Id<"store">;
     terminalId: Id<"posTerminal">;
-    localRegisterSessionId: string;
+    cursor: LocalSyncCursorIdentity;
     acceptedThroughSequence: number;
     updatedAt: number;
   }): Promise<void>;

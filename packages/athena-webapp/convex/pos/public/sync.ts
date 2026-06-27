@@ -70,7 +70,10 @@ const localSyncResultValidator = commandResultValidator(
     mappings: v.array(localSyncMappingValidator),
     conflicts: v.array(localSyncConflictValidator),
     syncCursor: v.object({
+      syncScope: v.optional(v.union(v.literal("pos"), v.literal("expense"))),
+      localSyncCursorId: v.optional(v.string()),
       localRegisterSessionId: v.union(v.string(), v.null()),
+      localExpenseSessionId: v.optional(v.union(v.string(), v.null())),
       acceptedThroughSequence: v.number(),
     }),
   }),

@@ -11,9 +11,12 @@ export type PosLocalSyncTrigger =
 export interface PosLocalPendingEvent {
   id: string;
   terminalId: string;
+  syncScope?: "pos" | "expense";
   localRegisterSessionId: string;
+  localExpenseSessionId?: string;
   createdAt: number;
   sequence: number;
+  uploadSequence?: number;
 }
 
 export interface PosLocalSyncStatus {
@@ -42,9 +45,11 @@ export interface CreatePosLocalSyncSchedulerOptions {
     metadata: { trigger: PosLocalSyncTrigger },
   ): Promise<{
     heldEventIds?: string[];
+    rejectedEventIds?: string[];
     reviewEventIds?: string[];
     syncedEventIds: string[];
   }>;
+  markRejected?(eventIds: string[]): Promise<void>;
   markNeedsReview?(eventIds: string[]): Promise<void>;
   markSynced(eventIds: string[]): Promise<void>;
   isOnline(): boolean;
@@ -177,13 +182,17 @@ export function createPosLocalSyncScheduler(
         if (result.reviewEventIds?.length) {
           await options.markNeedsReview?.(result.reviewEventIds);
         }
+        if (result.rejectedEventIds?.length) {
+          await options.markRejected?.(result.rejectedEventIds);
+        }
         if (result.syncedEventIds.length) {
           await options.markSynced(result.syncedEventIds);
         }
         if (result.heldEventIds?.length) {
           if (
             result.syncedEventIds.length > 0 ||
-            (result.reviewEventIds?.length ?? 0) > 0
+            (result.reviewEventIds?.length ?? 0) > 0 ||
+            (result.rejectedEventIds?.length ?? 0) > 0
           ) {
             rerunRequested = true;
             return;
@@ -307,7 +316,7 @@ export function selectOrderedBatches(
       .filter(
         (event) =>
           event.terminalId === first.terminalId &&
-          event.localRegisterSessionId === first.localRegisterSessionId,
+          getPendingEventCursorKey(event) === getPendingEventCursorKey(first),
       )
       .slice(0, maxBatchSize);
     batches.push(batch);
@@ -328,6 +337,12 @@ function comparePendingEvents(
   left: PosLocalPendingEvent,
   right: PosLocalPendingEvent,
 ): number {
+  const leftUploadSequence = getPendingEventUploadSequence(left);
+  const rightUploadSequence = getPendingEventUploadSequence(right);
+  if (leftUploadSequence !== rightUploadSequence) {
+    return leftUploadSequence - rightUploadSequence;
+  }
+
   if (left.createdAt !== right.createdAt) {
     return left.createdAt - right.createdAt;
   }
@@ -337,6 +352,22 @@ function comparePendingEvents(
   }
 
   return left.id.localeCompare(right.id);
+}
+
+function getPendingEventCursorKey(event: PosLocalPendingEvent): string {
+  const scope = event.syncScope === "expense" ? "expense" : "pos";
+  const cursorId =
+    scope === "expense"
+      ? event.localExpenseSessionId || event.localRegisterSessionId
+      : event.localRegisterSessionId;
+
+  return `${event.terminalId}:${scope}:${cursorId}`;
+}
+
+function getPendingEventUploadSequence(event: PosLocalPendingEvent): number {
+  return typeof event.uploadSequence === "number"
+    ? event.uploadSequence
+    : event.sequence;
 }
 
 function getCurrentBackoffDelay(nowMs: number, until: number | null): number {

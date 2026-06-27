@@ -33,9 +33,7 @@ export function buildPosLocalSyncUploadEvents(
   );
   const uploadEvents: PosLocalUploadEvent[] = [];
 
-  for (const event of [...eventsToUpload].sort(
-    (left, right) => left.sequence - right.sequence,
-  )) {
+  for (const event of [...eventsToUpload].sort(compareUploadEvents)) {
     if (!isSyncablePosLocalEvent(event, uploadSupport)) continue;
     const uploadEvent = toUploadEvent(event, orderedEvents);
     if (!uploadEvent) continue;
@@ -45,6 +43,25 @@ export function buildPosLocalSyncUploadEvents(
   }
 
   return uploadEvents;
+}
+
+function compareUploadEvents(
+  left: PosLocalEventRecord,
+  right: PosLocalEventRecord,
+): number {
+  const leftUploadSequence =
+    typeof left.uploadSequence === "number"
+      ? left.uploadSequence
+      : left.sequence;
+  const rightUploadSequence =
+    typeof right.uploadSequence === "number"
+      ? right.uploadSequence
+      : right.sequence;
+  if (leftUploadSequence !== rightUploadSequence) {
+    return leftUploadSequence - rightUploadSequence;
+  }
+
+  return left.sequence - right.sequence;
 }
 
 export function isSyncablePosLocalEvent(
@@ -201,21 +218,6 @@ function toUploadEvent(
         countedCash:
           typeof payload.countedCash === "number" ? payload.countedCash : undefined,
         notes: nullableStringToOptional(payload.notes),
-      },
-    };
-  }
-
-  if (event.type === "register.reopened") {
-    const payload = asRecord(event.payload);
-    return {
-      localEventId: event.localEventId,
-      localRegisterSessionId: event.localRegisterSessionId,
-      eventType: "register_reopened",
-      occurredAt: event.createdAt,
-      staffProfileId: event.staffProfileId,
-      ...(event.staffProofToken ? { staffProofToken: event.staffProofToken } : {}),
-      payload: {
-        reason: nullableStringToOptional(payload.reason),
       },
     };
   }

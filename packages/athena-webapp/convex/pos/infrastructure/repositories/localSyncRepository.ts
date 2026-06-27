@@ -65,6 +65,38 @@ export function createConvexLocalSyncRepository(
       ? (normalized as Id<TableName>)
       : null;
   };
+  const findLocalSyncCursor = async (args: {
+    storeId: Id<"store">;
+    terminalId: Id<"posTerminal">;
+    cursor: {
+      syncScope: "pos" | "expense";
+      localSyncCursorId: string;
+    };
+  }): Promise<LocalSyncCursorRecord | null> => {
+    const scoped = (await ctx.db
+      .query("posLocalSyncCursor")
+      .withIndex("by_store_terminal_scope_cursor", (q) =>
+        q
+          .eq("storeId", args.storeId)
+          .eq("terminalId", args.terminalId)
+          .eq("syncScope", args.cursor.syncScope)
+          .eq("localSyncCursorId", args.cursor.localSyncCursorId),
+      )
+      .unique()) as LocalSyncCursorRecord | null;
+    if (scoped) return scoped;
+    if (args.cursor.syncScope !== "pos") return null;
+
+    const legacy = (await ctx.db
+      .query("posLocalSyncCursor")
+      .withIndex("by_store_terminal_register", (q) =>
+        q
+          .eq("storeId", args.storeId)
+          .eq("terminalId", args.terminalId)
+          .eq("localRegisterSessionId", args.cursor.localSyncCursorId),
+      )
+      .unique()) as LocalSyncCursorRecord | null;
+    return legacy && legacy.syncScope === undefined ? legacy : null;
+  };
 
   return {
     getTerminal(terminalId) {
@@ -205,29 +237,18 @@ export function createConvexLocalSyncRepository(
       );
     },
     async getAcceptedThroughSequence(args) {
-      const cursor = (await ctx.db
-        .query("posLocalSyncCursor")
-        .withIndex("by_store_terminal_register", (q) =>
-          q
-            .eq("storeId", args.storeId)
-            .eq("terminalId", args.terminalId)
-            .eq("localRegisterSessionId", args.localRegisterSessionId),
-        )
-        .unique()) as LocalSyncCursorRecord | null;
+      const cursor = await findLocalSyncCursor(args);
       return cursor?.acceptedThroughSequence ?? 0;
     },
     async updateAcceptedThroughSequence(args) {
-      const existing = (await ctx.db
-        .query("posLocalSyncCursor")
-        .withIndex("by_store_terminal_register", (q) =>
-          q
-            .eq("storeId", args.storeId)
-            .eq("terminalId", args.terminalId)
-            .eq("localRegisterSessionId", args.localRegisterSessionId),
-        )
-        .unique()) as LocalSyncCursorRecord | null;
+      const existing = await findLocalSyncCursor(args);
       if (existing) {
         await ctx.db.patch("posLocalSyncCursor", existing._id as Id<"posLocalSyncCursor">, {
+          syncScope: args.cursor.syncScope,
+          localSyncCursorId: args.cursor.localSyncCursorId,
+          localRegisterSessionId:
+            args.cursor.localRegisterSessionId ?? args.cursor.localSyncCursorId,
+          localExpenseSessionId: args.cursor.localExpenseSessionId,
           acceptedThroughSequence: args.acceptedThroughSequence,
           updatedAt: args.updatedAt,
         });
@@ -237,7 +258,11 @@ export function createConvexLocalSyncRepository(
       await ctx.db.insert("posLocalSyncCursor", {
         storeId: args.storeId,
         terminalId: args.terminalId,
-        localRegisterSessionId: args.localRegisterSessionId,
+        syncScope: args.cursor.syncScope,
+        localSyncCursorId: args.cursor.localSyncCursorId,
+        localRegisterSessionId:
+          args.cursor.localRegisterSessionId ?? args.cursor.localSyncCursorId,
+        localExpenseSessionId: args.cursor.localExpenseSessionId,
         acceptedThroughSequence: args.acceptedThroughSequence,
         updatedAt: args.updatedAt,
       });

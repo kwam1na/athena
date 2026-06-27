@@ -3401,6 +3401,10 @@ describe("useRegisterViewModel", () => {
     expect(result.current.drawerGate?.onSubmitCloseout).toBeUndefined();
     expect(result.current.drawerGate?.onReopenRegister).toBeUndefined();
     expect(result.current.drawerGate?.closeoutSubmittedReason).toBeUndefined();
+    expect(result.current.drawerGate?.canOpenCashControls).toBe(true);
+    expect(result.current.drawerGate?.cashControlsRegisterSessionId).toBe(
+      "drawer-1",
+    );
     expect(
       result.current.drawerGate?.hasPendingCloseoutApproval,
     ).toBeUndefined();
@@ -3445,6 +3449,10 @@ describe("useRegisterViewModel", () => {
     expect(result.current.drawerGate?.onSubmit).toEqual(expect.any(Function));
     expect(result.current.drawerGate?.onReopenRegister).toBeUndefined();
     expect(result.current.drawerGate?.closeoutSubmittedReason).toBeUndefined();
+    expect(result.current.drawerGate?.canOpenCashControls).toBe(true);
+    expect(result.current.drawerGate?.cashControlsRegisterSessionId).toBe(
+      "drawer-1",
+    );
     expect(
       result.current.drawerGate?.closeoutSecondaryActionLabel,
     ).toBeUndefined();
@@ -3831,6 +3839,71 @@ describe("useRegisterViewModel", () => {
     expect(mockMarkLocalEventsSynced).toHaveBeenCalledWith(["local-event-1"], {
       uploaded: true,
     });
+  });
+
+  it("keeps zero-variance cloud-backed closeouts pending when the cloud closeout fails", async () => {
+    mockSubmitRegisterSessionCloseout.mockResolvedValueOnce(
+      userError({
+        code: "precondition_failed",
+        message: "Register session changed before closeout could finish.",
+      }),
+    );
+    mockRegisterState = {
+      phase: "readyToStart",
+      terminal: { _id: "terminal-1", displayName: "Front Counter" },
+      cashier: {
+        _id: "staff-1",
+        firstName: "Ama",
+        lastName: "Kusi",
+        activeRoles: ["manager"],
+      },
+      activeRegisterSession: {
+        _id: "drawer-1",
+        status: "open",
+        terminalId: "terminal-1",
+        registerNumber: "1",
+        openingFloat: 5_000,
+        expectedCash: 5_000,
+        openedAt: Date.now(),
+      },
+      activeSession: null,
+      resumableSession: null,
+    };
+    mockActiveSession = null;
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        buildStaffAuthenticationResult(),
+      );
+    });
+
+    act(() => {
+      result.current.closeoutControl?.onRequestCloseout();
+    });
+
+    act(() => {
+      result.current.drawerGate?.onCloseoutCountedCashChange?.("50.00");
+    });
+
+    await act(async () => {
+      await result.current.drawerGate?.onSubmitCloseout?.();
+    });
+
+    expect(mockAppendLocalEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "register.closeout_started",
+        localRegisterSessionId: "drawer-1",
+      }),
+    );
+    expect(mockSubmitRegisterSessionCloseout).toHaveBeenCalled();
+    expect(mockMarkLocalEventsSynced).not.toHaveBeenCalled();
+    expect(toast.success).toHaveBeenCalledWith(
+      "Closeout saved locally. Athena will finish it after sync.",
+    );
+    expect(toast.success).not.toHaveBeenCalledWith("Register closed.");
   });
 
   it("opens the closeout drawer gate from an active empty register", async () => {

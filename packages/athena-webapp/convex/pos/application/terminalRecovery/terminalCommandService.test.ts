@@ -49,14 +49,18 @@ describe("terminal command service", () => {
       terminalId,
     });
     expect(claimed.kind).toBe("ok");
+    const executionId =
+      claimed.kind === "ok" ? claimed.data.executionId : undefined;
+    expect(executionId).toBe(`command-1:${now + 100}`);
     expect(repository.patchCommand).toHaveBeenCalledWith(
       commandId,
-      expect.objectContaining({ status: "claimed" }),
+      expect.objectContaining({ executionId, status: "claimed" }),
     );
 
     const acknowledged = await acknowledgeTerminalRecoveryCommand(repository, {
       acknowledgedAt: now + 200,
       commandId,
+      executionId,
       message: "Sync retry scheduled.",
       result: "completed",
       storeId,
@@ -566,6 +570,7 @@ describe("terminal command service", () => {
     const repository = buildRepository({
       commands: [
         buildCommand({
+          executionId: "command-1:2000000",
           status: "claimed",
         }),
       ],
@@ -574,6 +579,7 @@ describe("terminal command service", () => {
     const result = await acknowledgeTerminalRecoveryCommand(repository, {
       acknowledgedAt: now,
       commandId: "command-1" as Id<"posTerminalRecoveryCommand">,
+      executionId: "command-1:2000000",
       message: `staffProofToken=abc123 syncSecretHash=def456 paymentToken=ghi789 PIN 1234 payment=card customer Jane payload raw ${"a".repeat(40)} ${"details ".repeat(80)}`,
       result: "failed",
       storeId,
@@ -702,6 +708,50 @@ describe("terminal command service", () => {
         message: "This terminal recovery command cannot be acknowledged.",
       },
       kind: "user_error",
+    });
+  });
+
+  it("requires the claim execution id for non-update acknowledgements", async () => {
+    const repository = buildRepository({
+      commands: [
+        buildCommand({
+          executionId: "command-1:2000100",
+          status: "claimed",
+        }),
+      ],
+    });
+
+    await expect(
+      acknowledgeTerminalRecoveryCommand(repository, {
+        acknowledgedAt: now + 200,
+        commandId: "command-1" as Id<"posTerminalRecoveryCommand">,
+        result: "completed",
+        storeId,
+        terminalId,
+      }),
+    ).resolves.toMatchObject({
+      error: {
+        code: "precondition_failed",
+        message: "This terminal recovery command claim is stale.",
+      },
+      kind: "user_error",
+    });
+    expect(repository.patchCommand).not.toHaveBeenCalled();
+
+    await expect(
+      acknowledgeTerminalRecoveryCommand(repository, {
+        acknowledgedAt: now + 300,
+        commandId: "command-1" as Id<"posTerminalRecoveryCommand">,
+        executionId: "command-1:2000100",
+        result: "completed",
+        storeId,
+        terminalId,
+      }),
+    ).resolves.toMatchObject({
+      kind: "ok",
+      data: {
+        status: "completed",
+      },
     });
   });
 

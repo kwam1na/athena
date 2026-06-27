@@ -6,6 +6,7 @@ import { projectLocalSyncEvent } from "./projectLocalEvents";
 import { hashPosLocalStaffProofToken } from "./staffProof";
 import type {
   LocalSyncConflictRecord,
+  LocalSyncCursorIdentity,
   LocalSyncEventRecord,
   LocalSyncIngestionRepository,
   LocalSyncMappingRecord,
@@ -45,7 +46,10 @@ export type PosLocalSyncResult = {
   mappings: LocalSyncMappingRecord[];
   conflicts: LocalSyncConflictRecord[];
   syncCursor: {
+    syncScope?: "pos" | "expense";
+    localSyncCursorId?: string;
     localRegisterSessionId: string | null;
+    localExpenseSessionId?: string | null;
     acceptedThroughSequence: number;
   };
 };
@@ -131,8 +135,9 @@ export function createLocalSyncIngestionService(
       const held: PosLocalSyncHeldOutcome[] = [];
       const mappings: LocalSyncMappingRecord[] = [];
       const conflicts: LocalSyncConflictRecord[] = [];
-      let cursorRegisterSessionId: string | null =
-        batch.events[0] ? getLocalSyncCursorIdentity(batch.events[0]) : null;
+      let cursorIdentity: LocalSyncCursorIdentity | null = batch.events[0]
+        ? getLocalSyncCursorIdentity(batch.events[0])
+        : null;
       const syncScopes = new Set(batch.events.map(getLocalSyncScope));
       if (syncScopes.size > 1) {
         return userError({
@@ -141,28 +146,30 @@ export function createLocalSyncIngestionService(
         });
       }
 
-      const registerSessionIds = new Set(
-        batch.events.map(getLocalSyncCursorIdentity),
+      const cursorIds = new Set(
+        batch.events.map(
+          (event) => getLocalSyncCursorIdentity(event).localSyncCursorId,
+        ),
       );
-      if (registerSessionIds.size > 1) {
+      if (cursorIds.size > 1) {
         return userError({
           code: "validation_failed",
-          message: "POS sync batches must contain one local register session.",
+          message: "POS sync batches must contain one local sync cursor.",
         });
       }
       let acceptedThroughSequence =
-        cursorRegisterSessionId === null
+        cursorIdentity === null
           ? 0
           : await dependencies.repository.getAcceptedThroughSequence({
               storeId: batch.storeId,
               terminalId: batch.terminalId,
-              localRegisterSessionId: cursorRegisterSessionId,
+              cursor: cursorIdentity,
             });
 
       for (const event of [...batch.events].sort(
         (left, right) => left.sequence - right.sequence,
       )) {
-        cursorRegisterSessionId = getLocalSyncCursorIdentity(event);
+        cursorIdentity = getLocalSyncCursorIdentity(event);
         const existing = await dependencies.repository.findEvent({
           storeId: batch.storeId,
           terminalId: batch.terminalId,
@@ -352,7 +359,8 @@ export function createLocalSyncIngestionService(
             occurredAt: event.occurredAt,
             staffProfileId: event.staffProfileId,
             syncScope: getLocalSyncScope(event),
-            localRegisterSessionId: getLocalSyncCursorIdentity(event),
+            localRegisterSessionId:
+              getLocalSyncCursorIdentity(event).localSyncCursorId,
             ...(getLocalSyncScope(event) === "expense"
               ? { localExpenseSessionId: event.localExpenseSessionId ?? "" }
               : {}),
@@ -399,11 +407,11 @@ export function createLocalSyncIngestionService(
         );
       }
 
-      if (cursorRegisterSessionId !== null) {
+      if (cursorIdentity !== null) {
         await dependencies.repository.updateAcceptedThroughSequence({
           storeId: batch.storeId,
           terminalId: batch.terminalId,
-          localRegisterSessionId: cursorRegisterSessionId,
+          cursor: cursorIdentity,
           acceptedThroughSequence,
           updatedAt: dependencies.now(),
         });
@@ -415,7 +423,22 @@ export function createLocalSyncIngestionService(
         mappings: mappings.map(toSyncResultMapping),
         conflicts: conflicts.map(toSyncResultConflict),
         syncCursor: {
-          localRegisterSessionId: cursorRegisterSessionId,
+          ...(cursorIdentity
+            ? {
+                syncScope: cursorIdentity.syncScope,
+                localSyncCursorId: cursorIdentity.localSyncCursorId,
+              }
+            : {}),
+          localRegisterSessionId:
+            cursorIdentity?.localRegisterSessionId ??
+            cursorIdentity?.localSyncCursorId ??
+            null,
+          ...(cursorIdentity?.syncScope === "expense"
+            ? {
+                localExpenseSessionId:
+                  cursorIdentity.localExpenseSessionId ?? null,
+              }
+            : {}),
           acceptedThroughSequence,
         },
       });
@@ -434,10 +457,25 @@ function getLocalSyncScope(event: PosLocalSyncEventInput): "pos" | "expense" {
     : "pos";
 }
 
-function getLocalSyncCursorIdentity(event: PosLocalSyncEventInput): string {
-  return getLocalSyncScope(event) === "expense"
-    ? event.localExpenseSessionId ?? ""
-    : event.localRegisterSessionId ?? "";
+function getLocalSyncCursorIdentity(
+  event: PosLocalSyncEventInput,
+): LocalSyncCursorIdentity {
+  const syncScope = getLocalSyncScope(event);
+  if (syncScope === "expense") {
+    const localExpenseSessionId = event.localExpenseSessionId ?? "";
+    return {
+      syncScope,
+      localSyncCursorId: localExpenseSessionId,
+      localExpenseSessionId,
+    };
+  }
+
+  const localRegisterSessionId = event.localRegisterSessionId ?? "";
+  return {
+    syncScope,
+    localSyncCursorId: localRegisterSessionId,
+    localRegisterSessionId,
+  };
 }
 
 function prepareLocalSyncEventForProjection(input: {
@@ -474,7 +512,7 @@ async function buildLocalSyncEventRecordInput(
     terminalId: batch.terminalId,
     syncScope: getLocalSyncScope(event),
     localEventId: event.localEventId,
-    localRegisterSessionId: getLocalSyncCursorIdentity(event),
+    localRegisterSessionId: getLocalSyncCursorIdentity(event).localSyncCursorId,
     ...(getLocalSyncScope(event) === "expense"
       ? { localExpenseSessionId: event.localExpenseSessionId ?? "" }
       : {}),
@@ -500,7 +538,7 @@ function validateLocalSyncEventEnvelope(
 ): string | null {
   const scope = getLocalSyncScope(event);
   const localSyncIdentity = getLocalSyncCursorIdentity(event);
-  if (!event.localEventId.trim() || !localSyncIdentity.trim()) {
+  if (!event.localEventId.trim() || !localSyncIdentity.localSyncCursorId.trim()) {
     if (scope === "expense") {
       return "Expense sync event is missing required local identifiers.";
     }
@@ -658,8 +696,10 @@ export function parseStoredLocalSyncEvent(
   }
 
   return parseLocalSyncEvent(repository, {
+    syncScope: event.syncScope,
     localEventId: event.localEventId,
     localRegisterSessionId: event.localRegisterSessionId,
+    localExpenseSessionId: event.localExpenseSessionId,
     sequence: event.sequence,
     eventType: event.eventType,
     occurredAt: event.occurredAt,
@@ -1507,7 +1547,8 @@ function isSameLocalEvent(
 
   return (
     (existing.syncScope ?? "pos") === getLocalSyncScope(incoming) &&
-    existing.localRegisterSessionId === getLocalSyncCursorIdentity(incoming) &&
+    existing.localRegisterSessionId ===
+      getLocalSyncCursorIdentity(incoming).localSyncCursorId &&
     sequenceMatches &&
     existing.eventType === incoming.eventType &&
     existing.occurredAt === incoming.occurredAt &&
