@@ -78,6 +78,8 @@ const posTerminalApi = api.inventory.posTerminal as unknown as {
   >;
 };
 
+const TERMINAL_DETAIL_LIST_VISIBLE_LIMIT = 5;
+
 type RemoteAssistClientSummary = {
   _id: Id<"remoteAssistClient"> | string;
   accessPolicy:
@@ -1051,11 +1053,28 @@ function ConflictSection({
   runtimeStatus: TerminalRuntimeStatus | null;
   syncEvidence: TerminalSyncEvidence;
 }) {
+  const [isConflictListExpanded, setIsConflictListExpanded] = useState(false);
+  const [isLocalReviewListExpanded, setIsLocalReviewListExpanded] =
+    useState(false);
   const localReviewEvents = runtimeStatus?.sync.reviewEvents ?? [];
   const runtimeReviewCount = runtimeStatus?.sync.reviewEventCount ?? 0;
   const missingRuntimeReviewDetails =
     runtimeReviewCount > 0 && localReviewEvents.length === 0;
   const unresolvedConflicts = syncEvidence.unresolvedConflicts ?? [];
+  const visibleConflicts = isConflictListExpanded
+    ? unresolvedConflicts
+    : unresolvedConflicts.slice(0, TERMINAL_DETAIL_LIST_VISIBLE_LIMIT);
+  const hiddenConflictCount = Math.max(
+    unresolvedConflicts.length - TERMINAL_DETAIL_LIST_VISIBLE_LIMIT,
+    0,
+  );
+  const visibleLocalReviewEvents = isLocalReviewListExpanded
+    ? localReviewEvents
+    : localReviewEvents.slice(0, TERMINAL_DETAIL_LIST_VISIBLE_LIMIT);
+  const hiddenLocalReviewCount = Math.max(
+    localReviewEvents.length - TERMINAL_DETAIL_LIST_VISIBLE_LIMIT,
+    0,
+  );
   const reviewCount = getReviewEvidenceCount(syncEvidence);
 
   return (
@@ -1071,20 +1090,34 @@ function ConflictSection({
               : "No unresolved cloud sync conflicts are currently reported. Local runtime review, pending sync, or stale check-ins may still need attention above."}
           </p>
         ) : (
-          unresolvedConflicts.map((conflict) => (
-            <div
-              className="rounded-md border border-warning/30 bg-warning/10 px-layout-md py-layout-sm"
-              key={conflict._id}
-            >
-              <p className="text-sm font-medium text-foreground">
-                {conflict.summary}
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Sequence {conflict.sequence} /{" "}
-                {formatStatusLabel(conflict.conflictType)}
-              </p>
-            </div>
-          ))
+          <>
+            {visibleConflicts.map((conflict) => (
+              <div
+                className="rounded-md border border-warning/30 bg-warning/10 px-layout-md py-layout-sm"
+                key={conflict._id}
+              >
+                <p className="text-sm font-medium text-foreground">
+                  {conflict.summary}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Sequence {conflict.sequence} /{" "}
+                  {formatStatusLabel(conflict.conflictType)}
+                </p>
+              </div>
+            ))}
+            {hiddenConflictCount > 0 ? (
+              <Button
+                className="h-8 px-layout-sm text-xs"
+                onClick={() => setIsConflictListExpanded((current) => !current)}
+                type="button"
+                variant="outline"
+              >
+                {isConflictListExpanded
+                  ? "Show fewer"
+                  : `Show ${hiddenConflictCount} more`}
+              </Button>
+            ) : null}
+          </>
         )}
 
         {localReviewEvents.length > 0 ? (
@@ -1096,7 +1129,7 @@ function ConflictSection({
               <span>Status</span>
             </div>
             <div className="divide-y divide-border/80">
-              {localReviewEvents.map((event) => (
+              {visibleLocalReviewEvents.map((event) => (
                 <div
                   className="grid gap-layout-sm px-layout-md py-layout-sm text-sm md:grid-cols-[5rem_minmax(0,1fr)_8rem_7rem] md:items-center"
                   key={event.localEventId}
@@ -1124,6 +1157,22 @@ function ConflictSection({
                   </span>
                 </div>
               ))}
+              {hiddenLocalReviewCount > 0 ? (
+                <div className="px-layout-md py-layout-sm">
+                  <Button
+                    className="h-8 px-layout-sm text-xs"
+                    onClick={() =>
+                      setIsLocalReviewListExpanded((current) => !current)
+                    }
+                    type="button"
+                    variant="outline"
+                  >
+                    {isLocalReviewListExpanded
+                      ? "Show fewer"
+                      : `Show ${hiddenLocalReviewCount} more`}
+                  </Button>
+                </div>
+              ) : null}
             </div>
           </div>
         ) : null}
@@ -1586,6 +1635,11 @@ function RecoveryBlockerGroup({
   terminalId: Id<"posTerminal"> | string;
   title: string;
 }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const visibleLimit = 5;
+  const hiddenCount = Math.max(blockers.length - visibleLimit, 0);
+  const visibleBlockers = isExpanded ? blockers : blockers.slice(0, visibleLimit);
+
   return (
     <div className="rounded-md border border-border/80 bg-surface">
       <div className="border-b border-border/80 bg-surface-muted/40 px-layout-md py-layout-xs">
@@ -1599,35 +1653,51 @@ function RecoveryBlockerGroup({
             {emptyCopy}
           </p>
         ) : (
-          blockers.map((blocker) => (
-            <div
-              className="grid gap-layout-sm px-layout-md py-layout-sm md:grid-cols-[minmax(0,1fr)_auto] md:items-start"
-              key={blocker.id}
-            >
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-foreground">
-                  {blocker.title}
-                </p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {blocker.summary}
-                </p>
-                {blocker.detail ? (
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {blocker.detail}
+          <>
+            {visibleBlockers.map((blocker) => (
+              <div
+                className="grid gap-layout-sm px-layout-md py-layout-sm md:grid-cols-[minmax(0,1fr)_auto] md:items-start"
+                key={blocker.id}
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-foreground">
+                    {blocker.title}
                   </p>
-                ) : null}
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {blocker.summary}
+                  </p>
+                  {blocker.detail ? (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {blocker.detail}
+                    </p>
+                  ) : null}
+                </div>
+                <RecoveryBlockerAction
+                  blocker={blocker}
+                  onIssueTerminalRecoveryCommand={onIssueTerminalRecoveryCommand}
+                  onResolveTerminalCloudRepair={onResolveTerminalCloudRepair}
+                  onResolveRegisterSessionReview={onResolveRegisterSessionReview}
+                  orgUrlSlug={orgUrlSlug}
+                  storeUrlSlug={storeUrlSlug}
+                  terminalId={terminalId}
+                />
               </div>
-              <RecoveryBlockerAction
-                blocker={blocker}
-                onIssueTerminalRecoveryCommand={onIssueTerminalRecoveryCommand}
-                onResolveTerminalCloudRepair={onResolveTerminalCloudRepair}
-                onResolveRegisterSessionReview={onResolveRegisterSessionReview}
-                orgUrlSlug={orgUrlSlug}
-                storeUrlSlug={storeUrlSlug}
-                terminalId={terminalId}
-              />
-            </div>
-          ))
+            ))}
+            {hiddenCount > 0 ? (
+              <div className="px-layout-md py-layout-sm">
+                <Button
+                  className="h-8 px-layout-sm text-xs"
+                  onClick={() => setIsExpanded((current) => !current)}
+                  type="button"
+                  variant="outline"
+                >
+                  {isExpanded
+                    ? "Show fewer"
+                    : `Show ${hiddenCount} more`}
+                </Button>
+              </div>
+            ) : null}
+          </>
         )}
       </div>
     </div>

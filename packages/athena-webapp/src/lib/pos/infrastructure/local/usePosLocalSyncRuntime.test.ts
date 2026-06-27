@@ -1,5 +1,5 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   acknowledgeTerminalRecoveryCommand: vi.fn(),
@@ -77,6 +77,7 @@ import {
   RUNTIME_STATUS_FRESHNESS_PUBLISH_INTERVAL_MS,
   getRuntimeStatusPublishMaterialSignature,
   shouldPublishRuntimeStatus,
+  startRuntimeStatusFreshnessHeartbeat,
 } from "./runtimeStatusPublisher";
 import { buildPosLocalSyncUploadEvents } from "./syncContract";
 
@@ -117,6 +118,11 @@ describe("usePosLocalSyncRuntimeStatus", () => {
       configurable: true,
       value: true,
     });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.useRealTimers();
   });
 
   it("reads local events through the terminal seed and exposes retry refresh", async () => {
@@ -3871,6 +3877,27 @@ describe("usePosLocalSyncRuntimeStatus", () => {
       ),
     );
     expect(mocks.reportTerminalRuntimeStatus).toHaveBeenCalledTimes(1);
+  });
+
+  it("starts runtime check-in heartbeat wakeups on the freshness cadence", () => {
+    const heartbeat = vi.fn();
+    const setIntervalFn = vi.fn(() => "timer-1");
+    const clearIntervalFn = vi.fn();
+
+    const stopHeartbeat = startRuntimeStatusFreshnessHeartbeat(heartbeat, {
+      clearIntervalFn: clearIntervalFn as never,
+      setIntervalFn: setIntervalFn as never,
+    });
+
+    expect(setIntervalFn).toHaveBeenCalledWith(
+      heartbeat,
+      RUNTIME_STATUS_FRESHNESS_PUBLISH_INTERVAL_MS,
+    );
+    expect(heartbeat).not.toHaveBeenCalled();
+
+    stopHeartbeat();
+
+    expect(clearIntervalFn).toHaveBeenCalledWith("timer-1");
   });
 
   it("queues changed runtime check-ins while a previous publish is in flight", async () => {
