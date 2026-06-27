@@ -73,6 +73,11 @@ import type {
   PosLocalEventRecord,
   PosTerminalIntegrityState,
 } from "./posLocalStore";
+import {
+  RUNTIME_STATUS_FRESHNESS_PUBLISH_INTERVAL_MS,
+  getRuntimeStatusPublishMaterialSignature,
+  shouldPublishRuntimeStatus,
+} from "./runtimeStatusPublisher";
 import { buildPosLocalSyncUploadEvents } from "./syncContract";
 
 function deferred<T>() {
@@ -4136,6 +4141,136 @@ describe("usePosLocalSyncRuntimeStatus", () => {
         terminalId: "terminal-cloud-1",
       }),
     );
+  });
+
+  it("normalizes volatile runtime observation timestamps in material publish signatures", () => {
+    const runtimeStatus = {
+      activeRegisterSession: {
+        cloudRegisterSessionId: "register-session-1",
+        localRegisterSessionId: "register-session-1",
+        observedAt: 100,
+        openedAt: 50,
+        registerNumber: "1",
+        status: "active",
+      },
+      appShell: {
+        observedAt: 100,
+        ready: true,
+      },
+      appUpdate: {
+        canApply: false,
+        detectorStatus: "ok",
+        observedAt: 100,
+        stagingStatus: "unknown",
+        status: "current",
+      },
+      localStore: {
+        available: true,
+        terminalSeedReady: true,
+      },
+      reportedAt: 100,
+      saleAuthority: {
+        observedAt: 100,
+        staffProfileId: "staff-1",
+        status: "ready",
+        transactionMode: "products_and_services",
+      },
+      snapshots: {
+        availabilityAgeMs: 100,
+        catalogAgeMs: 200,
+      },
+      source: "sync-runtime",
+      staffAuthority: {
+        staffProfileId: "staff-1",
+        status: "ready",
+      },
+      sync: {
+        failedEventCount: 0,
+        lastTrigger: "route-entry",
+        localOnlyEventCount: 0,
+        pendingEventCount: 0,
+        reviewEventCount: 105,
+        status: "syncing",
+        uploadableEventCount: 34,
+      },
+    };
+
+    expect(
+      getRuntimeStatusPublishMaterialSignature({
+        runtimeStatus: runtimeStatus as never,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    ).toEqual(
+      getRuntimeStatusPublishMaterialSignature({
+        runtimeStatus: {
+          ...runtimeStatus,
+          activeRegisterSession: {
+            ...runtimeStatus.activeRegisterSession,
+            observedAt: 200,
+          },
+          appShell: {
+            ...runtimeStatus.appShell,
+            observedAt: 200,
+          },
+          appUpdate: {
+            ...runtimeStatus.appUpdate,
+            observedAt: 200,
+          },
+          reportedAt: 200,
+          saleAuthority: {
+            ...runtimeStatus.saleAuthority,
+            observedAt: 200,
+          },
+          snapshots: {
+            availabilityAgeMs: 300,
+            catalogAgeMs: 400,
+          },
+          sync: {
+            ...runtimeStatus.sync,
+            lastTrigger: "foreground-interval",
+            status: "needs_review",
+          },
+        } as never,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+  });
+
+  it("throttles freshness-only runtime check-ins without delaying material changes", () => {
+    expect(
+      shouldPublishRuntimeStatus({
+        lastMaterialSignature: "material-a",
+        lastPublishedAt: 1_000,
+        lastPublishSignature: "publish-a",
+        materialSignature: "material-a",
+        now: 1_500,
+        publishSignature: "publish-b",
+      }),
+    ).toBe(false);
+
+    expect(
+      shouldPublishRuntimeStatus({
+        lastMaterialSignature: "material-a",
+        lastPublishedAt: 1_000,
+        lastPublishSignature: "publish-a",
+        materialSignature: "material-a",
+        now: 1_000 + RUNTIME_STATUS_FRESHNESS_PUBLISH_INTERVAL_MS,
+        publishSignature: "publish-b",
+      }),
+    ).toBe(true);
+
+    expect(
+      shouldPublishRuntimeStatus({
+        lastMaterialSignature: "material-a",
+        lastPublishedAt: 1_000,
+        lastPublishSignature: "publish-a",
+        materialSignature: "material-b",
+        now: 1_500,
+        publishSignature: "publish-b",
+      }),
+    ).toBe(true);
   });
 
   it("drains persisted-proof multi-staff local history from the hub in stored upload order", async () => {

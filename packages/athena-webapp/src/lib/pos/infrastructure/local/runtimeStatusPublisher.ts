@@ -1,5 +1,7 @@
 import type { PosTerminalRuntimeStatusPayload } from "./terminalRuntimeStatus";
 
+export const RUNTIME_STATUS_FRESHNESS_PUBLISH_INTERVAL_MS = 30_000;
+
 export type RuntimeCheckInNotReadyReason =
   | "missing_store"
   | "missing_sync_secret"
@@ -41,18 +43,42 @@ export function getRuntimeStatusPublishSignature(input: {
   storeId: string;
   terminalId: string;
 }) {
-  const stableStatus: Partial<PosTerminalRuntimeStatusPayload> = {
-    ...normalizeRuntimeStatusSignature(input.runtimeStatus),
-  };
-  delete stableStatus.reportedAt;
-  delete stableStatus.snapshots;
-
   return JSON.stringify({
     observationToken: input.observationToken,
-    runtimeStatus: stableStatus,
+    runtimeStatus: normalizeRuntimeStatusPublishMaterial(input.runtimeStatus),
     storeId: input.storeId,
     terminalId: input.terminalId,
   });
+}
+
+export function getRuntimeStatusPublishMaterialSignature(input: {
+  runtimeStatus: PosTerminalRuntimeStatusPayload;
+  storeId: string;
+  terminalId: string;
+}) {
+  return JSON.stringify({
+    runtimeStatus: normalizeRuntimeStatusPublishMaterial(input.runtimeStatus),
+    storeId: input.storeId,
+    terminalId: input.terminalId,
+  });
+}
+
+export function shouldPublishRuntimeStatus(input: {
+  lastMaterialSignature: string | null;
+  lastPublishedAt: number | null;
+  lastPublishSignature: string | null;
+  materialSignature: string;
+  now: number;
+  publishSignature: string;
+  freshnessIntervalMs?: number;
+}) {
+  if (input.publishSignature === input.lastPublishSignature) return false;
+  if (input.materialSignature !== input.lastMaterialSignature) return true;
+  if (input.lastPublishedAt === null) return true;
+
+  const freshnessIntervalMs =
+    input.freshnessIntervalMs ?? RUNTIME_STATUS_FRESHNESS_PUBLISH_INTERVAL_MS;
+  return input.now - input.lastPublishedAt >= freshnessIntervalMs;
 }
 
 function normalizeRuntimeStatusSignature(
@@ -67,6 +93,62 @@ function normalizeRuntimeStatusSignature(
       observedAt: 0,
     },
   };
+}
+
+function normalizeRuntimeStatusPublishMaterial(
+  runtimeStatus: PosTerminalRuntimeStatusPayload,
+) {
+  const stableStatus: Partial<PosTerminalRuntimeStatusPayload> = {
+    ...normalizeRuntimeStatusSignature(runtimeStatus),
+  };
+  delete stableStatus.reportedAt;
+  delete stableStatus.snapshots;
+
+  if (stableStatus.appShell) {
+    stableStatus.appShell = {
+      ...stableStatus.appShell,
+      observedAt: 0,
+    };
+  }
+  if (stableStatus.activeRegisterSession) {
+    stableStatus.activeRegisterSession = {
+      ...stableStatus.activeRegisterSession,
+      observedAt: 0,
+    };
+  }
+  if (stableStatus.appUpdate) {
+    stableStatus.appUpdate = {
+      ...stableStatus.appUpdate,
+      observedAt: 0,
+    };
+  }
+  if (stableStatus.saleAuthority) {
+    stableStatus.saleAuthority = {
+      ...stableStatus.saleAuthority,
+      observedAt: 0,
+    };
+  }
+  if (stableStatus.drawerAuthority) {
+    stableStatus.drawerAuthority = {
+      ...stableStatus.drawerAuthority,
+      observedAt: 0,
+    };
+  }
+  if (stableStatus.terminalIntegrity) {
+    stableStatus.terminalIntegrity = {
+      ...stableStatus.terminalIntegrity,
+      observedAt: 0,
+    };
+  }
+  if (stableStatus.sync) {
+    stableStatus.sync = { ...stableStatus.sync };
+    delete (stableStatus.sync as Partial<PosTerminalRuntimeStatusPayload["sync"]>)
+      .lastTrigger;
+    delete (stableStatus.sync as Partial<PosTerminalRuntimeStatusPayload["sync"]>)
+      .status;
+  }
+
+  return stableStatus;
 }
 
 export function getRuntimeCheckInNotReadyReason(input: {
