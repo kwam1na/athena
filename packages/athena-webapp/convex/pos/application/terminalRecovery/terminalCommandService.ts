@@ -7,6 +7,7 @@ import {
 import {
   TERMINAL_RECOVERY_COMMAND_TYPES,
   type TerminalRecoveryCommandAckResult,
+  type TerminalRecoveryLocalReviewEventEvidence,
   type TerminalRecoveryCommandPayload,
   type TerminalRecoveryCommandType,
   type TerminalRecoveryExpectedEvidence,
@@ -15,6 +16,8 @@ import {
 const COMMAND_TTL_MS = 15 * 60 * 1000;
 const RUNTIME_VERIFICATION_FRESHNESS_MS = 2 * 60 * 1000;
 const ACKNOWLEDGEMENT_MESSAGE_MAX_LENGTH = 240;
+const LOCAL_REVIEW_CLEAR_COMMAND_EVENT_LIMIT = 100;
+const LOCAL_REVIEW_ACK_EVENT_LIMIT = 100;
 const SECRET_LIKE_KEYS = [
   "secret",
   "token",
@@ -84,6 +87,17 @@ export async function issueTerminalRecoveryCommand(
 
   const commandContext = pruneUndefined(args.commandContext);
   const expectedEvidence = pruneUndefined(args.expectedEvidence);
+  const shapeValidation = validateTerminalRecoveryCommandShape({
+    commandContext,
+    commandType: args.commandType,
+    expectedEvidence,
+  });
+  if (shapeValidation) {
+    return userError({
+      code: "validation_failed",
+      message: shapeValidation,
+    });
+  }
   const existingCommands = await repository.listCommandsForTerminal({
     expiresAfter: args.issuedAt,
     storeId: args.storeId,
@@ -236,8 +250,10 @@ export async function acknowledgeTerminalRecoveryCommand(
   repository: TerminalRecoveryCommandRepository,
   args: {
     acknowledgedAt: number;
+    clearedLocalReviewEventIds?: string[];
     commandId: Id<"posTerminalRecoveryCommand">;
     executionId?: string;
+    localReviewEvents?: TerminalRecoveryLocalReviewEventEvidence[];
     message?: string;
     result: TerminalRecoveryCommandAckResult;
     storeId: Id<"store">;
@@ -266,9 +282,17 @@ export async function acknowledgeTerminalRecoveryCommand(
     args.result === "completed"
       ? "runtime_verification_ready"
       : "verification_failed";
+  const localReviewEvents = sanitizeLocalReviewEvents(args.localReviewEvents);
+  const clearedLocalReviewEventIds = uniqueStrings(
+    args.clearedLocalReviewEventIds,
+  );
   const patch = {
     acknowledgement: pruneUndefined({
       acknowledgedAt: args.acknowledgedAt,
+      ...(clearedLocalReviewEventIds.length > 0
+        ? { clearedLocalReviewEventIds }
+        : {}),
+      ...(localReviewEvents.length > 0 ? { localReviewEvents } : {}),
       message: sanitizeAcknowledgementMessage(args.message),
       result: args.result,
     }),
@@ -306,6 +330,69 @@ function sanitizeAcknowledgementMessage(message: string | undefined) {
     : `${redacted.slice(0, ACKNOWLEDGEMENT_MESSAGE_MAX_LENGTH - 3)}...`;
 }
 
+function sanitizeLocalReviewEvents(
+  events?: TerminalRecoveryLocalReviewEventEvidence[],
+): TerminalRecoveryLocalReviewEventEvidence[] {
+  if (!Array.isArray(events)) {
+    return [];
+  }
+
+  const seen = new Set<string>();
+  const safeEvents: TerminalRecoveryLocalReviewEventEvidence[] = [];
+  for (const event of events) {
+    if (safeEvents.length >= LOCAL_REVIEW_ACK_EVENT_LIMIT) break;
+    const localEventId = safeString(event.localEventId);
+    const type = safeString(event.type);
+    const status = safeString(event.status);
+    if (!localEventId || !type || !status) continue;
+    if (seen.has(localEventId)) continue;
+    if (!Number.isFinite(event.createdAt) || !Number.isFinite(event.sequence)) {
+      continue;
+    }
+    seen.add(localEventId);
+    safeEvents.push(
+      pruneUndefined({
+        createdAt: event.createdAt,
+        localEventId,
+        localPosSessionId: safeString(event.localPosSessionId),
+        localRegisterSessionId: safeString(event.localRegisterSessionId),
+        sequence: event.sequence,
+        status,
+        type,
+        uploaded:
+          typeof event.uploaded === "boolean" ? event.uploaded : undefined,
+        uploadSequence: Number.isFinite(event.uploadSequence)
+          ? event.uploadSequence
+          : undefined,
+      }),
+    );
+  }
+
+  return safeEvents;
+}
+
+function safeString(value: unknown) {
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : undefined;
+}
+
+function uniqueStrings(values: unknown[] | undefined) {
+  if (!Array.isArray(values)) {
+    return [];
+  }
+
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const value of values) {
+    const safeValue = safeString(value);
+    if (!safeValue || seen.has(safeValue)) continue;
+    seen.add(safeValue);
+    result.push(safeValue);
+  }
+  return result;
+}
+
 export async function verifyTerminalRecoveryCommandsFromRuntime(
   repository: TerminalRecoveryCommandRepository,
   args: {
@@ -330,7 +417,13 @@ export async function verifyTerminalRecoveryCommandsFromRuntime(
     if (command.verificationStatus !== "runtime_verification_ready") {
       continue;
     }
-    if (runtimeMatchesExpectedEvidence(args.runtimeStatus, command.expectedEvidence)) {
+    if (
+      command.acknowledgement?.acknowledgedAt !== undefined &&
+      args.runtimeStatus.receivedAt < command.acknowledgement.acknowledgedAt
+    ) {
+      continue;
+    }
+    if (runtimeMatchesExpectedEvidence(args.runtimeStatus, command)) {
       await repository.patchCommand(command._id, {
         verificationStatus: "verified",
         verifiedAt: args.verifiedAt,
@@ -344,8 +437,9 @@ export async function verifyTerminalRecoveryCommandsFromRuntime(
 
 function runtimeMatchesExpectedEvidence(
   runtimeStatus: Doc<"posTerminalRuntimeStatus">,
-  expectedEvidence: TerminalRecoveryExpectedEvidence,
+  command: Doc<"posTerminalRecoveryCommand">,
 ) {
+  const expectedEvidence = command.expectedEvidence;
   const appUpdateEvidence = getRuntimeAppUpdateEvidence(runtimeStatus);
   if (
     expectedEvidence.appUpdateStatus !== undefined &&
@@ -376,6 +470,25 @@ function runtimeMatchesExpectedEvidence(
   if (
     expectedEvidence.syncStatus !== undefined &&
     runtimeStatus.sync.status !== expectedEvidence.syncStatus
+  ) {
+    return false;
+  }
+  if (
+    expectedEvidence.localReviewDetailsCollected !== undefined &&
+    hasRuntimeLocalReviewDetails(runtimeStatus) !==
+      expectedEvidence.localReviewDetailsCollected
+  ) {
+    return false;
+  }
+  if (
+    expectedEvidence.localReviewEventCount !== undefined &&
+    runtimeStatus.sync.reviewEventCount !== expectedEvidence.localReviewEventCount
+  ) {
+    return false;
+  }
+  if (
+    expectedEvidence.localReviewClearedEventIds !== undefined &&
+    !localReviewClearEvidenceMatchesRuntime(command, runtimeStatus)
   ) {
     return false;
   }
@@ -416,8 +529,103 @@ function runtimeMatchesExpectedEvidence(
   return true;
 }
 
+function validateTerminalRecoveryCommandShape(input: {
+  commandContext: TerminalRecoveryCommandPayload;
+  commandType: TerminalRecoveryCommandType;
+  expectedEvidence: TerminalRecoveryExpectedEvidence;
+}) {
+  if (input.commandType !== "clear_local_review_items") {
+    return null;
+  }
+
+  const eventIds = input.commandContext.localReviewEventIds ?? [];
+  if (eventIds.length === 0) {
+    return "Local review cleanup commands require explicit local review item ids.";
+  }
+  if (eventIds.length > LOCAL_REVIEW_CLEAR_COMMAND_EVENT_LIMIT) {
+    return `Local review cleanup commands can include at most ${LOCAL_REVIEW_CLEAR_COMMAND_EVENT_LIMIT} item ids.`;
+  }
+  if (uniqueStrings(eventIds).length !== eventIds.length) {
+    return "Local review cleanup commands require unique local review item ids.";
+  }
+  if (
+    input.commandContext.localReviewClearAll === true ||
+    input.commandContext.localReviewClearLimit !== undefined
+  ) {
+    return "Local review cleanup commands must target explicit reviewed item ids.";
+  }
+  if (input.expectedEvidence.localReviewEventCount === undefined) {
+    return "Local review cleanup commands require expected local review count evidence.";
+  }
+  const expectedClearedIds = input.expectedEvidence.localReviewClearedEventIds ?? [];
+  if (uniqueStrings(expectedClearedIds).length !== expectedClearedIds.length) {
+    return "Local review cleanup commands require unique cleared item evidence.";
+  }
+  if (
+    !arraysEqualAsSets(
+      eventIds,
+      expectedClearedIds,
+    )
+  ) {
+    return "Local review cleanup commands require matching cleared item evidence.";
+  }
+
+  return null;
+}
+
+function localReviewClearedIdsMatchAcknowledgement(
+  command: Doc<"posTerminalRecoveryCommand">,
+) {
+  const expectedIds = command.expectedEvidence.localReviewClearedEventIds ?? [];
+  const clearedIds = command.acknowledgement?.clearedLocalReviewEventIds ?? [];
+  if (!arraysEqualAsSets(expectedIds, clearedIds)) {
+    return false;
+  }
+
+  return true;
+}
+
+function localReviewClearEvidenceMatchesRuntime(
+  command: Doc<"posTerminalRecoveryCommand">,
+  runtimeStatus: Doc<"posTerminalRuntimeStatus">,
+) {
+  if (!localReviewClearedIdsMatchAcknowledgement(command)) {
+    return false;
+  }
+
+  const expectedIds = command.expectedEvidence.localReviewClearedEventIds ?? [];
+  const currentReviewEvents = runtimeStatus.sync.reviewEvents ?? [];
+  if (currentReviewEvents.length === 0) {
+    return runtimeStatus.sync.reviewEventCount === 0;
+  }
+
+  const currentReviewIds = new Set(
+    currentReviewEvents.map((event) => event.localEventId),
+  );
+  return expectedIds.every((id) => !currentReviewIds.has(id));
+}
+
+function arraysEqualAsSets(left: string[], right: string[]) {
+  const leftIds = uniqueStrings(left);
+  const rightIds = uniqueStrings(right);
+  if (leftIds.length !== rightIds.length) {
+    return false;
+  }
+  const rightSet = new Set(rightIds);
+  return leftIds.every((id) => rightSet.has(id));
+}
+
 function normalizeOptionalHealthyStatus(status: string | undefined) {
   return status ?? "healthy";
+}
+
+function hasRuntimeLocalReviewDetails(
+  runtimeStatus: Doc<"posTerminalRuntimeStatus">,
+) {
+  return (
+    runtimeStatus.sync.reviewEventCount === 0 ||
+    (runtimeStatus.sync.reviewEvents?.length ?? 0) > 0
+  );
 }
 
 function getRuntimeAppUpdateEvidence(

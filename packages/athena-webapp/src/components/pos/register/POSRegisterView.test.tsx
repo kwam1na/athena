@@ -809,6 +809,7 @@ describe("POSRegisterView", () => {
 
     expect(screen.getByText("Support sync diagnostics")).toBeInTheDocument();
     expect(screen.getAllByText("Offline")).not.toHaveLength(0);
+    await userEvent.click(screen.getByRole("tab", { name: "Register" }));
     expect(screen.getAllByText("Local")).not.toHaveLength(0);
     expect(screen.getByText("Open")).toBeInTheDocument();
   });
@@ -824,6 +825,41 @@ describe("POSRegisterView", () => {
         localEntryStatus: "ready",
         online: true,
         runtimeState: {
+          events: [
+            {
+              createdAt: Date.UTC(2026, 4, 15, 12, 33, 0),
+              localEventId: "local-event-open",
+              localRegisterSessionId: "cloud-register-1",
+              sequence: 1,
+              status: "synced",
+              type: "register.opened",
+              uploaded: true,
+              uploadSequence: 1,
+            },
+            {
+              createdAt: Date.UTC(2026, 4, 15, 12, 34, 0),
+              localEventId: "local-event-sale",
+              localPosSessionId: "sale-1",
+              localRegisterSessionId: "cloud-register-1",
+              localTransactionId: "transaction-1",
+              sequence: 4,
+              staffProfileId: "staff-1",
+              status: "needs_review",
+              type: "transaction.completed",
+              uploadSequence: 2,
+            },
+            {
+              createdAt: Date.UTC(2026, 4, 15, 12, 33, 30),
+              localEventId: "local-event-review-extra",
+              localRegisterSessionId: "cloud-register-1",
+              sequence: 3,
+              staffProfileId: "staff-1",
+              status: "needs_review",
+              syncUploadable: true,
+              type: "register.closeout_started",
+              uploadSequence: 2,
+            },
+          ],
           heartbeat: {
             activeRegisterSession: {
               cloudRegisterSessionId: "cloud-register-1",
@@ -857,6 +893,30 @@ describe("POSRegisterView", () => {
               failedEventCount: 0,
               pendingEventCount: 1,
               reviewEventCount: 2,
+              reviewEvents: [
+                {
+                  createdAt: Date.UTC(2026, 4, 15, 12, 34, 0),
+                  localEventId: "local-event-sale",
+                  localPosSessionId: "sale-1",
+                  localRegisterSessionId: "cloud-register-1",
+                  localTransactionId: "transaction-1",
+                  sequence: 4,
+                  staffProfileId: "staff-1",
+                  status: "needs_review",
+                  type: "transaction.completed",
+                  uploadSequence: 2,
+                },
+                {
+                  createdAt: Date.UTC(2026, 4, 15, 12, 33, 30),
+                  localEventId: "local-event-review-extra",
+                  localRegisterSessionId: "cloud-register-1",
+                  sequence: 3,
+                  staffProfileId: "staff-1",
+                  status: "needs_review",
+                  type: "register.closeout_started",
+                  uploadSequence: 2,
+                },
+              ],
               status: "pending_sync",
               uploadableEventCount: 1,
             },
@@ -972,8 +1032,10 @@ describe("POSRegisterView", () => {
     pressDebugPanelShortcut();
 
     expect(screen.getByText("Support sync diagnostics")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("tab", { name: "Register" }));
     expect(screen.getByText("Online")).toBeInTheDocument();
     expect(screen.getAllByText("Live")).not.toHaveLength(0);
+    await userEvent.click(screen.getByRole("tab", { name: "Runtime" }));
     expect(screen.getAllByText("Local review")).not.toHaveLength(0);
     expect(screen.getByText("Local review item")).toBeInTheDocument();
     expect(screen.getByText("Manual retry")).toBeInTheDocument();
@@ -1033,6 +1095,57 @@ describe("POSRegisterView", () => {
     expect(screen.getByText("repair directive drawer")).toBeInTheDocument();
     expect(screen.getByText("repair directive expected")).toBeInTheDocument();
     expect(screen.getByText("13000")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("tab", { name: "Events" }));
+    const eventsPanel = screen
+      .getByText("Local IndexedDB events")
+      .closest("section");
+    expect(eventsPanel).not.toBeNull();
+    const eventsScope = within(eventsPanel!);
+    expect(eventsScope.getByRole("button", { name: "All 3" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(
+      eventsScope.getByRole("button", { name: "Review 2" }),
+    ).toBeInTheDocument();
+    expect(
+      eventsScope.getByRole("button", { name: "Uploadable 1" }),
+    ).toBeInTheDocument();
+    expect(
+      eventsScope.getByRole("button", { name: "Pending 0" }),
+    ).toBeInTheDocument();
+    expect(
+      eventsScope.getByRole("button", { name: "Failed 0" }),
+    ).toBeInTheDocument();
+    expect(
+      eventsScope.getByRole("button", { name: "Synced 1" }),
+    ).toBeInTheDocument();
+    expect(eventsScope.getByText("#4")).toBeInTheDocument();
+    expect(eventsScope.getByText("Transaction.Completed")).toBeInTheDocument();
+    expect(eventsScope.getAllByText("Needs Review")).toHaveLength(2);
+    expect(eventsScope.getByText("sale sale-1")).toBeInTheDocument();
+    expect(
+      eventsScope.getByText(
+        (_content, element) =>
+          element?.textContent === "transaction tran...tion-1",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      eventsScope.queryByText(/proof-token|payments|customer/i),
+    ).not.toBeInTheDocument();
+    await userEvent.click(eventsScope.getByRole("button", { name: "Review 2" }));
+    expect(eventsScope.getByText("#4")).toBeInTheDocument();
+    expect(eventsScope.getByText("#3")).toBeInTheDocument();
+    expect(eventsScope.queryByText("#1")).not.toBeInTheDocument();
+    await userEvent.click(
+      eventsScope.getByRole("button", { name: "Uploadable 1" }),
+    );
+    expect(eventsScope.getByText("#3")).toBeInTheDocument();
+    expect(eventsScope.queryByText("#4")).not.toBeInTheDocument();
+    expect(eventsScope.queryByText("#1")).not.toBeInTheDocument();
+    await userEvent.click(eventsScope.getByRole("button", { name: "Synced 1" }));
+    expect(eventsScope.getByText("#1")).toBeInTheDocument();
+    expect(eventsScope.queryByText("#4")).not.toBeInTheDocument();
 
     pressDebugPanelShortcut();
     expect(
@@ -1364,6 +1477,7 @@ describe("POSRegisterView", () => {
 
     await userEvent.keyboard("{Meta>}/{/Meta}");
 
+    await userEvent.click(screen.getByRole("tab", { name: "Register" }));
     expect(screen.getByText("cashier presence")).toBeInTheDocument();
     expect(screen.getByText("Restored")).toBeInTheDocument();
     expect(
@@ -1442,6 +1556,7 @@ describe("POSRegisterView", () => {
 
     pressDebugPanelShortcut();
 
+    await userEvent.click(screen.getByRole("tab", { name: "Register" }));
     expect(screen.getByText("app session")).toBeInTheDocument();
     expect(screen.getByText("Local sale continuation")).toBeInTheDocument();
     expect(screen.getByText("reconciliation posture")).toBeInTheDocument();

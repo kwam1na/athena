@@ -2,6 +2,8 @@ import type { Doc, Id } from "../../../_generated/dataModel";
 
 export const TERMINAL_RECOVERY_COMMAND_TYPES = [
   "retry_sync",
+  "collect_local_review",
+  "clear_local_review_items",
   "repair_terminal_seed",
   "clear_stale_drawer_authority",
   "refresh_staff_authority",
@@ -41,6 +43,9 @@ export type TerminalRecoveryCommandPayload = {
   expectedBlockerType?: string;
   expectedConflictIds?: Array<Id<"posLocalSyncConflict">>;
   expectedTerminalSeedIdentity?: string;
+  localReviewClearAll?: boolean;
+  localReviewClearLimit?: number;
+  localReviewEventIds?: string[];
   localRegisterSessionId?: string;
   reason?: string;
 };
@@ -58,6 +63,9 @@ export type TerminalRecoveryExpectedEvidence = {
   drawerAuthorityStatus?: "healthy" | "blocked";
   localRegisterSessionId?: string;
   localStoreAvailable?: boolean;
+  localReviewDetailsCollected?: boolean;
+  localReviewEventCount?: number;
+  localReviewClearedEventIds?: string[];
   saleAuthorityStatus?: "ready" | "missing" | "blocked" | "unknown";
   staffAuthorityStatus?: "ready" | "missing" | "expired" | "unknown";
   syncStatus?: Doc<"posTerminalRuntimeStatus">["sync"]["status"];
@@ -71,3 +79,15 @@ export type TerminalRecoveryCommandAckResult =
   | "completed"
   | "failed"
   | "precondition_failed";
+
+export type TerminalRecoveryLocalReviewEventEvidence = {
+  createdAt: number;
+  localEventId: string;
+  localPosSessionId?: string;
+  localRegisterSessionId?: string;
+  sequence: number;
+  status: string;
+  type: string;
+  uploaded?: boolean;
+  uploadSequence?: number;
+};

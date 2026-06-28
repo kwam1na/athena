@@ -304,6 +304,8 @@ export type TerminalRecoveryAction = {
 
 export type TerminalRecoveryCommandType =
   | "retry_sync"
+  | "collect_local_review"
+  | "clear_local_review_items"
   | "repair_terminal_seed"
   | "clear_stale_drawer_authority"
   | "refresh_staff_authority"
@@ -316,6 +318,9 @@ export type TerminalRecoveryCommandContext = {
   expectedBlockerType?: string;
   expectedConflictIds?: Array<Id<"posLocalSyncConflict">>;
   expectedTerminalSeedIdentity?: string;
+  localReviewClearAll?: boolean;
+  localReviewClearLimit?: number;
+  localReviewEventIds?: string[];
   localRegisterSessionId?: string;
   reason?: string;
 };
@@ -333,6 +338,8 @@ export type TerminalRecoveryExpectedEvidence = {
   drawerAuthorityStatus?: "healthy" | "blocked";
   localRegisterSessionId?: string;
   localStoreAvailable?: boolean;
+  localReviewDetailsCollected?: boolean;
+  localReviewEventCount?: number;
   saleAuthorityStatus?: "ready" | "missing" | "blocked" | "unknown";
   staffAuthorityStatus?: "ready" | "missing" | "expired" | "unknown";
   syncStatus?:
@@ -381,6 +388,19 @@ export type TerminalRecoveryPreview = {
     commandType?: TerminalRecoveryCommandType;
     label?: string;
     latestAcknowledgement?: string;
+    localReviewEvents?: Array<{
+      createdAt: number;
+      localEventId: string;
+      localPosSessionId?: string;
+      localRegisterSessionId?: string;
+      localTransactionId?: string;
+      sequence: number;
+      staffProfileId?: string;
+      status: string;
+      type: string;
+      uploaded?: boolean;
+      uploadSequence?: number;
+    }>;
     status?: TerminalRecoveryActionStatus;
     verificationStatus?: TerminalRecoveryActionStatus;
   } | null;

@@ -134,6 +134,8 @@ export const posTerminalRuntimeSyncValidator = v.object({
     localEventId: v.string(),
     localPosSessionId: v.optional(v.string()),
     localRegisterSessionId: v.optional(v.string()),
+    // Legacy fields are accepted for existing runtime rows but are stripped
+    // before new check-ins are persisted or terminal health reads are returned.
     localTransactionId: v.optional(v.string()),
     sequence: v.number(),
     staffProfileId: v.optional(v.string()),

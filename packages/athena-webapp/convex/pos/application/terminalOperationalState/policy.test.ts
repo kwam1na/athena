@@ -11,6 +11,7 @@ import type { TerminalOperationalPolicyInput } from "./types";
 
 const storeId = "store-1" as Id<"store">;
 const terminalId = "terminal-1" as Id<"posTerminal">;
+const now = 2_000_000;
 
 describe("terminal operational state policy", () => {
   it("keeps sales readiness distinct from support recovery", () => {
@@ -210,7 +211,7 @@ describe("terminal operational state policy", () => {
     expect(state.recoveryPreview.readiness).toBe("able_to_transact_now");
   });
 
-  it("treats local runtime review as terminal sync retry instead of manual business review", () => {
+  it("treats local runtime review as terminal-local evidence collection instead of manual business review", () => {
     const state = buildTerminalOperationalState(
       baseInput({
         runtimeStatus: buildRuntimeStatus({
@@ -229,9 +230,350 @@ describe("terminal operational state policy", () => {
     expect(state.recoveryEvidence.manualReview).toEqual([]);
     expect(state.recoveryPreview.readiness).toBe("needs_terminal_action");
     expect(state.operationalExplanation).toMatchObject({
+      headline: "Local review collection needed",
       lane: "needs_terminal_action",
       primaryOwner: "terminal",
-      supportAction: "terminal_sync_retry",
+      supportAction: "terminal_command",
+    });
+    expect(state.recoveryPreview.terminalActions[0]).toMatchObject({
+      commandType: "collect_local_review",
+      expectedEvidence: { localReviewDetailsCollected: true },
+    });
+  });
+
+  it("keeps local runtime collection available when verified collection did not clear latest runtime review", () => {
+    const state = buildTerminalOperationalState(
+      baseInput({
+        commandStatus: {
+          commandId: "command-collect-review" as Id<"posTerminalRecoveryCommand">,
+          commandType: "collect_local_review",
+          label: "Collect local review items",
+          status: "completed",
+          verificationStatus: "verified",
+        },
+        runtimeStatus: buildRuntimeStatus({
+          sync: {
+            failedEventCount: 0,
+            localOnlyEventCount: 0,
+            pendingEventCount: 1,
+            reviewEventCount: 84,
+            status: "needs_review",
+            uploadableEventCount: 1,
+          },
+        }),
+      }),
+    );
+
+    expect(state.recoveryEvidence.terminalActions[0]).toMatchObject({
+      commandType: "collect_local_review",
+      expectedEvidence: { localReviewDetailsCollected: true },
+    });
+    expect(state.recoveryPreview.terminalActions[0]).toMatchObject({
+      commandType: "collect_local_review",
+      expectedEvidence: { localReviewDetailsCollected: true },
+    });
+    expect(state.recoveryPreview.commandStatus).toMatchObject({
+      commandType: "collect_local_review",
+      verificationStatus: "verified",
+    });
+  });
+
+  it("offers local review cleanup from matching collected terminal evidence", () => {
+    const state = buildTerminalOperationalState(
+      baseInput({
+        commandStatus: {
+          commandId: "command-collect-review" as Id<"posTerminalRecoveryCommand">,
+          commandType: "collect_local_review",
+          label: "Collect local review items",
+          localReviewEvents: [
+            {
+              createdAt: now - 1_000,
+              localEventId: "event-review-1",
+              sequence: 12,
+              status: "needs_review",
+              type: "transaction.completed",
+              uploaded: true,
+              uploadSequence: 12,
+            },
+            {
+              createdAt: now - 500,
+              localEventId: "event-review-2",
+              sequence: 13,
+              status: "needs_review",
+              type: "register.closeout_started",
+              uploaded: true,
+              uploadSequence: 13,
+            },
+          ],
+          status: "completed",
+          verificationStatus: "verified",
+        },
+        runtimeStatus: buildRuntimeStatus({
+          sync: {
+            failedEventCount: 0,
+            localOnlyEventCount: 0,
+            pendingEventCount: 0,
+            reviewEventCount: 2,
+            reviewEvents: [
+              {
+                createdAt: now - 1_000,
+                localEventId: "event-review-1",
+                sequence: 12,
+                status: "needs_review",
+                type: "transaction.completed",
+                uploaded: true,
+                uploadSequence: 12,
+              },
+              {
+                createdAt: now - 500,
+                localEventId: "event-review-2",
+                sequence: 13,
+                status: "needs_review",
+                type: "register.closeout_started",
+                uploaded: true,
+                uploadSequence: 13,
+              },
+            ],
+            status: "needs_review",
+            uploadableEventCount: 0,
+          },
+        }),
+      }),
+    );
+
+    expect(state.recoveryEvidence.terminalActions[0]).toMatchObject({
+      commandContext: {
+        expectedBlockerType: "local_review",
+        localReviewEventIds: ["event-review-1", "event-review-2"],
+      },
+      commandType: "clear_local_review_items",
+      expectedEvidence: {
+        localReviewClearedEventIds: ["event-review-1", "event-review-2"],
+        localReviewEventCount: 0,
+      },
+    });
+  });
+
+  it("requires fresh runtime ids before clearing collected local review evidence", () => {
+    const state = buildTerminalOperationalState(
+      baseInput({
+        commandStatus: {
+          commandId: "command-collect-review" as Id<"posTerminalRecoveryCommand">,
+          commandType: "collect_local_review",
+          label: "Collect local review items",
+          localReviewEvents: [
+            {
+              createdAt: now - 1_000,
+              localEventId: "event-review-1",
+              sequence: 12,
+              status: "needs_review",
+              type: "transaction.completed",
+              uploaded: true,
+              uploadSequence: 12,
+            },
+          ],
+          status: "completed",
+          verificationStatus: "verified",
+        },
+        runtimeStatus: buildRuntimeStatus({
+          sync: {
+            failedEventCount: 0,
+            localOnlyEventCount: 0,
+            pendingEventCount: 0,
+            reviewEventCount: 1,
+            reviewEvents: [],
+            status: "needs_review",
+            uploadableEventCount: 0,
+          },
+        }),
+      }),
+    );
+
+    expect(state.recoveryEvidence.terminalActions[0]).toMatchObject({
+      commandType: "collect_local_review",
+      expectedEvidence: { localReviewDetailsCollected: true },
+    });
+  });
+
+  it("does not use stale collected local review evidence when runtime ids differ", () => {
+    const state = buildTerminalOperationalState(
+      baseInput({
+        commandStatus: {
+          commandId: "command-collect-review" as Id<"posTerminalRecoveryCommand">,
+          commandType: "collect_local_review",
+          label: "Collect local review items",
+          localReviewEvents: [
+            {
+              createdAt: now - 1_000,
+              localEventId: "stale-review-1",
+              sequence: 12,
+              status: "needs_review",
+              type: "transaction.completed",
+              uploaded: true,
+              uploadSequence: 12,
+            },
+          ],
+          status: "completed",
+          verificationStatus: "verified",
+        },
+        runtimeStatus: buildRuntimeStatus({
+          sync: {
+            failedEventCount: 0,
+            localOnlyEventCount: 0,
+            pendingEventCount: 0,
+            reviewEventCount: 1,
+            reviewEvents: [
+              {
+                createdAt: now - 500,
+                localEventId: "current-review-1",
+                sequence: 13,
+                status: "needs_review",
+                type: "register.closeout_started",
+                uploaded: true,
+                uploadSequence: 13,
+              },
+            ],
+            status: "needs_review",
+            uploadableEventCount: 0,
+          },
+        }),
+      }),
+    );
+
+    expect(state.recoveryEvidence.terminalActions[0]).toMatchObject({
+      commandContext: {
+        localReviewEventIds: ["current-review-1"],
+      },
+      commandType: "clear_local_review_items",
+      expectedEvidence: {
+        localReviewClearedEventIds: ["current-review-1"],
+        localReviewEventCount: 0,
+      },
+    });
+  });
+
+  it("offers local review cleanup when all local review items were uploaded and reported", () => {
+    const state = buildTerminalOperationalState(
+      baseInput({
+        runtimeStatus: buildRuntimeStatus({
+          sync: {
+            failedEventCount: 0,
+            localOnlyEventCount: 0,
+            pendingEventCount: 0,
+            reviewEventCount: 2,
+            reviewEvents: [
+              {
+                createdAt: now - 1_000,
+                localEventId: "event-review-1",
+                sequence: 12,
+                status: "needs_review",
+                type: "transaction.completed",
+                uploaded: true,
+                uploadSequence: 12,
+              },
+              {
+                createdAt: now - 500,
+                localEventId: "event-review-2",
+                sequence: 13,
+                status: "needs_review",
+                type: "register.closeout_started",
+                uploaded: true,
+                uploadSequence: 13,
+              },
+            ],
+            status: "needs_review",
+            uploadableEventCount: 0,
+          },
+        }),
+      }),
+    );
+
+    expect(state.recoveryEvidence.terminalActions[0]).toMatchObject({
+      commandContext: {
+        expectedBlockerType: "local_review",
+        localReviewEventIds: ["event-review-1", "event-review-2"],
+      },
+      commandType: "clear_local_review_items",
+      expectedEvidence: {
+        localReviewClearedEventIds: ["event-review-1", "event-review-2"],
+        localReviewEventCount: 0,
+      },
+    });
+    expect(state.recoveryPreview.terminalActions[0]).toMatchObject({
+      commandType: "clear_local_review_items",
+    });
+  });
+
+  it("offers a 100-item local review cleanup batch for over-cap review backlogs", () => {
+    const reviewEvents = Array.from({ length: 100 }, (_, index) => ({
+      createdAt: now - index,
+      localEventId: `event-review-${index + 1}`,
+      sequence: index + 1,
+      status: "needs_review" as const,
+      type: "transaction.completed",
+      uploaded: true,
+      uploadSequence: index + 1,
+    }));
+
+    const state = buildTerminalOperationalState(
+      baseInput({
+        runtimeStatus: buildRuntimeStatus({
+          sync: {
+            failedEventCount: 0,
+            localOnlyEventCount: 0,
+            pendingEventCount: 0,
+            reviewEventCount: 101,
+            reviewEvents,
+            status: "needs_review",
+            uploadableEventCount: 0,
+          },
+        }),
+      }),
+    );
+
+    expect(state.recoveryEvidence.terminalActions[0]).toMatchObject({
+      commandContext: {
+        localReviewEventIds: reviewEvents.map((event) => event.localEventId),
+      },
+      commandType: "clear_local_review_items",
+      expectedEvidence: {
+        localReviewClearedEventIds: reviewEvents.map(
+          (event) => event.localEventId,
+        ),
+        localReviewEventCount: 1,
+      },
+    });
+  });
+
+  it("keeps collecting local review evidence when any reported local review item was not uploaded", () => {
+    const state = buildTerminalOperationalState(
+      baseInput({
+        runtimeStatus: buildRuntimeStatus({
+          sync: {
+            failedEventCount: 0,
+            localOnlyEventCount: 0,
+            pendingEventCount: 0,
+            reviewEventCount: 1,
+            reviewEvents: [
+              {
+                createdAt: now - 1_000,
+                localEventId: "event-review-1",
+                sequence: 12,
+                status: "needs_review",
+                type: "transaction.completed",
+                uploadSequence: 12,
+              },
+            ],
+            status: "needs_review",
+            uploadableEventCount: 0,
+          },
+        }),
+      }),
+    );
+
+    expect(state.recoveryEvidence.terminalActions[0]).toMatchObject({
+      commandType: "collect_local_review",
+      expectedEvidence: { localReviewDetailsCollected: true },
     });
   });
 

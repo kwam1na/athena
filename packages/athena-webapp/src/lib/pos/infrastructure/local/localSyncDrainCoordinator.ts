@@ -70,7 +70,11 @@ export function buildRuntimeSyncDebug(
   );
   const failedEvents = events.filter((event) => event.sync.status === "failed");
   const oldestPendingEvent = [...events]
-    .filter((event) => event.sync.status !== "synced")
+    .filter(
+      (event) =>
+        event.sync.status !== "synced" &&
+        event.sync.status !== "locally_resolved",
+    )
     .sort((left, right) => left.createdAt - right.createdAt)
     .at(0);
 
@@ -130,7 +134,7 @@ function getReviewDiagnosticsEvents(
   return events
     .slice()
     .sort(compareUploadableEventOrder)
-    .slice(0, 10)
+    .slice(0, 100)
     .map((event) => ({
       createdAt: event.createdAt,
       localEventId: event.localEventId,

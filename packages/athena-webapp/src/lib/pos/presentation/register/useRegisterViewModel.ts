@@ -5611,6 +5611,11 @@ export function useRegisterViewModel(): RegisterViewModel {
               },
             }
           : {}),
+        ...(localRuntimeSyncSource?.localEvents
+          ? {
+              events: localRuntimeSyncSource.localEvents,
+            }
+          : {}),
         ...(localRuntimeSyncSource?.debug?.activeRegisterSessionRepair
           ? {
               repair:

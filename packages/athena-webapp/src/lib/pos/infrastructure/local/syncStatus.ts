@@ -75,7 +75,7 @@ export function derivePosLocalSyncStatus(input: {
   const uploadBlockingEvents = orderedEvents.filter(
     (event) =>
       typeof event.uploadSequence === "number" &&
-      event.sync.status !== "synced",
+      !isLocallySettledSyncStatus(event.sync.status),
   );
   const pendingCount = uploadBlockingEvents.filter((event) =>
     event.sync.status === "pending" || event.sync.status === "syncing",
@@ -113,10 +113,16 @@ function getContiguousSyncedSequence(events: PosLocalEventRecord[]) {
       lastSyncedSequence = event.sequence;
       continue;
     }
-    if (event.sync.status !== "synced") break;
+    if (!isLocallySettledSyncStatus(event.sync.status)) break;
     lastSyncedSequence = event.sequence;
   }
   return lastSyncedSequence;
+}
+
+export function isLocallySettledSyncStatus(
+  status: PosLocalEventRecord["sync"]["status"],
+) {
+  return status === "synced" || status === "locally_resolved";
 }
 
 function getSyncState(input: {

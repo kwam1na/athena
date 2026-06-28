@@ -24,6 +24,8 @@ type TerminalSalesReadinessInput = {
   saleAuthorityReady: boolean;
 };
 
+const LOCAL_REVIEW_CLEAR_COMMAND_EVENT_LIMIT = 100;
+
 export function buildTerminalOperationalState(
   input: TerminalOperationalPolicyInput,
 ): TerminalOperationalState {
@@ -41,9 +43,10 @@ export function buildTerminalOperationalState(
       ...input,
       runtimeStatus: effectiveRuntimeStatus,
     });
-  const terminalActions = buildTerminalRecoveryActions({
-    runtimeStatus: effectiveRuntimeStatus,
-  });
+  const terminalActions = buildTerminalRecoveryActions(
+    effectiveRuntimeStatus,
+    input.commandStatus,
+  );
   const manualReview = buildTerminalRecoveryManualReview({
     attentionReasons,
     skippedConflictIds: input.cloudRepair.skippedConflictIds,
@@ -526,9 +529,9 @@ function buildDiagnosticEvidence(input: TerminalOperationalPolicyInput) {
 }
 
 function buildTerminalRecoveryActions(
-  input: Pick<TerminalOperationalPolicyInput, "runtimeStatus">,
+  status: TerminalOperationalPolicyInput["runtimeStatus"],
+  commandStatus: TerminalOperationalPolicyInput["commandStatus"],
 ): TerminalOperationalState["recoveryEvidence"]["terminalActions"] {
-  const status = input.runtimeStatus;
   if (!status) {
     return [];
   }
@@ -591,20 +594,100 @@ function buildTerminalRecoveryActions(
       reason: "Local sync needs a terminal retry.",
     });
   }
-  if (status.sync.status === "needs_review" || status.sync.reviewEventCount > 0) {
+  const clearableReviewEvents =
+    getClearableRuntimeLocalReviewEvents(status.sync) ??
+    getClearableCollectedLocalReviewEvents(status.sync, commandStatus);
+  if (clearableReviewEvents) {
+    const localReviewEventIds = clearableReviewEvents.map(
+      (event) => event.localEventId,
+    );
     actions.push({
-      commandType: "retry_sync",
+      commandType: "clear_local_review_items",
       expectedEvidence: {
-        syncStatus: "idle",
+        localReviewClearedEventIds: localReviewEventIds,
+        localReviewEventCount: Math.max(
+          status.sync.reviewEventCount - clearableReviewEvents.length,
+          0,
+        ),
       },
       commandContext: {
         expectedBlockerType: "local_review",
-        reason: "Local review items need a terminal sync retry.",
+        localReviewEventIds,
+        reason: "Uploaded local review items can be cleared from this terminal.",
       },
-      reason: "Local review items need a terminal sync retry.",
+      reason: "Uploaded local review items can be cleared from this terminal.",
+    });
+  } else if (status.sync.status === "needs_review" || status.sync.reviewEventCount > 0) {
+    actions.push({
+      commandType: "collect_local_review",
+      expectedEvidence: {
+        localReviewDetailsCollected: true,
+      },
+      commandContext: {
+        expectedBlockerType: "local_review",
+        reason: "Local review items need terminal-local evidence collection.",
+      },
+      reason: "Local review items need terminal-local evidence collection.",
     });
   }
   return dedupeTerminalActions(actions);
+}
+
+function getClearableRuntimeLocalReviewEvents(
+  sync: NonNullable<
+    TerminalOperationalPolicyInput["runtimeStatus"]
+  >["sync"],
+) {
+  if (sync.reviewEventCount <= 0) {
+    return null;
+  }
+  const reviewEvents = sync.reviewEvents ?? [];
+  return reviewEvents.length > 0 &&
+    reviewEvents.length <= sync.reviewEventCount &&
+    reviewEvents.every((event) => event.uploaded === true)
+    ? reviewEvents.slice(0, LOCAL_REVIEW_CLEAR_COMMAND_EVENT_LIMIT)
+    : null;
+}
+
+function getClearableCollectedLocalReviewEvents(
+  sync: NonNullable<
+    TerminalOperationalPolicyInput["runtimeStatus"]
+  >["sync"],
+  commandStatus: TerminalOperationalPolicyInput["commandStatus"],
+) {
+  if (
+    sync.reviewEventCount <= 0 ||
+    commandStatus?.commandType !== "collect_local_review" ||
+    commandStatus.verificationStatus !== "verified"
+  ) {
+    return null;
+  }
+
+  const reviewEvents = commandStatus.localReviewEvents ?? [];
+  const runtimeReviewEvents = sync.reviewEvents ?? [];
+  if (runtimeReviewEvents.length === 0) {
+    return null;
+  }
+  if (!sameLocalReviewEventIds(reviewEvents, runtimeReviewEvents)) {
+    return null;
+  }
+
+  return reviewEvents.length > 0 &&
+    reviewEvents.length <= sync.reviewEventCount &&
+    reviewEvents.every((event) => event.uploaded === true)
+    ? reviewEvents.slice(0, LOCAL_REVIEW_CLEAR_COMMAND_EVENT_LIMIT)
+    : null;
+}
+
+function sameLocalReviewEventIds(
+  left: Array<{ localEventId: string }>,
+  right: Array<{ localEventId: string }>,
+) {
+  if (left.length !== right.length) {
+    return false;
+  }
+  const rightIds = new Set(right.map((event) => event.localEventId));
+  return left.every((event) => rightIds.has(event.localEventId));
 }
 
 function buildTerminalRecoveryManualReview(args: {
@@ -746,15 +829,28 @@ function buildTerminalOperationalExplanation(args: {
     const retryOnly = args.recoveryEvidence.terminalActions.every(
       (action) => action.commandType === "retry_sync",
     );
+    const localReviewCollectionOnly =
+      args.recoveryEvidence.terminalActions.length > 0 &&
+      args.recoveryEvidence.terminalActions.every(
+        (action) => action.commandType === "collect_local_review",
+      );
     return {
       blockingDomain: "terminal_runtime",
-      detail: retryOnly
+      detail: localReviewCollectionOnly
+        ? "The terminal needs to publish local review item evidence before support can continue."
+        : retryOnly
         ? "The terminal needs to retry local sync before evidence is current."
         : "The terminal needs a local repair command before support can continue.",
       evidenceReferences,
-      headline: retryOnly ? "Terminal sync retry needed" : "Terminal action needed",
+      headline: localReviewCollectionOnly
+        ? "Local review collection needed"
+        : retryOnly
+          ? "Terminal sync retry needed"
+          : "Terminal action needed",
       lane: "needs_terminal_action",
-      nextStep: retryOnly
+      nextStep: localReviewCollectionOnly
+        ? "Collect local review items and wait for a fresh check-in."
+        : retryOnly
         ? "Send a terminal sync retry and wait for a fresh check-in."
         : "Send the available terminal repair command.",
       primaryOwner: "terminal",

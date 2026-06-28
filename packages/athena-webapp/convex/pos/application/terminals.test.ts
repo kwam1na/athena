@@ -1204,9 +1204,9 @@ describe("terminal health summaries", () => {
         commandContext: expect.objectContaining({
           expectedBlockerType: "local_review",
         }),
-        commandType: "retry_sync",
-        expectedEvidence: { syncStatus: "idle" },
-        reason: "Local review items need a terminal sync retry.",
+        commandType: "collect_local_review",
+        expectedEvidence: { localReviewDetailsCollected: true },
+        reason: "Local review items need terminal-local evidence collection.",
       }),
     ]);
   });

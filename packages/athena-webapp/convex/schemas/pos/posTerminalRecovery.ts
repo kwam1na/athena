@@ -2,6 +2,8 @@ import { v } from "convex/values";
 
 export const posTerminalRecoveryCommandTypeValidator = v.union(
   v.literal("retry_sync"),
+  v.literal("collect_local_review"),
+  v.literal("clear_local_review_items"),
   v.literal("repair_terminal_seed"),
   v.literal("clear_stale_drawer_authority"),
   v.literal("refresh_staff_authority"),
@@ -32,6 +34,9 @@ export const posTerminalRecoveryCommandPayloadValidator = v.object({
   expectedBlockerType: v.optional(v.string()),
   expectedConflictIds: v.optional(v.array(v.id("posLocalSyncConflict"))),
   expectedTerminalSeedIdentity: v.optional(v.string()),
+  localReviewClearAll: v.optional(v.boolean()),
+  localReviewClearLimit: v.optional(v.number()),
+  localReviewEventIds: v.optional(v.array(v.string())),
   localRegisterSessionId: v.optional(v.string()),
   reason: v.optional(v.string()),
 });
@@ -52,6 +57,9 @@ export const posTerminalRecoveryExpectedEvidenceValidator = v.object({
   drawerAuthorityStatus: v.optional(v.union(v.literal("healthy"), v.literal("blocked"))),
   localRegisterSessionId: v.optional(v.string()),
   localStoreAvailable: v.optional(v.boolean()),
+  localReviewDetailsCollected: v.optional(v.boolean()),
+  localReviewEventCount: v.optional(v.number()),
+  localReviewClearedEventIds: v.optional(v.array(v.string())),
   saleAuthorityStatus: v.optional(
     v.union(
       v.literal("ready"),
@@ -90,8 +98,40 @@ export const posTerminalRecoveryExpectedEvidenceValidator = v.object({
   terminalSeedReady: v.optional(v.boolean()),
 });
 
+export const posTerminalRecoveryLocalReviewEventValidator = v.object({
+  createdAt: v.number(),
+  localEventId: v.string(),
+  localPosSessionId: v.optional(v.string()),
+  localRegisterSessionId: v.optional(v.string()),
+  sequence: v.number(),
+  status: v.string(),
+  type: v.string(),
+  uploaded: v.optional(v.boolean()),
+  uploadSequence: v.optional(v.number()),
+});
+
+const posTerminalRecoveryStoredLocalReviewEventValidator = v.object({
+  createdAt: v.number(),
+  localEventId: v.string(),
+  localPosSessionId: v.optional(v.string()),
+  localRegisterSessionId: v.optional(v.string()),
+  // Legacy fields are accepted for existing audit rows but are no longer written
+  // or returned by public/runtime evidence paths.
+  localTransactionId: v.optional(v.string()),
+  sequence: v.number(),
+  staffProfileId: v.optional(v.string()),
+  status: v.string(),
+  type: v.string(),
+  uploaded: v.optional(v.boolean()),
+  uploadSequence: v.optional(v.number()),
+});
+
 export const posTerminalRecoveryCommandAckValidator = v.object({
   acknowledgedAt: v.number(),
+  clearedLocalReviewEventIds: v.optional(v.array(v.string())),
+  localReviewEvents: v.optional(
+    v.array(posTerminalRecoveryStoredLocalReviewEventValidator),
+  ),
   message: v.optional(v.string()),
   result: v.union(
     v.literal("completed"),

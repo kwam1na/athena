@@ -14,6 +14,8 @@ import type {
 
 export type PosTerminalRecoveryCommandType =
   | "retry_sync"
+  | "collect_local_review"
+  | "clear_local_review_items"
   | "repair_terminal_seed"
   | "clear_stale_drawer_authority"
   | "refresh_staff_authority"
@@ -36,8 +38,10 @@ export type PosTerminalRecoveryCommand = {
 };
 
 export type PosTerminalRecoveryCommandResult = {
+  clearedLocalReviewEventIds?: string[];
   commandId: string;
   diagnostics?: Record<string, string | number | boolean | null>;
+  localReviewEvents?: PosTerminalRecoveryLocalReviewEvent[];
   message?: string;
   onAcknowledgeFailed?: () => void;
   postAcknowledge?: () =>
@@ -54,6 +58,18 @@ export type PosTerminalRecoveryCommandResult = {
     | "unsafe_authority_state";
   status: "completed" | "failed" | "ignored" | "precondition_failed";
   type: string;
+};
+
+export type PosTerminalRecoveryLocalReviewEvent = {
+  createdAt: number;
+  localEventId: string;
+  localPosSessionId?: string;
+  localRegisterSessionId?: string;
+  sequence: number;
+  status: string;
+  type: string;
+  uploaded?: boolean;
+  uploadSequence?: number;
 };
 
 export type PosTerminalRecoveryCommandCallbackResult = {
@@ -118,8 +134,15 @@ type ClearStaleDrawerAuthorityPreconditions = {
   localRegisterSessionId: string;
 };
 
+type ClearLocalReviewItemsRequest = { localEventIds: string[] };
+
+const CLEAR_LOCAL_REVIEW_ITEMS_HARD_CAP = 100;
+const COLLECT_LOCAL_REVIEW_ITEMS_HARD_CAP = 100;
+
 const SUPPORTED_COMMAND_TYPES = new Set<string>([
   "retry_sync",
+  "collect_local_review",
+  "clear_local_review_items",
   "repair_terminal_seed",
   "clear_stale_drawer_authority",
   "refresh_staff_authority",
@@ -156,6 +179,10 @@ export async function executeTerminalRecoveryCommand(
     switch (commandType) {
       case "retry_sync":
         return executeRetrySync(context);
+      case "collect_local_review":
+        return executeCollectLocalReview(context);
+      case "clear_local_review_items":
+        return executeClearLocalReviewItems(context);
       case "repair_terminal_seed":
         return executeRepairTerminalSeed(context);
       case "clear_stale_drawer_authority":
@@ -278,6 +305,127 @@ async function executeRetrySync(
   await context.onRetrySync?.();
   return completed(context.command, {
     diagnostics: { terminalId: context.terminalId },
+  });
+}
+
+async function executeCollectLocalReview(
+  context: PosTerminalRecoveryCommandContext,
+): Promise<PosTerminalRecoveryCommandResult> {
+  const events = await context.store.listEvents();
+  if (!events.ok) {
+    return failed(context.command, "local_store_failure", {
+      message: events.error.message,
+    });
+  }
+
+  const reviewEvents = getScopedLocalReviewEvents(events.value, context);
+  const uploadedReviewEventCount = reviewEvents.filter(
+    (event) => event.sync.uploaded === true,
+  ).length;
+  if (reviewEvents.length > 0) {
+    await context.onRetrySync?.();
+  }
+
+  return completed(context.command, {
+    diagnostics: {
+      reviewEventCount: reviewEvents.length,
+      terminalId: context.terminalId,
+      uploadedReviewEventCount,
+    },
+    localReviewEvents: reviewEvents
+      .slice(0, COLLECT_LOCAL_REVIEW_ITEMS_HARD_CAP)
+      .map(toLocalReviewEvidence),
+    message:
+      reviewEvents.length === 0
+        ? "No local review items were found on this terminal."
+        : `${reviewEvents.length} local review item${reviewEvents.length === 1 ? "" : "s"} ${reviewEvents.length === 1 ? "was" : "were"} collected and queued for sync retry.`,
+  });
+}
+
+function toLocalReviewEvidence(
+  event: PosLocalEventRecord,
+): PosTerminalRecoveryLocalReviewEvent {
+  return {
+    createdAt: event.createdAt,
+    localEventId: event.localEventId,
+    ...(event.localPosSessionId
+      ? { localPosSessionId: event.localPosSessionId }
+      : {}),
+    ...(event.localRegisterSessionId
+      ? { localRegisterSessionId: event.localRegisterSessionId }
+      : {}),
+    sequence: event.sequence,
+    status: event.sync.status,
+    type: event.type,
+    ...(event.sync.uploaded !== undefined
+      ? { uploaded: event.sync.uploaded }
+      : {}),
+    ...(typeof event.uploadSequence === "number"
+      ? { uploadSequence: event.uploadSequence }
+      : {}),
+  };
+}
+
+async function executeClearLocalReviewItems(
+  context: PosTerminalRecoveryCommandContext,
+): Promise<PosTerminalRecoveryCommandResult> {
+  const request = toClearLocalReviewItemsRequest(context.command);
+  if (!request) {
+    return preconditionFailed(context.command);
+  }
+
+  const events = await context.store.listEvents();
+  if (!events.ok) {
+    return failed(context.command, "local_store_failure", {
+      message: events.error.message,
+    });
+  }
+
+  const reviewEvents = getScopedLocalReviewEvents(events.value, context);
+  const previouslyClearedEvents = getScopedTerminalRecoveryClearedReviewEvents(
+    events.value,
+    context,
+  );
+  const selection = selectLocalReviewEventIdsForClear(
+    request,
+    reviewEvents,
+    previouslyClearedEvents,
+  );
+  if (!selection.allRequestedIdsAccountedFor) {
+    return preconditionFailed(context.command);
+  }
+
+  const clear = await context.store.clearLocalReviewEvents(selection.idsToClear);
+  if (!clear.ok) {
+    return failed(context.command, "local_store_failure", {
+      message: clear.error.message,
+    });
+  }
+
+  const remainingEvents = await context.store.listEvents();
+  if (!remainingEvents.ok) {
+    return failed(context.command, "local_store_failure", {
+      message: remainingEvents.error.message,
+    });
+  }
+
+  const clearedReviewEventCount = clear.value.length;
+  const remainingReviewEventCount = getScopedLocalReviewEvents(
+    remainingEvents.value,
+    context,
+  ).length;
+
+  return completed(context.command, {
+    clearedLocalReviewEventIds: request.localEventIds,
+    diagnostics: {
+      clearedReviewEventCount,
+      remainingReviewEventCount,
+      terminalId: context.terminalId,
+    },
+    message:
+      clearedReviewEventCount === 0
+        ? "No local review items matched this recovery command."
+        : `${clearedReviewEventCount} local review item${clearedReviewEventCount === 1 ? "" : "s"} ${clearedReviewEventCount === 1 ? "was" : "were"} cleared on this terminal.`,
   });
 }
 
@@ -523,8 +671,75 @@ function hasSettledLifecycleEvents(input: {
   );
 }
 
+function getScopedLocalReviewEvents(
+  events: PosLocalEventRecord[],
+  context: PosTerminalRecoveryCommandContext,
+) {
+  const scopeIds = terminalScopeIds(context);
+  return events
+    .filter(
+      (event) =>
+        event.storeId === context.storeId &&
+        scopeIds.has(event.terminalId) &&
+        event.sync.status === "needs_review" &&
+        event.sync.uploaded === true,
+    )
+    .sort(compareLocalReviewEventOrder);
+}
+
+function getScopedTerminalRecoveryClearedReviewEvents(
+  events: PosLocalEventRecord[],
+  context: PosTerminalRecoveryCommandContext,
+) {
+  const scopeIds = terminalScopeIds(context);
+  return events.filter(
+    (event) =>
+      event.storeId === context.storeId &&
+      scopeIds.has(event.terminalId) &&
+      event.sync.status === "locally_resolved" &&
+      event.sync.localResolution?.reason === "terminal_recovery_command",
+  );
+}
+
+function selectLocalReviewEventIdsForClear(
+  request: ClearLocalReviewItemsRequest,
+  reviewEvents: PosLocalEventRecord[],
+  previouslyClearedEvents: PosLocalEventRecord[],
+) {
+  const scopedReviewIds = new Set(
+    reviewEvents.map((event) => event.localEventId),
+  );
+  const scopedPreviouslyClearedIds = new Set(
+    previouslyClearedEvents.map((event) => event.localEventId),
+  );
+  const idsToClear = request.localEventIds
+    .filter((localEventId) => scopedReviewIds.has(localEventId))
+    .slice(0, CLEAR_LOCAL_REVIEW_ITEMS_HARD_CAP);
+  return {
+    allRequestedIdsAccountedFor: request.localEventIds.every(
+      (localEventId) =>
+        scopedReviewIds.has(localEventId) ||
+        scopedPreviouslyClearedIds.has(localEventId),
+    ),
+    idsToClear,
+  };
+}
+
+function compareLocalReviewEventOrder(
+  left: PosLocalEventRecord,
+  right: PosLocalEventRecord,
+) {
+  const leftUploadSequence = left.uploadSequence ?? Number.POSITIVE_INFINITY;
+  const rightUploadSequence = right.uploadSequence ?? Number.POSITIVE_INFINITY;
+  if (leftUploadSequence !== rightUploadSequence) {
+    return leftUploadSequence - rightUploadSequence;
+  }
+
+  return left.sequence - right.sequence;
+}
+
 function isSettledLocalSyncStatus(status: PosLocalSyncEventStatus) {
-  return status === "synced";
+  return status === "synced" || status === "locally_resolved";
 }
 
 function isDrawerAuthorityLifecycleEvent(event: PosLocalEventRecord) {
@@ -580,6 +795,50 @@ function toClearDrawerAuthorityPreconditions(
   return value;
 }
 
+function toClearLocalReviewItemsRequest(
+  command: PosTerminalRecoveryCommand,
+): ClearLocalReviewItemsRequest | null {
+  const candidates = [command.commandContext, command.payload];
+  for (const candidate of candidates) {
+    const ids = firstLocalReviewEventIds(candidate);
+    if (ids.length > 0) {
+      return { localEventIds: ids };
+    }
+  }
+
+  return null;
+}
+
+function firstLocalReviewEventIds(value: unknown): string[] {
+  if (!isRecord(value)) {
+    return [];
+  }
+
+  for (const key of [
+    "localReviewEventIds",
+    "localEventIds",
+    "reviewEventIds",
+  ]) {
+    const ids = uniqueStrings(value[key]);
+    if (ids.length > 0) {
+      return ids;
+    }
+  }
+
+  if (Array.isArray(value.localReviewEvents)) {
+    const ids = uniqueStrings(
+      value.localReviewEvents.map((eventRecord) =>
+        isRecord(eventRecord) ? eventRecord.localEventId : undefined,
+      ),
+    );
+    if (ids.length > 0) {
+      return ids;
+    }
+  }
+
+  return [];
+}
+
 function firstDrawerAuthorityPreconditions(
   value: unknown,
 ): ClearStaleDrawerAuthorityPreconditions | null {
@@ -606,6 +865,20 @@ function firstDrawerAuthorityPreconditions(
     localEventSettlement: "settled",
     localRegisterSessionId: value.localRegisterSessionId,
   };
+}
+
+function uniqueStrings(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return Array.from(
+    new Set(
+      value.filter(
+        (item): item is string => typeof item === "string" && item.length > 0,
+      ),
+    ),
+  );
 }
 
 function isProvisionedTerminalSeed(
@@ -636,7 +909,9 @@ function isDrawerAuthorityBlockReason(
 function completed(
   command: PosTerminalRecoveryCommand,
   options: {
+    clearedLocalReviewEventIds?: string[];
     diagnostics?: Record<string, string | number | boolean | null>;
+    localReviewEvents?: PosTerminalRecoveryLocalReviewEvent[];
     message?: string;
     onAcknowledgeFailed?: () => void;
     postAcknowledge?: PosTerminalRecoveryCommandResult["postAcknowledge"];
@@ -644,11 +919,18 @@ function completed(
 ): PosTerminalRecoveryCommandResult {
   return {
     commandId: getCommandId(command),
+    ...(options.clearedLocalReviewEventIds &&
+    options.clearedLocalReviewEventIds.length > 0
+      ? { clearedLocalReviewEventIds: options.clearedLocalReviewEventIds }
+      : {}),
     ...(options.diagnostics
       ? { diagnostics: redactDiagnostics(options.diagnostics) }
       : {}),
     ...(options.message
       ? { message: safeRecoveryMessage(options.message) }
+      : {}),
+    ...(options.localReviewEvents && options.localReviewEvents.length > 0
+      ? { localReviewEvents: options.localReviewEvents }
       : {}),
     ...(options.onAcknowledgeFailed
       ? { onAcknowledgeFailed: options.onAcknowledgeFailed }

@@ -632,9 +632,38 @@ async function buildTerminalRecoveryCommandStatus(
     commandType: latestCommand.commandType,
     label: getTerminalRecoveryCommandLabel(latestCommand.commandType),
     latestAcknowledgement: latestCommand.acknowledgement?.message,
+    localReviewEvents: stripLocalReviewEvents(
+      latestCommand.acknowledgement?.localReviewEvents,
+    ),
     status: getTerminalRecoveryCommandStatusForPreview(latestCommand, args.now),
     verificationStatus: latestCommand.verificationStatus,
   };
+}
+
+function stripLocalReviewEvents(
+  events:
+    | NonNullable<
+        Doc<"posTerminalRecoveryCommand">["acknowledgement"]
+      >["localReviewEvents"]
+    | undefined,
+) {
+  return events?.map((event) => ({
+    createdAt: event.createdAt,
+    localEventId: event.localEventId,
+    ...(event.localPosSessionId
+      ? { localPosSessionId: event.localPosSessionId }
+      : {}),
+    ...(event.localRegisterSessionId
+      ? { localRegisterSessionId: event.localRegisterSessionId }
+      : {}),
+    sequence: event.sequence,
+    status: event.status,
+    type: event.type,
+    ...(event.uploaded !== undefined ? { uploaded: event.uploaded } : {}),
+    ...(typeof event.uploadSequence === "number"
+      ? { uploadSequence: event.uploadSequence }
+      : {}),
+  }));
 }
 
 function getTerminalRecoveryCommandStatusForPreview(
@@ -657,6 +686,8 @@ function getTerminalRecoveryCommandLabel(
   switch (commandType) {
     case "update_app":
       return "Update app";
+    case "collect_local_review":
+      return "Collect local review items";
     case "repair_terminal_seed":
       return "Terminal setup repair";
     case "clear_stale_drawer_authority":
@@ -1044,5 +1075,33 @@ function stripRuntimeStatusIdentity(status: Doc<"posTerminalRuntimeStatus">) {
     terminalId: _terminalId,
     ...runtimeStatus
   } = status;
-  return runtimeStatus;
+  return {
+    ...runtimeStatus,
+    sync: {
+      ...runtimeStatus.sync,
+      reviewEvents: stripRuntimeReviewEvents(runtimeStatus.sync.reviewEvents),
+    },
+  };
+}
+
+function stripRuntimeReviewEvents(
+  events: Doc<"posTerminalRuntimeStatus">["sync"]["reviewEvents"],
+) {
+  return events?.map((event) => ({
+    createdAt: event.createdAt,
+    localEventId: event.localEventId,
+    ...(event.localPosSessionId
+      ? { localPosSessionId: event.localPosSessionId }
+      : {}),
+    ...(event.localRegisterSessionId
+      ? { localRegisterSessionId: event.localRegisterSessionId }
+      : {}),
+    sequence: event.sequence,
+    status: event.status,
+    type: event.type,
+    ...(event.uploaded !== undefined ? { uploaded: event.uploaded } : {}),
+    ...(typeof event.uploadSequence === "number"
+      ? { uploadSequence: event.uploadSequence }
+      : {}),
+  }));
 }

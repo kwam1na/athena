@@ -4,6 +4,7 @@ import type {
   TerminalRecoveryCommandPayload,
   TerminalRecoveryCommandType,
   TerminalRecoveryExpectedEvidence,
+  TerminalRecoveryLocalReviewEventEvidence,
   TerminalRecoveryReadiness,
 } from "../terminalRecovery/types";
 
@@ -152,6 +153,7 @@ export type TerminalRecoveryPreview = {
     commandType: TerminalRecoveryCommandType;
     label: string;
     latestAcknowledgement?: string;
+    localReviewEvents?: TerminalRecoveryLocalReviewEventEvidence[];
     status: Doc<"posTerminalRecoveryCommand">["status"];
     verificationStatus: Doc<"posTerminalRecoveryCommand">["verificationStatus"];
   } | null;

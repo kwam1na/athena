@@ -65,6 +65,7 @@ import {
   collectServerSyncedLocalEventIds,
   derivePosLocalRuntimeSyncStatus,
   getRuntimeStatusSignature,
+  isPosLocalRuntimeDrainCandidate,
   usePosLocalSyncRuntimeStatus,
   writeReturnedLocalCloudMappings,
 } from "./usePosLocalSyncRuntime";
@@ -864,10 +865,17 @@ describe("usePosLocalSyncRuntimeStatus", () => {
     expect(result.current?.debug?.reviewEventCount).toBe(1);
     expect(mocks.ingestLocalEvents).not.toHaveBeenCalled();
 
-    act(() => {
+    await act(async () => {
       result.current?.onRetrySync?.();
     });
 
+    await waitFor(() =>
+      expect(result.current?.debug).toEqual(
+        expect.objectContaining({
+          lastTrigger: "manual-retry",
+        }),
+      ),
+    );
     await waitFor(() =>
       expect(mocks.ingestLocalEvents).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -891,6 +899,32 @@ describe("usePosLocalSyncRuntimeStatus", () => {
       storeId: "store-1",
       terminalId: "local-terminal-1",
     });
+  });
+
+  it("selects syncable local review events for support-triggered review drains", () => {
+    const reviewEvent = buildLocalEvent({
+      localEventId: "event-closeout",
+      payload: {
+        countedCash: 100,
+        notes: "End of day",
+      },
+      sequence: 1,
+      sync: { status: "needs_review" },
+      type: "register.closeout_started",
+    });
+
+    expect(
+      isPosLocalRuntimeDrainCandidate(reviewEvent, {
+        includeReviewEvents: true,
+        onlyReviewEvents: true,
+      }),
+    ).toBe(true);
+    expect(
+      isPosLocalRuntimeDrainCandidate(reviewEvent, {
+        includeUploadedReviewEvents: true,
+        onlyUploadedReviewEvents: true,
+      }),
+    ).toBe(false);
   });
 
   it("self-heals uploaded register open reviews from status-only route entry", async () => {
@@ -1022,7 +1056,26 @@ describe("usePosLocalSyncRuntimeStatus", () => {
     expect(store.markEventsNeedsReview).not.toHaveBeenCalled();
   });
 
-  it("does not manually retry review events that were never uploaded", async () => {
+  it("manually retries syncable review events even when they were never marked uploaded", async () => {
+    mocks.ingestLocalEvents.mockResolvedValue({
+      kind: "ok",
+      data: {
+        accepted: [
+          {
+            localEventId: "event-closeout",
+            sequence: 1,
+            status: "projected",
+          },
+        ],
+        held: [],
+        mappings: [],
+        conflicts: [],
+        syncCursor: {
+          localRegisterSessionId: "register-1",
+          acceptedThroughSequence: 1,
+        },
+      },
+    });
     const store = {
       listEvents: vi.fn(async () => ({
         ok: true,
@@ -1088,8 +1141,23 @@ describe("usePosLocalSyncRuntimeStatus", () => {
     await waitFor(() =>
       expect(store.listEvents.mock.calls.length).toBeGreaterThan(1),
     );
-    expect(mocks.ingestLocalEvents).not.toHaveBeenCalled();
-    expect(store.markEventsSynced).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(mocks.ingestLocalEvents).toHaveBeenCalledWith(
+        expect.objectContaining({
+          events: [
+            expect.objectContaining({
+              eventType: "register_closed",
+              localEventId: "event-closeout",
+            }),
+          ],
+        }),
+      ),
+    );
+    await waitFor(() =>
+      expect(store.markEventsSynced).toHaveBeenCalledWith(["event-closeout"], {
+        uploaded: true,
+      }),
+    );
     expect(store.markEventsNeedsReview).not.toHaveBeenCalled();
   });
 

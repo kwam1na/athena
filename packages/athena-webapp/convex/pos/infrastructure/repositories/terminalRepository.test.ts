@@ -467,6 +467,52 @@ describe("terminalRepository sync evidence", () => {
     ]);
   });
 
+  it("omits mapped conflicts for settled register sessions from current review evidence", async () => {
+    const ctx = buildCtx({
+      posLocalSyncConflict: [
+        buildSyncConflict({
+          _id: "conflict-closed-register" as Id<"posLocalSyncConflict">,
+          conflictType: "permission",
+          localRegisterSessionId: "local-register-closed",
+          sequence: 8,
+        }),
+      ],
+      posLocalSyncMapping: [
+        buildSyncMapping({
+          cloudId: "register-session-closed",
+          localId: "local-register-closed",
+          localRegisterSessionId: "local-register-closed",
+        }),
+      ],
+      registerSession: [
+        buildRegisterSession({
+          _id: "register-session-closed" as Id<"registerSession">,
+          closedAt: 900,
+          countedCash: 100,
+          status: "closed",
+          variance: 0,
+        }),
+      ],
+    });
+
+    const result = await getTerminalSyncEvidence(ctx as never, {
+      storeId: "store-1" as Id<"store">,
+      terminalId: "terminal-1" as Id<"posTerminal">,
+    });
+
+    expect(result.unresolvedConflictCount).toBe(0);
+    expect(result.unresolvedConflicts).toEqual([]);
+    expect(result.reviewSummary).toEqual({
+      groups: [],
+      meta: {
+        cap: TERMINAL_SYNC_REVIEW_SUMMARY_CAP,
+        hasMore: false,
+        sampledCount: 0,
+        targetResolutionIncomplete: false,
+      },
+    });
+  });
+
   it("caps review summary samples and reports when more conflicts exist", async () => {
     const conflicts = Array.from(
       { length: TERMINAL_SYNC_REVIEW_SUMMARY_CAP + 1 },
@@ -825,7 +871,7 @@ describe("terminalRepository register-session action targets", () => {
           openedByStaffProfileId: "staff-1" as Id<"staffProfile">,
           openingFloat: 100,
           registerNumber: "1",
-          status: "closed",
+          status: "open",
           storeId: "store-1" as Id<"store">,
           terminalId: "terminal-1" as Id<"posTerminal">,
         },

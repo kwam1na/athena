@@ -2,7 +2,10 @@ import type { Doc, Id } from "../../../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../../../_generated/server";
 
 import type { PosLocalSyncEventStatus } from "../../../../shared/posLocalSyncContract";
-import { isPosUsableRegisterSessionStatus } from "../../../../shared/registerSessionStatus";
+import {
+  isPosUsableRegisterSessionStatus,
+  isRegisterSessionConflictBlockingStatus,
+} from "../../../../shared/registerSessionStatus";
 import type {
   TerminalSyncEvidence,
   TerminalSyncReviewActionTarget,
@@ -22,6 +25,14 @@ type PosTerminalReadCtx = QueryCtx | MutationCtx;
 type TerminalSyncConflictWithReviewTarget = Doc<"posLocalSyncConflict"> & {
   reviewTarget?: TerminalSyncReviewTarget;
 };
+type RegisterSessionReviewTargetResolution =
+  | {
+      actionTarget: TerminalSyncReviewActionTarget;
+      status: "actionable";
+    }
+  | {
+      status: "not_register_conflict" | "settled" | "unresolved";
+    };
 
 export function mapTerminalRecord(
   terminal: Doc<"posTerminal">,
@@ -337,6 +348,7 @@ async function buildTerminalSyncReviewSummary(
     return reviewTarget ? { ...conflict, reviewTarget } : conflict;
   });
   const groupByKey = new Map<string, TerminalSyncReviewSummaryGroup>();
+  const currentConflicts: TerminalSyncConflictWithReviewTarget[] = [];
 
   for (const conflict of annotatedConflicts) {
     const groupInput = await classifyTerminalSyncReviewConflict(ctx, {
@@ -346,6 +358,10 @@ async function buildTerminalSyncReviewSummary(
         openWorkTargets.targetResolutionIncomplete,
       terminalId: args.terminalId,
     });
+    if (!groupInput) {
+      continue;
+    }
+    currentConflicts.push(conflict);
     const key = [
       groupInput.owner,
       groupInput.actionability,
@@ -366,13 +382,13 @@ async function buildTerminalSyncReviewSummary(
   }
 
   return {
-    conflicts: annotatedConflicts,
+    conflicts: currentConflicts,
     reviewSummary: {
       groups: Array.from(groupByKey.values()).sort(
         (left, right) => right.latestSequence - left.latestSequence,
       ),
       meta: {
-        sampledCount: annotatedConflicts.length,
+        sampledCount: currentConflicts.length,
         cap: TERMINAL_SYNC_REVIEW_SUMMARY_CAP,
         hasMore: args.hasMore,
         targetResolutionIncomplete:
@@ -446,7 +462,7 @@ async function classifyTerminalSyncReviewConflict(
     targetResolutionIncomplete: boolean;
     terminalId: Id<"posTerminal">;
   },
-): Promise<TerminalSyncReviewSummaryGroup> {
+): Promise<TerminalSyncReviewSummaryGroup | null> {
   if (args.conflict.reviewTarget) {
     return {
       actionability: "open_work_review",
@@ -459,10 +475,14 @@ async function classifyTerminalSyncReviewConflict(
     };
   }
 
-  const actionTarget = await getRegisterSessionReviewActionTarget(ctx, args);
-  if (actionTarget) {
+  const registerSessionResolution =
+    await resolveRegisterSessionReviewTargetForConflict(ctx, args);
+  if (registerSessionResolution.status === "settled") {
+    return null;
+  }
+  if (registerSessionResolution.status === "actionable") {
     return {
-      actionTarget,
+      actionTarget: registerSessionResolution.actionTarget,
       actionability: "cash_controls_review",
       conflictType: args.conflict.conflictType,
       count: 1,
@@ -493,35 +513,26 @@ async function classifyTerminalSyncReviewConflict(
   };
 }
 
-async function getRegisterSessionReviewActionTarget(
+async function resolveRegisterSessionReviewTargetForConflict(
   ctx: QueryCtx | MutationCtx,
   args: {
     conflict: Doc<"posLocalSyncConflict">;
     storeId: Id<"store">;
     terminalId: Id<"posTerminal">;
   },
-): Promise<TerminalSyncReviewActionTarget | null> {
+): Promise<RegisterSessionReviewTargetResolution> {
   if (
     args.conflict.conflictType !== "duplicate_local_id" &&
     args.conflict.conflictType !== "permission"
   ) {
-    return null;
+    return { status: "not_register_conflict" };
   }
 
-  const registerSessionId = await resolveTerminalRegisterSessionActionTarget(
-    ctx,
-    {
-      localRegisterSessionId: args.conflict.localRegisterSessionId,
-      storeId: args.storeId,
-      terminalId: args.terminalId,
-    },
-  );
-  return registerSessionId
-    ? {
-        type: "register_session",
-        registerSessionId,
-      }
-    : null;
+  return resolveTerminalRegisterSessionReviewTarget(ctx, {
+    localRegisterSessionId: args.conflict.localRegisterSessionId,
+    storeId: args.storeId,
+    terminalId: args.terminalId,
+  });
 }
 
 function toTerminalSyncConflictExample(
@@ -794,6 +805,23 @@ export async function resolveTerminalRegisterSessionActionTarget(
   if (!args.localRegisterSessionId) {
     return null;
   }
+  const resolution = await resolveTerminalRegisterSessionReviewTarget(ctx, args);
+  return resolution.status === "actionable"
+    ? resolution.actionTarget.registerSessionId
+    : null;
+}
+
+async function resolveTerminalRegisterSessionReviewTarget(
+  ctx: QueryCtx | MutationCtx,
+  args: {
+    localRegisterSessionId?: string | null;
+    storeId: Id<"store">;
+    terminalId: Id<"posTerminal">;
+  },
+): Promise<RegisterSessionReviewTargetResolution> {
+  if (!args.localRegisterSessionId) {
+    return { status: "unresolved" };
+  }
   const localRegisterSessionId = args.localRegisterSessionId;
 
   const registerSessionMapping = await ctx.db
@@ -808,7 +836,7 @@ export async function resolveTerminalRegisterSessionActionTarget(
     )
     .unique();
   if (registerSessionMapping?.cloudTable === "registerSession") {
-    return resolveRegisterSessionActionTarget(ctx, {
+    return resolveRegisterSessionReviewTarget(ctx, {
       registerSessionId:
         registerSessionMapping.cloudId as Id<"registerSession">,
       storeId: args.storeId,
@@ -828,24 +856,24 @@ export async function resolveTerminalRegisterSessionActionTarget(
     normalizeId?.call(ctx.db, "registerSession", localRegisterSessionId) ??
     null;
   if (!cloudRegisterSessionId) {
-    return null;
+    return { status: "unresolved" };
   }
 
-  return resolveRegisterSessionActionTarget(ctx, {
+  return resolveRegisterSessionReviewTarget(ctx, {
     registerSessionId: cloudRegisterSessionId,
     storeId: args.storeId,
     terminalId: args.terminalId,
   });
 }
 
-async function resolveRegisterSessionActionTarget(
+async function resolveRegisterSessionReviewTarget(
   ctx: QueryCtx | MutationCtx,
   args: {
     registerSessionId: Id<"registerSession">;
     storeId: Id<"store">;
     terminalId: Id<"posTerminal">;
   },
-) {
+): Promise<RegisterSessionReviewTargetResolution> {
   const registerSession = await ctx.db.get(
     "registerSession",
     args.registerSessionId,
@@ -854,10 +882,19 @@ async function resolveRegisterSessionActionTarget(
     registerSession?.storeId === args.storeId &&
     registerSession.terminalId === args.terminalId
   ) {
-    return args.registerSessionId;
+    if (!isRegisterSessionConflictBlockingStatus(registerSession.status)) {
+      return { status: "settled" };
+    }
+    return {
+      actionTarget: {
+        type: "register_session",
+        registerSessionId: args.registerSessionId,
+      },
+      status: "actionable",
+    };
   }
 
-  return null;
+  return { status: "unresolved" };
 }
 
 export async function getTerminalByFingerprint(

@@ -728,8 +728,8 @@ describe("terminal health presentation", () => {
           },
         ],
         commandStatus: {
-          commandType: "retry_sync",
-          label: "Sync retry",
+          commandType: "collect_local_review",
+          label: "Collect local review items",
           status: "pending",
           verificationStatus: "waiting_for_acknowledgement",
         },
@@ -738,13 +738,13 @@ describe("terminal health presentation", () => {
           {
             commandContext: {
               expectedBlockerType: "local_review",
-              reason: "Local review items need a terminal sync retry.",
+              reason: "Local review items need terminal-local evidence collection.",
             },
-            commandType: "retry_sync",
+            commandType: "collect_local_review",
             expectedEvidence: {
-              syncStatus: "idle",
+              localReviewDetailsCollected: true,
             },
-            reason: "Local review items need a terminal sync retry.",
+            reason: "Local review items need terminal-local evidence collection.",
           },
         ],
       },
@@ -758,17 +758,17 @@ describe("terminal health presentation", () => {
     expect(presentation.groups.terminalRequired).toEqual([
       expect.objectContaining({
         action: expect.objectContaining({
-          commandType: "retry_sync",
+          commandType: "collect_local_review",
           status: "pending",
         }),
-        summary: "Sync retry command is queued for this checkout station.",
-        title: "Terminal sync retry",
+        summary: "Local review collection is queued for this checkout station.",
+        title: "Local review collection",
       }),
     ]);
     expect(presentation.safeActions).toEqual([]);
     expect(presentation.commandStatus).toEqual(
       expect.objectContaining({
-        label: "Sync retry",
+        label: "Collect local review items",
         status: "Pending",
         verificationStatus: "Waiting For Acknowledgement",
       }),
@@ -889,7 +889,7 @@ describe("terminal health presentation", () => {
     );
   });
 
-  it("presents local review backlog recovery as a terminal sync retry", () => {
+  it("presents local review backlog recovery as terminal-local evidence collection", () => {
     const presentation = buildTerminalRecoveryPresentation({
       recovery: {
         commandStatus: {
@@ -902,13 +902,13 @@ describe("terminal health presentation", () => {
           {
             commandContext: {
               expectedBlockerType: "local_review",
-              reason: "Local review items need a terminal sync retry.",
+              reason: "Local review items need terminal-local evidence collection.",
             },
-            commandType: "retry_sync",
+            commandType: "collect_local_review",
             expectedEvidence: {
-              syncStatus: "idle",
+              localReviewDetailsCollected: true,
             },
-            reason: "Local review items need a terminal sync retry.",
+            reason: "Local review items need terminal-local evidence collection.",
           },
         ],
       },
@@ -919,15 +919,136 @@ describe("terminal health presentation", () => {
 
     expect(presentation.groups.terminalRequired[0]).toEqual(
       expect.objectContaining({
-        detail: "Expected after check-in: Sync Idle.",
-        summary: "Local review items need a terminal sync retry.",
-        title: "Terminal sync retry",
+        detail: "Expected after check-in: Local review details collected.",
+        summary: "Local review items need terminal-local evidence collection.",
+        title: "Local review collection",
       }),
     );
     expect(presentation.safeActions[0]).toEqual(
       expect.objectContaining({
-        commandType: "retry_sync",
-        label: "Retry terminal sync",
+        commandType: "collect_local_review",
+        label: "Collect local review items",
+      }),
+    );
+  });
+
+  it("keeps local review collection available when latest runtime still reports review items", () => {
+    const presentation = buildTerminalRecoveryPresentation({
+      recovery: {
+        commandStatus: {
+          commandType: "collect_local_review",
+          label: "Collect local review items",
+          status: "completed",
+          verificationStatus: "verified",
+        },
+        terminalActions: [
+          {
+            commandContext: {
+              expectedBlockerType: "local_review",
+              reason: "Local review items need terminal-local evidence collection.",
+            },
+            commandType: "collect_local_review",
+            expectedEvidence: {
+              localReviewDetailsCollected: true,
+            },
+            reason: "Local review items need terminal-local evidence collection.",
+          },
+        ],
+      },
+      runtimeStatus: {
+        receivedAt: Date.now(),
+        sync: {
+          failedEventCount: 0,
+          localOnlyEventCount: 0,
+          pendingEventCount: 0,
+          reviewEventCount: 84,
+          reviewEvents: [],
+          status: "needs_review",
+          uploadableEventCount: 0,
+        },
+      },
+      syncEvidence: {},
+      terminal: { status: "active" },
+    });
+
+    expect(presentation.groups.terminalRequired[0]).toEqual(
+      expect.objectContaining({
+        action: expect.objectContaining({
+          commandType: "collect_local_review",
+          status: "available",
+        }),
+        summary: "Local review items need terminal-local evidence collection.",
+        title: "Local review collection",
+      }),
+    );
+    expect(presentation.safeActions[0]).toEqual(
+      expect.objectContaining({
+        commandType: "collect_local_review",
+        status: "available",
+      }),
+    );
+  });
+
+  it("presents local review cleanup as a safe terminal action", () => {
+    const presentation = buildTerminalRecoveryPresentation({
+      recovery: {
+        terminalActions: [
+          {
+            commandContext: {
+              expectedBlockerType: "local_review",
+              localReviewEventIds: ["event-review-1"],
+              reason: "Uploaded local review items can be cleared from this terminal.",
+            },
+            commandType: "clear_local_review_items",
+            expectedEvidence: {
+              localReviewEventCount: 0,
+            },
+            reason: "Uploaded local review items can be cleared from this terminal.",
+          },
+        ],
+      },
+      runtimeStatus: {
+        receivedAt: Date.now(),
+        sync: {
+          failedEventCount: 0,
+          localOnlyEventCount: 0,
+          pendingEventCount: 0,
+          reviewEventCount: 1,
+          reviewEvents: [
+            {
+              createdAt: Date.now() - 1_000,
+              localEventId: "event-review-1",
+              sequence: 12,
+              status: "needs_review",
+              type: "transaction.completed",
+              uploaded: true,
+              uploadSequence: 12,
+            },
+          ],
+          status: "needs_review",
+          uploadableEventCount: 0,
+        },
+      },
+      syncEvidence: {},
+      terminal: { status: "active" },
+    });
+
+    expect(presentation.groups.terminalRequired[0]).toEqual(
+      expect.objectContaining({
+        action: expect.objectContaining({
+          commandType: "clear_local_review_items",
+          label: "Clear local review items",
+          status: "available",
+        }),
+        detail: "Expected after check-in: 0 local review items remaining.",
+        summary: "Uploaded local review items can be cleared from this terminal.",
+        title: "Local review cleanup",
+      }),
+    );
+    expect(presentation.safeActions[0]).toEqual(
+      expect.objectContaining({
+        commandType: "clear_local_review_items",
+        label: "Clear local review items",
       }),
     );
   });

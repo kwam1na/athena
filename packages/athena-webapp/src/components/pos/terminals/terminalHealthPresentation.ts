@@ -1085,7 +1085,7 @@ function buildRecoveryBlockers(
   }
 
   if (recovery) {
-    return buildRecoveryBlockersFromPreview(recovery);
+    return buildRecoveryBlockersFromPreview(summary, recovery);
   }
 
   return deriveRecoveryBlockers(summary);
@@ -1471,6 +1471,7 @@ function getPreviewCommandActionStatus(
 }
 
 function buildRecoveryBlockersFromPreview(
+  summary: TerminalHealthClassificationInput,
   preview: TerminalRecoveryPreview,
 ): RecoveryBlockerWithCategory[] {
   const blockers: RecoveryBlockerWithCategory[] = [];
@@ -1497,8 +1498,9 @@ function buildRecoveryBlockersFromPreview(
   }
 
   preview.terminalActions?.forEach((action, index) => {
-    const actionStatus = getPreviewCommandActionStatus(
-      preview.commandStatus,
+    const actionStatus = getTerminalActionStatusForCurrentRuntime(
+      summary,
+      preview,
       action.commandType,
     );
     if (actionStatus === "verified") {
@@ -1540,6 +1542,34 @@ function buildRecoveryBlockersFromPreview(
   });
 
   return blockers;
+}
+
+function getTerminalActionStatusForCurrentRuntime(
+  summary: TerminalHealthClassificationInput,
+  preview: TerminalRecoveryPreview,
+  commandType: TerminalRecoveryCommandType,
+) {
+  const actionStatus = getPreviewCommandActionStatus(
+    preview.commandStatus,
+    commandType,
+  );
+  if (
+    actionStatus === "verified" &&
+    commandType === "collect_local_review" &&
+    latestRuntimeStillNeedsLocalReviewDrain(summary)
+  ) {
+    return undefined;
+  }
+  return actionStatus;
+}
+
+function latestRuntimeStillNeedsLocalReviewDrain(
+  summary: TerminalHealthClassificationInput,
+) {
+  const sync = summary.runtimeStatus?.sync;
+  return Boolean(
+    sync && (sync.status === "needs_review" || (sync.reviewEventCount ?? 0) > 0),
+  );
 }
 
 export function isRecoveryActionIssuable(action: TerminalRecoveryAction) {
@@ -1735,6 +1765,10 @@ function getTerminalCommandActionLabel(
   switch (commandType) {
     case "update_app":
       return "Update app";
+    case "collect_local_review":
+      return "Collect local review items";
+    case "clear_local_review_items":
+      return "Clear local review items";
     case "repair_terminal_seed":
       return "Send terminal setup repair";
     case "clear_stale_drawer_authority":
@@ -1756,6 +1790,10 @@ function getTerminalCommandTitle(
   switch (commandType) {
     case "update_app":
       return "App update";
+    case "collect_local_review":
+      return "Local review collection";
+    case "clear_local_review_items":
+      return "Local review cleanup";
     case "repair_terminal_seed":
       return "Terminal setup repair";
     case "clear_stale_drawer_authority":
@@ -1778,11 +1816,18 @@ function getTerminalCommandRecoverySummary(
   const commandName =
     commandType === "update_app"
       ? "Update app command"
+      : commandType === "collect_local_review"
+        ? "Local review collection"
+      : commandType === "clear_local_review_items"
+        ? "Local review cleanup"
       : commandType === "clear_stale_drawer_authority"
         ? "Drawer repair command"
         : commandType === "retry_sync"
           ? "Sync retry command"
           : "Terminal repair command";
+  if (status === "verified" && commandType === "collect_local_review") {
+    return "Local review collection completed, but the terminal still reports local review items.";
+  }
   if (status === "verified") {
     return `${commandName} was verified by the latest terminal check-in.`;
   }
@@ -1817,6 +1862,12 @@ function getExpectedEvidenceSummary(
       : null,
     evidence.syncStatus
       ? `Sync ${formatStatusLabel(evidence.syncStatus)}`
+      : null,
+    evidence.localReviewDetailsCollected === true
+      ? "Local review details collected"
+      : null,
+    evidence.localReviewEventCount !== undefined
+      ? `${evidence.localReviewEventCount} local review items remaining`
       : null,
     evidence.terminalSeedReady === true ? "Terminal seed ready" : null,
     evidence.localStoreAvailable === true ? "Local store available" : null,

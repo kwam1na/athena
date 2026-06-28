@@ -30,6 +30,7 @@ import {
   issueTerminalRecoveryCommand as issueTerminalRecoveryCommandService,
   listClaimableTerminalRecoveryCommands,
 } from "../application/terminalRecovery/terminalCommandService";
+import type { TerminalRecoveryPreview } from "../application/terminalOperationalState/types";
 import { runAcceptedRuntimeStatusSideEffects } from "../application/terminalRuntime/postRuntimeStatusSideEffects";
 import {
   createTerminalRecoveryCommandReadRepository,
@@ -45,6 +46,7 @@ import {
   posTerminalRecoveryCommandStatusValidator,
   posTerminalRecoveryCommandTypeValidator,
   posTerminalRecoveryExpectedEvidenceValidator,
+  posTerminalRecoveryLocalReviewEventValidator,
   posTerminalRecoveryVerificationStatusValidator,
 } from "../../schemas/pos/posTerminalRecovery";
 import {
@@ -528,6 +530,9 @@ const terminalHealthSummaryReturnValidator = v.object({
           commandType: posTerminalRecoveryCommandTypeValidator,
           label: v.string(),
           latestAcknowledgement: v.optional(v.string()),
+          localReviewEvents: v.optional(
+            v.array(posTerminalRecoveryLocalReviewEventValidator),
+          ),
           status: posTerminalRecoveryCommandStatusValidator,
           verificationStatus: posTerminalRecoveryVerificationStatusValidator,
         }),
@@ -587,6 +592,10 @@ const terminalRecoveryCommandReturnValidator = v.object({
   acknowledgement: v.optional(
     v.object({
       acknowledgedAt: v.number(),
+      clearedLocalReviewEventIds: v.optional(v.array(v.string())),
+      localReviewEvents: v.optional(
+        v.array(posTerminalRecoveryLocalReviewEventValidator),
+      ),
       message: v.optional(v.string()),
       result: v.union(
         v.literal("completed"),
@@ -676,7 +685,7 @@ function stripRuntimeStatusInput(
       failedEventCount: status.sync.failedEventCount,
       reviewEventCount: status.sync.reviewEventCount,
       localOnlyEventCount: status.sync.localOnlyEventCount,
-      reviewEvents: status.sync.reviewEvents,
+      reviewEvents: stripRuntimeReviewEvents(status.sync.reviewEvents),
       oldestPendingEventAt: status.sync.oldestPendingEventAt,
       nextPendingUploadSequence: status.sync.nextPendingUploadSequence,
       lastSyncedSequence: status.sync.lastSyncedSequence,
@@ -733,6 +742,28 @@ function stripRuntimeStatusInput(
       registerReadModelAgeMs: status.snapshots.registerReadModelAgeMs,
     },
   };
+}
+
+function stripRuntimeReviewEvents(
+  reviewEvents: TerminalRuntimeStatusInput["sync"]["reviewEvents"],
+) {
+  return reviewEvents?.map((event) => ({
+    createdAt: event.createdAt,
+    localEventId: event.localEventId,
+    ...(event.localPosSessionId
+      ? { localPosSessionId: event.localPosSessionId }
+      : {}),
+    ...(event.localRegisterSessionId
+      ? { localRegisterSessionId: event.localRegisterSessionId }
+      : {}),
+    sequence: event.sequence,
+    status: event.status,
+    type: event.type,
+    ...(event.uploaded !== undefined ? { uploaded: event.uploaded } : {}),
+    ...(typeof event.uploadSequence === "number"
+      ? { uploadSequence: event.uploadSequence }
+      : {}),
+  }));
 }
 
 async function requireTerminalStoreAccess(
@@ -1160,14 +1191,38 @@ export const issueTerminalRecoveryCommand = mutation({
           message: "This terminal is not active for this store.",
         });
       }
+      const recoveryPreview = await previewTerminalRecoveryQuery(ctx, {
+        now: Date.now(),
+        storeId: args.storeId,
+        terminalId: args.terminalId,
+      });
+      const matchingAction =
+        args.commandType === "clear_local_review_items" && recoveryPreview
+          ? findMatchingTerminalRecoveryAction(recoveryPreview.terminalActions, {
+              commandContext: args.commandContext,
+              commandType: args.commandType,
+              expectedEvidence: args.expectedEvidence,
+            })
+          : null;
+      if (args.commandType === "clear_local_review_items" && !matchingAction) {
+        return userError({
+          code: "precondition_failed",
+          message: "This terminal recovery command is no longer available.",
+        });
+      }
+      const commandAction = matchingAction ?? {
+        commandContext: args.commandContext,
+        commandType: args.commandType,
+        expectedEvidence: args.expectedEvidence,
+      };
       return issueTerminalRecoveryCommandService(
         createTerminalRecoveryCommandRepository(ctx),
         {
-          commandType: args.commandType,
-          expectedEvidence: args.expectedEvidence,
+          commandType: commandAction.commandType,
+          expectedEvidence: commandAction.expectedEvidence,
           issuedAt: Date.now(),
           issuedByUserId: athenaUser._id,
-          commandContext: args.commandContext,
+          commandContext: commandAction.commandContext,
           storeId: args.storeId,
           terminalId: args.terminalId,
         },
@@ -1181,6 +1236,38 @@ export const issueTerminalRecoveryCommand = mutation({
     }
   },
 });
+
+function findMatchingTerminalRecoveryAction(
+  actions: TerminalRecoveryPreview["terminalActions"],
+  target: {
+    commandContext: unknown;
+    commandType: string;
+    expectedEvidence: unknown;
+  },
+) {
+  return actions.find(
+    (action) =>
+      action.commandType === target.commandType &&
+      stableStringify(action.commandContext) ===
+        stableStringify(target.commandContext) &&
+      stableStringify(action.expectedEvidence) ===
+        stableStringify(target.expectedEvidence),
+  );
+}
+
+function stableStringify(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map(stableStringify).join(",")}]`;
+  }
+  if (value && typeof value === "object") {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .filter((entry) => entry[1] !== undefined)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, entry]) => `${JSON.stringify(key)}:${stableStringify(entry)}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
 
 export const listTerminalRecoveryCommands = query({
   args: {
@@ -1265,6 +1352,10 @@ export const acknowledgeTerminalRecoveryCommand = mutation({
       v.literal("precondition_failed"),
     ),
     message: v.optional(v.string()),
+    clearedLocalReviewEventIds: v.optional(v.array(v.string())),
+    localReviewEvents: v.optional(
+      v.array(posTerminalRecoveryLocalReviewEventValidator),
+    ),
     executionId: v.optional(v.string()),
   },
   returns: commandResultValidator(terminalRecoveryCommandReturnValidator),
@@ -1282,8 +1373,10 @@ export const acknowledgeTerminalRecoveryCommand = mutation({
       createTerminalRecoveryCommandRepository(ctx),
       {
         acknowledgedAt: Date.now(),
+        clearedLocalReviewEventIds: args.clearedLocalReviewEventIds,
         commandId: args.commandId,
         executionId: args.executionId,
+        localReviewEvents: args.localReviewEvents,
         message: args.message,
         result: args.result,
         storeId: args.storeId,

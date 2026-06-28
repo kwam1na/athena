@@ -54,6 +54,67 @@ describe("terminal health queries", () => {
     expect(summary?.recoveryPreview?.terminalActions).toEqual([]);
   });
 
+  it("does not report settled closed-register conflicts as terminal health review debt", async () => {
+    const ctx = buildQueryCtx({
+      posLocalSyncConflict: [
+        buildConflict({
+          _id: "conflict-closed-register" as Id<"posLocalSyncConflict">,
+          conflictType: "permission",
+          localRegisterSessionId: "local-register-closed",
+          sequence: 4,
+        }),
+      ],
+      posLocalSyncMapping: [
+        {
+          _id: "mapping-closed-register" as Id<"posLocalSyncMapping">,
+          _creationTime: now - 5_000,
+          cloudId: "register-closed",
+          cloudTable: "registerSession",
+          createdAt: now - 5_000,
+          localEventId: "event-closed-register",
+          localId: "local-register-closed",
+          localIdKind: "registerSession",
+          localRegisterSessionId: "local-register-closed",
+          storeId,
+          terminalId,
+        } satisfies Doc<"posLocalSyncMapping">,
+      ],
+      posTerminal: [buildTerminal()],
+      posTerminalRuntimeStatus: [buildRuntimeStatus()],
+      registerSession: [
+        buildRegisterSession({
+          _id: "register-closed" as Id<"registerSession">,
+          closedAt: now - 1_000,
+          countedCash: 6_013,
+          expectedCash: 6_013,
+          status: "closed",
+          variance: 0,
+        }),
+      ],
+    });
+
+    const summary = await getTerminalHealthSummary(ctx, {
+      now,
+      storeId,
+      terminalId,
+    });
+
+    expect(summary?.syncEvidence.unresolvedConflictCount).toBe(0);
+    expect(summary?.syncEvidence.reviewSummary).toEqual({
+      groups: [],
+      meta: {
+        cap: 50,
+        hasMore: false,
+        sampledCount: 0,
+        targetResolutionIncomplete: false,
+      },
+    });
+    expect(summary?.attentionReasons.map((reason) => reason.type)).not.toContain(
+      "cloud_conflict",
+    );
+    expect(summary?.recoveryPreview?.readiness).toBe("healthy_idle");
+  });
+
   it.each(["closing", "closeout_rejected"] as const)(
     "treats a %s cloud drawer authority as ready for replacement",
     async (status) => {
