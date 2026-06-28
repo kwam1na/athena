@@ -211,6 +211,57 @@ describe("terminal operational state policy", () => {
     expect(state.recoveryPreview.readiness).toBe("able_to_transact_now");
   });
 
+  it("keeps unresolved synced inventory conflicts in the inventory review lane", () => {
+    const state = buildTerminalOperationalState(
+      baseInput({
+        syncEvidence: {
+          ...emptySyncEvidence(),
+          conflictedCount: 2,
+          unresolvedConflictCount: 2,
+          reviewSummary: {
+            groups: [
+              {
+                actionability: "manual_review",
+                conflictType: "inventory",
+                count: 2,
+                latestCreatedAt: 1_999_000,
+                latestSequence: 26,
+                owner: "manual_review",
+              },
+            ],
+            meta: {
+              cap: 50,
+              hasMore: false,
+              sampledCount: 2,
+              targetResolutionIncomplete: false,
+            },
+          },
+        },
+      }),
+    );
+
+    expect(state.attentionReasons).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          count: 2,
+          summary: "2 inventory review items need attention.",
+          type: "synced_sale_inventory_review",
+        }),
+      ]),
+    );
+    expect(state.attentionReasons[0]?.actionTarget).toBeUndefined();
+    expect(state.attentionReasons.map((reason) => reason.type)).not.toContain(
+      "cloud_conflict",
+    );
+    expect(state.recoveryEvidence.manualReview).toEqual([
+      {
+        reason: "2 inventory review items need attention.",
+        source: "cloud_sync",
+        type: "synced_sale_inventory_review",
+      },
+    ]);
+  });
+
   it("treats local runtime review as terminal-local evidence collection instead of manual business review", () => {
     const state = buildTerminalOperationalState(
       baseInput({
@@ -354,7 +405,7 @@ describe("terminal operational state policy", () => {
     });
   });
 
-  it("requires fresh runtime ids before clearing collected local review evidence", () => {
+  it("uses verified collected local review evidence when the latest runtime reports only a count", () => {
     const state = buildTerminalOperationalState(
       baseInput({
         commandStatus: {
@@ -390,8 +441,15 @@ describe("terminal operational state policy", () => {
     );
 
     expect(state.recoveryEvidence.terminalActions[0]).toMatchObject({
-      commandType: "collect_local_review",
-      expectedEvidence: { localReviewDetailsCollected: true },
+      commandContext: {
+        expectedBlockerType: "local_review",
+        localReviewEventIds: ["event-review-1"],
+      },
+      commandType: "clear_local_review_items",
+      expectedEvidence: {
+        localReviewClearedEventIds: ["event-review-1"],
+        localReviewEventCount: 0,
+      },
     });
   });
 
@@ -759,6 +817,114 @@ describe("terminal operational state policy", () => {
     expect(state.terminalHealth).toBe("needs_attention");
   });
 
+  it("keeps open-work cloud review counts separate from manual-review counts", () => {
+    const state = buildTerminalOperationalState(
+      baseInput({
+        syncEvidence: {
+          ...emptySyncEvidence(),
+          conflictedCount: 50,
+          latestEvent: {
+            eventType: "register_closed",
+            localEventId: "local-conflicted",
+            localRegisterSessionId: "local-register-1",
+            occurredAt: 1_999_000,
+            sequence: 44,
+            status: "rejected",
+            submittedAt: 1_999_000,
+          },
+          reviewSummary: {
+            groups: [
+              {
+                actionability: "open_work_review",
+                conflictType: "permission",
+                count: 28,
+                latestCreatedAt: 1_999_000,
+                latestSequence: 44,
+                owner: "operations_open_work",
+                reviewTarget: {
+                  type: "open_work",
+                  workItemId: "work-item-1" as Id<"operationalWorkItem">,
+                  workItemType: "synced_sale_inventory_review",
+                },
+              },
+              {
+                actionability: "manual_review",
+                conflictType: "permission",
+                count: 22,
+                latestCreatedAt: 1_998_000,
+                latestSequence: 43,
+                owner: "manual_review",
+              },
+            ],
+            meta: {
+              cap: 50,
+              hasMore: false,
+              sampledCount: 50,
+              targetResolutionIncomplete: false,
+            },
+          },
+          unresolvedConflictCount: 50,
+        },
+      }),
+    );
+
+    expect(state.attentionReasons).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          actionTarget: {
+            label: "Review open work",
+            type: "open_work",
+          },
+          count: 28,
+          summary: "28 cloud sync conflicts need review.",
+          type: "cloud_conflict",
+        }),
+        expect.objectContaining({
+          count: 22,
+          summary:
+            "22 cloud sync conflicts require manager review before support can repair this terminal.",
+          type: "cloud_conflict",
+        }),
+      ]),
+    );
+    expect(
+      state.attentionReasons.find((reason) => reason.count === 22)?.actionTarget,
+    ).toBeUndefined();
+    expect(state.recoveryEvidence.manualReview).toEqual([
+      {
+        reason:
+          "22 cloud sync conflicts require manager review before support can repair this terminal.",
+        source: "cloud_sync",
+        type: "cloud_conflict",
+      },
+    ]);
+  });
+
+  it("collapses unsafe cloud repair candidates into one fallback manual review blocker", () => {
+    const state = buildTerminalOperationalState(
+      baseInput({
+        cloudRepair: {
+          preconditionHash: "hash",
+          safeConflictIds: [],
+          skippedConflictIds: [
+            "unsafe-conflict-1" as Id<"posLocalSyncConflict">,
+            "unsafe-conflict-2" as Id<"posLocalSyncConflict">,
+            "unsafe-conflict-3" as Id<"posLocalSyncConflict">,
+          ],
+        },
+      }),
+    );
+
+    expect(state.recoveryEvidence.manualReview).toEqual([
+      {
+        reason:
+          "3 cloud sync conflicts require manager review before support can repair this terminal.",
+        source: "cloud_repair",
+        type: "unsafe_cloud_conflict",
+      },
+    ]);
+  });
+
   it("does not treat closed historical sync event statuses as current review backlog", () => {
     const state = buildTerminalOperationalState(
       baseInput({
@@ -793,6 +959,82 @@ describe("terminal operational state policy", () => {
     expect(state.attentionReasons).toEqual([]);
     expect(state.recoveryEvidence.manualReview).toEqual([]);
     expect(state.terminalHealth).toBe("online");
+  });
+
+  it("keeps capped sync review evidence from presenting as healthy", () => {
+    const state = buildTerminalOperationalState(
+      baseInput({
+        syncEvidence: {
+          ...emptySyncEvidence(),
+          reviewSummary: {
+            groups: [],
+            meta: {
+              cap: 20,
+              hasMore: true,
+              sampledCount: 0,
+              targetResolutionIncomplete: true,
+            },
+          },
+        },
+      }),
+    );
+
+    expect(state.attentionReasons).toContainEqual(
+      expect.objectContaining({
+        source: "cloud_sync",
+        type: "cloud_conflict",
+      }),
+    );
+    expect(state.terminalHealth).toBe("needs_attention");
+    expect(state.operationalExplanation.summaryMeta.targetResolutionIncomplete).toBe(
+      true,
+    );
+  });
+
+  it("routes register-session sync review groups to cash controls", () => {
+    const registerSessionId = "register-session-review" as Id<"registerSession">;
+    const state = buildTerminalOperationalState(
+      baseInput({
+        syncEvidence: {
+          ...emptySyncEvidence(),
+          reviewSummary: {
+            groups: [
+              {
+                actionTarget: {
+                  registerSessionId,
+                  type: "register_session",
+                },
+                actionability: "cash_controls_review",
+                conflictType: "permission",
+                count: 1,
+                latestCreatedAt: 1_999_000,
+                latestSequence: 14,
+                owner: "cash_controls",
+              },
+            ],
+            meta: {
+              cap: 20,
+              hasMore: false,
+              sampledCount: 1,
+              targetResolutionIncomplete: false,
+            },
+          },
+          unresolvedConflictCount: 1,
+        },
+      }),
+    );
+
+    expect(state.attentionReasons).toContainEqual(
+      expect.objectContaining({
+        actionTarget: {
+          registerSessionId,
+          type: "cash_control_register_session",
+        },
+        source: "cloud_sync",
+        type: "cloud_conflict",
+      }),
+    );
+    expect(state.operationalExplanation.primaryOwner).toBe("cash_controls");
   });
 
   it("explains current review backlog even when the terminal is not sale-ready", () => {
@@ -840,7 +1082,7 @@ describe("terminal operational state policy", () => {
 
     expect(state.salesReadiness).toBe("healthy_idle");
     expect(state.operationalExplanation).toMatchObject({
-      headline: "Review needed",
+      headline: "Manager review needed",
       lane: "needs_manual_review",
       saleImpact: "not_ready",
       supportAction: "manual_review",
@@ -872,6 +1114,36 @@ describe("terminal operational state policy", () => {
       "drawer_authority_blocked",
     );
     expect(state.recoveryPreview.terminalActions).toEqual([]);
+  });
+
+  it("drops stale local runtime attention reasons that no longer match runtime evidence", () => {
+    const state = buildTerminalOperationalState(
+      baseInput({
+        attentionReasons: [
+          {
+            count: 1,
+            source: "local_runtime",
+            summary: "1 local review item is still on this terminal.",
+            type: "local_review",
+          },
+        ],
+        runtimeStatus: buildRuntimeStatus({
+          sync: {
+            failedEventCount: 0,
+            localOnlyEventCount: 0,
+            pendingEventCount: 0,
+            reviewEventCount: 0,
+            status: "idle",
+            uploadableEventCount: 0,
+          },
+        }),
+      }),
+    );
+
+    expect(state.runtimeEvidence.effectiveStatus?.sync.reviewEventCount).toBe(0);
+    expect(state.attentionReasons.map((reason) => reason.type)).not.toContain(
+      "local_review",
+    );
   });
 });
 

@@ -1362,11 +1362,7 @@ function AttentionReasonsSection({
                     getSupportSafeAttentionReasonSummary(reason)}
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {reason.source === "cloud_sync"
-                    ? "Cloud sync evidence"
-                    : reason.source === "local_runtime"
-                      ? "Local runtime review"
-                      : "Terminal check-in"}
+                  {getAttentionReasonContextLabel(reason)}
                   {reason.nextPendingUploadSequence == null
                     ? ""
                     : ` / next upload #${reason.nextPendingUploadSequence}`}
@@ -1386,6 +1382,34 @@ function AttentionReasonsSection({
       </div>
     </DetailPanel>
   );
+}
+
+function getAttentionReasonContextLabel(reason: TerminalHealthAttentionReason) {
+  if (reason.type === "synced_sale_inventory_review") {
+    return reason.actionTarget
+      ? "Inventory review work"
+      : "Inventory review required before support repair";
+  }
+
+  if (
+    reason.source === "cloud_sync" &&
+    (reason.type === "cloud_conflict" ||
+      reason.type === "cloud_held" ||
+      reason.type === "cloud_rejected") &&
+    !reason.actionTarget
+  ) {
+    return "Manager review required before support repair";
+  }
+
+  if (reason.source === "cloud_sync") {
+    return "Cloud sync evidence";
+  }
+
+  if (reason.source === "local_runtime") {
+    return "Local runtime review";
+  }
+
+  return "Terminal check-in";
 }
 
 function AttentionReasonAction({

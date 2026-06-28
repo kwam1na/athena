@@ -37,18 +37,21 @@ export function buildTerminalOperationalState(
   const cloudRegisterSessionSaleUsable = input.latestRegisterSession
     ? isRegisterSessionSaleUsable(input.latestRegisterSession)
     : undefined;
-  const attentionReasons =
+  const attentionReasons = reconcileTerminalHealthAttentionReasons(
     input.attentionReasons ??
-    deriveTerminalHealthAttentionReasons({
-      ...input,
-      runtimeStatus: effectiveRuntimeStatus,
-    });
+      deriveTerminalHealthAttentionReasons({
+        ...input,
+        runtimeStatus: effectiveRuntimeStatus,
+      }),
+    effectiveRuntimeStatus,
+  );
   const terminalActions = buildTerminalRecoveryActions(
     effectiveRuntimeStatus,
     input.commandStatus,
   );
   const manualReview = buildTerminalRecoveryManualReview({
     attentionReasons,
+    safeConflictIds: input.cloudRepair.safeConflictIds,
     skippedConflictIds: input.cloudRepair.skippedConflictIds,
   });
   const healthyIdle = hasHealthyIdleEvidence({
@@ -289,7 +292,7 @@ export function deriveTerminalHealthAttentionReasons(
     };
     if (inventoryReviewTarget) {
       reason.actionTarget = {
-        label: "Inventory review",
+        label: "Review inventory work",
         type: "open_work",
       };
     }
@@ -299,16 +302,84 @@ export function deriveTerminalHealthAttentionReasons(
   const cloudReviewGroups = currentReviewGroups.filter(
     (group) => !isInventoryReviewGroup(group, !!input.syncEvidence.reviewSummary),
   );
-  const conflictedCount = sumReviewGroupCounts(cloudReviewGroups);
+  const openWorkCloudReviewGroups = cloudReviewGroups.filter(
+    isOpenWorkReviewGroup,
+  );
+  const cashControlCloudReviewGroups = cloudReviewGroups.filter(
+    isCashControlReviewGroup,
+  );
+  const manualCloudReviewGroups = cloudReviewGroups.filter(
+    (group) =>
+      !isOpenWorkReviewGroup(group) && !isCashControlReviewGroup(group),
+  );
+  const openWorkCloudReviewCount = sumReviewGroupCounts(
+    openWorkCloudReviewGroups,
+  );
+  const manualCloudReviewCount = sumReviewGroupCounts(manualCloudReviewGroups);
+  const cashControlCloudReviewCount = sumReviewGroupCounts(
+    cashControlCloudReviewGroups,
+  );
 
-  if (conflictedCount > 0) {
+  if (openWorkCloudReviewCount > 0) {
     reasons.push({
-      count: conflictedCount,
+      actionTarget: {
+        label: "Review open work",
+        type: "open_work",
+      },
+      count: openWorkCloudReviewCount,
       latestEventSequence:
-        latestReviewGroupSequence(cloudReviewGroups) ?? latestEvent?.sequence,
+        latestReviewGroupSequence(openWorkCloudReviewGroups) ??
+        latestEvent?.sequence,
       latestEventStatus: latestEvent?.status,
       source: "cloud_sync",
-      summary: `${conflictedCount} cloud sync conflict${conflictedCount === 1 ? " needs" : "s need"} review.`,
+      summary: `${openWorkCloudReviewCount} cloud sync conflict${openWorkCloudReviewCount === 1 ? " needs" : "s need"} review.`,
+      type: "cloud_conflict",
+    });
+  }
+
+  if (manualCloudReviewCount > 0) {
+    reasons.push({
+      count: manualCloudReviewCount,
+      latestEventSequence:
+        latestReviewGroupSequence(manualCloudReviewGroups) ??
+        latestEvent?.sequence,
+      latestEventStatus: latestEvent?.status,
+      source: "cloud_sync",
+      summary: `${manualCloudReviewCount} cloud sync conflict${manualCloudReviewCount === 1 ? " requires" : "s require"} manager review before support can repair this terminal.`,
+      type: "cloud_conflict",
+    });
+  }
+
+  if (cashControlCloudReviewCount > 0) {
+    const cashControlTarget = cashControlCloudReviewGroups.find(
+      (group) => group.actionTarget,
+    )?.actionTarget;
+    const reason: TerminalHealthAttentionReason = {
+      count: cashControlCloudReviewCount,
+      latestEventSequence:
+        latestReviewGroupSequence(cashControlCloudReviewGroups) ??
+        latestEvent?.sequence,
+      latestEventStatus: latestEvent?.status,
+      source: "cloud_sync",
+      summary: `${cashControlCloudReviewCount} cash control review item${cashControlCloudReviewCount === 1 ? " needs" : "s need"} attention.`,
+      type: "cloud_conflict",
+    };
+    if (cashControlTarget) {
+      reason.actionTarget = {
+        registerSessionId: cashControlTarget.registerSessionId,
+        type: "cash_control_register_session",
+      };
+    }
+    reasons.push(reason);
+  }
+
+  if (
+    input.syncEvidence.reviewSummary?.meta.targetResolutionIncomplete &&
+    currentReviewGroups.length === 0
+  ) {
+    reasons.push({
+      source: "cloud_sync",
+      summary: "Cloud sync review evidence is capped before the exact owner could be resolved.",
       type: "cloud_conflict",
     });
   }
@@ -349,6 +420,27 @@ export function deriveTerminalHealthAttentionReasons(
   return reasons;
 }
 
+function reconcileTerminalHealthAttentionReasons(
+  reasons: TerminalHealthAttentionReason[],
+  runtimeStatus: TerminalOperationalPolicyInput["runtimeStatus"],
+): TerminalHealthAttentionReason[] {
+  return reasons.filter((reason) => {
+    if (reason.type === "local_review") {
+      const sync = runtimeStatus?.sync;
+      return Boolean(
+        sync && (sync.status === "needs_review" || sync.reviewEventCount > 0),
+      );
+    }
+    if (reason.type === "sync_failed") {
+      const sync = runtimeStatus?.sync;
+      return Boolean(
+        sync && (sync.status === "failed" || sync.failedEventCount > 0),
+      );
+    }
+    return true;
+  });
+}
+
 function getCurrentReviewGroups(
   syncEvidence: TerminalOperationalPolicyInput["syncEvidence"],
 ): TerminalSyncReviewSummaryGroup[] {
@@ -378,6 +470,22 @@ function sumReviewGroupCounts(groups: TerminalSyncReviewSummaryGroup[]) {
   return groups.reduce((total, group) => total + group.count, 0);
 }
 
+function isOpenWorkReviewGroup(group: TerminalSyncReviewSummaryGroup) {
+  return (
+    group.actionability === "open_work_review" ||
+    group.owner === "operations_open_work" ||
+    !!group.reviewTarget
+  );
+}
+
+function isCashControlReviewGroup(group: TerminalSyncReviewSummaryGroup) {
+  return (
+    group.actionability === "cash_controls_review" ||
+    group.owner === "cash_controls" ||
+    group.actionTarget?.type === "register_session"
+  );
+}
+
 function latestReviewGroupSequence(groups: TerminalSyncReviewSummaryGroup[]) {
   return groups.reduce<number | undefined>(
     (latest, group) =>
@@ -398,10 +506,7 @@ function isInventoryReviewGroup(
   if (!hasRepositoryReviewSummary) {
     return true;
   }
-  return (
-    group.actionability === "open_work_review" ||
-    group.actionability === "diagnostic_only"
-  );
+  return true;
 }
 
 export function classifySupportRecovery(
@@ -665,10 +770,10 @@ function getClearableCollectedLocalReviewEvents(
 
   const reviewEvents = commandStatus.localReviewEvents ?? [];
   const runtimeReviewEvents = sync.reviewEvents ?? [];
-  if (runtimeReviewEvents.length === 0) {
-    return null;
-  }
-  if (!sameLocalReviewEventIds(reviewEvents, runtimeReviewEvents)) {
+  if (
+    runtimeReviewEvents.length > 0 &&
+    !sameLocalReviewEventIds(reviewEvents, runtimeReviewEvents)
+  ) {
     return null;
   }
 
@@ -692,23 +797,35 @@ function sameLocalReviewEventIds(
 
 function buildTerminalRecoveryManualReview(args: {
   attentionReasons: TerminalHealthAttentionReason[];
+  safeConflictIds: TerminalOperationalPolicyInput["cloudRepair"]["safeConflictIds"];
   skippedConflictIds: TerminalOperationalPolicyInput["cloudRepair"]["skippedConflictIds"];
 }): TerminalOperationalState["recoveryEvidence"]["manualReview"] {
+  const hasSafeCloudRepair = args.safeConflictIds.length > 0;
   const manual: TerminalOperationalState["recoveryEvidence"]["manualReview"] =
     args.attentionReasons
       .filter((reason) =>
         reason.type === "cloud_held" ||
-        reason.type === "cloud_rejected",
+        reason.type === "cloud_rejected" ||
+        (reason.type === "synced_sale_inventory_review" &&
+          !reason.actionTarget &&
+          !hasSafeCloudRepair) ||
+        (reason.type === "cloud_conflict" &&
+          !reason.actionTarget &&
+          !hasSafeCloudRepair),
       )
       .map((reason) => ({
         reason: reason.summary,
         source: reason.source,
         type: reason.type,
       }));
-  for (const conflictId of args.skippedConflictIds) {
+
+  if (
+    args.skippedConflictIds.length > 0 &&
+    !manual.some((item) => item.source === "cloud_sync")
+  ) {
+    const count = args.skippedConflictIds.length;
     manual.push({
-      reason:
-        "A cloud sync conflict needs manual review before support can repair this terminal.",
+      reason: `${count} cloud sync conflict${count === 1 ? " requires" : "s require"} manager review before support can repair this terminal.`,
       source: "cloud_repair",
       type: "unsafe_cloud_conflict",
     });
@@ -1078,7 +1195,7 @@ function hasCurrentSyncReviewBacklog(
     return true;
   }
   if (syncEvidence.reviewSummary) {
-    return false;
+    return syncEvidence.reviewSummary.meta.targetResolutionIncomplete;
   }
   return (
     syncEvidence.conflictedCount > 0 ||

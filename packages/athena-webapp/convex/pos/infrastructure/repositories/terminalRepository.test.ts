@@ -513,6 +513,163 @@ describe("terminalRepository sync evidence", () => {
     });
   });
 
+  it("omits register conflicts when the blocking register session is already settled", async () => {
+    const ctx = buildCtx({
+      posLocalSyncConflict: [
+        buildSyncConflict({
+          _id: "conflict-closed-blocking-session" as Id<"posLocalSyncConflict">,
+          conflictType: "permission",
+          details: {
+            blockingRegisterSessionId: "register-session-closed",
+            localRegisterSessionId: "local-register-new",
+            registerNumber: "1",
+          },
+          localRegisterSessionId: "local-register-new",
+          sequence: 8,
+          summary: "A register session is already open for this terminal.",
+        }),
+      ],
+      registerSession: [
+        buildRegisterSession({
+          _id: "register-session-closed" as Id<"registerSession">,
+          closedAt: 900,
+          countedCash: 100,
+          status: "closed",
+          variance: 0,
+        }),
+      ],
+    });
+
+    const result = await getTerminalSyncEvidence(ctx as never, {
+      storeId: "store-1" as Id<"store">,
+      terminalId: "terminal-1" as Id<"posTerminal">,
+    });
+
+    expect(result.unresolvedConflictCount).toBe(0);
+    expect(result.unresolvedConflicts).toEqual([]);
+    expect(result.reviewSummary?.groups).toEqual([]);
+  });
+
+  it("dedupes repeated register conflicts for the same local event", async () => {
+    const duplicateConflicts = Array.from({ length: 4 }, (_, index) =>
+      buildSyncConflict({
+        _id: `conflict-duplicate-${index}` as Id<"posLocalSyncConflict">,
+        conflictType: "permission",
+        details: {
+          blockingRegisterSessionId: "register-session-open",
+          localRegisterSessionId: "local-register-new",
+          registerNumber: "1",
+        },
+        localEventId: "event-register-open",
+        localRegisterSessionId: "local-register-new",
+        sequence: 8,
+        summary: "A register session is already open for this terminal.",
+      }),
+    );
+    const ctx = buildCtx({
+      posLocalSyncConflict: duplicateConflicts,
+      registerSession: [
+        buildRegisterSession({
+          _id: "register-session-open" as Id<"registerSession">,
+          status: "open",
+        }),
+      ],
+    });
+
+    const result = await getTerminalSyncEvidence(ctx as never, {
+      storeId: "store-1" as Id<"store">,
+      terminalId: "terminal-1" as Id<"posTerminal">,
+    });
+
+    expect(result.unresolvedConflictCount).toBe(1);
+    expect(result.unresolvedConflicts).toHaveLength(1);
+    expect(result.reviewSummary?.groups).toEqual([
+      expect.objectContaining({
+        actionTarget: {
+          registerSessionId: "register-session-open",
+          type: "register_session",
+        },
+        actionability: "cash_controls_review",
+        conflictType: "permission",
+        count: 1,
+        owner: "cash_controls",
+      }),
+    ]);
+  });
+
+  it("finds actionable inventory conflicts behind newer settled register conflicts", async () => {
+    const settledRegisterConflicts = Array.from(
+      { length: 5_010 },
+      (_, index) =>
+        buildSyncConflict({
+          _id: `conflict-settled-${index}` as Id<"posLocalSyncConflict">,
+          conflictType: "permission",
+          details: {
+            blockingRegisterSessionId: "register-session-closed",
+            localRegisterSessionId: `local-register-${index}`,
+            registerNumber: "1",
+          },
+          localEventId: `event-register-open-${index}`,
+          localRegisterSessionId: `local-register-${index}`,
+          sequence: 1_000 + index,
+          summary: "A register session is already open for this terminal.",
+        }),
+    );
+    const ctx = buildCtx({
+      posLocalSyncConflict: [
+        ...settledRegisterConflicts,
+        buildSyncConflict({
+          _id: "conflict-inventory" as Id<"posLocalSyncConflict">,
+          conflictType: "inventory",
+          details: {
+            localTransactionId: "local-transaction-1",
+            productSkuId: "sku-1",
+            quantityAvailable: 0,
+            requestedQuantity: 1,
+          },
+          localEventId: "event-inventory",
+          sequence: 8,
+          summary: "Inventory needs manager review for a synced offline sale.",
+        }),
+      ],
+      registerSession: [
+        buildRegisterSession({
+          _id: "register-session-closed" as Id<"registerSession">,
+          closedAt: 900,
+          countedCash: 100,
+          status: "closed",
+          variance: 0,
+        }),
+      ],
+    });
+
+    const result = await getTerminalSyncEvidence(ctx as never, {
+      storeId: "store-1" as Id<"store">,
+      terminalId: "terminal-1" as Id<"posTerminal">,
+    });
+
+    expect(result.unresolvedConflicts).toEqual([
+      expect.objectContaining({
+        _id: "conflict-inventory",
+        conflictType: "inventory",
+        localEventId: "event-inventory",
+      }),
+    ]);
+    expect(result.reviewSummary?.meta).toMatchObject({
+      hasMore: true,
+      sampledCount: 1,
+      targetResolutionIncomplete: true,
+    });
+    expect(result.reviewSummary?.groups).toEqual([
+      expect.objectContaining({
+        actionability: "manual_review",
+        conflictType: "inventory",
+        count: 1,
+        owner: "manual_review",
+      }),
+    ]);
+  });
+
   it("caps review summary samples and reports when more conflicts exist", async () => {
     const conflicts = Array.from(
       { length: TERMINAL_SYNC_REVIEW_SUMMARY_CAP + 1 },

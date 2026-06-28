@@ -946,17 +946,26 @@ async function resolveAttentionReasonActionTargets(
   },
 ): Promise<TerminalHealthAttentionReason[]> {
   const registerSessionIdByReasonType =
+    !args.syncEvidence.reviewSummary &&
     args.attentionReasons.some(isRegisterSessionReviewReason)
       ? await resolveRegisterSessionTargets(ctx, args)
       : new Map<TerminalHealthAttentionReason["type"], Id<"registerSession"> | null>();
 
-  return args.attentionReasons.map((reason) => ({
-    ...reason,
-    actionTarget: getAttentionReasonActionTarget(reason, {
+  return args.attentionReasons.map((reason) => {
+    const actionTarget = getAttentionReasonActionTarget(reason, {
       registerSessionId:
         registerSessionIdByReasonType.get(reason.type) ?? null,
-    }),
-  }));
+    });
+    if (actionTarget) {
+      return {
+        ...reason,
+        actionTarget,
+      };
+    }
+
+    const { actionTarget: _actionTarget, ...reasonWithoutActionTarget } = reason;
+    return reasonWithoutActionTarget;
+  });
 }
 
 async function resolveRegisterSessionTargets(
@@ -1041,10 +1050,14 @@ function getAttentionReasonActionTarget(
   context: {
     registerSessionId: Id<"registerSession"> | null;
   },
-): TerminalHealthAttentionActionTarget {
+): TerminalHealthAttentionActionTarget | undefined {
+  if (reason.actionTarget) {
+    return reason.actionTarget;
+  }
+
   switch (reason.type) {
     case "synced_sale_inventory_review":
-      return { label: "Review inventory work", type: "open_work" };
+      return undefined;
     case "cloud_conflict":
     case "cloud_held":
     case "cloud_rejected":
@@ -1053,7 +1066,7 @@ function getAttentionReasonActionTarget(
             registerSessionId: context.registerSessionId,
             type: "cash_control_register_session",
           }
-        : { type: "open_work" };
+        : undefined;
     case "terminal_seed_missing":
     case "terminal_authorization_failed":
       return { type: "pos_settings" };

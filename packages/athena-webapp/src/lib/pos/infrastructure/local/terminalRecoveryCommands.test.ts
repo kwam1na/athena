@@ -933,6 +933,60 @@ describe("terminalRecoveryCommands", () => {
     expect(JSON.stringify(result)).not.toContain("customer");
   });
 
+  it("collects non-uploaded local review items so recovery can retry sync", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+      createLocalId: () => "event-review-1",
+    });
+    await store.appendEvent({
+      initialSyncStatus: "needs_review",
+      localRegisterSessionId: "register-local-1",
+      payload: { payments: [{ amount: 1000 }], customer: "redacted" },
+      staffProfileId: "staff-1",
+      staffProofToken: "proof-token-1",
+      storeId: "store-1",
+      terminalId: "local-terminal-1",
+      type: "register.closeout_started",
+    });
+
+    const onRetrySync = vi.fn();
+    const result = await executeTerminalRecoveryCommand({
+      command: buildCommand({ type: "collect_local_review" }),
+      onRetrySync,
+      store,
+      storeId: "store-1",
+      terminalId: "terminal-cloud-1",
+      terminalSeed: seed,
+    });
+
+    expect(result).toEqual({
+      commandId: "command-1",
+      diagnostics: {
+        reviewEventCount: 1,
+        terminalId: "terminal-cloud-1",
+        uploadedReviewEventCount: 0,
+      },
+      message: "1 local review item was collected and queued for sync retry.",
+      localReviewEvents: [
+        {
+          createdAt: expect.any(Number),
+          localEventId: "event-review-1",
+          localRegisterSessionId: "register-local-1",
+          sequence: 1,
+          status: "needs_review",
+          type: "register.closeout_started",
+          uploadSequence: 1,
+        },
+      ],
+      status: "completed",
+      type: "collect_local_review",
+    });
+    expect(onRetrySync).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(result)).not.toMatch(
+      /staff-1|payments|customer|proof-token/i,
+    );
+  });
+
   it("clears requested terminal-local review items and reports remaining review count", async () => {
     let nextLocalId = 1;
     const store = createPosLocalStore({

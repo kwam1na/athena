@@ -381,7 +381,7 @@ async function executeClearLocalReviewItems(
     });
   }
 
-  const reviewEvents = getScopedLocalReviewEvents(events.value, context);
+  const reviewEvents = getScopedUploadedLocalReviewEvents(events.value, context);
   const previouslyClearedEvents = getScopedTerminalRecoveryClearedReviewEvents(
     events.value,
     context,
@@ -410,7 +410,7 @@ async function executeClearLocalReviewItems(
   }
 
   const clearedReviewEventCount = clear.value.length;
-  const remainingReviewEventCount = getScopedLocalReviewEvents(
+  const remainingReviewEventCount = getScopedUploadedLocalReviewEvents(
     remainingEvents.value,
     context,
   ).length;
@@ -681,10 +681,18 @@ function getScopedLocalReviewEvents(
       (event) =>
         event.storeId === context.storeId &&
         scopeIds.has(event.terminalId) &&
-        event.sync.status === "needs_review" &&
-        event.sync.uploaded === true,
+        event.sync.status === "needs_review",
     )
     .sort(compareLocalReviewEventOrder);
+}
+
+function getScopedUploadedLocalReviewEvents(
+  events: PosLocalEventRecord[],
+  context: PosTerminalRecoveryCommandContext,
+) {
+  return getScopedLocalReviewEvents(events, context).filter(
+    (event) => event.sync.uploaded === true,
+  );
 }
 
 function getScopedTerminalRecoveryClearedReviewEvents(

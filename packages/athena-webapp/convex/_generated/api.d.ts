@@ -236,6 +236,7 @@ import type * as pos_infrastructure_repositories_registerSessionRepository from 
 import type * as pos_infrastructure_repositories_sessionCommandRepository from "../pos/infrastructure/repositories/sessionCommandRepository.js";
 import type * as pos_infrastructure_repositories_sessionRepository from "../pos/infrastructure/repositories/sessionRepository.js";
 import type * as pos_infrastructure_repositories_terminalRecoveryRepository from "../pos/infrastructure/repositories/terminalRecoveryRepository.js";
+import type * as pos_infrastructure_repositories_terminalRegisterConflictResolution from "../pos/infrastructure/repositories/terminalRegisterConflictResolution.js";
 import type * as pos_infrastructure_repositories_terminalRepository from "../pos/infrastructure/repositories/terminalRepository.js";
 import type * as pos_infrastructure_repositories_transactionRepository from "../pos/infrastructure/repositories/transactionRepository.js";
 import type * as pos_public_catalog from "../pos/public/catalog.js";
@@ -659,6 +660,7 @@ declare const fullApi: ApiFromModules<{
   "pos/infrastructure/repositories/sessionCommandRepository": typeof pos_infrastructure_repositories_sessionCommandRepository;
   "pos/infrastructure/repositories/sessionRepository": typeof pos_infrastructure_repositories_sessionRepository;
   "pos/infrastructure/repositories/terminalRecoveryRepository": typeof pos_infrastructure_repositories_terminalRecoveryRepository;
+  "pos/infrastructure/repositories/terminalRegisterConflictResolution": typeof pos_infrastructure_repositories_terminalRegisterConflictResolution;
   "pos/infrastructure/repositories/terminalRepository": typeof pos_infrastructure_repositories_terminalRepository;
   "pos/infrastructure/repositories/transactionRepository": typeof pos_infrastructure_repositories_transactionRepository;
   "pos/public/catalog": typeof pos_public_catalog;

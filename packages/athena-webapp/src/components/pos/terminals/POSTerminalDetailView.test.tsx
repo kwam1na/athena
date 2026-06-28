@@ -367,9 +367,9 @@ describe("POSTerminalDetailViewContent", () => {
     expect(
       screen.getByText("Local runtime review / next upload #14"),
     ).toBeInTheDocument();
-    expect(screen.getAllByText("Cloud sync evidence").length).toBeGreaterThan(
-      0,
-    );
+    expect(
+      screen.getAllByText("Cloud sync evidence").length,
+    ).toBeGreaterThan(0);
     expect(
       screen.getByText("Staff authority changed before sync."),
     ).toBeInTheDocument();
@@ -1774,6 +1774,39 @@ describe("POSTerminalDetailViewContent", () => {
     ).toHaveAttribute("href", "/wigclub/store/osu/operations/open-work");
     expect(
       screen.queryByRole("link", { name: /review register session/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("renders unresolved inventory review reasons without fabricating a CTA", () => {
+    render(
+      <POSTerminalDetailViewContent
+        detail={{
+          ...detail,
+          attentionReasons: [
+            {
+              count: 2,
+              latestEventSequence: 26,
+              latestEventStatus: "conflicted",
+              source: "cloud_sync",
+              summary: "2 inventory review items need attention.",
+              type: "synced_sale_inventory_review",
+            },
+          ],
+        }}
+        isLoading={false}
+        orgUrlSlug="wigclub"
+        storeUrlSlug="osu"
+      />,
+    );
+
+    expect(
+      screen.getByText("2 inventory review items need attention."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Inventory review required before support repair"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: /review inventory work/i }),
     ).not.toBeInTheDocument();
   });
 
