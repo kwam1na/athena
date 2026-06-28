@@ -17,6 +17,7 @@ export type PosReconciliationItem = {
   notes?: string | null;
   reviewKind?:
     | "duplicate_register_closeout"
+    | "duplicate_register_open"
     | "register_closeout_variance"
     | "register_not_open_sale"
     | "missing_register_session_mapping"
@@ -164,6 +165,19 @@ export function isRegisterCloseoutReviewItem(item: PosReconciliationItem) {
   );
 }
 
+export function isDuplicateLocalIdReviewItem(item: PosReconciliationItem) {
+  const summary = item.summary?.trim().toLowerCase() ?? "";
+
+  return (
+    item.reviewKind === "duplicate_register_open" ||
+    item.type === "duplicate_local_id" ||
+    summary.includes("already open for this terminal") ||
+    summary.includes("already open for this register number") ||
+    summary.includes("session id was reused") ||
+    summary.includes("duplicate")
+  );
+}
+
 export function buildPosSyncStatusPresentation(
   source?: SyncStatusSource | null,
 ): PosSyncStatusPresentation {
@@ -201,6 +215,10 @@ export function formatPosReconciliationType(
 ): string {
   if (item && isRegisterCloseoutReviewItem(item)) {
     return "Closeout variance review";
+  }
+
+  if (item && isDuplicateLocalIdReviewItem(item)) {
+    return "Duplicate register opening";
   }
 
   switch (type) {

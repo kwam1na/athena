@@ -601,6 +601,22 @@ describe("cash control deposits", () => {
       conflictType: "permission",
       reviewKind: "missing_register_session_mapping",
     });
+    expect(
+      classifyRegisterSessionSyncReview({
+        conflictType: "permission",
+        details: {
+          blockingRegisterSessionId: "session_open",
+          localRegisterSessionId: "local-register-2",
+        },
+        localEventId: "event-register-opened-2",
+        status: "needs_review",
+        summary: "A register session is already open for this terminal.",
+      }),
+    ).toEqual({
+      actionPolicy: "reject_only",
+      conflictType: "permission",
+      reviewKind: "duplicate_register_open",
+    });
   });
 
   it("projects sync review classification into register-session local sync status", () => {
@@ -657,6 +673,20 @@ describe("cash control deposits", () => {
             status: "needs_review",
             summary: "Inventory needs manager review for a synced offline sale.",
           },
+          {
+            _id: "sync_conflict_duplicate_open",
+            conflictType: "permission",
+            createdAt: 3,
+            details: {
+              blockingRegisterSessionId: "session_open",
+              localRegisterSessionId: "local-register-2",
+            },
+            localEventId: "event-register-opened-2",
+            localRegisterSessionId: "local-register-2",
+            sequence: 13,
+            status: "needs_review",
+            summary: "A register session is already open for this terminal.",
+          },
         ],
         {
           staffNamesById: new Map([
@@ -683,6 +713,12 @@ describe("cash control deposits", () => {
             staffName: "Skank H.",
             total: 2200000,
           }),
+        }),
+        expect.objectContaining({
+          actionPolicy: "reject_only",
+          id: "sync_conflict_duplicate_open",
+          reviewKind: "duplicate_register_open",
+          type: "permission",
         }),
       ],
     });
@@ -2714,6 +2750,135 @@ describe("cash control deposits", () => {
         type: "synced_sale_inventory_review",
       }),
     ]);
+  });
+
+  it("rejects large duplicate register-open review batches without rereading matching conflicts", async () => {
+    const duplicateConflicts = Array.from({ length: 150 }, (_, index) => ({
+      _id: `sync_conflict_duplicate_open_${index}`,
+      storeId: "store_1",
+      terminalId: "terminal_1",
+      localRegisterSessionId: "local-register-1",
+      localEventId: "event_duplicate_open",
+      sequence: index + 1,
+      conflictType: "permission",
+      status: "needs_review",
+      summary: "A register session is already open for this terminal.",
+      details: {
+        blockingRegisterSessionId: "session_open",
+        localRegisterSessionId: "local-register-1",
+      },
+      createdAt: index + 1,
+    }));
+    const ctx = createAuthorizedRegisterDepositCtx({
+      operationalEvent: [],
+      organizationMember: [
+        {
+          _id: "member_1",
+          organizationId: "org_1",
+          role: "full_admin",
+          userId: "athena_user_1",
+        },
+      ],
+      posLocalSyncConflict: duplicateConflicts,
+      posLocalSyncEvent: [
+        {
+          _id: "sync_event_duplicate_open",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-1",
+          localEventId: "event_duplicate_open",
+          sequence: 1,
+          eventType: "register_opened",
+          occurredAt: 2,
+          staffProfileId: "staff_1",
+          payload: {
+            openingFloat: 50000,
+            registerNumber: "1",
+          },
+          status: "conflicted",
+          submittedAt: 3,
+        },
+      ],
+      posLocalSyncMapping: [
+        {
+          _id: "sync_mapping_1",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-1",
+          localIdKind: "registerSession",
+          localId: "local-register-1",
+          cloudTable: "registerSession",
+          cloudId: "session_open",
+        },
+      ],
+      registerSession: [
+        {
+          _id: "session_open",
+          expectedCash: 50000,
+          openedAt: 1,
+          openingFloat: 50000,
+          organizationId: "org_1",
+          registerNumber: "1",
+          status: "active",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+        },
+      ],
+      staffProfile: [
+        {
+          _id: "manager_1",
+          linkedUserId: "athena_user_1",
+          organizationId: "org_1",
+          status: "active",
+          storeId: "store_1",
+        },
+        {
+          _id: "staff_1",
+          organizationId: "org_1",
+          status: "active",
+          storeId: "store_1",
+        },
+      ],
+      staffRoleAssignment: [
+        {
+          _id: "role_1",
+          organizationId: "org_1",
+          role: "manager",
+          staffProfileId: "manager_1",
+          status: "active",
+          storeId: "store_1",
+        },
+      ],
+    });
+
+    const result = await getHandler(resolveRegisterSessionSyncReview)(
+      ctx as never,
+      {
+        actorStaffProfileId: "manager_1" as Id<"staffProfile">,
+        decision: "rejected",
+        registerSessionId: "session_open" as Id<"registerSession">,
+        reviewConflictIds: duplicateConflicts.map((conflict) => conflict._id),
+        storeId: "store_1" as Id<"store">,
+      },
+    );
+
+    expect(result).toEqual(
+      ok({
+        action: "rejected",
+        projectedCount: 0,
+        registerSession: expect.objectContaining({ _id: "session_open" }),
+        resolvedCount: duplicateConflicts.length,
+      }),
+    );
+    expect(ctx.tables.get("posLocalSyncConflict")).toEqual(
+      duplicateConflicts.map((conflict) =>
+        expect.objectContaining({
+          _id: conflict._id,
+          resolvedByStaffProfileId: "manager_1",
+          status: "resolved",
+        }),
+      ),
+    );
   });
 
   it("does not keep projected inventory handoff sales in cash-controls review", async () => {

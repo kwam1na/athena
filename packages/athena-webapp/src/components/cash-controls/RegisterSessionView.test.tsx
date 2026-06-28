@@ -1619,15 +1619,25 @@ describe("RegisterSessionViewContent", () => {
       screen.queryByRole("button", { name: "Reject inventory review item" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Apply duplicate review item" }),
+      screen.queryByRole("button", {
+        name: "Apply duplicate register opening",
+      }),
     ).not.toBeInTheDocument();
+    expect(
+      screen.getByText("Inventory review and Duplicate register opening."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Duplicate register opening"),
+    ).toBeInTheDocument();
 
     await user.click(
-      screen.getByRole("button", { name: "Reject duplicate review item" }),
+      screen.getByRole("button", {
+        name: "Reject duplicate register opening",
+      }),
     );
     await user.click(
       screen.getByRole("button", {
-        name: "Confirm staff for Reject duplicate review item",
+        name: "Confirm staff for Reject duplicate register opening",
       }),
     );
 
@@ -1639,6 +1649,70 @@ describe("RegisterSessionViewContent", () => {
         reviewConflictIds: ["sync_conflict_duplicate"],
       }),
     );
+  });
+
+  it("offers a batch reject action for duplicate synced register openings", () => {
+    render(
+      <RegisterSessionViewContent
+        currency="GHS"
+        isLoading={false}
+        onRecordDeposit={vi.fn()}
+        {...closeoutHandlers}
+        onResolveSyncReview={vi.fn()}
+        registerSessionSnapshot={{
+          ...baseSnapshot,
+          registerSession: {
+            ...baseSnapshot.registerSession,
+            localSyncStatus: {
+              status: "needs_review",
+              reconciliationItems: [
+                {
+                  actionPolicy: "reject_only",
+                  id: "sync_conflict_duplicate_open",
+                  localEventId: "event-register-opened-2",
+                  reviewKind: "duplicate_register_open",
+                  sequence: 2,
+                  status: "needs_review",
+                  summary:
+                    "A register session is already open for this terminal.",
+                  type: "permission",
+                },
+                {
+                  actionPolicy: "reject_only",
+                  id: "sync_conflict_reused_open",
+                  localEventId: "event-register-opened-3",
+                  reviewKind: "duplicate_register_open",
+                  sequence: 3,
+                  status: "needs_review",
+                  summary:
+                    "Local register session id was reused by a different synced register open.",
+                  type: "duplicate_local_id",
+                },
+              ],
+            },
+          },
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByText(
+        "Reject these duplicate synced register openings to keep the current register session and clear this review.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Duplicate register opening."),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", {
+        name: "Apply duplicate register openings",
+      }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: "Reject duplicate register openings",
+      }),
+    ).toBeInTheDocument();
   });
 
   it("approves synced register review items after manager sign-in", async () => {
