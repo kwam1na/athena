@@ -78,6 +78,7 @@ import { Accordion, AccordionContent, AccordionItem } from "../ui/accordion";
 import {
   buildPosSyncStatusPresentation,
   formatPosReconciliationType,
+  isDuplicateLocalIdReviewItem,
   isRegisterCloseoutReviewItem,
   type PosReconciliationItem,
   type PosSyncStatusPresentation,
@@ -543,10 +544,12 @@ function getPaymentMethodIcon({
 
 function getSyncReviewActionCopy({
   hasCloseoutReview,
+  hasDuplicateRegisterOpenReview,
   hasOnlyRejectedReviewItems,
   hasSaleReview,
 }: {
   hasCloseoutReview: boolean;
+  hasDuplicateRegisterOpenReview: boolean;
   hasOnlyRejectedReviewItems: boolean;
   hasSaleReview: boolean;
 }) {
@@ -566,6 +569,17 @@ function getSyncReviewActionCopy({
       approveLabel: "Apply synced closeout",
       rejectAuthDescription: "Authenticate to reject the synced closeout",
       rejectLabel: "Reject synced closeout",
+    };
+  }
+
+  if (hasDuplicateRegisterOpenReview) {
+    return {
+      approveAuthDescription:
+        "Authenticate to apply duplicate synced register openings",
+      approveLabel: "Apply duplicate register openings",
+      rejectAuthDescription:
+        "Authenticate to reject duplicate synced register openings",
+      rejectLabel: "Reject duplicate register openings",
     };
   }
 
@@ -1572,6 +1586,10 @@ function getCombinedReviewNextStep(items: PosReconciliationItem[]) {
     return "This synced activity cannot be applied because a service line is missing customer attribution. Reject it to clear this review, then recreate the service work with a customer if needed.";
   }
 
+  if (items.every(isDuplicateLocalIdRegisterSyncReviewItem)) {
+    return "Reject these duplicate synced register openings to keep the current register session and clear this review.";
+  }
+
   if (items.some((item) => !isApprovableRegisterSyncReviewItem(item))) {
     return "This synced activity needs correction before it can be applied. Reject it to clear this review, then correct the sale from the appropriate workflow if needed.";
   }
@@ -1612,13 +1630,7 @@ function isMissingRegisterSessionMappingReviewItem(
 }
 
 function isDuplicateLocalIdRegisterSyncReviewItem(item: PosReconciliationItem) {
-  const summary = item.summary?.trim().toLowerCase() ?? "";
-
-  return (
-    item.type === "duplicate_local_id" ||
-    summary.includes("session id was reused") ||
-    summary.includes("duplicate")
-  );
+  return isDuplicateLocalIdReviewItem(item);
 }
 
 function getRegisterSyncReviewItemActionLabels(item: PosReconciliationItem) {
@@ -1635,8 +1647,8 @@ function getRegisterSyncReviewItemActionLabels(item: PosReconciliationItem) {
 
   if (isDuplicateLocalIdRegisterSyncReviewItem(item)) {
     return {
-      approveLabel: "Apply duplicate review item",
-      rejectLabel: "Reject duplicate review item",
+      approveLabel: "Apply duplicate register opening",
+      rejectLabel: "Reject duplicate register opening",
     };
   }
 
@@ -1662,7 +1674,7 @@ function getRegisterSyncReviewItemActionLabels(item: PosReconciliationItem) {
 
 function getRegisterSyncReviewItemSummary(item: PosReconciliationItem) {
   if (isDuplicateLocalIdRegisterSyncReviewItem(item)) {
-    return "Local register activity already synced from another sale. Reject this item unless the sale needs to be reviewed again.";
+    return "Duplicate synced register opening. Reject this item to keep the current register session and clear the review.";
   }
 
   if (isInventoryRegisterSyncReviewItem(item)) {
@@ -1707,7 +1719,7 @@ function getRegisterSyncReviewItemSummary(item: PosReconciliationItem) {
 
 function getRegisterSyncReviewDecisionScope(item: PosReconciliationItem) {
   if (isDuplicateLocalIdRegisterSyncReviewItem(item)) {
-    return "duplicate_local_id";
+    return "duplicate_register_open";
   }
 
   if (isInventoryRegisterSyncReviewItem(item)) {
@@ -1780,6 +1792,9 @@ function RegisterSessionSyncNotice({
   );
   const hasCloseoutReview = reconciliationItems.some(
     isRegisterCloseoutReviewItem,
+  );
+  const hasDuplicateRegisterOpenReview = reconciliationItems.some(
+    isDuplicateLocalIdRegisterSyncReviewItem,
   );
   const closeoutReviewCount = reconciliationItems.filter(
     isRegisterCloseoutReviewItem,
@@ -1875,6 +1890,7 @@ function RegisterSessionSyncNotice({
     : [];
   const actionCopy = getSyncReviewActionCopy({
     hasCloseoutReview,
+    hasDuplicateRegisterOpenReview,
     hasOnlyRejectedReviewItems,
     hasSaleReview:
       syncReviewSaleSummaries.length > 0 ||
@@ -3241,6 +3257,9 @@ export function RegisterSessionViewContent({
       : registerSession?.variance;
   const syncReviewActionCopy = getSyncReviewActionCopy({
     hasCloseoutReview: isRegisterCloseoutSyncReview,
+    hasDuplicateRegisterOpenReview: visibleSyncReviewItems.some(
+      isDuplicateLocalIdRegisterSyncReviewItem,
+    ),
     hasOnlyRejectedReviewItems: hasOnlyRejectedSyncReviewItems(syncStatus),
     hasSaleReview:
       getSyncReviewSaleSummaries(visibleSyncReviewItems).length > 0,
@@ -3295,6 +3314,9 @@ export function RegisterSessionViewContent({
 
     const actionCopy = getSyncReviewActionCopy({
       hasCloseoutReview: isRegisterCloseoutSyncReview,
+      hasDuplicateRegisterOpenReview: visibleSyncReviewItems.some(
+        isDuplicateLocalIdRegisterSyncReviewItem,
+      ),
       hasOnlyRejectedReviewItems: hasOnlyRejectedSyncReviewItems(syncStatus),
       hasSaleReview:
         getSyncReviewSaleSummaries(visibleSyncReviewItems).length > 0,

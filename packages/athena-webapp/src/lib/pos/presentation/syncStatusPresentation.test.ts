@@ -93,6 +93,36 @@ describe("formatPosReconciliationType", () => {
     expect(formatPosReconciliationType(type)).toBe(expected);
   });
 
+  it.each(
+    [
+    {
+      summary:
+        "Local register session id was reused by a different synced register open.",
+      type: "permission",
+    },
+    {
+      summary: "Local POS session id was reused by a different synced sale.",
+      type: "duplicate_local_id",
+    },
+    {
+      summary: "A register session is already open for this terminal.",
+      type: "permission",
+    },
+    {
+      reviewKind: "duplicate_register_open",
+      summary: "Backend copy can change.",
+      type: "permission",
+    },
+    ] as const,
+  )(
+    "classifies duplicate local/session id conflicts as duplicate register opening",
+    (item) => {
+      expect(formatPosReconciliationType(item.type, item)).toBe(
+        "Duplicate register opening",
+      );
+    },
+  );
+
   it("detects legacy closeout review items from local event evidence", () => {
     expect(
       isRegisterCloseoutReviewItem({

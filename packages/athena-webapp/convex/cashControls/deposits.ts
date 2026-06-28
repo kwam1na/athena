@@ -1634,17 +1634,28 @@ export const resolveRegisterSessionSyncReview = mutation({
     const localSyncRepository = createConvexLocalSyncRepository(ctx);
     const projectedTransactionIds: string[] = [];
     const resolvedConflictIds = new Set<Id<"posLocalSyncConflict">>();
-    const conflictResolutionKeys: Array<{
-      localEventId: string;
-      storeId: Id<"store">;
-      terminalId: Id<"posTerminal">;
-    }> = [];
     const localEventIds: string[] = [];
     const originalStatuses: string[] = [];
     const rejectedCloseoutLocalEventIds = new Set<string>();
     const sequences: number[] = [];
     let managerOverrideCount = 0;
     let projectedCloseoutCount = 0;
+
+    function addResolvedMatchingLoadedConflicts(
+      selectedConflict: (typeof conflicts)[number],
+      terminalId: Id<"posTerminal">,
+    ) {
+      for (const candidate of allConflicts) {
+        if (
+          candidate.status === "needs_review" &&
+          candidate.localEventId === selectedConflict.localEventId &&
+          candidate.terminalId === terminalId &&
+          candidate.conflictType === selectedConflict.conflictType
+        ) {
+          resolvedConflictIds.add(candidate._id as Id<"posLocalSyncConflict">);
+        }
+      }
+    }
 
     for (const conflict of conflicts) {
       const terminalId = conflict.terminalId ?? registerSession.terminalId;
@@ -1669,11 +1680,6 @@ export const resolveRegisterSessionSyncReview = mutation({
       }
       const hasConflictRecord =
         !(conflict.status === "rejected" && conflict._id === syncEvent._id);
-      conflictResolutionKeys.push({
-        localEventId: syncEvent.localEventId,
-        storeId: args.storeId,
-        terminalId,
-      });
       localEventIds.push(syncEvent.localEventId);
       originalStatuses.push(syncEvent.status);
       sequences.push(syncEvent.sequence);
@@ -1736,6 +1742,7 @@ export const resolveRegisterSessionSyncReview = mutation({
         }
         if (hasConflictRecord) {
           resolvedConflictIds.add(conflict._id as Id<"posLocalSyncConflict">);
+          addResolvedMatchingLoadedConflicts(conflict, terminalId);
         }
         if (
           syncEvent.eventType === "register_closed" &&
@@ -2049,6 +2056,7 @@ export const resolveRegisterSessionSyncReview = mutation({
       });
       if (hasConflictRecord) {
         resolvedConflictIds.add(conflict._id as Id<"posLocalSyncConflict">);
+        addResolvedMatchingLoadedConflicts(conflict, terminalId);
       }
       if (shouldApplyReviewedCloseout) {
         projectedCloseoutCount += 1;
@@ -2063,38 +2071,6 @@ export const resolveRegisterSessionSyncReview = mutation({
           .map((mapping) => mapping.cloudId),
       );
     }
-
-    await Promise.all(
-      conflictResolutionKeys.map(async (key) => {
-        const matchingConflicts = await ctx.db
-          .query("posLocalSyncConflict")
-          .withIndex("by_store_terminal_localEvent", (q) =>
-            q
-              .eq("storeId", key.storeId)
-              .eq("terminalId", key.terminalId)
-              .eq("localEventId", key.localEventId),
-          )
-          .take(100);
-
-        for (const conflict of matchingConflicts) {
-          const matchesSelectedConflictType = conflicts.some(
-            (selectedConflict) =>
-              selectedConflict.localEventId === conflict.localEventId &&
-              selectedConflict.terminalId === conflict.terminalId &&
-              selectedConflict.conflictType === conflict.conflictType,
-          );
-          if (
-            conflict.status === "needs_review" &&
-            (requestedConflictIds.size === 0 ||
-              requestedConflictIds.has(conflict._id) ||
-              requestedConflictIds.has(conflict.localEventId) ||
-              matchesSelectedConflictType)
-          ) {
-            resolvedConflictIds.add(conflict._id);
-          }
-        }
-      }),
-    );
 
     await Promise.all(
       Array.from(resolvedConflictIds).map((conflictId) =>
