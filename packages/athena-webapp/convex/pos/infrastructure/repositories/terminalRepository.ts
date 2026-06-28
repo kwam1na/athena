@@ -2,37 +2,41 @@ import type { Doc, Id } from "../../../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../../../_generated/server";
 
 import type { PosLocalSyncEventStatus } from "../../../../shared/posLocalSyncContract";
-import {
-  isPosUsableRegisterSessionStatus,
-  isRegisterSessionConflictBlockingStatus,
-} from "../../../../shared/registerSessionStatus";
+import { isPosUsableRegisterSessionStatus } from "../../../../shared/registerSessionStatus";
 import type {
   TerminalSyncEvidence,
-  TerminalSyncReviewActionTarget,
   TerminalSyncReviewEvent,
   TerminalSyncReviewSummary,
   TerminalSyncReviewSummaryGroup,
   TerminalSyncReviewTarget,
 } from "../../domain/terminalSyncEvidence";
 import type { PosTerminalSummary } from "../../domain/types";
+import {
+  resolveTerminalRegisterConflict,
+  resolveTerminalRegisterSessionConflict,
+} from "./terminalRegisterConflictResolution";
 
 const MANAGER_REJECTED_SYNC_REVIEW_CODE = "manager_rejected";
 export const TERMINAL_SYNC_REVIEW_SUMMARY_CAP = 50;
+const TERMINAL_SYNC_REVIEW_SOURCE_LOOKUP_CAP =
+  TERMINAL_SYNC_REVIEW_SUMMARY_CAP;
 export const TERMINAL_SYNC_REVIEW_TARGET_LOOKUP_CAP = 200;
 const TERMINAL_SYNC_UNRESOLVED_CONFLICT_EXAMPLE_CAP = 20;
+const TERMINAL_SYNC_REVIEW_CONFLICT_TYPES = [
+  "duplicate_local_id",
+  "inventory",
+  "payment",
+  "permission",
+] as const;
 
 type PosTerminalReadCtx = QueryCtx | MutationCtx;
 type TerminalSyncConflictWithReviewTarget = Doc<"posLocalSyncConflict"> & {
   reviewTarget?: TerminalSyncReviewTarget;
 };
-type RegisterSessionReviewTargetResolution =
-  | {
-      actionTarget: TerminalSyncReviewActionTarget;
-      status: "actionable";
-    }
-  | {
-      status: "not_register_conflict" | "settled" | "unresolved";
-    };
+type CurrentTerminalSyncReviewConflict = {
+  conflict: TerminalSyncConflictWithReviewTarget;
+  groupInput: TerminalSyncReviewSummaryGroup;
+};
 
 export function mapTerminalRecord(
   terminal: Doc<"posTerminal">,
@@ -200,30 +204,18 @@ export async function getTerminalSyncEvidence(
     .order("desc")
     .take(100);
 
-  const [cursors, conflicts] = await Promise.all([
+  const [cursors, conflictSources] = await Promise.all([
     ctx.db
       .query("posLocalSyncCursor")
       .withIndex("by_store_terminal", (q) =>
         q.eq("storeId", args.storeId).eq("terminalId", args.terminalId),
       )
       .take(50),
-    ctx.db
-      .query("posLocalSyncConflict")
-      .withIndex("by_store_terminal_status", (q) =>
-        q
-          .eq("storeId", args.storeId)
-          .eq("terminalId", args.terminalId)
-          .eq("status", "needs_review"),
-      )
-      .order("desc")
-      .take(TERMINAL_SYNC_REVIEW_SUMMARY_CAP + 1),
+    listTerminalSyncReviewSourceConflicts(ctx, args),
   ]);
-  const conflictSample = conflicts
-    .slice(0, TERMINAL_SYNC_REVIEW_SUMMARY_CAP)
-    .sort((left, right) => right.sequence - left.sequence);
   const conflictSummary = await buildTerminalSyncReviewSummary(ctx, {
-    conflicts: conflictSample,
-    hasMore: conflicts.length > TERMINAL_SYNC_REVIEW_SUMMARY_CAP,
+    conflicts: conflictSources.conflicts,
+    hasMore: conflictSources.hasMore,
     storeId: args.storeId,
     terminalId: args.terminalId,
   });
@@ -297,6 +289,57 @@ export async function getTerminalSyncEvidence(
   };
 }
 
+async function listTerminalSyncReviewSourceConflicts(
+  ctx: QueryCtx | MutationCtx,
+  args: {
+    storeId: Id<"store">;
+    terminalId: Id<"posTerminal">;
+  },
+): Promise<{
+  conflicts: Array<Doc<"posLocalSyncConflict">>;
+  hasMore: boolean;
+}> {
+  const conflictsByType = await Promise.all(
+    TERMINAL_SYNC_REVIEW_CONFLICT_TYPES.map((conflictType) =>
+      ctx.db
+        .query("posLocalSyncConflict")
+        .withIndex("by_store_terminal_status_type", (q) =>
+          q
+            .eq("storeId", args.storeId)
+            .eq("terminalId", args.terminalId)
+            .eq("status", "needs_review")
+            .eq("conflictType", conflictType),
+        )
+        .order("desc")
+        .take(TERMINAL_SYNC_REVIEW_SOURCE_LOOKUP_CAP + 1),
+    ),
+  );
+
+  return {
+    conflicts: dedupeConflictsById(
+      conflictsByType.flatMap((conflicts) =>
+        conflicts.slice(0, TERMINAL_SYNC_REVIEW_SOURCE_LOOKUP_CAP),
+      ),
+    ).sort((left, right) => right.sequence - left.sequence),
+    hasMore: conflictsByType.some(
+      (conflicts) => conflicts.length > TERMINAL_SYNC_REVIEW_SOURCE_LOOKUP_CAP,
+    ),
+  };
+}
+
+function dedupeConflictsById<T extends Pick<Doc<"posLocalSyncConflict">, "_id">>(
+  conflicts: T[],
+) {
+  const seenConflictIds = new Set<Id<"posLocalSyncConflict">>();
+  return conflicts.filter((conflict) => {
+    if (seenConflictIds.has(conflict._id)) {
+      return false;
+    }
+    seenConflictIds.add(conflict._id);
+    return true;
+  });
+}
+
 function emptyTerminalSyncReviewSummary(): TerminalSyncReviewSummary {
   return {
     groups: [],
@@ -347,8 +390,8 @@ async function buildTerminalSyncReviewSummary(
         : undefined;
     return reviewTarget ? { ...conflict, reviewTarget } : conflict;
   });
-  const groupByKey = new Map<string, TerminalSyncReviewSummaryGroup>();
-  const currentConflicts: TerminalSyncConflictWithReviewTarget[] = [];
+  const currentConflicts: CurrentTerminalSyncReviewConflict[] = [];
+  const seenCurrentConflictKeys = new Set<string>();
 
   for (const conflict of annotatedConflicts) {
     const groupInput = await classifyTerminalSyncReviewConflict(ctx, {
@@ -361,7 +404,21 @@ async function buildTerminalSyncReviewSummary(
     if (!groupInput) {
       continue;
     }
-    currentConflicts.push(conflict);
+    const currentConflictKey = getCurrentConflictKey(conflict, groupInput);
+    if (seenCurrentConflictKeys.has(currentConflictKey)) {
+      continue;
+    }
+    seenCurrentConflictKeys.add(currentConflictKey);
+    currentConflicts.push({ conflict, groupInput });
+  }
+  const hasMoreCurrentConflicts =
+    currentConflicts.length > TERMINAL_SYNC_REVIEW_SUMMARY_CAP;
+  const currentConflictSample = currentConflicts.slice(
+    0,
+    TERMINAL_SYNC_REVIEW_SUMMARY_CAP,
+  );
+  const sampledGroupByKey = new Map<string, TerminalSyncReviewSummaryGroup>();
+  for (const { groupInput } of currentConflictSample) {
     const key = [
       groupInput.owner,
       groupInput.actionability,
@@ -369,7 +426,7 @@ async function buildTerminalSyncReviewSummary(
       groupInput.reviewTarget?.workItemId ?? "",
       groupInput.actionTarget?.registerSessionId ?? "",
     ].join(":");
-    const existing = groupByKey.get(key);
+    const existing = sampledGroupByKey.get(key);
     if (existing) {
       existing.count += 1;
       if (groupInput.latestSequence > existing.latestSequence) {
@@ -378,24 +435,62 @@ async function buildTerminalSyncReviewSummary(
       }
       continue;
     }
-    groupByKey.set(key, groupInput);
+    sampledGroupByKey.set(key, groupInput);
   }
 
   return {
-    conflicts: currentConflicts,
+    conflicts: currentConflictSample.map(({ conflict }) => conflict),
     reviewSummary: {
-      groups: Array.from(groupByKey.values()).sort(
+      groups: Array.from(sampledGroupByKey.values()).sort(
         (left, right) => right.latestSequence - left.latestSequence,
       ),
       meta: {
-        sampledCount: currentConflicts.length,
+        sampledCount: currentConflictSample.length,
         cap: TERMINAL_SYNC_REVIEW_SUMMARY_CAP,
-        hasMore: args.hasMore,
+        hasMore: args.hasMore || hasMoreCurrentConflicts,
         targetResolutionIncomplete:
-          args.hasMore || openWorkTargets.targetResolutionIncomplete,
+          args.hasMore ||
+          hasMoreCurrentConflicts ||
+          openWorkTargets.targetResolutionIncomplete,
       },
     },
   };
+}
+
+function getCurrentConflictKey(
+  conflict: TerminalSyncConflictWithReviewTarget,
+  group: TerminalSyncReviewSummaryGroup,
+) {
+  return [
+    group.owner,
+    group.actionability,
+    group.conflictType,
+    group.reviewTarget?.workItemId ?? "",
+    group.actionTarget?.registerSessionId ?? "",
+    conflict.localEventId,
+    conflict.localRegisterSessionId,
+    getConflictBusinessKey(conflict),
+  ].join(":");
+}
+
+function getConflictBusinessKey(conflict: Doc<"posLocalSyncConflict">) {
+  const details =
+    conflict.details && typeof conflict.details === "object"
+      ? (conflict.details as Record<string, unknown>)
+      : {};
+  const productSkuId = details.productSkuId;
+  if (typeof productSkuId === "string" && productSkuId.length > 0) {
+    return `sku:${productSkuId}`;
+  }
+  const localTransactionId = details.localTransactionId;
+  if (
+    conflict.conflictType === "inventory" &&
+    typeof localTransactionId === "string" &&
+    localTransactionId.length > 0
+  ) {
+    return `transaction:${localTransactionId}`;
+  }
+  return "";
 }
 
 async function getOpenWorkTargetsByLocalEventId(
@@ -475,14 +570,20 @@ async function classifyTerminalSyncReviewConflict(
     };
   }
 
-  const registerSessionResolution =
-    await resolveRegisterSessionReviewTargetForConflict(ctx, args);
+  const registerSessionResolution = await resolveTerminalRegisterConflict(ctx, {
+    conflict: args.conflict,
+    storeId: args.storeId,
+    terminalId: args.terminalId,
+  });
   if (registerSessionResolution.status === "settled") {
     return null;
   }
-  if (registerSessionResolution.status === "actionable") {
+  if (registerSessionResolution.status === "current") {
     return {
-      actionTarget: registerSessionResolution.actionTarget,
+      actionTarget: {
+        registerSessionId: registerSessionResolution.registerSessionId,
+        type: "register_session",
+      },
       actionability: "cash_controls_review",
       conflictType: args.conflict.conflictType,
       count: 1,
@@ -511,28 +612,6 @@ async function classifyTerminalSyncReviewConflict(
     latestSequence: args.conflict.sequence,
     owner: "manual_review",
   };
-}
-
-async function resolveRegisterSessionReviewTargetForConflict(
-  ctx: QueryCtx | MutationCtx,
-  args: {
-    conflict: Doc<"posLocalSyncConflict">;
-    storeId: Id<"store">;
-    terminalId: Id<"posTerminal">;
-  },
-): Promise<RegisterSessionReviewTargetResolution> {
-  if (
-    args.conflict.conflictType !== "duplicate_local_id" &&
-    args.conflict.conflictType !== "permission"
-  ) {
-    return { status: "not_register_conflict" };
-  }
-
-  return resolveTerminalRegisterSessionReviewTarget(ctx, {
-    localRegisterSessionId: args.conflict.localRegisterSessionId,
-    storeId: args.storeId,
-    terminalId: args.terminalId,
-  });
 }
 
 function toTerminalSyncConflictExample(
@@ -805,96 +884,10 @@ export async function resolveTerminalRegisterSessionActionTarget(
   if (!args.localRegisterSessionId) {
     return null;
   }
-  const resolution = await resolveTerminalRegisterSessionReviewTarget(ctx, args);
-  return resolution.status === "actionable"
-    ? resolution.actionTarget.registerSessionId
+  const resolution = await resolveTerminalRegisterSessionConflict(ctx, args);
+  return resolution.status === "current"
+    ? resolution.registerSessionId
     : null;
-}
-
-async function resolveTerminalRegisterSessionReviewTarget(
-  ctx: QueryCtx | MutationCtx,
-  args: {
-    localRegisterSessionId?: string | null;
-    storeId: Id<"store">;
-    terminalId: Id<"posTerminal">;
-  },
-): Promise<RegisterSessionReviewTargetResolution> {
-  if (!args.localRegisterSessionId) {
-    return { status: "unresolved" };
-  }
-  const localRegisterSessionId = args.localRegisterSessionId;
-
-  const registerSessionMapping = await ctx.db
-    .query("posLocalSyncMapping")
-    .withIndex("by_store_terminal_local", (q) =>
-      q
-        .eq("storeId", args.storeId)
-        .eq("terminalId", args.terminalId)
-        .eq("localRegisterSessionId", localRegisterSessionId)
-        .eq("localIdKind", "registerSession")
-        .eq("localId", localRegisterSessionId),
-    )
-    .unique();
-  if (registerSessionMapping?.cloudTable === "registerSession") {
-    return resolveRegisterSessionReviewTarget(ctx, {
-      registerSessionId:
-        registerSessionMapping.cloudId as Id<"registerSession">,
-      storeId: args.storeId,
-      terminalId: args.terminalId,
-    });
-  }
-
-  const normalizeId = (
-    ctx.db as unknown as {
-      normalizeId?: (
-        tableName: string,
-        value: string,
-      ) => Id<"registerSession"> | null;
-    }
-  ).normalizeId;
-  const cloudRegisterSessionId =
-    normalizeId?.call(ctx.db, "registerSession", localRegisterSessionId) ??
-    null;
-  if (!cloudRegisterSessionId) {
-    return { status: "unresolved" };
-  }
-
-  return resolveRegisterSessionReviewTarget(ctx, {
-    registerSessionId: cloudRegisterSessionId,
-    storeId: args.storeId,
-    terminalId: args.terminalId,
-  });
-}
-
-async function resolveRegisterSessionReviewTarget(
-  ctx: QueryCtx | MutationCtx,
-  args: {
-    registerSessionId: Id<"registerSession">;
-    storeId: Id<"store">;
-    terminalId: Id<"posTerminal">;
-  },
-): Promise<RegisterSessionReviewTargetResolution> {
-  const registerSession = await ctx.db.get(
-    "registerSession",
-    args.registerSessionId,
-  );
-  if (
-    registerSession?.storeId === args.storeId &&
-    registerSession.terminalId === args.terminalId
-  ) {
-    if (!isRegisterSessionConflictBlockingStatus(registerSession.status)) {
-      return { status: "settled" };
-    }
-    return {
-      actionTarget: {
-        type: "register_session",
-        registerSessionId: args.registerSessionId,
-      },
-      status: "actionable",
-    };
-  }
-
-  return { status: "unresolved" };
 }
 
 export async function getTerminalByFingerprint(

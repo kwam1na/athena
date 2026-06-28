@@ -1,13 +1,23 @@
 import type { Doc, Id } from "../../../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../../../_generated/server";
-import { isRegisterSessionConflictBlockingStatus } from "../../../../shared/registerSessionStatus";
 import type {
   TerminalRecoveryCommandReadRepository,
   TerminalRecoveryCommandRepository,
 } from "../../application/terminalRecovery/terminalCommandService";
+import {
+  isCurrentTerminalRegisterConflict,
+  resolveTerminalRegisterConflict,
+} from "./terminalRegisterConflictResolution";
 
 type TerminalRecoveryCtx = QueryCtx | MutationCtx;
 export type TerminalRecoveryConflictRepositoryCtx = QueryCtx | MutationCtx;
+const TERMINAL_RECOVERY_CONFLICT_SOURCE_LOOKUP_CAP = 100;
+const TERMINAL_RECOVERY_CONFLICT_TYPES = [
+  "duplicate_local_id",
+  "inventory",
+  "payment",
+  "permission",
+] as const;
 
 export function createTerminalRecoveryCommandReadRepository(
   ctx: TerminalRecoveryCtx,
@@ -82,15 +92,7 @@ export async function listTerminalRecoveryConflictsForRepair(
     terminalId: Id<"posTerminal">;
   },
 ) {
-  const conflicts = await ctx.db
-    .query("posLocalSyncConflict")
-    .withIndex("by_store_terminal_status", (q) =>
-      q
-        .eq("storeId", args.storeId)
-        .eq("terminalId", args.terminalId)
-        .eq("status", "needs_review"),
-    )
-    .take(100);
+  const conflicts = await listTerminalRecoveryConflictSources(ctx, args);
 
   const currentConflicts = await Promise.all(
     conflicts.map(async (conflict) =>
@@ -104,6 +106,50 @@ export async function listTerminalRecoveryConflictsForRepair(
   );
 }
 
+async function listTerminalRecoveryConflictSources(
+  ctx: QueryCtx | MutationCtx,
+  args: {
+    storeId: Id<"store">;
+    terminalId: Id<"posTerminal">;
+  },
+) {
+  const conflictsByType = await Promise.all(
+    TERMINAL_RECOVERY_CONFLICT_TYPES.map((conflictType) =>
+      ctx.db
+        .query("posLocalSyncConflict")
+        .withIndex("by_store_terminal_status_type", (q) =>
+          q
+            .eq("storeId", args.storeId)
+            .eq("terminalId", args.terminalId)
+            .eq("status", "needs_review")
+            .eq("conflictType", conflictType),
+        )
+        .order("desc")
+        .take(TERMINAL_RECOVERY_CONFLICT_SOURCE_LOOKUP_CAP + 1),
+    ),
+  );
+
+  return dedupeRecoveryConflictsById(
+    conflictsByType.flatMap((conflicts) =>
+      conflicts.slice(0, TERMINAL_RECOVERY_CONFLICT_SOURCE_LOOKUP_CAP),
+    ),
+  )
+    .sort((left, right) => right.sequence - left.sequence);
+}
+
+function dedupeRecoveryConflictsById<
+  T extends Pick<Doc<"posLocalSyncConflict">, "_id">,
+>(conflicts: T[]) {
+  const seen = new Set<Id<"posLocalSyncConflict">>();
+  return conflicts.filter((conflict) => {
+    if (seen.has(conflict._id)) {
+      return false;
+    }
+    seen.add(conflict._id);
+    return true;
+  });
+}
+
 async function isCurrentTerminalRecoveryConflict(
   ctx: QueryCtx | MutationCtx,
   conflict: Doc<"posLocalSyncConflict">,
@@ -112,113 +158,12 @@ async function isCurrentTerminalRecoveryConflict(
     terminalId: Id<"posTerminal">;
   },
 ) {
-  if (
-    conflict.conflictType !== "duplicate_local_id" &&
-    conflict.conflictType !== "permission"
-  ) {
-    return true;
-  }
-
-  const registerSession = await resolveRegisterSessionForConflict(ctx, {
-    localRegisterSessionId: conflict.localRegisterSessionId,
+  const resolution = await resolveTerminalRegisterConflict(ctx, {
+    conflict,
     storeId: args.storeId,
     terminalId: args.terminalId,
   });
-  if (!registerSession) {
-    return true;
-  }
-
-  return isRegisterSessionConflictBlockingStatus(registerSession.status);
-}
-
-async function resolveRegisterSessionForConflict(
-  ctx: QueryCtx | MutationCtx,
-  args: {
-    localRegisterSessionId?: string | null;
-    storeId: Id<"store">;
-    terminalId: Id<"posTerminal">;
-  },
-): Promise<Doc<"registerSession"> | null> {
-  if (!args.localRegisterSessionId) {
-    return null;
-  }
-  const localRegisterSessionId = args.localRegisterSessionId;
-
-  const mappedSession = await resolveMappedRegisterSession(ctx, {
-    localRegisterSessionId,
-    storeId: args.storeId,
-    terminalId: args.terminalId,
-  });
-  if (mappedSession) {
-    return mappedSession;
-  }
-
-  const normalizeId = (
-    ctx.db as unknown as {
-      normalizeId?: (
-        tableName: string,
-        value: string,
-      ) => Id<"registerSession"> | null;
-    }
-  ).normalizeId;
-  const registerSessionId =
-    normalizeId?.call(ctx.db, "registerSession", localRegisterSessionId) ??
-    null;
-  return registerSessionId
-    ? getScopedRegisterSession(ctx, {
-        registerSessionId,
-        storeId: args.storeId,
-        terminalId: args.terminalId,
-      })
-    : null;
-}
-
-async function resolveMappedRegisterSession(
-  ctx: QueryCtx | MutationCtx,
-  args: {
-    localRegisterSessionId: string;
-    storeId: Id<"store">;
-    terminalId: Id<"posTerminal">;
-  },
-) {
-  const registerSessionMapping = await ctx.db
-    .query("posLocalSyncMapping")
-    .withIndex("by_store_terminal_local", (q) =>
-      q
-        .eq("storeId", args.storeId)
-        .eq("terminalId", args.terminalId)
-        .eq("localRegisterSessionId", args.localRegisterSessionId)
-        .eq("localIdKind", "registerSession")
-        .eq("localId", args.localRegisterSessionId),
-    )
-    .unique();
-  if (registerSessionMapping?.cloudTable !== "registerSession") {
-    return null;
-  }
-
-  return getScopedRegisterSession(ctx, {
-    registerSessionId: registerSessionMapping.cloudId as Id<"registerSession">,
-    storeId: args.storeId,
-    terminalId: args.terminalId,
-  });
-}
-
-async function getScopedRegisterSession(
-  ctx: QueryCtx | MutationCtx,
-  args: {
-    registerSessionId: Id<"registerSession">;
-    storeId: Id<"store">;
-    terminalId: Id<"posTerminal">;
-  },
-) {
-  const registerSession = await ctx.db.get(
-    "registerSession",
-    args.registerSessionId,
-  );
-  return registerSession?.storeId === args.storeId &&
-    registerSession.terminalId === args.terminalId
-    ? registerSession
-    : null;
+  return isCurrentTerminalRegisterConflict(resolution);
 }
 
 export async function getTerminalRecoverySourceEvent(

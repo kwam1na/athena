@@ -1321,27 +1321,258 @@ describe("terminal health summaries", () => {
     expect(result?.health).toBe("needs_attention");
     expect(result?.attentionReasons).toEqual([
       expect.objectContaining({
-        actionTarget: { type: "open_work" },
         count: 1,
         source: "cloud_sync",
         summary: "1 cloud sync conflict needs review.",
         type: "cloud_conflict",
       }),
       expect.objectContaining({
-        actionTarget: { type: "open_work" },
         count: 1,
         source: "cloud_sync",
         summary: "1 synced item is held before projection.",
         type: "cloud_held",
       }),
       expect.objectContaining({
-        actionTarget: { type: "open_work" },
         count: 1,
         source: "cloud_sync",
         summary: "1 synced item was rejected by the server.",
         type: "cloud_rejected",
       }),
     ]);
+    expect(
+      result?.attentionReasons.some((reason) => reason.actionTarget),
+    ).toBe(false);
+  });
+
+  it("does not link manual-only cloud review counts to open work", async () => {
+    vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
+    vi.mocked(getLatestRuntimeStatusForTerminal).mockResolvedValue(null);
+    vi.mocked(getTerminalSyncEvidence).mockResolvedValue({
+      latestEvent: {
+        localEventId: "local-event-44",
+        localRegisterSessionId: "local-register-1",
+        sequence: 44,
+        eventType: "register_closed",
+        status: "rejected",
+        occurredAt: 120,
+        submittedAt: 130,
+      },
+      sampledEventCount: 100,
+      acceptedCount: 0,
+      projectedCount: 96,
+      conflictedCount: 50,
+      heldCount: 0,
+      rejectedCount: 0,
+      acceptedThroughSequence: 26,
+      cursorUpdatedAt: 180,
+      reviewSummary: {
+        groups: [
+          {
+            actionability: "open_work_review",
+            conflictType: "permission",
+            count: 28,
+            latestCreatedAt: 160,
+            latestSequence: 44,
+            owner: "operations_open_work",
+            reviewTarget: {
+              type: "open_work",
+              workItemId: "work-item-1" as Id<"operationalWorkItem">,
+              workItemType: "synced_sale_inventory_review",
+            },
+          },
+          {
+            actionability: "manual_review",
+            conflictType: "permission",
+            count: 22,
+            latestCreatedAt: 150,
+            latestSequence: 43,
+            owner: "manual_review",
+          },
+        ],
+        meta: {
+          cap: 50,
+          hasMore: false,
+          sampledCount: 50,
+          targetResolutionIncomplete: false,
+        },
+      },
+      unresolvedConflictCount: 50,
+    });
+
+    const result = await getTerminalHealthSummary(
+      { db: null as never } as never,
+      {
+        storeId: "store-1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+        now: 220,
+      },
+    );
+
+    const openWorkReason = result?.attentionReasons.find(
+      (reason) => reason.count === 28,
+    );
+    const manualReason = result?.attentionReasons.find(
+      (reason) => reason.count === 22,
+    );
+
+    expect(openWorkReason).toMatchObject({
+      actionTarget: {
+        label: "Review open work",
+        type: "open_work",
+      },
+      summary: "28 cloud sync conflicts need review.",
+      type: "cloud_conflict",
+    });
+    expect(manualReason).toMatchObject({
+      summary:
+        "22 cloud sync conflicts require manager review before support can repair this terminal.",
+      type: "cloud_conflict",
+    });
+    expect(manualReason?.actionTarget).toBeUndefined();
+  });
+
+  it("does not apply cash-control fallback targets to manual review summary groups", async () => {
+    vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
+    vi.mocked(getLatestRuntimeStatusForTerminal).mockResolvedValue(null);
+    vi.mocked(resolveTerminalRegisterSessionActionTarget).mockResolvedValue(
+      "register-session-fallback" as Id<"registerSession">,
+    );
+    vi.mocked(getTerminalSyncEvidence).mockResolvedValue({
+      latestEvent: {
+        localEventId: "local-event-44",
+        localRegisterSessionId: "local-register-1",
+        sequence: 44,
+        eventType: "register_closed",
+        status: "conflicted",
+        occurredAt: 120,
+        submittedAt: 130,
+      },
+      sampledEventCount: 100,
+      acceptedCount: 0,
+      projectedCount: 96,
+      conflictedCount: 50,
+      heldCount: 0,
+      rejectedCount: 0,
+      reviewSummary: {
+        groups: [
+          {
+            actionability: "manual_review",
+            conflictType: "permission",
+            count: 22,
+            latestCreatedAt: 150,
+            latestSequence: 43,
+            owner: "manual_review",
+          },
+          {
+            actionTarget: {
+              registerSessionId: "register-session-cash" as Id<"registerSession">,
+              type: "register_session",
+            },
+            actionability: "cash_controls_review",
+            conflictType: "permission",
+            count: 1,
+            latestCreatedAt: 160,
+            latestSequence: 44,
+            owner: "cash_controls",
+          },
+        ],
+        meta: {
+          cap: 50,
+          hasMore: false,
+          sampledCount: 23,
+          targetResolutionIncomplete: false,
+        },
+      },
+      unresolvedConflictCount: 23,
+    });
+
+    const result = await getTerminalHealthSummary(
+      { db: null as never } as never,
+      {
+        storeId: "store-1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+        now: 220,
+      },
+    );
+
+    expect(resolveTerminalRegisterSessionActionTarget).not.toHaveBeenCalled();
+    const manualReason = result?.attentionReasons.find(
+      (reason) => reason.count === 22,
+    );
+    const cashControlReason = result?.attentionReasons.find(
+      (reason) => reason.count === 1,
+    );
+    expect(manualReason).toMatchObject({
+      summary:
+        "22 cloud sync conflicts require manager review before support can repair this terminal.",
+      type: "cloud_conflict",
+    });
+    expect(manualReason?.actionTarget).toBeUndefined();
+    expect(cashControlReason).toMatchObject({
+      actionTarget: {
+        registerSessionId: "register-session-cash",
+        type: "cash_control_register_session",
+      },
+      summary: "1 cash control review item needs attention.",
+      type: "cloud_conflict",
+    });
+  });
+
+  it("does not synthesize inventory open-work links without a resolved target", async () => {
+    vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
+    vi.mocked(getLatestRuntimeStatusForTerminal).mockResolvedValue(null);
+    vi.mocked(getTerminalSyncEvidence).mockResolvedValue({
+      latestEvent: null,
+      latestReviewEvent: null,
+      latestReviewEventsByStatus: {
+        conflicted: null,
+        held: null,
+        rejected: null,
+      },
+      sampledEventCount: 2,
+      acceptedCount: 0,
+      projectedCount: 0,
+      conflictedCount: 2,
+      heldCount: 0,
+      rejectedCount: 0,
+      reviewSummary: {
+        groups: [
+          {
+            actionability: "manual_review",
+            conflictType: "inventory",
+            count: 2,
+            latestCreatedAt: 160,
+            latestSequence: 44,
+            owner: "manual_review",
+          },
+        ],
+        meta: {
+          cap: 50,
+          hasMore: false,
+          sampledCount: 2,
+          targetResolutionIncomplete: false,
+        },
+      },
+      unresolvedConflictCount: 2,
+    });
+
+    const result = await getTerminalHealthSummary(
+      { db: null as never } as never,
+      {
+        storeId: "store-1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+        now: 220,
+      },
+    );
+
+    expect(result?.attentionReasons).toEqual([
+      expect.objectContaining({
+        count: 2,
+        summary: "2 inventory review items need attention.",
+        type: "synced_sale_inventory_review",
+      }),
+    ]);
+    expect(result?.attentionReasons[0]?.actionTarget).toBeUndefined();
   });
 
   it("resolves cloud review reasons to a cash-control register session when sync mapping exists", async () => {
@@ -1441,6 +1672,29 @@ describe("terminal health summaries", () => {
           summary: "Inventory needs manager review for a synced offline sale.",
         },
       ],
+      reviewSummary: {
+        groups: [
+          {
+            actionability: "open_work_review",
+            conflictType: "inventory",
+            count: 1,
+            latestCreatedAt: 140,
+            latestSequence: 26,
+            owner: "operations_open_work",
+            reviewTarget: {
+              type: "open_work",
+              workItemId: "work-item-1" as Id<"operationalWorkItem">,
+              workItemType: "synced_sale_inventory_review",
+            },
+          },
+        ],
+        meta: {
+          cap: 50,
+          hasMore: false,
+          sampledCount: 1,
+          targetResolutionIncomplete: false,
+        },
+      },
     });
 
     const result = await getTerminalHealthSummary(

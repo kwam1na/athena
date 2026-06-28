@@ -725,6 +725,12 @@ const schema = defineSchema({
       "localRegisterSessionId",
       "status",
       "conflictType",
+    ])
+    .index("by_store_terminal_status_type", [
+      "storeId",
+      "terminalId",
+      "status",
+      "conflictType",
     ]),
   posLocalStaffProof: defineTable(posLocalStaffProofSchema)
     .index("by_tokenHash", ["tokenHash"])
