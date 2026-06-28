@@ -108,6 +108,34 @@ describe("derivePosLocalSyncStatus", () => {
     });
   });
 
+  it("treats locally resolved review items as terminal-settled without reporting cloud sync", () => {
+    expect(
+      derivePosLocalSyncStatus({
+        events: [
+          event(1, "synced"),
+          event(2, "locally_resolved", {
+            sync: {
+              localResolution: {
+                reason: "terminal_recovery_command",
+                resolvedAt: 10,
+                status: "local_review_cleared",
+              },
+              status: "locally_resolved",
+              uploaded: true,
+            },
+          }),
+        ],
+        isOnline: true,
+      }),
+    ).toMatchObject({
+      state: "synced",
+      pendingCount: 0,
+      failedCount: 0,
+      lastSyncedSequence: 2,
+      nextPendingSequence: null,
+    });
+  });
+
   it("marks unsynced work as offline when the browser is offline", () => {
     expect(
       derivePosLocalSyncStatus({

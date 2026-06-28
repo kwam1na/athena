@@ -1459,6 +1459,101 @@ describe("posLocalStore", () => {
     }
   });
 
+  it("clears only requested local review events without retaining staff proof", async () => {
+    let nextLocalId = 1;
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+      clock: () => 4_000,
+      createLocalId: () => `local-event-${nextLocalId++}`,
+    });
+
+    await store.appendEvent({
+      initialSyncStatus: "needs_review",
+      localRegisterSessionId: "local-register-session-1",
+      payload: { total: 25 },
+      staffProfileId: "staff_cloud_1",
+      staffProofToken: "proof-token-1",
+      storeId: "store_cloud_1",
+      terminalId: "local-terminal-1",
+      type: "transaction.completed",
+    });
+    await store.markEventsNeedsReview(["local-event-1"], undefined, {
+      uploaded: true,
+    });
+    await store.appendEvent({
+      localRegisterSessionId: "local-register-session-1",
+      payload: { openingFloat: 100 },
+      staffProfileId: "staff_cloud_1",
+      staffProofToken: "proof-token-2",
+      storeId: "store_cloud_1",
+      terminalId: "local-terminal-1",
+      type: "register.opened",
+    });
+    await store.appendEvent({
+      initialSyncStatus: "needs_review",
+      localRegisterSessionId: "local-register-session-1",
+      payload: { total: 40 },
+      staffProfileId: "staff_cloud_1",
+      staffProofToken: "proof-token-3",
+      storeId: "store_cloud_1",
+      terminalId: "local-terminal-1",
+      type: "transaction.completed",
+    });
+
+    await expect(
+      store.clearLocalReviewEvents([
+        "local-event-1",
+        "local-event-2",
+        "missing-event",
+      ]),
+    ).resolves.toEqual({
+      ok: true,
+      value: [
+        expect.objectContaining({
+          localEventId: "local-event-1",
+          sync: expect.objectContaining({
+            localResolution: {
+              reason: "terminal_recovery_command",
+              resolvedAt: 4_000,
+              status: "local_review_cleared",
+            },
+            status: "locally_resolved",
+          }),
+        }),
+      ],
+    });
+
+    const listed = await store.listEvents();
+
+    expect(listed).toEqual({
+      ok: true,
+      value: [
+        expect.objectContaining({
+          localEventId: "local-event-1",
+          sync: expect.objectContaining({
+            localResolution: expect.objectContaining({
+              status: "local_review_cleared",
+            }),
+            status: "locally_resolved",
+          }),
+        }),
+        expect.objectContaining({
+          localEventId: "local-event-2",
+          staffProofToken: "proof-token-2",
+          sync: expect.objectContaining({ status: "pending" }),
+        }),
+        expect.objectContaining({
+          localEventId: "local-event-3",
+          staffProofToken: "proof-token-3",
+          sync: expect.objectContaining({ status: "needs_review" }),
+        }),
+      ],
+    });
+    if (listed.ok) {
+      expect(listed.value[0]).not.toHaveProperty("staffProofToken");
+    }
+  });
+
   it("returns an explicit failure for unsupported local schema versions", async () => {
     const adapter = createMemoryPosLocalStorageAdapter({
       schemaVersion: POS_LOCAL_STORE_SCHEMA_VERSION + 1,

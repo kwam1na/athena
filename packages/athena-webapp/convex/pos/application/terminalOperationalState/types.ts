@@ -4,6 +4,7 @@ import type {
   TerminalRecoveryCommandPayload,
   TerminalRecoveryCommandType,
   TerminalRecoveryExpectedEvidence,
+  TerminalRecoveryLocalReviewEventEvidence,
   TerminalRecoveryReadiness,
 } from "../terminalRecovery/types";
 
@@ -18,6 +19,70 @@ export type TerminalSupportRecovery =
       status: "needs_cloud_repair" | "needs_manual_review" | "needs_terminal_action";
     }
   | null;
+
+export type TerminalOperationalExplanation = {
+  blockingDomain:
+    | "cloud_repair"
+    | "manual_review"
+    | "none"
+    | "sync_review"
+    | "terminal_runtime";
+  detail: string;
+  evidenceReferences: Array<{
+    count?: number;
+    source:
+      | "cloud_repair"
+      | TerminalHealthAttentionReason["source"]
+      | TerminalDiagnosticEvidence[number]["source"];
+    summary: string;
+    type: "diagnostic" | "safe_cloud_conflict" | TerminalHealthAttentionReason["type"];
+  }>;
+  headline: string;
+  lane:
+    | TerminalSalesReadiness
+    | "needs_cloud_repair"
+    | "needs_manual_review"
+    | "needs_terminal_action"
+    | "sale_ready_with_review_backlog"
+    | "stale_runtime"
+    | "unknown";
+  nextStep: string;
+  primaryOwner:
+    | "cash_controls"
+    | "manager"
+    | "none"
+    | "operations"
+    | "support"
+    | "terminal";
+  saleImpact: "can_transact_now" | "not_ready" | "unknown";
+  secondaryActions: Array<{
+    label: string;
+    primaryOwner:
+      | "cash_controls"
+      | "manager"
+      | "operations"
+      | "support"
+      | "terminal";
+    supportAction:
+      | "manual_review"
+      | "safe_cloud_repair"
+      | "terminal_command"
+      | "terminal_sync_retry";
+  }>;
+  severity: "critical" | "info" | "warning";
+  summaryMeta: {
+    hasSecondarySafeRepair: boolean;
+    reviewBacklogCount: number;
+    targetResolutionIncomplete: boolean;
+  };
+  supportAction:
+    | "manual_review"
+    | "none"
+    | "safe_cloud_repair"
+    | "terminal_command"
+    | "terminal_sync_retry"
+    | "wait_for_check_in";
+};
 
 export type TerminalDiagnosticEvidence = Array<{
   severity: "info" | "warning";
@@ -88,6 +153,7 @@ export type TerminalRecoveryPreview = {
     commandType: TerminalRecoveryCommandType;
     label: string;
     latestAcknowledgement?: string;
+    localReviewEvents?: TerminalRecoveryLocalReviewEventEvidence[];
     status: Doc<"posTerminalRecoveryCommand">["status"];
     verificationStatus: Doc<"posTerminalRecoveryCommand">["verificationStatus"];
   } | null;
@@ -135,6 +201,7 @@ export type TerminalOperationalState = {
   appUpdateEvidence: TerminalRecoveryPreview["appUpdate"];
   attentionReasons: TerminalHealthAttentionReason[];
   diagnosticEvidence: TerminalDiagnosticEvidence;
+  operationalExplanation: TerminalOperationalExplanation;
   recoveryEvidence: {
     cloudRepair: TerminalRecoveryPreview["cloudRepair"];
     commandStatus: TerminalRecoveryPreview["commandStatus"];
@@ -166,6 +233,7 @@ export type TerminalOperationalState = {
 export type TerminalOperationalPolicyInput = {
   appUpdate: TerminalRecoveryPreview["appUpdate"];
   activeRegisterSession?: Doc<"registerSession"> | null;
+  attentionReasons?: TerminalHealthAttentionReason[];
   cloudRepair: TerminalRecoveryPreview["cloudRepair"];
   commandStatus: TerminalRecoveryPreview["commandStatus"];
   drawerAuthorityRegisterSession?: Doc<"registerSession"> | null;

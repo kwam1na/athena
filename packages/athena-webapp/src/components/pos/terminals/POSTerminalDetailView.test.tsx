@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -438,9 +444,7 @@ describe("POSTerminalDetailViewContent", () => {
     const staffAuthorityLabel = screen.getByText("Staff authority");
     expect(staffAuthorityLabel).toBeInTheDocument();
     expect(screen.getAllByText("Ready").length).toBeGreaterThanOrEqual(2);
-    expect(
-      screen.queryByText("Staff authority ready"),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Staff authority ready")).not.toBeInTheDocument();
   });
 
   it("renders expired staff authority as a compact warning state", () => {
@@ -812,6 +816,163 @@ describe("POSTerminalDetailViewContent", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("renders server operational explanation with bounded evidence and hides raw review payloads", () => {
+    render(
+      <POSTerminalDetailViewContent
+        detail={{
+          ...detail,
+          attentionReasons: [],
+          operationalExplanation: {
+            blockingDomain: "sync_review",
+            detail:
+              "M Supplies conflict-raw-001 includes payment payload and customer payload details.",
+            evidenceReferences: [
+              {
+                count: 17,
+                source: "cloud_sync",
+                summary: "M Supplies conflict-raw-001 payment payload",
+                type: "synced_sale_inventory_review",
+              },
+            ],
+            headline: "M Supplies review needed",
+            lane: "sale_ready_with_review_backlog",
+            nextStep:
+              "Review the open work queue before support repairs anything.",
+            primaryOwner: "operations",
+            saleImpact: "can_transact_now",
+            secondaryActions: [
+              {
+                label: "Safe cloud repair available",
+                primaryOwner: "support",
+                supportAction: "safe_cloud_repair",
+              },
+            ],
+            severity: "warning",
+            summaryMeta: {
+              hasSecondarySafeRepair: true,
+              reviewBacklogCount: 17,
+              targetResolutionIncomplete: false,
+            },
+            supportAction: "manual_review",
+          },
+          recovery: {
+            readiness: {
+              status: "able_to_transact_now",
+              summary:
+                "Able to transact now. Drawer, cashier, and sale authority are active.",
+            },
+          },
+          syncEvidence: {
+            ...detail.syncEvidence,
+            unresolvedConflicts: [
+              {
+                _id: "conflict-raw-001",
+                conflictType: "payment",
+                createdAt: Date.now() - 3 * 60_000,
+                localEventId: "local-secret-payment",
+                localRegisterSessionId: "local-session-secret",
+                sequence: 44,
+                summary: "A synced payment event needs manager review.",
+              },
+            ],
+          },
+        }}
+        isLoading={false}
+        orgUrlSlug="wigclub"
+        storeUrlSlug="osu"
+      />,
+    );
+
+    expect(screen.getAllByText("Review needed").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Sales can continue.").length).toBeGreaterThan(
+      0,
+    );
+    expect(screen.getAllByText("Sales can continue").length).toBeGreaterThan(0);
+    expect(screen.getByText("Operations")).toBeInTheDocument();
+    expect(screen.getByText("Manual review")).toBeInTheDocument();
+    expect(
+      screen.getAllByText(
+        "Review the open work queue before support repairs anything.",
+      ).length,
+    ).toBeGreaterThan(0);
+    expect(screen.getByText("Review evidence")).toBeInTheDocument();
+    expect(screen.getByText("17")).toBeInTheDocument();
+    expect(screen.getByText("Synced Sale Inventory Review")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", {
+        name: /resolve safe cloud repair/i,
+      }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        /M Supplies|conflict-raw-001|payment payload|customer payload|sync secret|backend exception/i,
+      ),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps detailed conflict and local review rows visible with an operational explanation", () => {
+    render(
+      <POSTerminalDetailViewContent
+        detail={{
+          ...detail,
+          operationalExplanation: {
+            blockingDomain: "sync_review",
+            detail:
+              "Review-owned sync work needs attention, but this terminal has fresh sale authority.",
+            evidenceReferences: [
+              {
+                count: 1,
+                source: "cloud_sync",
+                summary: "1 cloud sync conflict needs review.",
+                type: "cloud_conflict",
+              },
+            ],
+            headline: "Review needed. Sales can continue.",
+            lane: "sale_ready_with_review_backlog",
+            nextStep: "Use the linked review workspace to clear the backlog.",
+            primaryOwner: "cash_controls",
+            saleImpact: "can_transact_now",
+            secondaryActions: [],
+            severity: "warning",
+            summaryMeta: {
+              hasSecondarySafeRepair: false,
+              reviewBacklogCount: 1,
+              targetResolutionIncomplete: false,
+            },
+            supportAction: "manual_review",
+          },
+          syncEvidence: {
+            ...detail.syncEvidence,
+            unresolvedConflicts: [
+              {
+                _id: "conflict-visible",
+                conflictType: "permission",
+                createdAt: Date.now() - 3 * 60_000,
+                localEventId: "local-visible",
+                localRegisterSessionId: "local-session-visible",
+                sequence: 44,
+                summary: "A synced register event needs permission review.",
+              },
+            ],
+          },
+        }}
+        isLoading={false}
+        orgUrlSlug="wigclub"
+        storeUrlSlug="osu"
+      />,
+    );
+
+    expect(screen.getAllByText("Review needed").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Sales can continue.").length).toBeGreaterThan(
+      0,
+    );
+    expect(
+      screen.getByText("A synced register event needs permission review."),
+    ).toBeInTheDocument();
+    expect(screen.getByText("register.opened")).toBeInTheDocument();
+    expect(screen.getByText("cart.item_added")).toBeInTheDocument();
+  });
+
   it("issues cloud and terminal recovery actions from displayed metadata", async () => {
     const onResolveTerminalCloudRepair = vi.fn(async () => ({
       data: { resolvedCount: 1 },
@@ -923,6 +1084,79 @@ describe("POSTerminalDetailViewContent", () => {
     expect(mocks.toastSuccess).toHaveBeenCalledWith("Terminal command queued.");
   });
 
+  it("lets operators collect local review items from a local runtime review row", async () => {
+    const onIssueTerminalRecoveryCommand = vi.fn(async () => ({
+      data: { _id: "command-retry" },
+      kind: "ok" as const,
+    }));
+
+    render(
+      <POSTerminalDetailViewContent
+        detail={{
+          ...detail,
+          attentionReasons: [
+            {
+              actionTarget: { type: "pos_register" },
+              count: 84,
+              nextPendingUploadSequence: 1,
+              source: "local_runtime",
+              summary: "84 local review items are still on this terminal.",
+              type: "local_review",
+            },
+          ],
+          recovery: {
+            readiness: "needs_terminal_action",
+            terminalActions: [
+              {
+                commandContext: {
+                  expectedBlockerType: "local_review",
+                  reason: "Local review items need terminal-local evidence collection.",
+                },
+                commandType: "collect_local_review",
+                expectedEvidence: {
+                  localReviewDetailsCollected: true,
+                },
+                reason: "Local review items need terminal-local evidence collection.",
+              },
+            ],
+          },
+        }}
+        isLoading={false}
+        onIssueTerminalRecoveryCommand={onIssueTerminalRecoveryCommand}
+        orgUrlSlug="wigclub"
+        storeUrlSlug="osu"
+      />,
+    );
+
+    const attentionSection = screen
+      .getByRole("heading", { name: /why this terminal needs attention/i })
+      .closest("section");
+    expect(attentionSection).not.toBeNull();
+
+    fireEvent.click(
+      within(attentionSection as HTMLElement).getByRole("button", {
+        name: /collect local review items/i,
+      }),
+    );
+
+    await waitFor(() => {
+      expect(onIssueTerminalRecoveryCommand).toHaveBeenCalledWith({
+        action: expect.objectContaining({
+          commandContext: expect.objectContaining({
+            expectedBlockerType: "local_review",
+          }),
+          commandType: "collect_local_review",
+          expectedEvidence: {
+            localReviewDetailsCollected: true,
+          },
+          kind: "terminal_command",
+        }),
+        terminalId: "terminal-1",
+      });
+    });
+    expect(mocks.toastSuccess).toHaveBeenCalledWith("Terminal command queued.");
+  });
+
   it("issues Update app from active terminals even when update readiness is unknown", async () => {
     const onIssueTerminalRecoveryCommand = vi.fn(async () => ({
       data: { _id: "command-update" },
@@ -966,7 +1200,9 @@ describe("POSTerminalDetailViewContent", () => {
         terminalId: "terminal-1",
       });
     });
-    expect(mocks.toastSuccess).toHaveBeenCalledWith("Update app command queued.");
+    expect(mocks.toastSuccess).toHaveBeenCalledWith(
+      "Update app command queued.",
+    );
   });
 
   it("disables duplicate Update app actions while an equivalent command is active", () => {
@@ -1073,13 +1309,13 @@ describe("POSTerminalDetailViewContent", () => {
               {
                 commandContext: {
                   expectedBlockerType: "local_review",
-                  reason: "Local review items need a terminal sync retry.",
+                  reason: "Local review items need terminal-local evidence collection.",
                 },
-                commandType: "retry_sync",
+                commandType: "collect_local_review",
                 expectedEvidence: {
-                  syncStatus: "idle",
+                  localReviewDetailsCollected: true,
                 },
-                reason: "Local review items need a terminal sync retry.",
+                reason: "Local review items need terminal-local evidence collection.",
               },
             ],
           },
@@ -1097,7 +1333,7 @@ describe("POSTerminalDetailViewContent", () => {
     expect(screen.getByText("1 safe action")).toBeInTheDocument();
     expect(
       screen.getByText(
-        "retry terminal sync, then use the next check-in to decide whether drawer repair still needs to run.",
+        "collect local review items from this checkout station, then use the next check-in to review the terminal-local evidence.",
       ),
     ).toBeInTheDocument();
     expect(
@@ -1107,12 +1343,13 @@ describe("POSTerminalDetailViewContent", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        "Command did not complete. Retry terminal sync before sending drawer repair again.",
+        "Command did not complete. Use the available terminal action before sending drawer repair again.",
       ),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /retry terminal sync/i }),
-    ).toBeInTheDocument();
+      screen.getAllByRole("button", { name: /collect local review items/i })
+        .length,
+    ).toBeGreaterThan(0);
   });
 
   it("does not foreground old failed recovery commands when no support work remains", () => {
@@ -1255,7 +1492,9 @@ describe("POSTerminalDetailViewContent", () => {
     ).not.toBeInTheDocument();
     expect(screen.queryByText("Verification")).not.toBeInTheDocument();
     expect(
-      screen.queryByText("Recovery was verified by the latest terminal check-in."),
+      screen.queryByText(
+        "Recovery was verified by the latest terminal check-in.",
+      ),
     ).not.toBeInTheDocument();
     expect(
       screen.queryByText(
@@ -1277,7 +1516,8 @@ describe("POSTerminalDetailViewContent", () => {
   it("shows normalized recovery action failures", async () => {
     const onResolveTerminalCloudRepair = vi.fn(async () => ({
       error: {
-        message: "Terminal recovery evidence changed. Preview the repair again.",
+        message:
+          "Terminal recovery evidence changed. Preview the repair again.",
       },
       kind: "user_error" as const,
     }));
@@ -1395,7 +1635,9 @@ describe("POSTerminalDetailViewContent", () => {
     );
 
     expect(screen.getByText("Manual review summary 5")).toBeInTheDocument();
-    expect(screen.queryByText("Manual review summary 6")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Manual review summary 6"),
+    ).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Show 3 more" }));
 
@@ -1403,7 +1645,9 @@ describe("POSTerminalDetailViewContent", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Show fewer" }));
 
-    expect(screen.queryByText("Manual review summary 6")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Manual review summary 6"),
+    ).not.toBeInTheDocument();
   });
 
   it("routes attention reasons to the available action surfaces", () => {
@@ -1629,7 +1873,12 @@ describe("POSTerminalDetailViewContent", () => {
     ).toBeInTheDocument();
   });
 
-  it("explains when local review counts arrive without item details", () => {
+  it("offers local review collection when local review counts arrive without item details", async () => {
+    const onIssueTerminalRecoveryCommand = vi.fn(async () => ({
+      data: { _id: "command-retry" },
+      kind: "ok" as const,
+    }));
+
     render(
       <POSTerminalDetailViewContent
         detail={{
@@ -1643,6 +1892,22 @@ describe("POSTerminalDetailViewContent", () => {
               status: "needs_review",
             },
           },
+          recovery: {
+            readiness: "needs_terminal_action",
+            terminalActions: [
+              {
+                commandContext: {
+                  expectedBlockerType: "local_review",
+                  reason: "Local review items need terminal-local evidence collection.",
+                },
+                commandType: "collect_local_review",
+                expectedEvidence: {
+                  localReviewDetailsCollected: true,
+                },
+                reason: "Local review items need terminal-local evidence collection.",
+              },
+            ],
+          },
           syncEvidence: {
             ...detail.syncEvidence,
             unresolvedConflicts: [],
@@ -1650,17 +1915,231 @@ describe("POSTerminalDetailViewContent", () => {
           },
         }}
         isLoading={false}
+        onIssueTerminalRecoveryCommand={onIssueTerminalRecoveryCommand}
       />,
     );
 
     expect(
-      screen.getByText("33 local review items were reported by this terminal."),
+      screen.getByText("33 local review items need local collection."),
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        "The latest runtime check-in did not include item-level local review details.",
+        "Details are missing from the latest check-in. Collect local review items from this checkout station.",
       ),
     ).toBeInTheDocument();
+
+    const conflictSection = screen
+      .getByRole("heading", { name: /conflicts and review/i })
+      .closest("section");
+    expect(conflictSection).not.toBeNull();
+    fireEvent.click(
+      within(conflictSection as HTMLElement).getByRole("button", {
+        name: /collect local review items/i,
+      }),
+    );
+
+    await waitFor(() => {
+      expect(onIssueTerminalRecoveryCommand).toHaveBeenCalledWith({
+        action: expect.objectContaining({
+          commandContext: expect.objectContaining({
+            expectedBlockerType: "local_review",
+          }),
+          commandType: "collect_local_review",
+          expectedEvidence: {
+            localReviewDetailsCollected: true,
+          },
+          kind: "terminal_command",
+        }),
+        terminalId: "terminal-1",
+      });
+    });
+  });
+
+  it("keeps local review collection available when verified collection did not clear the latest check-in", async () => {
+    const onIssueTerminalRecoveryCommand = vi.fn(async () => ({
+      data: { _id: "command-retry" },
+      kind: "ok" as const,
+    }));
+
+    render(
+      <POSTerminalDetailViewContent
+        detail={{
+          ...detail,
+          runtimeStatus: {
+            ...detail.runtimeStatus!,
+            sync: {
+              ...detail.runtimeStatus!.sync,
+              reviewEventCount: 33,
+              reviewEvents: [],
+              status: "needs_review",
+            },
+          },
+          recovery: {
+            commandStatus: {
+              commandType: "collect_local_review",
+              label: "Collect local review items",
+              status: "completed",
+              verificationStatus: "verified",
+            },
+            readiness: "needs_terminal_action",
+            terminalActions: [
+              {
+                commandContext: {
+                  expectedBlockerType: "local_review",
+                  reason: "Local review items need terminal-local evidence collection.",
+                },
+                commandType: "collect_local_review",
+                expectedEvidence: {
+                  localReviewDetailsCollected: true,
+                },
+                reason: "Local review items need terminal-local evidence collection.",
+              },
+            ],
+          },
+          syncEvidence: {
+            ...detail.syncEvidence,
+            unresolvedConflicts: [],
+            unresolvedConflictCount: 0,
+          },
+        }}
+        isLoading={false}
+        onIssueTerminalRecoveryCommand={onIssueTerminalRecoveryCommand}
+      />,
+    );
+
+    const conflictSection = screen
+      .getByRole("heading", { name: /conflicts and review/i })
+      .closest("section");
+    expect(conflictSection).not.toBeNull();
+    fireEvent.click(
+      within(conflictSection as HTMLElement).getByRole("button", {
+        name: /collect local review items/i,
+      }),
+    );
+
+    await waitFor(() => {
+      expect(onIssueTerminalRecoveryCommand).toHaveBeenCalledWith({
+        action: expect.objectContaining({
+          commandContext: expect.objectContaining({
+            expectedBlockerType: "local_review",
+          }),
+          commandType: "collect_local_review",
+          expectedEvidence: {
+            localReviewDetailsCollected: true,
+          },
+          kind: "terminal_command",
+        }),
+        terminalId: "terminal-1",
+      });
+    });
+  });
+
+  it("shows collected local review evidence and clear action when collection matches the latest count", async () => {
+    const onIssueTerminalRecoveryCommand = vi.fn(async () => ({
+      data: { _id: "command-clear" },
+      kind: "ok" as const,
+    }));
+
+    render(
+      <POSTerminalDetailViewContent
+        detail={{
+          ...detail,
+          runtimeStatus: {
+            ...detail.runtimeStatus!,
+            sync: {
+              ...detail.runtimeStatus!.sync,
+              reviewEventCount: 2,
+              reviewEvents: [],
+              status: "needs_review",
+            },
+          },
+          recovery: {
+            commandStatus: {
+              commandType: "collect_local_review",
+              label: "Collect local review items",
+              localReviewEvents: [
+                {
+                  createdAt: Date.now() - 1_000,
+                  localEventId: "event-review-1",
+                  sequence: 12,
+                  status: "needs_review",
+                  type: "transaction.completed",
+                  uploaded: true,
+                  uploadSequence: 3,
+                },
+                {
+                  createdAt: Date.now() - 500,
+                  localEventId: "event-review-2",
+                  sequence: 13,
+                  status: "needs_review",
+                  type: "register.closeout_started",
+                  uploaded: true,
+                  uploadSequence: 4,
+                },
+              ],
+              status: "completed",
+              verificationStatus: "verified",
+            },
+            readiness: "needs_terminal_action",
+            terminalActions: [
+              {
+                commandContext: {
+                  expectedBlockerType: "local_review",
+                  localReviewEventIds: ["event-review-1", "event-review-2"],
+                  reason:
+                    "Uploaded local review items can be cleared from this terminal.",
+                },
+                commandType: "clear_local_review_items",
+                expectedEvidence: {
+                  localReviewEventCount: 0,
+                },
+                reason:
+                  "Uploaded local review items can be cleared from this terminal.",
+              },
+            ],
+          },
+          syncEvidence: {
+            ...detail.syncEvidence,
+            unresolvedConflicts: [],
+            unresolvedConflictCount: 0,
+          },
+        }}
+        isLoading={false}
+        onIssueTerminalRecoveryCommand={onIssueTerminalRecoveryCommand}
+      />,
+    );
+
+    expect(screen.getByText("transaction.completed")).toBeInTheDocument();
+    expect(screen.getByText("register.closeout_started")).toBeInTheDocument();
+    expect(
+      screen.queryByText("2 local review items need local collection."),
+    ).not.toBeInTheDocument();
+
+    const conflictSection = screen
+      .getByRole("heading", { name: /conflicts and review/i })
+      .closest("section");
+    expect(conflictSection).not.toBeNull();
+    fireEvent.click(
+      within(conflictSection as HTMLElement).getByRole("button", {
+        name: /clear local review items/i,
+      }),
+    );
+
+    await waitFor(() => {
+      expect(onIssueTerminalRecoveryCommand).toHaveBeenCalledWith({
+        action: expect.objectContaining({
+          commandContext: expect.objectContaining({
+            localReviewEventIds: ["event-review-1", "event-review-2"],
+          }),
+          commandType: "clear_local_review_items",
+          expectedEvidence: {
+            localReviewEventCount: 0,
+          },
+          kind: "terminal_command",
+        }),
+        terminalId: "terminal-1",
+      });
+    });
   });
 
   it("renders no-data and query unavailable states", () => {

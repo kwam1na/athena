@@ -71,10 +71,12 @@ import {
 import {
   buildPosTerminalRuntimeCopyDiagnostics,
   buildPosTerminalRuntimeStatus,
+  toPosTerminalRuntimeDiagnosticsEvent,
   toReportablePosTerminalRuntimeStatus,
   type PosTerminalRuntimeAppUpdateInput,
   type PosTerminalRuntimeAppSessionRecoveryInput,
   type PosTerminalRuntimeCopyDiagnostics,
+  type PosTerminalRuntimeDiagnosticsEvent,
   type PosTerminalRuntimeStatusPayload,
   type PosTerminalRuntimeStatusSource,
   type PosTerminalRuntimeSyncDebugInput,
@@ -96,16 +98,30 @@ type AppUpdateCommandCorrelation = {
   commandIssuedAt?: number;
 };
 
+export type PosLocalRuntimeDrainOptions = {
+  includeReviewEvents?: boolean;
+  includeUploadedReviewEvents?: boolean;
+  onlyReviewEvents?: boolean;
+  onlyUploadedRegisterOpenReviewEvents?: boolean;
+  onlyUploadedReviewEvents?: boolean;
+};
+
 export type PosLocalRuntimeSyncStatusSource = {
   copyDiagnostics?: PosTerminalRuntimeCopyDiagnostics;
   debug?: PosLocalRuntimeSyncDebug;
   description?: string | null;
   label?: string | null;
+  localEvents?: PosLocalRuntimeDiagnosticsEvent[];
   onRetrySync?: (() => void) | null;
   pendingEventCount?: number | null;
   runtimeStatus?: PosTerminalRuntimeStatusPayload;
   status?: string | null;
 };
+
+export type PosLocalRuntimeDiagnosticsEvent =
+  PosTerminalRuntimeDiagnosticsEvent & {
+    syncUploadable?: boolean;
+  };
 
 export type PosLocalRuntimeSyncDebug = {
   activeRegisterSessionRepair?: {
@@ -424,11 +440,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
 
       const createDrainScheduler = (
         syncSeed: NonNullable<typeof provisionedSeed>,
-        options: {
-          includeUploadedReviewEvents?: boolean;
-          onlyUploadedRegisterOpenReviewEvents?: boolean;
-          onlyUploadedReviewEvents?: boolean;
-        } = {},
+        options: PosLocalRuntimeDrainOptions = {},
       ) =>
         createPosLocalSyncScheduler({
           isOnline: () =>
@@ -465,29 +477,9 @@ export function usePosLocalSyncRuntimeStatus(input: {
               setReadError(pending.error.message);
               throw new Error(pending.error.message);
             }
-            const uploadableEvents = pending.value.events
-              .filter((event) => {
-                const isUploadedReviewEvent =
-                  options.includeUploadedReviewEvents === true &&
-                  event.sync.status === "needs_review" &&
-                  event.sync.uploaded;
-                const isUploadedRegisterOpenReviewEvent =
-                  isUploadedReviewEvent && event.type === "register.opened";
-                if (options.onlyUploadedRegisterOpenReviewEvents === true) {
-                  return isUploadedRegisterOpenReviewEvent;
-                }
-                if (options.onlyUploadedReviewEvents === true) {
-                  return isUploadedReviewEvent;
-                }
-
-                return (
-                  event.sync.status === "pending" ||
-                  event.sync.status === "syncing" ||
-                  event.sync.status === "failed" ||
-                  isUploadedReviewEvent
-                );
-              })
-              .filter((event) => isSyncablePosLocalEvent(event, uploadSupport));
+            const uploadableEvents = pending.value.events.filter((event) =>
+              isPosLocalRuntimeDrainCandidate(event, options, uploadSupport),
+            );
             if (!shouldStop()) {
               setDebug((current) => ({
                 ...current,
@@ -811,10 +803,9 @@ export function usePosLocalSyncRuntimeStatus(input: {
 
           if (trigger === "manual-retry") {
             const scheduler = createDrainScheduler(provisionedSeed, {
-              includeUploadedReviewEvents: true,
-              onlyUploadedReviewEvents: true,
+              includeReviewEvents: true,
+              onlyReviewEvents: true,
             });
-            stopSchedulers.push(() => scheduler.stop());
             scheduler.trigger("manual-retry", { priority: "high" });
           }
         }
@@ -834,9 +825,8 @@ export function usePosLocalSyncRuntimeStatus(input: {
 
       if (trigger === "manual-retry") {
         const manualRetryScheduler = createDrainScheduler(provisionedSeed, {
-          includeUploadedReviewEvents: true,
+          includeReviewEvents: true,
         });
-        stopSchedulers.push(() => manualRetryScheduler.stop());
         manualRetryScheduler.trigger("manual-retry", { priority: "high" });
         return;
       }
@@ -950,6 +940,14 @@ export function usePosLocalSyncRuntimeStatus(input: {
   const copyDiagnostics = useMemo(
     () => buildPosTerminalRuntimeCopyDiagnostics(runtimeStatusInput),
     [runtimeStatusInput],
+  );
+  const localDiagnosticsEvents = useMemo(
+    () =>
+      events
+        .slice()
+        .sort((left, right) => left.sequence - right.sequence)
+        .map((event) => toLocalRuntimeDiagnosticsEvent(event, uploadSupport)),
+    [events, uploadSupport],
   );
   const runtimeStatusTerminalId =
     runtimeReadiness.terminalSeed?.cloudTerminalId ?? terminalId ?? null;
@@ -1446,8 +1444,10 @@ export function usePosLocalSyncRuntimeStatus(input: {
         }
         const acknowledged = await acknowledgeTerminalRecoveryCommand({
           commandId: claimResult.data._id,
+          clearedLocalReviewEventIds: localResult.clearedLocalReviewEventIds,
           ...(executionId ? { executionId } : {}),
           message: localResult.message,
+          localReviewEvents: localResult.localReviewEvents,
           result: ackResult,
           storeId: storeId as Id<"store">,
           syncSecretHash: runtimeStatusSyncSecretHash,
@@ -1541,6 +1541,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
           "Local register activity could not be read. Check this terminal before continuing.",
         debug,
         label: "Local sync unavailable",
+        localEvents: localDiagnosticsEvents,
         onRetrySync: requestRetry,
         pendingEventCount: 1,
         runtimeStatus,
@@ -1554,13 +1555,20 @@ export function usePosLocalSyncRuntimeStatus(input: {
       staffProfileId,
     });
     if (source) {
-      return { ...source, copyDiagnostics, debug, runtimeStatus };
+      return {
+        ...source,
+        copyDiagnostics,
+        debug,
+        localEvents: localDiagnosticsEvents,
+        runtimeStatus,
+      };
     }
 
     return debug.lastTrigger
       ? {
           copyDiagnostics,
           debug,
+          localEvents: localDiagnosticsEvents,
           onRetrySync: requestRetry,
           runtimeStatus,
         }
@@ -1570,6 +1578,7 @@ export function usePosLocalSyncRuntimeStatus(input: {
     debug,
     events,
     isOnline,
+    localDiagnosticsEvents,
     readError,
     requestRetry,
     runtimeStatus,
@@ -1938,6 +1947,37 @@ async function readScopedPosLocalUploadEvents(input: {
   };
 }
 
+function toLocalRuntimeDiagnosticsEvent(
+  event: PosLocalEventRecord,
+  uploadSupport: PosLocalSyncUploadSupport,
+): PosLocalRuntimeDiagnosticsEvent {
+  return {
+    ...toPosTerminalRuntimeDiagnosticsEvent(event),
+    ...(isRuntimeUploadableDiagnosticsEvent(event, uploadSupport)
+      ? { syncUploadable: true }
+      : {}),
+  };
+}
+
+function isRuntimeUploadableDiagnosticsEvent(
+  event: PosLocalEventRecord,
+  uploadSupport: PosLocalSyncUploadSupport,
+) {
+  return (
+    isPendingUploadCandidate(event) &&
+    isSyncablePosLocalEvent(event, uploadSupport)
+  );
+}
+
+function isPendingUploadCandidate(event: PosLocalEventRecord) {
+  return (
+    event.sync.status === "pending" ||
+    event.sync.status === "syncing" ||
+    event.sync.status === "failed" ||
+    (event.sync.status === "needs_review" && event.sync.uploaded)
+  );
+}
+
 function getAppSessionUploadSupport(
   recovery?: PosTerminalRuntimeAppSessionRecoveryInput | null,
 ): PosLocalSyncUploadSupport {
@@ -1951,6 +1991,44 @@ function getAppSessionUploadSupport(
         ? "supported"
         : "unverified",
   };
+}
+
+export function isPosLocalRuntimeDrainCandidate(
+  event: PosLocalEventRecord,
+  options: PosLocalRuntimeDrainOptions = {},
+  uploadSupport: PosLocalSyncUploadSupport = {},
+) {
+  const isReviewEvent = event.sync.status === "needs_review";
+  const isUploadedReviewEvent =
+    isReviewEvent && event.sync.uploaded === true;
+  const isIncludedReviewEvent =
+    options.includeReviewEvents === true
+      ? isReviewEvent
+      : options.includeUploadedReviewEvents === true && isUploadedReviewEvent;
+  const isUploadedRegisterOpenReviewEvent =
+    isIncludedReviewEvent && event.type === "register.opened";
+
+  if (options.onlyUploadedRegisterOpenReviewEvents === true) {
+    return (
+      isUploadedRegisterOpenReviewEvent &&
+      isSyncablePosLocalEvent(event, uploadSupport)
+    );
+  }
+
+  if (
+    options.onlyReviewEvents === true ||
+    options.onlyUploadedReviewEvents === true
+  ) {
+    return isIncludedReviewEvent && isSyncablePosLocalEvent(event, uploadSupport);
+  }
+
+  return (
+    (event.sync.status === "pending" ||
+      event.sync.status === "syncing" ||
+      event.sync.status === "failed" ||
+      isIncludedReviewEvent) &&
+    isSyncablePosLocalEvent(event, uploadSupport)
+  );
 }
 
 export function collectServerSyncedLocalEventIds(

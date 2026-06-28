@@ -38,6 +38,7 @@ import type {
   TerminalHealth,
   TerminalHealthAttentionActionTarget,
   TerminalHealthAttentionReason,
+  TerminalOperationalExplanation,
   TerminalOperationalState,
   TerminalRecoveryPreview,
 } from "../terminalOperationalState/types";
@@ -47,8 +48,21 @@ export type {
   TerminalAppUpdateStatus,
   TerminalHealthAttentionActionTarget,
   TerminalHealthAttentionReason,
+  TerminalOperationalExplanation,
   TerminalRecoveryPreview,
 } from "../terminalOperationalState/types";
+
+const EMPTY_TERMINAL_SYNC_REVIEW_SUMMARY: NonNullable<
+  TerminalSyncEvidence["reviewSummary"]
+> = {
+  groups: [],
+  meta: {
+    sampledCount: 0,
+    cap: 50,
+    hasMore: false,
+    targetResolutionIncomplete: false,
+  },
+};
 
 const EMPTY_TERMINAL_SYNC_EVIDENCE: TerminalSyncEvidence = {
   latestEvent: null,
@@ -64,6 +78,30 @@ const EMPTY_TERMINAL_SYNC_EVIDENCE: TerminalSyncEvidence = {
   conflictedCount: 0,
   heldCount: 0,
   rejectedCount: 0,
+  reviewSummary: EMPTY_TERMINAL_SYNC_REVIEW_SUMMARY,
+};
+
+const UNKNOWN_OPERATIONAL_EXPLANATION: TerminalOperationalExplanation = {
+  blockingDomain: "none",
+  detail: "Terminal health evidence has not been collected yet.",
+  evidenceReferences: [],
+  headline: "Health unknown",
+  lane: "unknown",
+  nextStep: "Wait for terminal health evidence.",
+  primaryOwner: "none",
+  saleImpact: "unknown",
+  secondaryActions: [],
+  severity: "info",
+  summaryMeta: {
+    hasSecondarySafeRepair: false,
+    reviewBacklogCount: 0,
+    targetResolutionIncomplete: false,
+  },
+  supportAction: "none",
+};
+
+type TerminalHealthSummarySyncEvidence = TerminalSyncEvidence & {
+  reviewSummary: NonNullable<TerminalSyncEvidence["reviewSummary"]>;
 };
 
 export type TerminalHealthSummary = {
@@ -83,12 +121,13 @@ export type TerminalHealthSummary = {
     "_id" | "_creationTime" | "storeId" | "terminalId"
   > | null;
   attentionReasons: TerminalHealthAttentionReason[];
+  operationalExplanation: TerminalOperationalExplanation;
   recoveryPreview: TerminalRecoveryPreview | null;
   registerSessionLink: {
     registerSessionId: Id<"registerSession">;
     status: ActiveRegisterSessionLinkStatus;
   } | null;
-  syncEvidence: TerminalSyncEvidence;
+  syncEvidence: TerminalHealthSummarySyncEvidence;
 };
 
 type ActiveRegisterSessionLinkStatus = Extract<
@@ -171,10 +210,9 @@ async function buildTerminalHealthSummary(
     terminal: args.terminal,
   });
   const { runtimeStatus, registerSessionLink } = facts;
-  const syncEvidence = await annotateTerminalSyncEvidenceReviewTargets(ctx, {
-    storeId: args.terminal.storeId,
-    syncEvidence: facts.rawSyncEvidence,
-  });
+  const syncEvidence = normalizeTerminalSyncEvidenceReviewSummary(
+    facts.rawSyncEvidence,
+  );
   const runtimeAgeMs = runtimeStatus
     ? Math.max(0, args.now - runtimeStatus.receivedAt)
     : null;
@@ -188,20 +226,11 @@ async function buildTerminalHealthSummary(
         runtimeStatus,
         registerNumber: args.terminal.registerNumber,
         storeId: args.terminal.storeId,
-        syncEvidence,
+        syncEvidence: facts.rawSyncEvidence,
         terminalId: args.terminal._id,
         terminalStatus: args.terminal.status,
       })
     : null;
-  const resolvedAttentionReasons = await resolveAttentionReasonActionTargets(
-    ctx,
-    {
-      attentionReasons: operationalState?.attentionReasons ?? [],
-      storeId: args.terminal.storeId,
-      syncEvidence,
-      terminalId: args.terminal._id,
-    },
-  );
   const recoveryPreview = operationalState?.recoveryPreview ?? null;
 
   return {
@@ -219,7 +248,9 @@ async function buildTerminalHealthSummary(
     runtimeStatus: operationalState?.runtimeEvidence.effectiveStatus
       ? stripRuntimeStatusIdentity(operationalState.runtimeEvidence.effectiveStatus)
       : null,
-    attentionReasons: resolvedAttentionReasons,
+    attentionReasons: operationalState?.attentionReasons ?? [],
+    operationalExplanation:
+      operationalState?.operationalExplanation ?? UNKNOWN_OPERATIONAL_EXPLANATION,
     recoveryPreview,
     registerSessionLink,
     syncEvidence,
@@ -236,6 +267,16 @@ export async function previewTerminalRecovery(
 ) {
   const summary = await getTerminalHealthSummary(ctx, args);
   return summary?.recoveryPreview ?? null;
+}
+
+function normalizeTerminalSyncEvidenceReviewSummary(
+  syncEvidence: TerminalSyncEvidence,
+): TerminalHealthSummarySyncEvidence {
+  return {
+    ...syncEvidence,
+    reviewSummary:
+      syncEvidence.reviewSummary ?? EMPTY_TERMINAL_SYNC_REVIEW_SUMMARY,
+  };
 }
 
 async function buildTerminalRecoveryPreview(
@@ -286,7 +327,7 @@ async function buildTerminalOperationalStateForSummary(
     storeId: args.storeId,
     terminalId: args.terminalId,
   });
-  const operationalState = buildTerminalOperationalState({
+  const policyInput = {
     appUpdate: buildTerminalAppUpdatePreview({
       commandStatus,
       now: args.now,
@@ -307,9 +348,22 @@ async function buildTerminalOperationalStateForSummary(
     syncEvidence: args.syncEvidence,
     terminalId: args.terminalId,
     terminalStatus: args.terminalStatus,
-  });
+  } satisfies Parameters<typeof buildTerminalOperationalState>[0];
+  const operationalState = buildTerminalOperationalState(policyInput);
+  const resolvedAttentionReasons = await resolveAttentionReasonActionTargets(
+    ctx,
+    {
+      attentionReasons: operationalState.attentionReasons,
+      storeId: args.storeId,
+      syncEvidence: args.syncEvidence,
+      terminalId: args.terminalId,
+    },
+  );
 
-  return operationalState;
+  return buildTerminalOperationalState({
+    ...policyInput,
+    attentionReasons: resolvedAttentionReasons,
+  });
 }
 
 function buildTerminalAppUpdatePreview(args: {
@@ -578,9 +632,38 @@ async function buildTerminalRecoveryCommandStatus(
     commandType: latestCommand.commandType,
     label: getTerminalRecoveryCommandLabel(latestCommand.commandType),
     latestAcknowledgement: latestCommand.acknowledgement?.message,
+    localReviewEvents: stripLocalReviewEvents(
+      latestCommand.acknowledgement?.localReviewEvents,
+    ),
     status: getTerminalRecoveryCommandStatusForPreview(latestCommand, args.now),
     verificationStatus: latestCommand.verificationStatus,
   };
+}
+
+function stripLocalReviewEvents(
+  events:
+    | NonNullable<
+        Doc<"posTerminalRecoveryCommand">["acknowledgement"]
+      >["localReviewEvents"]
+    | undefined,
+) {
+  return events?.map((event) => ({
+    createdAt: event.createdAt,
+    localEventId: event.localEventId,
+    ...(event.localPosSessionId
+      ? { localPosSessionId: event.localPosSessionId }
+      : {}),
+    ...(event.localRegisterSessionId
+      ? { localRegisterSessionId: event.localRegisterSessionId }
+      : {}),
+    sequence: event.sequence,
+    status: event.status,
+    type: event.type,
+    ...(event.uploaded !== undefined ? { uploaded: event.uploaded } : {}),
+    ...(typeof event.uploadSequence === "number"
+      ? { uploadSequence: event.uploadSequence }
+      : {}),
+  }));
 }
 
 function getTerminalRecoveryCommandStatusForPreview(
@@ -603,6 +686,8 @@ function getTerminalRecoveryCommandLabel(
   switch (commandType) {
     case "update_app":
       return "Update app";
+    case "collect_local_review":
+      return "Collect local review items";
     case "repair_terminal_seed":
       return "Terminal setup repair";
     case "clear_stale_drawer_authority":
@@ -982,75 +1067,6 @@ function getAttentionReasonActionTarget(
   }
 }
 
-async function annotateTerminalSyncEvidenceReviewTargets(
-  ctx: QueryCtx,
-  args: {
-    storeId: Id<"store">;
-    syncEvidence: TerminalSyncEvidence;
-  },
-): Promise<TerminalSyncEvidence> {
-  const unresolvedConflicts = args.syncEvidence.unresolvedConflicts ?? [];
-  const inventoryConflictLocalEventIds = new Set(
-    unresolvedConflicts
-      .filter((conflict) => conflict.conflictType === "inventory")
-      .map((conflict) => conflict.localEventId),
-  );
-  if (
-    inventoryConflictLocalEventIds.size === 0 ||
-    !ctx.db ||
-    typeof ctx.db.query !== "function"
-  ) {
-    return args.syncEvidence;
-  }
-
-  const workItems = await ctx.db
-    .query("operationalWorkItem")
-    .withIndex("by_storeId_type", (q) =>
-      q
-        .eq("storeId", args.storeId)
-        .eq("type", "synced_sale_inventory_review"),
-    )
-    .take(200);
-  const openWorkItemByLocalEventId = new Map<
-    string,
-    Doc<"operationalWorkItem">
-  >();
-  for (const workItem of workItems) {
-    if (workItem.status !== "open") {
-      continue;
-    }
-    const localEventId = workItem.metadata?.localEventId;
-    if (
-      typeof localEventId === "string" &&
-      inventoryConflictLocalEventIds.has(localEventId)
-    ) {
-      openWorkItemByLocalEventId.set(localEventId, workItem);
-    }
-  }
-
-  if (openWorkItemByLocalEventId.size === 0) {
-    return args.syncEvidence;
-  }
-
-  return {
-    ...args.syncEvidence,
-    unresolvedConflicts: unresolvedConflicts.map((conflict) => {
-      const workItem = openWorkItemByLocalEventId.get(conflict.localEventId);
-      if (!workItem || conflict.conflictType !== "inventory") {
-        return conflict;
-      }
-      return {
-        ...conflict,
-        reviewTarget: {
-          type: "open_work" as const,
-          workItemId: workItem._id,
-          workItemType: "synced_sale_inventory_review" as const,
-        },
-      };
-    }),
-  };
-}
-
 function stripRuntimeStatusIdentity(status: Doc<"posTerminalRuntimeStatus">) {
   const {
     _id: _id,
@@ -1059,5 +1075,33 @@ function stripRuntimeStatusIdentity(status: Doc<"posTerminalRuntimeStatus">) {
     terminalId: _terminalId,
     ...runtimeStatus
   } = status;
-  return runtimeStatus;
+  return {
+    ...runtimeStatus,
+    sync: {
+      ...runtimeStatus.sync,
+      reviewEvents: stripRuntimeReviewEvents(runtimeStatus.sync.reviewEvents),
+    },
+  };
+}
+
+function stripRuntimeReviewEvents(
+  events: Doc<"posTerminalRuntimeStatus">["sync"]["reviewEvents"],
+) {
+  return events?.map((event) => ({
+    createdAt: event.createdAt,
+    localEventId: event.localEventId,
+    ...(event.localPosSessionId
+      ? { localPosSessionId: event.localPosSessionId }
+      : {}),
+    ...(event.localRegisterSessionId
+      ? { localRegisterSessionId: event.localRegisterSessionId }
+      : {}),
+    sequence: event.sequence,
+    status: event.status,
+    type: event.type,
+    ...(event.uploaded !== undefined ? { uploaded: event.uploaded } : {}),
+    ...(typeof event.uploadSequence === "number"
+      ? { uploadSequence: event.uploadSequence }
+      : {}),
+  }));
 }

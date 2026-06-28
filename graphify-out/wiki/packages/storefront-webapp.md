@@ -19,9 +19,9 @@ Landing page for packages/storefront-webapp. Use this page to orient around grap
 ## Graph Hotspots
 - `storefrontJourneyEvents.ts` (45 edges, Community 10) - [`packages/storefront-webapp/src/lib/storefrontJourneyEvents.ts`](../../../packages/storefront-webapp/src/lib/storefrontJourneyEvents.ts)
 - `createJourneyEvent()` (40 edges, Community 10) - [`packages/storefront-webapp/src/lib/storefrontJourneyEvents.ts`](../../../packages/storefront-webapp/src/lib/storefrontJourneyEvents.ts)
-- `getStoreConfigV2()` (17 edges, Community 59) - [`packages/storefront-webapp/src/lib/storeConfig.ts`](../../../packages/storefront-webapp/src/lib/storeConfig.ts)
-- `storefrontContextEvents.ts` (17 edges, Community 78) - [`packages/storefront-webapp/src/lib/storefrontContextEvents.ts`](../../../packages/storefront-webapp/src/lib/storefrontContextEvents.ts)
-- `checkoutSession.ts` (14 edges, Community 93) - [`packages/storefront-webapp/src/api/checkoutSession.ts`](../../../packages/storefront-webapp/src/api/checkoutSession.ts)
+- `getStoreConfigV2()` (17 edges, Community 62) - [`packages/storefront-webapp/src/lib/storeConfig.ts`](../../../packages/storefront-webapp/src/lib/storeConfig.ts)
+- `storefrontContextEvents.ts` (17 edges, Community 79) - [`packages/storefront-webapp/src/lib/storefrontContextEvents.ts`](../../../packages/storefront-webapp/src/lib/storefrontContextEvents.ts)
+- `checkoutSession.ts` (14 edges, Community 94) - [`packages/storefront-webapp/src/api/checkoutSession.ts`](../../../packages/storefront-webapp/src/api/checkoutSession.ts)
 
 ## Navigation
 - [wiki index](../index.md) - back to the wiki index

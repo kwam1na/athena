@@ -36,6 +36,7 @@ import {
   type PosOfflineReadinessSummary,
 } from "@/offline/posOfflineReadiness";
 import {
+  buildTerminalOperationalExplanationPresentation,
   buildTerminalRecoveryPresentation,
   classifyTerminalHealth,
   formatAge,
@@ -412,6 +413,8 @@ export function POSTerminalHealthViewContent({
         summary,
         currentBrowserTerminalIdSet,
       ),
+      operationalExplanation:
+        buildTerminalOperationalExplanationPresentation(summary),
       originalIndex: index,
       summary,
     }))
@@ -422,7 +425,10 @@ export function POSTerminalHealthViewContent({
       return left.originalIndex - right.originalIndex;
     });
   const reviewCount = healthRows.filter(
-    (row) => row.classification.label === "Needs review",
+    (row) =>
+      row.classification.label === "Needs review" ||
+      row.operationalExplanation.lane === "sale_ready_with_review_backlog" ||
+      row.operationalExplanation.lane === "needs_manual_review",
   ).length;
   const healthyCount = healthRows.filter(
     (row) => row.classification.label === "Healthy",
@@ -492,158 +498,195 @@ export function POSTerminalHealthViewContent({
               ) : (
                 <section className="space-y-layout-sm">
                   {healthRows.map(
-                    ({ classification, isCurrentBrowserTerminal, summary }) => {
-                    const runtimeStatus = summary.runtimeStatus;
-                    const primaryReason =
-                      getPrimaryTerminalAttentionReason(summary);
-                    const offlineReadiness =
-                      buildTerminalOfflineReadiness(summary);
-                    const recovery = buildTerminalRecoveryPresentation(summary);
-                    const syncReviewCount =
-                      (runtimeStatus?.sync.reviewEventCount ?? 0) +
-                      getReviewEvidenceCount(summary.syncEvidence);
-                    const syncSummary = runtimeStatus
-                      ? `${runtimeStatus.sync.pendingEventCount} pending / ${syncReviewCount} review`
-                      : "No runtime sync check-in";
-                    const cloudCursorSummary =
-                      summary.syncEvidence.acceptedThroughSequence == null
-                        ? "No accepted sequence"
-                        : `Accepted through ${summary.syncEvidence.acceptedThroughSequence}`;
-                    const operationalNote =
-                      classification.label === "Healthy"
-                        ? null
-                        : (primaryReason?.summary ??
-                          classification.description);
-                    return (
-                      <article
-                        className={cn(
-                          "rounded-lg border border-border bg-surface-raised p-layout-md shadow-surface",
-                          isCurrentBrowserTerminal
-                            ? "bg-action-workflow-soft/10"
-                            : null,
-                        )}
-                        key={summary.terminal._id}
-                      >
-                        <div className="flex flex-wrap items-start justify-between gap-layout-md">
-                          <div className="min-w-0 space-y-layout-xs">
-                            <div className="flex flex-wrap items-center gap-layout-xs">
-                              <Link
-                                className="min-w-0 text-xl font-medium text-foreground underline-offset-4 hover:underline"
-                                params={{
-                                  orgUrlSlug,
-                                  storeUrlSlug,
-                                  terminalId: String(summary.terminal._id),
-                                }}
-                                to="/$orgUrlSlug/store/$storeUrlSlug/pos/terminals/$terminalId"
-                                search={{ o: getOrigin() }}
-                              >
-                                {summary.terminal.displayName}
-                              </Link>
-                              {isCurrentBrowserTerminal ? (
-                                <Badge
-                                  className="inline-flex shrink-0 items-center gap-layout-xs border-action-workflow-border text-action-workflow"
-                                  variant="outline"
+                    ({
+                      classification,
+                      isCurrentBrowserTerminal,
+                      operationalExplanation,
+                      summary,
+                    }) => {
+                      const runtimeStatus = summary.runtimeStatus;
+                      const primaryReason =
+                        getPrimaryTerminalAttentionReason(summary);
+                      const offlineReadiness =
+                        buildTerminalOfflineReadiness(summary);
+                      const recovery =
+                        buildTerminalRecoveryPresentation(summary);
+                      const syncReviewCount =
+                        (runtimeStatus?.sync.reviewEventCount ?? 0) +
+                        getReviewEvidenceCount(summary.syncEvidence);
+                      const syncSummary = runtimeStatus
+                        ? `${runtimeStatus.sync.pendingEventCount} pending / ${syncReviewCount} review`
+                        : "No runtime sync check-in";
+                      const cloudCursorSummary =
+                        summary.syncEvidence.acceptedThroughSequence == null
+                          ? "No accepted sequence"
+                          : `Accepted through ${summary.syncEvidence.acceptedThroughSequence}`;
+                      const operationalNote =
+                        classification.label === "Healthy"
+                          ? null
+                          : (primaryReason?.summary ??
+                            classification.description);
+                      return (
+                        <article
+                          className={cn(
+                            "rounded-lg border border-border bg-surface-raised p-layout-md shadow-surface",
+                            isCurrentBrowserTerminal
+                              ? "bg-action-workflow-soft/10"
+                              : null,
+                          )}
+                          key={summary.terminal._id}
+                        >
+                          <div className="flex flex-wrap items-start justify-between gap-layout-md">
+                            <div className="min-w-0 space-y-layout-xs">
+                              <div className="flex flex-wrap items-center gap-layout-xs">
+                                <Link
+                                  className="min-w-0 text-xl font-medium text-foreground underline-offset-4 hover:underline"
+                                  params={{
+                                    orgUrlSlug,
+                                    storeUrlSlug,
+                                    terminalId: String(summary.terminal._id),
+                                  }}
+                                  to="/$orgUrlSlug/store/$storeUrlSlug/pos/terminals/$terminalId"
+                                  search={{ o: getOrigin() }}
                                 >
-                                  <MonitorCheck
-                                    aria-hidden="true"
-                                    className="h-3.5 w-3.5"
-                                  />
-                                  This browser
-                                </Badge>
-                              ) : null}
-                            </div>
-                            <div className="flex flex-wrap gap-layout-xs text-sm text-muted-foreground">
-                              <span>
-                                {formatRegisterNumber(
-                                  summary.terminal.registerNumber,
-                                )}
-                              </span>
-                              <span>
-                                {getStaffAuthorityLabel(
-                                  runtimeStatus?.staffAuthority,
-                                )}
-                              </span>
-                            </div>
-                          </div>
-                          <Badge
-                            className={classification.toneClassName}
-                            variant="outline"
-                          >
-                            {classification.label}
-                          </Badge>
-                        </div>
-
-                        <div className="mt-layout-md grid gap-layout-md border-t border-border pt-layout-md lg:grid-cols-[minmax(0,1.2fr)_minmax(26rem,0.8fr)]">
-                          <div>
-                            <p className="text-xs font-medium uppercase text-muted-foreground">
-                              Sales readiness
-                            </p>
-                            <p className="mt-1 text-base font-medium text-foreground">
-                              {recovery.readiness.label}
-                            </p>
-                            <p className="mt-layout-2xs text-sm text-muted-foreground">
-                              {recovery.readiness.description}
-                            </p>
-                            {operationalNote ? (
-                              <p className="mt-layout-sm text-sm text-foreground">
-                                {operationalNote}
-                              </p>
-                            ) : null}
-                          </div>
-
-                          <dl className="grid gap-x-layout-lg gap-y-layout-sm sm:grid-cols-2">
-                            <TerminalFact
-                              label="Last check-in"
-                              value={
-                                <span className="inline-flex items-center gap-layout-xs">
-                                  <Clock3
-                                    aria-hidden="true"
-                                    className="h-3.5 w-3.5 text-muted-foreground"
-                                  />
-                                  {formatTerminalTimestamp(
-                                    runtimeStatus?.receivedAt,
+                                  {summary.terminal.displayName}
+                                </Link>
+                                {isCurrentBrowserTerminal ? (
+                                  <Badge
+                                    className="inline-flex shrink-0 items-center gap-layout-xs border-action-workflow-border text-action-workflow"
+                                    variant="outline"
+                                  >
+                                    <MonitorCheck
+                                      aria-hidden="true"
+                                      className="h-3.5 w-3.5"
+                                    />
+                                    This browser
+                                  </Badge>
+                                ) : null}
+                              </div>
+                              <div className="flex flex-wrap gap-layout-xs text-sm text-muted-foreground">
+                                <span>
+                                  {formatRegisterNumber(
+                                    summary.terminal.registerNumber,
                                   )}
                                 </span>
+                                <span>
+                                  {getStaffAuthorityLabel(
+                                    runtimeStatus?.staffAuthority,
+                                  )}
+                                </span>
+                              </div>
+                            </div>
+                            <Badge
+                              className={
+                                summary.operationalExplanation
+                                  ? operationalExplanation.toneClassName
+                                  : classification.toneClassName
                               }
-                            />
-                            <TerminalFact label="Sync" value={syncSummary} />
-                            <TerminalFact
-                              label="Offline checkout"
-                              value={
-                                <LocalDataFreshness
-                                  snapshots={runtimeStatus?.snapshots}
-                                />
-                              }
-                            />
-                            <TerminalFact
-                              label="Register session"
-                              value={
-                                <RegisterSessionFactValue
-                                  orgUrlSlug={orgUrlSlug}
-                                  registerSessionLink={
-                                    summary.registerSessionLink
-                                  }
-                                  runtimeStatus={runtimeStatus}
-                                  storeUrlSlug={storeUrlSlug}
-                                />
-                              }
-                            />
-                            <TerminalFact
-                              label="App update"
-                              value={recovery.appUpdate.label}
-                            />
-                            <TerminalFact
-                              label="Cloud cursor"
-                              value={cloudCursorSummary}
-                            />
-                          </dl>
-                        </div>
+                              variant="outline"
+                            >
+                              {summary.operationalExplanation
+                                ? operationalExplanation.label
+                                : classification.label}
+                            </Badge>
+                          </div>
 
-                        <OfflineReadinessDiagnostic
-                          readiness={offlineReadiness}
-                        />
-                      </article>
-                    );
+                          <div className="mt-layout-md grid gap-layout-md border-t border-border pt-layout-md lg:grid-cols-[minmax(0,1.2fr)_minmax(26rem,0.8fr)]">
+                            <div>
+                              <p className="text-xs font-medium uppercase text-muted-foreground">
+                                Sales readiness
+                              </p>
+                              {summary.operationalExplanation ? (
+                                <>
+                                  <p className="mt-1 text-base font-medium text-foreground">
+                                    {operationalExplanation.headline}
+                                  </p>
+                                  <p className="mt-layout-2xs text-sm text-muted-foreground">
+                                    {operationalExplanation.detail}
+                                  </p>
+                                  <p className="mt-layout-sm text-sm text-foreground">
+                                    {operationalExplanation.saleImpactLabel}
+                                  </p>
+                                  {operationalExplanation.supportAction !==
+                                  "none" ? (
+                                    <p className="mt-layout-sm text-sm text-foreground">
+                                      <span className="font-medium">
+                                        Next step:
+                                      </span>{" "}
+                                      {operationalExplanation.nextStep}
+                                    </p>
+                                  ) : null}
+                                </>
+                              ) : (
+                                <>
+                                  <p className="mt-1 text-base font-medium text-foreground">
+                                    {recovery.readiness.label}
+                                  </p>
+                                  <p className="mt-layout-2xs text-sm text-muted-foreground">
+                                    {recovery.readiness.description}
+                                  </p>
+                                  {operationalNote ? (
+                                    <p className="mt-layout-sm text-sm text-foreground">
+                                      {operationalNote}
+                                    </p>
+                                  ) : null}
+                                </>
+                              )}
+                            </div>
+
+                            <dl className="grid gap-x-layout-lg gap-y-layout-sm sm:grid-cols-2">
+                              <TerminalFact
+                                label="Last check-in"
+                                value={
+                                  <span className="inline-flex items-center gap-layout-xs">
+                                    <Clock3
+                                      aria-hidden="true"
+                                      className="h-3.5 w-3.5 text-muted-foreground"
+                                    />
+                                    {formatTerminalTimestamp(
+                                      runtimeStatus?.receivedAt,
+                                    )}
+                                  </span>
+                                }
+                              />
+                              <TerminalFact label="Sync" value={syncSummary} />
+                              <TerminalFact
+                                label="Offline checkout"
+                                value={
+                                  <LocalDataFreshness
+                                    snapshots={runtimeStatus?.snapshots}
+                                  />
+                                }
+                              />
+                              <TerminalFact
+                                label="Register session"
+                                value={
+                                  <RegisterSessionFactValue
+                                    orgUrlSlug={orgUrlSlug}
+                                    registerSessionLink={
+                                      summary.registerSessionLink
+                                    }
+                                    runtimeStatus={runtimeStatus}
+                                    storeUrlSlug={storeUrlSlug}
+                                  />
+                                }
+                              />
+                              <TerminalFact
+                                label="App update"
+                                value={recovery.appUpdate.label}
+                              />
+                              <TerminalFact
+                                label="Cloud cursor"
+                                value={cloudCursorSummary}
+                              />
+                            </dl>
+                          </div>
+
+                          <OfflineReadinessDiagnostic
+                            readiness={offlineReadiness}
+                          />
+                        </article>
+                      );
                     },
                   )}
                 </section>

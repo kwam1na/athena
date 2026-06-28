@@ -12,7 +12,10 @@ import {
   type PosTerminalIntegrityState,
   type PosProvisionedTerminalSeed,
 } from "./posLocalStore";
-import { derivePosLocalSyncStatus } from "./syncStatus";
+import {
+  derivePosLocalSyncStatus,
+  isLocallySettledSyncStatus,
+} from "./syncStatus";
 import {
   isSyncablePosLocalEvent,
   isUploadDeferredByValidation,
@@ -285,9 +288,7 @@ export type PosTerminalRuntimeDiagnosticsEvent = {
   localEventId: string;
   localPosSessionId?: string;
   localRegisterSessionId?: string;
-  localTransactionId?: string;
   sequence: number;
-  staffProfileId?: string;
   status: PosLocalEventRecord["sync"]["status"];
   type: PosLocalEventRecord["type"];
   uploaded?: boolean;
@@ -440,8 +441,7 @@ export function buildPosTerminalRuntimeStatus(
       localOnlyEventCount: sync.localOnlyEventCount,
       pendingEventCount: sync.pendingEventCount,
       reviewEventCount: sync.reviewEventCount,
-      reviewEvents:
-        input.syncDebug?.reviewEvents ?? getReviewDiagnosticsEvents(input.events),
+      reviewEvents: getRuntimeReviewDiagnosticsEvents(input),
       status: sync.status,
       uploadableEventCount: sync.uploadableEventCount,
       lastSyncedSequence: sync.lastSyncedSequence,
@@ -536,7 +536,7 @@ export function buildPosTerminalRuntimeCopyDiagnostics(
       .slice()
       .sort((left, right) => left.sequence - right.sequence)
       .slice(-20)
-      .map(toDiagnosticsEvent),
+      .map(toPosTerminalRuntimeDiagnosticsEvent),
     failures: {
       ...(localStoreFailure ? { localStore: localStoreFailure } : {}),
       ...(syncFailure ? { sync: syncFailure } : {}),
@@ -668,11 +668,14 @@ function buildSyncMetrics(
   input: PosTerminalRuntimeStatusInput,
 ): PosTerminalRuntimeSyncMetrics {
   const uploadableEvents = input.events.filter(
-    (event) => event.sync.status !== "synced" && isSyncablePosLocalEvent(event),
+    (event) =>
+      !isLocallySettledSyncStatus(event.sync.status) &&
+      isSyncablePosLocalEvent(event),
   );
   const localOnlyEvents = input.events.filter(
     (event) =>
-      event.sync.status !== "synced" && !isSyncablePosLocalEvent(event),
+      !isLocallySettledSyncStatus(event.sync.status) &&
+      !isSyncablePosLocalEvent(event),
   );
   const failedEventCount =
     input.syncDebug?.failedEventCount ??
@@ -695,7 +698,7 @@ function buildSyncMetrics(
     isOnline: input.browserInfo?.online ?? true,
   });
   const oldestPendingEvent = input.events
-    .filter((event) => event.sync.status !== "synced")
+    .filter((event) => !isLocallySettledSyncStatus(event.sync.status))
     .sort((left, right) => left.createdAt - right.createdAt)
     .at(0);
   const nextUploadableEvent = uploadableEvents
@@ -911,7 +914,7 @@ function snapshotAges(
   };
 }
 
-function toDiagnosticsEvent(
+export function toPosTerminalRuntimeDiagnosticsEvent(
   event: PosLocalEventRecord,
 ): PosTerminalRuntimeDiagnosticsEvent {
   return {
@@ -923,11 +926,7 @@ function toDiagnosticsEvent(
     ...(event.localRegisterSessionId
       ? { localRegisterSessionId: event.localRegisterSessionId }
       : {}),
-    ...(event.localTransactionId
-      ? { localTransactionId: event.localTransactionId }
-      : {}),
     sequence: event.sequence,
-    ...(event.staffProfileId ? { staffProfileId: event.staffProfileId } : {}),
     status: event.sync.status,
     type: event.type,
     ...(event.sync.uploaded !== undefined
@@ -946,8 +945,46 @@ function getReviewDiagnosticsEvents(
     .filter((event) => event.sync.status === "needs_review")
     .slice()
     .sort(compareUploadableEventOrder)
-    .slice(0, 10)
-    .map(toDiagnosticsEvent);
+    .slice(0, 100)
+    .map(toPosTerminalRuntimeDiagnosticsEvent);
+}
+
+function getRuntimeReviewDiagnosticsEvents(
+  input: PosTerminalRuntimeStatusInput,
+): PosTerminalRuntimeDiagnosticsEvent[] {
+  const debugReviewEvents = input.syncDebug?.reviewEvents;
+  if (debugReviewEvents && debugReviewEvents.length > 0) {
+    return debugReviewEvents.map(toSafeRuntimeDiagnosticsEvent);
+  }
+
+  const eventReviewEvents = getReviewDiagnosticsEvents(input.events);
+  if (eventReviewEvents.length > 0) {
+    return eventReviewEvents;
+  }
+
+  return debugReviewEvents?.map(toSafeRuntimeDiagnosticsEvent) ?? [];
+}
+
+function toSafeRuntimeDiagnosticsEvent(
+  event: PosTerminalRuntimeDiagnosticsEvent,
+): PosTerminalRuntimeDiagnosticsEvent {
+  return {
+    createdAt: event.createdAt,
+    localEventId: event.localEventId,
+    ...(event.localPosSessionId
+      ? { localPosSessionId: event.localPosSessionId }
+      : {}),
+    ...(event.localRegisterSessionId
+      ? { localRegisterSessionId: event.localRegisterSessionId }
+      : {}),
+    sequence: event.sequence,
+    status: event.status,
+    type: event.type,
+    ...(event.uploaded !== undefined ? { uploaded: event.uploaded } : {}),
+    ...(typeof event.uploadSequence === "number"
+      ? { uploadSequence: event.uploadSequence }
+      : {}),
+  };
 }
 
 function compareUploadableEventOrder(

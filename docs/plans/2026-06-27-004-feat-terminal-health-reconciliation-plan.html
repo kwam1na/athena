@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Plan: Add Terminal Health Reconciliation Lanes</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f7f7f4;
+        --panel: #ffffff;
+        --ink: #151720;
+        --muted: #616775;
+        --line: #deded8;
+        --accent: #1f6f68;
+        --accent-soft: #e3f0ee;
+        --warn: #8a5a12;
+        --warn-soft: #fff4dc;
+        --danger: #9f2d2d;
+        --danger-soft: #fae6e6;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      main {
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: 40px 24px 56px;
+      }
+
+      header {
+        border-bottom: 1px solid var(--line);
+        margin-bottom: 24px;
+        padding-bottom: 20px;
+      }
+
+      h1,
+      h2,
+      h3 {
+        line-height: 1.2;
+        margin: 0;
+      }
+
+      h1 {
+        font-size: clamp(2rem, 4vw, 3.25rem);
+        letter-spacing: 0;
+      }
+
+      h2 {
+        font-size: 1.25rem;
+        margin-bottom: 12px;
+      }
+
+      h3 {
+        font-size: 1rem;
+        margin-bottom: 8px;
+      }
+
+      p {
+        margin: 0 0 12px;
+      }
+
+      a {
+        color: var(--accent);
+      }
+
+      code {
+        background: #f1f1ed;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        padding: 0 4px;
+      }
+
+      section {
+        margin-top: 24px;
+      }
+
+      .meta {
+        color: var(--muted);
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 16px;
+        margin-top: 14px;
+      }
+
+      .grid {
+        display: grid;
+        gap: 14px;
+      }
+
+      .grid.two {
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      }
+
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 16px;
+      }
+
+      .callout {
+        background: var(--accent-soft);
+        border-left: 4px solid var(--accent);
+      }
+
+      .warning {
+        background: var(--warn-soft);
+        border-left: 4px solid var(--warn);
+      }
+
+      .danger {
+        background: var(--danger-soft);
+        border-left: 4px solid var(--danger);
+      }
+
+      ul {
+        margin: 0;
+        padding-left: 20px;
+      }
+
+      li + li {
+        margin-top: 6px;
+      }
+
+      table {
+        border-collapse: collapse;
+        width: 100%;
+      }
+
+      th,
+      td {
+        border: 1px solid var(--line);
+        padding: 10px;
+        text-align: left;
+        vertical-align: top;
+      }
+
+      th {
+        background: #efefea;
+      }
+
+      .unit {
+        display: grid;
+        gap: 8px;
+      }
+
+      .unit strong {
+        color: var(--accent);
+      }
+
+      .toc {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .toc a {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 6px 10px;
+        text-decoration: none;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>feat: Add Terminal Health Reconciliation Lanes</h1>
+        <div class="meta">
+          <span>Type: feat</span>
+          <span>Status: active</span>
+          <span>Date: 2026-06-27</span>
+          <span>Source: <a href="./2026-06-27-004-feat-terminal-health-reconciliation-plan.md">markdown plan</a></span>
+        </div>
+      </header>
+
+      <nav class="toc" aria-label="Plan sections">
+        <a href="#summary">Summary</a>
+        <a href="#requirements">Requirements</a>
+        <a href="#decisions">Decisions</a>
+        <a href="#lanes">Lanes</a>
+        <a href="#units">Units</a>
+        <a href="#risks">Risks</a>
+      </nav>
+
+      <section id="summary" class="card callout">
+        <h2>Summary</h2>
+        <p>
+          Add a reusable explanation model for terminal health that reconciles sale readiness,
+          support recovery, sync review backlog, and next action lanes from
+          <code>TerminalOperationalState</code>. The plan keeps the motivating incident as a
+          representative fixture, not a special-case implementation.
+        </p>
+      </section>
+
+      <section class="grid two">
+        <article class="card">
+          <h2>Problem</h2>
+          <p>
+            Terminal Health can show a fresh online runtime and sale-ready evidence while still
+            marking a terminal as needing attention because sync review or cloud conflict evidence
+            remains unresolved.
+          </p>
+          <p>
+            Today those facts are split across attention reasons, support recovery, and conflict
+            lists. The plan adds one server-owned explanation of the relationship between them.
+          </p>
+        </article>
+
+        <article class="card warning">
+          <h2>Safety Boundary</h2>
+          <p>
+            Business facts remain manual. Sale, payment, inventory, closeout, variance, customer,
+            staff proof, and unknown conflicts must never become automatic repair candidates.
+          </p>
+        </article>
+      </section>
+
+      <section id="requirements" class="card">
+        <h2>Requirements Digest</h2>
+        <ul>
+          <li>Derive a health explanation with lane, next step, sale impact, support action, and bounded evidence.</li>
+          <li>Keep <code>terminalHealth</code>, <code>salesReadiness</code>, and <code>supportRecovery</code> distinct.</li>
+          <li>Preserve manual review and safe cloud repair boundaries.</li>
+          <li>Use capped summaries or pagination for large review/conflict backlogs.</li>
+          <li>Make public contract fields, literals, access boundaries, and sync-secret separation explicit.</li>
+          <li>Keep roster/detail explanations additive and keep recovery preview behaviorally consistent without changing its shape.</li>
+          <li>Use calm operational copy and avoid raw backend wording or internal ids.</li>
+        </ul>
+      </section>
+
+      <section id="decisions" class="card">
+        <h2>Key Decisions</h2>
+        <ul>
+          <li>Extend <code>TerminalOperationalState</code> instead of adding UI-only inference.</li>
+          <li>Use a review-first roster headline plus compact sale-continuity copy when sales can continue.</li>
+          <li>Manual review remains primary in mixed manual-review plus safe-repair states.</li>
+          <li>Generic local review becomes terminal-local retry or diagnostics, not manual business review.</li>
+          <li>Unsafe cloud repair skips stay visible as manual-review or diagnostic evidence.</li>
+          <li>App update remains outside <code>operationalExplanation.lane</code>.</li>
+          <li>Health summaries return bounded evidence and sampling metadata, not unbounded lists.</li>
+        </ul>
+      </section>
+
+      <section id="lanes" class="card">
+        <h2>Lane Matrix</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Lane</th>
+              <th>Meaning</th>
+              <th>Owner</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>sale_ready_with_review_backlog</code></td>
+              <td>Support review needed; cashier can continue.</td>
+              <td>Existing owner resolved from evidence.</td>
+            </tr>
+            <tr>
+              <td><code>needs_manual_review</code></td>
+              <td>Business or review facts need a human workflow.</td>
+              <td>Cash Controls or Operations/Open Work.</td>
+            </tr>
+            <tr>
+              <td><code>needs_terminal_action</code></td>
+              <td>Matching terminal must repair local state or retry sync.</td>
+              <td>Terminal command/runtime.</td>
+            </tr>
+            <tr>
+              <td><code>needs_cloud_repair</code></td>
+              <td>Safe cloud repair policy can resolve stale duplicate lifecycle evidence.</td>
+              <td>Support cloud repair.</td>
+            </tr>
+            <tr>
+              <td><code>stale_runtime</code></td>
+              <td>Runtime evidence is stale or absent.</td>
+              <td>Diagnostic / wait for check-in.</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="card">
+        <h2>Public Contract</h2>
+        <p>
+          <code>operationalExplanation</code> is additive on terminal health list/detail
+          responses. It keeps existing fields intact and uses fixed public literals for lane,
+          severity, blocking domain, sale impact, support action, owner, evidence references,
+          secondary actions, and sampling metadata.
+        </p>
+        <ul>
+          <li><code>previewTerminalRecovery</code> keeps returning only <code>TerminalRecoveryPreview</code>; tests prove recovery-preview consistency with list/detail.</li>
+          <li>Required access stays staff/user-role based; terminal sync secrets never authorize support-facing reads.</li>
+          <li>Evidence references are display-safe only and exclude raw payloads, secrets, payment/customer data, and staff proof/PIN material.</li>
+          <li>Operations/Open Work ownership is definitive only when resolved through bounded indexed reads; otherwise <code>targetResolutionIncomplete</code> is true.</li>
+        </ul>
+      </section>
+
+      <section id="units">
+        <h2>Implementation Units</h2>
+        <div class="grid">
+          <article class="card unit">
+            <strong>U1. Characterize Current Terminal Health Cases</strong>
+            <span>Lock in sale readiness, support recovery, and health distinctions before policy changes.</span>
+          </article>
+          <article class="card unit">
+            <strong>U2. Add Bounded Sync Review Evidence Summary</strong>
+            <span>Group large review backlogs by type, owner, and actionability with named caps and indexed reads.</span>
+          </article>
+          <article class="card unit">
+            <strong>U3. Add Operational Explanation Policy</strong>
+            <span>Derive lane, sale impact, next step, support action, severity, and bounded evidence while resolving generic local-review ambiguity.</span>
+          </article>
+          <article class="card unit">
+            <strong>U4. Project And Validate The Public Contract</strong>
+            <span>Expose the explanation through terminal queries, Convex validators, and frontend types.</span>
+          </article>
+          <article class="card unit">
+            <strong>U5. Update Roster And Detail Presentation</strong>
+            <span>Use the same explanation in roster and detail, including required sale-continuity copy for sale-ready review backlog.</span>
+          </article>
+          <article class="card unit">
+            <strong>U6. Strengthen Regression Coverage And Documentation</strong>
+            <span>Document the lane boundary and harden cloud repair/manual review tests.</span>
+          </article>
+        </div>
+      </section>
+
+      <section id="risks" class="card danger">
+        <h2>Primary Risks</h2>
+        <ul>
+          <li>Hiding a true sale blocker behind review copy.</li>
+          <li>Encouraging unsafe cleanup of business facts.</li>
+          <li>Understating huge backlogs when summaries are bounded.</li>
+          <li>Drifting public validators from query return shape.</li>
+          <li>Letting roster and detail copy diverge.</li>
+          <li>Letting sync-secret terminal proof become an accidental read credential.</li>
+        </ul>
+      </section>
+    </main>
+  </body>
+</html>

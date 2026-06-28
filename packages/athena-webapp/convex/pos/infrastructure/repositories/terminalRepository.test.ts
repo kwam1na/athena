@@ -5,6 +5,8 @@ import {
   getTerminalSyncEvidence,
   hasActiveRegisterSessionForTerminal,
   resolveTerminalRegisterSessionActionTarget,
+  TERMINAL_SYNC_REVIEW_SUMMARY_CAP,
+  TERMINAL_SYNC_REVIEW_TARGET_LOOKUP_CAP,
   upsertLatestRuntimeStatus,
 } from "./terminalRepository";
 
@@ -145,7 +147,10 @@ describe("terminalRepository runtime status", () => {
     const result = await upsertLatestRuntimeStatus(ctx as never, input);
 
     expect(result).toBe("runtime-status-new");
-    expect(ctx.db.insert).toHaveBeenCalledWith("posTerminalRuntimeStatus", input);
+    expect(ctx.db.insert).toHaveBeenCalledWith(
+      "posTerminalRuntimeStatus",
+      input,
+    );
     expect(ctx.db.patch).not.toHaveBeenCalled();
   });
 
@@ -202,6 +207,15 @@ describe("terminalRepository sync evidence", () => {
       rejectedCount: 0,
       unresolvedConflictCount: 0,
       unresolvedConflicts: [],
+      reviewSummary: {
+        groups: [],
+        meta: {
+          cap: TERMINAL_SYNC_REVIEW_SUMMARY_CAP,
+          hasMore: false,
+          sampledCount: 0,
+          targetResolutionIncomplete: false,
+        },
+      },
       acceptedThroughSequence: 12,
       cursorUpdatedAt: 300,
     });
@@ -221,11 +235,31 @@ describe("terminalRepository sync evidence", () => {
         },
       ],
       posLocalSyncEvent: [
-        buildSyncEvent({ localEventId: "event-accepted", sequence: 1, status: "accepted" }),
-        buildSyncEvent({ localEventId: "event-projected", sequence: 2, status: "projected" }),
-        buildSyncEvent({ localEventId: "event-conflicted", sequence: 3, status: "conflicted" }),
-        buildSyncEvent({ localEventId: "event-held", sequence: 4, status: "held" }),
-        buildSyncEvent({ localEventId: "event-rejected", sequence: 5, status: "rejected" }),
+        buildSyncEvent({
+          localEventId: "event-accepted",
+          sequence: 1,
+          status: "accepted",
+        }),
+        buildSyncEvent({
+          localEventId: "event-projected",
+          sequence: 2,
+          status: "projected",
+        }),
+        buildSyncEvent({
+          localEventId: "event-conflicted",
+          sequence: 3,
+          status: "conflicted",
+        }),
+        buildSyncEvent({
+          localEventId: "event-held",
+          sequence: 4,
+          status: "held",
+        }),
+        buildSyncEvent({
+          localEventId: "event-rejected",
+          sequence: 5,
+          status: "rejected",
+        }),
       ],
       posLocalSyncConflict: [
         buildSyncConflict({
@@ -302,18 +336,350 @@ describe("terminalRepository sync evidence", () => {
           _id: "conflict-latest",
           localEventId: "event-rejected",
           sequence: 5,
-          summary: "A register session is already open for this terminal.",
+          summary: "A synced register event needs permission review.",
         }),
         expect.objectContaining({
           _id: "conflict-older",
           localEventId: "event-conflicted",
           sequence: 3,
-          summary: "Older conflict.",
+          summary: "A synced register event needs permission review.",
         }),
       ],
       acceptedThroughSequence: 7,
       cursorUpdatedAt: 400,
+      reviewSummary: {
+        groups: [
+          expect.objectContaining({
+            actionability: "manual_review",
+            conflictType: "permission",
+            count: 2,
+            owner: "manual_review",
+          }),
+        ],
+        meta: {
+          cap: TERMINAL_SYNC_REVIEW_SUMMARY_CAP,
+          hasMore: false,
+          sampledCount: 2,
+          targetResolutionIncomplete: false,
+        },
+      },
     });
+  });
+
+  it("groups inventory conflicts with open work targets under operations", async () => {
+    const ctx = buildCtx({
+      operationalWorkItem: [
+        buildOperationalWorkItem({
+          _id: "work-item-1" as Id<"operationalWorkItem">,
+          metadata: {
+            localEventId: "event-inventory",
+          },
+          status: "open",
+          type: "synced_sale_inventory_review",
+        }),
+      ],
+      posLocalSyncConflict: [
+        buildSyncConflict({
+          _id: "conflict-inventory" as Id<"posLocalSyncConflict">,
+          conflictType: "inventory",
+          localEventId: "event-inventory",
+          sequence: 9,
+        }),
+      ],
+    });
+
+    const result = await getTerminalSyncEvidence(ctx as never, {
+      storeId: "store-1" as Id<"store">,
+      terminalId: "terminal-1" as Id<"posTerminal">,
+    });
+
+    expect(result.unresolvedConflicts?.[0]).toMatchObject({
+      _id: "conflict-inventory",
+      reviewTarget: {
+        type: "open_work",
+        workItemId: "work-item-1",
+        workItemType: "synced_sale_inventory_review",
+      },
+    });
+    expect(result.reviewSummary).toEqual({
+      groups: [
+        expect.objectContaining({
+          actionability: "open_work_review",
+          conflictType: "inventory",
+          count: 1,
+          owner: "operations_open_work",
+          reviewTarget: {
+            type: "open_work",
+            workItemId: "work-item-1",
+            workItemType: "synced_sale_inventory_review",
+          },
+        }),
+      ],
+      meta: {
+        cap: TERMINAL_SYNC_REVIEW_SUMMARY_CAP,
+        hasMore: false,
+        sampledCount: 1,
+        targetResolutionIncomplete: false,
+      },
+    });
+  });
+
+  it("groups mapped register-session conflicts under cash controls", async () => {
+    const ctx = buildCtx({
+      posLocalSyncConflict: [
+        buildSyncConflict({
+          _id: "conflict-register" as Id<"posLocalSyncConflict">,
+          conflictType: "permission",
+          localRegisterSessionId: "local-register-1",
+          sequence: 8,
+        }),
+      ],
+      posLocalSyncMapping: [
+        buildSyncMapping({
+          cloudId: "register-session-1",
+          localId: "local-register-1",
+          localRegisterSessionId: "local-register-1",
+        }),
+      ],
+      registerSession: [
+        buildRegisterSession({
+          _id: "register-session-1" as Id<"registerSession">,
+        }),
+      ],
+    });
+
+    const result = await getTerminalSyncEvidence(ctx as never, {
+      storeId: "store-1" as Id<"store">,
+      terminalId: "terminal-1" as Id<"posTerminal">,
+    });
+
+    expect(result.reviewSummary?.groups).toEqual([
+      expect.objectContaining({
+        actionTarget: {
+          registerSessionId: "register-session-1",
+          type: "register_session",
+        },
+        actionability: "cash_controls_review",
+        conflictType: "permission",
+        count: 1,
+        owner: "cash_controls",
+      }),
+    ]);
+  });
+
+  it("omits mapped conflicts for settled register sessions from current review evidence", async () => {
+    const ctx = buildCtx({
+      posLocalSyncConflict: [
+        buildSyncConflict({
+          _id: "conflict-closed-register" as Id<"posLocalSyncConflict">,
+          conflictType: "permission",
+          localRegisterSessionId: "local-register-closed",
+          sequence: 8,
+        }),
+      ],
+      posLocalSyncMapping: [
+        buildSyncMapping({
+          cloudId: "register-session-closed",
+          localId: "local-register-closed",
+          localRegisterSessionId: "local-register-closed",
+        }),
+      ],
+      registerSession: [
+        buildRegisterSession({
+          _id: "register-session-closed" as Id<"registerSession">,
+          closedAt: 900,
+          countedCash: 100,
+          status: "closed",
+          variance: 0,
+        }),
+      ],
+    });
+
+    const result = await getTerminalSyncEvidence(ctx as never, {
+      storeId: "store-1" as Id<"store">,
+      terminalId: "terminal-1" as Id<"posTerminal">,
+    });
+
+    expect(result.unresolvedConflictCount).toBe(0);
+    expect(result.unresolvedConflicts).toEqual([]);
+    expect(result.reviewSummary).toEqual({
+      groups: [],
+      meta: {
+        cap: TERMINAL_SYNC_REVIEW_SUMMARY_CAP,
+        hasMore: false,
+        sampledCount: 0,
+        targetResolutionIncomplete: false,
+      },
+    });
+  });
+
+  it("caps review summary samples and reports when more conflicts exist", async () => {
+    const conflicts = Array.from(
+      { length: TERMINAL_SYNC_REVIEW_SUMMARY_CAP + 1 },
+      (_, index) =>
+        buildSyncConflict({
+          _id: `conflict-${index}` as Id<"posLocalSyncConflict">,
+          localEventId: `event-${index}`,
+          sequence: index + 1,
+        }),
+    );
+    const ctx = buildCtx({
+      posLocalSyncConflict: conflicts,
+    });
+
+    const result = await getTerminalSyncEvidence(ctx as never, {
+      storeId: "store-1" as Id<"store">,
+      terminalId: "terminal-1" as Id<"posTerminal">,
+    });
+
+    expect(result.unresolvedConflicts).toHaveLength(20);
+    expect(result.reviewSummary?.meta).toEqual({
+      cap: TERMINAL_SYNC_REVIEW_SUMMARY_CAP,
+      hasMore: true,
+      sampledCount: TERMINAL_SYNC_REVIEW_SUMMARY_CAP,
+      targetResolutionIncomplete: true,
+    });
+    expect(result.reviewSummary?.groups).toEqual([
+      expect.objectContaining({
+        count: TERMINAL_SYNC_REVIEW_SUMMARY_CAP,
+      }),
+    ]);
+  });
+
+  it("marks target resolution incomplete when open work lookup is capped before a match", async () => {
+    const workItems = Array.from(
+      { length: TERMINAL_SYNC_REVIEW_TARGET_LOOKUP_CAP + 1 },
+      (_, index) =>
+        buildOperationalWorkItem({
+          _id: `work-item-${index}` as Id<"operationalWorkItem">,
+          metadata: {
+            localEventId:
+              index === TERMINAL_SYNC_REVIEW_TARGET_LOOKUP_CAP
+                ? "event-inventory"
+                : `other-event-${index}`,
+          },
+          status: "open",
+          type: "synced_sale_inventory_review",
+        }),
+    );
+    const ctx = buildCtx({
+      operationalWorkItem: workItems,
+      posLocalSyncConflict: [
+        buildSyncConflict({
+          _id: "conflict-inventory" as Id<"posLocalSyncConflict">,
+          conflictType: "inventory",
+          localEventId: "event-inventory",
+        }),
+      ],
+    });
+
+    const result = await getTerminalSyncEvidence(ctx as never, {
+      storeId: "store-1" as Id<"store">,
+      terminalId: "terminal-1" as Id<"posTerminal">,
+    });
+
+    expect(result.unresolvedConflicts?.[0]?.reviewTarget).toBeUndefined();
+    expect(result.reviewSummary?.meta).toEqual({
+      cap: TERMINAL_SYNC_REVIEW_SUMMARY_CAP,
+      hasMore: false,
+      sampledCount: 1,
+      targetResolutionIncomplete: true,
+    });
+    expect(result.reviewSummary?.groups).toEqual([
+      expect.objectContaining({
+        actionability: "diagnostic_only",
+        conflictType: "inventory",
+        owner: "diagnostic",
+      }),
+    ]);
+  });
+
+  it("finds matching open work targets after closed inventory review history", async () => {
+    const closedWorkItems = Array.from({ length: 8 }, (_, index) =>
+      buildOperationalWorkItem({
+        _id: `closed-work-item-${index}` as Id<"operationalWorkItem">,
+        metadata: {
+          localEventId: `closed-event-${index}`,
+        },
+        status: "completed",
+        type: "synced_sale_inventory_review",
+      }),
+    );
+    const ctx = buildCtx({
+      operationalWorkItem: [
+        ...closedWorkItems,
+        buildOperationalWorkItem({
+          _id: "work-item-current" as Id<"operationalWorkItem">,
+          metadata: {
+            localEventId: "event-inventory",
+          },
+          status: "open",
+          type: "synced_sale_inventory_review",
+        }),
+      ],
+      posLocalSyncConflict: [
+        buildSyncConflict({
+          _id: "conflict-inventory" as Id<"posLocalSyncConflict">,
+          conflictType: "inventory",
+          localEventId: "event-inventory",
+        }),
+      ],
+    });
+
+    const result = await getTerminalSyncEvidence(ctx as never, {
+      storeId: "store-1" as Id<"store">,
+      terminalId: "terminal-1" as Id<"posTerminal">,
+    });
+
+    expect(result.unresolvedConflicts?.[0]?.reviewTarget).toEqual({
+      type: "open_work",
+      workItemId: "work-item-current",
+      workItemType: "synced_sale_inventory_review",
+    });
+    expect(result.reviewSummary?.meta.targetResolutionIncomplete).toBe(false);
+  });
+
+  it("keeps business-fact conflicts in manual review without exposing raw details", async () => {
+    const ctx = buildCtx({
+      posLocalSyncConflict: [
+        buildSyncConflict({
+          _id: "conflict-payment" as Id<"posLocalSyncConflict">,
+          conflictType: "payment",
+          details: {
+            accountNumber: "4111111111111111",
+            customerName: "Sensitive Customer",
+            staffProofToken: "staff-proof-secret",
+          },
+          summary: "Payment projection requires manager review.",
+        }),
+      ],
+    });
+
+    const result = await getTerminalSyncEvidence(ctx as never, {
+      storeId: "store-1" as Id<"store">,
+      terminalId: "terminal-1" as Id<"posTerminal">,
+    });
+
+    expect(result.reviewSummary?.groups).toEqual([
+      expect.objectContaining({
+        actionability: "manual_review",
+        conflictType: "payment",
+        count: 1,
+        owner: "manual_review",
+      }),
+    ]);
+    expect(JSON.stringify(result.reviewSummary)).not.toContain(
+      "4111111111111111",
+    );
+    expect(JSON.stringify(result.reviewSummary)).not.toContain(
+      "Sensitive Customer",
+    );
+    expect(JSON.stringify(result.reviewSummary)).not.toContain(
+      "staff-proof-secret",
+    );
+    expect(result.unresolvedConflicts?.[0]?.summary).toBe(
+      "A synced register event needs review.",
+    );
   });
 
   it("excludes manager-rejected sync reviews from actionable terminal evidence", async () => {
@@ -505,7 +871,7 @@ describe("terminalRepository register-session action targets", () => {
           openedByStaffProfileId: "staff-1" as Id<"staffProfile">,
           openingFloat: 100,
           registerNumber: "1",
-          status: "closed",
+          status: "open",
           storeId: "store-1" as Id<"store">,
           terminalId: "terminal-1" as Id<"posTerminal">,
         },
@@ -564,14 +930,17 @@ describe("terminalRepository register-session action targets", () => {
   });
 });
 
-function buildCtx(seed: {
-  posLocalSyncCursor?: Array<Doc<"posLocalSyncCursor">>;
-  posLocalSyncConflict?: Array<Doc<"posLocalSyncConflict">>;
-  posLocalSyncEvent?: Array<Doc<"posLocalSyncEvent">>;
-  posLocalSyncMapping?: Array<Doc<"posLocalSyncMapping">>;
-  posTerminalRuntimeStatus?: Array<Doc<"posTerminalRuntimeStatus">>;
-  registerSession?: Array<Doc<"registerSession">>;
-} = {}) {
+function buildCtx(
+  seed: {
+    operationalWorkItem?: Array<Doc<"operationalWorkItem">>;
+    posLocalSyncCursor?: Array<Doc<"posLocalSyncCursor">>;
+    posLocalSyncConflict?: Array<Doc<"posLocalSyncConflict">>;
+    posLocalSyncEvent?: Array<Doc<"posLocalSyncEvent">>;
+    posLocalSyncMapping?: Array<Doc<"posLocalSyncMapping">>;
+    posTerminalRuntimeStatus?: Array<Doc<"posTerminalRuntimeStatus">>;
+    registerSession?: Array<Doc<"registerSession">>;
+  } = {},
+) {
   return {
     db: {
       get: vi.fn(async (tableName: keyof typeof seed, id: string) => {
@@ -598,37 +967,42 @@ function buildQuery<T extends { _creationTime?: number; sequence?: number }>(
 ) {
   let currentRows = [...rows];
   return {
-    withIndex: vi.fn((_indexName: string, build: (q: {
-      eq: (field: string, value: unknown) => unknown;
-    }) => unknown) => {
-      const q = {
-        eq: vi.fn((field: string, value: unknown) => {
-          currentRows = currentRows.filter(
-            (row) => (row as Record<string, unknown>)[field] === value,
-          );
-          return q;
-        }),
-      };
-      build(q);
+    withIndex: vi.fn(
+      (
+        _indexName: string,
+        build: (q: {
+          eq: (field: string, value: unknown) => unknown;
+        }) => unknown,
+      ) => {
+        const q = {
+          eq: vi.fn((field: string, value: unknown) => {
+            currentRows = currentRows.filter(
+              (row) => (row as Record<string, unknown>)[field] === value,
+            );
+            return q;
+          }),
+        };
+        build(q);
 
-      return {
-        order: vi.fn((direction: "asc" | "desc") => {
-          currentRows = [...currentRows].sort((left, right) => {
-            const leftOrder = left.sequence ?? left._creationTime ?? 0;
-            const rightOrder = right.sequence ?? right._creationTime ?? 0;
-            return direction === "desc"
-              ? rightOrder - leftOrder
-              : leftOrder - rightOrder;
-          });
-          return {
-            first: vi.fn(async () => currentRows[0] ?? null),
-            take: vi.fn(async (count: number) => currentRows.slice(0, count)),
-          };
-        }),
-        take: vi.fn(async (count: number) => currentRows.slice(0, count)),
-        unique: vi.fn(async () => currentRows[0] ?? null),
-      };
-    }),
+        return {
+          order: vi.fn((direction: "asc" | "desc") => {
+            currentRows = [...currentRows].sort((left, right) => {
+              const leftOrder = left.sequence ?? left._creationTime ?? 0;
+              const rightOrder = right.sequence ?? right._creationTime ?? 0;
+              return direction === "desc"
+                ? rightOrder - leftOrder
+                : leftOrder - rightOrder;
+            });
+            return {
+              first: vi.fn(async () => currentRows[0] ?? null),
+              take: vi.fn(async (count: number) => currentRows.slice(0, count)),
+            };
+          }),
+          take: vi.fn(async (count: number) => currentRows.slice(0, count)),
+          unique: vi.fn(async () => currentRows[0] ?? null),
+        };
+      },
+    ),
   };
 }
 
@@ -700,6 +1074,25 @@ function buildSyncEvent(
   } as Doc<"posLocalSyncEvent">;
 }
 
+function buildSyncMapping(
+  overrides: Partial<Doc<"posLocalSyncMapping">> = {},
+): Doc<"posLocalSyncMapping"> {
+  return {
+    _id: "mapping-1" as Id<"posLocalSyncMapping">,
+    _creationTime: 1,
+    cloudId: "register-session-1",
+    cloudTable: "registerSession",
+    createdAt: 1,
+    localEventId: "event-1",
+    localId: "local-register-1",
+    localIdKind: "registerSession",
+    localRegisterSessionId: "local-register-1",
+    storeId: "store-1" as Id<"store">,
+    terminalId: "terminal-1" as Id<"posTerminal">,
+    ...overrides,
+  } as Doc<"posLocalSyncMapping">;
+}
+
 function buildSyncConflict(
   overrides: Partial<Doc<"posLocalSyncConflict">> = {},
 ): Doc<"posLocalSyncConflict"> {
@@ -718,4 +1111,23 @@ function buildSyncConflict(
     createdAt: 120,
     ...overrides,
   } as Doc<"posLocalSyncConflict">;
+}
+
+function buildOperationalWorkItem(
+  overrides: Partial<Doc<"operationalWorkItem">> = {},
+): Doc<"operationalWorkItem"> {
+  return {
+    _id: "work-item-1" as Id<"operationalWorkItem">,
+    _creationTime: 1,
+    approvalState: "not_required",
+    createdAt: 1,
+    metadata: {},
+    organizationId: "organization-1" as Id<"organization">,
+    priority: "normal",
+    status: "open",
+    storeId: "store-1" as Id<"store">,
+    title: "Review synced sale inventory",
+    type: "synced_sale_inventory_review",
+    ...overrides,
+  } as Doc<"operationalWorkItem">;
 }

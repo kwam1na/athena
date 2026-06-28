@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { Doc, Id } from "../../../_generated/dataModel";
 import type { QueryCtx } from "../../../_generated/server";
+import { TERMINAL_SYNC_REVIEW_SUMMARY_CAP } from "../../infrastructure/repositories/terminalRepository";
 import { collectTerminalOperationalFacts } from "./collectTerminalOperationalFacts";
 
 const now = 2_000_000;
@@ -127,6 +128,22 @@ describe("collectTerminalOperationalFacts", () => {
     expect(facts.rawSyncEvidence.unresolvedConflicts?.[0]?._id).toBe(
       "conflict-1",
     );
+    expect(facts.rawSyncEvidence.reviewSummary).toEqual({
+      groups: [
+        expect.objectContaining({
+          actionability: "manual_review",
+          conflictType: "inventory",
+          count: 1,
+          owner: "manual_review",
+        }),
+      ],
+      meta: {
+        cap: TERMINAL_SYNC_REVIEW_SUMMARY_CAP,
+        hasMore: false,
+        sampledCount: 1,
+        targetResolutionIncomplete: false,
+      },
+    });
   });
 });
 
@@ -296,6 +313,15 @@ function emptySyncEvidence() {
     rejectedCount: 0,
     unresolvedConflictCount: 0,
     unresolvedConflicts: [],
+    reviewSummary: {
+      groups: [],
+      meta: {
+        cap: TERMINAL_SYNC_REVIEW_SUMMARY_CAP,
+        hasMore: false,
+        sampledCount: 0,
+        targetResolutionIncomplete: false,
+      },
+    },
   };
 }
 

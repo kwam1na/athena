@@ -46,6 +46,7 @@ import type { ApprovalRequirement } from "~/shared/approvalPolicy";
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
 import {
+  buildTerminalOperationalExplanationPresentation,
   buildTerminalRecoveryPresentation,
   classifyTerminalHealth,
   formatAge,
@@ -275,9 +276,7 @@ function getStaffAuthorityTone(
   }
 }
 
-function getDrawerAuthorityTone(
-  runtimeStatus?: TerminalRuntimeStatus | null,
-) {
+function getDrawerAuthorityTone(runtimeStatus?: TerminalRuntimeStatus | null) {
   if (!runtimeStatus) {
     return "neutral";
   }
@@ -444,7 +443,9 @@ function RuntimeReportGroup({
   runtimeStatus: TerminalRuntimeStatus | null;
 }) {
   const syncTone = getRuntimeSyncTone(runtimeStatus?.sync.status);
-  const appUpdateTone = getRuntimeAppUpdateTone(runtimeStatus?.appUpdate?.status);
+  const appUpdateTone = getRuntimeAppUpdateTone(
+    runtimeStatus?.appUpdate?.status,
+  );
   const activeRegisterSession = runtimeStatus?.activeRegisterSession;
 
   return (
@@ -475,7 +476,9 @@ function RuntimeReportGroup({
           label="Sync"
           tone={syncTone}
           value={
-            runtimeStatus ? formatStatusLabel(runtimeStatus.sync.status) : "No report"
+            runtimeStatus
+              ? formatStatusLabel(runtimeStatus.sync.status)
+              : "No report"
           }
         />
         <RailSignalRow
@@ -484,7 +487,11 @@ function RuntimeReportGroup({
         />
         <RailSignalRow
           label="Local review"
-          tone={(runtimeStatus?.sync.reviewEventCount ?? 0) > 0 ? "warning" : "neutral"}
+          tone={
+            (runtimeStatus?.sync.reviewEventCount ?? 0) > 0
+              ? "warning"
+              : "neutral"
+          }
           value={formatLocalReviewCount(runtimeStatus)}
         />
         <RailSignalRow
@@ -835,7 +842,8 @@ function compareRuntimeBuildMetadata(
     terminalBuildMetadata.buildSha &&
     latestBuildMetadata.buildSha
   ) {
-    return terminalBuildMetadata.appVersion === latestBuildMetadata.appVersion &&
+    return terminalBuildMetadata.appVersion ===
+      latestBuildMetadata.appVersion &&
       terminalBuildMetadata.buildSha === latestBuildMetadata.buildSha
       ? "latest"
       : "stale";
@@ -859,7 +867,9 @@ function compareRuntimeBuildMetadata(
 function getTerminalBuildMetadata(
   runtimeStatus: TerminalRuntimeStatus | null,
 ): AthenaWebappRuntimeBuildMetadata {
-  const appVersion = normalizeOptionalRuntimeMetadata(runtimeStatus?.appVersion);
+  const appVersion = normalizeOptionalRuntimeMetadata(
+    runtimeStatus?.appVersion,
+  );
   const buildSha = normalizeOptionalRuntimeMetadata(runtimeStatus?.buildSha);
 
   return {
@@ -1047,16 +1057,35 @@ function SyncEvidenceSection({
 }
 
 function ConflictSection({
+  detail,
+  onIssueTerminalRecoveryCommand,
+  operationalExplanation,
   runtimeStatus,
   syncEvidence,
 }: {
+  detail?: TerminalHealthDetail;
+  onIssueTerminalRecoveryCommand?: POSTerminalDetailViewContentProps["onIssueTerminalRecoveryCommand"];
+  operationalExplanation?: ReturnType<
+    typeof buildTerminalOperationalExplanationPresentation
+  >;
   runtimeStatus: TerminalRuntimeStatus | null;
   syncEvidence: TerminalSyncEvidence;
 }) {
   const [isConflictListExpanded, setIsConflictListExpanded] = useState(false);
   const [isLocalReviewListExpanded, setIsLocalReviewListExpanded] =
     useState(false);
-  const localReviewEvents = runtimeStatus?.sync.reviewEvents ?? [];
+  const runtimeLocalReviewEvents = runtimeStatus?.sync.reviewEvents ?? [];
+  const recoveryPreview = detail?.recovery ?? detail?.recoveryPreview;
+  const collectedLocalReviewEvents =
+    recoveryPreview?.commandStatus?.commandType ===
+      "collect_local_review" &&
+    recoveryPreview.commandStatus.verificationStatus === "verified"
+      ? (recoveryPreview.commandStatus.localReviewEvents ?? [])
+      : [];
+  const localReviewEvents =
+    runtimeLocalReviewEvents.length > 0
+      ? runtimeLocalReviewEvents
+      : collectedLocalReviewEvents;
   const runtimeReviewCount = runtimeStatus?.sync.reviewEventCount ?? 0;
   const missingRuntimeReviewDetails =
     runtimeReviewCount > 0 && localReviewEvents.length === 0;
@@ -1076,6 +1105,16 @@ function ConflictSection({
     0,
   );
   const reviewCount = getReviewEvidenceCount(syncEvidence);
+  const localReviewActionReason = {
+    actionTarget: { type: "pos_register" },
+    count: runtimeReviewCount,
+    source: "local_runtime",
+    summary: `${runtimeReviewCount} local review item${runtimeReviewCount === 1 ? " is" : "s are"} still on this terminal.`,
+    type: "local_review",
+  } satisfies TerminalHealthAttentionReason;
+  const hasLocalReviewTableAction = Boolean(
+    getAttentionReasonRecoveryAction(localReviewActionReason, detail),
+  );
 
   return (
     <DetailPanel
@@ -1083,6 +1122,12 @@ function ConflictSection({
       title="Conflicts and review"
     >
       <div className="space-y-layout-sm">
+        {operationalExplanation ? (
+          <OperationalExplanationReviewSummary
+            operationalExplanation={operationalExplanation}
+          />
+        ) : null}
+
         {unresolvedConflicts.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             {reviewCount > 0
@@ -1121,73 +1166,97 @@ function ConflictSection({
         )}
 
         {localReviewEvents.length > 0 ? (
-          <div className="overflow-hidden rounded-md border border-border/80 bg-surface">
-            <div className="grid gap-layout-sm border-b border-border/80 bg-surface-muted/40 px-layout-md py-layout-xs text-xs font-medium uppercase text-muted-foreground md:grid-cols-[5rem_minmax(0,1fr)_8rem_7rem]">
-              <span>Sequence</span>
-              <span>Local review item</span>
-              <span>Upload</span>
-              <span>Status</span>
-            </div>
-            <div className="divide-y divide-border/80">
-              {visibleLocalReviewEvents.map((event) => (
-                <div
-                  className="grid gap-layout-sm px-layout-md py-layout-sm text-sm md:grid-cols-[5rem_minmax(0,1fr)_8rem_7rem] md:items-center"
-                  key={event.localEventId}
-                >
-                  <span className="font-numeric tabular-nums text-muted-foreground">
-                    #{event.sequence}
-                  </span>
-                  <span className="min-w-0 truncate font-medium text-foreground">
-                    {event.type}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    {event.uploaded
-                      ? "Uploaded"
-                      : event.uploadSequence == null
-                        ? "Local only"
-                        : `Upload #${event.uploadSequence}`}
-                  </span>
-                  <span
-                    className={cn(
-                      "inline-flex w-fit items-center rounded-md border px-layout-xs py-1 text-xs font-medium",
-                      getSyncEventStatusClassName(event.status),
-                    )}
+          <div className="space-y-layout-sm">
+            <div className="overflow-hidden rounded-md border border-border/80 bg-surface">
+              <div className="grid gap-layout-sm border-b border-border/80 bg-surface-muted/40 px-layout-md py-layout-xs text-xs font-medium uppercase text-muted-foreground md:grid-cols-[5rem_minmax(0,1fr)_8rem_7rem]">
+                <span>Sequence</span>
+                <span>Local review item</span>
+                <span>Upload</span>
+                <span>Status</span>
+              </div>
+              <div className="divide-y divide-border/80">
+                {visibleLocalReviewEvents.map((event) => (
+                  <div
+                    className="grid gap-layout-sm px-layout-md py-layout-sm text-sm md:grid-cols-[5rem_minmax(0,1fr)_8rem_7rem] md:items-center"
+                    key={event.localEventId}
                   >
-                    {formatStatusLabel(event.status)}
-                  </span>
-                </div>
-              ))}
-              {hiddenLocalReviewCount > 0 ? (
-                <div className="px-layout-md py-layout-sm">
-                  <Button
-                    className="h-8 px-layout-sm text-xs"
-                    onClick={() =>
-                      setIsLocalReviewListExpanded((current) => !current)
-                    }
-                    type="button"
-                    variant="outline"
-                  >
-                    {isLocalReviewListExpanded
-                      ? "Show fewer"
-                      : `Show ${hiddenLocalReviewCount} more`}
-                  </Button>
-                </div>
-              ) : null}
+                    <span className="font-numeric tabular-nums text-muted-foreground">
+                      #{event.sequence}
+                    </span>
+                    <span className="min-w-0 truncate font-medium text-foreground">
+                      {event.type}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {event.uploaded
+                        ? "Uploaded"
+                        : event.uploadSequence == null
+                          ? "Local only"
+                          : `Upload #${event.uploadSequence}`}
+                    </span>
+                    <span
+                      className={cn(
+                        "inline-flex w-fit items-center rounded-md border px-layout-xs py-1 text-xs font-medium",
+                        getSyncEventStatusClassName(event.status),
+                      )}
+                    >
+                      {formatStatusLabel(event.status)}
+                    </span>
+                  </div>
+                ))}
+                {hiddenLocalReviewCount > 0 ? (
+                  <div className="px-layout-md py-layout-sm">
+                    <Button
+                      className="h-8 px-layout-sm text-xs"
+                      onClick={() =>
+                        setIsLocalReviewListExpanded((current) => !current)
+                      }
+                      type="button"
+                      variant="outline"
+                    >
+                      {isLocalReviewListExpanded
+                        ? "Show fewer"
+                        : `Show ${hiddenLocalReviewCount} more`}
+                    </Button>
+                  </div>
+                ) : null}
+              </div>
             </div>
+            {hasLocalReviewTableAction ? (
+              <div className="flex justify-end">
+                <AttentionReasonAction
+                  detail={detail}
+                  onIssueTerminalRecoveryCommand={onIssueTerminalRecoveryCommand}
+                  reason={localReviewActionReason}
+                />
+              </div>
+            ) : null}
           </div>
         ) : null}
 
         {missingRuntimeReviewDetails ? (
-          <div className="rounded-md border border-warning/30 bg-warning/10 px-layout-md py-layout-sm">
-            <p className="text-sm font-medium text-foreground">
-              {runtimeReviewCount} local review{" "}
-              {runtimeReviewCount === 1 ? "item was" : "items were"} reported
-              by this terminal.
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              The latest runtime check-in did not include item-level local
-              review details.
-            </p>
+          <div className="grid gap-layout-sm rounded-md border border-warning/30 bg-warning/10 px-layout-md py-layout-sm md:grid-cols-[minmax(0,1fr)_auto] md:items-start">
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-foreground">
+                {runtimeReviewCount} local review{" "}
+                {runtimeReviewCount === 1 ? "item needs" : "items need"} local
+                collection.
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Details are missing from the latest check-in. Collect local
+                review items from this checkout station.
+              </p>
+            </div>
+            <AttentionReasonAction
+              detail={detail}
+              onIssueTerminalRecoveryCommand={onIssueTerminalRecoveryCommand}
+              reason={{
+                actionTarget: { type: "pos_register" },
+                count: runtimeReviewCount,
+                source: "local_runtime",
+                summary: `${runtimeReviewCount} local review item${runtimeReviewCount === 1 ? " is" : "s are"} still on this terminal.`,
+                type: "local_review",
+              }}
+            />
           </div>
         ) : null}
       </div>
@@ -1195,13 +1264,74 @@ function ConflictSection({
   );
 }
 
+function OperationalExplanationReviewSummary({
+  operationalExplanation,
+}: {
+  operationalExplanation: ReturnType<
+    typeof buildTerminalOperationalExplanationPresentation
+  >;
+}) {
+  return (
+    <>
+      <div className="rounded-md border border-border/80 bg-surface px-layout-md py-layout-md">
+        <p className="text-sm font-medium text-foreground">
+          {operationalExplanation.headline}
+        </p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {operationalExplanation.detail}
+        </p>
+        <p className="mt-layout-xs text-sm text-foreground">
+          <span className="font-medium">Next step:</span>{" "}
+          {operationalExplanation.nextStep}
+        </p>
+      </div>
+
+      {operationalExplanation.evidenceReferences.length > 0 ? (
+        <div className="overflow-hidden rounded-md border border-border/80 bg-surface">
+          <div className="grid gap-layout-sm border-b border-border/80 bg-surface-muted/40 px-layout-md py-layout-xs text-xs font-medium uppercase text-muted-foreground md:grid-cols-[minmax(0,1fr)_4rem_minmax(14rem,max-content)]">
+            <span>Evidence</span>
+            <span>Count</span>
+            <span>Type</span>
+          </div>
+          <div className="divide-y divide-border/80">
+            {operationalExplanation.evidenceReferences.map(
+              (reference, index) => (
+                <div
+                  className="grid gap-layout-sm px-layout-md py-layout-sm text-sm md:grid-cols-[minmax(0,1fr)_4rem_minmax(14rem,max-content)] md:items-center"
+                  key={`${reference.source}-${reference.type}-${index}`}
+                >
+                  <span className="min-w-0 font-medium text-foreground">
+                    {reference.label}
+                  </span>
+                  <span className="font-numeric tabular-nums text-muted-foreground">
+                    {reference.count ?? "-"}
+                  </span>
+                  <span className="min-w-0 text-muted-foreground">
+                    {formatStatusLabel(reference.type)}
+                  </span>
+                </div>
+              ),
+            )}
+          </div>
+        </div>
+      ) : (
+        <p className="text-sm text-muted-foreground">
+          No display-safe review samples were returned with this explanation.
+        </p>
+      )}
+    </>
+  );
+}
+
 function AttentionReasonsSection({
   detail,
+  onIssueTerminalRecoveryCommand,
   onResolveRegisterSessionReview,
   orgUrlSlug,
   storeUrlSlug,
 }: {
   detail: TerminalHealthDetail;
+  onIssueTerminalRecoveryCommand?: POSTerminalDetailViewContentProps["onIssueTerminalRecoveryCommand"];
   onResolveRegisterSessionReview?: POSTerminalDetailViewContentProps["onResolveRegisterSessionReview"];
   orgUrlSlug?: string;
   storeUrlSlug?: string;
@@ -1244,6 +1374,7 @@ function AttentionReasonsSection({
               </div>
               <AttentionReasonAction
                 detail={detail}
+                onIssueTerminalRecoveryCommand={onIssueTerminalRecoveryCommand}
                 onResolveRegisterSessionReview={onResolveRegisterSessionReview}
                 orgUrlSlug={orgUrlSlug}
                 reason={reason}
@@ -1259,12 +1390,14 @@ function AttentionReasonsSection({
 
 function AttentionReasonAction({
   detail,
+  onIssueTerminalRecoveryCommand,
   onResolveRegisterSessionReview,
   orgUrlSlug,
   reason,
   storeUrlSlug,
 }: {
   detail?: TerminalHealthDetail;
+  onIssueTerminalRecoveryCommand?: POSTerminalDetailViewContentProps["onIssueTerminalRecoveryCommand"];
   onResolveRegisterSessionReview?: POSTerminalDetailViewContentProps["onResolveRegisterSessionReview"];
   orgUrlSlug?: string;
   reason: TerminalHealthAttentionReason;
@@ -1272,13 +1405,17 @@ function AttentionReasonAction({
 }) {
   const target = reason.actionTarget;
   const [isResolving, setIsResolving] = useState(false);
+  const [isIssuingCommand, setIsIssuingCommand] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
-  if (!orgUrlSlug || !storeUrlSlug || !target) {
+  if (!target) {
     return null;
   }
 
   if (target.type === "cash_control_register_session") {
+    if (!orgUrlSlug || !storeUrlSlug) {
+      return null;
+    }
     const registerSessionId = target.registerSessionId;
     const resolveRegisterSessionReview = onResolveRegisterSessionReview;
 
@@ -1343,6 +1480,9 @@ function AttentionReasonAction({
   }
 
   if (target.type === "open_work") {
+    if (!orgUrlSlug || !storeUrlSlug) {
+      return null;
+    }
     return (
       <Button asChild size="sm" variant="utility">
         <Link
@@ -1367,6 +1507,63 @@ function AttentionReasonAction({
   }
 
   if (target.type === "pos_register") {
+    const action = getAttentionReasonRecoveryAction(reason, detail);
+    const canIssue = action ? isRecoveryActionIssuable(action) : false;
+
+    if (action) {
+      const issueRecoveryCommand = async () => {
+        if (
+          !canIssue ||
+          !onIssueTerminalRecoveryCommand ||
+          !detail ||
+          isIssuingCommand
+        ) {
+          return;
+        }
+
+        setIsIssuingCommand(true);
+        setErrorMessage("");
+        const result = await onIssueTerminalRecoveryCommand({
+          action,
+          terminalId: detail.terminal._id,
+        });
+        setIsIssuingCommand(false);
+
+        if (result.kind === "ok") {
+          toast.success("Terminal command queued.");
+          return;
+        }
+
+        const message = normalizeRecoveryActionError(result.error.message);
+        setErrorMessage(message);
+        toast.error(message);
+      };
+
+      return (
+        <div className="grid justify-items-start gap-layout-xs">
+          <Button
+            disabled={!canIssue || !onIssueTerminalRecoveryCommand || isIssuingCommand}
+            onClick={() => {
+              void issueRecoveryCommand();
+            }}
+            size="sm"
+            variant="utility"
+          >
+            <Send aria-hidden="true" />
+            {isIssuingCommand ? "Sending..." : action.label}
+          </Button>
+          {action.status && action.status !== "available" ? (
+            <p className="max-w-sm text-xs text-muted-foreground">
+              {getRecoveryActionStatusCopy(action)}
+            </p>
+          ) : null}
+          {errorMessage ? (
+            <p className="max-w-sm text-xs text-danger">{errorMessage}</p>
+          ) : null}
+        </div>
+      );
+    }
+
     return (
       <p className="max-w-sm text-xs text-muted-foreground">
         {getTerminalCommandAttentionCopy(reason, detail) ??
@@ -1395,10 +1592,7 @@ function getTerminalCommandAttentionCopy(
     return null;
   }
 
-  const commandName =
-    expectedCommandType === "clear_stale_drawer_authority"
-      ? "Drawer repair command"
-      : "Terminal setup repair command";
+  const commandName = getTerminalCommandStatusCopyName(expectedCommandType);
 
   if (commandStatus.verificationStatus === "verified") {
     return `${commandName} was completed and verified by terminal check-in. This row will clear when the terminal list receives the next check-in.`;
@@ -1429,10 +1623,10 @@ function isVerifiedTerminalCommandAttention(
 
   return Boolean(
     expectedCommandType &&
-      commandStatus?.verificationStatus === "verified" &&
-      recovery?.terminalActions?.some(
-        (action) => action.commandType === expectedCommandType,
-      ),
+    commandStatus?.verificationStatus === "verified" &&
+    recovery?.terminalActions?.some(
+      (action) => action.commandType === expectedCommandType,
+    ),
   );
 }
 
@@ -1453,10 +1647,7 @@ function getTerminalCommandAttentionTitle(
     return null;
   }
 
-  const commandName =
-    expectedCommandType === "clear_stale_drawer_authority"
-      ? "Drawer repair command"
-      : "Terminal setup repair command";
+  const commandName = getTerminalCommandStatusCopyName(expectedCommandType);
 
   if (commandStatus.verificationStatus === "verified") {
     return `${commandName} verified; waiting for the next terminal check-in.`;
@@ -1487,7 +1678,59 @@ function getAttentionReasonCommandType(reason: TerminalHealthAttentionReason) {
   ) {
     return "repair_terminal_seed";
   }
+  if (
+    reason.type === "sync_failed" ||
+    reason.type === "sync_unavailable"
+  ) {
+    return "retry_sync";
+  }
   return null;
+}
+
+function getTerminalCommandStatusCopyName(
+  commandType: NonNullable<ReturnType<typeof getAttentionReasonCommandType>>,
+) {
+  if (commandType === "clear_stale_drawer_authority") {
+    return "Drawer repair command";
+  }
+  if (commandType === "retry_sync") {
+    return "Terminal sync retry";
+  }
+  return "Terminal setup repair command";
+}
+
+function getAttentionReasonRecoveryAction(
+  reason: TerminalHealthAttentionReason,
+  detail?: TerminalHealthDetail,
+) {
+  if (reason.type === "local_review" && detail) {
+    return (
+      buildTerminalRecoveryPresentation(detail).safeActions.find(
+        isLocalReviewTerminalAction,
+      ) ?? null
+    );
+  }
+
+  const commandType = getAttentionReasonCommandType(reason);
+  if (!commandType || !detail) {
+    return null;
+  }
+
+  return (
+    buildTerminalRecoveryPresentation(detail).safeActions.find(
+      (action) =>
+        action.kind === "terminal_command" &&
+        action.commandType === commandType,
+    ) ?? null
+  );
+}
+
+function isLocalReviewTerminalAction(action: TerminalRecoveryAction) {
+  return (
+    action.kind === "terminal_command" &&
+    (action.commandType === "clear_local_review_items" ||
+      action.commandType === "collect_local_review")
+  );
 }
 
 function RecoveryMetric({
@@ -1511,7 +1754,9 @@ function RecoveryNextStep({
   commandStatus,
   safeActions,
 }: {
-  commandStatus: ReturnType<typeof buildTerminalRecoveryPresentation>["commandStatus"];
+  commandStatus: ReturnType<
+    typeof buildTerminalRecoveryPresentation
+  >["commandStatus"];
   safeActions: TerminalRecoveryAction[];
 }) {
   const nextAction = safeActions[0];
@@ -1528,7 +1773,9 @@ function RecoveryNextStep({
 }
 
 function shouldShowRecoveryNextStep(
-  commandStatus: ReturnType<typeof buildTerminalRecoveryPresentation>["commandStatus"],
+  commandStatus: ReturnType<
+    typeof buildTerminalRecoveryPresentation
+  >["commandStatus"],
 ) {
   return (
     commandStatus.status === "Failed" ||
@@ -1540,6 +1787,12 @@ function shouldShowRecoveryNextStep(
 function getRecoveryNextStepCopy(action: TerminalRecoveryAction) {
   if (action.commandType === "retry_sync") {
     return "retry terminal sync, then use the next check-in to decide whether drawer repair still needs to run.";
+  }
+  if (action.commandType === "collect_local_review") {
+    return "collect local review items from this checkout station, then use the next check-in to review the terminal-local evidence.";
+  }
+  if (action.commandType === "clear_local_review_items") {
+    return "clear reviewed local items from this checkout station, then use the next check-in to confirm the local review count is zero.";
   }
   if (action.commandType === "clear_stale_drawer_authority") {
     return "send drawer authority repair from this checkout station.";
@@ -1557,7 +1810,9 @@ function RecoveryCommandFailureReason({
   commandStatus,
   safeActions,
 }: {
-  commandStatus: ReturnType<typeof buildTerminalRecoveryPresentation>["commandStatus"];
+  commandStatus: ReturnType<
+    typeof buildTerminalRecoveryPresentation
+  >["commandStatus"];
   safeActions: TerminalRecoveryAction[];
 }) {
   const reason = getRecoveryCommandFailureReason(commandStatus, safeActions);
@@ -1571,7 +1826,9 @@ function RecoveryCommandFailureReason({
 }
 
 function getRecoveryCommandFailureReason(
-  commandStatus: ReturnType<typeof buildTerminalRecoveryPresentation>["commandStatus"],
+  commandStatus: ReturnType<
+    typeof buildTerminalRecoveryPresentation
+  >["commandStatus"],
   safeActions: TerminalRecoveryAction[],
 ) {
   if (!shouldShowRecoveryNextStep(commandStatus)) {
@@ -1638,7 +1895,9 @@ function RecoveryBlockerGroup({
   const [isExpanded, setIsExpanded] = useState(false);
   const visibleLimit = 5;
   const hiddenCount = Math.max(blockers.length - visibleLimit, 0);
-  const visibleBlockers = isExpanded ? blockers : blockers.slice(0, visibleLimit);
+  const visibleBlockers = isExpanded
+    ? blockers
+    : blockers.slice(0, visibleLimit);
 
   return (
     <div className="rounded-md border border-border/80 bg-surface">
@@ -1674,9 +1933,13 @@ function RecoveryBlockerGroup({
                 </div>
                 <RecoveryBlockerAction
                   blocker={blocker}
-                  onIssueTerminalRecoveryCommand={onIssueTerminalRecoveryCommand}
+                  onIssueTerminalRecoveryCommand={
+                    onIssueTerminalRecoveryCommand
+                  }
                   onResolveTerminalCloudRepair={onResolveTerminalCloudRepair}
-                  onResolveRegisterSessionReview={onResolveRegisterSessionReview}
+                  onResolveRegisterSessionReview={
+                    onResolveRegisterSessionReview
+                  }
                   orgUrlSlug={orgUrlSlug}
                   storeUrlSlug={storeUrlSlug}
                   terminalId={terminalId}
@@ -1691,9 +1954,7 @@ function RecoveryBlockerGroup({
                   type="button"
                   variant="outline"
                 >
-                  {isExpanded
-                    ? "Show fewer"
-                    : `Show ${hiddenCount} more`}
+                  {isExpanded ? "Show fewer" : `Show ${hiddenCount} more`}
                 </Button>
               </div>
             ) : null}
@@ -1844,7 +2105,7 @@ function getRecoveryActionStatusCopy(action: TerminalRecoveryAction) {
       return "Command expired. Refresh terminal health before sending another command.";
     case "failed":
       if (action.commandType === "clear_stale_drawer_authority") {
-        return "Command did not complete. Retry terminal sync before sending drawer repair again.";
+        return "Command did not complete. Use the available terminal action before sending drawer repair again.";
       }
       return "Command did not complete. Run the next safe action before retrying.";
     case "blocked":
@@ -1882,7 +2143,12 @@ function AppUpdateActionPanel({
   const [errorMessage, setErrorMessage] = useState("");
 
   const submitUpdateApp = async () => {
-    if (!action || !canIssue || !onIssueTerminalRecoveryCommand || isSubmitting) {
+    if (
+      !action ||
+      !canIssue ||
+      !onIssueTerminalRecoveryCommand ||
+      isSubmitting
+    ) {
       return;
     }
 
@@ -1920,7 +2186,10 @@ function AppUpdateActionPanel({
             {appUpdate.description}
           </p>
           {action?.status && action.status !== "available" ? (
-            <p className="mt-layout-xs text-xs text-muted-foreground" role="status">
+            <p
+              className="mt-layout-xs text-xs text-muted-foreground"
+              role="status"
+            >
               {getRecoveryActionStatusCopy(action)}
             </p>
           ) : null}
@@ -1929,7 +2198,12 @@ function AppUpdateActionPanel({
           ) : null}
         </div>
         <Button
-          disabled={!action || !canIssue || !onIssueTerminalRecoveryCommand || isSubmitting}
+          disabled={
+            !action ||
+            !canIssue ||
+            !onIssueTerminalRecoveryCommand ||
+            isSubmitting
+          }
           onClick={() => {
             void submitUpdateApp();
           }}
@@ -1960,6 +2234,11 @@ function RecoveryPanel({
   storeUrlSlug?: string;
 }) {
   const recovery = buildTerminalRecoveryPresentation(detail);
+  const operationalExplanation =
+    buildTerminalOperationalExplanationPresentation(detail);
+  const hasServerOperationalExplanation = Boolean(
+    detail.operationalExplanation,
+  );
   const hasCurrentRecoveryWork = hasCurrentSupportRecoveryWork(recovery);
   const supportReadiness = hasCurrentRecoveryWork
     ? recovery.readiness
@@ -1978,17 +2257,54 @@ function RecoveryPanel({
         <div className="flex flex-col gap-layout-sm md:flex-row md:items-start md:justify-between">
           <div className="min-w-0">
             <p className="text-xs font-medium uppercase text-muted-foreground">
-              Readiness
+              {hasServerOperationalExplanation
+                ? "Operational explanation"
+                : "Readiness"}
             </p>
             <p className="mt-1 text-base font-medium text-foreground">
-              {supportReadiness.label}
+              {hasServerOperationalExplanation
+                ? operationalExplanation.headline
+                : supportReadiness.label}
             </p>
             <p className="mt-1 text-sm text-muted-foreground">
-              {supportReadiness.description}
+              {hasServerOperationalExplanation
+                ? operationalExplanation.detail
+                : supportReadiness.description}
             </p>
+            {hasServerOperationalExplanation ? (
+              <p className="mt-layout-xs text-sm text-foreground">
+                <span className="font-medium">Next step:</span>{" "}
+                {operationalExplanation.nextStep}
+              </p>
+            ) : null}
           </div>
+          {hasServerOperationalExplanation ? (
+            <Badge
+              className={operationalExplanation.toneClassName}
+              variant="outline"
+            >
+              {operationalExplanation.saleImpactLabel}
+            </Badge>
+          ) : null}
         </div>
       </div>
+
+      {hasServerOperationalExplanation ? (
+        <div className="mt-layout-md grid gap-layout-sm md:grid-cols-3">
+          <RecoveryMetric
+            label="Owner"
+            value={operationalExplanation.ownerLabel}
+          />
+          <RecoveryMetric
+            label="Support action"
+            value={operationalExplanation.supportActionLabel}
+          />
+          <RecoveryMetric
+            label="Recovery readiness"
+            value={supportReadiness.label}
+          />
+        </div>
+      ) : null}
 
       <AppUpdateActionPanel
         appUpdate={recovery.appUpdate}
@@ -2541,12 +2857,20 @@ export function POSTerminalDetailViewContent({
               />
               <AttentionReasonsSection
                 detail={detail}
+                onIssueTerminalRecoveryCommand={onIssueTerminalRecoveryCommand}
                 onResolveRegisterSessionReview={onResolveRegisterSessionReview}
                 orgUrlSlug={orgUrlSlug}
                 storeUrlSlug={storeUrlSlug}
               />
               <SyncEvidenceSection syncEvidence={detail.syncEvidence} />
               <ConflictSection
+                detail={detail}
+                onIssueTerminalRecoveryCommand={onIssueTerminalRecoveryCommand}
+                operationalExplanation={
+                  detail.operationalExplanation
+                    ? buildTerminalOperationalExplanationPresentation(detail)
+                    : undefined
+                }
                 runtimeStatus={detail.runtimeStatus}
                 syncEvidence={detail.syncEvidence}
               />

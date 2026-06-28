@@ -165,6 +165,49 @@ describe("terminalRuntimeStatus", () => {
     expect(JSON.stringify(status)).not.toContain("payments");
   });
 
+  it("treats locally resolved review items as settled in runtime sync metrics", () => {
+    const status = buildPosTerminalRuntimeStatus({
+      browserInfo: { online: true },
+      clock: () => 3_000,
+      events: [
+        buildLocalEvent({
+          createdAt: 1_000,
+          localEventId: "event-local-review",
+          sequence: 1,
+          sync: {
+            localResolution: {
+              reason: "terminal_recovery_command",
+              resolvedAt: 2_500,
+              status: "local_review_cleared",
+            },
+            status: "locally_resolved",
+            uploaded: true,
+          },
+          uploadSequence: 1,
+        }),
+        buildLocalEvent({
+          createdAt: 2_000,
+          localEventId: "event-pending",
+          sequence: 2,
+          sync: { status: "pending" },
+          uploadSequence: 2,
+        }),
+      ],
+      source: "support-diagnostics",
+    });
+
+    expect(status.sync).toEqual(
+      expect.objectContaining({
+        lastSyncedSequence: 1,
+        nextPendingUploadSequence: 2,
+        oldestPendingEventAt: 2_000,
+        pendingEventCount: 1,
+        reviewEventCount: 0,
+        uploadableEventCount: 1,
+      }),
+    );
+  });
+
   it("builds copy diagnostics with identifiers, counts, sequences, timestamps, and labels only", () => {
     const diagnostics = buildPosTerminalRuntimeCopyDiagnostics({
       clock: () => 2_000,
@@ -264,9 +307,7 @@ describe("terminalRuntimeStatus", () => {
         localEventId: "event-sale",
         localPosSessionId: "sale-1",
         localRegisterSessionId: "register-1",
-        localTransactionId: "transaction-1",
         sequence: 2,
-        staffProfileId: "staff-1",
         status: "failed",
         type: "transaction.completed",
         uploadSequence: 2,
@@ -281,6 +322,8 @@ describe("terminalRuntimeStatus", () => {
     expect(serialized).not.toContain("Customer Name");
     expect(serialized).not.toContain("sync-secret-hash");
     expect(serialized).not.toContain("123456789012345678901234");
+    expect(serialized).not.toContain("transaction-1");
+    expect(serialized).not.toContain("staff-1");
   });
 
   it("includes sanitized local review event samples in server check-ins", () => {
@@ -310,9 +353,7 @@ describe("terminalRuntimeStatus", () => {
         localEventId: "event-review",
         localPosSessionId: "sale-1",
         localRegisterSessionId: "register-1",
-        localTransactionId: "transaction-1",
         sequence: 5,
-        staffProfileId: "staff-1",
         status: "needs_review",
         type: "transaction.completed",
         uploaded: true,
@@ -323,6 +364,10 @@ describe("terminalRuntimeStatus", () => {
     expect(JSON.stringify(status.sync.reviewEvents)).not.toContain(
       "customer@example.com",
     );
+    expect(JSON.stringify(status.sync.reviewEvents)).not.toContain(
+      "transaction-1",
+    );
+    expect(JSON.stringify(status.sync.reviewEvents)).not.toContain("staff-1");
   });
 
   it("keeps local review samples from sync debug when event state is stale", () => {
@@ -355,6 +400,37 @@ describe("terminalRuntimeStatus", () => {
         localEventId: "event-review",
         sequence: 5,
         type: "transaction.completed",
+      }),
+    ]);
+  });
+
+  it("falls back to local event review samples when sync debug only reports a count", () => {
+    const status = buildPosTerminalRuntimeStatus({
+      clock: () => 2_000,
+      events: [
+        buildLocalEvent({
+          localEventId: "event-review",
+          sequence: 5,
+          sync: { status: "needs_review", uploaded: true },
+          type: "transaction.completed",
+          uploadSequence: 2,
+        }),
+      ],
+      source: "register",
+      syncDebug: {
+        reviewEventCount: 84,
+        reviewEvents: [],
+      },
+    });
+
+    expect(status.sync.reviewEventCount).toBe(84);
+    expect(status.sync.reviewEvents).toEqual([
+      expect.objectContaining({
+        localEventId: "event-review",
+        sequence: 5,
+        status: "needs_review",
+        type: "transaction.completed",
+        uploaded: true,
       }),
     ]);
   });

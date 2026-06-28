@@ -133,6 +133,37 @@ function buildTerminalHealthSummaryResult() {
         },
       },
     ],
+    operationalExplanation: {
+      blockingDomain: "terminal_runtime",
+      detail: "The terminal needs a local repair command before support can continue.",
+      evidenceReferences: [
+        {
+          count: 1,
+          source: "terminal_runtime",
+          summary: "Terminal setup data needs repair.",
+          type: "terminal_seed_missing",
+        },
+      ],
+      headline: "Terminal action needed",
+      lane: "needs_terminal_action",
+      nextStep: "Send the available terminal repair command.",
+      primaryOwner: "terminal",
+      saleImpact: "not_ready",
+      secondaryActions: [
+        {
+          label: "Safe cloud repair available",
+          primaryOwner: "support",
+          supportAction: "safe_cloud_repair",
+        },
+      ],
+      severity: "warning",
+      summaryMeta: {
+        hasSecondarySafeRepair: true,
+        reviewBacklogCount: 0,
+        targetResolutionIncomplete: false,
+      },
+      supportAction: "terminal_command",
+    },
     recoveryPreview: {
       readiness: "needs_terminal_action",
       runtimeFresh: true,
@@ -237,6 +268,24 @@ function buildTerminalHealthSummaryResult() {
           summary: "Duplicate local event id.",
         },
       ],
+      reviewSummary: {
+        groups: [
+          {
+            actionability: "manual_review",
+            conflictType: "duplicate_local_id",
+            count: 1,
+            latestCreatedAt: 100,
+            latestSequence: 8,
+            owner: "manual_review",
+          },
+        ],
+        meta: {
+          sampledCount: 1,
+          cap: 50,
+          hasMore: false,
+          targetResolutionIncomplete: false,
+        },
+      },
       acceptedThroughSequence: 7,
       cursorUpdatedAt: 110,
     },
@@ -328,6 +377,38 @@ describe("POS terminal public mutations", () => {
     mocks.listTerminalHealthSummariesQuery.mockResolvedValue([]);
     mocks.getTerminalHealthSummaryQuery.mockResolvedValue(null);
     mocks.getLatestRuntimeStatusForTerminal.mockResolvedValue(null);
+    mocks.previewTerminalRecoveryQuery.mockResolvedValue({
+      appUpdate: {
+        description: "Current",
+        status: "current",
+      },
+      readiness: "needs_terminal_action",
+      runtimeFresh: true,
+      evidence: {
+        activeRegisterSession: false,
+        freshRuntimeRequiredForAbleToTransactNow: true,
+      },
+      cloudRepair: {
+        preconditionHash: "hash",
+        safeConflictIds: [],
+        skippedConflictIds: [],
+      },
+      commandStatus: null,
+      terminalActions: [
+        {
+          commandType: "repair_terminal_seed",
+          commandContext: {
+            expectedBlockerType: "terminal_seed",
+            reason: "Terminal setup data needs repair.",
+          },
+          expectedEvidence: {
+            terminalIntegrityStatus: "healthy",
+          },
+          reason: "Terminal setup data needs repair.",
+        },
+      ],
+      manualReview: [],
+    });
     mocks.createTerminalRecoveryCommandReadRepository.mockReturnValue({
       repository: "read",
     });
@@ -631,7 +712,9 @@ describe("POS terminal public mutations", () => {
               createdAt: 101,
               localEventId: "event-review-1",
               localRegisterSessionId: "local-register-1",
+              localTransactionId: "transaction-local-1",
               sequence: 9,
+              staffProfileId: "staff-1",
               status: "needs_review",
               type: "transaction.completed",
               uploaded: true,
@@ -698,6 +781,11 @@ describe("POS terminal public mutations", () => {
         verifierMetadata: expect.anything(),
         rawLocalEvents: expect.anything(),
       }),
+    );
+    const forwardedStatus =
+      mocks.submitTerminalRuntimeStatusCommand.mock.calls[0]?.[1].status;
+    expect(JSON.stringify(forwardedStatus.sync.reviewEvents)).not.toMatch(
+      /transaction-local-1|staff-1/,
     );
   });
 
@@ -1285,7 +1373,25 @@ describe("POS terminal public mutations", () => {
       ...terminal,
       syncSecretHash: "sync-secret-hash",
     };
-    const recoveryCommand = buildRecoveryCommand();
+    const recoveryCommand = buildRecoveryCommand({
+      acknowledgement: {
+        acknowledgedAt: 2,
+        clearedLocalReviewEventIds: ["event-review-1"],
+        localReviewEvents: [
+          {
+            createdAt: 1,
+            localEventId: "event-review-1",
+            localRegisterSessionId: "register-local-1",
+            sequence: 1,
+            status: "needs_review",
+            type: "transaction.completed",
+            uploaded: true,
+            uploadSequence: 1,
+          },
+        ],
+        result: "completed",
+      },
+    });
     const commandResult = { kind: "ok" as const, data: recoveryCommand };
 
     assertConformsToExportedReturns(listTerminals as never, [terminal]);
@@ -1376,6 +1482,44 @@ describe("POS terminal public mutations", () => {
     );
   });
 
+  it("does not allow sync-secret-only terminal proof to read terminal health", async () => {
+    mocks.requireAuthenticatedAthenaUserWithCtx.mockRejectedValue(
+      new Error("not signed in"),
+    );
+    const ctx = buildCtx({
+      terminal: {
+        _id: "terminal-1",
+        storeId: "store-1",
+        status: "active",
+        registeredByUserId: "athena-user-2",
+        syncSecretHash: SYNC_SECRET_HASH,
+      },
+    });
+
+    await expect(
+      getHandler(listTerminalHealthSummaries)(ctx as never, {
+        storeId: "store-1",
+      }),
+    ).rejects.toThrow("not signed in");
+    await expect(
+      getHandler(getTerminalHealthSummary)(ctx as never, {
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      }),
+    ).rejects.toThrow("not signed in");
+    await expect(
+      getHandler(previewTerminalRecovery)(ctx as never, {
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      }),
+    ).rejects.toThrow("not signed in");
+
+    expect(mocks.requireOrganizationMemberRoleWithCtx).not.toHaveBeenCalled();
+    expect(mocks.listTerminalHealthSummariesQuery).not.toHaveBeenCalled();
+    expect(mocks.getTerminalHealthSummaryQuery).not.toHaveBeenCalled();
+    expect(mocks.previewTerminalRecoveryQuery).not.toHaveBeenCalled();
+  });
+
   it("requires full admin membership and actor attribution before cloud repair", async () => {
     const ctx = buildCtx();
 
@@ -1406,6 +1550,23 @@ describe("POS terminal public mutations", () => {
 
   it("requires full admin membership before issuing terminal recovery commands", async () => {
     const ctx = buildCtx();
+    mocks.previewTerminalRecoveryQuery.mockResolvedValue({
+      appUpdate: null,
+      readiness: "healthy_idle",
+      runtimeFresh: true,
+      evidence: {
+        activeRegisterSession: false,
+        freshRuntimeRequiredForAbleToTransactNow: false,
+      },
+      cloudRepair: {
+        preconditionHash: "hash",
+        safeConflictIds: [],
+        skippedConflictIds: [],
+      },
+      commandStatus: null,
+      terminalActions: [],
+      manualReview: [],
+    });
 
     const result = await getHandler(issueTerminalRecoveryCommand)(ctx as never, {
       storeId: "store-1",
@@ -1438,6 +1599,124 @@ describe("POS terminal public mutations", () => {
       }),
     );
     expect(result.kind).toBe("ok");
+  });
+
+  it("issues preview-matched local review cleanup commands", async () => {
+    const ctx = buildCtx();
+    const clearAction = {
+      commandType: "clear_local_review_items",
+      commandContext: {
+        expectedBlockerType: "local_review",
+        localReviewEventIds: ["event-review-1"],
+        reason: "Uploaded local review items can be cleared from this terminal.",
+      },
+      expectedEvidence: {
+        localReviewClearedEventIds: ["event-review-1"],
+        localReviewEventCount: 0,
+      },
+      reason: "Uploaded local review items can be cleared from this terminal.",
+    };
+    mocks.previewTerminalRecoveryQuery.mockResolvedValue({
+      appUpdate: {
+        description: "Current",
+        status: "current",
+      },
+      readiness: "needs_terminal_action",
+      runtimeFresh: true,
+      evidence: {
+        activeRegisterSession: false,
+        freshRuntimeRequiredForAbleToTransactNow: true,
+      },
+      cloudRepair: {
+        preconditionHash: "hash",
+        safeConflictIds: [],
+        skippedConflictIds: [],
+      },
+      commandStatus: null,
+      terminalActions: [clearAction],
+      manualReview: [],
+    });
+
+    const result = await getHandler(issueTerminalRecoveryCommand)(ctx as never, {
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      commandType: "clear_local_review_items",
+      commandContext: clearAction.commandContext,
+      expectedEvidence: clearAction.expectedEvidence,
+    });
+
+    expect(mocks.issueTerminalRecoveryCommandService).toHaveBeenCalledWith(
+      { repository: "write" },
+      expect.objectContaining({
+        commandContext: clearAction.commandContext,
+        commandType: "clear_local_review_items",
+        expectedEvidence: clearAction.expectedEvidence,
+        issuedByUserId: "athena-user-1",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      }),
+    );
+    expect(result.kind).toBe("ok");
+  });
+
+  it("rejects terminal recovery commands that are not in the current server preview", async () => {
+    const ctx = buildCtx();
+    mocks.previewTerminalRecoveryQuery.mockResolvedValue({
+      appUpdate: {
+        description: "Current",
+        status: "current",
+      },
+      readiness: "needs_terminal_action",
+      runtimeFresh: true,
+      evidence: {
+        activeRegisterSession: false,
+        freshRuntimeRequiredForAbleToTransactNow: true,
+      },
+      cloudRepair: {
+        preconditionHash: "hash",
+        safeConflictIds: [],
+        skippedConflictIds: [],
+      },
+      commandStatus: null,
+      terminalActions: [
+        {
+          commandType: "clear_local_review_items",
+          commandContext: {
+            expectedBlockerType: "local_review",
+            localReviewEventIds: ["event-review-1"],
+            reason: "Uploaded local review items can be cleared from this terminal.",
+          },
+          expectedEvidence: {
+            localReviewClearedEventIds: ["event-review-1"],
+            localReviewEventCount: 0,
+          },
+          reason: "Uploaded local review items can be cleared from this terminal.",
+        },
+      ],
+      manualReview: [],
+    });
+
+    const result = await getHandler(issueTerminalRecoveryCommand)(ctx as never, {
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      commandType: "clear_local_review_items",
+      commandContext: {
+        expectedBlockerType: "local_review",
+        localReviewClearAll: true,
+        reason: "Clear everything.",
+      },
+      expectedEvidence: {
+        localReviewEventCount: 0,
+      },
+    });
+
+    expect(result).toMatchObject({
+      error: {
+        code: "precondition_failed",
+      },
+      kind: "user_error",
+    });
+    expect(mocks.issueTerminalRecoveryCommandService).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -1612,6 +1891,62 @@ describe("POS terminal public mutations", () => {
       expect.objectContaining({
         commandId: "command-1",
         executionId: "command-1:2000100",
+        result: "completed",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      }),
+    );
+    expect(result.kind).toBe("ok");
+  });
+
+  it("forwards local review acknowledgement evidence from terminal runtime proof", async () => {
+    mocks.requireAuthenticatedAthenaUserWithCtx.mockRejectedValue(
+      new Error("not signed in"),
+    );
+    const ctx = buildCtx({
+      terminal: {
+        _id: "terminal-1",
+        storeId: "store-1",
+        status: "active",
+        registeredByUserId: "athena-user-2",
+        syncSecretHash: SYNC_SECRET_HASH,
+      },
+    });
+    const localReviewEvents = [
+      {
+        createdAt: 1,
+        localEventId: "event-review-1",
+        localRegisterSessionId: "register-local-1",
+        sequence: 1,
+        status: "needs_review",
+        type: "transaction.completed",
+        uploaded: true,
+        uploadSequence: 1,
+      },
+    ];
+
+    const result = await getHandler(acknowledgeTerminalRecoveryCommand)(
+      ctx as never,
+      {
+        storeId: "store-1",
+        terminalId: "terminal-1",
+        syncSecretHash: "sync-secret-1",
+        commandId: "command-1",
+        result: "completed",
+        message: "Local review evidence collected.",
+        executionId: "command-1:2000100",
+        clearedLocalReviewEventIds: ["event-review-1"],
+        localReviewEvents,
+      },
+    );
+
+    expect(mocks.acknowledgeTerminalRecoveryCommandService).toHaveBeenCalledWith(
+      { repository: "write" },
+      expect.objectContaining({
+        clearedLocalReviewEventIds: ["event-review-1"],
+        commandId: "command-1",
+        executionId: "command-1:2000100",
+        localReviewEvents,
         result: "completed",
         storeId: "store-1",
         terminalId: "terminal-1",

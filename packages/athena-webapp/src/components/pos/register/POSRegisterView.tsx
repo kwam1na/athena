@@ -12,6 +12,7 @@ import {
 import type { Product } from "@/components/pos/types";
 import { SidebarProvider, useSidebar } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import View from "@/components/View";
 import {
   calculatePosRemainingDue,
@@ -680,7 +681,13 @@ function POSLocalDebugStrip({
 }) {
   if (!debug || !isVisible) return null;
 
-  const rows = [
+  const runtimeState = debug.runtimeState;
+  const heartbeat = runtimeState?.heartbeat;
+  const localEvents = runtimeState?.events ?? [];
+  const localReviewEvents = heartbeat?.sync.reviewEvents ?? [];
+  const localReadModel = runtimeState?.localReadModel;
+  const repair = runtimeState?.repair;
+  const registerRows: DebugPanelRow[] = [
     ["connection", debug.online ? "Online" : "Offline"],
     ["register activity", formatDebugStatus(debug.localEntryStatus)],
     ["staff access", formatDebugStatus(debug.localStaffAuthorityStatus)],
@@ -698,6 +705,28 @@ function POSLocalDebugStrip({
       debug.syncFlow.staffProof === "present" ? "Ready" : "Needed",
     ],
     ["sign-in panel", debug.authDialogOpen ? "Open" : "Closed"],
+    [
+      "local drawer",
+      formatDebugRegisterSession(localReadModel?.activeRegisterSession),
+    ],
+    [
+      "local block reason",
+      localReadModel?.saleBlockReason
+        ? formatDebugStatus(localReadModel.saleBlockReason)
+        : "none",
+    ],
+    [
+      "local read sequence",
+      localReadModel
+        ? [
+            `local ${localReadModel.syncStatus.lastLocalSequence}`,
+            `synced ${localReadModel.syncStatus.lastSyncedSequence ?? "n/a"}`,
+            `next ${localReadModel.syncStatus.nextPendingSequence ?? "n/a"}`,
+          ].join(" ")
+        : "none",
+    ],
+  ];
+  const syncRows: DebugPanelRow[] = [
     ["sync status", formatDebugStatus(debug.syncFlow.status)],
     ["sync hold-up", getDebugSyncHoldUp(debug)],
     ["next sync step", getDebugSyncNextStep(debug)],
@@ -807,11 +836,7 @@ function POSLocalDebugStrip({
       ].join(" "),
     ],
   ];
-  const runtimeState = debug.runtimeState;
-  const heartbeat = runtimeState?.heartbeat;
-  const localReadModel = runtimeState?.localReadModel;
-  const repair = runtimeState?.repair;
-  const runtimeRows = runtimeState
+  const heartbeatRows: DebugPanelRow[] = runtimeState
     ? [
         [
           "heartbeat source",
@@ -910,26 +935,6 @@ function POSLocalDebugStrip({
             : "none",
         ],
         [
-          "local drawer",
-          formatDebugRegisterSession(localReadModel?.activeRegisterSession),
-        ],
-        [
-          "local block reason",
-          localReadModel?.saleBlockReason
-            ? formatDebugStatus(localReadModel.saleBlockReason)
-            : "none",
-        ],
-        [
-          "local read sequence",
-          localReadModel
-            ? [
-                `local ${localReadModel.syncStatus.lastLocalSequence}`,
-                `synced ${localReadModel.syncStatus.lastSyncedSequence ?? "n/a"}`,
-                `next ${localReadModel.syncStatus.nextPendingSequence ?? "n/a"}`,
-              ].join(" ")
-            : "none",
-        ],
-        [
           "repair seed result",
           repair ? formatDebugStatus(repair.seedResult) : "not observed",
         ],
@@ -950,6 +955,7 @@ function POSLocalDebugStrip({
         ],
       ]
     : [];
+  const runtimeRows = [...heartbeatRows, ...syncRows];
   const flow = [
     {
       label: debug.online ? "Connected" : "Offline",
@@ -1025,33 +1031,38 @@ function POSLocalDebugStrip({
       >
         Support sync diagnostics
       </summary>
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        {flow.map((step, index) => (
-          <div key={step.label} className="flex items-center gap-2">
-            <span
-              className={cn(
-                "inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 font-medium",
-                step.state === "ready"
-                  ? "border-success/25 bg-success/10 text-success"
-                  : step.state === "blocked"
-                    ? "border-warning/30 bg-warning/15 text-warning"
-                    : step.state === "active"
-                      ? "border-primary/25 bg-primary/10 text-primary"
-                      : "border-border bg-background text-muted-foreground",
-              )}
-            >
-              <Circle className="h-2 w-2 fill-current" />
-              {step.label}
-            </span>
-            {index < flow.length - 1 ? (
-              <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
-            ) : null}
-          </div>
-        ))}
-      </div>
-      {debug.terminalId ? (
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <Button asChild size="sm" variant="utility">
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {flow.map((step, index) => (
+            <div key={step.label} className="flex items-center gap-2">
+              <span
+                className={cn(
+                  "inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 font-medium",
+                  step.state === "ready"
+                    ? "border-success/25 bg-success/10 text-success"
+                    : step.state === "blocked"
+                      ? "border-warning/30 bg-warning/15 text-warning"
+                      : step.state === "active"
+                        ? "border-primary/25 bg-primary/10 text-primary"
+                        : "border-border bg-background text-muted-foreground",
+                )}
+              >
+                <Circle className="h-2 w-2 fill-current" />
+                {step.label}
+              </span>
+              {index < flow.length - 1 ? (
+                <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
+              ) : null}
+            </div>
+          ))}
+        </div>
+        {debug.terminalId ? (
+          <Button
+            asChild
+            className="ml-auto h-8 px-2.5 text-xs"
+            size="sm"
+            variant="ghost"
+          >
             <Link
               params={(params) => ({
                 ...params,
@@ -1066,63 +1077,382 @@ function POSLocalDebugStrip({
               <ArrowRight aria-hidden className="h-3.5 w-3.5" />
             </Link>
           </Button>
+        ) : null}
+      </div>
+      <Tabs defaultValue="runtime" className="mt-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <TabsList
+            aria-label="Support sync diagnostic sections"
+            className="bg-background/60"
+            size="sm"
+          >
+            <TabsTrigger size="sm" value="runtime">
+              Runtime
+            </TabsTrigger>
+            <TabsTrigger size="sm" value="register">
+              Register
+            </TabsTrigger>
+            <TabsTrigger size="sm" value="events">
+              Events
+            </TabsTrigger>
+          </TabsList>
+          <p className="text-xs text-muted-foreground">
+            Runtime covers heartbeat and sync worker state. Register covers the
+            cashier and drawer context. Events shows the local IndexedDB log.
+          </p>
         </div>
-      ) : null}
-      {runtimeRows.length > 0 ? (
-        <section className="mt-4 rounded-md border border-border bg-background/70 p-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Runtime state
-            </p>
+        <TabsContent className="mt-3" value="runtime">
+          <DebugPanelSection
+            badges={[
+              {
+                label: localReadModel?.canSell
+                  ? "local sale ready"
+                  : "local gate active",
+                tone: localReadModel?.canSell ? "ready" : "warning",
+              },
+              {
+                label: `repair ${
+                  repair ? formatDebugStatus(repair.seedResult) : "not observed"
+                }`,
+                tone:
+                  repair?.seedResult === "seeded"
+                    ? "ready"
+                    : repair?.seedResult === "gateway_rejected" ||
+                        repair?.seedResult === "missing_staff_identity"
+                      ? "warning"
+                      : "neutral",
+              },
+            ]}
+            description="Heartbeat, local read-model, repair, and upload-worker signals."
+            rows={runtimeRows}
+            title="Runtime state"
+          />
+        </TabsContent>
+        <TabsContent className="mt-3" value="register">
+          <DebugPanelSection
+            badges={[
+              {
+                label: debug.staffSignedIn ? "staff signed in" : "no staff",
+                tone: debug.staffSignedIn ? "ready" : "warning",
+              },
+              {
+                label: debug.authDialogOpen ? "sign-in open" : "sign-in closed",
+                tone: debug.authDialogOpen ? "warning" : "neutral",
+              },
+            ]}
+            description="Register record, cashier presence, app session, and drawer context."
+            rows={registerRows}
+            title="Register state"
+          />
+        </TabsContent>
+        <TabsContent className="mt-3" value="events">
+          <DebugEventsSection
+            events={localEvents}
+            reviewEvents={localReviewEvents}
+          />
+        </TabsContent>
+      </Tabs>
+    </details>
+  );
+}
+
+type DebugPanelRow = [label: string, value: string];
+
+type DebugRuntimeState = NonNullable<
+  NonNullable<RegisterViewModel["debug"]>["runtimeState"]
+>;
+type DebugEventRecord = NonNullable<DebugRuntimeState["events"]>[number];
+type DebugEventFilter =
+  | "all"
+  | "review"
+  | "uploadable"
+  | "pending"
+  | "failed"
+  | "synced";
+
+const DEBUG_EVENT_FILTERS: Array<{
+  label: string;
+  value: DebugEventFilter;
+}> = [
+  { label: "All", value: "all" },
+  { label: "Review", value: "review" },
+  { label: "Uploadable", value: "uploadable" },
+  { label: "Pending", value: "pending" },
+  { label: "Failed", value: "failed" },
+  { label: "Synced", value: "synced" },
+];
+
+function isDebugEventReview(event: DebugEventRecord) {
+  return event.status === "needs_review";
+}
+
+function isDebugEventFailed(event: DebugEventRecord) {
+  return event.status === "failed";
+}
+
+function isDebugEventSynced(event: DebugEventRecord) {
+  return (
+    !isDebugEventReview(event) &&
+    !isDebugEventFailed(event) &&
+    (event.uploaded === true ||
+      event.status === "synced" ||
+      event.status === "locally_resolved")
+  );
+}
+
+function isDebugEventUploadable(event: DebugEventRecord) {
+  if (event.syncUploadable !== undefined) {
+    return event.syncUploadable;
+  }
+
+  return (
+    !isDebugEventReview(event) &&
+    !isDebugEventFailed(event) &&
+    !isDebugEventSynced(event) &&
+    event.uploaded !== true &&
+    typeof event.uploadSequence === "number"
+  );
+}
+
+function isDebugEventPending(event: DebugEventRecord) {
+  return (
+    !isDebugEventReview(event) &&
+    !isDebugEventFailed(event) &&
+    !isDebugEventSynced(event) &&
+    !isDebugEventUploadable(event)
+  );
+}
+
+function debugEventMatchesFilter(
+  event: DebugEventRecord,
+  filter: DebugEventFilter,
+) {
+  switch (filter) {
+    case "review":
+      return isDebugEventReview(event);
+    case "uploadable":
+      return isDebugEventUploadable(event);
+    case "pending":
+      return isDebugEventPending(event);
+    case "failed":
+      return isDebugEventFailed(event);
+    case "synced":
+      return isDebugEventSynced(event);
+    case "all":
+    default:
+      return true;
+  }
+}
+
+function DebugPanelSection({
+  badges,
+  description,
+  rows,
+  title,
+}: {
+  badges: Array<{ label: string; tone: "neutral" | "ready" | "warning" }>;
+  description: string;
+  rows: DebugPanelRow[];
+  title: string;
+}) {
+  return (
+    <section className="rounded-md border border-border bg-background/70 p-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 space-y-1">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            {title}
+          </p>
+          <p className="max-w-2xl text-xs leading-5 text-muted-foreground">
+            {description}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {badges.map((badge) => (
             <span
               className={cn(
                 "inline-flex h-6 items-center rounded-full border px-2 font-medium",
-                localReadModel?.canSell
+                badge.tone === "ready"
                   ? "border-success/25 bg-success/10 text-success"
-                  : "border-warning/30 bg-warning/15 text-warning",
-              )}
-            >
-              {localReadModel?.canSell ? "local sale ready" : "local gate active"}
-            </span>
-            <span
-              className={cn(
-                "inline-flex h-6 items-center rounded-full border px-2 font-medium",
-                repair?.seedResult === "seeded"
-                  ? "border-success/25 bg-success/10 text-success"
-                  : repair?.seedResult === "gateway_rejected" ||
-                      repair?.seedResult === "missing_staff_identity"
+                  : badge.tone === "warning"
                     ? "border-warning/30 bg-warning/15 text-warning"
                     : "border-border bg-muted/30 text-muted-foreground",
               )}
+              key={badge.label}
             >
-              repair {repair ? formatDebugStatus(repair.seedResult) : "not observed"}
+              {badge.label}
             </span>
-          </div>
-          <dl className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {runtimeRows.map(([label, value]) => (
-              <div key={label} className="min-w-0">
-                <dt className="uppercase tracking-wide text-muted-foreground">
-                  {label}
-                </dt>
-                <dd className="break-words font-mono text-foreground">
-                  {value}
-                </dd>
-              </div>
-            ))}
-          </dl>
-        </section>
-      ) : null}
-      <dl className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          ))}
+        </div>
+      </div>
+      <dl className="mt-3 grid gap-x-5 gap-y-3 sm:grid-cols-2 xl:grid-cols-3">
         {rows.map(([label, value]) => (
-          <div key={label} className="min-w-0">
-            <dt className="uppercase tracking-wide text-muted-foreground">
+          <div key={label} className="min-w-0 border-t border-border/60 pt-2">
+            <dt className="text-[0.68rem] font-medium uppercase tracking-wide text-muted-foreground">
               {label}
             </dt>
-            <dd className="break-words font-mono text-foreground">{value}</dd>
+            <dd className="mt-0.5 break-words font-mono text-[0.72rem] leading-5 text-foreground">
+              {value}
+            </dd>
           </div>
         ))}
       </dl>
-    </details>
+    </section>
+  );
+}
+
+function DebugEventsSection({
+  events,
+  reviewEvents,
+}: {
+  events: DebugRuntimeState["events"];
+  reviewEvents?: NonNullable<DebugRuntimeState["heartbeat"]>["sync"]["reviewEvents"];
+}) {
+  const [eventFilter, setEventFilter] = useState<DebugEventFilter>("all");
+  const mergedEventsById = new Map<string, DebugEventRecord>();
+  for (const event of reviewEvents ?? []) {
+    mergedEventsById.set(event.localEventId, event);
+  }
+  for (const event of events ?? []) {
+    mergedEventsById.set(event.localEventId, event);
+  }
+  const orderedEvents = [...mergedEventsById.values()].sort(
+    (left, right) => right.sequence - left.sequence,
+  );
+  const filteredEvents = orderedEvents.filter((event) =>
+    debugEventMatchesFilter(event, eventFilter),
+  );
+  const eventFilterCounts = DEBUG_EVENT_FILTERS.reduce<
+    Record<DebugEventFilter, number>
+  >((counts, filter) => {
+    counts[filter.value] =
+      filter.value === "all"
+        ? orderedEvents.length
+        : orderedEvents.filter((event) =>
+            debugEventMatchesFilter(event, filter.value),
+          ).length;
+    return counts;
+  }, {} as Record<DebugEventFilter, number>);
+
+  return (
+    <section className="rounded-md border border-border bg-background/70 p-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 space-y-1">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Local IndexedDB events
+          </p>
+          <p className="max-w-2xl text-xs leading-5 text-muted-foreground">
+            Local event records reported by this terminal. Payload and proof
+            fields are omitted.
+          </p>
+        </div>
+        <div aria-label="Local event filters" className="flex flex-wrap gap-2">
+          {DEBUG_EVENT_FILTERS.map((filter) => {
+            const isActive = eventFilter === filter.value;
+            return (
+              <button
+                aria-pressed={isActive}
+                className={cn(
+                  "inline-flex h-6 items-center rounded-full border px-2 font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  isActive
+                    ? "border-foreground/20 bg-foreground text-background"
+                    : filter.value === "synced"
+                      ? "border-success/25 bg-success/10 text-success"
+                      : filter.value === "review" || filter.value === "failed"
+                        ? "border-warning/30 bg-warning/15 text-warning"
+                        : "border-border bg-muted/30 text-muted-foreground hover:bg-muted",
+                )}
+                key={filter.value}
+                type="button"
+                onClick={() => setEventFilter(filter.value)}
+              >
+                {filter.label} {eventFilterCounts[filter.value]}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      {filteredEvents.length > 0 ? (
+        <div className="mt-3 max-h-[32rem] overflow-auto rounded-md border border-border/70">
+          <div className="min-w-[46rem]">
+            <div className="sticky top-0 z-10 grid grid-cols-[5rem_minmax(12rem,1fr)_8rem_8rem_minmax(10rem,1fr)] gap-3 border-b border-border bg-muted px-3 py-2 text-[0.68rem] font-medium uppercase tracking-wide text-muted-foreground">
+              <span>Sequence</span>
+              <span>Event</span>
+              <span>Status</span>
+              <span>Upload</span>
+              <span>Scope</span>
+            </div>
+            <div className="divide-y divide-border/70">
+              {filteredEvents.map((event) => (
+                <div
+                  className="grid grid-cols-[5rem_minmax(12rem,1fr)_8rem_8rem_minmax(10rem,1fr)] gap-3 px-3 py-2 text-xs"
+                  key={event.localEventId}
+                >
+                  <div className="font-mono text-muted-foreground">
+                    #{event.sequence}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate font-medium text-foreground">
+                      {formatDebugStatus(event.type)}
+                    </p>
+                    <p className="mt-0.5 truncate font-mono text-[0.68rem] text-muted-foreground">
+                      {event.localEventId}
+                    </p>
+                    <p className="mt-0.5 font-mono text-[0.68rem] text-muted-foreground">
+                      {formatDebugTimestamp(event.createdAt)}
+                    </p>
+                  </div>
+                  <div className="font-mono text-foreground">
+                    {formatDebugStatus(event.status)}
+                  </div>
+                  <div className="font-mono text-muted-foreground">
+                    {typeof event.uploadSequence === "number"
+                      ? `#${event.uploadSequence}`
+                      : "n/a"}
+                    {event.uploaded === true ? " uploaded" : ""}
+                  </div>
+                  <div className="min-w-0 space-y-0.5 font-mono text-[0.68rem] text-muted-foreground">
+                    {event.localRegisterSessionId ? (
+                      <p className="truncate">
+                        register{" "}
+                        {formatDebugIdentifier(event.localRegisterSessionId)}
+                      </p>
+                    ) : null}
+                    {event.localPosSessionId ? (
+                      <p className="truncate">
+                        sale {formatDebugIdentifier(event.localPosSessionId)}
+                      </p>
+                    ) : null}
+                    {event.localTransactionId ? (
+                      <p className="truncate">
+                        transaction{" "}
+                        {formatDebugIdentifier(event.localTransactionId)}
+                      </p>
+                    ) : null}
+                    {event.staffProfileId ? (
+                      <p className="truncate">
+                        staff {formatDebugIdentifier(event.staffProfileId)}
+                      </p>
+                    ) : null}
+                    {!event.localRegisterSessionId &&
+                    !event.localPosSessionId &&
+                    !event.localTransactionId &&
+                    !event.staffProfileId ? (
+                      <p>none</p>
+                    ) : null}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-3 rounded-md border border-dashed border-border px-3 py-4 text-xs text-muted-foreground">
+          {orderedEvents.length > 0
+            ? "No local events match this filter."
+            : "No local events were reported by this terminal."}
+        </div>
+      )}
+    </section>
   );
 }
 

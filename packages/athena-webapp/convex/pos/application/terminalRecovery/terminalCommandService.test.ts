@@ -103,6 +103,98 @@ describe("terminal command service", () => {
     expect(repository.insertCommand).not.toHaveBeenCalled();
   });
 
+  it("rejects local review cleanup commands without bounded explicit ids", async () => {
+    const repository = buildRepository();
+
+    await expect(
+      issueTerminalRecoveryCommand(repository, {
+        commandType: "clear_local_review_items",
+        expectedEvidence: { localReviewEventCount: 0 },
+        issuedAt: now,
+        issuedByUserId: "user-1" as Id<"athenaUser">,
+        commandContext: {
+          localReviewClearAll: true,
+          reason: "Clear all local review items.",
+        },
+        storeId,
+        terminalId,
+      }),
+    ).resolves.toMatchObject({
+      error: { code: "validation_failed" },
+      kind: "user_error",
+    });
+
+    await expect(
+      issueTerminalRecoveryCommand(repository, {
+        commandType: "clear_local_review_items",
+        expectedEvidence: { localReviewEventCount: 0 },
+        issuedAt: now,
+        issuedByUserId: "user-1" as Id<"athenaUser">,
+        commandContext: {
+          localReviewEventIds: Array.from(
+            { length: 101 },
+            (_, index) => `event-review-${index}`,
+          ),
+          reason: "Clear reviewed local review items.",
+        },
+        storeId,
+        terminalId,
+      }),
+    ).resolves.toMatchObject({
+      error: { code: "validation_failed" },
+      kind: "user_error",
+    });
+
+    await expect(
+      issueTerminalRecoveryCommand(repository, {
+        commandType: "clear_local_review_items",
+        expectedEvidence: {},
+        issuedAt: now,
+        issuedByUserId: "user-1" as Id<"athenaUser">,
+        commandContext: {
+          localReviewEventIds: ["event-review-1"],
+          reason: "Clear reviewed local review items.",
+        },
+        storeId,
+        terminalId,
+      }),
+    ).resolves.toMatchObject({
+      error: { code: "validation_failed" },
+      kind: "user_error",
+    });
+
+    expect(repository.insertCommand).not.toHaveBeenCalled();
+  });
+
+  it("rejects local review cleanup commands with duplicate explicit ids", async () => {
+    const repository = buildRepository();
+
+    await expect(
+      issueTerminalRecoveryCommand(repository, {
+        commandType: "clear_local_review_items",
+        expectedEvidence: {
+          localReviewClearedEventIds: ["event-review-1", "event-review-1"],
+          localReviewEventCount: 0,
+        },
+        issuedAt: now,
+        issuedByUserId: "user-1" as Id<"athenaUser">,
+        commandContext: {
+          expectedBlockerType: "local_review",
+          localReviewEventIds: ["event-review-1", "event-review-1"],
+          reason: "Clear uploaded review item.",
+        },
+        storeId,
+        terminalId,
+      }),
+    ).resolves.toMatchObject({
+      error: {
+        code: "validation_failed",
+      },
+      kind: "user_error",
+    });
+    expect(repository.insertCommand).not.toHaveBeenCalled();
+  });
+
   it("issues update_app with command-correlated expected evidence", async () => {
     const repository = buildRepository();
 
@@ -755,6 +847,94 @@ describe("terminal command service", () => {
     });
   });
 
+  it("stores sanitized local review evidence on command acknowledgement", async () => {
+    const repository = buildRepository({
+      commands: [
+        buildCommand({
+          executionId: "command-1:2000100",
+          status: "claimed",
+        }),
+      ],
+    });
+
+    await expect(
+      acknowledgeTerminalRecoveryCommand(repository, {
+        acknowledgedAt: now + 300,
+        commandId: "command-1" as Id<"posTerminalRecoveryCommand">,
+        executionId: "command-1:2000100",
+        localReviewEvents: [
+          {
+            createdAt: now - 1_000,
+            localEventId: "event-review-1",
+            localRegisterSessionId: "register-local-1",
+            localTransactionId: "transaction-local-1",
+            sequence: 12,
+            staffProfileId: "staff-1",
+            status: "needs_review",
+            type: "transaction.completed",
+            uploaded: true,
+            uploadSequence: 3,
+          } as never,
+          {
+            createdAt: now - 500,
+            localEventId: "event-review-2",
+            localRegisterSessionId: "register-local-1",
+            sequence: 13,
+            status: "needs_review",
+            type: "register.closeout_started",
+            uploaded: true,
+            uploadSequence: 4,
+          },
+          {
+            createdAt: now - 100,
+            localEventId: "event-review-1",
+            localRegisterSessionId: "register-local-stale",
+            sequence: 99,
+            status: "needs_review",
+            type: "stale.duplicate",
+            uploaded: true,
+            uploadSequence: 99,
+          },
+        ],
+        message: "Collected review payload token=raw-secret",
+        result: "completed",
+        storeId,
+        terminalId,
+      }),
+    ).resolves.toMatchObject({
+      kind: "ok",
+      data: {
+        acknowledgement: {
+          localReviewEvents: [
+            expect.objectContaining({
+              localEventId: "event-review-1",
+              localRegisterSessionId: "register-local-1",
+              sequence: 12,
+              status: "needs_review",
+              type: "transaction.completed",
+              uploaded: true,
+              uploadSequence: 3,
+            }),
+            expect.objectContaining({
+              localEventId: "event-review-2",
+              sequence: 13,
+              type: "register.closeout_started",
+            }),
+          ],
+          message: "Collected review payload [redacted]",
+        },
+        status: "completed",
+      },
+    });
+    expect(JSON.stringify(repository.patchCommand.mock.calls)).not.toMatch(
+      /raw-secret|payment|customer|proof-token|transaction-local-1|staff-1/i,
+    );
+    const storedCommand = await repository.getCommand(
+      "command-1" as Id<"posTerminalRecoveryCommand">,
+    );
+    expect(storedCommand?.acknowledgement?.localReviewEvents).toHaveLength(2);
+  });
+
   it("does not let another terminal claim or acknowledge a command", async () => {
     const repository = buildRepository({
       commands: [buildCommand()],
@@ -827,6 +1007,310 @@ describe("terminal command service", () => {
       verifiedAt: now,
     });
     expect(fresh.verifiedCommandIds).toEqual(["command-1"]);
+  });
+
+  it("verifies local review collection only after item-level details are present", async () => {
+    const repository = buildRepository({
+      commands: [
+        buildCommand({
+          commandType: "collect_local_review",
+          expectedEvidence: {
+            localReviewDetailsCollected: true,
+          },
+          status: "completed",
+          verificationStatus: "runtime_verification_ready",
+        }),
+      ],
+    });
+
+    const countOnly = await verifyTerminalRecoveryCommandsFromRuntime(
+      repository,
+      {
+        runtimeStatus: buildRuntimeStatus({
+          receivedAt: now,
+          sync: {
+            failedEventCount: 0,
+            localOnlyEventCount: 0,
+            pendingEventCount: 0,
+            reviewEventCount: 84,
+            reviewEvents: [],
+            status: "needs_review",
+            uploadableEventCount: 0,
+          },
+        }),
+        storeId,
+        terminalId,
+        verifiedAt: now,
+      },
+    );
+    expect(countOnly.verifiedCommandIds).toEqual([]);
+
+    const withDetails = await verifyTerminalRecoveryCommandsFromRuntime(
+      repository,
+      {
+        runtimeStatus: buildRuntimeStatus({
+          receivedAt: now,
+          sync: {
+            failedEventCount: 0,
+            localOnlyEventCount: 0,
+            pendingEventCount: 0,
+            reviewEventCount: 84,
+            reviewEvents: [
+              {
+                createdAt: now - 1_000,
+                localEventId: "event-review-1",
+                sequence: 10,
+                status: "needs_review",
+                type: "transaction.completed",
+                uploaded: true,
+              },
+            ],
+            status: "needs_review",
+            uploadableEventCount: 0,
+          },
+        }),
+        storeId,
+        terminalId,
+        verifiedAt: now,
+      },
+    );
+
+    expect(withDetails.verifiedCommandIds).toEqual(["command-1"]);
+  });
+
+  it("verifies local review cleanup only after review count reaches expected count", async () => {
+    const repository = buildRepository({
+      commands: [
+        buildCommand({
+          commandType: "clear_local_review_items",
+          commandContext: {
+            expectedBlockerType: "local_review",
+            localReviewEventIds: ["event-review-1", "event-review-2"],
+          },
+          expectedEvidence: {
+            localReviewClearedEventIds: ["event-review-1", "event-review-2"],
+            localReviewEventCount: 0,
+          },
+          acknowledgement: {
+            acknowledgedAt: now - 100,
+            clearedLocalReviewEventIds: ["event-review-1", "event-review-2"],
+            result: "completed",
+          },
+          status: "completed",
+          verificationStatus: "runtime_verification_ready",
+        }),
+      ],
+    });
+
+    const stillBlocked = await verifyTerminalRecoveryCommandsFromRuntime(
+      repository,
+      {
+        runtimeStatus: buildRuntimeStatus({
+          receivedAt: now,
+          sync: {
+            failedEventCount: 0,
+            localOnlyEventCount: 0,
+            pendingEventCount: 0,
+            reviewEventCount: 2,
+            reviewEvents: [],
+            status: "needs_review",
+            uploadableEventCount: 0,
+          },
+        }),
+        storeId,
+        terminalId,
+        verifiedAt: now,
+      },
+    );
+    expect(stillBlocked.verifiedCommandIds).toEqual([]);
+
+    const cleared = await verifyTerminalRecoveryCommandsFromRuntime(
+      repository,
+      {
+        runtimeStatus: buildRuntimeStatus({
+          receivedAt: now,
+          sync: {
+            failedEventCount: 0,
+            localOnlyEventCount: 0,
+            pendingEventCount: 0,
+            reviewEventCount: 0,
+            reviewEvents: [],
+            status: "idle",
+            uploadableEventCount: 0,
+          },
+        }),
+        storeId,
+        terminalId,
+        verifiedAt: now,
+      },
+    );
+
+    expect(cleared.verifiedCommandIds).toEqual(["command-1"]);
+  });
+
+  it("does not verify local review cleanup when cleared ids are incomplete", async () => {
+    const repository = buildRepository({
+      commands: [
+        buildCommand({
+          acknowledgement: {
+            acknowledgedAt: now - 100,
+            clearedLocalReviewEventIds: ["event-review-1"],
+            result: "completed",
+          },
+          commandType: "clear_local_review_items",
+          commandContext: {
+            expectedBlockerType: "local_review",
+            localReviewEventIds: ["event-review-1", "event-review-2"],
+          },
+          expectedEvidence: {
+            localReviewClearedEventIds: ["event-review-1", "event-review-2"],
+            localReviewEventCount: 0,
+          },
+          status: "completed",
+          verificationStatus: "runtime_verification_ready",
+        }),
+      ],
+    });
+
+    const result = await verifyTerminalRecoveryCommandsFromRuntime(repository, {
+      runtimeStatus: buildRuntimeStatus({
+        receivedAt: now,
+        sync: {
+          failedEventCount: 0,
+          localOnlyEventCount: 0,
+          pendingEventCount: 0,
+          reviewEventCount: 0,
+          reviewEvents: [],
+          status: "idle",
+          uploadableEventCount: 0,
+        },
+      }),
+      storeId,
+      terminalId,
+      verifiedAt: now,
+    });
+
+    expect(result.verifiedCommandIds).toEqual([]);
+  });
+
+  it("does not verify local review cleanup when a cleared id remains in runtime evidence", async () => {
+    const repository = buildRepository({
+      commands: [
+        buildCommand({
+          acknowledgement: {
+            acknowledgedAt: now - 100,
+            clearedLocalReviewEventIds: ["event-review-1", "event-review-2"],
+            result: "completed",
+          },
+          commandType: "clear_local_review_items",
+          commandContext: {
+            expectedBlockerType: "local_review",
+            localReviewEventIds: ["event-review-1", "event-review-2"],
+          },
+          expectedEvidence: {
+            localReviewClearedEventIds: ["event-review-1", "event-review-2"],
+            localReviewEventCount: 1,
+          },
+          status: "completed",
+          verificationStatus: "runtime_verification_ready",
+        }),
+      ],
+    });
+
+    const result = await verifyTerminalRecoveryCommandsFromRuntime(repository, {
+      runtimeStatus: buildRuntimeStatus({
+        receivedAt: now,
+        sync: {
+          failedEventCount: 0,
+          localOnlyEventCount: 0,
+          pendingEventCount: 0,
+          reviewEventCount: 1,
+          reviewEvents: [
+            {
+              createdAt: now - 1_000,
+              localEventId: "event-review-1",
+              sequence: 12,
+              status: "needs_review",
+              type: "transaction.completed",
+              uploaded: true,
+              uploadSequence: 12,
+            },
+          ],
+          status: "needs_review",
+          uploadableEventCount: 0,
+        },
+      }),
+      storeId,
+      terminalId,
+      verifiedAt: now,
+    });
+
+    expect(result.verifiedCommandIds).toEqual([]);
+  });
+
+  it("does not verify completed commands with runtime evidence captured before acknowledgement", async () => {
+    const repository = buildRepository({
+      commands: [
+        buildCommand({
+          acknowledgement: {
+            acknowledgedAt: now + 1_000,
+            result: "completed",
+          },
+          commandType: "clear_local_review_items",
+          commandContext: {
+            expectedBlockerType: "local_review",
+            localReviewEventIds: ["event-review-1"],
+          },
+          expectedEvidence: {
+            localReviewEventCount: 0,
+          },
+          status: "completed",
+          verificationStatus: "runtime_verification_ready",
+        }),
+      ],
+    });
+
+    const preCommandRuntime = await verifyTerminalRecoveryCommandsFromRuntime(
+      repository,
+      {
+        runtimeStatus: buildRuntimeStatus({
+          receivedAt: now,
+          sync: {
+            failedEventCount: 0,
+            localOnlyEventCount: 0,
+            pendingEventCount: 0,
+            reviewEventCount: 0,
+            status: "idle",
+            uploadableEventCount: 0,
+          },
+        }),
+        storeId,
+        terminalId,
+        verifiedAt: now + 1_500,
+      },
+    );
+    expect(preCommandRuntime.verifiedCommandIds).toEqual([]);
+
+    const postCommandRuntime = await verifyTerminalRecoveryCommandsFromRuntime(
+      repository,
+      {
+        runtimeStatus: buildRuntimeStatus({
+          receivedAt: now + 1_500,
+          sync: {
+            failedEventCount: 0,
+            localOnlyEventCount: 0,
+            pendingEventCount: 0,
+            reviewEventCount: 0,
+            status: "idle",
+            uploadableEventCount: 0,
+          },
+        }),
+        storeId,
+        terminalId,
+        verifiedAt: now + 1_500,
+      },
+    );
+    expect(postCommandRuntime.verifiedCommandIds).toEqual(["command-1"]);
   });
 
   it("treats omitted optional terminal health sections as healthy during verification", async () => {

@@ -462,6 +462,19 @@ export interface RegisterViewModel {
           nextPendingUploadSequence?: number;
           pendingEventCount?: number;
           reviewEventCount?: number;
+          reviewEvents?: Array<{
+            createdAt: number;
+            localEventId: string;
+            localPosSessionId?: string;
+            localRegisterSessionId?: string;
+            localTransactionId?: string;
+            sequence: number;
+            staffProfileId?: string;
+            status: string;
+            type: string;
+            uploaded?: boolean;
+            uploadSequence?: number;
+          }>;
           status: string;
           uploadableEventCount?: number;
         };
@@ -470,6 +483,20 @@ export interface RegisterViewModel {
           status: string;
         };
       };
+      events?: Array<{
+        createdAt: number;
+        localEventId: string;
+        localPosSessionId?: string;
+        localRegisterSessionId?: string;
+        localTransactionId?: string;
+        sequence: number;
+        staffProfileId?: string;
+        status: string;
+        syncUploadable?: boolean;
+        type: string;
+        uploaded?: boolean;
+        uploadSequence?: number;
+      }>;
       localReadModel?: {
         activeRegisterSession?: {
           cloudRegisterSessionId?: string;

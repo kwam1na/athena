@@ -85,7 +85,9 @@ vi.mock("@/lib/pos/infrastructure/local/localPosEntryContext", () => ({
 }));
 
 vi.mock("@/components/View", () => ({
-  default: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  default: ({ children }: { children?: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
 }));
 
 vi.mock("@/components/common/FadeIn", () => ({
@@ -93,11 +95,7 @@ vi.mock("@/components/common/FadeIn", () => ({
 }));
 
 vi.mock("@/components/common/PageLevelHeader", () => ({
-  PageLevelHeader: ({
-    title,
-  }: {
-    title: string;
-  }) => <h1>{title}</h1>,
+  PageLevelHeader: ({ title }: { title: string }) => <h1>{title}</h1>,
   PageWorkspace: ({ children }: { children?: React.ReactNode }) => (
     <div>{children}</div>
   ),
@@ -302,7 +300,9 @@ describe("POSTerminalHealthViewContent", () => {
       screen.getByText("1 synced item is held before projection."),
     ).toBeInTheDocument();
     expect(screen.getByText("Review kiosk")).toBeInTheDocument();
-    expect(screen.getAllByText("Staff authority ready").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Staff authority ready").length).toBeGreaterThan(
+      0,
+    );
     expect(
       screen.getAllByText("Active in cash controls").length,
     ).toBeGreaterThan(0);
@@ -317,15 +317,14 @@ describe("POSTerminalHealthViewContent", () => {
     expect(screen.getByText("Update ready")).toBeInTheDocument();
     expect(screen.getAllByText("Products and stock").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Register details").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Offline diagnostics need attention").length).toBeGreaterThan(0);
     expect(
-      screen.getAllByText("Ready signals").length,
+      screen.getAllByText("Offline diagnostics need attention").length,
     ).toBeGreaterThan(0);
+    expect(screen.getAllByText("Ready signals").length).toBeGreaterThan(0);
     expect(screen.getAllByText("App shell").length).toBeGreaterThan(0);
-    expect(screen.getByRole("link", { name: /Front counter/i })).toHaveAttribute(
-      "href",
-      "/acme/store/osu/pos/terminals/terminal-1",
-    );
+    expect(
+      screen.getByRole("link", { name: /Front counter/i }),
+    ).toHaveAttribute("href", "/acme/store/osu/pos/terminals/terminal-1");
   });
 
   it("renders operational empty and query unavailable states", () => {
@@ -382,8 +381,12 @@ describe("POSTerminalHealthViewContent", () => {
     );
 
     expect(screen.getByText("This browser")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Front counter/i })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Back counter/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /Front counter/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /Back counter/i }),
+    ).toBeInTheDocument();
   });
 
   it("orders the terminal attached to the current browser first", () => {
@@ -413,11 +416,13 @@ describe("POSTerminalHealthViewContent", () => {
     );
 
     const backCounterLink = screen.getByRole("link", { name: "Back counter" });
-    const frontCounterLink = screen.getByRole("link", { name: "Front counter" });
+    const frontCounterLink = screen.getByRole("link", {
+      name: "Front counter",
+    });
     expect(
       Boolean(
         backCounterLink.compareDocumentPosition(frontCounterLink) &
-          Node.DOCUMENT_POSITION_FOLLOWING,
+        Node.DOCUMENT_POSITION_FOLLOWING,
       ),
     ).toBe(true);
   });
@@ -438,7 +443,9 @@ describe("POSTerminalHealthViewContent", () => {
     expect(screen.getByText("Needs review")).toBeInTheDocument();
     expect(screen.getByText("Stale or missing")).toBeInTheDocument();
     expect(screen.getAllByText("-")).toHaveLength(5);
-    expect(screen.queryByText("No POS terminals registered")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("No POS terminals registered"),
+    ).not.toBeInTheDocument();
   });
 
   it("shows redacted app-session reconciliation posture without marking cashier continuation as review", () => {
@@ -532,6 +539,69 @@ describe("POSTerminalHealthViewContent", () => {
     ).toBeInTheDocument();
   });
 
+  it("shows sale-ready review backlog as review-owned without raw operational payloads", () => {
+    render(
+      <POSTerminalHealthViewContent
+        healthSummaries={[
+          {
+            ...baseSummary,
+            health: "needs_attention",
+            operationalExplanation: {
+              blockingDomain: "sync_review",
+              detail:
+                "M Supplies conflict-raw-001 has payment payload data pending review.",
+              evidenceReferences: [
+                {
+                  count: 9,
+                  source: "cloud_sync",
+                  summary: "M Supplies conflict-raw-001 payment payload",
+                  type: "synced_sale_inventory_review",
+                },
+              ],
+              headline: "M Supplies review needed",
+              lane: "sale_ready_with_review_backlog",
+              nextStep:
+                "Review the open work queue before support repairs anything.",
+              primaryOwner: "operations",
+              saleImpact: "can_transact_now",
+              secondaryActions: [],
+              severity: "warning",
+              summaryMeta: {
+                hasSecondarySafeRepair: false,
+                reviewBacklogCount: 9,
+                targetResolutionIncomplete: false,
+              },
+              supportAction: "manual_review",
+            },
+            recovery: {
+              readiness: {
+                status: "able_to_transact_now",
+                summary:
+                  "Able to transact now. Drawer, cashier, and sale authority are active.",
+              },
+            },
+          },
+        ]}
+        isLoading={false}
+        orgUrlSlug="acme"
+        storeUrlSlug="osu"
+      />,
+    );
+
+    expect(screen.getAllByText("Review needed").length).toBeGreaterThan(0);
+    expect(screen.getByText("Sales can continue.")).toBeInTheDocument();
+    expect(screen.getByText("Sales can continue")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Review the open work queue before support repairs anything.",
+      ),
+    ).toBeInTheDocument();
+    expect(metricCard("Needs review")).toHaveTextContent("1");
+    expect(
+      screen.queryByText(/M Supplies|conflict-raw-001|payment payload/i),
+    ).not.toBeInTheDocument();
+  });
+
   it("does not show stale setup notes when recovery cleared the terminal blocker", () => {
     render(
       <POSTerminalHealthViewContent
@@ -587,9 +657,9 @@ describe("POSTerminalHealthViewContent", () => {
 });
 
 function metricCard(label: string) {
-  const metricLabel = screen.getAllByText(label).find(
-    (element) => element.tagName.toLowerCase() === "p",
-  );
+  const metricLabel = screen
+    .getAllByText(label)
+    .find((element) => element.tagName.toLowerCase() === "p");
   if (!metricLabel) {
     throw new Error(`Metric ${label} was not rendered.`);
   }

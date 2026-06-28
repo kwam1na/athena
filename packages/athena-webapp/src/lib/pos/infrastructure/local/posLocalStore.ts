@@ -53,8 +53,17 @@ export type PosLocalSyncEventStatus =
   | "pending"
   | "syncing"
   | "synced"
+  | "locally_resolved"
   | "needs_review"
   | "failed";
+
+export type PosLocalReviewResolutionReason = "terminal_recovery_command";
+
+export interface PosLocalReviewResolutionMetadata {
+  reason: PosLocalReviewResolutionReason;
+  resolvedAt: number;
+  status: "local_review_cleared";
+}
 
 export type PosLocalEventValidationFlag =
   | "app-session-unverified"
@@ -117,6 +126,7 @@ export interface PosLocalEventRecord {
     status: PosLocalSyncEventStatus;
     cloudEventId?: string;
     error?: string;
+    localResolution?: PosLocalReviewResolutionMetadata;
     uploaded?: boolean;
   };
 }
@@ -1520,6 +1530,60 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
                   status: "needs_review" as const,
                   ...(error ? { error } : {}),
                   ...(markOptions?.uploaded ? { uploaded: true } : {}),
+                },
+              };
+              await transaction.put(
+                "events",
+                String(event.sequence),
+                nextEvent,
+              );
+              updated.push(nextEvent);
+            }
+
+            return updated.sort(
+              (left, right) => left.sequence - right.sequence,
+            );
+          },
+        );
+
+        return { ok: true, value };
+      } catch (error) {
+        return toFailure(error);
+      }
+    },
+
+    async clearLocalReviewEvents(
+      eventIds: string[],
+      clearOptions?: { reason?: PosLocalReviewResolutionReason },
+    ): Promise<PosLocalStoreResult<PosLocalEventRecord[]>> {
+      try {
+        const value = await options.adapter.transaction(
+          "readwrite",
+          ["meta", "events"],
+          async (transaction) => {
+            await ensureSupportedSchema(transaction, "readwrite");
+            const eventIdSet = new Set(eventIds);
+            const events =
+              await transaction.getAll<PosLocalEventRecord>("events");
+            const updated: PosLocalEventRecord[] = [];
+            const resolvedAt = clock();
+
+            for (const event of events) {
+              if (!eventIdSet.has(event.localEventId)) continue;
+              if (event.sync.status !== "needs_review") continue;
+              const eventWithoutProof = omitStaffProofToken(event);
+              const nextEvent = {
+                ...eventWithoutProof,
+                sync: {
+                  ...event.sync,
+                  error: undefined,
+                  localResolution: {
+                    reason:
+                      clearOptions?.reason ?? "terminal_recovery_command",
+                    resolvedAt,
+                    status: "local_review_cleared" as const,
+                  },
+                  status: "locally_resolved" as const,
                 },
               };
               await transaction.put(
