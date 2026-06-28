@@ -855,6 +855,7 @@ const schema = defineSchema({
     .index("by_storeId", ["storeId"])
     .index("by_storeId_status", ["storeId", "status"])
     .index("by_storeId_type", ["storeId", "type"])
+    .index("by_storeId_type_status", ["storeId", "type", "status"])
     .index("by_storeId_assignedTo", ["storeId", "assignedToStaffProfileId"])
     .index("by_customerProfileId", ["customerProfileId"])
     .index("by_approvalState", ["approvalState"]),

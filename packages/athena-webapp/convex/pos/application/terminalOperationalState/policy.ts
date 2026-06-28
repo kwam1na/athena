@@ -2,8 +2,10 @@ import {
   isRegisterSessionReplacementBlocking,
   isRegisterSessionSaleUsable,
 } from "../../../../shared/registerSessionLifecyclePolicy";
+import type { TerminalSyncReviewSummaryGroup } from "../../domain/terminalSyncEvidence";
 import type {
   TerminalHealthAttentionReason,
+  TerminalOperationalExplanation,
   TerminalOperationalPolicyInput,
   TerminalOperationalState,
   TerminalSalesReadiness,
@@ -33,10 +35,12 @@ export function buildTerminalOperationalState(
   const cloudRegisterSessionSaleUsable = input.latestRegisterSession
     ? isRegisterSessionSaleUsable(input.latestRegisterSession)
     : undefined;
-  const attentionReasons = deriveTerminalHealthAttentionReasons({
-    ...input,
-    runtimeStatus: effectiveRuntimeStatus,
-  });
+  const attentionReasons =
+    input.attentionReasons ??
+    deriveTerminalHealthAttentionReasons({
+      ...input,
+      runtimeStatus: effectiveRuntimeStatus,
+    });
   const terminalActions = buildTerminalRecoveryActions({
     runtimeStatus: effectiveRuntimeStatus,
   });
@@ -75,11 +79,28 @@ export function buildTerminalOperationalState(
     runtimeStatus: effectiveRuntimeStatus,
     terminalStatus: input.terminalStatus,
   });
+  const operationalExplanation = buildTerminalOperationalExplanation({
+    attentionReasons,
+    cloudRepair: input.cloudRepair,
+    diagnosticEvidence,
+    recoveryEvidence: {
+      cloudRepair: input.cloudRepair,
+      manualReview,
+      terminalActions,
+    },
+    runtimeFresh: input.runtimeFresh,
+    runtimeStatus: effectiveRuntimeStatus,
+    salesReadiness,
+    supportRecovery,
+    syncEvidence: input.syncEvidence,
+    terminalHealth,
+  });
 
   return {
     appUpdateEvidence: input.appUpdate,
     attentionReasons,
     diagnosticEvidence,
+    operationalExplanation,
     recoveryEvidence: {
       cloudRepair: input.cloudRepair,
       commandStatus: input.commandStatus,
@@ -243,34 +264,45 @@ export function deriveTerminalHealthAttentionReasons(
     });
   }
 
-  const inventoryReviewCount =
-    input.syncEvidence.unresolvedConflicts?.filter(
-      (conflict) =>
-        conflict.conflictType === "inventory" &&
-        conflict.reviewTarget?.workItemType ===
-          "synced_sale_inventory_review",
-    ).length ?? 0;
+  const currentReviewGroups = getCurrentReviewGroups(input.syncEvidence);
+  const inventoryReviewGroups = currentReviewGroups.filter(
+    (group) => isInventoryReviewGroup(group, !!input.syncEvidence.reviewSummary),
+  );
+  const inventoryReviewCount = sumReviewGroupCounts(inventoryReviewGroups);
 
   if (inventoryReviewCount > 0) {
-    reasons.push({
+    const inventoryReviewTarget = inventoryReviewGroups.find(
+      (group) => group.reviewTarget,
+    )?.reviewTarget;
+    const latestInventoryReviewSequence =
+      latestReviewGroupSequence(inventoryReviewGroups) ?? latestEvent?.sequence;
+    const reason: TerminalHealthAttentionReason = {
       count: inventoryReviewCount,
-      latestEventSequence: latestEvent?.sequence,
+      latestEventSequence: latestInventoryReviewSequence,
       latestEventStatus: latestEvent?.status,
       source: "cloud_sync",
       summary: `${inventoryReviewCount} inventory review item${inventoryReviewCount === 1 ? " needs" : "s need"} attention.`,
       type: "synced_sale_inventory_review",
-    });
+    };
+    if (inventoryReviewTarget) {
+      reason.actionTarget = {
+        label: "Inventory review",
+        type: "open_work",
+      };
+    }
+    reasons.push(reason);
   }
 
-  const conflictedCount = Math.max(
-    0,
-    input.syncEvidence.conflictedCount - inventoryReviewCount,
+  const cloudReviewGroups = currentReviewGroups.filter(
+    (group) => !isInventoryReviewGroup(group, !!input.syncEvidence.reviewSummary),
   );
+  const conflictedCount = sumReviewGroupCounts(cloudReviewGroups);
 
   if (conflictedCount > 0) {
     reasons.push({
       count: conflictedCount,
-      latestEventSequence: latestEvent?.sequence,
+      latestEventSequence:
+        latestReviewGroupSequence(cloudReviewGroups) ?? latestEvent?.sequence,
       latestEventStatus: latestEvent?.status,
       source: "cloud_sync",
       summary: `${conflictedCount} cloud sync conflict${conflictedCount === 1 ? " needs" : "s need"} review.`,
@@ -278,29 +310,95 @@ export function deriveTerminalHealthAttentionReasons(
     });
   }
 
-  if (input.syncEvidence.heldCount > 0) {
-    reasons.push({
-      count: input.syncEvidence.heldCount,
-      latestEventSequence: latestEvent?.sequence,
-      latestEventStatus: latestEvent?.status,
-      source: "cloud_sync",
-      summary: `${input.syncEvidence.heldCount} synced item${input.syncEvidence.heldCount === 1 ? " is" : "s are"} held before projection.`,
-      type: "cloud_held",
-    });
-  }
-
-  if (input.syncEvidence.rejectedCount > 0) {
-    reasons.push({
-      count: input.syncEvidence.rejectedCount,
-      latestEventSequence: latestEvent?.sequence,
-      latestEventStatus: latestEvent?.status,
-      source: "cloud_sync",
-      summary: `${input.syncEvidence.rejectedCount} synced item${input.syncEvidence.rejectedCount === 1 ? " was" : "s were"} rejected by the server.`,
-      type: "cloud_rejected",
-    });
+  if (!input.syncEvidence.reviewSummary && currentReviewGroups.length === 0) {
+    if (input.syncEvidence.conflictedCount > 0) {
+      reasons.push({
+        count: input.syncEvidence.conflictedCount,
+        latestEventSequence: latestEvent?.sequence,
+        latestEventStatus: latestEvent?.status,
+        source: "cloud_sync",
+        summary: `${input.syncEvidence.conflictedCount} cloud sync conflict${input.syncEvidence.conflictedCount === 1 ? " needs" : "s need"} review.`,
+        type: "cloud_conflict",
+      });
+    }
+    if (input.syncEvidence.heldCount > 0) {
+      reasons.push({
+        count: input.syncEvidence.heldCount,
+        latestEventSequence: latestEvent?.sequence,
+        latestEventStatus: latestEvent?.status,
+        source: "cloud_sync",
+        summary: `${input.syncEvidence.heldCount} synced item${input.syncEvidence.heldCount === 1 ? " is" : "s are"} held before projection.`,
+        type: "cloud_held",
+      });
+    }
+    if (input.syncEvidence.rejectedCount > 0) {
+      reasons.push({
+        count: input.syncEvidence.rejectedCount,
+        latestEventSequence: latestEvent?.sequence,
+        latestEventStatus: latestEvent?.status,
+        source: "cloud_sync",
+        summary: `${input.syncEvidence.rejectedCount} synced item${input.syncEvidence.rejectedCount === 1 ? " was" : "s were"} rejected by the server.`,
+        type: "cloud_rejected",
+      });
+    }
   }
 
   return reasons;
+}
+
+function getCurrentReviewGroups(
+  syncEvidence: TerminalOperationalPolicyInput["syncEvidence"],
+): TerminalSyncReviewSummaryGroup[] {
+  if (syncEvidence.reviewSummary) {
+    return syncEvidence.reviewSummary.groups;
+  }
+
+  return (syncEvidence.unresolvedConflicts ?? []).map((conflict) => ({
+    ...(conflict.reviewTarget
+      ? {
+          actionability: "open_work_review" as const,
+          owner: "operations_open_work" as const,
+          reviewTarget: conflict.reviewTarget,
+        }
+      : {
+          actionability: "manual_review" as const,
+          owner: "manual_review" as const,
+        }),
+    conflictType: conflict.conflictType,
+    count: 1,
+    latestCreatedAt: conflict.createdAt,
+    latestSequence: conflict.sequence,
+  }));
+}
+
+function sumReviewGroupCounts(groups: TerminalSyncReviewSummaryGroup[]) {
+  return groups.reduce((total, group) => total + group.count, 0);
+}
+
+function latestReviewGroupSequence(groups: TerminalSyncReviewSummaryGroup[]) {
+  return groups.reduce<number | undefined>(
+    (latest, group) =>
+      latest === undefined
+        ? group.latestSequence
+        : Math.max(latest, group.latestSequence),
+    undefined,
+  );
+}
+
+function isInventoryReviewGroup(
+  group: TerminalSyncReviewSummaryGroup,
+  hasRepositoryReviewSummary: boolean,
+) {
+  if (group.conflictType !== "inventory") {
+    return false;
+  }
+  if (!hasRepositoryReviewSummary) {
+    return true;
+  }
+  return (
+    group.actionability === "open_work_review" ||
+    group.actionability === "diagnostic_only"
+  );
 }
 
 export function classifySupportRecovery(
@@ -362,7 +460,6 @@ export function classifySalesReadiness(
   input: TerminalSalesReadinessInput,
 ): TerminalSalesReadiness {
   if (
-    input.healthyIdle &&
     input.activeRegisterSession &&
     input.saleAuthorityReady &&
     input.cloudRegisterSessionSaleUsable !== false
@@ -518,8 +615,7 @@ function buildTerminalRecoveryManualReview(args: {
     args.attentionReasons
       .filter((reason) =>
         reason.type === "cloud_held" ||
-        reason.type === "cloud_rejected" ||
-        reason.type === "local_review",
+        reason.type === "cloud_rejected",
       )
       .map((reason) => ({
         reason: reason.summary,
@@ -535,6 +631,316 @@ function buildTerminalRecoveryManualReview(args: {
     });
   }
   return manual;
+}
+
+function buildTerminalOperationalExplanation(args: {
+  attentionReasons: TerminalHealthAttentionReason[];
+  cloudRepair: TerminalOperationalPolicyInput["cloudRepair"];
+  diagnosticEvidence: TerminalOperationalState["diagnosticEvidence"];
+  recoveryEvidence: Pick<
+    TerminalOperationalState["recoveryEvidence"],
+    "cloudRepair" | "manualReview" | "terminalActions"
+  >;
+  runtimeFresh: boolean;
+  runtimeStatus: TerminalOperationalPolicyInput["runtimeStatus"];
+  salesReadiness: TerminalSalesReadiness;
+  supportRecovery: TerminalSupportRecovery;
+  syncEvidence: TerminalOperationalPolicyInput["syncEvidence"];
+  terminalHealth: TerminalOperationalState["terminalHealth"];
+}): TerminalOperationalExplanation {
+  const reviewBacklogReasons = args.attentionReasons.filter(isReviewBacklogReason);
+  const reviewBacklogCount = reviewBacklogReasons.reduce(
+    (total, reason) => total + (reason.count ?? 1),
+    0,
+  );
+  const targetResolutionIncomplete =
+    args.syncEvidence.reviewSummary?.meta.targetResolutionIncomplete ?? false;
+  const evidenceReferences = [
+    ...args.attentionReasons.map((reason) =>
+      buildExplanationEvidenceReference({
+        count: reason.count,
+        source: reason.source,
+        summary: reason.summary,
+        type: reason.type,
+      }),
+    ),
+    ...args.diagnosticEvidence.map((diagnostic) => ({
+      source: diagnostic.source,
+      summary: diagnostic.summary,
+      type: "diagnostic" as const,
+    })),
+  ];
+  const safeRepairSecondaryAction =
+    args.cloudRepair.safeConflictIds.length > 0 &&
+    args.supportRecovery?.status !== "needs_cloud_repair"
+      ? {
+          label: "Safe cloud repair available",
+          primaryOwner: "support" as const,
+          supportAction: "safe_cloud_repair" as const,
+        }
+      : null;
+  const secondaryActions = safeRepairSecondaryAction
+    ? [safeRepairSecondaryAction]
+    : [];
+
+  if (
+    reviewBacklogReasons.length > 0 &&
+    !args.supportRecovery
+  ) {
+    const saleReady = args.salesReadiness === "able_to_transact_now";
+    return {
+      blockingDomain: "sync_review",
+      detail:
+        targetResolutionIncomplete
+          ? "Review-owned sync work needs attention, but the exact owner was capped while this terminal remains sale-ready."
+          : saleReady
+            ? "Review-owned sync work needs attention, but this terminal has fresh sale authority."
+            : "Review-owned sync work needs attention before terminal health is clear.",
+      evidenceReferences,
+      headline: saleReady
+        ? "Review needed. Sales can continue."
+        : "Review needed",
+      lane: saleReady ? "sale_ready_with_review_backlog" : "needs_manual_review",
+      nextStep: targetResolutionIncomplete
+        ? "Use Operations or Cash Controls review workspaces to locate the backlog."
+        : "Use the linked review workspace to clear the backlog.",
+      primaryOwner: resolveReviewBacklogOwner(
+        reviewBacklogReasons,
+        targetResolutionIncomplete,
+      ),
+      saleImpact: saleImpactForReadiness(args.salesReadiness),
+      secondaryActions,
+      severity: saleReady ? "warning" : "critical",
+      summaryMeta: {
+        hasSecondarySafeRepair: !!safeRepairSecondaryAction,
+        reviewBacklogCount,
+        targetResolutionIncomplete,
+      },
+      supportAction: "manual_review",
+    };
+  }
+
+  if (args.supportRecovery?.status === "needs_manual_review") {
+    return {
+      blockingDomain: "manual_review",
+      detail:
+        "Manual review must finish before support repairs this terminal.",
+      evidenceReferences,
+      headline: "Manager review needed",
+      lane: "needs_manual_review",
+      nextStep: "Use the linked review workspace before running support repair.",
+      primaryOwner: "manager",
+      saleImpact: saleImpactForReadiness(args.salesReadiness),
+      secondaryActions,
+      severity: "critical",
+      summaryMeta: {
+        hasSecondarySafeRepair: !!safeRepairSecondaryAction,
+        reviewBacklogCount,
+        targetResolutionIncomplete,
+      },
+      supportAction: "manual_review",
+    };
+  }
+
+  if (args.supportRecovery?.status === "needs_terminal_action") {
+    const retryOnly = args.recoveryEvidence.terminalActions.every(
+      (action) => action.commandType === "retry_sync",
+    );
+    return {
+      blockingDomain: "terminal_runtime",
+      detail: retryOnly
+        ? "The terminal needs to retry local sync before evidence is current."
+        : "The terminal needs a local repair command before support can continue.",
+      evidenceReferences,
+      headline: retryOnly ? "Terminal sync retry needed" : "Terminal action needed",
+      lane: "needs_terminal_action",
+      nextStep: retryOnly
+        ? "Send a terminal sync retry and wait for a fresh check-in."
+        : "Send the available terminal repair command.",
+      primaryOwner: "terminal",
+      saleImpact: saleImpactForReadiness(args.salesReadiness),
+      secondaryActions,
+      severity: "warning",
+      summaryMeta: {
+        hasSecondarySafeRepair: !!safeRepairSecondaryAction,
+        reviewBacklogCount,
+        targetResolutionIncomplete,
+      },
+      supportAction: retryOnly ? "terminal_sync_retry" : "terminal_command",
+    };
+  }
+
+  if (args.supportRecovery?.status === "needs_cloud_repair") {
+    return {
+      blockingDomain: "cloud_repair",
+      detail: "Support can run the safe cloud repair for the listed sync evidence.",
+      evidenceReferences: [
+        ...evidenceReferences,
+        {
+          count: args.cloudRepair.safeConflictIds.length,
+          source: "cloud_repair",
+          summary: "Safe cloud repair conflicts are available.",
+          type: "safe_cloud_conflict",
+        },
+      ],
+      headline: "Cloud repair available",
+      lane: "needs_cloud_repair",
+      nextStep: "Run the safe cloud repair action.",
+      primaryOwner: "support",
+      saleImpact: saleImpactForReadiness(args.salesReadiness),
+      secondaryActions,
+      severity: "warning",
+      summaryMeta: {
+        hasSecondarySafeRepair: false,
+        reviewBacklogCount,
+        targetResolutionIncomplete,
+      },
+      supportAction: "safe_cloud_repair",
+    };
+  }
+
+  if (
+    !args.runtimeFresh ||
+    !args.runtimeStatus ||
+    args.terminalHealth === "stale" ||
+    args.terminalHealth === "offline"
+  ) {
+    return {
+      blockingDomain: "terminal_runtime",
+      detail: "Terminal runtime evidence is stale or unavailable.",
+      evidenceReferences,
+      headline: "Waiting for check-in",
+      lane: args.runtimeStatus ? "stale_runtime" : "unknown",
+      nextStep: "Wait for a fresh terminal check-in or send terminal sync retry.",
+      primaryOwner: "terminal",
+      saleImpact: args.salesReadiness === "able_to_transact_now"
+        ? "can_transact_now"
+        : "unknown",
+      secondaryActions,
+      severity: "warning",
+      summaryMeta: {
+        hasSecondarySafeRepair: !!safeRepairSecondaryAction,
+        reviewBacklogCount,
+        targetResolutionIncomplete,
+      },
+      supportAction: "wait_for_check_in",
+    };
+  }
+
+  if (args.salesReadiness === "able_to_transact_now") {
+    return {
+      blockingDomain: "none",
+      detail: "Fresh runtime evidence reports an active drawer with sale authority.",
+      evidenceReferences,
+      headline: "Ready for sales",
+      lane: "able_to_transact_now",
+      nextStep: "No support action needed.",
+      primaryOwner: "none",
+      saleImpact: "can_transact_now",
+      secondaryActions,
+      severity: "info",
+      summaryMeta: {
+        hasSecondarySafeRepair: !!safeRepairSecondaryAction,
+        reviewBacklogCount,
+        targetResolutionIncomplete,
+      },
+      supportAction: "none",
+    };
+  }
+
+  if (args.salesReadiness === "drawer_open") {
+    return {
+      blockingDomain: "none",
+      detail: "A drawer is open for this terminal.",
+      evidenceReferences,
+      headline: "Drawer open",
+      lane: "drawer_open",
+      nextStep: "No support action needed.",
+      primaryOwner: "none",
+      saleImpact: "unknown",
+      secondaryActions,
+      severity: "info",
+      summaryMeta: {
+        hasSecondarySafeRepair: !!safeRepairSecondaryAction,
+        reviewBacklogCount,
+        targetResolutionIncomplete,
+      },
+      supportAction: "none",
+    };
+  }
+
+  return {
+    blockingDomain: "none",
+    detail: "No terminal health blockers are reported.",
+    evidenceReferences,
+    headline: "Healthy idle",
+    lane: "healthy_idle",
+    nextStep: "No support action needed.",
+    primaryOwner: "none",
+    saleImpact: "unknown",
+    secondaryActions,
+    severity: "info",
+    summaryMeta: {
+      hasSecondarySafeRepair: !!safeRepairSecondaryAction,
+      reviewBacklogCount,
+      targetResolutionIncomplete,
+    },
+    supportAction: "none",
+  };
+}
+
+function isReviewBacklogReason(reason: TerminalHealthAttentionReason) {
+  return (
+    reason.type === "synced_sale_inventory_review" ||
+    reason.type === "cloud_conflict" ||
+    reason.type === "cloud_held" ||
+    reason.type === "cloud_rejected"
+  );
+}
+
+function buildExplanationEvidenceReference(args: {
+  count?: number;
+  source: TerminalOperationalExplanation["evidenceReferences"][number]["source"];
+  summary: string;
+  type: TerminalOperationalExplanation["evidenceReferences"][number]["type"];
+}): TerminalOperationalExplanation["evidenceReferences"][number] {
+  const reference: TerminalOperationalExplanation["evidenceReferences"][number] = {
+    source: args.source,
+    summary: args.summary,
+    type: args.type,
+  };
+  if (args.count !== undefined) {
+    reference.count = args.count;
+  }
+  return reference;
+}
+
+function resolveReviewBacklogOwner(
+  reasons: TerminalHealthAttentionReason[],
+  targetResolutionIncomplete = false,
+): TerminalOperationalExplanation["primaryOwner"] {
+  if (targetResolutionIncomplete) {
+    return "operations";
+  }
+  if (reasons.some((reason) => reason.actionTarget?.type === "open_work")) {
+    return "operations";
+  }
+  if (
+    reasons.some(
+      (reason) => reason.actionTarget?.type === "cash_control_register_session",
+    )
+  ) {
+    return "cash_controls";
+  }
+  return "manager";
+}
+
+function saleImpactForReadiness(
+  readiness: TerminalSalesReadiness,
+): TerminalOperationalExplanation["saleImpact"] {
+  return readiness === "able_to_transact_now"
+    ? "can_transact_now"
+    : "not_ready";
 }
 
 function hasHealthyIdleEvidence(args: {
@@ -562,12 +968,26 @@ function hasHealthyIdleEvidence(args: {
     (!status.terminalIntegrity || status.terminalIntegrity.status === "healthy") &&
     (!status.drawerAuthority || status.drawerAuthority.status === "healthy") &&
     (args.syncEvidence.unresolvedConflictCount ?? 0) === 0 &&
-    args.syncEvidence.conflictedCount === 0 &&
-    args.syncEvidence.heldCount === 0 &&
-    args.syncEvidence.rejectedCount === 0 &&
+    !hasCurrentSyncReviewBacklog(args.syncEvidence) &&
     args.terminalActions.length === 0 &&
     args.manualReview.length === 0 &&
     args.cloudRepair.safeConflictIds.length === 0
+  );
+}
+
+function hasCurrentSyncReviewBacklog(
+  syncEvidence: TerminalOperationalPolicyInput["syncEvidence"],
+) {
+  if (getCurrentReviewGroups(syncEvidence).length > 0) {
+    return true;
+  }
+  if (syncEvidence.reviewSummary) {
+    return false;
+  }
+  return (
+    syncEvidence.conflictedCount > 0 ||
+    syncEvidence.heldCount > 0 ||
+    syncEvidence.rejectedCount > 0
   );
 }
 

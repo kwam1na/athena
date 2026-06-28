@@ -186,7 +186,11 @@ export type TerminalSyncEvent = {
 
 export type TerminalSyncReviewEvent = Pick<
   TerminalSyncEvent,
-  "eventType" | "localEventId" | "localRegisterSessionId" | "sequence" | "status"
+  | "eventType"
+  | "localEventId"
+  | "localRegisterSessionId"
+  | "sequence"
+  | "status"
 >;
 
 export type TerminalSyncConflict = {
@@ -386,15 +390,16 @@ export type TerminalRecoveryPreview = {
   };
   manualReview?: Array<{
     reason: string;
-    source:
-      | "cloud_repair"
-      | TerminalHealthAttentionReason["source"];
+    source: "cloud_repair" | TerminalHealthAttentionReason["source"];
     type: "unsafe_cloud_conflict" | TerminalHealthAttentionReason["type"];
   }>;
-  readiness?: {
-    status?: TerminalRecoveryReadinessStatus;
-    summary?: string;
-  } | TerminalRecoveryReadinessStatus | null;
+  readiness?:
+    | {
+        status?: TerminalRecoveryReadinessStatus;
+        summary?: string;
+      }
+    | TerminalRecoveryReadinessStatus
+    | null;
   runtimeFresh?: boolean;
   terminalActions?: Array<{
     commandContext: TerminalRecoveryCommandContext;
@@ -434,9 +439,124 @@ export type TerminalAppUpdatePreview = {
   summary?: string;
 };
 
+export type TerminalOperationalExplanationServerLane =
+  | "able_to_transact_now"
+  | "drawer_open"
+  | "healthy_idle"
+  | "sale_ready_with_review_backlog"
+  | "needs_manual_review"
+  | "needs_terminal_action"
+  | "needs_cloud_repair"
+  | "stale_runtime"
+  | "unknown";
+
+export type TerminalOperationalExplanationLane =
+  | TerminalOperationalExplanationServerLane
+  | "healthy"
+  | "sync_failed";
+
+export type TerminalOperationalExplanationServerSeverity =
+  | "info"
+  | "warning"
+  | "critical";
+
+export type TerminalOperationalExplanationSeverity =
+  | TerminalOperationalExplanationServerSeverity
+  | "danger";
+
+export type TerminalOperationalExplanationBlockingDomain =
+  | "cloud_repair"
+  | "manual_review"
+  | "none"
+  | "sync_review"
+  | "terminal_runtime";
+
+export type TerminalOperationalExplanationServerSaleImpact =
+  | "can_transact_now"
+  | "not_ready"
+  | "unknown";
+
+export type TerminalOperationalExplanationSaleImpact =
+  | TerminalOperationalExplanationServerSaleImpact
+  | "can_continue_local_sales"
+  | "open_drawer_or_sign_in"
+  | "blocked";
+
+export type TerminalOperationalExplanationServerSupportAction =
+  | "manual_review"
+  | "none"
+  | "safe_cloud_repair"
+  | "terminal_command"
+  | "terminal_sync_retry"
+  | "wait_for_check_in";
+
+export type TerminalOperationalExplanationSupportAction =
+  | TerminalOperationalExplanationServerSupportAction
+  | "review_cash_controls"
+  | "review_open_work"
+  | "resolve_safe_cloud_repair"
+  | "run_terminal_command"
+  | "retry_terminal_sync"
+  | "diagnostic_only";
+
+export type TerminalOperationalExplanationServerPrimaryOwner =
+  | "none"
+  | "cash_controls"
+  | "manager"
+  | "operations"
+  | "terminal"
+  | "support";
+
+export type TerminalOperationalExplanationPrimaryOwner =
+  | TerminalOperationalExplanationServerPrimaryOwner
+  | "system";
+
+export type TerminalOperationalExplanationEvidenceReference = {
+  count?: number;
+  source: string;
+  summary: string;
+  type: string;
+};
+
+export type TerminalOperationalExplanationSecondaryAction = {
+  actionTarget?: TerminalHealthAttentionActionTarget;
+  label: string;
+  primaryOwner: Exclude<TerminalOperationalExplanationServerPrimaryOwner, "none">;
+  supportAction: Exclude<
+    TerminalOperationalExplanationServerSupportAction,
+    "none" | "wait_for_check_in"
+  >;
+};
+
+export type TerminalOperationalExplanation = {
+  blockingDomain: TerminalOperationalExplanationBlockingDomain;
+  detail: string;
+  evidenceReferences: TerminalOperationalExplanationEvidenceReference[];
+  headline: string;
+  lane: TerminalOperationalExplanationServerLane;
+  nextStep: string;
+  primaryOwner: TerminalOperationalExplanationServerPrimaryOwner;
+  saleImpact: TerminalOperationalExplanationServerSaleImpact;
+  secondaryActions: TerminalOperationalExplanationSecondaryAction[];
+  severity: TerminalOperationalExplanationServerSeverity;
+  summaryMeta: {
+    hasSecondarySafeRepair: boolean;
+    reviewBacklogCount: number;
+    targetResolutionIncomplete: boolean;
+  };
+  supportAction: TerminalOperationalExplanationServerSupportAction;
+};
+
 export type TerminalHealthSummary = {
   attentionReasons?: TerminalHealthAttentionReason[];
-  health?: "needs_attention" | "offline" | "online" | "stale" | "unknown" | string;
+  health?:
+    | "needs_attention"
+    | "offline"
+    | "online"
+    | "stale"
+    | "unknown"
+    | string;
+  operationalExplanation?: TerminalOperationalExplanation | null;
   registerSessionLink?: {
     registerSessionId: Id<"registerSession"> | string;
     status: "active" | "open";

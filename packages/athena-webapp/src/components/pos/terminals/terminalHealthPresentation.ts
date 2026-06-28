@@ -12,6 +12,13 @@ import type {
   TerminalRecoveryReadinessStatus,
   TerminalAppUpdatePreview,
   TerminalAppUpdateStatus,
+  TerminalOperationalExplanation,
+  TerminalOperationalExplanationEvidenceReference,
+  TerminalOperationalExplanationLane,
+  TerminalOperationalExplanationPrimaryOwner,
+  TerminalOperationalExplanationSaleImpact,
+  TerminalOperationalExplanationSeverity,
+  TerminalOperationalExplanationSupportAction,
 } from "./terminalHealthTypes";
 
 export type TerminalHealthClassification = {
@@ -67,9 +74,39 @@ export type TerminalAppUpdatePresentation = {
   toneClassName: string;
 };
 
+export type TerminalOperationalExplanationPresentation = {
+  detail: string;
+  evidenceReferences: Array<
+    TerminalOperationalExplanationEvidenceReference & {
+      label: string;
+    }
+  >;
+  headline: string;
+  label: string;
+  lane: TerminalOperationalExplanationLane;
+  nextStep: string;
+  ownerLabel: string;
+  primaryOwner: TerminalOperationalExplanationPrimaryOwner;
+  saleImpact: TerminalOperationalExplanationSaleImpact;
+  saleImpactLabel: string;
+  secondaryActions: TerminalOperationalExplanation["secondaryActions"];
+  severity: TerminalOperationalExplanationSeverity;
+  summaryMeta: TerminalOperationalExplanation["summaryMeta"];
+  supportAction: TerminalOperationalExplanationSupportAction;
+  supportActionLabel: string;
+  toneClassName: string;
+};
+
 type TerminalHealthClassificationInput = {
   attentionReasons?: TerminalHealthAttentionReason[];
-  health?: "needs_attention" | "offline" | "online" | "stale" | "unknown" | string;
+  health?:
+    | "needs_attention"
+    | "offline"
+    | "online"
+    | "stale"
+    | "unknown"
+    | string;
+  operationalExplanation?: TerminalOperationalExplanation | null;
   recovery?: TerminalRecoveryPreview | null;
   recoveryPreview?: TerminalRecoveryPreview | null;
   runtimeStatus:
@@ -100,7 +137,8 @@ export function formatTerminalTimestamp(timestamp?: number | null) {
     { divisor: 1_000, unit: "second" },
   ] as const;
   const formatter = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
-  const selected = units.find((unit) => absoluteDelta >= unit.divisor) ?? units[3];
+  const selected =
+    units.find((unit) => absoluteDelta >= unit.divisor) ?? units[3];
 
   return formatter.format(Math.round(delta / selected.divisor), selected.unit);
 }
@@ -219,6 +257,532 @@ export function getPrimaryTerminalAttentionReason(
   return getTerminalAttentionReasons(summary)[0] ?? null;
 }
 
+export function buildTerminalOperationalExplanationPresentation(
+  summary: TerminalHealthClassificationInput,
+): TerminalOperationalExplanationPresentation {
+  const serverExplanation = summary.operationalExplanation;
+  if (serverExplanation) {
+    return normalizeServerOperationalExplanation(serverExplanation);
+  }
+
+  return buildLegacyOperationalExplanation(summary);
+}
+
+function normalizeServerOperationalExplanation(
+  explanation: TerminalOperationalExplanation,
+): TerminalOperationalExplanationPresentation {
+  const lane = normalizeOperationalLane(explanation.lane);
+  const severity = normalizeOperationalSeverity(explanation.severity);
+  const fallback = getOperationalLaneFallback(lane, severity);
+  const saleImpact = normalizeSaleImpact(explanation.saleImpact);
+  const supportAction = normalizeSupportAction(explanation.supportAction);
+  const primaryOwner = normalizePrimaryOwner(explanation.primaryOwner);
+
+  const headline =
+    lane === "sale_ready_with_review_backlog"
+      ? "Review needed"
+      : sanitizeOperationalCopy(explanation.headline, fallback.headline);
+  const detail =
+    lane === "sale_ready_with_review_backlog"
+      ? "Sales can continue."
+      : sanitizeOperationalCopy(explanation.detail, fallback.detail);
+
+  return {
+    detail,
+    evidenceReferences: normalizeOperationalEvidenceReferences(
+      explanation.evidenceReferences,
+    ),
+    headline,
+    label: fallback.label,
+    lane,
+    nextStep: sanitizeOperationalCopy(explanation.nextStep, fallback.nextStep),
+    ownerLabel: getPrimaryOwnerLabel(primaryOwner),
+    primaryOwner,
+    saleImpact,
+    saleImpactLabel: getSaleImpactLabel(saleImpact),
+    secondaryActions: normalizeOperationalSecondaryActions(
+      explanation.secondaryActions,
+    ),
+    severity,
+    summaryMeta: normalizeOperationalSummaryMeta(explanation.summaryMeta),
+    supportAction,
+    supportActionLabel: getSupportActionLabel(supportAction),
+    toneClassName: getOperationalSeverityToneClassName(severity),
+  };
+}
+
+function buildLegacyOperationalExplanation(
+  summary: TerminalHealthClassificationInput,
+): TerminalOperationalExplanationPresentation {
+  const recovery = buildTerminalRecoveryPresentation(summary);
+  const runtimeStatus = summary.runtimeStatus;
+  const runtimeSync = runtimeStatus?.sync;
+  const reviewCount =
+    (runtimeSync?.reviewEventCount ?? 0) +
+    getReviewEvidenceCount(summary.syncEvidence);
+  const isSaleReady =
+    recovery.readiness.status === "able_to_transact_now" ||
+    (runtimeStatus?.staffAuthority?.status === "ready" &&
+      runtimeStatus.localStore?.available !== false &&
+      Boolean(runtimeStatus.activeRegisterSession));
+
+  if (reviewCount > 0 && isSaleReady) {
+    return {
+      detail: "Sales can continue.",
+      evidenceReferences: [
+        {
+          count: reviewCount,
+          label: "Review backlog",
+          source: "sync_evidence",
+          summary: "Review backlog",
+          type: "review_backlog",
+        },
+      ],
+      headline: "Review needed",
+      label: "Review needed",
+      lane: "sale_ready_with_review_backlog",
+      nextStep:
+        "Review the open work or cash-control backlog. Do not block new sales from this terminal.",
+      ownerLabel: "Operations",
+      primaryOwner: "operations",
+      saleImpact: "can_transact_now",
+      saleImpactLabel: "Sales can continue",
+      secondaryActions: [],
+      severity: "warning",
+      summaryMeta: {
+        hasSecondarySafeRepair: false,
+        reviewBacklogCount: reviewCount,
+        targetResolutionIncomplete: false,
+      },
+      supportAction: "review_open_work",
+      supportActionLabel: "Review open work",
+      toneClassName: getOperationalSeverityToneClassName("warning"),
+    };
+  }
+
+  if (recovery.groups.manualReview.length > 0) {
+    return buildStaticOperationalExplanation({
+      detail:
+        recovery.groups.manualReview[0]?.summary ??
+        "Manager or operations review is required before support repairs this terminal.",
+      lane: "needs_manual_review",
+      nextStep:
+        "Review cash-control or operations work before support repairs this terminal.",
+      primaryOwner: "cash_controls",
+      saleImpact: "unknown",
+      severity: "danger",
+      supportAction: "review_cash_controls",
+    });
+  }
+
+  if (recovery.groups.terminalRequired.length > 0) {
+    return buildStaticOperationalExplanation({
+      detail:
+        recovery.groups.terminalRequired[0]?.summary ??
+        "The checkout station needs terminal-side recovery before Athena can verify it.",
+      lane: "needs_terminal_action",
+      nextStep: "Send the safe terminal command or wait for a fresh check-in.",
+      primaryOwner: "terminal",
+      saleImpact: "unknown",
+      severity: "warning",
+      supportAction: "run_terminal_command",
+    });
+  }
+
+  if (recovery.groups.cloudRepair.length > 0) {
+    return buildStaticOperationalExplanation({
+      detail:
+        recovery.groups.cloudRepair[0]?.summary ??
+        "A safe cloud repair is available for stale terminal evidence.",
+      lane: "needs_cloud_repair",
+      nextStep: "Resolve the safe cloud repair item.",
+      primaryOwner: "support",
+      saleImpact: "unknown",
+      severity: "warning",
+      supportAction: "resolve_safe_cloud_repair",
+    });
+  }
+
+  if (
+    runtimeSync?.status === "failed" ||
+    (runtimeSync?.failedEventCount ?? 0) > 0
+  ) {
+    return buildStaticOperationalExplanation({
+      detail: "The latest terminal sync attempt failed.",
+      lane: "sync_failed",
+      nextStep: "Retry terminal sync or wait for the next check-in.",
+      primaryOwner: "terminal",
+      saleImpact: "unknown",
+      severity: "danger",
+      supportAction: "retry_terminal_sync",
+    });
+  }
+
+  const classification = classifyTerminalHealth(summary);
+  if (
+    classification.label === "No check-in" ||
+    classification.label === "Stale"
+  ) {
+    return buildStaticOperationalExplanation({
+      detail: "Athena is waiting for a current terminal check-in.",
+      lane: "stale_runtime",
+      nextStep: "Refresh terminal health or wait for the next check-in.",
+      primaryOwner: "terminal",
+      saleImpact: "unknown",
+      severity: "warning",
+      supportAction: "wait_for_check_in",
+    });
+  }
+
+  return buildStaticOperationalExplanation({
+    detail: "Current terminal evidence has no repair or review blockers.",
+    lane: "healthy",
+    nextStep: "No action is needed for terminal health.",
+    primaryOwner: "none",
+    saleImpact:
+      recovery.readiness.status === "able_to_transact_now"
+        ? "can_transact_now"
+        : "open_drawer_or_sign_in",
+    severity: "info",
+    supportAction: "none",
+  });
+}
+
+function buildStaticOperationalExplanation({
+  detail,
+  lane,
+  nextStep,
+  primaryOwner,
+  saleImpact,
+  severity,
+  supportAction,
+}: {
+  detail: string;
+  lane: TerminalOperationalExplanationLane;
+  nextStep: string;
+  primaryOwner: TerminalOperationalExplanationPrimaryOwner;
+  saleImpact: TerminalOperationalExplanationSaleImpact;
+  severity: TerminalOperationalExplanationSeverity;
+  supportAction: TerminalOperationalExplanationSupportAction;
+}): TerminalOperationalExplanationPresentation {
+  const fallback = getOperationalLaneFallback(lane, severity);
+  const normalizedDetail = sanitizeOperationalCopy(detail, fallback.detail);
+
+  return {
+    detail: normalizedDetail,
+    evidenceReferences: [],
+    headline: fallback.headline,
+    label: fallback.label,
+    lane,
+    nextStep,
+    ownerLabel: getPrimaryOwnerLabel(primaryOwner),
+    primaryOwner,
+    saleImpact,
+    saleImpactLabel: getSaleImpactLabel(saleImpact),
+    secondaryActions: [],
+    severity,
+    summaryMeta: {
+      hasSecondarySafeRepair: false,
+      reviewBacklogCount: 0,
+      targetResolutionIncomplete: false,
+    },
+    supportAction,
+    supportActionLabel: getSupportActionLabel(supportAction),
+    toneClassName: getOperationalSeverityToneClassName(severity),
+  };
+}
+
+function normalizeOperationalEvidenceReferences(
+  evidenceReferences: TerminalOperationalExplanationEvidenceReference[],
+) {
+  return evidenceReferences.map((reference) => ({
+    ...(typeof reference.count === "number" ? { count: reference.count } : {}),
+    label: sanitizeOperationalCopy(reference.summary, "Review evidence"),
+    source: reference.source,
+    summary: sanitizeOperationalCopy(reference.summary, "Review evidence"),
+    type: reference.type,
+  }));
+}
+
+function normalizeOperationalSecondaryActions(
+  secondaryActions: TerminalOperationalExplanation["secondaryActions"],
+) {
+  return secondaryActions.map((action) => ({
+    ...action,
+    label: sanitizeOperationalCopy(
+      action.label,
+      getSupportActionLabel(action.supportAction),
+    ),
+    supportAction: action.supportAction,
+  }));
+}
+
+function normalizeOperationalSummaryMeta(
+  summaryMeta: TerminalOperationalExplanation["summaryMeta"],
+) {
+  return {
+    hasSecondarySafeRepair: Boolean(summaryMeta.hasSecondarySafeRepair),
+    reviewBacklogCount: normalizeCount(summaryMeta.reviewBacklogCount),
+    targetResolutionIncomplete: Boolean(summaryMeta.targetResolutionIncomplete),
+  };
+}
+
+function normalizeCount(value: number) {
+  return Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+}
+
+function normalizeOperationalLane(lane: TerminalOperationalExplanationLane) {
+  switch (lane) {
+    case "able_to_transact_now":
+    case "drawer_open":
+    case "healthy_idle":
+    case "healthy":
+    case "sale_ready_with_review_backlog":
+    case "needs_manual_review":
+    case "needs_terminal_action":
+    case "needs_cloud_repair":
+    case "sync_failed":
+    case "stale_runtime":
+      return lane;
+    default:
+      return "unknown";
+  }
+}
+
+function normalizeOperationalSeverity(
+  severity: TerminalOperationalExplanationSeverity,
+) {
+  if (severity === "critical" || severity === "danger" || severity === "warning") {
+    return severity;
+  }
+  return "info";
+}
+
+function normalizeSaleImpact(
+  saleImpact: TerminalOperationalExplanationSaleImpact,
+) {
+  switch (saleImpact) {
+    case "can_transact_now":
+    case "can_continue_local_sales":
+    case "open_drawer_or_sign_in":
+    case "not_ready":
+    case "blocked":
+      return saleImpact;
+    default:
+      return "unknown";
+  }
+}
+
+function normalizeSupportAction(
+  supportAction: TerminalOperationalExplanationSupportAction,
+) {
+  switch (supportAction) {
+    case "manual_review":
+    case "none":
+    case "safe_cloud_repair":
+    case "terminal_command":
+    case "terminal_sync_retry":
+    case "review_cash_controls":
+    case "review_open_work":
+    case "resolve_safe_cloud_repair":
+    case "run_terminal_command":
+    case "retry_terminal_sync":
+    case "wait_for_check_in":
+      return supportAction;
+    default:
+      return "diagnostic_only";
+  }
+}
+
+function normalizePrimaryOwner(
+  primaryOwner: TerminalOperationalExplanationPrimaryOwner,
+) {
+  switch (primaryOwner) {
+    case "none":
+    case "cash_controls":
+    case "manager":
+    case "operations":
+    case "terminal":
+    case "support":
+      return primaryOwner;
+    default:
+      return "system";
+  }
+}
+
+function getOperationalLaneFallback(
+  lane: TerminalOperationalExplanationLane,
+  severity: TerminalOperationalExplanationSeverity,
+) {
+  switch (lane) {
+    case "able_to_transact_now":
+      return {
+        detail: "Fresh runtime evidence reports sale authority.",
+        headline: "Ready for sales",
+        label: "Ready",
+        nextStep: "No action is needed for terminal health.",
+      };
+    case "drawer_open":
+      return {
+        detail: "A drawer is open for this terminal.",
+        headline: "Drawer open",
+        label: "Drawer open",
+        nextStep: "No action is needed for terminal health.",
+      };
+    case "healthy_idle":
+    case "healthy":
+      return {
+        detail: "Current terminal evidence has no repair or review blockers.",
+        headline: "No action needed",
+        label: "Healthy",
+        nextStep: "No action is needed for terminal health.",
+      };
+    case "sale_ready_with_review_backlog":
+      return {
+        detail: "Sales can continue.",
+        headline: "Review needed",
+        label: "Review needed",
+        nextStep:
+          "Review the open work or cash-control backlog. Do not block new sales from this terminal.",
+      };
+    case "needs_manual_review":
+      return {
+        detail:
+          "Manager or operations review is required before support repairs this terminal.",
+        headline: "Manager review needed",
+        label: "Manager review needed",
+        nextStep:
+          "Review cash-control or operations work before support repairs this terminal.",
+      };
+    case "needs_terminal_action":
+      return {
+        detail:
+          "The checkout station needs terminal-side recovery before Athena can verify it.",
+        headline: "Terminal action needed",
+        label: "Terminal action needed",
+        nextStep:
+          "Send the safe terminal command or wait for a fresh check-in.",
+      };
+    case "needs_cloud_repair":
+      return {
+        detail: "A safe cloud repair is available for stale terminal evidence.",
+        headline: "Safe cloud repair available",
+        label: "Cloud repair",
+        nextStep: "Resolve the safe cloud repair item.",
+      };
+    case "sync_failed":
+      return {
+        detail: "The latest terminal sync attempt failed.",
+        headline: "Sync failed",
+        label: "Sync failed",
+        nextStep: "Retry terminal sync or wait for the next check-in.",
+      };
+    case "stale_runtime":
+      return {
+        detail: "Athena is waiting for a current terminal check-in.",
+        headline: "Waiting for check-in",
+        label: "Waiting for check-in",
+        nextStep: "Refresh terminal health or wait for the next check-in.",
+      };
+    default:
+      return {
+        detail:
+          "Athena does not have enough current evidence to explain this terminal.",
+        headline: "Terminal status needs review",
+        label:
+          severity === "critical" || severity === "danger"
+            ? "Needs attention"
+            : "Unknown",
+        nextStep: "Refresh terminal health or wait for the next check-in.",
+      };
+  }
+}
+
+function getOperationalSeverityToneClassName(
+  severity: TerminalOperationalExplanationSeverity,
+) {
+  switch (severity) {
+    case "critical":
+    case "danger":
+      return "border-danger/25 bg-danger/10 text-danger";
+    case "warning":
+      return "border-warning/30 bg-warning/15 text-warning";
+    default:
+      return "border-success/30 bg-success/10 text-success";
+  }
+}
+
+function getSaleImpactLabel(
+  saleImpact: TerminalOperationalExplanationSaleImpact,
+) {
+  switch (saleImpact) {
+    case "can_transact_now":
+      return "Sales can continue";
+    case "can_continue_local_sales":
+      return "Local sales can continue";
+    case "open_drawer_or_sign_in":
+      return "Open drawer or sign in";
+    case "not_ready":
+      return "Sales not ready";
+    case "blocked":
+      return "Sales blocked";
+    default:
+      return "Sale impact unknown";
+  }
+}
+
+function getSupportActionLabel(
+  supportAction: TerminalOperationalExplanationSupportAction,
+) {
+  switch (supportAction) {
+    case "manual_review":
+      return "Manual review";
+    case "none":
+      return "No support action";
+    case "safe_cloud_repair":
+      return "Safe cloud repair";
+    case "terminal_command":
+      return "Terminal command";
+    case "terminal_sync_retry":
+      return "Retry terminal sync";
+    case "review_cash_controls":
+      return "Review cash controls";
+    case "review_open_work":
+      return "Review open work";
+    case "resolve_safe_cloud_repair":
+      return "Resolve safe cloud repair";
+    case "run_terminal_command":
+      return "Run terminal command";
+    case "retry_terminal_sync":
+      return "Retry terminal sync";
+    case "wait_for_check_in":
+      return "Wait for check-in";
+    default:
+      return "Diagnostic review";
+  }
+}
+
+function getPrimaryOwnerLabel(
+  primaryOwner: TerminalOperationalExplanationPrimaryOwner,
+) {
+  switch (primaryOwner) {
+    case "none":
+      return "No owner";
+    case "cash_controls":
+      return "Cash controls";
+    case "manager":
+      return "Manager";
+    case "operations":
+      return "Operations";
+    case "terminal":
+      return "Terminal";
+    case "support":
+      return "Support";
+    default:
+      return "System";
+  }
+}
+
 export function getSupportSafeAttentionReasonSummary(
   reason: TerminalHealthAttentionReason,
 ) {
@@ -324,7 +888,8 @@ export function classifyTerminalHealth(
   ) {
     return {
       description:
-        primaryReason?.summary ?? "Local activity needs manager or support review.",
+        primaryReason?.summary ??
+        "Local activity needs manager or support review.",
       label: "Needs review",
       toneClassName: "border-warning/30 bg-warning/15 text-warning",
     };
@@ -452,8 +1017,12 @@ export function buildTerminalRecoveryPresentation(
   const recovery = getTerminalRecoveryPreview(summary);
   const blockers = buildRecoveryBlockers(summary, recovery);
   const groups = {
-    cloudRepair: blockers.filter((blocker) => blocker.category === "cloud_repair"),
-    manualReview: blockers.filter((blocker) => blocker.category === "manual_review"),
+    cloudRepair: blockers.filter(
+      (blocker) => blocker.category === "cloud_repair",
+    ),
+    manualReview: blockers.filter(
+      (blocker) => blocker.category === "manual_review",
+    ),
     terminalRequired: blockers.filter(
       (blocker) => blocker.category === "terminal_required",
     ),
@@ -470,7 +1039,9 @@ export function buildTerminalRecoveryPresentation(
     appUpdate,
     commandStatus: {
       commandType: recovery?.commandStatus?.commandType,
-      label: normalizeSupportCopy(recovery?.commandStatus?.label) ?? "No command issued",
+      label:
+        normalizeSupportCopy(recovery?.commandStatus?.label) ??
+        "No command issued",
       latestAcknowledgement: normalizeSupportCopy(
         recovery?.commandStatus?.latestAcknowledgement,
       ),
@@ -492,7 +1063,9 @@ export function buildTerminalRecoveryPresentation(
       ),
       summary:
         normalizeSupportCopy(recovery?.verification?.summary) ??
-        getRecoveryVerificationSummary(recovery?.commandStatus?.verificationStatus) ??
+        getRecoveryVerificationSummary(
+          recovery?.commandStatus?.verificationStatus,
+        ) ??
         "Athena has not received recovery verification from a fresh terminal check-in.",
     },
   };
@@ -500,7 +1073,10 @@ export function buildTerminalRecoveryPresentation(
 
 function buildRecoveryBlockers(
   summary: TerminalHealthClassificationInput,
-  recovery: TerminalRecoveryPreview | null | undefined = getTerminalRecoveryPreview(summary),
+  recovery:
+    | TerminalRecoveryPreview
+    | null
+    | undefined = getTerminalRecoveryPreview(summary),
 ): RecoveryBlockerWithCategory[] {
   if (recovery?.blockers && !hasStructuredRecoveryPreview(recovery)) {
     return recovery.blockers.map((blocker, index) =>
@@ -515,7 +1091,9 @@ function buildRecoveryBlockers(
   return deriveRecoveryBlockers(summary);
 }
 
-function getTerminalRecoveryPreview(summary: TerminalHealthClassificationInput) {
+function getTerminalRecoveryPreview(
+  summary: TerminalHealthClassificationInput,
+) {
   return summary.recoveryPreview ?? summary.recovery ?? null;
 }
 
@@ -603,13 +1181,17 @@ function normalizeTerminalAppUpdatePreview(
         ? record.stagingFailedAssetCount
         : undefined,
     stagingReason:
-      typeof record.stagingReason === "string" ? record.stagingReason : undefined,
+      typeof record.stagingReason === "string"
+        ? record.stagingReason
+        : undefined,
     stagingRejectedAssetCount:
       typeof record.stagingRejectedAssetCount === "number"
         ? record.stagingRejectedAssetCount
         : undefined,
     stagingStatus:
-      typeof record.stagingStatus === "string" ? record.stagingStatus : undefined,
+      typeof record.stagingStatus === "string"
+        ? record.stagingStatus
+        : undefined,
     status,
     summary:
       typeof record.summary === "string"
@@ -618,7 +1200,7 @@ function normalizeTerminalAppUpdatePreview(
           ? normalizeAppUpdateBlockerSummary(record.blockerSummary)
           : typeof record.selectedBlockerCode === "string"
             ? normalizeAppUpdateBlockerSummary(record.selectedBlockerCode)
-          : undefined,
+            : undefined,
   };
 }
 
@@ -842,16 +1424,21 @@ function normalizeAppUpdateBlockerSummary(value: string) {
 function hasStructuredRecoveryPreview(recovery: TerminalRecoveryPreview) {
   return Boolean(
     (recovery.cloudRepair?.safeConflictIds.length ?? 0) > 0 ||
-      (recovery.terminalActions?.length ?? 0) > 0 ||
-      (recovery.manualReview?.length ?? 0) > 0,
+    (recovery.terminalActions?.length ?? 0) > 0 ||
+    (recovery.manualReview?.length ?? 0) > 0,
   );
 }
 
-function getRecoveryVerificationSummary(status?: TerminalRecoveryActionStatus | null) {
+function getRecoveryVerificationSummary(
+  status?: TerminalRecoveryActionStatus | null,
+) {
   if (status === "verified") {
     return "Recovery was verified by the latest terminal check-in.";
   }
-  if (status === "runtime_verification_ready" || status === "waiting_for_check_in") {
+  if (
+    status === "runtime_verification_ready" ||
+    status === "waiting_for_check_in"
+  ) {
     return "Command completed locally. Waiting for a fresh terminal check-in before verification.";
   }
   if (status === "waiting_for_acknowledgement") {
@@ -969,9 +1556,7 @@ export function isRecoveryActionIssuable(action: TerminalRecoveryAction) {
   }
 
   return Boolean(
-    action.commandType &&
-      action.commandContext &&
-      action.expectedEvidence,
+    action.commandType && action.commandContext && action.expectedEvidence,
   );
 }
 
@@ -1010,7 +1595,8 @@ function buildRecoveryReadiness(
           ? "needs_terminal_action"
           : "healthy_idle";
   const status =
-    explicitStatus && explicitReadinessMatchesVisibleEvidence(explicitStatus, groups)
+    explicitStatus &&
+    explicitReadinessMatchesVisibleEvidence(explicitStatus, groups)
       ? explicitStatus
       : derivedStatus;
 
@@ -1018,8 +1604,9 @@ function buildRecoveryReadiness(
 
   return {
     description:
-      normalizeSupportCopy(typeof readiness === "string" ? undefined : readiness?.summary) ??
-      fallback.description,
+      normalizeSupportCopy(
+        typeof readiness === "string" ? undefined : readiness?.summary,
+      ) ?? fallback.description,
     label: fallback.label,
     status,
     toneClassName: fallback.toneClassName,
@@ -1107,7 +1694,8 @@ function normalizeBackendRecoveryBlocker(
     ["cloud_repair", "terminal_command"].includes(blocker.action.kind)
       ? {
           ...blocker.action,
-          label: normalizeSupportCopy(blocker.action.label) ?? blocker.action.label,
+          label:
+            normalizeSupportCopy(blocker.action.label) ?? blocker.action.label,
           status: normalizeActionStatus(blocker.action.status),
         }
       : undefined;
@@ -1119,7 +1707,8 @@ function normalizeBackendRecoveryBlocker(
     detail: normalizeSupportCopy(blocker.detail),
     id: blocker.id ?? `${category}-${index}`,
     status: blocker.status ?? blocker.action?.status,
-    summary: normalizeSupportCopy(blocker.summary) ?? defaultBlockerSummary(category),
+    summary:
+      normalizeSupportCopy(blocker.summary) ?? defaultBlockerSummary(category),
     title:
       normalizeSupportCopy(blocker.title) ??
       (category === "cloud_repair"
@@ -1190,10 +1779,10 @@ function getTerminalCommandRecoverySummary(
     commandType === "update_app"
       ? "Update app command"
       : commandType === "clear_stale_drawer_authority"
-      ? "Drawer repair command"
-      : commandType === "retry_sync"
-        ? "Sync retry command"
-      : "Terminal repair command";
+        ? "Drawer repair command"
+        : commandType === "retry_sync"
+          ? "Sync retry command"
+          : "Terminal repair command";
   if (status === "verified") {
     return `${commandName} was verified by the latest terminal check-in.`;
   }
@@ -1226,7 +1815,9 @@ function getExpectedEvidenceSummary(
     evidence.staffAuthorityStatus
       ? `Staff authority ${formatStatusLabel(evidence.staffAuthorityStatus)}`
       : null,
-    evidence.syncStatus ? `Sync ${formatStatusLabel(evidence.syncStatus)}` : null,
+    evidence.syncStatus
+      ? `Sync ${formatStatusLabel(evidence.syncStatus)}`
+      : null,
     evidence.terminalSeedReady === true ? "Terminal seed ready" : null,
     evidence.localStoreAvailable === true ? "Local store available" : null,
   ].filter(Boolean);
@@ -1250,7 +1841,10 @@ function deriveRecoveryBlockerFromReason(
 ): RecoveryBlockerWithCategory {
   const normalizedSummary = normalizeSupportCopy(reason.summary);
 
-  if (reason.type === "cloud_conflict" && isSafeDuplicateDrawerOpen(reason.summary)) {
+  if (
+    reason.type === "cloud_conflict" &&
+    isSafeDuplicateDrawerOpen(reason.summary)
+  ) {
     return {
       action: {
         kind: "cloud_repair",
@@ -1310,7 +1904,9 @@ function normalizeRecoveryCategory(
   return "manual_review";
 }
 
-function defaultBlockerSummary(category: RecoveryBlockerWithCategory["category"]) {
+function defaultBlockerSummary(
+  category: RecoveryBlockerWithCategory["category"],
+) {
   if (category === "cloud_repair") {
     return "Cloud repair is available for stale terminal evidence.";
   }
@@ -1320,7 +1916,9 @@ function defaultBlockerSummary(category: RecoveryBlockerWithCategory["category"]
   return "Manual review required. Use the linked operations or cash-control review before support repairs this terminal.";
 }
 
-function terminalRequiredSummary(reasonType: TerminalHealthAttentionReason["type"]) {
+function terminalRequiredSummary(
+  reasonType: TerminalHealthAttentionReason["type"],
+) {
   if (reasonType === "terminal_authorization_failed") {
     return "Terminal authorization needs refresh. This checkout station must reconnect before Athena can verify it.";
   }
@@ -1360,6 +1958,21 @@ function normalizeSupportCopy(value?: string | null) {
     return "Duplicate drawer-open attempts can be resolved. No sales, payments, or inventory will be changed.";
   }
   return value;
+}
+
+function sanitizeOperationalCopy(value: string | undefined, fallback: string) {
+  const normalized = normalizeSupportCopy(value);
+  if (!normalized || containsUnsafeOperationalCopy(normalized)) {
+    return fallback;
+  }
+
+  return normalized;
+}
+
+function containsUnsafeOperationalCopy(value: string) {
+  return /sync secret|authorization_failed|staff proof|pin\b|password|token|otp|payment payload|customer payload|card payload|raw payload|backend exception|stack trace|traceback|returnsvalidationerror|conflict[-_][a-z0-9-]+|poslocalsyncconflict/i.test(
+    value,
+  );
 }
 
 function isAppSessionLocalContinuation(

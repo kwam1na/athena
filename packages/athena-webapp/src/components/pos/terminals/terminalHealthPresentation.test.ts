@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  buildTerminalOperationalExplanationPresentation,
   buildTerminalRecoveryPresentation,
   classifyTerminalHealth,
   formatAge,
@@ -11,6 +12,202 @@ import {
 } from "./terminalHealthPresentation";
 
 describe("terminal health presentation", () => {
+  it("prefers server operational explanations and makes sale-ready review backlog explicit", () => {
+    const presentation = buildTerminalOperationalExplanationPresentation({
+      health: "needs_attention",
+      operationalExplanation: {
+        blockingDomain: "sync_review",
+        detail:
+          "A bounded sync review backlog is still open. Store conflict-raw-001 contains payment payload data.",
+        evidenceReferences: [
+          {
+            count: 12,
+            source: "cloud_sync",
+            summary: "Review backlog sample for Store conflict-raw-001",
+            type: "synced_sale_inventory_review",
+          },
+        ],
+        headline: "Back office review needed",
+        lane: "sale_ready_with_review_backlog",
+        nextStep: "Review the open work queue before support repairs anything.",
+        primaryOwner: "operations",
+        saleImpact: "can_transact_now",
+        secondaryActions: [
+          {
+            label: "Safe cloud repair available",
+            primaryOwner: "support",
+            supportAction: "safe_cloud_repair",
+          },
+        ],
+        severity: "warning",
+        summaryMeta: {
+          hasSecondarySafeRepair: true,
+          reviewBacklogCount: 12,
+          targetResolutionIncomplete: false,
+        },
+        supportAction: "manual_review",
+      },
+      recovery: {
+        readiness: {
+          status: "able_to_transact_now",
+          summary:
+            "Able to transact now. Drawer, cashier, and sale authority are active.",
+        },
+      },
+      runtimeStatus: null,
+      syncEvidence: {},
+      terminal: { status: "active" },
+    });
+
+    const renderedCopy = JSON.stringify(presentation);
+
+    expect(presentation).toEqual(
+      expect.objectContaining({
+        detail: "Sales can continue.",
+        headline: "Review needed",
+        label: "Review needed",
+        lane: "sale_ready_with_review_backlog",
+        nextStep: "Review the open work queue before support repairs anything.",
+        ownerLabel: "Operations",
+        saleImpactLabel: "Sales can continue",
+        supportActionLabel: "Manual review",
+      }),
+    );
+    expect(presentation.evidenceReferences).toEqual([
+      expect.objectContaining({
+        count: 12,
+        label: "Review evidence",
+        source: "cloud_sync",
+        type: "synced_sale_inventory_review",
+      }),
+    ]);
+    expect(renderedCopy).not.toMatch(
+      /conflict-raw-001|payment payload/i,
+    );
+  });
+
+  it("recognizes healthy server lanes and critical severity from the public contract", () => {
+    const healthy = buildTerminalOperationalExplanationPresentation({
+      health: "online",
+      operationalExplanation: {
+        blockingDomain: "none",
+        detail: "Fresh runtime evidence reports sale authority.",
+        evidenceReferences: [],
+        headline: "Ready for sales",
+        lane: "able_to_transact_now",
+        nextStep: "No support action needed.",
+        primaryOwner: "none",
+        saleImpact: "can_transact_now",
+        secondaryActions: [],
+        severity: "info",
+        summaryMeta: {
+          hasSecondarySafeRepair: false,
+          reviewBacklogCount: 0,
+          targetResolutionIncomplete: false,
+        },
+        supportAction: "none",
+      },
+      runtimeStatus: null,
+      syncEvidence: {},
+      terminal: { status: "active" },
+    });
+    const manualReview = buildTerminalOperationalExplanationPresentation({
+      health: "needs_attention",
+      operationalExplanation: {
+        blockingDomain: "manual_review",
+        detail: "Manual review must finish before support repairs this terminal.",
+        evidenceReferences: [
+          {
+            source: "cloud_repair",
+            summary:
+              "A cloud sync conflict needs manual review before support can repair this terminal.",
+            type: "unsafe_cloud_conflict",
+          },
+        ],
+        headline: "Manager review needed",
+        lane: "needs_manual_review",
+        nextStep: "Use the linked review workspace before running support repair.",
+        primaryOwner: "manager",
+        saleImpact: "not_ready",
+        secondaryActions: [],
+        severity: "critical",
+        summaryMeta: {
+          hasSecondarySafeRepair: false,
+          reviewBacklogCount: 1,
+          targetResolutionIncomplete: false,
+        },
+        supportAction: "manual_review",
+      },
+      runtimeStatus: null,
+      syncEvidence: {},
+      terminal: { status: "active" },
+    });
+
+    expect(healthy).toEqual(
+      expect.objectContaining({
+        label: "Ready",
+        lane: "able_to_transact_now",
+        saleImpactLabel: "Sales can continue",
+        supportActionLabel: "No support action",
+      }),
+    );
+    expect(manualReview).toEqual(
+      expect.objectContaining({
+        label: "Manager review needed",
+        lane: "needs_manual_review",
+        saleImpactLabel: "Sales not ready",
+        supportActionLabel: "Manual review",
+        toneClassName: "border-danger/25 bg-danger/10 text-danger",
+      }),
+    );
+  });
+
+  it("falls back to legacy evidence for sale-ready review backlog", () => {
+    const presentation = buildTerminalOperationalExplanationPresentation({
+      health: "needs_attention",
+      recovery: {
+        readiness: {
+          status: "able_to_transact_now",
+          summary:
+            "Able to transact now. Drawer, cashier, and sale authority are active.",
+        },
+      },
+      runtimeStatus: {
+        receivedAt: Date.now(),
+        localStore: { available: true, terminalSeedReady: true },
+        staffAuthority: { status: "ready" },
+        sync: {
+          failedEventCount: 0,
+          pendingEventCount: 0,
+          reviewEventCount: 3,
+          status: "needs_review",
+          uploadableEventCount: 0,
+        },
+      },
+      syncEvidence: { unresolvedConflictCount: 2 },
+      terminal: { status: "active" },
+    });
+
+    expect(presentation).toEqual(
+      expect.objectContaining({
+        detail: "Sales can continue.",
+        headline: "Review needed",
+        label: "Review needed",
+        lane: "sale_ready_with_review_backlog",
+        nextStep:
+          "Review the open work or cash-control backlog. Do not block new sales from this terminal.",
+        ownerLabel: "Operations",
+        saleImpactLabel: "Sales can continue",
+      }),
+    );
+    expect(presentation.evidenceReferences).toEqual([
+      expect.objectContaining({
+        count: 5,
+        label: "Review backlog",
+      }),
+    ]);
+  });
+
   it("derives app-update state from fresh runtime evidence without creating support blockers", () => {
     const ready = buildTerminalRecoveryPresentation({
       recoveryPreview: {
@@ -301,7 +498,8 @@ describe("terminal health presentation", () => {
         recovery: {
           readiness: {
             status: "able_to_transact_now",
-            summary: "Able to transact now. Drawer, cashier, and sale authority are active.",
+            summary:
+              "Able to transact now. Drawer, cashier, and sale authority are active.",
           },
         },
         runtimeStatus: null,
@@ -444,7 +642,9 @@ describe("terminal health presentation", () => {
         kind: "cloud_repair",
       }),
     );
-    expect(presentation.groups.terminalRequired.map((blocker) => blocker.action)).toEqual([
+    expect(
+      presentation.groups.terminalRequired.map((blocker) => blocker.action),
+    ).toEqual([
       expect.objectContaining({
         commandType: "repair_terminal_seed",
         expectedEvidence: { terminalIntegrityStatus: "healthy" },
@@ -913,7 +1113,9 @@ describe("terminal health presentation", () => {
       "Manual review required. Use the linked operations or cash-control review before support repairs this terminal.",
     );
     expect(presentation.safeActions.map((action) => action.kind)).toEqual([]);
-    expect(renderedCopy).not.toMatch(/register_opened|already open|authorization_failed|sync secret/i);
+    expect(renderedCopy).not.toMatch(
+      /register_opened|already open|authorization_failed|sync secret/i,
+    );
   });
 
   it("classifies missing check-ins, stale check-ins, pending sync, and review work", () => {
@@ -1072,7 +1274,8 @@ describe("terminal health presentation", () => {
         attentionReasons: [
           {
             source: "terminal_runtime",
-            summary: "Terminal setup data is not ready on this checkout station.",
+            summary:
+              "Terminal setup data is not ready on this checkout station.",
             type: "terminal_seed_missing",
           },
         ],
@@ -1093,7 +1296,8 @@ describe("terminal health presentation", () => {
       }),
     ).toEqual(
       expect.objectContaining({
-        description: "Terminal setup data is not ready on this checkout station.",
+        description:
+          "Terminal setup data is not ready on this checkout station.",
         label: "Setup needed",
       }),
     );
@@ -1105,7 +1309,8 @@ describe("terminal health presentation", () => {
         attentionReasons: [
           {
             source: "terminal_runtime",
-            summary: "Terminal setup data is not ready on this checkout station.",
+            summary:
+              "Terminal setup data is not ready on this checkout station.",
             type: "terminal_seed_missing",
           },
         ],
@@ -1334,32 +1539,35 @@ describe("terminal health presentation", () => {
         type: "cloud_rejected" as const,
       },
     },
-  ])("classifies $reason.type attention reasons", ({ expectedLabel, reason }) => {
-    expect(
-      classifyTerminalHealth({
-        attentionReasons: [reason],
-        health: "needs_attention",
-        runtimeStatus: {
-          receivedAt: Date.now(),
-          localStore: { available: true, terminalSeedReady: true },
-          sync: {
-            failedEventCount: 0,
-            pendingEventCount: 0,
-            reviewEventCount: 0,
-            status: "idle",
-            uploadableEventCount: 0,
+  ])(
+    "classifies $reason.type attention reasons",
+    ({ expectedLabel, reason }) => {
+      expect(
+        classifyTerminalHealth({
+          attentionReasons: [reason],
+          health: "needs_attention",
+          runtimeStatus: {
+            receivedAt: Date.now(),
+            localStore: { available: true, terminalSeedReady: true },
+            sync: {
+              failedEventCount: 0,
+              pendingEventCount: 0,
+              reviewEventCount: 0,
+              status: "idle",
+              uploadableEventCount: 0,
+            },
           },
-        },
-        syncEvidence: { unresolvedConflictCount: 0 },
-        terminal: { status: "active" },
-      }),
-    ).toEqual(
-      expect.objectContaining({
-        description: reason.summary,
-        label: expectedLabel,
-      }),
-    );
-  });
+          syncEvidence: { unresolvedConflictCount: 0 },
+          terminal: { status: "active" },
+        }),
+      ).toEqual(
+        expect.objectContaining({
+          description: reason.summary,
+          label: expectedLabel,
+        }),
+      );
+    },
+  );
 
   it("formats timestamps and snapshot ages in operator-readable labels", () => {
     vi.setSystemTime(new Date("2026-05-20T12:00:00.000Z"));

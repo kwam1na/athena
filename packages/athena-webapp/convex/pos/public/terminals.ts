@@ -193,6 +193,48 @@ const runtimeStatusSnapshotReturnValidator = v.object({
   receivedAt: v.number(),
 });
 
+const terminalSyncReviewTargetReturnValidator = v.object({
+  type: v.literal("open_work"),
+  workItemId: v.id("operationalWorkItem"),
+  workItemType: v.literal("synced_sale_inventory_review"),
+});
+
+const terminalSyncReviewSummaryReturnValidator = v.object({
+  groups: v.array(
+    v.object({
+      actionTarget: v.optional(
+        v.object({
+          type: v.literal("register_session"),
+          registerSessionId: v.id("registerSession"),
+        }),
+      ),
+      actionability: v.union(
+        v.literal("cash_controls_review"),
+        v.literal("diagnostic_only"),
+        v.literal("manual_review"),
+        v.literal("open_work_review"),
+      ),
+      conflictType: v.string(),
+      count: v.number(),
+      latestCreatedAt: v.number(),
+      latestSequence: v.number(),
+      owner: v.union(
+        v.literal("cash_controls"),
+        v.literal("diagnostic"),
+        v.literal("manual_review"),
+        v.literal("operations_open_work"),
+      ),
+      reviewTarget: v.optional(terminalSyncReviewTargetReturnValidator),
+    }),
+  ),
+  meta: v.object({
+    sampledCount: v.number(),
+    cap: v.number(),
+    hasMore: v.boolean(),
+    targetResolutionIncomplete: v.boolean(),
+  }),
+});
+
 const terminalSyncEvidenceReturnValidator = v.object({
   latestEvent: v.union(
     v.object({
@@ -263,14 +305,11 @@ const terminalSyncEvidenceReturnValidator = v.object({
     createdAt: v.number(),
     localEventId: v.string(),
     localRegisterSessionId: v.string(),
-    reviewTarget: v.optional(v.object({
-      type: v.literal("open_work"),
-      workItemId: v.id("operationalWorkItem"),
-      workItemType: v.literal("synced_sale_inventory_review"),
-    })),
+    reviewTarget: v.optional(terminalSyncReviewTargetReturnValidator),
     sequence: v.number(),
     summary: v.string(),
   }))),
+  reviewSummary: terminalSyncReviewSummaryReturnValidator,
   acceptedThroughSequence: v.optional(v.number()),
   cursorUpdatedAt: v.optional(v.number()),
 });
@@ -329,6 +368,95 @@ const terminalHealthAttentionReasonReturnValidator = v.object({
   ),
 });
 
+const terminalOperationalExplanationReturnValidator = v.object({
+  blockingDomain: v.union(
+    v.literal("cloud_repair"),
+    v.literal("manual_review"),
+    v.literal("none"),
+    v.literal("sync_review"),
+    v.literal("terminal_runtime"),
+  ),
+  detail: v.string(),
+  evidenceReferences: v.array(
+    v.object({
+      count: v.optional(v.number()),
+      source: v.union(
+        v.literal("cloud_repair"),
+        v.literal("cloud_register_lifecycle"),
+        v.literal("local_runtime"),
+        v.literal("recovery_command"),
+        v.literal("sync_evidence"),
+        v.literal("cloud_sync"),
+        v.literal("terminal_runtime"),
+      ),
+      summary: v.string(),
+      type: v.string(),
+    }),
+  ),
+  headline: v.string(),
+  lane: v.union(
+    v.literal("able_to_transact_now"),
+    v.literal("drawer_open"),
+    v.literal("healthy_idle"),
+    v.literal("needs_cloud_repair"),
+    v.literal("needs_manual_review"),
+    v.literal("needs_terminal_action"),
+    v.literal("sale_ready_with_review_backlog"),
+    v.literal("stale_runtime"),
+    v.literal("unknown"),
+  ),
+  nextStep: v.string(),
+  primaryOwner: v.union(
+    v.literal("cash_controls"),
+    v.literal("manager"),
+    v.literal("none"),
+    v.literal("operations"),
+    v.literal("support"),
+    v.literal("terminal"),
+  ),
+  saleImpact: v.union(
+    v.literal("can_transact_now"),
+    v.literal("not_ready"),
+    v.literal("unknown"),
+  ),
+  secondaryActions: v.array(
+    v.object({
+      label: v.string(),
+      primaryOwner: v.union(
+        v.literal("cash_controls"),
+        v.literal("manager"),
+        v.literal("operations"),
+        v.literal("support"),
+        v.literal("terminal"),
+      ),
+      supportAction: v.union(
+        v.literal("manual_review"),
+        v.literal("safe_cloud_repair"),
+        v.literal("terminal_command"),
+        v.literal("terminal_sync_retry"),
+      ),
+    }),
+  ),
+  severity: v.union(
+    v.literal("critical"),
+    v.literal("info"),
+    v.literal("warning"),
+  ),
+  summaryMeta: v.object({
+    hasSecondarySafeRepair: v.boolean(),
+    reviewBacklogCount: v.number(),
+    targetResolutionIncomplete: v.boolean(),
+  }),
+  supportAction: v.union(
+    v.literal("manual_review"),
+    v.literal("none"),
+    v.literal("safe_cloud_repair"),
+    v.literal("terminal_command"),
+    v.literal("terminal_sync_retry"),
+    v.literal("wait_for_check_in"),
+  ),
+});
+
 const terminalAppUpdatePreviewReturnValidator = v.object({
   commandCorrelated: v.optional(v.boolean()),
   currentBuildId: v.optional(v.string()),
@@ -371,6 +499,7 @@ const terminalHealthSummaryReturnValidator = v.object({
   runtimeAgeMs: v.union(v.number(), v.null()),
   runtimeStatus: v.union(runtimeStatusSnapshotReturnValidator, v.null()),
   attentionReasons: v.array(terminalHealthAttentionReasonReturnValidator),
+  operationalExplanation: terminalOperationalExplanationReturnValidator,
   recoveryPreview: v.union(
     v.object({
       readiness: v.union(

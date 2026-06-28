@@ -89,6 +89,65 @@ describe("terminal cloud repair policy", () => {
     });
   });
 
+  it("skips source events that carry unsafe business facts", () => {
+    const conflict = buildConflict();
+
+    expect(
+      classifyTerminalCloudRepairConflict({
+        conflict,
+        now,
+        sourceEvent: buildEvent({
+          payload: {
+            openingFloat: 100,
+            registerNumber: "A1",
+            sale: {
+              saleId: "sale-1",
+              total: 25,
+            },
+          },
+        }),
+        storeId,
+        terminalId,
+      }),
+    ).toMatchObject({
+      conflictId: conflict._id,
+      kind: "skipped",
+      reason: "contains_business_facts",
+    });
+  });
+
+  it("skips missing source events and already-resolved conflicts", () => {
+    expect(
+      classifyTerminalCloudRepairConflict({
+        conflict: buildConflict(),
+        now,
+        sourceEvent: null,
+        storeId,
+        terminalId,
+      }),
+    ).toMatchObject({
+      kind: "skipped",
+      reason: "missing_source_event",
+    });
+
+    expect(
+      classifyTerminalCloudRepairConflict({
+        conflict: buildConflict({
+          _id: "resolved-conflict" as Id<"posLocalSyncConflict">,
+          status: "resolved",
+        }),
+        now,
+        sourceEvent: buildEvent({ eventType: "register_opened" }),
+        storeId,
+        terminalId,
+      }),
+    ).toMatchObject({
+      conflictId: "resolved-conflict",
+      kind: "skipped",
+      reason: "not_needs_review",
+    });
+  });
+
   it("requires preview preconditions to match before repair runs", () => {
     const safeConflict = buildConflict();
     const preview = buildTerminalCloudRepairPreview({

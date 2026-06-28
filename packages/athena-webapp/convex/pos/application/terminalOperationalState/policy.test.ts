@@ -75,11 +75,10 @@ describe("terminal operational state policy", () => {
       cloudRepair: {
         preconditionHash: "hash",
         safeConflictIds: ["conflict-1" as Id<"posLocalSyncConflict">],
-        skippedConflictIds: [],
+        skippedConflictIds: ["conflict-unsafe" as Id<"posLocalSyncConflict">],
       },
       syncEvidence: {
         ...emptySyncEvidence(),
-        heldCount: 1,
         latestEvent: {
           eventType: "sale_completed",
           localEventId: "local-held",
@@ -89,6 +88,36 @@ describe("terminal operational state policy", () => {
           status: "held",
           submittedAt: 1_999_000,
         },
+        reviewSummary: {
+          groups: [
+            {
+              actionability: "manual_review",
+              conflictType: "payment",
+              count: 1,
+              latestCreatedAt: 1_999_000,
+              latestSequence: 12,
+              owner: "manual_review",
+            },
+          ],
+          meta: {
+            cap: 20,
+            hasMore: false,
+            sampledCount: 1,
+            targetResolutionIncomplete: false,
+          },
+        },
+        unresolvedConflictCount: 1,
+        unresolvedConflicts: [
+          {
+            _id: "conflict-held" as Id<"posLocalSyncConflict">,
+            conflictType: "payment",
+            createdAt: 1_999_000,
+            localEventId: "local-held",
+            localRegisterSessionId: "local-register-1",
+            sequence: 12,
+            summary: "A synced event was rejected by the server.",
+          },
+        ],
       },
       runtimeStatus: buildRuntimeStatus({
         sync: {
@@ -105,6 +134,145 @@ describe("terminal operational state policy", () => {
     expect(buildTerminalOperationalState(input).recoveryPreview.readiness).toBe(
       "needs_manual_review",
     );
+  });
+
+  it("explains sale-ready review backlog without implying cashier blocking", () => {
+    const state = buildTerminalOperationalState(
+      baseInput({
+        runtimeStatus: buildRuntimeStatus({
+          activeRegisterSession: {
+            localRegisterSessionId: "local-register-1",
+            observedAt: 1_999_000,
+            openedAt: 1_980_000,
+            status: "open",
+          },
+          saleAuthority: {
+            observedAt: 1_999_000,
+            status: "ready",
+            transactionMode: "products_and_services",
+          },
+        }),
+        syncEvidence: {
+          ...emptySyncEvidence(),
+          conflictedCount: 1,
+          unresolvedConflictCount: 1,
+          unresolvedConflicts: [
+            {
+              _id: "conflict-1" as Id<"posLocalSyncConflict">,
+              conflictType: "inventory",
+              createdAt: 1_999_000,
+              localEventId: "local-event-1",
+              localRegisterSessionId: "local-register-1",
+              reviewTarget: {
+                type: "open_work",
+                workItemId: "work-item-1" as Id<"operationalWorkItem">,
+                workItemType: "synced_sale_inventory_review",
+              },
+              sequence: 26,
+              summary: "Inventory needs manager review for a synced offline sale.",
+            },
+          ],
+          reviewSummary: {
+            groups: [
+              {
+                actionability: "open_work_review",
+                conflictType: "inventory",
+                count: 1,
+                latestCreatedAt: 1_999_000,
+                latestSequence: 26,
+                owner: "operations_open_work",
+                reviewTarget: {
+                  type: "open_work",
+                  workItemId: "work-item-1" as Id<"operationalWorkItem">,
+                  workItemType: "synced_sale_inventory_review",
+                },
+              },
+            ],
+            meta: {
+              cap: 20,
+              hasMore: false,
+              sampledCount: 1,
+              targetResolutionIncomplete: false,
+            },
+          },
+        },
+      }),
+    );
+
+    expect(state.salesReadiness).toBe("able_to_transact_now");
+    expect(state.operationalExplanation).toMatchObject({
+      headline: "Review needed. Sales can continue.",
+      lane: "sale_ready_with_review_backlog",
+      primaryOwner: "operations",
+      saleImpact: "can_transact_now",
+      supportAction: "manual_review",
+    });
+    expect(state.recoveryPreview.readiness).toBe("able_to_transact_now");
+  });
+
+  it("treats local runtime review as terminal sync retry instead of manual business review", () => {
+    const state = buildTerminalOperationalState(
+      baseInput({
+        runtimeStatus: buildRuntimeStatus({
+          sync: {
+            failedEventCount: 0,
+            localOnlyEventCount: 0,
+            pendingEventCount: 1,
+            reviewEventCount: 1,
+            status: "needs_review",
+            uploadableEventCount: 1,
+          },
+        }),
+      }),
+    );
+
+    expect(state.recoveryEvidence.manualReview).toEqual([]);
+    expect(state.recoveryPreview.readiness).toBe("needs_terminal_action");
+    expect(state.operationalExplanation).toMatchObject({
+      lane: "needs_terminal_action",
+      primaryOwner: "terminal",
+      supportAction: "terminal_sync_retry",
+    });
+  });
+
+  it("keeps safe cloud repair secondary when manual review is primary", () => {
+    const state = buildTerminalOperationalState(
+      baseInput({
+        cloudRepair: {
+          preconditionHash: "hash",
+          safeConflictIds: ["safe-conflict" as Id<"posLocalSyncConflict">],
+          skippedConflictIds: ["unsafe-conflict" as Id<"posLocalSyncConflict">],
+        },
+      }),
+    );
+
+    expect(state.recoveryPreview.readiness).toBe("needs_manual_review");
+    expect(state.operationalExplanation).toMatchObject({
+      lane: "needs_manual_review",
+      supportAction: "manual_review",
+    });
+    expect(state.operationalExplanation.secondaryActions).toContainEqual({
+      label: "Safe cloud repair available",
+      primaryOwner: "support",
+      supportAction: "safe_cloud_repair",
+    });
+  });
+
+  it("explains stale runtime without creating a cloud repair lane", () => {
+    const state = buildTerminalOperationalState(
+      baseInput({
+        runtimeAgeMs: 16 * 60 * 1_000,
+        runtimeFresh: false,
+      }),
+    );
+
+    expect(state.terminalHealth).toBe("offline");
+    expect(state.supportRecovery).toBeNull();
+    expect(state.operationalExplanation).toMatchObject({
+      headline: "Waiting for check-in",
+      lane: "stale_runtime",
+      supportAction: "wait_for_check_in",
+    });
   });
 
   it("classifies safe cloud repair when no manual review or terminal action exists", () => {
@@ -201,12 +369,12 @@ describe("terminal operational state policy", () => {
     ).toBe("offline");
   });
 
-  it("derives attention reasons inside the aggregate policy", () => {
+  it("derives cloud attention from unresolved review summary instead of historical event status", () => {
     const state = buildTerminalOperationalState(
       baseInput({
         syncEvidence: {
           ...emptySyncEvidence(),
-          conflictedCount: 1,
+          conflictedCount: 2,
           latestEvent: {
             eventType: "sale_completed",
             localEventId: "local-conflicted",
@@ -215,6 +383,24 @@ describe("terminal operational state policy", () => {
             sequence: 7,
             status: "conflicted",
             submittedAt: 1_999_000,
+          },
+          reviewSummary: {
+            groups: [
+              {
+                actionability: "manual_review",
+                conflictType: "payment",
+                count: 1,
+                latestCreatedAt: 1_999_000,
+                latestSequence: 7,
+                owner: "manual_review",
+              },
+            ],
+            meta: {
+              cap: 20,
+              hasMore: false,
+              sampledCount: 1,
+              targetResolutionIncomplete: false,
+            },
           },
         },
       }),
@@ -229,6 +415,94 @@ describe("terminal operational state policy", () => {
       }),
     );
     expect(state.terminalHealth).toBe("needs_attention");
+  });
+
+  it("does not treat closed historical sync event statuses as current review backlog", () => {
+    const state = buildTerminalOperationalState(
+      baseInput({
+        syncEvidence: {
+          ...emptySyncEvidence(),
+          conflictedCount: 3,
+          heldCount: 1,
+          latestEvent: {
+            eventType: "sale_completed",
+            localEventId: "local-resolved",
+            localRegisterSessionId: "local-register-1",
+            occurredAt: 1_999_000,
+            sequence: 9,
+            status: "conflicted",
+            submittedAt: 1_999_000,
+          },
+          reviewSummary: {
+            groups: [],
+            meta: {
+              cap: 20,
+              hasMore: false,
+              sampledCount: 0,
+              targetResolutionIncomplete: false,
+            },
+          },
+          unresolvedConflictCount: 0,
+          unresolvedConflicts: [],
+        },
+      }),
+    );
+
+    expect(state.attentionReasons).toEqual([]);
+    expect(state.recoveryEvidence.manualReview).toEqual([]);
+    expect(state.terminalHealth).toBe("online");
+  });
+
+  it("explains current review backlog even when the terminal is not sale-ready", () => {
+    const state = buildTerminalOperationalState(
+      baseInput({
+        runtimeStatus: buildRuntimeStatus({
+          activeRegisterSession: undefined,
+          saleAuthority: undefined,
+        }),
+        syncEvidence: {
+          ...emptySyncEvidence(),
+          reviewSummary: {
+            groups: [
+              {
+                actionability: "manual_review",
+                conflictType: "permission",
+                count: 1,
+                latestCreatedAt: 1_999_000,
+                latestSequence: 14,
+                owner: "manual_review",
+              },
+            ],
+            meta: {
+              cap: 20,
+              hasMore: false,
+              sampledCount: 1,
+              targetResolutionIncomplete: false,
+            },
+          },
+          unresolvedConflictCount: 1,
+          unresolvedConflicts: [
+            {
+              _id: "conflict-review" as Id<"posLocalSyncConflict">,
+              conflictType: "permission",
+              createdAt: 1_999_000,
+              localEventId: "event-review",
+              localRegisterSessionId: "local-register-1",
+              sequence: 14,
+              summary: "A synced register event needs permission review.",
+            },
+          ],
+        },
+      }),
+    );
+
+    expect(state.salesReadiness).toBe("healthy_idle");
+    expect(state.operationalExplanation).toMatchObject({
+      headline: "Review needed",
+      lane: "needs_manual_review",
+      saleImpact: "not_ready",
+      supportAction: "manual_review",
+    });
   });
 
   it("clears cleanly closed drawer authority inside the aggregate policy", () => {

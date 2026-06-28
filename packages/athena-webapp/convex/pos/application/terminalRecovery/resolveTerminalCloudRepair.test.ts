@@ -161,6 +161,13 @@ describe("resolveTerminalCloudRepair", () => {
         status: "needs_review",
       }),
     );
+    expect(ctx.db.patch).not.toHaveBeenCalledWith(
+      "posLocalSyncConflict",
+      closeoutVarianceConflict._id,
+      expect.objectContaining({
+        status: "resolved",
+      }),
+    );
   });
 
   it("repairs only the latest safe duplicate register-open conflict", async () => {
@@ -371,6 +378,49 @@ describe("resolveTerminalCloudRepair", () => {
       },
       kind: "user_error",
     });
+    expect(ctx.db.patch).not.toHaveBeenCalled();
+  });
+
+  it("reports missing source events as skipped without mutating review facts", async () => {
+    const conflict = buildConflict({
+      _id: "missing-source-conflict" as Id<"posLocalSyncConflict">,
+      localEventId: "missing-event",
+    });
+    const ctx = buildCtx({
+      posLocalSyncConflict: [conflict],
+      posLocalSyncEvent: [],
+    });
+
+    const result = await resolveTerminalCloudRepair(ctx as never, {
+      expectedPreconditionHash: buildTerminalCloudRepairPreconditionHash({
+        safeConflictIds: [],
+        storeId,
+        terminalId,
+      }),
+      now,
+      resolvedByUserId: "user-1" as Id<"athenaUser">,
+      storeId,
+      terminalId,
+    });
+
+    expect(result).toEqual({
+      kind: "ok",
+      data: {
+        preconditionHash: buildTerminalCloudRepairPreconditionHash({
+          safeConflictIds: [],
+          storeId,
+          terminalId,
+        }),
+        resolvedConflictIds: [],
+        skippedConflictIds: [conflict._id],
+      },
+    });
+    expect(ctx.tables.posLocalSyncConflict).toContainEqual(
+      expect.objectContaining({
+        _id: conflict._id,
+        status: "needs_review",
+      }),
+    );
     expect(ctx.db.patch).not.toHaveBeenCalled();
   });
 });

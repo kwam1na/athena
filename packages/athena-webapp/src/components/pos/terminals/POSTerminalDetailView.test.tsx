@@ -438,9 +438,7 @@ describe("POSTerminalDetailViewContent", () => {
     const staffAuthorityLabel = screen.getByText("Staff authority");
     expect(staffAuthorityLabel).toBeInTheDocument();
     expect(screen.getAllByText("Ready").length).toBeGreaterThanOrEqual(2);
-    expect(
-      screen.queryByText("Staff authority ready"),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Staff authority ready")).not.toBeInTheDocument();
   });
 
   it("renders expired staff authority as a compact warning state", () => {
@@ -812,6 +810,163 @@ describe("POSTerminalDetailViewContent", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("renders server operational explanation with bounded evidence and hides raw review payloads", () => {
+    render(
+      <POSTerminalDetailViewContent
+        detail={{
+          ...detail,
+          attentionReasons: [],
+          operationalExplanation: {
+            blockingDomain: "sync_review",
+            detail:
+              "M Supplies conflict-raw-001 includes payment payload and customer payload details.",
+            evidenceReferences: [
+              {
+                count: 17,
+                source: "cloud_sync",
+                summary: "M Supplies conflict-raw-001 payment payload",
+                type: "synced_sale_inventory_review",
+              },
+            ],
+            headline: "M Supplies review needed",
+            lane: "sale_ready_with_review_backlog",
+            nextStep:
+              "Review the open work queue before support repairs anything.",
+            primaryOwner: "operations",
+            saleImpact: "can_transact_now",
+            secondaryActions: [
+              {
+                label: "Safe cloud repair available",
+                primaryOwner: "support",
+                supportAction: "safe_cloud_repair",
+              },
+            ],
+            severity: "warning",
+            summaryMeta: {
+              hasSecondarySafeRepair: true,
+              reviewBacklogCount: 17,
+              targetResolutionIncomplete: false,
+            },
+            supportAction: "manual_review",
+          },
+          recovery: {
+            readiness: {
+              status: "able_to_transact_now",
+              summary:
+                "Able to transact now. Drawer, cashier, and sale authority are active.",
+            },
+          },
+          syncEvidence: {
+            ...detail.syncEvidence,
+            unresolvedConflicts: [
+              {
+                _id: "conflict-raw-001",
+                conflictType: "payment",
+                createdAt: Date.now() - 3 * 60_000,
+                localEventId: "local-secret-payment",
+                localRegisterSessionId: "local-session-secret",
+                sequence: 44,
+                summary: "A synced payment event needs manager review.",
+              },
+            ],
+          },
+        }}
+        isLoading={false}
+        orgUrlSlug="wigclub"
+        storeUrlSlug="osu"
+      />,
+    );
+
+    expect(screen.getAllByText("Review needed").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Sales can continue.").length).toBeGreaterThan(
+      0,
+    );
+    expect(screen.getAllByText("Sales can continue").length).toBeGreaterThan(0);
+    expect(screen.getByText("Operations")).toBeInTheDocument();
+    expect(screen.getByText("Manual review")).toBeInTheDocument();
+    expect(
+      screen.getAllByText(
+        "Review the open work queue before support repairs anything.",
+      ).length,
+    ).toBeGreaterThan(0);
+    expect(screen.getByText("Review evidence")).toBeInTheDocument();
+    expect(screen.getByText("17")).toBeInTheDocument();
+    expect(screen.getByText("Synced Sale Inventory Review")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", {
+        name: /resolve safe cloud repair/i,
+      }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        /M Supplies|conflict-raw-001|payment payload|customer payload|sync secret|backend exception/i,
+      ),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps detailed conflict and local review rows visible with an operational explanation", () => {
+    render(
+      <POSTerminalDetailViewContent
+        detail={{
+          ...detail,
+          operationalExplanation: {
+            blockingDomain: "sync_review",
+            detail:
+              "Review-owned sync work needs attention, but this terminal has fresh sale authority.",
+            evidenceReferences: [
+              {
+                count: 1,
+                source: "cloud_sync",
+                summary: "1 cloud sync conflict needs review.",
+                type: "cloud_conflict",
+              },
+            ],
+            headline: "Review needed. Sales can continue.",
+            lane: "sale_ready_with_review_backlog",
+            nextStep: "Use the linked review workspace to clear the backlog.",
+            primaryOwner: "cash_controls",
+            saleImpact: "can_transact_now",
+            secondaryActions: [],
+            severity: "warning",
+            summaryMeta: {
+              hasSecondarySafeRepair: false,
+              reviewBacklogCount: 1,
+              targetResolutionIncomplete: false,
+            },
+            supportAction: "manual_review",
+          },
+          syncEvidence: {
+            ...detail.syncEvidence,
+            unresolvedConflicts: [
+              {
+                _id: "conflict-visible",
+                conflictType: "permission",
+                createdAt: Date.now() - 3 * 60_000,
+                localEventId: "local-visible",
+                localRegisterSessionId: "local-session-visible",
+                sequence: 44,
+                summary: "A synced register event needs permission review.",
+              },
+            ],
+          },
+        }}
+        isLoading={false}
+        orgUrlSlug="wigclub"
+        storeUrlSlug="osu"
+      />,
+    );
+
+    expect(screen.getAllByText("Review needed").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Sales can continue.").length).toBeGreaterThan(
+      0,
+    );
+    expect(
+      screen.getByText("A synced register event needs permission review."),
+    ).toBeInTheDocument();
+    expect(screen.getByText("register.opened")).toBeInTheDocument();
+    expect(screen.getByText("cart.item_added")).toBeInTheDocument();
+  });
+
   it("issues cloud and terminal recovery actions from displayed metadata", async () => {
     const onResolveTerminalCloudRepair = vi.fn(async () => ({
       data: { resolvedCount: 1 },
@@ -966,7 +1121,9 @@ describe("POSTerminalDetailViewContent", () => {
         terminalId: "terminal-1",
       });
     });
-    expect(mocks.toastSuccess).toHaveBeenCalledWith("Update app command queued.");
+    expect(mocks.toastSuccess).toHaveBeenCalledWith(
+      "Update app command queued.",
+    );
   });
 
   it("disables duplicate Update app actions while an equivalent command is active", () => {
@@ -1255,7 +1412,9 @@ describe("POSTerminalDetailViewContent", () => {
     ).not.toBeInTheDocument();
     expect(screen.queryByText("Verification")).not.toBeInTheDocument();
     expect(
-      screen.queryByText("Recovery was verified by the latest terminal check-in."),
+      screen.queryByText(
+        "Recovery was verified by the latest terminal check-in.",
+      ),
     ).not.toBeInTheDocument();
     expect(
       screen.queryByText(
@@ -1277,7 +1436,8 @@ describe("POSTerminalDetailViewContent", () => {
   it("shows normalized recovery action failures", async () => {
     const onResolveTerminalCloudRepair = vi.fn(async () => ({
       error: {
-        message: "Terminal recovery evidence changed. Preview the repair again.",
+        message:
+          "Terminal recovery evidence changed. Preview the repair again.",
       },
       kind: "user_error" as const,
     }));
@@ -1395,7 +1555,9 @@ describe("POSTerminalDetailViewContent", () => {
     );
 
     expect(screen.getByText("Manual review summary 5")).toBeInTheDocument();
-    expect(screen.queryByText("Manual review summary 6")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Manual review summary 6"),
+    ).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Show 3 more" }));
 
@@ -1403,7 +1565,9 @@ describe("POSTerminalDetailViewContent", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Show fewer" }));
 
-    expect(screen.queryByText("Manual review summary 6")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Manual review summary 6"),
+    ).not.toBeInTheDocument();
   });
 
   it("routes attention reasons to the available action surfaces", () => {

@@ -46,6 +46,7 @@ import type { ApprovalRequirement } from "~/shared/approvalPolicy";
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
 import {
+  buildTerminalOperationalExplanationPresentation,
   buildTerminalRecoveryPresentation,
   classifyTerminalHealth,
   formatAge,
@@ -275,9 +276,7 @@ function getStaffAuthorityTone(
   }
 }
 
-function getDrawerAuthorityTone(
-  runtimeStatus?: TerminalRuntimeStatus | null,
-) {
+function getDrawerAuthorityTone(runtimeStatus?: TerminalRuntimeStatus | null) {
   if (!runtimeStatus) {
     return "neutral";
   }
@@ -444,7 +443,9 @@ function RuntimeReportGroup({
   runtimeStatus: TerminalRuntimeStatus | null;
 }) {
   const syncTone = getRuntimeSyncTone(runtimeStatus?.sync.status);
-  const appUpdateTone = getRuntimeAppUpdateTone(runtimeStatus?.appUpdate?.status);
+  const appUpdateTone = getRuntimeAppUpdateTone(
+    runtimeStatus?.appUpdate?.status,
+  );
   const activeRegisterSession = runtimeStatus?.activeRegisterSession;
 
   return (
@@ -475,7 +476,9 @@ function RuntimeReportGroup({
           label="Sync"
           tone={syncTone}
           value={
-            runtimeStatus ? formatStatusLabel(runtimeStatus.sync.status) : "No report"
+            runtimeStatus
+              ? formatStatusLabel(runtimeStatus.sync.status)
+              : "No report"
           }
         />
         <RailSignalRow
@@ -484,7 +487,11 @@ function RuntimeReportGroup({
         />
         <RailSignalRow
           label="Local review"
-          tone={(runtimeStatus?.sync.reviewEventCount ?? 0) > 0 ? "warning" : "neutral"}
+          tone={
+            (runtimeStatus?.sync.reviewEventCount ?? 0) > 0
+              ? "warning"
+              : "neutral"
+          }
           value={formatLocalReviewCount(runtimeStatus)}
         />
         <RailSignalRow
@@ -835,7 +842,8 @@ function compareRuntimeBuildMetadata(
     terminalBuildMetadata.buildSha &&
     latestBuildMetadata.buildSha
   ) {
-    return terminalBuildMetadata.appVersion === latestBuildMetadata.appVersion &&
+    return terminalBuildMetadata.appVersion ===
+      latestBuildMetadata.appVersion &&
       terminalBuildMetadata.buildSha === latestBuildMetadata.buildSha
       ? "latest"
       : "stale";
@@ -859,7 +867,9 @@ function compareRuntimeBuildMetadata(
 function getTerminalBuildMetadata(
   runtimeStatus: TerminalRuntimeStatus | null,
 ): AthenaWebappRuntimeBuildMetadata {
-  const appVersion = normalizeOptionalRuntimeMetadata(runtimeStatus?.appVersion);
+  const appVersion = normalizeOptionalRuntimeMetadata(
+    runtimeStatus?.appVersion,
+  );
   const buildSha = normalizeOptionalRuntimeMetadata(runtimeStatus?.buildSha);
 
   return {
@@ -1047,9 +1057,13 @@ function SyncEvidenceSection({
 }
 
 function ConflictSection({
+  operationalExplanation,
   runtimeStatus,
   syncEvidence,
 }: {
+  operationalExplanation?: ReturnType<
+    typeof buildTerminalOperationalExplanationPresentation
+  >;
   runtimeStatus: TerminalRuntimeStatus | null;
   syncEvidence: TerminalSyncEvidence;
 }) {
@@ -1083,6 +1097,12 @@ function ConflictSection({
       title="Conflicts and review"
     >
       <div className="space-y-layout-sm">
+        {operationalExplanation ? (
+          <OperationalExplanationReviewSummary
+            operationalExplanation={operationalExplanation}
+          />
+        ) : null}
+
         {unresolvedConflicts.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             {reviewCount > 0
@@ -1181,8 +1201,8 @@ function ConflictSection({
           <div className="rounded-md border border-warning/30 bg-warning/10 px-layout-md py-layout-sm">
             <p className="text-sm font-medium text-foreground">
               {runtimeReviewCount} local review{" "}
-              {runtimeReviewCount === 1 ? "item was" : "items were"} reported
-              by this terminal.
+              {runtimeReviewCount === 1 ? "item was" : "items were"} reported by
+              this terminal.
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
               The latest runtime check-in did not include item-level local
@@ -1192,6 +1212,65 @@ function ConflictSection({
         ) : null}
       </div>
     </DetailPanel>
+  );
+}
+
+function OperationalExplanationReviewSummary({
+  operationalExplanation,
+}: {
+  operationalExplanation: ReturnType<
+    typeof buildTerminalOperationalExplanationPresentation
+  >;
+}) {
+  return (
+    <>
+      <div className="rounded-md border border-border/80 bg-surface px-layout-md py-layout-md">
+        <p className="text-sm font-medium text-foreground">
+          {operationalExplanation.headline}
+        </p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {operationalExplanation.detail}
+        </p>
+        <p className="mt-layout-xs text-sm text-foreground">
+          <span className="font-medium">Next step:</span>{" "}
+          {operationalExplanation.nextStep}
+        </p>
+      </div>
+
+      {operationalExplanation.evidenceReferences.length > 0 ? (
+        <div className="overflow-hidden rounded-md border border-border/80 bg-surface">
+          <div className="grid gap-layout-sm border-b border-border/80 bg-surface-muted/40 px-layout-md py-layout-xs text-xs font-medium uppercase text-muted-foreground md:grid-cols-[minmax(0,1fr)_7rem_8rem]">
+            <span>Evidence</span>
+            <span>Count</span>
+            <span>Type</span>
+          </div>
+          <div className="divide-y divide-border/80">
+            {operationalExplanation.evidenceReferences.map(
+              (reference, index) => (
+                <div
+                  className="grid gap-layout-sm px-layout-md py-layout-sm text-sm md:grid-cols-[minmax(0,1fr)_7rem_8rem] md:items-center"
+                  key={`${reference.source}-${reference.type}-${index}`}
+                >
+                  <span className="min-w-0 font-medium text-foreground">
+                    {reference.label}
+                  </span>
+                  <span className="font-numeric tabular-nums text-muted-foreground">
+                    {reference.count ?? "-"}
+                  </span>
+                  <span className="truncate text-muted-foreground">
+                    {formatStatusLabel(reference.type)}
+                  </span>
+                </div>
+              ),
+            )}
+          </div>
+        </div>
+      ) : (
+        <p className="text-sm text-muted-foreground">
+          No display-safe review samples were returned with this explanation.
+        </p>
+      )}
+    </>
   );
 }
 
@@ -1429,10 +1508,10 @@ function isVerifiedTerminalCommandAttention(
 
   return Boolean(
     expectedCommandType &&
-      commandStatus?.verificationStatus === "verified" &&
-      recovery?.terminalActions?.some(
-        (action) => action.commandType === expectedCommandType,
-      ),
+    commandStatus?.verificationStatus === "verified" &&
+    recovery?.terminalActions?.some(
+      (action) => action.commandType === expectedCommandType,
+    ),
   );
 }
 
@@ -1511,7 +1590,9 @@ function RecoveryNextStep({
   commandStatus,
   safeActions,
 }: {
-  commandStatus: ReturnType<typeof buildTerminalRecoveryPresentation>["commandStatus"];
+  commandStatus: ReturnType<
+    typeof buildTerminalRecoveryPresentation
+  >["commandStatus"];
   safeActions: TerminalRecoveryAction[];
 }) {
   const nextAction = safeActions[0];
@@ -1528,7 +1609,9 @@ function RecoveryNextStep({
 }
 
 function shouldShowRecoveryNextStep(
-  commandStatus: ReturnType<typeof buildTerminalRecoveryPresentation>["commandStatus"],
+  commandStatus: ReturnType<
+    typeof buildTerminalRecoveryPresentation
+  >["commandStatus"],
 ) {
   return (
     commandStatus.status === "Failed" ||
@@ -1557,7 +1640,9 @@ function RecoveryCommandFailureReason({
   commandStatus,
   safeActions,
 }: {
-  commandStatus: ReturnType<typeof buildTerminalRecoveryPresentation>["commandStatus"];
+  commandStatus: ReturnType<
+    typeof buildTerminalRecoveryPresentation
+  >["commandStatus"];
   safeActions: TerminalRecoveryAction[];
 }) {
   const reason = getRecoveryCommandFailureReason(commandStatus, safeActions);
@@ -1571,7 +1656,9 @@ function RecoveryCommandFailureReason({
 }
 
 function getRecoveryCommandFailureReason(
-  commandStatus: ReturnType<typeof buildTerminalRecoveryPresentation>["commandStatus"],
+  commandStatus: ReturnType<
+    typeof buildTerminalRecoveryPresentation
+  >["commandStatus"],
   safeActions: TerminalRecoveryAction[],
 ) {
   if (!shouldShowRecoveryNextStep(commandStatus)) {
@@ -1638,7 +1725,9 @@ function RecoveryBlockerGroup({
   const [isExpanded, setIsExpanded] = useState(false);
   const visibleLimit = 5;
   const hiddenCount = Math.max(blockers.length - visibleLimit, 0);
-  const visibleBlockers = isExpanded ? blockers : blockers.slice(0, visibleLimit);
+  const visibleBlockers = isExpanded
+    ? blockers
+    : blockers.slice(0, visibleLimit);
 
   return (
     <div className="rounded-md border border-border/80 bg-surface">
@@ -1674,9 +1763,13 @@ function RecoveryBlockerGroup({
                 </div>
                 <RecoveryBlockerAction
                   blocker={blocker}
-                  onIssueTerminalRecoveryCommand={onIssueTerminalRecoveryCommand}
+                  onIssueTerminalRecoveryCommand={
+                    onIssueTerminalRecoveryCommand
+                  }
                   onResolveTerminalCloudRepair={onResolveTerminalCloudRepair}
-                  onResolveRegisterSessionReview={onResolveRegisterSessionReview}
+                  onResolveRegisterSessionReview={
+                    onResolveRegisterSessionReview
+                  }
                   orgUrlSlug={orgUrlSlug}
                   storeUrlSlug={storeUrlSlug}
                   terminalId={terminalId}
@@ -1691,9 +1784,7 @@ function RecoveryBlockerGroup({
                   type="button"
                   variant="outline"
                 >
-                  {isExpanded
-                    ? "Show fewer"
-                    : `Show ${hiddenCount} more`}
+                  {isExpanded ? "Show fewer" : `Show ${hiddenCount} more`}
                 </Button>
               </div>
             ) : null}
@@ -1882,7 +1973,12 @@ function AppUpdateActionPanel({
   const [errorMessage, setErrorMessage] = useState("");
 
   const submitUpdateApp = async () => {
-    if (!action || !canIssue || !onIssueTerminalRecoveryCommand || isSubmitting) {
+    if (
+      !action ||
+      !canIssue ||
+      !onIssueTerminalRecoveryCommand ||
+      isSubmitting
+    ) {
       return;
     }
 
@@ -1920,7 +2016,10 @@ function AppUpdateActionPanel({
             {appUpdate.description}
           </p>
           {action?.status && action.status !== "available" ? (
-            <p className="mt-layout-xs text-xs text-muted-foreground" role="status">
+            <p
+              className="mt-layout-xs text-xs text-muted-foreground"
+              role="status"
+            >
               {getRecoveryActionStatusCopy(action)}
             </p>
           ) : null}
@@ -1929,7 +2028,12 @@ function AppUpdateActionPanel({
           ) : null}
         </div>
         <Button
-          disabled={!action || !canIssue || !onIssueTerminalRecoveryCommand || isSubmitting}
+          disabled={
+            !action ||
+            !canIssue ||
+            !onIssueTerminalRecoveryCommand ||
+            isSubmitting
+          }
           onClick={() => {
             void submitUpdateApp();
           }}
@@ -1960,6 +2064,11 @@ function RecoveryPanel({
   storeUrlSlug?: string;
 }) {
   const recovery = buildTerminalRecoveryPresentation(detail);
+  const operationalExplanation =
+    buildTerminalOperationalExplanationPresentation(detail);
+  const hasServerOperationalExplanation = Boolean(
+    detail.operationalExplanation,
+  );
   const hasCurrentRecoveryWork = hasCurrentSupportRecoveryWork(recovery);
   const supportReadiness = hasCurrentRecoveryWork
     ? recovery.readiness
@@ -1978,17 +2087,54 @@ function RecoveryPanel({
         <div className="flex flex-col gap-layout-sm md:flex-row md:items-start md:justify-between">
           <div className="min-w-0">
             <p className="text-xs font-medium uppercase text-muted-foreground">
-              Readiness
+              {hasServerOperationalExplanation
+                ? "Operational explanation"
+                : "Readiness"}
             </p>
             <p className="mt-1 text-base font-medium text-foreground">
-              {supportReadiness.label}
+              {hasServerOperationalExplanation
+                ? operationalExplanation.headline
+                : supportReadiness.label}
             </p>
             <p className="mt-1 text-sm text-muted-foreground">
-              {supportReadiness.description}
+              {hasServerOperationalExplanation
+                ? operationalExplanation.detail
+                : supportReadiness.description}
             </p>
+            {hasServerOperationalExplanation ? (
+              <p className="mt-layout-xs text-sm text-foreground">
+                <span className="font-medium">Next step:</span>{" "}
+                {operationalExplanation.nextStep}
+              </p>
+            ) : null}
           </div>
+          {hasServerOperationalExplanation ? (
+            <Badge
+              className={operationalExplanation.toneClassName}
+              variant="outline"
+            >
+              {operationalExplanation.saleImpactLabel}
+            </Badge>
+          ) : null}
         </div>
       </div>
+
+      {hasServerOperationalExplanation ? (
+        <div className="mt-layout-md grid gap-layout-sm md:grid-cols-3">
+          <RecoveryMetric
+            label="Owner"
+            value={operationalExplanation.ownerLabel}
+          />
+          <RecoveryMetric
+            label="Support action"
+            value={operationalExplanation.supportActionLabel}
+          />
+          <RecoveryMetric
+            label="Recovery readiness"
+            value={supportReadiness.label}
+          />
+        </div>
+      ) : null}
 
       <AppUpdateActionPanel
         appUpdate={recovery.appUpdate}
@@ -2547,6 +2693,11 @@ export function POSTerminalDetailViewContent({
               />
               <SyncEvidenceSection syncEvidence={detail.syncEvidence} />
               <ConflictSection
+                operationalExplanation={
+                  detail.operationalExplanation
+                    ? buildTerminalOperationalExplanationPresentation(detail)
+                    : undefined
+                }
                 runtimeStatus={detail.runtimeStatus}
                 syncEvidence={detail.syncEvidence}
               />

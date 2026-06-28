@@ -133,6 +133,37 @@ function buildTerminalHealthSummaryResult() {
         },
       },
     ],
+    operationalExplanation: {
+      blockingDomain: "terminal_runtime",
+      detail: "The terminal needs a local repair command before support can continue.",
+      evidenceReferences: [
+        {
+          count: 1,
+          source: "terminal_runtime",
+          summary: "Terminal setup data needs repair.",
+          type: "terminal_seed_missing",
+        },
+      ],
+      headline: "Terminal action needed",
+      lane: "needs_terminal_action",
+      nextStep: "Send the available terminal repair command.",
+      primaryOwner: "terminal",
+      saleImpact: "not_ready",
+      secondaryActions: [
+        {
+          label: "Safe cloud repair available",
+          primaryOwner: "support",
+          supportAction: "safe_cloud_repair",
+        },
+      ],
+      severity: "warning",
+      summaryMeta: {
+        hasSecondarySafeRepair: true,
+        reviewBacklogCount: 0,
+        targetResolutionIncomplete: false,
+      },
+      supportAction: "terminal_command",
+    },
     recoveryPreview: {
       readiness: "needs_terminal_action",
       runtimeFresh: true,
@@ -237,6 +268,24 @@ function buildTerminalHealthSummaryResult() {
           summary: "Duplicate local event id.",
         },
       ],
+      reviewSummary: {
+        groups: [
+          {
+            actionability: "manual_review",
+            conflictType: "duplicate_local_id",
+            count: 1,
+            latestCreatedAt: 100,
+            latestSequence: 8,
+            owner: "manual_review",
+          },
+        ],
+        meta: {
+          sampledCount: 1,
+          cap: 50,
+          hasMore: false,
+          targetResolutionIncomplete: false,
+        },
+      },
       acceptedThroughSequence: 7,
       cursorUpdatedAt: 110,
     },
@@ -1374,6 +1423,44 @@ describe("POS terminal public mutations", () => {
         terminalId: "terminal-1",
       }),
     );
+  });
+
+  it("does not allow sync-secret-only terminal proof to read terminal health", async () => {
+    mocks.requireAuthenticatedAthenaUserWithCtx.mockRejectedValue(
+      new Error("not signed in"),
+    );
+    const ctx = buildCtx({
+      terminal: {
+        _id: "terminal-1",
+        storeId: "store-1",
+        status: "active",
+        registeredByUserId: "athena-user-2",
+        syncSecretHash: SYNC_SECRET_HASH,
+      },
+    });
+
+    await expect(
+      getHandler(listTerminalHealthSummaries)(ctx as never, {
+        storeId: "store-1",
+      }),
+    ).rejects.toThrow("not signed in");
+    await expect(
+      getHandler(getTerminalHealthSummary)(ctx as never, {
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      }),
+    ).rejects.toThrow("not signed in");
+    await expect(
+      getHandler(previewTerminalRecovery)(ctx as never, {
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      }),
+    ).rejects.toThrow("not signed in");
+
+    expect(mocks.requireOrganizationMemberRoleWithCtx).not.toHaveBeenCalled();
+    expect(mocks.listTerminalHealthSummariesQuery).not.toHaveBeenCalled();
+    expect(mocks.getTerminalHealthSummaryQuery).not.toHaveBeenCalled();
+    expect(mocks.previewTerminalRecoveryQuery).not.toHaveBeenCalled();
   });
 
   it("requires full admin membership and actor attribution before cloud repair", async () => {
