@@ -35,6 +35,7 @@ function getHandler(definition: unknown) {
 }
 
 function createQueryCtx(seed: Record<string, Array<Record<string, unknown>>>) {
+  const indexReads: Array<{ indexName: string; tableName: string }> = [];
   const rowsByTable = new Map(
     Object.entries(seed).map(([tableName, rows]) => [
       tableName,
@@ -115,7 +116,8 @@ function createQueryCtx(seed: Record<string, Array<Record<string, unknown>>>) {
             );
             return query;
           },
-          withIndex: (_indexName: string, build: (q: any) => unknown) => {
+          withIndex: (indexName: string, build: (q: any) => unknown) => {
+            indexReads.push({ indexName, tableName });
             const indexQuery = {
               eq(field: string, value: unknown) {
                 filters.push([field, value]);
@@ -176,6 +178,7 @@ function createQueryCtx(seed: Record<string, Array<Record<string, unknown>>>) {
       },
     },
     auth: {},
+    indexReads,
   };
 }
 
@@ -5757,6 +5760,14 @@ describe("cash control deposits", () => {
         }),
       }),
     );
+    expect(ctx.indexReads).not.toContainEqual({
+      indexName: "by_store_status",
+      tableName: "posLocalSyncConflict",
+    });
+    expect(ctx.indexReads).not.toContainEqual({
+      indexName: "by_store_status",
+      tableName: "posLocalSyncEvent",
+    });
   });
 
   it("applies the target session sync review when the store-level review backlog is capped", async () => {

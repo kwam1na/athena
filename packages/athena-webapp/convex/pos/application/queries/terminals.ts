@@ -7,6 +7,7 @@ import {
 import {
   getTerminalByFingerprint as getTerminalByFingerprintRecord,
   getTerminalById,
+  getTerminalSyncReviewSummaryEvidence,
   listTerminalsForStore,
   resolveTerminalRegisterSessionActionTarget,
 } from "../../infrastructure/repositories/terminalRepository";
@@ -78,6 +79,8 @@ const EMPTY_TERMINAL_SYNC_EVIDENCE: TerminalSyncEvidence = {
   conflictedCount: 0,
   heldCount: 0,
   rejectedCount: 0,
+  unresolvedConflictCount: 0,
+  unresolvedConflicts: [],
   reviewSummary: EMPTY_TERMINAL_SYNC_REVIEW_SUMMARY,
 };
 
@@ -134,6 +137,14 @@ type ActiveRegisterSessionLinkStatus = Extract<
   Doc<"registerSession">["status"],
   "active" | "open"
 >;
+type TerminalHealthEvidenceMode = "detail" | "roster";
+
+const EMPTY_TERMINAL_CLOUD_REPAIR_PREVIEW: TerminalRecoveryPreview["cloudRepair"] =
+  {
+    preconditionHash: "terminal-cloud-repair:none",
+    safeConflictIds: [],
+    skippedConflictIds: [],
+  };
 
 export async function listTerminals(
   ctx: QueryCtx,
@@ -165,7 +176,7 @@ export async function listTerminalHealthSummaries(
   return Promise.all(
     terminals.map((terminal) =>
       buildTerminalHealthSummary(ctx, {
-        includeSyncEvidence: true,
+        evidenceMode: "roster",
         terminal,
         now: args.now ?? Date.now(),
       }),
@@ -187,7 +198,7 @@ export async function getTerminalHealthSummary(
   }
 
   return buildTerminalHealthSummary(ctx, {
-    includeSyncEvidence: true,
+    evidenceMode: "detail",
     terminal,
     now: args.now ?? Date.now(),
   });
@@ -199,39 +210,48 @@ export const getTerminalHealthDetail = getTerminalHealthSummary;
 async function buildTerminalHealthSummary(
   ctx: QueryCtx,
   args: {
-    includeSyncEvidence: boolean;
+    evidenceMode: TerminalHealthEvidenceMode;
     terminal: Doc<"posTerminal">;
     now: number;
   },
 ): Promise<TerminalHealthSummary> {
   const facts = await collectTerminalOperationalFacts(ctx, {
     emptySyncEvidence: EMPTY_TERMINAL_SYNC_EVIDENCE,
-    includeSyncEvidence: args.includeSyncEvidence,
+    includeSyncEvidence: args.evidenceMode === "detail",
     terminal: args.terminal,
   });
   const { runtimeStatus, registerSessionLink } = facts;
+  const rawSyncEvidence =
+    args.evidenceMode === "detail"
+      ? facts.rawSyncEvidence
+      : await getTerminalSyncReviewSummaryEvidence(ctx, {
+          storeId: args.terminal.storeId,
+          terminalId: args.terminal._id,
+        });
   const syncEvidence = normalizeTerminalSyncEvidenceReviewSummary(
-    facts.rawSyncEvidence,
+    rawSyncEvidence,
   );
   const runtimeAgeMs = runtimeStatus
     ? Math.max(0, args.now - runtimeStatus.receivedAt)
     : null;
-  const operationalState = args.includeSyncEvidence
-    ? await buildTerminalOperationalStateForSummary(ctx, {
-        activeRegisterSession: facts.activeRegisterSession,
-        drawerAuthorityRegisterSession: facts.drawerAuthorityRegisterSession,
-        latestRegisterSession: facts.latestRegisterSession,
-        now: args.now,
-        runtimeAgeMs,
-        runtimeStatus,
-        registerNumber: args.terminal.registerNumber,
-        storeId: args.terminal.storeId,
-        syncEvidence: facts.rawSyncEvidence,
-        terminalId: args.terminal._id,
-        terminalStatus: args.terminal.status,
-      })
-    : null;
-  const recoveryPreview = operationalState?.recoveryPreview ?? null;
+  const operationalState = await buildTerminalOperationalStateForSummary(ctx, {
+    evidenceMode: args.evidenceMode,
+    activeRegisterSession: facts.activeRegisterSession,
+    drawerAuthorityRegisterSession: facts.drawerAuthorityRegisterSession,
+    latestRegisterSession: facts.latestRegisterSession,
+    now: args.now,
+    runtimeAgeMs,
+    runtimeStatus,
+    registerNumber: args.terminal.registerNumber,
+    storeId: args.terminal.storeId,
+    syncEvidence: rawSyncEvidence,
+    terminalId: args.terminal._id,
+    terminalStatus: args.terminal.status,
+  });
+  const recoveryPreview =
+    args.evidenceMode === "detail"
+      ? operationalState.recoveryPreview
+      : buildRosterRecoveryPreview(operationalState.recoveryPreview);
 
   return {
     terminal: {
@@ -243,17 +263,28 @@ async function buildTerminalHealthSummary(
       status: args.terminal.status,
       browserInfo: args.terminal.browserInfo,
     },
-    health: operationalState?.terminalHealth ?? "unknown",
+    health: operationalState.terminalHealth,
     runtimeAgeMs,
-    runtimeStatus: operationalState?.runtimeEvidence.effectiveStatus
+    runtimeStatus: operationalState.runtimeEvidence.effectiveStatus
       ? stripRuntimeStatusIdentity(operationalState.runtimeEvidence.effectiveStatus)
       : null,
-    attentionReasons: operationalState?.attentionReasons ?? [],
+    attentionReasons: operationalState.attentionReasons,
     operationalExplanation:
-      operationalState?.operationalExplanation ?? UNKNOWN_OPERATIONAL_EXPLANATION,
+      operationalState.operationalExplanation ?? UNKNOWN_OPERATIONAL_EXPLANATION,
     recoveryPreview,
     registerSessionLink,
     syncEvidence,
+  };
+}
+
+function buildRosterRecoveryPreview(
+  recoveryPreview: TerminalRecoveryPreview,
+): TerminalRecoveryPreview {
+  return {
+    ...recoveryPreview,
+    cloudRepair: EMPTY_TERMINAL_CLOUD_REPAIR_PREVIEW,
+    commandStatus: null,
+    terminalActions: [],
   };
 }
 
@@ -279,32 +310,12 @@ function normalizeTerminalSyncEvidenceReviewSummary(
   };
 }
 
-async function buildTerminalRecoveryPreview(
-  ctx: QueryCtx,
-  args: {
-    activeRegisterSession: Doc<"registerSession"> | null;
-    drawerAuthorityRegisterSession: Doc<"registerSession"> | null;
-    latestRegisterSession: Doc<"registerSession"> | null;
-    now: number;
-    runtimeAgeMs: number | null;
-    runtimeStatus: Doc<"posTerminalRuntimeStatus"> | null;
-    registerNumber?: string | null;
-    storeId: Id<"store">;
-    syncEvidence: TerminalSyncEvidence;
-    terminalId: Id<"posTerminal">;
-    terminalStatus: Doc<"posTerminal">["status"];
-  },
-): Promise<TerminalRecoveryPreview> {
-  const operationalState = await buildTerminalOperationalStateForSummary(ctx, args);
-
-  return operationalState.recoveryPreview;
-}
-
 async function buildTerminalOperationalStateForSummary(
   ctx: QueryCtx,
   args: {
     activeRegisterSession: Doc<"registerSession"> | null;
     drawerAuthorityRegisterSession: Doc<"registerSession"> | null;
+    evidenceMode?: TerminalHealthEvidenceMode;
     latestRegisterSession: Doc<"registerSession"> | null;
     now: number;
     runtimeAgeMs: number | null;
@@ -321,12 +332,19 @@ async function buildTerminalOperationalStateForSummary(
     args.runtimeAgeMs !== null &&
     args.runtimeAgeMs <= 2 * 60 * 1000 &&
     args.runtimeStatus.browserInfo?.online !== false;
-  const cloudRepair = await buildTerminalRecoveryCloudRepairPreview(ctx, args);
-  const commandStatus = await buildTerminalRecoveryCommandStatus(ctx, {
-    now: args.now,
-    storeId: args.storeId,
-    terminalId: args.terminalId,
-  });
+  const evidenceMode = args.evidenceMode ?? "detail";
+  const cloudRepair =
+    evidenceMode === "detail"
+      ? await buildTerminalRecoveryCloudRepairPreview(ctx, args)
+      : EMPTY_TERMINAL_CLOUD_REPAIR_PREVIEW;
+  const commandStatus =
+    evidenceMode === "detail"
+      ? await buildTerminalRecoveryCommandStatus(ctx, {
+          now: args.now,
+          storeId: args.storeId,
+          terminalId: args.terminalId,
+        })
+      : null;
   const policyInput = {
     appUpdate: buildTerminalAppUpdatePreview({
       commandStatus,

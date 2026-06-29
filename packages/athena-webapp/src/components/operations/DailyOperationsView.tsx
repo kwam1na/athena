@@ -64,6 +64,7 @@ import {
 } from "../store-pulse/StorePulseSummaryView";
 
 type DailyOperationsApi = {
+  getDailyOperationsDetailSnapshot?: unknown;
   getDailyOperationsSnapshot?: unknown;
 };
 
@@ -274,6 +275,7 @@ export type DailyOperationsSnapshot = {
     };
     type: string;
   }>;
+  timelineHasMore?: boolean;
   weekMetrics: Array<{
     currentDayCashTotal: number;
     currentDayCashTransactionCount: number;
@@ -295,11 +297,14 @@ export type DailyOperationsSnapshot = {
 
 type DailyOperationsViewContentProps = {
   currency: string;
+  hasDetailSnapshot: boolean;
   hasFullAdminAccess: boolean;
   hasFinancialDetailsAccess: boolean;
+  isLoadingDetailSnapshot?: boolean;
   isAuthenticated: boolean;
   isLoadingAccess: boolean;
   isLoadingSnapshot: boolean;
+  onRequestDetailSnapshot?: () => void;
   onOperatingDateChange?: (date: Date) => void;
   orgUrlSlug: string;
   snapshot?: DailyOperationsSnapshot;
@@ -1910,11 +1915,14 @@ function WeekMetricsStrip({
 
 export function DailyOperationsViewContent({
   currency,
+  hasDetailSnapshot,
   hasFullAdminAccess,
   hasFinancialDetailsAccess,
+  isLoadingDetailSnapshot,
   isAuthenticated,
   isLoadingAccess,
   isLoadingSnapshot,
+  onRequestDetailSnapshot,
   onOperatingDateChange,
   orgUrlSlug,
   snapshot,
@@ -1940,6 +1948,7 @@ export function DailyOperationsViewContent({
 
   const previewTimeline = snapshot?.timeline.slice(0, TIMELINE_PREVIEW_LIMIT);
   const hasMoreTimelineEvents =
+    snapshot?.timelineHasMore ??
     (snapshot?.timeline.length ?? 0) > TIMELINE_PREVIEW_LIMIT;
   const metricLabels = snapshot
     ? getDailyOperationsMetricLabels(snapshot.operatingDate)
@@ -2284,23 +2293,40 @@ export function DailyOperationsViewContent({
                   ) : null}
                 </div>
 
-                <WeekMetricsStrip
-                  currency={snapshot.currency ?? currency}
-                  hasFinancialDetailsAccess={hasFinancialDetailsAccess}
-                  metrics={snapshot.weekMetrics}
-                  orgUrlSlug={orgUrlSlug}
-                  storePulseWindow={storePulseWindow}
-                  storeUrlSlug={storeUrlSlug}
-                />
-              </section>
+                    {hasDetailSnapshot ? (
+                      <WeekMetricsStrip
+                        currency={snapshot.currency ?? currency}
+                        hasFinancialDetailsAccess={hasFinancialDetailsAccess}
+                        metrics={snapshot.weekMetrics}
+                        orgUrlSlug={orgUrlSlug}
+                        storePulseWindow={storePulseWindow}
+                        storeUrlSlug={storeUrlSlug}
+                      />
+                    ) : onRequestDetailSnapshot ? (
+                      <div className="flex justify-start">
+                        <Button
+                          disabled={isLoadingDetailSnapshot}
+                          onClick={onRequestDetailSnapshot}
+                          type="button"
+                          variant="outline"
+                        >
+                          {isLoadingDetailSnapshot
+                            ? "Loading analytics"
+                            : "Load analytics"}
+                        </Button>
+                      </div>
+                    ) : null}
+                  </section>
 
               <PageWorkspaceGrid>
                 <PageWorkspaceMain className="xl:col-start-1 xl:row-start-1">
-                  <DailyOperationsStorePulsePanel
-                    currency={snapshot.currency ?? currency}
-                    hasFullAdminAccess={hasFullAdminAccess}
-                    snapshot={snapshot}
-                  />
+                  {hasDetailSnapshot ? (
+                    <DailyOperationsStorePulsePanel
+                      currency={snapshot.currency ?? currency}
+                      hasFullAdminAccess={hasFullAdminAccess}
+                      snapshot={snapshot}
+                    />
+                  ) : null}
                   <DailyOperationsCompletionAttributionNotice
                     carryForwardCount={snapshot.completedClose?.carryForwardCount}
                     completedClose={snapshot.completedClose}
@@ -2336,7 +2362,10 @@ export function DailyOperationsViewContent({
                     {hasMoreTimelineEvents ? (
                       <Button
                         className="mt-layout-md w-full"
-                        onClick={() => setIsTimelineSheetOpen(true)}
+                        onClick={() => {
+                          onRequestDetailSnapshot?.();
+                          setIsTimelineSheetOpen(true);
+                        }}
                         size="sm"
                         type="button"
                         variant="outline"
@@ -2453,8 +2482,10 @@ function DailyOperationsApiPendingView() {
 }
 
 function DailyOperationsConnectedView({
+  getDailyOperationsDetailSnapshot,
   getDailyOperationsSnapshot,
 }: {
+  getDailyOperationsDetailSnapshot?: unknown;
   getDailyOperationsSnapshot: unknown;
 }) {
   const {
@@ -2487,20 +2518,43 @@ function DailyOperationsConnectedView({
     [search.weekEndOperatingDate],
   );
   const storePulseWindow: StorePulseWindow = "today";
-  const snapshot = useExpectedDailyOperationsQuery(
+  const snapshotArgs = canQueryProtectedData
+    ? {
+        ...operatingDateRange,
+        operatingTimezoneOffsetMinutes: getOperatingTimezoneOffsetMinutes(
+          operatingDateRange.operatingDate,
+        ),
+        storeId: activeStore!._id,
+        storePulseWindow,
+        weekEndOperatingDate,
+      }
+    : "skip";
+  const snapshotRequestKey =
+    snapshotArgs === "skip"
+      ? "skip"
+      : `${String(snapshotArgs.storeId)}:${snapshotArgs.operatingDate}:${snapshotArgs.startAt ?? ""}:${snapshotArgs.endAt ?? ""}:${snapshotArgs.weekEndOperatingDate ?? ""}:${snapshotArgs.storePulseWindow}`;
+  const [requestedDetailSnapshotKey, setRequestedDetailSnapshotKey] = useState<
+    string | null
+  >(null);
+  const isDetailSnapshotRequested =
+    snapshotRequestKey !== "skip" &&
+    requestedDetailSnapshotKey === snapshotRequestKey;
+
+  const compactSnapshot = useExpectedDailyOperationsQuery(
     getDailyOperationsSnapshot,
-    canQueryProtectedData
-      ? {
-          ...operatingDateRange,
-          operatingTimezoneOffsetMinutes: getOperatingTimezoneOffsetMinutes(
-            operatingDateRange.operatingDate,
-          ),
-          storeId: activeStore!._id,
-          storePulseWindow,
-          weekEndOperatingDate,
-        }
+    snapshotArgs,
+  ) as DailyOperationsSnapshot | undefined;
+  const detailSnapshot = useExpectedDailyOperationsQuery(
+    getDailyOperationsDetailSnapshot ?? getDailyOperationsSnapshot,
+    getDailyOperationsDetailSnapshot &&
+      canQueryProtectedData &&
+      isDetailSnapshotRequested
+      ? snapshotArgs
       : "skip",
   ) as DailyOperationsSnapshot | undefined;
+  const snapshot = compactSnapshot
+    ? { ...compactSnapshot, ...(detailSnapshot ?? {}) }
+    : detailSnapshot;
 
   const handleOperatingDateChange = (date: Date) => {
     const nextRange = getLocalOperatingDateRange(date);
@@ -2520,11 +2574,20 @@ function DailyOperationsConnectedView({
   return (
     <DailyOperationsViewContent
       currency={activeStore?.currency ?? "GHS"}
+      hasDetailSnapshot={detailSnapshot !== undefined}
       hasFullAdminAccess={canAccessSurface}
       hasFinancialDetailsAccess={hasFinancialDetailsAccess}
       isAuthenticated={isAuthenticated}
       isLoadingAccess={isLoadingAccess}
-      isLoadingSnapshot={snapshot === undefined}
+      isLoadingDetailSnapshot={
+        isDetailSnapshotRequested && detailSnapshot === undefined
+      }
+      isLoadingSnapshot={compactSnapshot === undefined}
+      onRequestDetailSnapshot={() =>
+        setRequestedDetailSnapshotKey(
+          snapshotRequestKey === "skip" ? null : snapshotRequestKey,
+        )
+      }
       onOperatingDateChange={handleOperatingDateChange}
       orgUrlSlug={params?.orgUrlSlug ?? ""}
       snapshot={snapshot}
@@ -2543,6 +2606,9 @@ export function DailyOperationsView() {
 
   return (
     <DailyOperationsConnectedView
+      getDailyOperationsDetailSnapshot={
+        dailyOperationsApi.getDailyOperationsDetailSnapshot
+      }
       getDailyOperationsSnapshot={dailyOperationsApi.getDailyOperationsSnapshot}
     />
   );

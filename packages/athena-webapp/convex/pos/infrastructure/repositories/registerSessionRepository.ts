@@ -54,7 +54,9 @@ export async function getActiveRegisterSessionForRegisterState(
   );
 
   const syncConflictsBySessionId = session
-    ? await listOpenLocalSyncConflictsByRegisterSession(ctx, identity.storeId)
+    ? await listOpenLocalSyncConflictsByRegisterSession(ctx, identity.storeId, {
+        registerSessionIds: [session._id],
+      })
     : null;
   const syncConflicts =
     session && syncConflictsBySessionId

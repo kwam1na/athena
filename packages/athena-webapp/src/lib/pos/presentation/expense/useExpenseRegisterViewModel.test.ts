@@ -700,6 +700,7 @@ describe("useExpenseRegisterViewModel", () => {
       }),
     ]);
     expect(catalogGatewayMocks.useConvexRegisterCatalog).toHaveBeenCalledWith({
+      refreshMetadataSnapshot: true,
       storeId: "store-1",
     });
     expect(

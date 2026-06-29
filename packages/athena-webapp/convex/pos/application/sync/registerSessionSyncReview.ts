@@ -116,6 +116,7 @@ export type RegisterSessionLocalSyncStatus = {
 
 type ListOpenLocalSyncConflictsOptions = {
   includeRejectedEvidence?: boolean;
+  includeTransactionMappingEvidence?: boolean;
   registerSessionIds?: Array<Id<"registerSession">>;
 };
 
@@ -586,7 +587,10 @@ async function listTargetRegisterSessionSyncFacts(
   options: Required<
     Pick<ListOpenLocalSyncConflictsOptions, "registerSessionIds">
   > &
-    Pick<ListOpenLocalSyncConflictsOptions, "includeRejectedEvidence">,
+    Pick<
+      ListOpenLocalSyncConflictsOptions,
+      "includeRejectedEvidence" | "includeTransactionMappingEvidence"
+    >,
 ) {
   const needsReviewConflicts: Doc<"posLocalSyncConflict">[] = [];
   const resolvedConflicts: Doc<"posLocalSyncConflict">[] = [];
@@ -622,6 +626,45 @@ async function listTargetRegisterSessionSyncFacts(
         .map((mapping) => mapping.localRegisterSessionId)
         .filter((localId): localId is string => Boolean(localId)),
     ]);
+    if (options.includeTransactionMappingEvidence) {
+      const sessionTransactions = (
+        await Promise.all(
+          (["completed", "void"] as const).map((status) =>
+            ctx.db
+              .query("posTransaction")
+              .withIndex(
+                "by_storeId_status_registerSessionId_completedAt",
+                (q) =>
+                  q
+                    .eq("storeId", storeId)
+                    .eq("status", status)
+                    .eq("registerSessionId", registerSessionId)
+                    .gte("completedAt", 0),
+              )
+              .take(SYNC_CONFLICT_LIMIT),
+          ),
+        )
+      ).flat();
+      for (const transaction of sessionTransactions) {
+        const transactionTerminalId = transaction.terminalId ?? terminalId;
+        const transactionMappings = await ctx.db
+          .query("posLocalSyncMapping")
+          .withIndex("by_store_terminal_cloud", (q) =>
+            q
+              .eq("storeId", storeId)
+              .eq("terminalId", transactionTerminalId)
+              .eq("cloudTable", "posTransaction")
+              .eq("cloudId", transaction._id),
+          )
+          .take(SYNC_CONFLICT_LIMIT);
+
+        for (const mapping of transactionMappings) {
+          if (mapping.localRegisterSessionId) {
+            localRegisterSessionIds.add(mapping.localRegisterSessionId);
+          }
+        }
+      }
+    }
 
     for (const localRegisterSessionId of localRegisterSessionIds) {
       const conflicts = await ctx.db
@@ -722,10 +765,13 @@ export async function listOpenLocalSyncConflictsByRegisterSession(
   storeId: Id<"store">,
   options: ListOpenLocalSyncConflictsOptions = {},
 ) {
-  const targetedFacts = options.registerSessionIds?.length
-    ? await listTargetRegisterSessionSyncFacts(ctx, storeId, {
+  const hasTargetRegisterSessions = Boolean(options.registerSessionIds?.length);
+  const targetedFacts = hasTargetRegisterSessions
+      ? await listTargetRegisterSessionSyncFacts(ctx, storeId, {
         includeRejectedEvidence: options.includeRejectedEvidence,
-        registerSessionIds: options.registerSessionIds,
+        includeTransactionMappingEvidence:
+          options.includeTransactionMappingEvidence,
+        registerSessionIds: options.registerSessionIds!,
       })
     : { needsReviewConflicts: [], rejectedEvents: [], resolvedConflicts: [] };
   const [
@@ -733,28 +779,30 @@ export async function listOpenLocalSyncConflictsByRegisterSession(
     cappedResolvedConflicts,
     cappedRejectedEvents,
   ] =
-    await Promise.all([
-      ctx.db
-        .query("posLocalSyncConflict")
-        .withIndex("by_store_status", (q) =>
-          q.eq("storeId", storeId).eq("status", "needs_review"),
-        )
-        .take(SYNC_CONFLICT_LIMIT),
-      ctx.db
-        .query("posLocalSyncConflict")
-        .withIndex("by_store_status", (q) =>
-          q.eq("storeId", storeId).eq("status", "resolved"),
-        )
-        .take(SYNC_CONFLICT_LIMIT),
-      options.includeRejectedEvidence
-        ? ctx.db
-            .query("posLocalSyncEvent")
+    hasTargetRegisterSessions
+      ? [[], [], []]
+      : await Promise.all([
+          ctx.db
+            .query("posLocalSyncConflict")
             .withIndex("by_store_status", (q) =>
-              q.eq("storeId", storeId).eq("status", "rejected"),
+              q.eq("storeId", storeId).eq("status", "needs_review"),
             )
-            .take(SYNC_CONFLICT_LIMIT)
-        : Promise.resolve([]),
-    ]);
+            .take(SYNC_CONFLICT_LIMIT),
+          ctx.db
+            .query("posLocalSyncConflict")
+            .withIndex("by_store_status", (q) =>
+              q.eq("storeId", storeId).eq("status", "resolved"),
+            )
+            .take(SYNC_CONFLICT_LIMIT),
+          options.includeRejectedEvidence
+            ? ctx.db
+                .query("posLocalSyncEvent")
+                .withIndex("by_store_status", (q) =>
+                  q.eq("storeId", storeId).eq("status", "rejected"),
+                )
+                .take(SYNC_CONFLICT_LIMIT)
+            : Promise.resolve([]),
+        ]);
   const needsReviewConflicts = uniqueById([
     ...cappedNeedsReviewConflicts,
     ...targetedFacts.needsReviewConflicts,

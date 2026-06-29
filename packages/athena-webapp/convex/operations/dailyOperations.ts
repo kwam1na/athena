@@ -23,6 +23,9 @@ import { buildPaymentTotals, transactionCashDelta } from "./paymentTotals";
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_OPERATIONS_QUERY_LIMIT = 200;
 const MAX_OPERATIONS_LOOKAHEAD_LIMIT = MAX_OPERATIONS_QUERY_LIMIT + 1;
+const COMPACT_OPERATIONS_TIMELINE_LIMIT = 5;
+const COMPACT_SCHEDULED_RUN_SUMMARY_LIMIT = 3;
+const FULL_SCHEDULED_RUN_SUMMARY_LIMIT = 8;
 const SCHEDULED_RUN_CRON_FAMILIES = [
   "release-checkout-items",
   "clear-abandoned-sessions",
@@ -571,11 +574,21 @@ async function listTimelineEvents(
   args: {
     endAt: number;
     includeManagerReviewEvidence?: boolean;
+    limit?: number;
     startAt: number;
     storeId: Id<"store">;
   },
 ): Promise<DailyOperationsTimelineEvent[]> {
   if (!args.startAt || !args.endAt) return [];
+  const limit = Math.max(
+    0,
+    Math.min(
+      args.limit ?? MAX_OPERATIONS_QUERY_LIMIT,
+      MAX_OPERATIONS_QUERY_LIMIT,
+    ),
+  );
+
+  if (limit === 0) return [];
 
   const eventsPromise = ctx.db
     .query("operationalEvent")
@@ -586,7 +599,7 @@ async function listTimelineEvents(
         .lt("createdAt", args.endAt),
     )
     .order("desc")
-    .take(MAX_OPERATIONS_QUERY_LIMIT);
+    .take(limit);
   const storePromise = ctx.db.get("store", args.storeId);
   const registerSessionsPromise = listTimelineRegisterSessions(ctx, args.storeId);
   const pendingRegisterCountsPromise = args.includeManagerReviewEvidence
@@ -643,7 +656,7 @@ async function listTimelineEvents(
     ...pendingRegisterCountEvents,
   ]
     .sort(compareDailyOperationsTimelineEvents)
-    .slice(0, MAX_OPERATIONS_QUERY_LIMIT);
+    .slice(0, limit);
 }
 
 async function listPendingRegisterCountTimelineEvents(
@@ -1773,10 +1786,21 @@ async function listDailyOperationsScheduledRunSummaries(
   ctx: Pick<QueryCtx, "db">,
   args: {
     endAt: number;
+    limit?: number;
     storeId: Id<"store">;
     startAt: number;
   },
 ): Promise<DailyOperationsScheduledRunSummary[]> {
+  const limit = Math.max(
+    0,
+    Math.min(
+      args.limit ?? FULL_SCHEDULED_RUN_SUMMARY_LIMIT,
+      FULL_SCHEDULED_RUN_SUMMARY_LIMIT,
+    ),
+  );
+
+  if (limit === 0) return [];
+
   const runs = (
     await Promise.all(
       SCHEDULED_RUN_CRON_FAMILIES.map((cronFamily) =>
@@ -1788,7 +1812,8 @@ async function listDailyOperationsScheduledRunSummaries(
               .eq("cronFamily", cronFamily)
               .gte("scheduledWindowStartAt", args.startAt),
           )
-          .take(MAX_OPERATIONS_QUERY_LIMIT),
+          .order("desc")
+          .take(limit),
       ),
     )
   ).flat();
@@ -1800,7 +1825,7 @@ async function listDailyOperationsScheduledRunSummaries(
         isOperatorVisibleScheduledRun(run),
     )
     .sort((left, right) => right.completedAt - left.completedAt)
-    .slice(0, 8)
+    .slice(0, limit)
     .map((run) => ({
       candidateCount: run.candidateCount,
       completedAt: run.completedAt,
@@ -2079,18 +2104,24 @@ export async function buildDailyOperationsSnapshotWithCtx(
   ctx: Pick<QueryCtx, "db">,
   args: {
     endAt?: number;
+    includeAnalyticsDetails?: boolean;
     includeFinancialDetails?: boolean;
     includeManagerReviewEvidence?: boolean;
     includeScheduledRunSummaries?: boolean;
+    scheduledRunSummariesLimit?: number;
     operatingDate: string;
     operatingTimezoneOffsetMinutes?: number;
     startAt?: number;
     storeId: Id<"store">;
     storePulseWindow?: DailyOperationsStorePulseWindow;
+    timelineLimit?: number;
+    timelinePreviewLimit?: number;
     weekEndOperatingDate?: string;
   },
 ) {
   const includeFinancialDetails = args.includeFinancialDetails ?? true;
+  const includeAnalyticsDetails =
+    args.includeAnalyticsDetails ?? includeFinancialDetails;
   const range = resolveRange(args);
   const [
     openingSnapshot,
@@ -2115,6 +2146,7 @@ export async function buildDailyOperationsSnapshotWithCtx(
       (args.includeManagerReviewEvidence ?? true)
         ? listDailyOperationsScheduledRunSummaries(ctx, {
             ...range,
+            limit: args.scheduledRunSummariesLimit,
             storeId: args.storeId,
           })
         : Promise.resolve([]),
@@ -2122,10 +2154,11 @@ export async function buildDailyOperationsSnapshotWithCtx(
         ...range,
         includeManagerReviewEvidence:
           args.includeManagerReviewEvidence ?? true,
+        limit: args.timelineLimit,
         storeId: args.storeId,
       }),
       ctx.db.get("store", args.storeId),
-      includeFinancialDetails
+      includeAnalyticsDetails
         ? getStorePulseSummaryForWindow(ctx as QueryCtx, {
             currentDayEnd: range.endAt - 1,
             currentDayStart: range.startAt,
@@ -2134,21 +2167,32 @@ export async function buildDailyOperationsSnapshotWithCtx(
             storeId: args.storeId,
           })
         : Promise.resolve(undefined),
-      buildWeekMetrics(ctx, args),
+      includeAnalyticsDetails
+        ? buildWeekMetrics(ctx, args)
+        : Promise.resolve([]),
     ]);
   const automationStatuses = await listDailyOperationsAutomationStatuses(ctx, {
     ...args,
     closeCompletion: closeSnapshot.completedClose,
   });
   const priorOperatingDate = shiftOperatingDate(args.operatingDate, -1);
-  const priorDayMetric =
-    weekMetrics.find((metric) => metric.operatingDate === priorOperatingDate) ??
-    (await buildWeekMetricForDate(ctx, {
-      isSelected: false,
-      operatingDate: priorOperatingDate,
-      operatingTimezoneOffsetMinutes: args.operatingTimezoneOffsetMinutes,
-      storeId: args.storeId,
-    }));
+  const priorDayMetric = includeAnalyticsDetails
+    ? weekMetrics.find((metric) => metric.operatingDate === priorOperatingDate) ??
+      (await buildWeekMetricForDate(ctx, {
+        isSelected: false,
+        operatingDate: priorOperatingDate,
+        operatingTimezoneOffsetMinutes: args.operatingTimezoneOffsetMinutes,
+        storeId: args.storeId,
+      }))
+    : undefined;
+  const visibleTimeline =
+    typeof args.timelinePreviewLimit === "number"
+      ? timeline.slice(0, args.timelinePreviewLimit)
+      : timeline;
+  const timelineHasMore =
+    typeof args.timelinePreviewLimit === "number"
+      ? timeline.length > args.timelinePreviewLimit
+      : undefined;
 
   const isOpeningStarted = openingSnapshot.status === "started";
   const isCloseReopened =
@@ -2281,16 +2325,15 @@ export async function buildDailyOperationsSnapshotWithCtx(
     }),
     lifecycle,
     operatingDate: args.operatingDate,
-    ...(includeFinancialDetails ? { priorDayMetric } : {}),
+    ...(includeAnalyticsDetails && priorDayMetric ? { priorDayMetric } : {}),
     primaryAction: primaryAction(lifecycleStatus),
     scheduledRunSummaries,
     startAt: range.startAt,
     storeId: args.storeId,
     ...(storePulse ? { storePulse } : {}),
-    timeline: includeFinancialDetails ? timeline : [],
-    weekMetrics: includeFinancialDetails
-      ? weekMetrics
-      : weekMetrics.map(redactWeekMetricFinancialDetails),
+    timeline: visibleTimeline,
+    ...(typeof timelineHasMore === "boolean" ? { timelineHasMore } : {}),
+    weekMetrics,
   };
 }
 
@@ -2317,48 +2360,73 @@ function maybeRedactCloseSummary(
   } satisfies DailyOperationsCloseSummary;
 }
 
-function redactWeekMetricFinancialDetails(
-  metric: DailyOperationsWeekMetric,
-): DailyOperationsWeekMetric {
+const dailyOperationsSnapshotArgsValidator = {
+  endAt: v.optional(v.number()),
+  operatingDate: v.string(),
+  operatingTimezoneOffsetMinutes: v.optional(v.number()),
+  startAt: v.optional(v.number()),
+  storeId: v.id("store"),
+  storePulseWindow: v.optional(storePulseWindowValidator),
+  weekEndOperatingDate: v.optional(v.string()),
+};
+
+async function authorizeDailyOperationsSnapshot(
+  ctx: QueryCtx,
+  args: { storeId: Id<"store"> },
+) {
+  const store = await ctx.db.get("store", args.storeId);
+  if (!store) {
+    throw new Error("Store not found.");
+  }
+
+  const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+  const membership = await requireOrganizationMemberRoleWithCtx(ctx, {
+    allowedRoles: ["full_admin", "pos_only"],
+    failureMessage: "You cannot view daily operations for this store.",
+    organizationId: store.organizationId,
+    userId: athenaUser._id,
+  });
+
   return {
-    ...maybeRedactCloseSummary(metric, false),
-    isClosed: metric.isClosed,
-    isReopened: metric.isReopened,
-    isSelected: metric.isSelected,
-    operatingDate: metric.operatingDate,
+    includeManagerReviewEvidence: membership.role === "full_admin",
   };
 }
 
 export const getDailyOperationsSnapshot = query({
-  args: {
-    endAt: v.optional(v.number()),
-    operatingDate: v.string(),
-    operatingTimezoneOffsetMinutes: v.optional(v.number()),
-    startAt: v.optional(v.number()),
-    storeId: v.id("store"),
-    storePulseWindow: v.optional(storePulseWindowValidator),
-    weekEndOperatingDate: v.optional(v.string()),
-  },
+  args: dailyOperationsSnapshotArgsValidator,
   handler: async (ctx, args) => {
-    const store = await ctx.db.get("store", args.storeId);
-    if (!store) {
-      throw new Error("Store not found.");
-    }
-
-    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
-    const membership = await requireOrganizationMemberRoleWithCtx(ctx, {
-      allowedRoles: ["full_admin", "pos_only"],
-      failureMessage: "You cannot view daily operations for this store.",
-      organizationId: store.organizationId,
-      userId: athenaUser._id,
-    });
-    const includeManagerReviewEvidence = membership.role === "full_admin";
+    const { includeManagerReviewEvidence } =
+      await authorizeDailyOperationsSnapshot(ctx, args);
 
     return buildDailyOperationsSnapshotWithCtx(ctx, {
       ...args,
+      includeAnalyticsDetails: false,
       includeFinancialDetails: includeManagerReviewEvidence,
       includeManagerReviewEvidence,
       includeScheduledRunSummaries: includeManagerReviewEvidence,
+      scheduledRunSummariesLimit: COMPACT_SCHEDULED_RUN_SUMMARY_LIMIT,
+      timelineLimit: COMPACT_OPERATIONS_TIMELINE_LIMIT + 1,
+      timelinePreviewLimit: COMPACT_OPERATIONS_TIMELINE_LIMIT,
+    });
+  },
+});
+
+export const getDailyOperationsDetailSnapshot = query({
+  args: {
+    ...dailyOperationsSnapshotArgsValidator,
+  },
+  handler: async (ctx, args) => {
+    const { includeManagerReviewEvidence } =
+      await authorizeDailyOperationsSnapshot(ctx, args);
+
+    return buildDailyOperationsSnapshotWithCtx(ctx, {
+      ...args,
+      includeAnalyticsDetails: includeManagerReviewEvidence,
+      includeFinancialDetails: includeManagerReviewEvidence,
+      includeManagerReviewEvidence,
+      includeScheduledRunSummaries: includeManagerReviewEvidence,
+      scheduledRunSummariesLimit: FULL_SCHEDULED_RUN_SUMMARY_LIMIT,
+      timelineLimit: MAX_OPERATIONS_QUERY_LIMIT,
     });
   },
 });
