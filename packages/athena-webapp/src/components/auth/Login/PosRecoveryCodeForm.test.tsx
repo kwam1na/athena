@@ -74,7 +74,7 @@ describe("PosRecoveryCodeForm", () => {
     );
   });
 
-  it("uses generic failure copy for rejected recovery sign-in", async () => {
+  it("uses access-aware failure copy for rejected recovery sign-in", async () => {
     const user = userEvent.setup();
     mocked.signIn.mockResolvedValue({ signingIn: false });
 
@@ -91,7 +91,7 @@ describe("PosRecoveryCodeForm", () => {
 
     expect(
       await screen.findByText(
-        "Sign-in details not recognized. Enter the recovery code again.",
+        "POS sign-in failed. Check the recovery code or ask an admin to confirm POS-only access.",
       ),
     ).toBeInTheDocument();
     expect(mocked.navigate).not.toHaveBeenCalled();

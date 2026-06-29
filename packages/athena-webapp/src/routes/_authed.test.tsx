@@ -987,6 +987,11 @@ describe("Authed layout", () => {
     mocked.useRouterState.mockImplementation(({ select }) =>
       select({ location: { pathname: "/wigclub/store/wigclub/pos/register" } }),
     );
+    window.history.replaceState(
+      {},
+      "",
+      "/wigclub/store/wigclub/pos/register?drawer=front",
+    );
 
     render(<Layout />);
 
@@ -1000,6 +1005,12 @@ describe("Authed layout", () => {
         "This checkout station cannot reopen the register. Sign in again or reconnect this register from POS Settings before using checkout.",
       ),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Sign in to POS" }),
+    ).toHaveAttribute(
+      "href",
+      "/login?redirectTo=%2Fwigclub%2Fstore%2Fwigclub%2Fpos%2Fregister%3Fdrawer%3Dfront",
+    );
     expect(screen.queryByText(/terminal_revoked/)).not.toBeInTheDocument();
     expect(screen.queryByTestId("app-sidebar")).not.toBeInTheDocument();
     expect(screen.queryByTestId("app-header")).not.toBeInTheDocument();

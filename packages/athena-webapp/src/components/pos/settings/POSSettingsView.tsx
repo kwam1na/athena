@@ -8,6 +8,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LoadingButton } from "@/components/ui/loading-button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { FadeIn } from "../../common/FadeIn";
 import { PageLevelHeader, PageWorkspace } from "../../common/PageLevelHeader";
 import View from "../../View";
@@ -66,6 +73,23 @@ const HealthLink = Link as unknown as ComponentType<HealthLinkProps>;
 type AutomationPolicyMode = "disabled" | "dry_run" | "enabled";
 const DEFAULT_OPENING_LOCAL_START_MINUTES = 8 * 60;
 const DEFAULT_EOD_LOCAL_COMPLETION_WINDOW_MINUTES = 22 * 60;
+const AUTOMATION_START_OFFSET_OPTIONS = [
+  { value: "-60", label: "1 hour before opening" },
+  { value: "-30", label: "30 minutes before opening" },
+  { value: "-15", label: "15 minutes before opening" },
+  { value: "0", label: "At opening" },
+  { value: "15", label: "15 minutes after opening" },
+  { value: "30", label: "30 minutes after opening" },
+  { value: "60", label: "1 hour after opening" },
+];
+const EOD_COMPLETION_OFFSET_OPTIONS = [
+  { value: "0", label: "At close" },
+  { value: "15", label: "15 minutes after close" },
+  { value: "30", label: "30 minutes after close" },
+  { value: "60", label: "1 hour after close" },
+  { value: "120", label: "2 hours after close" },
+  { value: "180", label: "3 hours after close" },
+];
 const terminalCapabilityOptions: Array<{
   value: PosTerminalTransactionCapability;
   label: string;
@@ -254,7 +278,7 @@ function FingerprintRegistrationCard({
         <div className="space-y-layout-xs">
           <Label>Terminal login</Label>
           <RadioGroup
-            className="grid gap-layout-sm sm:grid-cols-2"
+            className="grid w-fit max-w-full gap-layout-sm sm:grid-cols-[repeat(2,minmax(0,20rem))]"
             value={loginMode}
             onValueChange={(value) =>
               onLoginModeChange(normalizePosTerminalLoginMode(value))
@@ -416,6 +440,92 @@ function parseNonNegativeIntegerInput(value: string) {
   return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;
 }
 
+function normalizeMinuteOfDay(value: number) {
+  return ((value % (24 * 60)) + 24 * 60) % (24 * 60);
+}
+
+function parseStoreHoursTimeLabel(value?: string | null) {
+  if (!value) return null;
+
+  const match = value.trim().match(/^(\d{1,2}):(\d{2})(?:\s*([AP]M))?$/i);
+  if (!match) return null;
+
+  let hour = Number(match[1]);
+  const minute = Number(match[2]);
+  const meridiem = match[3]?.toUpperCase();
+  if (
+    !Number.isInteger(hour) ||
+    !Number.isInteger(minute) ||
+    minute < 0 ||
+    minute > 59
+  ) {
+    return null;
+  }
+
+  if (meridiem) {
+    if (hour < 1 || hour > 12) return null;
+    hour = hour % 12;
+    if (meridiem === "PM") hour += 12;
+  } else if (hour < 0 || hour > 23) {
+    return null;
+  }
+
+  return hour * 60 + minute;
+}
+
+function formatStoreHoursTimeLabel(value?: string | null) {
+  const minutes = parseStoreHoursTimeLabel(value);
+  if (minutes === null) return value ?? "Store Hours opening time";
+
+  return formatMinuteOfDayLabel(minutes);
+}
+
+function formatMinuteOfDayLabel(minutes: number) {
+  const hour24 = Math.floor(minutes / 60);
+  const minute = minutes % 60;
+  const hour12 = hour24 % 12 || 12;
+  const meridiem = hour24 < 12 ? "AM" : "PM";
+
+  return `${String(hour12).padStart(2, "0")}:${String(minute).padStart(
+    2,
+    "0",
+  )} ${meridiem}`;
+}
+
+function formatOffsetFromStoreHours(offsetMinutes: number) {
+  const option = AUTOMATION_START_OFFSET_OPTIONS.find(
+    (entry) => Number(entry.value) === offsetMinutes,
+  );
+  if (option) return option.label;
+
+  const absoluteMinutes = Math.abs(offsetMinutes);
+  const unitLabel = absoluteMinutes === 1 ? "minute" : "minutes";
+  if (offsetMinutes < 0) {
+    return `${absoluteMinutes} ${unitLabel} before opening`;
+  }
+  if (offsetMinutes > 0) {
+    return `${absoluteMinutes} ${unitLabel} after opening`;
+  }
+  return "At opening";
+}
+
+function formatOffsetFromStoreClose(offsetMinutes: number) {
+  const option = EOD_COMPLETION_OFFSET_OPTIONS.find(
+    (entry) => Number(entry.value) === offsetMinutes,
+  );
+  if (option) return option.label;
+
+  const absoluteMinutes = Math.abs(offsetMinutes);
+  const unitLabel = absoluteMinutes === 1 ? "minute" : "minutes";
+  if (offsetMinutes < 0) {
+    return `${absoluteMinutes} ${unitLabel} before close`;
+  }
+  if (offsetMinutes > 0) {
+    return `${absoluteMinutes} ${unitLabel} after close`;
+  }
+  return "At close";
+}
+
 type StoreScheduleSummary = {
   context?: {
     currentWindow?: {
@@ -471,13 +581,17 @@ function StoreHoursTimingReadout({
     scheduleContext?.currentWindow ?? scheduleContext?.nextWindow ?? null;
   const openingTiming =
     currentOrNextWindow?.localStartLabel
-      ? `Opening at ${currentOrNextWindow.localStartLabel}`
+      ? `Opening at ${formatStoreHoursTimeLabel(
+          currentOrNextWindow.localStartLabel,
+        )}`
       : scheduleContext?.phase === "closed"
         ? "Store is closed today."
         : "Opening timing is waiting for Store Hours.";
   const eodTiming =
     currentOrNextWindow?.localEndLabel
-      ? `EOD after ${currentOrNextWindow.localEndLabel}`
+      ? `EOD after ${formatStoreHoursTimeLabel(
+          currentOrNextWindow.localEndLabel,
+        )}`
       : "EOD timing is waiting for Store Hours.";
   const timezone =
     scheduleContext?.timezone ??
@@ -549,12 +663,19 @@ function EodCompletionAutomationAdminPanel({
       ? { storeId }
       : "skip",
   ) as EodAutoCompletePolicy | null | undefined;
+  const scheduleSummary = useQuery(
+    storeScheduleApi.getStoreScheduleSummary,
+    !isLoading && hasFullAdminAccess && storeId
+      ? { storeId }
+      : "skip",
+  ) as StoreScheduleSummary | null | undefined;
   const updateEodAutoCompletePolicy = useMutation(
     api.operations.dailyOperationsAutomation.updateEodAutoCompletePolicy,
   ) as unknown as UpdateEodAutoCompletePolicy;
   const [mode, setMode] = useState<AutomationPolicyMode>("disabled");
   const [cleanDayAutoCompleteEnabled, setCleanDayAutoCompleteEnabled] =
     useState(false);
+  const [completionOffsetMinutes, setCompletionOffsetMinutes] = useState(0);
   const [maxAbsoluteCashVariance, setMaxAbsoluteCashVariance] = useState("0");
   const [maxVoidedSaleCount, setMaxVoidedSaleCount] = useState("0");
   const [maxVoidedSaleTotal, setMaxVoidedSaleTotal] = useState("0");
@@ -569,6 +690,53 @@ function EodCompletionAutomationAdminPanel({
   const policyMaxAbsoluteCashVariance = policy?.maxAbsoluteCashVariance;
   const policyMaxVoidedSaleCount = policy?.maxVoidedSaleCount;
   const policyMaxVoidedSaleTotal = policy?.maxVoidedSaleTotal;
+  const scheduleContext = scheduleSummary?.context;
+  const currentOrNextWindow =
+    scheduleContext?.currentWindow ?? scheduleContext?.nextWindow ?? null;
+  const storeCloseMinute = parseStoreHoursTimeLabel(
+    currentOrNextWindow?.localEndLabel,
+  );
+  const selectedCompletionMinute =
+    storeCloseMinute === null
+      ? (policy?.localCompletionWindowMinutes ??
+        DEFAULT_EOD_LOCAL_COMPLETION_WINDOW_MINUTES)
+      : normalizeMinuteOfDay(storeCloseMinute + completionOffsetMinutes);
+  const selectedCompletionOffsetLabel = formatOffsetFromStoreClose(
+    completionOffsetMinutes,
+  );
+  const completionOffsetOptions = EOD_COMPLETION_OFFSET_OPTIONS.some(
+    (option) => Number(option.value) === completionOffsetMinutes,
+  )
+    ? EOD_COMPLETION_OFFSET_OPTIONS
+    : [
+        ...EOD_COMPLETION_OFFSET_OPTIONS,
+        {
+          value: String(completionOffsetMinutes),
+          label: selectedCompletionOffsetLabel,
+        },
+      ].sort((left, right) => Number(left.value) - Number(right.value));
+  const storeCloseLabel = formatStoreHoursTimeLabel(
+    currentOrNextWindow?.localEndLabel,
+  );
+  const selectedCompletionTimeLabel = formatMinuteOfDayLabel(
+    selectedCompletionMinute,
+  );
+
+  useEffect(() => {
+    if (policy?.localCompletionWindowMinutes == null || storeCloseMinute === null) {
+      setCompletionOffsetMinutes(0);
+      return;
+    }
+
+    const rawOffset = policy.localCompletionWindowMinutes - storeCloseMinute;
+    const normalizedOffset =
+      rawOffset > 12 * 60
+        ? rawOffset - 24 * 60
+        : rawOffset < -12 * 60
+          ? rawOffset + 24 * 60
+          : rawOffset;
+    setCompletionOffsetMinutes(normalizedOffset);
+  }, [policy?.localCompletionWindowMinutes, storeCloseMinute]);
 
   useEffect(() => {
     if (
@@ -642,9 +810,7 @@ function EodCompletionAutomationAdminPanel({
     try {
       await updateEodAutoCompletePolicy({
         cleanDayAutoCompleteEnabled,
-        localCompletionWindowMinutes:
-          policy?.localCompletionWindowMinutes ??
-          DEFAULT_EOD_LOCAL_COMPLETION_WINDOW_MINUTES,
+        localCompletionWindowMinutes: selectedCompletionMinute,
         maxAbsoluteCashVariance: parsedMaxAbsoluteCashVariance,
         maxVoidedSaleCount: parsedMaxVoidedSaleCount,
         maxVoidedSaleTotal: parsedMaxVoidedSaleTotal,
@@ -696,7 +862,7 @@ function EodCompletionAutomationAdminPanel({
         </div>
 
         <RadioGroup
-          className="grid gap-layout-sm sm:grid-cols-3"
+          className="grid gap-layout-sm sm:grid-cols-[repeat(3,minmax(10rem,18rem))]"
           value={mode}
           onValueChange={(value) =>
             setMode(normalizeAutomationPolicyMode(value as AutomationPolicyMode))
@@ -744,7 +910,39 @@ function EodCompletionAutomationAdminPanel({
         </RadioGroup>
 
         <div className="grid gap-layout-md">
-          <label className="flex min-h-[5rem] items-start gap-layout-sm rounded-md border border-border bg-background p-layout-sm text-sm">
+          <div className="max-w-[18rem] space-y-layout-xs">
+            <Label htmlFor="eod-completion-offset">
+              EOD completion offset
+            </Label>
+            <Select
+              onValueChange={(value) =>
+                setCompletionOffsetMinutes(Number(value))
+              }
+              value={String(completionOffsetMinutes)}
+            >
+              <SelectTrigger
+                aria-label="EOD completion offset"
+                className="h-control-standard bg-background"
+                id="eod-completion-offset"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {completionOffsetOptions.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-sm leading-5 text-muted-foreground">
+              {storeCloseMinute === null
+                ? " Set a close time to derive timing."
+                : `Close ${storeCloseLabel}. Runs ${selectedCompletionTimeLabel}.`}
+            </p>
+          </div>
+
+          <label className="flex min-h-[5rem] w-fit max-w-full justify-self-start items-start gap-layout-sm rounded-md border border-border bg-background p-layout-sm text-sm">
             <Checkbox
               aria-label="Enable blocker-free completion"
               checked={cleanDayAutoCompleteEnabled}
@@ -763,10 +961,11 @@ function EodCompletionAutomationAdminPanel({
               </span>
             </span>
           </label>
+
         </div>
 
-        <div className="grid gap-layout-md sm:grid-cols-3">
-          <div className="space-y-layout-xs">
+        <div className="grid gap-layout-md sm:grid-cols-[repeat(3,minmax(10rem,14rem))]">
+          <div className="space-y-layout-xs min-w-0">
             <Label htmlFor="eod-cash-variance-threshold">
               Cash variance threshold
             </Label>
@@ -780,7 +979,7 @@ function EodCompletionAutomationAdminPanel({
               value={maxAbsoluteCashVariance}
             />
           </div>
-          <div className="space-y-layout-xs">
+          <div className="space-y-layout-xs min-w-0">
             <Label htmlFor="eod-voided-sale-count-threshold">
               Voided sale count threshold
             </Label>
@@ -792,7 +991,7 @@ function EodCompletionAutomationAdminPanel({
               value={maxVoidedSaleCount}
             />
           </div>
-          <div className="space-y-layout-xs">
+          <div className="space-y-layout-xs min-w-0">
             <Label htmlFor="eod-voided-sale-total-threshold">
               Voided sale total threshold
             </Label>
@@ -844,16 +1043,45 @@ function StoreDayAutomationAdminPanel({
     api.operations.dailyOperationsAutomation.getOpeningAutoStartPolicy,
     !isLoading && hasFullAdminAccess && storeId ? { storeId } : "skip",
   ) as StoreDayAutomationPolicy | null | undefined;
+  const scheduleSummary = useQuery(
+    storeScheduleApi.getStoreScheduleSummary,
+    !isLoading && hasFullAdminAccess && storeId ? { storeId } : "skip",
+  ) as StoreScheduleSummary | null | undefined;
   const updateOpeningAutoStartPolicy = useMutation(
     api.operations.dailyOperationsAutomation.updateOpeningAutoStartPolicy,
   ) as unknown as UpdateOpeningAutoStartPolicy;
   const [isEnabled, setIsEnabled] = useState(false);
+  const [startOffsetMinutes, setStartOffsetMinutes] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<{
     kind: "error" | "success";
     text: string;
   } | null>(null);
   const policyMode = policy?.mode;
+  const scheduleContext = scheduleSummary?.context;
+  const currentOrNextWindow =
+    scheduleContext?.currentWindow ?? scheduleContext?.nextWindow ?? null;
+  const storeOpeningMinute = parseStoreHoursTimeLabel(
+    currentOrNextWindow?.localStartLabel,
+  );
+  const selectedStartMinute =
+    storeOpeningMinute === null
+      ? (policy?.localStartMinutes ?? DEFAULT_OPENING_LOCAL_START_MINUTES)
+      : normalizeMinuteOfDay(storeOpeningMinute + startOffsetMinutes);
+  const selectedStartOffsetLabel = formatOffsetFromStoreHours(
+    startOffsetMinutes,
+  );
+  const startOffsetOptions = AUTOMATION_START_OFFSET_OPTIONS.some(
+    (option) => Number(option.value) === startOffsetMinutes,
+  )
+    ? AUTOMATION_START_OFFSET_OPTIONS
+    : [
+        ...AUTOMATION_START_OFFSET_OPTIONS,
+        { value: String(startOffsetMinutes), label: selectedStartOffsetLabel },
+      ].sort((left, right) => Number(left.value) - Number(right.value));
+  const storeOpeningLabel =
+    formatStoreHoursTimeLabel(currentOrNextWindow?.localStartLabel);
+  const selectedStartTimeLabel = formatMinuteOfDayLabel(selectedStartMinute);
 
   useEffect(() => {
     if (policyMode == null) {
@@ -862,6 +1090,22 @@ function StoreDayAutomationAdminPanel({
 
     setIsEnabled(policyMode === "enabled");
   }, [policyMode]);
+
+  useEffect(() => {
+    if (policy?.localStartMinutes == null || storeOpeningMinute === null) {
+      setStartOffsetMinutes(0);
+      return;
+    }
+
+    const rawOffset = policy.localStartMinutes - storeOpeningMinute;
+    const normalizedOffset =
+      rawOffset > 12 * 60
+        ? rawOffset - 24 * 60
+        : rawOffset < -12 * 60
+          ? rawOffset + 24 * 60
+          : rawOffset;
+    setStartOffsetMinutes(normalizedOffset);
+  }, [policy?.localStartMinutes, storeOpeningMinute]);
 
   if (isLoading || !hasFullAdminAccess) {
     return null;
@@ -882,8 +1126,7 @@ function StoreDayAutomationAdminPanel({
     setMessage(null);
     try {
       await updateOpeningAutoStartPolicy({
-        localStartMinutes:
-          policy?.localStartMinutes ?? DEFAULT_OPENING_LOCAL_START_MINUTES,
+        localStartMinutes: selectedStartMinute,
         mode: isEnabled ? "enabled" : "disabled",
         openingBlockerHandling: "start_with_manager_review",
         operatingTimezoneOffsetMinutes:
@@ -930,7 +1173,7 @@ function StoreDayAutomationAdminPanel({
         </div>
 
         <div className="grid gap-layout-md">
-          <label className="flex min-h-[5rem] items-start gap-layout-sm rounded-md border border-border bg-background p-layout-sm text-sm">
+          <label className="flex min-h-[5rem] w-fit max-w-full justify-self-start items-start gap-layout-sm rounded-md border border-border bg-background p-layout-sm text-sm">
             <Checkbox
               aria-label="Enable store-day auto-start"
               checked={isEnabled}
@@ -942,11 +1185,39 @@ function StoreDayAutomationAdminPanel({
                 Enable store-day auto-start
               </span>
               <span className="mt-1 block leading-5 text-muted-foreground">
-                Athena starts Opening Handoff from Store Hours timing. Review
-                items are not resolved by automation.
+                {storeOpeningMinute === null
+                  ? " Set an opening time to derive timing."
+                  : `Opening ${storeOpeningLabel}. Runs ${selectedStartTimeLabel}.`}
               </span>
             </span>
           </label>
+
+          <div className="max-w-[18rem] space-y-layout-xs">
+            <div className="space-y-layout-xs">
+              <Label htmlFor="store-day-auto-start-offset">
+                Auto-start offset
+              </Label>
+              <Select
+                onValueChange={(value) => setStartOffsetMinutes(Number(value))}
+                value={String(startOffsetMinutes)}
+              >
+                <SelectTrigger
+                  aria-label="Store day auto-start offset"
+                  className="h-control-standard bg-background"
+                  id="store-day-auto-start-offset"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {startOffsetOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
         </div>
 
         {message ? (
@@ -1099,7 +1370,7 @@ function POSRecoveryCodeAdminPanel({
 
         {currentRecoveryCode ? (
           <div
-            className="rounded-md border border-signal/30 bg-signal/10 px-layout-md py-layout-sm"
+            className="w-fit max-w-full rounded-md border border-signal/30 bg-signal/10 px-layout-md py-layout-sm"
             role="status"
           >
             <p className="text-sm font-medium text-foreground">

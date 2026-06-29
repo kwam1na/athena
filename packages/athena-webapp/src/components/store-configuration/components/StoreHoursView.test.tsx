@@ -1,6 +1,6 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useQuery } from "convex/react";
 
 import { StoreHoursView } from "./StoreHoursView";
@@ -85,6 +85,10 @@ describe("StoreHoursView", () => {
     mockUpdateSchedule.mockResolvedValue(undefined);
   });
 
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("shows candidate store hours and requires full-admin confirmation before saving", async () => {
     const user = userEvent.setup();
 
@@ -97,16 +101,16 @@ describe("StoreHoursView", () => {
       ),
     ).toBeInTheDocument();
     expect(screen.getByText("Needs admin review")).toBeInTheDocument();
-    expect(screen.getByText("Open today, 9:00 AM to 5:00 PM")).toBeInTheDocument();
-    expect(screen.getByLabelText("Store timezone")).toHaveValue(
-      "America/New_York",
-    );
+    expect(screen.getByRole("combobox", { name: "Store timezone" }))
+      .toHaveTextContent("America/New_York");
     expect(screen.getByRole("button", { name: "Save store hours" }))
       .toBeDisabled();
 
     await user.click(screen.getByLabelText("Confirm suggested store hours"));
-    await user.clear(screen.getByLabelText("Monday close time"));
-    await user.type(screen.getByLabelText("Monday close time"), "18:30");
+    await user.click(screen.getByRole("combobox", { name: "Store timezone" }));
+    await user.click(await screen.findByRole("option", { name: "Africa/Accra" }));
+    await user.click(screen.getByRole("combobox", { name: "Monday close time" }));
+    await user.click(await screen.findByRole("option", { name: "06:30 PM" }));
     await user.click(screen.getByRole("button", { name: "Save store hours" }));
 
     await waitFor(() =>
@@ -121,7 +125,7 @@ describe("StoreHoursView", () => {
                 note: "Holiday",
               }),
             ]),
-            timezone: "America/New_York",
+            timezone: "Africa/Accra",
             weeklyClosedDays: expect.arrayContaining([0]),
             weeklyWindows: expect.arrayContaining([
               expect.objectContaining({
@@ -183,32 +187,115 @@ describe("StoreHoursView", () => {
     );
   });
 
-  it("associates validation copy with inputs and announces errors", async () => {
+  it("renders store timezone as a selectable combobox", async () => {
     const user = userEvent.setup();
 
     render(<StoreHoursView />);
 
-    await user.click(screen.getByLabelText("Confirm suggested store hours"));
-    await user.clear(screen.getByLabelText("Store timezone"));
-    await user.click(screen.getByRole("button", { name: "Save store hours" }));
+    const timezoneSelect = screen.getByRole("combobox", {
+      name: "Store timezone",
+    });
+    expect(timezoneSelect).toHaveTextContent("America/New_York");
 
-    const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent("Choose a valid store timezone.");
-    expect(screen.getByLabelText("Store timezone")).toHaveAttribute(
-      "aria-describedby",
-      "store-hours-message",
+    await user.click(timezoneSelect);
+
+    expect(
+      await screen.findByRole("option", { name: "Africa/Accra" }),
+    ).toBeInTheDocument();
+  });
+
+  it("formats raw 24-hour summary times for display", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-28T12:00:00.000Z"));
+    mockedUseQuery.mockReturnValue({
+      ...candidateSchedule,
+      nextCloseLabel: "19:00",
+      nextOpenLabel: "09:00",
+      todayScheduleLabel: "Next open 09:00.",
+      timezone: "Africa/Accra",
+      weeklyHours: [
+        {
+          closed: false,
+          day: "monday",
+          windows: [{ openTime: "09:00", closeTime: "19:00" }],
+        },
+        {
+          closed: true,
+          day: "sunday",
+          windows: [],
+        },
+      ],
+    } as never);
+
+    render(<StoreHoursView />);
+
+    const summary = screen.getByText("Today").closest("dl");
+    expect(summary).not.toBeNull();
+    expect(within(summary!).getByText("Closed today.")).toBeInTheDocument();
+    expect(within(summary!).getByText("Monday 09:00 AM")).toBeInTheDocument();
+    expect(within(summary!).getByText("Monday 07:00 PM")).toBeInTheDocument();
+    expect(summary).toHaveTextContent(
+      "TodayClosed today.Next openMonday 09:00 AMNext closeMonday 07:00 PM",
     );
-    expect(mockUpdateSchedule).not.toHaveBeenCalled();
+  });
+
+  it("orders the summary around the active store window", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-29T12:00:00.000Z"));
+    mockedUseQuery.mockReturnValue({
+      ...candidateSchedule,
+      nextCloseLabel: "19:00",
+      nextOpenLabel: "09:00",
+      timezone: "Africa/Accra",
+      weeklyHours: [
+        {
+          closed: false,
+          day: "monday",
+          windows: [{ openTime: "09:00", closeTime: "19:00" }],
+        },
+        {
+          closed: false,
+          day: "tuesday",
+          windows: [{ openTime: "09:00", closeTime: "19:00" }],
+        },
+      ],
+    } as never);
+
+    render(<StoreHoursView />);
+
+    const summary = screen.getByText("Today").closest("dl");
+    expect(summary).not.toBeNull();
+    expect(within(summary!).getByText("Opened 09:00 AM.")).toBeInTheDocument();
+    expect(within(summary!).getByText("Monday 07:00 PM")).toBeInTheDocument();
+    expect(within(summary!).getByText("Tuesday 09:00 AM")).toBeInTheDocument();
+    expect(summary).toHaveTextContent(
+      "TodayOpened 09:00 AM.Next closeMonday 07:00 PMNext openTuesday 09:00 AM",
+    );
   });
 
   it("validates overlapping date exceptions before saving", async () => {
     const user = userEvent.setup();
+    mockedUseQuery.mockReturnValue({
+      ...candidateSchedule,
+      exceptions: [
+        {
+          closed: true,
+          date: "2026-07-04",
+          label: "Holiday",
+          windows: [],
+        },
+        {
+          closed: true,
+          date: "2026-07-04",
+          label: "Special closure",
+          windows: [],
+        },
+      ],
+    } as never);
 
     render(<StoreHoursView />);
 
     await user.click(screen.getByLabelText("Confirm suggested store hours"));
-    await user.click(screen.getByRole("button", { name: "Add exception" }));
-    await user.type(screen.getByLabelText("Exception 2 date"), "2026-07-04");
     await user.click(screen.getByRole("button", { name: "Save store hours" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(

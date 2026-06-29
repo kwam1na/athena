@@ -1,10 +1,6 @@
 import { OrganizationModal } from "@/components/ui/modals/organization-modal";
 import { StoreModal } from "@/components/ui/modals/store-modal";
-import {
-  Outlet,
-  useNavigate,
-  useRouterState,
-} from "@tanstack/react-router";
+import { Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   type Dispatch,
   type CSSProperties,
@@ -24,12 +20,20 @@ import { AppSidebar } from "../components/app-sidebar";
 import { useAuth } from "../hooks/useAuth";
 import { usePermissions } from "../hooks/usePermissions";
 import { PermissionsProvider } from "../contexts/PermissionsContext";
-import { Monitor, Moon, ShieldCheck, Sun, UserCircle } from "lucide-react";
+import {
+  ArrowUpRight,
+  Monitor,
+  Moon,
+  ShieldCheck,
+  Sun,
+  UserCircle,
+} from "lucide-react";
 import { AppHeader } from "@/components/Navbar";
 import { cn } from "@/lib/utils";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { LOGGED_IN_USER_ID_KEY, POS_APP_ACCOUNT_ID_KEY } from "@/lib/constants";
 import { Badge } from "@/components/ui/badge";
+import { buttonVariants } from "@/components/ui/button";
 import {
   ManagerElevationProvider,
   useManagerElevation,
@@ -61,7 +65,6 @@ import {
 } from "@/lib/pos/infrastructure/terminal/posTerminalAppSessionRecoveryContext";
 import type { PosTerminalRuntimeAppSessionRecoveryInput } from "@/lib/pos/infrastructure/local/terminalRuntimeStatus";
 import { type AthenaThemeMode, useAthenaTheme } from "@/lib/theme";
-
 
 const POS_TERMINAL_FULLSCREEN_PATH_PATTERN =
   /^\/(?<orgUrlSlug>[^/]+)\/store\/(?<storeUrlSlug>[^/]+)\/pos\/(?:register|expense)\/?$/;
@@ -133,6 +136,15 @@ function getRedirectPathWithSearch(
   return browserPathWithSearch;
 }
 
+function getLoginHref(redirectTo: string) {
+  if (!redirectTo) {
+    return "/login";
+  }
+
+  const params = new URLSearchParams({ redirectTo });
+  return `/login?${params.toString()}`;
+}
+
 function isUnknownRouterPath(pathname?: string) {
   return !pathname || pathname === "/";
 }
@@ -178,6 +190,9 @@ function getBlockedPosTerminalShellCopy({
       title: "POS terminal recovery unavailable",
       message:
         "This checkout station cannot reopen the register. Sign in again or reconnect this register from POS Settings before using checkout.",
+      action: {
+        label: "Sign in to POS",
+      },
     };
   }
 
@@ -227,6 +242,9 @@ function PosTerminalBlockedShell({
     entryContext,
     recoveryReason,
   });
+  const actionHref = copy.action
+    ? getLoginHref(getBrowserPathWithSearch())
+    : null;
 
   return (
     <section className="flex h-full min-h-0 items-center justify-center bg-background p-6">
@@ -240,6 +258,15 @@ function PosTerminalBlockedShell({
         <p className="mt-4 text-base leading-7 text-muted-foreground">
           {copy.message}
         </p>
+        {actionHref && copy.action ? (
+          <a
+            className={cn(buttonVariants({ variant: "workflow" }), "mt-6")}
+            href={actionHref}
+          >
+            <span>{copy.action.label}</span>
+            <ArrowUpRight aria-hidden="true" className="h-4 w-4" />
+          </a>
+        ) : null}
       </div>
     </section>
   );
@@ -366,7 +393,9 @@ function UserMenu({ userEmail }: { userEmail: string }) {
         <DropdownMenuLabel className="flex flex-col gap-1">
           <span>Appearance</span>
           <span className="text-xs font-normal text-muted-foreground">
-            {resolvedTheme === "dark" ? "Dark mode active" : "Light mode active"}
+            {resolvedTheme === "dark"
+              ? "Dark mode active"
+              : "Light mode active"}
           </span>
         </DropdownMenuLabel>
         <DropdownMenuRadioGroup
