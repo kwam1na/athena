@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Link, useParams, useSearch } from "@tanstack/react-router";
 import { useMutation, usePaginatedQuery, useQuery } from "convex/react";
 import {
@@ -6,6 +13,10 @@ import {
   ClipboardCheck,
   Lock,
   LockOpen,
+  ReceiptText,
+  Scissors,
+  ShoppingCart,
+  type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { FadeIn } from "../common/FadeIn";
@@ -87,6 +98,13 @@ type QueueWorkItem = {
   type: string;
 };
 
+type QueueWorkItemMixEntry = {
+  count: number;
+  label: string;
+  percent: number;
+  type: string;
+};
+
 type QueueApprovalRequest = {
   _id: string;
   metadata?: {
@@ -155,6 +173,12 @@ type QueueApprovalRequest = {
 };
 
 export type OperationsWorkflow = "stock" | "queue" | "approvals";
+export type OpenWorkSortOrder = "latest" | "oldest";
+export type OpenWorkSearchState = {
+  page?: number;
+  sort?: OpenWorkSortOrder;
+};
+export type OpenWorkSearchPatch = Partial<OpenWorkSearchState>;
 
 type QueueApprovalLineItem = NonNullable<
   NonNullable<QueueApprovalRequest["metadata"]>["lineItems"]
@@ -179,8 +203,166 @@ function formatApprovalsHeaderTitle(count: number) {
   return `${count.toLocaleString()} pending ${count === 1 ? "approval" : "approvals"}`;
 }
 
+function sortQueueWorkItems(
+  workItems: QueueWorkItem[],
+  sortOrder: OpenWorkSortOrder,
+) {
+  return [...workItems].sort((left, right) => {
+    const createdAtDelta =
+      sortOrder === "latest"
+        ? right.createdAt - left.createdAt
+        : left.createdAt - right.createdAt;
+
+    if (createdAtDelta !== 0) return createdAtDelta;
+
+    return left._id.localeCompare(right._id);
+  });
+}
+
 function formatQueueWorkItemValue(value: string) {
   return capitalizeWords(value.replace(/_/g, " "));
+}
+
+function preserveOperationalAcronyms(value: string) {
+  return value.replace(/\bSku\b/g, "SKU").replace(/\bPos\b/g, "POS");
+}
+
+function formatWorkItemTitle(title: string) {
+  const prefixes = [
+    "Review inventory for ",
+    "Review pending checkout item: ",
+  ];
+
+  for (const prefix of prefixes) {
+    if (title.startsWith(prefix)) {
+      const subject = title.slice(prefix.length).trim();
+
+      if (subject) {
+        return `${prefix}${preserveOperationalAcronyms(capitalizeWords(subject))}`;
+      }
+    }
+  }
+
+  return preserveOperationalAcronyms(capitalizeWords(title));
+}
+
+function getWorkItemTitleSubject(title: string, prefix: string) {
+  if (!title.startsWith(prefix)) return null;
+
+  const subject = title.slice(prefix.length).trim();
+
+  return subject
+    ? preserveOperationalAcronyms(capitalizeWords(subject))
+    : null;
+}
+
+function getQueueWorkItemTypeLabel(type: string) {
+  if (type === "pos_pending_checkout_item_review") {
+    return "POS pending checkout";
+  }
+
+  if (type === "synced_sale_inventory_review") {
+    return "Synced sale inventory";
+  }
+
+  if (type === "service_case" || type === "service_intake") {
+    return "Service intake";
+  }
+
+  return formatQueueWorkItemValue(type);
+}
+
+function getOpenWorkMixEntries(
+  workItems: QueueWorkItem[],
+): QueueWorkItemMixEntry[] {
+  const countsByType = new Map<string, number>();
+
+  for (const item of workItems) {
+    countsByType.set(item.type, (countsByType.get(item.type) ?? 0) + 1);
+  }
+
+  return Array.from(countsByType.entries())
+    .map(([type, count]) => ({
+      count,
+      label: getQueueWorkItemTypeLabel(type),
+      percent: Math.round((count / workItems.length) * 100),
+      type,
+    }))
+    .sort((left, right) => {
+      if (right.count !== left.count) return right.count - left.count;
+
+      return left.label.localeCompare(right.label);
+    });
+}
+
+function formatOpenWorkMixHeadline(entries: QueueWorkItemMixEntry[]) {
+  if (entries.length === 1) {
+    return `All ${entries[0].label}`;
+  }
+
+  return `${entries.length} work types`;
+}
+
+function formatOpenWorkMixCount(count: number) {
+  return `${count.toLocaleString()} ${count === 1 ? "item" : "items"}`;
+}
+
+function getQueueWorkItemContextPresentation(type: string) {
+  if (type === "pos_pending_checkout_item_review") {
+    return {
+      cardClassName: "bg-surface-raised hover:border-border",
+      Icon: ShoppingCart,
+      iconClassName:
+        "border-action-workflow-border bg-action-workflow-soft text-action-workflow",
+      contextLabelClassName: "text-action-workflow",
+    };
+  }
+
+  if (type === "synced_sale_inventory_review") {
+    return {
+      cardClassName: "bg-surface-raised hover:border-border",
+      Icon: ReceiptText,
+      iconClassName: "border-warning-border bg-warning-soft text-warning",
+      contextLabelClassName: "text-warning",
+    };
+  }
+
+  if (type === "service_case" || type === "service_intake") {
+    return {
+      cardClassName: "bg-surface-raised hover:border-border",
+      Icon: Scissors,
+      iconClassName: "border-success/25 bg-success/10 text-success",
+      contextLabelClassName: "text-success",
+    };
+  }
+
+  return {
+    cardClassName: "bg-surface-raised hover:border-border",
+    Icon: ClipboardCheck,
+    iconClassName:
+      "border-action-workflow-border bg-action-workflow-soft text-action-workflow",
+    contextLabelClassName: "text-action-workflow",
+  };
+}
+
+function WorkItemContextIcon({
+  className,
+  Icon,
+}: {
+  className: string;
+  Icon: LucideIcon;
+}) {
+  return (
+    <span
+      aria-hidden="true"
+      className={cn(
+        "inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border",
+        className,
+      )}
+    >
+      <Icon className="h-3 w-3" strokeWidth={2} />
+    </span>
+  );
 }
 
 function getQueueWorkItemStringMetadata(
@@ -189,6 +371,211 @@ function getQueueWorkItemStringMetadata(
 ): string | undefined {
   const value = item.metadata?.[key];
   return typeof value === "string" && value.trim() ? value : undefined;
+}
+
+function getQueueWorkItemNumberMetadata(
+  item: QueueWorkItem,
+  key: string,
+): number | undefined {
+  const value = item.metadata?.[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function getQueueWorkItemArrayMetadataCount(
+  item: QueueWorkItem,
+  key: string,
+): number | undefined {
+  const value = item.metadata?.[key];
+  return Array.isArray(value) ? value.length : undefined;
+}
+
+function getQueueWorkItemInventoryReviewLineCount(item: QueueWorkItem) {
+  const skippedLineCount = getQueueWorkItemArrayMetadataCount(
+    item,
+    "skippedMutationItems",
+  );
+
+  if (skippedLineCount && skippedLineCount > 0) {
+    return skippedLineCount;
+  }
+
+  const trustedLineCount = getQueueWorkItemArrayMetadataCount(
+    item,
+    "trustedInventoryLines",
+  );
+
+  return trustedLineCount && trustedLineCount > 0 ? trustedLineCount : undefined;
+}
+
+function getQueueWorkItemStockAdjustmentSkuId(item: QueueWorkItem) {
+  if (item.type === "synced_sale_inventory_review") {
+    return getQueueWorkItemStringMetadata(
+      item,
+      "primaryProductSkuId",
+    ) as Id<"productSku"> | undefined;
+  }
+
+  if (item.type === "pos_pending_checkout_item_review") {
+    return getQueueWorkItemStringMetadata(
+      item,
+      "provisionalProductSkuId",
+    ) as Id<"productSku"> | undefined;
+  }
+
+  return undefined;
+}
+
+function formatOptionalQuantity(value: number | undefined) {
+  return typeof value === "number" ? value.toLocaleString() : "Unknown";
+}
+
+function formatOptionalLineCount(value: number | undefined) {
+  if (typeof value !== "number") {
+    return "Not recorded";
+  }
+
+  return `${value.toLocaleString()} ${value === 1 ? "line" : "lines"}`;
+}
+
+function formatOptionalMoney(value: number | undefined) {
+  return typeof value === "number"
+    ? formatStoredAmount(ghsCurrencyFormatter, value)
+    : "Unknown";
+}
+
+function formatReceiptNumber(value: string | undefined) {
+  return value ? `#${value}` : "Unknown";
+}
+
+function getQueueWorkItemTransactionId(item: QueueWorkItem) {
+  const sourceType = getQueueWorkItemStringMetadata(item, "sourceType");
+  const sourceId = getQueueWorkItemStringMetadata(item, "sourceId");
+  const transactionId = getQueueWorkItemStringMetadata(item, "transactionId");
+
+  if (transactionId) return transactionId as Id<"posTransaction">;
+
+  return sourceType === "posTransaction" && sourceId
+    ? (sourceId as Id<"posTransaction">)
+    : undefined;
+}
+
+function ReceiptReferenceLink({
+  orgUrlSlug,
+  receiptNumber,
+  storeUrlSlug,
+  transactionId,
+}: {
+  orgUrlSlug?: string;
+  receiptNumber?: string;
+  storeUrlSlug?: string;
+  transactionId?: Id<"posTransaction">;
+}) {
+  const receiptLabel = formatReceiptNumber(receiptNumber);
+
+  if (!orgUrlSlug || !storeUrlSlug || !transactionId) {
+    return <span>{receiptLabel}</span>;
+  }
+
+  return (
+    <Link
+      aria-label={`Open transaction ${receiptLabel}`}
+      className="inline-flex items-center gap-1 text-foreground underline-offset-4 transition-colors hover:text-primary hover:underline"
+      params={{
+        orgUrlSlug,
+        storeUrlSlug,
+        transactionId,
+      }}
+      search={{ o: getOrigin() }}
+      to="/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId"
+    >
+      {receiptLabel}
+      <ArrowUpRight aria-hidden="true" className="h-3 w-3" />
+    </Link>
+  );
+}
+
+function StockAdjustmentReferenceLink({
+  children,
+  orgUrlSlug,
+  skuId,
+  storeUrlSlug,
+}: {
+  children: ReactNode;
+  orgUrlSlug?: string;
+  skuId?: Id<"productSku">;
+  storeUrlSlug?: string;
+}) {
+  if (!orgUrlSlug || !storeUrlSlug || !skuId) {
+    return <>{children}</>;
+  }
+
+  return (
+    <Link
+      className="inline-flex items-center gap-1 text-foreground underline-offset-4 transition-colors hover:text-primary hover:underline"
+      params={{
+        orgUrlSlug,
+        storeUrlSlug,
+      }}
+      search={{
+        mode: "manual",
+        o: getOrigin(),
+        sku: skuId,
+      }}
+      to="/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments"
+    >
+      {children}
+      <ArrowUpRight aria-hidden="true" className="h-3 w-3" />
+    </Link>
+  );
+}
+
+function OpenWorkMixSummary({ workItems }: { workItems: QueueWorkItem[] }) {
+  const mixEntries = getOpenWorkMixEntries(workItems);
+  const headline = formatOpenWorkMixHeadline(mixEntries);
+
+  return (
+    <section
+      aria-label="Work type breakdown"
+      className="rounded-lg border border-border bg-surface px-layout-md py-layout-md shadow-surface"
+    >
+      <div className="flex items-start justify-between gap-layout-sm">
+        <div className="min-w-0">
+          <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+            Work type
+          </p>
+          <h2 className="mt-1 text-base font-medium leading-6 text-foreground">
+            {headline}
+          </h2>
+        </div>
+        <span className="-mr-1 -mt-1 h-7 w-7 shrink-0" aria-hidden="true" />
+      </div>
+
+      <div className="mt-layout-md space-y-layout-md">
+        {mixEntries.map((entry) => (
+          <div className="space-y-2" key={entry.type}>
+            <div className="flex min-w-0 items-center justify-between gap-layout-md text-sm">
+              <span className="min-w-0 truncate text-foreground">
+                {entry.label}
+              </span>
+              <span className="shrink-0 tabular-nums text-muted-foreground">
+                {formatOpenWorkMixCount(entry.count)}
+              </span>
+            </div>
+            <div
+              aria-label={`${entry.label}: ${formatOpenWorkMixCount(entry.count)}, ${entry.percent}%`}
+              className="h-1.5 overflow-hidden rounded-full bg-action-workflow-soft"
+              role="img"
+            >
+              <div
+                className="h-full rounded-full bg-action-workflow"
+                style={{ width: `${entry.percent}%` }}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
 }
 
 function QueueWorkItemCard({
@@ -200,14 +587,20 @@ function QueueWorkItemCard({
   orgUrlSlug?: string;
   storeUrlSlug?: string;
 }) {
-  const stockAdjustmentSkuId =
+  const stockAdjustmentSkuId = getQueueWorkItemStockAdjustmentSkuId(item);
+  const receiptNumber = getQueueWorkItemStringMetadata(item, "receiptNumber");
+  const receiptTransactionId = getQueueWorkItemTransactionId(item);
+  const title = formatWorkItemTitle(item.title);
+  const pendingCheckoutTitleSubject =
+    item.type === "pos_pending_checkout_item_review"
+      ? getWorkItemTitleSubject(item.title, "Review pending checkout item: ")
+      : null;
+  const syncedSaleTitleSubject =
     item.type === "synced_sale_inventory_review"
-      ? (getQueueWorkItemStringMetadata(
-          item,
-          "primaryProductSkuId",
-        ) as Id<"productSku"> | undefined)
-      : undefined;
-  const collapsedMetadataEntries: OperationReviewMetadataEntry[] = [
+      ? getWorkItemTitleSubject(item.title, "Review inventory for ")
+      : null;
+  const contextPresentation = getQueueWorkItemContextPresentation(item.type);
+  const serviceCollapsedMetadataEntries: OperationReviewMetadataEntry[] = [
     {
       label: "Owner",
       value: item.assignedStaffName ?? "Unassigned",
@@ -225,8 +618,71 @@ function QueueWorkItemCard({
       value: item.dueAt ? getRelativeTime(item.dueAt) : "Not scheduled",
     },
   ];
+  const pendingCheckoutCollapsedMetadataEntries: OperationReviewMetadataEntry[] =
+    [
+      {
+        label: "Item code",
+        value:
+          getQueueWorkItemStringMetadata(item, "lookupCode") ?? "Not captured",
+      },
+      {
+        label: "Quantity sold",
+        value: formatOptionalQuantity(
+          getQueueWorkItemNumberMetadata(item, "quantitySold"),
+        ),
+      },
+      {
+        label: "Total sold",
+        value: formatOptionalQuantity(
+          getQueueWorkItemNumberMetadata(item, "totalQuantitySold"),
+        ),
+      },
+      {
+        label: "Price",
+        value: formatOptionalMoney(getQueueWorkItemNumberMetadata(item, "price")),
+      },
+    ];
+  const syncedSaleCollapsedMetadataEntries: OperationReviewMetadataEntry[] = [
+    {
+      label: "Receipt",
+      value: (
+        <ReceiptReferenceLink
+          orgUrlSlug={orgUrlSlug}
+          receiptNumber={receiptNumber}
+          storeUrlSlug={storeUrlSlug}
+          transactionId={receiptTransactionId}
+        />
+      ),
+    },
+    {
+      label: "Needs action",
+      value: "Check stock count",
+    },
+    {
+      label: "Created",
+      value: getRelativeTime(item.createdAt),
+    },
+  ];
+  const collapsedMetadataEntries =
+    item.type === "pos_pending_checkout_item_review"
+      ? pendingCheckoutCollapsedMetadataEntries
+      : item.type === "synced_sale_inventory_review"
+        ? syncedSaleCollapsedMetadataEntries
+        : serviceCollapsedMetadataEntries;
+  const expandedOnlyMetadataEntries: OperationReviewMetadataEntry[] =
+    item.type === "synced_sale_inventory_review"
+      ? [
+          {
+            label: "Affected sale lines",
+            value: formatOptionalLineCount(
+              getQueueWorkItemInventoryReviewLineCount(item),
+            ),
+          },
+        ]
+      : [];
   const metadataEntries: OperationReviewMetadataEntry[] = [
     ...collapsedMetadataEntries,
+    ...expandedOnlyMetadataEntries,
     {
       label: "Status",
       value: formatQueueWorkItemValue(item.status),
@@ -244,26 +700,27 @@ function QueueWorkItemCard({
   return (
     <OperationReviewItemCard
       actionSlot={
+        stockAdjustmentSkuId && orgUrlSlug && storeUrlSlug ? (
+          <Link
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-foreground underline-offset-4 transition-colors hover:text-primary hover:underline"
+            params={{
+              orgUrlSlug,
+              storeUrlSlug,
+            }}
+            search={{
+              mode: "manual",
+              o: getOrigin(),
+              sku: stockAdjustmentSkuId,
+            }}
+            to="/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments"
+          >
+            Open stock adjustments
+            <ArrowUpRight aria-hidden="true" className="h-3.5 w-3.5" />
+          </Link>
+        ) : null
+      }
+      badgeSlot={
         <>
-          {stockAdjustmentSkuId && orgUrlSlug && storeUrlSlug ? (
-            <Button asChild size="sm" variant="ghost">
-              <Link
-                params={{
-                  orgUrlSlug,
-                  storeUrlSlug,
-                }}
-                search={{
-                  mode: "manual",
-                  o: getOrigin(),
-                  sku: stockAdjustmentSkuId,
-                }}
-                to="/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments"
-              >
-                Open stock adjustments
-                <ArrowUpRight className="h-3.5 w-3.5" />
-              </Link>
-            </Button>
-          ) : null}
           <Badge
             className="border-border bg-surface text-muted-foreground shadow-sm"
             variant="outline"
@@ -271,19 +728,53 @@ function QueueWorkItemCard({
             {formatQueueWorkItemValue(item.status)}
           </Badge>
           <Badge
-            className="border-warning/30 bg-warning/10 text-warning-foreground shadow-sm"
+            className="border-border bg-surface text-muted-foreground shadow-sm"
             variant="outline"
           >
             {formatQueueWorkItemValue(item.priority)}
           </Badge>
         </>
       }
+      className={contextPresentation.cardClassName}
       collapsedMetadataEntries={collapsedMetadataEntries}
+      contextIcon={
+        <WorkItemContextIcon
+          className={contextPresentation.iconClassName}
+          Icon={contextPresentation.Icon}
+        />
+      }
       contextLabel={formatQueueWorkItemValue(item.type)}
+      contextLabelClassName={contextPresentation.contextLabelClassName}
       description={null}
       itemId={item._id}
       metadataEntries={metadataEntries}
-      title={item.title}
+      title={
+        pendingCheckoutTitleSubject ? (
+          <>
+            Review pending checkout item:{" "}
+            <StockAdjustmentReferenceLink
+              orgUrlSlug={orgUrlSlug}
+              skuId={stockAdjustmentSkuId}
+              storeUrlSlug={storeUrlSlug}
+            >
+              {pendingCheckoutTitleSubject}
+            </StockAdjustmentReferenceLink>
+          </>
+        ) : syncedSaleTitleSubject ? (
+          <>
+            Review inventory for{" "}
+            <StockAdjustmentReferenceLink
+              orgUrlSlug={orgUrlSlug}
+              skuId={stockAdjustmentSkuId}
+              storeUrlSlug={storeUrlSlug}
+            >
+              {syncedSaleTitleSubject}
+            </StockAdjustmentReferenceLink>
+          </>
+        ) : (
+          title
+        )
+      }
     />
   );
 }
@@ -647,6 +1138,7 @@ type OperationsQueueViewContentProps = {
   onLockApprovalDecisions?: () => void;
   onLoadMoreInventoryItems?: () => void;
   onRequestApprovalDecisionUnlock?: () => void;
+  onOpenWorkSearchChange?: (patch: OpenWorkSearchPatch) => void;
   onDiscardCycleCountDraft?: () => Promise<NormalizedCommandResult<unknown>>;
   onRefreshCycleCountDraftLineBaseline?: (args: {
     productSkuId: Id<"productSku">;
@@ -666,6 +1158,7 @@ type OperationsQueueViewContentProps = {
   showBackButton?: boolean;
   storeId?: Id<"store">;
   storeUrlSlug?: string;
+  openWorkSearch?: OpenWorkSearchState;
   stockAdjustmentSearch?: StockAdjustmentSearchState;
   workItems: QueueWorkItem[];
 };
@@ -693,6 +1186,7 @@ export function OperationsQueueViewContent({
   onDiscardCycleCountDraft,
   onLockApprovalDecisions,
   onLoadMoreInventoryItems,
+  onOpenWorkSearchChange,
   onRequestApprovalDecisionUnlock,
   onRefreshCycleCountDraftLineBaseline,
   onSaveCycleCountDraftLine,
@@ -703,20 +1197,29 @@ export function OperationsQueueViewContent({
   showBackButton = false,
   storeId,
   storeUrlSlug,
+  openWorkSearch,
   stockAdjustmentSearch,
   workItems,
 }: OperationsQueueViewContentProps) {
-  const [openWorkPage, setOpenWorkPage] = useState(1);
+  const requestedOpenWorkPage = openWorkSearch?.page ?? 1;
+  const requestedOpenWorkSortOrder = openWorkSearch?.sort ?? "latest";
+  const [openWorkPage, setOpenWorkPage] = useState(requestedOpenWorkPage);
+  const [openWorkSortOrder, setOpenWorkSortOrder] =
+    useState<OpenWorkSortOrder>(requestedOpenWorkSortOrder);
   const resolvedWorkflow =
     activeWorkflow ?? getDefaultWorkflow({ approvalRequests, workItems });
+  const sortedWorkItems = useMemo(
+    () => sortQueueWorkItems(workItems, openWorkSortOrder),
+    [openWorkSortOrder, workItems],
+  );
   const openWorkPageCount = Math.max(
     1,
-    Math.ceil(workItems.length / OPEN_WORK_ITEMS_PER_PAGE),
+    Math.ceil(sortedWorkItems.length / OPEN_WORK_ITEMS_PER_PAGE),
   );
   const clampedOpenWorkPage = Math.min(openWorkPage, openWorkPageCount);
   const openWorkPageStart =
     (clampedOpenWorkPage - 1) * OPEN_WORK_ITEMS_PER_PAGE;
-  const visibleWorkItems = workItems.slice(
+  const visibleWorkItems = sortedWorkItems.slice(
     openWorkPageStart,
     openWorkPageStart + OPEN_WORK_ITEMS_PER_PAGE,
   );
@@ -756,14 +1259,52 @@ export function OperationsQueueViewContent({
     isLoadingQueue || hasRenderedApprovalsLoadingHeaderRef.current;
 
   useEffect(() => {
-    setOpenWorkPage(1);
-  }, [resolvedWorkflow, workItems.length]);
+    setOpenWorkPage(requestedOpenWorkPage);
+  }, [requestedOpenWorkPage]);
 
   useEffect(() => {
+    setOpenWorkSortOrder(requestedOpenWorkSortOrder);
+  }, [requestedOpenWorkSortOrder]);
+
+  const handleOpenWorkPageChange = useCallback(
+    (page: number) => {
+      const nextPage = Math.min(Math.max(1, page), openWorkPageCount);
+
+      setOpenWorkPage(nextPage);
+      onOpenWorkSearchChange?.({
+        page: nextPage > 1 ? nextPage : undefined,
+      });
+    },
+    [onOpenWorkSearchChange, openWorkPageCount],
+  );
+
+  const handleOpenWorkSortOrderChange = useCallback(
+    (sortOrder: OpenWorkSortOrder) => {
+      setOpenWorkSortOrder(sortOrder);
+      setOpenWorkPage(1);
+      onOpenWorkSearchChange?.({
+        page: undefined,
+        sort: sortOrder,
+      });
+    },
+    [onOpenWorkSearchChange],
+  );
+
+  useEffect(() => {
+    if (openWorkSearch?.page !== undefined) return;
+
+    setOpenWorkPage(1);
+  }, [openWorkSearch?.page, resolvedWorkflow, workItems.length]);
+
+  useEffect(() => {
+    if (isLoadingQueue) return;
     if (openWorkPage <= openWorkPageCount) return;
 
     setOpenWorkPage(openWorkPageCount);
-  }, [openWorkPage, openWorkPageCount]);
+    onOpenWorkSearchChange?.({
+      page: openWorkPageCount > 1 ? openWorkPageCount : undefined,
+    });
+  }, [isLoadingQueue, onOpenWorkSearchChange, openWorkPage, openWorkPageCount]);
 
   if (isLoadingPermissions) {
     return null;
@@ -838,11 +1379,7 @@ export function OperationsQueueViewContent({
             ) : (
               <PageWorkspaceGrid className="xl:grid-cols-[minmax(15rem,0.32fr)_minmax(0,1fr)]">
                 <PageWorkspaceRail className="gap-layout-md">
-                  <OperationsSummaryMetric
-                    helper="Open work items"
-                    label="Waiting for progress"
-                    value={workItems.length}
-                  />
+                  <OpenWorkMixSummary workItems={workItems} />
                 </PageWorkspaceRail>
 
                 <PageWorkspaceMain
@@ -850,12 +1387,52 @@ export function OperationsQueueViewContent({
                   className="space-y-0 rounded-lg border border-border bg-surface-raised shadow-surface"
                 >
                   <div className="border-b border-border px-layout-md py-layout-md">
-                    <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-                      Work queue
-                    </p>
-                    <h2 className="mt-1 text-lg font-medium text-foreground">
-                      Open items
-                    </h2>
+                    <div className="flex flex-col gap-layout-md sm:flex-row sm:items-end sm:justify-between">
+                      <div>
+                        <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                          Work queue
+                        </p>
+                        <h2 className="mt-1 text-lg font-medium text-foreground">
+                          Open items
+                        </h2>
+                      </div>
+
+                      <div
+                        aria-label="Sort open work"
+                        className="inline-flex w-fit rounded-md border border-border bg-background p-1"
+                        role="group"
+                      >
+                        {[
+                          ["latest", "Latest"],
+                          ["oldest", "Oldest"],
+                        ].map(([sortOrder, label]) => {
+                          const isSelected = openWorkSortOrder === sortOrder;
+
+                          return (
+                            <Button
+                              aria-pressed={isSelected}
+                              className={cn(
+                                "h-7 px-3 text-xs",
+                                isSelected
+                                  ? "bg-action-workflow-soft text-action-workflow hover:bg-action-workflow-soft/75"
+                                  : "text-muted-foreground hover:text-foreground",
+                              )}
+                              key={sortOrder}
+                              onClick={() =>
+                                handleOpenWorkSortOrderChange(
+                                  sortOrder as OpenWorkSortOrder,
+                                )
+                              }
+                              size="sm"
+                              type="button"
+                              variant="ghost"
+                            >
+                              {label}
+                            </Button>
+                          );
+                        })}
+                      </div>
+                    </div>
                   </div>
 
                   <div className="p-layout-md">
@@ -873,7 +1450,7 @@ export function OperationsQueueViewContent({
 
                   {workItems.length > OPEN_WORK_ITEMS_PER_PAGE ? (
                     <ListPagination
-                      onPageChange={setOpenWorkPage}
+                      onPageChange={handleOpenWorkPageChange}
                       page={clampedOpenWorkPage}
                       pageCount={openWorkPageCount}
                       pageSize={OPEN_WORK_ITEMS_PER_PAGE}
@@ -986,9 +1563,9 @@ export function OperationsQueueViewContent({
                         const approvalCopy = getApprovalRequestCopy(
                           request.requestType,
                         );
-                        const requestLabel =
-                          request.workItemTitle ??
-                          formatApprovalRequestType(request.requestType);
+                        const requestLabel = request.workItemTitle
+                          ? formatWorkItemTitle(request.workItemTitle)
+                          : formatApprovalRequestType(request.requestType);
                         const inventoryLineItems =
                           getInventoryApprovalLineItems(request);
                         const paymentCorrectionSummary =
@@ -1917,7 +2494,9 @@ export function OperationsQueueViewContent({
 
 type OperationsQueueViewProps = {
   activeWorkflow?: OperationsWorkflow;
+  onOpenWorkSearchChange?: (patch: OpenWorkSearchPatch) => void;
   onStockAdjustmentSearchChange?: (patch: StockAdjustmentSearchPatch) => void;
+  openWorkSearch?: OpenWorkSearchState;
   stockAdjustmentSearch?: StockAdjustmentSearchState;
 };
 
@@ -1929,7 +2508,9 @@ type ApprovalDecisionUnlock = {
 
 export function OperationsQueueView({
   activeWorkflow,
+  onOpenWorkSearchChange,
   onStockAdjustmentSearchChange,
+  openWorkSearch,
   stockAdjustmentSearch,
 }: OperationsQueueViewProps = {}) {
   const routeParams = useParams({ strict: false }) as
@@ -2470,6 +3051,7 @@ export function OperationsQueueView({
         onDecideApprovalRequest={handleDecideApprovalRequest}
         onLoadMoreInventoryItems={() => inventorySnapshotPage.loadMore(100)}
         onLockApprovalDecisions={() => setApprovalDecisionUnlock(null)}
+        onOpenWorkSearchChange={onOpenWorkSearchChange}
         onRefreshCycleCountDraftLineBaseline={
           handleRefreshCycleCountDraftLineBaseline
         }
@@ -2483,6 +3065,7 @@ export function OperationsQueueView({
         showBackButton={typeof search.o === "string" && search.o.length > 0}
         storeId={activeStore._id}
         storeUrlSlug={routeParams?.storeUrlSlug}
+        openWorkSearch={openWorkSearch}
         stockAdjustmentSearch={stockAdjustmentSearch}
         workItems={queue?.workItems ?? []}
       />

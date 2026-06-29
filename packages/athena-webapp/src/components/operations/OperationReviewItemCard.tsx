@@ -12,21 +12,27 @@ export type OperationReviewMetadataEntry = {
 type OperationReviewItemCardProps = {
   actionSlot?: ReactNode;
   badgeSlot?: ReactNode;
+  className?: string;
   collapsedMetadataEntries?: OperationReviewMetadataEntry[];
+  contextIcon?: ReactNode;
   contextLabel: string;
+  contextLabelClassName?: string;
   description?: string | null;
   itemId: string;
   metadataEntries?: OperationReviewMetadataEntry[];
   selectionSlot?: ReactNode;
   showCollapsedDescription?: boolean;
-  title: string;
+  title: ReactNode;
 };
 
 export function OperationReviewItemCard({
   actionSlot,
   badgeSlot,
+  className,
   collapsedMetadataEntries,
+  contextIcon,
   contextLabel,
+  contextLabelClassName,
   description,
   itemId,
   metadataEntries = [],
@@ -42,51 +48,64 @@ export function OperationReviewItemCard({
     /[^a-zA-Z0-9_-]/g,
     "-",
   )}`;
+  const detailsToggle = hasMetadata ? (
+    <Button
+      aria-controls={detailsId}
+      aria-expanded={isExpanded}
+      onClick={() => setIsExpanded((current) => !current)}
+      size="sm"
+      type="button"
+      variant="utility"
+    >
+      <ChevronDown
+        aria-hidden="true"
+        className={cn("transition-transform", isExpanded && "rotate-180")}
+      />
+      {isExpanded ? "Hide details" : "Show details"}
+    </Button>
+  ) : null;
 
   return (
-    <article className="rounded-lg border border-border/80 bg-surface-raised p-layout-md shadow-surface transition-[border-color,box-shadow] hover:border-border">
+    <article
+      className={cn(
+        "relative overflow-hidden rounded-lg border border-border/80 bg-surface-raised p-layout-md shadow-surface transition-[border-color,box-shadow] duration-standard ease-standard hover:border-border",
+        className,
+      )}
+    >
       <div className="flex flex-col gap-layout-md md:flex-row md:items-start md:justify-between">
         <div className="flex min-w-0 gap-layout-sm">
           {selectionSlot}
-          <div className="min-w-0 space-y-layout-xs">
+          <div className="min-w-0 flex-1 space-y-layout-xs">
             <div className="flex flex-wrap items-center gap-2">
-              <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+              {contextIcon}
+              <p
+                className={cn(
+                  "text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground",
+                  contextLabelClassName,
+                )}
+              >
                 {contextLabel}
               </p>
             </div>
             <div className="flex flex-wrap items-baseline gap-x-layout-md gap-y-layout-xs">
-              <p className="font-medium text-foreground">{title}</p>
-              {badgeSlot}
+              <p className="font-medium leading-6 text-foreground">{title}</p>
               {description && showCollapsedDescription ? (
                 <p className="text-sm leading-6 text-muted-foreground">
                   {description}
                 </p>
               ) : null}
             </div>
+            {actionSlot ? (
+              <div className="flex flex-wrap items-center gap-2 pt-layout-xs">
+                {actionSlot}
+              </div>
+            ) : null}
           </div>
         </div>
 
         <div className="flex shrink-0 flex-wrap items-center gap-2 md:justify-end">
-          {actionSlot}
-          {hasMetadata ? (
-            <Button
-              aria-controls={detailsId}
-              aria-expanded={isExpanded}
-              onClick={() => setIsExpanded((current) => !current)}
-              size="sm"
-              type="button"
-              variant="utility"
-            >
-              <ChevronDown
-                aria-hidden="true"
-                className={cn(
-                  "transition-transform",
-                  isExpanded && "rotate-180",
-                )}
-              />
-              {isExpanded ? "Hide details" : "Show details"}
-            </Button>
-          ) : null}
+          {badgeSlot}
+          {detailsToggle}
         </div>
       </div>
 
