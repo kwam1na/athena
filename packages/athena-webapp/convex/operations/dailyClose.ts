@@ -26,6 +26,10 @@ import {
   getLatestDailyOperationsAutomationStatusWithCtx,
   type DailyOperationsAutomationStatus,
 } from "./dailyOperationsAutomation";
+import {
+  requireAuthenticatedAthenaUserWithCtx,
+  requireOrganizationMemberRoleWithCtx,
+} from "../lib/athenaUserAuth";
 import { buildPaymentTotals, transactionCashDelta } from "./paymentTotals";
 import type { AutomationDecisionEvidence } from "../automation/runLedger";
 
@@ -2940,6 +2944,12 @@ async function validateCarryForwardWorkItemIds(
   };
 }
 
+function uniqueOperationalWorkItemIds(
+  workItemIds: Id<"operationalWorkItem">[],
+) {
+  return Array.from(new Set(workItemIds));
+}
+
 function carryForwardWorkItemIdFromItem(
   item: DailyCloseItem,
 ): Id<"operationalWorkItem"> | null {
@@ -3237,26 +3247,11 @@ export async function completeDailyCloseWithCtx(
     });
   }
 
-  const reviewedItemKeys = new Set(args.reviewedItemKeys ?? []);
-  const unreviewedItemKeys = snapshot.reviewItems
-    .map((item) => item.key)
-    .filter((key) => !reviewedItemKeys.has(key));
-
-  if (unreviewedItemKeys.length > 0) {
-    return userError({
-      code: "precondition_failed",
-      message:
-        "EOD Review items must be acknowledged before completion.",
-      metadata: {
-        reviewItemCount: snapshot.reviewItems.length,
-        unreviewedItemKeys,
-      },
-    });
-  }
-
   const linkedWorkItemResult = await validateCarryForwardWorkItemIds(ctx, {
     storeId: args.storeId,
-    workItemIds: args.carryForwardWorkItemIds ?? [],
+    workItemIds: uniqueOperationalWorkItemIds(
+      args.carryForwardWorkItemIds ?? [],
+    ),
   });
 
   if (!linkedWorkItemResult.ok) {
@@ -3309,13 +3304,21 @@ export async function completeDailyCloseWithCtx(
 
   const now = Date.now();
   const completedByStaffProfileId = approvalProof.data.approvedByStaffProfileId;
-  const carryForwardWorkItems = [
-    ...linkedWorkItemResult.workItems,
-    ...createdWorkItemResult.workItems,
-  ];
-  const carryForwardWorkItemIds = carryForwardWorkItems.map(
-    (workItem) => workItem._id,
+  const reviewedItemKeys = snapshot.reviewItems.map((item) => item.key);
+  const carryForwardWorkItemIds = uniqueOperationalWorkItemIds(
+    [
+      ...(snapshot.existingClose?.carryForwardWorkItemIds ?? []),
+      ...linkedWorkItemResult.workItems.map((workItem) => workItem._id),
+      ...createdWorkItemResult.workItems.map((workItem) => workItem._id),
+    ] as Id<"operationalWorkItem">[],
   );
+  const carryForwardWorkItems = (
+    await Promise.all(
+      carryForwardWorkItemIds.map((workItemId) =>
+        ctx.db.get("operationalWorkItem", workItemId),
+      ),
+    )
+  ).filter(Boolean) as Array<Doc<"operationalWorkItem">>;
   const notes = trimOptional(args.notes);
   const readiness = {
     ...snapshot.readiness,
@@ -3344,12 +3347,12 @@ export async function completeDailyCloseWithCtx(
       actorType: "human",
       notes,
       readiness,
-      reviewedItemKeys: args.reviewedItemKeys,
+      reviewedItemKeys,
       snapshot,
       summary,
     }),
     carryForwardWorkItemIds,
-    reviewedItemKeys: args.reviewedItemKeys,
+    reviewedItemKeys,
     notes,
     updatedAt: now,
     completedAt: now,
@@ -4062,11 +4065,25 @@ export const getDailyCloseSnapshot = query({
     startAt: v.optional(v.number()),
     storeId: v.id("store"),
   },
-  handler: (ctx, args) =>
-    buildDailyCloseSnapshotWithCtx(ctx, {
+  handler: async (ctx, args) => {
+    const store = await ctx.db.get("store", args.storeId);
+    if (!store) {
+      throw new Error("Store not found.");
+    }
+
+    const athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+    const membership = await requireOrganizationMemberRoleWithCtx(ctx, {
+      allowedRoles: ["full_admin", "pos_only"],
+      failureMessage: "You cannot view EOD Review for this store.",
+      organizationId: store.organizationId,
+      userId: athenaUser._id,
+    });
+
+    return buildDailyCloseSnapshotWithCtx(ctx, {
       ...args,
-      includeManagerReviewEvidence: false,
-    }),
+      includeManagerReviewEvidence: membership.role === "full_admin",
+    });
+  },
 });
 
 export const completeDailyClose = mutation({

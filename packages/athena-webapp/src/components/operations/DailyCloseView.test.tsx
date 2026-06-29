@@ -1427,6 +1427,11 @@ describe("DailyCloseViewContent", () => {
           description: "Check missing receipt during opening.",
           id: "carry-1",
           statusLabel: "Carry forward",
+          subject: {
+            id: "carry-1",
+            label: "Receipt follow-up",
+            type: "operational_work_item",
+          },
           title: "Receipt follow-up",
         },
       ],
@@ -1449,7 +1454,50 @@ describe("DailyCloseViewContent", () => {
         endAt: readySnapshot.endAt,
         notes: "",
         operatingDate: "2026-05-07",
-        reviewedItemKeys: ["review-1"],
+        reviewedItemKeys: [],
+        startAt: readySnapshot.startAt,
+      });
+    });
+  });
+
+  it("does not send redacted carry-forward placeholders as completion ids", async () => {
+    const user = userEvent.setup();
+    const onComplete = vi.fn(async () => ok({ closeId: "close-1" }));
+    const snapshot: DailyCloseSnapshot = {
+      ...readySnapshot,
+      carryForwardItems: [
+        {
+          description: "Check missing receipt during opening.",
+          id: "carry-redacted",
+          statusLabel: "Carry forward",
+          subject: {
+            id: "redacted",
+            label: "Receipt follow-up",
+            type: "operational_work_item",
+          },
+          title: "Receipt follow-up",
+        },
+      ],
+      status: "carry_forward",
+      summary: {
+        ...baseSummary,
+        carryForwardCount: 1,
+      },
+    };
+
+    renderContent(snapshot, { onComplete });
+
+    await user.click(
+      screen.getByRole("button", { name: /complete EOD review/i }),
+    );
+
+    await waitFor(() => {
+      expect(onComplete).toHaveBeenCalledWith({
+        carryForwardWorkItemIds: [],
+        endAt: readySnapshot.endAt,
+        notes: "",
+        operatingDate: "2026-05-07",
+        reviewedItemKeys: [],
         startAt: readySnapshot.startAt,
       });
     });
