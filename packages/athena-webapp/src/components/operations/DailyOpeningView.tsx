@@ -53,6 +53,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 import { OperationReviewWorkspace } from "./OperationReviewWorkspace";
 import { OperationReviewItemCard } from "./OperationReviewItemCard";
 import { OperationsSummaryMetric } from "./OperationsSummaryMetric";
+import {
+  StaffAuthenticationDialog,
+  type StaffAuthenticationResult,
+} from "../staff-auth/StaffAuthenticationDialog";
 
 type DailyOpeningApi = {
   getDailyOpeningSnapshot?: unknown;
@@ -170,9 +174,13 @@ type DailyOpeningViewContentProps = {
   isLoadingAccess: boolean;
   isLoadingSnapshot: boolean;
   isStarting: boolean;
-  onStartDay: (args: StartDayArgs) => Promise<NormalizedCommandResult<unknown>>;
+  onAuthenticateStaff?: (args: {
+    pinHash: string;
+    username: string;
+  }) => Promise<NormalizedCommandResult<StaffAuthenticationResult>>;
   onAuthenticateForApproval?: CommandApprovalDialogProps["onAuthenticateForApproval"];
   onOperatingDateChange?: (date: Date) => void;
+  onStartDay: (args: StartDayArgs) => Promise<NormalizedCommandResult<unknown>>;
   orgUrlSlug: string;
   snapshot?: DailyOpeningSnapshot;
   storeId?: Id<"store">;
@@ -1592,6 +1600,7 @@ export function DailyOpeningViewContent({
   isLoadingAccess,
   isLoadingSnapshot,
   isStarting,
+  onAuthenticateStaff,
   onOperatingDateChange,
   onStartDay,
   orgUrlSlug,
@@ -1605,6 +1614,9 @@ export function DailyOpeningViewContent({
     kind: "error" | "success";
     message: string;
   } | null>(null);
+  const [pendingStaffStartArgs, setPendingStaffStartArgs] =
+    useState<StartDayArgs | null>(null);
+  const [isStaffAuthOpen, setIsStaffAuthOpen] = useState(false);
   const navigate = useNavigate();
   const search = useSearch({ strict: false }) as {
     page?: unknown;
@@ -1672,34 +1684,13 @@ export function DailyOpeningViewContent({
   const acknowledgedRequiredCount = requiredAcknowledgementKeys.filter((key) =>
     acknowledgedKeys.includes(key),
   ).length;
-  const submitStartDay = async (approval?: {
-    approvalProofId: Id<"approvalProof">;
-    approvedByStaffProfileId: Id<"staffProfile">;
-  }) => {
-    if (!snapshot || isStarted) return;
 
-    const acknowledgementComplete =
-      acknowledgedRequiredCount >= requiredAcknowledgementKeys.length;
-
-    if (!acknowledgementComplete) return;
-
-    setCommandMessage(null);
-
-    const result = await onStartDay({
-      acknowledgedItemKeys: requiredAcknowledgementKeys,
-      ...(approval
-        ? {
-            actorStaffProfileId: approval.approvedByStaffProfileId,
-            approvalProofId: approval.approvalProofId,
-          }
-        : {}),
-      endAt: snapshot.endAt,
-      notes,
-      operatingDate: snapshot.operatingDate,
-      startAt: snapshot.startAt,
-    });
+  const startDayWithArgs = async (args: StartDayArgs) => {
+    const result = await onStartDay(args);
 
     if (result.kind === "ok") {
+      setPendingStaffStartArgs(null);
+      setIsStaffAuthOpen(false);
       setCommandMessage({
         kind: "success",
         message: "Store day started.",
@@ -1713,8 +1704,58 @@ export function DailyOpeningViewContent({
     });
   };
 
+  const submitStartDay = async (approval?: {
+    approvalProofId: Id<"approvalProof">;
+    approvedByStaffProfileId: Id<"staffProfile">;
+  }) => {
+    if (!snapshot || isStarted) return;
+
+    const acknowledgementComplete =
+      acknowledgedRequiredCount >= requiredAcknowledgementKeys.length;
+
+    if (!acknowledgementComplete) return;
+
+    setCommandMessage(null);
+
+    const startArgs = {
+      acknowledgedItemKeys: requiredAcknowledgementKeys,
+      ...(approval
+        ? {
+            actorStaffProfileId: approval.approvedByStaffProfileId,
+            approvalProofId: approval.approvalProofId,
+          }
+        : {}),
+      endAt: snapshot.endAt,
+      notes,
+      operatingDate: snapshot.operatingDate,
+      startAt: snapshot.startAt,
+    };
+
+    if (approval || !onAuthenticateStaff) {
+      await startDayWithArgs(startArgs);
+      return;
+    }
+
+    setPendingStaffStartArgs(startArgs);
+    setIsStaffAuthOpen(true);
+  };
+
   const handleStartDay = () => {
     void submitStartDay();
+  };
+
+  const handleStaffAuthenticatedForStart = (
+    result: StaffAuthenticationResult,
+  ) => {
+    if (!pendingStaffStartArgs) {
+      setIsStaffAuthOpen(false);
+      return;
+    }
+
+    void startDayWithArgs({
+      ...pendingStaffStartArgs,
+      actorStaffProfileId: result.staffProfileId,
+    });
   };
 
   const handleBucketValueChange = (value: BucketStatus) => {
@@ -1737,7 +1778,8 @@ export function DailyOpeningViewContent({
   };
 
   return (
-    <OperationReviewWorkspace
+    <>
+      <OperationReviewWorkspace
       actions={
         snapshot ? (
           <OperatingDatePicker
@@ -1849,7 +1891,25 @@ export function DailyOpeningViewContent({
         <DailyOpeningStatusTitle status={status} title={displayCopy.title} />
       }
       title="Opening Handoff"
-    />
+      />
+      {onAuthenticateStaff ? (
+        <StaffAuthenticationDialog
+          copy={{
+            description: "Start the store day with your staff sign-in.",
+            submitLabel: "Start day",
+            title: "Confirm staff credentials",
+          }}
+          hideAlternateAction
+          onAuthenticate={(args) => onAuthenticateStaff(args)}
+          onAuthenticated={handleStaffAuthenticatedForStart}
+          onDismiss={() => {
+            setIsStaffAuthOpen(false);
+            setPendingStaffStartArgs(null);
+          }}
+          open={isStaffAuthOpen}
+        />
+      ) : null}
+    </>
   );
 }
 
@@ -1914,9 +1974,36 @@ function DailyOpeningConnectedView({
       : "skip",
   ) as DailyOpeningSnapshot | undefined;
   const startStoreDayMutation = useExpectedDailyOpeningMutation(startStoreDay);
+  const authenticateStaffCredential = useMutation(
+    api.operations.staffCredentials.authenticateStaffCredential,
+  );
   const authenticateStaffCredentialForApproval = useMutation(
     api.operations.staffCredentials.authenticateStaffCredentialForApproval,
   );
+
+  async function handleAuthenticateStaff(args: {
+    pinHash: string;
+    username: string;
+  }): Promise<NormalizedCommandResult<StaffAuthenticationResult>> {
+    if (!activeStore?._id) {
+      return {
+        kind: "user_error",
+        error: {
+          code: "authentication_failed",
+          message: "Select a store before confirming staff credentials.",
+        },
+      };
+    }
+
+    return runCommand(() =>
+      authenticateStaffCredential({
+        allowedRoles: ["cashier", "manager"],
+        pinHash: args.pinHash,
+        storeId: activeStore._id,
+        username: args.username,
+      }) as Promise<CommandResult<StaffAuthenticationResult>>,
+    );
+  }
 
   async function handleAuthenticateForApproval(args: {
     actionKey: string;
@@ -2009,6 +2096,7 @@ function DailyOpeningConnectedView({
       isLoadingAccess={isLoadingAccess}
       isLoadingSnapshot={snapshot === undefined}
       isStarting={isStarting}
+      onAuthenticateStaff={handleAuthenticateStaff}
       onAuthenticateForApproval={handleAuthenticateForApproval}
       onOperatingDateChange={handleOperatingDateChange}
       onStartDay={handleStartDay}

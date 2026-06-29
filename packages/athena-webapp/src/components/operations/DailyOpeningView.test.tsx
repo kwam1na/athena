@@ -146,6 +146,55 @@ vi.mock("./CommandApprovalDialog", () => ({
     ) : null,
 }));
 
+vi.mock("../staff-auth/StaffAuthenticationDialog", () => ({
+  StaffAuthenticationDialog: ({
+    onAuthenticate,
+    onAuthenticated,
+    onDismiss,
+    open,
+  }: {
+    onAuthenticate: (args: {
+      pinHash: string;
+      username: string;
+    }) => Promise<{
+      data?: {
+        staffProfileId: Id<"staffProfile">;
+        staffProfile: { fullName?: string | null };
+      };
+      kind: string;
+    }>;
+    onAuthenticated: (result: {
+      staffProfileId: Id<"staffProfile">;
+      staffProfile: { fullName?: string | null };
+    }) => void;
+    onDismiss: () => void;
+    open: boolean;
+  }) =>
+    open ? (
+      <div aria-label="Confirm staff credentials" role="dialog">
+        <p>Confirm staff credentials</p>
+        <button
+          onClick={async () => {
+            const result = await onAuthenticate({
+              pinHash: "pin-hash",
+              username: "cashier",
+            });
+
+            if (result.kind === "ok" && result.data) {
+              onAuthenticated(result.data);
+            }
+          }}
+          type="button"
+        >
+          Confirm staff
+        </button>
+        <button onClick={onDismiss} type="button">
+          Cancel
+        </button>
+      </div>
+    ) : null,
+}));
+
 vi.mock("~/convex/_generated/api", () => ({
   api: {
     operations: {
@@ -655,6 +704,46 @@ describe("DailyOpeningViewContent", () => {
         "Drawer closed. Open the drawer before starting the store day.",
       ),
     ).toBeInTheDocument();
+  });
+
+  it("collects staff credentials before starting Opening Handoff", async () => {
+    const user = userEvent.setup();
+    const onAuthenticateStaff = vi.fn(async () =>
+      ok({
+        staffProfile: { fullName: "Ama Mensah" },
+        staffProfileId: "staff-1" as Id<"staffProfile">,
+      }),
+    );
+    const onStartDay = vi.fn(async () => ok({ openingId: "opening-1" }));
+
+    renderContent(readySnapshot, {
+      onAuthenticateStaff,
+      onStartDay,
+    });
+
+    await user.click(screen.getByRole("button", { name: /start day/i }));
+
+    expect(onStartDay).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole("dialog", { name: "Confirm staff credentials" }),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /confirm staff/i }));
+
+    await waitFor(() => {
+      expect(onAuthenticateStaff).toHaveBeenCalledWith({
+        pinHash: "pin-hash",
+        username: "cashier",
+      });
+      expect(onStartDay).toHaveBeenCalledWith({
+        acknowledgedItemKeys: [],
+        actorStaffProfileId: "staff-1",
+        endAt: readySnapshot.endAt,
+        notes: "",
+        operatingDate: "2026-05-08",
+        startAt: readySnapshot.startAt,
+      });
+    });
   });
 
   it("starts the store day directly even when manager approval support is available", async () => {
