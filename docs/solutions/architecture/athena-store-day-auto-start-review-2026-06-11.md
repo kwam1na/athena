@@ -42,6 +42,10 @@ Use a store-scoped automation policy for `daily_operations/opening.auto_start`:
   prevents the cron from recording a run before the configured local time.
 - `openingBlockerHandling` controls whether blockers are skipped or routed to
   manager review.
+- Canonical store hours are customer-facing windows. When a store schedule
+  exists, Opening auto-start should still use `openingLocalStartMinutes` as the
+  operational trigger, even when that trigger is before or after customer-facing
+  opening.
 
 When the policy allows manager review, the automation path may start Opening
 with blockers, review items, and carry-forward items. Those items are copied
@@ -60,6 +64,9 @@ that bypass and continues to require blocker resolution and acknowledgement.
   rule.
 - Avoid recording skipped cron runs before the configured local start time; early
   checks are scheduler noise, not business decisions.
+- Do not treat customer-facing store hours as a hard lower bound for Opening
+  auto-start. POS settings intentionally stores an offset from those hours so
+  the store day can start before customers arrive.
 
 ## Prevention
 

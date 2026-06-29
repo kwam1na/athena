@@ -1259,17 +1259,116 @@ describe("daily operations automation adapter", () => {
     expect(inserts.map((insert) => insert.table)).toEqual(["automationRun"]);
   });
 
-  it("derives configured EOD auto-complete operating dates from policy local timezone", async () => {
+  it("runs configured EOD auto-complete before customer-facing close when the policy offset is earlier", async () => {
     const { db, inserts } = createDb({
       automationPolicy: [
-        policy("eod.auto_complete", "dry_run", {
+        policy("eod.auto_complete", "enabled", {
           eodCleanDayAutoCompleteEnabled: true,
-          eodLocalCompletionWindowMinutes: 21 * 60,
-          operatingTimezoneOffsetMinutes: 240,
+          eodLocalCompletionWindowMinutes: 16 * 60,
+          operatingTimezoneOffsetMinutes: 0,
+        }),
+      ],
+      posTransaction: [completedTransaction()],
+      registerSession: [
+        closedRegisterSession({
+          closedAt: Date.UTC(2026, 5, 8, 15),
+        }),
+      ],
+      store: [store],
+      storeSchedule: [
+        storeSchedule({
+          timezone: "UTC",
+          weeklyWindows: [
+            {
+              dayOfWeek: 1,
+              endMinute: 19 * 60,
+              startMinute: 9 * 60,
+            },
+          ],
+        }),
+      ],
+    });
+
+    const result = await runConfiguredDailyOperationsAutomationWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        now: Date.UTC(2026, 5, 8, 16),
+      },
+    );
+
+    expect(result.eodAutoCompleteResults).toHaveLength(1);
+    expect(inserts).toContainEqual(
+      expect.objectContaining({
+        table: "automationRun",
+        value: expect.objectContaining({
+          action: "eod.auto_complete",
+          decisionEvidence: expect.objectContaining({
+            observed: expect.objectContaining({
+              scheduleEvidenceSource: "canonical_schedule",
+              storeScheduleId: "storeSchedule-1",
+            }),
+          }),
+          operatingDate: "2026-06-08",
+          outcome: "applied",
+        }),
+      }),
+    );
+  });
+
+  it("waits after customer-facing close when the EOD policy offset is later", async () => {
+    const { db, inserts } = createDb({
+      automationPolicy: [
+        policy("eod.auto_complete", "enabled", {
+          eodCleanDayAutoCompleteEnabled: true,
+          eodLocalCompletionWindowMinutes: 18 * 60,
+          operatingTimezoneOffsetMinutes: 0,
         }),
       ],
       posTransaction: [completedTransaction()],
       registerSession: [closedRegisterSession()],
+      store: [store],
+      storeSchedule: [
+        storeSchedule({
+          timezone: "UTC",
+          weeklyWindows: [
+            {
+              dayOfWeek: 1,
+              endMinute: 17 * 60,
+              startMinute: 9 * 60,
+            },
+          ],
+        }),
+      ],
+    });
+
+    const result = await runConfiguredDailyOperationsAutomationWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        now: Date.UTC(2026, 5, 8, 17, 30),
+      },
+    );
+
+    expect(result.eodAutoCompleteResults).toHaveLength(0);
+    expect(inserts.filter((insert) => insert.table === "automationRun")).toEqual(
+      [],
+    );
+  });
+
+  it("derives configured EOD auto-complete operating dates from policy local timezone", async () => {
+    const { db, inserts } = createDb({
+      automationPolicy: [
+        policy("eod.auto_complete", "enabled", {
+          eodCleanDayAutoCompleteEnabled: true,
+          eodLocalCompletionWindowMinutes: 16 * 60,
+          operatingTimezoneOffsetMinutes: 0,
+        }),
+      ],
+      posTransaction: [completedTransaction()],
+      registerSession: [
+        closedRegisterSession({
+          closedAt: Date.UTC(2026, 5, 8, 15),
+        }),
+      ],
       store: [store],
     });
 
@@ -1287,48 +1386,7 @@ describe("daily operations automation adapter", () => {
         value: expect.objectContaining({
           action: "eod.auto_complete",
           operatingDate: "2026-06-08",
-          outcome: "dry_run",
-        }),
-      }),
-    );
-  });
-
-  it("uses stored canonical schedules for configured EOD auto-complete timing", async () => {
-    const { db, inserts } = createDb({
-      automationPolicy: [
-        policy("eod.auto_complete", "dry_run", {
-          eodCleanDayAutoCompleteEnabled: true,
-          eodLocalCompletionWindowMinutes: 21 * 60,
-          operatingTimezoneOffsetMinutes: 240,
-        }),
-      ],
-      posTransaction: [completedTransaction()],
-      registerSession: [closedRegisterSession()],
-      store: [store],
-      storeSchedule: [storeSchedule()],
-    });
-
-    const result = await runConfiguredDailyOperationsAutomationWithCtx(
-      { db } as unknown as MutationCtx,
-      {
-        now: Date.UTC(2026, 5, 8, 18),
-      },
-    );
-
-    expect(result.eodAutoCompleteResults).toHaveLength(1);
-    expect(inserts).toContainEqual(
-      expect.objectContaining({
-        table: "automationRun",
-        value: expect.objectContaining({
-          action: "eod.auto_complete",
-          decisionEvidence: expect.objectContaining({
-            observed: expect.objectContaining({
-              scheduleEvidenceSource: "canonical_schedule",
-              storeScheduleId: "storeSchedule-1",
-            }),
-          }),
-          operatingDate: "2026-06-08",
-          outcome: "dry_run",
+          outcome: "applied",
         }),
       }),
     );
@@ -1822,6 +1880,89 @@ describe("daily operations automation adapter", () => {
           outcome: "applied",
         }),
       }),
+    );
+  });
+
+  it("runs configured Opening cron before customer-facing hours when the policy offset is earlier", async () => {
+    const { db, inserts } = createDb({
+      automationPolicy: [
+        policy("opening.auto_start", "enabled", {
+          openingBlockerHandling: "manager_review",
+          openingLocalStartMinutes: 8 * 60,
+          operatingTimezoneOffsetMinutes: 0,
+        }),
+      ],
+      dailyClose: [completedDailyClose()],
+      store: [store],
+      storeSchedule: [
+        storeSchedule({
+          timezone: "UTC",
+          weeklyWindows: [
+            {
+              dayOfWeek: 1,
+              endMinute: 19 * 60,
+              startMinute: 9 * 60,
+            },
+          ],
+        }),
+      ],
+    });
+
+    const result = await runConfiguredDailyOperationsAutomationWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        now: Date.UTC(2026, 5, 8, 8),
+      },
+    );
+
+    expect(result.openingResults).toHaveLength(1);
+    expect(inserts).toContainEqual(
+      expect.objectContaining({
+        table: "automationRun",
+        value: expect.objectContaining({
+          action: "opening.auto_start",
+          operatingDate: "2026-06-08",
+          outcome: "applied",
+        }),
+      }),
+    );
+  });
+
+  it("waits during customer-facing hours when the policy offset is later than opening", async () => {
+    const { db, inserts } = createDb({
+      automationPolicy: [
+        policy("opening.auto_start", "enabled", {
+          openingBlockerHandling: "manager_review",
+          openingLocalStartMinutes: 10 * 60,
+          operatingTimezoneOffsetMinutes: 0,
+        }),
+      ],
+      dailyClose: [completedDailyClose()],
+      store: [store],
+      storeSchedule: [
+        storeSchedule({
+          timezone: "UTC",
+          weeklyWindows: [
+            {
+              dayOfWeek: 1,
+              endMinute: 19 * 60,
+              startMinute: 9 * 60,
+            },
+          ],
+        }),
+      ],
+    });
+
+    const result = await runConfiguredDailyOperationsAutomationWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        now: Date.UTC(2026, 5, 8, 9),
+      },
+    );
+
+    expect(result.openingResults).toEqual([]);
+    expect(inserts.filter((insert) => insert.table === "automationRun")).toEqual(
+      [],
     );
   });
 

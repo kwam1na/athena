@@ -41,6 +41,7 @@ const EOD_AUTO_COMPLETE_LOW_RISK_REVIEW_CATEGORIES = new Set([
   "cash_variance",
   "voided_sale",
 ]);
+const MINUTE_MS = 60 * 1000;
 
 export const dailyOperationsOpeningAutoStartAction = defineAutomationAction({
   action: OPENING_AUTO_START_ACTION,
@@ -109,7 +110,9 @@ export type DailyOperationsAutomationStoreDayContext = {
   openedAt?: number;
   closedAt?: number;
   openingEvaluationAt?: number;
+  openingWindowStartMinutes?: number;
   eodEvaluationAt?: number;
+  eodWindowEndMinutes?: number;
 };
 
 type DailyOperationsAutomationTimingEvidence = {
@@ -856,6 +859,152 @@ function openingPolicyCronWindow(args: {
   };
 }
 
+function openingLocalStartMinutesForPolicy(policy: Doc<"automationPolicy">) {
+  return typeof policy.openingLocalStartMinutes === "number" &&
+    Number.isInteger(policy.openingLocalStartMinutes)
+    ? policy.openingLocalStartMinutes
+    : DEFAULT_OPENING_LOCAL_START_MINUTES;
+}
+
+function normalizedPolicyOffsetFromScheduleStart(args: {
+  policyLocalStartMinutes: number;
+  scheduleStartMinutes: number;
+}) {
+  const rawOffset = args.policyLocalStartMinutes - args.scheduleStartMinutes;
+
+  return rawOffset > 12 * 60
+    ? rawOffset - 24 * 60
+    : rawOffset < -12 * 60
+      ? rawOffset + 24 * 60
+      : rawOffset;
+}
+
+function eodLocalCompletionWindowMinutesForPolicy(
+  policy: Doc<"automationPolicy">,
+) {
+  return typeof policy.eodLocalCompletionWindowMinutes === "number" &&
+    Number.isInteger(policy.eodLocalCompletionWindowMinutes)
+    ? policy.eodLocalCompletionWindowMinutes
+    : DEFAULT_EOD_LOCAL_COMPLETION_WINDOW_MINUTES;
+}
+
+function openingPolicyStartAtForStoreDay(args: {
+  policy: Doc<"automationPolicy">;
+  storeDayContext: DailyOperationsAutomationStoreDayContext;
+}) {
+  if (
+    typeof args.storeDayContext.openedAt !== "number" ||
+    typeof args.storeDayContext.openingWindowStartMinutes !== "number"
+  ) {
+    return null;
+  }
+
+  const offsetMinutes = normalizedPolicyOffsetFromScheduleStart({
+    policyLocalStartMinutes: openingLocalStartMinutesForPolicy(args.policy),
+    scheduleStartMinutes: args.storeDayContext.openingWindowStartMinutes,
+  });
+
+  return args.storeDayContext.openedAt + offsetMinutes * MINUTE_MS;
+}
+
+function eodPolicyCompletionAtForStoreDay(args: {
+  policy: Doc<"automationPolicy">;
+  storeDayContext: DailyOperationsAutomationStoreDayContext;
+}) {
+  if (
+    typeof args.storeDayContext.closedAt !== "number" ||
+    typeof args.storeDayContext.eodWindowEndMinutes !== "number"
+  ) {
+    return null;
+  }
+
+  const offsetMinutes = normalizedPolicyOffsetFromScheduleStart({
+    policyLocalStartMinutes: eodLocalCompletionWindowMinutesForPolicy(args.policy),
+    scheduleStartMinutes: args.storeDayContext.eodWindowEndMinutes,
+  });
+
+  return args.storeDayContext.closedAt + offsetMinutes * MINUTE_MS;
+}
+
+function configuredOpeningOperatingDate(args: {
+  cronWindow: ReturnType<typeof openingPolicyCronWindow>;
+  now: number;
+  policy: Doc<"automationPolicy">;
+  scheduleContext: ConfiguredStoreScheduleContext;
+}) {
+  const storeDayContext = args.scheduleContext.storeDayContext;
+
+  if (!storeDayContext) {
+    return args.cronWindow?.operatingDate ?? null;
+  }
+
+  if (
+    args.scheduleContext.phase === "closed" ||
+    args.scheduleContext.phase === "after_last_window"
+  ) {
+    return null;
+  }
+
+  const policyStartAt = openingPolicyStartAtForStoreDay({
+    policy: args.policy,
+    storeDayContext,
+  });
+
+  if (typeof policyStartAt === "number") {
+    return args.now >= policyStartAt ? storeDayContext.operatingDate : null;
+  }
+
+  if (
+    args.scheduleContext.phase === "during_window" ||
+    args.scheduleContext.phase === "between_windows"
+  ) {
+    return storeDayContext.operatingDate;
+  }
+
+  return args.cronWindow?.operatingDate === storeDayContext.operatingDate
+    ? storeDayContext.operatingDate
+    : null;
+}
+
+function configuredEodAutoCompleteStoreDayContext(args: {
+  cronWindow: ReturnType<typeof eodAutoCompletePolicyCronWindow>;
+  policy: Doc<"automationPolicy">;
+  scheduleContext: ConfiguredStoreScheduleContext;
+}) {
+  if (args.cronWindow?.completionWindowSatisfied === false) {
+    return {
+      completionWindowSatisfied: false,
+      operatingDate: null,
+      storeDayContext: undefined,
+    };
+  }
+
+  const operatingDate = args.cronWindow?.operatingDate ?? null;
+  const storeDayContext = args.scheduleContext.storeDayContext;
+
+  if (!operatingDate || storeDayContext?.operatingDate !== operatingDate) {
+    return {
+      completionWindowSatisfied: args.cronWindow?.completionWindowSatisfied,
+      operatingDate,
+      storeDayContext: undefined,
+    };
+  }
+
+  const policyCompletionAt = eodPolicyCompletionAtForStoreDay({
+    policy: args.policy,
+    storeDayContext,
+  });
+
+  return {
+    completionWindowSatisfied: true,
+    operatingDate,
+    storeDayContext:
+      typeof policyCompletionAt === "number"
+        ? { ...storeDayContext, eodEvaluationAt: policyCompletionAt }
+        : storeDayContext,
+  };
+}
+
 function scheduleEvidenceForStoreDayContext(
   storeDayContext: DailyOperationsAutomationStoreDayContext | undefined,
   action: "opening.auto_start" | "eod.auto_complete",
@@ -949,8 +1098,13 @@ async function resolveConfiguredStoreScheduleContext(
         context.phase === "after_last_window"
           ? args.now
           : relevantWindow?.endsAt,
+      eodWindowEndMinutes:
+        context.phase === "after_last_window"
+          ? undefined
+          : relevantWindow?.endMinute,
       openedAt: relevantWindow?.startsAt,
       openingEvaluationAt: relevantWindow?.startsAt,
+      openingWindowStartMinutes: relevantWindow?.startMinute,
       operatingDate: context.operatingDate,
       scheduleVersion: context.scheduleVersionId,
       source: "canonical_schedule",
@@ -1190,16 +1344,12 @@ export async function runConfiguredDailyOperationsAutomationWithCtx(
         now,
         policy,
       });
-      const operatingDate =
-        scheduleContext.storeDayContext &&
-        (scheduleContext.phase === "during_window" ||
-          scheduleContext.phase === "between_windows")
-          ? scheduleContext.storeDayContext.operatingDate
-          : scheduleContext.phase === "closed" ||
-              scheduleContext.phase === "before_first_window" ||
-              scheduleContext.phase === "after_last_window"
-            ? null
-            : cronWindow?.operatingDate ?? null;
+      const operatingDate = configuredOpeningOperatingDate({
+        cronWindow,
+        now,
+        policy,
+        scheduleContext,
+      });
 
       return runConfiguredPolicySafely(ctx, {
         action: OPENING_AUTO_START_ACTION,
@@ -1252,27 +1402,23 @@ export async function runConfiguredDailyOperationsAutomationWithCtx(
         now,
         policy,
       });
-      const operatingDate =
-        scheduleContext.storeDayContext
-          ? scheduleContext.phase === "after_last_window"
-            ? scheduleContext.storeDayContext.operatingDate
-            : null
-          : cronWindow?.completionWindowSatisfied === false
-          ? null
-          : cronWindow?.operatingDate ?? null;
+      const eodStoreDayContext = configuredEodAutoCompleteStoreDayContext({
+        cronWindow,
+        policy,
+        scheduleContext,
+      });
 
       return runConfiguredPolicySafely(ctx, {
         action: EOD_AUTO_COMPLETE_ACTION,
-        operatingDate,
+        operatingDate: eodStoreDayContext.operatingDate,
         policy,
         run: (operatingDate) =>
           runDailyCloseAutoCompleteEligibilityWithCtx(ctx, {
-            completionWindowSatisfied: scheduleContext.storeDayContext
-              ? scheduleContext.phase === "after_last_window"
-              : cronWindow?.completionWindowSatisfied,
+            completionWindowSatisfied:
+              eodStoreDayContext.completionWindowSatisfied,
             now,
             operatingDate,
-            storeDayContext: scheduleContext.storeDayContext,
+            storeDayContext: eodStoreDayContext.storeDayContext,
             storeId: policy.storeId,
           }),
       });
