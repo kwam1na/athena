@@ -47,6 +47,14 @@ function getHandler<TArgs, TResult>(definition: unknown) {
     ._handler;
 }
 
+function compareIndexedValue(left: unknown, right: unknown) {
+  if (typeof left === "number" && typeof right === "number") {
+    return left - right;
+  }
+
+  return String(left).localeCompare(String(right));
+}
+
 function createDb(seed: Partial<Record<TableName, Row[]>> = {}) {
   const tables = new Map<TableName, Map<string, Row>>();
   const inserts: Array<{ table: TableName; value: Row }> = [];
@@ -71,7 +79,7 @@ function createDb(seed: Partial<Record<TableName, Row[]>> = {}) {
 
   const query = (table: TableName) => {
     const filters: Array<
-      [string, unknown | { gte?: number; lt?: number; lte?: number }]
+      [string, unknown | { gte?: unknown; lt?: unknown; lte?: unknown }]
     > = [];
     let sortDirection: "asc" | "desc" = "asc";
     const filteredRows = () => {
@@ -80,24 +88,24 @@ function createDb(seed: Partial<Record<TableName, Row[]>> = {}) {
           if (value && typeof value === "object" && !Array.isArray(value)) {
             if (
               "gte" in value &&
-              typeof value.gte === "number" &&
-              Number(row[field]) < value.gte
+              value.gte !== undefined &&
+              compareIndexedValue(row[field], value.gte) < 0
             ) {
               return false;
             }
 
             if (
               "lt" in value &&
-              typeof value.lt === "number" &&
-              Number(row[field]) >= value.lt
+              value.lt !== undefined &&
+              compareIndexedValue(row[field], value.lt) >= 0
             ) {
               return false;
             }
 
             if (
               "lte" in value &&
-              typeof value.lte === "number" &&
-              Number(row[field]) > value.lte
+              value.lte !== undefined &&
+              compareIndexedValue(row[field], value.lte) > 0
             ) {
               return false;
             }
@@ -134,9 +142,9 @@ function createDb(seed: Partial<Record<TableName, Row[]>> = {}) {
         _index: string,
         applyIndex: (builder: {
           eq: (field: string, value: unknown) => typeof builder;
-          gte: (field: string, value: number) => typeof builder;
-          lt: (field: string, value: number) => typeof builder;
-          lte: (field: string, value: number) => typeof builder;
+          gte: (field: string, value: unknown) => typeof builder;
+          lt: (field: string, value: unknown) => typeof builder;
+          lte: (field: string, value: unknown) => typeof builder;
         }) => unknown,
       ) {
         const builder = {
@@ -144,15 +152,15 @@ function createDb(seed: Partial<Record<TableName, Row[]>> = {}) {
             filters.push([field, value]);
             return builder;
           },
-          gte(field: string, value: number) {
+          gte(field: string, value: unknown) {
             filters.push([field, { gte: value }]);
             return builder;
           },
-          lt(field: string, value: number) {
+          lt(field: string, value: unknown) {
             filters.push([field, { lt: value }]);
             return builder;
           },
-          lte(field: string, value: number) {
+          lte(field: string, value: unknown) {
             filters.push([field, { lte: value }]);
             return builder;
           },
@@ -509,6 +517,239 @@ describe("end-of-day review backend foundation", () => {
       policyMode: "enabled",
     });
     expect(snapshot.completedClose).toBeNull();
+  });
+
+  it("includes all closed register sessions for the day and records complete register source evidence", async () => {
+    const registerSessions = Array.from({ length: 205 }, (_, index) => ({
+      _id: `register-closed-${index + 1}`,
+      closedAt: Date.UTC(2026, 4, 7, 18, index % 60),
+      closeoutRecords: [
+        {
+          expectedCash: 10000 + index,
+          occurredAt: Date.UTC(2026, 4, 7, 18, index % 60),
+          type: "closed",
+        },
+      ],
+      countedCash: 10000 + index,
+      expectedCash: 10000 + index,
+      openedAt: Date.UTC(2026, 4, 7, 9, index % 60),
+      openingFloat: 10000,
+      status: "closed",
+      storeId: "store-1",
+    }));
+    const { db } = createDb({
+      registerSession: registerSessions,
+      store: [store],
+    });
+
+    const snapshot = await buildDailyCloseSnapshotWithCtx(
+      { db } as unknown as QueryCtx,
+      { operatingDate: "2026-05-07", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(snapshot.summary.closedRegisterSessionCount).toBe(205);
+    expect(snapshot.readyItems).toHaveLength(205);
+    expect(snapshot.sourceCompleteness.complete).toBe(true);
+    expect(snapshot.sourceCompleteness.entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          complete: true,
+          readMode: "by_storeId_status_closeoutOperatingDate_missing",
+          recordCount: 205,
+          source: "register_session",
+          statuses: ["closed"],
+        }),
+      ]),
+    );
+  });
+
+  it("finds active register blockers after more than 1000 indexed historic register sessions", async () => {
+    const historicSessions = Array.from({ length: 1000 }, (_, index) => ({
+      _id: `historic-register-${index + 1}`,
+      closedAt: Date.UTC(2026, 4, 6, 18, index % 60),
+      closeoutOperatingDate: "2026-05-06",
+      closeoutRecords: [
+        {
+          closedAt: Date.UTC(2026, 4, 6, 18, index % 60),
+          countedCash: 10000,
+          expectedCash: 10000,
+          occurredAt: Date.UTC(2026, 4, 6, 18, index % 60),
+          type: "closed",
+        },
+      ],
+      countedCash: 10000,
+      expectedCash: 10000,
+      openedAt: Date.UTC(2026, 4, 6, 9, index % 60),
+      openingFloat: 10000,
+      status: "closed",
+      storeId: "store-1",
+    }));
+    const { db } = createDb({
+      registerSession: [
+        ...historicSessions,
+        {
+          _id: "active-register-after-history",
+          openedAt: Date.UTC(2026, 4, 7, 9),
+          openedOperatingDate: "2026-05-07",
+          openingFloat: 10000,
+          status: "active",
+          storeId: "store-1",
+        },
+      ],
+      store: [store],
+    });
+
+    const snapshot = await buildDailyCloseSnapshotWithCtx(
+      { db } as unknown as QueryCtx,
+      { operatingDate: "2026-05-07", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(snapshot.sourceCompleteness.complete).toBe(true);
+    expect(snapshot.blockers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: "register_session:active-register-after-history:active",
+        }),
+      ]),
+    );
+  });
+
+  it("keeps prior-day active register sessions blocking the target day until resolved", async () => {
+    const { db } = createDb({
+      registerSession: [
+        {
+          _id: "carried-active-register",
+          openedAt: Date.UTC(2026, 4, 6, 20),
+          openedOperatingDate: "2026-05-06",
+          openingFloat: 10000,
+          status: "active",
+          storeId: "store-1",
+        },
+      ],
+      store: [store],
+    });
+
+    const snapshot = await buildDailyCloseSnapshotWithCtx(
+      { db } as unknown as QueryCtx,
+      { operatingDate: "2026-05-07", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(snapshot.sourceCompleteness.complete).toBe(true);
+    expect(snapshot.blockers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: "register_session:carried-active-register:active",
+        }),
+      ]),
+    );
+  });
+
+  it("does not mark source incomplete for many future active register sessions", async () => {
+    const activeOtherDateSessions = Array.from({ length: 1000 }, (_, index) => ({
+      _id: `active-other-date-${index + 1}`,
+      openedAt: Date.UTC(2026, 4, 8, 9, index % 60),
+      openedOperatingDate: "2026-05-08",
+      openingFloat: 10000,
+      status: "active",
+      storeId: "store-1",
+    }));
+    const { db } = createDb({
+      registerSession: [
+        ...activeOtherDateSessions,
+        {
+          _id: "target-date-closed-register",
+          closedAt: Date.UTC(2026, 4, 7, 18),
+          closeoutOperatingDate: "2026-05-07",
+          closeoutRecords: [
+            {
+              closedAt: Date.UTC(2026, 4, 7, 18),
+              countedCash: 10000,
+              expectedCash: 10000,
+              occurredAt: Date.UTC(2026, 4, 7, 18),
+              type: "closed",
+            },
+          ],
+          countedCash: 10000,
+          expectedCash: 10000,
+          openedAt: Date.UTC(2026, 4, 7, 9),
+          openedOperatingDate: "2026-05-07",
+          openingFloat: 10000,
+          status: "closed",
+          storeId: "store-1",
+        },
+      ],
+      store: [store],
+    });
+
+    const snapshot = await buildDailyCloseSnapshotWithCtx(
+      { db } as unknown as QueryCtx,
+      { operatingDate: "2026-05-07", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(snapshot.sourceCompleteness.entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          complete: true,
+          readMode: "by_storeId_status_openedOperatingDate",
+          recordCount: 0,
+          statuses: ["active"],
+        }),
+      ]),
+    );
+    expect(snapshot.sourceCompleteness.complete).toBe(true);
+    expect(snapshot.blockers).toEqual([]);
+    expect(snapshot.summary.closedRegisterSessionCount).toBe(1);
+  });
+
+  it("finds review-only closeouts by closeout operating date when the drawer opened on a prior day", async () => {
+    const { db } = createDb({
+      registerSession: [
+        {
+          _id: "carried-rejected-closeout",
+          closedAt: Date.UTC(2026, 4, 7, 18),
+          closeoutOperatingDate: "2026-05-07",
+          closeoutRecords: [
+            {
+              closedAt: Date.UTC(2026, 4, 7, 18),
+              countedCash: 9000,
+              expectedCash: 10000,
+              occurredAt: Date.UTC(2026, 4, 7, 18),
+              type: "closed",
+            },
+          ],
+          countedCash: 9000,
+          expectedCash: 10000,
+          openedAt: Date.UTC(2026, 4, 6, 20),
+          openedOperatingDate: "2026-05-06",
+          openingFloat: 10000,
+          status: "closeout_rejected",
+          storeId: "store-1",
+        },
+      ],
+      store: [store],
+    });
+
+    const snapshot = await buildDailyCloseSnapshotWithCtx(
+      { db } as unknown as QueryCtx,
+      { operatingDate: "2026-05-07", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(snapshot.blockers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: "register_session:carried-rejected-closeout:closeout_rejected",
+        }),
+      ]),
+    );
+    expect(snapshot.sourceCompleteness.entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          readMode: "by_storeId_status_closeoutOperatingDate",
+          recordCount: 1,
+          statuses: ["closeout_rejected"],
+        }),
+      ]),
+    );
   });
 
   it("classifies blockers, review items, carry-forward items, ready items, and summary totals", async () => {
@@ -2743,6 +2984,253 @@ describe("end-of-day review backend foundation", () => {
     );
   });
 
+  it("keeps default automation completion current and demotes older current closes", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 4, 7, 22));
+    const { db, tables } = createDb({
+      dailyClose: [
+        completedDailyCloseRow({
+          _id: "daily-close-prior-current",
+          completedAt: Date.UTC(2026, 4, 6, 22),
+          createdAt: Date.UTC(2026, 4, 6, 22),
+          operatingDate: "2026-05-06",
+          updatedAt: Date.UTC(2026, 4, 6, 22),
+        }),
+      ],
+      store: [store],
+    });
+
+    const result = await completeDailyCloseForAutomationWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        automationDecisionReason: "EOD Review passed policy checks.",
+        automationPolicyVersion: "daily-close-auto-complete.v1",
+        automationRunId: "automation-run-current" as Id<"automationRun">,
+        eodAutoCompletePolicy,
+        operatingDate: "2026-05-07",
+        policyReviewedItemKeys: [],
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(result).toMatchObject({
+      kind: "ok",
+      data: {
+        action: "completed",
+        dailyClose: {
+          isCurrent: true,
+          reportSnapshot: {
+            closeMetadata: {
+              currentnessMode: "mark_current",
+            },
+          },
+        },
+      },
+    });
+    expect(
+      tables.get("dailyClose")?.get("daily-close-prior-current")?.isCurrent,
+    ).toBe(false);
+  });
+
+  it("records historical automation completion without demoting the live current close", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 4, 9, 22));
+    const { db, tables } = createDb({
+      dailyClose: [
+        completedDailyCloseRow({
+          _id: "daily-close-live-current",
+          completedAt: Date.UTC(2026, 4, 8, 22),
+          createdAt: Date.UTC(2026, 4, 8, 22),
+          operatingDate: "2026-05-08",
+          updatedAt: Date.UTC(2026, 4, 8, 22),
+        }),
+      ],
+      store: [store],
+    });
+
+    const result = await completeDailyCloseForAutomationWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        automationDecisionReason: "Historic EOD Review passed policy checks.",
+        automationPolicyVersion: "daily-close-auto-complete.v1",
+        automationRunId: "automation-run-historical" as Id<"automationRun">,
+        currentnessMode: "historical_record",
+        eodAutoCompletePolicy,
+        operatingDate: "2026-05-07",
+        policyReviewedItemKeys: [],
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(result).toMatchObject({
+      kind: "ok",
+      data: {
+        action: "completed",
+        dailyClose: {
+          actorType: "automation",
+          isCurrent: false,
+          reportSnapshot: {
+            closeMetadata: {
+              currentnessMode: "historical_record",
+              operatingDate: "2026-05-07",
+            },
+            sourceCompleteness: {
+              complete: true,
+              entries: expect.arrayContaining([
+                expect.objectContaining({
+                  complete: true,
+                  readMode: "by_storeId_status_closeoutOperatingDate_missing",
+                  source: "register_session",
+                }),
+              ]),
+            },
+          },
+        },
+      },
+    });
+    expect(
+      tables.get("dailyClose")?.get("daily-close-live-current")?.isCurrent,
+    ).toBe(true);
+  });
+
+  it("rejects historical automation completion when register source evidence is incomplete", async () => {
+    const registerSessions = Array.from({ length: 1000 }, (_, index) => ({
+      _id: `register-cap-${index + 1}`,
+      closedAt: Date.UTC(2026, 4, 7, 18, index % 60),
+      countedCash: 10000,
+      expectedCash: 10000,
+      openedAt: Date.UTC(2026, 4, 7, 9, index % 60),
+      openingFloat: 10000,
+      status: "closed",
+      storeId: "store-1",
+    }));
+    const { db, inserts } = createDb({
+      registerSession: registerSessions,
+      store: [store],
+    });
+
+    const result = await completeDailyCloseForAutomationWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        automationDecisionReason: "Historic EOD Review passed policy checks.",
+        automationPolicyVersion: "daily-close-auto-complete.v1",
+        automationRunId: "automation-run-incomplete-source" as Id<"automationRun">,
+        currentnessMode: "historical_record",
+        eodAutoCompletePolicy,
+        operatingDate: "2026-05-07",
+        policyReviewedItemKeys: [],
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(result).toMatchObject({
+      kind: "user_error",
+      error: {
+        code: "precondition_failed",
+        metadata: {
+          incompleteSources: [
+            {
+              complete: false,
+              limit: 1000,
+              readMode: "by_storeId_status_closeoutOperatingDate_missing",
+              reason: "register_session_legacy_closed_fallback_cap_reached",
+              source: "register_session",
+            },
+          ],
+        },
+      },
+    });
+    expect(inserts).toEqual([]);
+  });
+
+  it("rejects historical automation completion when completed transaction reads hit the source cap", async () => {
+    const transactions = Array.from({ length: 200 }, (_, index) => ({
+      _id: `txn-cap-${index + 1}`,
+      completedAt: Date.UTC(2026, 4, 7, 15, index % 60),
+      payments: [{ amount: 100, method: "cash", timestamp: 1 }],
+      status: "completed",
+      storeId: "store-1",
+      subtotal: 100,
+      tax: 0,
+      total: 100,
+      totalPaid: 100,
+      transactionNumber: `TXN-CAP-${index + 1}`,
+    }));
+    const { db, inserts } = createDb({
+      posTransaction: transactions,
+      store: [store],
+    });
+
+    const result = await completeDailyCloseForAutomationWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        automationDecisionReason: "Historic EOD Review passed policy checks.",
+        automationPolicyVersion: "daily-close-auto-complete.v1",
+        automationRunId: "automation-run-incomplete-transactions" as Id<"automationRun">,
+        currentnessMode: "historical_record",
+        eodAutoCompletePolicy,
+        operatingDate: "2026-05-07",
+        policyReviewedItemKeys: [],
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(result).toMatchObject({
+      kind: "user_error",
+      error: {
+        code: "precondition_failed",
+        metadata: {
+          incompleteSources: [
+            expect.objectContaining({
+              complete: false,
+              limit: 200,
+              readMode: "by_storeId_status_completedAt",
+              reason: "pos_transaction_source_cap_reached",
+              source: "pos_transaction",
+            }),
+          ],
+        },
+      },
+    });
+    expect(inserts).toEqual([]);
+  });
+
+  it("records incomplete source evidence when pending approval reads hit the cap", async () => {
+    const approvals = Array.from({ length: 200 }, (_, index) => ({
+      _id: `approval-cap-${index + 1}`,
+      createdAt: Date.UTC(2026, 4, 7, 16, index % 60),
+      reason: "Manager review required.",
+      requestType: "variance_review",
+      status: "pending",
+      storeId: "store-1",
+      subjectId: `register-${index + 1}`,
+      subjectType: "register_session",
+    }));
+    const { db } = createDb({
+      approvalRequest: approvals,
+      store: [store],
+    });
+
+    const snapshot = await buildDailyCloseSnapshotWithCtx(
+      { db } as unknown as QueryCtx,
+      { operatingDate: "2026-05-07", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(snapshot.sourceCompleteness).toEqual(
+      expect.objectContaining({
+        complete: false,
+        entries: expect.arrayContaining([
+          expect.objectContaining({
+            complete: false,
+            limit: 200,
+            readMode: "by_storeId_status",
+            reason: "approval_request_source_cap_reached",
+            source: "approval_request",
+            statuses: ["pending"],
+          }),
+        ]),
+      }),
+    );
+  });
+
   it("records policy-reviewed item keys when automation completes reviewed items", async () => {
     vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 4, 7, 22));
     const reviewKey = "pos_transaction:txn-void:void";
@@ -3640,6 +4128,77 @@ describe("end-of-day review backend foundation", () => {
         reason: "Late cash sale was missed.",
         reopenedDailyCloseId: "dailyClose-2",
       },
+    });
+  });
+
+  it("reopens a historical close without demoting the live current close", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 4, 9, 10));
+    const historicalSnapshot = completedDailyCloseSnapshot({
+      closeMetadata: {
+        ...completedDailyCloseSnapshot().closeMetadata,
+        currentnessMode: "historical_record",
+      },
+    });
+    const liveCurrentClose = completedDailyCloseRow({
+      _id: "daily-close-current",
+      completedAt: Date.UTC(2026, 4, 8, 22),
+      createdAt: Date.UTC(2026, 4, 8, 22),
+      isCurrent: true,
+      operatingDate: "2026-05-08",
+      updatedAt: Date.UTC(2026, 4, 8, 22),
+    });
+    const { db, tables } = createDb({
+      approvalProof: [
+        dailyCloseReopenApprovalProof({
+          createdAt: Date.UTC(2026, 4, 9, 9),
+          expiresAt: Date.UTC(2026, 4, 9, 11),
+        }),
+      ],
+      dailyClose: [
+        completedDailyCloseRow({
+          isCurrent: false,
+          reportSnapshot: historicalSnapshot,
+        }),
+        liveCurrentClose,
+      ],
+    });
+
+    const result = await reopenDailyCloseWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        actorStaffProfileId: "staff-1" as Id<"staffProfile">,
+        actorUserId: "user-1" as Id<"athenaUser">,
+        approvalProofId: "approval-proof-reopen-1" as Id<"approvalProof">,
+        dailyCloseId: "daily-close-1" as Id<"dailyClose">,
+        reason: "Historic correction.",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(result).toMatchObject({
+      kind: "ok",
+      data: {
+        originalDailyClose: {
+          _id: "daily-close-1",
+          isCurrent: false,
+          lifecycleStatus: "reopened",
+        },
+        reopenedDailyClose: {
+          isCurrent: false,
+          lifecycleStatus: "active",
+          reopenedFromDailyCloseId: "daily-close-1",
+          status: "open",
+        },
+      },
+    });
+    expect(tables.get("dailyClose")?.get("daily-close-current")).toMatchObject({
+      isCurrent: true,
+      lifecycleStatus: "active",
+    });
+    expect(tables.get("dailyClose")?.get("daily-close-1")).toMatchObject({
+      isCurrent: false,
+      lifecycleStatus: "reopened",
+      reportSnapshot: historicalSnapshot,
     });
   });
 

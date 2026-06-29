@@ -8,6 +8,8 @@ import {
   type RegisterSessionStatus,
 } from "../../shared/registerSessionStatus";
 import { isRegisterSessionReplacementBlocking } from "../../shared/registerSessionLifecyclePolicy";
+import { getStoreScheduleContextForStoreAtWithCtx } from "../inventory/storeSchedule";
+import type { StoreScheduleContext } from "../lib/storeScheduleTime";
 import { recordRegisterSessionTraceBestEffort } from "./registerSessionTracing";
 
 const registerSessionStatusSet = (
@@ -26,6 +28,12 @@ type RegisterSessionIdentity = {
   terminalId?: Id<"posTerminal"> | null;
 };
 type RegisterSessionCashAdjustmentKind = "sale" | "void";
+type RegisterSessionOperatingDateDerivationStatus = "resolved" | "missing_schedule";
+type RegisterSessionCloseoutOwnershipSource =
+  | "closed_record"
+  | "approval_request"
+  | "closeout_submission"
+  | "closed_at";
 type RegisterSessionCloseoutRecord = {
   actorStaffProfileId?: Id<"staffProfile">;
   actorUserId?: Id<"athenaUser">;
@@ -50,6 +58,106 @@ function omitUndefined<T extends Record<string, unknown>>(value: T) {
   return Object.fromEntries(
     Object.entries(value).filter(([, entryValue]) => entryValue !== undefined)
   ) as T;
+}
+
+function buildOperatingDateEvidence(context: StoreScheduleContext) {
+  if (context.kind !== "resolved") {
+    return {
+      derivationStatus: "missing_schedule" as const,
+      operatingDate: undefined,
+      operatingDateEndAt: undefined,
+      operatingDateScheduleVersionId: undefined,
+      operatingDateStartAt: undefined,
+    };
+  }
+
+  return {
+    derivationStatus: "resolved" as const,
+    operatingDate: context.operatingDate,
+    operatingDateEndAt: context.currentWindow?.endsAt,
+    operatingDateScheduleVersionId: context.scheduleVersionId
+      ? (context.scheduleVersionId as Id<"storeSchedule">)
+      : undefined,
+    operatingDateStartAt: context.currentWindow?.startsAt,
+  };
+}
+
+export async function resolveRegisterSessionOperatingDateContext(
+  ctx: MutationCtx,
+  args: {
+    at: number;
+    storeId: Id<"store">;
+  }
+) {
+  return (
+    await getStoreScheduleContextForStoreAtWithCtx(ctx, {
+      at: args.at,
+      storeId: args.storeId,
+    })
+  ).context;
+}
+
+export function buildRegisterSessionDateDerivationPatch(args: {
+  closeoutContext?: StoreScheduleContext;
+  closeoutOwnedAt?: number;
+  closeoutOwnershipSource?: RegisterSessionCloseoutOwnershipSource;
+  openedAt?: number;
+  openedContext?: StoreScheduleContext;
+}) {
+  const patch: {
+    closeoutOperatingDate?: string;
+    closeoutOperatingDateDerivationStatus?: RegisterSessionOperatingDateDerivationStatus;
+    closeoutOperatingDateEndAt?: number;
+    closeoutOperatingDateScheduleVersionId?: Id<"storeSchedule">;
+    closeoutOperatingDateStartAt?: number;
+    closeoutOwnedAt?: number;
+    closeoutOwnershipSource?: RegisterSessionCloseoutOwnershipSource;
+    openedOperatingDate?: string;
+    openedOperatingDateDerivationStatus?: RegisterSessionOperatingDateDerivationStatus;
+    openedOperatingDateEndAt?: number;
+    openedOperatingDateScheduleVersionId?: Id<"storeSchedule">;
+    openedOperatingDateStartAt?: number;
+  } = {};
+
+  if (args.openedAt !== undefined && args.openedContext) {
+    const evidence = buildOperatingDateEvidence(args.openedContext);
+    patch.openedOperatingDate = evidence.operatingDate;
+    patch.openedOperatingDateDerivationStatus = evidence.derivationStatus;
+    patch.openedOperatingDateEndAt = evidence.operatingDateEndAt;
+    patch.openedOperatingDateScheduleVersionId =
+      evidence.operatingDateScheduleVersionId;
+    patch.openedOperatingDateStartAt = evidence.operatingDateStartAt;
+  }
+
+  if (
+    args.closeoutOwnedAt !== undefined &&
+    args.closeoutOwnershipSource &&
+    args.closeoutContext
+  ) {
+    const evidence = buildOperatingDateEvidence(args.closeoutContext);
+    patch.closeoutOwnedAt = args.closeoutOwnedAt;
+    patch.closeoutOwnershipSource = args.closeoutOwnershipSource;
+    patch.closeoutOperatingDate = evidence.operatingDate;
+    patch.closeoutOperatingDateDerivationStatus = evidence.derivationStatus;
+    patch.closeoutOperatingDateEndAt = evidence.operatingDateEndAt;
+    patch.closeoutOperatingDateScheduleVersionId =
+      evidence.operatingDateScheduleVersionId;
+    patch.closeoutOperatingDateStartAt = evidence.operatingDateStartAt;
+  }
+
+  return patch;
+}
+
+export function buildClearedRegisterSessionCloseoutDatePatch() {
+  return {
+    closeoutOwnedAt: undefined,
+    closeoutOwnershipSource: undefined,
+    closeoutOperatingDate: undefined,
+    closeoutOperatingDateDerivationStatus: undefined,
+    closeoutOperatingDateEndAt: undefined,
+    closeoutOperatingDateScheduleVersionId: undefined,
+    closeoutOperatingDateStartAt: undefined,
+  };
 }
 
 async function persistRegisterSessionWorkflowTraceIdBestEffort(
@@ -240,6 +348,7 @@ export function buildReopenedRegisterSessionPatch(session: {
   assertValidRegisterSessionTransition(session.status, "active");
 
   return {
+    ...buildClearedRegisterSessionCloseoutDatePatch(),
     countedCash: undefined,
     managerApprovalRequestId: undefined,
     status: "active" as const,
@@ -269,6 +378,7 @@ export function buildReopenedRejectedRegisterSessionCloseoutPatch(
     "Rejected register closeout reopened for correction.";
 
   return {
+    ...buildClearedRegisterSessionCloseoutDatePatch(),
     closeoutRecords: [
       ...(session.closeoutRecords ?? []),
       omitUndefined({
@@ -388,6 +498,7 @@ export function buildReopenedClosedRegisterSessionPatch(
     "Closed register closeout reopened for correction.";
 
   return {
+    ...buildClearedRegisterSessionCloseoutDatePatch(),
     closedAt: undefined,
     closedByStaffProfileId: undefined,
     closedByUserId: undefined,
@@ -600,11 +711,22 @@ export const openRegisterSession = internalMutation({
       ...args,
       ...identity,
     });
+    const sessionInput = buildRegisterSession({
+      ...args,
+      ...identity,
+    });
+    const openedContext = await resolveRegisterSessionOperatingDateContext(ctx, {
+      at: sessionInput.openedAt,
+      storeId: args.storeId,
+    });
     const sessionId = await ctx.db.insert(
       "registerSession",
-      buildRegisterSession({
-        ...args,
-        ...identity,
+      omitUndefined({
+        ...sessionInput,
+        ...buildRegisterSessionDateDerivationPatch({
+          openedAt: sessionInput.openedAt,
+          openedContext,
+        }),
       })
     );
     const session = await ctx.db.get("registerSession", sessionId);
@@ -854,10 +976,23 @@ export const beginRegisterSessionCloseout = internalMutation({
       throw new Error("Register session not found.");
     }
 
+    const closeoutSubmittedAt = Date.now();
+    const closeoutContext = await resolveRegisterSessionOperatingDateContext(ctx, {
+      at: closeoutSubmittedAt,
+      storeId: session.storeId,
+    });
+    const closeoutPatch = buildRegisterSessionCloseoutPatch(session, args);
     await ctx.db.patch(
       "registerSession",
       args.registerSessionId,
-      buildRegisterSessionCloseoutPatch(session, args)
+      {
+        ...closeoutPatch,
+        ...buildRegisterSessionDateDerivationPatch({
+          closeoutContext,
+          closeoutOwnedAt: closeoutSubmittedAt,
+          closeoutOwnershipSource: "closeout_submission",
+        }),
+      }
     );
 
     return ctx.db.get("registerSession", args.registerSessionId);
@@ -1046,10 +1181,22 @@ export const closeRegisterSession = internalMutation({
       throw new Error("Register session not found.");
     }
 
+    const closeoutPatch = buildClosedRegisterSessionPatch(session, args);
+    const closeoutContext = await resolveRegisterSessionOperatingDateContext(ctx, {
+      at: closeoutPatch.closedAt,
+      storeId: session.storeId,
+    });
     await ctx.db.patch(
       "registerSession",
       args.registerSessionId,
-      buildClosedRegisterSessionPatch(session, args)
+      {
+        ...closeoutPatch,
+        ...buildRegisterSessionDateDerivationPatch({
+          closeoutContext,
+          closeoutOwnedAt: closeoutPatch.closedAt,
+          closeoutOwnershipSource: "closed_record",
+        }),
+      }
     );
 
     return ctx.db.get("registerSession", args.registerSessionId);

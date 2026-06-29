@@ -6,6 +6,7 @@ import {
   assertValidRegisterSessionTransition,
   buildClosedRegisterSessionPatch,
   buildRegisterSessionDepositPatch,
+  buildRegisterSessionDateDerivationPatch,
   buildRegisterSessionCloseoutPatch,
   buildRegisterSessionOpeningFloatCorrectionPatch,
   buildRejectedRegisterSessionCloseoutPatch,
@@ -18,6 +19,7 @@ import {
   recordRegisterSessionTransaction,
 } from "../operations/registerSessions";
 import { recordRegisterSessionTraceBestEffort } from "../operations/registerSessionTracing";
+import type { StoreScheduleContext } from "../lib/storeScheduleTime";
 
 vi.mock("../operations/registerSessionTracing", () => ({
   recordRegisterSessionTraceBestEffort: vi.fn(() => ({
@@ -44,6 +46,73 @@ describe("cash controls register sessions", () => {
       status: "open",
     });
     expect(session.openedAt).toEqual(expect.any(Number));
+  });
+
+  it("derives register-session operating date evidence from store schedule context", () => {
+    const resolvedContext = {
+      kind: "resolved",
+      timezone: "America/New_York",
+      operatingDate: "2026-06-28",
+      phase: "during_window",
+      isOpen: true,
+      scheduleVersionId: "schedule_1",
+      currentWindow: {
+        localDate: "2026-06-28",
+        startMinute: 600,
+        endMinute: 120,
+        startsAt: 1_800_000,
+        endsAt: 1_860_000,
+        crossesDateBoundary: true,
+        localStartLabel: "10:00",
+        localEndLabel: "02:00",
+      },
+      nextWindow: null,
+    } satisfies StoreScheduleContext;
+
+    expect(
+      buildRegisterSessionDateDerivationPatch({
+        closeoutContext: resolvedContext,
+        closeoutOwnedAt: 1_850_000,
+        closeoutOwnershipSource: "closed_record",
+        openedAt: 1_800_000,
+        openedContext: resolvedContext,
+      }),
+    ).toEqual({
+      closeoutOwnedAt: 1_850_000,
+      closeoutOwnershipSource: "closed_record",
+      closeoutOperatingDate: "2026-06-28",
+      closeoutOperatingDateDerivationStatus: "resolved",
+      closeoutOperatingDateEndAt: 1_860_000,
+      closeoutOperatingDateScheduleVersionId: "schedule_1",
+      closeoutOperatingDateStartAt: 1_800_000,
+      openedOperatingDate: "2026-06-28",
+      openedOperatingDateDerivationStatus: "resolved",
+      openedOperatingDateEndAt: 1_860_000,
+      openedOperatingDateScheduleVersionId: "schedule_1",
+      openedOperatingDateStartAt: 1_800_000,
+    });
+
+    expect(
+      buildRegisterSessionDateDerivationPatch({
+        closeoutContext: {
+          kind: "missing_schedule",
+          timezone: null,
+          operatingDate: "2026-06-28",
+          phase: "unavailable",
+          isOpen: false,
+          scheduleVersionId: null,
+          currentWindow: null,
+          nextWindow: null,
+        },
+        closeoutOwnedAt: 1_850_000,
+        closeoutOwnershipSource: "closeout_submission",
+      }),
+    ).toMatchObject({
+      closeoutOwnedAt: 1_850_000,
+      closeoutOwnershipSource: "closeout_submission",
+      closeoutOperatingDate: undefined,
+      closeoutOperatingDateDerivationStatus: "missing_schedule",
+    });
   });
 
   it("counts only net cash tendered toward expected cash", () => {
@@ -283,9 +352,15 @@ describe("cash controls register sessions", () => {
           return id;
         }),
         patch: vi.fn(),
-        query: vi.fn(() => ({
+        query: vi.fn((tableName: string) => ({
           withIndex: vi.fn((indexName: string) => ({
+            take: vi.fn(async () =>
+              tableName === "storeSchedule" ? [] : existingSessions,
+            ),
             order: vi.fn(() => ({
+              take: vi.fn(async () =>
+                tableName === "storeSchedule" ? [] : existingSessions,
+              ),
               first: vi.fn(async () =>
                 indexName === "by_terminalId"
                   ? existingSessions.shift() ?? null
@@ -357,8 +432,11 @@ describe("cash controls register sessions", () => {
       buildReopenedRegisterSessionPatch({
         status: "closing",
       })
-    ).toEqual({
+    ).toMatchObject({
       countedCash: undefined,
+      closeoutOwnedAt: undefined,
+      closeoutOperatingDate: undefined,
+      closeoutOwnershipSource: undefined,
       managerApprovalRequestId: undefined,
       status: "active",
       variance: undefined,

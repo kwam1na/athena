@@ -201,6 +201,21 @@ describe("operations query indexing", () => {
       },
       {
         table: "registerSession",
+        descriptor: "by_storeId_status_openedOperatingDate",
+        fields: ["storeId", "status", "openedOperatingDate"],
+      },
+      {
+        table: "registerSession",
+        descriptor: "by_storeId_status_closeoutOperatingDate",
+        fields: ["storeId", "status", "closeoutOperatingDate"],
+      },
+      {
+        table: "registerSession",
+        descriptor: "by_storeId_closeoutOperatingDate",
+        fields: ["storeId", "closeoutOperatingDate"],
+      },
+      {
+        table: "registerSession",
         descriptor: "by_storeId_registerNumber",
         fields: ["storeId", "registerNumber"],
       },

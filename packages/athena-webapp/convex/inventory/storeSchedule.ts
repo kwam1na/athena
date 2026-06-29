@@ -5,6 +5,7 @@ import type { Doc, Id } from "../_generated/dataModel";
 import { commandResultValidator } from "../lib/commandResultValidators";
 import {
   getMissingStoreScheduleContext,
+  resolveStoreOperatingRangeForDate,
   resolveStoreScheduleContext,
   validateNoEffectiveRangeOverlap,
   validateStoreScheduleDraft,
@@ -341,6 +342,7 @@ async function findActiveScheduleForStoreAt(
         .eq("status", "active")
         .lte("effectiveFrom", args.at),
     )
+    .order("desc")
     .take(STORE_SCHEDULE_VERSION_READ_LIMIT);
 
   return (
@@ -366,6 +368,27 @@ export async function getStoreScheduleContextForStoreAtWithCtx(
     context: schedule
       ? resolveStoreScheduleContext({ schedule, at: args.at })
       : getMissingStoreScheduleContext({ at: args.at }),
+  };
+}
+
+export async function resolveStoreOperatingRangeForDateWithCtx(
+  ctx: Pick<QueryCtx, "db"> | Pick<MutationCtx, "db">,
+  args: { storeId: Id<"store">; operatingDate: string },
+) {
+  const effectiveAt = Date.parse(`${args.operatingDate}T12:00:00.000Z`);
+  const schedule = Number.isFinite(effectiveAt)
+    ? await findActiveScheduleForStoreAt(ctx, {
+        storeId: args.storeId,
+        at: effectiveAt,
+      })
+    : null;
+
+  return {
+    schedule,
+    range: resolveStoreOperatingRangeForDate({
+      schedule,
+      operatingDate: args.operatingDate,
+    }),
   };
 }
 

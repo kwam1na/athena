@@ -224,11 +224,21 @@ function createMutationCtx(seed?: {
     query: vi.fn((table: string) => ({
       withIndex(indexName: string, apply: (builder: {
         eq(field: string, value: unknown): unknown;
+        lte(field: string, value: unknown): unknown;
       }) => void) {
         const filters: Record<string, unknown> = {};
+        const rangeFilters: Array<(row: Record<string, unknown>) => boolean> = [];
         const builder = {
           eq(field: string, value: unknown) {
             filters[field] = value;
+            return builder;
+          },
+          lte(field: string, value: unknown) {
+            rangeFilters.push(
+              (row) =>
+                typeof row[field] === "number" &&
+                row[field] <= (value as number),
+            );
             return builder;
           },
         };
@@ -268,6 +278,43 @@ function createMutationCtx(seed?: {
                   request.registerSessionId === filters.registerSessionId,
               ),
           };
+        }
+
+        if (
+          table === "storeSchedule" &&
+          indexName === "by_storeId_status_effectiveFrom"
+        ) {
+          const schedules = [
+            {
+              _id: "schedule-1",
+              createdAt: 0,
+              effectiveFrom: 0,
+              organizationId: "org-1",
+              source: "seed",
+              status: "active",
+              storeId: "store-1",
+              timezone: "UTC",
+              updatedAt: 0,
+              weeklyClosedDays: [],
+              weeklyWindows: Array.from({ length: 7 }, (_, dayOfWeek) => ({
+                dayOfWeek,
+                endMinute: 24 * 60,
+                startMinute: 0,
+              })),
+              dateExceptions: [],
+            },
+          ].filter((schedule) =>
+            Object.entries(filters).every(
+              ([field, value]) =>
+                schedule[field as keyof typeof schedule] === value,
+            ) &&
+            rangeFilters.every((matches) => matches(schedule)),
+          );
+          const query = {
+            order: () => query,
+            take: async (limit: number) => schedules.slice(0, limit),
+          };
+          return query;
         }
 
         throw new Error(`Unsupported query ${table}.${indexName}`);

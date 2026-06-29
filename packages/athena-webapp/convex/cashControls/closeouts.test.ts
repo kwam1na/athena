@@ -228,6 +228,12 @@ describe("cash control closeouts", () => {
         },
         registerSession: {
           _id: "session-1",
+          closeoutOperatingDate: "2026-06-08",
+          closeoutOperatingDateDerivationStatus: "resolved",
+          closeoutOperatingDateEndAt: Date.UTC(2026, 5, 9, 2),
+          closeoutOperatingDateStartAt: Date.UTC(2026, 5, 8, 10),
+          closeoutOwnedAt: Date.UTC(2026, 5, 8, 21),
+          closeoutOwnershipSource: "closed_record",
           status: "closed",
         },
       },
@@ -1578,6 +1584,9 @@ describe("cash control closeouts", () => {
         query: vi.fn(() => ({
           withIndex: vi.fn(() => ({
             collect: vi.fn(async () => []),
+            order: vi.fn(() => ({
+              take: vi.fn(async () => []),
+            })),
             take: vi.fn(async () => []),
           })),
         })),
@@ -1692,6 +1701,9 @@ describe("cash control closeouts", () => {
         query: vi.fn(() => ({
           withIndex: vi.fn(() => ({
             collect: vi.fn(async () => []),
+            order: vi.fn(() => ({
+              take: vi.fn(async () => []),
+            })),
             take: vi.fn(async () => []),
           })),
         })),

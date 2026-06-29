@@ -80,6 +80,38 @@ export type StoreScheduleContext =
       nextWindow: null;
     };
 
+export type StoreOperatingRangeForDateResult =
+  | {
+      kind: "resolved";
+      timezone: string;
+      operatingDate: string;
+      scheduleVersionId: string | null;
+      startAt: number;
+      endAt: number;
+      windowCount: number;
+    }
+  | {
+      kind: "closed";
+      timezone: string;
+      operatingDate: string;
+      scheduleVersionId: string | null;
+      reason: "closed_day";
+    }
+  | {
+      kind: "missing_schedule";
+      timezone: null;
+      operatingDate: string;
+      scheduleVersionId: null;
+      reason: "missing_schedule";
+    }
+  | {
+      kind: "invalid";
+      timezone: string | null;
+      operatingDate: string;
+      scheduleVersionId: string | null;
+      reason: "invalid_operating_date" | "unresolvable_schedule_window";
+    };
+
 export type StoreScheduleValidationResult =
   | { ok: true; fields: Record<string, never> }
   | { ok: false; fields: Record<string, string[]> };
@@ -665,6 +697,65 @@ export function resolveStoreScheduleContext(args: {
     nextWindow:
       nextWindow ??
       (localMinute < firstWindow.startMinute ? firstWindow : null),
+  };
+}
+
+export function resolveStoreOperatingRangeForDate(args: {
+  schedule: StoreScheduleDraft | null | undefined;
+  operatingDate: string;
+}): StoreOperatingRangeForDateResult {
+  if (!parseLocalDate(args.operatingDate)) {
+    return {
+      kind: "invalid",
+      timezone: args.schedule?.timezone ?? null,
+      operatingDate: args.operatingDate,
+      scheduleVersionId: args.schedule?._id ?? null,
+      reason: "invalid_operating_date",
+    };
+  }
+
+  if (!args.schedule) {
+    return {
+      kind: "missing_schedule",
+      timezone: null,
+      operatingDate: args.operatingDate,
+      scheduleVersionId: null,
+      reason: "missing_schedule",
+    };
+  }
+
+  const windows = contextWindowsForDate(args.schedule, args.operatingDate);
+  if (windows.length === 0) {
+    return {
+      kind: "closed",
+      timezone: args.schedule.timezone,
+      operatingDate: args.operatingDate,
+      scheduleVersionId: args.schedule._id ?? null,
+      reason: "closed_day",
+    };
+  }
+
+  const startAt = Math.min(...windows.map((window) => window.startsAt));
+  const endAt = Math.max(...windows.map((window) => window.endsAt));
+
+  if (!Number.isFinite(startAt) || !Number.isFinite(endAt) || endAt <= startAt) {
+    return {
+      kind: "invalid",
+      timezone: args.schedule.timezone,
+      operatingDate: args.operatingDate,
+      scheduleVersionId: args.schedule._id ?? null,
+      reason: "unresolvable_schedule_window",
+    };
+  }
+
+  return {
+    kind: "resolved",
+    timezone: args.schedule.timezone,
+    operatingDate: args.operatingDate,
+    scheduleVersionId: args.schedule._id ?? null,
+    startAt,
+    endAt,
+    windowCount: windows.length,
   };
 }
 

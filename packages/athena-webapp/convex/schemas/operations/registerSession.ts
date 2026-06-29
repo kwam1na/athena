@@ -17,6 +17,29 @@ export const registerSessionSchema = v.object({
   openedByUserId: v.optional(v.id("athenaUser")),
   openedByStaffProfileId: v.optional(v.id("staffProfile")),
   openedAt: v.number(),
+  openedOperatingDate: v.optional(v.string()),
+  openedOperatingDateStartAt: v.optional(v.number()),
+  openedOperatingDateEndAt: v.optional(v.number()),
+  openedOperatingDateScheduleVersionId: v.optional(v.id("storeSchedule")),
+  openedOperatingDateDerivationStatus: v.optional(
+    v.union(v.literal("resolved"), v.literal("missing_schedule"))
+  ),
+  closeoutOwnedAt: v.optional(v.number()),
+  closeoutOwnershipSource: v.optional(
+    v.union(
+      v.literal("closed_record"),
+      v.literal("approval_request"),
+      v.literal("closeout_submission"),
+      v.literal("closed_at")
+    )
+  ),
+  closeoutOperatingDate: v.optional(v.string()),
+  closeoutOperatingDateStartAt: v.optional(v.number()),
+  closeoutOperatingDateEndAt: v.optional(v.number()),
+  closeoutOperatingDateScheduleVersionId: v.optional(v.id("storeSchedule")),
+  closeoutOperatingDateDerivationStatus: v.optional(
+    v.union(v.literal("resolved"), v.literal("missing_schedule"))
+  ),
   openingFloat: v.number(),
   expectedCash: v.number(),
   countedCash: v.optional(v.number()),

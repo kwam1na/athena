@@ -95,8 +95,13 @@ function createMutationCtx(seed?: {
     query: vi.fn((table: string) => ({
       withIndex(indexName: string, buildQuery?: (q: {
         eq: (field: string, value: string) => unknown;
+        lte: (field: string, value: number) => unknown;
       }) => unknown) {
-        if (table !== "registerSession" && table !== "workflowTrace") {
+        if (
+          table !== "registerSession" &&
+          table !== "workflowTrace" &&
+          table !== "storeSchedule"
+        ) {
           throw new Error(`Unsupported query table ${table}`);
         }
 
@@ -108,15 +113,63 @@ function createMutationCtx(seed?: {
         if (table === "workflowTrace" && indexName !== "by_storeId_traceId") {
           throw new Error(`Unsupported workflowTrace index ${indexName}`);
         }
+        if (
+          table === "storeSchedule" &&
+          indexName !== "by_storeId_status_effectiveFrom"
+        ) {
+          throw new Error(`Unsupported storeSchedule index ${indexName}`);
+        }
 
         const filters = new Map<string, string>();
+        const rangeFilters: Array<(row: Record<string, unknown>) => boolean> = [];
         const queryBuilder = {
           eq(field: string, value: string) {
             filters.set(field, value);
             return queryBuilder;
           },
+          lte(field: string, value: number) {
+            rangeFilters.push(
+              (row) =>
+                typeof row[field] === "number" && row[field] <= value,
+            );
+            return queryBuilder;
+          },
         };
         buildQuery?.(queryBuilder);
+
+        if (table === "storeSchedule") {
+          const schedules = [
+            {
+              _id: "schedule-1",
+              createdAt: 0,
+              dateExceptions: [],
+              effectiveFrom: 0,
+              organizationId: "org-1",
+              source: "seed",
+              status: "active",
+              storeId: "store-1",
+              timezone: "UTC",
+              updatedAt: 0,
+              weeklyClosedDays: [],
+              weeklyWindows: Array.from({ length: 7 }, (_, dayOfWeek) => ({
+                dayOfWeek,
+                endMinute: 24 * 60,
+                startMinute: 0,
+              })),
+            },
+          ].filter((schedule) =>
+            [...filters].every(
+              ([field, value]) =>
+                schedule[field as keyof typeof schedule] === value,
+            ) &&
+            rangeFilters.every((matches) => matches(schedule)),
+          );
+          const query = {
+            order: () => query,
+            take: async (limit: number) => schedules.slice(0, limit),
+          };
+          return query;
+        }
 
         return {
           first: async () => {

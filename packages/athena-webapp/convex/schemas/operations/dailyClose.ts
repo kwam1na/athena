@@ -12,6 +12,27 @@ const dailyCloseSourceSubjectValidator = v.object({
   label: v.optional(v.string()),
 });
 
+const dailyCloseSourceCompletenessValidator = v.object({
+  complete: v.boolean(),
+  entries: v.array(
+    v.object({
+      source: v.string(),
+      complete: v.boolean(),
+      readMode: v.string(),
+      recordCount: v.number(),
+      limit: v.optional(v.number()),
+      range: v.optional(
+        v.object({
+          startAt: v.number(),
+          endAt: v.number(),
+        }),
+      ),
+      statuses: v.optional(v.array(v.string())),
+      reason: v.optional(v.string()),
+    }),
+  ),
+});
+
 const dailyCloseReportItemValidator = v.object({
   key: v.string(),
   severity: v.union(
@@ -52,6 +73,9 @@ const dailyCloseReportSnapshotValidator = v.object({
     automationRunId: v.optional(v.id("automationRun")),
     automationPolicyVersion: v.optional(v.string()),
     automationDecisionReason: v.optional(v.string()),
+    currentnessMode: v.optional(
+      v.union(v.literal("mark_current"), v.literal("historical_record")),
+    ),
     policyReviewedItemKeys: v.optional(v.array(v.string())),
     notes: v.optional(v.string()),
     reviewedItemKeys: v.optional(v.array(v.string())),
@@ -68,6 +92,7 @@ const dailyCloseReportSnapshotValidator = v.object({
   reviewedItems: v.array(dailyCloseReportItemValidator),
   carryForwardItems: v.array(dailyCloseReportItemValidator),
   readyItems: v.array(dailyCloseReportItemValidator),
+  sourceCompleteness: v.optional(dailyCloseSourceCompletenessValidator),
   sourceSubjects: v.array(dailyCloseSourceSubjectValidator),
 });
 
@@ -92,6 +117,7 @@ export const dailyCloseSchema = v.object({
     readyCount: v.number(),
   }),
   summary: v.record(v.string(), v.any()),
+  sourceCompleteness: v.optional(dailyCloseSourceCompletenessValidator),
   sourceSubjects: v.array(dailyCloseSourceSubjectValidator),
   reportSnapshot: v.optional(dailyCloseReportSnapshotValidator),
   carryForwardWorkItemIds: v.array(v.id("operationalWorkItem")),

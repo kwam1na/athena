@@ -137,6 +137,14 @@ function createQueryCtx(seed: Record<string, Array<Record<string, unknown>>>) {
                 );
                 return indexQuery;
               },
+              lte(field: string, value: unknown) {
+                predicateFilters.push(
+                  (row) =>
+                    typeof row[field] === "number" &&
+                    row[field] <= (value as number),
+                );
+                return indexQuery;
+              },
             };
             build(indexQuery);
             return query;

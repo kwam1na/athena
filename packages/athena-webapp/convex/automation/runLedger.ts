@@ -487,6 +487,36 @@ export async function recordAutomationRunWithCtx(
   return run;
 }
 
+export async function upsertAutomationRunWithCtx(
+  ctx: MutationCtx,
+  args: AutomationRunRecordInput,
+) {
+  const existingRun = await getAutomationRunByIdempotencyKeyWithCtx(ctx, {
+    idempotencyKey: args.idempotencyKey,
+    storeId: args.storeId,
+  });
+
+  if (!existingRun) {
+    return recordAutomationRunWithCtx(ctx, args);
+  }
+
+  await ctx.db.patch("automationRun", existingRun._id, {
+    ...args,
+    appliedAt: args.outcome === "applied" ? existingRun.appliedAt : undefined,
+    error: args.error,
+    eventIds: args.eventIds ?? [],
+    updatedAt: Date.now(),
+  });
+
+  const run = await ctx.db.get("automationRun", existingRun._id);
+
+  if (!run) {
+    throw new Error("Automation run could not be loaded after update.");
+  }
+
+  return run;
+}
+
 export async function patchAutomationRunOutcomeWithCtx(
   ctx: MutationCtx,
   args: {
