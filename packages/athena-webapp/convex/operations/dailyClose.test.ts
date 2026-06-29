@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
+import * as athenaUserAuth from "../lib/athenaUserAuth";
 import {
   buildDailyCloseSnapshotWithCtx,
   completeDailyClose,
@@ -15,6 +16,11 @@ import {
   reopenDailyCloseWithCtx,
 } from "./dailyClose";
 import { assertConformsToExportedReturns } from "../lib/returnValidatorContract";
+
+vi.mock("../lib/athenaUserAuth", () => ({
+  requireAuthenticatedAthenaUserWithCtx: vi.fn(),
+  requireOrganizationMemberRoleWithCtx: vi.fn(),
+}));
 
 type TableName =
   | "approvalProof"
@@ -371,6 +377,25 @@ function completedDailyCloseRow(overrides: Partial<Row> = {}): Row {
     updatedAt: Date.UTC(2026, 4, 7, 22),
     ...overrides,
   };
+}
+
+function mockDailyCloseSnapshotAccess(role: "full_admin" | "pos_only") {
+  vi.mocked(
+    athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+  ).mockResolvedValue({
+    _creationTime: 0,
+    _id: "user-1" as Id<"athenaUser">,
+    email: "pos@wigclub.store",
+  });
+  vi.mocked(
+    athenaUserAuth.requireOrganizationMemberRoleWithCtx,
+  ).mockResolvedValue({
+    _creationTime: 0,
+    _id: `member-${role}` as Id<"organizationMember">,
+    organizationId: "org-1" as Id<"organization">,
+    role,
+    userId: "user-1" as Id<"athenaUser">,
+  });
 }
 
 describe("end-of-day review backend foundation", () => {
@@ -1045,6 +1070,7 @@ describe("end-of-day review backend foundation", () => {
   });
 
   it("preserves active register blocker context on the exported snapshot query", async () => {
+    mockDailyCloseSnapshotAccess("pos_only");
     const { db } = createDb({
       posTerminal: [
         {
@@ -1111,7 +1137,76 @@ describe("end-of-day review backend foundation", () => {
     expect(snapshot.blockers[0].metadata).not.toHaveProperty("variance");
   });
 
+  it("returns financial metric amounts on the exported snapshot query for full admins", async () => {
+    mockDailyCloseSnapshotAccess("full_admin");
+    const completedAt = Date.UTC(2026, 5, 27, 14);
+    const transactions = Array.from({ length: 7 }, (_, index) => {
+      const isCash = index < 5;
+      const total = (index + 1) * 1000;
+
+      return {
+        _id: `txn-${index + 1}`,
+        completedAt: completedAt + index,
+        payments: [
+          {
+            amount: total,
+            method: isCash ? "cash" : "mobile_money",
+            timestamp: completedAt + index,
+          },
+        ],
+        status: "completed",
+        storeId: "store-1",
+        subtotal: total,
+        tax: 0,
+        total,
+        totalPaid: total,
+        transactionNumber: `TXN-${index + 1}`,
+      };
+    });
+    const { db } = createDb({
+      posTransaction: transactions,
+      store: [store],
+    });
+    const handler = getHandler<
+      {
+        operatingDate: string;
+        storeId: Id<"store">;
+      },
+      Promise<Awaited<ReturnType<typeof buildDailyCloseSnapshotWithCtx>>>
+    >(getDailyCloseSnapshot);
+
+    const snapshot = await handler(
+      { db } as unknown as QueryCtx,
+      {
+        operatingDate: "2026-06-27",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(snapshot.summary).toMatchObject({
+      currentDayCashTotal: 15000,
+      currentDayCashTransactionCount: 5,
+      salesTotal: 28000,
+      transactionCount: 7,
+    });
+    expect(snapshot.summary.paymentTotals).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          amount: 15000,
+          method: "cash",
+          transactionCount: 5,
+        }),
+        expect.objectContaining({
+          amount: 13000,
+          method: "mobile_money",
+          transactionCount: 2,
+        }),
+      ]),
+    );
+  });
+
   it("redacts completed automation review evidence on the exported snapshot query", async () => {
+    mockDailyCloseSnapshotAccess("pos_only");
     const reportSnapshot = completedDailyCloseSnapshot({
       closeMetadata: {
         ...completedDailyCloseSnapshot().closeMetadata,
@@ -2131,8 +2226,8 @@ describe("end-of-day review backend foundation", () => {
     expect(inserts).toEqual([]);
   });
 
-  it("requires review item acknowledgement before completion", async () => {
-    const { db } = createDb({
+  it("requires manager approval before completing a review-only day", async () => {
+    const { db, inserts } = createDb({
       posTransaction: [
         {
           _id: "txn-void",
@@ -2159,15 +2254,15 @@ describe("end-of-day review backend foundation", () => {
     );
 
     expect(result).toMatchObject({
-      kind: "user_error",
-      error: {
-        code: "precondition_failed",
-        metadata: {
-          reviewItemCount: 1,
-          unreviewedItemKeys: ["pos_transaction:txn-void:void"],
+      kind: "approval_required",
+      approval: {
+        action: {
+          key: "operations.daily_close.complete",
+          label: "Complete EOD Review",
         },
       },
     });
+    expect(inserts).toEqual([]);
   });
 
   it("requires manager approval before completing a ready day", async () => {
@@ -2395,6 +2490,162 @@ describe("end-of-day review backend foundation", () => {
         approvedByStaffProfileId: "staff-manager-1",
       },
     });
+  });
+
+  it("completes review-only days and records command-time review evidence", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 4, 7, 22));
+    const { db } = createDb({
+      approvalProof: [dailyCloseApprovalProof()],
+      posTransaction: [
+        {
+          _id: "txn-void",
+          completedAt: Date.UTC(2026, 4, 7, 15),
+          payments: [],
+          status: "void",
+          storeId: "store-1",
+          subtotal: 500,
+          tax: 0,
+          total: 500,
+          totalPaid: 500,
+          transactionNumber: "TXN-2",
+        },
+      ],
+      store: [store],
+    });
+
+    const result = await completeDailyCloseWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        actorStaffProfileId: "staff-1" as Id<"staffProfile">,
+        approvalProofId: "approval-proof-1" as Id<"approvalProof">,
+        operatingDate: "2026-05-07",
+        reviewedItemKeys: [],
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(result).toMatchObject({
+      kind: "ok",
+      data: {
+        action: "completed",
+        dailyClose: {
+          readiness: {
+            reviewCount: 1,
+            status: "needs_review",
+          },
+          reportSnapshot: {
+            closeMetadata: {
+              reviewedItemKeys: ["pos_transaction:txn-void:void"],
+            },
+            reviewedItems: [
+              {
+                key: "pos_transaction:txn-void:void",
+              },
+            ],
+          },
+          reviewedItemKeys: ["pos_transaction:txn-void:void"],
+          status: "completed",
+        },
+      },
+    });
+    expect(() =>
+      assertConformsToExportedReturns(completeDailyClose, result),
+    ).not.toThrow();
+  });
+
+  it("completes an open carry-forward close without duplicating preserved work", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 4, 7, 22));
+    const { db } = createDb({
+      approvalProof: [dailyCloseApprovalProof()],
+      dailyClose: [
+        {
+          _id: "daily-close-open",
+          carryForwardWorkItemIds: ["work-existing"],
+          createdAt: Date.UTC(2026, 4, 7, 20),
+          isCurrent: true,
+          operatingDate: "2026-05-07",
+          organizationId: "org-1",
+          readiness: {
+            blockerCount: 0,
+            carryForwardCount: 1,
+            readyCount: 0,
+            reviewCount: 0,
+            status: "ready",
+          },
+          sourceSubjects: [],
+          status: "open",
+          storeId: "store-1",
+          summary: {
+            carryForwardWorkItemCount: 1,
+          },
+          updatedAt: Date.UTC(2026, 4, 7, 20),
+        },
+      ],
+      operationalWorkItem: [
+        {
+          _id: "work-existing",
+          approvalState: "not_required",
+          createdAt: 4,
+          organizationId: "org-1",
+          priority: "normal",
+          status: "open",
+          storeId: "store-1",
+          title: "Call customer tomorrow",
+          type: "customer_follow_up",
+        },
+      ],
+      store: [store],
+    });
+
+    const result = await completeDailyCloseWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        actorStaffProfileId: "staff-1" as Id<"staffProfile">,
+        approvalProofId: "approval-proof-1" as Id<"approvalProof">,
+        carryForwardWorkItemIds: [
+          "work-existing" as Id<"operationalWorkItem">,
+          "work-existing" as Id<"operationalWorkItem">,
+        ],
+        operatingDate: "2026-05-07",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(result).toMatchObject({
+      kind: "ok",
+      data: {
+        action: "completed",
+        carryForwardWorkItems: [
+          {
+            _id: "work-existing",
+          },
+        ],
+        dailyClose: {
+          _id: "daily-close-open",
+          carryForwardWorkItemIds: ["work-existing"],
+          readiness: {
+            carryForwardCount: 1,
+          },
+          reportSnapshot: {
+            carryForwardItems: [
+              {
+                key: "operational_work_item:work-existing:carry_forward",
+              },
+            ],
+            closeMetadata: {
+              carryForwardWorkItemIds: ["work-existing"],
+            },
+          },
+          status: "completed",
+          summary: {
+            carryForwardWorkItemCount: 1,
+          },
+        },
+      },
+    });
+    expect(() =>
+      assertConformsToExportedReturns(completeDailyClose, result),
+    ).not.toThrow();
   });
 
   it("completes a ready day through automation with durable attribution and no approval proof metadata", async () => {

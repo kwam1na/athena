@@ -871,18 +871,19 @@ function getItemId(item: DailyCloseItem) {
   );
 }
 
-function getReviewedItemKeys(items: DailyCloseItem[]) {
-  return items.map((item) => item.key ?? getItemId(item));
-}
-
 function getCarryForwardWorkItemId(item: DailyCloseItem) {
-  return item.subject?.type === "operational_work_item"
-    ? item.subject.id
-    : getItemId(item);
+  if (item.subject?.type !== "operational_work_item") {
+    return null;
+  }
+
+  return isUsableRouteIdentifier(item.subject.id) ? item.subject.id : null;
 }
 
 function getCarryForwardWorkItemIds(items: DailyCloseItem[]) {
-  return items.map(getCarryForwardWorkItemId);
+  return items.flatMap((item) => {
+    const workItemId = getCarryForwardWorkItemId(item);
+    return workItemId ? [workItemId] : [];
+  });
 }
 
 function getItemDescription(item: DailyCloseItem) {
@@ -2304,6 +2305,9 @@ function BucketSection({
         ) : (
           paginatedItems.map((item) => {
             const selectionId = getCarryForwardWorkItemId(item);
+            const isSelectable = Boolean(
+              selectionId && selectedIds && onSelectedIdsChange,
+            );
 
             return (
               <DailyCloseItemCard
@@ -2312,7 +2316,9 @@ function BucketSection({
                 item={item}
                 key={getItemId(item)}
                 onSelectedChange={(isSelected) => {
-                  if (!selectedIds || !onSelectedIdsChange) return;
+                  if (!selectionId || !selectedIds || !onSelectedIdsChange) {
+                    return;
+                  }
 
                   onSelectedIdsChange(
                     isSelected
@@ -2321,8 +2327,8 @@ function BucketSection({
                   );
                 }}
                 orgUrlSlug={orgUrlSlug}
-                selectable={Boolean(selectedIds && onSelectedIdsChange)}
-                selected={selectedIds?.includes(selectionId)}
+                selectable={isSelectable}
+                selected={selectionId ? selectedIds?.includes(selectionId) : false}
                 storeUrlSlug={storeUrlSlug}
               />
             );
@@ -3295,7 +3301,7 @@ export function DailyCloseViewContent({
       endAt: snapshot.endAt,
       notes,
       operatingDate: snapshot.operatingDate,
-      reviewedItemKeys: getReviewedItemKeys(snapshot.reviewItems),
+      reviewedItemKeys: [],
       startAt: snapshot.startAt,
     };
 
