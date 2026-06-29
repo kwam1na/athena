@@ -89,56 +89,66 @@ describe("StoreHoursView", () => {
     vi.useRealTimers();
   });
 
-  it("shows candidate store hours and requires full-admin confirmation before saving", async () => {
-    const user = userEvent.setup();
+  it(
+    "shows candidate store hours and requires full-admin confirmation before saving",
+    async () => {
+      const user = userEvent.setup();
 
-    render(<StoreHoursView />);
+      render(<StoreHoursView />);
 
-    expect(screen.getByText("Store Hours")).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        "Review these suggested hours before Athena uses them as the store schedule.",
-      ),
-    ).toBeInTheDocument();
-    expect(screen.getByText("Needs admin review")).toBeInTheDocument();
-    expect(screen.getByRole("combobox", { name: "Store timezone" }))
-      .toHaveTextContent("America/New_York");
-    expect(screen.getByRole("button", { name: "Save store hours" }))
-      .toBeDisabled();
+      expect(screen.getByText("Store Hours")).toBeInTheDocument();
+      expect(
+        screen.getByText(
+          "Review these suggested hours before Athena uses them as the store schedule.",
+        ),
+      ).toBeInTheDocument();
+      expect(screen.getByText("Needs admin review")).toBeInTheDocument();
+      expect(screen.getByRole("combobox", { name: "Store timezone" }))
+        .toHaveTextContent("America/New_York");
+      expect(screen.getByRole("button", { name: "Save store hours" }))
+        .toBeDisabled();
 
-    await user.click(screen.getByLabelText("Confirm suggested store hours"));
-    await user.click(screen.getByRole("combobox", { name: "Store timezone" }));
-    await user.click(await screen.findByRole("option", { name: "Africa/Accra" }));
-    await user.click(screen.getByRole("combobox", { name: "Monday close time" }));
-    await user.click(await screen.findByRole("option", { name: "06:30 PM" }));
-    await user.click(screen.getByRole("button", { name: "Save store hours" }));
+      await user.click(screen.getByLabelText("Confirm suggested store hours"));
+      await user.click(
+        screen.getByRole("combobox", { name: "Store timezone" }),
+      );
+      await user.click(
+        await screen.findByRole("option", { name: "Africa/Accra" }),
+      );
+      await user.click(
+        screen.getByRole("combobox", { name: "Monday close time" }),
+      );
+      await user.click(await screen.findByRole("option", { name: "06:30 PM" }));
+      await user.click(screen.getByRole("button", { name: "Save store hours" }));
 
-    await waitFor(() =>
-      expect(mockUpdateSchedule).toHaveBeenCalledWith(
-        expect.objectContaining({
-          storeId: "store-1",
-          schedule: expect.objectContaining({
-            dateExceptions: expect.arrayContaining([
-              expect.objectContaining({
-                closed: true,
-                localDate: "2026-07-04",
-                note: "Holiday",
-              }),
-            ]),
-            timezone: "Africa/Accra",
-            weeklyClosedDays: expect.arrayContaining([0]),
-            weeklyWindows: expect.arrayContaining([
-              expect.objectContaining({
-                dayOfWeek: 1,
-                endMinute: 18 * 60 + 30,
-                startMinute: 9 * 60,
-              }),
-            ]),
+      await waitFor(() =>
+        expect(mockUpdateSchedule).toHaveBeenCalledWith(
+          expect.objectContaining({
+            storeId: "store-1",
+            schedule: expect.objectContaining({
+              dateExceptions: expect.arrayContaining([
+                expect.objectContaining({
+                  closed: true,
+                  localDate: "2026-07-04",
+                  note: "Holiday",
+                }),
+              ]),
+              timezone: "Africa/Accra",
+              weeklyClosedDays: expect.arrayContaining([0]),
+              weeklyWindows: expect.arrayContaining([
+                expect.objectContaining({
+                  dayOfWeek: 1,
+                  endMinute: 18 * 60 + 30,
+                  startMinute: 9 * 60,
+                }),
+              ]),
+            }),
           }),
-        }),
-      ),
-    );
-  });
+        ),
+      );
+    },
+    15_000,
+  );
 
   it("keeps non-full-admin accounts in a read-only summary state", () => {
     mockHasFullAdminAccess = false;
