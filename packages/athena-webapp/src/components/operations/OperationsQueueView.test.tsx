@@ -334,9 +334,15 @@ describe("OperationsQueueViewContent", () => {
             _id: "work-item-1" as Id<"operationalWorkItem">,
             approvalState: "pending",
             createdAt: Date.now() - 5 * 60 * 1000,
+            metadata: {
+              lookupCode: "nahh",
+              price: 80000,
+              quantitySold: 1,
+              totalQuantitySold: 1,
+            },
             priority: "normal",
             status: "open",
-            title: "Review pending checkout item",
+            title: "Review pending checkout item: ADORE DYE",
             type: "pos_pending_checkout_item_review",
           },
           {
@@ -345,7 +351,7 @@ describe("OperationsQueueViewContent", () => {
             createdAt: Date.now() - 10 * 60 * 1000,
             priority: "high",
             status: "open",
-            title: "Follow up service intake",
+            title: "follow up service intake",
             type: "service_case",
           },
         ]}
@@ -358,8 +364,26 @@ describe("OperationsQueueViewContent", () => {
         "Service intake and stock review work that still needs progress or completion.",
       ),
     ).toBeInTheDocument();
-    expect(screen.getByText("Review pending checkout item")).toBeInTheDocument();
-    expect(screen.getByText("Follow up service intake")).toBeInTheDocument();
+    expect(
+      screen.getByRole("region", { name: "Work type breakdown" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Work type")).toBeInTheDocument();
+    expect(screen.getByText("2 work types")).toBeInTheDocument();
+    expect(screen.getByText("POS pending checkout")).toBeInTheDocument();
+    expect(screen.getByText("Service intake")).toBeInTheDocument();
+    expect(screen.getAllByText("1 item")).toHaveLength(2);
+    expect(
+      screen.getByText("Review pending checkout item: Adore Dye"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Item code")).toBeInTheDocument();
+    expect(screen.getByText("Quantity sold")).toBeInTheDocument();
+    expect(screen.getByText("Total sold")).toBeInTheDocument();
+    expect(screen.getByText("Price")).toBeInTheDocument();
+    expect(screen.getByText("GH₵800")).toBeInTheDocument();
+    expect(screen.queryByText("GH₵80,000")).not.toBeInTheDocument();
+    expect(screen.getByText("Follow Up Service Intake")).toBeInTheDocument();
+    expect(screen.getByText("Owner")).toBeInTheDocument();
+    expect(screen.getByText("Customer")).toBeInTheDocument();
   });
 
   it("shows only the open work header while the queue is loading", () => {
@@ -503,8 +527,8 @@ describe("OperationsQueueViewContent", () => {
         "Review manager approval requests before queued stock and payment changes are applied.",
       ),
     ).toBeInTheDocument();
-    expect(screen.getByText("Cycle count review · 1 SKU")).toBeInTheDocument();
-    expect(screen.getByText("Service deposit review")).toBeInTheDocument();
+    expect(screen.getByText("Cycle Count Review · 1 SKU")).toBeInTheDocument();
+    expect(screen.getByText("Service Deposit Review")).toBeInTheDocument();
   });
 
   it("separates open work items from pending approvals", () => {
@@ -540,7 +564,7 @@ describe("OperationsQueueViewContent", () => {
       />,
     );
 
-    expect(screen.getByText("Closure wig wash and style")).toBeInTheDocument();
+    expect(screen.getByText("Closure Wig Wash And Style")).toBeInTheDocument();
     expect(screen.getByText("Requested by Mary Aidoo")).toBeInTheDocument();
     expect(screen.queryByText("pending")).not.toBeInTheDocument();
 
@@ -576,7 +600,7 @@ describe("OperationsQueueViewContent", () => {
       />,
     );
 
-    expect(screen.getByText("Closure wig wash and style")).toBeInTheDocument();
+    expect(screen.getByText("Closure Wig Wash And Style")).toBeInTheDocument();
     expect(screen.getByText("Service Intake")).toBeInTheDocument();
     expect(screen.getByText("Intake Created")).toBeInTheDocument();
     expect(screen.getByText("Urgent")).toBeInTheDocument();
@@ -617,23 +641,153 @@ describe("OperationsQueueViewContent", () => {
       />,
     );
 
-    expect(screen.getByText("Open work item 1")).toBeInTheDocument();
-    expect(screen.getByText("Open work item 5")).toBeInTheDocument();
-    expect(screen.queryByText("Open work item 6")).not.toBeInTheDocument();
+    expect(screen.getByText("Open Work Item 1")).toBeInTheDocument();
+    expect(screen.getByText("Open Work Item 5")).toBeInTheDocument();
+    expect(screen.queryByText("Open Work Item 6")).not.toBeInTheDocument();
     expect(screen.getByText("Showing 1-5 of 12")).toBeInTheDocument();
     expect(screen.getByText("Page 1 of 3")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Go to next page" }));
 
-    expect(screen.queryByText("Open work item 1")).not.toBeInTheDocument();
-    expect(screen.getByText("Open work item 6")).toBeInTheDocument();
-    expect(screen.getByText("Open work item 10")).toBeInTheDocument();
-    expect(screen.queryByText("Open work item 11")).not.toBeInTheDocument();
+    expect(screen.queryByText("Open Work Item 1")).not.toBeInTheDocument();
+    expect(screen.getByText("Open Work Item 6")).toBeInTheDocument();
+    expect(screen.getByText("Open Work Item 10")).toBeInTheDocument();
+    expect(screen.queryByText("Open Work Item 11")).not.toBeInTheDocument();
     expect(screen.getByText("Showing 6-10 of 12")).toBeInTheDocument();
     expect(screen.getByText("Page 2 of 3")).toBeInTheDocument();
   });
 
-  it("links synced sale inventory work items to manual stock adjustments", () => {
+  it("sorts open work items by latest and oldest creation time", async () => {
+    const { default: userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+    const baseTime = Date.UTC(2026, 5, 28, 12, 0, 0);
+    const workItems = Array.from({ length: 6 }, (_, index) => ({
+      _id: `work-item-${index + 1}` as Id<"operationalWorkItem">,
+      approvalState: "not_required",
+      createdAt: baseTime + index * 60 * 1000,
+      priority: "normal",
+      status: "open",
+      title: `Open work item ${index + 1}`,
+      type: "service_case",
+    }));
+
+    render(
+      <OperationsQueueViewContent
+        {...baseProps}
+        activeWorkflow="queue"
+        workItems={workItems}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Latest" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByText("Open Work Item 6")).toBeInTheDocument();
+    expect(screen.queryByText("Open Work Item 1")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Oldest" }));
+
+    expect(screen.getByRole("button", { name: "Oldest" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByText("Open Work Item 1")).toBeInTheDocument();
+    expect(screen.queryByText("Open Work Item 6")).not.toBeInTheDocument();
+    expect(screen.getByText("Page 1 of 2")).toBeInTheDocument();
+  });
+
+  it("links pending checkout work items to stock adjustments with the provisional SKU selected", () => {
+    render(
+      <OperationsQueueViewContent
+        {...baseProps}
+        activeWorkflow="queue"
+        orgUrlSlug="wigclub"
+        storeUrlSlug="wigclub"
+        workItems={[
+          {
+            _id: "work-item-1" as Id<"operationalWorkItem">,
+            approvalState: "not_required",
+            createdAt: Date.now() - 5 * 60 * 1000,
+            metadata: {
+              provisionalProductSkuId: "pending-sku-1",
+            },
+            priority: "normal",
+            status: "open",
+            title: "Review pending checkout item: BRUDDAH",
+            type: "pos_pending_checkout_item_review",
+          },
+        ]}
+      />,
+    );
+
+    const titleHref = new URL(
+      screen
+        .getByRole("link", {
+          name: "Bruddah",
+        })
+        .getAttribute("href") ?? "",
+      "http://localhost",
+    );
+    expect(
+      screen.getByText((_content, element) =>
+        element?.tagName.toLowerCase() === "p" &&
+        element.textContent === "Review pending checkout item: Bruddah",
+      ),
+    ).toBeInTheDocument();
+    expect(titleHref.pathname).toBe(
+      "/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments",
+    );
+    expect(titleHref.searchParams.get("mode")).toBe("manual");
+    expect(titleHref.searchParams.get("sku")).toBe("pending-sku-1");
+
+    const actionHref = new URL(
+      screen
+        .getByRole("link", { name: "Open stock adjustments" })
+        .getAttribute("href") ?? "",
+      "http://localhost",
+    );
+    expect(actionHref.searchParams.get("sku")).toBe("pending-sku-1");
+  });
+
+  it("keeps pending checkout work item titles plain without provisional SKU metadata", () => {
+    render(
+      <OperationsQueueViewContent
+        {...baseProps}
+        activeWorkflow="queue"
+        orgUrlSlug="wigclub"
+        storeUrlSlug="wigclub"
+        workItems={[
+          {
+            _id: "work-item-1" as Id<"operationalWorkItem">,
+            approvalState: "not_required",
+            createdAt: Date.now() - 5 * 60 * 1000,
+            priority: "normal",
+            status: "open",
+            title: "Review pending checkout item: BRUDDAH",
+            type: "pos_pending_checkout_item_review",
+          },
+        ]}
+      />,
+    );
+
+    expect(
+      screen.getByText("Review pending checkout item: Bruddah"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", {
+        name: "Bruddah",
+      }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "Open stock adjustments" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("links synced sale inventory work items to manual stock adjustments", async () => {
+    const { default: userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+
     render(
       <OperationsQueueViewContent
         {...baseProps}
@@ -650,10 +804,11 @@ describe("OperationsQueueViewContent", () => {
               receiptNumber: "939540",
               sourceId: "transaction-1",
               sourceType: "posTransaction",
+              trustedInventoryLines: [{ productSkuId: "product-sku-1" }],
             },
             priority: "high",
             status: "open",
-            title: "Review inventory for Ebin Skin Protector Enhanced",
+            title: "Review inventory for ADORE DYE",
             type: "synced_sale_inventory_review",
           },
         ]}
@@ -661,9 +816,51 @@ describe("OperationsQueueViewContent", () => {
     );
 
     expect(
-      screen.getByText("Review inventory for Ebin Skin Protector Enhanced"),
+      screen.getByText((_content, element) =>
+        element?.tagName.toLowerCase() === "p" &&
+        element.textContent === "Review inventory for Adore Dye",
+      ),
     ).toBeInTheDocument();
     expect(screen.getByText("Synced Sale Inventory Review")).toBeInTheDocument();
+    const titleHref = new URL(
+      screen
+        .getByRole("link", { name: "Adore Dye" })
+        .getAttribute("href") ?? "",
+      "http://localhost",
+    );
+    expect(titleHref.pathname).toBe(
+      "/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments",
+    );
+    expect(titleHref.searchParams.get("mode")).toBe("manual");
+    expect(titleHref.searchParams.get("sku")).toBe("product-sku-1");
+    expect(screen.getByText("Receipt")).toBeInTheDocument();
+    const receiptLink = screen.getByRole("link", {
+      name: "Open transaction #939540",
+    });
+    expect(receiptLink).toBeInTheDocument();
+    expect(receiptLink).toHaveAttribute(
+      "href",
+      "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId?o=%252F",
+    );
+    expect(screen.queryByText("Primary SKU")).not.toBeInTheDocument();
+    expect(screen.queryByText("product-sku-1")).not.toBeInTheDocument();
+    expect(screen.getByText("Needs action")).toBeInTheDocument();
+    expect(screen.getByText("Check stock count")).toBeInTheDocument();
+    expect(screen.queryByText("Why")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Sale synced without reducing stock"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Affected sale lines")).not.toBeInTheDocument();
+    expect(screen.queryByText("1 line")).not.toBeInTheDocument();
+    expect(screen.getByText("High")).toHaveClass(
+      "bg-surface",
+      "text-muted-foreground",
+    );
+
+    await user.click(screen.getByRole("button", { name: "Show details" }));
+
+    expect(screen.getByText("Affected sale lines")).toBeInTheDocument();
+    expect(screen.getByText("1 line")).toBeInTheDocument();
 
     const stockAdjustmentsHref = new URL(
       screen
@@ -676,6 +873,74 @@ describe("OperationsQueueViewContent", () => {
     );
     expect(stockAdjustmentsHref.searchParams.get("mode")).toBe("manual");
     expect(stockAdjustmentsHref.searchParams.get("sku")).toBe("product-sku-1");
+  });
+
+  it("hydrates open work page and sort state from controlled search", () => {
+    const baseTime = Date.UTC(2026, 5, 28, 12, 0, 0);
+    const workItems = Array.from({ length: 6 }, (_, index) => ({
+      _id: `work-item-${index + 1}` as Id<"operationalWorkItem">,
+      approvalState: "not_required",
+      createdAt: baseTime + index * 60 * 1000,
+      priority: "normal",
+      status: "open",
+      title: `Open work item ${index + 1}`,
+      type: "service_case",
+    }));
+
+    render(
+      <OperationsQueueViewContent
+        {...baseProps}
+        activeWorkflow="queue"
+        openWorkSearch={{
+          page: 2,
+          sort: "oldest",
+        }}
+        workItems={workItems}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Oldest" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByText("Open Work Item 6")).toBeInTheDocument();
+    expect(screen.queryByText("Open Work Item 1")).not.toBeInTheDocument();
+    expect(screen.getByText("Page 2 of 2")).toBeInTheDocument();
+  });
+
+  it("reports open work page and sort changes for route search state", async () => {
+    const { default: userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+    const onOpenWorkSearchChange = vi.fn();
+    const workItems = Array.from({ length: 6 }, (_, index) => ({
+      _id: `work-item-${index + 1}` as Id<"operationalWorkItem">,
+      approvalState: "not_required",
+      createdAt: Date.now() - index * 60 * 1000,
+      priority: "normal",
+      status: "open",
+      title: `Open work item ${index + 1}`,
+      type: "service_case",
+    }));
+
+    render(
+      <OperationsQueueViewContent
+        {...baseProps}
+        activeWorkflow="queue"
+        onOpenWorkSearchChange={onOpenWorkSearchChange}
+        workItems={workItems}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Go to next page" }));
+
+    expect(onOpenWorkSearchChange).toHaveBeenCalledWith({ page: 2 });
+
+    await user.click(screen.getByRole("button", { name: "Oldest" }));
+
+    expect(onOpenWorkSearchChange).toHaveBeenCalledWith({
+      page: undefined,
+      sort: "oldest",
+    });
   });
 
   it("does not link synced sale inventory work items without valid SKU metadata", () => {
@@ -705,6 +970,36 @@ describe("OperationsQueueViewContent", () => {
 
     expect(
       screen.queryByRole("link", { name: "Open stock adjustments" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("renders synced sale receipt as text when transaction metadata is unavailable", () => {
+    render(
+      <OperationsQueueViewContent
+        {...baseProps}
+        activeWorkflow="queue"
+        orgUrlSlug="wigclub"
+        storeUrlSlug="wigclub"
+        workItems={[
+          {
+            _id: "work-item-1" as Id<"operationalWorkItem">,
+            approvalState: "not_required",
+            createdAt: Date.now() - 5 * 60 * 1000,
+            metadata: {
+              receiptNumber: "939540",
+            },
+            priority: "high",
+            status: "open",
+            title: "Review inventory for ADORE DYE",
+            type: "synced_sale_inventory_review",
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("#939540")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "Open transaction #939540" }),
     ).not.toBeInTheDocument();
   });
 
