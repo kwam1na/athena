@@ -34,6 +34,7 @@ import { buildPaymentTotals, transactionCashDelta } from "./paymentTotals";
 import type { AutomationDecisionEvidence } from "../automation/runLedger";
 
 const DAILY_CLOSE_QUERY_LIMIT = 200;
+const REGISTER_SESSION_DAILY_CLOSE_SOURCE_LIMIT = 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_OPERATING_DATE_RANGE_MS = 36 * 60 * 60 * 1000;
 const DAILY_CLOSE_SUBJECT_TYPE = "daily_close";
@@ -83,9 +84,11 @@ type DailyCloseRange = { endAt: number; startAt: number };
 type RegisterSessionRangeCandidate = Pick<
   Doc<"registerSession">,
   | "closedAt"
+  | "closeoutOperatingDate"
   | "closeoutRecords"
   | "countedCash"
   | "managerApprovalRequestId"
+  | "openedOperatingDate"
   | "openedAt"
   | "status"
 >;
@@ -143,6 +146,27 @@ type DailyCloseSummary = {
   }>;
 };
 
+type DailyCloseSourceCompletenessEntry = {
+  source: string;
+  complete: boolean;
+  readMode: string;
+  recordCount: number;
+  limit?: number;
+  range?: DailyCloseRange;
+  statuses?: string[];
+  reason?: string;
+};
+
+type DailyCloseSourceCompleteness = {
+  complete: boolean;
+  entries: DailyCloseSourceCompletenessEntry[];
+};
+
+type DailyCloseSourceRead<T> = {
+  rows: T[];
+  completeness: DailyCloseSourceCompletenessEntry;
+};
+
 type DailyCloseSnapshot = {
   operatingDate: string;
   storeId: Id<"store">;
@@ -173,6 +197,7 @@ type DailyCloseSnapshot = {
   readyItems: DailyCloseItem[];
   readiness: DailyCloseReadiness;
   summary: DailyCloseSummary;
+  sourceCompleteness: DailyCloseSourceCompleteness;
   sourceSubjects: Array<{
     type: string;
     id: string;
@@ -209,6 +234,7 @@ type DailyCloseReportSnapshot = {
     automationRunId?: Id<"automationRun">;
     automationPolicyVersion?: string;
     automationDecisionReason?: string;
+    currentnessMode?: "mark_current" | "historical_record";
     policyReviewedItemKeys?: string[];
     notes?: string;
     reviewedItemKeys?: string[];
@@ -219,6 +245,7 @@ type DailyCloseReportSnapshot = {
   reviewedItems: DailyCloseItem[];
   carryForwardItems: DailyCloseItem[];
   readyItems: DailyCloseItem[];
+  sourceCompleteness?: DailyCloseSourceCompleteness;
   sourceSubjects: DailyCloseSnapshot["sourceSubjects"];
 };
 
@@ -279,7 +306,51 @@ function normalizeCompletedDailyCloseSnapshot(args: {
     readiness: reportSnapshot.readiness,
     summary: normalizeDailyCloseSummary(reportSnapshot.summary),
     sourceSubjects: reportSnapshot.sourceSubjects,
+    sourceCompleteness:
+      reportSnapshot.sourceCompleteness ?? completeSourceCompleteness([]),
   };
+}
+
+function completeSourceCompleteness(
+  entries: DailyCloseSourceCompletenessEntry[],
+): DailyCloseSourceCompleteness {
+  return {
+    complete: entries.every((entry) => entry.complete),
+    entries,
+  };
+}
+
+function sourceCompletenessEntry(args: {
+  complete?: boolean;
+  limit?: number;
+  range?: DailyCloseRange;
+  readMode: string;
+  recordCount: number;
+  reason?: string;
+  source: string;
+  statuses?: string[];
+}): DailyCloseSourceCompletenessEntry {
+  const complete =
+    args.complete ?? (args.limit === undefined || args.recordCount < args.limit);
+
+  return {
+    source: args.source,
+    complete,
+    readMode: args.readMode,
+    recordCount: args.recordCount,
+    ...(args.limit === undefined ? {} : { limit: args.limit }),
+    ...(args.range === undefined ? {} : { range: args.range }),
+    ...(args.statuses === undefined ? {} : { statuses: args.statuses }),
+    ...(complete ? {} : { reason: args.reason ?? `${args.source}_source_cap_reached` }),
+  };
+}
+
+function mergeSourceCompleteness(
+  ...sources: Array<DailyCloseSourceCompleteness | DailyCloseSourceCompletenessEntry>
+) {
+  return completeSourceCompleteness(
+    sources.flatMap((source) => ("entries" in source ? source.entries : [source])),
+  );
 }
 
 function normalizeDailyCloseSummary(
@@ -404,6 +475,7 @@ type CompleteDailyCloseForAutomationArgs = {
   policyReviewedItemKeys: string[];
   startAt?: number;
   storeId: Id<"store">;
+  currentnessMode?: "mark_current" | "historical_record";
 };
 
 type CompleteDailyCloseResult = ApprovalCommandResult<{
@@ -877,64 +949,191 @@ async function getPriorCompletedDailyClose(
   );
 }
 
-async function listActiveRegisterSessions(
-  ctx: Pick<QueryCtx, "db">,
-  storeId: Id<"store">,
-) {
-  const sessions = await Promise.all(
-    ACTIVE_REGISTER_STATUSES.map((status) =>
-      ctx.db
-        .query("registerSession")
-        .withIndex("by_storeId_status", (q) =>
-          q.eq("storeId", storeId).eq("status", status),
-        )
-        .take(DAILY_CLOSE_QUERY_LIMIT),
-    ),
-  );
-
-  return sessions.flat();
-}
-
-async function listReviewOnlyRegisterCloseoutSessions(
-  ctx: Pick<QueryCtx, "db">,
-  storeId: Id<"store">,
-) {
-  const sessions = await Promise.all(
-    REVIEW_ONLY_REGISTER_CLOSEOUT_STATUSES.map((status) =>
-      ctx.db
-        .query("registerSession")
-        .withIndex("by_storeId_status", (q) =>
-          q.eq("storeId", storeId).eq("status", status),
-        )
-        .take(DAILY_CLOSE_QUERY_LIMIT),
-    ),
-  );
-
-  return sessions.flat();
-}
-
-async function listClosedRegisterSessionsForDay(
+async function listRegisterSessionsForDailyClose(
   ctx: Pick<QueryCtx, "db">,
   args: {
     endAt: number;
+    operatingDate: string;
     startAt: number;
     storeId: Id<"store">;
   },
 ) {
-  const sessions = await ctx.db
-    .query("registerSession")
-    .withIndex("by_storeId_status", (q) =>
-      q.eq("storeId", args.storeId).eq("status", "closed"),
-    )
-    .take(DAILY_CLOSE_QUERY_LIMIT);
-
-  return sessions.filter((session) =>
-    isInRange(
-      registerSessionCloseoutOperatingAt(session),
-      args.startAt,
-      args.endAt,
+  const range = { startAt: args.startAt, endAt: args.endAt };
+  const activeIndexedSessionPages = await Promise.all(
+    ACTIVE_REGISTER_STATUSES.map((status) =>
+      ctx.db
+        .query("registerSession")
+        .withIndex("by_storeId_status_openedOperatingDate", (q) =>
+          q
+            .eq("storeId", args.storeId)
+            .eq("status", status)
+            .lte("openedOperatingDate", args.operatingDate),
+        )
+        .order("desc")
+        .take(REGISTER_SESSION_DAILY_CLOSE_SOURCE_LIMIT),
     ),
   );
+  const activeMissingDateSessionPages = await Promise.all(
+    ACTIVE_REGISTER_STATUSES.map((status) =>
+      ctx.db
+        .query("registerSession")
+        .withIndex("by_storeId_status_openedOperatingDate", (q) =>
+          q
+            .eq("storeId", args.storeId)
+            .eq("status", status)
+            .eq("openedOperatingDate", undefined),
+        )
+        .take(REGISTER_SESSION_DAILY_CLOSE_SOURCE_LIMIT),
+    ),
+  );
+  const reviewOnlyIndexedSessionPages = await Promise.all(
+    REVIEW_ONLY_REGISTER_CLOSEOUT_STATUSES.map((status) =>
+      ctx.db
+        .query("registerSession")
+        .withIndex("by_storeId_status_closeoutOperatingDate", (q) =>
+          q
+            .eq("storeId", args.storeId)
+            .eq("status", status)
+            .eq("closeoutOperatingDate", args.operatingDate),
+        )
+        .take(REGISTER_SESSION_DAILY_CLOSE_SOURCE_LIMIT),
+    ),
+  );
+  const reviewOnlyMissingDateSessionPages = await Promise.all(
+    REVIEW_ONLY_REGISTER_CLOSEOUT_STATUSES.map((status) =>
+      ctx.db
+        .query("registerSession")
+        .withIndex("by_storeId_status_closeoutOperatingDate", (q) =>
+          q
+            .eq("storeId", args.storeId)
+            .eq("status", status)
+            .eq("closeoutOperatingDate", undefined),
+        )
+        .take(REGISTER_SESSION_DAILY_CLOSE_SOURCE_LIMIT),
+    ),
+  );
+  const indexedClosedSessions = await ctx.db
+    .query("registerSession")
+    .withIndex("by_storeId_status_closeoutOperatingDate", (q) =>
+      q
+        .eq("storeId", args.storeId)
+        .eq("status", "closed")
+        .eq("closeoutOperatingDate", args.operatingDate),
+    )
+    .take(REGISTER_SESSION_DAILY_CLOSE_SOURCE_LIMIT);
+  const legacyClosedSessionCandidates = await ctx.db
+    .query("registerSession")
+    .withIndex("by_storeId_status_closeoutOperatingDate", (q) =>
+      q
+        .eq("storeId", args.storeId)
+        .eq("status", "closed")
+        .eq("closeoutOperatingDate", undefined),
+    )
+    .take(REGISTER_SESSION_DAILY_CLOSE_SOURCE_LIMIT);
+  const closedSessionsById = new Map<Id<"registerSession">, Doc<"registerSession">>();
+
+  indexedClosedSessions.forEach((session) =>
+    closedSessionsById.set(session._id, session),
+  );
+  legacyClosedSessionCandidates
+    .filter(
+      (session) =>
+        !session.closeoutOperatingDate &&
+        isInRange(
+          registerSessionCloseoutOperatingAt(session),
+          args.startAt,
+          args.endAt,
+        ),
+    )
+    .forEach((session) => closedSessionsById.set(session._id, session));
+  const activeSessionsById = new Map<Id<"registerSession">, Doc<"registerSession">>();
+  const reviewOnlySessionsById = new Map<Id<"registerSession">, Doc<"registerSession">>();
+
+  activeIndexedSessionPages
+    .flat()
+    .filter((session) => registerSessionIntersectsRange(session, range))
+    .forEach((session) => activeSessionsById.set(session._id, session));
+  activeMissingDateSessionPages
+    .flat()
+    .filter((session) => registerSessionBelongsToRange(session, range))
+    .forEach((session) => activeSessionsById.set(session._id, session));
+  reviewOnlyIndexedSessionPages.flat().forEach((session) =>
+    reviewOnlySessionsById.set(session._id, session),
+  );
+  reviewOnlyMissingDateSessionPages
+    .flat()
+    .filter((session) => registerSessionBelongsToRange(session, range))
+    .forEach((session) => reviewOnlySessionsById.set(session._id, session));
+
+  return {
+    activeSessions: Array.from(activeSessionsById.values()),
+    reviewOnlySessions: Array.from(reviewOnlySessionsById.values()),
+    closedSessions: Array.from(closedSessionsById.values()),
+    sourceCompleteness: completeSourceCompleteness([
+      ...ACTIVE_REGISTER_STATUSES.map((status, index) =>
+        sourceCompletenessEntry({
+          source: "register_session",
+          readMode: "by_storeId_status_openedOperatingDate",
+          recordCount: activeIndexedSessionPages[index].length,
+          limit: REGISTER_SESSION_DAILY_CLOSE_SOURCE_LIMIT,
+          range,
+          reason: "register_session_active_opened_date_cap_reached",
+          statuses: [status],
+        }),
+      ),
+      ...ACTIVE_REGISTER_STATUSES.map((status, index) =>
+        sourceCompletenessEntry({
+          source: "register_session",
+          readMode: "by_storeId_status_openedOperatingDate_missing",
+          recordCount: activeMissingDateSessionPages[index].length,
+          limit: REGISTER_SESSION_DAILY_CLOSE_SOURCE_LIMIT,
+          range,
+          reason: "register_session_active_missing_opened_date_cap_reached",
+          statuses: [status],
+        }),
+      ),
+      ...REVIEW_ONLY_REGISTER_CLOSEOUT_STATUSES.map((status, index) =>
+        sourceCompletenessEntry({
+          source: "register_session",
+          readMode: "by_storeId_status_closeoutOperatingDate",
+          recordCount: reviewOnlyIndexedSessionPages[index].length,
+          limit: REGISTER_SESSION_DAILY_CLOSE_SOURCE_LIMIT,
+          range,
+          reason: "register_session_review_closeout_date_cap_reached",
+          statuses: [status],
+        }),
+      ),
+      ...REVIEW_ONLY_REGISTER_CLOSEOUT_STATUSES.map((status, index) =>
+        sourceCompletenessEntry({
+          source: "register_session",
+          readMode: "by_storeId_status_closeoutOperatingDate_missing",
+          recordCount: reviewOnlyMissingDateSessionPages[index].length,
+          limit: REGISTER_SESSION_DAILY_CLOSE_SOURCE_LIMIT,
+          range,
+          reason: "register_session_review_missing_closeout_date_cap_reached",
+          statuses: [status],
+        }),
+      ),
+      sourceCompletenessEntry({
+        source: "register_session",
+        readMode: "by_storeId_status_closeoutOperatingDate",
+        recordCount: indexedClosedSessions.length,
+        limit: REGISTER_SESSION_DAILY_CLOSE_SOURCE_LIMIT,
+        range,
+        reason: "register_session_closed_date_cap_reached",
+        statuses: ["closed"],
+      }),
+      sourceCompletenessEntry({
+        source: "register_session",
+        readMode: "by_storeId_status_closeoutOperatingDate_missing",
+        recordCount: legacyClosedSessionCandidates.length,
+        limit: REGISTER_SESSION_DAILY_CLOSE_SOURCE_LIMIT,
+        range,
+        reason: "register_session_legacy_closed_fallback_cap_reached",
+        statuses: ["closed"],
+      }),
+    ]),
+  };
 }
 
 function registerSessionIntersectsRange(
@@ -1027,7 +1226,8 @@ async function listPendingCloseoutApprovals(
     startAt: number;
     storeId: Id<"store">;
   },
-) {
+): Promise<DailyCloseSourceRead<Doc<"approvalRequest">>> {
+  const range = { startAt: args.startAt, endAt: args.endAt };
   const approvals = await ctx.db
     .query("approvalRequest")
     .withIndex("by_storeId_status", (q) =>
@@ -1049,9 +1249,20 @@ async function listPendingCloseoutApprovals(
     })),
   );
 
-  return scopedApprovals
-    .filter(({ belongsToRange }) => belongsToRange)
-    .map(({ approval }) => approval);
+  return {
+    rows: scopedApprovals
+      .filter(({ belongsToRange }) => belongsToRange)
+      .map(({ approval }) => approval),
+    completeness: sourceCompletenessEntry({
+      source: "approval_request",
+      readMode: "by_storeId_status",
+      recordCount: approvals.length,
+      limit: DAILY_CLOSE_QUERY_LIMIT,
+      range,
+      reason: "approval_request_source_cap_reached",
+      statuses: ["pending"],
+    }),
+  };
 }
 
 async function listOpenPosSessions(
@@ -1061,9 +1272,10 @@ async function listOpenPosSessions(
     startAt: number;
     storeId: Id<"store">;
   },
-) {
+): Promise<DailyCloseSourceRead<Doc<"posSession">>> {
+  const range = { startAt: args.startAt, endAt: args.endAt };
   const now = Date.now();
-  const sessions = await Promise.all(
+  const sessionPages = await Promise.all(
     OPEN_POS_SESSION_STATUSES.map((status) =>
       ctx.db
         .query("posSession")
@@ -1074,18 +1286,28 @@ async function listOpenPosSessions(
     ),
   );
 
-  return sessions
-    .flat()
-    .filter(
+  return {
+    rows: sessionPages.flat().filter(
       (session) =>
         session.expiresAt >= now && posSessionIntersectsRange(session, args),
-    );
+    ),
+    completeness: sourceCompletenessEntry({
+      source: "pos_session",
+      complete: sessionPages.every((page) => page.length < DAILY_CLOSE_QUERY_LIMIT),
+      readMode: "by_storeId_and_status",
+      recordCount: sessionPages.reduce((count, page) => count + page.length, 0),
+      limit: DAILY_CLOSE_QUERY_LIMIT,
+      range,
+      reason: "pos_session_source_cap_reached",
+      statuses: [...OPEN_POS_SESSION_STATUSES],
+    }),
+  };
 }
 
 async function listOpenOperationalWorkItems(
   ctx: Pick<QueryCtx, "db">,
   storeId: Id<"store">,
-) {
+): Promise<DailyCloseSourceRead<Doc<"operationalWorkItem">>> {
   const workItems = await Promise.all(
     OPEN_OPERATIONAL_WORK_ITEM_STATUSES.map((status) =>
       ctx.db
@@ -1097,7 +1319,42 @@ async function listOpenOperationalWorkItems(
     ),
   );
 
-  return workItems.flat();
+  return {
+    rows: workItems.flat(),
+    completeness: sourceCompletenessEntry({
+      source: "operational_work_item",
+      complete: workItems.every((page) => page.length < DAILY_CLOSE_QUERY_LIMIT),
+      readMode: "by_storeId_status",
+      recordCount: workItems.reduce((count, page) => count + page.length, 0),
+      limit: DAILY_CLOSE_QUERY_LIMIT,
+      reason: "operational_work_item_source_cap_reached",
+      statuses: [...OPEN_OPERATIONAL_WORK_ITEM_STATUSES],
+    }),
+  };
+}
+
+async function readCappedSource<T>(args: {
+  limit: number;
+  query: Promise<T[]>;
+  range: DailyCloseRange;
+  readMode: string;
+  source: string;
+  statuses?: string[];
+}): Promise<DailyCloseSourceRead<T>> {
+  const rows = await args.query;
+
+  return {
+    rows,
+    completeness: sourceCompletenessEntry({
+      source: args.source,
+      readMode: args.readMode,
+      recordCount: rows.length,
+      limit: args.limit,
+      range: args.range,
+      reason: `${args.source}_source_cap_reached`,
+      statuses: args.statuses,
+    }),
+  };
 }
 
 async function listTransactionsForDay(
@@ -1108,17 +1365,26 @@ async function listTransactionsForDay(
     status: string;
     storeId: Id<"store">;
   },
-) {
-  return ctx.db
-    .query("posTransaction")
-    .withIndex("by_storeId_status_completedAt", (q) =>
-      q
-        .eq("storeId", args.storeId)
-        .eq("status", args.status)
-        .gte("completedAt", args.startAt)
-        .lt("completedAt", args.endAt),
-    )
-    .take(DAILY_CLOSE_QUERY_LIMIT);
+): Promise<DailyCloseSourceRead<Doc<"posTransaction">>> {
+  const range = { startAt: args.startAt, endAt: args.endAt };
+
+  return readCappedSource({
+    source: "pos_transaction",
+    readMode: "by_storeId_status_completedAt",
+    limit: DAILY_CLOSE_QUERY_LIMIT,
+    range,
+    statuses: [args.status],
+    query: ctx.db
+      .query("posTransaction")
+      .withIndex("by_storeId_status_completedAt", (q) =>
+        q
+          .eq("storeId", args.storeId)
+          .eq("status", args.status)
+          .gte("completedAt", args.startAt)
+          .lt("completedAt", args.endAt),
+      )
+      .take(DAILY_CLOSE_QUERY_LIMIT),
+  });
 }
 
 async function listExpensesForDay(
@@ -1128,17 +1394,26 @@ async function listExpensesForDay(
     startAt: number;
     storeId: Id<"store">;
   },
-) {
-  return ctx.db
-    .query("expenseTransaction")
-    .withIndex("by_storeId_status_completedAt", (q) =>
-      q
-        .eq("storeId", args.storeId)
-        .eq("status", "completed")
-        .gte("completedAt", args.startAt)
-        .lt("completedAt", args.endAt),
-    )
-    .take(DAILY_CLOSE_QUERY_LIMIT);
+): Promise<DailyCloseSourceRead<Doc<"expenseTransaction">>> {
+  const range = { startAt: args.startAt, endAt: args.endAt };
+
+  return readCappedSource({
+    source: "expense_transaction",
+    readMode: "by_storeId_status_completedAt",
+    limit: DAILY_CLOSE_QUERY_LIMIT,
+    range,
+    statuses: ["completed"],
+    query: ctx.db
+      .query("expenseTransaction")
+      .withIndex("by_storeId_status_completedAt", (q) =>
+        q
+          .eq("storeId", args.storeId)
+          .eq("status", "completed")
+          .gte("completedAt", args.startAt)
+          .lt("completedAt", args.endAt),
+      )
+      .take(DAILY_CLOSE_QUERY_LIMIT),
+  });
 }
 
 async function listDepositsForDay(
@@ -1148,19 +1423,31 @@ async function listDepositsForDay(
     startAt: number;
     storeId: Id<"store">;
   },
-) {
+): Promise<DailyCloseSourceRead<Doc<"paymentAllocation">>> {
+  const range = { startAt: args.startAt, endAt: args.endAt };
   const allocations = await ctx.db
     .query("paymentAllocation")
     .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
     .take(DAILY_CLOSE_QUERY_LIMIT);
 
-  return allocations.filter(
-    (allocation) =>
-      allocation.allocationType === "cash_deposit" &&
-      allocation.direction === "out" &&
-      allocation.status === "recorded" &&
-      isInRange(allocation.recordedAt, args.startAt, args.endAt),
-  );
+  return {
+    rows: allocations.filter(
+      (allocation) =>
+        allocation.allocationType === "cash_deposit" &&
+        allocation.direction === "out" &&
+        allocation.status === "recorded" &&
+        isInRange(allocation.recordedAt, args.startAt, args.endAt),
+    ),
+    completeness: sourceCompletenessEntry({
+      source: "payment_allocation",
+      readMode: "by_storeId",
+      recordCount: allocations.length,
+      limit: DAILY_CLOSE_QUERY_LIMIT,
+      range,
+      reason: "payment_allocation_source_cap_reached",
+      statuses: ["recorded"],
+    }),
+  };
 }
 
 type PosTransactionAdjustmentReportRow = {
@@ -1280,14 +1567,15 @@ function adjustmentSettlementAmount(
   return adjustmentSalesDelta(adjustment);
 }
 
-export async function listAppliedTransactionAdjustmentsForDay(
+async function readAppliedTransactionAdjustmentsForDay(
   ctx: Pick<QueryCtx, "db">,
   args: {
     endAt: number;
     startAt: number;
     storeId: Id<"store">;
   },
-): Promise<AppliedTransactionAdjustment[]> {
+): Promise<DailyCloseSourceRead<AppliedTransactionAdjustment>> {
+  const range = { startAt: args.startAt, endAt: args.endAt };
   const adjustments = (await ctx.db
     .query("posTransactionAdjustment")
     .withIndex("by_storeId_status_appliedAt", (q) =>
@@ -1299,29 +1587,53 @@ export async function listAppliedTransactionAdjustmentsForDay(
     )
     .take(DAILY_CLOSE_QUERY_LIMIT)) as PosTransactionAdjustmentReportRow[];
 
-  return adjustments.flatMap((adjustment) => {
-    const status = adjustment.status ?? "";
-    const appliedAt = adjustmentAppliedAt(adjustment);
-    const transactionId = adjustmentTransactionId(adjustment);
+  return {
+    rows: adjustments.flatMap((adjustment) => {
+      const status = adjustment.status ?? "";
+      const appliedAt = adjustmentAppliedAt(adjustment);
+      const transactionId = adjustmentTransactionId(adjustment);
 
-    if (
-      !APPLIED_TRANSACTION_ADJUSTMENT_STATUSES.has(status) ||
-      appliedAt === null ||
-      !transactionId
-    ) {
-      return [];
-    }
+      if (
+        !APPLIED_TRANSACTION_ADJUSTMENT_STATUSES.has(status) ||
+        appliedAt === null ||
+        !transactionId
+      ) {
+        return [];
+      }
 
-    return [
-      {
-        ...adjustment,
-        appliedAt,
-        signedSalesDelta: adjustmentSalesDelta(adjustment),
-        signedSettlementAmount: adjustmentSettlementAmount(adjustment),
-        transactionId,
-      },
-    ];
-  });
+      return [
+        {
+          ...adjustment,
+          appliedAt,
+          signedSalesDelta: adjustmentSalesDelta(adjustment),
+          signedSettlementAmount: adjustmentSettlementAmount(adjustment),
+          transactionId,
+        },
+      ];
+    }),
+    completeness: sourceCompletenessEntry({
+      source: "pos_transaction_adjustment",
+      readMode: "by_storeId_status_appliedAt",
+      recordCount: adjustments.length,
+      limit: DAILY_CLOSE_QUERY_LIMIT,
+      range,
+      reason: "pos_transaction_adjustment_source_cap_reached",
+      statuses: ["applied"],
+    }),
+  };
+}
+
+export async function listAppliedTransactionAdjustmentsForDay(
+  ctx: Pick<QueryCtx, "db">,
+  args: {
+    endAt: number;
+    startAt: number;
+    storeId: Id<"store">;
+  },
+): Promise<AppliedTransactionAdjustment[]> {
+  const read = await readAppliedTransactionAdjustmentsForDay(ctx, args);
+
+  return read.rows;
 }
 
 function buildAdjustmentPaymentTotals(
@@ -1480,6 +1792,7 @@ function buildDailyCloseReportSnapshot(args: {
   completedAt: number;
   completedByStaffProfileId?: Id<"staffProfile">;
   completedByUserId?: Id<"athenaUser">;
+  currentnessMode?: "mark_current" | "historical_record";
   notes?: string;
   policyReviewedItemKeys?: string[];
   readiness: DailyCloseReadiness;
@@ -1501,6 +1814,7 @@ function buildDailyCloseReportSnapshot(args: {
       automationRunId: args.automationRunId,
       automationPolicyVersion: args.automationPolicyVersion,
       automationDecisionReason: args.automationDecisionReason,
+      currentnessMode: args.currentnessMode,
       policyReviewedItemKeys: args.policyReviewedItemKeys,
       notes: args.notes,
       reviewedItemKeys: args.reviewedItemKeys,
@@ -1514,6 +1828,7 @@ function buildDailyCloseReportSnapshot(args: {
       ...args.carryForwardWorkItems.map(asCarryForwardItem),
     ]),
     readyItems: args.snapshot.readyItems,
+    sourceCompleteness: args.snapshot.sourceCompleteness,
     sourceSubjects: args.snapshot.sourceSubjects,
   };
 }
@@ -1712,6 +2027,10 @@ function snapshotReviewedItems(
   );
 }
 
+function incompleteSourceCompletenessEntries(snapshot: DailyCloseSnapshot) {
+  return snapshot.sourceCompleteness.entries.filter((entry) => !entry.complete);
+}
+
 function completionAttributionForDailyClose(
   dailyClose: Doc<"dailyClose">,
   completedByStaffProfileId = dailyClose.completedByStaffProfileId,
@@ -1819,6 +2138,7 @@ function redactDailyCloseReportSnapshotForBroadView(
       automationRunId: snapshot.closeMetadata.automationRunId,
       automationPolicyVersion: snapshot.closeMetadata.automationPolicyVersion,
       automationDecisionReason: snapshot.closeMetadata.automationDecisionReason,
+      currentnessMode: snapshot.closeMetadata.currentnessMode,
       notes: snapshot.closeMetadata.notes,
       carryForwardWorkItemIds: [],
     },
@@ -1829,6 +2149,7 @@ function redactDailyCloseReportSnapshotForBroadView(
       redactDailyCloseItemForBroadView,
     ),
     readyItems: snapshot.readyItems.map(redactDailyCloseItemForBroadView),
+    sourceCompleteness: snapshot.sourceCompleteness,
     sourceSubjects: [],
   };
 }
@@ -2014,6 +2335,15 @@ export async function buildDailyCloseSnapshotWithCtx(
         readyCount: 0,
       },
       summary: emptySummary(),
+      sourceCompleteness: completeSourceCompleteness([
+        {
+          source: "operating_date",
+          complete: false,
+          readMode: "validation",
+          recordCount: 0,
+          reason: "invalid_operating_date",
+        },
+      ]),
       sourceSubjects: [blocker.subject],
     };
   }
@@ -2052,22 +2382,22 @@ export async function buildDailyCloseSnapshotWithCtx(
   }
 
   const [
-    activeRegisterSessionsForStore,
-    reviewOnlyRegisterCloseoutSessionsForStore,
-    closedRegisterSessions,
-    pendingApprovals,
-    openPosSessions,
-    openWorkItems,
-    completedTransactions,
-    appliedTransactionAdjustments,
-    voidedTransactions,
-    expenseTransactions,
-    cashDeposits,
+    registerSessionRead,
+    pendingApprovalRead,
+    openPosSessionRead,
+    openWorkItemRead,
+    completedTransactionRead,
+    appliedTransactionAdjustmentRead,
+    voidedTransactionRead,
+    expenseTransactionRead,
+    cashDepositRead,
     priorClose,
   ] = await Promise.all([
-    listActiveRegisterSessions(ctx, args.storeId),
-    listReviewOnlyRegisterCloseoutSessions(ctx, args.storeId),
-    listClosedRegisterSessionsForDay(ctx, { ...range, storeId: args.storeId }),
+    listRegisterSessionsForDailyClose(ctx, {
+      ...range,
+      operatingDate: args.operatingDate,
+      storeId: args.storeId,
+    }),
     listPendingCloseoutApprovals(ctx, { ...range, storeId: args.storeId }),
     listOpenPosSessions(ctx, { ...range, storeId: args.storeId }),
     listOpenOperationalWorkItems(ctx, args.storeId),
@@ -2076,7 +2406,7 @@ export async function buildDailyCloseSnapshotWithCtx(
       status: "completed",
       storeId: args.storeId,
     }),
-    listAppliedTransactionAdjustmentsForDay(ctx, {
+    readAppliedTransactionAdjustmentsForDay(ctx, {
       ...range,
       storeId: args.storeId,
     }),
@@ -2089,19 +2419,39 @@ export async function buildDailyCloseSnapshotWithCtx(
     listDepositsForDay(ctx, { ...range, storeId: args.storeId }),
     getPriorCompletedDailyClose(ctx, args),
   ]);
+  const completedTransactions = completedTransactionRead.rows;
+  const appliedTransactionAdjustments = appliedTransactionAdjustmentRead.rows;
+  const voidedTransactions = voidedTransactionRead.rows;
+  const expenseTransactions = expenseTransactionRead.rows;
+  const cashDeposits = cashDepositRead.rows;
+  const pendingApprovals = pendingApprovalRead.rows;
+  const openPosSessions = openPosSessionRead.rows;
+  const openWorkItems = openWorkItemRead.rows;
+  const sourceCompleteness = mergeSourceCompleteness(
+    registerSessionRead.sourceCompleteness,
+    pendingApprovalRead.completeness,
+    openPosSessionRead.completeness,
+    openWorkItemRead.completeness,
+    completedTransactionRead.completeness,
+    appliedTransactionAdjustmentRead.completeness,
+    voidedTransactionRead.completeness,
+    expenseTransactionRead.completeness,
+    cashDepositRead.completeness,
+  );
 
   const activeRegisterSessionsInRange =
     await filterRegisterSessionsBelongingToRange(
       ctx,
-      activeRegisterSessionsForStore,
+      registerSessionRead.activeSessions,
       range,
     );
   const reviewOnlyRegisterCloseoutSessionsInRange =
     await filterRegisterSessionsBelongingToRange(
       ctx,
-      reviewOnlyRegisterCloseoutSessionsForStore,
+      registerSessionRead.reviewOnlySessions,
       range,
     );
+  const closedRegisterSessions = registerSessionRead.closedSessions;
   const activeRegisterSessionApprovalsById = await buildApprovalRequestsById(
     ctx,
     activeRegisterSessionsInRange.map(
@@ -2910,6 +3260,7 @@ export async function buildDailyCloseSnapshotWithCtx(
       readyItems,
       readiness,
       summary,
+      sourceCompleteness,
       sourceSubjects: uniqueSourceSubjects(allItems),
     },
     includeManagerReviewEvidence,
@@ -3337,6 +3688,7 @@ export async function completeDailyCloseWithCtx(
     isCurrent: true,
     readiness,
     summary,
+    sourceCompleteness: snapshot.sourceCompleteness,
     sourceSubjects: snapshot.sourceSubjects,
     reportSnapshot: buildDailyCloseReportSnapshot({
       carryForwardWorkItemIds,
@@ -3439,6 +3791,8 @@ export async function completeDailyCloseForAutomationWithCtx(
   ctx: MutationCtx,
   args: CompleteDailyCloseForAutomationArgs,
 ): Promise<CompleteDailyCloseResult> {
+  const currentnessMode = args.currentnessMode ?? "mark_current";
+  const markAsCurrent = currentnessMode === "mark_current";
   const store = await getStore(ctx, args.storeId);
 
   if (!store) {
@@ -3531,6 +3885,21 @@ export async function completeDailyCloseForAutomationWithCtx(
     });
   }
 
+  if (currentnessMode === "historical_record") {
+    const incompleteSources = incompleteSourceCompletenessEntries(snapshot);
+
+    if (incompleteSources.length > 0) {
+      return userError({
+        code: "precondition_failed",
+        message:
+          "EOD Review automation cannot complete historic records without complete source evidence.",
+        metadata: {
+          incompleteSources,
+        },
+      });
+    }
+  }
+
   if (snapshot.blockers.length > 0) {
     return userError({
       code: "precondition_failed",
@@ -3612,9 +3981,10 @@ export async function completeDailyCloseForAutomationWithCtx(
     operatingDate: args.operatingDate,
     status: "completed" as const,
     lifecycleStatus: "active" as const,
-    isCurrent: true,
+    isCurrent: markAsCurrent,
     readiness,
     summary,
+    sourceCompleteness: snapshot.sourceCompleteness,
     sourceSubjects: snapshot.sourceSubjects,
     reportSnapshot: buildDailyCloseReportSnapshot({
       actorType: "automation",
@@ -3624,6 +3994,7 @@ export async function completeDailyCloseForAutomationWithCtx(
       carryForwardWorkItemIds,
       carryForwardWorkItems,
       completedAt: now,
+      currentnessMode,
       policyReviewedItemKeys: args.policyReviewedItemKeys,
       readiness,
       reviewedItemKeys: args.policyReviewedItemKeys,
@@ -3652,10 +4023,12 @@ export async function completeDailyCloseForAutomationWithCtx(
     });
   }
 
-  await markOtherDailyClosesNotCurrent(ctx, {
-    currentCloseId: dailyCloseId,
-    storeId: args.storeId,
-  });
+  if (markAsCurrent) {
+    await markOtherDailyClosesNotCurrent(ctx, {
+      currentCloseId: dailyCloseId,
+      storeId: args.storeId,
+    });
+  }
 
   const dailyClose = await ctx.db.get("dailyClose", dailyCloseId);
 
@@ -3667,7 +4040,7 @@ export async function completeDailyCloseForAutomationWithCtx(
     });
   }
 
-  if (dailyClose.supersedesDailyCloseId) {
+  if (markAsCurrent && dailyClose.supersedesDailyCloseId) {
     await ctx.db.patch("dailyClose", dailyClose.supersedesDailyCloseId, {
       lifecycleStatus: "superseded",
       isCurrent: false,
@@ -3809,13 +4182,18 @@ export async function reopenDailyCloseWithCtx(
   }
 
   const now = Date.now();
+  const originalReportSnapshot =
+    originalDailyClose.reportSnapshot as DailyCloseReportSnapshot;
+  const reopenedShouldBeCurrent =
+    originalDailyClose.isCurrent !== false &&
+    originalReportSnapshot.closeMetadata.currentnessMode !== "historical_record";
   const reopenedDailyCloseId = await ctx.db.insert("dailyClose", {
     storeId: originalDailyClose.storeId,
     organizationId: originalDailyClose.organizationId,
     operatingDate: originalDailyClose.operatingDate,
     status: "open",
     lifecycleStatus: "active",
-    isCurrent: true,
+    isCurrent: reopenedShouldBeCurrent,
     readiness: originalDailyClose.readiness,
     summary: originalDailyClose.summary,
     sourceSubjects: originalDailyClose.sourceSubjects,
@@ -3843,10 +4221,12 @@ export async function reopenDailyCloseWithCtx(
     updatedAt: now,
   });
 
-  await markOtherDailyClosesNotCurrent(ctx, {
-    currentCloseId: reopenedDailyCloseId,
-    storeId: args.storeId,
-  });
+  if (reopenedShouldBeCurrent) {
+    await markOtherDailyClosesNotCurrent(ctx, {
+      currentCloseId: reopenedDailyCloseId,
+      storeId: args.storeId,
+    });
+  }
 
   const reopenedDailyClose = await ctx.db.get(
     "dailyClose",
@@ -4140,6 +4520,9 @@ export const completeDailyCloseForAutomation = internalMutation({
       maxVoidedSaleCount: v.number(),
       maxVoidedSaleTotal: v.number(),
     }),
+    currentnessMode: v.optional(
+      v.union(v.literal("mark_current"), v.literal("historical_record")),
+    ),
     endAt: v.optional(v.number()),
     operatingDate: v.string(),
     organizationId: v.optional(v.id("organization")),

@@ -2,6 +2,10 @@ import type { Id, TableNames } from "../../../_generated/dataModel";
 import type { MutationCtx } from "../../../_generated/server";
 import { isRegisterSessionConflictBlockingStatus } from "../../../../shared/registerSessionStatus";
 import { recordRegisterSessionTraceBestEffort } from "../../../operations/registerSessionTracing";
+import {
+  buildRegisterSessionDateDerivationPatch,
+  resolveRegisterSessionOperatingDateContext,
+} from "../../../operations/registerSessions";
 import { buildOperationalWorkItem } from "../../../operations/operationalWorkItems";
 import { normalizeOperationalEventTraceFields } from "../../../operations/operationalEvents";
 import {
@@ -29,6 +33,12 @@ import type {
 } from "../../application/sync/types";
 import { listRegisterSessionCloseoutHolds } from "../../application/sync/registerSessionCloseoutHolds";
 import { validatePosLocalStaffProofWithCtx } from "../../application/sync/staffProofValidation";
+
+function omitUndefined<T extends Record<string, unknown>>(value: T) {
+  return Object.fromEntries(
+    Object.entries(value).filter(([, entryValue]) => entryValue !== undefined),
+  ) as T;
+}
 
 export function createConvexLocalSyncRepository(
   ctx: MutationCtx,
@@ -380,7 +390,11 @@ export function createConvexLocalSyncRepository(
         .take(100);
     },
     async createRegisterSession(input) {
-      return ctx.db.insert("registerSession", {
+      const openedContext = await resolveRegisterSessionOperatingDateContext(ctx, {
+        at: input.openedAt,
+        storeId: input.storeId,
+      });
+      return ctx.db.insert("registerSession", omitUndefined({
         storeId: input.storeId,
         organizationId: input.organizationId,
         terminalId: input.terminalId,
@@ -388,10 +402,14 @@ export function createConvexLocalSyncRepository(
         status: "active",
         openedByStaffProfileId: input.openedByStaffProfileId,
         openedAt: input.openedAt,
+        ...buildRegisterSessionDateDerivationPatch({
+          openedAt: input.openedAt,
+          openedContext,
+        }),
         openingFloat: input.openingFloat,
         expectedCash: input.expectedCash,
         notes: input.notes,
-      });
+      }));
     },
     async findBlockingRegisterSession(args) {
       const latestByTerminal = await ctx.db
@@ -577,7 +595,28 @@ export function createConvexLocalSyncRepository(
         : null;
     },
     async patchRegisterSession(registerSessionId, patch) {
-      await ctx.db.patch("registerSession", registerSessionId, patch);
+      let datePatch = {};
+
+      if (patch.status === "closed" && typeof patch.closedAt === "number") {
+        const storeId =
+          patch.storeId ?? (await ctx.db.get("registerSession", registerSessionId))?.storeId;
+
+        if (storeId) {
+          datePatch = buildRegisterSessionDateDerivationPatch({
+            closeoutContext: await resolveRegisterSessionOperatingDateContext(ctx, {
+              at: patch.closedAt,
+              storeId,
+            }),
+            closeoutOwnedAt: patch.closedAt,
+            closeoutOwnershipSource: "closed_record",
+          });
+        }
+      }
+
+      await ctx.db.patch("registerSession", registerSessionId, {
+        ...patch,
+        ...datePatch,
+      });
     },
     async createPosSession(input) {
       return ctx.db.insert("posSession", {

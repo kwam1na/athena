@@ -1,6 +1,12 @@
 import type { Doc, Id } from "../_generated/dataModel";
-import type { MutationCtx, QueryCtx } from "../_generated/server";
-import { internalMutation, mutation, query } from "../_generated/server";
+import { internal } from "../_generated/api";
+import type { ActionCtx, MutationCtx, QueryCtx } from "../_generated/server";
+import {
+  internalAction,
+  internalMutation,
+  mutation,
+  query,
+} from "../_generated/server";
 import { v } from "convex/values";
 import { defineAutomationAction } from "../automation/actionRegistry";
 import { evaluateAutomationActionWithCtx } from "../automation/automationFoundation";
@@ -9,13 +15,16 @@ import {
   DEFAULT_OPENING_BLOCKER_HANDLING,
   DEFAULT_OPENING_LOCAL_START_MINUTES,
   EOD_AUTO_COMPLETE_POLICY_ACTION,
+  getAutomationRunByIdempotencyKeyWithCtx,
   getEodAutoCompletePolicyConfigWithCtx,
   getOpeningAutoStartPolicyConfigWithCtx,
   listAutomationRunsForStoreDayActionWithCtx,
+  patchAutomationRunOutcomeWithCtx,
   recordAutomationRunWithCtx,
   type AutomationDecisionEvidence,
   type EodAutoCompletePolicyConfig,
   upsertEodAutoCompletePolicyConfigWithCtx,
+  upsertAutomationRunWithCtx,
   upsertOpeningAutoStartPolicyConfigWithCtx,
   type OpeningAutoStartBlockerHandling,
 } from "../automation/runLedger";
@@ -28,7 +37,10 @@ import {
   completeDailyCloseForAutomationWithCtx,
 } from "./dailyClose";
 import { requireStoreFullAdminAccess } from "../stockOps/access";
-import { getStoreScheduleContextForStoreAtWithCtx } from "../inventory/storeSchedule";
+import {
+  getStoreScheduleContextForStoreAtWithCtx,
+  resolveStoreOperatingRangeForDateWithCtx,
+} from "../inventory/storeSchedule";
 
 export const DAILY_OPERATIONS_AUTOMATION_DOMAIN = "daily_operations";
 const OPENING_AUTO_START_ACTION = "opening.auto_start";
@@ -37,6 +49,8 @@ const EOD_AUTO_COMPLETE_ACTION = EOD_AUTO_COMPLETE_POLICY_ACTION;
 const AUTOMATION_POLICY_CRON_LIMIT = 500;
 const DAILY_OPERATIONS_POLICY_VERSION = "daily-operations.v1";
 const CONFIGURED_AUTOMATION_LOOKBACK_MS = 2 * 60 * 60 * 1000;
+const HISTORIC_EOD_AUTO_CLOSE_TRIGGER_TYPE = "support_batch";
+const HISTORIC_EOD_AUTO_CLOSE_MAX_DAYS_LIMIT = 100;
 const EOD_AUTO_COMPLETE_LOW_RISK_REVIEW_CATEGORIES = new Set([
   "cash_variance",
   "voided_sale",
@@ -133,6 +147,46 @@ type ConfiguredStoreScheduleContext = {
     | "closed"
     | "unavailable";
   storeDayContext?: DailyOperationsAutomationStoreDayContext;
+};
+
+type HistoricEodAutoCloseMode = "dry_run" | "apply";
+
+type HistoricEodStoreRangeResolution =
+  | {
+      kind: "resolved";
+      endAt: number;
+      scheduleEvidence: DailyOperationsAutomationTimingEvidence;
+      startAt: number;
+      storeDayContext: DailyOperationsAutomationStoreDayContext;
+    }
+  | {
+      kind: "unavailable";
+    }
+  | {
+      kind: "quarantine";
+      classification:
+        | "quarantine_store_schedule_ambiguous"
+        | "quarantine_store_schedule_closed"
+        | "quarantine_missing_store_schedule";
+      reason:
+        | "missing_store_schedule"
+        | "store_schedule_ambiguous"
+        | "store_schedule_closed";
+      scheduleEvidence?: DailyOperationsAutomationTimingEvidence;
+      storeScheduleId?: string;
+    };
+
+type HistoricEodDateResult = {
+  action:
+    | "applied"
+    | "already_completed"
+    | "dry_run"
+    | "failed"
+    | "quarantined"
+    | "skipped";
+  classification?: string;
+  operatingDate: string;
+  runId?: Id<"automationRun">;
 };
 
 function toApiOpeningBlockerHandling(
@@ -775,6 +829,567 @@ export async function runDailyCloseAutoCompleteEligibilityWithCtx(
     organizationId: snapshot.organizationId ?? undefined,
     storeId: args.storeId,
   });
+}
+
+function isValidOperatingDate(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+
+  const parsed = Date.parse(`${value}T00:00:00.000Z`);
+
+  return (
+    Number.isFinite(parsed) &&
+    new Date(parsed).toISOString().slice(0, 10) === value
+  );
+}
+
+function addDaysToOperatingDate(operatingDate: string, days: number) {
+  return new Date(
+    Date.parse(`${operatingDate}T00:00:00.000Z`) + days * 24 * 60 * 60_000,
+  )
+    .toISOString()
+    .slice(0, 10);
+}
+
+function historicEodAutoCloseIdempotencyKey(args: {
+  operatingDate: string;
+  storeId: Id<"store">;
+}) {
+  return `${DAILY_OPERATIONS_AUTOMATION_DOMAIN}:${EOD_AUTO_COMPLETE_ACTION}:historic:${args.storeId}:${args.operatingDate}`;
+}
+
+function policyEvidenceForHistoricRun(policyConfig: EodAutoCompletePolicyConfig) {
+  return {
+    cleanDayAutoCompleteEnabled: policyConfig.cleanDayAutoCompleteEnabled,
+    localCompletionWindowMinutes: policyConfig.localCompletionWindowMinutes,
+    maxAbsoluteCashVariance: policyConfig.maxAbsoluteCashVariance,
+    maxVoidedSaleCount: policyConfig.maxVoidedSaleCount,
+    maxVoidedSaleTotal: policyConfig.maxVoidedSaleTotal,
+    mode: policyConfig.paused ? "disabled" : policyConfig.mode,
+  };
+}
+
+function historicQuarantineEvidence(args: {
+  classification: string;
+  operatingDate: string;
+  policyConfig: EodAutoCompletePolicyConfig;
+  quarantineReason: string;
+  scheduleEvidence?: DailyOperationsAutomationTimingEvidence;
+}): AutomationDecisionEvidence {
+  return {
+    kind: "eod_auto_complete",
+    classification: args.classification,
+    eligible: false,
+    observed: {
+      operatingDate: args.operatingDate,
+      quarantineReason: args.quarantineReason,
+      ...(args.scheduleEvidence
+        ? {
+            scheduleEvidenceSource: args.scheduleEvidence.source,
+            ...(args.scheduleEvidence.storeScheduleId
+              ? { storeScheduleId: args.scheduleEvidence.storeScheduleId }
+              : {}),
+            ...(args.scheduleEvidence.scheduleVersion
+              ? { scheduleVersion: args.scheduleEvidence.scheduleVersion }
+              : {}),
+            ...(typeof args.scheduleEvidence.openedAt === "number"
+              ? { scheduleOpenedAt: args.scheduleEvidence.openedAt }
+              : {}),
+            ...(typeof args.scheduleEvidence.closedAt === "number"
+              ? { scheduleClosedAt: args.scheduleEvidence.closedAt }
+              : {}),
+            ...(typeof args.scheduleEvidence.evaluationAt === "number"
+              ? { scheduleEvaluationAt: args.scheduleEvidence.evaluationAt }
+              : {}),
+          }
+        : {}),
+    },
+    policy: policyEvidenceForHistoricRun(args.policyConfig),
+  };
+}
+
+async function recordHistoricEodQuarantineWithCtx(
+  ctx: MutationCtx,
+  args: {
+    classification: string;
+    decisionReason: string;
+    operatingDate: string;
+    policyConfig: EodAutoCompletePolicyConfig;
+    quarantineReason: string;
+    scheduleEvidence?: DailyOperationsAutomationTimingEvidence;
+    storeId: Id<"store">;
+  },
+): Promise<HistoricEodDateResult> {
+  const run = await upsertAutomationRunWithCtx(ctx, {
+    action: EOD_AUTO_COMPLETE_ACTION,
+    decisionEvidence: historicQuarantineEvidence({
+      classification: args.classification,
+      operatingDate: args.operatingDate,
+      policyConfig: args.policyConfig,
+      quarantineReason: args.quarantineReason,
+      scheduleEvidence: args.scheduleEvidence,
+    }),
+    decisionReason: args.decisionReason,
+    domain: DAILY_OPERATIONS_AUTOMATION_DOMAIN,
+    eventIds: [],
+    idempotencyKey: historicEodAutoCloseIdempotencyKey(args),
+    mutationBoundary: dailyOperationsEodAutoCompleteAction.mutationBoundary,
+    operatingDate: args.operatingDate,
+    organizationId: args.policyConfig.policy?.organizationId,
+    outcome: "skipped",
+    policyMode: args.policyConfig.paused
+      ? "disabled"
+      : args.policyConfig.mode,
+    policyVersion:
+      args.policyConfig.policy?.policyVersion ?? DAILY_OPERATIONS_POLICY_VERSION,
+    snapshotCounts: {},
+    sourceSubjects: [
+      {
+        id: args.operatingDate,
+        label: args.operatingDate,
+        type: "daily_close",
+      },
+    ],
+    storeId: args.storeId,
+    triggerType: HISTORIC_EOD_AUTO_CLOSE_TRIGGER_TYPE,
+  });
+
+  return {
+    action: "quarantined",
+    classification: args.classification,
+    operatingDate: args.operatingDate,
+    runId: run._id,
+  };
+}
+
+async function resolveHistoricEodStoreRangeForDateWithCtx(
+  ctx: MutationCtx,
+  args: {
+    operatingDate: string;
+    storeId: Id<"store">;
+  },
+): Promise<HistoricEodStoreRangeResolution> {
+  const { range } = await resolveStoreOperatingRangeForDateWithCtx(ctx, {
+    operatingDate: args.operatingDate,
+    storeId: args.storeId,
+  });
+
+  const scheduleEvidence = {
+    closedAt: range.kind === "resolved" ? range.endAt : undefined,
+    evaluationAt: range.kind === "resolved" ? range.endAt : undefined,
+    openedAt: range.kind === "resolved" ? range.startAt : undefined,
+    scheduleVersion: range.scheduleVersionId ?? undefined,
+    source: "canonical_schedule" as const,
+    storeScheduleId: range.scheduleVersionId ?? undefined,
+  };
+
+  if (range.kind === "invalid") {
+    return {
+      kind: "quarantine",
+      classification: "quarantine_store_schedule_ambiguous",
+      reason: "store_schedule_ambiguous",
+      scheduleEvidence,
+      storeScheduleId: range.scheduleVersionId ?? undefined,
+    };
+  }
+
+  if (range.kind === "missing_schedule") {
+    return {
+      kind: "quarantine",
+      classification: "quarantine_missing_store_schedule",
+      reason: "missing_store_schedule",
+      scheduleEvidence,
+      storeScheduleId: range.scheduleVersionId ?? undefined,
+    };
+  }
+
+  if (range.kind === "closed") {
+    return {
+      kind: "quarantine",
+      classification: "quarantine_store_schedule_closed",
+      reason: "store_schedule_closed",
+      scheduleEvidence,
+      storeScheduleId: range.scheduleVersionId ?? undefined,
+    };
+  }
+
+  if (!range.scheduleVersionId) {
+    return {
+      kind: "quarantine",
+      classification: "quarantine_store_schedule_ambiguous",
+      reason: "store_schedule_ambiguous",
+      scheduleEvidence,
+    };
+  }
+
+  const storeDayContext: DailyOperationsAutomationStoreDayContext = {
+    closedAt: range.endAt,
+    eodEvaluationAt: range.endAt,
+    openedAt: range.startAt,
+    openingEvaluationAt: range.startAt,
+    operatingDate: args.operatingDate,
+    scheduleVersion: range.scheduleVersionId,
+    source: "canonical_schedule",
+    storeScheduleId: range.scheduleVersionId,
+  };
+
+  return {
+    kind: "resolved",
+    endAt: range.endAt,
+    scheduleEvidence,
+    startAt: range.startAt,
+    storeDayContext,
+  };
+}
+
+export async function runHistoricEodAutoCloseForDateWithCtx(
+  ctx: MutationCtx,
+  args: {
+    asOfOperatingDate: string;
+    mode: HistoricEodAutoCloseMode;
+    operatingDate: string;
+    storeId: Id<"store">;
+  },
+): Promise<HistoricEodDateResult> {
+  const policyConfig = await getEodAutoCompletePolicyConfigWithCtx(ctx, {
+    storeId: args.storeId,
+  });
+  const idempotencyKey = historicEodAutoCloseIdempotencyKey(args);
+  const existingRun = await getAutomationRunByIdempotencyKeyWithCtx(ctx, {
+    idempotencyKey,
+    storeId: args.storeId,
+  });
+
+  if (existingRun?.outcome === "applied") {
+    const activeCompletedClose = await ctx.db
+      .query("dailyClose")
+      .withIndex("by_storeId_operatingDate_lifecycleStatus", (q) =>
+        q
+          .eq("storeId", args.storeId)
+          .eq("operatingDate", args.operatingDate)
+          .eq("lifecycleStatus", "active"),
+      )
+      .first();
+
+    if (
+      activeCompletedClose?.status === "completed" &&
+      activeCompletedClose.automationRunId === existingRun._id
+    ) {
+      return {
+        action: "already_completed",
+        classification:
+          typeof existingRun.decisionEvidence?.classification === "string"
+            ? existingRun.decisionEvidence.classification
+            : "completed",
+        operatingDate: args.operatingDate,
+        runId: existingRun._id,
+      };
+    }
+  }
+
+  if (!isValidOperatingDate(args.operatingDate)) {
+    return recordHistoricEodQuarantineWithCtx(ctx, {
+      classification: "quarantine_invalid_operating_date",
+      decisionReason:
+        "Historic EOD auto-close requires an operating date in YYYY-MM-DD format.",
+      operatingDate: args.operatingDate,
+      policyConfig,
+      quarantineReason: "invalid_operating_date",
+      storeId: args.storeId,
+    });
+  }
+
+  if (args.operatingDate >= args.asOfOperatingDate) {
+    return recordHistoricEodQuarantineWithCtx(ctx, {
+      classification: "quarantine_current_or_future_date",
+      decisionReason:
+        "Historic EOD auto-close is support-owned and only processes past operating dates.",
+      operatingDate: args.operatingDate,
+      policyConfig,
+      quarantineReason: "current_or_future_date",
+      storeId: args.storeId,
+    });
+  }
+
+  const scheduleRange = await resolveHistoricEodStoreRangeForDateWithCtx(ctx, {
+    operatingDate: args.operatingDate,
+    storeId: args.storeId,
+  });
+
+  if (scheduleRange.kind === "quarantine") {
+    return recordHistoricEodQuarantineWithCtx(ctx, {
+      classification: scheduleRange.classification,
+      decisionReason:
+        "Historic EOD auto-close quarantined this date for Store Schedule review.",
+      operatingDate: args.operatingDate,
+      policyConfig,
+      quarantineReason: scheduleRange.reason,
+      scheduleEvidence: scheduleRange.scheduleEvidence,
+      storeId: args.storeId,
+    });
+  }
+
+  if (scheduleRange.kind === "unavailable" && args.mode === "apply") {
+    return recordHistoricEodQuarantineWithCtx(ctx, {
+      classification: "quarantine_missing_store_schedule",
+      decisionReason:
+        "Historic EOD auto-close apply mode requires Store Schedule range evidence.",
+      operatingDate: args.operatingDate,
+      policyConfig,
+      quarantineReason: "missing_store_schedule",
+      storeId: args.storeId,
+    });
+  }
+
+  if (scheduleRange.kind === "resolved" && scheduleRange.endAt > Date.now()) {
+    return recordHistoricEodQuarantineWithCtx(ctx, {
+      classification: "quarantine_store_day_still_open",
+      decisionReason:
+        "Historic EOD auto-close waits until the resolved store-local operating day has ended.",
+      operatingDate: args.operatingDate,
+      policyConfig,
+      quarantineReason: "store_day_still_open",
+      scheduleEvidence: scheduleRange.scheduleEvidence,
+      storeId: args.storeId,
+    });
+  }
+
+  const snapshot = await buildDailyCloseSnapshotWithCtx(ctx, {
+    endAt: scheduleRange.kind === "resolved" ? scheduleRange.endAt : undefined,
+    operatingDate: args.operatingDate,
+    startAt:
+      scheduleRange.kind === "resolved" ? scheduleRange.startAt : undefined,
+    storeId: args.storeId,
+  });
+
+  if (!snapshot.sourceCompleteness.complete) {
+    return recordHistoricEodQuarantineWithCtx(ctx, {
+      classification: "quarantine_incomplete_source_reads",
+      decisionReason:
+        "Historic EOD auto-close requires complete Daily Close source reads.",
+      operatingDate: args.operatingDate,
+      policyConfig,
+      quarantineReason: "incomplete_source_reads",
+      scheduleEvidence:
+        scheduleRange.kind === "resolved"
+          ? scheduleRange.scheduleEvidence
+          : undefined,
+      storeId: args.storeId,
+    });
+  }
+
+  const adapterDecision = eodAutoCompleteDecision(snapshot, policyConfig, {
+    insideCompletionWindow: true,
+    localCompletionWindowMinutes: policyConfig.localCompletionWindowMinutes,
+    localMinuteOfDay: policyConfig.localCompletionWindowMinutes,
+    scheduleEvidence:
+      scheduleRange.kind === "resolved"
+        ? scheduleRange.scheduleEvidence
+        : undefined,
+  });
+  const policyReviewedItemKeys =
+    adapterDecision.decisionEvidence.classification === "low_risk_review"
+      ? snapshot.reviewItems.map((item) => item.key)
+      : [];
+  const supportPolicyMode =
+    args.mode === "dry_run"
+      ? "dry_run"
+      : policyConfig.paused
+        ? "disabled"
+        : policyConfig.mode;
+  const initialOutcome =
+    args.mode === "dry_run"
+      ? "dry_run"
+      : supportPolicyMode === "enabled"
+        ? adapterDecision.outcome
+        : supportPolicyMode;
+  const run = await upsertAutomationRunWithCtx(ctx, {
+    action: EOD_AUTO_COMPLETE_ACTION,
+    decisionEvidence: adapterDecision.decisionEvidence,
+    decisionReason: adapterDecision.decisionReason,
+    domain: DAILY_OPERATIONS_AUTOMATION_DOMAIN,
+    eventIds: [],
+    idempotencyKey,
+    mutationBoundary: dailyOperationsEodAutoCompleteAction.mutationBoundary,
+    operatingDate: args.operatingDate,
+    organizationId:
+      snapshot.organizationId ?? policyConfig.policy?.organizationId,
+    outcome: initialOutcome,
+    policyMode: supportPolicyMode,
+    policyVersion:
+      policyConfig.policy?.policyVersion ?? DAILY_OPERATIONS_POLICY_VERSION,
+    snapshotCounts: adapterDecision.snapshotCounts,
+    sourceSubjects: adapterDecision.sourceSubjects,
+    storeId: args.storeId,
+    triggerType: HISTORIC_EOD_AUTO_CLOSE_TRIGGER_TYPE,
+  });
+
+  if (args.mode === "dry_run") {
+    return {
+      action: "dry_run",
+      classification: adapterDecision.decisionEvidence.classification,
+      operatingDate: args.operatingDate,
+      runId: run._id,
+    };
+  }
+
+  if (supportPolicyMode !== "enabled" || adapterDecision.outcome !== "eligible") {
+    return {
+      action:
+        adapterDecision.decisionEvidence.classification === "completed"
+          ? "already_completed"
+          : "skipped",
+      classification: adapterDecision.decisionEvidence.classification,
+      operatingDate: args.operatingDate,
+      runId: run._id,
+    };
+  }
+
+  const result = await completeDailyCloseForAutomationWithCtx(ctx, {
+    automationDecisionReason:
+      run.decisionReason ?? "Historic EOD Review completed by automation policy.",
+    automationPolicyVersion: run.policyVersion,
+    automationRunId: run._id,
+    automationScheduleEvidence:
+      scheduleRange.kind === "resolved"
+        ? scheduleRange.scheduleEvidence
+        : undefined,
+    currentnessMode: "historical_record",
+    eodAutoCompletePolicy: {
+      cleanDayAutoCompleteEnabled: policyConfig.cleanDayAutoCompleteEnabled,
+      maxAbsoluteCashVariance: policyConfig.maxAbsoluteCashVariance,
+      maxVoidedSaleCount: policyConfig.maxVoidedSaleCount,
+      maxVoidedSaleTotal: policyConfig.maxVoidedSaleTotal,
+    },
+    endAt: scheduleRange.kind === "resolved" ? scheduleRange.endAt : undefined,
+    operatingDate: args.operatingDate,
+    organizationId: snapshot.organizationId ?? undefined,
+    policyReviewedItemKeys,
+    startAt:
+      scheduleRange.kind === "resolved" ? scheduleRange.startAt : undefined,
+    storeId: args.storeId,
+  });
+
+  if (result.kind !== "ok") {
+    await patchAutomationRunOutcomeWithCtx(ctx, {
+      error:
+        result.kind === "user_error"
+          ? {
+              code: result.error.code,
+              message: result.error.message,
+            }
+          : {
+              code: "historic_eod_auto_close_failed",
+              message: "Historic EOD auto-close could not complete.",
+            },
+      outcome: result.kind === "user_error" ? "skipped" : "failed",
+      runId: run._id,
+    });
+
+    return {
+      action: result.kind === "user_error" ? "skipped" : "failed",
+      classification: adapterDecision.decisionEvidence.classification,
+      operatingDate: args.operatingDate,
+      runId: run._id,
+    };
+  }
+
+  await patchAutomationRunOutcomeWithCtx(ctx, {
+    appliedAt: result.data.action === "completed" ? Date.now() : undefined,
+    decisionEvidence: result.data.automationDecisionEvidence,
+    eventIds: result.data.operationalEventId
+      ? [result.data.operationalEventId]
+      : [],
+    outcome: result.data.action === "completed" ? "applied" : "skipped",
+    runId: run._id,
+  });
+
+  return {
+    action:
+      result.data.action === "completed" ? "applied" : "already_completed",
+    classification: adapterDecision.decisionEvidence.classification,
+    operatingDate: args.operatingDate,
+    runId: run._id,
+  };
+}
+
+export async function runHistoricEodAutoCloseBatchWithCtx(
+  ctx: MutationCtx,
+  args: {
+    asOfOperatingDate?: string;
+    endOperatingDate: string;
+    maxDays: number;
+    mode: HistoricEodAutoCloseMode;
+    startOperatingDate: string;
+    storeId: Id<"store">;
+  },
+) {
+  if (
+    !isValidOperatingDate(args.startOperatingDate) ||
+    !isValidOperatingDate(args.endOperatingDate)
+  ) {
+    throw new Error("Historic EOD auto-close requires valid date range bounds.");
+  }
+
+  if (
+    !Number.isInteger(args.maxDays) ||
+    args.maxDays < 1 ||
+    args.maxDays > HISTORIC_EOD_AUTO_CLOSE_MAX_DAYS_LIMIT
+  ) {
+    throw new Error("Historic EOD auto-close maxDays is out of range.");
+  }
+
+  const asOfOperatingDate =
+    args.asOfOperatingDate ?? new Date(Date.now()).toISOString().slice(0, 10);
+  if (!isValidOperatingDate(asOfOperatingDate)) {
+    throw new Error("Historic EOD auto-close as-of date is invalid.");
+  }
+
+  const results: HistoricEodDateResult[] = [];
+  let operatingDate = args.startOperatingDate;
+
+  while (operatingDate <= args.endOperatingDate && results.length < args.maxDays) {
+    const result = await runHistoricEodAutoCloseForDateWithCtx(ctx, {
+      asOfOperatingDate,
+      mode: args.mode,
+      operatingDate,
+      storeId: args.storeId,
+    });
+
+    results.push(result);
+    operatingDate = addDaysToOperatingDate(operatingDate, 1);
+  }
+
+  return summarizeHistoricEodAutoCloseBatch(args.mode, results, {
+    endOperatingDate: args.endOperatingDate,
+    nextOperatingDate: operatingDate,
+  });
+}
+
+function summarizeHistoricEodAutoCloseBatch(
+  mode: HistoricEodAutoCloseMode,
+  results: HistoricEodDateResult[],
+  args: {
+    endOperatingDate: string;
+    nextOperatingDate: string;
+  },
+) {
+  return {
+    alreadyCompleted: results.filter(
+      (result) => result.action === "already_completed",
+    ).length,
+    applied: results.filter((result) => result.action === "applied").length,
+    candidates: results.length,
+    failed: results.filter((result) => result.action === "failed").length,
+    mode,
+    nextOperatingDate:
+      args.nextOperatingDate <= args.endOperatingDate
+        ? args.nextOperatingDate
+        : null,
+    quarantined: results.filter((result) => result.action === "quarantined")
+      .length,
+    results,
+    skipped: results.filter((result) => result.action === "skipped").length,
+  };
 }
 
 function operatingDateForPolicy(args: {
@@ -1445,6 +2060,84 @@ export const runScheduledDailyOperationsAutomation = internalMutation({
 export const runConfiguredDailyOperationsAutomation = internalMutation({
   args: {},
   handler: (ctx) => runConfiguredDailyOperationsAutomationWithCtx(ctx),
+});
+
+export const runHistoricEodAutoCloseForDate = internalMutation({
+  args: {
+    asOfOperatingDate: v.string(),
+    mode: v.union(v.literal("dry_run"), v.literal("apply")),
+    operatingDate: v.string(),
+    storeId: v.id("store"),
+  },
+  handler: (ctx, args) => runHistoricEodAutoCloseForDateWithCtx(ctx, args),
+});
+
+async function runHistoricEodAutoCloseBatchActionWithCtx(
+  ctx: Pick<ActionCtx, "runMutation">,
+  args: {
+    asOfOperatingDate?: string;
+    endOperatingDate: string;
+    maxDays: number;
+    mode: HistoricEodAutoCloseMode;
+    startOperatingDate: string;
+    storeId: Id<"store">;
+  },
+) {
+  if (
+    !isValidOperatingDate(args.startOperatingDate) ||
+    !isValidOperatingDate(args.endOperatingDate)
+  ) {
+    throw new Error("Historic EOD auto-close requires valid date range bounds.");
+  }
+
+  if (
+    !Number.isInteger(args.maxDays) ||
+    args.maxDays < 1 ||
+    args.maxDays > HISTORIC_EOD_AUTO_CLOSE_MAX_DAYS_LIMIT
+  ) {
+    throw new Error("Historic EOD auto-close maxDays is out of range.");
+  }
+
+  const asOfOperatingDate =
+    args.asOfOperatingDate ?? new Date(Date.now()).toISOString().slice(0, 10);
+  if (!isValidOperatingDate(asOfOperatingDate)) {
+    throw new Error("Historic EOD auto-close as-of date is invalid.");
+  }
+
+  const results: HistoricEodDateResult[] = [];
+  let operatingDate = args.startOperatingDate;
+
+  while (operatingDate <= args.endOperatingDate && results.length < args.maxDays) {
+    const result = await ctx.runMutation(
+      internal.operations.dailyOperationsAutomation.runHistoricEodAutoCloseForDate,
+      {
+        asOfOperatingDate,
+        mode: args.mode,
+        operatingDate,
+        storeId: args.storeId,
+      },
+    );
+
+    results.push(result as HistoricEodDateResult);
+    operatingDate = addDaysToOperatingDate(operatingDate, 1);
+  }
+
+  return summarizeHistoricEodAutoCloseBatch(args.mode, results, {
+    endOperatingDate: args.endOperatingDate,
+    nextOperatingDate: operatingDate,
+  });
+}
+
+export const runHistoricEodAutoCloseBatch = internalAction({
+  args: {
+    asOfOperatingDate: v.optional(v.string()),
+    endOperatingDate: v.string(),
+    maxDays: v.number(),
+    mode: v.union(v.literal("dry_run"), v.literal("apply")),
+    startOperatingDate: v.string(),
+    storeId: v.id("store"),
+  },
+  handler: (ctx, args) => runHistoricEodAutoCloseBatchActionWithCtx(ctx, args),
 });
 
 export const getOpeningAutoStartPolicy = query({

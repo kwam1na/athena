@@ -9,6 +9,7 @@ import {
   getEodAutoCompletePolicy,
   getOpeningAutoStartPolicy,
   prepareDailyCloseAutomationWithCtx,
+  runHistoricEodAutoCloseBatchWithCtx,
   runDailyCloseAutoCompleteEligibilityWithCtx,
   runConfiguredDailyOperationsAutomationWithCtx,
   runDailyOpeningAutomationWithCtx,
@@ -578,6 +579,14 @@ describe("daily operations automation adapter", () => {
         }),
       ],
       store: [store],
+      storeSchedule: [
+        storeSchedule({
+          weeklyWindows: [
+            { dayOfWeek: 6, startMinute: 9 * 60, endMinute: 17 * 60 },
+            { dayOfWeek: 0, startMinute: 9 * 60, endMinute: 17 * 60 },
+          ],
+        }),
+      ],
     });
 
     const result = await runDailyOpeningAutomationWithCtx(
@@ -606,6 +615,14 @@ describe("daily operations automation adapter", () => {
         }),
       ],
       store: [store],
+      storeSchedule: [
+        storeSchedule({
+          weeklyWindows: [
+            { dayOfWeek: 6, startMinute: 9 * 60, endMinute: 17 * 60 },
+            { dayOfWeek: 0, startMinute: 9 * 60, endMinute: 17 * 60 },
+          ],
+        }),
+      ],
     });
 
     const result = await runDailyOpeningAutomationWithCtx(
@@ -1513,6 +1530,820 @@ describe("daily operations automation adapter", () => {
         carryForwardWorkItemIds: ["work-1"],
       },
     });
+  });
+
+  it("dry-runs bounded historic EOD auto-close dates oldest-first without closing days", async () => {
+    const { db, inserts } = createDb({
+      automationPolicy: [
+        policy("eod.auto_complete", "enabled", {
+          eodCleanDayAutoCompleteEnabled: true,
+          eodLocalCompletionWindowMinutes: 0,
+          operatingTimezoneOffsetMinutes: 0,
+        }),
+      ],
+      posTransaction: [
+        completedTransaction({
+          completedAt: Date.UTC(2026, 5, 6, 14),
+        }),
+        completedTransaction({
+          _id: "txn-2",
+          completedAt: Date.UTC(2026, 5, 7, 14),
+          payments: [{ amount: 12000, method: "cash", timestamp: 1 }],
+          status: "completed",
+          storeId: "store-1",
+          subtotal: 12000,
+          tax: 0,
+          total: 12000,
+          totalPaid: 12000,
+          transactionNumber: "TXN-2",
+        }),
+      ],
+      registerSession: [
+        closedRegisterSession({
+          closedAt: Date.UTC(2026, 5, 6, 21),
+          openedAt: Date.UTC(2026, 5, 6, 8),
+        }),
+        closedRegisterSession({
+          _id: "register-2",
+          closedAt: Date.UTC(2026, 5, 7, 21),
+          countedCash: 25000,
+          expectedCash: 25000,
+          openedAt: Date.UTC(2026, 5, 7, 8),
+          registerNumber: "2",
+          status: "closed",
+          storeId: "store-1",
+        }),
+      ],
+      store: [store],
+      storeSchedule: [
+        storeSchedule({
+          weeklyWindows: [
+            { dayOfWeek: 6, startMinute: 9 * 60, endMinute: 17 * 60 },
+            { dayOfWeek: 0, startMinute: 9 * 60, endMinute: 17 * 60 },
+          ],
+        }),
+      ],
+    });
+
+    const result = await runHistoricEodAutoCloseBatchWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        asOfOperatingDate: "2026-06-10",
+        endOperatingDate: "2026-06-08",
+        maxDays: 2,
+        mode: "dry_run",
+        startOperatingDate: "2026-06-06",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(result).toMatchObject({
+      applied: 0,
+      candidates: 2,
+      failed: 0,
+      mode: "dry_run",
+      nextOperatingDate: "2026-06-08",
+      skipped: 0,
+    });
+    expect(result.results).toEqual([
+      expect.objectContaining({
+        action: "dry_run",
+        classification: "clean_day",
+        operatingDate: "2026-06-06",
+      }),
+      expect.objectContaining({
+        action: "dry_run",
+        classification: "clean_day",
+        operatingDate: "2026-06-07",
+      }),
+    ]);
+    expect(
+      inserts.filter((insert) => insert.table !== "automationRun"),
+    ).toEqual([]);
+    expect(inserts.map((insert) => insert.table)).toEqual([
+      "automationRun",
+      "automationRun",
+    ]);
+    expect(inserts.map((insert) => insert.value)).toEqual([
+        expect.objectContaining({
+          outcome: "dry_run",
+          policyMode: "dry_run",
+          decisionEvidence: expect.objectContaining({
+            classification: "clean_day",
+            observed: expect.objectContaining({
+              scheduleEvidenceSource: "canonical_schedule",
+              storeScheduleId: "storeSchedule-1",
+            }),
+          }),
+        }),
+        expect.objectContaining({
+          outcome: "dry_run",
+          policyMode: "dry_run",
+          decisionEvidence: expect.objectContaining({
+            classification: "clean_day",
+            observed: expect.objectContaining({
+              scheduleEvidenceSource: "canonical_schedule",
+              storeScheduleId: "storeSchedule-1",
+            }),
+          }),
+        }),
+    ]);
+    expect(
+      inserts.map((insert) => insert.value).map((run) => run.idempotencyKey),
+    ).toEqual([
+      "daily_operations:eod.auto_complete:historic:store-1:2026-06-06",
+      "daily_operations:eod.auto_complete:historic:store-1:2026-06-07",
+    ]);
+  });
+
+  it("quarantines current or future historic EOD dates with stable run evidence", async () => {
+    const { db, inserts } = createDb({
+      automationPolicy: [
+        policy("eod.auto_complete", "enabled", {
+          eodCleanDayAutoCompleteEnabled: true,
+          eodLocalCompletionWindowMinutes: 0,
+          operatingTimezoneOffsetMinutes: 0,
+        }),
+      ],
+      store: [store],
+    });
+
+    const result = await runHistoricEodAutoCloseBatchWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        asOfOperatingDate: "2026-06-08",
+        endOperatingDate: "2026-06-08",
+        maxDays: 1,
+        mode: "apply",
+        startOperatingDate: "2026-06-08",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(result).toMatchObject({
+      applied: 0,
+      candidates: 1,
+      quarantined: 1,
+    });
+    expect(inserts).toContainEqual(
+      expect.objectContaining({
+        table: "automationRun",
+        value: expect.objectContaining({
+          action: "eod.auto_complete",
+          decisionEvidence: expect.objectContaining({
+            classification: "quarantine_current_or_future_date",
+            eligible: false,
+            observed: expect.objectContaining({
+              quarantineReason: "current_or_future_date",
+            }),
+          }),
+          idempotencyKey:
+            "daily_operations:eod.auto_complete:historic:store-1:2026-06-08",
+          outcome: "skipped",
+          triggerType: "support_batch",
+        }),
+      }),
+    );
+  });
+
+  it("quarantines a past UTC date while the store-local operating day is still open", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 5, 9, 0, 30));
+    const { db, inserts } = createDb({
+      automationPolicy: [
+        policy("eod.auto_complete", "enabled", {
+          eodCleanDayAutoCompleteEnabled: true,
+          eodLocalCompletionWindowMinutes: 0,
+          operatingTimezoneOffsetMinutes: -4 * 60,
+        }),
+      ],
+      store: [store],
+      storeSchedule: [
+        storeSchedule({
+          timezone: "America/New_York",
+          weeklyWindows: [
+            { dayOfWeek: 1, startMinute: 10 * 60, endMinute: 22 * 60 },
+          ],
+        }),
+      ],
+    });
+
+    const result = await runHistoricEodAutoCloseBatchWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        asOfOperatingDate: "2026-06-09",
+        endOperatingDate: "2026-06-08",
+        maxDays: 1,
+        mode: "apply",
+        startOperatingDate: "2026-06-08",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(result).toMatchObject({
+      applied: 0,
+      candidates: 1,
+      quarantined: 1,
+    });
+    expect(inserts.map((insert) => insert.table)).toEqual(["automationRun"]);
+    expect(inserts[0].value).toMatchObject({
+      decisionEvidence: {
+        classification: "quarantine_store_day_still_open",
+        eligible: false,
+        observed: {
+          quarantineReason: "store_day_still_open",
+          scheduleEvidenceSource: "canonical_schedule",
+          storeScheduleId: "storeSchedule-1",
+        },
+      },
+      outcome: "skipped",
+      triggerType: "support_batch",
+    });
+  });
+
+  it("quarantines historic apply dates when Store Schedule evidence is missing", async () => {
+    const { db, inserts } = createDb({
+      automationPolicy: [
+        policy("eod.auto_complete", "enabled", {
+          eodCleanDayAutoCompleteEnabled: true,
+          eodLocalCompletionWindowMinutes: 0,
+          operatingTimezoneOffsetMinutes: 0,
+        }),
+      ],
+      store: [store],
+    });
+
+    const result = await runHistoricEodAutoCloseBatchWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        asOfOperatingDate: "2026-06-10",
+        endOperatingDate: "2026-06-08",
+        maxDays: 1,
+        mode: "apply",
+        startOperatingDate: "2026-06-08",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(result).toMatchObject({
+      applied: 0,
+      candidates: 1,
+      quarantined: 1,
+      results: [
+        expect.objectContaining({
+          action: "quarantined",
+          classification: "quarantine_missing_store_schedule",
+          operatingDate: "2026-06-08",
+        }),
+      ],
+    });
+    expect(inserts.map((insert) => insert.table)).toEqual(["automationRun"]);
+    expect(inserts[0].value).toMatchObject({
+      decisionEvidence: {
+        classification: "quarantine_missing_store_schedule",
+        eligible: false,
+        observed: expect.objectContaining({
+          quarantineReason: "missing_store_schedule",
+        }),
+      },
+      outcome: "skipped",
+      policyMode: "enabled",
+      triggerType: "support_batch",
+    });
+  });
+
+  it("applies historic EOD auto-close with full canonical Store Schedule range evidence", async () => {
+    const { db, inserts } = createDb({
+      automationPolicy: [
+        policy("eod.auto_complete", "enabled", {
+          eodCleanDayAutoCompleteEnabled: true,
+          eodLocalCompletionWindowMinutes: 0,
+          operatingTimezoneOffsetMinutes: 0,
+        }),
+      ],
+      posTransaction: [
+        completedTransaction({
+          _id: "txn-morning",
+          completedAt: Date.UTC(2026, 5, 8, 10),
+          transactionNumber: "TXN-MORNING",
+        }),
+        completedTransaction({
+          _id: "txn-evening",
+          completedAt: Date.UTC(2026, 5, 8, 18),
+          transactionNumber: "TXN-EVENING",
+        }),
+      ],
+      registerSession: [
+        closedRegisterSession({
+          _id: "register-morning",
+          closedAt: Date.UTC(2026, 5, 8, 11),
+          closeoutOperatingDate: "2026-06-08",
+          openedAt: Date.UTC(2026, 5, 8, 9),
+        }),
+        closedRegisterSession({
+          _id: "register-evening",
+          closedAt: Date.UTC(2026, 5, 8, 19),
+          closeoutOperatingDate: "2026-06-08",
+          openedAt: Date.UTC(2026, 5, 8, 16),
+        }),
+      ],
+      store: [store],
+      storeSchedule: [
+        storeSchedule({
+          weeklyWindows: [
+            { dayOfWeek: 1, startMinute: 9 * 60, endMinute: 12 * 60 },
+            { dayOfWeek: 1, startMinute: 16 * 60, endMinute: 20 * 60 },
+          ],
+        }),
+      ],
+    });
+
+    const result = await runHistoricEodAutoCloseBatchWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        asOfOperatingDate: "2026-06-10",
+        endOperatingDate: "2026-06-08",
+        maxDays: 1,
+        mode: "apply",
+        startOperatingDate: "2026-06-08",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(result).toMatchObject({
+      applied: 1,
+      candidates: 1,
+      failed: 0,
+      quarantined: 0,
+    });
+    expect(inserts.map((insert) => insert.table)).toEqual([
+      "automationRun",
+      "dailyClose",
+      "operationalEvent",
+    ]);
+    expect(
+      inserts.find((insert) => insert.table === "dailyClose")?.value,
+    ).toMatchObject({
+      actorType: "automation",
+      automationRunId: "automationRun-1",
+      isCurrent: false,
+      operatingDate: "2026-06-08",
+      reportSnapshot: {
+        closeMetadata: {
+          endAt: Date.UTC(2026, 5, 8, 20),
+          startAt: Date.UTC(2026, 5, 8, 9),
+        },
+      },
+      summary: {
+        salesTotal: 24000,
+        transactionCount: 2,
+      },
+    });
+    expect(inserts[0].value).toMatchObject({
+      decisionEvidence: {
+        observed: {
+          scheduleEvidenceSource: "canonical_schedule",
+          storeScheduleId: "storeSchedule-1",
+        },
+      },
+      triggerType: "support_batch",
+    });
+  });
+
+  it("quarantines historic apply dates when Store Schedule marks the date closed", async () => {
+    const { db, inserts } = createDb({
+      automationPolicy: [
+        policy("eod.auto_complete", "enabled", {
+          eodCleanDayAutoCompleteEnabled: true,
+          eodLocalCompletionWindowMinutes: 0,
+          operatingTimezoneOffsetMinutes: 0,
+        }),
+      ],
+      store: [store],
+      storeSchedule: [
+        storeSchedule({
+          weeklyClosedDays: [1],
+          weeklyWindows: [],
+        }),
+      ],
+    });
+
+    const result = await runHistoricEodAutoCloseBatchWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        asOfOperatingDate: "2026-06-10",
+        endOperatingDate: "2026-06-08",
+        maxDays: 1,
+        mode: "apply",
+        startOperatingDate: "2026-06-08",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(result).toMatchObject({
+      applied: 0,
+      quarantined: 1,
+    });
+    expect(inserts).toContainEqual(
+      expect.objectContaining({
+        table: "automationRun",
+        value: expect.objectContaining({
+          decisionEvidence: expect.objectContaining({
+            classification: "quarantine_store_schedule_closed",
+            observed: expect.objectContaining({
+              quarantineReason: "store_schedule_closed",
+              scheduleEvidenceSource: "canonical_schedule",
+              storeScheduleId: "storeSchedule-1",
+            }),
+          }),
+          outcome: "skipped",
+        }),
+      }),
+    );
+  });
+
+  it("quarantines historic apply when Daily Close source reads are incomplete", async () => {
+    const cappedTransactions = Array.from({ length: 200 }, (_, index) =>
+      completedTransaction({
+        _id: `txn-cap-${index + 1}`,
+        completedAt: Date.UTC(2026, 5, 8, 14, index % 60),
+        transactionNumber: `TXN-CAP-${index + 1}`,
+      }),
+    );
+    const { db, inserts } = createDb({
+      automationPolicy: [
+        policy("eod.auto_complete", "enabled", {
+          eodCleanDayAutoCompleteEnabled: true,
+          eodLocalCompletionWindowMinutes: 0,
+          operatingTimezoneOffsetMinutes: 0,
+        }),
+      ],
+      posTransaction: cappedTransactions,
+      store: [store],
+      storeSchedule: [storeSchedule()],
+    });
+    const dryRunDb = createDb({
+      automationPolicy: [
+        policy("eod.auto_complete", "enabled", {
+          eodCleanDayAutoCompleteEnabled: true,
+          eodLocalCompletionWindowMinutes: 0,
+          operatingTimezoneOffsetMinutes: 0,
+        }),
+      ],
+      posTransaction: cappedTransactions,
+      store: [store],
+      storeSchedule: [storeSchedule()],
+    });
+
+    const result = await runHistoricEodAutoCloseBatchWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        asOfOperatingDate: "2026-06-10",
+        endOperatingDate: "2026-06-08",
+        maxDays: 1,
+        mode: "apply",
+        startOperatingDate: "2026-06-08",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+    const dryRunResult = await runHistoricEodAutoCloseBatchWithCtx(
+      { db: dryRunDb.db } as unknown as MutationCtx,
+      {
+        asOfOperatingDate: "2026-06-10",
+        endOperatingDate: "2026-06-08",
+        maxDays: 1,
+        mode: "dry_run",
+        startOperatingDate: "2026-06-08",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(result).toMatchObject({
+      applied: 0,
+      candidates: 1,
+      quarantined: 1,
+    });
+    expect(inserts.map((insert) => insert.table)).toEqual(["automationRun"]);
+    expect(inserts[0].value).toMatchObject({
+      decisionEvidence: {
+        classification: "quarantine_incomplete_source_reads",
+        eligible: false,
+        observed: expect.objectContaining({
+          quarantineReason: "incomplete_source_reads",
+          scheduleEvidenceSource: "canonical_schedule",
+          storeScheduleId: "storeSchedule-1",
+        }),
+      },
+      outcome: "skipped",
+      triggerType: "support_batch",
+    });
+    expect(dryRunResult).toMatchObject({
+      applied: 0,
+      candidates: 1,
+      quarantined: 1,
+      results: [
+        {
+          action: "quarantined",
+          classification: "quarantine_incomplete_source_reads",
+        },
+      ],
+    });
+    expect(dryRunDb.inserts.map((insert) => insert.table)).toEqual([
+      "automationRun",
+    ]);
+    expect(dryRunDb.inserts[0].value).toMatchObject({
+      decisionEvidence: {
+        classification: "quarantine_incomplete_source_reads",
+        observed: expect.objectContaining({
+          quarantineReason: "incomplete_source_reads",
+        }),
+      },
+    });
+  });
+
+  it("preserves applied historic automation run evidence on apply and dry-run reruns", async () => {
+    const appliedRun = {
+      _id: "automation-run-applied",
+      action: "eod.auto_complete",
+      appliedAt: Date.UTC(2026, 5, 8, 22),
+      createdAt: Date.UTC(2026, 5, 8, 22),
+      decisionEvidence: {
+        classification: "clean_day",
+        eligible: true,
+        observed: {},
+      },
+      decisionReason: "Historic EOD Review completed by automation policy.",
+      domain: "daily_operations",
+      eventIds: ["event-applied"],
+      idempotencyKey:
+        "daily_operations:eod.auto_complete:historic:store-1:2026-06-08",
+      mutationBoundary: "Daily Close completion record and audit event only",
+      operatingDate: "2026-06-08",
+      outcome: "applied",
+      policyMode: "enabled",
+      policyVersion: "daily-operations.v1",
+      snapshotCounts: {},
+      sourceSubjects: [],
+      storeId: "store-1",
+      triggerType: "support_batch",
+      updatedAt: Date.UTC(2026, 5, 8, 22),
+    };
+    const { db, inserts, patches } = createDb({
+      automationPolicy: [
+        policy("eod.auto_complete", "enabled", {
+          eodCleanDayAutoCompleteEnabled: true,
+          eodLocalCompletionWindowMinutes: 0,
+          operatingTimezoneOffsetMinutes: 0,
+        }),
+      ],
+      automationRun: [appliedRun],
+      dailyClose: [
+        completedDailyClose({
+          _id: "daily-close-applied",
+          automationRunId: "automation-run-applied",
+          completedAt: Date.UTC(2026, 5, 8, 22),
+          operatingDate: "2026-06-08",
+          updatedAt: Date.UTC(2026, 5, 8, 22),
+        }),
+      ],
+      store: [store],
+      storeSchedule: [storeSchedule()],
+    });
+
+    const applyResult = await runHistoricEodAutoCloseBatchWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        asOfOperatingDate: "2026-06-10",
+        endOperatingDate: "2026-06-08",
+        maxDays: 1,
+        mode: "apply",
+        startOperatingDate: "2026-06-08",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+    const dryRunResult = await runHistoricEodAutoCloseBatchWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        asOfOperatingDate: "2026-06-10",
+        endOperatingDate: "2026-06-08",
+        maxDays: 1,
+        mode: "dry_run",
+        startOperatingDate: "2026-06-08",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+    const currentDateResult = await runHistoricEodAutoCloseBatchWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        asOfOperatingDate: "2026-06-08",
+        endOperatingDate: "2026-06-08",
+        maxDays: 1,
+        mode: "apply",
+        startOperatingDate: "2026-06-08",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(applyResult.results[0]).toMatchObject({
+      action: "already_completed",
+      runId: "automation-run-applied",
+    });
+    expect(dryRunResult.results[0]).toMatchObject({
+      action: "already_completed",
+      runId: "automation-run-applied",
+    });
+    expect(currentDateResult.results[0]).toMatchObject({
+      action: "already_completed",
+      runId: "automation-run-applied",
+    });
+    expect(inserts).toEqual([]);
+    expect(patches).toEqual([]);
+  });
+
+  it("does not report an applied historic run as completed after the linked close is reopened", async () => {
+    const appliedRun = {
+      _id: "automation-run-applied",
+      action: "eod.auto_complete",
+      appliedAt: Date.UTC(2026, 5, 8, 22),
+      createdAt: Date.UTC(2026, 5, 8, 22),
+      decisionEvidence: {
+        classification: "completed",
+        eligible: true,
+        observed: {},
+      },
+      decisionReason: "Historic EOD Review completed by automation policy.",
+      domain: "daily_operations",
+      eventIds: ["event-applied"],
+      idempotencyKey:
+        "daily_operations:eod.auto_complete:historic:store-1:2026-06-08",
+      mutationBoundary: "Daily Close completion record and audit event only",
+      operatingDate: "2026-06-08",
+      outcome: "applied",
+      policyMode: "enabled",
+      policyVersion: "daily-operations.v1",
+      snapshotCounts: {},
+      sourceSubjects: [],
+      storeId: "store-1",
+      triggerType: "support_batch",
+      updatedAt: Date.UTC(2026, 5, 8, 22),
+    };
+    const { db, patches } = createDb({
+      automationPolicy: [
+        policy("eod.auto_complete", "enabled", {
+          eodCleanDayAutoCompleteEnabled: true,
+          eodLocalCompletionWindowMinutes: 0,
+          operatingTimezoneOffsetMinutes: 0,
+        }),
+      ],
+      automationRun: [appliedRun],
+      dailyClose: [
+        completedDailyClose({
+          _id: "daily-close-applied",
+          automationRunId: "automation-run-applied",
+          completedAt: Date.UTC(2026, 5, 8, 22),
+          lifecycleStatus: "reopened",
+          operatingDate: "2026-06-08",
+          supersededByDailyCloseId: "daily-close-reopened",
+          updatedAt: Date.UTC(2026, 5, 9, 10),
+        }),
+        completedDailyClose({
+          _id: "daily-close-reopened",
+          automationRunId: undefined,
+          completedAt: undefined,
+          lifecycleStatus: "active",
+          operatingDate: "2026-06-08",
+          reopenedFromDailyCloseId: "daily-close-applied",
+          status: "open",
+          updatedAt: Date.UTC(2026, 5, 9, 10),
+        }),
+      ],
+      store: [store],
+      storeSchedule: [storeSchedule()],
+    });
+
+    const rerunResult = await runHistoricEodAutoCloseBatchWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        asOfOperatingDate: "2026-06-10",
+        endOperatingDate: "2026-06-08",
+        maxDays: 1,
+        mode: "apply",
+        startOperatingDate: "2026-06-08",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(rerunResult.results[0]).toMatchObject({
+      action: "skipped",
+      runId: "automation-run-applied",
+    });
+    expect(rerunResult.results[0]).not.toMatchObject({
+      action: "already_completed",
+    });
+    expect(patches).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "automation-run-applied",
+          table: "automationRun",
+          value: expect.objectContaining({
+            outcome: "skipped",
+          }),
+        }),
+      ]),
+    );
+  });
+
+  it("clears applied evidence when an invalidated historic run is downgraded by a replacement close", async () => {
+    const appliedRun = {
+      _id: "automation-run-applied",
+      action: "eod.auto_complete",
+      appliedAt: Date.UTC(2026, 5, 8, 22),
+      createdAt: Date.UTC(2026, 5, 8, 22),
+      decisionEvidence: {
+        classification: "completed",
+        eligible: true,
+        observed: {},
+      },
+      decisionReason: "Historic EOD Review completed by automation policy.",
+      domain: "daily_operations",
+      error: {
+        code: "stale-error",
+        message: "Previous stale error evidence.",
+      },
+      eventIds: ["event-applied"],
+      idempotencyKey:
+        "daily_operations:eod.auto_complete:historic:store-1:2026-06-08",
+      mutationBoundary: "Daily Close completion record and audit event only",
+      operatingDate: "2026-06-08",
+      outcome: "applied",
+      policyMode: "enabled",
+      policyVersion: "daily-operations.v1",
+      snapshotCounts: {},
+      sourceSubjects: [],
+      storeId: "store-1",
+      triggerType: "support_batch",
+      updatedAt: Date.UTC(2026, 5, 8, 22),
+    };
+    const { db, patches } = createDb({
+      automationPolicy: [
+        policy("eod.auto_complete", "enabled", {
+          eodCleanDayAutoCompleteEnabled: true,
+          eodLocalCompletionWindowMinutes: 0,
+          operatingTimezoneOffsetMinutes: 0,
+        }),
+      ],
+      automationRun: [appliedRun],
+      dailyClose: [
+        completedDailyClose({
+          _id: "daily-close-applied",
+          automationRunId: "automation-run-applied",
+          completedAt: Date.UTC(2026, 5, 8, 22),
+          lifecycleStatus: "reopened",
+          operatingDate: "2026-06-08",
+          supersededByDailyCloseId: "daily-close-replacement",
+          updatedAt: Date.UTC(2026, 5, 9, 10),
+        }),
+        completedDailyClose({
+          _id: "daily-close-replacement",
+          automationRunId: undefined,
+          completedAt: Date.UTC(2026, 5, 9, 11),
+          lifecycleStatus: "active",
+          operatingDate: "2026-06-08",
+          reopenedFromDailyCloseId: "daily-close-applied",
+          status: "completed",
+          updatedAt: Date.UTC(2026, 5, 9, 11),
+        }),
+      ],
+      store: [store],
+      storeSchedule: [storeSchedule()],
+    });
+
+    const rerunResult = await runHistoricEodAutoCloseBatchWithCtx(
+      { db } as unknown as MutationCtx,
+      {
+        asOfOperatingDate: "2026-06-10",
+        endOperatingDate: "2026-06-08",
+        maxDays: 1,
+        mode: "apply",
+        startOperatingDate: "2026-06-08",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(rerunResult.results[0]).toMatchObject({
+      action: "already_completed",
+      runId: "automation-run-applied",
+    });
+
+    const runPatch = patches.find(
+      (patch) =>
+        patch.table === "automationRun" && patch.id === "automation-run-applied",
+    )?.value;
+
+    expect(runPatch).toMatchObject({
+      outcome: "skipped",
+    });
+    expect(runPatch).toHaveProperty("appliedAt", undefined);
+    expect(runPatch).toHaveProperty("error", undefined);
   });
 
   it("skips EOD auto-complete for review categories outside the low-risk policy", async () => {

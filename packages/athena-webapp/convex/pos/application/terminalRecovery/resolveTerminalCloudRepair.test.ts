@@ -521,6 +521,7 @@ function buildQuery(rows: Array<Record<string, unknown>>) {
     withIndex: vi.fn((_indexName: string, build: (q: {
       eq: (field: string, value: unknown) => unknown;
       gt: (field: string, value: unknown) => unknown;
+      lte: (field: string, value: unknown) => unknown;
     }) => unknown) => {
       const q = {
         eq: vi.fn((field: string, value: unknown) => {
@@ -529,6 +530,12 @@ function buildQuery(rows: Array<Record<string, unknown>>) {
         }),
         gt: vi.fn((field: string, value: unknown) => {
           currentRows = currentRows.filter((row) => Number(row[field]) > Number(value));
+          return q;
+        }),
+        lte: vi.fn((field: string, value: unknown) => {
+          currentRows = currentRows.filter(
+            (row) => Number(row[field]) <= Number(value),
+          );
           return q;
         }),
       };

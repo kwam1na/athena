@@ -880,6 +880,20 @@ const schema = defineSchema({
   registerSession: defineTable(registerSessionSchema)
     .index("by_storeId", ["storeId"])
     .index("by_storeId_status", ["storeId", "status"])
+    .index("by_storeId_status_openedOperatingDate", [
+      "storeId",
+      "status",
+      "openedOperatingDate",
+    ])
+    .index("by_storeId_status_closeoutOperatingDate", [
+      "storeId",
+      "status",
+      "closeoutOperatingDate",
+    ])
+    .index("by_storeId_closeoutOperatingDate", [
+      "storeId",
+      "closeoutOperatingDate",
+    ])
     .index("by_storeId_registerNumber", ["storeId", "registerNumber"])
     .index("by_terminalId", ["terminalId"])
     .index("by_managerApprovalRequestId", ["managerApprovalRequestId"]),

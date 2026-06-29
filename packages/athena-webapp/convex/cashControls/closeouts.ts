@@ -10,8 +10,10 @@ import {
 import { consumeApprovalProofWithCtx } from "../operations/approvalProofs";
 import { recordOperationalEventWithCtx } from "../operations/operationalEvents";
 import {
+  buildRegisterSessionDateDerivationPatch,
   rejectRegisterSessionCloseoutWithCtx,
   reopenRejectedRegisterSessionCloseoutWithCtx,
+  resolveRegisterSessionOperatingDateContext,
 } from "../operations/registerSessions";
 import { recordRegisterSessionTraceBestEffort } from "../operations/registerSessionTracing";
 import { authenticateStaffCredentialWithCtx } from "../operations/staffCredentials";
@@ -1254,9 +1256,19 @@ export const submitRegisterSessionCloseout = mutation({
           expectedCash: registerSession.expectedCash,
           registerSession,
         });
+      const approvalRequestCreatedAt = approvalRequest?.createdAt ?? Date.now();
+      const closeoutContext = await resolveRegisterSessionOperatingDateContext(ctx, {
+        at: approvalRequestCreatedAt,
+        storeId: args.storeId,
+      });
 
       await ctx.db.patch("registerSession", registerSession._id, {
         managerApprovalRequestId: approvalRequestId,
+        ...buildRegisterSessionDateDerivationPatch({
+          closeoutContext,
+          closeoutOwnedAt: approvalRequestCreatedAt,
+          closeoutOwnershipSource: "approval_request",
+        }),
       });
 
       await recordOperationalEventWithCtx(ctx, {

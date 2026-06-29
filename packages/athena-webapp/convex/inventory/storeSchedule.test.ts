@@ -15,6 +15,7 @@ import {
   getStoreDayContext,
   getStoreScheduleSummary,
   listStoreScheduleVersions,
+  resolveStoreOperatingRangeForDateWithCtx,
   upsertStoreScheduleCommand,
   upsertStoreScheduleCommandWithCtx,
 } from "./storeSchedule";
@@ -79,6 +80,18 @@ describe("store schedule resolver", () => {
     ).not.toThrow();
     expect(() =>
       assertConformsToExportedReturns(getStoreDayContext, context),
+    ).not.toThrow();
+    expect(() =>
+      assertConformsToExportedReturns(getStoreDayContext, {
+        kind: "missing_schedule",
+        timezone: null,
+        operatingDate: "2026-06-08",
+        phase: "unavailable",
+        isOpen: false,
+        scheduleVersionId: null,
+        currentWindow: null,
+        nextWindow: null,
+      }),
     ).not.toThrow();
     expect(() =>
       assertConformsToExportedReturns(getStoreScheduleSummary, {
@@ -394,6 +407,100 @@ describe("store schedule schema indexes", () => {
     expect(schema).toContain(
       '.index("by_source_status", ["source", "status"])',
     );
+  });
+});
+
+describe("store schedule version resolution", () => {
+  it("resolves the newest effective schedule before applying the version cap", async () => {
+    const olderSchedules = Array.from({ length: 100 }, (_, index) =>
+      baseSchedule({
+        _id: `old-schedule-${index + 1}` as any,
+        effectiveFrom: Date.UTC(2026, 0, index + 1),
+        weeklyWindows: [
+          { dayOfWeek: 1, startMinute: 9 * 60, endMinute: 10 * 60 },
+        ],
+      }),
+    );
+    const latestSchedule = baseSchedule({
+      _id: "latest-schedule" as any,
+      effectiveFrom: Date.parse("2026-06-01T00:00:00.000Z"),
+      timezone: "UTC",
+      weeklyWindows: [
+        { dayOfWeek: 1, startMinute: 12 * 60, endMinute: 13 * 60 },
+      ],
+    });
+    const schedules = [...olderSchedules, latestSchedule];
+    const ctx = {
+      db: {
+        query: vi.fn(() => {
+          const filters: Array<[string, unknown | { lte: unknown }]> = [];
+          let sortDirection: "asc" | "desc" = "asc";
+          const rows = () =>
+            schedules
+              .filter((schedule) =>
+                filters.every(([field, value]) => {
+                  if (value && typeof value === "object" && "lte" in value) {
+                    return (
+                      Number(schedule[field as keyof typeof schedule]) <=
+                      Number(value.lte)
+                    );
+                  }
+
+                  return schedule[field as keyof typeof schedule] === value;
+                }),
+              )
+              .sort((left, right) =>
+                sortDirection === "desc"
+                  ? right.effectiveFrom - left.effectiveFrom
+                  : left.effectiveFrom - right.effectiveFrom,
+              );
+
+          const chain = {
+            order(direction: "asc" | "desc") {
+              sortDirection = direction;
+              return chain;
+            },
+            take: vi.fn(async (limit: number) => rows().slice(0, limit)),
+            withIndex: vi.fn(
+              (
+                _index: string,
+                applyIndex: (builder: {
+                  eq: (field: string, value: unknown) => typeof builder;
+                  lte: (field: string, value: unknown) => typeof builder;
+                }) => void,
+              ) => {
+                const builder = {
+                  eq(field: string, value: unknown) {
+                    filters.push([field, value]);
+                    return builder;
+                  },
+                  lte(field: string, value: unknown) {
+                    filters.push([field, { lte: value }]);
+                    return builder;
+                  },
+                };
+                applyIndex(builder);
+                return chain;
+              },
+            ),
+          };
+
+          return chain;
+        }),
+      },
+    } as any;
+
+    const result = await resolveStoreOperatingRangeForDateWithCtx(ctx, {
+      operatingDate: "2026-06-08",
+      storeId: "store-1" as any,
+    });
+
+    expect(result.schedule?._id).toBe("latest-schedule");
+    expect(result.range).toMatchObject({
+      kind: "resolved",
+      startAt: Date.parse("2026-06-08T12:00:00.000Z"),
+      endAt: Date.parse("2026-06-08T13:00:00.000Z"),
+    });
   });
 });
 

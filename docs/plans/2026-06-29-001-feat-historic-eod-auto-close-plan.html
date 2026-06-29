@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>feat: Add historic EOD auto-close automation</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #17202a;
+        --muted: #5d6975;
+        --line: #d7dde4;
+        --panel: #f7f9fb;
+        --accent: #0f6b5f;
+      }
+      body {
+        margin: 0;
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
+        color: var(--ink);
+        background: white;
+      }
+      main {
+        max-width: 1040px;
+        margin: 0 auto;
+        padding: 40px 28px 64px;
+      }
+      header {
+        border-bottom: 1px solid var(--line);
+        margin-bottom: 28px;
+        padding-bottom: 20px;
+      }
+      h1 {
+        font-size: 34px;
+        line-height: 1.18;
+        margin: 0 0 12px;
+      }
+      h2 {
+        font-size: 22px;
+        line-height: 1.25;
+        margin: 32px 0 12px;
+      }
+      h3 {
+        font-size: 17px;
+        margin: 24px 0 10px;
+      }
+      p,
+      li {
+        font-size: 15px;
+        line-height: 1.55;
+      }
+      ul,
+      ol {
+        padding-left: 22px;
+      }
+      code {
+        background: #edf1f4;
+        border-radius: 4px;
+        padding: 1px 4px;
+        font-size: 0.92em;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 14px 0 24px;
+        font-size: 14px;
+      }
+      th,
+      td {
+        border: 1px solid var(--line);
+        padding: 10px 12px;
+        text-align: left;
+        vertical-align: top;
+      }
+      th {
+        background: var(--panel);
+      }
+      .meta {
+        color: var(--muted);
+        font-size: 14px;
+      }
+      .summary {
+        border-left: 4px solid var(--accent);
+        background: var(--panel);
+        padding: 14px 16px;
+      }
+      .unit {
+        border-top: 1px solid var(--line);
+        padding-top: 18px;
+      }
+      .mermaid-note {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 12px 14px;
+        color: var(--muted);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div class="meta">Plan · 2026-06-29 · status: active</div>
+        <h1>feat: Add historic EOD auto-close automation</h1>
+        <p class="summary">
+          Add an automation-first path for Athena to retroactively close eligible
+          historic store days. The work starts with register-session date indexes
+          and source completeness verification, then adds a bounded support-owned
+          historic runner on the existing Daily Close automation completion rail.
+        </p>
+      </header>
+
+      <section>
+        <h2>Problem Frame</h2>
+        <p>
+          Current EOD automation can complete the active store day, but historic
+          missing days still require manual date-by-date work. That is both slow
+          and risky because Daily Close currently uses capped source reads in
+          several places. Historic automation also needs a currentness mode so
+          old closes do not demote the live current close.
+        </p>
+      </section>
+
+      <section>
+        <h2>Requirements</h2>
+        <ol>
+          <li>Add date-indexed register-session support before any historic close mutation path.</li>
+          <li>Keep completed history as <code>dailyClose</code> rows with stored <code>reportSnapshot</code>.</li>
+          <li>Use Store Schedule local operating ranges, not UTC calendar days.</li>
+          <li>Bound support-owned internal runs by explicit store/date range, batch size, mode, and oldest-first ordering.</li>
+          <li>Reuse current <code>eod.auto_complete</code> policy gates and fail closed on blockers.</li>
+          <li>Never overwrite human-completed closes.</li>
+          <li>Never demote the live/current close from a historic run.</li>
+          <li>Align <code>dailyClose</code>, report snapshot, <code>automationRun</code>, and operational-event evidence.</li>
+          <li>Expose skipped, failed, and dry-run reasons safely.</li>
+          <li>Quarantine incomplete or ambiguous source data durably in per-date automation evidence.</li>
+          <li>Cover scale, timezone, currentness, idempotency, and batch resume regressions.</li>
+        </ol>
+      </section>
+
+      <section>
+        <h2>Technical Decisions</h2>
+        <ul>
+          <li>Add optional derived register-session date fields, schedule evidence, and indexes first.</li>
+          <li>Match existing Daily Close date ownership semantics when deriving closeout dates, and quarantine when Store Schedule cannot resolve durable local-day evidence.</li>
+          <li>Use widen-migrate-narrow: optional fields, dual-write, backfill, verify, then rely on indexes.</li>
+          <li>Use a distinct historic run namespace while keeping policy semantics equivalent to <code>eod.auto_complete</code>; batch evidence lives in per-date <code>automationRun</code> rows plus backend results.</li>
+          <li>Add historical currentness mode to Daily Close automation completion.</li>
+          <li>Process multi-day ranges oldest-first through a per-date internal mutation so close, event, and run evidence cannot diverge.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Implementation Flow</h2>
+        <p class="mermaid-note">
+          Explicit range -> Store Schedule resolver -> oldest-first candidates ->
+          source-complete Daily Close snapshot -> policy gate -> dry-run, quarantine, or
+          historical-currentness completion -> completed snapshot/event/run evidence.
+        </p>
+      </section>
+
+      <section>
+        <h2>State Safety Matrix</h2>
+        <table>
+          <thead>
+            <tr><th>Existing state</th><th>Historic run result</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>No close and eligible snapshot</td><td>Insert/apply completed close with automation attribution.</td></tr>
+            <tr><td>Open/review close and eligible snapshot</td><td>Complete without marking it store-wide current.</td></tr>
+            <tr><td>Human-completed close</td><td>No-op; preserve human record.</td></tr>
+            <tr><td>Automation-completed close for same historic key</td><td>Idempotent no-op.</td></tr>
+            <tr><td>Reopened or superseded close</td><td>Skip/quarantine.</td></tr>
+            <tr><td>Live current close</td><td>Unchanged by old-date historic runs.</td></tr>
+            <tr><td>Incomplete register-session evidence</td><td>Skip/quarantine.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>Implementation Units</h2>
+
+        <article class="unit">
+          <h3>U1. Register-session date foundation</h3>
+          <p>
+            Add optional derived date fields, schedule evidence, indexes, and dual-write support in
+            register-session close, reject, reopen, correction, and local sync
+            paths. Cover >200 session ranges and reopened closeouts.
+          </p>
+        </article>
+
+        <article class="unit">
+          <h3>U2. Indexed Daily Close snapshot reads</h3>
+          <p>
+            Replace capped broad source scans with indexed or completeness-aware
+            helpers while preserving final semantic filtering and conservative
+            legacy fallback evidence.
+          </p>
+        </article>
+
+        <article class="unit">
+          <h3>U3. Historic currentness mode</h3>
+          <p>
+            Extend automation completion so historic records can complete with
+            snapshots and events without marking themselves current or demoting
+            the live current close.
+          </p>
+        </article>
+
+        <article class="unit">
+          <h3>U4. Historic EOD runner</h3>
+          <p>
+            Add explicit support-owned dry-run and apply modes for bounded
+            store/date ranges, using oldest-first processing, distinct historic
+            idempotency keys, and transactional per-date writes.
+          </p>
+        </article>
+
+        <article class="unit">
+          <h3>U5. Safe visibility and audit</h3>
+          <p>
+            Preserve read-only Daily Close History, show Athena attribution for
+            historic completed snapshots, and keep restricted details behind
+            existing permissions. No operator-facing backlog toggle ships here.
+          </p>
+        </article>
+
+        <article class="unit">
+          <h3>U6. Backfill and verification sensors</h3>
+          <p>
+            Add paginated register-session date backfill and source completeness
+            verification. Count updated, skipped, ambiguous, and already-current
+            sessions without collecting whole production tables.
+          </p>
+        </article>
+
+        <article class="unit">
+          <h3>U7. Regression and delivery sensors</h3>
+          <p>
+            Run focused Daily Close, automation, and cash-controls tests; Convex
+            audit and changed lint; typecheck; build; Graphify rebuild; and
+            <code>bun run pr:athena</code> before PR merge, root alignment, and
+            production deploy.
+          </p>
+        </article>
+      </section>
+
+      <section>
+        <h2>Tracking Plan</h2>
+        <table>
+          <thead>
+            <tr><th>Ticket</th><th>Unit</th><th>Posture</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Add register-session date indexes and dual-write fields</td><td>U1</td><td>test-first</td></tr>
+            <tr><td>Backfill register-session date fields and add source completeness verification</td><td>U6</td><td>test-first</td></tr>
+            <tr><td>Replace Daily Close source scans with indexed/completeness-aware helpers</td><td>U2</td><td>characterization-first</td></tr>
+            <tr><td>Make Daily Close automation completion safe for historic currentness</td><td>U3</td><td>test-first</td></tr>
+            <tr><td>Add bounded historic EOD auto-close runner</td><td>U4</td><td>test-first</td></tr>
+            <tr><td>Surface historic automation evidence safely</td><td>U5</td><td>characterization-first</td></tr>
+            <tr><td>Validate, regenerate artifacts, merge, align root, deploy</td><td>U7</td><td>sensor-only</td></tr>
+          </tbody>
+        </table>
+      </section>
+    </main>
+  </body>
+</html>
