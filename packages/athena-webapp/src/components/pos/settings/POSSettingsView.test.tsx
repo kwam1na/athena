@@ -3,6 +3,7 @@ import type {
   ButtonHTMLAttributes,
   InputHTMLAttributes,
   LabelHTMLAttributes,
+  ReactElement,
   ReactNode,
 } from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -131,6 +132,92 @@ vi.mock("@/components/ui/loading-button", () => ({
   },
 }));
 
+vi.mock("@/components/ui/select", async () => {
+  const React = await vi.importActual<typeof import("react")>("react");
+
+  type SelectItemProps = {
+    children?: ReactNode;
+    value: string;
+  };
+  type SelectRootProps = {
+    children?: ReactNode;
+    onValueChange?: (value: string) => void;
+    value?: string;
+  };
+  type SelectTriggerProps = React.SelectHTMLAttributes<HTMLSelectElement>;
+
+  const SelectContent = ({ children }: { children?: ReactNode }) => (
+    <>{children}</>
+  );
+  const SelectItem = ({ children }: SelectItemProps) => <>{children}</>;
+  const SelectValue = () => null;
+  const SelectTrigger = ({ children }: SelectTriggerProps) => <>{children}</>;
+
+  function collectItems(children?: ReactNode): Array<
+    React.ReactElement<SelectItemProps>
+  > {
+    const items: Array<React.ReactElement<SelectItemProps>> = [];
+
+    React.Children.forEach(children, (child) => {
+      if (!React.isValidElement(child)) return;
+      if (child.type === SelectItem) {
+        items.push(child as React.ReactElement<SelectItemProps>);
+        return;
+      }
+
+      items.push(...collectItems(child.props.children));
+    });
+
+    return items;
+  }
+
+  function findTrigger(
+    children?: ReactNode,
+  ): React.ReactElement<SelectTriggerProps> | null {
+    let trigger: React.ReactElement<SelectTriggerProps> | null = null;
+
+    React.Children.forEach(children, (child) => {
+      if (trigger || !React.isValidElement(child)) return;
+      if (child.type === SelectTrigger) {
+        trigger = child as React.ReactElement<SelectTriggerProps>;
+        return;
+      }
+
+      trigger = findTrigger(child.props.children);
+    });
+
+    return trigger;
+  }
+
+  const Select = ({ children, onValueChange, value }: SelectRootProps) => {
+    const trigger = findTrigger(children);
+    const { children: _children, ...triggerProps } = trigger?.props ?? {};
+    void _children;
+
+    return (
+      <select
+        {...triggerProps}
+        onChange={(event) => onValueChange?.(event.currentTarget.value)}
+        value={value}
+      >
+        {collectItems(children).map((item) => (
+          <option key={item.props.value} value={item.props.value}>
+            {item.props.children}
+          </option>
+        ))}
+      </select>
+    );
+  };
+
+  return {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+  };
+});
+
 vi.mock("@/lib/browserFingerprint", () => ({
   generateBrowserFingerprint: mocks.generateBrowserFingerprint,
 }));
@@ -164,6 +251,12 @@ async function waitForFingerprintEffect() {
       expect.any(String),
     ),
   );
+}
+
+async function renderPOSSettingsView(view: ReactElement = <POSSettingsView />) {
+  const result = render(view);
+  await waitForFingerprintEffect();
+  return result;
 }
 
 describe("registerAndProvisionPosTerminal", () => {
@@ -307,7 +400,7 @@ describe("registerAndProvisionPosTerminal", () => {
       },
     }));
 
-    render(
+    await renderPOSSettingsView(
       <POSSettingsView
         storeFactory={() =>
           ({
@@ -387,7 +480,7 @@ describe("registerAndProvisionPosTerminal", () => {
       },
     }));
 
-    render(
+    await renderPOSSettingsView(
       <POSSettingsView
         storeFactory={() =>
           ({
@@ -433,7 +526,7 @@ describe("registerAndProvisionPosTerminal", () => {
   });
 
   it("shows the current POS recovery code from status", async () => {
-    render(<POSSettingsView />);
+    await renderPOSSettingsView();
 
     expect(await screen.findByText("mintlamp42")).toBeInTheDocument();
     expect(
@@ -444,7 +537,7 @@ describe("registerAndProvisionPosTerminal", () => {
   it("lets full admins rotate the POS recovery code and keeps plaintext visible", async () => {
     const user = userEvent.setup();
 
-    render(<POSSettingsView />);
+    await renderPOSSettingsView();
 
     await user.click(
       await screen.findByRole("button", { name: /rotate recovery code/i }),
@@ -472,7 +565,7 @@ describe("registerAndProvisionPosTerminal", () => {
         : null,
     );
 
-    render(<POSSettingsView />);
+    await renderPOSSettingsView();
 
     await user.click(await screen.findByRole("button", { name: /unlock/i }));
 
@@ -486,7 +579,7 @@ describe("registerAndProvisionPosTerminal", () => {
   it("lets full admins revoke an active POS recovery code", async () => {
     const user = userEvent.setup();
 
-    render(<POSSettingsView />);
+    await renderPOSSettingsView();
 
     await user.click(await screen.findByRole("button", { name: /revoke/i }));
 
@@ -498,7 +591,7 @@ describe("registerAndProvisionPosTerminal", () => {
   });
 
   it("shows full admins the store-day automation policy", async () => {
-    render(<POSSettingsView />);
+    await renderPOSSettingsView();
 
     expect(await screen.findByText("Store day automation")).toBeInTheDocument();
     expect(
@@ -507,6 +600,14 @@ describe("registerAndProvisionPosTerminal", () => {
       ),
     ).toBeInTheDocument();
     expect(screen.getByLabelText("Enable store-day auto-start")).toBeChecked();
+    expect(
+      screen.getByRole("combobox", { name: "Store day auto-start offset" }),
+    ).toHaveTextContent("At opening");
+    expect(
+      screen.getByText(
+        "Opening 08:30 AM. Runs 08:30 AM.",
+      ),
+    ).toBeInTheDocument();
     expect(
       screen.queryByRole("combobox", { name: "Store day start hour" }),
     ).not.toBeInTheDocument();
@@ -519,8 +620,46 @@ describe("registerAndProvisionPosTerminal", () => {
     });
   });
 
+  it("formats raw Store Hours opening times in the auto-start summary", async () => {
+    mocks.useQuery.mockImplementation((ref) =>
+      ref === "getOpeningAutoStartPolicy"
+        ? {
+            localStartMinutes: 480,
+            mode: "enabled",
+            openingBlockerHandling: "start_with_manager_review",
+            operatingTimezoneOffsetMinutes: -120,
+          }
+        : ref === "getStoreScheduleSummary"
+          ? {
+              context: {
+                currentWindow: {
+                  localEndLabel: "19:00",
+                  localStartLabel: "09:00",
+                },
+                isOpen: true,
+                nextWindow: null,
+                phase: "during_window",
+                timezone: "Africa/Accra",
+              },
+              schedule: {
+                timezone: "Africa/Accra",
+              },
+            }
+          : null,
+    );
+
+    await renderPOSSettingsView();
+
+    expect(await screen.findByText("Store day automation")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Opening 09:00 AM. Runs 08:00 AM.",
+      ),
+    ).toBeInTheDocument();
+  });
+
   it("shows full admins a distinct EOD completion automation policy", async () => {
-    render(<POSSettingsView />);
+    await renderPOSSettingsView();
 
     expect(
       await screen.findByText("EOD completion automation"),
@@ -535,6 +674,14 @@ describe("registerAndProvisionPosTerminal", () => {
     expect(
       screen.queryByRole("combobox", { name: "EOD completion hour" }),
     ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("combobox", { name: "EOD completion offset" }),
+    ).toHaveTextContent("At close");
+    expect(
+      screen.getByText(
+        "Close 06:30 PM. Runs 06:30 PM.",
+      ),
+    ).toBeInTheDocument();
     expect(screen.getByLabelText("Cash variance threshold")).toHaveValue(500);
     expect(screen.getByLabelText("Voided sale count threshold")).toHaveValue(1);
     expect(screen.getByLabelText("Voided sale total threshold")).toHaveValue(2500);
@@ -546,7 +693,7 @@ describe("registerAndProvisionPosTerminal", () => {
   it("saves the EOD completion automation policy with thresholds", async () => {
     const user = userEvent.setup();
 
-    render(<POSSettingsView />);
+    await renderPOSSettingsView();
 
     await screen.findByText("EOD completion automation");
     await waitFor(() =>
@@ -563,6 +710,15 @@ describe("registerAndProvisionPosTerminal", () => {
     fireEvent.change(screen.getByLabelText("Voided sale total threshold"), {
       target: { value: "9000" },
     });
+    await user.selectOptions(
+      screen.getByRole("combobox", { name: "EOD completion offset" }),
+      "60",
+    );
+    expect(
+      screen.getByText(
+        "Close 06:30 PM. Runs 07:30 PM.",
+      ),
+    ).toBeInTheDocument();
     expect(screen.getByLabelText("Enable EOD completion")).toBeChecked();
     expect(screen.getByLabelText("Enable blocker-free completion")).not.toBeChecked();
     expect(screen.getByLabelText("Cash variance threshold")).toHaveValue(750);
@@ -575,7 +731,7 @@ describe("registerAndProvisionPosTerminal", () => {
     await waitFor(() =>
       expect(mocks.updateEodAutoCompletePolicy).toHaveBeenCalledWith({
         cleanDayAutoCompleteEnabled: false,
-        localCompletionWindowMinutes: 1110,
+        localCompletionWindowMinutes: 1170,
         maxAbsoluteCashVariance: 750,
         maxVoidedSaleCount: 2,
         maxVoidedSaleTotal: 9000,
@@ -589,16 +745,20 @@ describe("registerAndProvisionPosTerminal", () => {
   it("saves the store-day automation policy without owning business hours", async () => {
     const user = userEvent.setup();
 
-    render(<POSSettingsView />);
+    await renderPOSSettingsView();
 
     await user.click(await screen.findByLabelText("Enable store-day auto-start"));
+    await user.selectOptions(
+      screen.getByRole("combobox", { name: "Store day auto-start offset" }),
+      "-30",
+    );
     await user.click(
       screen.getByRole("button", { name: "Save store-day automation" }),
     );
 
     await waitFor(() =>
       expect(mocks.updateOpeningAutoStartPolicy).toHaveBeenCalledWith({
-        localStartMinutes: 510,
+        localStartMinutes: 480,
         mode: "disabled",
         openingBlockerHandling: "start_with_manager_review",
         operatingTimezoneOffsetMinutes: -120,
@@ -643,7 +803,7 @@ describe("registerAndProvisionPosTerminal", () => {
           : null,
     );
 
-    render(<POSSettingsView />);
+    await renderPOSSettingsView();
 
     await user.click(await screen.findByLabelText("Enable store-day auto-start"));
     await user.click(
@@ -652,7 +812,7 @@ describe("registerAndProvisionPosTerminal", () => {
 
     await waitFor(() =>
       expect(mocks.updateOpeningAutoStartPolicy).toHaveBeenCalledWith({
-        localStartMinutes: 480,
+        localStartMinutes: 510,
         mode: "enabled",
         openingBlockerHandling: "start_with_manager_review",
         operatingTimezoneOffsetMinutes: undefined,
@@ -662,20 +822,55 @@ describe("registerAndProvisionPosTerminal", () => {
   });
 
   it("summarizes POS automation timing from Store Hours", async () => {
-    render(<POSSettingsView />);
+    await renderPOSSettingsView();
 
     expect(await screen.findByText("Store Hours timing")).toBeInTheDocument();
     expect(screen.getByText("Timing comes from Store Hours")).toBeInTheDocument();
     expect(
       screen.getByText("Athena uses Store Hours to time Opening and EOD automation."),
     ).toBeInTheDocument();
-    expect(screen.getByText("Opening at 8:30 AM")).toBeInTheDocument();
-    expect(screen.getByText("EOD after 6:30 PM")).toBeInTheDocument();
+    expect(screen.getByText("Opening at 08:30 AM")).toBeInTheDocument();
+    expect(screen.getByText("EOD after 06:30 PM")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Open Store Hours" }))
       .toHaveAttribute("href", "/acme/store/downtown/configuration");
     expect(mocks.useQuery).toHaveBeenCalledWith("getStoreScheduleSummary", {
       storeId: "store-1",
     });
+  });
+
+  it("formats raw Store Hours timing labels in the timing readout", async () => {
+    mocks.useQuery.mockImplementation((ref) =>
+      ref === "getOpeningAutoStartPolicy"
+        ? {
+            localStartMinutes: 480,
+            mode: "enabled",
+            openingBlockerHandling: "start_with_manager_review",
+            operatingTimezoneOffsetMinutes: -120,
+          }
+        : ref === "getStoreScheduleSummary"
+          ? {
+              context: {
+                currentWindow: {
+                  localEndLabel: "19:00",
+                  localStartLabel: "09:00",
+                },
+                isOpen: true,
+                nextWindow: null,
+                phase: "during_window",
+                timezone: "Africa/Accra",
+              },
+              schedule: {
+                timezone: "Africa/Accra",
+              },
+            }
+          : null,
+    );
+
+    await renderPOSSettingsView();
+
+    expect(await screen.findByText("Store Hours timing")).toBeInTheDocument();
+    expect(screen.getByText("Opening at 09:00 AM")).toBeInTheDocument();
+    expect(screen.getByText("EOD after 07:00 PM")).toBeInTheDocument();
   });
 
   it("disables revoke for revoked POS recovery codes", async () => {
@@ -691,7 +886,7 @@ describe("registerAndProvisionPosTerminal", () => {
         : null,
     );
 
-    render(<POSSettingsView />);
+    await renderPOSSettingsView();
 
     await waitFor(() =>
       expect(screen.getByRole("button", { name: /revoke/i })).toBeDisabled(),
@@ -704,7 +899,7 @@ describe("registerAndProvisionPosTerminal", () => {
       isLoading: false,
     });
 
-    render(<POSSettingsView />);
+    await renderPOSSettingsView();
     await waitForFingerprintEffect();
 
     expect(screen.queryByText("POS recovery code")).not.toBeInTheDocument();
@@ -737,7 +932,7 @@ describe("registerAndProvisionPosTerminal", () => {
       new Error("internal duplicate_policy stack"),
     );
 
-    render(<POSSettingsView />);
+    await renderPOSSettingsView();
 
     await user.click(
       screen.getByRole("button", {
@@ -768,7 +963,7 @@ describe("registerAndProvisionPosTerminal", () => {
       new Error("internal threshold_policy stack"),
     );
 
-    render(<POSSettingsView />);
+    await renderPOSSettingsView();
 
     await user.click(
       screen.getByRole("button", {
@@ -791,7 +986,7 @@ describe("registerAndProvisionPosTerminal", () => {
   });
 
   it("hands off roster and support work to terminal health", async () => {
-    render(<POSSettingsView />);
+    await renderPOSSettingsView();
 
     expect(screen.getByText("Terminal health")).toBeInTheDocument();
     await waitFor(() =>
@@ -826,6 +1021,19 @@ describe("registerAndProvisionPosTerminal", () => {
   });
 
   it("links terminal health to the current terminal and keeps settings as the origin", async () => {
+    const existingTerminal = {
+      _id: "terminal-existing",
+      _creationTime: 1,
+      browserInfo: { userAgent: "test" },
+      displayName: "Front counter",
+      fingerprintHash: "fingerprint-1",
+      registeredAt: 1,
+      registeredByUserId: "user-1",
+      registerNumber: "3",
+      status: "active",
+      storeId: "store-1",
+    };
+
     mocks.useQuery.mockImplementation((ref) =>
       ref === "getRecoveryCodeStatus"
         ? {
@@ -844,22 +1052,11 @@ describe("registerAndProvisionPosTerminal", () => {
               operatingTimezoneOffsetMinutes: 0,
             }
           : ref === "getTerminalByFingerprint"
-            ? {
-                _id: "terminal-existing",
-                _creationTime: 1,
-                browserInfo: { userAgent: "test" },
-                displayName: "Front counter",
-                fingerprintHash: "fingerprint-1",
-                registeredAt: 1,
-                registeredByUserId: "user-1",
-                registerNumber: "3",
-                status: "active",
-                storeId: "store-1",
-              }
+            ? existingTerminal
             : null,
     );
 
-    render(<POSSettingsView />);
+    await renderPOSSettingsView();
 
     expect(screen.getByText("Terminal health")).toBeInTheDocument();
     expect(
@@ -909,7 +1106,7 @@ describe("registerAndProvisionPosTerminal", () => {
       },
     });
 
-    render(
+    await renderPOSSettingsView(
       <POSSettingsView
         storeFactory={() =>
           ({

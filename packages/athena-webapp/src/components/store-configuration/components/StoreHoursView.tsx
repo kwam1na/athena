@@ -1,13 +1,23 @@
 import { useEffect, useMemo, useState } from "react";
-import { CalendarClock, Plus, Trash2 } from "lucide-react";
+import { CalendarClock, CalendarIcon, Plus, Trash2 } from "lucide-react";
 import { useQuery } from "convex/react";
 import type { FunctionReference } from "convex/server";
 
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LoadingButton } from "@/components/ui/loading-button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { cn } from "@/lib/utils";
 import { usePermissions } from "@/hooks/usePermissions";
 import useGetActiveStore from "~/src/hooks/useGetActiveStore";
 import { api } from "~/convex/_generated/api";
@@ -109,6 +119,13 @@ const DAY_OF_WEEK_BY_KEY: Record<StoreScheduleDayKey, number> = {
   saturday: 6,
 };
 
+const DAY_KEY_BY_DAY_OF_WEEK = Object.fromEntries(
+  Object.entries(DAY_OF_WEEK_BY_KEY).map(([day, dayOfWeek]) => [
+    dayOfWeek,
+    day,
+  ]),
+) as Record<number, StoreScheduleDayKey>;
+
 const DEFAULT_WEEKLY_HOURS: StoreScheduleWeeklyDayInput[] = WEEKDAYS.map(
   ({ day }) => ({
     closed: day === "sunday",
@@ -117,6 +134,37 @@ const DEFAULT_WEEKLY_HOURS: StoreScheduleWeeklyDayInput[] = WEEKDAYS.map(
       day === "sunday" ? [] : [{ openTime: "09:00", closeTime: "17:00" }],
   }),
 );
+
+const TIME_OPTIONS = Array.from({ length: 24 * 4 }, (_entry, index) => {
+  const totalMinutes = index * 15;
+  return minuteToTimeInput(totalMinutes);
+});
+
+const TIMEZONE_OPTIONS = [
+  "Africa/Abidjan",
+  "Africa/Accra",
+  "Africa/Cairo",
+  "Africa/Casablanca",
+  "Africa/Johannesburg",
+  "Africa/Lagos",
+  "America/Chicago",
+  "America/Denver",
+  "America/Los_Angeles",
+  "America/New_York",
+  "America/Phoenix",
+  "America/Toronto",
+  "America/Vancouver",
+  "Asia/Dubai",
+  "Asia/Hong_Kong",
+  "Asia/Singapore",
+  "Asia/Tokyo",
+  "Australia/Sydney",
+  "Europe/Amsterdam",
+  "Europe/Berlin",
+  "Europe/London",
+  "Europe/Paris",
+  "UTC",
+];
 
 function normalizeWeeklyHours(
   weeklyHours?: StoreScheduleWeeklyDayInput[] | null,
@@ -199,6 +247,303 @@ function minuteToTimeInput(minute: number) {
   const hour = Math.floor(normalized / 60);
   const minuteOfHour = normalized % 60;
   return `${String(hour).padStart(2, "0")}:${String(minuteOfHour).padStart(2, "0")}`;
+}
+
+function formatTimeLabel(value: string) {
+  const minute = timeInputToMinute(value);
+  if (minute === null) {
+    return value;
+  }
+
+  const hour = Math.floor(minute / 60);
+  const minuteOfHour = minute % 60;
+  const period = hour >= 12 ? "PM" : "AM";
+  const displayHour = hour % 12 || 12;
+
+  return `${String(displayHour).padStart(2, "0")}:${String(minuteOfHour).padStart(2, "0")} ${period}`;
+}
+
+function formatScheduleSummaryLabel(value: string) {
+  return value.replace(/\b([01]\d|2[0-3]):([0-5]\d)\b/g, (time) =>
+    formatTimeLabel(time),
+  );
+}
+
+function getStoreLocalNowParts(timezone: string) {
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      hour: "2-digit",
+      hourCycle: "h23",
+      minute: "2-digit",
+      timeZone: timezone,
+      weekday: "long",
+    }).formatToParts(new Date());
+    const partByType = Object.fromEntries(
+      parts.map((part) => [part.type, part.value]),
+    );
+    const dayOfWeek = WEEKDAYS.find(
+      (entry) => entry.label === partByType.weekday,
+    );
+
+    if (!dayOfWeek) {
+      return null;
+    }
+
+    return {
+      dayOfWeek: DAY_OF_WEEK_BY_KEY[dayOfWeek.day],
+      minute: Number(partByType.hour) * 60 + Number(partByType.minute),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function getNextWindowDayLabel(args: {
+  timezone: string;
+  time: string;
+  type: "close" | "open";
+  weeklyHours: StoreScheduleWeeklyDayInput[];
+}) {
+  const nextWindowMinute = timeInputToMinute(args.time);
+  const localNow = getStoreLocalNowParts(args.timezone);
+  if (nextWindowMinute === null || !localNow) {
+    return null;
+  }
+
+  for (let offset = 0; offset < 7; offset += 1) {
+    const dayOfWeek = (localNow.dayOfWeek + offset) % 7;
+    const day = DAY_KEY_BY_DAY_OF_WEEK[dayOfWeek];
+    const daySchedule = args.weeklyHours.find((entry) => entry.day === day);
+    if (!daySchedule || daySchedule.closed) {
+      continue;
+    }
+
+    const hasMatchingNextOpen = daySchedule.windows.some((window) => {
+      const windowMinute = timeInputToMinute(
+        args.type === "open" ? window.openTime : window.closeTime,
+      );
+      return (
+        windowMinute === nextWindowMinute &&
+        (offset > 0 || windowMinute > localNow.minute)
+      );
+    });
+    if (hasMatchingNextOpen) {
+      return getDayLabel(day);
+    }
+  }
+
+  return null;
+}
+
+function getCurrentOpenWindow(args: {
+  timezone: string;
+  weeklyHours: StoreScheduleWeeklyDayInput[];
+}) {
+  const localNow = getStoreLocalNowParts(args.timezone);
+  if (!localNow) {
+    return null;
+  }
+
+  const localDay = DAY_KEY_BY_DAY_OF_WEEK[localNow.dayOfWeek];
+  const daySchedule = args.weeklyHours.find((entry) => entry.day === localDay);
+  if (!daySchedule || daySchedule.closed) {
+    return null;
+  }
+
+  return (
+    daySchedule.windows.find((window) => {
+      const openMinute = timeInputToMinute(window.openTime);
+      const closeMinute = timeInputToMinute(window.closeTime);
+      return (
+        openMinute !== null &&
+        closeMinute !== null &&
+        localNow.minute >= openMinute &&
+        localNow.minute < closeMinute
+      );
+    }) ?? null
+  );
+}
+
+function formatNextCloseSummaryLabel(args: {
+  timezone: string;
+  value: string;
+  weeklyHours: StoreScheduleWeeklyDayInput[];
+}) {
+  const trimmedValue = args.value.trim();
+  const dayLabel = trimmedValue.match(/^([01]\d|2[0-3]):([0-5]\d)$/)
+    ? getNextWindowDayLabel({
+        timezone: args.timezone,
+        time: trimmedValue,
+        type: "close",
+        weeklyHours: args.weeklyHours,
+      })
+    : null;
+  const formattedValue = formatScheduleSummaryLabel(args.value);
+
+  return dayLabel ? `${dayLabel} ${formattedValue}` : formattedValue;
+}
+
+function formatNextOpenSummaryLabel(args: {
+  timezone: string;
+  value: string;
+  weeklyHours: StoreScheduleWeeklyDayInput[];
+}) {
+  const trimmedValue = args.value.trim();
+  const dayLabel = trimmedValue.match(/^([01]\d|2[0-3]):([0-5]\d)$/)
+    ? getNextWindowDayLabel({
+        timezone: args.timezone,
+        time: trimmedValue,
+        type: "open",
+        weeklyHours: args.weeklyHours,
+      })
+    : null;
+  const formattedValue = formatScheduleSummaryLabel(args.value);
+
+  return dayLabel ? `${dayLabel} ${formattedValue}` : formattedValue;
+}
+
+function dateInputToCalendarDate(value: string) {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) {
+    return undefined;
+  }
+
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+}
+
+function calendarDateToDateInput(date: Date) {
+  return `${String(date.getFullYear()).padStart(4, "0")}-${String(
+    date.getMonth() + 1,
+  ).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function formatDateLabel(value: string) {
+  const date = dateInputToCalendarDate(value);
+  if (!date) {
+    return "Pick a date";
+  }
+
+  return new Intl.DateTimeFormat(undefined, {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(date);
+}
+
+function StoreHoursTimeSelect({
+  id,
+  label,
+  onChange,
+  value,
+}: {
+  id: string;
+  label: string;
+  onChange: (value: string) => void;
+  value: string;
+}) {
+  const options = TIME_OPTIONS.includes(value)
+    ? TIME_OPTIONS
+    : [...TIME_OPTIONS, value].sort((first, second) => {
+        const firstMinute = timeInputToMinute(first) ?? Number.MAX_SAFE_INTEGER;
+        const secondMinute = timeInputToMinute(second) ?? Number.MAX_SAFE_INTEGER;
+        return firstMinute - secondMinute;
+      });
+
+  return (
+    <Select onValueChange={onChange} value={value}>
+      <SelectTrigger
+        aria-label={label}
+        className="h-control-standard bg-background"
+        id={id}
+      >
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {options.map((option) => (
+          <SelectItem key={option} value={option}>
+            {formatTimeLabel(option)}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+function StoreHoursTimezoneSelect({
+  describedBy,
+  onChange,
+  value,
+}: {
+  describedBy?: string;
+  onChange: (value: string) => void;
+  value: string;
+}) {
+  const options = TIMEZONE_OPTIONS.includes(value)
+    ? TIMEZONE_OPTIONS
+    : [...TIMEZONE_OPTIONS, value].sort();
+
+  return (
+    <Select onValueChange={onChange} value={value}>
+      <SelectTrigger
+        aria-describedby={describedBy}
+        aria-label="Store timezone"
+        className="h-control-standard bg-background"
+        id="store-hours-timezone"
+      >
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {options.map((option) => (
+          <SelectItem key={option} value={option}>
+            {option}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+function StoreHoursDatePicker({
+  id,
+  label,
+  onChange,
+  value,
+}: {
+  id: string;
+  label: string;
+  onChange: (value: string) => void;
+  value: string;
+}) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          aria-label={label}
+          className={cn(
+            "h-control-standard w-full justify-start bg-background text-left font-normal",
+            !value && "text-muted-foreground",
+          )}
+          id={id}
+          type="button"
+          variant="outline"
+        >
+          <CalendarIcon className="mr-2 h-4 w-4" />
+          {formatDateLabel(value)}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-auto p-0">
+        <Calendar
+          mode="single"
+          onSelect={(date) => {
+            if (date) {
+              onChange(calendarDateToDateInput(date));
+            }
+          }}
+          selected={dateInputToCalendarDate(value)}
+        />
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 function normalizeScheduleForForm(schedule?: StoreScheduleQueryResult | null) {
@@ -384,34 +729,58 @@ export const StoreHoursView = () => {
 
   const candidateSchedule = isCandidateSchedule(schedule);
   const statusLabel = candidateSchedule ? "Needs admin review" : "Admin confirmed";
-  const summary = useMemo(
-    () => ({
-      nextClose:
-        schedule?.summary?.nextCloseLabel ??
-        schedule?.nextCloseLabel ??
-        "Next close not available",
-      nextOpen:
-        schedule?.summary?.nextOpenLabel ??
-        schedule?.nextOpenLabel ??
-        "Next open not available",
-      timezone:
-        schedule?.summary?.timezoneLabel ??
-        schedule?.timezone ??
-        timezone,
-      today:
-        schedule?.summary?.todayScheduleLabel ??
-        schedule?.todayScheduleLabel ??
-        "Today follows the weekly store hours.",
-    }),
-    [schedule, timezone],
-  );
+  const summary = useMemo(() => {
+    const summaryTimezone =
+      schedule?.summary?.timezoneLabel ?? schedule?.timezone ?? timezone;
+    const summaryWeeklyHours = normalizeWeeklyHours(schedule?.weeklyHours);
+    const activeWindow = getCurrentOpenWindow({
+      timezone: summaryTimezone,
+      weeklyHours: summaryWeeklyHours,
+    });
+    const nextOpenLabel =
+      schedule?.summary?.nextOpenLabel ??
+      schedule?.nextOpenLabel ??
+      "Next open not available";
+    const nextCloseLabel =
+      schedule?.summary?.nextCloseLabel ??
+      schedule?.nextCloseLabel ??
+      "Next close not available";
+    const today = activeWindow
+      ? `Opened ${formatTimeLabel(activeWindow.openTime)}.`
+      : "Closed today.";
+    const nextClose = formatNextCloseSummaryLabel({
+      timezone: summaryTimezone,
+      value: nextCloseLabel,
+      weeklyHours: summaryWeeklyHours,
+    });
+    const nextOpen = formatNextOpenSummaryLabel({
+      timezone: summaryTimezone,
+      value: nextOpenLabel,
+      weeklyHours: summaryWeeklyHours,
+    });
+
+    return {
+      items: activeWindow
+        ? [
+            { label: "Today", value: today },
+            { label: "Next close", value: nextClose },
+            { label: "Next open", value: nextOpen },
+          ]
+        : [
+            { label: "Today", value: today },
+            { label: "Next open", value: nextOpen },
+            { label: "Next close", value: nextClose },
+          ],
+      timezone: summaryTimezone,
+    };
+  }, [schedule, timezone]);
 
   useEffect(() => {
     if (schedule === undefined) {
       return;
     }
 
-    setTimezone(schedule?.timezone ?? "America/New_York");
+    setTimezone(schedule?.timezone || "America/New_York");
     setWeeklyHours(normalizeWeeklyHours(schedule?.weeklyHours));
     setExceptions((schedule?.exceptions ?? []).map(normalizeException));
     setConfirmCandidate(false);
@@ -462,7 +831,7 @@ export const StoreHoursView = () => {
   };
 
   const resetForm = () => {
-    setTimezone(schedule?.timezone ?? "America/New_York");
+    setTimezone(schedule?.timezone || "America/New_York");
     setWeeklyHours(normalizeWeeklyHours(schedule?.weeklyHours));
     setExceptions((schedule?.exceptions ?? []).map(normalizeException));
     setConfirmCandidate(false);
@@ -569,24 +938,14 @@ export const StoreHoursView = () => {
         </div>
 
         <dl className="grid gap-layout-sm text-sm sm:grid-cols-3">
-          <div>
-            <dt className="font-medium text-foreground">Today</dt>
-            <dd className="mt-layout-2xs text-muted-foreground">
-              {summary.today}
-            </dd>
-          </div>
-          <div>
-            <dt className="font-medium text-foreground">Next close</dt>
-            <dd className="mt-layout-2xs text-muted-foreground">
-              {summary.nextClose}
-            </dd>
-          </div>
-          <div>
-            <dt className="font-medium text-foreground">Next open</dt>
-            <dd className="mt-layout-2xs text-muted-foreground">
-              {summary.nextOpen}
-            </dd>
-          </div>
+          {summary.items.map((item) => (
+            <div key={item.label}>
+              <dt className="font-medium text-foreground">{item.label}</dt>
+              <dd className="mt-layout-2xs text-muted-foreground">
+                {item.value}
+              </dd>
+            </div>
+          ))}
         </dl>
 
         {candidateSchedule ? (
@@ -604,19 +963,18 @@ export const StoreHoursView = () => {
           <>
             <div className="space-y-layout-xs">
               <Label htmlFor="store-hours-timezone">Store timezone</Label>
-              <Input
-                aria-describedby={message?.kind === "error" ? "store-hours-message" : undefined}
-                className="h-control-standard bg-background"
-                id="store-hours-timezone"
-                onChange={(event) => {
-                  setTimezone(event.target.value);
+              <StoreHoursTimezoneSelect
+                describedBy={
+                  message?.kind === "error" ? "store-hours-message" : undefined
+                }
+                onChange={(value) => {
+                  setTimezone(value);
                   setIsDirty(true);
                 }}
-                placeholder="America/New_York"
                 value={timezone}
               />
               <p className="text-xs text-muted-foreground">
-                Use an IANA timezone such as America/New_York.
+                Choose the store-local IANA timezone.
               </p>
             </div>
 
@@ -675,21 +1033,20 @@ export const StoreHoursView = () => {
                             <Label htmlFor={`${entry.day}-open`}>
                               {dayLabel} open time
                             </Label>
-                            <Input
-                              className="h-control-standard bg-background"
+                            <StoreHoursTimeSelect
                               id={`${entry.day}-open`}
-                              onChange={(event) =>
+                              label={`${dayLabel} open time`}
+                              onChange={(value) =>
                                 updateDay(entry.day, (current) => ({
                                   ...current,
                                   windows: [
                                     {
                                       ...window,
-                                      openTime: event.target.value,
+                                      openTime: value,
                                     },
                                   ],
                                 }))
                               }
-                              type="time"
                               value={window.openTime}
                             />
                           </div>
@@ -697,21 +1054,20 @@ export const StoreHoursView = () => {
                             <Label htmlFor={`${entry.day}-close`}>
                               {dayLabel} close time
                             </Label>
-                            <Input
-                              className="h-control-standard bg-background"
+                            <StoreHoursTimeSelect
                               id={`${entry.day}-close`}
-                              onChange={(event) =>
+                              label={`${dayLabel} close time`}
+                              onChange={(value) =>
                                 updateDay(entry.day, (current) => ({
                                   ...current,
                                   windows: [
                                     {
                                       ...window,
-                                      closeTime: event.target.value,
+                                      closeTime: value,
                                     },
                                   ],
                                 }))
                               }
-                              type="time"
                               value={window.closeTime}
                             />
                           </div>
@@ -757,16 +1113,15 @@ export const StoreHoursView = () => {
                           <Label htmlFor={`exception-${index}-date`}>
                             {label} date
                           </Label>
-                          <Input
-                            className="h-control-standard bg-background"
+                          <StoreHoursDatePicker
                             id={`exception-${index}-date`}
-                            onChange={(event) =>
+                            label={`${label} date`}
+                            onChange={(value) =>
                               updateException(index, (current) => ({
                                 ...current,
-                                date: event.target.value,
+                                date: value,
                               }))
                             }
-                            type="date"
                             value={exception.date}
                           />
                         </div>
@@ -826,21 +1181,20 @@ export const StoreHoursView = () => {
                               <Label htmlFor={`exception-${index}-open`}>
                                 {label} open time
                               </Label>
-                              <Input
-                                className="h-control-standard bg-background"
+                              <StoreHoursTimeSelect
                                 id={`exception-${index}-open`}
-                                onChange={(event) =>
+                                label={`${label} open time`}
+                                onChange={(value) =>
                                   updateException(index, (current) => ({
                                     ...current,
                                     windows: [
                                       {
                                         ...window,
-                                        openTime: event.target.value,
+                                        openTime: value,
                                       },
                                     ],
                                   }))
                                 }
-                                type="time"
                                 value={window.openTime}
                               />
                             </div>
@@ -848,21 +1202,20 @@ export const StoreHoursView = () => {
                               <Label htmlFor={`exception-${index}-close`}>
                                 {label} close time
                               </Label>
-                              <Input
-                                className="h-control-standard bg-background"
+                              <StoreHoursTimeSelect
                                 id={`exception-${index}-close`}
-                                onChange={(event) =>
+                                label={`${label} close time`}
+                                onChange={(value) =>
                                   updateException(index, (current) => ({
                                     ...current,
                                     windows: [
                                       {
                                         ...window,
-                                        closeTime: event.target.value,
+                                        closeTime: value,
                                       },
                                     ],
                                   }))
                                 }
-                                type="time"
                                 value={window.closeTime}
                               />
                             </div>

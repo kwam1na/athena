@@ -11,7 +11,7 @@ import { startAthenaAuthSyncHandoff } from "./authSyncHandoff";
 
 const POS_RECOVERY_ACCOUNT_EMAIL = "pos@wigclub.store";
 const RECOVERY_FAILURE_COPY =
-  "Sign-in details not recognized. Enter the recovery code again.";
+  "POS sign-in failed. Check the recovery code or ask an admin to confirm POS-only access.";
 
 function navigationTargetForRedirect(redirectTo: string) {
   const [pathname, queryString] = redirectTo.split("?", 2);
