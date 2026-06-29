@@ -4,6 +4,7 @@ import type { QueryCtx } from "../_generated/server";
 import * as athenaUserAuth from "../lib/athenaUserAuth";
 import {
   buildDailyOperationsSnapshotWithCtx,
+  getDailyOperationsDetailSnapshot,
   getDailyOperationsSnapshot,
 } from "./dailyOperations";
 
@@ -1546,13 +1547,7 @@ describe("daily operations overview read model", () => {
       transactionCount: 1,
     });
     expect(snapshot.priorDayMetric).toBeUndefined();
-    expect(
-      snapshot.weekMetrics.find((metric) => metric.operatingDate === "2026-06-21"),
-    ).toMatchObject({
-      paymentTotals: [],
-      salesTotal: 0,
-      transactionCount: 1,
-    });
+    expect(snapshot.weekMetrics).toEqual([]);
     expect(snapshot).not.toHaveProperty("storePulse");
   });
 
@@ -1958,7 +1953,169 @@ describe("daily operations overview read model", () => {
       transactionCount: 1,
     });
     expect(snapshot.priorDayMetric).toBeUndefined();
-    expect(snapshot.timeline).toEqual([]);
+    expect(snapshot.storePulse).toBeUndefined();
+    expect(snapshot.timeline).toEqual([
+      expect.objectContaining({ id: "event-register-opened" }),
+    ]);
+    expect(snapshot.weekMetrics).toEqual([]);
+  });
+
+  it("keeps the default public snapshot compact for high-cardinality store-day history", async () => {
+    vi.mocked(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).mockResolvedValue({
+      _creationTime: 0,
+      _id: "user-1" as Id<"athenaUser">,
+      email: "admin@wigclub.store",
+    });
+    vi.mocked(
+      athenaUserAuth.requireOrganizationMemberRoleWithCtx,
+    ).mockResolvedValue({
+      _creationTime: 0,
+      _id: "member-admin" as Id<"organizationMember">,
+      organizationId: "org-1" as Id<"organization">,
+      role: "full_admin",
+      userId: "user-1" as Id<"athenaUser">,
+    });
+    const events = Array.from({ length: 20 }, (_, index) => ({
+      _id: `event-${index}`,
+      createdAt: Date.UTC(2026, 4, 8, 8, index),
+      eventType: "operations.event",
+      message: `Event ${index}`,
+      storeId: "store-1",
+      subjectId: `subject-${index}`,
+      subjectType: "operations",
+    }));
+
+    const snapshot = await getHandler(getDailyOperationsSnapshot)(
+      buildCtx({
+        dailyClose: [priorClose],
+        dailyOpening: [startedOpening],
+        operationalEvent: events,
+        scheduledRunLedger: [
+          {
+            _id: "run-applied",
+            actorType: "system",
+            candidateCount: 2,
+            completedAt: Date.UTC(2026, 4, 8, 9),
+            createdAt: Date.UTC(2026, 4, 8, 9),
+            cronFamily: "complete-checkout-sessions",
+            failedCount: 0,
+            outcome: "applied",
+            processedCount: 2,
+            runKey: "scheduled-run:complete-checkout-sessions:store",
+            sampleSubjectIds: [],
+            scheduledWindowEndAt: Date.UTC(2026, 4, 8, 9, 30),
+            scheduledWindowStartAt: Date.UTC(2026, 4, 8, 9),
+            scope: "store",
+            skippedCount: 0,
+            snapshotCounts: {},
+            sourceSubjectType: "checkout_session",
+            storeId: "store-1",
+            succeededCount: 2,
+            updatedAt: Date.UTC(2026, 4, 8, 9),
+            visibility: "store",
+          },
+        ],
+        store: [store],
+      }) as never,
+      {
+        operatingDate: "2026-05-08",
+        storeId: "store-1" as Id<"store">,
+        weekEndOperatingDate: "2026-05-09",
+      },
+    );
+
+    expect(snapshot.lifecycle.status).toBe("ready_to_close");
+    expect(snapshot.primaryAction).toMatchObject({
+      label: "Start EOD Review",
+    });
+    expect(snapshot.timeline).toHaveLength(5);
+    expect(snapshot.timeline[0].id).toBe("event-19");
+    expect(
+      snapshot.timeline.map(
+        (event: (typeof snapshot.timeline)[number]) => event.id,
+      ),
+    ).not.toContain("event-14");
+    expect(snapshot.timelineHasMore).toBe(true);
+    expect(snapshot.scheduledRunSummaries).toEqual([
+      expect.objectContaining({ id: "run-applied" }),
+    ]);
+    expect(snapshot.priorDayMetric).toBeUndefined();
+    expect(snapshot.storePulse).toBeUndefined();
+    expect(snapshot.weekMetrics).toEqual([]);
+  });
+
+  it("returns analytics and full bounded history from the explicit detail query", async () => {
+    vi.mocked(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).mockResolvedValue({
+      _creationTime: 0,
+      _id: "user-1" as Id<"athenaUser">,
+      email: "admin@wigclub.store",
+    });
+    vi.mocked(
+      athenaUserAuth.requireOrganizationMemberRoleWithCtx,
+    ).mockResolvedValue({
+      _creationTime: 0,
+      _id: "member-admin" as Id<"organizationMember">,
+      organizationId: "org-1" as Id<"organization">,
+      role: "full_admin",
+      userId: "user-1" as Id<"athenaUser">,
+    });
+    const events = Array.from({ length: 20 }, (_, index) => ({
+      _id: `event-${index}`,
+      createdAt: Date.UTC(2026, 4, 8, 8, index),
+      eventType: "operations.event",
+      message: `Event ${index}`,
+      storeId: "store-1",
+      subjectId: `subject-${index}`,
+      subjectType: "operations",
+    }));
+
+    const snapshot = await getHandler(getDailyOperationsDetailSnapshot)(
+      buildCtx({
+        dailyClose: [priorClose],
+        dailyOpening: [startedOpening],
+        operationalEvent: events,
+        posTransaction: [
+          {
+            _id: "txn-current",
+            changeGiven: 0,
+            completedAt: Date.UTC(2026, 4, 8, 16),
+            paymentMethod: "cash",
+            paymentAllocations: [],
+            payments: [{ amount: 821500, method: "cash" }],
+            status: "completed",
+            storeId: "store-1",
+            terminalId: "terminal-1",
+            total: 821500,
+            totalPaid: 821500,
+            transactionNumber: "TXN-CURRENT",
+          },
+        ],
+        store: [store],
+      }) as never,
+      {
+        operatingDate: "2026-05-08",
+        storeId: "store-1" as Id<"store">,
+        weekEndOperatingDate: "2026-05-09",
+      },
+    );
+
+    expect(snapshot.timeline).toHaveLength(20);
+    expect(snapshot.timeline[0].id).toBe("event-19");
+    expect(snapshot.storePulse).toBeDefined();
+    expect(snapshot.weekMetrics).toHaveLength(7);
+    expect(
+      snapshot.weekMetrics.find(
+        (metric: (typeof snapshot.weekMetrics)[number]) =>
+          metric.operatingDate === "2026-05-08",
+      ),
+    ).toMatchObject({
+      salesTotal: 821500,
+      transactionCount: 1,
+    });
   });
 
   it("buckets week sales by the local operating-day offset instead of UTC midnight", async () => {

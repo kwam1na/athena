@@ -289,6 +289,29 @@ export async function getTerminalSyncEvidence(
   };
 }
 
+export async function getTerminalSyncReviewSummaryEvidence(
+  ctx: QueryCtx | MutationCtx,
+  args: {
+    storeId: Id<"store">;
+    terminalId: Id<"posTerminal">;
+  },
+): Promise<TerminalSyncEvidence> {
+  const conflictSources = await listTerminalSyncReviewSourceConflicts(ctx, args);
+  const conflictSummary = await buildTerminalSyncReviewSummary(ctx, {
+    conflicts: conflictSources.conflicts,
+    hasMore: conflictSources.hasMore,
+    storeId: args.storeId,
+    terminalId: args.terminalId,
+  });
+
+  return {
+    ...EMPTY_TERMINAL_SYNC_EVIDENCE,
+    unresolvedConflictCount: conflictSummary.reviewSummary.meta.sampledCount,
+    unresolvedConflicts: [],
+    reviewSummary: conflictSummary.reviewSummary,
+  };
+}
+
 async function listTerminalSyncReviewSourceConflicts(
   ctx: QueryCtx | MutationCtx,
   args: {

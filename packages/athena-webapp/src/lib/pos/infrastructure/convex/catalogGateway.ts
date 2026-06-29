@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from "convex/react";
+import { useConvex, useMutation, useQuery } from "convex/react";
 import type { FunctionReference } from "convex/server";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -76,6 +76,38 @@ type RegisterCatalogAvailabilityGatewayState =
       status: "local-store-failure";
     };
 
+type RegisterCatalogMetadataGatewayState =
+  | {
+      refreshedAt: number;
+      rows: PosRegisterCatalogRowDto[];
+      source: "local" | "refresh";
+      status: "ready";
+    }
+  | {
+      refreshedAt?: number;
+      rows?: PosRegisterCatalogRowDto[];
+      source: "local" | "none";
+      status: "refreshing";
+    }
+  | {
+      rows?: undefined;
+      source: "none";
+      status: "loading" | "missing";
+    }
+  | {
+      error: unknown;
+      rows?: undefined;
+      source: "none";
+      status: "local-store-failure";
+    }
+  | {
+      error: unknown;
+      refreshedAt?: number;
+      rows?: PosRegisterCatalogRowDto[];
+      source: "local" | "none";
+      status: "refresh-failed";
+    };
+
 type ProductByIdResult = {
   _id: Id<"product">;
   name?: string;
@@ -142,20 +174,57 @@ function signatureForAvailabilityRows(
 export function useConvexRegisterCatalog(
   input: PosRegisterCatalogInput,
 ): PosRegisterCatalogRowDto[] | undefined {
-  const liveRows = useQuery(
-    api.pos.public.catalog.listRegisterCatalogSnapshot,
-    input.storeId ? { storeId: input.storeId } : "skip",
-  );
-  const [localRows, setLocalRows] = useState<
-    PosRegisterCatalogRowDto[] | undefined
-  >(undefined);
+  const state = useConvexRegisterCatalogState(input);
+
+  return "rows" in state ? state.rows : undefined;
+}
+
+export function useConvexRegisterCatalogState(
+  input: PosRegisterCatalogInput,
+): RegisterCatalogMetadataGatewayState {
+  const convex = useConvex();
+  const refreshKey = input.metadataRefreshKey ?? "";
+  const shouldRefresh = Boolean(input.refreshMetadataSnapshot);
   const storeId = input.storeId;
+  const [state, setState] = useState<RegisterCatalogMetadataGatewayState>(() =>
+    shouldRefresh
+      ? { rows: undefined, source: "none", status: "refreshing" }
+      : { source: "none", status: "loading" },
+  );
 
   useEffect(() => {
     let cancelled = false;
-    setLocalRows(undefined);
+    setState((current) => {
+      if (shouldRefresh) {
+        return {
+          refreshedAt: "refreshedAt" in current ? current.refreshedAt : undefined,
+          rows: "rows" in current ? current.rows : undefined,
+          source: "rows" in current && current.rows ? "local" : "none",
+          status: "refreshing",
+        };
+      }
 
-    if (!storeId || typeof indexedDB === "undefined") {
+      return { source: "none", status: "loading" };
+    });
+
+    if (!storeId) {
+      setState({ source: "none", status: "missing" });
+      return;
+    }
+
+    if (typeof indexedDB === "undefined") {
+      setState(
+        shouldRefresh
+          ? {
+              error: {
+                code: "write_failed",
+                message: "POS local store is unavailable in this browser context.",
+              },
+              source: "none",
+              status: "local-store-failure",
+            }
+          : { source: "none", status: "missing" },
+      );
       return;
     }
 
@@ -166,27 +235,134 @@ export function useConvexRegisterCatalog(
 
       if (cancelled) return;
       if (result.ok && result.value) {
-        setLocalRows(result.value.rows);
+        const snapshot = result.value;
+        if (shouldRefresh) {
+          setState((current) =>
+            current.status === "ready" && current.source === "refresh"
+              ? current
+              : {
+                  refreshedAt: snapshot.refreshedAt,
+                  rows: snapshot.rows,
+                  source: "local",
+                  status: "refreshing",
+                },
+          );
+        } else {
+          setState({
+            refreshedAt: snapshot.refreshedAt,
+            rows: snapshot.rows,
+            source: "local",
+            status: "ready",
+          });
+        }
+        return;
+      }
+
+      if (result.ok) {
+        if (shouldRefresh) {
+          setState((current) =>
+            current.status === "ready" && current.source === "refresh"
+              ? current
+              : { rows: undefined, source: "none", status: "refreshing" },
+          );
+        } else {
+          setState({ source: "none", status: "missing" });
+        }
+        return;
+      }
+
+      if (shouldRefresh) {
+        setState((current) =>
+          current.status === "ready" && current.source === "refresh"
+            ? current
+            : {
+                error: result.error,
+                refreshedAt:
+                  "refreshedAt" in current ? current.refreshedAt : undefined,
+                rows: "rows" in current ? current.rows : undefined,
+                source: "rows" in current && current.rows ? "local" : "none",
+                status: "refresh-failed",
+              },
+        );
+        return;
+      }
+
+      setState({
+        error: result.error,
+        source: "none",
+        status: "local-store-failure",
+      });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [shouldRefresh, storeId]);
+
+  useEffect(() => {
+    if (!storeId || !shouldRefresh || typeof indexedDB === "undefined") {
+      return;
+    }
+
+    let cancelled = false;
+
+    setState((current) => ({
+      refreshedAt: "refreshedAt" in current ? current.refreshedAt : undefined,
+      rows: "rows" in current ? current.rows : undefined,
+      source: "rows" in current && current.rows ? "local" : "none",
+      status: "refreshing",
+    }));
+
+    void (async () => {
+      try {
+        const rows = await convex.query(
+          api.pos.public.catalog.listRegisterCatalogSnapshot,
+          { storeId },
+        );
+
+        if (cancelled) return;
+
+        const writeResult = await createPosLocalStore({
+          adapter: createIndexedDbPosLocalStorageAdapter(),
+        }).writeRegisterCatalogSnapshot({ storeId, rows });
+
+        if (cancelled) return;
+
+        if (writeResult.ok) {
+          setState({
+            refreshedAt: writeResult.value.refreshedAt,
+            rows: writeResult.value.rows,
+            source: "refresh",
+            status: "ready",
+          });
+          return;
+        }
+
+        setState({
+          error: writeResult.error,
+          rows,
+          source: "none",
+          status: "refresh-failed",
+        });
+      } catch (error) {
+        if (cancelled) return;
+
+        setState((current) => ({
+          error,
+          refreshedAt: "refreshedAt" in current ? current.refreshedAt : undefined,
+          rows: "rows" in current ? current.rows : undefined,
+          source: "rows" in current && current.rows ? "local" : "none",
+          status: "refresh-failed",
+        }));
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [storeId]);
+  }, [convex, refreshKey, shouldRefresh, storeId]);
 
-  useEffect(() => {
-    if (!storeId || liveRows === undefined || typeof indexedDB === "undefined") {
-      return;
-    }
-
-    setLocalRows(liveRows);
-    void createPosLocalStore({
-      adapter: createIndexedDbPosLocalStorageAdapter(),
-    }).writeRegisterCatalogSnapshot({ storeId, rows: liveRows });
-  }, [liveRows, storeId]);
-
-  return liveRows ?? localRows;
+  return state;
 }
 
 export function useConvexRegisterServiceCatalog(input: {
@@ -264,7 +440,10 @@ export function useConvexRegisterCatalogAvailability(
 export function usePrewarmRegisterCatalogOfflineSnapshots(input: {
   storeId?: Id<"store">;
 }) {
-  useConvexRegisterCatalog({ storeId: input.storeId });
+  useConvexRegisterCatalog({
+    refreshMetadataSnapshot: true,
+    storeId: input.storeId,
+  });
   useConvexRegisterServiceCatalog({ storeId: input.storeId });
   useConvexRegisterCatalogAvailabilityState({
     refreshFullAvailabilitySnapshot: true,

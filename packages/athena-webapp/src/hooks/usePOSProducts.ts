@@ -33,7 +33,10 @@ export function usePOSProductIdSearch(
 }
 
 export function usePOSRegisterCatalog(storeId: Id<"store"> | undefined) {
-  return useConvexRegisterCatalog({ storeId });
+  return useConvexRegisterCatalog({
+    refreshMetadataSnapshot: true,
+    storeId,
+  });
 }
 
 export const usePOSTransactionComplete = () => useConvexDirectTransactionMutation();

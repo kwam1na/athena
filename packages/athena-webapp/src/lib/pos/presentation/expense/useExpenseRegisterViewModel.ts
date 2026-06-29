@@ -487,6 +487,7 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
   ]);
 
   const registerCatalogRows = useConvexRegisterCatalog({
+    refreshMetadataSnapshot: true,
     storeId: activeStore?._id,
   });
   const registerCatalogIndex = useRegisterCatalogIndex(registerCatalogRows);

@@ -24,6 +24,7 @@ import {
   getTerminalById,
   getTerminalByStoreIdAndRegisterNumber,
   getTerminalSyncEvidence,
+  getTerminalSyncReviewSummaryEvidence,
   hasActiveRegisterSessionForTerminal,
   listTerminalsForStore,
   patchTerminalRecord,
@@ -79,6 +80,7 @@ vi.mock("../infrastructure/repositories/terminalRepository", () => ({
   getLatestRegisterSessionForTerminal: vi.fn(),
   getLatestRuntimeStatusForTerminal: vi.fn(),
   getTerminalSyncEvidence: vi.fn(),
+  getTerminalSyncReviewSummaryEvidence: vi.fn(),
   hasActiveRegisterSessionForTerminal: vi.fn(),
   listTerminalsForStore: vi.fn(),
   mapTerminalRecord: (terminal: typeof existingTerminal) => terminal,
@@ -885,6 +887,26 @@ describe("terminal health summaries", () => {
     vi.mocked(getActiveRegisterSessionForTerminal).mockResolvedValue(null);
     vi.mocked(getDrawerAuthorityRegisterSession).mockResolvedValue(null);
     vi.mocked(getLatestRegisterSessionForTerminal).mockResolvedValue(null);
+    vi.mocked(getTerminalSyncReviewSummaryEvidence).mockResolvedValue({
+      latestEvent: null,
+      sampledEventCount: 0,
+      acceptedCount: 0,
+      projectedCount: 0,
+      conflictedCount: 0,
+      heldCount: 0,
+      rejectedCount: 0,
+      unresolvedConflictCount: 0,
+      unresolvedConflicts: [],
+      reviewSummary: {
+        groups: [],
+        meta: {
+          sampledCount: 0,
+          cap: 20,
+          hasMore: false,
+          targetResolutionIncomplete: false,
+        },
+      },
+    });
     vi.mocked(hasActiveRegisterSessionForTerminal).mockResolvedValue(false);
     vi.mocked(listTerminalRecoveryConflictsForRepair).mockResolvedValue([]);
     vi.mocked(getTerminalRecoverySourceEvent).mockResolvedValue(null);
@@ -911,26 +933,34 @@ describe("terminal health summaries", () => {
     vi.mocked(getLatestRuntimeStatusForTerminal).mockResolvedValue(
       buildPersistedRuntimeStatus(),
     );
-    vi.mocked(getTerminalSyncEvidence).mockResolvedValue({
-      latestEvent: {
-        localEventId: "local-event-1",
-        localRegisterSessionId: "local-register-1",
-        sequence: 7,
-        eventType: "sale_completed",
-        status: "projected",
-        occurredAt: 120,
-        submittedAt: 130,
-        acceptedAt: 140,
-        projectedAt: 150,
-      },
+    vi.mocked(getTerminalSyncReviewSummaryEvidence).mockResolvedValue({
+      latestEvent: null,
       sampledEventCount: 3,
       acceptedCount: 0,
       projectedCount: 2,
       conflictedCount: 1,
       heldCount: 0,
       rejectedCount: 0,
-      acceptedThroughSequence: 7,
-      cursorUpdatedAt: 160,
+      unresolvedConflictCount: 1,
+      unresolvedConflicts: [],
+      reviewSummary: {
+        groups: [
+          {
+            actionability: "manual_review",
+            conflictType: "inventory",
+            count: 1,
+            latestCreatedAt: 160,
+            latestSequence: 7,
+            owner: "manual_review",
+          },
+        ],
+        meta: {
+          sampledCount: 1,
+          cap: 20,
+          hasMore: false,
+          targetResolutionIncomplete: false,
+        },
+      },
     });
 
     const result = await listTerminalHealthSummaries(
@@ -955,20 +985,23 @@ describe("terminal health summaries", () => {
           source: "sync-runtime",
         }),
         syncEvidence: expect.objectContaining({
-          acceptedThroughSequence: 7,
           conflictedCount: 1,
-          cursorUpdatedAt: 160,
-          latestEvent: expect.objectContaining({
-            localEventId: "local-event-1",
-            sequence: 7,
-            status: "projected",
-          }),
           projectedCount: 2,
           sampledEventCount: 3,
+          unresolvedConflictCount: 1,
+          reviewSummary: expect.objectContaining({
+            groups: [
+              expect.objectContaining({
+                conflictType: "inventory",
+                count: 1,
+              }),
+            ],
+          }),
         }),
       }),
     ]);
-    expect(vi.mocked(getTerminalSyncEvidence)).toHaveBeenCalledWith(
+    expect(vi.mocked(getTerminalSyncEvidence)).not.toHaveBeenCalled();
+    expect(vi.mocked(getTerminalSyncReviewSummaryEvidence)).toHaveBeenCalledWith(
       expect.anything(),
       {
         storeId: "store-1",

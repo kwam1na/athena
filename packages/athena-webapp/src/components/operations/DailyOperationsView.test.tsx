@@ -26,6 +26,7 @@ const mockedHooks = vi.hoisted(() => ({
 }));
 
 const mockedApi = vi.hoisted(() => ({
+  getDailyOperationsDetailSnapshot: "getDailyOperationsDetailSnapshot",
   getDailyOperationsSnapshot: "getDailyOperationsSnapshot",
 }));
 
@@ -457,6 +458,21 @@ const timelineOverflowSnapshot: DailyOperationsSnapshot = {
   })),
 };
 
+const compactTimelineOverflowSnapshot: DailyOperationsSnapshot = {
+  ...operatingSnapshot,
+  timeline: Array.from({ length: 5 }, (_, index) => ({
+    createdAt: Date.UTC(2026, 4, 8, 12, index),
+    id: `compact-event-${index + 1}`,
+    message: `Compact timeline event ${index + 1}`,
+    subject: {
+      id: `compact-subject-${index + 1}`,
+      type: "operations",
+    },
+    type: "operations.event",
+  })),
+  timelineHasMore: true,
+};
+
 const quickAddTimelineSnapshot: DailyOperationsSnapshot = {
   ...operatingSnapshot,
   timeline: [
@@ -859,6 +875,7 @@ function renderContent(
   return render(
     <DailyOperationsViewContent
       currency="GHS"
+      hasDetailSnapshot
       hasFullAdminAccess
       hasFinancialDetailsAccess
       isAuthenticated
@@ -1909,6 +1926,27 @@ describe("DailyOperationsViewContent", () => {
     expect(screen.getByText("Timeline event 12")).toBeInTheDocument();
   });
 
+  it("offers timeline detail when the compact snapshot has hidden events", () => {
+    const onRequestDetailSnapshot = vi.fn();
+
+    renderContent(compactTimelineOverflowSnapshot, {
+      onRequestDetailSnapshot,
+    });
+
+    const timeline = screen.getByRole("region", {
+      name: "Store-day timeline",
+    });
+
+    expect(
+      within(timeline).getByText("Compact timeline event 5"),
+    ).toBeInTheDocument();
+
+    fireEvent.click(within(timeline).getByRole("button", { name: "Show more" }));
+
+    expect(onRequestDetailSnapshot).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
   it("links quick-add product names to the product detail page with origin search", () => {
     renderContent(quickAddTimelineSnapshot);
 
@@ -2103,6 +2141,9 @@ describe("DailyOperationsViewContent", () => {
 describe("DailyOperationsView", () => {
   beforeEach(() => {
     (
+      mockedApi as { getDailyOperationsDetailSnapshot?: unknown }
+    ).getDailyOperationsDetailSnapshot = "getDailyOperationsDetailSnapshot";
+    (
       mockedApi as { getDailyOperationsSnapshot?: unknown }
     ).getDailyOperationsSnapshot = "getDailyOperationsSnapshot";
     window.scrollTo = vi.fn();
@@ -2113,7 +2154,9 @@ describe("DailyOperationsView", () => {
       isAuthenticated: true,
       isLoadingAccess: false,
     });
-    mockedHooks.useQuery.mockReturnValue(operatingSnapshot);
+    mockedHooks.useQuery.mockImplementation((_query, args) =>
+      args === "skip" ? undefined : operatingSnapshot,
+    );
     mockedHooks.navigate.mockReset();
     mockedHooks.useSearch.mockReturnValue({});
   });
@@ -2133,6 +2176,65 @@ describe("DailyOperationsView", () => {
     expect(
       screen.getByRole("heading", { name: "Historical store-day view" }),
     ).toBeInTheDocument();
+  });
+
+  it("skips analytics detail until explicitly requested", () => {
+    render(<DailyOperationsView />);
+
+    expect(mockedHooks.useQuery).toHaveBeenCalledWith(
+      mockedApi.getDailyOperationsDetailSnapshot,
+      "skip",
+    );
+  });
+
+  it("queries analytics detail through the explicit companion query after request", () => {
+    render(<DailyOperationsView />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Load analytics" }));
+
+    expect(mockedHooks.useQuery).toHaveBeenCalledWith(
+      mockedApi.getDailyOperationsDetailSnapshot,
+      expect.objectContaining({
+        operatingTimezoneOffsetMinutes: expect.any(Number),
+        storeId: "store-1",
+        storePulseWindow: "today",
+        weekEndOperatingDate: getCurrentSaturdayWeekEndOperatingDate(),
+      }),
+    );
+  });
+
+  it("does not carry a detail request across operating-date changes", () => {
+    const view = render(<DailyOperationsView />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Load analytics" }));
+
+    expect(mockedHooks.useQuery).toHaveBeenCalledWith(
+      mockedApi.getDailyOperationsDetailSnapshot,
+      expect.objectContaining({
+        operatingDate: expect.any(String),
+        storeId: "store-1",
+      }),
+    );
+
+    mockedHooks.useQuery.mockClear();
+    mockedHooks.useSearch.mockReturnValue({
+      operatingDate: "2026-05-07",
+      weekEndOperatingDate: "2026-05-08",
+    });
+
+    view.rerender(<DailyOperationsView />);
+
+    expect(mockedHooks.useQuery).toHaveBeenCalledWith(
+      mockedApi.getDailyOperationsSnapshot,
+      expect.objectContaining({
+        operatingDate: "2026-05-07",
+        storeId: "store-1",
+      }),
+    );
+    expect(mockedHooks.useQuery).toHaveBeenCalledWith(
+      mockedApi.getDailyOperationsDetailSnapshot,
+      "skip",
+    );
   });
 
   it("queries the daily operations snapshot for the route operating date", () => {
@@ -2202,6 +2304,10 @@ describe("DailyOperationsView", () => {
 
     expect(mockedHooks.useQuery).toHaveBeenCalledWith(
       mockedApi.getDailyOperationsSnapshot,
+      "skip",
+    );
+    expect(mockedHooks.useQuery).toHaveBeenCalledWith(
+      mockedApi.getDailyOperationsDetailSnapshot,
       "skip",
     );
     expect(screen.getByText("Access Denied")).toBeInTheDocument();

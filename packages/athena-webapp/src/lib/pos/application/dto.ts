@@ -182,6 +182,8 @@ export interface PosRegisterCatalogRowDto {
 }
 
 export interface PosRegisterCatalogInput {
+  metadataRefreshKey?: string | number;
+  refreshMetadataSnapshot?: boolean;
   storeId?: Id<"store">;
 }
 

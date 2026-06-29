@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>refactor: Reduce Convex read amplification</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f7f8fb;
+        --panel: #ffffff;
+        --ink: #18202f;
+        --muted: #586174;
+        --line: #d9deea;
+        --accent: #0b6bcb;
+        --accent-soft: #e7f1fd;
+        --risk: #9a3412;
+        --ok: #166534;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      header {
+        background: var(--panel);
+        border-bottom: 1px solid var(--line);
+        padding: 32px max(24px, calc((100vw - 1120px) / 2));
+      }
+      main {
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: 28px 24px 48px;
+      }
+      h1 {
+        margin: 0 0 10px;
+        font-size: 32px;
+        line-height: 1.15;
+        letter-spacing: 0;
+      }
+      h2 {
+        margin: 0 0 14px;
+        font-size: 21px;
+        letter-spacing: 0;
+      }
+      h3 {
+        margin: 22px 0 8px;
+        font-size: 16px;
+        letter-spacing: 0;
+      }
+      p { margin: 0 0 12px; }
+      a { color: var(--accent); }
+      code {
+        border: 1px solid var(--line);
+        border-radius: 5px;
+        background: #f4f6fa;
+        padding: 1px 5px;
+        font-size: 0.92em;
+      }
+      section {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        margin: 0 0 18px;
+        padding: 22px;
+      }
+      nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 18px;
+      }
+      nav a {
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 6px 10px;
+        text-decoration: none;
+        background: #fff;
+      }
+      ul, ol { margin: 8px 0 0 20px; padding: 0; }
+      li { margin: 6px 0; }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 10px 0 4px;
+      }
+      th, td {
+        border: 1px solid var(--line);
+        padding: 9px 10px;
+        vertical-align: top;
+        text-align: left;
+      }
+      th { background: #f4f6fa; }
+      .meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        color: var(--muted);
+      }
+      .pill {
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: #fff;
+        padding: 5px 9px;
+      }
+      .callout {
+        border-left: 4px solid var(--accent);
+        background: var(--accent-soft);
+        padding: 12px 14px;
+        margin: 12px 0;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 12px;
+      }
+      .unit {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 14px;
+        background: #fbfcff;
+      }
+      .unit h3 { margin-top: 0; }
+      .ok { color: var(--ok); font-weight: 600; }
+      .risk { color: var(--risk); font-weight: 600; }
+      .small { color: var(--muted); font-size: 13px; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>refactor: Reduce Convex read amplification</h1>
+      <div class="meta">
+        <span class="pill">Type: refactor</span>
+        <span class="pill">Status: active</span>
+        <span class="pill">Date: 2026-06-29</span>
+        <span class="pill">Markdown: docs/plans/2026-06-29-002-refactor-convex-read-amplification-plan.md</span>
+      </div>
+      <nav aria-label="Plan sections">
+        <a href="#summary">Summary</a>
+        <a href="#requirements">Requirements</a>
+        <a href="#decisions">Decisions</a>
+        <a href="#units">Units</a>
+        <a href="#risks">Risks</a>
+        <a href="#verification">Verification</a>
+      </nav>
+    </header>
+    <main>
+      <section id="summary">
+        <h2>Summary</h2>
+        <p>Reduce the June 27 production Convex read spike by turning the hottest reactive queries into bounded, intent-specific read models. The plan starts with measurement, then narrows register sync-review reads, splits Daily Operations analytics from default posture, separates terminal roster from terminal detail evidence, and moves POS catalog metadata away from full live reactivity.</p>
+        <div class="callout">
+          <strong>Production signal:</strong> June 27 showed 68.05 GB of prod reads. The main hot functions were <code>getDailyOperationsSnapshot</code>, <code>getState</code>, <code>getTerminalHealthDetail</code>, <code>listRegisterCatalogSnapshot</code>, and <code>getRegisterSessionSnapshot</code>.
+        </div>
+      </section>
+
+      <section id="requirements">
+        <h2>Requirements</h2>
+        <ul>
+          <li>Reduce reads for the five hot functions without removing operational behavior.</li>
+          <li>Preserve POS local-first continuity and keep sale readiness distinct from terminal health and review backlog.</li>
+          <li>Keep Daily Operations as an overview of source workflows.</li>
+          <li>Keep sync-review evidence current and targetable.</li>
+          <li>Keep POS catalog visibility enforcement server-side.</li>
+          <li>Add high-cardinality characterization and read-boundary coverage before changing each hot path.</li>
+          <li>Keep Convex queries read-only.</li>
+          <li>Verify production impact through Convex dashboard and Insights.</li>
+        </ul>
+      </section>
+
+      <section id="decisions">
+        <h2>Key Decisions</h2>
+        <table>
+          <thead>
+            <tr><th>Decision</th><th>Rationale</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Measure first</td><td>High-cardinality read-boundary tests and normalized before/after dashboard checks prevent unproven optimization.</td></tr>
+            <tr><td>Target register sync review</td><td>Register state and session detail need one session's evidence, not store-wide backlog scans.</td></tr>
+            <tr><td>Use companion queries</td><td>Daily Ops default posture should load separately from analytics, full timeline, and scheduled-run diagnostics.</td></tr>
+            <tr><td>Split default and detail reads</td><td>Daily Ops, terminal health, and catalog each mix low-freshness summary data with detail-grade evidence today.</td></tr>
+            <tr><td>Define catalog refresh</td><td>Point-in-time metadata must have explicit invalidation triggers and checkout validation for stale rows.</td></tr>
+            <tr><td>Preserve existing policy boundaries</td><td><code>TerminalOperationalState</code>, register lifecycle policy, and catalog visibility rules remain correctness boundaries.</td></tr>
+            <tr><td>Delay digest tables until proven needed</td><td>Digests add write and rollout complexity; bounded reads should be tried first where possible.</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="units">
+        <h2>Implementation Unit Digest</h2>
+        <div class="grid">
+          <article class="unit">
+            <h3>U1. Measure Hot Read Sets</h3>
+            <p>Add high-cardinality characterization coverage and a production comparison checklist for the hot functions.</p>
+            <p class="small">Key files: dailyOperations, deposits, register, terminals, catalog tests. Assertions should prove bounded or proportional reads.</p>
+          </article>
+          <article class="unit">
+            <h3>U2. Target Register Sync Review</h3>
+            <p>Split targeted session evidence from store backlog evidence and update register/cash-control callers.</p>
+            <p class="small">Primary risk: losing derived semantics for inventory open work, non-sale mappings, stale resolved conflicts, or rejected evidence.</p>
+          </article>
+          <article class="unit">
+            <h3>U3. Split Daily Operations Reads</h3>
+            <p>Keep default posture lightweight and load analytics, full timeline, and scheduled diagnostics through companion queries.</p>
+            <p class="small">Primary risk: losing manager context.</p>
+          </article>
+          <article class="unit">
+            <h3>U4. Split Terminal Roster and Detail</h3>
+            <p>Return a roster contract with sale impact, lane, runtime age, owner/action summary, backlog, and incomplete flags; optimize the named detail function separately while preserving full support evidence.</p>
+            <p class="small">Primary risk: under-reporting support work or returning falsely clean roster rows.</p>
+          </article>
+          <article class="unit">
+            <h3>U5. Stabilize POS Catalog Metadata</h3>
+            <p>Replace full live metadata subscription with an authenticated point-in-time refresh contract and bounded live availability.</p>
+            <p class="small">Primary risk: stale metadata at the wrong moment.</p>
+          </article>
+          <article class="unit">
+            <h3>U6. Consolidate Subscriptions</h3>
+            <p>Align React hooks with the new backend boundaries and remove duplicate full-snapshot subscriptions.</p>
+            <p class="small">Primary risk: recreating backend cost through nested rerenders or cart-edit remounts.</p>
+          </article>
+          <article class="unit">
+            <h3>U7. Rollout and Verify</h3>
+            <p>Run as an interleaved gate after U2, U3, U4, and U5/U6 using normalized read bytes per call and comparable traffic windows before the next slice proceeds.</p>
+            <p class="small">Primary risk: misreading lower traffic or subscriber changes as improvement.</p>
+          </article>
+        </div>
+      </section>
+
+      <section>
+        <h2>Read Boundary Matrix</h2>
+        <table>
+          <thead>
+            <tr><th>Surface</th><th>Default read</th><th>Detail or on-demand read</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Daily Operations</td><td>Lifecycle, blockers, queue counts, primary actions, compact timeline preview, scheduled-run status</td><td>Store pulse, week metrics, full timeline, scheduled-run diagnostics/evidence</td></tr>
+            <tr><td>POS register state</td><td>Readiness plus target session sync status</td><td>Store backlog in manager workspaces</td></tr>
+            <tr><td>Terminal health</td><td>Sale impact, health lane, runtime age, owner/action summary, backlog and incomplete flags</td><td>Optimized one-terminal detail evidence: conflict examples, repair previews, source-event evidence</td></tr>
+            <tr><td>POS catalog</td><td>Authenticated point-in-time metadata snapshot with invalidation/refresh triggers</td><td>Bounded live availability for displayed or exact-match SKUs</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="risks">
+        <h2>Risks</h2>
+        <ul>
+          <li><span class="risk">Review evidence omission:</span> mitigated by over-cap targeted review tests.</li>
+          <li><span class="risk">Terminal support drift:</span> mitigated by keeping <code>TerminalOperationalState</code> authoritative.</li>
+          <li><span class="risk">Catalog stale reads:</span> mitigated by explicit refresh triggers, checkout command validation, and bounded availability subscriptions.</li>
+          <li><span class="risk">Digest drift:</span> mitigated by conditional mutation maintenance, backfill, fallback, and query-write boundary proof.</li>
+        </ul>
+      </section>
+
+      <section id="verification">
+        <h2>Verification Strategy</h2>
+        <ul>
+          <li>Focused read-boundary tests fail if broad store-wide scans return to target paths or high-cardinality fixtures scale with old read sets.</li>
+          <li>Behavior tests preserve cashier readiness, Daily Operations posture, terminal detail evidence, and catalog visibility.</li>
+          <li>After each slice, compare Convex dashboard Database I/O, read bytes per call, comparable traffic windows, and <code>npx convex insights --prod --details</code> for the relevant hot functions, including terminal roster and detail separately.</li>
+          <li>Capture final boundaries in <code>docs/solutions/performance/athena-convex-read-amplification-2026-06-29.md</code>.</li>
+        </ul>
+        <p class="ok">Reviewer alignment target: unanimous approval across performance, POS continuity, operations/cash-control, and rollout/test lenses.</p>
+      </section>
+    </main>
+  </body>
+</html>

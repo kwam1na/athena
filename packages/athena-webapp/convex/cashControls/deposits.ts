@@ -1598,6 +1598,7 @@ export const resolveRegisterSessionSyncReview = mutation({
       args.storeId,
       {
         includeRejectedEvidence: true,
+        includeTransactionMappingEvidence: true,
         registerSessionIds: [args.registerSessionId],
       },
     );

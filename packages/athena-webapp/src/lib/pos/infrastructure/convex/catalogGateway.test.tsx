@@ -9,9 +9,11 @@ import type {
 import type { Id } from "~/convex/_generated/dataModel";
 import {
   useConvexRegisterCatalog,
+  useConvexRegisterCatalogState,
   useConvexRegisterCatalogAvailability,
   useConvexRegisterCatalogAvailabilityState,
   useConvexRegisterServiceCatalog,
+  usePrewarmRegisterCatalogOfflineSnapshots,
 } from "./catalogGateway";
 
 const catalogStoreMocks = vi.hoisted(() => ({
@@ -23,11 +25,14 @@ const catalogStoreMocks = vi.hoisted(() => ({
   writeRegisterServiceCatalogSnapshot: vi.fn(),
 }));
 const convexMocks = vi.hoisted(() => ({
+  query: vi.fn(),
+  useConvex: vi.fn(),
   useMutation: vi.fn(),
   useQuery: vi.fn(),
 }));
 
 vi.mock("convex/react", () => ({
+  useConvex: convexMocks.useConvex,
   useMutation: convexMocks.useMutation,
   useQuery: convexMocks.useQuery,
 }));
@@ -106,6 +111,10 @@ describe("catalogGateway", () => {
   beforeEach(() => {
     liveAvailabilityRows = undefined;
     fullAvailabilitySnapshotRows = undefined;
+    convexMocks.query.mockReset();
+    convexMocks.query.mockResolvedValue([]);
+    convexMocks.useConvex.mockReset();
+    convexMocks.useConvex.mockReturnValue({ query: convexMocks.query });
     convexMocks.useMutation.mockReset();
     convexMocks.useQuery.mockReset();
     convexMocks.useQuery.mockImplementation((_query, args) => {
@@ -142,10 +151,17 @@ describe("catalogGateway", () => {
         },
       }),
     );
-    catalogStoreMocks.writeRegisterCatalogSnapshot.mockResolvedValue({
-      ok: true,
-      value: null,
-    });
+    catalogStoreMocks.writeRegisterCatalogSnapshot.mockImplementation(
+      async (input: { rows: PosRegisterCatalogRowDto[]; storeId: string }) => ({
+        ok: true,
+        value: {
+          refreshedAt: Date.now(),
+          rows: input.rows,
+          schemaVersion: 8,
+          storeId: input.storeId,
+        },
+      }),
+    );
     catalogStoreMocks.writeRegisterServiceCatalogSnapshot.mockResolvedValue({
       ok: true,
       value: null,
@@ -156,9 +172,8 @@ describe("catalogGateway", () => {
     });
   });
 
-  it("returns the cached register catalog snapshot while live catalog data is unavailable", async () => {
+  it("returns the cached register catalog snapshot without subscribing to full metadata", async () => {
     const cachedRows = [buildRegisterCatalogRow()];
-    convexMocks.useQuery.mockReturnValue(undefined);
     catalogStoreMocks.readRegisterCatalogSnapshot.mockResolvedValue({
       ok: true,
       value: {
@@ -174,6 +189,8 @@ describe("catalogGateway", () => {
     );
 
     await waitFor(() => expect(result.current).toEqual(cachedRows));
+    expect(convexMocks.useQuery).not.toHaveBeenCalled();
+    expect(convexMocks.query).not.toHaveBeenCalled();
     expect(catalogStoreMocks.readRegisterCatalogSnapshot).toHaveBeenCalledWith({
       storeId: "store-1",
     });
@@ -181,7 +198,6 @@ describe("catalogGateway", () => {
   });
 
   it("keeps the register catalog loading when neither live data nor a local snapshot is available", async () => {
-    convexMocks.useQuery.mockReturnValue(undefined);
     catalogStoreMocks.readRegisterCatalogSnapshot.mockResolvedValue({
       ok: true,
       value: null,
@@ -195,21 +211,81 @@ describe("catalogGateway", () => {
       expect(catalogStoreMocks.readRegisterCatalogSnapshot).toHaveBeenCalled(),
     );
     expect(result.current).toBeUndefined();
+    expect(convexMocks.useQuery).not.toHaveBeenCalled();
+    expect(convexMocks.query).not.toHaveBeenCalled();
   });
 
-  it("persists live register catalog rows for the next offline lookup", async () => {
-    const liveRows = [buildRegisterCatalogRow({ sku: "DW-20" })];
-    convexMocks.useQuery.mockReturnValue(liveRows);
+  it("persists explicitly refreshed register catalog rows for the next offline lookup", async () => {
+    const refreshedRows = [buildRegisterCatalogRow({ sku: "DW-20" })];
+    convexMocks.query.mockResolvedValue(refreshedRows);
 
     const { result } = renderHook(() =>
-      useConvexRegisterCatalog({ storeId: "store-1" as Id<"store"> }),
+      useConvexRegisterCatalog({
+        refreshMetadataSnapshot: true,
+        storeId: "store-1" as Id<"store">,
+      }),
     );
 
-    expect(result.current).toEqual(liveRows);
+    await waitFor(() => expect(result.current).toEqual(refreshedRows));
+    expect(convexMocks.useQuery).not.toHaveBeenCalled();
+    expect(convexMocks.query).toHaveBeenCalledWith(expect.anything(), {
+      storeId: "store-1",
+    });
     await waitFor(() =>
       expect(catalogStoreMocks.writeRegisterCatalogSnapshot).toHaveBeenCalledWith({
         storeId: "store-1",
-        rows: liveRows,
+        rows: refreshedRows,
+      }),
+    );
+  });
+
+  it("exposes explicit register catalog metadata refresh state", async () => {
+    const refreshedRows = [buildRegisterCatalogRow({ sku: "DW-22" })];
+    convexMocks.query.mockResolvedValue(refreshedRows);
+
+    const { result } = renderHook(() =>
+      useConvexRegisterCatalogState({
+        metadataRefreshKey: "price-and-barcode-change",
+        refreshMetadataSnapshot: true,
+        storeId: "store-1" as Id<"store">,
+      }),
+    );
+
+    expect(result.current).toEqual({
+      rows: undefined,
+      source: "none",
+      status: "refreshing",
+    });
+    await waitFor(() =>
+      expect(result.current).toEqual({
+        refreshedAt: expect.any(Number),
+        rows: refreshedRows,
+        source: "refresh",
+        status: "ready",
+      }),
+    );
+  });
+
+  it("refreshes register catalog metadata once during POS prewarm without a live subscription", async () => {
+    const refreshedRows = [buildRegisterCatalogRow({ sku: "DW-PREWARM" })];
+    convexMocks.query.mockResolvedValue(refreshedRows);
+
+    renderHook(() =>
+      usePrewarmRegisterCatalogOfflineSnapshots({
+        storeId: "store-1" as Id<"store">,
+      }),
+    );
+
+    await waitFor(() => expect(convexMocks.query).toHaveBeenCalled());
+    expect(
+      convexMocks.query.mock.calls.some(
+        ([, args]) => args?.storeId === "store-1",
+      ),
+    ).toBe(true);
+    await waitFor(() =>
+      expect(catalogStoreMocks.writeRegisterCatalogSnapshot).toHaveBeenCalledWith({
+        rows: refreshedRows,
+        storeId: "store-1",
       }),
     );
   });

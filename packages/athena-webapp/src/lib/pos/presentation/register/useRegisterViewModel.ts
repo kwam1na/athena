@@ -745,6 +745,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     registerNumber: terminalRegisterNumber,
   });
   const registerCatalogRows = useConvexRegisterCatalog({
+    refreshMetadataSnapshot: true,
     storeId: activeStoreId,
   });
   const registerCatalogIndex = useRegisterCatalogIndex(registerCatalogRows);

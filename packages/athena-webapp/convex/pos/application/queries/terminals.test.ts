@@ -611,6 +611,119 @@ describe("terminal health queries", () => {
     );
   });
 
+  it("keeps roster summaries off detail-grade terminal evidence reads", async () => {
+    const terminals = Array.from({ length: 3 }, (_, index) =>
+      buildTerminal({
+        _id: `terminal-${index + 1}` as Id<"posTerminal">,
+        displayName: `Register ${index + 1}`,
+        registerNumber: `${index + 1}`,
+      }),
+    );
+    const conflicts = terminals.flatMap((terminal, terminalIndex) =>
+      Array.from({ length: 12 }, (_, conflictIndex) =>
+        buildConflict({
+          _id:
+            `conflict-${terminalIndex + 1}-${conflictIndex + 1}` as Id<"posLocalSyncConflict">,
+          createdAt: now - conflictIndex,
+          localEventId: `event-${terminalIndex + 1}-${conflictIndex + 1}`,
+          localRegisterSessionId: `register-${terminalIndex + 1}`,
+          sequence: conflictIndex + 1,
+          terminalId: terminal._id,
+        }),
+      ),
+    );
+    const detailGradeEvents = conflicts.map((conflict) =>
+      buildEvent({
+        _id: `${conflict.localEventId}-id` as Id<"posLocalSyncEvent">,
+        localEventId: conflict.localEventId,
+        localRegisterSessionId: conflict.localRegisterSessionId,
+        sequence: conflict.sequence,
+        terminalId: conflict.terminalId,
+      }),
+    );
+    const { ctx, queries } = buildTrackedQueryCtx({
+      posLocalSyncConflict: conflicts,
+      posLocalSyncCursor: terminals.map((terminal, index) => ({
+        _id: `cursor-${index + 1}` as Id<"posLocalSyncCursor">,
+        _creationTime: now - index,
+        acceptedThroughSequence: 10,
+        storeId,
+        terminalId: terminal._id,
+        updatedAt: now - index,
+      })),
+      posLocalSyncEvent: detailGradeEvents,
+      posTerminal: terminals,
+      posTerminalRecoveryCommand: terminals.map((terminal, index) => ({
+        _id:
+          `command-${index + 1}` as Id<"posTerminalRecoveryCommand">,
+        _creationTime: now - index,
+        commandContext: {
+          reason: "Detail-only command evidence.",
+        },
+        commandType: "retry_sync",
+        expectedEvidence: {
+          syncStatus: "idle",
+        },
+        expiresAt: now + 60_000,
+        issuedAt: now - index,
+        issuedByUserId: "user-1" as Id<"athenaUser">,
+        status: "pending",
+        storeId,
+        terminalId: terminal._id,
+        verificationStatus: "waiting_for_acknowledgement",
+      })),
+      posTerminalRuntimeStatus: terminals.map((terminal, index) =>
+        buildRuntimeStatus({
+          _id: `runtime-${index + 1}` as Id<"posTerminalRuntimeStatus">,
+          terminalId: terminal._id,
+          saleAuthority: {
+            observedAt: now - 1_000,
+            status: "ready",
+            transactionMode: "products_and_services",
+          },
+        }),
+      ),
+      registerSession: terminals.map((terminal, index) =>
+        buildRegisterSession({
+          _id: `register-${index + 1}` as Id<"registerSession">,
+          registerNumber: terminal.registerNumber,
+          status: "active",
+          terminalId: terminal._id,
+        }),
+      ),
+    });
+
+    const summaries = await listTerminalHealthSummaries(ctx, {
+      now,
+      storeId,
+    });
+
+    expect(summaries).toHaveLength(3);
+    expect(summaries[0]?.operationalExplanation.lane).toBe(
+      "sale_ready_with_review_backlog",
+    );
+    expect(summaries[0]?.operationalExplanation.saleImpact).toBe(
+      "can_transact_now",
+    );
+    expect(
+      summaries[0]?.operationalExplanation.summaryMeta.reviewBacklogCount,
+    ).toBe(12);
+    expect(
+      summaries[0]?.operationalExplanation.summaryMeta
+        .targetResolutionIncomplete,
+    ).toBe(false);
+    expect(summaries[0]?.syncEvidence.unresolvedConflictCount).toBe(12);
+    expect(summaries[0]?.syncEvidence.unresolvedConflicts).toEqual([]);
+    expect(summaries[0]?.recoveryPreview?.commandStatus).toBeNull();
+    expect(summaries[0]?.recoveryPreview?.cloudRepair.safeConflictIds).toEqual(
+      [],
+    );
+    expect(summaries[0]?.recoveryPreview?.terminalActions).toEqual([]);
+    expect(queries).not.toContain("posLocalSyncEvent");
+    expect(queries).not.toContain("posLocalSyncCursor");
+    expect(queries).not.toContain("posTerminalRecoveryCommand");
+  });
+
   it("offers cloud repair preview for a replacement open after submitted closeout review", async () => {
     const duplicateOpenConflict = buildConflict({
       _id: "duplicate-open-conflict" as Id<"posLocalSyncConflict">,
@@ -713,7 +826,7 @@ describe("terminal health queries", () => {
     ]);
   });
 
-  it("keeps terminal health roster and detail recovery preview in parity", async () => {
+  it("keeps terminal health roster and detail posture aligned while detail owns recovery payloads", async () => {
     const ctx = buildQueryCtx({
       posTerminal: [buildTerminal()],
       posTerminalRecoveryCommand: [
@@ -771,15 +884,26 @@ describe("terminal health queries", () => {
         type: "sync_failed",
       }),
     ]);
-    expect(rosterSummary?.recoveryPreview).toEqual(detailSummary?.recoveryPreview);
     expect(rosterSummary?.recoveryPreview).toEqual(
+      expect.objectContaining({
+        cloudRepair: {
+          preconditionHash: "terminal-cloud-repair:none",
+          safeConflictIds: [],
+          skippedConflictIds: [],
+        },
+        commandStatus: null,
+        readiness: "needs_terminal_action",
+        terminalActions: [],
+      }),
+    );
+    expect(detailSummary?.recoveryPreview).toEqual(
       expect.objectContaining({
         commandStatus: expect.objectContaining({
           commandType: "retry_sync",
           status: "pending",
           verificationStatus: "waiting_for_acknowledgement",
         }),
-        readiness: "needs_terminal_action",
+        readiness: rosterSummary?.recoveryPreview?.readiness,
         terminalActions: [
           expect.objectContaining({
             commandType: "retry_sync",
@@ -789,6 +913,12 @@ describe("terminal health queries", () => {
           }),
         ],
       }),
+    );
+    expect(rosterSummary?.operationalExplanation.lane).toBe(
+      detailSummary?.operationalExplanation.lane,
+    );
+    expect(rosterSummary?.operationalExplanation.saleImpact).toBe(
+      detailSummary?.operationalExplanation.saleImpact,
     );
   });
 
@@ -1047,6 +1177,7 @@ describe("terminal health queries", () => {
 });
 
 type TestTable =
+  | "operationalWorkItem"
   | "posLocalSyncConflict"
   | "posLocalSyncCursor"
   | "posLocalSyncEvent"
@@ -1061,7 +1192,14 @@ type TestTable =
 function buildQueryCtx(
   records: Partial<Record<TestTable, Array<Record<string, unknown>>>>,
 ) {
-  return {
+  return buildTrackedQueryCtx(records).ctx;
+}
+
+function buildTrackedQueryCtx(
+  records: Partial<Record<TestTable, Array<Record<string, unknown>>>>,
+) {
+  const queries: TestTable[] = [];
+  const ctx = {
     db: {
       get(table: TestTable, id: string) {
         return Promise.resolve(
@@ -1072,10 +1210,16 @@ function buildQueryCtx(
         return records[table]?.some((record) => record._id === id) ? id : null;
       },
       query(table: TestTable) {
+        queries.push(table);
         return buildQuery(records[table] ?? []);
       },
     },
   } as unknown as QueryCtx;
+
+  return {
+    ctx,
+    queries,
+  };
 }
 
 function buildTerminal(
@@ -1232,13 +1376,46 @@ function buildEvent(
 }
 
 function buildQuery(records: Array<Record<string, unknown>>) {
+  let scopedRecords = [...records];
+  const queryBuilder = {
+    eq(field: string, value: unknown) {
+      scopedRecords = scopedRecords.filter((record) => record[field] === value);
+      return queryBuilder;
+    },
+    gt(field: string, value: unknown) {
+      scopedRecords = scopedRecords.filter(
+        (record) =>
+          typeof record[field] === "number" &&
+          typeof value === "number" &&
+          record[field] > value,
+      );
+      return queryBuilder;
+    },
+  };
   const chain = {
-    collect: () => Promise.resolve(records),
-    first: () => Promise.resolve(records[0] ?? null),
-    order: () => chain,
-    take: (count: number) => Promise.resolve(records.slice(0, count)),
-    unique: () => Promise.resolve(records[0] ?? null),
-    withIndex: () => chain,
+    collect: () => Promise.resolve(scopedRecords),
+    first: () => Promise.resolve(scopedRecords[0] ?? null),
+    order: (direction: "asc" | "desc" = "asc") => {
+      scopedRecords = [...scopedRecords].sort((left, right) => {
+        const leftValue =
+          typeof left._creationTime === "number" ? left._creationTime : 0;
+        const rightValue =
+          typeof right._creationTime === "number" ? right._creationTime : 0;
+        return direction === "desc"
+          ? rightValue - leftValue
+          : leftValue - rightValue;
+      });
+      return chain;
+    },
+    take: (count: number) => Promise.resolve(scopedRecords.slice(0, count)),
+    unique: () => Promise.resolve(scopedRecords[0] ?? null),
+    withIndex: (
+      _name: string,
+      configure?: (builder: typeof queryBuilder) => unknown,
+    ) => {
+      configure?.(queryBuilder);
+      return chain;
+    },
   };
 
   return chain;
