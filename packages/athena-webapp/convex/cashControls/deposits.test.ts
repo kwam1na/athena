@@ -628,6 +628,55 @@ describe("cash control deposits", () => {
       conflictType: "permission",
       reviewKind: "duplicate_register_open",
     });
+    expect(
+      classifyRegisterSessionSyncReview({
+        conflictType: "duplicate_local_id",
+        details: {},
+        localEventId: "event-sale-completed-summary",
+        status: "needs_review",
+        summary: "Local POS session id was reused by a different synced sale.",
+      }),
+    ).toEqual({
+      actionPolicy: "apply_or_reject",
+      conflictType: "duplicate_local_id",
+      reviewKind: "duplicate_pos_session_sale",
+    });
+    expect(
+      classifyRegisterSessionSyncReview({
+        conflictType: "duplicate_local_id",
+        details: {
+          localId: "local-pos-session-1",
+          localIdKind: "posSession",
+          localTransactionId: "local-transaction-1",
+          originalTransactionId: "transaction-original",
+        },
+        localEventId: "event-sale-completed-details",
+        status: "needs_review",
+        summary: "Backend copy can change.",
+      }),
+    ).toEqual({
+      actionPolicy: "apply_or_reject",
+      conflictType: "duplicate_local_id",
+      reviewKind: "duplicate_pos_session_sale",
+    });
+    expect(
+      classifyRegisterSessionSyncReview({
+        conflictType: "duplicate_local_id",
+        details: {
+          localId: "local-register-2",
+          localIdKind: "registerSession",
+          localTransactionId: "local-transaction-1",
+        },
+        localEventId: "event-register-opened-2",
+        status: "needs_review",
+        summary:
+          "Local register session id was reused by a different synced register open.",
+      }),
+    ).toEqual({
+      actionPolicy: "reject_only",
+      conflictType: "duplicate_local_id",
+      reviewKind: "duplicate_register_open",
+    });
   });
 
   it("projects sync review classification into register-session local sync status", () => {
@@ -1748,6 +1797,14 @@ describe("cash control deposits", () => {
           status: "active",
           storeId: "store_1",
         },
+        {
+          _id: "role_2",
+          organizationId: "org_1",
+          role: "cashier",
+          staffProfileId: "staff_1",
+          status: "active",
+          storeId: "store_1",
+        },
       ],
     });
 
@@ -2655,6 +2712,43 @@ describe("cash control deposits", () => {
       ],
     });
 
+    const approveDuplicateOnly = await getHandler(
+      resolveRegisterSessionSyncReview,
+    )(ctx as never, {
+      actorStaffProfileId: "manager_1" as Id<"staffProfile">,
+      registerSessionId: "session_open" as Id<"registerSession">,
+      reviewConflictIds: ["sync_conflict_duplicate"],
+      storeId: "store_1" as Id<"store">,
+    });
+
+    expect(approveDuplicateOnly).toEqual(
+      userError({
+        code: "precondition_failed",
+        message:
+          "This synced sale has multiple review items. Resolve them together so Athena can apply the sale once.",
+      }),
+    );
+    expect(ctx.tables.get("posTransaction")).toEqual([]);
+    expect(ctx.tables.get("paymentAllocation") ?? []).toEqual([]);
+    expect(ctx.tables.get("posLocalSyncEvent")).toEqual([
+      expect.objectContaining({
+        _id: "sync_event_inventory_sale",
+        status: "conflicted",
+      }),
+    ]);
+    expect(ctx.tables.get("posLocalSyncConflict")).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          _id: "sync_conflict_duplicate",
+          status: "needs_review",
+        }),
+        expect.objectContaining({
+          _id: "sync_conflict_inventory",
+          status: "needs_review",
+        }),
+      ]),
+    );
+
     const rejectDuplicate = await getHandler(resolveRegisterSessionSyncReview)(
       ctx as never,
       {
@@ -2758,6 +2852,837 @@ describe("cash control deposits", () => {
           sourceType: "posTransaction",
         }),
         title: "Review inventory for Ebin Skin Protector Enhanced",
+        type: "synced_sale_inventory_review",
+      }),
+    ]);
+  });
+
+  it("rejects duplicate register-opening evidence without rejecting the projected sale event", async () => {
+    const ctx = createAuthorizedRegisterDepositCtx({
+      operationalEvent: [],
+      posLocalSyncConflict: [
+        {
+          _id: "sync_conflict_duplicate",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-1",
+          localEventId: "event_inventory_sale",
+          sequence: 13,
+          conflictType: "duplicate_local_id",
+          status: "needs_review",
+          summary:
+            "Local register session id was reused by a different synced register open.",
+          details: {
+            localId: "local-register-1",
+            localIdKind: "registerSession",
+            localTransactionId: "local-transaction-1",
+            originalTransactionId: "transaction_original",
+          },
+          createdAt: 2,
+        },
+      ],
+      posLocalSyncEvent: [
+        {
+          _id: "sync_event_inventory_sale",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-1",
+          localEventId: "event_inventory_sale",
+          sequence: 13,
+          eventType: "sale_completed",
+          occurredAt: 2,
+          projectedAt: 4,
+          staffProfileId: "staff_1",
+          payload: {
+            localPosSessionId: "local-pos-session-1",
+            localTransactionId: "local-transaction-1",
+            localReceiptNumber: "224763",
+            receiptNumber: "224763",
+            registerNumber: "1",
+            totals: {
+              subtotal: 8000,
+              tax: 0,
+              total: 8000,
+            },
+            items: [
+              {
+                localTransactionItemId: "local-item-1",
+                productId: "product_1",
+                productSkuId: "product_sku_1",
+                productName: "Melt Band",
+                productSku: "KK38-61G-ZW8",
+                quantity: 2,
+                unitPrice: 2500,
+              },
+              {
+                localTransactionItemId: "local-item-2",
+                productId: "product_2",
+                productSkuId: "product_sku_2",
+                productName: "Romantic Rain Lip Oil",
+                productSku: "KK38-9KB-VPS",
+                quantity: 1,
+                unitPrice: 3000,
+              },
+            ],
+            payments: [
+              {
+                localPaymentId: "local-payment-1",
+                method: "mobile_money",
+                amount: 8000,
+                timestamp: 3,
+              },
+            ],
+          },
+          status: "conflicted",
+          submittedAt: 4,
+          acceptedAt: 4,
+        },
+      ],
+      posLocalSyncMapping: [
+        {
+          _id: "sync_mapping_1",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-1",
+          localIdKind: "registerSession",
+          localId: "local-register-1",
+          cloudTable: "registerSession",
+          cloudId: "session_open",
+        },
+      ],
+      registerSession: [
+        {
+          _id: "session_open",
+          expectedCash: 231000,
+          openedAt: 1,
+          openingFloat: 15500,
+          organizationId: "org_1",
+          registerNumber: "1",
+          status: "active",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+        },
+      ],
+      posTerminal: [
+        {
+          _id: "terminal_1",
+          registerNumber: "1",
+          registeredByUserId: "athena_user_1",
+          status: "active",
+          storeId: "store_1",
+        },
+      ],
+      staffProfile: [
+        {
+          _id: "manager_1",
+          linkedUserId: "athena_user_1",
+          organizationId: "org_1",
+          status: "active",
+          storeId: "store_1",
+        },
+        {
+          _id: "staff_1",
+          organizationId: "org_1",
+          status: "active",
+          storeId: "store_1",
+        },
+      ],
+      staffRoleAssignment: [
+        {
+          _id: "role_1",
+          organizationId: "org_1",
+          role: "manager",
+          staffProfileId: "manager_1",
+          status: "active",
+          storeId: "store_1",
+        },
+        {
+          _id: "role_2",
+          organizationId: "org_1",
+          role: "cashier",
+          staffProfileId: "staff_1",
+          status: "active",
+          storeId: "store_1",
+        },
+      ],
+    });
+
+    const result = await getHandler(resolveRegisterSessionSyncReview)(
+      ctx as never,
+      {
+        actorStaffProfileId: "manager_1" as Id<"staffProfile">,
+        decision: "rejected",
+        registerSessionId: "session_open" as Id<"registerSession">,
+        reviewConflictIds: ["sync_conflict_duplicate"],
+        storeId: "store_1" as Id<"store">,
+      },
+    );
+
+    expect(result).toEqual(
+      ok({
+        action: "rejected",
+        projectedCount: 0,
+        registerSession: expect.objectContaining({ _id: "session_open" }),
+        resolvedCount: 1,
+      }),
+    );
+    expect(ctx.tables.get("posLocalSyncEvent")).toEqual([
+      expect.objectContaining({
+        _id: "sync_event_inventory_sale",
+        projectedAt: 4,
+        status: "projected",
+      }),
+    ]);
+    expect(ctx.tables.get("posLocalSyncEvent")?.[0]).not.toHaveProperty(
+      "rejectionCode",
+    );
+    expect(ctx.tables.get("posLocalSyncEvent")?.[0]).not.toHaveProperty(
+      "rejectionMessage",
+    );
+    expect(ctx.tables.get("posLocalSyncConflict")).toEqual([
+      expect.objectContaining({
+        _id: "sync_conflict_duplicate",
+        resolvedByStaffProfileId: "manager_1",
+        status: "resolved",
+      }),
+    ]);
+  });
+
+  it("rejects unprojected duplicate POS-session sale evidence without leaving a hidden conflict", async () => {
+    const ctx = createAuthorizedRegisterDepositCtx({
+      operationalEvent: [],
+      posLocalSyncConflict: [
+        {
+          _id: "sync_conflict_duplicate",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-1",
+          localEventId: "event_duplicate_sale",
+          sequence: 13,
+          conflictType: "duplicate_local_id",
+          status: "needs_review",
+          summary:
+            "Local POS session id was reused by a different synced sale.",
+          details: {
+            localId: "local-pos-session-1",
+            localIdKind: "posSession",
+            localTransactionId: "local-transaction-1",
+            originalTransactionId: "transaction_original",
+          },
+          createdAt: 2,
+        },
+      ],
+      posLocalSyncEvent: [
+        {
+          _id: "sync_event_duplicate_sale",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-1",
+          localEventId: "event_duplicate_sale",
+          sequence: 13,
+          eventType: "sale_completed",
+          occurredAt: 2,
+          staffProfileId: "staff_1",
+          payload: {
+            localPosSessionId: "local-pos-session-1",
+            localTransactionId: "local-transaction-1",
+            localReceiptNumber: "224763",
+            receiptNumber: "224763",
+            registerNumber: "1",
+            totals: { subtotal: 8000, tax: 0, total: 8000 },
+            items: [],
+            payments: [
+              {
+                localPaymentId: "local-payment-1",
+                method: "mobile_money",
+                amount: 8000,
+                timestamp: 3,
+              },
+            ],
+          },
+          status: "conflicted",
+          submittedAt: 4,
+          acceptedAt: 4,
+        },
+      ],
+      posLocalSyncMapping: [
+        {
+          _id: "sync_mapping_1",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-1",
+          localIdKind: "registerSession",
+          localId: "local-register-1",
+          cloudTable: "registerSession",
+          cloudId: "session_open",
+        },
+      ],
+      registerSession: [
+        {
+          _id: "session_open",
+          expectedCash: 231000,
+          openedAt: 1,
+          openingFloat: 15500,
+          organizationId: "org_1",
+          registerNumber: "1",
+          status: "active",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+        },
+      ],
+      posTerminal: [
+        {
+          _id: "terminal_1",
+          registerNumber: "1",
+          registeredByUserId: "athena_user_1",
+          status: "active",
+          storeId: "store_1",
+        },
+      ],
+      staffProfile: [
+        {
+          _id: "manager_1",
+          linkedUserId: "athena_user_1",
+          organizationId: "org_1",
+          status: "active",
+          storeId: "store_1",
+        },
+        {
+          _id: "staff_1",
+          organizationId: "org_1",
+          status: "active",
+          storeId: "store_1",
+        },
+      ],
+      staffRoleAssignment: [
+        {
+          _id: "role_1",
+          organizationId: "org_1",
+          role: "manager",
+          staffProfileId: "manager_1",
+          status: "active",
+          storeId: "store_1",
+        },
+      ],
+    });
+
+    const result = await getHandler(resolveRegisterSessionSyncReview)(
+      ctx as never,
+      {
+        actorStaffProfileId: "manager_1" as Id<"staffProfile">,
+        decision: "rejected",
+        registerSessionId: "session_open" as Id<"registerSession">,
+        reviewConflictIds: ["sync_conflict_duplicate"],
+        storeId: "store_1" as Id<"store">,
+      },
+    );
+
+    expect(result).toEqual(
+      ok({
+        action: "rejected",
+        projectedCount: 0,
+        registerSession: expect.objectContaining({ _id: "session_open" }),
+        resolvedCount: 1,
+      }),
+    );
+    expect(ctx.tables.get("posLocalSyncEvent")).toEqual([
+      expect.objectContaining({
+        _id: "sync_event_duplicate_sale",
+        rejectionCode: "manager_rejected",
+        status: "rejected",
+      }),
+    ]);
+    expect(ctx.tables.get("posLocalSyncConflict")).toEqual([
+      expect.objectContaining({
+        _id: "sync_conflict_duplicate",
+        resolvedByStaffProfileId: "manager_1",
+        status: "resolved",
+      }),
+    ]);
+  });
+
+  it("resolves projected duplicate POS-session sale review rows on approval", async () => {
+    const ctx = createAuthorizedRegisterDepositCtx({
+      operationalEvent: [],
+      posLocalSyncConflict: [
+        {
+          _id: "sync_conflict_duplicate",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-1",
+          localEventId: "event_duplicate_sale",
+          sequence: 13,
+          conflictType: "duplicate_local_id",
+          status: "needs_review",
+          summary:
+            "Local POS session id was reused by a different synced sale.",
+          details: {
+            localId: "local-pos-session-1",
+            localIdKind: "posSession",
+            localTransactionId: "local-transaction-1",
+            originalTransactionId: "transaction_original",
+          },
+          createdAt: 2,
+        },
+      ],
+      posLocalSyncEvent: [
+        {
+          _id: "sync_event_duplicate_sale",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-1",
+          localEventId: "event_duplicate_sale",
+          sequence: 13,
+          eventType: "sale_completed",
+          occurredAt: 2,
+          projectedAt: 4,
+          staffProfileId: "staff_1",
+          payload: {
+            localPosSessionId: "local-pos-session-1",
+            localTransactionId: "local-transaction-1",
+            localReceiptNumber: "224763",
+            receiptNumber: "224763",
+            registerNumber: "1",
+            totals: { subtotal: 8000, tax: 0, total: 8000 },
+            items: [],
+            payments: [
+              {
+                localPaymentId: "local-payment-1",
+                method: "mobile_money",
+                amount: 8000,
+                timestamp: 3,
+              },
+            ],
+          },
+          status: "projected",
+          submittedAt: 4,
+          acceptedAt: 4,
+        },
+      ],
+      posLocalSyncMapping: [
+        {
+          _id: "sync_mapping_register",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-1",
+          localIdKind: "registerSession",
+          localId: "local-register-1",
+          cloudTable: "registerSession",
+          cloudId: "session_open",
+        },
+      ],
+      registerSession: [
+        {
+          _id: "session_open",
+          expectedCash: 231000,
+          openedAt: 1,
+          openingFloat: 15500,
+          organizationId: "org_1",
+          registerNumber: "1",
+          status: "active",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+        },
+      ],
+      staffProfile: [
+        {
+          _id: "manager_1",
+          linkedUserId: "athena_user_1",
+          organizationId: "org_1",
+          status: "active",
+          storeId: "store_1",
+        },
+      ],
+      staffRoleAssignment: [
+        {
+          _id: "role_1",
+          organizationId: "org_1",
+          role: "manager",
+          staffProfileId: "manager_1",
+          status: "active",
+          storeId: "store_1",
+        },
+      ],
+    });
+
+    const result = await getHandler(resolveRegisterSessionSyncReview)(
+      ctx as never,
+      {
+        actorStaffProfileId: "manager_1" as Id<"staffProfile">,
+        registerSessionId: "session_open" as Id<"registerSession">,
+        reviewConflictIds: ["sync_conflict_duplicate"],
+        storeId: "store_1" as Id<"store">,
+      },
+    );
+
+    expect(result).toEqual(
+      ok({
+        action: "resolved",
+        projectedCount: 0,
+        registerSession: expect.objectContaining({ _id: "session_open" }),
+        resolvedCount: 1,
+      }),
+    );
+    expect(ctx.tables.get("posLocalSyncConflict")).toEqual([
+      expect.objectContaining({
+        _id: "sync_conflict_duplicate",
+        resolvedByStaffProfileId: "manager_1",
+        status: "resolved",
+      }),
+    ]);
+    expect(ctx.tables.get("posLocalSyncEvent")).toEqual([
+      expect.objectContaining({
+        _id: "sync_event_duplicate_sale",
+        projectedAt: 4,
+        status: "projected",
+      }),
+    ]);
+  });
+
+  it("preserves a duplicate POS-session sale with sibling inventory review through the cash-controls review resolver", async () => {
+    const ctx = createAuthorizedRegisterDepositCtx({
+      operationalEvent: [],
+      paymentAllocation: [],
+      posInventoryMovement: [],
+      posLocalSyncConflict: [
+        {
+          _id: "sync_conflict_inventory",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-1",
+          localEventId: "event_duplicate_sale",
+          sequence: 13,
+          conflictType: "inventory",
+          status: "needs_review",
+          summary: "Inventory needs manager review for a synced offline sale.",
+          details: {
+            localTransactionId: "local-transaction-preserved",
+            productSkuId: "product_sku_1",
+            requestedQuantity: 2,
+            availableInventoryCount: 1,
+            quantityAvailable: 1,
+            quantityAvailableAfterHolds: 1,
+          },
+          createdAt: 1,
+        },
+        {
+          _id: "sync_conflict_duplicate",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-1",
+          localEventId: "event_duplicate_sale",
+          sequence: 13,
+          conflictType: "duplicate_local_id",
+          status: "needs_review",
+          summary:
+            "Local POS session id was reused by a different synced sale.",
+          details: {
+            localId: "local-pos-session-1",
+            localIdKind: "posSession",
+            localTransactionId: "local-transaction-preserved",
+            originalTransactionId: "transaction_original",
+          },
+          createdAt: 2,
+        },
+      ],
+      posLocalSyncEvent: [
+        {
+          _id: "sync_event_duplicate_sale",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-1",
+          localEventId: "event_duplicate_sale",
+          sequence: 13,
+          eventType: "sale_completed",
+          occurredAt: 2,
+          staffProfileId: "staff_1",
+          payload: {
+            localPosSessionId: "local-pos-session-1",
+            localTransactionId: "local-transaction-preserved",
+            localReceiptNumber: "224763",
+            receiptNumber: "224763",
+            registerNumber: "1",
+            totals: { subtotal: 8000, tax: 0, total: 8000 },
+            items: [
+              {
+                localTransactionItemId: "local-item-1",
+                productId: "product_1",
+                productSkuId: "product_sku_1",
+                productName: "Melt Band",
+                productSku: "KK38-61G-ZW8",
+                quantity: 2,
+                unitPrice: 2500,
+              },
+              {
+                localTransactionItemId: "local-item-2",
+                productId: "product_2",
+                productSkuId: "product_sku_2",
+                productName: "Romantic Rain Lip Oil",
+                productSku: "KK38-9KB-VPS",
+                quantity: 1,
+                unitPrice: 3000,
+              },
+            ],
+            payments: [
+              {
+                localPaymentId: "local-payment-1",
+                method: "mobile_money",
+                amount: 8000,
+                timestamp: 3,
+              },
+            ],
+          },
+          status: "conflicted",
+          submittedAt: 4,
+          acceptedAt: 4,
+        },
+      ],
+      posLocalSyncMapping: [
+        {
+          _id: "sync_mapping_register",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-1",
+          localIdKind: "registerSession",
+          localId: "local-register-1",
+          cloudTable: "registerSession",
+          cloudId: "session_open",
+        },
+        {
+          _id: "sync_mapping_pos_session",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          localRegisterSessionId: "local-register-1",
+          localEventId: "event_original_sale",
+          localIdKind: "posSession",
+          localId: "local-pos-session-1",
+          cloudTable: "posSession",
+          cloudId: "pos_session_original",
+        },
+      ],
+      posSession: [
+        {
+          _id: "pos_session_original",
+          registerSessionId: "session_open",
+          staffProfileId: "staff_1",
+          status: "completed",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          transactionId: "transaction_original",
+        },
+      ],
+      posTransaction: [
+        {
+          _id: "transaction_original",
+          completedAt: 1,
+          registerSessionId: "session_open",
+          status: "completed",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+          total: 5000,
+          transactionNumber: "196629",
+        },
+      ],
+      registerSession: [
+        {
+          _id: "session_open",
+          expectedCash: 231000,
+          openedAt: 1,
+          openingFloat: 15500,
+          organizationId: "org_1",
+          registerNumber: "1",
+          status: "active",
+          storeId: "store_1",
+          terminalId: "terminal_1",
+        },
+      ],
+      posTerminal: [
+        {
+          _id: "terminal_1",
+          registerNumber: "1",
+          registeredByUserId: "athena_user_1",
+          status: "active",
+          storeId: "store_1",
+        },
+      ],
+      product: [
+        { _id: "product_1", storeId: "store_1" },
+        { _id: "product_2", storeId: "store_1" },
+      ],
+      productSku: [
+        {
+          _id: "product_sku_1",
+          images: [],
+          inventoryCount: 1,
+          price: 2500,
+          productId: "product_1",
+          quantityAvailable: 1,
+          sku: "KK38-61G-ZW8",
+          storeId: "store_1",
+        },
+        {
+          _id: "product_sku_2",
+          images: [],
+          inventoryCount: 10,
+          price: 3000,
+          productId: "product_2",
+          quantityAvailable: 10,
+          sku: "KK38-9KB-VPS",
+          storeId: "store_1",
+        },
+      ],
+      staffProfile: [
+        {
+          _id: "manager_1",
+          linkedUserId: "athena_user_1",
+          organizationId: "org_1",
+          status: "active",
+          storeId: "store_1",
+        },
+        {
+          _id: "staff_1",
+          organizationId: "org_1",
+          status: "active",
+          storeId: "store_1",
+        },
+      ],
+      staffRoleAssignment: [
+        {
+          _id: "role_1",
+          organizationId: "org_1",
+          role: "manager",
+          staffProfileId: "manager_1",
+          status: "active",
+          storeId: "store_1",
+        },
+        {
+          _id: "role_2",
+          organizationId: "org_1",
+          role: "cashier",
+          staffProfileId: "staff_1",
+          status: "active",
+          storeId: "store_1",
+        },
+      ],
+    });
+
+    const result = await getHandler(resolveRegisterSessionSyncReview)(
+      ctx as never,
+      {
+        actorStaffProfileId: "manager_1" as Id<"staffProfile">,
+        registerSessionId: "session_open" as Id<"registerSession">,
+        reviewConflictIds: [
+          "sync_conflict_inventory",
+          "sync_conflict_duplicate",
+        ],
+        storeId: "store_1" as Id<"store">,
+      },
+    );
+
+    expect(result).toEqual(
+      ok({
+        action: "resolved",
+        projectedCount: 1,
+        registerSession: expect.objectContaining({ _id: "session_open" }),
+        resolvedCount: 2,
+      }),
+    );
+    expect(ctx.tables.get("posTransaction")).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          _id: "posTransaction_2",
+          registerSessionId: "session_open",
+          sessionId: undefined,
+          status: "completed",
+          total: 8000,
+          transactionNumber: "224763",
+        }),
+      ]),
+    );
+    expect(ctx.tables.get("posSession")).toEqual([
+      expect.objectContaining({
+        _id: "pos_session_original",
+        transactionId: "transaction_original",
+      }),
+    ]);
+    expect(ctx.tables.get("paymentAllocation")).toEqual([
+      expect.objectContaining({
+        amount: 8000,
+        externalReference: "local-payment-1",
+        method: "mobile_money",
+        posTransactionId: "posTransaction_2",
+        targetType: "pos_transaction",
+      }),
+    ]);
+    expect(ctx.tables.get("posLocalSyncMapping")).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          localIdKind: "posSession",
+          localId: "local-pos-session-1",
+          cloudId: "pos_session_original",
+        }),
+        expect.objectContaining({
+          localIdKind: "transaction",
+          localId: "local-transaction-preserved",
+          cloudId: "posTransaction_2",
+        }),
+        expect.objectContaining({
+          localIdKind: "receipt",
+          localId: "224763",
+          cloudId: "posTransaction_2",
+        }),
+      ]),
+    );
+    expect(
+      ctx
+        .tables
+        .get("posLocalSyncMapping")
+        ?.filter((row) => row.localIdKind === "posSession"),
+    ).toHaveLength(1);
+    expect(ctx.tables.get("posLocalSyncEvent")).toEqual([
+      expect.objectContaining({
+        _id: "sync_event_duplicate_sale",
+        status: "projected",
+      }),
+    ]);
+    expect(ctx.tables.get("posLocalSyncConflict")).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          _id: "sync_conflict_inventory",
+          resolvedByStaffProfileId: "manager_1",
+          status: "resolved",
+        }),
+        expect.objectContaining({
+          _id: "sync_conflict_duplicate",
+          resolvedByStaffProfileId: "manager_1",
+          status: "resolved",
+        }),
+      ]),
+    );
+    expect(ctx.tables.get("operationalWorkItem")).toEqual([
+      expect.objectContaining({
+        createdByStaffProfileId: "manager_1",
+        metadata: expect.objectContaining({
+          primaryProductSkuId: "product_sku_1",
+          receiptNumber: "224763",
+          registerSessionId: "session_open",
+          skippedMutationItems: expect.arrayContaining([
+            expect.objectContaining({
+              productSkuId: "product_sku_1",
+              reason: "stock_shortfall",
+              requestedQuantity: 2,
+            }),
+          ]),
+          sourceType: "posTransaction",
+          trustedInventoryLines: expect.arrayContaining([
+            expect.objectContaining({
+              productSkuId: "product_sku_1",
+              quantity: 2,
+            }),
+          ]),
+        }),
+        status: "open",
+        title: "Review inventory for Melt Band",
         type: "synced_sale_inventory_review",
       }),
     ]);
@@ -2890,6 +3815,13 @@ describe("cash control deposits", () => {
         }),
       ),
     );
+    expect(ctx.tables.get("posLocalSyncEvent")).toEqual([
+      expect.objectContaining({
+        _id: "sync_event_duplicate_open",
+        rejectionCode: "manager_rejected",
+        status: "rejected",
+      }),
+    ]);
   });
 
   it("does not keep projected inventory handoff sales in cash-controls review", async () => {

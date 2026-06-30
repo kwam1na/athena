@@ -41,6 +41,7 @@ type ProjectEventArgs = {
   options?: {
     allowClosedRegisterSaleProjection?: boolean;
     allowReviewedClosingRegisterSaleProjection?: boolean;
+    allowReviewedDuplicatePosSessionSaleProjection?: boolean;
     applyExpectedTotalForReviewedNonCashOverpayment?: boolean;
     allowReviewedInventorySaleProjection?: boolean;
     allowRegisterCloseoutVarianceProjection?: boolean;
@@ -107,6 +108,7 @@ type SaleSessionResolution = {
   registerSession: RegisterSessionRecord;
   existingPosSession: PosSessionRecord;
   existingPosSessionMapping: LocalSyncMappingRecord | null;
+  preserveSaleWithoutPosSession?: boolean;
   resolvedRegisterNumber: string;
 };
 
@@ -130,7 +132,7 @@ type PlannedPaymentAllocation = {
 };
 
 type PersistedSaleSession = {
-  posSessionId: Id<"posSession">;
+  posSessionId?: Id<"posSession">;
   posSessionMappings: LocalSyncMappingRecord[];
   reusedExistingSession: boolean;
 };
@@ -1609,6 +1611,39 @@ async function resolveSaleRegisterAndSession(
     return conflictResult(conflict);
   }
 
+  const terminalRegisterNumber = normalizeOptionalString(
+    terminal?.registerNumber,
+  );
+  const payloadRegisterNumber = normalizeOptionalString(payload.registerNumber);
+  const registerSessionNumber = normalizeOptionalString(
+    registerSession.registerNumber,
+  );
+  const resolvedRegisterNumber =
+    registerSessionNumber ?? terminalRegisterNumber;
+
+  if (
+    !terminal ||
+    terminal.storeId !== args.storeId ||
+    terminal.status !== "active" ||
+    !resolvedRegisterNumber ||
+    (terminalRegisterNumber &&
+      terminalRegisterNumber !== resolvedRegisterNumber) ||
+    (payloadRegisterNumber && payloadRegisterNumber !== resolvedRegisterNumber)
+  ) {
+    const conflict = await createConflict(repository, args, {
+      conflictType: "permission",
+      summary: "Sale register assignment does not match synced POS history.",
+      details: {
+        localRegisterSessionId: args.event.localRegisterSessionId,
+        localTransactionId: payload.localTransactionId,
+        payloadRegisterNumber,
+        registerSessionNumber,
+        terminalRegisterNumber,
+      },
+    });
+    return conflictResult(conflict);
+  }
+
   if (
     existingPosSession &&
     existingPosSession.staffProfileId !== args.event.staffProfileId
@@ -1654,6 +1689,18 @@ async function resolveSaleRegisterAndSession(
       existingTransactionMapping.cloudId === existingPosSession.transactionId;
 
     if (!isSameSyncedSale) {
+      if (
+        args.options?.allowReviewedDuplicatePosSessionSaleProjection === true
+      ) {
+        return {
+          existingPosSession: null,
+          existingPosSessionMapping: null,
+          preserveSaleWithoutPosSession: true,
+          registerSession,
+          resolvedRegisterNumber,
+        };
+      }
+
       const conflict = await createConflict(repository, args, {
         conflictType: "duplicate_local_id",
         summary: "Local POS session id was reused by a different synced sale.",
@@ -1666,39 +1713,6 @@ async function resolveSaleRegisterAndSession(
       });
       return conflictResult(conflict);
     }
-  }
-
-  const terminalRegisterNumber = normalizeOptionalString(
-    terminal?.registerNumber,
-  );
-  const payloadRegisterNumber = normalizeOptionalString(payload.registerNumber);
-  const registerSessionNumber = normalizeOptionalString(
-    registerSession.registerNumber,
-  );
-  const resolvedRegisterNumber =
-    registerSessionNumber ?? terminalRegisterNumber;
-
-  if (
-    !terminal ||
-    terminal.storeId !== args.storeId ||
-    terminal.status !== "active" ||
-    !resolvedRegisterNumber ||
-    (terminalRegisterNumber &&
-      terminalRegisterNumber !== resolvedRegisterNumber) ||
-    (payloadRegisterNumber && payloadRegisterNumber !== resolvedRegisterNumber)
-  ) {
-    const conflict = await createConflict(repository, args, {
-      conflictType: "permission",
-      summary: "Sale register assignment does not match synced POS history.",
-      details: {
-        localRegisterSessionId: args.event.localRegisterSessionId,
-        localTransactionId: payload.localTransactionId,
-        payloadRegisterNumber,
-        registerSessionNumber,
-        terminalRegisterNumber,
-      },
-    });
-    return conflictResult(conflict);
   }
 
   return {
@@ -1992,6 +2006,13 @@ async function persistSaleSession(
   },
 ): Promise<PersistedSaleSession> {
   const { payload, session } = input;
+  if (session.preserveSaleWithoutPosSession) {
+    return {
+      posSessionMappings: [],
+      reusedExistingSession: false,
+    };
+  }
+
   const posSessionId =
     session.existingPosSession?._id ??
     (await repository.createPosSession({
@@ -2037,7 +2058,7 @@ async function persistSaleRecord(
   const transactionId = await repository.createTransaction({
     transactionNumber: payload.receiptNumber,
     storeId: args.storeId,
-    sessionId: saleSession.posSessionId,
+    ...(saleSession.posSessionId ? { sessionId: saleSession.posSessionId } : {}),
     registerSessionId: session.registerSession._id,
     staffProfileId: args.event.staffProfileId,
     registerNumber: session.resolvedRegisterNumber,
@@ -2053,18 +2074,20 @@ async function persistSaleRecord(
     completedAt: args.event.occurredAt,
     customerInfo: payload.customerInfo,
   });
-  await repository.patchPosSession(saleSession.posSessionId, {
-    completedAt: args.event.occurredAt,
-    customerInfo: payload.customerInfo,
-    customerProfileId: payload.customerProfileId,
-    payments: payments.transactionPayments,
-    status: "completed",
-    subtotal: payload.totals.subtotal,
-    tax: payload.totals.tax,
-    total: payload.totals.total,
-    transactionId,
-    updatedAt: args.event.occurredAt,
-  });
+  if (saleSession.posSessionId) {
+    await repository.patchPosSession(saleSession.posSessionId, {
+      completedAt: args.event.occurredAt,
+      customerInfo: payload.customerInfo,
+      customerProfileId: payload.customerProfileId,
+      payments: payments.transactionPayments,
+      status: "completed",
+      subtotal: payload.totals.subtotal,
+      tax: payload.totals.tax,
+      total: payload.totals.total,
+      transactionId,
+      updatedAt: args.event.occurredAt,
+    });
+  }
 
   const transactionMapping = await createMapping(repository, args, {
     localIdKind: "transaction",
@@ -2104,9 +2127,11 @@ async function persistSaleItemsAndInventory(
 	    input;
 	  const itemMappings: LocalSyncMappingRecord[] = [];
 	  const consumedHoldQuantities =
-	    inventoryValidation.stockMutationAllowed && saleSession.reusedExistingSession
-	    ? await repository.consumeInventoryHoldsForSession({
-	        sessionId: saleSession.posSessionId,
+    inventoryValidation.stockMutationAllowed &&
+    saleSession.reusedExistingSession &&
+    saleSession.posSessionId
+      ? await repository.consumeInventoryHoldsForSession({
+          sessionId: saleSession.posSessionId,
         items: trustedInventorySaleItems(payload).map((item) => ({
           productSkuId: item.productSkuId as Id<"productSku">,
           quantity: item.quantity,
@@ -2134,7 +2159,7 @@ async function persistSaleItemsAndInventory(
     const canonicalItem = catalogItemsByLocalId.get(
       item.localTransactionItemId ?? item.productSkuId,
     );
-    if (!saleSession.reusedExistingSession) {
+    if (!saleSession.reusedExistingSession && saleSession.posSessionId) {
       await repository.createPosSessionItem({
         sessionId: saleSession.posSessionId,
         storeId: args.storeId,
@@ -2794,39 +2819,41 @@ async function recordSaleWorkflowEvidence(
     store: StoreRecord;
   },
 ) {
-  await repository.recordPosSessionWorkflowTrace?.({
-    stage: "completed",
-    session: {
-      ...(input.session.existingPosSession ?? {}),
-      _id: input.saleSession.posSessionId,
-      sessionNumber: input.payload.localPosSessionId,
-      storeId: args.storeId,
-      staffProfileId: args.event.staffProfileId,
-      customerProfileId: input.payload.customerProfileId,
-      customerInfo: input.payload.customerInfo,
-      terminalId: args.terminalId,
-      registerNumber: input.session.resolvedRegisterNumber,
-      registerSessionId: input.session.registerSession._id,
-      status: "completed",
+  if (input.saleSession.posSessionId) {
+    await repository.recordPosSessionWorkflowTrace?.({
+      stage: "completed",
+      session: {
+        ...(input.session.existingPosSession ?? {}),
+        _id: input.saleSession.posSessionId,
+        sessionNumber: input.payload.localPosSessionId,
+        storeId: args.storeId,
+        staffProfileId: args.event.staffProfileId,
+        customerProfileId: input.payload.customerProfileId,
+        customerInfo: input.payload.customerInfo,
+        terminalId: args.terminalId,
+        registerNumber: input.session.resolvedRegisterNumber,
+        registerSessionId: input.session.registerSession._id,
+        status: "completed",
+        transactionId: input.sale.transactionId,
+        createdAt:
+          input.session.existingPosSession?.createdAt ?? args.event.occurredAt,
+        updatedAt: args.event.occurredAt,
+        expiresAt:
+          input.session.existingPosSession?.expiresAt ?? args.event.occurredAt,
+        completedAt: args.event.occurredAt,
+        subtotal: input.payload.totals.subtotal,
+        tax: input.payload.totals.tax,
+        total: input.payload.totals.total,
+        payments: input.payments.transactionPayments,
+        inventoryHoldMode: "ledger",
+      } as never,
+      occurredAt: args.event.occurredAt,
       transactionId: input.sale.transactionId,
-      createdAt:
-        input.session.existingPosSession?.createdAt ?? args.event.occurredAt,
-      updatedAt: args.event.occurredAt,
-      expiresAt:
-        input.session.existingPosSession?.expiresAt ?? args.event.occurredAt,
-      completedAt: args.event.occurredAt,
-      subtotal: input.payload.totals.subtotal,
-      tax: input.payload.totals.tax,
-      total: input.payload.totals.total,
-      payments: input.payments.transactionPayments,
-      inventoryHoldMode: "ledger",
-    } as never,
-    occurredAt: args.event.occurredAt,
-    transactionId: input.sale.transactionId,
-    paymentMethod: input.payments.primaryPaymentMethod,
-    amount: input.payload.totals.total,
-    paymentCount: input.payments.transactionPayments.length,
-  });
+      paymentMethod: input.payments.primaryPaymentMethod,
+      amount: input.payload.totals.total,
+      paymentCount: input.payments.transactionPayments.length,
+    });
+  }
 
   const registerSessionTraceResult =
     await repository.recordRegisterSessionWorkflowTrace?.({

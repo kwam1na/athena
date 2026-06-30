@@ -101,10 +101,6 @@ describe("formatPosReconciliationType", () => {
       type: "permission",
     },
     {
-      summary: "Local POS session id was reused by a different synced sale.",
-      type: "duplicate_local_id",
-    },
-    {
       summary: "A register session is already open for this terminal.",
       type: "permission",
     },
@@ -122,6 +118,16 @@ describe("formatPosReconciliationType", () => {
       );
     },
   );
+
+  it("formats duplicate POS-session sale reviews as sale preservation", () => {
+    expect(
+      formatPosReconciliationType("duplicate_local_id", {
+        reviewKind: "duplicate_pos_session_sale",
+        summary: "Local POS session id was reused by a different synced sale.",
+        type: "duplicate_local_id",
+      }),
+    ).toBe("Synced sale preservation");
+  });
 
   it("detects legacy closeout review items from local event evidence", () => {
     expect(

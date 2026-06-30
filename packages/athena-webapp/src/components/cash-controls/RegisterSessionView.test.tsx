@@ -1499,7 +1499,7 @@ describe("RegisterSessionViewContent", () => {
     });
   });
 
-  it("shows only the duplicate rejection decision for duplicate synced sale reviews", async () => {
+  it("offers a preserve decision for duplicate POS-session sale reviews", async () => {
     const user = userEvent.setup();
     const onAuthenticateStaff = vi.fn().mockResolvedValue(
       ok({
@@ -1565,10 +1565,10 @@ describe("RegisterSessionViewContent", () => {
                   type: "inventory",
                 },
                 {
-                  actionPolicy: "reject_only",
+                  actionPolicy: "apply_or_reject",
                   id: "sync_conflict_duplicate",
                   localEventId: "event-duplicate-sale",
-                  reviewKind: "unknown",
+                  reviewKind: "duplicate_pos_session_sale",
                   sale: {
                     itemCount: 8,
                     items: [
@@ -1600,11 +1600,6 @@ describe("RegisterSessionViewContent", () => {
       />,
     );
 
-    expect(screen.queryByText("Review decisions")).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "Reject reviewed sale activity" }),
-    ).not.toBeInTheDocument();
-
     await user.click(
       screen.getByRole("button", {
         name: /Receipt #8707507/i,
@@ -1613,22 +1608,291 @@ describe("RegisterSessionViewContent", () => {
 
     expect(screen.getByText("Review decisions")).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Apply inventory review item" }),
+      screen.queryByRole("button", { name: "Reject reviewed sale activity" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Reject inventory review item" }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("button", { name: "Apply inventory review item" }),
+    ).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", {
-        name: "Apply duplicate register opening",
+      screen.getByRole("button", { name: "Reject inventory review item" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Preserve synced sale" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: "Reject duplicate sale evidence",
       }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.getByText("Inventory review and Duplicate register opening."),
     ).toBeInTheDocument();
     expect(
-      screen.getByText("Duplicate register opening"),
+      screen.getByText("Inventory review and Synced sale preservation."),
     ).toBeInTheDocument();
+    expect(
+      screen.getByText("Synced sale preservation"),
+    ).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Preserve synced sale",
+      }),
+    );
+    await user.click(
+      screen.getByRole("button", {
+        name: "Confirm staff for Preserve synced sale",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(onResolveSyncReview).toHaveBeenNthCalledWith(1, {
+        actorStaffProfileId: "manager-1",
+        decision: "approved",
+        registerSessionId: "session-1",
+        reviewConflictIds: [
+          "sync_conflict_inventory",
+          "sync_conflict_duplicate",
+        ],
+      }),
+    );
+  });
+
+  it("rejects duplicate POS-session sale evidence without clearing sibling sale reviews", async () => {
+    const user = userEvent.setup();
+    const onAuthenticateStaff = vi.fn().mockResolvedValue(
+      ok({
+        activeRoles: ["manager"],
+        staffProfile: { fullName: "Ato Kofi" },
+        staffProfileId: "manager-1",
+      }),
+    );
+    const onResolveSyncReview = vi
+      .fn()
+      .mockResolvedValue(
+        ok({ action: "rejected", projectedCount: 0, resolvedCount: 1 }),
+      );
+
+    render(
+      <RegisterSessionViewContent
+        currency="GHS"
+        isLoading={false}
+        onRecordDeposit={vi.fn()}
+        {...closeoutHandlers}
+        onAuthenticateStaff={onAuthenticateStaff}
+        onResolveSyncReview={onResolveSyncReview}
+        registerSessionSnapshot={{
+          ...baseSnapshot,
+          registerSession: {
+            ...baseSnapshot.registerSession,
+            localSyncStatus: {
+              status: "needs_review",
+              reconciliationItems: [
+                {
+                  actionPolicy: "apply_or_reject",
+                  id: "sync_conflict_inventory",
+                  inventoryReview: {
+                    availableInventoryCount: 1,
+                    productSkuId: "sku-hair-dryer",
+                    quantityAvailable: 1,
+                    quantityAvailableAfterHolds: 1,
+                    requestedQuantity: 2,
+                  },
+                  reviewKind: "inventory_review",
+                  sale: {
+                    itemCount: 8,
+                    items: [
+                      {
+                        name: "Promaxgold 3000w Hair Dryer",
+                        productSkuId: "sku-hair-dryer",
+                        quantity: 2,
+                        sku: "KK38-E2Z-E9V",
+                        total: 36000,
+                      },
+                    ],
+                    occurredAt: Date.parse("2026-06-19T10:52:00Z"),
+                    paymentMethods: ["mobile_money"],
+                    receiptNumber: "8707507",
+                    staffName: "Joyce O.",
+                    total: 18500,
+                    totalPaid: 18500,
+                  },
+                  sequence: 26,
+                  status: "needs_review",
+                  summary:
+                    "Inventory needs manager review for a synced offline sale.",
+                  type: "inventory",
+                },
+                {
+                  actionPolicy: "apply_or_reject",
+                  id: "sync_conflict_duplicate",
+                  localEventId: "event-duplicate-sale",
+                  reviewKind: "duplicate_pos_session_sale",
+                  sale: {
+                    itemCount: 8,
+                    items: [
+                      {
+                        name: "Promaxgold 3000w Hair Dryer",
+                        productSkuId: "sku-hair-dryer",
+                        quantity: 2,
+                        sku: "KK38-E2Z-E9V",
+                        total: 36000,
+                      },
+                    ],
+                    occurredAt: Date.parse("2026-06-19T10:52:00Z"),
+                    paymentMethods: ["mobile_money"],
+                    receiptNumber: "8707507",
+                    staffName: "Joyce O.",
+                    total: 18500,
+                    totalPaid: 18500,
+                  },
+                  sequence: 10,
+                  status: "needs_review",
+                  summary:
+                    "Local POS session id was reused by a different synced sale.",
+                  type: "duplicate_local_id",
+                },
+              ],
+            },
+          },
+        }}
+      />,
+    );
+
+    await user.click(
+      screen.getByRole("button", {
+        name: /Receipt #8707507/i,
+      }),
+    );
+    await user.click(
+      screen.getByRole("button", {
+        name: "Reject duplicate sale evidence",
+      }),
+    );
+    await user.click(
+      screen.getByRole("button", {
+        name: "Confirm staff for Reject duplicate sale evidence",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(onResolveSyncReview).toHaveBeenNthCalledWith(1, {
+        actorStaffProfileId: "manager-1",
+        decision: "rejected",
+        registerSessionId: "session-1",
+        reviewConflictIds: ["sync_conflict_duplicate"],
+      }),
+    );
+  });
+
+  it("separates duplicate register-opening decisions from sale evidence", async () => {
+    const user = userEvent.setup();
+    const onAuthenticateStaff = vi.fn().mockResolvedValue(
+      ok({
+        activeRoles: ["manager"],
+        staffProfile: { fullName: "Ato Kofi" },
+        staffProfileId: "manager-1",
+      }),
+    );
+    const onResolveSyncReview = vi
+      .fn()
+      .mockResolvedValue(
+        ok({ action: "rejected", projectedCount: 0, resolvedCount: 1 }),
+      );
+
+    render(
+      <RegisterSessionViewContent
+        currency="GHS"
+        isLoading={false}
+        onRecordDeposit={vi.fn()}
+        {...closeoutHandlers}
+        onAuthenticateStaff={onAuthenticateStaff}
+        onResolveSyncReview={onResolveSyncReview}
+        registerSessionSnapshot={{
+          ...baseSnapshot,
+          registerSession: {
+            ...baseSnapshot.registerSession,
+            localSyncStatus: {
+              status: "needs_review",
+              reconciliationItems: [
+                {
+                  actionPolicy: "reject_only",
+                  id: "sync_conflict_duplicate",
+                  localEventId: "event-duplicate-sale",
+                  reviewKind: "duplicate_register_open",
+                  sale: {
+                    itemCount: 3,
+                    items: [
+                      {
+                        name: "Melt Band",
+                        quantity: 2,
+                        sku: "KK38-61G-ZW8",
+                        total: 5000,
+                      },
+                      {
+                        name: "Romantic Rain Lip Oil",
+                        quantity: 1,
+                        sku: "KK38-9KB-VPS",
+                        total: 3000,
+                      },
+                    ],
+                    occurredAt: Date.parse("2026-06-30T08:28:00Z"),
+                    paymentMethods: ["mobile_money"],
+                    receiptNumber: "224763",
+                    staffName: "Gertrude A.",
+                    total: 8000,
+                    totalPaid: 8000,
+                  },
+                  sequence: 13,
+                  status: "needs_review",
+                  summary:
+                    "Local register session id was reused by a different synced register open.",
+                  type: "duplicate_local_id",
+                },
+              ],
+            },
+          },
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByText(
+        "Reject the duplicate register-opening evidence to keep the current register session. Any sale details shown below are evidence only.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Synced sale evidence")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "These synced sale details were reported with the duplicate register-opening evidence.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Resolve duplicate-opening evidence without clearing the synced sale details shown below.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getAllByRole("button", {
+        name: "Reject duplicate register opening",
+      }),
+    ).toHaveLength(1);
+
+    await user.click(
+      screen.getByRole("button", {
+        name: /Receipt #224763/i,
+      }),
+    );
+
+    expect(screen.getByText("Melt Band")).toBeInTheDocument();
+    expect(screen.getByText("Romantic Rain Lip Oil")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "This sale is shown as evidence for the duplicate register-opening review.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getAllByRole("button", {
+        name: "Reject duplicate register opening",
+      }),
+    ).toHaveLength(1);
 
     await user.click(
       screen.getByRole("button", {
@@ -1641,14 +1905,12 @@ describe("RegisterSessionViewContent", () => {
       }),
     );
 
-    await waitFor(() =>
-      expect(onResolveSyncReview).toHaveBeenNthCalledWith(1, {
-        actorStaffProfileId: "manager-1",
-        decision: "rejected",
-        registerSessionId: "session-1",
-        reviewConflictIds: ["sync_conflict_duplicate"],
-      }),
-    );
+    expect(onResolveSyncReview).toHaveBeenCalledWith({
+      actorStaffProfileId: "manager-1",
+      decision: "rejected",
+      registerSessionId: "session-1",
+      reviewConflictIds: ["sync_conflict_duplicate"],
+    });
   });
 
   it("offers a batch reject action for duplicate synced register openings", () => {
@@ -1697,7 +1959,7 @@ describe("RegisterSessionViewContent", () => {
 
     expect(
       screen.getByText(
-        "Reject these duplicate synced register openings to keep the current register session and clear this review.",
+        "Reject the duplicate register-opening evidence to keep the current register session. Any sale details shown below are evidence only.",
       ),
     ).toBeInTheDocument();
     expect(
@@ -1709,10 +1971,10 @@ describe("RegisterSessionViewContent", () => {
       }),
     ).not.toBeInTheDocument();
     expect(
-      screen.getByRole("button", {
-        name: "Reject duplicate register openings",
+      screen.getAllByRole("button", {
+        name: "Reject duplicate register opening",
       }),
-    ).toBeInTheDocument();
+    ).toHaveLength(2);
   });
 
   it("approves synced register review items after manager sign-in", async () => {

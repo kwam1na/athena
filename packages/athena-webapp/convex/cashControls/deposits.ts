@@ -1642,6 +1642,25 @@ export const resolveRegisterSessionSyncReview = mutation({
     let managerOverrideCount = 0;
     let projectedCloseoutCount = 0;
 
+    function syncReviewConflictsMatch(
+      left: CashControlSyncConflict,
+      right: CashControlSyncConflict,
+    ) {
+      if (left._id === right._id) return true;
+      if (left.summary !== right.summary) return false;
+
+      const leftDetails = left.details ?? {};
+      const rightDetails = right.details ?? {};
+      const identityKeys = [
+        "localIdKind",
+        "localId",
+        "localTransactionId",
+        "localRegisterSessionId",
+      ];
+
+      return identityKeys.every((key) => leftDetails[key] === rightDetails[key]);
+    }
+
     function addResolvedMatchingLoadedConflicts(
       selectedConflict: (typeof conflicts)[number],
       terminalId: Id<"posTerminal">,
@@ -1651,14 +1670,71 @@ export const resolveRegisterSessionSyncReview = mutation({
           candidate.status === "needs_review" &&
           candidate.localEventId === selectedConflict.localEventId &&
           candidate.terminalId === terminalId &&
-          candidate.conflictType === selectedConflict.conflictType
+          candidate.conflictType === selectedConflict.conflictType &&
+          syncReviewConflictsMatch(selectedConflict, candidate)
         ) {
           resolvedConflictIds.add(candidate._id as Id<"posLocalSyncConflict">);
         }
       }
     }
 
+    function getOpenEventConflicts(
+      selectedConflict: (typeof conflicts)[number],
+      terminalId: Id<"posTerminal">,
+    ) {
+      return allConflicts.filter(
+        (candidate) =>
+          candidate.status === "needs_review" &&
+          candidate.localEventId === selectedConflict.localEventId &&
+          candidate.terminalId === terminalId,
+      );
+    }
+
+    async function hasProjectedSaleTransactionMapping(
+      syncEvent: StoredLocalSyncEvent,
+      terminalId: Id<"posTerminal">,
+    ) {
+      const payload = recordDetail(syncEvent.payload) ?? {};
+      const localTransactionId = stringDetail(payload, "localTransactionId");
+      const localReceiptNumber = stringDetail(payload, "localReceiptNumber");
+      const mappingInputs = [
+        localTransactionId
+          ? { localIdKind: "transaction" as const, localId: localTransactionId }
+          : null,
+        localReceiptNumber
+          ? { localIdKind: "receipt" as const, localId: localReceiptNumber }
+          : null,
+      ].filter((input): input is NonNullable<typeof input> => Boolean(input));
+
+      for (const mappingInput of mappingInputs) {
+        const mapping = await localSyncRepository.findMapping({
+          storeId: syncEvent.storeId,
+          terminalId,
+          localRegisterSessionId: syncEvent.localRegisterSessionId,
+          ...mappingInput,
+        });
+        if (mapping?.cloudTable !== "posTransaction") continue;
+
+        const transaction = await ctx.db.get(
+          "posTransaction",
+          mapping.cloudId as Id<"posTransaction">,
+        );
+        if (
+          transaction?.status === "completed" &&
+          transaction.storeId === syncEvent.storeId &&
+          transaction.registerSessionId === args.registerSessionId
+        ) {
+          return true;
+        }
+      }
+
+      return false;
+    }
+
     for (const conflict of conflicts) {
+      if (resolvedConflictIds.has(conflict._id as Id<"posLocalSyncConflict">)) {
+        continue;
+      }
       const terminalId = conflict.terminalId ?? registerSession.terminalId;
       if (!terminalId) {
         return userError({
@@ -1698,8 +1774,15 @@ export const resolveRegisterSessionSyncReview = mutation({
               !requestedConflictIds.has(candidate._id) &&
               !requestedConflictIds.has(candidate.localEventId),
           );
+        const shouldPreserveProjectedSaleEvent =
+          syncEvent.eventType === "sale_completed" &&
+          typeof syncEvent.projectedAt === "number" &&
+          (review.reviewKind === "duplicate_register_open" ||
+            (review.reviewKind === "duplicate_pos_session_sale" &&
+              (await hasProjectedSaleTransactionMapping(syncEvent, terminalId))));
         if (
           !hasUnselectedOpenConflictForEvent &&
+          !shouldPreserveProjectedSaleEvent &&
           (syncEvent.status === "conflicted" ||
             syncEvent.status === "rejected")
         ) {
@@ -1739,6 +1822,14 @@ export const resolveRegisterSessionSyncReview = mutation({
             rejectionMessage:
               "Manager rejected synced register activity during cash-controls review.",
             status: "rejected",
+          });
+        } else if (
+          shouldPreserveProjectedSaleEvent &&
+          syncEvent.status === "conflicted" &&
+          typeof syncEvent.projectedAt === "number"
+        ) {
+          await localSyncRepository.patchEvent(syncEvent._id, {
+            status: "projected",
           });
         }
         if (hasConflictRecord) {
@@ -1807,11 +1898,49 @@ export const resolveRegisterSessionSyncReview = mutation({
         (syncEvent.eventType === "sale_completed" &&
           matchesLocalRegisterSession &&
           (review.reviewKind === "register_not_open_sale" ||
-            review.reviewKind === "inventory_review")) ||
+            review.reviewKind === "inventory_review" ||
+            review.reviewKind === "duplicate_pos_session_sale")) ||
         (shouldApplyManagerOverride &&
           syncEvent.eventType === "sale_completed");
+      const openEventConflicts = shouldApplyReviewedSale
+        ? getOpenEventConflicts(conflict, terminalId)
+        : [];
+      const selectedEventConflicts = openEventConflicts.filter(
+        (candidate) =>
+          requestedConflictIds.size === 0 ||
+          requestedConflictIds.has(candidate._id) ||
+          requestedConflictIds.has(candidate.localEventId),
+      );
+      const selectedEventReviewKinds = new Set(
+        selectedEventConflicts.map(
+          (candidate) =>
+            classifyRegisterSessionSyncReview(candidate).reviewKind,
+        ),
+      );
+      const hasUnselectedOpenSaleConflict =
+        shouldApplyReviewedSale &&
+        requestedConflictIds.size > 0 &&
+        openEventConflicts.some(
+          (candidate) =>
+            !requestedConflictIds.has(candidate._id) &&
+            !requestedConflictIds.has(candidate.localEventId),
+        );
+      if (hasUnselectedOpenSaleConflict) {
+        return userError({
+          code: "precondition_failed",
+          message:
+            "This synced sale has multiple review items. Resolve them together so Athena can apply the sale once.",
+        });
+      }
+      const shouldPreserveDuplicatePosSessionSale =
+        shouldApplyReviewedSale &&
+        selectedEventReviewKinds.has("duplicate_pos_session_sale");
       const shouldApplyReviewedInventorySale =
-        shouldApplyReviewedSale && review.reviewKind === "inventory_review";
+        shouldApplyReviewedSale && selectedEventReviewKinds.has("inventory_review");
+      const shouldApplyReviewedSaleCashOverride =
+        shouldApplyReviewedSale &&
+        (selectedEventReviewKinds.has("register_not_open_sale") ||
+          selectedEventReviewKinds.has("inventory_review"));
       const shouldApplyReviewedCloseout =
         (syncEvent.eventType === "register_closed" &&
           matchesLocalRegisterSession &&
@@ -1978,6 +2107,18 @@ export const resolveRegisterSessionSyncReview = mutation({
       }
 
       if (syncEvent.status === "projected") {
+        if (hasConflictRecord) {
+          if (shouldApplyReviewedSale && selectedEventConflicts.length > 0) {
+            for (const selectedEventConflict of selectedEventConflicts) {
+              resolvedConflictIds.add(
+                selectedEventConflict._id as Id<"posLocalSyncConflict">,
+              );
+            }
+          } else {
+            resolvedConflictIds.add(conflict._id as Id<"posLocalSyncConflict">);
+            addResolvedMatchingLoadedConflicts(conflict, terminalId);
+          }
+        }
         continue;
       }
 
@@ -2026,14 +2167,18 @@ export const resolveRegisterSessionSyncReview = mutation({
           allowReviewedClosingRegisterSaleProjection:
             shouldRepairMissingRegisterSessionMapping,
           applyExpectedTotalForReviewedNonCashOverpayment:
-            shouldApplyManagerOverride || shouldApplyReviewedSale,
+            shouldApplyManagerOverride || shouldApplyReviewedSaleCashOverride,
           allowReviewedInventorySaleProjection:
             shouldApplyReviewedInventorySale,
+          allowReviewedDuplicatePosSessionSaleProjection:
+            shouldPreserveDuplicatePosSessionSale,
           allowRegisterCloseoutVarianceProjection: shouldApplyReviewedCloseout,
           reviewedConflictIds:
-            requestedConflictIds.size > 0
-              ? Array.from(requestedConflictIds)
-              : conflicts.map((reviewConflict) => reviewConflict._id),
+            shouldApplyReviewedSale && selectedEventConflicts.length > 0
+              ? selectedEventConflicts.map((reviewConflict) => reviewConflict._id)
+              : requestedConflictIds.size > 0
+                ? Array.from(requestedConflictIds)
+                : conflicts.map((reviewConflict) => reviewConflict._id),
           reviewActorStaffProfileId,
           trustStoredStaffProof: true,
         },
@@ -2056,8 +2201,16 @@ export const resolveRegisterSessionSyncReview = mutation({
         projectedAt: resolvedAt,
       });
       if (hasConflictRecord) {
-        resolvedConflictIds.add(conflict._id as Id<"posLocalSyncConflict">);
-        addResolvedMatchingLoadedConflicts(conflict, terminalId);
+        if (shouldApplyReviewedSale && selectedEventConflicts.length > 0) {
+          for (const selectedEventConflict of selectedEventConflicts) {
+            resolvedConflictIds.add(
+              selectedEventConflict._id as Id<"posLocalSyncConflict">,
+            );
+          }
+        } else {
+          resolvedConflictIds.add(conflict._id as Id<"posLocalSyncConflict">);
+          addResolvedMatchingLoadedConflicts(conflict, terminalId);
+        }
       }
       if (shouldApplyReviewedCloseout) {
         projectedCloseoutCount += 1;

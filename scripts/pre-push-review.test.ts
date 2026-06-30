@@ -16,11 +16,13 @@ const EXPIRED_PROOF_OPTIONS = {
     status: "stale" as const,
     reason: "test proof disabled",
   }),
+  runCompoundCheck: async () => {},
 };
 
 describe("pre-push review wiring", () => {
   it("exports testable helpers for pre-push orchestration", () => {
     expect(typeof prePushReview.getChangedFilesVsOriginMain).toBe("function");
+    expect(typeof prePushReview.runCompoundCheck).toBe("function");
     expect(typeof prePushReview.runPrePushReview).toBe("function");
   });
 
@@ -103,7 +105,7 @@ describe("pre-push review wiring", () => {
     ]);
   });
 
-  it("runs graphify check before self-review, architecture checks, harness review, and inferential review", async () => {
+  it("runs graphify and compound checks before self-review, architecture checks, harness review, and inferential review", async () => {
     const steps: string[] = [];
 
     await prePushReview.runPrePushReview(ROOT_DIR, {
@@ -114,6 +116,9 @@ describe("pre-push review wiring", () => {
       },
       runGraphifyCheck: async () => {
         steps.push("graphify:check");
+      },
+      runCompoundCheck: async () => {
+        steps.push("compound:check");
       },
       runHarnessSelfReview: async () => {
         steps.push("harness:self-review:origin/main");
@@ -137,6 +142,7 @@ describe("pre-push review wiring", () => {
 
     expect(steps).toEqual([
       "graphify:check",
+      "compound:check",
       "harness:self-review:origin/main",
       "architecture:check",
       "changed-files",
@@ -1030,6 +1036,10 @@ describe("repo harness ergonomics", () => {
     );
     expect(readme).toContain(
       "`pre-push:review` starts with `bun run graphify:check`",
+    );
+    expect(readme).toContain("then runs `bun run compound:check`");
+    expect(readme).toContain(
+      "`compound:check` is intentionally early so solution-doc policy failures are caught locally before the branch reaches CI.",
     );
     expect(readme).toContain(
       "runs `bun run graphify:rebuild` once, reruns `bun run graphify:check`, and then stops",

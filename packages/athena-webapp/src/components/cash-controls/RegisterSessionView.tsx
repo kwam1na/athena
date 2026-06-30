@@ -79,6 +79,7 @@ import {
   buildPosSyncStatusPresentation,
   formatPosReconciliationType,
   isDuplicateLocalIdReviewItem,
+  isDuplicatePosSessionSaleReviewItem,
   isRegisterCloseoutReviewItem,
   type PosReconciliationItem,
   type PosSyncStatusPresentation,
@@ -841,6 +842,7 @@ function SyncReviewTimeline({
 
 type SyncReviewSaleSummary = NonNullable<PosReconciliationItem["sale"]> & {
   inventoryReviews: NonNullable<PosReconciliationItem["inventoryReview"]>[];
+  registerOpeningReviewItems: PosReconciliationItem[];
   reasons: string[];
   reviewItems: PosReconciliationItem[];
   sequences: number[];
@@ -872,12 +874,15 @@ function getSyncReviewSaleSummaries(items: PosReconciliationItem[]) {
     const nextSale: SyncReviewSaleSummary = existing ?? {
       ...item.sale,
       inventoryReviews: [],
+      registerOpeningReviewItems: [],
       reasons: [],
       reviewItems: [],
       sequences: [],
     };
+    const isRegisterOpeningReview =
+      isDuplicateLocalIdRegisterSyncReviewItem(item);
 
-    if (summary && !nextSale.reasons.includes(summary)) {
+    if (!isRegisterOpeningReview && summary && !nextSale.reasons.includes(summary)) {
       nextSale.reasons.push(summary);
     }
 
@@ -900,7 +905,12 @@ function getSyncReviewSaleSummaries(items: PosReconciliationItem[]) {
 
     salesByKey.set(key, {
       ...nextSale,
-      reviewItems: [...nextSale.reviewItems, item],
+      registerOpeningReviewItems: isRegisterOpeningReview
+        ? [...nextSale.registerOpeningReviewItems, item]
+        : nextSale.registerOpeningReviewItems,
+      reviewItems: isRegisterOpeningReview
+        ? nextSale.reviewItems
+        : [...nextSale.reviewItems, item],
       sequences: nextSale.sequences.sort((left, right) => left - right),
     });
   }
@@ -1137,11 +1147,14 @@ function SalesUnderReviewList({
       <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-            Sales under review
+            {sales.some((sale) => sale.reviewItems.length > 0)
+              ? "Sales under review"
+              : "Synced sale evidence"}
           </p>
           <p className="text-xs leading-5 text-muted-foreground">
-            These synced sale details will affect this register session if
-            applied.
+            {sales.some((sale) => sale.reviewItems.length > 0)
+              ? "These synced sale details will affect this register session if applied."
+              : "These synced sale details were reported with the duplicate register-opening evidence."}
           </p>
         </div>
         <div className="flex flex-wrap gap-x-layout-sm gap-y-1 text-xs text-muted-foreground">
@@ -1337,7 +1350,9 @@ function SalesUnderReviewList({
                             ? `${reviewReasons
                                 .map((reason) => reason.replace(/[.!?]+$/, ""))
                                 .join("; ")}.`
-                            : "This sale needs manager review before it is applied."}
+                            : sale.registerOpeningReviewItems.length > 0
+                              ? "This sale is shown as evidence for the duplicate register-opening review."
+                              : "This sale needs manager review before it is applied."}
                         </p>
                       </div>
                     </div>
@@ -1365,10 +1380,12 @@ function SalesUnderReviewList({
 }
 
 function RegisterSyncReviewItemDecisionList({
+  description = "Resolve only the review item that matches this sale decision.",
   isResolving,
   items,
   onReviewDecision,
 }: {
+  description?: string;
   isResolving?: boolean;
   items: PosReconciliationItem[];
   onReviewDecision: (
@@ -1379,6 +1396,11 @@ function RegisterSyncReviewItemDecisionList({
   const duplicateItems = items.filter(isDuplicateLocalIdRegisterSyncReviewItem);
   const decisionItems = duplicateItems.length > 0 ? duplicateItems : items;
   const actionableItems = decisionItems.filter((item) => item.id);
+  const approveConflictIds = actionableItems.some(
+    isDuplicatePosSessionSaleReviewItem,
+  )
+    ? actionableItems.flatMap((item) => (item.id ? [item.id] : []))
+    : null;
 
   if (actionableItems.length === 0) {
     return null;
@@ -1391,13 +1413,15 @@ function RegisterSyncReviewItemDecisionList({
           Review decisions
         </p>
         <p className="text-xs leading-5 text-muted-foreground">
-          Resolve only the review item that matches this sale decision.
+          {description}
         </p>
       </div>
       <div className="grid gap-layout-xs">
         {actionableItems.map((item, index) => {
           const labels = getRegisterSyncReviewItemActionLabels(item);
           const reviewConflictIds = item.id ? [item.id] : undefined;
+          const approveReviewConflictIds =
+            approveConflictIds ?? reviewConflictIds;
 
           return (
             <article
@@ -1421,7 +1445,7 @@ function RegisterSyncReviewItemDecisionList({
                     onClick={() =>
                       onReviewDecision("approved", {
                         approveLabel: labels.approveLabel,
-                        reviewConflictIds,
+                        reviewConflictIds: approveReviewConflictIds,
                       })
                     }
                     size="sm"
@@ -1586,8 +1610,12 @@ function getCombinedReviewNextStep(items: PosReconciliationItem[]) {
     return "This synced activity cannot be applied because a service line is missing customer attribution. Reject it to clear this review, then recreate the service work with a customer if needed.";
   }
 
+  if (items.some(isDuplicatePosSessionSaleReviewItem)) {
+    return "Preserve the synced sale as a completed transaction without reusing the duplicate POS session, or reject the sale evidence if it is not valid.";
+  }
+
   if (items.every(isDuplicateLocalIdRegisterSyncReviewItem)) {
-    return "Reject these duplicate synced register openings to keep the current register session and clear this review.";
+    return "Reject the duplicate register-opening evidence to keep the current register session. Any sale details shown below are evidence only.";
   }
 
   if (items.some((item) => !isApprovableRegisterSyncReviewItem(item))) {
@@ -1645,6 +1673,13 @@ function getRegisterSyncReviewItemActionLabels(item: PosReconciliationItem) {
     };
   }
 
+  if (isDuplicatePosSessionSaleReviewItem(item)) {
+    return {
+      approveLabel: "Preserve synced sale",
+      rejectLabel: "Reject duplicate sale evidence",
+    };
+  }
+
   if (isDuplicateLocalIdRegisterSyncReviewItem(item)) {
     return {
       approveLabel: "Apply duplicate register opening",
@@ -1673,6 +1708,10 @@ function getRegisterSyncReviewItemActionLabels(item: PosReconciliationItem) {
 }
 
 function getRegisterSyncReviewItemSummary(item: PosReconciliationItem) {
+  if (isDuplicatePosSessionSaleReviewItem(item)) {
+    return "This sale reused a local POS session that belongs to another transaction. Preserve it to record the receipt without changing that POS session.";
+  }
+
   if (isDuplicateLocalIdRegisterSyncReviewItem(item)) {
     return "Duplicate synced register opening. Reject this item to keep the current register session and clear the review.";
   }
@@ -1718,6 +1757,10 @@ function getRegisterSyncReviewItemSummary(item: PosReconciliationItem) {
 }
 
 function getRegisterSyncReviewDecisionScope(item: PosReconciliationItem) {
+  if (isDuplicatePosSessionSaleReviewItem(item)) {
+    return "duplicate_pos_session_sale";
+  }
+
   if (isDuplicateLocalIdRegisterSyncReviewItem(item)) {
     return "duplicate_register_open";
   }
@@ -1849,12 +1892,21 @@ function RegisterSessionSyncNotice({
     !hasOnlyRejectedReviewItems &&
     Boolean(onReviewDecision) &&
     hasUniformBatchReviewDecision &&
+    !hasDuplicateRegisterOpenReview &&
     !hasMixedReviewQueue;
   const shouldShowReviewItemActions =
     syncStatus.status === "needs_review" &&
     Boolean(onReviewDecision) &&
     hasMixedReviewQueue;
+  const shouldShowDuplicateOpeningItemActions =
+    syncStatus.status === "needs_review" &&
+    Boolean(onReviewDecision) &&
+    hasDuplicateRegisterOpenReview &&
+    shouldCombineReviewItems;
   const reviewItemDecisionHandler = shouldShowReviewItemActions
+    ? onReviewDecision
+    : undefined;
+  const duplicateOpeningDecisionHandler = shouldShowDuplicateOpeningItemActions
     ? onReviewDecision
     : undefined;
   const shouldShowSyncFooter =
@@ -1887,6 +1939,9 @@ function RegisterSessionSyncNotice({
     getSyncReviewSaleSummaries(reconciliationItems);
   const syncReviewSaleSummaries = shouldCombineReviewItems
     ? allSyncReviewSaleSummaries
+    : [];
+  const duplicateRegisterOpeningReviewItems = shouldCombineReviewItems
+    ? reconciliationItems.filter(isDuplicateLocalIdRegisterSyncReviewItem)
     : [];
   const actionCopy = getSyncReviewActionCopy({
     hasCloseoutReview,
@@ -2002,6 +2057,17 @@ function RegisterSessionSyncNotice({
                     />
                   </div>
                 </div>
+                {duplicateOpeningDecisionHandler &&
+                duplicateRegisterOpeningReviewItems.length > 0 ? (
+                  <div className="md:col-span-2">
+                    <RegisterSyncReviewItemDecisionList
+                      description="Resolve duplicate-opening evidence without clearing the synced sale details shown below."
+                      isResolving={isResolving}
+                      items={duplicateRegisterOpeningReviewItems}
+                      onReviewDecision={duplicateOpeningDecisionHandler}
+                    />
+                  </div>
+                ) : null}
                 <SalesUnderReviewList
                   currency={currency}
                   isResolving={isResolving}

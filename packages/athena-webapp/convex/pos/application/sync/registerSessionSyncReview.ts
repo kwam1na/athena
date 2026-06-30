@@ -21,6 +21,8 @@ export const INVENTORY_SYNC_REVIEW_SUMMARY =
   "Inventory needs manager review for a synced offline sale.";
 export const MISSING_REGISTER_SESSION_MAPPING_SYNC_REVIEW_SUMMARY =
   "Register session mapping is missing for synced POS history.";
+export const DUPLICATE_POS_SESSION_SALE_SYNC_REVIEW_SUMMARY =
+  "Local POS session id was reused by a different synced sale.";
 export const DUPLICATE_REGISTER_OPEN_SYNC_REVIEW_SUMMARIES = new Set([
   "A register session is already open for this terminal.",
   "A register session is already open for this register number.",
@@ -35,6 +37,7 @@ export type RegisterSessionSyncReviewActionPolicy =
 export type RegisterSessionSyncReviewKind =
   | "duplicate_register_closeout"
   | "duplicate_register_open"
+  | "duplicate_pos_session_sale"
   | "register_closeout_variance"
   | "register_not_open_sale"
   | "missing_register_session_mapping"
@@ -168,6 +171,19 @@ export function classifyRegisterSessionSyncReview(
       actionPolicy: "reject_only",
       conflictType: conflict.conflictType,
       reviewKind: "duplicate_register_closeout",
+    };
+  }
+
+  if (
+    summary === DUPLICATE_POS_SESSION_SALE_SYNC_REVIEW_SUMMARY ||
+    (conflict.conflictType === "duplicate_local_id" &&
+      details.localIdKind === "posSession" &&
+      typeof details.localTransactionId === "string")
+  ) {
+    return {
+      actionPolicy: "apply_or_reject",
+      conflictType: conflict.conflictType,
+      reviewKind: "duplicate_pos_session_sale",
     };
   }
 
