@@ -1462,32 +1462,36 @@ function LocalRegisterClosedWorkspace({
   syncStatus: NonNullable<RegisterViewModel["syncStatus"]>;
 }) {
   return (
-    <section className="flex h-full min-h-0 items-center justify-center rounded-lg border border-warning/30 bg-warning/10 px-layout-lg py-layout-xl text-center">
-      <div className="max-w-xl space-y-layout-md">
-        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-warning/30 bg-background text-warning">
-          <Cloud aria-hidden className="h-5 w-5" />
+    <section className="flex h-full min-h-0 items-start justify-center overflow-y-auto rounded-lg border border-border bg-surface-raised px-6 py-10 text-center sm:px-8 sm:pt-20">
+      <div className="w-[min(100%,40rem)]">
+        <div className="mx-auto flex max-w-2xl flex-col rounded-lg border border-border bg-surface-raised p-8 shadow-surface">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-warning/30 bg-warning/10 text-warning">
+            <Cloud aria-hidden className="h-5 w-5" />
+          </div>
+          <div className="mt-6 space-y-layout-xs">
+            <p className="text-xs font-medium uppercase tracking-[0.18em] text-warning">
+              Pending sync
+            </p>
+            <h2 className="font-display text-2xl font-semibold text-foreground">
+              Register closed locally
+            </h2>
+            <p className="text-sm leading-6 text-muted-foreground">
+              {syncStatus.description}
+            </p>
+          </div>
+          {syncStatus.onRetrySync ? (
+            <div className="mt-6 flex justify-center">
+              <button
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-border bg-background px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                onClick={syncStatus.onRetrySync}
+                type="button"
+              >
+                <RefreshCw className="h-4 w-4" />
+                Retry sync
+              </button>
+            </div>
+          ) : null}
         </div>
-        <div className="space-y-layout-xs">
-          <p className="text-xs font-medium uppercase tracking-[0.18em] text-warning">
-            Pending sync
-          </p>
-          <h2 className="font-display text-2xl font-semibold text-foreground">
-            Register closed locally
-          </h2>
-          <p className="text-sm leading-6 text-muted-foreground">
-            {syncStatus.description}
-          </p>
-        </div>
-        {syncStatus.onRetrySync ? (
-          <button
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-border bg-background px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            onClick={syncStatus.onRetrySync}
-            type="button"
-          >
-            <RefreshCw className="h-4 w-4" />
-            Retry sync
-          </button>
-        ) : null}
       </div>
     </section>
   );
@@ -1730,11 +1734,13 @@ function POSRegisterViewContent({
       cashierCount: viewModel.cashierCard ? 1 : 0,
       nextStep: "ready",
     } satisfies RegisterViewModel["onboarding"]);
+  const localCloseoutSyncStatus = viewModel.syncStatus;
   const isLocallyClosedPendingSync =
     isPosWorkflow &&
     !viewModel.checkout.isTransactionCompleted &&
-    viewModel.syncStatus?.status === "locally_closed_pending_sync";
-  const isPosRegisterLocked = isPosWorkflow && isAwaitingCashierAuth;
+    localCloseoutSyncStatus?.status === "locally_closed_pending_sync";
+  const isPosRegisterLocked =
+    isPosWorkflow && isAwaitingCashierAuth && !isLocallyClosedPendingSync;
   const shouldShowOnboarding =
     isPosWorkflow &&
     onboardingState.shouldShow &&
@@ -1779,7 +1785,7 @@ function POSRegisterViewContent({
   const isRegisterOperable =
     isPosWorkflow && isHeaderProductSearchSupported && !viewModel.drawerGate;
   const shouldRenderSaleSurface = isPosWorkflow
-    ? !viewModel.checkout.isTransactionCompleted && !isLocallyClosedPendingSync
+    ? !viewModel.checkout.isTransactionCompleted
     : true;
   const shouldRenderExpenseCompletionWorkspace =
     !isPosWorkflow &&
@@ -1820,8 +1826,7 @@ function POSRegisterViewContent({
     !isResolvingRegisterSetup &&
     (shouldRenderCartSidebar ||
       shouldRenderCheckoutPanel ||
-      isAwaitingCashierAuth) &&
-    !isLocallyClosedPendingSync;
+      isAwaitingCashierAuth);
   const shouldPreviewCompletedExpenseItems =
     !isPosWorkflow && viewModel.checkout.isTransactionCompleted;
   const completedExpenseCartItems = shouldPreviewCompletedExpenseItems
@@ -2162,7 +2167,7 @@ function POSRegisterViewContent({
                 {isPosWorkflow ? (
                   <RegisterSyncStatusChip
                     isRegisterOperable={isRegisterOperable}
-                    syncStatus={viewModel.syncStatus}
+                    syncStatus={localCloseoutSyncStatus}
                   />
                 ) : null}
               </div>
@@ -2248,13 +2253,7 @@ function POSRegisterViewContent({
           ) : null}
 
           <div className="grid min-h-0 flex-1 grid-cols-1 gap-6 overflow-hidden lg:grid-cols-[minmax(0,2fr)_minmax(340px,1fr)]">
-            {isLocallyClosedPendingSync && viewModel.syncStatus ? (
-              <div className="lg:col-span-2">
-                <LocalRegisterClosedWorkspace
-                  syncStatus={viewModel.syncStatus}
-                />
-              </div>
-            ) : shouldRenderSaleSurface ? (
+            {shouldRenderSaleSurface ? (
               <div
                 data-testid="register-main-workspace"
                 className={cn(
@@ -2262,7 +2261,11 @@ function POSRegisterViewContent({
                   !shouldRenderWorkspaceSidebar && "lg:col-span-2",
                 )}
               >
-                {shouldShowOnboarding ? (
+                {isLocallyClosedPendingSync && localCloseoutSyncStatus ? (
+                  <LocalRegisterClosedWorkspace
+                    syncStatus={localCloseoutSyncStatus}
+                  />
+                ) : shouldShowOnboarding ? (
                   <POSOnboardingWorkspace onboarding={onboardingState} />
                 ) : isResolvingCashierPresence ? (
                   <RegisterSetupResolvingWorkspace />
