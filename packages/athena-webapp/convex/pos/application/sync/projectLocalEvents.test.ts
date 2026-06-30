@@ -2937,6 +2937,122 @@ describe("projectLocalSyncEvent", () => {
     expect(repository.createdServiceWorkItems).toHaveLength(1);
   });
 
+  it("preserves a reviewed sale without reusing a duplicate local POS session", async () => {
+    const repository = createProjectionRepository();
+    repository.createdPosSessions.push({
+      _id: "pos-session-original",
+      completedAt: 10,
+      createdAt: 9,
+      expiresAt: 20,
+      inventoryHoldMode: "ledger",
+      payments: [
+        {
+          amount: 50,
+          method: "cash",
+          timestamp: 10,
+        },
+      ],
+      registerNumber: "1",
+      registerSessionId: "register-session-1",
+      sessionNumber: "local-session-1",
+      staffProfileId: "staff-1",
+      status: "completed",
+      storeId: "store-1",
+      subtotal: 50,
+      tax: 0,
+      terminalId: "terminal-1",
+      total: 50,
+      transactionId: "transaction-original",
+      updatedAt: 10,
+    });
+    repository.mappings.push({
+      _id: "mapping-existing-pos-session",
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      localRegisterSessionId: "local-register-1",
+      localEventId: "event-original-sale",
+      localIdKind: "posSession",
+      localId: "local-session-1",
+      cloudTable: "posSession",
+      cloudId: "pos-session-original",
+      createdAt: 9,
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: buildSaleCompletedEvent({
+        localEventId: "event-sale-completed-review",
+        payload: {
+          ...buildSaleCompletedEvent().payload,
+          localTransactionId: "local-txn-review",
+          localReceiptNumber: "LR-REVIEW",
+          receiptNumber: "LR-REVIEW",
+        },
+      }),
+      syncEventId: "sync-event-review",
+      submittedByUserId: "athena-user-1" as never,
+      now: 100,
+      options: {
+        allowReviewedDuplicatePosSessionSaleProjection: true,
+        reviewedConflictIds: ["conflict-duplicate-pos-session"],
+        reviewActorStaffProfileId: "manager-1" as never,
+      },
+    });
+
+    expect(result.status).toBe("projected");
+    expect(result.conflicts).toEqual([]);
+    expect(repository.createdTransactions).toEqual([
+      expect.objectContaining({
+        _id: "transaction-1",
+        registerSessionId: "register-session-1",
+        transactionNumber: "LR-REVIEW",
+      }),
+    ]);
+    expect(
+      (repository.createdTransactions[0] as { sessionId?: string }).sessionId,
+    ).toBeUndefined();
+    expect(repository.createdTransactionItems).toHaveLength(1);
+    expect(repository.createdPaymentAllocations).toHaveLength(1);
+    expect(repository.recordedSaleInventoryMovements).toEqual([
+      expect.objectContaining({
+        posTransactionId: "transaction-1",
+        productSkuId: "sku-1",
+        quantity: 1,
+      }),
+    ]);
+    expect(repository.posSessionPatches).toEqual([]);
+    expect(repository.createdPosSessions).toHaveLength(1);
+    expect(repository.createdPosSessionItems).toEqual([]);
+    expect(repository.recordedPosSessionTraces).toEqual([]);
+    expect(repository.mappings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          localIdKind: "posSession",
+          localId: "local-session-1",
+          cloudId: "pos-session-original",
+        }),
+        expect.objectContaining({
+          localIdKind: "transaction",
+          localId: "local-txn-review",
+          cloudId: "transaction-1",
+        }),
+        expect.objectContaining({
+          localIdKind: "receipt",
+          localId: "LR-REVIEW",
+          cloudId: "transaction-1",
+        }),
+      ]),
+    );
+    expect(
+      repository.mappings.filter(
+        (mapping) =>
+          mapping.localIdKind === "posSession" &&
+          mapping.localId === "local-session-1",
+      ),
+    ).toHaveLength(1);
+  });
+
   it("aggregates duplicate SKU lines before validating and patching inventory", async () => {
     const repository = createProjectionRepository({
       sku: {

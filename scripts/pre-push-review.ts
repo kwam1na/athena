@@ -44,6 +44,7 @@ type PrePushReviewOptions = {
     baseRef: string,
   ) => Promise<string[]>;
   getLocalChangedFiles?: (rootDir: string) => Promise<string[]>;
+  runCompoundCheck?: (rootDir: string) => Promise<void>;
   runGraphifyCheck?: (rootDir: string) => Promise<void>;
   runGraphifyRebuild?: (rootDir: string) => Promise<void>;
   runArchitectureCheck?: (rootDir: string) => Promise<void>;
@@ -164,6 +165,18 @@ export async function runHarnessImplementationTests(
   }
 }
 
+export async function runCompoundCheck(rootDir: string): Promise<void> {
+  const proc = Bun.spawn(["bun", "run", "compound:check"], {
+    cwd: rootDir,
+    stdout: "inherit",
+    stderr: "inherit",
+  });
+  const exitCode = await proc.exited;
+  if (exitCode !== 0) {
+    throw new Error(`compound:check failed (exit ${exitCode})`);
+  }
+}
+
 export async function runHarnessInferentialReview(
   rootDir: string,
 ): Promise<void> {
@@ -240,6 +253,8 @@ export async function runPrePushReview(
     ((nextRootDir: string) => getChangedFilesForHarnessReview(nextRootDir));
   const runGraphifyFreshnessCheck =
     options.runGraphifyCheck ?? runGraphifyCheck;
+  const runCompoundPolicyCheck =
+    options.runCompoundCheck ?? runCompoundCheck;
   const runGraphifyRebuildStep =
     options.runGraphifyRebuild ?? runGraphifyRebuild;
   const runArchitecture = options.runArchitectureCheck ?? runArchitectureCheck;
@@ -368,7 +383,7 @@ export async function runPrePushReview(
 
   logger.log("[pre-push] Running pre-push validation suite...\n");
 
-  logger.log("[pre-push] Step 1/6: graphify:check");
+  logger.log("[pre-push] Step 1/7: graphify:check");
   try {
     await runGraphifyFreshnessCheck(rootDir);
   } catch (error) {
@@ -383,7 +398,10 @@ export async function runPrePushReview(
     await runGraphifyFreshnessCheck(rootDir);
   }
 
-  logger.log(`[pre-push] Step 2/6: harness:self-review (vs ${BASE_REF})`);
+  logger.log("[pre-push] Step 2/7: compound:check");
+  await runCompoundPolicyCheck(rootDir);
+
+  logger.log(`[pre-push] Step 3/7: harness:self-review (vs ${BASE_REF})`);
   let selfReviewResult = await runSelfReview(rootDir);
   if ((selfReviewResult?.blockers?.length ?? 0) > 0) {
     const repaired = await maybeRepairGeneratedHarnessDocs(
@@ -401,7 +419,7 @@ export async function runPrePushReview(
 
   await getPendingGeneratedHarnessDocs();
 
-  logger.log("[pre-push] Step 3/6: architecture:check");
+  logger.log("[pre-push] Step 4/7: architecture:check");
   await runArchitecture(rootDir);
 
   const changedFiles = await loadChangedFiles();
@@ -409,16 +427,16 @@ export async function runPrePushReview(
 
   if (repoValidation.matchedFiles.length > 0) {
     logger.log(
-      "[pre-push] Step 4/6: harness:test skipped (repo harness validations run inside harness:review)",
+      "[pre-push] Step 5/7: harness:test skipped (repo harness validations run inside harness:review)",
     );
   } else {
     logger.log(
-      "[pre-push] Step 4/6: harness:test skipped (no harness-owned changes)",
+      "[pre-push] Step 5/7: harness:test skipped (no harness-owned changes)",
     );
   }
 
   // runHarnessReview internally runs harness:check first, then targeted per-surface scripts
-  logger.log(`[pre-push] Step 5/6: harness:review (vs ${BASE_REF})`);
+  logger.log(`[pre-push] Step 6/7: harness:review (vs ${BASE_REF})`);
   try {
     await review(rootDir, {
       baseRef: BASE_REF,
@@ -444,10 +462,10 @@ export async function runPrePushReview(
 
   if (finalRepoValidation.matchedFiles.length > 0) {
     logger.log(
-      "[pre-push] Step 6/6: harness:inferential-review skipped (repo harness validations already ran in harness:review)",
+      "[pre-push] Step 7/7: harness:inferential-review skipped (repo harness validations already ran in harness:review)",
     );
   } else {
-    logger.log("[pre-push] Step 6/6: harness:inferential-review");
+    logger.log("[pre-push] Step 7/7: harness:inferential-review");
     await runInferentialReview(rootDir);
   }
 

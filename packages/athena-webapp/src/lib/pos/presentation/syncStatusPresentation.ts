@@ -18,6 +18,7 @@ export type PosReconciliationItem = {
   reviewKind?:
     | "duplicate_register_closeout"
     | "duplicate_register_open"
+    | "duplicate_pos_session_sale"
     | "register_closeout_variance"
     | "register_not_open_sale"
     | "missing_register_session_mapping"
@@ -166,6 +167,10 @@ export function isRegisterCloseoutReviewItem(item: PosReconciliationItem) {
 }
 
 export function isDuplicateLocalIdReviewItem(item: PosReconciliationItem) {
+  if (isDuplicatePosSessionSaleReviewItem(item)) {
+    return false;
+  }
+
   const summary = item.summary?.trim().toLowerCase() ?? "";
 
   return (
@@ -175,6 +180,19 @@ export function isDuplicateLocalIdReviewItem(item: PosReconciliationItem) {
     summary.includes("already open for this register number") ||
     summary.includes("session id was reused") ||
     summary.includes("duplicate")
+  );
+}
+
+export function isDuplicatePosSessionSaleReviewItem(
+  item: PosReconciliationItem,
+) {
+  const summary = item.summary?.trim().toLowerCase() ?? "";
+
+  return (
+    item.reviewKind === "duplicate_pos_session_sale" ||
+    summary === "local pos session id was reused by a different synced sale." ||
+    (item.type === "duplicate_local_id" &&
+      summary.includes("local pos session id was reused"))
   );
 }
 
@@ -215,6 +233,10 @@ export function formatPosReconciliationType(
 ): string {
   if (item && isRegisterCloseoutReviewItem(item)) {
     return "Closeout variance review";
+  }
+
+  if (item && isDuplicatePosSessionSaleReviewItem(item)) {
+    return "Synced sale preservation";
   }
 
   if (item && isDuplicateLocalIdReviewItem(item)) {
