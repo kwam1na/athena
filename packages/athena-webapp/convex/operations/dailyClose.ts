@@ -1416,6 +1416,62 @@ async function listExpensesForDay(
   });
 }
 
+async function buildTransactionItemCountsByTransactionId(
+  ctx: Pick<QueryCtx, "db">,
+  transactions: Array<Doc<"posTransaction">>,
+) {
+  const entries = await Promise.all(
+    transactions.map(async (transaction) => {
+      const items = await ctx.db
+        .query("posTransactionItem")
+        .withIndex("by_transactionId", (q) =>
+          q.eq("transactionId", transaction._id),
+        )
+        .take(DAILY_CLOSE_QUERY_LIMIT);
+      const itemCount = items.reduce(
+        (sum, item) =>
+          sum +
+          (typeof item.quantity === "number" && Number.isFinite(item.quantity)
+            ? item.quantity
+            : 0),
+        0,
+      );
+
+      return [String(transaction._id), itemCount] as const;
+    }),
+  );
+
+  return new Map(entries);
+}
+
+async function buildExpenseTransactionItemCountsByTransactionId(
+  ctx: Pick<QueryCtx, "db">,
+  transactions: Array<Doc<"expenseTransaction">>,
+) {
+  const entries = await Promise.all(
+    transactions.map(async (transaction) => {
+      const items = await ctx.db
+        .query("expenseTransactionItem")
+        .withIndex("by_transactionId", (q) =>
+          q.eq("transactionId", transaction._id),
+        )
+        .take(DAILY_CLOSE_QUERY_LIMIT);
+      const itemCount = items.reduce(
+        (sum, item) =>
+          sum +
+          (typeof item.quantity === "number" && Number.isFinite(item.quantity)
+            ? item.quantity
+            : 0),
+        0,
+      );
+
+      return [String(transaction._id), itemCount] as const;
+    }),
+  );
+
+  return new Map(entries);
+}
+
 async function listDepositsForDay(
   ctx: Pick<QueryCtx, "db">,
   args: {
@@ -2423,6 +2479,16 @@ export async function buildDailyCloseSnapshotWithCtx(
   const appliedTransactionAdjustments = appliedTransactionAdjustmentRead.rows;
   const voidedTransactions = voidedTransactionRead.rows;
   const expenseTransactions = expenseTransactionRead.rows;
+  const completedTransactionItemCountsById =
+    await buildTransactionItemCountsByTransactionId(ctx, [
+      ...completedTransactions,
+      ...voidedTransactions,
+    ]);
+  const expenseTransactionItemCountsById =
+    await buildExpenseTransactionItemCountsByTransactionId(
+      ctx,
+      expenseTransactions,
+    );
   const cashDeposits = cashDepositRead.rows;
   const pendingApprovals = pendingApprovalRead.rows;
   const openPosSessions = openPosSessionRead.rows;
@@ -2960,6 +3026,13 @@ export async function buildDailyCloseSnapshotWithCtx(
         completedAt: transaction.completedAt,
         total: transaction.total,
         totalPaid: transaction.totalPaid,
+        ...(completedTransactionItemCountsById.get(String(transaction._id))
+          ? {
+              itemCount: completedTransactionItemCountsById.get(
+                String(transaction._id),
+              ),
+            }
+          : {}),
         ...(typeof transaction.changeGiven === "number"
           ? { changeGiven: transaction.changeGiven }
           : {}),
@@ -3060,6 +3133,13 @@ export async function buildDailyCloseSnapshotWithCtx(
         ...(transaction.notes ? { notes: transaction.notes } : {}),
         total: transaction.totalValue,
         completedAt: transaction.completedAt,
+        ...(expenseTransactionItemCountsById.get(String(transaction._id))
+          ? {
+              itemCount: expenseTransactionItemCountsById.get(
+                String(transaction._id),
+              ),
+            }
+          : {}),
       },
     });
   });
@@ -3111,6 +3191,13 @@ export async function buildDailyCloseSnapshotWithCtx(
         total: transaction.total,
         totalPaid: transaction.totalPaid,
         completedAt: transaction.completedAt,
+        ...(completedTransactionItemCountsById.get(String(transaction._id))
+          ? {
+              itemCount: completedTransactionItemCountsById.get(
+                String(transaction._id),
+              ),
+            }
+          : {}),
         ...(typeof transaction.voidedAt === "number"
           ? { voidedAt: transaction.voidedAt }
           : {}),

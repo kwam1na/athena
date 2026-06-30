@@ -42,6 +42,9 @@ vi.mock("../common/PageHeader", () => ({
       <div>{trailingContent}</div>
     </div>
   ),
+  NavigateBackButton: ({ label = "Back" }: { label?: string }) => (
+    <button type="button">{label}</button>
+  ),
 }));
 
 const baseSnapshot = {

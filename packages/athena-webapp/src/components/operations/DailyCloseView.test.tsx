@@ -113,6 +113,7 @@ const baseSummary = {
   totalSales: 125500,
   transactionCount: 14,
   varianceTotal: 0,
+  voidedTransactionCount: 1,
 };
 
 const readySnapshot: DailyCloseSnapshot = {
@@ -152,6 +153,7 @@ const readySnapshot: DailyCloseSnapshot = {
       id: "ready-2",
       metadata: {
         completedAt: Date.UTC(2026, 4, 7, 14),
+        itemCount: 2,
         owner: "Kofi Mensah",
         paymentMethods: "Cash, Mobile Money",
         terminal: "Front counter terminal / Register A1",
@@ -177,6 +179,7 @@ const readySnapshot: DailyCloseSnapshot = {
       },
       metadata: {
         completedAt: Date.UTC(2026, 4, 7, 16),
+        itemCount: 4,
         notes: "Bought packing supplies.",
         owner: "Akosua Mensah",
         report: "EXP-1",
@@ -192,6 +195,30 @@ const readySnapshot: DailyCloseSnapshot = {
     },
   ],
   reviewItems: [
+    {
+      category: "voided_sale",
+      description: "Review voided sales before completing the end of day review.",
+      id: "review-void-1",
+      link: {
+        label: "View transaction",
+        params: { transactionId: "txn-void-1" },
+        to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId",
+      },
+      metadata: {
+        completedAt: Date.UTC(2026, 4, 7, 15),
+        itemCount: 3,
+        owner: "Kofi Mensah",
+        paymentMethods: "Card",
+        total: 71000,
+        transaction: "VOID-1",
+      },
+      subject: {
+        id: "txn-void-1",
+        label: "VOID-1",
+        type: "pos_transaction",
+      },
+      title: "Voided sale needs review",
+    },
     {
       description: "Reviewed by manager before close.",
       id: "review-1",
@@ -1025,7 +1052,7 @@ describe("DailyCloseViewContent", () => {
   it("opens a POS and expense transaction report as line items", async () => {
     const user = userEvent.setup();
 
-    renderContent(readySnapshot);
+    const { unmount } = renderContent(readySnapshot);
 
     expect(
       screen.queryByRole("region", {
@@ -1049,17 +1076,40 @@ describe("DailyCloseViewContent", () => {
     ).not.toBeInTheDocument();
     expect(
       screen.queryByText(
-        "14 POS sales, 1 expense transaction, no voided sales available for review.",
+        "14 POS sales, 1 expense transaction, 1 voided sale available for review.",
       ),
     ).not.toBeInTheDocument();
 
     await user.click(reportButton);
 
+    expect(mockedRouter.navigate).toHaveBeenCalledWith({
+      search: expect.any(Function),
+    });
+    const reportSearchUpdater = mockedRouter.navigate.mock.calls[0]?.[0]
+      ?.search as (current: Record<string, unknown>) => Record<string, unknown>;
+    expect(
+      reportSearchUpdater({
+        o: "%2Fwigclub%2Fstore%2Fwigclub%2Foperations",
+        page: 2,
+        tab: "ready",
+      }),
+    ).toEqual({
+      o: "%2Fwigclub%2Fstore%2Fwigclub%2Foperations",
+      page: 2,
+      report: "transactions",
+      tab: "ready",
+    });
+
+    unmount();
+    vi.clearAllMocks();
+    mockedRouter.search = { report: "transactions" };
+    renderContent(readySnapshot);
+
     const report = await screen.findByRole("dialog");
 
     expect(
       within(report).getByText(
-        "14 POS sales, 1 expense transaction, no voided sales available from the end of day review workspace.",
+        "14 POS sales, 1 expense transaction, 1 voided sale available from the end of day review workspace.",
       ),
     ).toBeInTheDocument();
     expect(within(report).getByText("Item")).toBeInTheDocument();
@@ -1069,8 +1119,26 @@ describe("DailyCloseViewContent", () => {
     expect(within(report).getByText("Amount")).toBeInTheDocument();
     expect(within(report).queryByText("POS sale")).not.toBeInTheDocument();
     expect(within(report).getByText("#TXN-1")).toBeInTheDocument();
+    expect(within(report).getByText("2 items")).toHaveClass(
+      "text-muted-foreground",
+    );
     expect(within(report).getByText("#EXP-1")).toBeInTheDocument();
-    expect(within(report).getByText("Kofi Mensah")).toBeInTheDocument();
+    expect(within(report).getByText("4 items")).toHaveClass(
+      "text-muted-foreground",
+    );
+    expect(within(report).getByText("#VOID-1")).toBeInTheDocument();
+    expect(within(report).getByText("3 items")).toHaveClass(
+      "text-muted-foreground",
+    );
+    expect(within(report).getByText("Voided")).toHaveClass(
+      "text-destructive",
+    );
+    expect(
+      within(report)
+        .getByText("#VOID-1")
+        .closest("[data-transaction-report-row]"),
+    ).toHaveClass("bg-destructive/5");
+    expect(within(report).getAllByText("Kofi Mensah")).toHaveLength(2);
     expect(within(report).getByText("Akosua Mensah")).toBeInTheDocument();
     expect(within(report).getByText("Cash, Mobile Money")).toBeInTheDocument();
     expect(within(report).getByText("Expense")).toBeInTheDocument();
@@ -1090,6 +1158,41 @@ describe("DailyCloseViewContent", () => {
       "href",
       "/wigclub/store/osu/pos/expense-reports/expense-1?o=%252F",
     );
+  });
+
+  it("removes only the transaction report search param when closing the report sheet", async () => {
+    const user = userEvent.setup();
+    mockedRouter.search = {
+      o: "%2Fwigclub%2Fstore%2Fwigclub%2Foperations",
+      page: 2,
+      report: "transactions",
+      tab: "ready",
+    };
+
+    renderContent(readySnapshot);
+
+    const report = await screen.findByRole("dialog");
+    await user.click(within(report).getByRole("button", { name: /close/i }));
+
+    expect(mockedRouter.navigate).toHaveBeenCalledWith({
+      search: expect.any(Function),
+    });
+    const searchUpdater = mockedRouter.navigate.mock.calls[0]?.[0]?.search as (
+      current: Record<string, unknown>,
+    ) => Record<string, unknown>;
+
+    expect(
+      searchUpdater({
+        o: "%2Fwigclub%2Fstore%2Fwigclub%2Foperations",
+        page: 2,
+        report: "transactions",
+        tab: "ready",
+      }),
+    ).toEqual({
+      o: "%2Fwigclub%2Fstore%2Fwigclub%2Foperations",
+      page: 2,
+      tab: "ready",
+    });
   });
 
   it("uses the preserved item link when redacted sale rows expose only a transaction number", () => {
@@ -1131,7 +1234,7 @@ describe("DailyCloseViewContent", () => {
   });
 
   it("uses sentence-case fragments in the empty transaction report summary", async () => {
-    const user = userEvent.setup();
+    mockedRouter.search = { report: "transactions" };
 
     renderContent({
       ...readySnapshot,
@@ -1143,8 +1246,6 @@ describe("DailyCloseViewContent", () => {
         voidedTransactionCount: 0,
       },
     });
-
-    await user.click(screen.getByRole("button", { name: /view report/i }));
 
     expect(
       await screen.findByText(

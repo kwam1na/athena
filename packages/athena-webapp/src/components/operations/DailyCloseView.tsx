@@ -265,6 +265,7 @@ const bucketTabValues: BucketStatus[] = [
   "review",
 ];
 const DAILY_CLOSE_ITEMS_PER_PAGE = 5;
+const TRANSACTION_REPORT_SEARCH_VALUE = "transactions";
 
 type BucketConfig = {
   ariaLabel: string;
@@ -1950,6 +1951,24 @@ function getTransactionReportIdentifier(item: DailyCloseItem) {
     : (item.subject?.label ?? item.title);
 }
 
+function getTransactionReportItemCountLabel(item: DailyCloseItem) {
+  if (
+    item.category !== "sale" &&
+    item.category !== "expense" &&
+    item.category !== "voided_sale"
+  ) {
+    return null;
+  }
+
+  const itemCount = getNumericMetadataValue(
+    getMetadataStringOrNumber(item.metadata, "itemCount"),
+  );
+
+  if (itemCount === null || itemCount <= 0) return null;
+
+  return itemCount === 1 ? "1 item" : `${itemCount} items`;
+}
+
 function getTransactionReportAmount(item: DailyCloseItem, currency: string) {
   const amount = getNumericMetadataValue(
     getMetadataStringOrNumber(item.metadata, "total"),
@@ -2054,32 +2073,54 @@ function TransactionReportIdentifierLink({
   const identifier = getTransactionReportIdentifier(item);
   const link = getTransactionReportLink(item);
   const label = identifier.startsWith("#") ? identifier : `#${identifier}`;
+  const itemCountLabel = getTransactionReportItemCountLabel(item);
+  const voidedCue =
+    item.category === "voided_sale" ? (
+      <Badge size="sm" variant="destructive">
+        Voided
+      </Badge>
+    ) : null;
+  const count = itemCountLabel ? (
+    <span className="text-xs font-normal text-muted-foreground">
+      {itemCountLabel}
+    </span>
+  ) : null;
 
   if (!link?.to) {
-    return <span className="font-medium text-foreground">{label}</span>;
+    return (
+      <span className="inline-flex items-baseline gap-2">
+        <span className="font-medium text-foreground">{label}</span>
+        {count}
+        {voidedCue}
+      </span>
+    );
   }
 
   return (
-    <Link
-      className="inline-flex items-center gap-1 font-medium text-foreground underline-offset-4 transition-colors hover:text-primary hover:underline"
-      params={
-        {
-          orgUrlSlug,
-          storeUrlSlug,
-          ...(link.params ?? {}),
-        } as never
-      }
-      search={
-        {
-          o: getOrigin(),
-          ...(link.search ?? {}),
-        } as never
-      }
-      to={link.to as never}
-    >
-      {label}
-      <ArrowUpRight aria-hidden="true" className="h-3 w-3" />
-    </Link>
+    <span className="inline-flex items-baseline gap-2">
+      <Link
+        className="inline-flex items-center gap-1 font-medium text-foreground underline-offset-4 transition-colors hover:text-primary hover:underline"
+        params={
+          {
+            orgUrlSlug,
+            storeUrlSlug,
+            ...(link.params ?? {}),
+          } as never
+        }
+        search={
+          {
+            o: getOrigin(),
+            ...(link.search ?? {}),
+          } as never
+        }
+        to={link.to as never}
+      >
+        {label}
+        <ArrowUpRight aria-hidden="true" className="h-3 w-3" />
+      </Link>
+      {count}
+      {voidedCue}
+    </span>
   );
 }
 
@@ -2439,17 +2480,20 @@ function BucketTabs({
 function TransactionReportAction({
   canViewFinancialDetails,
   currency,
+  isOpen,
+  onOpenChange,
   orgUrlSlug,
   snapshot,
   storeUrlSlug,
 }: {
   canViewFinancialDetails: boolean;
   currency: string;
+  isOpen: boolean;
+  onOpenChange: (isOpen: boolean) => void;
   orgUrlSlug: string;
   snapshot: DailyCloseSnapshot;
   storeUrlSlug: string;
 }) {
-  const [isOpen, setIsOpen] = useState(false);
   const items = getTransactionReportItems(snapshot);
   const reportSummary = [
     formatPosSaleCount(
@@ -2467,7 +2511,7 @@ function TransactionReportAction({
     <>
       <Button
         className="shrink-0"
-        onClick={() => setIsOpen(true)}
+        onClick={() => onOpenChange(true)}
         type="button"
         variant="outline"
       >
@@ -2475,7 +2519,7 @@ function TransactionReportAction({
         View report
       </Button>
 
-      <Sheet open={isOpen} onOpenChange={setIsOpen}>
+      <Sheet open={isOpen} onOpenChange={onOpenChange}>
         <SheetContent
           className="flex w-[min(100vw,72rem)] max-w-[calc(100vw-1rem)] flex-col overflow-hidden border-border bg-surface-raised p-0 shadow-overlay sm:max-w-6xl"
           side="right"
@@ -2508,7 +2552,13 @@ function TransactionReportAction({
 
                     return (
                       <div
-                        className="grid grid-cols-1 gap-layout-sm px-layout-xl py-layout-md text-sm md:grid-cols-[minmax(10rem,1.25fr)_minmax(8rem,0.9fr)_minmax(10rem,1fr)_minmax(10rem,0.9fr)_minmax(7rem,0.7fr)] md:items-center md:gap-layout-lg"
+                        className={cn(
+                          "grid grid-cols-1 gap-layout-sm px-layout-xl py-layout-md text-sm md:grid-cols-[minmax(10rem,1.25fr)_minmax(8rem,0.9fr)_minmax(10rem,1fr)_minmax(10rem,0.9fr)_minmax(7rem,0.7fr)] md:items-center md:gap-layout-lg",
+                          item.category === "voided_sale"
+                            ? "bg-destructive/5"
+                            : null,
+                        )}
+                        data-transaction-report-row=""
                         key={getItemId(item)}
                       >
                         <div className="min-w-0">
@@ -2570,6 +2620,8 @@ export function DailyCloseReadOnlyReport({
   const [selectedBucketValue, setSelectedBucketValue] =
     useState<BucketStatus>(defaultBucketValue);
   const [selectedBucketPage, setSelectedBucketPage] = useState(1);
+  const [isTransactionReportOpen, setIsTransactionReportOpen] =
+    useState(false);
   const selectedBucket =
     buckets.find((bucket) => bucket.value === selectedBucketValue) ??
     buckets.find((bucket) => bucket.value === defaultBucketValue) ??
@@ -2595,6 +2647,8 @@ export function DailyCloseReadOnlyReport({
             <TransactionReportAction
               canViewFinancialDetails={canViewFinancialDetails}
               currency={currency}
+              isOpen={isTransactionReportOpen}
+              onOpenChange={setIsTransactionReportOpen}
               orgUrlSlug={orgUrlSlug}
               snapshot={displaySnapshot}
               storeUrlSlug={storeUrlSlug}
@@ -3202,6 +3256,7 @@ export function DailyCloseViewContent({
   const search = useSearch({ strict: false }) as {
     o?: unknown;
     page?: unknown;
+    report?: unknown;
     tab?: unknown;
   };
   const carryForwardWorkItemIds = useMemo(
@@ -3290,6 +3345,8 @@ export function DailyCloseViewContent({
   const selectedBucketValue =
     normalizeBucketTab(search.tab) ?? defaultBucketValue;
   const selectedBucketPage = normalizePage(search.page);
+  const isTransactionReportOpen =
+    search.report === TRANSACTION_REPORT_SEARCH_VALUE;
 
   const handleComplete = async () => {
     if (!snapshot || isBlocked || isCompleted) return;
@@ -3418,6 +3475,23 @@ export function DailyCloseViewContent({
     });
   };
 
+  const handleTransactionReportOpenChange = (isOpen: boolean) => {
+    void navigate({
+      search: ((current: Record<string, unknown>) => {
+        if (isOpen) {
+          return {
+            ...current,
+            report: TRANSACTION_REPORT_SEARCH_VALUE,
+          };
+        }
+
+        const nextSearch = { ...current };
+        delete nextSearch.report;
+        return nextSearch;
+      }) as never,
+    });
+  };
+
   return (
     <OperationReviewWorkspace
       actions={
@@ -3426,6 +3500,8 @@ export function DailyCloseViewContent({
             <TransactionReportAction
               canViewFinancialDetails={hasFinancialDetailsAccess}
               currency={currency}
+              isOpen={isTransactionReportOpen}
+              onOpenChange={handleTransactionReportOpenChange}
               orgUrlSlug={orgUrlSlug}
               snapshot={displaySnapshot}
               storeUrlSlug={storeUrlSlug}

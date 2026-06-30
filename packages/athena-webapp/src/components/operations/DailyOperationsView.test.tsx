@@ -21,6 +21,8 @@ const mockedApi = vi.hoisted(() => ({
   getDailyOperationsDetailSnapshot: "getDailyOperationsDetailSnapshot",
   getDailyOperationsSnapshot: "getDailyOperationsSnapshot",
   getDailyOperationsStorePulseSnapshot: "getDailyOperationsStorePulseSnapshot",
+  getDailyOperationsStoreRequestsSnapshot:
+    "getDailyOperationsStoreRequestsSnapshot",
   getDailyOperationsTodayRefreshSnapshot:
     "getDailyOperationsTodayRefreshSnapshot",
   getDailyOperationsTimelinePreviewSnapshot:
@@ -438,7 +440,7 @@ const blockedSnapshot: DailyOperationsSnapshot = {
       key: "registers",
       label: "Registers",
       status: "blocked",
-      to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",
+      to: "/$orgUrlSlug/store/$storeUrlSlug/cash-controls",
     },
   ],
   lifecycle: {
@@ -1910,6 +1912,45 @@ describe("DailyOperationsViewContent", () => {
     ).toBeInTheDocument();
   });
 
+  it("renders pending approval requests from the separate store request snapshot", () => {
+    const operatingDate = getCurrentLocalOperatingDate();
+
+    renderContent(
+      {
+        ...blockedSnapshot,
+        lanes: blockedSnapshot.lanes.filter(
+          (lane) => lane.key !== "approvals",
+        ),
+        operatingDate,
+      },
+      {
+        storeRequestsSnapshot: {
+          approvalsLane: {
+            count: 3,
+            countLabel: "3",
+            description: "3 approvals pending.",
+            key: "approvals",
+            label: "Approvals",
+            status: "blocked",
+            to: "/$orgUrlSlug/store/$storeUrlSlug/operations/approvals",
+          },
+          operatingDate,
+        },
+      },
+    );
+
+    expect(
+      screen.getByRole("link", { name: "Open 3 pending approvals" }),
+    ).toHaveAttribute(
+      "href",
+      "/wigclub/store/osu/operations/approvals?o=%252Fwigclub%252Fstore%252Fosu%252Foperations",
+    );
+    expect(screen.getByText("3")).toHaveClass(
+      "font-semibold",
+      "tabular-nums",
+    );
+  });
+
   it("passes origin context to current-day blocker review actions", () => {
     renderContent({
       ...blockedSnapshot,
@@ -1926,7 +1967,7 @@ describe("DailyOperationsViewContent", () => {
       screen.getByRole("link", { name: "Open Registers" }),
     ).toHaveAttribute(
       "href",
-      "/wigclub/store/osu/operations/daily-close?o=%252Fwigclub%252Fstore%252Fosu%252Foperations",
+      "/wigclub/store/osu/cash-controls?o=%252Fwigclub%252Fstore%252Fosu%252Foperations",
     );
   });
 
@@ -2257,6 +2298,10 @@ describe("DailyOperationsView", () => {
     ).getDailyOperationsStorePulseSnapshot =
       "getDailyOperationsStorePulseSnapshot";
     (
+      mockedApi as { getDailyOperationsStoreRequestsSnapshot?: unknown }
+    ).getDailyOperationsStoreRequestsSnapshot =
+      "getDailyOperationsStoreRequestsSnapshot";
+    (
       mockedApi as { getDailyOperationsTodayRefreshSnapshot?: unknown }
     ).getDailyOperationsTodayRefreshSnapshot =
       "getDailyOperationsTodayRefreshSnapshot";
@@ -2376,6 +2421,48 @@ describe("DailyOperationsView", () => {
     );
   });
 
+  it("subscribes to store requests separately from the daily operations snapshot", () => {
+    mockedHooks.useQuery.mockImplementation((query, args) => {
+      if (args === "skip") return undefined;
+      if (query === mockedApi.getDailyOperationsStoreRequestsSnapshot) {
+        return {
+          approvalsLane: {
+            count: 2,
+            countLabel: "2",
+            description: "2 approvals pending.",
+            key: "approvals",
+            label: "Approvals",
+            status: "blocked",
+            to: "/$orgUrlSlug/store/$storeUrlSlug/operations/approvals",
+          },
+          operatingDate: operatingSnapshot.operatingDate,
+        };
+      }
+
+      return {
+        ...operatingSnapshot,
+        lanes: operatingSnapshot.lanes.filter(
+          (lane) => lane.key !== "approvals",
+        ),
+      };
+    });
+
+    render(<DailyOperationsView />);
+
+    expect(mockedHooks.useQuery).toHaveBeenCalledWith(
+      mockedApi.getDailyOperationsStoreRequestsSnapshot,
+      expect.objectContaining({
+        operatingTimezoneOffsetMinutes: expect.any(Number),
+        storeId: "store-1",
+        storePulseWindow: "today",
+        weekEndOperatingDate: getCurrentSaturdayWeekEndOperatingDate(),
+      }),
+    );
+    expect(
+      screen.getByRole("link", { name: "Open 2 pending approvals" }),
+    ).toBeInTheDocument();
+  });
+
   it("queries analytics detail when the empty analytics shell is clicked", () => {
     mockedHooks.useQuery.mockImplementation((query, args) => {
       if (args === "skip") return undefined;
@@ -2456,7 +2543,8 @@ describe("DailyOperationsView", () => {
     });
     const view = render(<DailyOperationsView />);
 
-    expect(await screen.findByText(/Data refreshed at /)).toBeInTheDocument();
+    expect(await screen.findByText(/^Data refreshed at /)).toBeInTheDocument();
+    expect(screen.queryByText(/^· Data refreshed at /)).not.toBeInTheDocument();
     const chart = screen.getByTestId("store-pulse-chart");
     const replayKey = screen
       .getByTestId("store-pulse-area")
@@ -3025,7 +3113,7 @@ describe("DailyOperationsView", () => {
     expect(within(storePulse).queryByRole("tablist")).not.toBeInTheDocument();
     expect(
       within(storePulse).getByText(
-        "Cached sales trend through the selected day.",
+        "Synced sales trend through the selected day.",
       ),
     ).toBeInTheDocument();
   });

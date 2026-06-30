@@ -77,6 +77,7 @@ type DailyOperationsApi = {
   getDailyOperationsDetailSnapshot?: unknown;
   getDailyOperationsSnapshot?: unknown;
   getDailyOperationsStorePulseSnapshot?: unknown;
+  getDailyOperationsStoreRequestsSnapshot?: unknown;
   getDailyOperationsTodayRefreshSnapshot?: unknown;
   getDailyOperationsTimelinePreviewSnapshot?: unknown;
   getDailyOperationsTimelineSnapshot?: unknown;
@@ -340,6 +341,7 @@ type DailyOperationsViewContentProps = {
   storePulseWindow: StorePulseWindow;
   storeUrlSlug: string;
   storePulseSnapshot?: DailyOperationsStorePulseSnapshot;
+  storeRequestsSnapshot?: DailyOperationsStoreRequestsSnapshot;
   todayRefreshedAt?: number;
   timelinePreviewSnapshot?: DailyOperationsTimelinePreviewSnapshot;
   timelineSnapshot?: DailyOperationsTimelineSnapshot;
@@ -361,6 +363,11 @@ type CachedWeekAnalytics = {
 type DailyOperationsStorePulseSnapshot = {
   operatingDate: string;
   storePulse?: StorePulseSummary | null;
+};
+
+type DailyOperationsStoreRequestsSnapshot = {
+  approvalsLane: DailyOperationsSnapshot["lanes"][number];
+  operatingDate: string;
 };
 
 type DailyOperationsTimelineSnapshot = {
@@ -693,10 +700,27 @@ function shouldShowHistoricalEodReviewAction(
   );
 }
 
-function getPendingApprovalsLane(snapshot: DailyOperationsSnapshot) {
-  const approvalsLane = snapshot.lanes.find((lane) => lane.key === "approvals");
+function getPendingApprovalsLaneFromLanes(
+  lanes: DailyOperationsSnapshot["lanes"],
+) {
+  const approvalsLane = lanes.find((lane) => lane.key === "approvals");
 
   return approvalsLane && approvalsLane.count > 0 ? approvalsLane : null;
+}
+
+function replaceApprovalsLane(
+  lanes: DailyOperationsSnapshot["lanes"],
+  approvalsLane?: DailyOperationsSnapshot["lanes"][number],
+) {
+  if (!approvalsLane) return lanes;
+
+  const nextLanes = lanes.map((lane) =>
+    lane.key === "approvals" ? approvalsLane : lane,
+  );
+
+  return nextLanes.some((lane) => lane.key === "approvals")
+    ? nextLanes
+    : [...nextLanes, approvalsLane];
 }
 
 function getPendingApprovalsCountLabel(
@@ -2201,7 +2225,7 @@ function DailyOperationsStorePulsePreview({
           <StorePulseTimeline
             animationKey={operatingDate}
             canViewFinancialDetails={hasFullAdminAccess}
-            description="Cached sales trend through the selected day."
+            description="Synced sales trend through the selected day."
             currencyFormatter={currencyFormatter(currency)}
             pulseWindow="this_week"
             snapshot={selectedCachedStorePulseTrend!.operatorSnapshot!}
@@ -2568,12 +2592,20 @@ function WeekMetricsStrip({
             Week at a glance
           </h3>
           <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
-            <span>
+            <span className="basis-full sm:basis-auto">
               Seven days ending {formatOperatingDate(weekEndOperatingDate)}
             </span>
             {refreshedAt ? (
+              <span
+                aria-hidden="true"
+                className="hidden sm:inline"
+              >
+                ·
+              </span>
+            ) : null}
+            {refreshedAt ? (
               <span className="whitespace-nowrap">
-                · Data refreshed at {formatAnalyticsCacheTimestamp(refreshedAt)}
+                Data refreshed at {formatAnalyticsCacheTimestamp(refreshedAt)}
               </span>
             ) : null}
             {canRefreshToday ? (
@@ -2795,6 +2827,7 @@ export function DailyOperationsViewContent({
   storePulseWindow,
   storeUrlSlug,
   storePulseSnapshot,
+  storeRequestsSnapshot,
   todayRefreshedAt,
   timelinePreviewSnapshot,
   timelineSnapshot,
@@ -2848,12 +2881,16 @@ export function DailyOperationsViewContent({
   const isHistoricalDate = snapshot
     ? isHistoricalOperatingDate(snapshot.operatingDate)
     : false;
-  const pendingApprovalsLane = snapshot
-    ? getPendingApprovalsLane(snapshot)
-    : null;
-  const actionableLanes = snapshot
-    ? snapshot.lanes.filter(isActionableLane)
+  const storeRequestsApprovalsLane =
+    snapshot && storeRequestsSnapshot?.operatingDate === snapshot.operatingDate
+      ? storeRequestsSnapshot.approvalsLane
+      : undefined;
+  const operationLanes = snapshot
+    ? replaceApprovalsLane(snapshot.lanes, storeRequestsApprovalsLane)
     : [];
+  const pendingApprovalsLane =
+    getPendingApprovalsLaneFromLanes(operationLanes);
+  const actionableLanes = operationLanes.filter(isActionableLane);
   const weekMetricsForDisplay =
     snapshot && (hasDetailSnapshot || !cachedWeekMetrics)
       ? snapshot.weekMetrics
@@ -3435,6 +3472,7 @@ function DailyOperationsConnectedView({
   getDailyOperationsDetailSnapshot,
   getDailyOperationsSnapshot,
   getDailyOperationsStorePulseSnapshot,
+  getDailyOperationsStoreRequestsSnapshot,
   getDailyOperationsTodayRefreshSnapshot,
   getDailyOperationsTimelinePreviewSnapshot,
   getDailyOperationsTimelineSnapshot,
@@ -3442,6 +3480,7 @@ function DailyOperationsConnectedView({
   getDailyOperationsDetailSnapshot?: unknown;
   getDailyOperationsSnapshot: unknown;
   getDailyOperationsStorePulseSnapshot?: unknown;
+  getDailyOperationsStoreRequestsSnapshot?: unknown;
   getDailyOperationsTodayRefreshSnapshot?: unknown;
   getDailyOperationsTimelinePreviewSnapshot?: unknown;
   getDailyOperationsTimelineSnapshot?: unknown;
@@ -3584,6 +3623,12 @@ function DailyOperationsConnectedView({
     getDailyOperationsStorePulseSnapshot ?? getDailyOperationsSnapshot,
     shouldQueryStorePulseSnapshot ? snapshotArgs : "skip",
   ) as DailyOperationsStorePulseSnapshot | undefined;
+  const storeRequestsSnapshot = useExpectedDailyOperationsQuery(
+    getDailyOperationsStoreRequestsSnapshot ?? getDailyOperationsSnapshot,
+    getDailyOperationsStoreRequestsSnapshot && canQueryProtectedData
+      ? snapshotArgs
+      : "skip",
+  ) as DailyOperationsStoreRequestsSnapshot | undefined;
   const queriedTodayRefreshSnapshot = useExpectedDailyOperationsQuery(
     getDailyOperationsTodayRefreshSnapshot ?? getDailyOperationsSnapshot,
     todayRefreshArgs,
@@ -3884,6 +3929,7 @@ function DailyOperationsConnectedView({
       storePulseWindow={storePulseWindow}
       storeUrlSlug={params?.storeUrlSlug ?? ""}
       storePulseSnapshot={storePulseSnapshot}
+      storeRequestsSnapshot={storeRequestsSnapshot}
       todayRefreshedAt={cachedTodayRefreshSnapshot?.refreshedAt}
       timelinePreviewSnapshot={timelinePreviewSnapshot}
       timelineSnapshot={timelineSnapshot}
@@ -3906,6 +3952,9 @@ export function DailyOperationsView() {
       getDailyOperationsSnapshot={dailyOperationsApi.getDailyOperationsSnapshot}
       getDailyOperationsStorePulseSnapshot={
         dailyOperationsApi.getDailyOperationsStorePulseSnapshot
+      }
+      getDailyOperationsStoreRequestsSnapshot={
+        dailyOperationsApi.getDailyOperationsStoreRequestsSnapshot
       }
       getDailyOperationsTodayRefreshSnapshot={
         dailyOperationsApi.getDailyOperationsTodayRefreshSnapshot

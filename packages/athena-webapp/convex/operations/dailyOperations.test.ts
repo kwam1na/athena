@@ -7,6 +7,7 @@ import {
   getDailyOperationsDetailSnapshot,
   getDailyOperationsSnapshot,
   getDailyOperationsStorePulseSnapshot,
+  getDailyOperationsStoreRequestsSnapshot,
   getDailyOperationsTodayRefreshSnapshot,
   getDailyOperationsTimelinePreviewSnapshot,
   getDailyOperationsTimelineSnapshot,
@@ -2580,6 +2581,7 @@ describe("daily operations overview read model", () => {
     ).toMatchObject({
       count: 1,
       status: "blocked",
+      to: "/$orgUrlSlug/store/$storeUrlSlug/cash-controls",
     });
   });
 
@@ -2849,6 +2851,94 @@ describe("daily operations overview read model", () => {
     expect(snapshot.attentionItems.map((item) => item.id)).not.toContain(
       "approval_request:approval-future-day:pending",
     );
+  });
+
+  it("returns pending approval requests through a separate store requests snapshot", async () => {
+    vi.setSystemTime(new Date("2026-05-08T12:00:00.000Z"));
+    vi.mocked(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).mockResolvedValue({
+      _creationTime: 0,
+      _id: "user-1" as Id<"athenaUser">,
+      email: "admin@wigclub.store",
+    });
+    vi.mocked(
+      athenaUserAuth.requireOrganizationMemberRoleWithCtx,
+    ).mockResolvedValue({
+      _creationTime: 0,
+      _id: "member-admin" as Id<"organizationMember">,
+      organizationId: "org-1" as Id<"organization">,
+      role: "full_admin",
+      userId: "user-1" as Id<"athenaUser">,
+    });
+
+    const snapshot = await getHandler(getDailyOperationsStoreRequestsSnapshot)(
+      buildCtx({
+        approvalRequest: [
+          {
+            _id: "approval-prior-day",
+            createdAt: Date.UTC(2026, 4, 7, 20),
+            reason: "Prior day variance review",
+            requestType: "variance_review",
+            status: "pending",
+            storeId: "store-1",
+            subjectId: "register-prior",
+            subjectType: "register_session",
+          },
+          {
+            _id: "approval-current-day",
+            createdAt: Date.UTC(2026, 4, 8, 10),
+            reason: "Current day variance review",
+            requestType: "variance_review",
+            status: "pending",
+            storeId: "store-1",
+            subjectId: "register-current",
+            subjectType: "register_session",
+          },
+          {
+            _id: "approval-approved",
+            createdAt: Date.UTC(2026, 4, 8, 11),
+            reason: "Resolved",
+            requestType: "variance_review",
+            status: "approved",
+            storeId: "store-1",
+            subjectId: "register-resolved",
+            subjectType: "register_session",
+          },
+        ],
+        operationalWorkItem: [
+          {
+            _id: "work-open",
+            approvalState: "not_required",
+            createdAt: 1,
+            organizationId: "org-1",
+            priority: "normal",
+            status: "open",
+            storeId: "store-1",
+            title: "Call customer",
+            type: "customer_follow_up",
+          },
+        ],
+        store: [store],
+      }) as never,
+      {
+        operatingDate: "2026-05-08",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(snapshot).toEqual({
+      approvalsLane: {
+        count: 2,
+        countLabel: "2",
+        description: "2 approvals pending.",
+        key: "approvals",
+        label: "Approvals",
+        status: "blocked",
+        to: "/$orgUrlSlug/store/$storeUrlSlug/operations/approvals",
+      },
+      operatingDate: "2026-05-08",
+    });
   });
 
   it("keeps a completed store day reviewable and scopes timeline events to the day", async () => {

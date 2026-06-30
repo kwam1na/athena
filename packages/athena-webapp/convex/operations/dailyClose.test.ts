@@ -29,6 +29,7 @@ type TableName =
   | "dailyClose"
   | "expenseSession"
   | "expenseTransaction"
+  | "expenseTransactionItem"
   | "operationalEvent"
   | "operationalWorkItem"
   | "paymentAllocation"
@@ -36,6 +37,7 @@ type TableName =
   | "posTerminal"
   | "posTransactionAdjustment"
   | "posTransaction"
+  | "posTransactionItem"
   | "registerSession"
   | "staffProfile"
   | "store";
@@ -856,6 +858,28 @@ describe("end-of-day review backend foundation", () => {
           transactionNumber: "EXP-PRIOR",
         },
       ],
+      expenseTransactionItem: [
+        {
+          _id: "expense-1-item-1",
+          costPrice: 1000,
+          productId: "expense-product-1",
+          productName: "Packing Paper",
+          productSku: "PP-1",
+          productSkuId: "expense-sku-1",
+          quantity: 4,
+          transactionId: "expense-1",
+        },
+        {
+          _id: "expense-2-item-1",
+          costPrice: 2500,
+          productId: "expense-product-2",
+          productName: "Carrier Bags",
+          productSku: "CB-1",
+          productSkuId: "expense-sku-2",
+          quantity: 1,
+          transactionId: "expense-2",
+        },
+      ],
       expenseSession: [
         {
           _id: "expense-session-1",
@@ -1003,6 +1027,41 @@ describe("end-of-day review backend foundation", () => {
           total: 7000,
           totalPaid: 7000,
           transactionNumber: "TXN-NEXT",
+        },
+      ],
+      posTransactionItem: [
+        {
+          _id: "txn-1-item-1",
+          productId: "product-1",
+          productName: "Lace Wig",
+          productSku: "LW-1",
+          productSkuId: "sku-1",
+          quantity: 1,
+          totalPrice: 7000,
+          transactionId: "txn-1",
+          unitPrice: 7000,
+        },
+        {
+          _id: "txn-1-item-2",
+          productId: "product-2",
+          productName: "Wig Cap",
+          productSku: "WC-1",
+          productSkuId: "sku-2",
+          quantity: 2,
+          totalPrice: 5000,
+          transactionId: "txn-1",
+          unitPrice: 2500,
+        },
+        {
+          _id: "txn-void-item-1",
+          productId: "product-3",
+          productName: "Closure Wig",
+          productSku: "CW-1",
+          productSkuId: "sku-3",
+          quantity: 2,
+          totalPrice: 5000,
+          transactionId: "txn-void",
+          unitPrice: 2500,
         },
       ],
       registerSession: [
@@ -1173,6 +1232,7 @@ describe("end-of-day review backend foundation", () => {
       )?.metadata,
     ).toMatchObject({
       completedAt: Date.UTC(2026, 4, 7, 15),
+      itemCount: 2,
       paymentMethods: "Card",
       total: 5000,
       totalPaid: 5000,
@@ -1197,6 +1257,7 @@ describe("end-of-day review backend foundation", () => {
       completedAt: Date.UTC(2026, 4, 7, 14),
       customer: "0240000000",
       owner: "Kofi Mensah",
+      itemCount: 3,
       paymentMethods: "Cash, Mobile Money",
       terminal: "Front counter terminal / Register A1",
       total: 12000,
@@ -1242,6 +1303,7 @@ describe("end-of-day review backend foundation", () => {
       },
       metadata: {
         completedAt: Date.UTC(2026, 4, 7, 17),
+        itemCount: 4,
         notes: "Restocked petty cash supplies.",
         owner: "Kofi Mensah",
         report: "EXP-1",

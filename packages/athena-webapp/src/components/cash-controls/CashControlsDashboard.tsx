@@ -361,8 +361,8 @@ function needsVarianceReview(session: CashControlsDashboardSession) {
   const syncStatus = getSessionSyncStatus(session);
   return Boolean(
     session.pendingApprovalRequest ||
-      session.variance ||
-      syncStatus.status === "needs_review",
+    session.variance ||
+    syncStatus.status === "needs_review",
   );
 }
 
@@ -855,7 +855,9 @@ function ClosedSessionsSummary({
                     <Link
                       aria-label={`Open ${formatRegisterName(session.registerNumber)} variance ${formatCurrency(
                         currency,
-                        hasFinancialDetailsAccess ? (session.variance ?? 0) : null,
+                        hasFinancialDetailsAccess
+                          ? (session.variance ?? 0)
+                          : null,
                       )}`}
                       className="block h-full w-full px-4 py-4 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                       params={{
@@ -1329,6 +1331,7 @@ export function CashControlsDashboardContent({
       <FadeIn className="container mx-auto py-layout-xl">
         <PageWorkspace>
           <PageLevelHeader
+            showBackButton
             eyebrow="Cash Ops"
             title="Cash controls"
             description="Track live drawers, review deposited totals, and move into session detail before shifting work into closeouts."
