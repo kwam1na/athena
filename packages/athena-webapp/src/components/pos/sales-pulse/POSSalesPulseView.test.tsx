@@ -165,9 +165,7 @@ describe("POSStorePulseSection", () => {
     expect(screen.getByText("Sales")).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Today" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "All time" })).toBeInTheDocument();
-    expect(
-      screen.queryByText(/Compared with/),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/Compared with/)).not.toBeInTheDocument();
     expect(screen.getByText("Sales trend")).toBeInTheDocument();
     expect(screen.queryByText("Busiest hour")).not.toBeInTheDocument();
     expect(screen.getByText("How customers paid")).toBeInTheDocument();
@@ -265,6 +263,19 @@ describe("POSStorePulseSection", () => {
 
     expect(screen.getByRole("tab", { name: "This week" })).toBeInTheDocument();
     expect(screen.getAllByText(/vs last week/).length).toBeGreaterThan(0);
+  });
+
+  it("uses clear no-sales copy when the prior window has no sales", () => {
+    const todaySummary = buildTodaySummary();
+    todaySummary.operatorSnapshot.comparison.yesterdayAverageTransaction = 0;
+    todaySummary.operatorSnapshot.comparison.yesterdayItemsSold = 0;
+    todaySummary.operatorSnapshot.comparison.yesterdaySales = 0;
+    todaySummary.operatorSnapshot.comparison.yesterdayTransactions = 0;
+
+    renderStorePulse({ todaySummary });
+
+    expect(screen.getAllByText("No sales yesterday")).toHaveLength(4);
+    expect(screen.queryByText("No yesterday")).not.toBeInTheDocument();
   });
 
   it("uses operator-friendly labels for the sales trend chart", () => {

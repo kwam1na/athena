@@ -64,7 +64,7 @@ function mockCorrectionHistoryDb(overrides?: {
                 ? (overrides?.serviceLines ?? [])
                 : tableName === "paymentAllocation"
                   ? (overrides?.paymentAllocations ?? [])
-              : (overrides?.correctionHistory ?? []),
+                  : (overrides?.correctionHistory ?? []),
           ),
         take: vi
           .fn()
@@ -95,9 +95,12 @@ describe("getCompletedTransactions", () => {
     vi.mocked(getPosSessionById).mockResolvedValue(null as never);
     vi.mocked(listTransactionItems).mockResolvedValue([] as never);
 
-    const result = await getCompletedTransactions({ db: mockCorrectionHistoryDb() } as never, {
-      storeId: "store-1" as Id<"store">,
-    });
+    const result = await getCompletedTransactions(
+      { db: mockCorrectionHistoryDb() } as never,
+      {
+        storeId: "store-1" as Id<"store">,
+      },
+    );
 
     expect(result).toEqual([
       expect.objectContaining({
@@ -128,9 +131,12 @@ describe("getCompletedTransactions", () => {
     } as never);
     vi.mocked(listTransactionItems).mockResolvedValue([] as never);
 
-    const result = await getCompletedTransactions({ db: mockCorrectionHistoryDb() } as never, {
-      storeId: "store-1" as Id<"store">,
-    });
+    const result = await getCompletedTransactions(
+      { db: mockCorrectionHistoryDb() } as never,
+      {
+        storeId: "store-1" as Id<"store">,
+      },
+    );
 
     expect(result).toEqual([
       expect.objectContaining({
@@ -197,9 +203,12 @@ describe("getCompletedTransactions", () => {
     vi.mocked(getPosSessionById).mockResolvedValue(null as never);
     vi.mocked(listTransactionItems).mockResolvedValue([] as never);
 
-    const result = await getCompletedTransactions({ db: mockCorrectionHistoryDb() } as never, {
-      storeId: "store-1" as Id<"store">,
-    });
+    const result = await getCompletedTransactions(
+      { db: mockCorrectionHistoryDb() } as never,
+      {
+        storeId: "store-1" as Id<"store">,
+      },
+    );
 
     expect(result).toEqual([
       expect.objectContaining({
@@ -231,9 +240,12 @@ describe("getCompletedTransactions", () => {
     vi.mocked(getPosSessionById).mockResolvedValue(null as never);
     vi.mocked(listTransactionItems).mockResolvedValue([] as never);
 
-    const result = await getCompletedTransactions({ db: mockCorrectionHistoryDb() } as never, {
-      storeId: "store-1" as Id<"store">,
-    });
+    const result = await getCompletedTransactions(
+      { db: mockCorrectionHistoryDb() } as never,
+      {
+        storeId: "store-1" as Id<"store">,
+      },
+    );
 
     expect(result).toEqual([
       expect.objectContaining({
@@ -289,7 +301,9 @@ describe("getTodaySummary", () => {
               ? [
                   {
                     _id: "opening-2026-06-19",
+                    endAt: Date.parse("2026-06-20T04:00:00.000Z"),
                     operatingDate: "2026-06-19",
+                    startAt: Date.parse("2026-06-19T04:00:00.000Z"),
                     status: "started",
                     storeId: "store-1",
                   },
@@ -312,8 +326,8 @@ describe("getTodaySummary", () => {
     expect(listCompletedTransactionsForDay).toHaveBeenCalledWith(
       expect.anything(),
       {
-        endOfDay: Date.parse("2026-06-19T23:59:59.999Z"),
-        startOfDay: Date.parse("2026-06-19T00:00:00.000Z"),
+        endOfDay: Date.parse("2026-06-20T03:59:59.999Z"),
+        startOfDay: Date.parse("2026-06-19T04:00:00.000Z"),
         storeId: "store-1",
       },
     );
@@ -468,6 +482,83 @@ describe("getTodaySummary", () => {
         transactionCount: 2,
       }),
     ]);
+  });
+
+  it("ignores stale unclosed openings when keying the POS pulse today window", async () => {
+    vi.setSystemTime(new Date("2026-06-30T12:00:00.000Z"));
+    vi.mocked(listCompletedTransactionsForRange)
+      .mockResolvedValueOnce([] as never)
+      .mockResolvedValueOnce([
+        {
+          _id: "txn-yesterday" as Id<"posTransaction">,
+          completedAt: Date.parse("2026-06-29T16:00:00.000Z"),
+          payments: [{ amount: 6_290, method: "cash", timestamp: 1 }],
+          storeId: "store-1" as Id<"store">,
+          total: 6_290,
+        },
+      ] as never);
+    vi.mocked(listCompletedTransactionsSince).mockResolvedValue([] as never);
+    vi.mocked(listTransactionItems).mockResolvedValueOnce([
+      { quantity: 82 },
+    ] as never);
+    const query = vi.fn((tableName: string) => ({
+      withIndex: vi.fn(() => ({
+        collect: vi.fn().mockResolvedValue([]),
+        take: vi.fn().mockResolvedValue([]),
+        order: vi.fn(() => ({
+          take: vi.fn().mockResolvedValue(
+            tableName === "dailyOpening"
+              ? [
+                  {
+                    _id: "opening-2026-06-29",
+                    endAt: Date.parse("2026-06-30T04:00:00.000Z"),
+                    operatingDate: "2026-06-29",
+                    startAt: Date.parse("2026-06-29T04:00:00.000Z"),
+                    status: "started",
+                    storeId: "store-1",
+                  },
+                ]
+              : [],
+          ),
+        })),
+      })),
+    }));
+
+    const result = await getTodaySummary(
+      {
+        db: { query },
+      } as never,
+      {
+        pulseWindow: "today",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(listCompletedTransactionsForRange).toHaveBeenNthCalledWith(
+      1,
+      expect.anything(),
+      {
+        completedFrom: Date.parse("2026-06-30T00:00:00.000Z"),
+        completedTo: Date.parse("2026-06-30T23:59:59.999Z"),
+        storeId: "store-1",
+      },
+    );
+    expect(result).toEqual(
+      expect.objectContaining({
+        date: "2026-06-30",
+        totalItemsSold: 0,
+        totalSales: 0,
+        totalTransactions: 0,
+      }),
+    );
+    expect(result.operatorSnapshot.comparison).toMatchObject({
+      currentItemsSold: 0,
+      currentSales: 0,
+      currentTransactions: 0,
+      yesterdayItemsSold: 82,
+      yesterdaySales: 6_290,
+      yesterdayTransactions: 1,
+    });
   });
 
   it("falls back to the server calendar day when the latest opening is already closed", async () => {
