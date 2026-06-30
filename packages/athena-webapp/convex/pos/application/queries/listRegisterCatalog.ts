@@ -52,8 +52,12 @@ type InventoryImportProvisionalSku = {
   importedProductName: string;
   importedSku?: string;
   importedBarcode?: string;
+  importedCategory?: string;
+  importedColor?: string;
+  importedLength?: number;
   importedPrice: number;
   importedQuantity: number;
+  importedSize?: string;
   provisionalQuantitySold?: number;
   provisionalTransactionCount?: number;
 };
@@ -77,9 +81,9 @@ function isDraftAllowedInTrustedRegisterCatalog(categorySlug?: string) {
   );
 }
 
-async function readCategoryName(
+async function readCategoryDoc(
   ctx: QueryCtx,
-  cache: Map<Id<"category">, string>,
+  cache: Map<Id<"category">, Doc<"category"> | null>,
   categoryId: Id<"category">,
 ) {
   const cached = cache.get(categoryId);
@@ -88,76 +92,80 @@ async function readCategoryName(
   }
 
   const category = await ctx.db.get("category", categoryId);
-  const name = category?.name ?? "";
-  cache.set(categoryId, name);
+  cache.set(categoryId, category);
 
-  return name;
+  return category;
 }
 
-async function readColorName(
-  ctx: QueryCtx,
-  cache: Map<Id<"color">, string>,
-  colorId: Id<"color"> | undefined,
-) {
-  if (!colorId) {
-    return "";
-  }
-
-  const cached = cache.get(colorId);
-  if (cached !== undefined) {
-    return cached;
-  }
-
-  const color = await ctx.db.get("color", colorId);
-  const name = color?.name ?? "";
-  cache.set(colorId, name);
-
-  return name;
-}
-
-function mapSkuToRegisterCatalogRow(args: {
-  product: Doc<"product">;
-  sku: Doc<"productSku">;
-  category: string;
-  color: string;
+function mapProjectionToRegisterCatalogRow(args: {
   pendingCheckoutItem?: PosPendingCheckoutItem;
-  provisionalSku?: InventoryImportProvisionalSku;
+  projection: Doc<"productSkuSearch">;
 }): RegisterCatalogRow {
   return {
-    id: args.provisionalSku?._id ?? args.sku._id,
-    productSkuId: args.sku._id,
-    skuId: args.sku._id,
-    productId: args.product._id,
-    ...(args.provisionalSku
-      ? { inventoryImportProvisionalSkuId: args.provisionalSku._id }
-      : {}),
+    id: args.projection.productSkuId,
+    productSkuId: args.projection.productSkuId,
+    skuId: args.projection.productSkuId,
+    productId: args.projection.productId,
     ...(args.pendingCheckoutItem
       ? { pendingCheckoutItemId: args.pendingCheckoutItem._id }
       : {}),
-    name: args.provisionalSku?.importedProductName ?? args.product.name,
-    sku: args.sku.sku || args.provisionalSku?.importedSku || "",
-    barcode: args.sku.barcode || args.provisionalSku?.importedBarcode || "",
+    name: args.projection.productName,
+    sku: args.projection.sku ?? "",
+    barcode: args.projection.barcode ?? "",
     price:
       args.pendingCheckoutItem?.provisionalPrice ??
-      args.provisionalSku?.importedPrice ??
-      getRegisterCatalogPrice(args.sku),
-    category: args.category,
-    description: args.product.description ?? "",
-    image: args.sku.images[0] ?? null,
-    size: args.sku.size ?? "",
-    length: args.sku.length ?? null,
-    color: args.color,
-    areProcessingFeesAbsorbed: args.product.areProcessingFeesAbsorbed ?? false,
+      getRegisterCatalogProjectionPrice(args.projection),
+    category: args.projection.categoryName ?? "",
+    description: args.projection.productDescription ?? "",
+    image: args.projection.images[0] ?? null,
+    size: args.projection.size ?? "",
+    length: args.projection.length ?? null,
+    color: args.projection.colorName ?? "",
+    areProcessingFeesAbsorbed:
+      args.projection.productProcessingFeesAbsorbed ?? false,
     availabilityPolicy: args.pendingCheckoutItem
       ? "pending_checkout"
-      : args.provisionalSku
-        ? "active_provisional_import"
-        : "trusted_inventory",
+      : "trusted_inventory",
+  };
+}
+
+function mapProvisionalSkuToRegisterCatalogRow(
+  provisionalSku: InventoryImportProvisionalSku,
+  projection?: Doc<"productSkuSearch">,
+): RegisterCatalogRow | null {
+  if (!provisionalSku.productId || !provisionalSku.productSkuId) {
+    return null;
+  }
+
+  return {
+    id: provisionalSku._id,
+    productSkuId: provisionalSku.productSkuId,
+    skuId: provisionalSku.productSkuId,
+    productId: provisionalSku.productId,
+    inventoryImportProvisionalSkuId: provisionalSku._id,
+    name: provisionalSku.importedProductName,
+    sku: projection?.sku || provisionalSku.importedSku || "",
+    barcode: projection?.barcode || provisionalSku.importedBarcode || "",
+    price: provisionalSku.importedPrice,
+    category:
+      projection?.categoryName ?? provisionalSku.importedCategory ?? "",
+    description: projection?.productDescription ?? "",
+    image: projection?.images[0] ?? null,
+    size: projection?.size ?? provisionalSku.importedSize ?? "",
+    length: projection?.length ?? provisionalSku.importedLength ?? null,
+    color: projection?.colorName ?? provisionalSku.importedColor ?? "",
+    areProcessingFeesAbsorbed:
+      projection?.productProcessingFeesAbsorbed ?? false,
+    availabilityPolicy: "active_provisional_import",
   };
 }
 
 function getRegisterCatalogPrice(sku: Doc<"productSku">) {
   return sku.netPrice ?? sku.price;
+}
+
+function getRegisterCatalogProjectionPrice(projection: Doc<"productSkuSearch">) {
+  return projection.netPrice ?? projection.price;
 }
 
 export function isTrustedRegisterCatalogSku(args: {
@@ -180,61 +188,75 @@ export function isTrustedRegisterCatalogSku(args: {
   );
 }
 
-async function listScopedRegisterCatalogSkus(
+function isTrustedRegisterCatalogProjection(
+  projection: Doc<"productSkuSearch">,
+) {
+  const isReservedPosOperationalProduct = projection.categorySlug
+    ? POS_OPERATIONAL_CATEGORY_SLUGS.has(projection.categorySlug)
+    : false;
+  const isDraftAllowed = isDraftAllowedInTrustedRegisterCatalog(
+    projection.categorySlug,
+  );
+
+  return (
+    projection.productAvailability !== "archived" &&
+    (projection.productAvailability !== "draft" || isDraftAllowed) &&
+    (projection.productIsVisible !== false || isReservedPosOperationalProduct) &&
+    (projection.isVisible !== false || isDraftAllowed)
+  );
+}
+
+async function listScopedRegisterCatalogProjections(
   ctx: QueryCtx,
   args: {
+    activeProvisionalProductSkuIds: Set<Id<"productSku">>;
     storeId: Id<"store">;
   },
 ) {
-  const rows: Array<{ product: Doc<"product">; sku: Doc<"productSku"> }> = [];
-  const productCache = new Map<Id<"product">, Doc<"product"> | null>();
+  const rows: Array<Doc<"productSkuSearch">> = [];
+  const projectionsBySkuId = new Map<
+    Id<"productSku">,
+    Doc<"productSkuSearch">
+  >();
+  const seenSkuIds = new Set<Id<"productSku">>();
   // Convex allows only one paginated query per function; this POS snapshot must read the store catalog in one query.
   // eslint-disable-next-line @convex-dev/no-collect-in-query
-  const skus = await ctx.db
-    .query("productSku")
+  const projections = await ctx.db
+    .query("productSkuSearch")
     .withIndex("by_storeId", (q) => q.eq("storeId", args.storeId))
     .collect();
 
-  for (const sku of skus) {
-    let product = productCache.get(sku.productId);
-
-    if (product === undefined) {
-      product = (await ctx.db.get("product", sku.productId)) ?? null;
-      productCache.set(sku.productId, product);
-    }
-
-    if (!product || product.storeId !== args.storeId) {
+  for (const projection of projections.sort(
+    (left, right) => left.productSkuCreationTime - right.productSkuCreationTime,
+  )) {
+    if (seenSkuIds.has(projection.productSkuId)) {
       continue;
     }
+    seenSkuIds.add(projection.productSkuId);
+    projectionsBySkuId.set(projection.productSkuId, projection);
 
-    const category = await ctx.db.get("category", product.categoryId);
-
-    if (!isTrustedRegisterCatalogSku({ product, sku, category })) {
+    if (!isTrustedRegisterCatalogProjection(projection)) {
       continue;
     }
 
     if (
-      category?.slug === "legacy-import" &&
-      (product.availability === "draft" ||
-        product.isVisible === false ||
-        sku.isVisible === false) &&
-      (await readActiveProvisionalImportSkuForStoreSku(ctx, {
-        storeId: args.storeId,
-        productId: product._id,
-        productSkuId: sku._id,
-      }))
+      projection.categorySlug === "legacy-import" &&
+      (projection.productAvailability === "draft" ||
+        projection.productIsVisible === false ||
+        projection.isVisible === false) &&
+      args.activeProvisionalProductSkuIds.has(projection.productSkuId)
     ) {
       continue;
     }
 
-    if (getRegisterCatalogPrice(sku) <= 0) {
+    if (getRegisterCatalogProjectionPrice(projection) <= 0) {
       continue;
     }
 
-    rows.push({ product, sku });
+    rows.push(projection);
   }
 
-  return rows;
+  return { projectionsBySkuId, rows };
 }
 
 async function listScopedRegisterCatalogAvailabilitySkus(
@@ -245,6 +267,7 @@ async function listScopedRegisterCatalogAvailabilitySkus(
   },
 ) {
   const rows: Array<Doc<"productSku">> = [];
+  const categoryCache = new Map<Id<"category">, Doc<"category"> | null>();
   const productCache = new Map<Id<"product">, Doc<"product"> | null>();
   // Convex allows only one paginated query per function; this POS snapshot must read the store catalog in one query.
   // eslint-disable-next-line @convex-dev/no-collect-in-query
@@ -274,7 +297,7 @@ async function listScopedRegisterCatalogAvailabilitySkus(
       product.isVisible === false ||
       sku.isVisible === false;
     const category = needsOperationalCategoryCheck
-      ? await ctx.db.get("category", product.categoryId)
+      ? await readCategoryDoc(ctx, categoryCache, product.categoryId)
       : null;
 
     if (!isTrustedRegisterCatalogSku({ product, sku, category })) {
@@ -474,8 +497,15 @@ export async function listRegisterCatalog(
   },
 ) {
   const rows: RegisterCatalogRow[] = [];
-  const categoryCache = new Map<Id<"category">, string>();
-  const colorCache = new Map<Id<"color">, string>();
+  const activeProvisionalSkus = await queryActiveProvisionalImportSkusForStore(
+    ctx,
+    args,
+  );
+  const activeProvisionalProductSkuIds = new Set(
+    activeProvisionalSkus.flatMap((row) =>
+      row.productSkuId ? [row.productSkuId] : [],
+    ),
+  );
   const pendingCheckoutItemsBySkuId = new Map(
     (await queryActivePendingCheckoutItemsForStore(ctx, args)).flatMap(
       (item) =>
@@ -486,63 +516,51 @@ export async function listRegisterCatalog(
   );
   const trustedAvailableSkuIds = new Set<Id<"productSku">>();
 
-  for (const { product, sku } of await listScopedRegisterCatalogSkus(
+  const catalogProjectionSnapshot = await listScopedRegisterCatalogProjections(
     ctx,
-    args,
-  )) {
-    if (sku.quantityAvailable > 0) {
-      trustedAvailableSkuIds.add(sku._id);
+    {
+      activeProvisionalProductSkuIds,
+      storeId: args.storeId,
+    },
+  );
+
+  for (const projection of catalogProjectionSnapshot.rows) {
+    if (projection.quantityAvailable > 0) {
+      trustedAvailableSkuIds.add(projection.productSkuId);
     }
     rows.push(
-      mapSkuToRegisterCatalogRow({
-        product,
-        sku,
-        category: await readCategoryName(
-          ctx,
-          categoryCache,
-          product.categoryId,
+      mapProjectionToRegisterCatalogRow({
+        projection,
+        pendingCheckoutItem: pendingCheckoutItemsBySkuId.get(
+          projection.productSkuId,
         ),
-        color: await readColorName(ctx, colorCache, sku.color),
-        pendingCheckoutItem: pendingCheckoutItemsBySkuId.get(sku._id),
       }),
     );
   }
 
-  for (const provisionalSku of await queryActiveProvisionalImportSkusForStore(
-    ctx,
-    args,
-  )) {
-    const [product, sku] = await Promise.all([
-      ctx.db.get("product", provisionalSku.productId),
-      ctx.db.get("productSku", provisionalSku.productSkuId),
-    ]);
-
+  for (const provisionalSku of activeProvisionalSkus) {
     if (
-      !product ||
-      !sku ||
-      product.storeId !== args.storeId ||
-      product.availability === "archived" ||
-      sku.storeId !== args.storeId ||
-      sku.productId !== product._id ||
+      !provisionalSku.productSkuId ||
       trustedAvailableSkuIds.has(provisionalSku.productSkuId) ||
       provisionalSku.importedPrice <= 0
     ) {
       continue;
     }
 
-    rows.push(
-      mapSkuToRegisterCatalogRow({
-        product,
-        sku,
-        category: await readCategoryName(
-          ctx,
-          categoryCache,
-          product.categoryId,
-        ),
-        color: await readColorName(ctx, colorCache, sku.color),
-        provisionalSku,
-      }),
+    const projection = catalogProjectionSnapshot.projectionsBySkuId.get(
+      provisionalSku.productSkuId,
     );
+    if (projection?.productAvailability === "archived") {
+      continue;
+    }
+
+    const row = mapProvisionalSkuToRegisterCatalogRow(
+      provisionalSku,
+      projection,
+    );
+    if (row) {
+      rows.push(row);
+    }
   }
 
   return rows;

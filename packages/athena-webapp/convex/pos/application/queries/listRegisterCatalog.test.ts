@@ -15,7 +15,8 @@ type TableName =
   | "inventoryImportProvisionalSku"
   | "posPendingCheckoutItem"
   | "product"
-  | "productSku";
+  | "productSku"
+  | "productSkuSearch";
 type Row = Record<string, unknown> & { _id: string };
 type IndexedFilter = {
   field: string;
@@ -36,6 +37,7 @@ function createRegisterCatalogCtx(
         "posPendingCheckoutItem",
         "product",
         "productSku",
+        "productSkuSearch",
       ] as TableName[]
     ).map((table) => [table, 0]),
   ) as Record<TableName, number>;
@@ -47,6 +49,7 @@ function createRegisterCatalogCtx(
     posPendingCheckoutItem: new Map(),
     product: new Map(),
     productSku: new Map(),
+    productSkuSearch: new Map(),
   };
 
   for (const [table, rows] of Object.entries(seed) as Array<
@@ -60,6 +63,64 @@ function createRegisterCatalogCtx(
         ...row,
       }),
     );
+  }
+
+  if (!seed.productSkuSearch) {
+    Array.from(tables.productSku.values()).forEach((sku, index) => {
+      const productId = sku.productId as string | undefined;
+      const product = productId ? tables.product.get(productId) : null;
+      if (!product) return;
+
+      const categoryId = product.categoryId as string | undefined;
+      const category = categoryId ? tables.category.get(categoryId) : null;
+      const colorId = sku.color as string | undefined;
+      const color = colorId ? tables.color.get(colorId) : null;
+      const skuCreationTime =
+        typeof sku._creationTime === "number" ? sku._creationTime : index;
+
+      tables.productSkuSearch.set(`search-${sku._id}`, {
+        _creationTime: skuCreationTime,
+        _id: `search-${sku._id}`,
+        barcode: sku.barcode,
+        categoryId,
+        categoryName: category?.name,
+        categorySlug: category?.slug,
+        colorId,
+        colorName: color?.name,
+        images: Array.isArray(sku.images) ? sku.images : [],
+        inventoryCount:
+          typeof sku.inventoryCount === "number" ? sku.inventoryCount : 0,
+        isVisible: sku.isVisible,
+        length: sku.length,
+        netPrice: sku.netPrice,
+        price: typeof sku.price === "number" ? sku.price : 0,
+        productAvailability: product.availability ?? "live",
+        productCategoryId: categoryId,
+        productDescription: product.description,
+        productId: product._id,
+        productInventoryCount:
+          typeof product.inventoryCount === "number"
+            ? product.inventoryCount
+            : 0,
+        productIsVisible: product.isVisible,
+        productName: product.name,
+        productProcessingFeesAbsorbed: product.areProcessingFeesAbsorbed,
+        productQuantityAvailable: product.quantityAvailable,
+        productSkuCreationTime: skuCreationTime,
+        productSkuId: sku._id,
+        productSubcategoryId: product.subcategoryId ?? "subcategory-missing",
+        quantityAvailable:
+          typeof sku.quantityAvailable === "number"
+            ? sku.quantityAvailable
+            : 0,
+        searchText: "",
+        size: sku.size,
+        sku: sku.sku,
+        storeId: sku.storeId,
+        updatedAt: 1,
+        sourceUpdatedAt: 1,
+      });
+    });
   }
 
   function countRead(table: TableName, count = 1) {
@@ -885,7 +946,7 @@ describe("listRegisterCatalog", () => {
       price: 1100 + index,
       quantityAvailable: 5,
     }));
-    const { ctx } = createRegisterCatalogCtx(
+    const { ctx, readCounts } = createRegisterCatalogCtx(
       {
         category: [
           {
@@ -911,6 +972,10 @@ describe("listRegisterCatalog", () => {
       name: "Club",
       price: 1504,
     });
+    expect(readCounts.category).toBe(0);
+    expect(readCounts.product).toBe(0);
+    expect(readCounts.productSku).toBe(0);
+    expect(readCounts.productSkuSearch).toBe(505);
   });
 
   it("returns bounded store-scoped availability for requested SKU ids after active holds", async () => {

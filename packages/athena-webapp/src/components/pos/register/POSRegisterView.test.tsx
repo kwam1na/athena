@@ -1686,7 +1686,7 @@ describe("POSRegisterView", () => {
     expect(onRetrySync).not.toHaveBeenCalled();
   });
 
-  it("hides sale controls while a locally closed register is waiting to sync", async () => {
+  it("shows the locally closed sync gate inside the register shell", async () => {
     const onRetrySync = vi.fn();
     mockUseRegisterViewModel.mockReturnValue({
       hasActiveStore: true,
@@ -1750,12 +1750,14 @@ describe("POSRegisterView", () => {
       screen.getByRole("button", { name: /retry sync/i }),
     ).toBeInTheDocument();
     expect(
-      screen.queryByText("register-customer-panel"),
-    ).not.toBeInTheDocument();
+      within(screen.getByTestId("register-main-workspace")).getByText(
+        "Register closed locally",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("register-customer-panel")).toBeInTheDocument();
+    expect(screen.getByText("register-checkout-panel")).toBeInTheDocument();
+    expect(screen.getByText("cart-items")).toBeInTheDocument();
     expect(screen.queryByText("register-action-bar")).not.toBeInTheDocument();
-    expect(
-      screen.queryByText("register-checkout-panel"),
-    ).not.toBeInTheDocument();
     expect(
       screen.queryByText("Ready for product lookup"),
     ).not.toBeInTheDocument();
