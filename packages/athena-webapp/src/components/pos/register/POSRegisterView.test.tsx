@@ -1761,6 +1761,72 @@ describe("POSRegisterView", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("keeps the completed transaction workspace visible while closeout sync is pending", async () => {
+    const onRetrySync = vi.fn();
+    mockUseRegisterViewModel.mockReturnValue({
+      hasActiveStore: true,
+      header: {
+        title: "POS",
+        isSessionActive: false,
+      },
+      registerInfo: {
+        customerName: undefined,
+        registerLabel: "Front Counter",
+        hasTerminal: true,
+      },
+      customerPanel: {},
+      productEntry: {
+        disabled: true,
+        productSearchQuery: "",
+        setProductSearchQuery: vi.fn(),
+        onBarcodeSubmit: vi.fn(),
+      },
+      cart: {
+        items: [],
+      },
+      checkout: {
+        isTransactionCompleted: true,
+        total: 2700,
+      },
+      sessionPanel: {},
+      cashierCard: {},
+      closeoutControl: {
+        canCloseout: false,
+        canShowOpeningFloatCorrection: false,
+        canCorrectOpeningFloat: false,
+        onRequestCloseout: vi.fn(),
+        onRequestOpeningFloatCorrection: vi.fn(),
+      },
+      authDialog: {
+        open: false,
+      },
+      drawerGate: null,
+      syncStatus: {
+        description:
+          "This register was closed locally. Athena will reconcile the closeout after sync.",
+        label: "Locally closed",
+        reconciliationItems: [],
+        status: "locally_closed_pending_sync",
+        tone: "warning",
+        onRetrySync,
+      },
+      onNavigateBack: vi.fn(),
+    });
+
+    const { POSRegisterView } = await import("./POSRegisterView");
+    render(<POSRegisterView />);
+
+    expect(
+      screen.queryByText("Register closed locally"),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("register-checkout-panel")).toBeInTheDocument();
+    expect(screen.getByText("checkout-total-2700")).toBeInTheDocument();
+    expect(screen.queryByText("register-action-bar")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Ready for product lookup"),
+    ).not.toBeInTheDocument();
+  });
+
   it("focuses the product lookup entry when the empty lookup workspace is clicked", async () => {
     const setShowProductLookup = vi.fn();
 

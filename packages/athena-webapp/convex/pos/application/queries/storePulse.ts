@@ -148,6 +148,189 @@ export async function getStorePulseSummaryForWindow(
   };
 }
 
+export async function getStorePulseSummariesForOperatingDateRanges(
+  ctx: QueryCtx,
+  args: {
+    dateRanges: Array<{
+      endAt: number;
+      operatingDate: string;
+      startAt: number;
+    }>;
+    storeId: Id<"store">;
+  },
+) {
+  if (!args.dateRanges.length) return [];
+
+  const orderedDateRanges = [...args.dateRanges].sort(
+    (first, second) => first.startAt - second.startAt,
+  );
+  const rangeStart = orderedDateRanges[0]!.startAt;
+  const rangeEnd = orderedDateRanges.at(-1)!.endAt - 1;
+  const transactions = await listCompletedTransactionsForRange(ctx, {
+    completedFrom: rangeStart,
+    completedTo: rangeEnd,
+    storeId: args.storeId,
+  });
+  const bucketByDate = new Map(
+    orderedDateRanges.map((range) => [
+      range.operatingDate,
+      {
+        hourBuckets: new Map<
+          number,
+          { hour: number; totalSales: number; transactionCount: number }
+        >(),
+        itemBuckets: new Map<string, PosOperatorItemBucket>(),
+        paymentBuckets: new Map<string, PosOperatorPaymentBucket>(),
+        totalItemsSold: 0,
+        totalSales: 0,
+        totalTransactions: 0,
+      },
+    ]),
+  );
+
+  for (const transaction of transactions) {
+    const operatingRange = orderedDateRanges.find(
+      (range) =>
+        transaction.completedAt >= range.startAt &&
+        transaction.completedAt < range.endAt,
+    );
+    if (!operatingRange) continue;
+
+    const bucket = bucketByDate.get(operatingRange.operatingDate);
+    if (!bucket) continue;
+
+    bucket.totalSales += transaction.total;
+    bucket.totalTransactions += 1;
+
+    const hour = new Date(transaction.completedAt).getUTCHours();
+    const hourBucket = bucket.hourBuckets.get(hour) ?? {
+      hour,
+      totalSales: 0,
+      transactionCount: 0,
+    };
+    hourBucket.totalSales += transaction.total;
+    hourBucket.transactionCount += 1;
+    bucket.hourBuckets.set(hour, hourBucket);
+
+    for (const payment of transactionPaymentTotals(transaction)) {
+      const method = payment.method || "unknown";
+      const existing = bucket.paymentBuckets.get(method) ?? {
+        count: 0,
+        label: formatPaymentMethodLabel(method),
+        method,
+        share: 0,
+        total: 0,
+      };
+      existing.count += 1;
+      existing.total += payment.amount;
+      bucket.paymentBuckets.set(method, existing);
+    }
+
+    const items = await listTransactionItems(ctx, transaction._id);
+    bucket.totalItemsSold += items.reduce(
+      (sum, item) => sum + item.quantity,
+      0,
+    );
+
+    for (const item of items) {
+      const key = `${item.productId}:${item.productSkuId}`;
+      const existing = bucket.itemBuckets.get(key) ?? {
+        name: item.productName,
+        productSku: item.productSku || null,
+        quantity: 0,
+        totalSales: 0,
+      };
+      existing.quantity += item.quantity;
+      existing.totalSales += item.totalPrice;
+      bucket.itemBuckets.set(key, existing);
+    }
+  }
+
+  return orderedDateRanges.map((range) => {
+    const bucket = bucketByDate.get(range.operatingDate)!;
+    const averageTransaction =
+      bucket.totalTransactions > 0
+        ? bucket.totalSales / bucket.totalTransactions
+        : 0;
+    const totalPaymentSales = Array.from(bucket.paymentBuckets.values()).reduce(
+      (sum, payment) => sum + payment.total,
+      0,
+    );
+    const paymentMix = Array.from(bucket.paymentBuckets.values())
+      .map((payment) => ({
+        ...payment,
+        share:
+          totalPaymentSales > 0
+            ? Math.round((payment.total / totalPaymentSales) * 100)
+            : 0,
+      }))
+      .sort((first, second) => second.total - first.total)
+      .slice(0, 4);
+    const topItems = Array.from(bucket.itemBuckets.values())
+      .sort((first, second) => {
+        if (second.quantity !== first.quantity) {
+          return second.quantity - first.quantity;
+        }
+        return second.totalSales - first.totalSales;
+      })
+      .slice(0, 10);
+    const busiestHour = Array.from(bucket.hourBuckets.values()).sort(
+      (first, second) => {
+        if (second.transactionCount !== first.transactionCount) {
+          return second.transactionCount - first.transactionCount;
+        }
+        return second.totalSales - first.totalSales;
+      },
+    )[0];
+    const trendDay = {
+      averageTransaction,
+      date: range.operatingDate,
+      label: formatShortDate(range.operatingDate),
+      totalItemsSold: bucket.totalItemsSold,
+      totalSales: bucket.totalSales,
+      transactionCount: bucket.totalTransactions,
+    };
+
+    return {
+      averageTransaction,
+      date: range.operatingDate,
+      operatorSnapshot: {
+        busiestHour: busiestHour
+          ? {
+              hour: busiestHour.hour,
+              label: formatHourLabel(busiestHour.hour),
+              totalSales: busiestHour.totalSales,
+              transactionCount: busiestHour.transactionCount,
+            }
+          : null,
+        comparison: {
+          averageTransactionDeltaPercent: 0,
+          currentAverageTransaction: averageTransaction,
+          currentItemsSold: bucket.totalItemsSold,
+          currentSales: bucket.totalSales,
+          currentTransactions: bucket.totalTransactions,
+          itemsSoldDeltaPercent: 0,
+          salesDeltaPercent: 0,
+          transactionDeltaPercent: 0,
+          yesterdayAverageTransaction: 0,
+          yesterdayItemsSold: 0,
+          yesterdaySales: 0,
+          yesterdayTransactions: 0,
+        },
+        historyDays: 1,
+        isLimited: false,
+        paymentMix,
+        topItems,
+        trend: [trendDay],
+        usableHistoryDays: bucket.totalTransactions > 0 ? 1 : 0,
+      },
+      totalItemsSold: bucket.totalItemsSold,
+      totalSales: bucket.totalSales,
+      totalTransactions: bucket.totalTransactions,
+    };
+  });
+}
+
 export async function summarizePosPulseTransactions(
   ctx: QueryCtx,
   transactions: Array<{ _id: Id<"posTransaction">; total: number }>,

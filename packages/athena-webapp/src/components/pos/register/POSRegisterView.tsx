@@ -1732,6 +1732,7 @@ function POSRegisterViewContent({
     } satisfies RegisterViewModel["onboarding"]);
   const isLocallyClosedPendingSync =
     isPosWorkflow &&
+    !viewModel.checkout.isTransactionCompleted &&
     viewModel.syncStatus?.status === "locally_closed_pending_sync";
   const isPosRegisterLocked = isPosWorkflow && isAwaitingCashierAuth;
   const shouldShowOnboarding =

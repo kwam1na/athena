@@ -1,13 +1,5 @@
-import {
-  fireEvent,
-  render,
-  screen,
-  within,
-} from "@testing-library/react";
-import React, {
-  type AnchorHTMLAttributes,
-  type ReactNode,
-} from "react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
+import React, { type AnchorHTMLAttributes, type ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -28,6 +20,10 @@ const mockedHooks = vi.hoisted(() => ({
 const mockedApi = vi.hoisted(() => ({
   getDailyOperationsDetailSnapshot: "getDailyOperationsDetailSnapshot",
   getDailyOperationsSnapshot: "getDailyOperationsSnapshot",
+  getDailyOperationsStorePulseSnapshot: "getDailyOperationsStorePulseSnapshot",
+  getDailyOperationsTimelinePreviewSnapshot:
+    "getDailyOperationsTimelinePreviewSnapshot",
+  getDailyOperationsTimelineSnapshot: "getDailyOperationsTimelineSnapshot",
 }));
 
 vi.mock("@tanstack/react-router", () => ({
@@ -76,17 +72,50 @@ vi.mock("@/hooks/use-mobile", () => ({
 }));
 
 vi.mock("recharts", () => ({
-  Area: () => <path data-testid="store-pulse-area" />,
+  Area: ({
+    animateNewValues,
+    animationBegin,
+    animationDuration,
+    animationEasing,
+    animationId,
+    "data-replay-key": replayKey,
+    isAnimationActive,
+    pathLength,
+  }: {
+    animateNewValues?: boolean;
+    animationBegin?: number;
+    animationDuration?: number;
+    animationEasing?: string;
+    animationId?: number;
+    "data-replay-key"?: string;
+    isAnimationActive?: boolean;
+    pathLength?: number;
+  }) => (
+    <path
+      data-animate-new-values={String(Boolean(animateNewValues))}
+      data-animation-begin={animationBegin ?? ""}
+      data-animation-duration={animationDuration ?? ""}
+      data-animation-easing={animationEasing ?? ""}
+      data-animation-id={animationId ?? ""}
+      data-animation-active={String(Boolean(isAnimationActive))}
+      data-path-length={pathLength ?? ""}
+      data-replay-key={replayKey ?? ""}
+      data-testid="store-pulse-area"
+    />
+  ),
   AreaChart: ({
     children,
+    className,
     data = [],
     margin,
   }: {
     children?: React.ReactNode;
+    className?: string;
     data?: Array<{ displayDate?: string; displayLabel?: string }>;
     margin?: { bottom?: number; left?: number; right?: number; top?: number };
   }) => (
     <svg
+      className={className}
       data-display-dates={data.map((day) => day.displayDate).join("|")}
       data-display-labels={data.map((day) => day.displayLabel).join("|")}
       data-margin-right={margin?.right ?? ""}
@@ -105,7 +134,9 @@ vi.mock("recharts", () => ({
   }) => (
     <g
       data-testid="store-pulse-x-axis"
-      data-tick-labels={ticks?.map((tick) => tickFormatter?.(tick)).join("|") ?? ""}
+      data-tick-labels={
+        ticks?.map((tick) => tickFormatter?.(tick)).join("|") ?? ""
+      }
       data-ticks={ticks?.join("|") ?? ""}
     />
   ),
@@ -208,10 +239,20 @@ const weekMetrics = [
   },
 ] satisfies DailyOperationsSnapshot["weekMetrics"];
 
-function buildStorePulseSummary(): NonNullable<DailyOperationsSnapshot["storePulse"]> {
+function buildStorePulseSummary({
+  date = "2026-06-20",
+  itemName = "Braiding hair",
+  paymentLabel = "Cash",
+  paymentMethod = "cash",
+}: {
+  date?: string;
+  itemName?: string;
+  paymentLabel?: string;
+  paymentMethod?: string;
+} = {}): NonNullable<DailyOperationsSnapshot["storePulse"]> {
   return {
     averageTransaction: 6_250,
-    date: "2026-06-20",
+    date,
     operatorSnapshot: {
       busiestHour: {
         hour: 14,
@@ -238,8 +279,8 @@ function buildStorePulseSummary(): NonNullable<DailyOperationsSnapshot["storePul
       paymentMix: [
         {
           count: 1,
-          label: "Cash",
-          method: "cash",
+          label: paymentLabel,
+          method: paymentMethod,
           share: 60,
           total: 7_500,
         },
@@ -253,7 +294,7 @@ function buildStorePulseSummary(): NonNullable<DailyOperationsSnapshot["storePul
       ],
       topItems: [
         {
-          name: "Braiding hair",
+          name: itemName,
           productSku: "BRAID-1",
           quantity: 2,
           totalSales: 8_000,
@@ -270,8 +311,8 @@ function buildStorePulseSummary(): NonNullable<DailyOperationsSnapshot["storePul
         },
         {
           averageTransaction: 6_250,
-          date: "2026-06-20",
-          label: "Jun 20",
+          date,
+          label: "Selected day",
           totalItemsSold: 3,
           totalSales: 12_500,
           transactionCount: 2,
@@ -347,13 +388,35 @@ const operatingSnapshot: DailyOperationsSnapshot = {
   weekMetrics,
 };
 
+function buildWeekSnapshots(): DailyOperationsSnapshot[] {
+  return weekMetrics.map((metric) => ({
+    ...operatingSnapshot,
+    closeSummary: {
+      ...operatingSnapshot.closeSummary,
+      currentDayCashTotal: metric.currentDayCashTotal,
+      currentDayCashTransactionCount: metric.currentDayCashTransactionCount,
+      expenseTotal: metric.expenseTotal,
+      expenseTransactionCount: metric.expenseTransactionCount,
+      salesTotal: metric.salesTotal,
+      transactionCount: metric.transactionCount,
+    },
+    operatingDate: metric.operatingDate,
+    storePulse: undefined,
+    weekMetrics: weekMetrics.map((weekMetric) => ({
+      ...weekMetric,
+      isSelected: weekMetric.operatingDate === metric.operatingDate,
+    })),
+  }));
+}
+
 const blockedSnapshot: DailyOperationsSnapshot = {
   ...operatingSnapshot,
   attentionItems: [
     {
       id: "register_session:register-1:open",
       label: "Register session is still open",
-      message: "Close the register session before completing the end of day review.",
+      message:
+        "Close the register session before completing the end of day review.",
       owner: "daily_close",
       severity: "critical",
       source: {
@@ -417,7 +480,7 @@ const closedSnapshot: DailyOperationsSnapshot = {
     status: "closed",
   },
   primaryAction: {
-      label: "Review EOD Review",
+    label: "Review EOD Review",
     to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",
   },
   timeline: [
@@ -695,8 +758,7 @@ const automationReviewSnapshot: DailyOperationsSnapshot = {
         {
           id: "register-session-review",
           label: "Register session still needs closeout",
-          message:
-            "Close the carried-over register session in Cash Controls.",
+          message: "Close the carried-over register session in Cash Controls.",
           source: {
             id: "session-1",
             label: "Register 1",
@@ -872,6 +934,16 @@ function renderContent(
     React.ComponentProps<typeof DailyOperationsViewContent>
   > = {},
 ) {
+  const defaultTimelinePreviewSnapshot =
+    snapshot && !overrides.timelinePreviewSnapshot
+      ? {
+          operatingDate: snapshot.operatingDate,
+          timeline: snapshot.timeline.slice(0, 5),
+          timelineHasMore:
+            snapshot.timelineHasMore ?? snapshot.timeline.length > 5,
+        }
+      : undefined;
+
   return render(
     <DailyOperationsViewContent
       currency="GHS"
@@ -885,6 +957,7 @@ function renderContent(
       snapshot={snapshot}
       storePulseWindow="today"
       storeUrlSlug="osu"
+      timelinePreviewSnapshot={defaultTimelinePreviewSnapshot}
       {...overrides}
     />,
   );
@@ -946,7 +1019,9 @@ describe("DailyOperationsViewContent", () => {
     expect(screen.getByText("2 payments")).toBeInTheDocument();
     expect(screen.getByText("Carried-over cash")).toBeInTheDocument();
     expect(screen.getAllByText("GH₵0")).not.toHaveLength(0);
-    expect(screen.getByText("No registers from prior days")).toBeInTheDocument();
+    expect(
+      screen.getByText("No registers from prior days"),
+    ).toBeInTheDocument();
     expect(screen.getByText("Expenses")).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: "Open expense reports" }),
@@ -1050,10 +1125,12 @@ describe("DailyOperationsViewContent", () => {
     renderContent({
       ...operatingSnapshot,
       operatingDate: getCurrentLocalOperatingDate(),
+      storePulse: buildStorePulseSummary(),
     });
 
     expect(screen.getByText("Today's net sales")).toBeInTheDocument();
     expect(screen.getByText("Today's cash")).toBeInTheDocument();
+    expect(screen.getByText("Today's top items")).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: "Open transactions" }),
     ).toHaveAttribute(
@@ -1161,7 +1238,9 @@ describe("DailyOperationsViewContent", () => {
         screen.getByRole("heading", { name: "Week at a glance" }),
       ) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
-    expect(screen.getByText("Athena started Opening Handoff.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Athena started Opening Handoff."),
+    ).toBeInTheDocument();
     expect(
       screen.getByText("Athena prepared EOD Review for manager review."),
     ).toBeInTheDocument();
@@ -1172,8 +1251,13 @@ describe("DailyOperationsViewContent", () => {
     expect(closeAutomationMessage).not.toHaveClass("truncate");
     expect(closeAutomationMessage).toHaveClass("break-words", "leading-5");
     expect(
-      screen.getByRole("link", { name: "Open Opening Handoff automation source" }),
-    ).toHaveAttribute("href", "/wigclub/store/osu/operations/opening?o=%252Fwigclub%252Fstore%252Fosu%252Foperations");
+      screen.getByRole("link", {
+        name: "Open Opening Handoff automation source",
+      }),
+    ).toHaveAttribute(
+      "href",
+      "/wigclub/store/osu/operations/opening?o=%252Fwigclub%252Fstore%252Fosu%252Foperations",
+    );
     expect(
       screen.getByRole("link", { name: "Open EOD Review automation source" }),
     ).toHaveAttribute(
@@ -1208,7 +1292,9 @@ describe("DailyOperationsViewContent", () => {
       screen.getByText("Athena completed EOD Review under store policy."),
     ).toBeInTheDocument();
     expect(
-      screen.getByText("Policy checked low-risk review evidence before completion."),
+      screen.getByText(
+        "Policy checked low-risk review evidence before completion.",
+      ),
     ).toBeInTheDocument();
     expect(
       screen.queryByText(
@@ -1254,7 +1340,9 @@ describe("DailyOperationsViewContent", () => {
       screen.getByText("Restricted close evidence is hidden for this account."),
     ).toBeInTheDocument();
     expect(
-      screen.queryByText("Policy checked low-risk review evidence and preserved carry-forward work for Opening."),
+      screen.queryByText(
+        "Policy checked low-risk review evidence and preserved carry-forward work for Opening.",
+      ),
     ).not.toBeInTheDocument();
   });
 
@@ -1270,7 +1358,9 @@ describe("DailyOperationsViewContent", () => {
     expect(
       screen.queryByText(/Checkout completion ran/i),
     ).not.toBeInTheDocument();
-    expect(screen.queryByText(/provider|exception|stack/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/provider|exception|stack/i),
+    ).not.toBeInTheDocument();
   });
 
   it("renders store pulse visualizations in the main workspace when provided", () => {
@@ -1303,25 +1393,28 @@ describe("DailyOperationsViewContent", () => {
       "data-display-labels",
       "Sun, May 3|Mon, May 4|Tue, May 5|Wed, May 6|Thu, May 7|Fri, May 8",
     );
-    expect(within(storePulse).getByTestId("store-pulse-x-axis")).toHaveAttribute(
-      "data-ticks",
-      "0|1|2|3|4|5",
-    );
+    expect(
+      within(storePulse).getByTestId("store-pulse-x-axis"),
+    ).toHaveAttribute("data-ticks", "0|1|2|3|4|5");
     expect(chart).toHaveAttribute("data-margin-right", "72");
     expect(within(storePulse).getByText("Braiding Hair")).toBeInTheDocument();
-    expect(
-      within(storePulse).getByText("Today's top items"),
-    ).toBeInTheDocument();
+    expect(within(storePulse).getByText("Top items")).toBeInTheDocument();
     expect(
       within(storePulse).getByLabelText("Total items sold: 3"),
     ).toBeInTheDocument();
     expect(screen.getByLabelText("Store-day timeline")).toBeInTheDocument();
     expect(within(storePulse).queryByRole("tablist")).not.toBeInTheDocument();
-    expect(within(storePulse).queryByText("Average sale")).not.toBeInTheDocument();
-    expect(within(storePulse).queryByText("Items sold")).not.toBeInTheDocument();
+    expect(
+      within(storePulse).queryByText("Average sale"),
+    ).not.toBeInTheDocument();
+    expect(
+      within(storePulse).queryByText("Items sold"),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText("Store pulse")).not.toBeInTheDocument();
     expect(
-      screen.queryByText("POS sales activity for the selected reporting window."),
+      screen.queryByText(
+        "POS sales activity for the selected reporting window.",
+      ),
     ).not.toBeInTheDocument();
     expect(
       within(storePulse).getByText("This week's completed POS sales."),
@@ -1352,16 +1445,15 @@ describe("DailyOperationsViewContent", () => {
     );
   });
 
-  it("shows a bounded empty state when store pulse is omitted", () => {
+  it("omits store pulse detail when no pulse data or request handler is available", () => {
     renderContent(operatingSnapshot);
 
-    expect(screen.getByText("Store pulse unavailable")).toBeInTheDocument();
     expect(
-      screen.getByText(
-        "Store pulse is not available for this view. Financially restricted or historical snapshots can omit POS pulse details.",
-      ),
-    ).toBeInTheDocument();
-    expect(screen.queryByLabelText("Store pulse loading")).not.toBeInTheDocument();
+      screen.queryByRole("region", { name: "Store pulse" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Store pulse loading"),
+    ).not.toBeInTheDocument();
   });
 
   it("surfaces Opening auto-start review evidence for managers", () => {
@@ -1375,7 +1467,9 @@ describe("DailyOperationsViewContent", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("Pending checkout")).toBeInTheDocument();
     expect(screen.getByText("4")).toBeInTheDocument();
-    expect(screen.getByText("2 other manager review items")).toBeInTheDocument();
+    expect(
+      screen.getByText("2 other manager review items"),
+    ).toBeInTheDocument();
     expect(
       screen.queryByText("Register session still needs closeout"),
     ).not.toBeInTheDocument();
@@ -1429,9 +1523,9 @@ describe("DailyOperationsViewContent", () => {
       .getByText("Today's net sales")
       .closest("a,article,div");
 
-    expect(screen.getAllByRole("heading", { name: "Opening review" })).toHaveLength(
-      1,
-    );
+    expect(
+      screen.getAllByRole("heading", { name: "Opening review" }),
+    ).toHaveLength(1);
     expect(automationPanel?.compareDocumentPosition(openingReview!)).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING,
     );
@@ -1843,8 +1937,12 @@ describe("DailyOperationsViewContent", () => {
     expect(
       screen.getByRole("heading", { name: "Historical store-day view" }),
     ).toBeInTheDocument();
-    expect(screen.queryByLabelText("Operator attention")).not.toBeInTheDocument();
-    expect(screen.queryByText("Register session is still open")).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Operator attention"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Register session is still open"),
+    ).not.toBeInTheDocument();
   });
 
   it("keeps historical EOD Review links on the selected operating date", () => {
@@ -1903,7 +2001,12 @@ describe("DailyOperationsViewContent", () => {
   });
 
   it("previews the five most recent timeline events and opens the full list in a sheet", () => {
-    renderContent(timelineOverflowSnapshot);
+    renderContent(timelineOverflowSnapshot, {
+      timelineSnapshot: {
+        operatingDate: timelineOverflowSnapshot.operatingDate,
+        timeline: timelineOverflowSnapshot.timeline,
+      },
+    });
 
     const timeline = screen.getByRole("region", {
       name: "Store-day timeline",
@@ -1915,7 +2018,9 @@ describe("DailyOperationsViewContent", () => {
       within(timeline).queryByText("Timeline event 6"),
     ).not.toBeInTheDocument();
 
-    fireEvent.click(within(timeline).getByRole("button", { name: "Show more" }));
+    fireEvent.click(
+      within(timeline).getByRole("button", { name: "Show more" }),
+    );
 
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     expect(screen.getAllByText("Store-day timeline")).not.toHaveLength(0);
@@ -1927,10 +2032,10 @@ describe("DailyOperationsViewContent", () => {
   });
 
   it("offers timeline detail when the compact snapshot has hidden events", () => {
-    const onRequestDetailSnapshot = vi.fn();
+    const onRequestTimelineSnapshot = vi.fn();
 
     renderContent(compactTimelineOverflowSnapshot, {
-      onRequestDetailSnapshot,
+      onRequestTimelineSnapshot,
     });
 
     const timeline = screen.getByRole("region", {
@@ -1941,10 +2046,13 @@ describe("DailyOperationsViewContent", () => {
       within(timeline).getByText("Compact timeline event 5"),
     ).toBeInTheDocument();
 
-    fireEvent.click(within(timeline).getByRole("button", { name: "Show more" }));
+    fireEvent.click(
+      within(timeline).getByRole("button", { name: "Show more" }),
+    );
 
-    expect(onRequestDetailSnapshot).toHaveBeenCalledTimes(1);
+    expect(onRequestTimelineSnapshot).toHaveBeenCalledTimes(1);
     expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByText("Timeline loading")).toBeInTheDocument();
   });
 
   it("links quick-add product names to the product detail page with origin search", () => {
@@ -1954,9 +2062,7 @@ describe("DailyOperationsViewContent", () => {
 
     expect(productLink).toHaveAttribute(
       "href",
-      expect.stringContaining(
-        "/wigclub/store/osu/products/product-1?o=",
-      ),
+      expect.stringContaining("/wigclub/store/osu/products/product-1?o="),
     );
     expect(productLink).toHaveAttribute(
       "href",
@@ -2093,9 +2199,7 @@ describe("DailyOperationsViewContent", () => {
 
     expect(skuLink).toHaveAttribute(
       "href",
-      expect.stringContaining(
-        "/wigclub/store/osu/products/product-1?o=",
-      ),
+      expect.stringContaining("/wigclub/store/osu/products/product-1?o="),
     );
     expect(skuLink).toHaveAttribute(
       "href",
@@ -2146,10 +2250,22 @@ describe("DailyOperationsView", () => {
     (
       mockedApi as { getDailyOperationsSnapshot?: unknown }
     ).getDailyOperationsSnapshot = "getDailyOperationsSnapshot";
+    (
+      mockedApi as { getDailyOperationsStorePulseSnapshot?: unknown }
+    ).getDailyOperationsStorePulseSnapshot =
+      "getDailyOperationsStorePulseSnapshot";
+    (
+      mockedApi as { getDailyOperationsTimelinePreviewSnapshot?: unknown }
+    ).getDailyOperationsTimelinePreviewSnapshot =
+      "getDailyOperationsTimelinePreviewSnapshot";
+    (
+      mockedApi as { getDailyOperationsTimelineSnapshot?: unknown }
+    ).getDailyOperationsTimelineSnapshot = "getDailyOperationsTimelineSnapshot";
     window.scrollTo = vi.fn();
     mockedHooks.useProtectedAdminPageState.mockReturnValue({
       activeStore: { _id: "store-1", currency: "GHS" },
       canQueryProtectedData: true,
+      hasFinancialDetailsAccess: true,
       hasFullAdminAccess: true,
       isAuthenticated: true,
       isLoadingAccess: false,
@@ -2178,19 +2294,8 @@ describe("DailyOperationsView", () => {
     ).toBeInTheDocument();
   });
 
-  it("skips analytics detail until explicitly requested", () => {
+  it("hydrates analytics detail on initial load for an uncached week", () => {
     render(<DailyOperationsView />);
-
-    expect(mockedHooks.useQuery).toHaveBeenCalledWith(
-      mockedApi.getDailyOperationsDetailSnapshot,
-      "skip",
-    );
-  });
-
-  it("queries analytics detail through the explicit companion query after request", () => {
-    render(<DailyOperationsView />);
-
-    fireEvent.click(screen.getByRole("button", { name: "Load analytics" }));
 
     expect(mockedHooks.useQuery).toHaveBeenCalledWith(
       mockedApi.getDailyOperationsDetailSnapshot,
@@ -2203,10 +2308,403 @@ describe("DailyOperationsView", () => {
     );
   });
 
-  it("does not carry a detail request across operating-date changes", () => {
+  it("mirrors the analytics layout before detail is loaded", () => {
+    mockedHooks.useQuery.mockImplementation((query, args) => {
+      if (args === "skip") return undefined;
+      if (query === mockedApi.getDailyOperationsDetailSnapshot) {
+        return undefined;
+      }
+      return operatingSnapshot;
+    });
+    render(<DailyOperationsView />);
+
+    expect(
+      screen.getByRole("heading", { name: "Week at a glance" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Week sales")).toBeInTheDocument();
+    expect(screen.getAllByText("Loading analytics").length).toBeGreaterThan(0);
+    expect(
+      screen.getByRole("button", {
+        name: "Load analytics for week at a glance",
+      }),
+    ).toBeInTheDocument();
+
+    const storePulse = screen.getByRole("region", { name: "Store pulse" });
+
+    expect(
+      within(storePulse).getByRole("button", {
+        name: "Load analytics for sales trend",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      within(storePulse).getByRole("heading", { name: "Sales trend" }),
+    ).toBeInTheDocument();
+    expect(
+      within(storePulse).getByTestId("sales-trend-preview-grid"),
+    ).toBeInTheDocument();
+    expect(
+      within(storePulse).queryByTestId("sales-trend-preview-line"),
+    ).not.toBeInTheDocument();
+    expect(
+      within(storePulse).getByText("Store pulse detail loads with analytics."),
+    ).toBeInTheDocument();
+    expect(
+      within(storePulse).getByRole("heading", { name: "Top items" }),
+    ).toBeInTheDocument();
+    expect(
+      within(storePulse).getByRole("heading", { name: "How customers paid" }),
+    ).toBeInTheDocument();
+  });
+
+  it("uses the explicit companion query for analytics hydration", () => {
+    render(<DailyOperationsView />);
+
+    expect(mockedHooks.useQuery).toHaveBeenCalledWith(
+      mockedApi.getDailyOperationsDetailSnapshot,
+      expect.objectContaining({
+        operatingTimezoneOffsetMinutes: expect.any(Number),
+        storeId: "store-1",
+        storePulseWindow: "today",
+        weekEndOperatingDate: getCurrentSaturdayWeekEndOperatingDate(),
+      }),
+    );
+  });
+
+  it("queries analytics detail when the empty analytics shell is clicked", () => {
+    mockedHooks.useQuery.mockImplementation((query, args) => {
+      if (args === "skip") return undefined;
+      if (query === mockedApi.getDailyOperationsDetailSnapshot) {
+        return undefined;
+      }
+      return operatingSnapshot;
+    });
+    render(<DailyOperationsView />);
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Load analytics for week at a glance",
+      }),
+    );
+
+    expect(mockedHooks.useQuery).toHaveBeenCalledWith(
+      mockedApi.getDailyOperationsDetailSnapshot,
+      expect.objectContaining({
+        operatingTimezoneOffsetMinutes: expect.any(Number),
+        storeId: "store-1",
+        storePulseWindow: "today",
+        weekEndOperatingDate: getCurrentSaturdayWeekEndOperatingDate(),
+      }),
+    );
+  });
+
+  it("queries selected-day store pulse detail on mount when auto hydration is enabled", () => {
+    mockedHooks.useQuery.mockImplementation((query, args) => {
+      if (args === "skip") return undefined;
+      if (query === mockedApi.getDailyOperationsStorePulseSnapshot) {
+        return undefined;
+      }
+      return operatingSnapshot;
+    });
+    render(<DailyOperationsView />);
+
+    expect(mockedHooks.useQuery).toHaveBeenCalledWith(
+      mockedApi.getDailyOperationsStorePulseSnapshot,
+      expect.objectContaining({
+        operatingTimezoneOffsetMinutes: expect.any(Number),
+        storeId: "store-1",
+        storePulseWindow: "today",
+        weekEndOperatingDate: getCurrentSaturdayWeekEndOperatingDate(),
+      }),
+    );
+  });
+
+  it("keeps the week chart stable when selected-day pulse detail hydrates", async () => {
+    let shouldReturnPulseDetail = false;
+
+    mockedHooks.useQuery.mockImplementation((query, args) => {
+      if (args === "skip") return undefined;
+      if (query === mockedApi.getDailyOperationsDetailSnapshot) {
+        return {
+          ...operatingSnapshot,
+          weekSnapshots: buildWeekSnapshots(),
+        };
+      }
+      if (query === mockedApi.getDailyOperationsStorePulseSnapshot) {
+        if (!shouldReturnPulseDetail) return undefined;
+
+        return {
+          operatingDate: "2026-05-08",
+          storePulse: buildStorePulseSummary({
+            date: "2026-05-08",
+            itemName: "Hydrated selected item",
+            paymentLabel: "Mobile Money",
+            paymentMethod: "mobile_money",
+          }),
+        };
+      }
+      return operatingSnapshot;
+    });
+    mockedHooks.useSearch.mockReturnValue({
+      operatingDate: "2026-05-08",
+      weekEndOperatingDate: "2026-05-09",
+    });
     const view = render(<DailyOperationsView />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Load analytics" }));
+    expect(await screen.findByText(/Data refreshed at /)).toBeInTheDocument();
+    const chart = screen.getByTestId("store-pulse-chart");
+    const replayKey = screen
+      .getByTestId("store-pulse-area")
+      .getAttribute("data-replay-key");
+
+    expect(chart).toHaveAttribute(
+      "data-display-labels",
+      "Sun, May 3|Mon, May 4|Tue, May 5|Wed, May 6|Thu, May 7|Fri, May 8",
+    );
+
+    shouldReturnPulseDetail = true;
+    view.rerender(<DailyOperationsView />);
+
+    expect(
+      await screen.findByText("Hydrated Selected Item"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Mobile Money")).toBeInTheDocument();
+    expect(screen.getByTestId("store-pulse-chart")).toHaveAttribute(
+      "data-display-labels",
+      "Sun, May 3|Mon, May 4|Tue, May 5|Wed, May 6|Thu, May 7|Fri, May 8",
+    );
+    expect(screen.getByTestId("store-pulse-area")).toHaveAttribute(
+      "data-replay-key",
+      replayKey,
+    );
+  });
+
+  it("queries timeline detail separately when the timeline asks for more", () => {
+    mockedHooks.useQuery.mockImplementation((query, args) => {
+      if (args === "skip") return undefined;
+      if (query === mockedApi.getDailyOperationsTimelinePreviewSnapshot) {
+        return compactTimelineOverflowSnapshot;
+      }
+      if (query === mockedApi.getDailyOperationsTimelineSnapshot) {
+        return {
+          operatingDate: compactTimelineOverflowSnapshot.operatingDate,
+          timeline: timelineOverflowSnapshot.timeline,
+        };
+      }
+      return compactTimelineOverflowSnapshot;
+    });
+    render(<DailyOperationsView />);
+
+    const timeline = screen.getByRole("region", {
+      name: "Store-day timeline",
+    });
+
+    fireEvent.click(
+      within(timeline).getByRole("button", { name: "Show more" }),
+    );
+
+    expect(mockedHooks.useQuery).toHaveBeenCalledWith(
+      mockedApi.getDailyOperationsTimelineSnapshot,
+      expect.objectContaining({
+        operatingTimezoneOffsetMinutes: expect.any(Number),
+        storeId: "store-1",
+      }),
+    );
+    expect(mockedHooks.useQuery).toHaveBeenCalledWith(
+      mockedApi.getDailyOperationsDetailSnapshot,
+      expect.objectContaining({
+        operatingTimezoneOffsetMinutes: expect.any(Number),
+        storeId: "store-1",
+      }),
+    );
+  });
+
+  it("renders the store-day timeline from the separate preview query", () => {
+    mockedHooks.useQuery.mockImplementation((query, args) => {
+      if (args === "skip") return undefined;
+      if (query === mockedApi.getDailyOperationsTimelinePreviewSnapshot) {
+        return {
+          operatingDate: operatingSnapshot.operatingDate,
+          timeline: [
+            {
+              createdAt: Date.UTC(2026, 4, 8, 23),
+              id: "fresh-preview-event",
+              message: "Latest preview event from timeline query.",
+              subject: {
+                id: "timeline-preview",
+                type: "operations",
+              },
+              type: "operations.event",
+            },
+          ],
+          timelineHasMore: false,
+        };
+      }
+
+      return {
+        ...operatingSnapshot,
+        timeline: [
+          {
+            createdAt: Date.UTC(2026, 4, 8, 8),
+            id: "stale-main-snapshot-event",
+            message: "Stale event from main snapshot.",
+            subject: {
+              id: "main-snapshot",
+              type: "operations",
+            },
+            type: "operations.event",
+          },
+        ],
+      };
+    });
+
+    render(<DailyOperationsView />);
+
+    const timeline = screen.getByRole("region", {
+      name: "Store-day timeline",
+    });
+
+    expect(
+      within(timeline).getByText("Latest preview event from timeline query."),
+    ).toBeInTheDocument();
+    expect(
+      within(timeline).queryByText("Stale event from main snapshot."),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps loaded week analytics visible when navigating within the same week", async () => {
+    mockedHooks.useQuery.mockImplementation((query, args) => {
+      if (args === "skip") return undefined;
+      if (query === mockedApi.getDailyOperationsDetailSnapshot) {
+        return {
+          ...operatingSnapshot,
+          closeSummary: {
+            ...operatingSnapshot.closeSummary,
+            salesTotal: 999,
+            transactionCount: 99,
+          },
+          weekSnapshots: buildWeekSnapshots(),
+        };
+      }
+      return operatingSnapshot;
+    });
+    mockedHooks.useSearch.mockReturnValue({
+      operatingDate: "2026-05-08",
+      weekEndOperatingDate: "2026-05-09",
+    });
+    const view = render(<DailyOperationsView />);
+
+    expect(await screen.findByText(/Data refreshed at /)).toBeInTheDocument();
+    expect(
+      screen.getAllByText((_, node) => node?.textContent === "GH₵15,331")
+        .length,
+    ).toBeGreaterThan(0);
+    expect(screen.queryByText("99 transactions")).not.toBeInTheDocument();
+    mockedHooks.useQuery.mockClear();
+
+    mockedHooks.useSearch.mockReturnValue({
+      operatingDate: "2026-05-07",
+      weekEndOperatingDate: "2026-05-09",
+    });
+    view.rerender(<DailyOperationsView />);
+
+    expect(screen.getByText(/Data refreshed at /)).toBeInTheDocument();
+    expect(mockedHooks.useQuery).toHaveBeenCalledWith(
+      mockedApi.getDailyOperationsSnapshot,
+      "skip",
+    );
+    expect(mockedHooks.useQuery).not.toHaveBeenCalledWith(
+      mockedApi.getDailyOperationsSnapshot,
+      expect.objectContaining({
+        operatingDate: "2026-05-07",
+      }),
+    );
+    expect(
+      screen.getByText((_, node) => node?.textContent === "GH₵17,461"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getAllByText((_, node) => node?.textContent === "GH₵450").length,
+    ).toBeGreaterThan(0);
+    expect(screen.getAllByText("1 transaction").length).toBeGreaterThan(0);
+    expect(
+      screen.queryByRole("button", {
+        name: "Load analytics for week at a glance",
+      }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId("store-pulse-chart")).toBeInTheDocument();
+    expect(screen.getByTestId("store-pulse-chart")).toHaveAttribute(
+      "data-display-labels",
+      "Sun, May 3|Mon, May 4|Tue, May 5|Wed, May 6|Thu, May 7",
+    );
+    expect(screen.getByTestId("store-pulse-chart")).toHaveClass(
+      "store-pulse-sales-trend-plot",
+    );
+    expect(screen.getByTestId("store-pulse-area")).toHaveAttribute(
+      "data-animate-new-values",
+      "false",
+    );
+    expect(screen.getByTestId("store-pulse-area")).toHaveAttribute(
+      "data-animation-active",
+      "false",
+    );
+    expect(screen.getByTestId("store-pulse-area")).toHaveAttribute(
+      "data-animation-duration",
+      "",
+    );
+    expect(screen.getByTestId("store-pulse-area")).toHaveAttribute(
+      "data-path-length",
+      "1",
+    );
+    expect(screen.getByTestId("store-pulse-area")).toHaveAttribute(
+      "data-replay-key",
+      "2026-05-07",
+    );
+    expect(
+      screen.queryByTestId("sales-trend-preview-grid"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: "Load analytics for Top items",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: "Load analytics for How customers paid",
+      }),
+    ).toBeInTheDocument();
+
+    mockedHooks.useQuery.mockClear();
+    mockedHooks.useSearch.mockReturnValue({
+      operatingDate: "2026-05-08",
+      weekEndOperatingDate: "2026-05-09",
+    });
+    view.rerender(<DailyOperationsView />);
+
+    expect(mockedHooks.useQuery).toHaveBeenCalledWith(
+      mockedApi.getDailyOperationsSnapshot,
+      "skip",
+    );
+    expect(mockedHooks.useQuery).toHaveBeenCalledWith(
+      mockedApi.getDailyOperationsDetailSnapshot,
+      "skip",
+    );
+    expect(mockedHooks.useQuery).not.toHaveBeenCalledWith(
+      mockedApi.getDailyOperationsDetailSnapshot,
+      expect.objectContaining({
+        operatingDate: "2026-05-08",
+      }),
+    );
+    expect(screen.getByTestId("store-pulse-area")).toHaveAttribute(
+      "data-animate-new-values",
+      "false",
+    );
+    expect(screen.getByTestId("store-pulse-area")).toHaveAttribute(
+      "data-replay-key",
+      "2026-05-08",
+    );
+  });
+
+  it("hydrates analytics detail again after navigating to an uncached week", () => {
+    const view = render(<DailyOperationsView />);
 
     expect(mockedHooks.useQuery).toHaveBeenCalledWith(
       mockedApi.getDailyOperationsDetailSnapshot,
@@ -2233,7 +2731,10 @@ describe("DailyOperationsView", () => {
     );
     expect(mockedHooks.useQuery).toHaveBeenCalledWith(
       mockedApi.getDailyOperationsDetailSnapshot,
-      "skip",
+      expect.objectContaining({
+        operatingDate: "2026-05-07",
+        storeId: "store-1",
+      }),
     );
   });
 
@@ -2249,7 +2750,11 @@ describe("DailyOperationsView", () => {
       mockedApi.getDailyOperationsSnapshot,
       expect.objectContaining({
         operatingDate: "2026-05-07",
-        operatingTimezoneOffsetMinutes: new Date(2026, 4, 7).getTimezoneOffset(),
+        operatingTimezoneOffsetMinutes: new Date(
+          2026,
+          4,
+          7,
+        ).getTimezoneOffset(),
         storeId: "store-1",
         storePulseWindow: "today",
         weekEndOperatingDate: "2026-05-09",
@@ -2287,7 +2792,7 @@ describe("DailyOperationsView", () => {
 
     expect(within(storePulse).queryByRole("tablist")).not.toBeInTheDocument();
     expect(
-      within(storePulse).getByText("This week's completed POS sales."),
+      within(storePulse).getByText("Cached sales trend through the selected day."),
     ).toBeInTheDocument();
   });
 

@@ -21,6 +21,7 @@ async function runFixtureCommand(rootDir: string, command: string[]) {
     cwd: rootDir,
     stdout: "pipe",
     stderr: "pipe",
+    env: gitFixtureEnv(),
   });
   const [stdout, stderr, exitCode] = await Promise.all([
     new Response(process.stdout).text(),
@@ -33,6 +34,12 @@ async function runFixtureCommand(rootDir: string, command: string[]) {
       `Fixture command failed: ${command.join(" ")}\n${stdout}\n${stderr}`,
     );
   }
+}
+
+function gitFixtureEnv() {
+  return Object.fromEntries(
+    Object.entries(process.env).filter(([key]) => !key.startsWith("GIT_")),
+  );
 }
 
 async function createFixtureRepo() {
