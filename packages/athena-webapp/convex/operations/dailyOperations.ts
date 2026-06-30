@@ -521,17 +521,48 @@ async function listOpenQueueSnapshot(
           .take(MAX_OPERATIONS_LOOKAHEAD_LIMIT),
       ),
     ),
-    ctx.db
-      .query("approvalRequest")
-      .withIndex("by_storeId_status", (q) =>
-        q.eq("storeId", args.storeId).eq("status", "pending"),
-      )
-      .take(MAX_OPERATIONS_LOOKAHEAD_LIMIT),
+    listPendingApprovalRequestsSnapshot(ctx, args),
   ]);
 
   const openWorkItems = workItemBatches
     .flatMap((batch) => batch)
     .slice(0, MAX_OPERATIONS_QUERY_LIMIT);
+  const hasMoreOpenWorkItems =
+    workItemBatches.some(
+      (batch) => batch.length > MAX_OPERATIONS_QUERY_LIMIT,
+    ) ||
+    workItemBatches.reduce((total, batch) => total + batch.length, 0) >
+      MAX_OPERATIONS_QUERY_LIMIT;
+  const hasMoreApprovalRequests =
+    pendingApprovalRequests.hasMoreApprovalRequests;
+
+  return {
+    approvalRequests: pendingApprovalRequests.approvalRequests,
+    approvalRequestsCountLabel:
+      pendingApprovalRequests.approvalRequestsCountLabel,
+    hasMoreApprovalRequests,
+    hasMoreOpenWorkItems,
+    openWorkItems,
+    openWorkItemsCountLabel: hasMoreOpenWorkItems
+      ? `${MAX_OPERATIONS_QUERY_LIMIT}+`
+      : String(openWorkItems.length),
+  };
+}
+
+async function listPendingApprovalRequestsSnapshot(
+  ctx: Pick<QueryCtx, "db">,
+  args: {
+    endAt: number;
+    startAt: number;
+    storeId: Id<"store">;
+  },
+) {
+  const pendingApprovalRequests = await ctx.db
+    .query("approvalRequest")
+    .withIndex("by_storeId_status", (q) =>
+      q.eq("storeId", args.storeId).eq("status", "pending"),
+    )
+    .take(MAX_OPERATIONS_LOOKAHEAD_LIMIT);
   const currentTime = Date.now();
   const dayApprovalRequests = pendingApprovalRequests.filter((request) =>
     approvalRequestBelongsToOperationsDay({
@@ -544,12 +575,6 @@ async function listOpenQueueSnapshot(
     0,
     MAX_OPERATIONS_QUERY_LIMIT,
   );
-  const hasMoreOpenWorkItems =
-    workItemBatches.some(
-      (batch) => batch.length > MAX_OPERATIONS_QUERY_LIMIT,
-    ) ||
-    workItemBatches.reduce((total, batch) => total + batch.length, 0) >
-      MAX_OPERATIONS_QUERY_LIMIT;
   const hasMoreApprovalRequests =
     dayApprovalRequests.length > MAX_OPERATIONS_QUERY_LIMIT;
 
@@ -559,11 +584,6 @@ async function listOpenQueueSnapshot(
       ? `${MAX_OPERATIONS_QUERY_LIMIT}+`
       : String(approvalRequests.length),
     hasMoreApprovalRequests,
-    hasMoreOpenWorkItems,
-    openWorkItems,
-    openWorkItemsCountLabel: hasMoreOpenWorkItems
-      ? `${MAX_OPERATIONS_QUERY_LIMIT}+`
-      : String(openWorkItems.length),
   };
 }
 
@@ -2048,20 +2068,10 @@ function buildLanes(args: {
       status: args.queueCounts.workItemCount > 0 ? "needs_attention" : "ready",
       to: "/$orgUrlSlug/store/$storeUrlSlug/operations/open-work",
     },
-    {
-      count: args.queueCounts.approvalCount,
-      countLabel: args.queueCounts.approvalCountLabel,
-      description:
-        args.queueCounts.approvalCount > 0
-          ? `${args.queueCounts.approvalCountLabel} approval${
-              args.queueCounts.approvalCount === 1 ? "" : "s"
-            } pending.`
-          : "No pending approvals.",
-      key: "approvals",
-      label: "Approvals",
-      status: args.queueCounts.approvalCount > 0 ? "blocked" : "ready",
-      to: "/$orgUrlSlug/store/$storeUrlSlug/operations/approvals",
-    },
+    buildApprovalsLane({
+      approvalCount: args.queueCounts.approvalCount,
+      approvalCountLabel: args.queueCounts.approvalCountLabel,
+    }),
     {
       count: args.closeBlockerCounts.registerCount,
       description:
@@ -2071,7 +2081,7 @@ function buildLanes(args: {
       key: "registers",
       label: "Registers",
       status: args.closeBlockerCounts.registerCount > 0 ? "blocked" : "ready",
-      to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",
+      to: "/$orgUrlSlug/store/$storeUrlSlug/cash-controls",
     },
     {
       count: args.closeBlockerCounts.posSessionCount,
@@ -2096,6 +2106,26 @@ function buildLanes(args: {
       to: "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",
     },
   ];
+}
+
+function buildApprovalsLane(args: {
+  approvalCount: number;
+  approvalCountLabel: string;
+}): DailyOperationsLane {
+  return {
+    count: args.approvalCount,
+    countLabel: args.approvalCountLabel,
+    description:
+      args.approvalCount > 0
+        ? `${args.approvalCountLabel} approval${
+            args.approvalCount === 1 ? "" : "s"
+          } pending.`
+        : "No pending approvals.",
+    key: "approvals",
+    label: "Approvals",
+    status: args.approvalCount > 0 ? "blocked" : "ready",
+    to: "/$orgUrlSlug/store/$storeUrlSlug/operations/approvals",
+  };
 }
 
 export async function buildDailyOperationsSnapshotWithCtx(
@@ -2504,6 +2534,26 @@ export const getDailyOperationsStorePulseSnapshot = query({
     return {
       operatingDate: args.operatingDate,
       storePulse,
+    };
+  },
+});
+
+export const getDailyOperationsStoreRequestsSnapshot = query({
+  args: dailyOperationsSnapshotArgsValidator,
+  handler: async (ctx, args) => {
+    await authorizeDailyOperationsSnapshot(ctx, args);
+    const range = resolveRange(args);
+    const approvals = await listPendingApprovalRequestsSnapshot(ctx, {
+      ...range,
+      storeId: args.storeId,
+    });
+
+    return {
+      approvalsLane: buildApprovalsLane({
+        approvalCount: approvals.approvalRequests.length,
+        approvalCountLabel: approvals.approvalRequestsCountLabel,
+      }),
+      operatingDate: args.operatingDate,
     };
   },
 });
