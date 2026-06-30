@@ -63,7 +63,6 @@ type MixedServiceLine = {
   unitPrice: number;
 };
 
-
 function summarizeCashierName(args: {
   fullName?: string;
   firstName?: string;
@@ -227,7 +226,9 @@ function normalizeAdjustmentLineItem(lineItem: Record<string, unknown>) {
       stringFromMetadata(lineItem.productName) ??
       stringFromMetadata(lineItem.name) ??
       "Unnamed item",
-    productSku: stringFromMetadata(lineItem.productSku) ?? stringFromMetadata(lineItem.sku),
+    productSku:
+      stringFromMetadata(lineItem.productSku) ??
+      stringFromMetadata(lineItem.sku),
     originalQuantity: numberFromMetadata(lineItem.originalQuantity),
     adjustedQuantity: numberFromMetadata(lineItem.adjustedQuantity),
     quantityDelta:
@@ -241,11 +242,13 @@ function normalizeAdjustmentLineItem(lineItem: Record<string, unknown>) {
 }
 
 function normalizeAdjustmentMetadata(metadata?: Record<string, unknown>) {
-  const adjustment = (metadata?.adjustment &&
-  typeof metadata.adjustment === "object" &&
-  !Array.isArray(metadata.adjustment)
-    ? metadata.adjustment
-    : metadata) as AdjustmentMetadata | undefined;
+  const adjustment = (
+    metadata?.adjustment &&
+    typeof metadata.adjustment === "object" &&
+    !Array.isArray(metadata.adjustment)
+      ? metadata.adjustment
+      : metadata
+  ) as AdjustmentMetadata | undefined;
 
   const rawLineItems = Array.isArray(adjustment?.lineItems)
     ? adjustment.lineItems
@@ -262,7 +265,9 @@ function normalizeAdjustmentMetadata(metadata?: Record<string, unknown>) {
     lineItems: rawLineItems
       .filter(
         (lineItem): lineItem is Record<string, unknown> =>
-          typeof lineItem === "object" && lineItem !== null && !Array.isArray(lineItem),
+          typeof lineItem === "object" &&
+          lineItem !== null &&
+          !Array.isArray(lineItem),
       )
       .map(normalizeAdjustmentLineItem),
     originalTotal: numberFromMetadata(adjustment?.originalTotal),
@@ -293,7 +298,10 @@ async function listMixedServiceLinesForTransaction(
     serviceLines.map(async (line) => {
       const serviceCase = await ctx.db.get("serviceCase", line.serviceCaseId);
       const workItem = serviceCase?.operationalWorkItemId
-        ? await ctx.db.get("operationalWorkItem", serviceCase.operationalWorkItemId)
+        ? await ctx.db.get(
+            "operationalWorkItem",
+            serviceCase.operationalWorkItemId,
+          )
         : null;
       const refundedAmount =
         line.isRefunded && line.refundedQuantity
@@ -367,7 +375,10 @@ export async function getCompletedTransactions(
         ? await getPosSessionById(ctx, transaction.sessionId)
         : null;
       const items = await listTransactionItems(ctx, transaction._id);
-      const serviceLines = await listMixedServiceLinesForTransaction(ctx, transaction);
+      const serviceLines = await listMixedServiceLinesForTransaction(
+        ctx,
+        transaction,
+      );
       const sessionTraceId = session?.workflowTraceId ?? null;
       const customerProfileId =
         transaction.customerProfileId ?? session?.customerProfileId;
@@ -388,9 +399,7 @@ export async function getCompletedTransactions(
         voidApprovalProofId: transaction.voidApprovalProofId,
         hasTrace: Boolean(sessionTraceId),
         sessionTraceId,
-        cashierName: cashier
-          ? formatStaffDisplayName(cashier)
-          : null,
+        cashierName: cashier ? formatStaffDisplayName(cashier) : null,
         customerProfileId,
         customerName:
           customerProfile?.fullName ?? transaction.customerInfo?.name ?? null,
@@ -432,7 +441,9 @@ export async function getTransactionById(
     session?.registerNumber ??
     registerSession?.registerNumber;
   const terminalId =
-    transaction.terminalId ?? session?.terminalId ?? registerSession?.terminalId;
+    transaction.terminalId ??
+    session?.terminalId ??
+    registerSession?.terminalId;
   const terminal = terminalId ? await getTerminalById(ctx, terminalId) : null;
   const items = await listTransactionItems(ctx, transaction._id);
   const serviceLines = await listMixedServiceLinesForTransaction(ctx, {
@@ -461,21 +472,19 @@ export async function getTransactionById(
   });
   const actorStaffNamesById = await listStaffNames(
     ctx,
-    new Set(
-      [
-        ...correctionHistory.flatMap((event) =>
-          event.actorStaffProfileId ? [event.actorStaffProfileId] : [],
-        ),
-        ...receiptDeliveries.flatMap((delivery) =>
-          delivery.actorStaffProfileId ? [delivery.actorStaffProfileId] : [],
-        ),
-        ...pendingItemAdjustmentApprovals.flatMap((approval) =>
-          approval.requestedByStaffProfileId
-            ? [approval.requestedByStaffProfileId]
-            : [],
-        ),
-      ],
-    ),
+    new Set([
+      ...correctionHistory.flatMap((event) =>
+        event.actorStaffProfileId ? [event.actorStaffProfileId] : [],
+      ),
+      ...receiptDeliveries.flatMap((delivery) =>
+        delivery.actorStaffProfileId ? [delivery.actorStaffProfileId] : [],
+      ),
+      ...pendingItemAdjustmentApprovals.flatMap((approval) =>
+        approval.requestedByStaffProfileId
+          ? [approval.requestedByStaffProfileId]
+          : [],
+      ),
+    ]),
   );
   const appliedAdjustmentSummaries = correctionHistory
     .filter((event) => ITEM_ADJUSTMENT_EVENT_TYPES.has(event.eventType))
@@ -488,7 +497,7 @@ export async function getTransactionById(
         appliedAt: event.createdAt,
         reason: event.reason ?? undefined,
         actorStaffName: event.actorStaffProfileId
-          ? actorStaffNamesById.get(event.actorStaffProfileId) ?? null
+          ? (actorStaffNamesById.get(event.actorStaffProfileId) ?? null)
           : null,
         ...adjustment,
         originalTotal: adjustment.originalTotal ?? transaction.total,
@@ -507,7 +516,8 @@ export async function getTransactionById(
         createdAt: approval.createdAt,
         reason: approval.reason ?? approval.notes ?? undefined,
         actorStaffName: approval.requestedByStaffProfileId
-          ? actorStaffNamesById.get(approval.requestedByStaffProfileId) ?? null
+          ? (actorStaffNamesById.get(approval.requestedByStaffProfileId) ??
+            null)
           : null,
         ...adjustment,
         originalTotal: adjustment.originalTotal ?? transaction.total,
@@ -596,7 +606,7 @@ export async function getTransactionById(
               _id: undefined,
               customerProfileId,
             }
-        : null,
+          : null,
     customerInfo: transaction.customerInfo,
     correctionHistory: correctionHistory.map((event) => ({
       _id: event._id,
@@ -608,7 +618,7 @@ export async function getTransactionById(
       actorUserId: event.actorUserId,
       actorStaffProfileId: event.actorStaffProfileId,
       actorStaffName: event.actorStaffProfileId
-        ? actorStaffNamesById.get(event.actorStaffProfileId) ?? null
+        ? (actorStaffNamesById.get(event.actorStaffProfileId) ?? null)
         : null,
     })),
     receiptDeliveryHistory: receiptDeliveries.map((delivery) => ({
@@ -619,7 +629,7 @@ export async function getTransactionById(
       recipientDisplay: delivery.recipientDisplay,
       actorStaffProfileId: delivery.actorStaffProfileId,
       actorStaffName: delivery.actorStaffProfileId
-        ? actorStaffNamesById.get(delivery.actorStaffProfileId) ?? null
+        ? (actorStaffNamesById.get(delivery.actorStaffProfileId) ?? null)
         : null,
       createdAt: delivery.createdAt,
       updatedAt: delivery.updatedAt,
@@ -748,7 +758,6 @@ export async function getTodaySummary(
   };
 }
 
-
 async function resolveCurrentPosSummaryWindow(
   ctx: Pick<QueryCtx, "db">,
   args: {
@@ -756,24 +765,20 @@ async function resolveCurrentPosSummaryWindow(
     storeId: Id<"store">;
   },
 ) {
-  const activeOpening = await findLatestOpenOperatingDay(ctx, {
+  const currentStoreDay = await findCurrentStoreDayOpening(ctx, {
+    now: args.now,
     storeId: args.storeId,
   });
   const operatingDate =
-    activeOpening?.operatingDate ??
+    currentStoreDay?.operatingDate ??
     new Date(args.now).toISOString().slice(0, 10);
   const fallbackStartOfDay = Date.parse(`${operatingDate}T00:00:00.000Z`);
-  const activeOpeningStartAt = activeOpening?.startAt;
-  const activeOpeningEndAt = activeOpening?.endAt;
-  const activeOpeningRange =
-    typeof activeOpeningStartAt === "number" &&
-    typeof activeOpeningEndAt === "number" &&
-    isValidPosSummaryWindowRange(activeOpeningStartAt, activeOpeningEndAt)
-      ? {
-          endOfDay: activeOpeningEndAt - 1,
-          startOfDay: activeOpeningStartAt,
-        }
-      : null;
+  const storeDayRange = currentStoreDay
+    ? {
+        endOfDay: currentStoreDay.endAt - 1,
+        startOfDay: currentStoreDay.startAt,
+      }
+    : null;
 
   if (!Number.isFinite(fallbackStartOfDay)) {
     const fallbackStart = Date.parse(
@@ -788,9 +793,9 @@ async function resolveCurrentPosSummaryWindow(
   }
 
   return {
-    endOfDay: activeOpeningRange?.endOfDay ?? fallbackStartOfDay + DAY_MS - 1,
+    endOfDay: storeDayRange?.endOfDay ?? fallbackStartOfDay + DAY_MS - 1,
     operatingDate,
-    startOfDay: activeOpeningRange?.startOfDay ?? fallbackStartOfDay,
+    startOfDay: storeDayRange?.startOfDay ?? fallbackStartOfDay,
   };
 }
 
@@ -805,12 +810,19 @@ function isValidPosSummaryWindowRange(startAt: unknown, endAt: unknown) {
   );
 }
 
-async function findLatestOpenOperatingDay(
+type CurrentStoreDayOpening = {
+  endAt: number;
+  operatingDate: string;
+  startAt: number;
+};
+
+async function findCurrentStoreDayOpening(
   ctx: Pick<QueryCtx, "db">,
   args: {
+    now: number;
     storeId: Id<"store">;
   },
-) {
+): Promise<CurrentStoreDayOpening | null> {
   const startedOpenings = await ctx.db
     .query("dailyOpening")
     .withIndex("by_storeId_status_operatingDate", (q) =>
@@ -820,6 +832,10 @@ async function findLatestOpenOperatingDay(
     .take(10);
 
   for (const opening of startedOpenings) {
+    if (!isActivePosSummaryOpeningAt(opening, args.now)) {
+      continue;
+    }
+
     const closes = await ctx.db
       .query("dailyClose")
       .withIndex("by_storeId_operatingDate", (q) =>
@@ -839,4 +855,20 @@ async function findLatestOpenOperatingDay(
   }
 
   return null;
+}
+
+function isActivePosSummaryOpeningAt(
+  opening: { endAt?: number; startAt?: number },
+  now: number,
+): opening is { endAt: number; startAt: number } {
+  const { endAt, startAt } = opening;
+
+  return (
+    typeof startAt === "number" &&
+    typeof endAt === "number" &&
+    isValidPosSummaryWindowRange(startAt, endAt) &&
+    Number.isFinite(now) &&
+    now >= startAt &&
+    now < endAt
+  );
 }

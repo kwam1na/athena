@@ -358,40 +358,39 @@ async function buildWeekMetricForDate(
     appliedTransactionAdjustments,
     expenseTransactions,
     dailyClose,
-  ] =
-    await Promise.all([
-      ctx.db
-        .query("posTransaction")
-        .withIndex("by_storeId_status_completedAt", (q) =>
-          q
-            .eq("storeId", args.storeId)
-            .eq("status", "completed")
-            .gte("completedAt", range.startAt)
-            .lt("completedAt", range.endAt),
-        )
-        .take(MAX_OPERATIONS_QUERY_LIMIT),
-      listAppliedTransactionAdjustmentsForDay(ctx, {
-        endAt: range.endAt,
-        startAt: range.startAt,
-        storeId: args.storeId,
-      }),
-      ctx.db
-        .query("expenseTransaction")
-        .withIndex("by_storeId_status_completedAt", (q) =>
-          q
-            .eq("storeId", args.storeId)
-            .eq("status", "completed")
-            .gte("completedAt", range.startAt)
-            .lt("completedAt", range.endAt),
-        )
-        .take(MAX_OPERATIONS_QUERY_LIMIT),
-      ctx.db
-        .query("dailyClose")
-        .withIndex("by_storeId_operatingDate", (q) =>
-          q.eq("storeId", args.storeId).eq("operatingDate", args.operatingDate),
-        )
-        .take(MAX_OPERATIONS_QUERY_LIMIT),
-    ]);
+  ] = await Promise.all([
+    ctx.db
+      .query("posTransaction")
+      .withIndex("by_storeId_status_completedAt", (q) =>
+        q
+          .eq("storeId", args.storeId)
+          .eq("status", "completed")
+          .gte("completedAt", range.startAt)
+          .lt("completedAt", range.endAt),
+      )
+      .take(MAX_OPERATIONS_QUERY_LIMIT),
+    listAppliedTransactionAdjustmentsForDay(ctx, {
+      endAt: range.endAt,
+      startAt: range.startAt,
+      storeId: args.storeId,
+    }),
+    ctx.db
+      .query("expenseTransaction")
+      .withIndex("by_storeId_status_completedAt", (q) =>
+        q
+          .eq("storeId", args.storeId)
+          .eq("status", "completed")
+          .gte("completedAt", range.startAt)
+          .lt("completedAt", range.endAt),
+      )
+      .take(MAX_OPERATIONS_QUERY_LIMIT),
+    ctx.db
+      .query("dailyClose")
+      .withIndex("by_storeId_operatingDate", (q) =>
+        q.eq("storeId", args.storeId).eq("operatingDate", args.operatingDate),
+      )
+      .take(MAX_OPERATIONS_QUERY_LIMIT),
+  ]);
   const currentDailyClose =
     dailyClose.find((close) => close.isCurrent) ?? dailyClose[0];
   const currentDayCashTotal = completedTransactions.reduce(
@@ -534,13 +533,12 @@ async function listOpenQueueSnapshot(
     .flatMap((batch) => batch)
     .slice(0, MAX_OPERATIONS_QUERY_LIMIT);
   const currentTime = Date.now();
-  const dayApprovalRequests = pendingApprovalRequests.filter(
-    (request) =>
-      approvalRequestBelongsToOperationsDay({
-        ...args,
-        currentTime,
-        request,
-      }),
+  const dayApprovalRequests = pendingApprovalRequests.filter((request) =>
+    approvalRequestBelongsToOperationsDay({
+      ...args,
+      currentTime,
+      request,
+    }),
   );
   const approvalRequests = dayApprovalRequests.slice(
     0,
@@ -605,7 +603,10 @@ async function listTimelineEvents(
     .order("desc")
     .take(operationalEventLimit);
   const storePromise = ctx.db.get("store", args.storeId);
-  const registerSessionsPromise = listTimelineRegisterSessions(ctx, args.storeId);
+  const registerSessionsPromise = listTimelineRegisterSessions(
+    ctx,
+    args.storeId,
+  );
   const pendingRegisterCountsPromise = args.includeManagerReviewEvidence
     ? listPendingRegisterCountTimelineEvents(ctx, args)
     : Promise.resolve([]);
@@ -616,14 +617,13 @@ async function listTimelineEvents(
     pendingRegisterCountEvents,
     store,
     terminalNamesById,
-  ] =
-    await Promise.all([
-      eventsPromise,
-      registerSessionsPromise,
-      pendingRegisterCountsPromise,
-      storePromise,
-      terminalNamesPromise,
-    ]);
+  ] = await Promise.all([
+    eventsPromise,
+    registerSessionsPromise,
+    pendingRegisterCountsPromise,
+    storePromise,
+    terminalNamesPromise,
+  ]);
   const operationalCloseoutKeys = new Set(
     events
       .map((event) => getOperationalRegisterCloseoutKey(event))
@@ -687,7 +687,10 @@ async function listPendingRegisterCountTimelineEvents(
       ),
     ),
   ]);
-  const eventsById = new Map<Id<"posLocalSyncEvent">, Doc<"posLocalSyncEvent">>();
+  const eventsById = new Map<
+    Id<"posLocalSyncEvent">,
+    Doc<"posLocalSyncEvent">
+  >();
 
   for (const event of eventBatches.flat()) {
     if (
@@ -840,7 +843,9 @@ async function mapOperationalTimelineEvent(
   const productSku = productSkuId
     ? await ctx.db.get("productSku", productSkuId)
     : null;
-  const isRegisterSessionEvent = isRegisterSessionSubjectType(event.subjectType);
+  const isRegisterSessionEvent = isRegisterSessionSubjectType(
+    event.subjectType,
+  );
   const registerSessionId =
     event.registerSessionId ??
     (isRegisterSessionEvent
@@ -869,7 +874,7 @@ async function mapOperationalTimelineEvent(
   const sku =
     typeof metadata.sku === "string"
       ? metadata.sku
-      : productSku?.sku ?? undefined;
+      : (productSku?.sku ?? undefined);
   const isPendingCheckoutItemEvent =
     event.subjectType === "pos_pending_checkout_item" &&
     productSkuId !== undefined;
@@ -878,12 +883,11 @@ async function mapOperationalTimelineEvent(
     productSku?.productName && sku
       ? `${productSku.productName} (${sku})`
       : productSku?.productName || productName;
-  const productLinkLabel =
-    isPendingCheckoutItemEvent
+  const productLinkLabel = isPendingCheckoutItemEvent
+    ? productName
+    : event.subjectType === "product_sku"
       ? productName
-      : event.subjectType === "product_sku"
-        ? productName
-        : productSkuLabel || productSkuDisplayLabel;
+      : productSkuLabel || productSkuDisplayLabel;
   const canLinkProduct =
     event.subjectType === "product_sku" ||
     isPendingCheckoutItemEvent ||
@@ -924,13 +928,12 @@ async function mapOperationalTimelineEvent(
   const terminalName = registerSession?.terminalId
     ? args.terminalNamesById.get(registerSession.terminalId)
     : undefined;
-  const registerLabel =
-    isRegisterSessionEvent
-      ? formatTerminalRegisterLinkLabel({
-          registerNumber: event.subjectLabel ?? registerNumber,
-          terminalName,
-        })
-      : undefined;
+  const registerLabel = isRegisterSessionEvent
+    ? formatTerminalRegisterLinkLabel({
+        registerNumber: event.subjectLabel ?? registerNumber,
+        terminalName,
+      })
+    : undefined;
   const approvalSubjectLabel = getApprovalTimelineSubjectLabel({
     event,
     metadata,
@@ -978,7 +981,9 @@ async function mapOperationalTimelineEvent(
 }
 
 function isRegisterSessionSubjectType(subjectType: string) {
-  return subjectType === "register_session" || subjectType === "registerSession";
+  return (
+    subjectType === "register_session" || subjectType === "registerSession"
+  );
 }
 
 function isPosTransactionSubjectType(subjectType: string) {
@@ -1039,7 +1044,10 @@ function normalizeTimelineEventMessage(
   if (context?.eventType === "pos_transaction_void_approval_requested") {
     const actorName = context.actorName?.trim();
     return actorName
-      ? message.replace(/^Void requested for\b/i, `Void requested by ${actorName} for`)
+      ? message.replace(
+          /^Void requested for\b/i,
+          `Void requested by ${actorName} for`,
+        )
       : message;
   }
 
@@ -1053,7 +1061,9 @@ function normalizeTimelineEventMessage(
       ? punctuateTimelineSentence(
           `${registerLabel} opened by ${actorName}${openingFloatPhrase}`,
         )
-      : punctuateTimelineSentence(`${registerLabel} opened${openingFloatPhrase}`);
+      : punctuateTimelineSentence(
+          `${registerLabel} opened${openingFloatPhrase}`,
+        );
   }
 
   if (/^Register session closed with an exact cash match\.$/i.test(message)) {
@@ -1067,7 +1077,11 @@ function normalizeTimelineEventMessage(
     return `${context?.registerLabel ?? "Register"} closeout recorded with a cash variance of ${recordedVarianceMatch[1]}.`;
   }
 
-  if (/^Register\s+\S+\s+closeout recorded with an exact cash match\.$/i.test(message)) {
+  if (
+    /^Register\s+\S+\s+closeout recorded with an exact cash match\.$/i.test(
+      message,
+    )
+  ) {
     return `${context?.registerLabel ?? "Register"} closeout recorded with an exact cash match.`;
   }
 
@@ -1079,7 +1093,9 @@ function normalizeTimelineEventMessage(
     return `${context.registerLabel ?? "Register session"} closeout recorded with a cash variance of ${formatTimelineAmount(context.currency ?? "GHS", context.variance)}.`;
   }
 
-  if (context?.eventType === "register_session_sync_closeout_review_requested") {
+  if (
+    context?.eventType === "register_session_sync_closeout_review_requested"
+  ) {
     const amount =
       typeof context.variance === "number" && context.variance !== 0
         ? formatTimelineAmount(context.currency ?? "GHS", context.variance)
@@ -1123,7 +1139,9 @@ function normalizeApprovalTimelineEventMessage(context?: {
   }
 
   if (context.eventType === "approval.proof_consumed") {
-    return punctuateTimelineSentence(`Manager approval applied${subjectPhrase}`);
+    return punctuateTimelineSentence(
+      `Manager approval applied${subjectPhrase}`,
+    );
   }
 
   return null;
@@ -1378,7 +1396,9 @@ function numberFromRecord(record: unknown, key: string) {
   if (!record || typeof record !== "object") return undefined;
 
   const value = (record as Record<string, unknown>)[key];
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : undefined;
 }
 
 function formatRegisterSessionLabel(registerNumber?: string) {
@@ -1458,7 +1478,8 @@ function compareTimelineEvents(
     createdAt: number;
   },
 ) {
-  if (left.createdAt !== right.createdAt) return right.createdAt - left.createdAt;
+  if (left.createdAt !== right.createdAt)
+    return right.createdAt - left.createdAt;
   return String(right._id).localeCompare(String(left._id));
 }
 
@@ -1564,9 +1585,11 @@ async function getLatestAppliedAutomationRunForAction(
     storeId: args.storeId,
   });
 
-  return runs
-    .filter((run) => run.outcome === "applied")
-    .sort(compareAutomationRuns)[0] ?? null;
+  return (
+    runs
+      .filter((run) => run.outcome === "applied")
+      .sort(compareAutomationRuns)[0] ?? null
+  );
 }
 
 function automationRunClassification(run: Doc<"automationRun">) {
@@ -1880,7 +1903,8 @@ function lifecycleCopy(status: LifecycleStatus) {
 
   if (status === "ready_to_close") {
     return {
-      description: "Opening Handoff is complete and the end of day review has no blockers.",
+      description:
+        "Opening Handoff is complete and the end of day review has no blockers.",
       label: "Ready to close",
     };
   }
@@ -2110,57 +2134,55 @@ export async function buildDailyOperationsSnapshotWithCtx(
     store,
     storePulse,
     weekMetrics,
-  ] =
-    await Promise.all([
-      buildDailyOpeningSnapshotWithCtx(ctx, args),
-      buildDailyCloseSnapshotWithCtx(ctx, args),
-      getDailyCloseRecordForDate(ctx, args),
-      listOpenQueueSnapshot(ctx, {
-        ...range,
-        storeId: args.storeId,
-      }),
-      args.includeScheduledRunSummaries &&
-      (args.includeManagerReviewEvidence ?? true)
-        ? listDailyOperationsScheduledRunSummaries(ctx, {
-            ...range,
-            limit: args.scheduledRunSummariesLimit,
-            storeId: args.storeId,
-          })
-        : Promise.resolve([]),
-      listTimelineEvents(ctx, {
-        ...range,
-        includeManagerReviewEvidence:
-          args.includeManagerReviewEvidence ?? true,
-        limit: args.timelineLimit,
-        storeId: args.storeId,
-      }),
-      ctx.db.get("store", args.storeId),
-      includeStorePulseDetails
-        ? getStorePulseSummaryForWindow(ctx as QueryCtx, {
-            currentDayEnd: range.endAt - 1,
-            currentDayStart: range.startAt,
-            currentOperatingDate: args.operatingDate,
-            pulseWindow: args.storePulseWindow ?? "today",
-            storeId: args.storeId,
-          })
-        : Promise.resolve(undefined),
-      includeAnalyticsDetails
-        ? buildWeekMetrics(ctx, args)
-        : Promise.resolve([]),
-    ]);
+  ] = await Promise.all([
+    buildDailyOpeningSnapshotWithCtx(ctx, args),
+    buildDailyCloseSnapshotWithCtx(ctx, args),
+    getDailyCloseRecordForDate(ctx, args),
+    listOpenQueueSnapshot(ctx, {
+      ...range,
+      storeId: args.storeId,
+    }),
+    args.includeScheduledRunSummaries &&
+    (args.includeManagerReviewEvidence ?? true)
+      ? listDailyOperationsScheduledRunSummaries(ctx, {
+          ...range,
+          limit: args.scheduledRunSummariesLimit,
+          storeId: args.storeId,
+        })
+      : Promise.resolve([]),
+    listTimelineEvents(ctx, {
+      ...range,
+      includeManagerReviewEvidence: args.includeManagerReviewEvidence ?? true,
+      limit: args.timelineLimit,
+      storeId: args.storeId,
+    }),
+    ctx.db.get("store", args.storeId),
+    includeStorePulseDetails
+      ? getStorePulseSummaryForWindow(ctx as QueryCtx, {
+          currentDayEnd: range.endAt - 1,
+          currentDayStart: range.startAt,
+          currentOperatingDate: args.operatingDate,
+          pulseWindow: args.storePulseWindow ?? "today",
+          storeId: args.storeId,
+        })
+      : Promise.resolve(undefined),
+    includeAnalyticsDetails ? buildWeekMetrics(ctx, args) : Promise.resolve([]),
+  ]);
   const automationStatuses = await listDailyOperationsAutomationStatuses(ctx, {
     ...args,
     closeCompletion: closeSnapshot.completedClose,
   });
   const priorOperatingDate = shiftOperatingDate(args.operatingDate, -1);
   const priorDayMetric = includeAnalyticsDetails
-    ? weekMetrics.find((metric) => metric.operatingDate === priorOperatingDate) ??
+    ? (weekMetrics.find(
+        (metric) => metric.operatingDate === priorOperatingDate,
+      ) ??
       (await buildWeekMetricForDate(ctx, {
         isSelected: false,
         operatingDate: priorOperatingDate,
         operatingTimezoneOffsetMinutes: args.operatingTimezoneOffsetMinutes,
         storeId: args.storeId,
-      }))
+      })))
     : undefined;
   const visibleTimeline =
     typeof args.timelinePreviewLimit === "number"
@@ -2240,7 +2262,7 @@ export async function buildDailyOperationsSnapshotWithCtx(
           ? "ready_to_close"
           : isCloseReopened
             ? "reopened"
-          : "operating";
+            : "operating";
   const lifecycle = {
     status: lifecycleStatus,
     ...lifecycleCopy(lifecycleStatus),
@@ -2382,6 +2404,11 @@ const dailyOperationsSnapshotArgsValidator = {
   weekEndOperatingDate: v.optional(v.string()),
 };
 
+const dailyOperationsRefreshArgsValidator = {
+  ...dailyOperationsSnapshotArgsValidator,
+  refreshRequestedAt: v.optional(v.number()),
+};
+
 async function authorizeDailyOperationsSnapshot(
   ctx: QueryCtx,
   args: { storeId: Id<"store"> },
@@ -2477,6 +2504,60 @@ export const getDailyOperationsStorePulseSnapshot = query({
     return {
       operatingDate: args.operatingDate,
       storePulse,
+    };
+  },
+});
+
+export const getDailyOperationsTodayRefreshSnapshot = query({
+  args: dailyOperationsRefreshArgsValidator,
+  handler: async (ctx, args) => {
+    const { includeManagerReviewEvidence } =
+      await authorizeDailyOperationsSnapshot(ctx, args);
+    const snapshot = await buildDailyOperationsSnapshotWithCtx(ctx, {
+      ...args,
+      includeAnalyticsDetails: false,
+      includeFinancialDetails: includeManagerReviewEvidence,
+      includeManagerReviewEvidence,
+      includeScheduledRunSummaries: false,
+      includeStorePulseDetails: includeManagerReviewEvidence,
+      scheduledRunSummariesLimit: 0,
+      timelineLimit: 0,
+      timelinePreviewLimit: 0,
+    });
+    const weekMetric = includeManagerReviewEvidence
+      ? await buildWeekMetricForDate(ctx, {
+          isSelected: true,
+          operatingDate: args.operatingDate,
+          operatingTimezoneOffsetMinutes: args.operatingTimezoneOffsetMinutes,
+          storeId: args.storeId,
+        })
+      : null;
+    const priorDayMetric = includeManagerReviewEvidence
+      ? await buildWeekMetricForDate(ctx, {
+          isSelected: false,
+          operatingDate: shiftOperatingDate(args.operatingDate, -1),
+          operatingTimezoneOffsetMinutes: args.operatingTimezoneOffsetMinutes,
+          storeId: args.storeId,
+        })
+      : null;
+
+    return {
+      attentionItems: snapshot.attentionItems,
+      closeSummary: snapshot.closeSummary,
+      completedClose: snapshot.completedClose ?? null,
+      currency: snapshot.currency,
+      endAt: snapshot.endAt,
+      lanes: snapshot.lanes,
+      lifecycle: snapshot.lifecycle,
+      operatingDate: snapshot.operatingDate,
+      primaryAction: snapshot.primaryAction,
+      priorDayMetric,
+      refreshedAt: Date.now(),
+      refreshRequestedAt: args.refreshRequestedAt ?? null,
+      startAt: snapshot.startAt,
+      storeId: snapshot.storeId,
+      storePulse: snapshot.storePulse ?? null,
+      weekMetric,
     };
   },
 });

@@ -25,6 +25,7 @@ import {
   CircleAlert,
   Clock3,
   PackageSearch,
+  RefreshCw,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -76,6 +77,7 @@ type DailyOperationsApi = {
   getDailyOperationsDetailSnapshot?: unknown;
   getDailyOperationsSnapshot?: unknown;
   getDailyOperationsStorePulseSnapshot?: unknown;
+  getDailyOperationsTodayRefreshSnapshot?: unknown;
   getDailyOperationsTimelinePreviewSnapshot?: unknown;
   getDailyOperationsTimelineSnapshot?: unknown;
 };
@@ -324,10 +326,12 @@ type DailyOperationsViewContentProps = {
   isLoadingStorePulseSnapshot?: boolean;
   isLoadingTimelinePreviewSnapshot?: boolean;
   isLoadingTimelineSnapshot?: boolean;
+  isRefreshingToday?: boolean;
   isAuthenticated: boolean;
   isLoadingAccess: boolean;
   isLoadingSnapshot: boolean;
   onRequestDetailSnapshot?: () => void;
+  onRefreshToday?: () => void;
   onRequestStorePulseSnapshot?: () => void;
   onRequestTimelineSnapshot?: () => void;
   onOperatingDateChange?: (date: Date) => void;
@@ -336,6 +340,7 @@ type DailyOperationsViewContentProps = {
   storePulseWindow: StorePulseWindow;
   storeUrlSlug: string;
   storePulseSnapshot?: DailyOperationsStorePulseSnapshot;
+  todayRefreshedAt?: number;
   timelinePreviewSnapshot?: DailyOperationsTimelinePreviewSnapshot;
   timelineSnapshot?: DailyOperationsTimelineSnapshot;
 };
@@ -368,9 +373,31 @@ type DailyOperationsTimelinePreviewSnapshot =
     timelineHasMore: boolean;
   };
 
+type DailyOperationsTodayRefreshSnapshot = Pick<
+  DailyOperationsSnapshot,
+  | "attentionItems"
+  | "closeSummary"
+  | "completedClose"
+  | "currency"
+  | "endAt"
+  | "lanes"
+  | "lifecycle"
+  | "operatingDate"
+  | "primaryAction"
+  | "startAt"
+  | "storeId"
+> & {
+  priorDayMetric?: DailyOperationsSnapshot["weekMetrics"][number] | null;
+  refreshedAt: number;
+  refreshRequestedAt?: number | null;
+  storePulse?: StorePulseSummary | null;
+  weekMetric?: DailyOperationsSnapshot["weekMetrics"][number] | null;
+};
+
 type StorePulseDetailHydrationMode = "manual" | "auto";
 
 const TIMELINE_PREVIEW_LIMIT = 5;
+const TODAY_REFRESH_STALE_MS = 10 * 60 * 1000;
 // Switch to "auto" to hydrate top items/payment mix on mount.
 const STORE_PULSE_DETAIL_HYDRATION_MODE: StorePulseDetailHydrationMode = "auto";
 
@@ -590,6 +617,67 @@ function selectWeekMetricsForOperatingDate(
     ...metric,
     isSelected: metric.operatingDate === operatingDate,
   }));
+}
+
+function replaceWeekMetricForOperatingDate(
+  metrics: DailyOperationsSnapshot["weekMetrics"] | undefined,
+  refreshedMetric:
+    | DailyOperationsSnapshot["weekMetrics"][number]
+    | null
+    | undefined,
+  operatingDate: string,
+) {
+  if (!metrics || !refreshedMetric) return metrics;
+
+  let didReplace = false;
+  const nextMetrics = metrics.map((metric) => {
+    if (metric.operatingDate !== operatingDate) {
+      return {
+        ...metric,
+        isSelected: metric.isSelected && metric.operatingDate === operatingDate,
+      };
+    }
+
+    didReplace = true;
+    return {
+      ...refreshedMetric,
+      isSelected: metric.isSelected,
+    };
+  });
+
+  return didReplace ? nextMetrics : metrics;
+}
+
+function applyTodayRefreshSnapshot(
+  snapshot: DailyOperationsSnapshot | undefined,
+  refreshSnapshot: DailyOperationsTodayRefreshSnapshot | undefined,
+) {
+  if (!snapshot || !refreshSnapshot) return snapshot;
+  if (snapshot.operatingDate !== refreshSnapshot.operatingDate) return snapshot;
+
+  const weekMetrics =
+    replaceWeekMetricForOperatingDate(
+      snapshot.weekMetrics,
+      refreshSnapshot.weekMetric,
+      snapshot.operatingDate,
+    ) ?? snapshot.weekMetrics;
+
+  return {
+    ...snapshot,
+    attentionItems: refreshSnapshot.attentionItems,
+    closeSummary: refreshSnapshot.closeSummary,
+    completedClose: refreshSnapshot.completedClose ?? undefined,
+    currency: refreshSnapshot.currency,
+    endAt: refreshSnapshot.endAt,
+    lanes: refreshSnapshot.lanes,
+    lifecycle: refreshSnapshot.lifecycle,
+    primaryAction: refreshSnapshot.primaryAction,
+    priorDayMetric: refreshSnapshot.priorDayMetric ?? undefined,
+    startAt: refreshSnapshot.startAt,
+    storeId: refreshSnapshot.storeId,
+    storePulse: refreshSnapshot.storePulse ?? snapshot.storePulse,
+    weekMetrics,
+  };
 }
 
 function shouldShowPrimaryAction(snapshot: DailyOperationsSnapshot) {
@@ -2411,18 +2499,24 @@ function WeekMetricsStrip({
   analyticsFetchedAt,
   currency,
   hasFinancialDetailsAccess,
+  isRefreshingToday,
   metrics,
+  onRefreshToday,
   orgUrlSlug,
   storePulseWindow,
   storeUrlSlug,
+  todayRefreshedAt,
 }: {
   analyticsFetchedAt?: number;
   currency: string;
   hasFinancialDetailsAccess: boolean;
+  isRefreshingToday?: boolean;
   metrics: DailyOperationsSnapshot["weekMetrics"];
+  onRefreshToday?: () => void;
   orgUrlSlug: string;
   storePulseWindow: StorePulseWindow;
   storeUrlSlug: string;
+  todayRefreshedAt?: number;
 }) {
   const scrollSelectedDayIntoView = useCallback(
     (element: HTMLElement | null) => {
@@ -2458,6 +2552,13 @@ function WeekMetricsStrip({
     (total, metric) => total + metric.salesTotal,
     0,
   );
+  const selectedMetric = metrics.find((metric) => metric.isSelected);
+  const canRefreshToday = Boolean(
+    onRefreshToday &&
+    selectedMetric?.operatingDate === currentOperatingDate &&
+    selectedMetric.operatingDate <= currentOperatingDate,
+  );
+  const refreshedAt = todayRefreshedAt ?? analyticsFetchedAt;
 
   return (
     <section className="space-y-layout-sm">
@@ -2466,15 +2567,35 @@ function WeekMetricsStrip({
           <h3 className="text-base font-medium text-foreground">
             Week at a glance
           </h3>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Seven days ending {formatOperatingDate(weekEndOperatingDate)}
-            {analyticsFetchedAt ? (
-              <span className="ml-2 whitespace-nowrap">
-                · Data refreshed at{" "}
-                {formatAnalyticsCacheTimestamp(analyticsFetchedAt)}
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+            <span>
+              Seven days ending {formatOperatingDate(weekEndOperatingDate)}
+            </span>
+            {refreshedAt ? (
+              <span className="whitespace-nowrap">
+                · Data refreshed at {formatAnalyticsCacheTimestamp(refreshedAt)}
               </span>
             ) : null}
-          </p>
+            {canRefreshToday ? (
+              <Button
+                aria-label="Refresh"
+                className="h-7 w-7"
+                disabled={isRefreshingToday}
+                onClick={onRefreshToday}
+                size="icon"
+                type="button"
+                variant="outline"
+              >
+                <RefreshCw
+                  aria-hidden="true"
+                  className={cn(
+                    "h-3.5 w-3.5",
+                    isRefreshingToday ? "animate-spin" : undefined,
+                  )}
+                />
+              </Button>
+            ) : null}
+          </div>
         </div>
         <div className="flex flex-col gap-layout-sm sm:flex-row sm:items-center">
           <p className="flex items-baseline justify-between gap-2 text-sm text-muted-foreground sm:justify-start">
@@ -2660,10 +2781,12 @@ export function DailyOperationsViewContent({
   isLoadingStorePulseSnapshot,
   isLoadingTimelinePreviewSnapshot,
   isLoadingTimelineSnapshot,
+  isRefreshingToday,
   isAuthenticated,
   isLoadingAccess,
   isLoadingSnapshot,
   onRequestDetailSnapshot,
+  onRefreshToday,
   onRequestStorePulseSnapshot,
   onRequestTimelineSnapshot,
   onOperatingDateChange,
@@ -2672,6 +2795,7 @@ export function DailyOperationsViewContent({
   storePulseWindow,
   storeUrlSlug,
   storePulseSnapshot,
+  todayRefreshedAt,
   timelinePreviewSnapshot,
   timelineSnapshot,
 }: DailyOperationsViewContentProps) {
@@ -3078,10 +3202,13 @@ export function DailyOperationsViewContent({
                     analyticsFetchedAt={weekAnalyticsFetchedAt}
                     currency={snapshot.currency ?? currency}
                     hasFinancialDetailsAccess={hasFinancialDetailsAccess}
+                    isRefreshingToday={isRefreshingToday}
                     metrics={weekMetricsForDisplay}
+                    onRefreshToday={onRefreshToday}
                     orgUrlSlug={orgUrlSlug}
                     storePulseWindow={storePulseWindow}
                     storeUrlSlug={storeUrlSlug}
+                    todayRefreshedAt={todayRefreshedAt}
                   />
                 ) : onRequestDetailSnapshot ? (
                   <DailyOperationsWeekMetricsPreview
@@ -3308,12 +3435,14 @@ function DailyOperationsConnectedView({
   getDailyOperationsDetailSnapshot,
   getDailyOperationsSnapshot,
   getDailyOperationsStorePulseSnapshot,
+  getDailyOperationsTodayRefreshSnapshot,
   getDailyOperationsTimelinePreviewSnapshot,
   getDailyOperationsTimelineSnapshot,
 }: {
   getDailyOperationsDetailSnapshot?: unknown;
   getDailyOperationsSnapshot: unknown;
   getDailyOperationsStorePulseSnapshot?: unknown;
+  getDailyOperationsTodayRefreshSnapshot?: unknown;
   getDailyOperationsTimelinePreviewSnapshot?: unknown;
   getDailyOperationsTimelineSnapshot?: unknown;
 }) {
@@ -3373,11 +3502,18 @@ function DailyOperationsConnectedView({
     useState<string | null>(null);
   const [requestedStorePulseSnapshotKey, setRequestedStorePulseSnapshotKey] =
     useState<string | null>(null);
+  const [todayRefreshRequest, setTodayRefreshRequest] = useState<{
+    requestedAt: number;
+    snapshotRequestKey: string;
+  } | null>(null);
   const [weekAnalyticsCache, setWeekAnalyticsCache] = useState<
     Record<string, CachedWeekAnalytics>
   >({});
   const [storePulseCache, setStorePulseCache] = useState<
     Record<string, DailyOperationsStorePulseSnapshot>
+  >({});
+  const [todayRefreshCache, setTodayRefreshCache] = useState<
+    Record<string, DailyOperationsTodayRefreshSnapshot>
   >({});
   const [timelinePreviewCache, setTimelinePreviewCache] = useState<
     Record<string, DailyOperationsTimelinePreviewSnapshot>
@@ -3419,6 +3555,22 @@ function DailyOperationsConnectedView({
     canQueryProtectedData &&
     (isStorePulseSnapshotRequested || shouldAutoHydrateStorePulseSnapshot) &&
     cachedStorePulseSnapshot === undefined;
+  const isTodayRefreshRequested =
+    snapshotRequestKey !== "skip" &&
+    todayRefreshRequest?.snapshotRequestKey === snapshotRequestKey;
+  const shouldQueryTodayRefreshSnapshot =
+    Boolean(getDailyOperationsTodayRefreshSnapshot) &&
+    canQueryProtectedData &&
+    isTodayRefreshRequested;
+  const todayRefreshArgs =
+    shouldQueryTodayRefreshSnapshot &&
+    snapshotArgs !== "skip" &&
+    todayRefreshRequest
+      ? {
+          ...snapshotArgs,
+          refreshRequestedAt: todayRefreshRequest.requestedAt,
+        }
+      : "skip";
 
   const compactSnapshot = useExpectedDailyOperationsQuery(
     getDailyOperationsSnapshot,
@@ -3432,6 +3584,10 @@ function DailyOperationsConnectedView({
     getDailyOperationsStorePulseSnapshot ?? getDailyOperationsSnapshot,
     shouldQueryStorePulseSnapshot ? snapshotArgs : "skip",
   ) as DailyOperationsStorePulseSnapshot | undefined;
+  const queriedTodayRefreshSnapshot = useExpectedDailyOperationsQuery(
+    getDailyOperationsTodayRefreshSnapshot ?? getDailyOperationsSnapshot,
+    todayRefreshArgs,
+  ) as DailyOperationsTodayRefreshSnapshot | undefined;
   const queriedTimelinePreviewSnapshot = useExpectedDailyOperationsQuery(
     getDailyOperationsTimelinePreviewSnapshot ?? getDailyOperationsSnapshot,
     getDailyOperationsTimelinePreviewSnapshot && canQueryProtectedData
@@ -3458,26 +3614,59 @@ function DailyOperationsConnectedView({
         )
       : detailSnapshot;
   const baseSnapshot = compactSnapshot ?? cachedDaySnapshotEntry?.snapshot;
-  const snapshot = baseSnapshot
+  const mergedSnapshot = baseSnapshot
     ? normalizedDetailSnapshot
       ? mergeDailyOperationsSnapshots(baseSnapshot, normalizedDetailSnapshot)
       : baseSnapshot
     : normalizedDetailSnapshot;
+  const cachedTodayRefreshSnapshot =
+    snapshotRequestKey === "skip"
+      ? undefined
+      : todayRefreshCache[snapshotRequestKey];
+  const snapshot = applyTodayRefreshSnapshot(
+    mergedSnapshot,
+    cachedTodayRefreshSnapshot,
+  );
   const cachedTimelinePreviewSnapshot =
     snapshotRequestKey === "skip"
       ? undefined
       : timelinePreviewCache[snapshotRequestKey];
   const timelinePreviewSnapshot =
     queriedTimelinePreviewSnapshot ?? cachedTimelinePreviewSnapshot;
+  const refreshedStorePulseSnapshot =
+    snapshotArgs !== "skip" && cachedTodayRefreshSnapshot
+      ? {
+          operatingDate: cachedTodayRefreshSnapshot.operatingDate,
+          storePulse: cachedTodayRefreshSnapshot.storePulse ?? null,
+        }
+      : undefined;
   const storePulseSnapshot =
-    queriedStorePulseSnapshot ?? cachedStorePulseSnapshot;
-  const cachedWeekMetrics =
+    refreshedStorePulseSnapshot ??
+    queriedStorePulseSnapshot ??
+    cachedStorePulseSnapshot;
+  const rawCachedWeekMetrics =
     cachedWeekAnalytics && snapshotArgs !== "skip"
       ? selectWeekMetricsForOperatingDate(
           cachedWeekAnalytics.metrics,
           snapshotArgs.operatingDate,
         )
       : undefined;
+  const cachedWeekMetrics =
+    snapshotArgs !== "skip"
+      ? replaceWeekMetricForOperatingDate(
+          rawCachedWeekMetrics,
+          cachedTodayRefreshSnapshot?.weekMetric,
+          snapshotArgs.operatingDate,
+        )
+      : rawCachedWeekMetrics;
+  const cachedWeekStorePulse =
+    cachedTodayRefreshSnapshot?.storePulse && snapshot
+      ? buildCachedWeekStorePulseSummary({
+          ...snapshot,
+          storePulse: cachedTodayRefreshSnapshot.storePulse,
+          weekMetrics: cachedWeekMetrics ?? snapshot.weekMetrics,
+        })
+      : cachedWeekAnalytics?.storePulse;
 
   useEffect(() => {
     if (
@@ -3536,6 +3725,31 @@ function DailyOperationsConnectedView({
   useEffect(() => {
     if (
       snapshotRequestKey === "skip" ||
+      queriedTodayRefreshSnapshot === undefined ||
+      !todayRefreshRequest ||
+      todayRefreshRequest.snapshotRequestKey !== snapshotRequestKey ||
+      queriedTodayRefreshSnapshot.refreshRequestedAt !==
+        todayRefreshRequest.requestedAt
+    ) {
+      return;
+    }
+
+    setTodayRefreshCache((current) => {
+      if (current[snapshotRequestKey] === queriedTodayRefreshSnapshot) {
+        return current;
+      }
+
+      return {
+        ...current,
+        [snapshotRequestKey]: queriedTodayRefreshSnapshot,
+      };
+    });
+    setTodayRefreshRequest(null);
+  }, [queriedTodayRefreshSnapshot, snapshotRequestKey, todayRefreshRequest]);
+
+  useEffect(() => {
+    if (
+      snapshotRequestKey === "skip" ||
       queriedTimelinePreviewSnapshot === undefined
     ) {
       return;
@@ -3572,13 +3786,57 @@ function DailyOperationsConnectedView({
       })) as never,
     });
   };
+  const canRefreshToday =
+    Boolean(getDailyOperationsTodayRefreshSnapshot) &&
+    canQueryProtectedData &&
+    snapshotArgs !== "skip" &&
+    snapshotArgs.operatingDate === getLocalOperatingDate();
+  const requestTodayRefresh = useCallback(() => {
+    if (!canRefreshToday || snapshotRequestKey === "skip") return;
+
+    setTodayRefreshRequest((current) => {
+      if (current?.snapshotRequestKey === snapshotRequestKey) {
+        return current;
+      }
+
+      return {
+        requestedAt: Date.now(),
+        snapshotRequestKey,
+      };
+    });
+  }, [canRefreshToday, snapshotRequestKey]);
+  const todayRefreshLastFetchedAt =
+    cachedTodayRefreshSnapshot?.refreshedAt ?? cachedWeekAnalytics?.fetchedAt;
+
+  useEffect(() => {
+    if (
+      !canRefreshToday ||
+      isTodayRefreshRequested ||
+      todayRefreshLastFetchedAt === undefined
+    ) {
+      return;
+    }
+
+    const staleDelayMs = Math.max(
+      todayRefreshLastFetchedAt + TODAY_REFRESH_STALE_MS - Date.now(),
+      0,
+    );
+    const timeoutId = window.setTimeout(requestTodayRefresh, staleDelayMs);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [
+    canRefreshToday,
+    isTodayRefreshRequested,
+    requestTodayRefresh,
+    todayRefreshLastFetchedAt,
+  ]);
 
   return (
     <DailyOperationsViewContent
       currency={activeStore?.currency ?? "GHS"}
       cachedWeekAnalyticsFetchedAt={cachedWeekAnalytics?.fetchedAt}
       cachedWeekMetrics={cachedWeekMetrics}
-      cachedWeekStorePulse={cachedWeekAnalytics?.storePulse}
+      cachedWeekStorePulse={cachedWeekStorePulse}
       hasDetailSnapshot={
         detailSnapshot !== undefined ||
         cachedDaySnapshotEntry?.hasDetail === true
@@ -3603,6 +3861,7 @@ function DailyOperationsConnectedView({
         isTimelineSnapshotRequested && timelineSnapshot === undefined
       }
       isLoadingSnapshot={snapshot === undefined}
+      isRefreshingToday={isTodayRefreshRequested}
       onRequestDetailSnapshot={() =>
         setRequestedDetailSnapshotKey(
           snapshotRequestKey === "skip" ? null : snapshotRequestKey,
@@ -3619,11 +3878,13 @@ function DailyOperationsConnectedView({
         )
       }
       onOperatingDateChange={handleOperatingDateChange}
+      onRefreshToday={canRefreshToday ? requestTodayRefresh : undefined}
       orgUrlSlug={params?.orgUrlSlug ?? ""}
       snapshot={snapshot}
       storePulseWindow={storePulseWindow}
       storeUrlSlug={params?.storeUrlSlug ?? ""}
       storePulseSnapshot={storePulseSnapshot}
+      todayRefreshedAt={cachedTodayRefreshSnapshot?.refreshedAt}
       timelinePreviewSnapshot={timelinePreviewSnapshot}
       timelineSnapshot={timelineSnapshot}
     />
@@ -3645,6 +3906,9 @@ export function DailyOperationsView() {
       getDailyOperationsSnapshot={dailyOperationsApi.getDailyOperationsSnapshot}
       getDailyOperationsStorePulseSnapshot={
         dailyOperationsApi.getDailyOperationsStorePulseSnapshot
+      }
+      getDailyOperationsTodayRefreshSnapshot={
+        dailyOperationsApi.getDailyOperationsTodayRefreshSnapshot
       }
       getDailyOperationsTimelinePreviewSnapshot={
         dailyOperationsApi.getDailyOperationsTimelinePreviewSnapshot

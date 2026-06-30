@@ -167,7 +167,7 @@ function formatComparisonHelper({
 }) {
   return formatOperationsMetricComparison({
     deltaPercent,
-    missingComparisonLabel: `No ${priorWindowLabel}`,
+    missingComparisonLabel: `No sales ${priorWindowLabel}`,
     priorValue,
     priorWindowLabel,
   });
@@ -698,7 +698,11 @@ export function PaymentMethodsPanel({
   );
 }
 
-function StorePulseRail({ snapshot }: { snapshot: StorePulseOperatorSnapshot }) {
+function StorePulseRail({
+  snapshot,
+}: {
+  snapshot: StorePulseOperatorSnapshot;
+}) {
   return (
     <PageWorkspaceRail>
       <PaymentMethodsPanel snapshot={snapshot} />
@@ -944,7 +948,9 @@ export function StorePulseSummaryView({
                           canView={canViewFinancialDetails}
                           label="Sales"
                         >
-                          {currencyFormatter.format(toDisplayAmount(totalSales))}
+                          {currencyFormatter.format(
+                            toDisplayAmount(totalSales),
+                          )}
                         </FinancialValue>
                       }
                     />

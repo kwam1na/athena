@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import React, { type AnchorHTMLAttributes, type ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -21,6 +21,8 @@ const mockedApi = vi.hoisted(() => ({
   getDailyOperationsDetailSnapshot: "getDailyOperationsDetailSnapshot",
   getDailyOperationsSnapshot: "getDailyOperationsSnapshot",
   getDailyOperationsStorePulseSnapshot: "getDailyOperationsStorePulseSnapshot",
+  getDailyOperationsTodayRefreshSnapshot:
+    "getDailyOperationsTodayRefreshSnapshot",
   getDailyOperationsTimelinePreviewSnapshot:
     "getDailyOperationsTimelinePreviewSnapshot",
   getDailyOperationsTimelineSnapshot: "getDailyOperationsTimelineSnapshot",
@@ -2255,6 +2257,10 @@ describe("DailyOperationsView", () => {
     ).getDailyOperationsStorePulseSnapshot =
       "getDailyOperationsStorePulseSnapshot";
     (
+      mockedApi as { getDailyOperationsTodayRefreshSnapshot?: unknown }
+    ).getDailyOperationsTodayRefreshSnapshot =
+      "getDailyOperationsTodayRefreshSnapshot";
+    (
       mockedApi as { getDailyOperationsTimelinePreviewSnapshot?: unknown }
     ).getDailyOperationsTimelinePreviewSnapshot =
       "getDailyOperationsTimelinePreviewSnapshot";
@@ -2476,6 +2482,232 @@ describe("DailyOperationsView", () => {
       "data-replay-key",
       replayKey,
     );
+  });
+
+  it("refreshes current-day operations facts without loading timeline detail", () => {
+    vi.useFakeTimers();
+    const refreshNow = new Date(2026, 4, 8, 12).getTime();
+    vi.setSystemTime(refreshNow);
+
+    try {
+      const refreshedSnapshot = {
+        attentionItems: operatingSnapshot.attentionItems,
+        closeSummary: {
+          ...operatingSnapshot.closeSummary,
+          currentDayCashTotal: 420000,
+          currentDayCashTransactionCount: 3,
+          paymentTotals: [
+            { amount: 420000, method: "cash", transactionCount: 3 },
+            {
+              amount: 2080000,
+              method: "mobile_money",
+              transactionCount: 6,
+            },
+          ],
+          salesTotal: 2500000,
+          transactionCount: 9,
+        },
+        completedClose: undefined,
+        currency: operatingSnapshot.currency,
+        endAt: Date.UTC(2026, 4, 9),
+        lanes: operatingSnapshot.lanes,
+        lifecycle: operatingSnapshot.lifecycle,
+        operatingDate: "2026-05-08",
+        primaryAction: operatingSnapshot.primaryAction,
+        priorDayMetric: weekMetrics[4],
+        refreshedAt: refreshNow,
+        refreshRequestedAt: refreshNow,
+        startAt: Date.UTC(2026, 4, 8),
+        storeId: operatingSnapshot.storeId,
+        storePulse: buildStorePulseSummary({
+          date: "2026-05-08",
+          itemName: "refreshed today item",
+          paymentLabel: "Mobile Money",
+          paymentMethod: "mobile_money",
+        }),
+        weekMetric: {
+          ...weekMetrics[5],
+          currentDayCashTotal: 420000,
+          currentDayCashTransactionCount: 3,
+          isSelected: true,
+          paymentTotals: [
+            { amount: 420000, method: "cash", transactionCount: 3 },
+            {
+              amount: 2080000,
+              method: "mobile_money",
+              transactionCount: 6,
+            },
+          ],
+          salesTotal: 2500000,
+          transactionCount: 9,
+        },
+      };
+
+      mockedHooks.useQuery.mockImplementation((query, args) => {
+        if (args === "skip") return undefined;
+        if (query === mockedApi.getDailyOperationsDetailSnapshot) {
+          return {
+            ...operatingSnapshot,
+            weekSnapshots: buildWeekSnapshots(),
+          };
+        }
+        if (query === mockedApi.getDailyOperationsStorePulseSnapshot) {
+          return {
+            operatingDate: "2026-05-08",
+            storePulse: buildStorePulseSummary({
+              date: "2026-05-08",
+              itemName: "hydrated selected item",
+              paymentLabel: "Cash",
+              paymentMethod: "cash",
+            }),
+          };
+        }
+        if (query === mockedApi.getDailyOperationsTodayRefreshSnapshot) {
+          const refreshArgs = args as { refreshRequestedAt?: unknown };
+
+          return {
+            ...refreshedSnapshot,
+            refreshRequestedAt: refreshArgs.refreshRequestedAt
+              ? Number(refreshArgs.refreshRequestedAt)
+              : refreshedSnapshot.refreshRequestedAt,
+          };
+        }
+        if (query === mockedApi.getDailyOperationsTimelinePreviewSnapshot) {
+          return {
+            operatingDate: "2026-05-08",
+            timeline: [],
+            timelineHasMore: false,
+          };
+        }
+
+        return operatingSnapshot;
+      });
+
+      render(<DailyOperationsView />);
+
+      const refreshButton = screen.getByRole("button", { name: "Refresh" });
+
+      mockedHooks.useQuery.mockClear();
+      fireEvent.click(refreshButton);
+
+      expect(mockedHooks.useQuery).toHaveBeenCalledWith(
+        mockedApi.getDailyOperationsTodayRefreshSnapshot,
+        expect.objectContaining({
+          operatingDate: "2026-05-08",
+          refreshRequestedAt: refreshNow,
+          storeId: "store-1",
+          storePulseWindow: "today",
+        }),
+      );
+      expect(mockedHooks.useQuery).not.toHaveBeenCalledWith(
+        mockedApi.getDailyOperationsTimelineSnapshot,
+        expect.objectContaining({
+          operatingDate: "2026-05-08",
+        }),
+      );
+      expect(screen.getAllByText("GH₵25,000").length).toBeGreaterThan(1);
+      expect(screen.getAllByText("9 transactions").length).toBeGreaterThan(1);
+      expect(screen.getByText("Refreshed Today Item")).toBeInTheDocument();
+      expect(screen.getAllByText("Mobile Money").length).toBeGreaterThan(1);
+      expect(screen.getByText(/Data refreshed at /)).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("auto-refreshes current-day operations after the displayed data is stale", async () => {
+    vi.useFakeTimers();
+    const initialFetchAt = new Date(2026, 4, 8, 12).getTime();
+    vi.setSystemTime(initialFetchAt);
+
+    try {
+      mockedHooks.useQuery.mockImplementation((query, args) => {
+        if (args === "skip") return undefined;
+        if (query === mockedApi.getDailyOperationsDetailSnapshot) {
+          return {
+            ...operatingSnapshot,
+            weekSnapshots: buildWeekSnapshots(),
+          };
+        }
+        if (query === mockedApi.getDailyOperationsTodayRefreshSnapshot) {
+          const refreshArgs = args as { refreshRequestedAt?: unknown };
+
+          return {
+            attentionItems: operatingSnapshot.attentionItems,
+            closeSummary: operatingSnapshot.closeSummary,
+            completedClose: undefined,
+            currency: operatingSnapshot.currency,
+            endAt: Date.UTC(2026, 4, 9),
+            lanes: operatingSnapshot.lanes,
+            lifecycle: operatingSnapshot.lifecycle,
+            operatingDate: "2026-05-08",
+            primaryAction: operatingSnapshot.primaryAction,
+            priorDayMetric: weekMetrics[4],
+            refreshedAt: Number(refreshArgs.refreshRequestedAt),
+            refreshRequestedAt: Number(refreshArgs.refreshRequestedAt),
+            startAt: Date.UTC(2026, 4, 8),
+            storeId: operatingSnapshot.storeId,
+            storePulse: buildStorePulseSummary({ date: "2026-05-08" }),
+            weekMetric: weekMetrics[5],
+          };
+        }
+        if (query === mockedApi.getDailyOperationsTimelinePreviewSnapshot) {
+          return {
+            operatingDate: "2026-05-08",
+            timeline: [],
+            timelineHasMore: false,
+          };
+        }
+
+        return operatingSnapshot;
+      });
+
+      render(<DailyOperationsView />);
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(screen.getByText(/Data refreshed at /)).toBeInTheDocument();
+
+      const getTodayRefreshCalls = () =>
+        mockedHooks.useQuery.mock.calls.filter(
+          ([query, args]) =>
+            query === mockedApi.getDailyOperationsTodayRefreshSnapshot &&
+            args !== "skip",
+        );
+
+      mockedHooks.useQuery.mockClear();
+
+      act(() => {
+        vi.advanceTimersByTime(10 * 60 * 1000 - 1);
+      });
+
+      expect(getTodayRefreshCalls()).toHaveLength(0);
+
+      act(() => {
+        vi.advanceTimersByTime(1);
+      });
+
+      expect(getTodayRefreshCalls()).toHaveLength(1);
+      expect(mockedHooks.useQuery).toHaveBeenCalledWith(
+        mockedApi.getDailyOperationsTodayRefreshSnapshot,
+        expect.objectContaining({
+          operatingDate: "2026-05-08",
+          refreshRequestedAt: initialFetchAt + 10 * 60 * 1000,
+          storeId: "store-1",
+          storePulseWindow: "today",
+        }),
+      );
+      expect(mockedHooks.useQuery).not.toHaveBeenCalledWith(
+        mockedApi.getDailyOperationsTimelineSnapshot,
+        expect.objectContaining({
+          operatingDate: "2026-05-08",
+        }),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("queries timeline detail separately when the timeline asks for more", () => {
@@ -2792,7 +3024,9 @@ describe("DailyOperationsView", () => {
 
     expect(within(storePulse).queryByRole("tablist")).not.toBeInTheDocument();
     expect(
-      within(storePulse).getByText("Cached sales trend through the selected day."),
+      within(storePulse).getByText(
+        "Cached sales trend through the selected day.",
+      ),
     ).toBeInTheDocument();
   });
 

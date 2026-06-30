@@ -7,6 +7,7 @@ import {
   getDailyOperationsDetailSnapshot,
   getDailyOperationsSnapshot,
   getDailyOperationsStorePulseSnapshot,
+  getDailyOperationsTodayRefreshSnapshot,
   getDailyOperationsTimelinePreviewSnapshot,
   getDailyOperationsTimelineSnapshot,
 } from "./dailyOperations";
@@ -530,13 +531,14 @@ describe("daily operations overview read model", () => {
       },
     );
 
-    expect(snapshot.automationStatuses.find((status) => status.lane === "close"))
-      .toMatchObject({
-        bucket: "needs_review",
-        id: "automation-close-prepare",
-        outcome: "prepared",
-        policyMode: "enabled",
-      });
+    expect(
+      snapshot.automationStatuses.find((status) => status.lane === "close"),
+    ).toMatchObject({
+      bucket: "needs_review",
+      id: "automation-close-prepare",
+      outcome: "prepared",
+      policyMode: "enabled",
+    });
   });
 
   it("prefers applied EOD auto-complete status for closed days over stale skipped dry-run runs", async () => {
@@ -566,7 +568,8 @@ describe("daily operations overview read model", () => {
                 maxVoidedSaleTotal: 0,
               },
             },
-            decisionReason: "EOD Review is clean and eligible for auto-complete.",
+            decisionReason:
+              "EOD Review is clean and eligible for auto-complete.",
             domain: "daily_operations",
             idempotencyKey:
               "daily_operations:eod.auto_complete:store-1:2026-05-08",
@@ -585,7 +588,8 @@ describe("daily operations overview read model", () => {
             _id: "automation-close-stale-skipped",
             action: "eod.auto_complete",
             createdAt: Date.UTC(2026, 4, 8, 23),
-            decisionReason: "EOD Review is already completed for this store day.",
+            decisionReason:
+              "EOD Review is already completed for this store day.",
             domain: "daily_operations",
             idempotencyKey:
               "daily_operations:eod.auto_complete:store-1:2026-05-08:retry",
@@ -677,20 +681,22 @@ describe("daily operations overview read model", () => {
     expect(snapshot.lifecycle.status).toBe("closed");
     expect(snapshot.completedClose).toMatchObject({
       actorType: "automation",
-      automationDecisionReason: "EOD Review is clean and eligible for auto-complete.",
+      automationDecisionReason:
+        "EOD Review is clean and eligible for auto-complete.",
       automationRunId: "automation-close-applied",
     });
-    expect(snapshot.automationStatuses.find((status) => status.lane === "close"))
-      .toMatchObject({
-        decisionEvidence: {
-          kind: "eod_auto_complete",
-        },
-        decisionReason: "EOD Review is clean and eligible for auto-complete.",
-        id: "automation-close-applied",
-        outcome: "applied",
-        policyMode: "enabled",
-        policyVersion: "daily-operations.v1",
-      });
+    expect(
+      snapshot.automationStatuses.find((status) => status.lane === "close"),
+    ).toMatchObject({
+      decisionEvidence: {
+        kind: "eod_auto_complete",
+      },
+      decisionReason: "EOD Review is clean and eligible for auto-complete.",
+      id: "automation-close-applied",
+      outcome: "applied",
+      policyMode: "enabled",
+      policyVersion: "daily-operations.v1",
+    });
   });
 
   it("redacts EOD auto-complete decision evidence for broad Daily Operations readers", async () => {
@@ -818,7 +824,9 @@ describe("daily operations overview read model", () => {
       actorType: "automation",
       automationRunId: "automation-close-applied",
     });
-    expect(snapshot.completedClose).not.toHaveProperty("policyReviewedItemKeys");
+    expect(snapshot.completedClose).not.toHaveProperty(
+      "policyReviewedItemKeys",
+    );
   });
 
   it("exposes only operator-visible scheduled run evidence for the store day", async () => {
@@ -1075,7 +1083,8 @@ describe("daily operations overview read model", () => {
     });
     expect(snapshot.lanes.find((lane) => lane.key === "opening")).toMatchObject(
       {
-        description: "1 opening item will be reviewed when Opening Handoff starts.",
+        description:
+          "1 opening item will be reviewed when Opening Handoff starts.",
         status: "needs_attention",
       },
     );
@@ -1195,7 +1204,9 @@ describe("daily operations overview read model", () => {
       transactionCount: 1,
     });
     expect(
-      snapshot.weekMetrics.find((metric) => metric.operatingDate === "2026-05-08"),
+      snapshot.weekMetrics.find(
+        (metric) => metric.operatingDate === "2026-05-08",
+      ),
     ).toMatchObject({
       adjustedSalesTotal: 43000,
       adjustmentCashSettlementTotal: -7000,
@@ -1240,8 +1251,7 @@ describe("daily operations overview read model", () => {
     expect(
       snapshot.attentionItems.some(
         (item) =>
-          item.owner === "daily_close" &&
-          item.label === "EOD Review reopened",
+          item.owner === "daily_close" && item.label === "EOD Review reopened",
       ),
     ).toBe(false);
   });
@@ -1386,7 +1396,9 @@ describe("daily operations overview read model", () => {
       "2026-05-09",
     ]);
     expect(
-      snapshot.weekMetrics.find((metric) => metric.operatingDate === "2026-05-07"),
+      snapshot.weekMetrics.find(
+        (metric) => metric.operatingDate === "2026-05-07",
+      ),
     ).toMatchObject({
       isClosed: true,
       isSelected: false,
@@ -1394,7 +1406,9 @@ describe("daily operations overview read model", () => {
       transactionCount: 1,
     });
     expect(
-      snapshot.weekMetrics.find((metric) => metric.operatingDate === "2026-05-08"),
+      snapshot.weekMetrics.find(
+        (metric) => metric.operatingDate === "2026-05-08",
+      ),
     ).toMatchObject({
       currentDayCashTotal: 80000,
       expenseTotal: 12000,
@@ -1412,7 +1426,9 @@ describe("daily operations overview read model", () => {
       transactionCount: 1,
     });
     expect(
-      snapshot.weekMetrics.find((metric) => metric.operatingDate === "2026-05-05"),
+      snapshot.weekMetrics.find(
+        (metric) => metric.operatingDate === "2026-05-05",
+      ),
     ).toMatchObject({
       isSelected: true,
       salesTotal: 0,
@@ -1763,7 +1779,9 @@ describe("daily operations overview read model", () => {
       transactionCount: 1,
     });
     expect(
-      snapshot.weekMetrics.find((metric) => metric.operatingDate === "2026-06-21"),
+      snapshot.weekMetrics.find(
+        (metric) => metric.operatingDate === "2026-06-21",
+      ),
     ).toMatchObject({
       salesTotal: 20000,
       transactionCount: 1,
@@ -1869,7 +1887,9 @@ describe("daily operations overview read model", () => {
     });
     vi.mocked(
       athenaUserAuth.requireOrganizationMemberRoleWithCtx,
-    ).mockRejectedValue(new Error("You cannot view daily operations for this store."));
+    ).mockRejectedValue(
+      new Error("You cannot view daily operations for this store."),
+    );
 
     await expect(
       getHandler(getDailyOperationsSnapshot)(
@@ -2217,6 +2237,121 @@ describe("daily operations overview read model", () => {
     });
   });
 
+  it("returns a current-day refresh payload with selected day metric and store pulse detail", async () => {
+    vi.setSystemTime(new Date("2026-05-08T18:30:00.000Z"));
+    vi.mocked(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).mockResolvedValue({
+      _creationTime: 0,
+      _id: "user-1" as Id<"athenaUser">,
+      email: "admin@wigclub.store",
+    });
+    vi.mocked(
+      athenaUserAuth.requireOrganizationMemberRoleWithCtx,
+    ).mockResolvedValue({
+      _creationTime: 0,
+      _id: "member-admin" as Id<"organizationMember">,
+      organizationId: "org-1" as Id<"organization">,
+      role: "full_admin",
+      userId: "user-1" as Id<"athenaUser">,
+    });
+
+    const snapshot = await getHandler(getDailyOperationsTodayRefreshSnapshot)(
+      buildCtx({
+        dailyClose: [priorClose],
+        dailyOpening: [startedOpening],
+        posTransaction: [
+          {
+            _id: "txn-prior",
+            changeGiven: 0,
+            completedAt: Date.UTC(2026, 4, 7, 16),
+            paymentMethod: "cash",
+            paymentAllocations: [],
+            payments: [{ amount: 20000, method: "cash" }],
+            status: "completed",
+            storeId: "store-1",
+            terminalId: "terminal-1",
+            total: 20000,
+            totalPaid: 20000,
+            transactionNumber: "TXN-PRIOR",
+          },
+          {
+            _id: "txn-current",
+            changeGiven: 0,
+            completedAt: Date.UTC(2026, 4, 8, 16),
+            paymentMethod: "cash",
+            paymentAllocations: [],
+            payments: [{ amount: 821500, method: "cash" }],
+            status: "completed",
+            storeId: "store-1",
+            terminalId: "terminal-1",
+            total: 821500,
+            totalPaid: 821500,
+            transactionNumber: "TXN-CURRENT",
+          },
+        ],
+        posTransactionItem: [
+          {
+            _id: "txn-item-current",
+            productId: "product-1",
+            productName: "Braiding Hair",
+            productSku: "BRAID-1",
+            productSkuId: "sku-1",
+            quantity: 2,
+            totalPrice: 821500,
+            transactionId: "txn-current",
+            unitPrice: 410750,
+          },
+        ],
+        store: [store],
+      }) as never,
+      {
+        operatingDate: "2026-05-08",
+        refreshRequestedAt: 12345,
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(snapshot).toMatchObject({
+      closeSummary: {
+        salesTotal: 821500,
+        transactionCount: 1,
+      },
+      operatingDate: "2026-05-08",
+      refreshedAt: Date.parse("2026-05-08T18:30:00.000Z"),
+      refreshRequestedAt: 12345,
+      storePulse: {
+        operatorSnapshot: {
+          paymentMix: [
+            expect.objectContaining({
+              method: "cash",
+              total: 821500,
+            }),
+          ],
+          topItems: [
+            expect.objectContaining({
+              name: "Braiding Hair",
+              quantity: 2,
+            }),
+          ],
+        },
+      },
+      weekMetric: expect.objectContaining({
+        isSelected: true,
+        operatingDate: "2026-05-08",
+        salesTotal: 821500,
+        transactionCount: 1,
+      }),
+    });
+    expect(snapshot.priorDayMetric).toMatchObject({
+      operatingDate: "2026-05-07",
+      salesTotal: 20000,
+      transactionCount: 1,
+    });
+    expect(snapshot).not.toHaveProperty("weekSnapshots");
+    expect(snapshot).not.toHaveProperty("timeline");
+  });
+
   it("returns full bounded timeline history from the explicit timeline query", async () => {
     vi.mocked(
       athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
@@ -2349,13 +2484,17 @@ describe("daily operations overview read model", () => {
     );
 
     expect(
-      snapshot.weekMetrics.find((metric) => metric.operatingDate === "2026-05-10"),
+      snapshot.weekMetrics.find(
+        (metric) => metric.operatingDate === "2026-05-10",
+      ),
     ).toMatchObject({
       salesTotal: 187899,
       transactionCount: 1,
     });
     expect(
-      snapshot.weekMetrics.find((metric) => metric.operatingDate === "2026-05-11"),
+      snapshot.weekMetrics.find(
+        (metric) => metric.operatingDate === "2026-05-11",
+      ),
     ).toMatchObject({
       salesTotal: 0,
       transactionCount: 0,
@@ -3240,7 +3379,8 @@ describe("daily operations overview read model", () => {
             _id: "event-variance-review-requested",
             createdAt: Date.UTC(2026, 4, 8, 20, 45),
             eventType: "register_session_variance_review_requested",
-            message: "Variance of -19500 exceeded the closeout approval threshold.",
+            message:
+              "Variance of -19500 exceeded the closeout approval threshold.",
             metadata: {
               countedCash: 124_500,
               expectedCash: 144_000,
@@ -3584,10 +3724,10 @@ describe("daily operations overview read model", () => {
 
   it("surfaces pending synced register count submissions for the operating day", async () => {
     const ctx = buildCtx(buildPendingRegisterCountSeed());
-    const snapshot = await buildDailyOperationsSnapshotWithCtx(
-      ctx,
-      { operatingDate: "2026-05-08", storeId: "store-1" as Id<"store"> },
-    );
+    const snapshot = await buildDailyOperationsSnapshotWithCtx(ctx, {
+      operatingDate: "2026-05-08",
+      storeId: "store-1" as Id<"store">,
+    });
 
     expect(snapshot.timeline[0]).toMatchObject({
       id: "pos_local_sync_register_count:sync-register-count",
