@@ -6,6 +6,9 @@ import {
   buildDailyOperationsSnapshotWithCtx,
   getDailyOperationsDetailSnapshot,
   getDailyOperationsSnapshot,
+  getDailyOperationsStorePulseSnapshot,
+  getDailyOperationsTimelinePreviewSnapshot,
+  getDailyOperationsTimelineSnapshot,
 } from "./dailyOperations";
 
 vi.mock("../lib/athenaUserAuth", () => ({
@@ -1954,9 +1957,8 @@ describe("daily operations overview read model", () => {
     });
     expect(snapshot.priorDayMetric).toBeUndefined();
     expect(snapshot.storePulse).toBeUndefined();
-    expect(snapshot.timeline).toEqual([
-      expect.objectContaining({ id: "event-register-opened" }),
-    ]);
+    expect(snapshot.timeline).toEqual([]);
+    expect(snapshot.timelineHasMore).toBe(false);
     expect(snapshot.weekMetrics).toEqual([]);
   });
 
@@ -2030,14 +2032,8 @@ describe("daily operations overview read model", () => {
     expect(snapshot.primaryAction).toMatchObject({
       label: "Start EOD Review",
     });
-    expect(snapshot.timeline).toHaveLength(5);
-    expect(snapshot.timeline[0].id).toBe("event-19");
-    expect(
-      snapshot.timeline.map(
-        (event: (typeof snapshot.timeline)[number]) => event.id,
-      ),
-    ).not.toContain("event-14");
-    expect(snapshot.timelineHasMore).toBe(true);
+    expect(snapshot.timeline).toEqual([]);
+    expect(snapshot.timelineHasMore).toBe(false);
     expect(snapshot.scheduledRunSummaries).toEqual([
       expect.objectContaining({ id: "run-applied" }),
     ]);
@@ -2046,7 +2042,7 @@ describe("daily operations overview read model", () => {
     expect(snapshot.weekMetrics).toEqual([]);
   });
 
-  it("returns analytics and full bounded history from the explicit detail query", async () => {
+  it("returns week analytics without timeline or store pulse detail from the explicit detail query", async () => {
     vi.mocked(
       athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
     ).mockResolvedValue({
@@ -2103,10 +2099,33 @@ describe("daily operations overview read model", () => {
       },
     );
 
-    expect(snapshot.timeline).toHaveLength(20);
-    expect(snapshot.timeline[0].id).toBe("event-19");
-    expect(snapshot.storePulse).toBeDefined();
+    expect(snapshot.timeline).toEqual([]);
+    expect(snapshot.timelineHasMore).toBe(false);
+    expect(snapshot.scheduledRunSummaries).toEqual([]);
+    expect(snapshot.storePulse).toBeUndefined();
     expect(snapshot.weekMetrics).toHaveLength(7);
+    expect(snapshot.weekStorePulses).toBeUndefined();
+    expect(snapshot.weekSnapshots).toHaveLength(7);
+    expect(
+      snapshot.weekSnapshots.find(
+        (weekSnapshot: (typeof snapshot.weekSnapshots)[number]) =>
+          weekSnapshot.operatingDate === "2026-05-08",
+      ),
+    ).toMatchObject({
+      operatingDate: "2026-05-08",
+      scheduledRunSummaries: [],
+      timeline: [],
+      timelineHasMore: false,
+    });
+    expect(
+      snapshot.weekSnapshots.find(
+        (weekSnapshot: (typeof snapshot.weekSnapshots)[number]) =>
+          weekSnapshot.operatingDate === "2026-05-07",
+      ),
+    ).toMatchObject({
+      operatingDate: "2026-05-07",
+      weekMetrics: [],
+    });
     expect(
       snapshot.weekMetrics.find(
         (metric: (typeof snapshot.weekMetrics)[number]) =>
@@ -2115,6 +2134,187 @@ describe("daily operations overview read model", () => {
     ).toMatchObject({
       salesTotal: 821500,
       transactionCount: 1,
+    });
+  });
+
+  it("returns selected-day store pulse detail from the explicit store pulse query", async () => {
+    vi.mocked(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).mockResolvedValue({
+      _creationTime: 0,
+      _id: "user-1" as Id<"athenaUser">,
+      email: "admin@wigclub.store",
+    });
+    vi.mocked(
+      athenaUserAuth.requireOrganizationMemberRoleWithCtx,
+    ).mockResolvedValue({
+      _creationTime: 0,
+      _id: "member-admin" as Id<"organizationMember">,
+      organizationId: "org-1" as Id<"organization">,
+      role: "full_admin",
+      userId: "user-1" as Id<"athenaUser">,
+    });
+
+    const snapshot = await getHandler(getDailyOperationsStorePulseSnapshot)(
+      buildCtx({
+        posTransaction: [
+          {
+            _id: "txn-current",
+            changeGiven: 0,
+            completedAt: Date.UTC(2026, 4, 8, 16),
+            paymentMethod: "cash",
+            paymentAllocations: [],
+            payments: [{ amount: 821500, method: "cash" }],
+            status: "completed",
+            storeId: "store-1",
+            terminalId: "terminal-1",
+            total: 821500,
+            totalPaid: 821500,
+            transactionNumber: "TXN-CURRENT",
+          },
+        ],
+        posTransactionItem: [
+          {
+            _id: "txn-item-current",
+            productId: "product-1",
+            productName: "Braiding Hair",
+            productSku: "BRAID-1",
+            productSkuId: "sku-1",
+            quantity: 2,
+            totalPrice: 821500,
+            transactionId: "txn-current",
+            unitPrice: 410750,
+          },
+        ],
+        store: [store],
+      }) as never,
+      {
+        operatingDate: "2026-05-08",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(snapshot).toMatchObject({
+      operatingDate: "2026-05-08",
+      storePulse: {
+        operatorSnapshot: {
+          paymentMix: [
+            expect.objectContaining({
+              count: 1,
+              label: "Cash",
+              total: 821500,
+            }),
+          ],
+          topItems: [
+            expect.objectContaining({
+              name: "Braiding Hair",
+              quantity: 2,
+              totalSales: 821500,
+            }),
+          ],
+        },
+      },
+    });
+  });
+
+  it("returns full bounded timeline history from the explicit timeline query", async () => {
+    vi.mocked(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).mockResolvedValue({
+      _creationTime: 0,
+      _id: "user-1" as Id<"athenaUser">,
+      email: "admin@wigclub.store",
+    });
+    vi.mocked(
+      athenaUserAuth.requireOrganizationMemberRoleWithCtx,
+    ).mockResolvedValue({
+      _creationTime: 0,
+      _id: "member-admin" as Id<"organizationMember">,
+      organizationId: "org-1" as Id<"organization">,
+      role: "full_admin",
+      userId: "user-1" as Id<"athenaUser">,
+    });
+    const events = Array.from({ length: 8 }, (_, index) => ({
+      _id: `timeline-event-${index}`,
+      createdAt: Date.UTC(2026, 4, 8, 9, index),
+      eventType: "operations.event",
+      message: `Timeline event ${index}`,
+      storeId: "store-1",
+      subjectId: `subject-${index}`,
+      subjectType: "operations",
+    }));
+
+    const snapshot = await getHandler(getDailyOperationsTimelineSnapshot)(
+      buildCtx({
+        dailyOpening: [startedOpening],
+        operationalEvent: events,
+        store: [store],
+      }) as never,
+      {
+        operatingDate: "2026-05-08",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(snapshot).toEqual({
+      operatingDate: "2026-05-08",
+      timeline: expect.arrayContaining([
+        expect.objectContaining({ id: "timeline-event-7" }),
+        expect.objectContaining({ id: "timeline-event-0" }),
+      ]),
+    });
+    expect(snapshot.timeline).toHaveLength(8);
+    expect(snapshot).not.toHaveProperty("storePulse");
+    expect(snapshot).not.toHaveProperty("weekMetrics");
+  });
+
+  it("returns the same first five events from the timeline preview query", async () => {
+    vi.mocked(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).mockResolvedValue({
+      _creationTime: 0,
+      _id: "user-1" as Id<"athenaUser">,
+      email: "admin@wigclub.store",
+    });
+    vi.mocked(
+      athenaUserAuth.requireOrganizationMemberRoleWithCtx,
+    ).mockResolvedValue({
+      _creationTime: 0,
+      _id: "member-admin" as Id<"organizationMember">,
+      organizationId: "org-1" as Id<"organization">,
+      role: "full_admin",
+      userId: "user-1" as Id<"athenaUser">,
+    });
+    const seed = {
+      dailyOpening: [startedOpening],
+      operationalEvent: Array.from({ length: 8 }, (_, index) => ({
+        _id: `timeline-event-${index}`,
+        createdAt: Date.UTC(2026, 4, 8, 9, index),
+        eventType: "operations.event",
+        message: `Timeline event ${index}`,
+        storeId: "store-1",
+        subjectId: `subject-${index}`,
+        subjectType: "operations",
+      })),
+      store: [store],
+    };
+    const args = {
+      operatingDate: "2026-05-08",
+      storeId: "store-1" as Id<"store">,
+    };
+
+    const previewSnapshot = await getHandler(
+      getDailyOperationsTimelinePreviewSnapshot,
+    )(buildCtx(seed) as never, args);
+    const fullSnapshot = await getHandler(getDailyOperationsTimelineSnapshot)(
+      buildCtx(seed) as never,
+      args,
+    );
+
+    expect(previewSnapshot).toEqual({
+      operatingDate: "2026-05-08",
+      timeline: fullSnapshot.timeline.slice(0, 5),
+      timelineHasMore: true,
     });
   });
 
@@ -2800,6 +3000,141 @@ describe("daily operations overview read model", () => {
     });
   });
 
+  it("selects the most recent compact timeline events after merging fallback sources", async () => {
+    const operationalEvents = Array.from({ length: 6 }, (_, index) => ({
+      _id: `older-event-${index}`,
+      createdAt: Date.UTC(2026, 4, 8, 10, index),
+      eventType: "operations.event",
+      message: `Older event ${index}`,
+      storeId: "store-1",
+      subjectId: `subject-${index}`,
+      subjectType: "operations",
+    }));
+    const snapshot = await buildDailyOperationsSnapshotWithCtx(
+      buildCtx({
+        dailyClose: [priorClose],
+        dailyOpening: [startedOpening],
+        operationalEvent: operationalEvents,
+        registerSession: [
+          {
+            _id: "register-latest",
+            closeoutRecords: [
+              {
+                actorStaffProfileId: "staff-1",
+                countedCash: 450,
+                expectedCash: 450,
+                occurredAt: Date.UTC(2026, 4, 8, 20, 45),
+                type: "closed",
+                variance: 0,
+              },
+            ],
+            expectedCash: 450,
+            openedAt: Date.UTC(2026, 4, 8, 8),
+            openingFloat: 100,
+            organizationId: "org-1",
+            registerNumber: "Register 9",
+            status: "closed",
+            storeId: "store-1",
+          },
+        ],
+        store: [store],
+      }),
+      {
+        operatingDate: "2026-05-08",
+        storeId: "store-1" as Id<"store">,
+        timelineLimit: 5,
+        timelinePreviewLimit: 5,
+      },
+    );
+
+    expect(snapshot.timeline).toHaveLength(5);
+    expect(snapshot.timeline[0]).toMatchObject({
+      id: "register_closeout:register-latest:closed:1778273100000",
+      message: "Register 9 closeout recorded with an exact cash match.",
+    });
+    expect(snapshot.timeline.map((event) => event.id)).not.toContain(
+      "older-event-0",
+    );
+  });
+
+  it("matches the compact timeline preview to the full timeline first rows", async () => {
+    vi.mocked(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).mockResolvedValue({
+      _creationTime: 0,
+      _id: "user-1" as Id<"athenaUser">,
+      email: "admin@wigclub.store",
+    });
+    vi.mocked(
+      athenaUserAuth.requireOrganizationMemberRoleWithCtx,
+    ).mockResolvedValue({
+      _creationTime: 0,
+      _id: "member-admin" as Id<"organizationMember">,
+      organizationId: "org-1" as Id<"organization">,
+      role: "full_admin",
+      userId: "user-1" as Id<"athenaUser">,
+    });
+    const seed = {
+      dailyClose: [priorClose],
+      dailyOpening: [startedOpening],
+      operationalEvent: Array.from({ length: 8 }, (_, index) => ({
+        _id: `timeline-event-${index}`,
+        createdAt: Date.UTC(2026, 4, 8, 10, index),
+        eventType: "operations.event",
+        message: `Timeline event ${index}`,
+        storeId: "store-1",
+        subjectId: `subject-${index}`,
+        subjectType: "operations",
+      })),
+      registerSession: [
+        {
+          _id: "register-latest",
+          closeoutRecords: [
+            {
+              actorStaffProfileId: "staff-1",
+              countedCash: 450,
+              expectedCash: 450,
+              occurredAt: Date.UTC(2026, 4, 8, 20, 45),
+              type: "closed",
+              variance: 0,
+            },
+          ],
+          expectedCash: 450,
+          openedAt: Date.UTC(2026, 4, 8, 8),
+          openingFloat: 100,
+          organizationId: "org-1",
+          registerNumber: "Register 9",
+          status: "closed",
+          storeId: "store-1",
+        },
+      ],
+      store: [store],
+    };
+    const args = {
+      operatingDate: "2026-05-08",
+      storeId: "store-1" as Id<"store">,
+    };
+    const compactSnapshot = await buildDailyOperationsSnapshotWithCtx(
+      buildCtx(seed),
+      {
+        ...args,
+        timelineLimit: 5,
+        timelinePreviewLimit: 5,
+      },
+    );
+    const fullTimelineSnapshot = await getHandler(
+      getDailyOperationsTimelineSnapshot,
+    )(buildCtx(seed) as never, args);
+
+    expect(compactSnapshot.timeline.map((event) => event.id)).toEqual(
+      fullTimelineSnapshot.timeline
+        .slice(0, 5)
+        .map(
+          (event: (typeof fullTimelineSnapshot.timeline)[number]) => event.id,
+        ),
+    );
+  });
+
   it("formats fallback register closeout variance records for the timeline", async () => {
     const snapshot = await buildDailyOperationsSnapshotWithCtx(
       buildCtx({
@@ -3425,7 +3760,7 @@ describe("daily operations overview read model", () => {
     expect(snapshot.timeline.map((event) => event.id)).not.toContain("event-0");
   });
 
-  it("orders same-minute cycle count lifecycle events by operator relevance", async () => {
+  it("orders same-minute timeline events by exact recency", async () => {
     const snapshot = await buildDailyOperationsSnapshotWithCtx(
       buildCtx({
         dailyClose: [priorClose],
@@ -3492,10 +3827,10 @@ describe("daily operations overview read model", () => {
     );
 
     expect(snapshot.timeline.map((event) => event.id)).toEqual([
+      "event-draft-started",
       "event-draft-submitted",
       "event-adjustment-applied",
       "event-draft-updated",
-      "event-draft-started",
     ]);
     expect(
       snapshot.timeline.find((event) => event.id === "event-draft-updated")

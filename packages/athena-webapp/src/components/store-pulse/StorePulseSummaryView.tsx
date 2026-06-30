@@ -315,13 +315,15 @@ function getTrendValue({
     : day.transactionCount;
 }
 
-function StorePulseTimeline({
+export function StorePulseTimeline({
+  animationKey,
   canViewFinancialDetails,
   description,
   currencyFormatter,
   pulseWindow,
   snapshot,
 }: {
+  animationKey?: string;
   canViewFinancialDetails: boolean;
   description: string;
   currencyFormatter: Intl.NumberFormat;
@@ -344,6 +346,10 @@ function StorePulseTimeline({
         value: getTrendValue({ canViewFinancialDetails, day }),
       })),
     [canViewFinancialDetails, pulseWindow, snapshot.trend],
+  );
+  const chartAnimationKey = useMemo(
+    () => animationKey ?? chartData.map((day) => day.date).join("|"),
+    [animationKey, chartData],
   );
   const xAxisTicks = useMemo(() => {
     if (isMobile) {
@@ -390,9 +396,10 @@ function StorePulseTimeline({
       <div className="overflow-hidden rounded-lg border border-border bg-surface-raised px-layout-sm py-8 shadow-surface sm:p-8">
         <ChartContainer
           config={salesPulseChartConfig}
-          className="h-[22rem] w-full"
+          className="store-pulse-sales-trend-chart h-[22rem] w-full"
         >
           <AreaChart
+            className="store-pulse-sales-trend-plot"
             data={chartData}
             margin={{ left: 0, right: salesTrendAxisInset, top: 0, bottom: 0 }}
           >
@@ -485,10 +492,14 @@ function StorePulseTimeline({
               }
             />
             <Area
+              key={chartAnimationKey}
+              data-replay-key={chartAnimationKey}
               dataKey="value"
               fill="url(#store-pulse-sales-fill)"
               fillOpacity={1}
+              isAnimationActive={false}
               name={chartLabel}
+              pathLength={1}
               type="monotone"
               stroke="var(--color-value)"
               strokeWidth={3}
@@ -502,7 +513,7 @@ function StorePulseTimeline({
   );
 }
 
-function TopItemsPanel({
+export function TopItemsPanel({
   canViewFinancialDetails,
   currencyFormatter,
   snapshot,
@@ -616,7 +627,7 @@ function TopItemsPanel({
   );
 }
 
-function PaymentMethodsPanel({
+export function PaymentMethodsPanel({
   snapshot,
 }: {
   snapshot: StorePulseOperatorSnapshot;
@@ -833,18 +844,24 @@ function StorePulseSkeleton({
 
 export function StorePulseSummaryView({
   canViewFinancialDetails,
+  chartAnimationKey,
+  chartDescription,
   currencyFormatter,
   onPulseWindowChange,
   pulseWindow,
+  showDetailPanels = true,
   showPulseWindowFilter = true,
   showSummaryMetrics = true,
   summary,
   topItemsTitle = "Top items",
 }: {
   canViewFinancialDetails: boolean;
+  chartAnimationKey?: string;
+  chartDescription?: string;
   currencyFormatter: Intl.NumberFormat;
   onPulseWindowChange: (pulseWindow: StorePulseWindow) => void;
   pulseWindow: StorePulseWindow;
+  showDetailPanels?: boolean;
   showPulseWindowFilter?: boolean;
   showSummaryMetrics?: boolean;
   summary: StorePulseSummary | undefined;
@@ -992,8 +1009,9 @@ export function StorePulseSummaryView({
 
             {canViewFinancialDetails ? (
               <StorePulseTimeline
+                animationKey={chartAnimationKey}
                 canViewFinancialDetails={canViewFinancialDetails}
-                description={copy.chartDescription}
+                description={chartDescription ?? copy.chartDescription}
                 currencyFormatter={currencyFormatter}
                 pulseWindow={pulseWindow}
                 snapshot={snapshot}
@@ -1001,7 +1019,7 @@ export function StorePulseSummaryView({
             ) : null}
           </section>
 
-          {canViewFinancialDetails ? (
+          {canViewFinancialDetails && showDetailPanels ? (
             <PageWorkspaceGrid className="xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
               <PageWorkspaceMain>
                 <TopItemsPanel

@@ -15,6 +15,7 @@ function runGit(rootDir: string, args: string[]) {
   const result = spawnSync("git", args, {
     cwd: rootDir,
     encoding: "utf8",
+    env: gitFixtureEnv(),
   });
 
   if (result.status !== 0) {
@@ -22,6 +23,12 @@ function runGit(rootDir: string, args: string[]) {
   }
 
   return result.stdout.trim();
+}
+
+function gitFixtureEnv() {
+  return Object.fromEntries(
+    Object.entries(process.env).filter(([key]) => !key.startsWith("GIT_")),
+  );
 }
 
 describe("pr-athena delivery run wrapper", () => {

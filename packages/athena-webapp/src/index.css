@@ -289,6 +289,51 @@
   }
 }
 
+@keyframes store-pulse-sales-trend-draw {
+  0% {
+    opacity: 0.38;
+    stroke-dashoffset: 1;
+  }
+
+  35% {
+    opacity: 0.82;
+  }
+
+  100% {
+    opacity: 1;
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes store-pulse-sales-trend-fill {
+  0% {
+    opacity: 0;
+  }
+
+  40% {
+    opacity: 0.12;
+  }
+
+  100% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .store-pulse-sales-trend-chart .recharts-area-curve {
+    animation: store-pulse-sales-trend-draw 520ms
+      var(--ease-emphasized) both;
+    stroke-dasharray: 1;
+    stroke-dashoffset: 0;
+  }
+
+  .store-pulse-sales-trend-chart .recharts-area-area {
+    animation: store-pulse-sales-trend-fill 380ms
+      var(--ease-standard) both;
+    animation-delay: 120ms;
+  }
+}
+
 @layer utilities {
   .dark .bg-white,
   .dark .hover\:bg-white:hover {

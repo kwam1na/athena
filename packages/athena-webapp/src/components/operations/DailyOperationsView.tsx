@@ -1,4 +1,10 @@
-import { useCallback, useMemo, useState } from "react";
+import {
+  useEffect,
+  type KeyboardEvent,
+  useCallback,
+  useMemo,
+  useState,
+} from "react";
 import {
   Link,
   useNavigate,
@@ -57,7 +63,10 @@ import {
 import { OperationsSummaryMetric } from "./OperationsSummaryMetric";
 import { formatOperationsMetricHelper } from "./operationsMetricFormatting";
 import {
+  PaymentMethodsPanel,
   StorePulseSummaryView,
+  StorePulseTimeline,
+  TopItemsPanel,
   type StorePulseSummary,
   type StorePulseTrendDay,
   type StorePulseWindow,
@@ -66,6 +75,9 @@ import {
 type DailyOperationsApi = {
   getDailyOperationsDetailSnapshot?: unknown;
   getDailyOperationsSnapshot?: unknown;
+  getDailyOperationsStorePulseSnapshot?: unknown;
+  getDailyOperationsTimelinePreviewSnapshot?: unknown;
+  getDailyOperationsTimelineSnapshot?: unknown;
 };
 
 const useExpectedDailyOperationsQuery = useQuery as unknown as (
@@ -293,26 +305,74 @@ export type DailyOperationsSnapshot = {
     salesTotal: number;
     transactionCount: number;
   }>;
+  weekStorePulses?: Array<{
+    operatingDate: string;
+    storePulse?: StorePulseSummary | null;
+  }>;
+  weekSnapshots?: DailyOperationsSnapshot[];
 };
 
 type DailyOperationsViewContentProps = {
+  cachedWeekAnalyticsFetchedAt?: number;
+  cachedWeekMetrics?: DailyOperationsSnapshot["weekMetrics"];
+  cachedWeekStorePulse?: StorePulseSummary | null;
   currency: string;
   hasDetailSnapshot: boolean;
   hasFullAdminAccess: boolean;
   hasFinancialDetailsAccess: boolean;
   isLoadingDetailSnapshot?: boolean;
+  isLoadingStorePulseSnapshot?: boolean;
+  isLoadingTimelinePreviewSnapshot?: boolean;
+  isLoadingTimelineSnapshot?: boolean;
   isAuthenticated: boolean;
   isLoadingAccess: boolean;
   isLoadingSnapshot: boolean;
   onRequestDetailSnapshot?: () => void;
+  onRequestStorePulseSnapshot?: () => void;
+  onRequestTimelineSnapshot?: () => void;
   onOperatingDateChange?: (date: Date) => void;
   orgUrlSlug: string;
   snapshot?: DailyOperationsSnapshot;
   storePulseWindow: StorePulseWindow;
   storeUrlSlug: string;
+  storePulseSnapshot?: DailyOperationsStorePulseSnapshot;
+  timelinePreviewSnapshot?: DailyOperationsTimelinePreviewSnapshot;
+  timelineSnapshot?: DailyOperationsTimelineSnapshot;
 };
 
+type CachedWeekAnalytics = {
+  daySnapshots: Record<
+    string,
+    {
+      hasDetail: boolean;
+      snapshot: DailyOperationsSnapshot;
+    }
+  >;
+  fetchedAt: number;
+  metrics: DailyOperationsSnapshot["weekMetrics"];
+  storePulse?: StorePulseSummary | null;
+};
+
+type DailyOperationsStorePulseSnapshot = {
+  operatingDate: string;
+  storePulse?: StorePulseSummary | null;
+};
+
+type DailyOperationsTimelineSnapshot = {
+  operatingDate: string;
+  timeline: DailyOperationsSnapshot["timeline"];
+};
+
+type DailyOperationsTimelinePreviewSnapshot =
+  DailyOperationsTimelineSnapshot & {
+    timelineHasMore: boolean;
+  };
+
+type StorePulseDetailHydrationMode = "manual" | "auto";
+
 const TIMELINE_PREVIEW_LIMIT = 5;
+// Switch to "auto" to hydrate top items/payment mix on mount.
+const STORE_PULSE_DETAIL_HYDRATION_MODE: StorePulseDetailHydrationMode = "auto";
 
 function getDailyOperationsApi(): DailyOperationsApi {
   return (
@@ -522,6 +582,16 @@ function getWeekEndOperatingDateFromSearch(weekEndOperatingDate?: unknown) {
   return getSaturdayWeekEndOperatingDate(getLocalOperatingDate());
 }
 
+function selectWeekMetricsForOperatingDate(
+  metrics: DailyOperationsSnapshot["weekMetrics"],
+  operatingDate: string,
+) {
+  return metrics.map((metric) => ({
+    ...metric,
+    isSelected: metric.operatingDate === operatingDate,
+  }));
+}
+
 function shouldShowPrimaryAction(snapshot: DailyOperationsSnapshot) {
   return !isHistoricalOperatingDate(snapshot.operatingDate);
 }
@@ -679,6 +749,13 @@ function formatWeekdayDate(operatingDate: string) {
   if (!parsed) return operatingDate;
 
   return parsed.toLocaleDateString([], { day: "numeric", month: "short" });
+}
+
+function formatAnalyticsCacheTimestamp(timestamp: number) {
+  return new Date(timestamp).toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
 function formatEntityCount(
@@ -1309,7 +1386,10 @@ export function ScheduledRunEvidencePanel({
     <section className="rounded-md border border-border bg-surface-raised px-layout-md py-layout-sm shadow-surface">
       <div className="flex flex-col gap-layout-sm">
         <h3 className="flex shrink-0 items-center gap-layout-xs text-sm font-medium text-foreground">
-          <Clock3 aria-hidden="true" className="h-4 w-4 text-muted-foreground" />
+          <Clock3
+            aria-hidden="true"
+            className="h-4 w-4 text-muted-foreground"
+          />
           Scheduled runs
         </h3>
         <div className="flex min-w-0 flex-col gap-layout-xs">
@@ -1488,6 +1568,12 @@ function HistoricalWorkflowPanel({
   );
 }
 
+function getTopItemsTitle(operatingDate: string) {
+  return operatingDate === getLocalOperatingDate()
+    ? "Today's top items"
+    : "Top items";
+}
+
 function DailyOperationsStorePulsePanel({
   currency,
   hasFullAdminAccess,
@@ -1504,13 +1590,14 @@ function DailyOperationsStorePulsePanel({
       {storePulseSummary ? (
         <StorePulseSummaryView
           canViewFinancialDetails={hasFullAdminAccess}
+          chartAnimationKey={snapshot.operatingDate}
           currencyFormatter={currencyFormatter(currency)}
           onPulseWindowChange={() => undefined}
           pulseWindow="this_week"
           showPulseWindowFilter={false}
           showSummaryMetrics={false}
           summary={storePulseSummary}
-          topItemsTitle="Today's top items"
+          topItemsTitle={getTopItemsTitle(snapshot.operatingDate)}
         />
       ) : (
         <div className="rounded-lg border border-border bg-surface p-layout-md shadow-surface">
@@ -1572,6 +1659,646 @@ function buildWeekToDateStorePulseSummary(
       ),
     },
   };
+}
+
+function buildCachedWeekStorePulseSummary(
+  snapshot: DailyOperationsSnapshot,
+): StorePulseSummary | null | undefined {
+  const summary = snapshot.storePulse;
+  const operatorSnapshot = summary?.operatorSnapshot;
+
+  if (!summary || !operatorSnapshot) {
+    return buildWeekMetricStorePulseSummary(snapshot);
+  }
+
+  const knownTrendByDate = new Map(
+    operatorSnapshot.trend.map((day) => [day.date, day]),
+  );
+  const weekTrend = snapshot.weekMetrics.map((metric): StorePulseTrendDay => {
+    const knownTrendDay = knownTrendByDate.get(metric.operatingDate);
+
+    return {
+      averageTransaction:
+        metric.transactionCount > 0
+          ? metric.salesTotal / metric.transactionCount
+          : 0,
+      date: metric.operatingDate,
+      hasKnownItemCount: knownTrendDay ? true : false,
+      label: knownTrendDay?.label ?? formatOperatingDate(metric.operatingDate),
+      totalItemsSold: knownTrendDay?.totalItemsSold ?? 0,
+      totalSales: metric.salesTotal,
+      transactionCount: metric.transactionCount,
+    };
+  });
+
+  if (weekTrend.length === 0) return summary;
+
+  return {
+    ...summary,
+    operatorSnapshot: {
+      ...operatorSnapshot,
+      historyDays: Math.max(operatorSnapshot.historyDays, weekTrend.length),
+      trend: weekTrend,
+      usableHistoryDays: Math.max(
+        operatorSnapshot.usableHistoryDays,
+        weekTrend.filter((day) => day.transactionCount > 0).length,
+      ),
+    },
+  };
+}
+
+function buildWeekMetricStorePulseSummary(
+  snapshot: DailyOperationsSnapshot,
+): StorePulseSummary | null {
+  const trend = snapshot.weekMetrics.map((metric): StorePulseTrendDay => {
+    const averageTransaction =
+      metric.transactionCount > 0
+        ? metric.salesTotal / metric.transactionCount
+        : 0;
+
+    return {
+      averageTransaction,
+      date: metric.operatingDate,
+      label: formatOperatingDate(metric.operatingDate),
+      totalItemsSold: 0,
+      totalSales: metric.salesTotal,
+      transactionCount: metric.transactionCount,
+    };
+  });
+  const selectedMetric =
+    snapshot.weekMetrics.find(
+      (metric) => metric.operatingDate === snapshot.operatingDate,
+    ) ?? snapshot.weekMetrics.at(-1);
+
+  if (!trend.length || !selectedMetric) return null;
+
+  const selectedAverageTransaction =
+    selectedMetric.transactionCount > 0
+      ? selectedMetric.salesTotal / selectedMetric.transactionCount
+      : 0;
+
+  return {
+    averageTransaction: selectedAverageTransaction,
+    date: snapshot.operatingDate,
+    operatorSnapshot: {
+      busiestHour: null,
+      comparison: {
+        averageTransactionDeltaPercent: 0,
+        currentAverageTransaction: selectedAverageTransaction,
+        currentItemsSold: 0,
+        currentSales: selectedMetric.salesTotal,
+        currentTransactions: selectedMetric.transactionCount,
+        itemsSoldDeltaPercent: 0,
+        salesDeltaPercent: 0,
+        transactionDeltaPercent: 0,
+        yesterdayAverageTransaction: 0,
+        yesterdayItemsSold: 0,
+        yesterdaySales: 0,
+        yesterdayTransactions: 0,
+      },
+      historyDays: trend.length,
+      isLimited: false,
+      paymentMix: [],
+      topItems: [],
+      trend,
+      usableHistoryDays: trend.filter((day) => day.transactionCount > 0).length,
+    },
+    totalItemsSold: 0,
+    totalSales: selectedMetric.salesTotal,
+    totalTransactions: selectedMetric.transactionCount,
+  };
+}
+
+function buildCachedStorePulseForOperatingDate({
+  operatingDate,
+  selectedDayStorePulse,
+  weekStorePulse,
+}: {
+  operatingDate: string;
+  selectedDayStorePulse?: StorePulseSummary | null;
+  weekStorePulse?: StorePulseSummary | null;
+}): StorePulseSummary | null | undefined {
+  const baseSummary = selectedDayStorePulse ?? weekStorePulse;
+  const weekOperatorSnapshot = weekStorePulse?.operatorSnapshot;
+  const selectedDayOperatorSnapshot = selectedDayStorePulse?.operatorSnapshot;
+
+  if (!baseSummary) return baseSummary;
+
+  const combinedSummary =
+    weekOperatorSnapshot && selectedDayOperatorSnapshot
+      ? {
+          ...baseSummary,
+          operatorSnapshot: {
+            ...selectedDayOperatorSnapshot,
+            historyDays: weekOperatorSnapshot.historyDays,
+            trend: weekOperatorSnapshot.trend,
+            usableHistoryDays: weekOperatorSnapshot.usableHistoryDays,
+          },
+        }
+      : baseSummary;
+
+  return selectStorePulseTrendThroughOperatingDate(
+    combinedSummary,
+    operatingDate,
+  );
+}
+
+function selectStorePulseTrendThroughOperatingDate(
+  summary: StorePulseSummary | null | undefined,
+  operatingDate: string,
+): StorePulseSummary | null | undefined {
+  const operatorSnapshot = summary?.operatorSnapshot;
+
+  if (!summary || !operatorSnapshot) return summary;
+
+  const trend = operatorSnapshot.trend.filter(
+    (day) => day.date <= operatingDate,
+  );
+
+  if (trend.length === operatorSnapshot.trend.length) return summary;
+
+  return {
+    ...summary,
+    operatorSnapshot: {
+      ...operatorSnapshot,
+      historyDays: trend.length,
+      trend,
+      usableHistoryDays: trend.filter((day) => day.transactionCount > 0).length,
+    },
+  };
+}
+
+function buildCachedWeekDaySnapshots(
+  snapshot: DailyOperationsSnapshot,
+): CachedWeekAnalytics["daySnapshots"] {
+  const daySnapshots: CachedWeekAnalytics["daySnapshots"] = {};
+  const weekMetricByDate = new Map(
+    snapshot.weekMetrics.map((metric) => [metric.operatingDate, metric]),
+  );
+
+  for (const weekSnapshot of snapshot.weekSnapshots ?? []) {
+    const weekMetric = weekMetricByDate.get(weekSnapshot.operatingDate);
+
+    daySnapshots[weekSnapshot.operatingDate] = {
+      hasDetail: false,
+      snapshot: weekMetric
+        ? normalizeDailyOperationsSnapshotWithWeekMetric(
+            weekSnapshot,
+            weekMetric,
+            snapshot.weekMetrics,
+          )
+        : weekSnapshot,
+    };
+  }
+
+  const selectedWeekMetric = weekMetricByDate.get(snapshot.operatingDate);
+
+  daySnapshots[snapshot.operatingDate] = {
+    hasDetail: true,
+    snapshot: selectedWeekMetric
+      ? normalizeDailyOperationsSnapshotWithWeekMetric(
+          snapshot,
+          selectedWeekMetric,
+          snapshot.weekMetrics,
+        )
+      : snapshot,
+  };
+
+  return daySnapshots;
+}
+
+function mergeDailyOperationsSnapshots(
+  baseSnapshot: DailyOperationsSnapshot,
+  detailSnapshot: DailyOperationsSnapshot,
+): DailyOperationsSnapshot {
+  return {
+    ...baseSnapshot,
+    ...detailSnapshot,
+    scheduledRunSummaries:
+      detailSnapshot.scheduledRunSummaries?.length === 0
+        ? baseSnapshot.scheduledRunSummaries
+        : detailSnapshot.scheduledRunSummaries,
+    timeline:
+      detailSnapshot.timeline.length === 0
+        ? baseSnapshot.timeline
+        : detailSnapshot.timeline,
+    timelineHasMore:
+      detailSnapshot.timeline.length === 0
+        ? baseSnapshot.timelineHasMore
+        : detailSnapshot.timelineHasMore,
+  };
+}
+
+function areTimelinePreviewSnapshotsEqual(
+  left: DailyOperationsTimelinePreviewSnapshot | undefined,
+  right: DailyOperationsTimelinePreviewSnapshot,
+) {
+  if (!left) return false;
+  if (left.operatingDate !== right.operatingDate) return false;
+  if (left.timelineHasMore !== right.timelineHasMore) return false;
+  if (left.timeline.length !== right.timeline.length) return false;
+
+  return left.timeline.every(
+    (event, index) =>
+      event.id === right.timeline[index]?.id &&
+      event.createdAt === right.timeline[index]?.createdAt,
+  );
+}
+
+function normalizeDailyOperationsSnapshotWithWeekMetric(
+  snapshot: DailyOperationsSnapshot,
+  metric: DailyOperationsSnapshot["weekMetrics"][number],
+  weekMetrics: DailyOperationsSnapshot["weekMetrics"],
+): DailyOperationsSnapshot {
+  const selectedWeekMetrics = selectWeekMetricsForOperatingDate(
+    weekMetrics,
+    snapshot.operatingDate,
+  );
+
+  return {
+    ...snapshot,
+    closeSummary: {
+      ...snapshot.closeSummary,
+      currentDayCashTotal: metric.currentDayCashTotal,
+      currentDayCashTransactionCount: metric.currentDayCashTransactionCount,
+      expenseTotal: metric.expenseTotal,
+      expenseTransactionCount: metric.expenseTransactionCount,
+      paymentTotals:
+        metric.paymentTotals?.map((paymentTotal) => ({
+          ...paymentTotal,
+          transactionCount: paymentTotal.transactionCount ?? undefined,
+        })) ?? [],
+      salesTotal: metric.salesTotal,
+      transactionCount: metric.transactionCount,
+    },
+    priorDayMetric: selectedWeekMetrics.find(
+      (weekMetric) =>
+        weekMetric.operatingDate ===
+        getPreviousOperatingDate(snapshot.operatingDate),
+    ),
+    weekMetrics: selectedWeekMetrics,
+  };
+}
+
+const WEEK_METRICS_PREVIEW_HEIGHT = 28;
+const WEEKDAY_PREVIEW_LABELS = [
+  "Sun",
+  "Mon",
+  "Tue",
+  "Wed",
+  "Thu",
+  "Fri",
+  "Sat",
+];
+
+function handleDeferredAnalyticsKeyDown(
+  event: KeyboardEvent<HTMLElement>,
+  onRequest: () => void,
+) {
+  if (event.key !== "Enter" && event.key !== " ") return;
+
+  event.preventDefault();
+  onRequest();
+}
+
+function DailyOperationsWeekMetricsPreview({
+  isLoading,
+  metrics,
+  onRequest,
+  operatingDate,
+}: {
+  isLoading?: boolean;
+  metrics: DailyOperationsSnapshot["weekMetrics"];
+  onRequest: () => void;
+  operatingDate: string;
+}) {
+  const previewWeekStart = getSundayWeekStartOperatingDate(operatingDate);
+  const previewMetrics =
+    metrics.length > 0
+      ? metrics
+      : WEEKDAY_PREVIEW_LABELS.map((_, index) => ({
+          isClosed: index < 3,
+          isReopened: false,
+          isSelected: false,
+          operatingDate: shiftLocalOperatingDate(previewWeekStart, index),
+          transactionCount: 0,
+        }));
+  const weekEndOperatingDate = metrics.at(-1)?.operatingDate;
+
+  return (
+    <section className="space-y-layout-sm">
+      <div className="flex flex-col gap-layout-xs sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h3 className="text-base font-medium text-foreground">
+            Week at a glance
+          </h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {weekEndOperatingDate
+              ? `Seven days ending ${formatOperatingDate(weekEndOperatingDate)}.`
+              : "Seven-day sales and close status."}
+          </p>
+        </div>
+        <div className="flex flex-col gap-layout-sm sm:flex-row sm:items-center">
+          <p className="flex items-baseline justify-between gap-2 text-sm text-muted-foreground sm:justify-start">
+            <span>Week sales</span>
+            <span className="font-numeric text-base font-semibold tabular-nums text-muted-foreground">
+              -
+            </span>
+          </p>
+          <Button
+            className="w-full shrink-0 transition-[background-color,border-color,color,transform] duration-150 ease-out active:scale-[0.98] sm:w-auto"
+            disabled={isLoading}
+            onClick={onRequest}
+            size="sm"
+            type="button"
+            variant="outline"
+          >
+            {isLoading ? "Loading analytics" : "Load analytics"}
+          </Button>
+        </div>
+      </div>
+      <div
+        aria-label="Load analytics for week at a glance"
+        className="group relative cursor-pointer overflow-x-auto rounded-lg border border-border bg-surface-raised p-layout-sm shadow-surface transition-[box-shadow] duration-200 ease-out hover:shadow-sm focus:outline-none focus-visible:border-action-workflow-border focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-within:border-action-workflow-border focus-within:shadow-sm"
+        onClick={() => {
+          if (!isLoading) onRequest();
+        }}
+        onKeyDown={(event) => {
+          if (!isLoading) handleDeferredAnalyticsKeyDown(event, onRequest);
+        }}
+        role="button"
+        tabIndex={isLoading ? -1 : 0}
+      >
+        <DailyOperationsDeferredAnalyticsAction
+          className="absolute right-layout-sm top-layout-sm z-10"
+          isLoading={isLoading}
+        />
+        <div className="flex min-w-max snap-x gap-layout-xs md:grid md:min-w-[42rem] md:grid-cols-7">
+          {previewMetrics.map((metric, index) => (
+            <article
+              className={cn(
+                "w-[10.5rem] shrink-0 snap-start rounded-md border px-layout-sm py-layout-sm text-left text-muted-foreground md:w-auto",
+                metric.isSelected
+                  ? "border-action-workflow-border bg-action-workflow-soft ring-1 ring-inset ring-action-workflow-border"
+                  : "border-transparent",
+              )}
+              key={metric.operatingDate || index}
+            >
+              <div className="flex items-center justify-between gap-layout-xs">
+                <span className="text-xs font-medium uppercase tracking-wide">
+                  {metric.operatingDate
+                    ? formatWeekdayLabel(metric.operatingDate)
+                    : WEEKDAY_PREVIEW_LABELS[index]}
+                </span>
+              </div>
+              {metric.operatingDate ? (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {formatWeekdayDate(metric.operatingDate)}
+                </p>
+              ) : null}
+              <div className="mt-layout-sm h-12">
+                <span
+                  aria-hidden="true"
+                  className="block w-full rounded-sm bg-muted"
+                  style={{ height: WEEK_METRICS_PREVIEW_HEIGHT }}
+                />
+              </div>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function DailyOperationsStorePulsePreview({
+  cachedSelectedStorePulse,
+  cachedStorePulse,
+  currency,
+  hasFullAdminAccess,
+  isLoading,
+  onRequest,
+  operatingDate,
+}: {
+  cachedSelectedStorePulse?: StorePulseSummary | null;
+  cachedStorePulse?: StorePulseSummary | null;
+  currency: string;
+  hasFullAdminAccess: boolean;
+  isLoading?: boolean;
+  onRequest: () => void;
+  operatingDate: string;
+}) {
+  const topItemsTitle = getTopItemsTitle(operatingDate);
+  const selectedCachedStorePulse = buildCachedStorePulseForOperatingDate({
+    operatingDate,
+    selectedDayStorePulse: cachedSelectedStorePulse,
+    weekStorePulse: cachedStorePulse,
+  });
+  const selectedCachedStorePulseTrend =
+    selectStorePulseTrendThroughOperatingDate(cachedStorePulse, operatingDate);
+  const hasCachedPulseTrendChart = Boolean(
+    selectedCachedStorePulseTrend?.operatorSnapshot?.trend.length,
+  );
+  const detailSnapshot = cachedSelectedStorePulse?.operatorSnapshot
+    ? selectedCachedStorePulse?.operatorSnapshot
+    : undefined;
+
+  return (
+    <section
+      aria-label="Store pulse"
+      className="space-y-layout-xl md:space-y-layout-2xl"
+    >
+      <section className="space-y-layout-2xl">
+        {hasCachedPulseTrendChart ? (
+          <StorePulseTimeline
+            animationKey={operatingDate}
+            canViewFinancialDetails={hasFullAdminAccess}
+            description="Cached sales trend through the selected day."
+            currencyFormatter={currencyFormatter(currency)}
+            pulseWindow="this_week"
+            snapshot={selectedCachedStorePulseTrend!.operatorSnapshot!}
+          />
+        ) : (
+          <section
+            aria-label="Sales trend preview"
+            className="space-y-layout-sm"
+          >
+            <div className="flex flex-col gap-layout-xs sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <h3 className="text-base font-medium text-foreground">
+                  Sales trend
+                </h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Store pulse detail loads with analytics.
+                </p>
+              </div>
+              <span className="rounded-md border border-border bg-background px-2 py-1 text-xs font-medium text-muted-foreground">
+                Paused
+              </span>
+            </div>
+            <div
+              aria-label="Load analytics for sales trend"
+              className="group relative cursor-pointer overflow-hidden rounded-lg border border-border bg-surface-raised p-8 shadow-surface transition-[box-shadow] duration-200 ease-out hover:shadow-sm focus:outline-none focus-visible:border-action-workflow-border focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-within:border-action-workflow-border focus-within:shadow-sm"
+              onClick={() => {
+                if (!isLoading) onRequest();
+              }}
+              onKeyDown={(event) => {
+                if (!isLoading)
+                  handleDeferredAnalyticsKeyDown(event, onRequest);
+              }}
+              role="button"
+              tabIndex={isLoading ? -1 : 0}
+            >
+              <DailyOperationsDeferredAnalyticsAction
+                className="absolute right-layout-md top-layout-md z-10"
+                isLoading={isLoading}
+              />
+              <div className="relative h-[22rem] w-full">
+                <div className="absolute inset-y-0 left-0 flex w-16 flex-col justify-between py-1">
+                  {Array.from({ length: 5 }).map((_, index) => (
+                    <span
+                      aria-hidden="true"
+                      className="h-3 w-12 rounded-sm bg-muted"
+                      key={index}
+                    />
+                  ))}
+                </div>
+                <div
+                  className="absolute inset-y-0 left-20 right-0 flex flex-col justify-between"
+                  data-testid="sales-trend-preview-grid"
+                >
+                  {Array.from({ length: 5 }).map((_, index) => (
+                    <span
+                      aria-hidden="true"
+                      className="h-px w-full rounded-sm bg-muted"
+                      key={index}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
+      </section>
+
+      <PageWorkspaceGrid className="xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+        <PageWorkspaceMain>
+          {detailSnapshot ? (
+            <TopItemsPanel
+              canViewFinancialDetails={hasFullAdminAccess}
+              currencyFormatter={currencyFormatter(currency)}
+              snapshot={detailSnapshot}
+              title={topItemsTitle}
+            />
+          ) : (
+            <DailyOperationsStorePulsePreviewList
+              description="Highest-volume items for the selected day."
+              isLoading={isLoading}
+              onRequest={onRequest}
+              rowCount={5}
+              title={topItemsTitle}
+            />
+          )}
+        </PageWorkspaceMain>
+        <PageWorkspaceRail>
+          {detailSnapshot ? (
+            <PaymentMethodsPanel snapshot={detailSnapshot} />
+          ) : (
+            <DailyOperationsStorePulsePreviewList
+              description="Share of synced POS sales by payment method."
+              isLoading={isLoading}
+              onRequest={onRequest}
+              rowCount={3}
+              title="How customers paid"
+            />
+          )}
+        </PageWorkspaceRail>
+      </PageWorkspaceGrid>
+    </section>
+  );
+}
+
+function DailyOperationsStorePulsePreviewList({
+  description,
+  isLoading,
+  onRequest,
+  rowCount,
+  title,
+}: {
+  description: string;
+  isLoading?: boolean;
+  onRequest: () => void;
+  rowCount: number;
+  title: string;
+}) {
+  return (
+    <section aria-label={`${title} preview`} className="space-y-layout-md">
+      <div>
+        <h3 className="text-base font-medium text-foreground">{title}</h3>
+        <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+      </div>
+      <div
+        aria-label={`Load analytics for ${title}`}
+        className="group relative cursor-pointer rounded-lg border border-border bg-surface-raised shadow-surface transition-[box-shadow] duration-200 ease-out hover:shadow-sm focus:outline-none focus-visible:border-action-workflow-border focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-within:border-action-workflow-border focus-within:shadow-sm"
+        onClick={() => {
+          if (!isLoading) onRequest();
+        }}
+        onKeyDown={(event) => {
+          if (!isLoading) handleDeferredAnalyticsKeyDown(event, onRequest);
+        }}
+        role="button"
+        tabIndex={isLoading ? -1 : 0}
+      >
+        <DailyOperationsDeferredAnalyticsAction
+          className="absolute right-layout-sm top-layout-sm z-10"
+          isLoading={isLoading}
+        />
+        <div className="divide-y divide-border/70">
+          {Array.from({ length: rowCount }).map((_, index) => (
+            <div
+              className="grid gap-2 px-layout-md py-layout-sm sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center"
+              key={index}
+            >
+              <span
+                aria-hidden="true"
+                className="h-6 w-6 rounded-sm bg-muted"
+              />
+              <div className="min-w-0">
+                <span
+                  aria-hidden="true"
+                  className="block h-4 w-32 rounded-sm bg-muted"
+                />
+                <span
+                  aria-hidden="true"
+                  className="mt-2 block h-3 w-44 max-w-full rounded-sm bg-muted"
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function DailyOperationsDeferredAnalyticsAction({
+  className,
+  isLoading,
+}: {
+  className?: string;
+  isLoading?: boolean;
+}) {
+  return (
+    <span
+      aria-hidden="true"
+      className={cn(
+        "inline-flex h-9 translate-y-1 items-center justify-center gap-2 whitespace-nowrap rounded-md border border-border bg-background px-3 text-sm font-medium text-foreground opacity-0 shadow-surface transition-[opacity,transform] duration-200 ease-out group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:translate-y-0 group-focus-within:opacity-100",
+        className,
+      )}
+    >
+      {isLoading ? "Loading analytics" : "Load analytics"}
+    </span>
+  );
 }
 
 function SupportingWorkspaceLinks({
@@ -1681,6 +2408,7 @@ function OperatingDatePicker({
 }
 
 function WeekMetricsStrip({
+  analyticsFetchedAt,
   currency,
   hasFinancialDetailsAccess,
   metrics,
@@ -1688,6 +2416,7 @@ function WeekMetricsStrip({
   storePulseWindow,
   storeUrlSlug,
 }: {
+  analyticsFetchedAt?: number;
   currency: string;
   hasFinancialDetailsAccess: boolean;
   metrics: DailyOperationsSnapshot["weekMetrics"];
@@ -1738,7 +2467,13 @@ function WeekMetricsStrip({
             Week at a glance
           </h3>
           <p className="mt-1 text-sm text-muted-foreground">
-            Seven days ending {formatOperatingDate(weekEndOperatingDate)}.
+            Seven days ending {formatOperatingDate(weekEndOperatingDate)}
+            {analyticsFetchedAt ? (
+              <span className="ml-2 whitespace-nowrap">
+                · Data refreshed at{" "}
+                {formatAnalyticsCacheTimestamp(analyticsFetchedAt)}
+              </span>
+            ) : null}
           </p>
         </div>
         <div className="flex flex-col gap-layout-sm sm:flex-row sm:items-center">
@@ -1914,20 +2649,31 @@ function WeekMetricsStrip({
 }
 
 export function DailyOperationsViewContent({
+  cachedWeekAnalyticsFetchedAt,
+  cachedWeekMetrics,
+  cachedWeekStorePulse,
   currency,
   hasDetailSnapshot,
   hasFullAdminAccess,
   hasFinancialDetailsAccess,
   isLoadingDetailSnapshot,
+  isLoadingStorePulseSnapshot,
+  isLoadingTimelinePreviewSnapshot,
+  isLoadingTimelineSnapshot,
   isAuthenticated,
   isLoadingAccess,
   isLoadingSnapshot,
   onRequestDetailSnapshot,
+  onRequestStorePulseSnapshot,
+  onRequestTimelineSnapshot,
   onOperatingDateChange,
   orgUrlSlug,
   snapshot,
   storePulseWindow,
   storeUrlSlug,
+  storePulseSnapshot,
+  timelinePreviewSnapshot,
+  timelineSnapshot,
 }: DailyOperationsViewContentProps) {
   const [isTimelineSheetOpen, setIsTimelineSheetOpen] = useState(false);
   const isMobile = useIsMobile();
@@ -1946,10 +2692,17 @@ export function DailyOperationsViewContent({
     return <NoPermissionView />;
   }
 
-  const previewTimeline = snapshot?.timeline.slice(0, TIMELINE_PREVIEW_LIMIT);
-  const hasMoreTimelineEvents =
-    snapshot?.timelineHasMore ??
-    (snapshot?.timeline.length ?? 0) > TIMELINE_PREVIEW_LIMIT;
+  const timelinePreview =
+    snapshot &&
+    timelinePreviewSnapshot?.operatingDate === snapshot.operatingDate
+      ? timelinePreviewSnapshot
+      : undefined;
+  const previewTimeline = timelinePreview?.timeline;
+  const hasMoreTimelineEvents = timelinePreview?.timelineHasMore ?? false;
+  const fullTimelineEvents =
+    snapshot && timelineSnapshot?.operatingDate === snapshot.operatingDate
+      ? timelineSnapshot.timeline
+      : undefined;
   const metricLabels = snapshot
     ? getDailyOperationsMetricLabels(snapshot.operatingDate)
     : undefined;
@@ -1977,6 +2730,33 @@ export function DailyOperationsViewContent({
   const actionableLanes = snapshot
     ? snapshot.lanes.filter(isActionableLane)
     : [];
+  const weekMetricsForDisplay =
+    snapshot && (hasDetailSnapshot || !cachedWeekMetrics)
+      ? snapshot.weekMetrics
+      : cachedWeekMetrics;
+  const hasHydratedWeekAnalytics =
+    hasDetailSnapshot || cachedWeekMetrics !== undefined;
+  const weekAnalyticsFetchedAt = hasHydratedWeekAnalytics
+    ? cachedWeekAnalyticsFetchedAt
+    : undefined;
+  const selectedWeekOperatingDate =
+    cachedWeekMetrics?.find((metric) => metric.isSelected)?.operatingDate ??
+    snapshot?.operatingDate;
+  const loadedStorePulse =
+    snapshot && storePulseSnapshot?.operatingDate === snapshot.operatingDate
+      ? storePulseSnapshot.storePulse
+      : snapshot?.storePulse;
+  const storePulseDetailSnapshot =
+    snapshot && loadedStorePulse !== undefined
+      ? {
+          ...snapshot,
+          storePulse: loadedStorePulse,
+        }
+      : undefined;
+  const requestStorePulseSnapshot =
+    onRequestStorePulseSnapshot ?? onRequestDetailSnapshot;
+  const storePulsePreviewSummary =
+    cachedWeekStorePulse ?? storePulseDetailSnapshot?.storePulse;
 
   return (
     <View hideBorder hideHeaderBottomBorder scrollMode="page">
@@ -2108,7 +2888,7 @@ export function DailyOperationsViewContent({
                   </>
                 ) : null}
 
-                <div className="grid gap-layout-sm sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
+                <div className="grid gap-layout-sm [grid-template-columns:repeat(auto-fit,minmax(min(14rem,100%),1fr))]">
                   <OperationsSummaryMetric
                     helper={formatOperationsMetricHelper({
                       currentValue: snapshot.closeSummary.salesTotal,
@@ -2293,42 +3073,55 @@ export function DailyOperationsViewContent({
                   ) : null}
                 </div>
 
-                    {hasDetailSnapshot ? (
-                      <WeekMetricsStrip
-                        currency={snapshot.currency ?? currency}
-                        hasFinancialDetailsAccess={hasFinancialDetailsAccess}
-                        metrics={snapshot.weekMetrics}
-                        orgUrlSlug={orgUrlSlug}
-                        storePulseWindow={storePulseWindow}
-                        storeUrlSlug={storeUrlSlug}
-                      />
-                    ) : onRequestDetailSnapshot ? (
-                      <div className="flex justify-start">
-                        <Button
-                          disabled={isLoadingDetailSnapshot}
-                          onClick={onRequestDetailSnapshot}
-                          type="button"
-                          variant="outline"
-                        >
-                          {isLoadingDetailSnapshot
-                            ? "Loading analytics"
-                            : "Load analytics"}
-                        </Button>
-                      </div>
-                    ) : null}
-                  </section>
+                {hasHydratedWeekAnalytics && weekMetricsForDisplay ? (
+                  <WeekMetricsStrip
+                    analyticsFetchedAt={weekAnalyticsFetchedAt}
+                    currency={snapshot.currency ?? currency}
+                    hasFinancialDetailsAccess={hasFinancialDetailsAccess}
+                    metrics={weekMetricsForDisplay}
+                    orgUrlSlug={orgUrlSlug}
+                    storePulseWindow={storePulseWindow}
+                    storeUrlSlug={storeUrlSlug}
+                  />
+                ) : onRequestDetailSnapshot ? (
+                  <DailyOperationsWeekMetricsPreview
+                    isLoading={isLoadingDetailSnapshot}
+                    metrics={snapshot.weekMetrics}
+                    onRequest={onRequestDetailSnapshot}
+                    operatingDate={
+                      selectedWeekOperatingDate ?? snapshot.operatingDate
+                    }
+                  />
+                ) : null}
+              </section>
 
               <PageWorkspaceGrid>
                 <PageWorkspaceMain className="xl:col-start-1 xl:row-start-1">
-                  {hasDetailSnapshot ? (
+                  {requestStorePulseSnapshot ? (
+                    <DailyOperationsStorePulsePreview
+                      cachedSelectedStorePulse={loadedStorePulse}
+                      cachedStorePulse={storePulsePreviewSummary}
+                      currency={snapshot.currency ?? currency}
+                      hasFullAdminAccess={hasFullAdminAccess}
+                      isLoading={
+                        isLoadingStorePulseSnapshot || isLoadingDetailSnapshot
+                      }
+                      onRequest={requestStorePulseSnapshot}
+                      operatingDate={
+                        selectedWeekOperatingDate ?? snapshot.operatingDate
+                      }
+                    />
+                  ) : storePulseDetailSnapshot ? (
                     <DailyOperationsStorePulsePanel
                       currency={snapshot.currency ?? currency}
                       hasFullAdminAccess={hasFullAdminAccess}
-                      snapshot={snapshot}
+                      snapshot={storePulseDetailSnapshot}
                     />
                   ) : null}
                   <DailyOperationsCompletionAttributionNotice
-                    carryForwardCount={snapshot.completedClose?.carryForwardCount}
+                    carryForwardCount={
+                      snapshot.completedClose?.carryForwardCount
+                    }
                     completedClose={snapshot.completedClose}
                   />
                 </PageWorkspaceMain>
@@ -2343,13 +3136,23 @@ export function DailyOperationsViewContent({
                       Store-day timeline
                     </h3>
                     <div className="mt-layout-md space-y-layout-md">
-                      {snapshot.timeline.length === 0 ? (
+                      {isLoadingTimelinePreviewSnapshot && !previewTimeline ? (
+                        Array.from({ length: TIMELINE_PREVIEW_LIMIT }).map(
+                          (_, index) => (
+                            <div className="space-y-2" key={index}>
+                              <span className="block h-3 w-16 rounded-sm bg-muted" />
+                              <span className="block h-4 w-full rounded-sm bg-muted" />
+                              <span className="block h-4 w-2/3 rounded-sm bg-muted" />
+                            </div>
+                          ),
+                        )
+                      ) : !previewTimeline || previewTimeline.length === 0 ? (
                         <EmptyState
                           description="No operational events have been recorded for this store day."
                           title="No timeline yet"
                         />
                       ) : (
-                        previewTimeline?.map((event) => (
+                        previewTimeline.map((event) => (
                           <TimelineEventItem
                             event={event}
                             key={event.id}
@@ -2362,15 +3165,18 @@ export function DailyOperationsViewContent({
                     {hasMoreTimelineEvents ? (
                       <Button
                         className="mt-layout-md w-full"
+                        disabled={isLoadingTimelineSnapshot}
                         onClick={() => {
-                          onRequestDetailSnapshot?.();
+                          onRequestTimelineSnapshot?.();
                           setIsTimelineSheetOpen(true);
                         }}
                         size="sm"
                         type="button"
                         variant="outline"
                       >
-                        Show more
+                        {isLoadingTimelineSnapshot
+                          ? "Loading timeline"
+                          : "Show more"}
                       </Button>
                     ) : null}
                   </section>
@@ -2440,16 +3246,33 @@ export function DailyOperationsViewContent({
                     </SheetDescription>
                   </SheetHeader>
                   <div className="min-h-0 flex-1 overflow-y-auto px-layout-lg py-layout-md">
-                    <div className="space-y-layout-md">
-                      {snapshot.timeline.map((event) => (
-                        <TimelineEventItem
-                          event={event}
-                          key={event.id}
-                          orgUrlSlug={orgUrlSlug}
-                          storeUrlSlug={storeUrlSlug}
-                        />
-                      ))}
-                    </div>
+                    {isLoadingTimelineSnapshot ? (
+                      <div className="space-y-layout-md">
+                        {Array.from({ length: 5 }).map((_, index) => (
+                          <div className="space-y-2" key={index}>
+                            <span className="block h-3 w-16 rounded-sm bg-muted" />
+                            <span className="block h-4 w-full rounded-sm bg-muted" />
+                            <span className="block h-4 w-2/3 rounded-sm bg-muted" />
+                          </div>
+                        ))}
+                      </div>
+                    ) : fullTimelineEvents && fullTimelineEvents.length > 0 ? (
+                      <div className="space-y-layout-md">
+                        {fullTimelineEvents.map((event) => (
+                          <TimelineEventItem
+                            event={event}
+                            key={event.id}
+                            orgUrlSlug={orgUrlSlug}
+                            storeUrlSlug={storeUrlSlug}
+                          />
+                        ))}
+                      </div>
+                    ) : (
+                      <EmptyState
+                        description="Timeline detail is not loaded yet."
+                        title="Timeline loading"
+                      />
+                    )}
                   </div>
                 </SheetContent>
               </Sheet>
@@ -2484,9 +3307,15 @@ function DailyOperationsApiPendingView() {
 function DailyOperationsConnectedView({
   getDailyOperationsDetailSnapshot,
   getDailyOperationsSnapshot,
+  getDailyOperationsStorePulseSnapshot,
+  getDailyOperationsTimelinePreviewSnapshot,
+  getDailyOperationsTimelineSnapshot,
 }: {
   getDailyOperationsDetailSnapshot?: unknown;
   getDailyOperationsSnapshot: unknown;
+  getDailyOperationsStorePulseSnapshot?: unknown;
+  getDailyOperationsTimelinePreviewSnapshot?: unknown;
+  getDailyOperationsTimelineSnapshot?: unknown;
 }) {
   const {
     activeStore,
@@ -2533,28 +3362,201 @@ function DailyOperationsConnectedView({
     snapshotArgs === "skip"
       ? "skip"
       : `${String(snapshotArgs.storeId)}:${snapshotArgs.operatingDate}:${snapshotArgs.startAt ?? ""}:${snapshotArgs.endAt ?? ""}:${snapshotArgs.weekEndOperatingDate ?? ""}:${snapshotArgs.storePulseWindow}`;
+  const weekAnalyticsCacheKey =
+    snapshotArgs === "skip"
+      ? "skip"
+      : `${String(snapshotArgs.storeId)}:${snapshotArgs.weekEndOperatingDate}:${snapshotArgs.storePulseWindow}`;
   const [requestedDetailSnapshotKey, setRequestedDetailSnapshotKey] = useState<
     string | null
   >(null);
+  const [requestedTimelineSnapshotKey, setRequestedTimelineSnapshotKey] =
+    useState<string | null>(null);
+  const [requestedStorePulseSnapshotKey, setRequestedStorePulseSnapshotKey] =
+    useState<string | null>(null);
+  const [weekAnalyticsCache, setWeekAnalyticsCache] = useState<
+    Record<string, CachedWeekAnalytics>
+  >({});
+  const [storePulseCache, setStorePulseCache] = useState<
+    Record<string, DailyOperationsStorePulseSnapshot>
+  >({});
+  const [timelinePreviewCache, setTimelinePreviewCache] = useState<
+    Record<string, DailyOperationsTimelinePreviewSnapshot>
+  >({});
   const isDetailSnapshotRequested =
     snapshotRequestKey !== "skip" &&
     requestedDetailSnapshotKey === snapshotRequestKey;
+  const isTimelineSnapshotRequested =
+    snapshotRequestKey !== "skip" &&
+    requestedTimelineSnapshotKey === snapshotRequestKey;
+  const cachedWeekAnalytics =
+    weekAnalyticsCacheKey === "skip"
+      ? undefined
+      : weekAnalyticsCache[weekAnalyticsCacheKey];
+  const shouldAutoHydrateWeekAnalytics =
+    weekAnalyticsCacheKey !== "skip" && cachedWeekAnalytics === undefined;
+  const cachedDaySnapshotEntry =
+    cachedWeekAnalytics && snapshotArgs !== "skip"
+      ? cachedWeekAnalytics.daySnapshots[snapshotArgs.operatingDate]
+      : undefined;
+  const hasCachedDetailSnapshot = cachedDaySnapshotEntry?.hasDetail === true;
+  const shouldQueryDetailSnapshot =
+    Boolean(getDailyOperationsDetailSnapshot) &&
+    canQueryProtectedData &&
+    (isDetailSnapshotRequested || shouldAutoHydrateWeekAnalytics) &&
+    !hasCachedDetailSnapshot;
+  const cachedStorePulseSnapshot =
+    snapshotRequestKey === "skip"
+      ? undefined
+      : storePulseCache[snapshotRequestKey];
+  const isStorePulseSnapshotRequested =
+    snapshotRequestKey !== "skip" &&
+    requestedStorePulseSnapshotKey === snapshotRequestKey;
+  const shouldAutoHydrateStorePulseSnapshot =
+    STORE_PULSE_DETAIL_HYDRATION_MODE === "auto" &&
+    snapshotRequestKey !== "skip";
+  const shouldQueryStorePulseSnapshot =
+    Boolean(getDailyOperationsStorePulseSnapshot) &&
+    canQueryProtectedData &&
+    (isStorePulseSnapshotRequested || shouldAutoHydrateStorePulseSnapshot) &&
+    cachedStorePulseSnapshot === undefined;
 
   const compactSnapshot = useExpectedDailyOperationsQuery(
     getDailyOperationsSnapshot,
-    snapshotArgs,
+    cachedDaySnapshotEntry ? "skip" : snapshotArgs,
   ) as DailyOperationsSnapshot | undefined;
   const detailSnapshot = useExpectedDailyOperationsQuery(
     getDailyOperationsDetailSnapshot ?? getDailyOperationsSnapshot,
-    getDailyOperationsDetailSnapshot &&
-      canQueryProtectedData &&
-      isDetailSnapshotRequested
+    shouldQueryDetailSnapshot ? snapshotArgs : "skip",
+  ) as DailyOperationsSnapshot | undefined;
+  const queriedStorePulseSnapshot = useExpectedDailyOperationsQuery(
+    getDailyOperationsStorePulseSnapshot ?? getDailyOperationsSnapshot,
+    shouldQueryStorePulseSnapshot ? snapshotArgs : "skip",
+  ) as DailyOperationsStorePulseSnapshot | undefined;
+  const queriedTimelinePreviewSnapshot = useExpectedDailyOperationsQuery(
+    getDailyOperationsTimelinePreviewSnapshot ?? getDailyOperationsSnapshot,
+    getDailyOperationsTimelinePreviewSnapshot && canQueryProtectedData
       ? snapshotArgs
       : "skip",
-  ) as DailyOperationsSnapshot | undefined;
-  const snapshot = compactSnapshot
-    ? { ...compactSnapshot, ...(detailSnapshot ?? {}) }
-    : detailSnapshot;
+  ) as DailyOperationsTimelinePreviewSnapshot | undefined;
+  const timelineSnapshot = useExpectedDailyOperationsQuery(
+    getDailyOperationsTimelineSnapshot ?? getDailyOperationsSnapshot,
+    getDailyOperationsTimelineSnapshot &&
+      canQueryProtectedData &&
+      isTimelineSnapshotRequested
+      ? snapshotArgs
+      : "skip",
+  ) as DailyOperationsTimelineSnapshot | undefined;
+  const detailSnapshotMetric = detailSnapshot?.weekMetrics.find(
+    (metric) => metric.operatingDate === detailSnapshot.operatingDate,
+  );
+  const normalizedDetailSnapshot =
+    detailSnapshot && detailSnapshotMetric
+      ? normalizeDailyOperationsSnapshotWithWeekMetric(
+          detailSnapshot,
+          detailSnapshotMetric,
+          detailSnapshot.weekMetrics,
+        )
+      : detailSnapshot;
+  const baseSnapshot = compactSnapshot ?? cachedDaySnapshotEntry?.snapshot;
+  const snapshot = baseSnapshot
+    ? normalizedDetailSnapshot
+      ? mergeDailyOperationsSnapshots(baseSnapshot, normalizedDetailSnapshot)
+      : baseSnapshot
+    : normalizedDetailSnapshot;
+  const cachedTimelinePreviewSnapshot =
+    snapshotRequestKey === "skip"
+      ? undefined
+      : timelinePreviewCache[snapshotRequestKey];
+  const timelinePreviewSnapshot =
+    queriedTimelinePreviewSnapshot ?? cachedTimelinePreviewSnapshot;
+  const storePulseSnapshot =
+    queriedStorePulseSnapshot ?? cachedStorePulseSnapshot;
+  const cachedWeekMetrics =
+    cachedWeekAnalytics && snapshotArgs !== "skip"
+      ? selectWeekMetricsForOperatingDate(
+          cachedWeekAnalytics.metrics,
+          snapshotArgs.operatingDate,
+        )
+      : undefined;
+
+  useEffect(() => {
+    if (
+      weekAnalyticsCacheKey === "skip" ||
+      !detailSnapshot?.weekMetrics?.length
+    ) {
+      return;
+    }
+
+    setWeekAnalyticsCache((current) => {
+      const existingWeekAnalytics = current[weekAnalyticsCacheKey];
+
+      if (
+        existingWeekAnalytics?.metrics === detailSnapshot.weekMetrics &&
+        existingWeekAnalytics.daySnapshots[detailSnapshot.operatingDate]
+          ?.hasDetail
+      ) {
+        return current;
+      }
+
+      return {
+        ...current,
+        [weekAnalyticsCacheKey]: {
+          daySnapshots: {
+            ...existingWeekAnalytics?.daySnapshots,
+            ...buildCachedWeekDaySnapshots(detailSnapshot),
+          },
+          fetchedAt: Date.now(),
+          metrics: detailSnapshot.weekMetrics,
+          storePulse: buildCachedWeekStorePulseSummary(detailSnapshot),
+        },
+      };
+    });
+  }, [detailSnapshot, weekAnalyticsCacheKey]);
+
+  useEffect(() => {
+    if (
+      snapshotRequestKey === "skip" ||
+      queriedStorePulseSnapshot === undefined
+    ) {
+      return;
+    }
+
+    setStorePulseCache((current) => {
+      if (current[snapshotRequestKey] === queriedStorePulseSnapshot) {
+        return current;
+      }
+
+      return {
+        ...current,
+        [snapshotRequestKey]: queriedStorePulseSnapshot,
+      };
+    });
+  }, [queriedStorePulseSnapshot, snapshotRequestKey]);
+
+  useEffect(() => {
+    if (
+      snapshotRequestKey === "skip" ||
+      queriedTimelinePreviewSnapshot === undefined
+    ) {
+      return;
+    }
+
+    setTimelinePreviewCache((current) => {
+      if (
+        areTimelinePreviewSnapshotsEqual(
+          current[snapshotRequestKey],
+          queriedTimelinePreviewSnapshot,
+        )
+      ) {
+        return current;
+      }
+
+      return {
+        ...current,
+        [snapshotRequestKey]: queriedTimelinePreviewSnapshot,
+      };
+    });
+  }, [queriedTimelinePreviewSnapshot, snapshotRequestKey]);
 
   const handleOperatingDateChange = (date: Date) => {
     const nextRange = getLocalOperatingDateRange(date);
@@ -2574,17 +3576,45 @@ function DailyOperationsConnectedView({
   return (
     <DailyOperationsViewContent
       currency={activeStore?.currency ?? "GHS"}
-      hasDetailSnapshot={detailSnapshot !== undefined}
+      cachedWeekAnalyticsFetchedAt={cachedWeekAnalytics?.fetchedAt}
+      cachedWeekMetrics={cachedWeekMetrics}
+      cachedWeekStorePulse={cachedWeekAnalytics?.storePulse}
+      hasDetailSnapshot={
+        detailSnapshot !== undefined ||
+        cachedDaySnapshotEntry?.hasDetail === true
+      }
       hasFullAdminAccess={canAccessSurface}
       hasFinancialDetailsAccess={hasFinancialDetailsAccess}
       isAuthenticated={isAuthenticated}
       isLoadingAccess={isLoadingAccess}
       isLoadingDetailSnapshot={
-        isDetailSnapshotRequested && detailSnapshot === undefined
+        shouldQueryDetailSnapshot && detailSnapshot === undefined
       }
-      isLoadingSnapshot={compactSnapshot === undefined}
+      isLoadingStorePulseSnapshot={
+        shouldQueryStorePulseSnapshot && queriedStorePulseSnapshot === undefined
+      }
+      isLoadingTimelinePreviewSnapshot={
+        Boolean(getDailyOperationsTimelinePreviewSnapshot) &&
+        canQueryProtectedData &&
+        queriedTimelinePreviewSnapshot === undefined &&
+        cachedTimelinePreviewSnapshot === undefined
+      }
+      isLoadingTimelineSnapshot={
+        isTimelineSnapshotRequested && timelineSnapshot === undefined
+      }
+      isLoadingSnapshot={snapshot === undefined}
       onRequestDetailSnapshot={() =>
         setRequestedDetailSnapshotKey(
+          snapshotRequestKey === "skip" ? null : snapshotRequestKey,
+        )
+      }
+      onRequestStorePulseSnapshot={() =>
+        setRequestedStorePulseSnapshotKey(
+          snapshotRequestKey === "skip" ? null : snapshotRequestKey,
+        )
+      }
+      onRequestTimelineSnapshot={() =>
+        setRequestedTimelineSnapshotKey(
           snapshotRequestKey === "skip" ? null : snapshotRequestKey,
         )
       }
@@ -2593,6 +3623,9 @@ function DailyOperationsConnectedView({
       snapshot={snapshot}
       storePulseWindow={storePulseWindow}
       storeUrlSlug={params?.storeUrlSlug ?? ""}
+      storePulseSnapshot={storePulseSnapshot}
+      timelinePreviewSnapshot={timelinePreviewSnapshot}
+      timelineSnapshot={timelineSnapshot}
     />
   );
 }
@@ -2610,6 +3643,15 @@ export function DailyOperationsView() {
         dailyOperationsApi.getDailyOperationsDetailSnapshot
       }
       getDailyOperationsSnapshot={dailyOperationsApi.getDailyOperationsSnapshot}
+      getDailyOperationsStorePulseSnapshot={
+        dailyOperationsApi.getDailyOperationsStorePulseSnapshot
+      }
+      getDailyOperationsTimelinePreviewSnapshot={
+        dailyOperationsApi.getDailyOperationsTimelinePreviewSnapshot
+      }
+      getDailyOperationsTimelineSnapshot={
+        dailyOperationsApi.getDailyOperationsTimelineSnapshot
+      }
     />
   );
 }

@@ -590,6 +590,10 @@ async function listTimelineEvents(
 
   if (limit === 0) return [];
 
+  const operationalEventLimit =
+    limit >= MAX_OPERATIONS_QUERY_LIMIT
+      ? MAX_OPERATIONS_QUERY_LIMIT
+      : MAX_OPERATIONS_LOOKAHEAD_LIMIT;
   const eventsPromise = ctx.db
     .query("operationalEvent")
     .withIndex("by_storeId_createdAt", (q) =>
@@ -599,7 +603,7 @@ async function listTimelineEvents(
         .lt("createdAt", args.endAt),
     )
     .order("desc")
-    .take(limit);
+    .take(operationalEventLimit);
   const storePromise = ctx.db.get("store", args.storeId);
   const registerSessionsPromise = listTimelineRegisterSessions(ctx, args.storeId);
   const pendingRegisterCountsPromise = args.includeManagerReviewEvidence
@@ -1444,44 +1448,16 @@ function getTimelineMinuteBucket(createdAt: number) {
   return Math.floor(createdAt / 60_000);
 }
 
-function getTimelineEventPriority(event: {
-  eventType: string;
-  metadata?: Record<string, unknown>;
-}) {
-  if (event.eventType === "cycle_count_draft_submitted") return 40;
-  if (
-    event.eventType === "stock_adjustment_applied" &&
-    event.metadata?.adjustmentType === "cycle_count"
-  ) {
-    return 30;
-  }
-  if (event.eventType === "cycle_count_draft_updated") return 20;
-  if (event.eventType === "cycle_count_draft_created") return 10;
-  return 25;
-}
-
 function compareTimelineEvents(
   left: {
     _id: Id<"operationalEvent">;
     createdAt: number;
-    eventType: string;
-    metadata?: Record<string, unknown>;
   },
   right: {
     _id: Id<"operationalEvent">;
     createdAt: number;
-    eventType: string;
-    metadata?: Record<string, unknown>;
   },
 ) {
-  const leftMinute = getTimelineMinuteBucket(left.createdAt);
-  const rightMinute = getTimelineMinuteBucket(right.createdAt);
-  if (leftMinute !== rightMinute) return rightMinute - leftMinute;
-
-  const priorityDelta =
-    getTimelineEventPriority(right) - getTimelineEventPriority(left);
-  if (priorityDelta !== 0) return priorityDelta;
-
   if (left.createdAt !== right.createdAt) return right.createdAt - left.createdAt;
   return String(right._id).localeCompare(String(left._id));
 }
@@ -1494,12 +1470,10 @@ function compareDailyOperationsTimelineEvents(
     {
       _id: left.id as Id<"operationalEvent">,
       createdAt: left.createdAt,
-      eventType: left.type,
     },
     {
       _id: right.id as Id<"operationalEvent">,
       createdAt: right.createdAt,
-      eventType: right.type,
     },
   );
 }
@@ -2108,6 +2082,7 @@ export async function buildDailyOperationsSnapshotWithCtx(
     includeFinancialDetails?: boolean;
     includeManagerReviewEvidence?: boolean;
     includeScheduledRunSummaries?: boolean;
+    includeStorePulseDetails?: boolean;
     scheduledRunSummariesLimit?: number;
     operatingDate: string;
     operatingTimezoneOffsetMinutes?: number;
@@ -2122,6 +2097,8 @@ export async function buildDailyOperationsSnapshotWithCtx(
   const includeFinancialDetails = args.includeFinancialDetails ?? true;
   const includeAnalyticsDetails =
     args.includeAnalyticsDetails ?? includeFinancialDetails;
+  const includeStorePulseDetails =
+    args.includeStorePulseDetails ?? includeAnalyticsDetails;
   const range = resolveRange(args);
   const [
     openingSnapshot,
@@ -2158,7 +2135,7 @@ export async function buildDailyOperationsSnapshotWithCtx(
         storeId: args.storeId,
       }),
       ctx.db.get("store", args.storeId),
-      includeAnalyticsDetails
+      includeStorePulseDetails
         ? getStorePulseSummaryForWindow(ctx as QueryCtx, {
             currentDayEnd: range.endAt - 1,
             currentDayStart: range.startAt,
@@ -2337,6 +2314,41 @@ export async function buildDailyOperationsSnapshotWithCtx(
   };
 }
 
+async function buildCompactDailyOperationsWeekSnapshotsWithCtx(
+  ctx: Pick<QueryCtx, "db">,
+  args: {
+    endAt?: number;
+    includeManagerReviewEvidence: boolean;
+    operatingDate: string;
+    operatingTimezoneOffsetMinutes?: number;
+    startAt?: number;
+    storeId: Id<"store">;
+    storePulseWindow?: DailyOperationsStorePulseWindow;
+    weekEndOperatingDate?: string;
+  },
+  weekMetrics: Awaited<
+    ReturnType<typeof buildDailyOperationsSnapshotWithCtx>
+  >["weekMetrics"],
+) {
+  const { endAt: _endAt, startAt: _startAt, ...weekSnapshotArgs } = args;
+
+  return Promise.all(
+    weekMetrics.map((metric) =>
+      buildDailyOperationsSnapshotWithCtx(ctx, {
+        ...weekSnapshotArgs,
+        includeAnalyticsDetails: false,
+        includeFinancialDetails: args.includeManagerReviewEvidence,
+        includeManagerReviewEvidence: args.includeManagerReviewEvidence,
+        includeScheduledRunSummaries: false,
+        operatingDate: metric.operatingDate,
+        scheduledRunSummariesLimit: 0,
+        timelineLimit: 0,
+        timelinePreviewLimit: 0,
+      }),
+    ),
+  );
+}
+
 function maybeRedactCloseSummary(
   summary: DailyOperationsCloseSummary,
   includeFinancialDetails: boolean,
@@ -2405,8 +2417,8 @@ export const getDailyOperationsSnapshot = query({
       includeManagerReviewEvidence,
       includeScheduledRunSummaries: includeManagerReviewEvidence,
       scheduledRunSummariesLimit: COMPACT_SCHEDULED_RUN_SUMMARY_LIMIT,
-      timelineLimit: COMPACT_OPERATIONS_TIMELINE_LIMIT + 1,
-      timelinePreviewLimit: COMPACT_OPERATIONS_TIMELINE_LIMIT,
+      timelineLimit: 0,
+      timelinePreviewLimit: 0,
     });
   },
 });
@@ -2419,14 +2431,92 @@ export const getDailyOperationsDetailSnapshot = query({
     const { includeManagerReviewEvidence } =
       await authorizeDailyOperationsSnapshot(ctx, args);
 
-    return buildDailyOperationsSnapshotWithCtx(ctx, {
+    const snapshot = await buildDailyOperationsSnapshotWithCtx(ctx, {
       ...args,
       includeAnalyticsDetails: includeManagerReviewEvidence,
       includeFinancialDetails: includeManagerReviewEvidence,
       includeManagerReviewEvidence,
-      includeScheduledRunSummaries: includeManagerReviewEvidence,
-      scheduledRunSummariesLimit: FULL_SCHEDULED_RUN_SUMMARY_LIMIT,
-      timelineLimit: MAX_OPERATIONS_QUERY_LIMIT,
+      includeScheduledRunSummaries: false,
+      includeStorePulseDetails: false,
+      scheduledRunSummariesLimit: 0,
+      timelineLimit: 0,
+      timelinePreviewLimit: 0,
     });
+
+    const weekSnapshots = await buildCompactDailyOperationsWeekSnapshotsWithCtx(
+      ctx,
+      {
+        ...args,
+        includeManagerReviewEvidence,
+      },
+      snapshot.weekMetrics,
+    );
+    return {
+      ...snapshot,
+      weekSnapshots,
+    };
+  },
+});
+
+export const getDailyOperationsStorePulseSnapshot = query({
+  args: dailyOperationsSnapshotArgsValidator,
+  handler: async (ctx, args) => {
+    const { includeManagerReviewEvidence } =
+      await authorizeDailyOperationsSnapshot(ctx, args);
+    const range = resolveRange(args);
+    const storePulse = includeManagerReviewEvidence
+      ? await getStorePulseSummaryForWindow(ctx, {
+          currentDayEnd: range.endAt - 1,
+          currentDayStart: range.startAt,
+          currentOperatingDate: args.operatingDate,
+          pulseWindow: args.storePulseWindow ?? "today",
+          storeId: args.storeId,
+        })
+      : null;
+
+    return {
+      operatingDate: args.operatingDate,
+      storePulse,
+    };
+  },
+});
+
+export const getDailyOperationsTimelineSnapshot = query({
+  args: dailyOperationsSnapshotArgsValidator,
+  handler: async (ctx, args) => {
+    const { includeManagerReviewEvidence } =
+      await authorizeDailyOperationsSnapshot(ctx, args);
+    const range = resolveRange(args);
+
+    return {
+      operatingDate: args.operatingDate,
+      timeline: await listTimelineEvents(ctx, {
+        ...range,
+        includeManagerReviewEvidence,
+        limit: MAX_OPERATIONS_QUERY_LIMIT,
+        storeId: args.storeId,
+      }),
+    };
+  },
+});
+
+export const getDailyOperationsTimelinePreviewSnapshot = query({
+  args: dailyOperationsSnapshotArgsValidator,
+  handler: async (ctx, args) => {
+    const { includeManagerReviewEvidence } =
+      await authorizeDailyOperationsSnapshot(ctx, args);
+    const range = resolveRange(args);
+    const timeline = await listTimelineEvents(ctx, {
+      ...range,
+      includeManagerReviewEvidence,
+      limit: COMPACT_OPERATIONS_TIMELINE_LIMIT + 1,
+      storeId: args.storeId,
+    });
+
+    return {
+      operatingDate: args.operatingDate,
+      timeline: timeline.slice(0, COMPACT_OPERATIONS_TIMELINE_LIMIT),
+      timelineHasMore: timeline.length > COMPACT_OPERATIONS_TIMELINE_LIMIT,
+    };
   },
 });

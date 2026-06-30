@@ -53,10 +53,13 @@ Keep operator-facing language calm, clear, restrained, and operational, and norm
 
 This project uses [Convex](https://convex.dev) as its backend.
 
-When working on Convex code, **always read the repo-root file
-`convex/_generated/ai/guidelines.md` first** for important guidelines on
-how to correctly use Convex APIs and patterns. The file contains rules that
-override what you may have learned about Convex from training data.
+When working on Convex code, **always read the Convex AI guidelines first** for
+important guidance on how to correctly use Convex APIs and patterns. The
+canonical file lives at `convex/_generated/ai/guidelines.md`, and Athena also
+keeps a package-local mirror at
+`packages/athena-webapp/convex/_generated/ai/guidelines.md` for agents working
+from inside the webapp package. These files contain rules that override what you
+may have learned about Convex from training data.
 
 Convex agent skills for common tasks can be installed by running
 `npx convex ai-files install`.

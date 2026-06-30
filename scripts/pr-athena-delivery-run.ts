@@ -79,6 +79,7 @@ async function runGitStdout(rootDir: string, args: string[]) {
     cwd: rootDir,
     stdout: "pipe",
     stderr: "pipe",
+    env: buildGitProcessEnv(),
   });
   const [stdout, stderr, exitCode] = await Promise.all([
     new Response(process.stdout).text(),
@@ -91,6 +92,12 @@ async function runGitStdout(rootDir: string, args: string[]) {
   }
 
   return stdout.trim();
+}
+
+function buildGitProcessEnv(env: NodeJS.ProcessEnv = process.env) {
+  return Object.fromEntries(
+    Object.entries(env).filter(([key]) => !key.startsWith("GIT_")),
+  );
 }
 
 export async function writePrAthenaProviderEvidence(

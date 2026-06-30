@@ -100,7 +100,7 @@ export function OperationsSummaryMetric({
       {helper ? (
         <p
           className={cn(
-            "mt-1 whitespace-nowrap text-xs leading-5 text-muted-foreground [&>span]:flex-nowrap",
+            "mt-1 text-xs leading-5 text-muted-foreground",
             helperClassName,
           )}
         >
@@ -110,11 +110,11 @@ export function OperationsSummaryMetric({
     </>
   );
   const rootClassName = cn(
-    "min-w-max rounded-lg border border-border bg-surface shadow-surface",
+    "min-w-0 rounded-lg border border-border bg-surface shadow-surface",
     tone === "quiet" ? "px-layout-md py-layout-md" : "px-layout-md py-layout-sm",
     onClick
       ? "block w-full text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-default disabled:hover:bg-surface"
-      : null,
+      : "w-full",
     className,
   );
 

@@ -147,13 +147,19 @@ async function runCommand(
   command: string[],
   spawn: (
     command: string[],
-    options: { cwd: string; stdout: "pipe"; stderr: "pipe" },
+    options: {
+      cwd: string;
+      stdout: "pipe";
+      stderr: "pipe";
+      env: Record<string, string | undefined>;
+    },
   ) => SpawnedProcess = Bun.spawn,
 ) {
   const process = spawn(command, {
     cwd: rootDir,
     stdout: "pipe",
     stderr: "pipe",
+    env: buildGitProcessEnv(),
   });
 
   const [stdout, stderr, exitCode] = await Promise.all([
@@ -167,6 +173,12 @@ async function runCommand(
     stderr,
     exitCode,
   };
+}
+
+function buildGitProcessEnv(env: NodeJS.ProcessEnv = process.env) {
+  return Object.fromEntries(
+    Object.entries(env).filter(([key]) => !key.startsWith("GIT_")),
+  );
 }
 
 export async function getChangedFilesForInferentialReview(

@@ -123,6 +123,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`convex/pos/application/posSessionTracing.test.ts`](../../convex/pos/application/posSessionTracing.test.ts)
 - [`convex/pos/application/queries/listRegisterCatalog.test.ts`](../../convex/pos/application/queries/listRegisterCatalog.test.ts)
 - [`convex/pos/application/queries/searchCatalog.test.ts`](../../convex/pos/application/queries/searchCatalog.test.ts)
+- [`convex/pos/application/queries/storePulse.test.ts`](../../convex/pos/application/queries/storePulse.test.ts)
 - [`convex/pos/application/queries/terminals.test.ts`](../../convex/pos/application/queries/terminals.test.ts)
 - [`convex/pos/application/sessionCommands.test.ts`](../../convex/pos/application/sessionCommands.test.ts)
 - [`convex/pos/application/sync/ingestLocalEvents.test.ts`](../../convex/pos/application/sync/ingestLocalEvents.test.ts)
