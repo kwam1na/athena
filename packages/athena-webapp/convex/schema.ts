@@ -161,7 +161,12 @@ const schema = defineSchema({
       "posTransactionId",
     ])
     .index("by_workItemId", ["workItemId"])
-    .index("by_registerSessionId", ["registerSessionId"]),
+    .index("by_registerSessionId", ["registerSessionId"])
+    .index("by_registerSessionId_status_requestType", [
+      "registerSessionId",
+      "status",
+      "requestType",
+    ]),
   automationPolicy: defineTable(automationPolicySchema)
     .index("by_storeId_domain_action", ["storeId", "domain", "action"])
     .index("by_domain_action_mode", ["domain", "action", "mode"])

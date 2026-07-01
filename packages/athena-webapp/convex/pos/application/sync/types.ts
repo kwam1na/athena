@@ -443,6 +443,37 @@ export type SyncProjectionRepository = {
     registerSessionId: Id<"registerSession">,
     patch: Partial<Omit<Doc<"registerSession">, "_id" | "_creationTime">>,
   ): Promise<void>;
+  getApprovalRequest(
+    approvalRequestId: Id<"approvalRequest">,
+  ): Promise<Doc<"approvalRequest"> | null>;
+  createOrReuseRegisterSessionVarianceReview(input: {
+    closeoutOccurredAt: number;
+    countedCash: number;
+    expectedCash: number;
+    gateDecisionReason?: string;
+    localEventId: string;
+    localRegisterSessionId?: string;
+    notes?: string;
+    organizationId?: Id<"organization">;
+    registerNumber?: string;
+    registerSessionId: Id<"registerSession">;
+    requestedByStaffProfileId?: Id<"staffProfile">;
+    requestedByUserId?: Id<"athenaUser">;
+    storeId: Id<"store">;
+    terminalId: Id<"posTerminal">;
+    variance: number;
+  }): Promise<
+    | {
+        approvalRequest: Doc<"approvalRequest">;
+        created: boolean;
+        status: "ready";
+      }
+    | {
+        details: Record<string, unknown>;
+        status: "conflict";
+        summary: string;
+      }
+  >;
   createPosSession(input: {
     localPosSessionId?: string;
     sessionNumber: string;
@@ -715,6 +746,7 @@ export type SyncProjectionRepository = {
     registerSessionId?: Id<"registerSession">;
     terminalId?: Id<"posTerminal">;
     localEventId?: string;
+    approvalRequestId?: Id<"approvalRequest">;
     paymentAllocationId?: Id<"paymentAllocation">;
     posTransactionId?: Id<"posTransaction">;
   }): Promise<Id<"operationalEvent">>;

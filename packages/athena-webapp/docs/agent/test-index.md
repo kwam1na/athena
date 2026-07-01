@@ -100,6 +100,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`convex/operations/operationalWorkItems.test.ts`](../../convex/operations/operationalWorkItems.test.ts)
 - [`convex/operations/operationsQueryIndexes.test.ts`](../../convex/operations/operationsQueryIndexes.test.ts)
 - [`convex/operations/paymentAllocations.test.ts`](../../convex/operations/paymentAllocations.test.ts)
+- [`convex/operations/registerSessionCloseoutGate.test.ts`](../../convex/operations/registerSessionCloseoutGate.test.ts)
 - [`convex/operations/registerSessionTracing.test.ts`](../../convex/operations/registerSessionTracing.test.ts)
 - [`convex/operations/registerSessions.trace.test.ts`](../../convex/operations/registerSessions.trace.test.ts)
 - [`convex/operations/serviceIntake.test.ts`](../../convex/operations/serviceIntake.test.ts)

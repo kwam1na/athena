@@ -1,6 +1,8 @@
 import type { Id, TableNames } from "../../../_generated/dataModel";
 import type { MutationCtx } from "../../../_generated/server";
 import { isRegisterSessionConflictBlockingStatus } from "../../../../shared/registerSessionStatus";
+import { buildApprovalRequest } from "../../../operations/approvalRequestHelpers";
+import { areRegisterSessionCloseoutReviewFactsEquivalent } from "../../../operations/registerSessionCloseoutGate";
 import { recordRegisterSessionTraceBestEffort } from "../../../operations/registerSessionTracing";
 import {
   buildRegisterSessionDateDerivationPatch,
@@ -68,6 +70,11 @@ function areConflictDetailsEquivalent(left: unknown, right: unknown): boolean {
       key === rightKeys[index] &&
       areConflictDetailsEquivalent(leftRecord[key], rightRecord[key]),
   );
+}
+
+function trimOptional(value?: string | null) {
+  const nextValue = value?.trim();
+  return nextValue ? nextValue : undefined;
 }
 
 export function createConvexLocalSyncRepository(
@@ -679,6 +686,117 @@ export function createConvexLocalSyncRepository(
         ...patch,
         ...datePatch,
       });
+    },
+    async getApprovalRequest(approvalRequestId) {
+      return ctx.db.get("approvalRequest", approvalRequestId);
+    },
+    async createOrReuseRegisterSessionVarianceReview(input) {
+      const notes = trimOptional(input.notes);
+      const pendingVarianceReviews = await ctx.db
+        .query("approvalRequest")
+        .withIndex("by_registerSessionId_status_requestType", (q) =>
+          q
+            .eq("registerSessionId", input.registerSessionId)
+            .eq("status", "pending")
+            .eq("requestType", "variance_review"),
+        )
+        .take(2);
+      if (pendingVarianceReviews.length > 1) {
+        return {
+          details: {
+            existingApprovalRequestIds: pendingVarianceReviews.map(
+              (approvalRequest) => approvalRequest._id,
+            ),
+            localEventId: input.localEventId,
+            registerSessionId: input.registerSessionId,
+          },
+          status: "conflict" as const,
+          summary:
+            "Register closeout already has multiple pending variance reviews.",
+        };
+      }
+      const matchingApprovalRequest = pendingVarianceReviews.find((approvalRequest) =>
+        areRegisterSessionCloseoutReviewFactsEquivalent(approvalRequest.metadata, {
+          countedCash: input.countedCash,
+          expectedCash: input.expectedCash,
+          localEventId: input.localEventId,
+          localRegisterSessionId: input.localRegisterSessionId,
+          notes,
+          terminalId: input.terminalId,
+          variance: input.variance,
+        }),
+      );
+
+      if (matchingApprovalRequest) {
+        return {
+          approvalRequest: matchingApprovalRequest,
+          created: false,
+          status: "ready" as const,
+        };
+      }
+
+      const conflictingApprovalRequest = pendingVarianceReviews[0];
+      if (conflictingApprovalRequest) {
+        return {
+          details: {
+            existingApprovalRequestId: conflictingApprovalRequest._id,
+            localEventId: input.localEventId,
+            registerSessionId: input.registerSessionId,
+          },
+          status: "conflict" as const,
+          summary:
+            "Register closeout already has a pending variance review with different closeout facts.",
+        };
+      }
+
+      const approvalRequestId = await ctx.db.insert(
+        "approvalRequest",
+        buildApprovalRequest({
+          metadata: {
+            countedCash: input.countedCash,
+            expectedCash: input.expectedCash,
+            gateDecision: "approval_required",
+            gateDecisionReason: input.gateDecisionReason,
+            localEventId: input.localEventId,
+            localRegisterSessionId: input.localRegisterSessionId,
+            notes,
+            closeoutOccurredAt: input.closeoutOccurredAt,
+            syncOrigin: "local_sync",
+            terminalId: input.terminalId,
+            variance: input.variance,
+          },
+          notes,
+          organizationId: input.organizationId,
+          reason: input.gateDecisionReason,
+          registerSessionId: input.registerSessionId,
+          requestType: "variance_review",
+          requestedByStaffProfileId: input.requestedByStaffProfileId,
+          requestedByUserId: input.requestedByUserId,
+          storeId: input.storeId,
+          subjectId: input.registerSessionId,
+          subjectType: "register_session",
+        }),
+      );
+      const approvalRequest = await ctx.db.get("approvalRequest", approvalRequestId);
+      if (!approvalRequest) {
+        throw new Error("Created approval request could not be read.");
+      }
+
+      await this.patchRegisterSession(input.registerSessionId, {
+        countedCash: input.countedCash,
+        variance: input.variance,
+        notes,
+        status: "closing",
+        managerApprovalRequestId: approvalRequestId,
+        closeoutOwnedAt: input.closeoutOccurredAt,
+        closeoutOwnershipSource: "approval_request",
+      });
+
+      return {
+        approvalRequest,
+        created: true,
+        status: "ready" as const,
+      };
     },
     async createPosSession(input) {
       return ctx.db.insert("posSession", {
