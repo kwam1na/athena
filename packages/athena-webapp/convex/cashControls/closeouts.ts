@@ -15,6 +15,12 @@ import {
   reopenRejectedRegisterSessionCloseoutWithCtx,
   resolveRegisterSessionOperatingDateContext,
 } from "../operations/registerSessions";
+import {
+  buildRegisterSessionCloseoutReview,
+  getCashControlsConfig,
+  type CashControlsConfig,
+  type RegisterSessionCloseoutReview,
+} from "../operations/registerSessionCloseoutGate";
 import { recordRegisterSessionTraceBestEffort } from "../operations/registerSessionTracing";
 import { authenticateStaffCredentialWithCtx } from "../operations/staffCredentials";
 import type { OperationalRole } from "../operations/staffRoles";
@@ -40,8 +46,13 @@ import {
 import type { ApprovalRequirement } from "../../shared/approvalPolicy";
 import { formatStaffDisplayName } from "../../shared/staffDisplayName";
 
+export {
+  buildRegisterSessionCloseoutReview,
+  getCashControlsConfig,
+};
+export type { CashControlsConfig, RegisterSessionCloseoutReview };
+
 const CLOSEOUT_SESSION_LIMIT = 100;
-const DEFAULT_VARIANCE_APPROVAL_THRESHOLD = 5000;
 const REGISTER_VARIANCE_REVIEW_ACTION =
   APPROVAL_ACTIONS.registerSessionVarianceReview;
 const REGISTER_VARIANCE_REVIEW_ACTION_KEY = REGISTER_VARIANCE_REVIEW_ACTION.key;
@@ -118,13 +129,6 @@ const userErrorValidator = v.object({
   metadata: v.optional(v.record(v.string(), v.any())),
 });
 
-type CashControlsConfig = {
-  requireManagerSignoffForAnyVariance: boolean;
-  requireManagerSignoffForOvers: boolean;
-  requireManagerSignoffForShorts: boolean;
-  varianceApprovalThreshold: number;
-};
-
 type CloseoutApprovalRequestRecord = Pick<
   Doc<"approvalRequest">,
   | "_id"
@@ -146,8 +150,6 @@ type CloseoutApprovalRequestSummary = {
   requestedByStaffName: string | null;
   status: string;
 };
-
-type RegisterSessionCloseoutReview = ReturnType<typeof buildRegisterSessionCloseoutReview>;
 
 type CloseoutSnapshot = {
   config: CashControlsConfig;
@@ -357,22 +359,6 @@ const correctRegisterSessionOpeningFloatResultValidator = commandResultValidator
   }),
 );
 
-function asRecord(value: unknown): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return {};
-  }
-
-  return value as Record<string, unknown>;
-}
-
-function asBoolean(value: unknown) {
-  return typeof value === "boolean" ? value : undefined;
-}
-
-function asNumber(value: unknown) {
-  return typeof value === "number" ? value : undefined;
-}
-
 function trimOptional(value?: string | null) {
   const nextValue = value?.trim();
   return nextValue ? nextValue : undefined;
@@ -410,79 +396,6 @@ async function persistRegisterSessionWorkflowTraceIdBestEffort(
   } catch (error) {
     console.error("[workflow-trace] register.session.trace.link", error);
   }
-}
-
-export function getCashControlsConfig(store?: { config?: unknown } | null): CashControlsConfig {
-  const operations = asRecord(asRecord(store?.config).operations);
-  const cashControls = asRecord(operations.cashControls);
-  const threshold = asNumber(cashControls.varianceApprovalThreshold);
-
-  return {
-    requireManagerSignoffForAnyVariance:
-      asBoolean(cashControls.requireManagerSignoffForAnyVariance) ?? false,
-    requireManagerSignoffForOvers:
-      asBoolean(cashControls.requireManagerSignoffForOvers) ?? false,
-    requireManagerSignoffForShorts:
-      asBoolean(cashControls.requireManagerSignoffForShorts) ?? false,
-    varianceApprovalThreshold: Math.max(
-      0,
-      threshold ?? DEFAULT_VARIANCE_APPROVAL_THRESHOLD
-    ),
-  };
-}
-
-export function buildRegisterSessionCloseoutReview(args: {
-  countedCash: number;
-  expectedCash: number;
-  config: CashControlsConfig;
-}) {
-  const variance = args.countedCash - args.expectedCash;
-  const hasVariance = variance !== 0;
-  const isOver = variance > 0;
-  const isShort = variance < 0;
-  const exceedsThreshold =
-    Math.abs(variance) > args.config.varianceApprovalThreshold;
-  const requiresApproval =
-    (hasVariance && args.config.requireManagerSignoffForAnyVariance) ||
-    (isOver && args.config.requireManagerSignoffForOvers) ||
-    (isShort && args.config.requireManagerSignoffForShorts) ||
-    exceedsThreshold;
-
-  if (!requiresApproval) {
-    return {
-      hasVariance,
-      reason: undefined,
-      requiresApproval: false as const,
-      variance,
-    };
-  }
-
-  if (exceedsThreshold) {
-    return {
-      hasVariance,
-      reason: `Variance of ${variance} exceeded the closeout approval threshold.`,
-      requiresApproval: true as const,
-      variance,
-    };
-  }
-
-  if (args.config.requireManagerSignoffForAnyVariance) {
-    return {
-      hasVariance,
-      reason: `Manager signoff is required for any register variance (${variance}).`,
-      requiresApproval: true as const,
-      variance,
-    };
-  }
-
-  return {
-    hasVariance,
-    reason: isOver
-      ? `Manager signoff is required for register overages (${variance}).`
-      : `Manager signoff is required for register shortages (${variance}).`,
-    requiresApproval: true as const,
-    variance,
-  };
 }
 
 export function buildRegisterSessionVarianceApprovalRequirement(args: {

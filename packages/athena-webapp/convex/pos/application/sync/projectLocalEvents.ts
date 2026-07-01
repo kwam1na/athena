@@ -1,6 +1,11 @@
 import type { Id } from "../../../_generated/dataModel";
 import { normalizeInStorePayments } from "../../../cashControls/paymentAllocationAttribution";
 import { toDisplayAmount } from "../../../lib/currency";
+import {
+  areRegisterSessionCloseoutReviewFactsEquivalent,
+  buildRegisterSessionCloseoutReview,
+  getCashControlsConfig,
+} from "../../../operations/registerSessionCloseoutGate";
 import { currencyFormatter, generateTransactionNumber } from "../../../utils";
 import {
   canReuseCloudRegisterSessionForLocalOpen as canReuseCloudRegisterSessionForLocalOpenPolicy,
@@ -3637,6 +3642,55 @@ async function projectRegisterClosed(
           conflicts: [existingVarianceConflict],
         };
       }
+
+      if (registerSession.managerApprovalRequestId) {
+        const approvalRequest = await repository.getApprovalRequest(
+          registerSession.managerApprovalRequestId,
+        );
+        const factsMatch =
+          approvalRequest?.requestType === "variance_review" &&
+          approvalRequest.registerSessionId === registerSession._id &&
+          areRegisterSessionCloseoutReviewFactsEquivalent(
+            approvalRequest.metadata,
+            {
+              countedCash,
+              expectedCash: registerSession.expectedCash,
+              localEventId: args.event.localEventId,
+              localRegisterSessionId: args.event.localRegisterSessionId,
+              notes: payload.notes?.trim() || undefined,
+              terminalId: args.terminalId,
+              variance,
+            },
+          );
+
+        if (
+          !approvalRequest ||
+          !factsMatch ||
+          (approvalRequest.status !== "pending" &&
+            approvalRequest.status !== "approved")
+        ) {
+          const conflict = await createConflict(repository, args, {
+            conflictType: "permission",
+            summary:
+              "Register closeout approval ownership no longer matches the synced closeout facts.",
+            details: {
+              approvalRequestId: registerSession.managerApprovalRequestId,
+              approvalRequestStatus: approvalRequest?.status,
+              localEventId: args.event.localEventId,
+              registerSessionId: registerSession._id,
+            },
+          });
+          return { status: "conflicted", mappings: [], conflicts: [conflict] };
+        }
+
+        const mapping = await createMapping(repository, args, {
+          localIdKind: "closeout",
+          localId: args.event.localEventId,
+          cloudTable: "registerSession",
+          cloudId: registerSession._id,
+        });
+        return { status: "projected", mappings: [mapping], conflicts: [] };
+      }
     }
 
     const conflict = await createConflict(repository, args, {
@@ -3721,53 +3775,89 @@ async function projectRegisterClosed(
       repository.getStore(args.storeId),
       repository.getTerminal(args.terminalId),
     ]);
-    const conflict = await createConflict(repository, args, {
-      conflictType: "permission",
-      summary: REGISTER_CLOSEOUT_VARIANCE_SYNC_REVIEW_SUMMARY,
-      details: {
-        closeoutOccurredAt: args.event.occurredAt,
-        countedCash,
-        expectedCash: registerSession.expectedCash,
-        notes: payload.notes,
-        variance,
-      },
-    });
-    const registerLabel = formatTerminalRegisterLabel({
-      registerNumber: registerSession.registerNumber,
-      terminalName: terminal?.displayName,
-    });
-    await repository.createOperationalEvent({
-      storeId: args.storeId,
-      organizationId: store?.organizationId,
-      eventType: "register_session_sync_closeout_review_requested",
-      subjectType: "register_session",
-      subjectId: registerSession._id,
-      message: `${registerLabel} closeout submitted with a cash variance of ${formatSaleTotal(store?.currency, variance)}. Review before applying it.`,
-      metadata: {
-        countedCash,
-        expectedCash: registerSession.expectedCash,
-        localEventId: args.event.localEventId,
-        notes: payload.notes,
-        registerNumber: registerSession.registerNumber,
-        reviewConflictId: conflict._id,
-        syncOrigin: "local_sync",
-        variance,
-      },
-      createdAt: args.event.occurredAt,
-      actorStaffProfileId: args.event.staffProfileId,
-      registerSessionId: registerSession._id,
-      terminalId: args.terminalId,
-      localEventId: args.event.localEventId,
-    });
-    await repository.patchRegisterSession(registerSession._id, {
-      status: "closing",
+    const closeoutReview = buildRegisterSessionCloseoutReview({
+      config: getCashControlsConfig(store),
       countedCash,
-      variance,
-      closeoutOwnedAt: args.event.occurredAt,
-      closeoutOwnershipSource: "closeout_submission",
-      notes: payload.notes,
+      expectedCash: registerSession.expectedCash,
     });
-    return { status: "conflicted", mappings: [], conflicts: [conflict] };
+
+    if (!closeoutReview.requiresApproval) {
+      // The shared Cash Controls gate allows this variance; project it below.
+    } else {
+      const reviewResult =
+        await repository.createOrReuseRegisterSessionVarianceReview({
+          closeoutOccurredAt: args.event.occurredAt,
+          countedCash,
+          expectedCash: registerSession.expectedCash,
+          gateDecisionReason: closeoutReview.reason,
+          localEventId: args.event.localEventId,
+          localRegisterSessionId: args.event.localRegisterSessionId,
+          notes: payload.notes,
+          organizationId: store?.organizationId,
+          registerNumber: registerSession.registerNumber,
+          registerSessionId: registerSession._id,
+          requestedByStaffProfileId: args.event.staffProfileId,
+          requestedByUserId: args.submittedByUserId,
+          storeId: args.storeId,
+          terminalId: args.terminalId,
+          variance: closeoutReview.variance,
+        });
+
+      if (reviewResult.status === "conflict") {
+        const conflict = await createConflict(repository, args, {
+          conflictType: "permission",
+          summary: reviewResult.summary,
+          details: reviewResult.details,
+        });
+        return { status: "conflicted", mappings: [], conflicts: [conflict] };
+      }
+
+      const registerLabel = formatTerminalRegisterLabel({
+        registerNumber: registerSession.registerNumber,
+        terminalName: terminal?.displayName,
+      });
+
+      if (reviewResult.created) {
+        await repository.createOperationalEvent({
+          storeId: args.storeId,
+          organizationId: store?.organizationId,
+          eventType: "register_session_variance_review_requested",
+          subjectType: "register_session",
+          subjectId: registerSession._id,
+          message: `${registerLabel} closeout submitted with a cash variance of ${formatSaleTotal(store?.currency, closeoutReview.variance)}. Review before finalizing it.`,
+          metadata: {
+            actionKey: "cash_controls.register_session.variance_review",
+            approvalMode: "async_approval",
+            approvalRequestId: reviewResult.approvalRequest._id,
+            countedCash,
+            expectedCash: registerSession.expectedCash,
+            gateDecision: "approval_required",
+            gateDecisionReason: closeoutReview.reason,
+            localEventId: args.event.localEventId,
+            localRegisterSessionId: args.event.localRegisterSessionId,
+            notes: payload.notes,
+            registerNumber: registerSession.registerNumber,
+            syncOrigin: "local_sync",
+            variance: closeoutReview.variance,
+          },
+          createdAt: args.event.occurredAt,
+          actorStaffProfileId: args.event.staffProfileId,
+          actorUserId: args.submittedByUserId,
+          approvalRequestId: reviewResult.approvalRequest._id,
+          registerSessionId: registerSession._id,
+          terminalId: args.terminalId,
+          localEventId: args.event.localEventId,
+        });
+      }
+
+      const mapping = await createMapping(repository, args, {
+        localIdKind: "closeout",
+        localId: args.event.localEventId,
+        cloudTable: "registerSession",
+        cloudId: registerSession._id,
+      });
+      return { status: "projected", mappings: [mapping], conflicts: [] };
+    }
   }
 
   const [store, terminal] = await Promise.all([

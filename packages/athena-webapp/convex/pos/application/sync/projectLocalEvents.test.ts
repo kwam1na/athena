@@ -4656,7 +4656,7 @@ describe("projectLocalSyncEvent", () => {
     ]);
   });
 
-  it("conflicts non-zero offline closeout variance for manager review", async () => {
+  it("projects under-threshold offline closeout variance without manager review", async () => {
     const repository = createProjectionRepository();
 
     const result = await projectLocalSyncEvent(repository, {
@@ -4679,55 +4679,624 @@ describe("projectLocalSyncEvent", () => {
       now: 100,
     });
 
-    expect(result.status).toBe("conflicted");
-    expect(repository.registerSessionPatches).toEqual([
-      {
-        registerSessionId: "register-session-1",
-        patch: {
-          closeoutOwnedAt: 30,
-          closeoutOwnershipSource: "closeout_submission",
-          countedCash: 90,
-          notes: "Short drawer",
-          status: "closing",
-          variance: -10,
-        },
-      },
-    ]);
-    const registerSessionPatch = repository.registerSessionPatches[0] as
-      | { patch: Record<string, unknown> }
-      | undefined;
-    expect(registerSessionPatch?.patch).not.toHaveProperty(
-      "closeoutRecords",
-    );
-    expect(result.conflicts).toEqual([
+    expect(result.status).toBe("projected");
+    expect(result.conflicts).toEqual([]);
+    expect(result.mappings).toEqual([
       expect.objectContaining({
-        conflictType: "permission",
-        details: expect.objectContaining({
-          notes: "Short drawer",
-        }),
-        summary:
-          "Register closeout variance requires manager review before synced closeout can be applied.",
+        cloudId: "register-session-1",
+        cloudTable: "registerSession",
+        localId: "event-register-closed-1",
+        localIdKind: "closeout",
       }),
     ]);
+    expect(repository.registerSessionPatches).toEqual(
+      expect.arrayContaining([
+        {
+          registerSessionId: "register-session-1",
+          patch: expect.objectContaining({
+            closedAt: 30,
+            closedByStaffProfileId: "staff-1",
+            countedCash: 90,
+            notes: "Short drawer",
+            status: "closed",
+            variance: -10,
+          }),
+        },
+      ]),
+    );
+    expect(repository.createdConflicts).toEqual([]);
     expect(repository.createdOperationalEvents).toEqual([
       expect.objectContaining({
         actorStaffProfileId: "staff-1",
         createdAt: 30,
-        eventType: "register_session_sync_closeout_review_requested",
+        eventType: "register_session_closed",
         localEventId: "event-register-closed-1",
         message:
-          "Front counter / Register 1 closeout submitted with a cash variance of GH₵-0.1. Review before applying it.",
+          "Front counter / Register 1 closeout recorded with a cash variance of GH₵-0.1.",
         metadata: expect.objectContaining({
           countedCash: 90,
           expectedCash: 100,
           localEventId: "event-register-closed-1",
-          notes: "Short drawer",
-          reviewConflictId: "conflict-1",
           syncOrigin: "local_sync",
           variance: -10,
         }),
         registerSessionId: "register-session-1",
         terminalId: "terminal-1",
+      }),
+    ]);
+  });
+
+  it("projects approval-required offline closeout variance with Cash Controls approval ownership", async () => {
+    const repository = createProjectionRepository({
+      storeConfig: {
+        operations: {
+          cashControls: {
+            varianceApprovalThreshold: 5,
+          },
+        },
+      },
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: {
+        localEventId: "event-register-closed-1",
+        localRegisterSessionId: "local-register-1",
+        sequence: 3,
+        eventType: "register_closed",
+        occurredAt: 30,
+        staffProfileId: "staff-1" as never,
+        staffProofToken: "proof-token-1",
+        payload: {
+          countedCash: 90,
+          notes: "Short drawer",
+        },
+      },
+      syncEventId: "sync-event-1",
+      now: 100,
+    });
+
+    expect(result.status).toBe("projected");
+    expect(result.conflicts).toEqual([]);
+    expect(repository.createdConflicts).toEqual([]);
+    expect(result.mappings).toEqual([
+      expect.objectContaining({
+        cloudId: "register-session-1",
+        cloudTable: "registerSession",
+        localId: "event-register-closed-1",
+        localIdKind: "closeout",
+      }),
+    ]);
+    expect(repository.approvalRequests).toEqual([
+      expect.objectContaining({
+        _id: "approval-request-1",
+        metadata: expect.objectContaining({
+          countedCash: 90,
+          expectedCash: 100,
+          gateDecision: "approval_required",
+          localEventId: "event-register-closed-1",
+          localRegisterSessionId: "local-register-1",
+          notes: "Short drawer",
+          syncOrigin: "local_sync",
+          terminalId: "terminal-1",
+          variance: -10,
+        }),
+        registerSessionId: "register-session-1",
+        requestType: "variance_review",
+        status: "pending",
+      }),
+    ]);
+    expect(repository.registerSessionPatches).toEqual([
+      {
+        registerSessionId: "register-session-1",
+        patch: expect.objectContaining({
+          closeoutOwnedAt: 30,
+          closeoutOwnershipSource: "approval_request",
+          countedCash: 90,
+          managerApprovalRequestId: "approval-request-1",
+          notes: "Short drawer",
+          status: "closing",
+          variance: -10,
+        }),
+      },
+    ]);
+    expect(repository.createdOperationalEvents).toEqual([
+      expect.objectContaining({
+        actorStaffProfileId: "staff-1",
+        approvalRequestId: "approval-request-1",
+        createdAt: 30,
+        eventType: "register_session_variance_review_requested",
+        localEventId: "event-register-closed-1",
+        metadata: expect.objectContaining({
+          approvalRequestId: "approval-request-1",
+          countedCash: 90,
+          expectedCash: 100,
+          gateDecision: "approval_required",
+          localEventId: "event-register-closed-1",
+          syncOrigin: "local_sync",
+          variance: -10,
+        }),
+        registerSessionId: "register-session-1",
+        terminalId: "terminal-1",
+      }),
+    ]);
+  });
+
+  it("honors store manager-signoff variance policy during offline closeout projection", async () => {
+    const repository = createProjectionRepository({
+      storeConfig: {
+        operations: {
+          cashControls: {
+            requireManagerSignoffForAnyVariance: true,
+            varianceApprovalThreshold: 5000,
+          },
+        },
+      },
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: {
+        localEventId: "event-register-closed-1",
+        localRegisterSessionId: "local-register-1",
+        sequence: 3,
+        eventType: "register_closed",
+        occurredAt: 30,
+        staffProfileId: "staff-1" as never,
+        staffProofToken: "proof-token-1",
+        payload: {
+          countedCash: 90,
+          notes: "Short drawer",
+        },
+      },
+      syncEventId: "sync-event-1",
+      now: 100,
+    });
+
+    expect(result.status).toBe("projected");
+    expect(result.conflicts).toEqual([]);
+    expect(repository.approvalRequests).toEqual([
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          gateDecisionReason:
+            "Manager signoff is required for any register variance (-10).",
+          variance: -10,
+        }),
+        requestType: "variance_review",
+        status: "pending",
+      }),
+    ]);
+    expect(repository.createdConflicts).toEqual([]);
+  });
+
+  it("conflicts approval-required closeout sync when a pending review has different facts", async () => {
+    const repository = createProjectionRepository({
+      approvalRequests: [
+        ...Array.from({ length: 25 }, (_, index) => ({
+          _id: `approval-request-unrelated-${index}`,
+          createdAt: index,
+          registerSessionId: "register-session-1",
+          requestType: index % 2 === 0 ? "void_review" : "variance_review",
+          status: index % 2 === 0 ? ("pending" as const) : ("approved" as const),
+        })),
+        {
+          _id: "approval-request-existing",
+          createdAt: 25,
+          metadata: {
+            countedCash: 80,
+            expectedCash: 100,
+            localEventId: "event-register-closed-previous",
+            localRegisterSessionId: "local-register-1",
+            notes: "Earlier count",
+            terminalId: "terminal-1",
+            variance: -20,
+          },
+          notes: "Earlier count",
+          reason: "Variance of -20 exceeded the closeout approval threshold.",
+          registerSessionId: "register-session-1",
+          requestType: "variance_review",
+          status: "pending",
+        },
+      ],
+      storeConfig: {
+        operations: {
+          cashControls: {
+            varianceApprovalThreshold: 5,
+          },
+        },
+      },
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: {
+        localEventId: "event-register-closed-1",
+        localRegisterSessionId: "local-register-1",
+        sequence: 3,
+        eventType: "register_closed",
+        occurredAt: 30,
+        staffProfileId: "staff-1" as never,
+        staffProofToken: "proof-token-1",
+        payload: {
+          countedCash: 90,
+          notes: "Short drawer",
+        },
+      },
+      syncEventId: "sync-event-1",
+      now: 100,
+    });
+
+    expect(result.status).toBe("conflicted");
+    expect(result.mappings).toEqual([]);
+    expect(result.conflicts).toEqual([
+      expect.objectContaining({
+        conflictType: "permission",
+        details: expect.objectContaining({
+          existingApprovalRequestId: "approval-request-existing",
+          localEventId: "event-register-closed-1",
+          registerSessionId: "register-session-1",
+        }),
+        summary:
+          "Register closeout already has a pending variance review with different closeout facts.",
+      }),
+    ]);
+    expect(repository.approvalRequests).toHaveLength(26);
+    expect(
+      repository.approvalRequests.filter(
+        (approvalRequest) =>
+          approvalRequest.status === "pending" &&
+          approvalRequest.requestType === "variance_review",
+      ),
+    ).toHaveLength(1);
+    expect(repository.approvalRequests).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ _id: "approval-request-27" }),
+      ]),
+    );
+    expect(repository.registerSessionPatches).toEqual([]);
+    expect(repository.createdOperationalEvents).toEqual([]);
+  });
+
+  it("conflicts approval-required closeout sync when multiple pending variance reviews exist", async () => {
+    const repository = createProjectionRepository({
+      approvalRequests: [
+        {
+          _id: "approval-request-one",
+          createdAt: 25,
+          metadata: {
+            countedCash: 90,
+            expectedCash: 100,
+            localEventId: "event-register-closed-1",
+            localRegisterSessionId: "local-register-1",
+            notes: "Short drawer",
+            terminalId: "terminal-1",
+            variance: -10,
+          },
+          notes: "Short drawer",
+          reason: "Variance of -10 exceeded the closeout approval threshold.",
+          registerSessionId: "register-session-1",
+          requestType: "variance_review",
+          status: "pending",
+        },
+        {
+          _id: "approval-request-two",
+          createdAt: 26,
+          metadata: {
+            countedCash: 80,
+            expectedCash: 100,
+            localEventId: "event-register-closed-previous",
+            localRegisterSessionId: "local-register-1",
+            notes: "Earlier count",
+            terminalId: "terminal-1",
+            variance: -20,
+          },
+          notes: "Earlier count",
+          reason: "Variance of -20 exceeded the closeout approval threshold.",
+          registerSessionId: "register-session-1",
+          requestType: "variance_review",
+          status: "pending",
+        },
+      ],
+      storeConfig: {
+        operations: {
+          cashControls: {
+            varianceApprovalThreshold: 5,
+          },
+        },
+      },
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: {
+        localEventId: "event-register-closed-1",
+        localRegisterSessionId: "local-register-1",
+        sequence: 3,
+        eventType: "register_closed",
+        occurredAt: 30,
+        staffProfileId: "staff-1" as never,
+        staffProofToken: "proof-token-1",
+        payload: {
+          countedCash: 90,
+          notes: "Short drawer",
+        },
+      },
+      syncEventId: "sync-event-1",
+      now: 100,
+    });
+
+    expect(result.status).toBe("conflicted");
+    expect(result.mappings).toEqual([]);
+    expect(result.conflicts).toEqual([
+      expect.objectContaining({
+        conflictType: "permission",
+        details: expect.objectContaining({
+          existingApprovalRequestIds: [
+            "approval-request-one",
+            "approval-request-two",
+          ],
+          localEventId: "event-register-closed-1",
+          registerSessionId: "register-session-1",
+        }),
+        summary:
+          "Register closeout already has multiple pending variance reviews.",
+      }),
+    ]);
+    expect(repository.approvalRequests).toHaveLength(2);
+    expect(repository.registerSessionPatches).toEqual([]);
+    expect(repository.createdOperationalEvents).toEqual([]);
+  });
+
+  it("reuses approval ownership when approval-required closeout sync retries", async () => {
+    const repository = createProjectionRepository({
+      approvalRequests: [
+        ...Array.from({ length: 25 }, (_, index) => ({
+          _id: `approval-request-unrelated-${index}`,
+          createdAt: index,
+          registerSessionId: "register-session-1",
+          requestType: index % 2 === 0 ? "void_review" : "variance_review",
+          status: index % 2 === 0 ? ("pending" as const) : ("approved" as const),
+        })),
+        {
+          _id: "approval-request-existing",
+          createdAt: 30,
+          metadata: {
+            countedCash: 90,
+            expectedCash: 100,
+            localEventId: "event-register-closed-1",
+            localRegisterSessionId: "local-register-1",
+            notes: "Short drawer",
+            terminalId: "terminal-1",
+            variance: -10,
+          },
+          notes: "Short drawer",
+          reason: "Variance of -10 exceeded the closeout approval threshold.",
+          registerSessionId: "register-session-1",
+          requestType: "variance_review",
+          status: "pending",
+        },
+      ],
+      registerSession: {
+        _id: "register-session-1",
+        closeoutRecords: [],
+        countedCash: 90,
+        expectedCash: 100,
+        managerApprovalRequestId: "approval-request-existing" as never,
+        registerNumber: "1",
+        status: "closing",
+        variance: -10,
+      },
+      storeConfig: {
+        operations: {
+          cashControls: {
+            varianceApprovalThreshold: 5,
+          },
+        },
+      },
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: {
+        localEventId: "event-register-closed-1",
+        localRegisterSessionId: "local-register-1",
+        sequence: 3,
+        eventType: "register_closed",
+        occurredAt: 30,
+        staffProfileId: "staff-1" as never,
+        staffProofToken: "proof-token-1",
+        payload: {
+          countedCash: 90,
+          notes: "Short drawer",
+        },
+      },
+      syncEventId: "sync-event-1",
+      now: 100,
+    });
+
+    expect(result.status).toBe("projected");
+    expect(result.conflicts).toEqual([]);
+    expect(repository.approvalRequests).toHaveLength(26);
+    expect(
+      repository.approvalRequests.filter(
+        (approvalRequest) =>
+          approvalRequest.status === "pending" &&
+          approvalRequest.requestType === "variance_review",
+      ),
+    ).toHaveLength(1);
+    expect(repository.approvalRequests).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ _id: "approval-request-27" }),
+      ]),
+    );
+    expect(repository.createdOperationalEvents).toEqual([]);
+    expect(result.mappings).toEqual([
+      expect.objectContaining({
+        cloudId: "register-session-1",
+        cloudTable: "registerSession",
+        localId: "event-register-closed-1",
+        localIdKind: "closeout",
+      }),
+    ]);
+  });
+
+  it("conflicts approval-owned closeout retry when the submitted notes changed", async () => {
+    const repository = createProjectionRepository({
+      approvalRequests: [
+        {
+          _id: "approval-request-existing",
+          createdAt: 30,
+          metadata: {
+            countedCash: 90,
+            expectedCash: 100,
+            localEventId: "event-register-closed-1",
+            localRegisterSessionId: "local-register-1",
+            notes: "Short drawer",
+            terminalId: "terminal-1",
+            variance: -10,
+          },
+          notes: "Short drawer",
+          reason: "Variance of -10 exceeded the closeout approval threshold.",
+          registerSessionId: "register-session-1",
+          requestType: "variance_review",
+          status: "pending",
+        },
+      ],
+      registerSession: {
+        _id: "register-session-1",
+        closeoutRecords: [],
+        countedCash: 90,
+        expectedCash: 100,
+        managerApprovalRequestId: "approval-request-existing" as never,
+        registerNumber: "1",
+        status: "closing",
+        variance: -10,
+      },
+      storeConfig: {
+        operations: {
+          cashControls: {
+            varianceApprovalThreshold: 5,
+          },
+        },
+      },
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: {
+        localEventId: "event-register-closed-1",
+        localRegisterSessionId: "local-register-1",
+        sequence: 3,
+        eventType: "register_closed",
+        occurredAt: 30,
+        staffProfileId: "staff-1" as never,
+        staffProofToken: "proof-token-1",
+        payload: {
+          countedCash: 90,
+          notes: "Adjusted drawer note",
+        },
+      },
+      syncEventId: "sync-event-1",
+      now: 100,
+    });
+
+    expect(result.status).toBe("conflicted");
+    expect(result.mappings).toEqual([]);
+    expect(result.conflicts).toEqual([
+      expect.objectContaining({
+        conflictType: "permission",
+        details: expect.objectContaining({
+          approvalRequestId: "approval-request-existing",
+          localEventId: "event-register-closed-1",
+          registerSessionId: "register-session-1",
+        }),
+        summary:
+          "Register closeout approval ownership no longer matches the synced closeout facts.",
+      }),
+    ]);
+    expect(repository.approvalRequests).toHaveLength(1);
+    expect(repository.createdOperationalEvents).toEqual([]);
+  });
+
+  it("replays an approved approval-owned closeout without creating a second review", async () => {
+    const repository = createProjectionRepository({
+      approvalRequests: [
+        {
+          _id: "approval-request-approved",
+          createdAt: 30,
+          decidedAt: 40,
+          metadata: {
+            countedCash: 90,
+            expectedCash: 100,
+            localEventId: "event-register-closed-1",
+            localRegisterSessionId: "local-register-1",
+            notes: "Short drawer",
+            terminalId: "terminal-1",
+            variance: -10,
+          },
+          notes: "Short drawer",
+          reason: "Variance of -10 exceeded the closeout approval threshold.",
+          registerSessionId: "register-session-1",
+          requestType: "variance_review",
+          status: "approved",
+        },
+      ],
+      registerSession: {
+        _id: "register-session-1",
+        closeoutRecords: [],
+        countedCash: 90,
+        expectedCash: 100,
+        managerApprovalRequestId: "approval-request-approved" as never,
+        registerNumber: "1",
+        status: "closing",
+        variance: -10,
+      },
+      storeConfig: {
+        operations: {
+          cashControls: {
+            varianceApprovalThreshold: 5,
+          },
+        },
+      },
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: {
+        localEventId: "event-register-closed-1",
+        localRegisterSessionId: "local-register-1",
+        sequence: 3,
+        eventType: "register_closed",
+        occurredAt: 30,
+        staffProfileId: "staff-1" as never,
+        staffProofToken: "proof-token-1",
+        payload: {
+          countedCash: 90,
+          notes: "Short drawer",
+        },
+      },
+      syncEventId: "sync-event-1",
+      now: 100,
+    });
+
+    expect(result.status).toBe("projected");
+    expect(result.conflicts).toEqual([]);
+    expect(repository.approvalRequests).toHaveLength(1);
+    expect(repository.registerSessionPatches).toEqual([]);
+    expect(repository.createdOperationalEvents).toEqual([]);
+    expect(result.mappings).toEqual([
+      expect.objectContaining({
+        cloudId: "register-session-1",
+        cloudTable: "registerSession",
+        localId: "event-register-closed-1",
+        localIdKind: "closeout",
       }),
     ]);
   });
@@ -6066,6 +6635,7 @@ function createProjectionRepository(
       closedAt?: number;
       closedByStaffProfileId?: string;
       countedCash?: number;
+      managerApprovalRequestId?: string;
       notes?: string;
       registerNumber?: string;
       status: string;
@@ -6190,8 +6760,31 @@ function createProjectionRepository(
         | "repairable_missing_register_session_mapping_sales";
     }>;
     validStaffProof: boolean;
+    storeConfig: unknown;
+    approvalRequests: Array<{
+      _id: string;
+      createdAt: number;
+      decidedAt?: number;
+      metadata?: Record<string, unknown>;
+      notes?: string;
+      reason?: string;
+      registerSessionId?: string;
+      requestType: string;
+      status: "pending" | "approved" | "rejected" | "cancelled";
+    }>;
   }> = {},
 ): SyncProjectionRepository & {
+  approvalRequests: Array<{
+    _id: string;
+    createdAt: number;
+    decidedAt?: number;
+    metadata?: Record<string, unknown>;
+    notes?: string;
+    reason?: string;
+    registerSessionId?: string;
+    requestType: string;
+    status: "pending" | "approved" | "rejected" | "cancelled";
+  }>;
   createdConflicts: LocalSyncConflictRecord[];
   consumedHoldRequests: unknown[];
   releasedHoldRequests: unknown[];
@@ -6264,6 +6857,7 @@ function createProjectionRepository(
   const registerSessionPatches: unknown[] = [];
   const consumedHoldRequests: unknown[] = [];
   const releasedHoldRequests: unknown[] = [];
+  const approvalRequests = [...(overrides.approvalRequests ?? [])];
   const sku = overrides.sku ?? {
     _id: "sku-1",
     storeId: "store-1",
@@ -6339,6 +6933,7 @@ function createProjectionRepository(
     registerSessionPatches,
     consumedHoldRequests,
     releasedHoldRequests,
+    approvalRequests,
     mappings,
     async getTerminal(terminalId) {
       return terminalId === "terminal-1" ? (terminal as never) : null;
@@ -6391,6 +6986,7 @@ function createProjectionRepository(
     async getStore() {
       return {
         _id: "store-1",
+        config: overrides.storeConfig,
         organizationId: "org-1",
       } as never;
     },
@@ -6682,6 +7278,106 @@ function createProjectionRepository(
     async patchRegisterSession(registerSessionId, patch) {
       registerSessionPatches.push({ registerSessionId, patch });
       if (registerSession) Object.assign(registerSession, patch);
+    },
+    async getApprovalRequest(approvalRequestId) {
+      return (
+        (approvalRequests.find(
+          (approvalRequest) => approvalRequest._id === approvalRequestId,
+        ) as never) ?? null
+      );
+    },
+    async createOrReuseRegisterSessionVarianceReview(input) {
+      const notes = input.notes?.trim() || undefined;
+      const pendingVarianceReviews = approvalRequests.filter(
+        (approvalRequest) =>
+          approvalRequest.status === "pending" &&
+          approvalRequest.requestType === "variance_review" &&
+          approvalRequest.registerSessionId === input.registerSessionId,
+      );
+      if (pendingVarianceReviews.length > 1) {
+        return {
+          details: {
+            existingApprovalRequestIds: pendingVarianceReviews.map(
+              (approvalRequest) => approvalRequest._id,
+            ),
+            localEventId: input.localEventId,
+            registerSessionId: input.registerSessionId,
+          },
+          status: "conflict",
+          summary:
+            "Register closeout already has multiple pending variance reviews.",
+        };
+      }
+      const matchingApprovalRequest = pendingVarianceReviews.find(
+        (approvalRequest) =>
+          approvalRequest.metadata?.countedCash === input.countedCash &&
+          approvalRequest.metadata?.expectedCash === input.expectedCash &&
+          approvalRequest.metadata?.variance === input.variance &&
+          approvalRequest.metadata?.notes === notes &&
+          approvalRequest.metadata?.localEventId === input.localEventId &&
+          approvalRequest.metadata?.localRegisterSessionId ===
+            input.localRegisterSessionId &&
+          approvalRequest.metadata?.terminalId === input.terminalId,
+      );
+
+      if (matchingApprovalRequest) {
+        return {
+          approvalRequest: matchingApprovalRequest as never,
+          created: false,
+          status: "ready",
+        };
+      }
+
+      if (pendingVarianceReviews[0]) {
+        return {
+          details: {
+            existingApprovalRequestId: pendingVarianceReviews[0]._id,
+            localEventId: input.localEventId,
+            registerSessionId: input.registerSessionId,
+          },
+          status: "conflict",
+          summary:
+            "Register closeout already has a pending variance review with different closeout facts.",
+        };
+      }
+
+      const approvalRequest = {
+        _id: `approval-request-${approvalRequests.length + 1}`,
+        createdAt: input.closeoutOccurredAt,
+        metadata: {
+          countedCash: input.countedCash,
+          expectedCash: input.expectedCash,
+          gateDecision: "approval_required",
+          gateDecisionReason: input.gateDecisionReason,
+          localEventId: input.localEventId,
+          localRegisterSessionId: input.localRegisterSessionId,
+          notes,
+          closeoutOccurredAt: input.closeoutOccurredAt,
+          syncOrigin: "local_sync",
+          terminalId: input.terminalId,
+          variance: input.variance,
+        },
+        notes,
+        reason: input.gateDecisionReason,
+        registerSessionId: input.registerSessionId,
+        requestType: "variance_review",
+        status: "pending" as const,
+      };
+      approvalRequests.push(approvalRequest);
+      await this.patchRegisterSession(input.registerSessionId, {
+        countedCash: input.countedCash,
+        variance: input.variance,
+        notes,
+        status: "closing",
+        managerApprovalRequestId: approvalRequest._id as never,
+        closeoutOwnedAt: approvalRequest.createdAt,
+        closeoutOwnershipSource: "approval_request",
+      });
+      return {
+        approvalRequest: approvalRequest as never,
+        created: true,
+        status: "ready",
+      };
     },
     async createPosSession(input) {
       const id = `pos-session-${input.localPosSessionId ?? nextId++}`;

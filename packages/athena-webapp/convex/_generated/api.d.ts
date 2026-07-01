@@ -172,6 +172,7 @@ import type * as operations_operationalEvents from "../operations/operationalEve
 import type * as operations_operationalWorkItems from "../operations/operationalWorkItems.js";
 import type * as operations_paymentAllocations from "../operations/paymentAllocations.js";
 import type * as operations_paymentTotals from "../operations/paymentTotals.js";
+import type * as operations_registerSessionCloseoutGate from "../operations/registerSessionCloseoutGate.js";
 import type * as operations_registerSessionTracing from "../operations/registerSessionTracing.js";
 import type * as operations_registerSessions from "../operations/registerSessions.js";
 import type * as operations_serviceIntake from "../operations/serviceIntake.js";
@@ -596,6 +597,7 @@ declare const fullApi: ApiFromModules<{
   "operations/operationalWorkItems": typeof operations_operationalWorkItems;
   "operations/paymentAllocations": typeof operations_paymentAllocations;
   "operations/paymentTotals": typeof operations_paymentTotals;
+  "operations/registerSessionCloseoutGate": typeof operations_registerSessionCloseoutGate;
   "operations/registerSessionTracing": typeof operations_registerSessionTracing;
   "operations/registerSessions": typeof operations_registerSessions;
   "operations/serviceIntake": typeof operations_serviceIntake;

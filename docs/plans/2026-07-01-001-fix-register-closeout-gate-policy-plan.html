@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>fix: Collapse POS and Cash Controls closeout gating</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f6f7f9;
+      --panel: #ffffff;
+      --ink: #17202b;
+      --muted: #5f6f80;
+      --line: #d9e0e8;
+      --accent: #1f6f8b;
+      --accent-soft: #e7f5f8;
+      --risk: #8a4b12;
+      --risk-soft: #fff3e5;
+      --ok: #23623a;
+      --ok-soft: #e8f5ed;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 32px 24px 56px;
+    }
+    header, section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 22px 24px;
+      margin-bottom: 18px;
+    }
+    h1, h2, h3 {
+      line-height: 1.2;
+      margin: 0 0 12px;
+    }
+    h1 { font-size: 29px; }
+    h2 { font-size: 20px; }
+    h3 { font-size: 16px; color: var(--muted); }
+    p { margin: 0 0 12px; }
+    a { color: var(--accent); }
+    .meta {
+      color: var(--muted);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 18px;
+      margin-top: 12px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+      gap: 12px;
+    }
+    .callout {
+      border-left: 4px solid var(--accent);
+      background: var(--accent-soft);
+      padding: 12px 14px;
+      border-radius: 6px;
+    }
+    .risk {
+      border-left-color: var(--risk);
+      background: var(--risk-soft);
+    }
+    .ok {
+      border-left-color: var(--ok);
+      background: var(--ok-soft);
+    }
+    ul, ol { margin: 8px 0 0 20px; padding: 0; }
+    li { margin: 5px 0; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 8px 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: #f1f4f7; }
+    code {
+      background: #eef2f5;
+      border-radius: 4px;
+      padding: 1px 4px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.92em;
+    }
+    .unit {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin-top: 12px;
+    }
+    .unit strong { color: var(--accent); }
+    .small { color: var(--muted); font-size: 13px; }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>fix: Collapse POS and Cash Controls closeout gating</h1>
+      <p>Register-session closeout variance should pass through one server-owned gate. Cash Controls and POS local-sync projection will use the same cash-controls threshold, manager-signoff flags, and closeout-hold precedence before deciding whether to close, wait, or request approval.</p>
+      <div class="meta">
+        <span>Type: fix</span>
+        <span>Status: active</span>
+        <span>Date: 2026-07-01</span>
+        <span>Worktree: <code>.worktrees/codex/closeout-gate-plan</code></span>
+        <span>Source: <a href="2026-07-01-001-fix-register-closeout-gate-policy-plan.md">Markdown plan</a></span>
+      </div>
+    </header>
+
+    <section>
+      <h2>Problem</h2>
+      <div class="grid">
+        <div class="callout risk">
+          <h3>Current POS Path</h3>
+          <p>POS closeout sync treats every non-zero variance as <code>register_closeout_variance</code> review unless an approved replay flag is present.</p>
+        </div>
+        <div class="callout risk">
+          <h3>Current Cash Controls Path</h3>
+          <p>Cash Controls applies store configuration: threshold, any-variance signoff, over signoff, and short signoff.</p>
+        </div>
+        <div class="callout ok">
+          <h3>Target</h3>
+          <p>The source path no longer determines manager-review policy. The shared gate decides once; each caller adapts the same result to its workflow.</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Requirements Digest</h2>
+      <ul>
+        <li>Cash Controls and POS projection evaluate variance with the same server-side policy and defaults.</li>
+        <li>Under-threshold POS variance closes during sync when no closeout holds remain.</li>
+        <li>Approval-required POS variance returns <code>projected</code>, creates a closeout mapping, and routes through one Cash Controls-owned review semantic.</li>
+        <li>Cash-affecting holds stay higher priority than variance approval.</li>
+        <li>Legacy <code>register_closeout_variance</code> conflicts remain resolvable.</li>
+        <li>Duplicate or ambiguous closeout uploads keep their existing conflict/reject behavior.</li>
+        <li>POS local-first continuity remains intact for unresolved local closeouts and replacement drawers.</li>
+        <li>Manager review evidence stays session-targeted and operator-readable.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Shared Gate Outcome</h2>
+      <table>
+        <thead>
+          <tr><th>Decision</th><th>Meaning</th><th>POS sync behavior</th><th>Cash Controls behavior</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>blocked_by_holds</code></td>
+            <td>Submitted facts exist, but cash-impacting work can still change expected cash.</td>
+            <td>Keep session <code>closing</code>; preserve submitted evidence; do not append final closeout records.</td>
+            <td>Return submitted/unresolved state or block finalization with hold copy.</td>
+          </tr>
+          <tr>
+            <td><code>approval_required</code></td>
+            <td>Variance requires manager approval by threshold or signoff flags.</td>
+            <td>Persist or reuse one Cash Controls review owner, patch the session to <code>closing</code> with <code>managerApprovalRequestId</code>, return <code>projected</code>, create a closeout mapping, and create no POS sync conflict.</td>
+            <td>Create/reuse approval request or require valid manager proof.</td>
+          </tr>
+          <tr>
+            <td><code>close_allowed</code></td>
+            <td>No holds and no policy-required approval.</td>
+            <td>Project as closed, map local event, and record closeout evidence.</td>
+            <td>Close or finalize immediately.</td>
+          </tr>
+          <tr>
+            <td><code>projection_conflict</code></td>
+            <td>Duplicate, ambiguous, stale, or identity-mismatched sync event.</td>
+            <td>Use existing sync conflict/reject behavior.</td>
+            <td>Not applicable to direct Cash Controls closeout.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Implementation Units</h2>
+      <div class="unit">
+        <p><strong>U1. Create the shared closeout gate</strong></p>
+        <p>Create <code>packages/athena-webapp/convex/operations/registerSessionCloseoutGate.ts</code> and tests. Move store config normalization and variance-review policy into a pure helper with no mutation side effects.</p>
+      </div>
+      <div class="unit">
+        <p><strong>U2. Wire Cash Controls to the gate</strong></p>
+        <p>Update <code>convex/cashControls/closeouts.ts</code> to use the helper while preserving current submit/finalize behavior, manager proof checks, and hold precedence. Extract a Cash Controls-owned idempotent review helper for POS sync approval-required variance.</p>
+      </div>
+      <div class="unit">
+        <p><strong>U3. Route POS local-sync projection through the gate</strong></p>
+        <p>Update <code>projectRegisterClosed</code> so under-threshold variance closes, approval-required variance persists review ownership then returns <code>projected</code>, and holds stay first.</p>
+      </div>
+      <div class="unit">
+        <p><strong>U4. Preserve legacy review resolution and deposit safety</strong></p>
+        <p>Keep historical <code>register_closeout_variance</code> conflicts approvable through the existing replay path while deposits remain blocked by unresolved closeout work.</p>
+      </div>
+      <div class="unit">
+        <p><strong>U5. Presentation, readiness, and continuity regression pass</strong></p>
+        <p>Verify under-threshold closeouts no longer show manager-review copy, approval-required variance still routes cleanly, and replacement drawer continuity remains intact.</p>
+      </div>
+      <div class="unit">
+        <p><strong>U6. Validation, graph, and documentation</strong></p>
+        <p>Run focused Vitest coverage, rebuild graph after code changes, and add a solution note for the shared gate invariant.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>Approval Persistence Contract</h2>
+      <ul>
+        <li>Reuse an existing pending <code>variance_review</code> for the same <code>registerSessionId</code> and identical closeout facts.</li>
+        <li>Never insert a second approval request when the same <code>localEventId</code> retries.</li>
+        <li>Conflict or reject changed closeout facts for the same register session before policy approval.</li>
+        <li>Patch the register session to <code>status: "closing"</code> with counted cash, variance, notes, <code>managerApprovalRequestId</code>, <code>closeoutOwnedAt</code>, <code>closeoutOwnershipSource: "approval_request"</code>, and closeout operating-date fields.</li>
+        <li>Store review metadata for counted cash, expected cash, variance, notes, local event id, local register-session id, terminal id, closeout time, <code>syncOrigin: "local_sync"</code>, and the gate decision/reason.</li>
+        <li><code>allowRegisterCloseoutVarianceProjection</code> bypasses only the variance-approval decision for approved legacy conflicts; identity, duplicate, stale-session, and hold checks still apply.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Validation Ladder</h2>
+      <ul>
+        <li><code>cd packages/athena-webapp &amp;&amp; bun run test -- convex/operations/registerSessionCloseoutGate.test.ts</code></li>
+        <li><code>cd packages/athena-webapp &amp;&amp; bun run test -- convex/cashControls/closeouts.test.ts</code></li>
+        <li><code>cd packages/athena-webapp &amp;&amp; bun run test -- convex/pos/application/sync/projectLocalEvents.test.ts -t "closeout"</code></li>
+        <li><code>cd packages/athena-webapp &amp;&amp; bun run test -- convex/cashControls/deposits.test.ts -t "closeout"</code></li>
+        <li><code>cd packages/athena-webapp &amp;&amp; bun run test -- convex/operations/dailyClose.test.ts -t "closeout"</code></li>
+        <li><code>cd packages/athena-webapp &amp;&amp; bun run test -- convex/operations/dailyOperations.test.ts -t "closeout"</code></li>
+        <li><code>cd packages/athena-webapp &amp;&amp; bun run test -- shared/registerSessionLifecyclePolicy.test.ts</code></li>
+        <li><code>cd packages/athena-webapp &amp;&amp; bun run test -- src/lib/pos/presentation/syncStatusPresentation.test.ts</code></li>
+        <li><code>cd packages/athena-webapp &amp;&amp; bun run test -- src/components/pos/register/POSRegisterView.test.tsx -t "closeout"</code></li>
+        <li><code>cd packages/athena-webapp &amp;&amp; bun run test -- src/components/pos/register/RegisterDrawerGate.test.tsx -t "closeout"</code></li>
+        <li><code>cd packages/athena-webapp &amp;&amp; bun run test -- src/components/cash-controls/RegisterSessionView.test.tsx -t "closeout"</code></li>
+        <li><code>cd packages/athena-webapp &amp;&amp; bun run test -- src/components/cash-controls/CashControlsDashboard.test.tsx -t "closeout"</code></li>
+        <li>After code changes: <code>bun run graphify:rebuild</code></li>
+        <li>Before PR: <code>bun run pr:athena</code></li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Risk Register</h2>
+      <table>
+        <thead>
+          <tr><th>Risk</th><th>Impact</th><th>Mitigation</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>POS projection creates duplicate review rows.</td>
+            <td>Managers see two queues for one closeout.</td>
+            <td>Use one Cash Controls-owned review semantic and test that policy-managed variance does not create a new POS-only conflict.</td>
+          </tr>
+          <tr>
+            <td>Variance closes before holds resolve.</td>
+            <td>Expected cash can change after closure.</td>
+            <td>Evaluate cash-affecting holds before variance approval or closure in both paths.</td>
+          </tr>
+          <tr>
+            <td>Cash Controls defaults drift during extraction.</td>
+            <td>Stores see changed approval behavior.</td>
+            <td>Keep existing threshold/signoff tests and add helper-level tests.</td>
+          </tr>
+          <tr>
+            <td>Legacy review rows become stranded.</td>
+            <td>Existing closeouts cannot be resolved.</td>
+            <td>Preserve <code>allowRegisterCloseoutVarianceProjection</code> and deposit review replay.</td>
+          </tr>
+          <tr>
+            <td>Approval-required POS sync retries side effects.</td>
+            <td>Duplicate approvals or repeated timeline evidence.</td>
+            <td>Require idempotent review creation, projected sync status, closeout mapping, and retry tests.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Reviewer Status</h2>
+      <ul>
+        <li>Research agents: repo mapping, institutional learnings, and flow analysis complete.</li>
+        <li>Scope reviewer approved the initial plan.</li>
+        <li>Feasibility, data-integrity, and testing feedback has been incorporated; second review is pending.</li>
+      </ul>
+      <p class="small">This HTML is paired with the markdown plan and should be regenerated or edited together if reviewer feedback changes the plan.</p>
+    </section>
+  </main>
+</body>
+</html>

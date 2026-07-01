@@ -303,6 +303,24 @@ describe("cash control closeouts", () => {
         },
       },
     };
+    const submittedApprovalOwnedCloseoutResult = {
+      kind: "ok" as const,
+      data: {
+        action: "submitted" as const,
+        closeoutReview: {
+          hasVariance: true,
+          reason: "Manager signoff is required for any register variance (-100).",
+          requiresApproval: true,
+          variance: -100,
+        },
+        pendingVoidApprovalCount: 1,
+        registerSession: {
+          _id: "session-1",
+          managerApprovalRequestId: "approval-request-1",
+          status: "closing",
+        },
+      },
+    };
     const finalizedCloseoutResult = {
       kind: "ok" as const,
       data: {
@@ -332,6 +350,10 @@ describe("cash control closeouts", () => {
     assertConformsToExportedReturns(
       submitRegisterSessionCloseout,
       submittedCloseoutResult,
+    );
+    assertConformsToExportedReturns(
+      submitRegisterSessionCloseout,
+      submittedApprovalOwnedCloseoutResult,
     );
     assertConformsToExportedReturns(
       finalizeRegisterSessionCloseout,

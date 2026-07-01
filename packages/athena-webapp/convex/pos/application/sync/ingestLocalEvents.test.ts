@@ -4250,6 +4250,32 @@ function createFakeSyncRepository(
         ? (existing as never)
         : null;
     },
+    async getApprovalRequest() {
+      return null;
+    },
+    async createOrReuseRegisterSessionVarianceReview(input) {
+      return {
+        status: "ready",
+        approvalRequest: {
+          _id: "approval-request-1",
+          _creationTime: input.closeoutOccurredAt,
+          actionKey: "cash_controls.register_session.variance_review",
+          createdAt: input.closeoutOccurredAt,
+          createdByStaffProfileId: input.requestedByStaffProfileId,
+          metadata: {
+            countedCash: input.countedCash,
+            expectedCash: input.expectedCash,
+            variance: input.variance,
+          },
+          reason: input.gateDecisionReason,
+          registerSessionId: input.registerSessionId,
+          requestType: "variance_review",
+          status: "pending",
+          storeId: input.storeId,
+        } as never,
+        created: true,
+      };
+    },
     async getActiveHeldQuantity() {
       return 0;
     },
