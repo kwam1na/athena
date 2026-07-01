@@ -117,6 +117,7 @@ type DailyOperationsTimelineEvent = {
   createdAt: number;
   id: string;
   message: string;
+  onlineOrderLink?: LinkTarget;
   productLink?: LinkTarget;
   registerLink?: LinkTarget;
   subject: SourceSubject;
@@ -831,6 +832,7 @@ async function mapOperationalTimelineEvent(
       eventType: string;
       message: string;
       metadata?: Record<string, unknown>;
+      onlineOrderId?: Id<"onlineOrder">;
       registerSessionId?: Id<"registerSession">;
       subjectId: string;
       subjectLabel?: string;
@@ -848,18 +850,30 @@ async function mapOperationalTimelineEvent(
     return null;
   }
 
+  const pendingCheckoutItemId =
+    typeof metadata.pendingCheckoutItemId === "string"
+      ? ctx.db.normalizeId(
+          "posPendingCheckoutItem",
+          metadata.pendingCheckoutItemId,
+        )
+      : event.subjectType === "pos_pending_checkout_item"
+        ? ctx.db.normalizeId("posPendingCheckoutItem", event.subjectId)
+        : null;
+  const pendingCheckoutItem = pendingCheckoutItemId
+    ? await ctx.db.get("posPendingCheckoutItem", pendingCheckoutItemId)
+    : null;
   const productId =
     typeof metadata.productId === "string"
       ? metadata.productId
       : typeof metadata.provisionalProductId === "string"
         ? metadata.provisionalProductId
-        : undefined;
+        : pendingCheckoutItem?.provisionalProductId;
   const productSkuId =
     typeof metadata.productSkuId === "string"
       ? (metadata.productSkuId as Id<"productSku">)
       : typeof metadata.provisionalProductSkuId === "string"
         ? (metadata.provisionalProductSkuId as Id<"productSku">)
-        : undefined;
+        : pendingCheckoutItem?.provisionalProductSkuId;
   const productSku = productSkuId
     ? await ctx.db.get("productSku", productSkuId)
     : null;
@@ -886,7 +900,7 @@ async function mapOperationalTimelineEvent(
   const productName =
     typeof metadata.productName === "string"
       ? metadata.productName
-      : event.subjectLabel;
+      : pendingCheckoutItem?.name ?? event.subjectLabel;
   const productSkuLabel =
     typeof metadata.productSkuLabel === "string"
       ? metadata.productSkuLabel
@@ -912,12 +926,13 @@ async function mapOperationalTimelineEvent(
     event.subjectType === "product_sku" ||
     isPendingCheckoutItemEvent ||
     productSkuId !== undefined;
-  const transactionNumber =
+  const transactionNumber = normalizeTransactionNumber(
     typeof metadata.transactionNumber === "string"
       ? metadata.transactionNumber
       : typeof metadata.receiptNumber === "string"
         ? metadata.receiptNumber
-        : undefined;
+        : extractTransactionNumber(event.subjectLabel, event.message),
+  );
   const transactionLink =
     isPosTransactionSubjectType(event.subjectType) && transactionNumber
       ? {
@@ -926,6 +941,26 @@ async function mapOperationalTimelineEvent(
             transactionId: event.subjectId,
           },
           to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId",
+        }
+      : undefined;
+  const onlineOrderId =
+    event.onlineOrderId ??
+    (event.subjectType === "online_order"
+      ? ctx.db.normalizeId("onlineOrder", event.subjectId)
+      : null);
+  const onlineOrderLabel =
+    event.subjectType === "online_order" ? event.subjectLabel : undefined;
+  const onlineOrderLink =
+    onlineOrderId && onlineOrderLabel
+      ? {
+          label: onlineOrderLabel.startsWith("#")
+            ? onlineOrderLabel
+            : `#${onlineOrderLabel}`,
+          matchLabel: onlineOrderLabel,
+          params: {
+            orderSlug: onlineOrderId,
+          },
+          to: "/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug",
         }
       : undefined;
   const productLink =
@@ -988,6 +1023,7 @@ async function mapOperationalTimelineEvent(
       registerLabel,
       variance: numberFromRecord(metadata, "variance"),
     }),
+    onlineOrderLink,
     productLink,
     registerLink,
     subject: {
@@ -1008,6 +1044,26 @@ function isRegisterSessionSubjectType(subjectType: string) {
 
 function isPosTransactionSubjectType(subjectType: string) {
   return subjectType === "pos_transaction" || subjectType === "posTransaction";
+}
+
+function extractTransactionNumber(...values: Array<string | undefined>) {
+  for (const value of values) {
+    const match = value?.match(/#([A-Za-z0-9][A-Za-z0-9-]*)/);
+    if (match?.[1]) {
+      return match[1];
+    }
+  }
+
+  return undefined;
+}
+
+function normalizeTransactionNumber(value: string | undefined) {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  return trimmed.startsWith("#") ? trimmed.slice(1) : trimmed;
 }
 
 function isDailyOperationsTimelineAuditEvent(event: {

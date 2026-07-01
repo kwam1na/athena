@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { Link, useSearch } from "@tanstack/react-router";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 import { ArrowUpRight, Receipt } from "lucide-react";
 
@@ -40,6 +40,62 @@ function isOnOperatingDate(timestamp: number, operatingDateStartAt: number) {
   return (
     timestamp >= operatingDateStartAt && timestamp < nextOperatingDateStartAt
   );
+}
+
+type ExpenseReportTimeFilter = "today" | "operatingDate" | "all";
+
+function getPageIndexFromSearch(page?: unknown) {
+  const parsedPage = typeof page === "number" ? page : Number(page);
+
+  return Number.isInteger(parsedPage) && parsedPage > 0 ? parsedPage - 1 : 0;
+}
+
+function getExpenseReportTimeFilter({
+  operatingDateStartAt,
+  timeRange,
+}: {
+  operatingDateStartAt: number | null;
+  timeRange?: unknown;
+}): ExpenseReportTimeFilter {
+  if (timeRange === "today" || timeRange === "all") {
+    return timeRange;
+  }
+
+  if (timeRange === "operatingDate" && operatingDateStartAt !== null) {
+    return "operatingDate";
+  }
+
+  if (operatingDateStartAt !== null) {
+    return "operatingDate";
+  }
+
+  return "today";
+}
+
+function getNextExpenseReportPageSearch(
+  current: Record<string, unknown>,
+  pageIndex: number,
+) {
+  const next = { ...current };
+  const page = pageIndex + 1;
+
+  if (page <= 1) {
+    delete next.page;
+  } else {
+    next.page = page;
+  }
+
+  return next;
+}
+
+function getNextExpenseReportFilterSearch(
+  current: Record<string, unknown>,
+  timeRange: ExpenseReportTimeFilter,
+) {
+  return {
+    ...getNextExpenseReportPageSearch(current, 0),
+    timeRange,
+  };
 }
 
 function ExpenseReportMobileCard({ report }: { report: ExpenseReportRow }) {
@@ -112,18 +168,22 @@ function ExpenseReportMobileCard({ report }: { report: ExpenseReportRow }) {
 export function ExpenseReportsView() {
   const { activeStore } = useGetActiveStore();
   const terminal = useGetTerminal();
+  const navigate = useNavigate();
   useExpenseLocalRuntime({
     staffProfileId: null,
     storeId: activeStore?._id,
     terminalId: terminal?._id,
   });
-  const { operatingDate } = useSearch({ strict: false }) as {
+  const { operatingDate, page, timeRange } = useSearch({ strict: false }) as {
     operatingDate?: string;
+    page?: unknown;
+    timeRange?: unknown;
   };
   const operatingDateStartAt = getStartOfOperatingDate(operatingDate);
-  const [filter, setFilter] = useState<"today" | "operatingDate" | "all">(
-    operatingDateStartAt ? "operatingDate" : "today",
+  const [filter, setFilter] = useState<ExpenseReportTimeFilter>(() =>
+    getExpenseReportTimeFilter({ operatingDateStartAt, timeRange }),
   );
+  const tablePageIndex = getPageIndexFromSearch(page);
 
   const expenseTransactions = useQuery(
     api.inventory.expenseTransactions.getExpenseTransactions,
@@ -151,10 +211,59 @@ export function ExpenseReportsView() {
 
     return tableData.filter((t) => isToday(t.completedAt));
   }, [tableData, filter, operatingDateStartAt]);
+  const isLoadingExpenseReports = expenseTransactions === undefined;
+
+  useEffect(() => {
+    setFilter(getExpenseReportTimeFilter({ operatingDateStartAt, timeRange }));
+  }, [operatingDateStartAt, timeRange]);
+  const handleTablePageIndexChange = useCallback(
+    (pageIndex: number) => {
+      void navigate({
+        replace: true,
+        search: ((current: Record<string, unknown>) =>
+          getNextExpenseReportPageSearch(current, pageIndex)) as never,
+      });
+    },
+    [navigate],
+  );
+  const handleFilterChange = useCallback(
+    (value: string) => {
+      const nextFilter = value as ExpenseReportTimeFilter;
+
+      setFilter(nextFilter);
+      void navigate({
+        replace: true,
+        search: ((current: Record<string, unknown>) =>
+          getNextExpenseReportFilterSearch(current, nextFilter)) as never,
+      });
+    },
+    [navigate],
+  );
+
+  useEffect(() => {
+    if (isLoadingExpenseReports || tablePageIndex === 0) {
+      return;
+    }
+
+    const maxPageIndex = Math.max(
+      0,
+      Math.ceil(filteredData.length / 10) - 1,
+    );
+
+    if (tablePageIndex <= maxPageIndex) {
+      return;
+    }
+
+    handleTablePageIndexChange(maxPageIndex);
+  }, [
+    filteredData.length,
+    handleTablePageIndexChange,
+    isLoadingExpenseReports,
+    tablePageIndex,
+  ]);
 
   if (!activeStore || !formatter) return null;
 
-  const isLoadingExpenseReports = expenseTransactions === undefined;
   const hasReports = filteredData.length > 0;
 
   return (
@@ -171,9 +280,7 @@ export function ExpenseReportsView() {
           <section className="space-y-layout-md">
             <Tabs
               value={filter}
-              onValueChange={(v) =>
-                setFilter(v as "today" | "operatingDate" | "all")
-              }
+              onValueChange={handleFilterChange}
             >
               <TabsList>
                 {operatingDateStartAt !== null ? (
@@ -209,20 +316,16 @@ export function ExpenseReportsView() {
             </Tabs>
 
             {isLoadingExpenseReports ? null : hasReports ? (
-              <>
-                <div className="grid gap-layout-sm md:hidden">
-                  {filteredData.map((report) => (
-                    <ExpenseReportMobileCard key={report._id} report={report} />
-                  ))}
-                </div>
-                <div className="hidden md:block">
-                  <GenericDataTable
-                    data={filteredData}
-                    columns={expenseReportColumns}
-                    tableId="pos-expense-reports"
-                  />
-                </div>
-              </>
+              <GenericDataTable
+                data={filteredData}
+                columns={expenseReportColumns}
+                pageIndex={tablePageIndex}
+                onPageIndexChange={handleTablePageIndexChange}
+                renderMobileCard={(report) => (
+                  <ExpenseReportMobileCard report={report} />
+                )}
+                tableId="pos-expense-reports"
+              />
             ) : (
               <div className="flex min-h-[50vh] items-center justify-center">
                 <EmptyState

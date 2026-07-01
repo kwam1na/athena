@@ -26,7 +26,10 @@ export function deriveLocalSaleBlocker(input: {
   terminalIntegrity?: Pick<PosTerminalIntegrityState, "status"> | null;
 }): PosLocalSaleBlocker | null {
   if (input.terminalIntegrity?.status !== undefined) {
-    if (input.terminalIntegrity.status !== "healthy") {
+    if (
+      input.terminalIntegrity.status !== "healthy" &&
+      !hasSaleUsableActiveRegisterSession(input.activeRegisterSession)
+    ) {
       return { reason: "terminal_integrity" };
     }
   }
@@ -51,4 +54,12 @@ export function deriveLocalSaleBlocker(input: {
   }
 
   return null;
+}
+
+function hasSaleUsableActiveRegisterSession(
+  session: {
+    status?: string | null;
+  } | null,
+) {
+  return session?.status === "open" || session?.status === "active";
 }

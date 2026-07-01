@@ -58,11 +58,11 @@ export async function registerAndProvisionPosTerminal(input: {
     browserInfo: BrowserInfo;
     displayName: string;
     fingerprintHash: string;
+    loginMode?: PosTerminalLoginMode;
     registerNumber: string;
     storeId: Id<"store">;
     syncSecretHash: string;
-    loginMode: PosTerminalLoginMode;
-    transactionCapability: PosTerminalTransactionCapability;
+    transactionCapability?: PosTerminalTransactionCapability;
   }) => Promise<
     | { kind: "ok"; data: ProvisionedTerminalRecord }
     | { kind: "user_error"; error: { message: string } }
@@ -72,17 +72,22 @@ export async function registerAndProvisionPosTerminal(input: {
   now?: () => number;
 }) {
   const syncSecretToken = await createTerminalSyncSecretToken();
-  const transactionCapability =
-    normalizePosTerminalTransactionCapability(input.transactionCapability);
-  const loginMode = normalizePosTerminalLoginMode(input.loginMode);
   const result = await input.registerTerminalMutation({
     storeId: input.activeStoreId,
     fingerprintHash: input.fingerprintHash,
     syncSecretHash: syncSecretToken,
     displayName: input.displayName,
     registerNumber: input.registerNumber,
-    loginMode,
-    transactionCapability,
+    ...(input.loginMode
+      ? { loginMode: normalizePosTerminalLoginMode(input.loginMode) }
+      : {}),
+    ...(input.transactionCapability
+      ? {
+          transactionCapability: normalizePosTerminalTransactionCapability(
+            input.transactionCapability,
+          ),
+        }
+      : {}),
     browserInfo: input.browserInfo,
   });
   if (result.kind === "user_error") return result;
@@ -100,10 +105,12 @@ export async function registerAndProvisionPosTerminal(input: {
     orgUrlSlug: input.orgUrlSlug,
     registerNumber: result.data.registerNumber,
     loginMode:
-      result.data.loginMode ?? loginMode ?? DEFAULT_POS_TERMINAL_LOGIN_MODE,
+      result.data.loginMode ??
+      normalizePosTerminalLoginMode(input.loginMode) ??
+      DEFAULT_POS_TERMINAL_LOGIN_MODE,
     transactionCapability:
       result.data.transactionCapability ??
-      transactionCapability ??
+      normalizePosTerminalTransactionCapability(input.transactionCapability) ??
       DEFAULT_POS_TERMINAL_TRANSACTION_CAPABILITY,
     displayName: result.data.displayName,
     provisionedAt: input.now?.() ?? Date.now(),

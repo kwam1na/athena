@@ -294,6 +294,7 @@ function buildAdjustmentApprovalRequirement(args: {
       settlementAmount: args.plan.settlementAmount,
       settlementDirection: args.plan.settlementDirection,
       settlementMethod: args.plan.settlementMethod,
+      transactionNumber: args.transaction.transactionNumber,
     },
   };
 }
@@ -993,6 +994,7 @@ async function applyApprovedAdjustment(
       settlementAmount: args.plan.settlementAmount,
       settlementDirection: args.plan.settlementDirection,
       settlementMethod: args.plan.settlementMethod,
+      transactionNumber: args.transaction.transactionNumber,
     },
     organizationId: store?.organizationId,
     paymentAllocationId: paymentAllocationId as Id<"paymentAllocation"> | undefined,

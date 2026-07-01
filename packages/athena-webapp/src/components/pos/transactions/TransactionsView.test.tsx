@@ -71,8 +71,10 @@ vi.mock("../../base/table/data-table", () => ({
     data,
     onPageIndexChange,
     pageIndex,
+    renderMobileCard,
   }: {
     data: Array<{
+      _id?: string;
       itemCount?: number;
       transactionNumber: string;
       sessionTraceId: string | null;
@@ -80,11 +82,27 @@ vi.mock("../../base/table/data-table", () => ({
     }>;
     onPageIndexChange?: (pageIndex: number) => void;
     pageIndex?: number;
+    renderMobileCard?: (row: {
+      _id?: string;
+      itemCount?: number;
+      transactionNumber: string;
+      sessionTraceId: string | null;
+      status?: string;
+    }) => React.ReactNode;
   }) => (
     <div>
       <div data-testid="transaction-table-page-index">
         {pageIndex ?? "local"}
       </div>
+      {renderMobileCard ? (
+        <div data-testid="transaction-mobile-cards">
+          {data.map((row) => (
+            <div key={`mobile-${row._id ?? row.transactionNumber}`}>
+              {renderMobileCard(row)}
+            </div>
+          ))}
+        </div>
+      ) : null}
       {data.map((row) => (
         <div key={row.transactionNumber}>
           <span>{row.transactionNumber}</span>

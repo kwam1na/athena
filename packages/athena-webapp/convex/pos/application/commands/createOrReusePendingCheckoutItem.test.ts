@@ -796,11 +796,79 @@ describe("createOrReusePendingCheckoutItem", () => {
     });
     expect(Array.from(tables.operationalEvent.values()).at(-1)).toMatchObject({
       eventType: "pos_pending_checkout_item_evidence_corrected",
+      posTransactionId: "txn001",
       metadata: expect.objectContaining({
+        provisionalProductId: "product001",
+        provisionalProductSkuId: "productSku001",
         quantityDelta: -2,
         reason: "transaction_void",
       }),
     });
+  });
+
+  it("records distinct operational events for repeated pending checkout evidence corrections", async () => {
+    const { ctx, tables } = createPendingCheckoutCtx(baseSeed);
+    const result = await createOrReusePendingCheckoutItem(ctx, {
+      createdByUserId: "user0001" as Id<"athenaUser">,
+      lookupCode: "556677",
+      name: "Committed pending item",
+      price: 30000,
+      quantitySold: 3,
+      storeId: "storezzzz" as Id<"store">,
+      timestamp: 1_000,
+    });
+
+    await recordPendingCheckoutItemSaleEvidence(ctx, {
+      actorUserId: "user0001" as Id<"athenaUser">,
+      pendingCheckoutItemId: result.pendingCheckoutItemId,
+      posTransactionId: "txn001" as Id<"posTransaction">,
+      price: 30000,
+      quantitySold: 3,
+      source: "online",
+      storeId: "storezzzz" as Id<"store">,
+      timestamp: 2_000,
+    });
+    await recordPendingCheckoutItemEvidenceCorrection(ctx, {
+      actorUserId: "user0001" as Id<"athenaUser">,
+      pendingCheckoutItemId: result.pendingCheckoutItemId,
+      posTransactionId: "txn001" as Id<"posTransaction">,
+      quantityDelta: -1,
+      reason: "item_adjustment",
+      storeId: "storezzzz" as Id<"store">,
+      timestamp: 3_000,
+    });
+    await recordPendingCheckoutItemEvidenceCorrection(ctx, {
+      actorUserId: "user0001" as Id<"athenaUser">,
+      pendingCheckoutItemId: result.pendingCheckoutItemId,
+      posTransactionId: "txn001" as Id<"posTransaction">,
+      quantityDelta: -1,
+      reason: "item_adjustment",
+      storeId: "storezzzz" as Id<"store">,
+      timestamp: 4_000,
+    });
+
+    const correctionEvents = Array.from(tables.operationalEvent.values()).filter(
+      (event) =>
+        event.eventType === "pos_pending_checkout_item_evidence_corrected",
+    );
+
+    expect(correctionEvents).toHaveLength(2);
+    expect(correctionEvents).toEqual([
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          quantityDelta: -1,
+          totalQuantitySold: 2,
+        }),
+        posTransactionId: "txn001",
+      }),
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          quantityDelta: -1,
+          totalQuantitySold: 1,
+        }),
+        posTransactionId: "txn001",
+      }),
+    ]);
   });
 
   it("rejects a pending checkout item when the lookup code already matches trusted catalog stock", async () => {

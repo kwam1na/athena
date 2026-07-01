@@ -33,6 +33,7 @@ interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
   getRowClassName?: (row: Row<TData>) => string | undefined;
+  renderMobileCard?: (row: TData, tableRow: Row<TData>) => React.ReactNode;
   pageIndex?: number;
   onLoadMore?: () => void;
   onPageIndexChange?: (pageIndex: number) => void;
@@ -47,6 +48,7 @@ export function GenericDataTable<TData, TValue>({
   columns,
   data,
   getRowClassName,
+  renderMobileCard,
   pageIndex,
   onLoadMore,
   onPageIndexChange,
@@ -99,7 +101,30 @@ export function GenericDataTable<TData, TValue>({
   return (
     <div className="space-y-4">
       {/* {showToolbar && <DataTableToolbar table={table} />} */}
-      <div className="rounded-md border">
+      {renderMobileCard ? (
+        <div
+          className="grid gap-layout-sm md:hidden"
+          data-testid={`${tableId}-mobile-cards`}
+        >
+          {table.getRowModel().rows?.length ? (
+            table.getRowModel().rows.map((row) => (
+              <React.Fragment key={row.id}>
+                {renderMobileCard(row.original, row)}
+              </React.Fragment>
+            ))
+          ) : (
+            <div className="rounded-md border border-border p-layout-md text-center text-sm text-muted-foreground">
+              No results.
+            </div>
+          )}
+        </div>
+      ) : null}
+      <div
+        className={cn(
+          "rounded-md border",
+          renderMobileCard && "hidden md:block",
+        )}
+      >
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (

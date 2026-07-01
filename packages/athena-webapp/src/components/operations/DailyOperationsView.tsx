@@ -264,6 +264,13 @@ export type DailyOperationsSnapshot = {
     createdAt: number;
     id: string;
     message: string;
+    onlineOrderLink?: {
+      label?: string;
+      matchLabel?: string;
+      params?: Record<string, string>;
+      search?: Record<string, string>;
+      to?: string;
+    };
     productLink?: {
       label?: string;
       params?: Record<string, string>;
@@ -327,6 +334,7 @@ type DailyOperationsViewContentProps = {
   isLoadingStorePulseSnapshot?: boolean;
   isLoadingTimelinePreviewSnapshot?: boolean;
   isLoadingTimelineSnapshot?: boolean;
+  isTimelineSheetOpen?: boolean;
   isRefreshingToday?: boolean;
   isAuthenticated: boolean;
   isLoadingAccess: boolean;
@@ -335,6 +343,7 @@ type DailyOperationsViewContentProps = {
   onRefreshToday?: () => void;
   onRequestStorePulseSnapshot?: () => void;
   onRequestTimelineSnapshot?: () => void;
+  onTimelineSheetOpenChange?: (open: boolean) => void;
   onOperatingDateChange?: (date: Date) => void;
   orgUrlSlug: string;
   snapshot?: DailyOperationsSnapshot;
@@ -755,8 +764,64 @@ function formatEventTime(timestamp: number) {
   }).format(new Date(timestamp));
 }
 
+const ONLINE_ORDER_TIMELINE_MESSAGE_TEMPLATES: Record<
+  string,
+  (orderLabel: string) => string
+> = {
+  online_order_cancelled: (orderLabel) => `Online order ${orderLabel} cancelled.`,
+  online_order_created: (orderLabel) => `Online order ${orderLabel} created.`,
+  online_order_delivered: (orderLabel) => `Online order ${orderLabel} delivered.`,
+  online_order_exchange_balance_collection: (orderLabel) =>
+    `Exchange balance collected for online order ${orderLabel}.`,
+  online_order_exchange_processed: (orderLabel) =>
+    `Exchange processed for online order ${orderLabel}.`,
+  online_order_item_restocked: (orderLabel) =>
+    `Returned item restocked for online order ${orderLabel}.`,
+  online_order_out_for_delivery: (orderLabel) =>
+    `Online order ${orderLabel} out for delivery.`,
+  online_order_payment_collected: (orderLabel) =>
+    `Payment collected for online order ${orderLabel}.`,
+  online_order_payment_verified: (orderLabel) =>
+    `Payment verified for online order ${orderLabel}.`,
+  online_order_picked_up: (orderLabel) => `Online order ${orderLabel} picked up.`,
+  online_order_pickup_exception: (orderLabel) =>
+    `Pickup exception recorded for online order ${orderLabel}.`,
+  online_order_ready_for_delivery: (orderLabel) =>
+    `Online order ${orderLabel} ready for delivery.`,
+  online_order_ready_for_pickup: (orderLabel) =>
+    `Online order ${orderLabel} ready for pickup.`,
+  online_order_refund_submitted: (orderLabel) =>
+    `Refund submitted for online order ${orderLabel}.`,
+  online_order_reservation_released: (orderLabel) =>
+    `Reservation released for online order ${orderLabel}.`,
+  online_order_return_approval_requested: (orderLabel) =>
+    `Return or exchange for online order ${orderLabel} sent for approval.`,
+  online_order_return_processed: (orderLabel) =>
+    `Return processed for online order ${orderLabel}.`,
+  online_order_return_refund: (orderLabel) =>
+    `Refund recorded for online order ${orderLabel}.`,
+  online_order_status_changed: (orderLabel) =>
+    `Online order ${orderLabel} status changed.`,
+};
+
+function formatOnlineOrderTimelineFallbackMessage(message: string) {
+  const match = /^(online_order_[a-z_]+) on (.+)$/.exec(message.trim());
+  if (!match) return message;
+
+  const [, eventType, subject] = match;
+  const template = ONLINE_ORDER_TIMELINE_MESSAGE_TEMPLATES[eventType];
+  if (!template) return message;
+
+  const trimmedSubject = subject.trim();
+  const orderLabel = trimmedSubject.startsWith("#")
+    ? trimmedSubject
+    : `#${trimmedSubject}`;
+
+  return template(orderLabel);
+}
+
 function formatTimelineMessage(message: string) {
-  return message.replace(
+  return formatOnlineOrderTimelineFallbackMessage(message).replace(
     /\b(\d{4})-(\d{2})-(\d{2})\b/g,
     (value, year, month, day) => {
       const parsed = new Date(Number(year), Number(month) - 1, Number(day));
@@ -784,23 +849,27 @@ function TimelineMessage({
   storeUrlSlug: string;
 }) {
   const inlineLink =
-    event.transactionLink ?? event.registerLink ?? event.productLink;
+    event.transactionLink ??
+    event.registerLink ??
+    event.onlineOrderLink ??
+    event.productLink;
   const linkLabel = inlineLink?.label?.trim();
   const matchLabel = event.transactionLink
     ? undefined
-    : event.registerLink?.matchLabel;
-  const linkMatch = findTimelineLinkMatch(event.message, linkLabel, matchLabel);
+    : event.registerLink?.matchLabel ?? event.onlineOrderLink?.matchLabel;
+  const displayMessage = formatTimelineMessage(event.message);
+  const linkMatch = findTimelineLinkMatch(displayMessage, linkLabel, matchLabel);
 
   if (!inlineLink?.to || !inlineLink.params || !linkLabel || !linkMatch) {
-    return <>{formatTimelineMessage(event.message)}</>;
+    return <>{displayMessage}</>;
   }
 
-  const before = event.message.slice(0, linkMatch.index);
-  const after = event.message.slice(linkMatch.index + linkMatch.length);
+  const before = displayMessage.slice(0, linkMatch.index);
+  const after = displayMessage.slice(linkMatch.index + linkMatch.length);
 
   return (
     <>
-      {formatTimelineMessage(before)}
+      {before}
       <Link
         className="inline-flex items-center gap-0.5 font-medium text-link underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         params={{
@@ -814,7 +883,7 @@ function TimelineMessage({
         <span>{linkLabel}</span>
         <ArrowUpRight aria-hidden="true" className="h-3 w-3" />
       </Link>
-      {formatTimelineMessage(after)}
+      {after}
     </>
   );
 }
@@ -2813,6 +2882,7 @@ export function DailyOperationsViewContent({
   isLoadingStorePulseSnapshot,
   isLoadingTimelinePreviewSnapshot,
   isLoadingTimelineSnapshot,
+  isTimelineSheetOpen: controlledTimelineSheetOpen,
   isRefreshingToday,
   isAuthenticated,
   isLoadingAccess,
@@ -2821,6 +2891,7 @@ export function DailyOperationsViewContent({
   onRefreshToday,
   onRequestStorePulseSnapshot,
   onRequestTimelineSnapshot,
+  onTimelineSheetOpenChange,
   onOperatingDateChange,
   orgUrlSlug,
   snapshot,
@@ -2832,8 +2903,14 @@ export function DailyOperationsViewContent({
   timelinePreviewSnapshot,
   timelineSnapshot,
 }: DailyOperationsViewContentProps) {
-  const [isTimelineSheetOpen, setIsTimelineSheetOpen] = useState(false);
+  const [localTimelineSheetOpen, setLocalTimelineSheetOpen] = useState(false);
   const isMobile = useIsMobile();
+  const isTimelineSheetOpen =
+    controlledTimelineSheetOpen ?? localTimelineSheetOpen;
+  const setTimelineSheetOpen = (open: boolean) => {
+    setLocalTimelineSheetOpen(open);
+    onTimelineSheetOpenChange?.(open);
+  };
 
   if (isLoadingAccess) {
     return null;
@@ -3332,7 +3409,7 @@ export function DailyOperationsViewContent({
                         disabled={isLoadingTimelineSnapshot}
                         onClick={() => {
                           onRequestTimelineSnapshot?.();
-                          setIsTimelineSheetOpen(true);
+                          setTimelineSheetOpen(true);
                         }}
                         size="sm"
                         type="button"
@@ -3396,7 +3473,7 @@ export function DailyOperationsViewContent({
 
               <Sheet
                 open={isTimelineSheetOpen}
-                onOpenChange={setIsTimelineSheetOpen}
+                onOpenChange={setTimelineSheetOpen}
               >
                 <SheetContent
                   className="flex w-[min(100vw,30rem)] max-w-[calc(100vw-1rem)] flex-col overflow-hidden border-border bg-surface-raised p-0 shadow-overlay sm:max-w-md"
@@ -3504,8 +3581,10 @@ function DailyOperationsConnectedView({
   const navigate = useNavigate();
   const search = useSearch({ strict: false }) as {
     operatingDate?: unknown;
+    timeline?: unknown;
     weekEndOperatingDate?: unknown;
   };
+  const isTimelineSearchOpen = search.timeline === "open";
   const operatingDateRange = useMemo(
     () => getLocalOperatingDateRangeFromSearch(search.operatingDate),
     [search.operatingDate],
@@ -3562,7 +3641,8 @@ function DailyOperationsConnectedView({
     requestedDetailSnapshotKey === snapshotRequestKey;
   const isTimelineSnapshotRequested =
     snapshotRequestKey !== "skip" &&
-    requestedTimelineSnapshotKey === snapshotRequestKey;
+    (requestedTimelineSnapshotKey === snapshotRequestKey ||
+      isTimelineSearchOpen);
   const cachedWeekAnalytics =
     weekAnalyticsCacheKey === "skip"
       ? undefined
@@ -3831,6 +3911,15 @@ function DailyOperationsConnectedView({
       })) as never,
     });
   };
+  const handleTimelineSheetOpenChange = (open: boolean) => {
+    void navigate({
+      replace: true,
+      search: ((current: Record<string, unknown>) => ({
+        ...current,
+        timeline: open ? "open" : undefined,
+      })) as never,
+    });
+  };
   const canRefreshToday =
     Boolean(getDailyOperationsTodayRefreshSnapshot) &&
     canQueryProtectedData &&
@@ -3905,6 +3994,7 @@ function DailyOperationsConnectedView({
       isLoadingTimelineSnapshot={
         isTimelineSnapshotRequested && timelineSnapshot === undefined
       }
+      isTimelineSheetOpen={isTimelineSearchOpen}
       isLoadingSnapshot={snapshot === undefined}
       isRefreshingToday={isTodayRefreshRequested}
       onRequestDetailSnapshot={() =>
@@ -3922,6 +4012,7 @@ function DailyOperationsConnectedView({
           snapshotRequestKey === "skip" ? null : snapshotRequestKey,
         )
       }
+      onTimelineSheetOpenChange={handleTimelineSheetOpenChange}
       onOperatingDateChange={handleOperatingDateChange}
       onRefreshToday={canRefreshToday ? requestTodayRefresh : undefined}
       orgUrlSlug={params?.orgUrlSlug ?? ""}

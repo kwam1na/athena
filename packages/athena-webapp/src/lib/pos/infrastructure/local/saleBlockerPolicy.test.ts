@@ -17,7 +17,7 @@ describe("deriveLocalSaleBlocker", () => {
     ).toBeNull();
   });
 
-  it("hard-blocks terminal integrity, missing destination, missing identities, and non-reopenable closed drawers", () => {
+  it("does not hard-block an open local drawer for terminal support repair", () => {
     expect(
       deriveLocalSaleBlocker({
         activeRegisterSession: {
@@ -25,6 +25,19 @@ describe("deriveLocalSaleBlocker", () => {
           localRegisterSessionId: "drawer-1",
           canReopen: false,
         },
+        hasLocalEventDestination: true,
+        hasRequiredIdentities: true,
+        terminalIntegrity: {
+          status: "requires_reprovision",
+        },
+      }),
+    ).toBeNull();
+  });
+
+  it("hard-blocks terminal integrity without an open drawer, missing destination, missing identities, and non-reopenable closed drawers", () => {
+    expect(
+      deriveLocalSaleBlocker({
+        activeRegisterSession: null,
         hasLocalEventDestination: true,
         hasRequiredIdentities: true,
         terminalIntegrity: {

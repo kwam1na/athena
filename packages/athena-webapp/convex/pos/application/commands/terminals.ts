@@ -114,8 +114,17 @@ export async function registerTerminal(
       terminalId: existing?._id,
     });
     const transactionCapability =
-      normalizePosTerminalTransactionCapability(args.transactionCapability);
-    const loginMode = normalizePosTerminalLoginMode(args.loginMode);
+      args.transactionCapability === undefined && existing
+        ? normalizePosTerminalTransactionCapability(
+            existing.transactionCapability,
+          )
+        : normalizePosTerminalTransactionCapability(
+            args.transactionCapability,
+          );
+    const loginMode =
+      args.loginMode === undefined && existing
+        ? normalizePosTerminalLoginMode(existing.loginMode)
+        : normalizePosTerminalLoginMode(args.loginMode);
 
     if (existing) {
       if (existing.status !== "active") {

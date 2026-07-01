@@ -665,6 +665,42 @@ const posSyncedSaleTimelineSnapshot: DailyOperationsSnapshot = {
   ],
 };
 
+const onlineOrderFallbackTimelineSnapshot: DailyOperationsSnapshot = {
+  ...operatingSnapshot,
+  timeline: [
+    {
+      createdAt: Date.UTC(2026, 4, 8, 18),
+      id: "event-online-order-created",
+      message: "online_order_created on 273912",
+      onlineOrderLink: {
+        label: "#273912",
+        matchLabel: "273912",
+        params: {
+          orderSlug: "online-order-273912",
+        },
+        to: "/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug",
+      },
+      subject: {
+        id: "online-order-273912",
+        label: "273912",
+        type: "online_order",
+      },
+      type: "online_order_created",
+    },
+    {
+      createdAt: Date.UTC(2026, 4, 8, 17),
+      id: "event-online-order-ready",
+      message: "online_order_ready_for_pickup on 273912",
+      subject: {
+        id: "online-order-273912",
+        label: "273912",
+        type: "online_order",
+      },
+      type: "online_order_ready_for_pickup",
+    },
+  ],
+};
+
 const voidRequestedTimelineSnapshot: DailyOperationsSnapshot = {
   ...operatingSnapshot,
   timeline: [
@@ -2211,6 +2247,31 @@ describe("DailyOperationsViewContent", () => {
     expect(transactionLink.querySelector("svg")).toBeInTheDocument();
   });
 
+  it("normalizes fallback online order timeline copy for operators", () => {
+    renderContent(onlineOrderFallbackTimelineSnapshot);
+
+    expect(
+      screen.getByText((content, node) => {
+        return node?.textContent === "Online order #273912 created.";
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Online order #273912 ready for pickup."),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("online_order_created on 273912"),
+    ).not.toBeInTheDocument();
+
+    const orderLink = screen.getByRole("link", { name: "#273912" });
+
+    expect(orderLink).toHaveAttribute(
+      "href",
+      expect.stringContaining(
+        "/wigclub/store/osu/orders/online-order-273912?o=",
+      ),
+    );
+  });
+
   it("links void requested timeline transactions and keeps requester copy inline", () => {
     renderContent(voidRequestedTimelineSnapshot);
 
@@ -2822,6 +2883,20 @@ describe("DailyOperationsView", () => {
       within(timeline).getByRole("button", { name: "Show more" }),
     );
 
+    expect(mockedHooks.navigate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        replace: true,
+        search: expect.any(Function),
+      }),
+    );
+    expect(
+      mockedHooks.navigate.mock.calls.at(-1)?.[0].search({
+        operatingDate: "2026-05-08",
+      }),
+    ).toEqual({
+      operatingDate: "2026-05-08",
+      timeline: "open",
+    });
     expect(mockedHooks.useQuery).toHaveBeenCalledWith(
       mockedApi.getDailyOperationsTimelineSnapshot,
       expect.objectContaining({
@@ -2831,6 +2906,35 @@ describe("DailyOperationsView", () => {
     );
     expect(mockedHooks.useQuery).toHaveBeenCalledWith(
       mockedApi.getDailyOperationsDetailSnapshot,
+      expect.objectContaining({
+        operatingTimezoneOffsetMinutes: expect.any(Number),
+        storeId: "store-1",
+      }),
+    );
+  });
+
+  it("restores the open timeline sheet from the URL search state", () => {
+    mockedHooks.useSearch.mockReturnValue({ timeline: "open" });
+    mockedHooks.useQuery.mockImplementation((query, args) => {
+      if (args === "skip") return undefined;
+      if (query === mockedApi.getDailyOperationsTimelinePreviewSnapshot) {
+        return compactTimelineOverflowSnapshot;
+      }
+      if (query === mockedApi.getDailyOperationsTimelineSnapshot) {
+        return {
+          operatingDate: compactTimelineOverflowSnapshot.operatingDate,
+          timeline: timelineOverflowSnapshot.timeline,
+        };
+      }
+      return compactTimelineOverflowSnapshot;
+    });
+
+    render(<DailyOperationsView />);
+
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByText("Timeline event 12")).toBeInTheDocument();
+    expect(mockedHooks.useQuery).toHaveBeenCalledWith(
+      mockedApi.getDailyOperationsTimelineSnapshot,
       expect.objectContaining({
         operatingTimezoneOffsetMinutes: expect.any(Number),
         storeId: "store-1",

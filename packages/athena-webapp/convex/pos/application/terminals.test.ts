@@ -182,6 +182,48 @@ describe("registerTerminal", () => {
     );
   });
 
+  it("preserves existing capability and login settings when reprovision args omit them", async () => {
+    const configuredTerminal = {
+      ...existingTerminal,
+      loginMode: "pos_only" as const,
+      transactionCapability: "services_only" as const,
+    };
+    vi.mocked(getTerminalByFingerprint).mockResolvedValue(configuredTerminal);
+    vi.mocked(getTerminalByStoreIdAndRegisterNumber).mockResolvedValue(null);
+    vi.mocked(getTerminalById).mockResolvedValue({
+      ...configuredTerminal,
+      displayName: "Updated Terminal",
+    });
+
+    const result = await registerTerminal({ db: null as never } as never, {
+      storeId: "store-1" as Id<"store">,
+      fingerprintHash: "fingerprint-1",
+      syncSecretHash: "sync-secret-rotated",
+      displayName: "Updated Terminal",
+      registerNumber: "A1",
+      registeredByUserId: "user-1" as Id<"athenaUser">,
+      browserInfo,
+    });
+
+    expect(vi.mocked(patchTerminalRecord)).toHaveBeenCalledWith(
+      expect.anything(),
+      configuredTerminal._id,
+      expect.objectContaining({
+        loginMode: "pos_only",
+        transactionCapability: "services_only",
+      }),
+    );
+    expect(result).toEqual(
+      expect.objectContaining({
+        kind: "ok",
+        data: expect.objectContaining({
+          loginMode: "pos_only",
+          transactionCapability: "services_only",
+        }),
+      }),
+    );
+  });
+
   it("rebinds an existing terminal to a different signed-in full-admin user", async () => {
     vi.mocked(getTerminalByFingerprint).mockResolvedValue(existingTerminal);
     vi.mocked(getTerminalByStoreIdAndRegisterNumber).mockResolvedValue(null);

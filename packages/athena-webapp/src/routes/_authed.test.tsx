@@ -604,6 +604,8 @@ describe("Authed layout", () => {
     );
     expect(screen.getByTestId("app-header")).toBeInTheDocument();
     expect(screen.getByTestId("app-header").parentElement).toHaveClass(
+      "min-w-0",
+      "overflow-hidden",
       "rounded-lg",
       "px-layout-xs",
       "py-layout-2xs",
@@ -614,7 +616,13 @@ describe("Authed layout", () => {
     );
     expect(
       screen.getByTestId("app-header").parentElement?.parentElement,
-    ).toHaveClass("px-layout-sm", "justify-start");
+    ).toHaveClass(
+      "flex-1",
+      "justify-start",
+      "overflow-hidden",
+      "px-0",
+      "sm:px-layout-sm",
+    );
     expect(
       screen.getByTestId("app-header").parentElement?.parentElement,
     ).not.toHaveClass(
@@ -646,7 +654,8 @@ describe("Authed layout", () => {
     const headerCell = screen.getByTestId("app-header").parentElement
       ?.parentElement as HTMLElement;
 
-    expect(headerCell).toHaveClass("w-auto", "justify-start");
+    expect(headerCell).toHaveClass("min-w-0", "flex-1", "justify-start");
+    expect(headerCell).not.toHaveClass("w-auto", "shrink-0");
     expect(headerCell).not.toHaveClass(
       "md:w-[var(--topbar-sidebar-width)]",
       "transition-[width]",
@@ -1182,13 +1191,19 @@ describe("Authed layout", () => {
     });
 
     expect(accountMenuButton).toHaveClass(
-      "h-9",
+      "h-10",
+      "w-10",
+      "sm:h-9",
+      "sm:w-auto",
       "rounded-lg",
       "border",
       "shadow-surface",
     );
     expect(themeToggleButton).toHaveClass(
-      "h-9",
+      "h-10",
+      "w-10",
+      "sm:h-9",
+      "sm:w-9",
       "rounded-lg",
       "border",
       "shadow-surface",
