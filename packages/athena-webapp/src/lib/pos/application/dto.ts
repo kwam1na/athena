@@ -74,6 +74,13 @@ export interface PosCashDrawerDto {
   notes?: string;
   variance?: number;
   workflowTraceId?: string;
+  pendingVoidApprovals?: {
+    cashAffectingCount: number;
+    cashAdjustmentCount?: number;
+    cashAdjustmentDelta?: number;
+    cashAmount: number;
+    count: number;
+  } | null;
   localSyncStatus?: {
     status: "needs_review";
     reconciliationItems: Array<{

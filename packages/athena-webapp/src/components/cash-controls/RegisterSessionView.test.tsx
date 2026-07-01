@@ -2751,11 +2751,16 @@ describe("RegisterSessionViewContent", () => {
           ...baseSnapshot,
           registerSession: {
             ...baseSnapshot.registerSession,
+            expectedCash: 610000,
+            netExpectedCash: 610000,
             pendingVoidApprovals: {
+              cashAffectingCount: 1,
+              cashAmount: 8000,
               count: 1,
               items: [
                 {
                   approvalRequestId: "void-approval-1",
+                  cashAmount: 8000,
                   requestedAt: new Date("2026-04-21T18:30:00.000Z").getTime(),
                   transactionId: "transaction-1",
                   transactionNumber: "TXN-0031",
@@ -2769,12 +2774,18 @@ describe("RegisterSessionViewContent", () => {
       />,
     );
 
-    expect(screen.getByText("Void review pending")).toBeInTheDocument();
+    expect(screen.getByText("Register corrections pending")).toBeInTheDocument();
     expect(
-      screen.getByText("Sale void review blocks final closeout"),
+      screen.getByText("Register corrections block final closeout"),
     ).toBeInTheDocument();
+    expect(screen.getAllByText(/Expected now/).length).toBeGreaterThan(0);
     expect(
-      screen.getByRole("link", { name: "Review void approvals" }),
+      screen.getAllByText(/After adjustments applies 1 pending cash void/)[0],
+    ).toHaveTextContent("GH₵80");
+    expect(screen.getAllByText("After adjustments").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("GH₵6,020").length).toBeGreaterThan(0);
+    expect(
+      screen.getByRole("link", { name: "Review approvals" }),
     ).toHaveAttribute(
       "href",
       "/wigclub/store/wigclub/operations/approvals?o=%252F",
@@ -2789,6 +2800,104 @@ describe("RegisterSessionViewContent", () => {
     expect(screen.getByLabelText("Deposit reference")).toBeDisabled();
     expect(screen.getByLabelText("Deposit notes")).toBeDisabled();
     expect(screen.getByRole("button", { name: "Record deposit" })).toBeDisabled();
+  });
+
+  it("holds cash item-adjustment closeouts without finalize or deposit actions", () => {
+    render(
+      <RegisterSessionViewContent
+        actorUserId="user-1"
+        currency="GHS"
+        isLoading={false}
+        onAuthenticateStaff={vi.fn()}
+        onFinalizeCloseout={vi.fn()}
+        onRecordDeposit={vi.fn()}
+        onReviewCloseout={vi.fn()}
+        onSubmitCloseout={vi.fn()}
+        orgUrlSlug="wigclub"
+        registerSessionSnapshot={{
+          ...baseSnapshot,
+          registerSession: {
+            ...baseSnapshot.registerSession,
+            expectedCash: 610000,
+            netExpectedCash: 610000,
+            pendingVoidApprovals: {
+              cashAdjustmentCount: 1,
+              cashAdjustmentDelta: -5000,
+              cashAmount: 0,
+              count: 0,
+              items: [],
+            },
+          },
+        }}
+        storeId="store-1"
+        storeUrlSlug="wigclub"
+      />,
+    );
+
+    expect(screen.getByText("Register corrections pending")).toBeInTheDocument();
+    expect(
+      screen.getByText("Register corrections block final closeout"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getAllByText(/1 pending cash item adjustment reducing cash/)[0],
+    ).toHaveTextContent("GH₵50");
+    expect(
+      screen.queryByRole("button", { name: "Finalize closeout" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Deposit amount")).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Record deposit" })).toBeDisabled();
+  });
+
+  it("wraps submitted closeout metrics when after-adjustment context is shown", () => {
+    render(
+      <RegisterSessionViewContent
+        actorUserId="user-1"
+        currency="GHS"
+        isLoading={false}
+        onAuthenticateStaff={vi.fn()}
+        onFinalizeCloseout={vi.fn()}
+        onRecordDeposit={vi.fn()}
+        onReviewCloseout={vi.fn()}
+        onSubmitCloseout={vi.fn()}
+        orgUrlSlug="wigclub"
+        registerSessionSnapshot={{
+          ...baseSnapshot,
+          closeoutReview: {
+            hasVariance: true,
+            requiresApproval: true,
+            variance: -307000,
+          },
+          registerSession: {
+            ...baseSnapshot.registerSession,
+            countedCash: 1583000,
+            expectedCash: 1583000,
+            netExpectedCash: 1583000,
+            pendingVoidApprovals: {
+              cashAffectingCount: 2,
+              cashAmount: 307000,
+              count: 2,
+              items: [],
+            },
+            variance: -307000,
+          },
+        }}
+        storeId="store-1"
+        storeUrlSlug="wigclub"
+      />,
+    );
+
+    const submittedCloseout = screen
+      .getByText("Submitted closeout")
+      .closest("div");
+    const metrics = submittedCloseout?.querySelector("dl");
+
+    expect(metrics).toHaveClass("flex", "flex-wrap");
+    expect(within(metrics as HTMLElement).getByText("Expected now")).toBeInTheDocument();
+    expect(
+      within(metrics as HTMLElement).getByText("After adjustments"),
+    ).toBeInTheDocument();
+    expect(within(metrics as HTMLElement).getByText("Counted")).toBeInTheDocument();
+    expect(within(metrics as HTMLElement).getByText("Variance")).toBeInTheDocument();
   });
 
   it("uses manager approval to submit a reopened closeout correction", async () => {

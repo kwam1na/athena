@@ -37,9 +37,14 @@ import {
   projectLocalSyncEvent,
 } from "../pos/application/sync/projectLocalEvents";
 import {
+  buildPendingCompletedSaleVoidApprovalSummary,
+  filterPendingCompletedSaleVoidApprovals,
+  filterPendingTransactionItemAdjustmentApprovals,
   getCloseoutHoldOperatorMessage,
   hasCashAffectingCloseoutHolds,
+  listPendingRegisterSessionApprovalRequests,
   listRegisterSessionCloseoutHolds,
+  type RegisterSessionPendingVoidApprovalSummary,
 } from "../pos/application/sync/registerSessionCloseoutHolds";
 import {
   requireAuthenticatedAthenaUserWithCtx,
@@ -131,16 +136,8 @@ type CashControlApprovalRequest = Pick<
   "_id" | "notes" | "reason" | "requestedByStaffProfileId" | "status"
 >;
 
-type CashControlPendingVoidApprovalSummary = {
-  count: number;
-  items: Array<{
-    approvalRequestId: Id<"approvalRequest">;
-    requestedAt: number;
-    transactionId: Id<"posTransaction"> | string;
-    transactionNumber?: string | null;
-    workItemId?: Id<"operationalWorkItem"> | null;
-  }>;
-};
+type CashControlPendingVoidApprovalSummary =
+  RegisterSessionPendingVoidApprovalSummary;
 
 type CashControlDepositAllocation = Pick<
   Doc<"paymentAllocation">,
@@ -654,6 +651,10 @@ function buildRegisterSessionSummary(args: {
         }
       : null,
     pendingVoidApprovals: args.pendingVoidApprovals ?? {
+      cashAffectingCount: 0,
+      cashAdjustmentCount: 0,
+      cashAdjustmentDelta: 0,
+      cashAmount: 0,
       count: 0,
       items: [],
     },
@@ -898,57 +899,6 @@ async function listRegisterSessionTransactions(
   });
 }
 
-function buildPendingVoidApprovalSummary(
-  approvalRequests: Doc<"approvalRequest">[],
-): CashControlPendingVoidApprovalSummary {
-  const items = approvalRequests
-    .sort((left, right) => left.createdAt - right.createdAt)
-    .map((approvalRequest) => ({
-      approvalRequestId: approvalRequest._id,
-      requestedAt: approvalRequest.createdAt,
-      transactionId:
-        approvalRequest.posTransactionId ??
-        approvalRequest.subjectId ??
-        "",
-      transactionNumber:
-        typeof approvalRequest.metadata?.transactionNumber === "string"
-          ? approvalRequest.metadata.transactionNumber
-          : null,
-      workItemId: approvalRequest.workItemId ?? null,
-    }))
-    .filter((item) => item.transactionId);
-
-  return {
-    count: items.length,
-    items,
-  };
-}
-
-async function listPendingVoidApprovalsForRegisterSession(
-  ctx: Pick<QueryCtx | MutationCtx, "db">,
-  args: {
-    registerSessionId: Id<"registerSession">;
-    storeId: Id<"store">;
-  },
-) {
-  const approvalRequests =
-    // eslint-disable-next-line @convex-dev/no-collect-in-query -- Register-session scoped approval queues are bounded by manager-review workflow volume and must not be truncated by the store-wide pending approval limit.
-    await ctx.db
-      .query("approvalRequest")
-      .withIndex("by_registerSessionId", (q) =>
-        q.eq("registerSessionId", args.registerSessionId),
-      )
-      .collect();
-
-  return approvalRequests.filter(
-    (approvalRequest) =>
-      approvalRequest.storeId === args.storeId &&
-      approvalRequest.status === "pending" &&
-      approvalRequest.requestType === "pos_transaction_void" &&
-      approvalRequest.subjectType === "pos_transaction",
-  );
-}
-
 async function listPendingVoidApprovalSummariesBySessionId(
   ctx: Pick<QueryCtx, "db">,
   args: {
@@ -958,7 +908,7 @@ async function listPendingVoidApprovalSummariesBySessionId(
 ) {
   const entries = await Promise.all(
     args.registerSessions.map(async (registerSession) => {
-      const approvalRequests = await listPendingVoidApprovalsForRegisterSession(
+      const approvalRequests = await listPendingRegisterSessionApprovalRequests(
         ctx,
         {
           registerSessionId: registerSession._id,
@@ -967,7 +917,14 @@ async function listPendingVoidApprovalSummariesBySessionId(
       );
       return [
         registerSession._id,
-        buildPendingVoidApprovalSummary(approvalRequests),
+        await buildPendingCompletedSaleVoidApprovalSummary(ctx, {
+          approvalRequests:
+            filterPendingCompletedSaleVoidApprovals(approvalRequests),
+          itemAdjustmentApprovalRequests:
+            filterPendingTransactionItemAdjustmentApprovals(approvalRequests),
+          registerSessionId: registerSession._id,
+          storeId: args.storeId,
+        }),
       ] as const;
     }),
   );
@@ -1154,7 +1111,7 @@ export const getRegisterSessionSnapshot = query({
             registerSession.managerApprovalRequestId,
           )
         : Promise.resolve(null),
-      listPendingVoidApprovalsForRegisterSession(ctx, {
+      listPendingRegisterSessionApprovalRequests(ctx, {
         registerSessionId: args.registerSessionId,
         storeId: args.storeId,
       }),
@@ -1283,7 +1240,16 @@ export const getRegisterSessionSnapshot = query({
         ...buildRegisterSessionSummary({
           approvalRequest,
           pendingVoidApprovals:
-            buildPendingVoidApprovalSummary(pendingVoidApprovals),
+            await buildPendingCompletedSaleVoidApprovalSummary(ctx, {
+              approvalRequests:
+                filterPendingCompletedSaleVoidApprovals(pendingVoidApprovals),
+              itemAdjustmentApprovalRequests:
+                filterPendingTransactionItemAdjustmentApprovals(
+                  pendingVoidApprovals,
+                ),
+              registerSessionId: args.registerSessionId,
+              storeId: args.storeId,
+            }),
           registerSession: registerSessionWithTraceId,
           staffNamesById,
           syncConflicts:

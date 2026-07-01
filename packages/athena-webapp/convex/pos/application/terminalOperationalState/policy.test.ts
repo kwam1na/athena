@@ -329,7 +329,7 @@ describe("terminal operational state policy", () => {
     });
   });
 
-  it("offers local review cleanup from matching collected terminal evidence", () => {
+  it("replays uploaded register-open review items from matching collected terminal evidence", () => {
     const state = buildTerminalOperationalState(
       baseInput({
         commandStatus: {
@@ -342,7 +342,7 @@ describe("terminal operational state policy", () => {
               localEventId: "event-review-1",
               sequence: 12,
               status: "needs_review",
-              type: "transaction.completed",
+              type: "register.opened",
               uploaded: true,
               uploadSequence: 12,
             },
@@ -351,7 +351,7 @@ describe("terminal operational state policy", () => {
               localEventId: "event-review-2",
               sequence: 13,
               status: "needs_review",
-              type: "register.closeout_started",
+              type: "register.opened",
               uploaded: true,
               uploadSequence: 13,
             },
@@ -371,7 +371,7 @@ describe("terminal operational state policy", () => {
                 localEventId: "event-review-1",
                 sequence: 12,
                 status: "needs_review",
-                type: "transaction.completed",
+                type: "register.opened",
                 uploaded: true,
                 uploadSequence: 12,
               },
@@ -380,7 +380,7 @@ describe("terminal operational state policy", () => {
                 localEventId: "event-review-2",
                 sequence: 13,
                 status: "needs_review",
-                type: "register.closeout_started",
+                type: "register.opened",
                 uploaded: true,
                 uploadSequence: 13,
               },
@@ -394,18 +394,16 @@ describe("terminal operational state policy", () => {
 
     expect(state.recoveryEvidence.terminalActions[0]).toMatchObject({
       commandContext: {
-        expectedBlockerType: "local_review",
-        localReviewEventIds: ["event-review-1", "event-review-2"],
+        expectedBlockerType: "local_review_replay",
       },
-      commandType: "clear_local_review_items",
+      commandType: "retry_sync",
       expectedEvidence: {
-        localReviewClearedEventIds: ["event-review-1", "event-review-2"],
-        localReviewEventCount: 0,
+        syncStatus: "idle",
       },
     });
   });
 
-  it("uses verified collected local review evidence when the latest runtime reports only a count", () => {
+  it("keeps collecting verified evidence when the latest runtime reports only a count", () => {
     const state = buildTerminalOperationalState(
       baseInput({
         commandStatus: {
@@ -418,7 +416,7 @@ describe("terminal operational state policy", () => {
               localEventId: "event-review-1",
               sequence: 12,
               status: "needs_review",
-              type: "transaction.completed",
+              type: "register.opened",
               uploaded: true,
               uploadSequence: 12,
             },
@@ -441,19 +439,59 @@ describe("terminal operational state policy", () => {
     );
 
     expect(state.recoveryEvidence.terminalActions[0]).toMatchObject({
-      commandContext: {
-        expectedBlockerType: "local_review",
-        localReviewEventIds: ["event-review-1"],
-      },
-      commandType: "clear_local_review_items",
-      expectedEvidence: {
-        localReviewClearedEventIds: ["event-review-1"],
-        localReviewEventCount: 0,
-      },
+      commandType: "collect_local_review",
+      expectedEvidence: { localReviewDetailsCollected: true },
     });
   });
 
-  it("does not use stale collected local review evidence when runtime ids differ", () => {
+  it("does not replay stale collected local review evidence after the runtime count clears", () => {
+    const state = buildTerminalOperationalState(
+      baseInput({
+        commandStatus: {
+          commandId: "command-collect-review" as Id<"posTerminalRecoveryCommand">,
+          commandType: "collect_local_review",
+          label: "Collect local review items",
+          localReviewEvents: [
+            {
+              createdAt: now - 1_000,
+              localEventId: "event-review-1",
+              sequence: 776,
+              status: "needs_review",
+              type: "register.opened",
+              uploaded: true,
+              uploadSequence: 1,
+            },
+            {
+              createdAt: now - 500,
+              localEventId: "event-review-2",
+              sequence: 780,
+              status: "needs_review",
+              type: "transaction.completed",
+              uploaded: true,
+              uploadSequence: 2,
+            },
+          ],
+          status: "completed",
+          verificationStatus: "verified",
+        },
+        runtimeStatus: buildRuntimeStatus({
+          sync: {
+            failedEventCount: 0,
+            localOnlyEventCount: 1,
+            pendingEventCount: 0,
+            reviewEventCount: 0,
+            reviewEvents: [],
+            status: "idle",
+            uploadableEventCount: 0,
+          },
+        }),
+      }),
+    );
+
+    expect(state.recoveryEvidence.terminalActions).toEqual([]);
+  });
+
+  it("replays current runtime local review evidence when collected evidence is stale", () => {
     const state = buildTerminalOperationalState(
       baseInput({
         commandStatus: {
@@ -486,7 +524,7 @@ describe("terminal operational state policy", () => {
                 localEventId: "current-review-1",
                 sequence: 13,
                 status: "needs_review",
-                type: "register.closeout_started",
+                type: "register.opened",
                 uploaded: true,
                 uploadSequence: 13,
               },
@@ -500,17 +538,16 @@ describe("terminal operational state policy", () => {
 
     expect(state.recoveryEvidence.terminalActions[0]).toMatchObject({
       commandContext: {
-        localReviewEventIds: ["current-review-1"],
+        expectedBlockerType: "local_review_replay",
       },
-      commandType: "clear_local_review_items",
+      commandType: "retry_sync",
       expectedEvidence: {
-        localReviewClearedEventIds: ["current-review-1"],
-        localReviewEventCount: 0,
+        syncStatus: "idle",
       },
     });
   });
 
-  it("offers local review cleanup when all local review items were uploaded and reported", () => {
+  it("does not replay uploaded business-fact review items", () => {
     const state = buildTerminalOperationalState(
       baseInput({
         runtimeStatus: buildRuntimeStatus({
@@ -547,28 +584,18 @@ describe("terminal operational state policy", () => {
     );
 
     expect(state.recoveryEvidence.terminalActions[0]).toMatchObject({
-      commandContext: {
-        expectedBlockerType: "local_review",
-        localReviewEventIds: ["event-review-1", "event-review-2"],
-      },
-      commandType: "clear_local_review_items",
-      expectedEvidence: {
-        localReviewClearedEventIds: ["event-review-1", "event-review-2"],
-        localReviewEventCount: 0,
-      },
-    });
-    expect(state.recoveryPreview.terminalActions[0]).toMatchObject({
-      commandType: "clear_local_review_items",
+      commandType: "collect_local_review",
+      expectedEvidence: { localReviewDetailsCollected: true },
     });
   });
 
-  it("offers a 100-item local review cleanup batch for over-cap review backlogs", () => {
+  it("replays uploaded local review backlogs without clearing an over-cap batch", () => {
     const reviewEvents = Array.from({ length: 100 }, (_, index) => ({
       createdAt: now - index,
       localEventId: `event-review-${index + 1}`,
       sequence: index + 1,
       status: "needs_review" as const,
-      type: "transaction.completed",
+      type: "register.opened",
       uploaded: true,
       uploadSequence: index + 1,
     }));
@@ -591,14 +618,11 @@ describe("terminal operational state policy", () => {
 
     expect(state.recoveryEvidence.terminalActions[0]).toMatchObject({
       commandContext: {
-        localReviewEventIds: reviewEvents.map((event) => event.localEventId),
+        expectedBlockerType: "local_review_replay",
       },
-      commandType: "clear_local_review_items",
+      commandType: "retry_sync",
       expectedEvidence: {
-        localReviewClearedEventIds: reviewEvents.map(
-          (event) => event.localEventId,
-        ),
-        localReviewEventCount: 1,
+        syncStatus: "idle",
       },
     });
   });

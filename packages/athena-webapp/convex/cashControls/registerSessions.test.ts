@@ -4,6 +4,7 @@ import {
   assertRegisterSessionIdentity,
   assertRegisterSessionMatchesTransaction,
   assertValidRegisterSessionTransition,
+  beginRegisterSessionCloseout,
   buildClosedRegisterSessionPatch,
   buildRegisterSessionDepositPatch,
   buildRegisterSessionDateDerivationPatch,
@@ -425,6 +426,63 @@ describe("cash controls register sessions", () => {
       variance: 200,
     });
     expect(closedPatch.closedAt).toEqual(expect.any(Number));
+  });
+
+  it("records submitted closeout ownership without appending closeout history", async () => {
+    const submittedAt = 1_850_000;
+    const session = {
+      ...buildRegisterSession({
+        storeId: "store_1" as Id<"store">,
+        openingFloat: 5000,
+        registerNumber: "A1",
+        terminalId: "terminal_1" as Id<"posTerminal">,
+      }),
+      _id: "register_session_1",
+      expectedCash: 5000,
+      status: "active" as const,
+    };
+    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(submittedAt);
+    const patch = vi.fn();
+    const ctx = {
+      db: {
+        get: vi.fn(async () => session),
+        patch,
+        query: vi.fn(() => ({
+          withIndex: vi.fn(() => ({
+            order: vi.fn(() => ({
+              take: vi.fn(async () => []),
+            })),
+          })),
+        })),
+      },
+    };
+
+    try {
+      await expect(
+        getHandler(beginRegisterSessionCloseout)(ctx, {
+          countedCash: 4800,
+          notes: "Counted after shift.",
+          registerSessionId: "register_session_1",
+        }),
+      ).resolves.toEqual(session);
+    } finally {
+      nowSpy.mockRestore();
+    }
+
+    expect(patch).toHaveBeenCalledWith(
+      "registerSession",
+      "register_session_1",
+      expect.objectContaining({
+        closeoutOwnedAt: submittedAt,
+        closeoutOwnershipSource: "closeout_submission",
+        countedCash: 4800,
+        notes: "Counted after shift.",
+        status: "closing",
+        variance: -200,
+      }),
+    );
+    const submittedPatch = patch.mock.calls[0]?.[2] as Record<string, unknown>;
+    expect(submittedPatch).not.toHaveProperty("closeoutRecords");
   });
 
   it("reopens closeout sessions by clearing closeout draft fields", () => {

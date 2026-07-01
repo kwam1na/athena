@@ -207,11 +207,93 @@ describe("terminal cloud repair policy", () => {
       }),
     ).resolves.toBe(false);
   });
+
+  it("allows terminal cloud repair to project a replacement open after closeout ownership", async () => {
+    const repository = createRepairProjectionRepository({
+      blockingRegisterSession: {
+        _id: "register-closing",
+        closeoutOwnedAt: 20,
+        closeoutOwnershipSource: "closeout_submission",
+        closeoutRecords: [],
+        status: "closing",
+        storeId,
+        terminalId,
+      },
+    });
+
+    await expect(
+      canProjectRegisterOpenForTerminalCloudRepair(repository, {
+        event: {
+          localEventId: "event-replacement-open",
+          localRegisterSessionId: "register-replacement",
+          sequence: 2,
+          eventType: "register_opened",
+          occurredAt: 30,
+          staffProfileId: "staff-1" as Id<"staffProfile">,
+          staffProofToken: "proof-token-1",
+          payload: {
+            openingFloat: 100,
+            registerNumber: "A1",
+          },
+        },
+        now,
+        storeId,
+        terminalId,
+      }),
+    ).resolves.toBe(true);
+  });
+
+  it("rejects terminal cloud repair for stale replacement opens before closeout ownership", async () => {
+    const repository = createRepairProjectionRepository({
+      blockingRegisterSession: {
+        _id: "register-closing",
+        closeoutOwnedAt: 20,
+        closeoutOwnershipSource: "closeout_submission",
+        closeoutRecords: [],
+        status: "closing",
+        storeId,
+        terminalId,
+      },
+    });
+
+    await expect(
+      canProjectRegisterOpenForTerminalCloudRepair(repository, {
+        event: {
+          localEventId: "event-stale-replacement-open",
+          localRegisterSessionId: "register-stale-replacement",
+          sequence: 2,
+          eventType: "register_opened",
+          occurredAt: 10,
+          staffProfileId: "staff-1" as Id<"staffProfile">,
+          staffProofToken: "proof-token-1",
+          payload: {
+            openingFloat: 100,
+            registerNumber: "A1",
+          },
+        },
+        now,
+        storeId,
+        terminalId,
+      }),
+    ).resolves.toBe(false);
+  });
 });
 
 function createRepairProjectionRepository(overrides: {
+  blockingRegisterSession?: {
+    _id: string;
+    closeoutOwnedAt?: number;
+    closeoutOwnershipSource?: string;
+    closeoutRecords?: unknown[];
+    status: string;
+    storeId: Id<"store">;
+    terminalId: Id<"posTerminal">;
+  } | null;
   registerSession?: {
     _id: string;
+    closeoutOwnedAt?: number;
+    closeoutOwnershipSource?: string;
+    closeoutRecords?: unknown[];
     status: string;
     storeId: Id<"store">;
     terminalId: Id<"posTerminal">;
@@ -221,7 +303,14 @@ function createRepairProjectionRepository(overrides: {
 } = {}): TerminalCloudRepairProjectionEligibilityRepository {
   return {
     async findBlockingRegisterSession() {
-      return null;
+      return overrides.blockingRegisterSession
+        ? ({
+            closeoutRecords: [],
+            expectedCash: 100,
+            registerNumber: "A1",
+            ...overrides.blockingRegisterSession,
+          } as never)
+        : null;
     },
     async getRegisterSession(registerSessionId) {
       return overrides.registerSession &&

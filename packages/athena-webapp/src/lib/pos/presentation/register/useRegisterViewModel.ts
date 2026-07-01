@@ -18,6 +18,7 @@ import { useAuth } from "@/hooks/useAuth";
 import useGetActiveStore from "@/hooks/useGetActiveStore";
 import { useGetTerminal } from "@/hooks/useGetTerminal";
 import { useNavigateBack } from "@/hooks/use-navigate-back";
+import { getPendingCashVoidContext } from "@/lib/cashControls/pendingCashVoidPresentation";
 import { registerAndProvisionPosTerminal } from "@/lib/pos/application/registerAndProvisionPosTerminal";
 import { bootstrapRegister } from "@/lib/pos/application/useCases/bootstrapRegister";
 import { holdSession as runHoldSession } from "@/lib/pos/application/useCases/holdSession";
@@ -150,6 +151,7 @@ import {
   getCloseoutCloudRegisterSessionCode,
   getCloseoutCloudRegisterSessionId,
   getCloseoutLocalRegisterSessionId,
+  getPendingLocalCashVoidApprovals,
   getPendingLocalCloseoutRegisterSession,
   isKnownCloudRegisterSessionBlockingLocalProjection,
   readLocalSyncStatus,
@@ -369,6 +371,13 @@ type CloseoutBlockedRegisterSession = {
   managerApprovalRequestId?: Id<"approvalRequest">;
   openedAt: number;
   openingFloat: number;
+  pendingVoidApprovals?: {
+    cashAffectingCount: number;
+    cashAdjustmentCount?: number;
+    cashAdjustmentDelta?: number;
+    cashAmount: number;
+    count: number;
+  } | null;
   registerNumber: string;
   status: "closing" | "closeout_rejected";
   terminalId: Id<"posTerminal">;
@@ -385,6 +394,7 @@ function selectPassiveCloseoutBlockedRegisterSession(
         managerApprovalRequestId?: Id<"approvalRequest">;
         openedAt?: number;
         openingFloat?: number;
+        pendingVoidApprovals?: CloseoutBlockedRegisterSession["pendingVoidApprovals"];
         registerNumber?: string;
         status?: string;
         terminalId?: Id<"posTerminal">;
@@ -420,6 +430,7 @@ function selectPassiveCloseoutBlockedRegisterSession(
     managerApprovalRequestId: session.managerApprovalRequestId,
     openedAt: session.openedAt,
     openingFloat: session.openingFloat,
+    pendingVoidApprovals: session.pendingVoidApprovals,
     registerNumber: session.registerNumber ?? "",
     status: session.status,
     terminalId: session.terminalId,
@@ -1773,6 +1784,8 @@ export function useRegisterViewModel(): RegisterViewModel {
     : null;
   const pendingLocalCloseoutRegisterSession =
     getPendingLocalCloseoutRegisterSession(localRegisterReadModel);
+  const pendingLocalCashVoidApprovals =
+    getPendingLocalCashVoidApprovals(localRegisterReadModel);
   const activeCloseoutRegisterSession =
     closeoutBlockedRegisterSession ??
     pendingLocalCloseoutRegisterSession ??
@@ -5193,6 +5206,38 @@ export function useRegisterViewModel(): RegisterViewModel {
     activeCloseoutRegisterSession ||
     activeOpeningFloatCorrectionRegisterSession,
   );
+  const activeCloseoutPendingVoidApprovals =
+    (activeCloseoutRegisterSession &&
+    "pendingVoidApprovals" in activeCloseoutRegisterSession
+      ? activeCloseoutRegisterSession.pendingVoidApprovals
+      : null) ??
+    pendingLocalCashVoidApprovals ??
+    (saleUsableActiveRegisterSession &&
+    "pendingVoidApprovals" in saleUsableActiveRegisterSession
+      ? saleUsableActiveRegisterSession.pendingVoidApprovals
+      : null);
+  const activeCloseoutExpectedCash = activeCloseoutRegisterSession?.expectedCash;
+  const activeCloseoutPendingCashVoidContext =
+    activeCloseoutPendingVoidApprovals
+      ? getPendingCashVoidContext({
+          expectedCash: activeCloseoutExpectedCash,
+          pendingVoidApprovals: activeCloseoutPendingVoidApprovals,
+        })
+      : null;
+  const activeCloseoutPendingCashVoidApprovals =
+    activeCloseoutPendingCashVoidContext
+      ? {
+          cashAffectingCount:
+            activeCloseoutPendingCashVoidContext.cashAffectingCount,
+          cashAdjustmentCount:
+            activeCloseoutPendingCashVoidContext.cashAdjustmentCount,
+          cashAdjustmentDelta:
+            activeCloseoutPendingCashVoidContext.cashAdjustmentDelta,
+          cashAmount: activeCloseoutPendingCashVoidContext.cashAmount,
+          expectedCashAfterApproval:
+            activeCloseoutPendingCashVoidContext.expectedCashAfterApproval,
+        }
+      : null;
   const handleRetryLocalSync = useCallback(() => {
     localRuntimeSyncSource?.onRetrySync?.();
     requestBootstrap();
@@ -5261,6 +5306,7 @@ export function useRegisterViewModel(): RegisterViewModel {
                 ? undefined
                 : handleCancelRegisterCloseout,
               expectedCash: activeCloseoutRegisterSession?.expectedCash,
+              pendingCashVoidApprovals: activeCloseoutPendingCashVoidApprovals,
               canOpenCashControls: isCashierManager,
               cashControlsRegisterSessionId:
                 activeCloseoutCloudRegisterSessionId ??

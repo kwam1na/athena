@@ -2067,9 +2067,9 @@ describe("POSTerminalDetailViewContent", () => {
     });
   });
 
-  it("shows collected local review evidence and clear action when collection matches the latest count", async () => {
+  it("shows collected local review evidence and replay action when collection matches the latest count", async () => {
     const onIssueTerminalRecoveryCommand = vi.fn(async () => ({
-      data: { _id: "command-clear" },
+      data: { _id: "command-replay" },
       kind: "ok" as const,
     }));
 
@@ -2117,17 +2117,16 @@ describe("POSTerminalDetailViewContent", () => {
             terminalActions: [
               {
                 commandContext: {
-                  expectedBlockerType: "local_review",
-                  localReviewEventIds: ["event-review-1", "event-review-2"],
+                  expectedBlockerType: "local_review_replay",
                   reason:
-                    "Uploaded local review items can be cleared from this terminal.",
+                    "Uploaded local review items should be replayed against current cloud rules.",
                 },
-                commandType: "clear_local_review_items",
+                commandType: "retry_sync",
                 expectedEvidence: {
-                  localReviewEventCount: 0,
+                  syncStatus: "idle",
                 },
                 reason:
-                  "Uploaded local review items can be cleared from this terminal.",
+                  "Uploaded local review items should be replayed against current cloud rules.",
               },
             ],
           },
@@ -2154,7 +2153,7 @@ describe("POSTerminalDetailViewContent", () => {
     expect(conflictSection).not.toBeNull();
     fireEvent.click(
       within(conflictSection as HTMLElement).getByRole("button", {
-        name: /clear local review items/i,
+        name: /retry terminal sync/i,
       }),
     );
 
@@ -2162,11 +2161,11 @@ describe("POSTerminalDetailViewContent", () => {
       expect(onIssueTerminalRecoveryCommand).toHaveBeenCalledWith({
         action: expect.objectContaining({
           commandContext: expect.objectContaining({
-            localReviewEventIds: ["event-review-1", "event-review-2"],
+            expectedBlockerType: "local_review_replay",
           }),
-          commandType: "clear_local_review_items",
+          commandType: "retry_sync",
           expectedEvidence: {
-            localReviewEventCount: 0,
+            syncStatus: "idle",
           },
           kind: "terminal_command",
         }),

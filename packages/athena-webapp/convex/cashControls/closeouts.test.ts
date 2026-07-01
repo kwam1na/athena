@@ -181,6 +181,92 @@ function createCloseoutMappingHoldCtx() {
   };
 }
 
+function createPendingItemAdjustmentApprovalCtx(options: {
+  settlementMethod?: string;
+  settlementDirection?: string;
+} = {}) {
+  const registerSession = {
+    _id: "session-1",
+    countedCash: 30000,
+    expectedCash: 30000,
+    openedAt: 1,
+    organizationId: "org-1",
+    registerNumber: "A1",
+    status: "closing",
+    storeId: "store-1",
+    terminalId: "terminal-1",
+  };
+  const closedSession = {
+    ...registerSession,
+    closedAt: 100,
+    closedByStaffProfileId: "manager-1",
+    status: "closed",
+  };
+  const runMutation = vi.fn(async () => closedSession);
+
+  return {
+    db: {
+      get: vi.fn(async (table: string) => {
+        if (table === "registerSession") return registerSession;
+        if (table === "store") {
+          return { _id: "store-1", currency: "GHS", organizationId: "org-1" };
+        }
+        if (table === "staffProfile") {
+          return {
+            _id: "manager-1",
+            linkedUserId: "manager-user-1",
+            organizationId: "org-1",
+            status: "active",
+            storeId: "store-1",
+          };
+        }
+        return null;
+      }),
+      insert: vi.fn(),
+      patch: vi.fn(),
+      query: vi.fn((table: string) => ({
+        withIndex: vi.fn(() => ({
+          collect: vi.fn(async () =>
+            table === "approvalRequest"
+              ? [
+                  {
+                    _id: "item-adjustment-approval-1",
+                    createdAt: 1,
+                    metadata: {
+                      settlementAmount: 5000,
+                      settlementDirection:
+                        options.settlementDirection ?? "refund",
+                      settlementMethod: options.settlementMethod ?? "cash",
+                    },
+                    registerSessionId: "session-1",
+                    requestType: "pos_item_adjustment",
+                    status: "pending",
+                    storeId: "store-1",
+                    subjectType: "pos_transaction_item_adjustment",
+                  },
+                ]
+              : [],
+          ),
+          take: vi.fn(async () =>
+            table === "staffRoleAssignment"
+              ? [
+                  {
+                    organizationId: "org-1",
+                    role: "manager",
+                    status: "active",
+                    storeId: "store-1",
+                  },
+                ]
+              : [],
+          ),
+        })),
+      })),
+    },
+    runMutation,
+    runQuery: vi.fn(async () => ({ _id: "store-1" })),
+  };
+}
+
 describe("cash control closeouts", () => {
   it("validates representative public closeout command results against exported return validators", () => {
     const validationError = {
@@ -1222,6 +1308,33 @@ describe("cash control closeouts", () => {
       "approvalRequest",
       expect.anything(),
     );
+    expect(insert).toHaveBeenCalledWith(
+      "operationalEvent",
+      expect.objectContaining({
+        eventType: "register_session_closeout_submitted",
+        message: expect.stringContaining(
+          "Register A1 closeout submitted with a cash variance",
+        ),
+        metadata: expect.objectContaining({
+          countedCash: 20000,
+          expectedCash: 30000,
+          holdKinds: ["pending_completed_sale_void_approvals"],
+          pendingVoidApprovalCount: 1,
+          variance: -10000,
+        }),
+        registerSessionId: "session-1",
+        subjectId: "session-1",
+        subjectType: "register_session",
+      }),
+    );
+    expect(insert).toHaveBeenCalledWith(
+      "operationalEvent",
+      expect.objectContaining({
+        message: expect.stringContaining(
+          "Finalize after pending register corrections are resolved.",
+        ),
+      }),
+    );
     expect(runMutation).toHaveBeenCalledTimes(1);
   });
 
@@ -1830,6 +1943,29 @@ describe("cash control closeouts", () => {
     expect(runMutation).not.toHaveBeenCalled();
   });
 
+  it("rejects closeout approval proof payloads while cash item adjustments are pending", async () => {
+    const ctx = createPendingItemAdjustmentApprovalCtx();
+
+    const result = await getHandler(submitRegisterSessionCloseout)(ctx, {
+      actorStaffProfileId: "manager-1",
+      actorUserId: "user-1",
+      approvalProofId: "proof-1",
+      countedCash: 30000,
+      registerSessionId: "session-1",
+      storeId: "store-1",
+    });
+
+    expect(result).toEqual({
+      kind: "user_error",
+      error: {
+        code: "precondition_failed",
+        message:
+          "Resolve pending register corrections before approving final closeout.",
+      },
+    });
+    expect(ctx.runMutation).not.toHaveBeenCalled();
+  });
+
   it("rejects closeout approval proof payloads while mapping repair holds exist", async () => {
     const ctx = createCloseoutMappingHoldCtx();
 
@@ -1921,6 +2057,49 @@ describe("cash control closeouts", () => {
       },
     });
     expect(runMutation).not.toHaveBeenCalled();
+  });
+
+  it("blocks final closeout while cash item adjustments remain", async () => {
+    const ctx = createPendingItemAdjustmentApprovalCtx();
+
+    const result = await getHandler(finalizeRegisterSessionCloseout)(ctx, {
+      actorStaffProfileId: "manager-1",
+      actorUserId: "user-1",
+      registerSessionId: "session-1",
+      storeId: "store-1",
+    });
+
+    expect(result).toEqual({
+      kind: "user_error",
+      error: {
+        code: "precondition_failed",
+        message:
+          "Resolve pending register corrections before finalizing closeout.",
+      },
+    });
+    expect(ctx.runMutation).not.toHaveBeenCalled();
+  });
+
+  it("does not block final closeout for non-cash item adjustments", async () => {
+    const ctx = createPendingItemAdjustmentApprovalCtx({
+      settlementMethod: "mobile_money",
+    });
+
+    const result = await getHandler(finalizeRegisterSessionCloseout)(ctx, {
+      actorStaffProfileId: "manager-1",
+      actorUserId: "user-1",
+      registerSessionId: "session-1",
+      storeId: "store-1",
+    });
+
+    expect(result).toMatchObject({
+      kind: "ok",
+      data: {
+        action: "closed",
+        registerSession: expect.objectContaining({ status: "closed" }),
+      },
+    });
+    expect(ctx.runMutation).toHaveBeenCalled();
   });
 
   it("blocks final closeout while mapping repair holds remain", async () => {

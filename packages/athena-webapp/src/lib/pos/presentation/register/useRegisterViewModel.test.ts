@@ -95,6 +95,11 @@ let mockRegisterState:
         notes?: string;
         variance?: number;
         workflowTraceId?: string;
+        pendingVoidApprovals?: {
+          cashAffectingCount: number;
+          cashAmount: number;
+          count: number;
+        } | null;
         localSyncStatus?: {
           description?: string;
           label?: string;
@@ -3947,6 +3952,110 @@ describe("useRegisterViewModel", () => {
 
     expect(result.current.drawerGate).toBeNull();
     expect(result.current.productEntry.disabled).toBe(false);
+  });
+
+  it("preserves pending cash void context from the local runtime on active drawer closeout forms", async () => {
+    mockRegisterState = {
+      phase: "readyToStart",
+      terminal: { _id: "terminal-1", displayName: "Front Counter" },
+      cashier: {
+        _id: "staff-1",
+        firstName: "Ama",
+        lastName: "Kusi",
+        activeRoles: ["cashier"],
+      },
+      activeRegisterSession: {
+        _id: "drawer-1",
+        status: "active",
+        terminalId: "terminal-1",
+        registerNumber: "8",
+        openingFloat: 602000,
+        expectedCash: 610000,
+        countedCash: undefined,
+        openedAt: Date.now(),
+      },
+      activeSession: null,
+      activeSessionConflict: null,
+      resumableSession: null,
+    };
+    mockActiveSession = {
+      ...mockActiveSession!,
+      cartItems: [],
+    };
+    mockListLocalEvents.mockResolvedValue({
+      ok: true,
+      value: [
+        buildLocalEvent({
+          sequence: 1,
+          type: "register.opened",
+          payload: {
+            expectedCash: 602000,
+            localRegisterSessionId: "drawer-1",
+            openingFloat: 602000,
+          },
+        }),
+        buildLocalEvent({
+          localPosSessionId: "local-sale-1",
+          localTransactionId: "local-transaction-1",
+          sequence: 2,
+          type: "transaction.completed",
+          payload: {
+            localPosSessionId: "local-sale-1",
+            localTransactionId: "local-transaction-1",
+            payments: [
+              { amount: 10000, method: "cash", timestamp: 2 },
+              { amount: 2000, method: "card", timestamp: 2 },
+            ],
+            receiptNumber: "R-1",
+            subtotal: 10000,
+            tax: 0,
+            total: 10000,
+          },
+        }),
+        buildLocalEvent({
+          localPosSessionId: "local-sale-1",
+          sequence: 3,
+          sync: { status: "needs_review", uploaded: true },
+          type: "cart.cleared",
+          payload: {
+            localPosSessionId: "local-sale-1",
+            reason: "Completed sale void awaiting manager approval",
+          },
+        }),
+      ],
+    });
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        buildStaffAuthenticationResult({ activeRoles: ["cashier"] }),
+      );
+    });
+
+    await waitForLocalRegisterEffects(result);
+
+    await waitFor(() =>
+      expect(result.current.closeoutControl?.canCloseout).toBe(true),
+    );
+
+    act(() => {
+      result.current.closeoutControl?.onRequestCloseout();
+    });
+
+    await waitFor(() =>
+      expect(result.current.drawerGate?.mode).toBe("closeoutBlocked"),
+    );
+
+    expect(result.current.drawerGate?.expectedCash).toBe(610000);
+    expect(result.current.drawerGate?.pendingCashVoidApprovals).toEqual({
+      cashAffectingCount: 1,
+      cashAdjustmentCount: 0,
+      cashAdjustmentDelta: 0,
+      cashAmount: 8000,
+      expectedCashAfterApproval: 602000,
+    });
   });
 
   it("submits cloud-backed local closeout with the original local drawer id", async () => {

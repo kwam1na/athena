@@ -4,6 +4,10 @@ import { ArrowRight, ArrowUpRight } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { useProtectedAdminPageState } from "@/hooks/useProtectedAdminPageState";
+import {
+  formatPendingCashVoidNotice,
+  getPendingCashVoidContext,
+} from "@/lib/cashControls/pendingCashVoidPresentation";
 import { capitalizeWords, cn } from "@/lib/utils";
 import { formatStoredCurrencyAmount } from "@/lib/pos/displayAmounts";
 import { formatRegisterSessionCode } from "@/lib/pos/presentation/registerSessionCode";
@@ -49,9 +53,14 @@ type DashboardApprovalRequest = {
 };
 
 type DashboardPendingVoidApprovals = {
+  cashAffectingCount?: number | null;
+  cashAdjustmentCount?: number | null;
+  cashAdjustmentDelta?: number | null;
+  cashAmount?: number | null;
   count: number;
   items: Array<{
     approvalRequestId: string;
+    cashAmount?: number | null;
     requestedAt: number;
     transactionId: string;
     transactionNumber?: string | null;
@@ -338,7 +347,7 @@ function getSessionActionLabel(session: CashControlsDashboardSession) {
     return "Review closeout";
   }
 
-  if ((session.pendingVoidApprovals?.count ?? 0) > 0) {
+  if (hasPendingCashCorrections(session)) {
     return "Review register";
   }
 
@@ -355,6 +364,15 @@ function getSessionActionLabel(session: CashControlsDashboardSession) {
   }
 
   return "Open drawer detail";
+}
+
+function hasPendingCashCorrections(session: CashControlsDashboardSession) {
+  return (
+    getPendingCashVoidContext({
+      expectedCash: session.expectedCash,
+      pendingVoidApprovals: session.pendingVoidApprovals,
+    }) !== null
+  );
 }
 
 function needsVarianceReview(session: CashControlsDashboardSession) {
@@ -509,8 +527,24 @@ function DrawerSessionCard({
   const showSyncDescription =
     syncStatus.status !== "synced" && !isCloseoutSyncReview;
   const firstReconciliationItem = syncStatus.reconciliationItems[0];
+  const pendingCashVoidContext = getPendingCashVoidContext({
+    expectedCash: session.expectedCash,
+    pendingVoidApprovals: session.pendingVoidApprovals,
+  });
+  const pendingCashVoidText =
+    pendingCashVoidContext && hasFinancialDetailsAccess
+      ? formatPendingCashVoidNotice({
+          context: pendingCashVoidContext,
+          formatAmount: (amount) => formatCurrency(currency, amount),
+        })
+      : null;
+  const pendingCashVoidApprovedExpectedCash =
+    hasFinancialDetailsAccess && pendingCashVoidContext
+      ? pendingCashVoidContext.expectedCashAfterApproval
+      : undefined;
   const metricColumnCount =
     1 +
+    (pendingCashVoidApprovedExpectedCash !== undefined ? 1 : 0) +
     (showDeposited ? 1 : 0) +
     (showCountedCash ? 1 : 0) +
     (showVariance ? 1 : 0);
@@ -579,14 +613,16 @@ function DrawerSessionCard({
           "mt-layout-md grid gap-layout-sm",
           metricColumnCount === 4
             ? "grid-cols-4"
-            : metricColumnCount === 3
-              ? "grid-cols-3"
-              : "grid-cols-2",
+            : metricColumnCount === 5
+              ? "grid-cols-5"
+              : metricColumnCount === 3
+                ? "grid-cols-3"
+                : "grid-cols-2",
         )}
       >
         <div>
           <dt className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-            Expected cash
+            {pendingCashVoidContext ? "Expected now" : "Expected cash"}
           </dt>
           <dd className="mt-1 font-numeric tabular-nums text-sm text-foreground">
             <CashControlsFinancialValue
@@ -597,6 +633,21 @@ function DrawerSessionCard({
             />
           </dd>
         </div>
+        {pendingCashVoidApprovedExpectedCash !== undefined ? (
+          <div>
+            <dt className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+              After adjustments
+            </dt>
+            <dd className="mt-1 font-numeric tabular-nums text-sm text-foreground">
+              <CashControlsFinancialValue
+                amount={pendingCashVoidApprovedExpectedCash}
+                canView={hasFinancialDetailsAccess}
+                currency={currency}
+                label="Expected cash if approved"
+              />
+            </dd>
+          </div>
+        ) : null}
         {showDeposited ? (
           <div>
             <dt className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
@@ -648,6 +699,11 @@ function DrawerSessionCard({
           </div>
         ) : null}
       </dl>
+      {pendingCashVoidText ? (
+        <p className="mt-layout-sm border-t border-border/70 pt-layout-sm text-xs leading-5 text-muted-foreground">
+          {pendingCashVoidText}
+        </p>
+      ) : null}
 
       <span
         className={cn(
@@ -1108,7 +1164,7 @@ function CashroomWorkflow({
       session.status === "closing" ||
       session.status === "closeout_rejected" ||
       Boolean(session.pendingApprovalRequest) ||
-      (session.pendingVoidApprovals?.count ?? 0) > 0 ||
+      hasPendingCashCorrections(session) ||
       getSessionSyncStatus(session).status !== "synced",
   );
   const needsAttentionIds = new Set(

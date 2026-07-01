@@ -426,7 +426,7 @@ export function projectLocalRegisterReadModel(input: {
         status: "active",
         expectedCash:
           activeRegisterSession.expectedCash +
-          getExpectedCashDelta(sale.payments, sale.total),
+          calculateLocalSaleExpectedCashDelta(sale.payments, sale.total),
       };
     }
   }
@@ -850,7 +850,10 @@ function parsePayments(value: unknown): PosPaymentDto[] | null {
   return payments;
 }
 
-function getExpectedCashDelta(payments: PosPaymentDto[], total: number) {
+export function calculateLocalSaleExpectedCashDelta(
+  payments: PosPaymentDto[],
+  total: number,
+) {
   const totalPaid = payments.reduce(
     (sum, payment) => sum + Math.max(0, payment.amount),
     0,

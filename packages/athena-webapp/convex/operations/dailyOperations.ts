@@ -1132,7 +1132,15 @@ function normalizeTimelineEventMessage(
     /^Register session closed with a variance of (.+)\.$/i,
   );
   if (varianceMatch?.[1]) {
-    return `${context?.registerLabel ?? "Register session"} closed with a variance of ${varianceMatch[1]}.`;
+    const variance =
+      typeof context?.variance === "number"
+        ? context.variance
+        : Number(varianceMatch[1]);
+    const formattedVariance = Number.isFinite(variance)
+      ? formatTimelineAmount(context?.currency ?? "GHS", variance)
+      : varianceMatch[1];
+
+    return `${context?.registerLabel ?? "Register session"} closed with a variance of ${formattedVariance}.`;
   }
 
   return message.replace(/^Offline POS sale\b/, "Sale");

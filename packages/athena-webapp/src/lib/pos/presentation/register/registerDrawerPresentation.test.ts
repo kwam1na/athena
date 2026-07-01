@@ -10,6 +10,7 @@ import {
   getCloseoutCloudRegisterSessionId,
   getCloseoutLocalRegisterSessionId,
   getLatestLocalRegisterLifecycleEvent,
+  getPendingLocalCashVoidApprovals,
   getPendingLocalCloseoutRegisterSession,
   isKnownCloudRegisterSessionBlockingLocalProjection,
   readLocalSyncStatus,
@@ -221,6 +222,77 @@ describe("registerDrawerPresentation", () => {
         }),
       ),
     ).toBeNull();
+  });
+
+  it("summarizes unsettled local cash clears for closeout context", () => {
+    expect(
+      getPendingLocalCashVoidApprovals(
+        readModel({
+          activeRegisterSession: {
+            expectedCash: 610_000,
+            localRegisterSessionId: "local-register-1",
+            openedAt: 1,
+            openingFloat: 602_000,
+            status: "active",
+          },
+          completedSales: [
+            {
+              completedAt: 2,
+              items: [],
+              localPosSessionId: "local-sale-1",
+              localRegisterSessionId: "local-register-1",
+              localTransactionId: "local-transaction-1",
+              payments: [
+                { amount: 10_000, method: "cash", timestamp: 2 },
+                { amount: 2_000, method: "card", timestamp: 2 },
+              ],
+              receiptNumber: "R-1",
+              serviceLines: [],
+              subtotal: 10_000,
+              tax: 0,
+              total: 10_000,
+            },
+            {
+              completedAt: 3,
+              items: [],
+              localPosSessionId: "local-sale-2",
+              localRegisterSessionId: "local-register-1",
+              localTransactionId: "local-transaction-2",
+              payments: [{ amount: 7_000, method: "card", timestamp: 3 }],
+              receiptNumber: "R-2",
+              serviceLines: [],
+              subtotal: 7_000,
+              tax: 0,
+              total: 7_000,
+            },
+          ],
+          sourceEvents: [
+            localEvent({
+              localPosSessionId: "local-sale-1",
+              sequence: 4,
+              sync: { status: "needs_review", uploaded: true },
+              type: "cart.cleared",
+            }),
+            localEvent({
+              localPosSessionId: "local-sale-2",
+              sequence: 5,
+              sync: { status: "needs_review", uploaded: true },
+              type: "cart.cleared",
+            }),
+            localEvent({
+              localPosSessionId: "local-sale-3",
+              sequence: 6,
+              sync: { status: "synced" },
+              type: "cart.cleared",
+            }),
+          ],
+        }),
+      ),
+    ).toEqual({
+      cashAffectingCount: 1,
+      cashAmount: 8_000,
+      count: 2,
+    });
   });
 
   it("preserves command user errors when the drawer cannot be opened", () => {

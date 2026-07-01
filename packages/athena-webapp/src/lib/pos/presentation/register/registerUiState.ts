@@ -252,6 +252,13 @@ export interface RegisterDrawerGateState {
   registerSessionCode?: string;
   registerSessionCodeScope?: "cloud" | "local";
   expectedCash?: number;
+  pendingCashVoidApprovals?: {
+    cashAffectingCount: number;
+    cashAdjustmentCount?: number;
+    cashAdjustmentDelta?: number;
+    cashAmount: number;
+    expectedCashAfterApproval?: number;
+  } | null;
   canOpenCashControls?: boolean;
   cashControlsRegisterSessionId?: Id<"registerSession">;
   canOpenDrawer?: boolean;
