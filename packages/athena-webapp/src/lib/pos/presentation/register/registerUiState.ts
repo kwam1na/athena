@@ -399,6 +399,16 @@ export interface RegisterOnboardingState {
   nextStep: "terminal" | "cashierSetup" | "ready";
 }
 
+export type RegisterReadinessGuardState =
+  | {
+      reason: "cashierPresence";
+      status: "settling";
+    }
+  | {
+      reason: "registerSetup";
+      status: "settling" | "visible";
+    };
+
 export type CashierPresenceRestoreStatus =
   | "pending"
   | "restored"
@@ -590,6 +600,7 @@ export interface RegisterViewModel {
   sessionPanel: RegisterSessionPanelState | null;
   cashierCard: RegisterCashierCardState | null;
   cashierPresenceRestore: RegisterCashierPresenceRestoreState;
+  readinessGuard: RegisterReadinessGuardState | null;
   drawerGate: RegisterDrawerGateState | null;
   closeoutControl: RegisterCloseoutControlState | null;
   updateApplyBlocker: RegisterUpdateApplyBlockerState;

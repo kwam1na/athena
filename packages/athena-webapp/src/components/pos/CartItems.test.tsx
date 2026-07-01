@@ -30,6 +30,19 @@ function buildServiceLine(
 }
 
 describe("CartItems service lines", () => {
+  it("uses the workspace panel token for its container surface", () => {
+    const { container } = render(<CartItems cartItems={[]} readOnly />);
+
+    expect(container.firstElementChild).toHaveClass(
+      "bg-workspace-panel",
+      "border-border",
+    );
+    expect(container.firstElementChild).not.toHaveClass(
+      "bg-gradient-to-br",
+      "border-gray-200",
+    );
+  });
+
   it("lets comfortable mobile product names wrap instead of clipping", () => {
     render(
       <CartItems

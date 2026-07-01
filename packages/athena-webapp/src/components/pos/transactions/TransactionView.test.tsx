@@ -2311,8 +2311,8 @@ describe("TransactionView", () => {
         {
           _id: "item_1",
           productId: "product_1",
-          productName: "Closure wig",
-          productSku: "CW-18",
+          productName: "GARNIER HEAT PROTECTANT",
+          productSku: "6N2Y-N57-CQR",
           productSkuId: "sku_1",
           quantity: 2,
           totalPrice: 2000,
@@ -2328,7 +2328,15 @@ describe("TransactionView", () => {
       screen.getByRole("button", { name: "Items or quantities" }),
     );
     expect(screen.getByText("Review item adjustment")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: /decrease closure wig/i }));
+    expect(screen.getByText("Garnier Heat Protectant")).toBeInTheDocument();
+    expect(
+      screen.queryByText("GARNIER HEAT PROTECTANT"),
+    ).not.toBeInTheDocument();
+    await user.click(
+      screen.getByRole("button", {
+        name: /decrease garnier heat protectant/i,
+      }),
+    );
     expect(screen.getByText("Refund due")).toBeInTheDocument();
     await user.type(
       screen.getByLabelText("Item adjustment reason"),
@@ -2371,7 +2379,9 @@ describe("TransactionView", () => {
     await user.click(
       screen.getByRole("button", { name: "Items or quantities" }),
     );
-    await user.click(screen.getByRole("button", { name: /decrease closure wig/i }));
+    await user.click(
+      screen.getByRole("button", { name: /decrease closure wig/i }),
+    );
     await user.type(
       screen.getByLabelText("Item adjustment reason"),
       "Customer received one unit.",
@@ -2385,7 +2395,7 @@ describe("TransactionView", () => {
     );
 
     expect(
-      screen.getByLabelText("Adjusted quantity for Closure wig"),
+      screen.getByLabelText("Adjusted quantity for Closure Wig"),
     ).toHaveValue(2);
     expect(screen.getByLabelText("Item adjustment reason")).toHaveValue("");
     expect(screen.queryByText("Refund due")).not.toBeInTheDocument();

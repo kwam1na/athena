@@ -29,7 +29,7 @@ vi.mock("convex/react", () => ({
 }));
 
 vi.mock("@/hooks/useGetActiveStore", () => ({
-  default: () => ({ activeStore: { _id: "store-1" } }),
+  default: () => ({ activeStore: { _id: "store-1", currency: "GHS" } }),
 }));
 
 vi.mock("@/hooks/useAuth", () => ({
@@ -682,9 +682,9 @@ describe("registerAndProvisionPosTerminal", () => {
         "Close 06:30 PM. Runs 06:30 PM.",
       ),
     ).toBeInTheDocument();
-    expect(screen.getByLabelText("Cash variance threshold")).toHaveValue(500);
+    expect(screen.getByLabelText("Cash variance threshold (GH₵)")).toHaveValue(5);
     expect(screen.getByLabelText("Voided sale count threshold")).toHaveValue(1);
-    expect(screen.getByLabelText("Voided sale total threshold")).toHaveValue(2500);
+    expect(screen.getByLabelText("Voided sale total threshold (GH₵)")).toHaveValue(25);
     expect(mocks.useQuery).toHaveBeenCalledWith("getEodAutoCompletePolicy", {
       storeId: "store-1",
     });
@@ -701,13 +701,13 @@ describe("registerAndProvisionPosTerminal", () => {
     );
     fireEvent.click(screen.getByLabelText("Enable EOD completion"));
     fireEvent.click(screen.getByLabelText("Enable blocker-free completion"));
-    fireEvent.change(screen.getByLabelText("Cash variance threshold"), {
+    fireEvent.change(screen.getByLabelText("Cash variance threshold (GH₵)"), {
       target: { value: "750" },
     });
     fireEvent.change(screen.getByLabelText("Voided sale count threshold"), {
       target: { value: "2" },
     });
-    fireEvent.change(screen.getByLabelText("Voided sale total threshold"), {
+    fireEvent.change(screen.getByLabelText("Voided sale total threshold (GH₵)"), {
       target: { value: "9000" },
     });
     await user.selectOptions(
@@ -721,9 +721,9 @@ describe("registerAndProvisionPosTerminal", () => {
     ).toBeInTheDocument();
     expect(screen.getByLabelText("Enable EOD completion")).toBeChecked();
     expect(screen.getByLabelText("Enable blocker-free completion")).not.toBeChecked();
-    expect(screen.getByLabelText("Cash variance threshold")).toHaveValue(750);
+    expect(screen.getByLabelText("Cash variance threshold (GH₵)")).toHaveValue(750);
     expect(screen.getByLabelText("Voided sale count threshold")).toHaveValue(2);
-    expect(screen.getByLabelText("Voided sale total threshold")).toHaveValue(9000);
+    expect(screen.getByLabelText("Voided sale total threshold (GH₵)")).toHaveValue(9000);
     await user.click(
       screen.getByRole("button", { name: "Save EOD completion automation" }),
     );
@@ -732,9 +732,9 @@ describe("registerAndProvisionPosTerminal", () => {
       expect(mocks.updateEodAutoCompletePolicy).toHaveBeenCalledWith({
         cleanDayAutoCompleteEnabled: false,
         localCompletionWindowMinutes: 1170,
-        maxAbsoluteCashVariance: 750,
+        maxAbsoluteCashVariance: 75000,
         maxVoidedSaleCount: 2,
-        maxVoidedSaleTotal: 9000,
+        maxVoidedSaleTotal: 900000,
         mode: "enabled",
         operatingTimezoneOffsetMinutes: -120,
         storeId: "store-1",

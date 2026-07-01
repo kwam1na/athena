@@ -22,7 +22,6 @@ import { usePermissions } from "../hooks/usePermissions";
 import { PermissionsProvider } from "../contexts/PermissionsContext";
 import {
   ArrowUpRight,
-  Monitor,
   Moon,
   ShieldCheck,
   Sun,
@@ -44,9 +43,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -64,7 +60,7 @@ import {
   toPosTerminalAppSessionRecoveryRuntimeInput,
 } from "@/lib/pos/infrastructure/terminal/posTerminalAppSessionRecoveryContext";
 import type { PosTerminalRuntimeAppSessionRecoveryInput } from "@/lib/pos/infrastructure/local/terminalRuntimeStatus";
-import { type AthenaThemeMode, useAthenaTheme } from "@/lib/theme";
+import { setAthenaThemeModeWithTransition, useAthenaTheme } from "@/lib/theme";
 
 const POS_TERMINAL_FULLSCREEN_PATH_PATTERN =
   /^\/(?<orgUrlSlug>[^/]+)\/store\/(?<storeUrlSlug>[^/]+)\/pos\/(?:register|expense)\/?$/;
@@ -77,6 +73,10 @@ const POS_RECOVERY_SHELL_PENDING_STATUSES = new Set([
   "validating",
   "retrying",
 ]);
+
+type AppShellVariant = "classic" | "contained";
+
+const APP_SHELL_VARIANT = "contained" satisfies AppShellVariant;
 
 function getPosHubRouteParams(pathname?: string) {
   return getRouteParamsForPattern(pathname, POS_HUB_PATH_PATTERN);
@@ -272,6 +272,33 @@ function PosTerminalBlockedShell({
   );
 }
 
+function PosTerminalSignInGate({ redirectTo }: { redirectTo: string }) {
+  const actionHref = getLoginHref(redirectTo);
+
+  return (
+    <section className="flex h-full min-h-0 items-center justify-center bg-background p-6">
+      <div className="w-full max-w-xl rounded-lg border border-border bg-surface px-8 py-10 text-center shadow-sm">
+        <p className="text-sm font-medium text-muted-foreground">
+          POS terminal
+        </p>
+        <h1 className="mt-3 text-2xl font-semibold text-foreground">
+          Sign in required
+        </h1>
+        <p className="mt-4 text-base leading-7 text-muted-foreground">
+          Sign in again to continue using this register.
+        </p>
+        <a
+          className={cn(buttonVariants({ variant: "workflow" }), "mt-6")}
+          href={actionHref}
+        >
+          <span>Sign in to POS</span>
+          <ArrowUpRight aria-hidden="true" className="h-4 w-4" />
+        </a>
+      </div>
+    </section>
+  );
+}
+
 function PosTerminalRecoveryPendingShell({
   status,
 }: {
@@ -344,11 +371,17 @@ function PosTerminalShell({
   );
 }
 
-function UserMenu({ userEmail }: { userEmail: string }) {
+function UserMenu({
+  shellVariant,
+  userEmail,
+}: {
+  shellVariant: AppShellVariant;
+  userEmail: string;
+}) {
   const navigate = useNavigate();
   const { signOut } = useAuthActions();
   const { hasFullAdminAccess } = usePermissions();
-  const { mode, resolvedTheme, setThemeMode } = useAthenaTheme();
+  const { resolvedTheme } = useAthenaTheme();
   const {
     activeElevation,
     endManagerElevation,
@@ -363,113 +396,144 @@ function UserMenu({ userEmail }: { userEmail: string }) {
     navigate({ to: "/login" });
   };
 
+  const nextTheme = resolvedTheme === "dark" ? "light" : "dark";
+  const ThemeIcon = resolvedTheme === "dark" ? Sun : Moon;
+  const isContainedShell = shellVariant === "contained";
+  const containedControlSurface =
+    "border border-border/70 bg-background/90 shadow-surface backdrop-blur supports-[backdrop-filter]:bg-background/75";
+
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          aria-label={`Open account menu for ${userEmail}`}
-          className="flex min-w-0 items-center gap-layout-xs rounded-md px-layout-xs py-layout-2xs text-sm text-foreground transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <UserCircle className="h-4 w-4 shrink-0 text-muted-foreground" />
-          <span className="hidden max-w-[18rem] truncate font-medium sm:block">
-            {userEmail}
-          </span>
-          {activeElevation ? (
-            <Badge
-              variant="outline"
-              size="sm"
-              className="hidden max-w-fit shrink-0 gap-1 border-action-workflow-border bg-action-workflow-soft text-action-workflow md:inline-flex"
+    <div className="flex min-w-0 items-center gap-layout-xs">
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            aria-label={`Open account menu for ${userEmail}`}
+            className={cn(
+              "flex h-9 min-w-0 items-center gap-layout-xs px-layout-xs text-sm text-foreground transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              isContainedShell ? `rounded-lg ${containedControlSurface}` : "rounded-md",
+            )}
+          >
+            <UserCircle className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <span className="hidden max-w-[18rem] truncate font-medium sm:block">
+              {userEmail}
+            </span>
+            {activeElevation ? (
+              <Badge
+                variant="outline"
+                size="sm"
+                className="hidden max-w-fit shrink-0 gap-1 border-action-workflow-border bg-action-workflow-soft text-action-workflow md:inline-flex"
+              >
+                <ShieldCheck aria-hidden="true" className="h-3 w-3 shrink-0" />
+                <span className="truncate">
+                  Elevated session: {activeElevation.displayName}
+                </span>
+              </Badge>
+            ) : null}
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-56">
+          {isManagerElevated ? (
+            <DropdownMenuItem
+              className="gap-layout-xs"
+              onSelect={() => void endManagerElevation()}
             >
-              <ShieldCheck aria-hidden="true" className="h-3 w-3 shrink-0" />
-              <span className="truncate">
-                Elevated session: {activeElevation.displayName}
-              </span>
-            </Badge>
+              End manager elevation
+            </DropdownMenuItem>
+          ) : !hasFullAdminAccess ? (
+            <DropdownMenuItem
+              className="gap-layout-xs"
+              onSelect={startManagerElevation}
+            >
+              Start manager elevation
+            </DropdownMenuItem>
           ) : null}
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-64">
-        <DropdownMenuLabel className="flex flex-col gap-1">
-          <span>Appearance</span>
-          <span className="text-xs font-normal text-muted-foreground">
-            {resolvedTheme === "dark"
-              ? "Dark mode active"
-              : "Light mode active"}
-          </span>
-        </DropdownMenuLabel>
-        <DropdownMenuRadioGroup
-          value={mode}
-          onValueChange={(value) => setThemeMode(value as AthenaThemeMode)}
-        >
-          <DropdownMenuRadioItem className="gap-layout-xs" value="system">
-            <Monitor className="h-4 w-4 text-muted-foreground" />
-            System
-          </DropdownMenuRadioItem>
-          <DropdownMenuRadioItem className="gap-layout-xs" value="light">
-            <Sun className="h-4 w-4 text-muted-foreground" />
-            Light
-          </DropdownMenuRadioItem>
-          <DropdownMenuRadioItem className="gap-layout-xs" value="dark">
-            <Moon className="h-4 w-4 text-muted-foreground" />
-            Dark
-          </DropdownMenuRadioItem>
-        </DropdownMenuRadioGroup>
-        <DropdownMenuSeparator />
-        {isManagerElevated ? (
+          {!hasFullAdminAccess || isManagerElevated ? (
+            <DropdownMenuSeparator />
+          ) : null}
           <DropdownMenuItem
             className="gap-layout-xs"
-            onSelect={() => void endManagerElevation()}
+            onSelect={() => void handleSignOut()}
           >
-            End manager elevation
+            Sign out
           </DropdownMenuItem>
-        ) : !hasFullAdminAccess ? (
-          <DropdownMenuItem
-            className="gap-layout-xs"
-            onSelect={startManagerElevation}
-          >
-            Start manager elevation
-          </DropdownMenuItem>
-        ) : null}
-        <DropdownMenuItem
-          className="gap-layout-xs"
-          onSelect={() => void handleSignOut()}
-        >
-          Sign out
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <button
+        type="button"
+        aria-label={`Switch to ${nextTheme} theme`}
+        title={`Switch to ${nextTheme} theme`}
+        className={cn(
+          "group flex h-9 w-9 shrink-0 items-center justify-center text-muted-foreground transition-[background-color,color,transform] duration-fast ease-standard hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.96]",
+          isContainedShell ? `rounded-lg ${containedControlSurface}` : "rounded-md",
+        )}
+        onClick={() => setAthenaThemeModeWithTransition(nextTheme)}
+      >
+        <ThemeIcon
+          aria-hidden="true"
+          className="h-4 w-4 transition-transform duration-fast ease-emphasized group-hover:rotate-12 group-active:scale-90"
+        />
+      </button>
+    </div>
   );
 }
 
-function TopBar({ userEmail }: { userEmail: string }) {
+function TopBar({
+  shellVariant,
+  userEmail,
+}: {
+  shellVariant: AppShellVariant;
+  userEmail: string;
+}) {
   const { state } = useSidebar();
+  const isContainedShell = shellVariant === "contained";
   const sidebarColumnWidth =
     state === "collapsed"
       ? "var(--sidebar-width-icon)"
       : "var(--sidebar-width)";
 
   return (
-    <header className="relative z-20 flex h-16 shrink-0 border-b border-border/70 bg-background">
+    <header
+      className={cn(
+        "relative z-20 box-border flex h-16 shrink-0",
+        isContainedShell
+          ? "bg-transparent px-layout-sm pt-layout-sm"
+          : "border-b border-border/70 bg-background",
+      )}
+    >
       <div
         className={cn(
-          "flex h-full w-auto shrink-0 items-center gap-layout-xs px-layout-sm transition-[width] duration-200 ease-linear md:w-[var(--topbar-sidebar-width)] md:px-layout-xl",
-          state === "expanded" && "md:border-r md:border-sidebar-border",
+          "flex h-full w-auto shrink-0 items-center gap-layout-xs px-layout-sm",
+          isContainedShell
+            ? "justify-start"
+            : "justify-center transition-[width] duration-200 ease-linear md:w-[var(--topbar-sidebar-width)]",
+          !isContainedShell &&
+            state === "expanded" &&
+            "md:border-r md:border-sidebar-border",
         )}
         style={
-          {
-            "--topbar-sidebar-width": sidebarColumnWidth,
-          } as CSSProperties
+          isContainedShell
+            ? undefined
+            : ({
+                "--topbar-sidebar-width": sidebarColumnWidth,
+              } as CSSProperties)
         }
       >
         <SidebarTrigger
           aria-label="Open navigation"
           className="h-9 w-9 md:hidden"
         />
-        <AppHeader />
+        <div
+          className={cn(
+            isContainedShell &&
+              "rounded-lg px-layout-xs py-layout-2xs",
+          )}
+        >
+          <AppHeader />
+        </div>
       </div>
       <div className="flex min-w-0 flex-1 items-center justify-end px-layout-sm md:px-layout-xl">
-        <UserMenu userEmail={userEmail} />
+        <UserMenu shellVariant={shellVariant} userEmail={userEmail} />
       </div>
     </header>
   );
@@ -587,22 +651,28 @@ export default function Layout() {
     Boolean(localPosEntryContext.terminalSeed);
   const shouldRenderPosTerminalShell =
     canRenderRehydratingPosShell ||
-    isRecoveredPosAppSession ||
     isNetworkWaitingPosAppSessionRecovery ||
     canRenderSignedInPosRegisterShell;
+  const shouldRenderPosSignInGate = isRecoveredPosAppSession;
   const shouldRenderPendingPosTerminalShell =
     isPendingPosAppSessionRecovery || isClassifyingPosAppSession;
   const shouldMountRemoteAssistRuntime =
+    Boolean(user) &&
     localPosEntryContext.status === "ready" &&
     Boolean(localPosEntryContext.terminalSeed);
   const posAppSessionRecoveryRuntimeInput =
     toPosTerminalAppSessionRecoveryRuntimeInput(posTerminalAppSessionRecovery);
   const userEmail =
     user?.email ??
-    (shouldRenderPosTerminalShell || shouldRenderPendingPosTerminalShell
+    (shouldRenderPosTerminalShell ||
+      shouldRenderPosSignInGate ||
+      shouldRenderPendingPosTerminalShell
       ? "POS terminal"
       : "");
   const isFullscreenActive = fullscreenOverride ?? routeWantsFullscreen;
+  const authRedirectTo = isUnknownRouterPath(pathname)
+    ? browserPathWithSearch
+    : getRedirectPathWithSearch(pathname, browserPathWithSearch);
 
   // useEffect(() => {
   //   // Read the sidebar state from cookies
@@ -624,6 +694,7 @@ export default function Layout() {
   useEffect(() => {
     if (
       shouldRenderPosTerminalShell ||
+      shouldRenderPosSignInGate ||
       shouldRenderPendingPosTerminalShell ||
       isBlockedPosAppSession ||
       isClassifyingPosAppSession
@@ -632,14 +703,11 @@ export default function Layout() {
     }
 
     if (!isLoading && user === null) {
-      const redirectTo = isUnknownRouterPath(pathname)
-        ? browserPathWithSearch
-        : getRedirectPathWithSearch(pathname, browserPathWithSearch);
       const loginTarget = routeWantsPos
         ? {
             to: "/login" as const,
             search: {
-              redirectTo,
+              redirectTo: authRedirectTo,
             } as never,
           }
         : { to: "/login" as const };
@@ -648,9 +716,11 @@ export default function Layout() {
   }, [
     browserPathname,
     browserPathWithSearch,
+    authRedirectTo,
     pathname,
     routeWantsPos,
     shouldRenderPosTerminalShell,
+    shouldRenderPosSignInGate,
     shouldRenderPendingPosTerminalShell,
     isBlockedPosAppSession,
     isClassifyingPosAppSession,
@@ -666,6 +736,7 @@ export default function Layout() {
   if (
     defaultOpen === null ||
     (!shouldRenderPosTerminalShell &&
+      !shouldRenderPosSignInGate &&
       !shouldRenderPendingPosTerminalShell &&
       !isBlockedPosAppSession &&
       (isLoading || user === null))
@@ -675,6 +746,7 @@ export default function Layout() {
 
   if (
     shouldRenderPosTerminalShell ||
+    shouldRenderPosSignInGate ||
     shouldRenderPendingPosTerminalShell ||
     isBlockedPosAppSession
   ) {
@@ -695,6 +767,8 @@ export default function Layout() {
             entryContext={localPosEntryContext}
             recoveryReason={posTerminalAppSessionRecovery.reason}
           />
+        ) : shouldRenderPosSignInGate ? (
+          <PosTerminalSignInGate redirectTo={authRedirectTo} />
         ) : shouldRenderPendingPosTerminalShell ? (
           <PosTerminalRecoveryPendingShell
             status={
@@ -718,18 +792,25 @@ export default function Layout() {
       <ManagerElevationProvider>
         <AppShellFullscreenContext.Provider value={{ setFullscreenOverride }}>
           <SidebarProvider
-            className="fixed inset-0 h-svh !min-h-0 flex-col overflow-hidden"
+            className="fixed inset-0 h-svh !min-h-0 flex-col overflow-hidden bg-app-canvas"
             defaultOpen={defaultOpen}
           >
             <MobileSidebarRouteDismiss routeKey={routeKey} />
-            {isFullscreenActive ? null : <TopBar userEmail={userEmail} />}
+            {isFullscreenActive ? null : (
+              <TopBar
+                shellVariant={APP_SHELL_VARIANT}
+                userEmail={userEmail}
+              />
+            )}
             <div
               className={cn(
                 "flex !min-h-0 flex-1",
                 isFullscreenActive ? "h-svh" : "h-[calc(100svh-4rem)]",
               )}
             >
-              <AppSidebar />
+              {isFullscreenActive ? null : (
+                <AppSidebar shellVariant={APP_SHELL_VARIANT} />
+              )}
               <SidebarInset className="h-full !min-h-0 overflow-hidden">
                 <main className="box-border flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-transparent p-layout-md md:p-8">
                   {shouldMountRemoteAssistRuntime ? (

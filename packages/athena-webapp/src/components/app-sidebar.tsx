@@ -11,6 +11,7 @@ import {
   SidebarMenuSubItem,
   SidebarRail,
 } from "@/components/ui/sidebar";
+import { cn } from "@/lib/utils";
 import * as Collapsible from "@radix-ui/react-collapsible";
 import type { ComponentType, MouseEventHandler, ReactNode } from "react";
 import {
@@ -56,6 +57,8 @@ type SidebarOrderSummary = {
   status: string;
 };
 
+type AppSidebarShellVariant = "classic" | "contained";
+
 function SidebarMenuCollapsible({
   icon: Icon,
   label,
@@ -94,7 +97,11 @@ function SidebarMenuCollapsible({
   );
 }
 
-export function AppSidebar() {
+export function AppSidebar({
+  shellVariant = "classic",
+}: {
+  shellVariant?: AppSidebarShellVariant;
+}) {
   const { activeStore } = useGetActiveStore();
   const { activeOrganization } = useGetActiveOrganization();
   const location = useLocation();
@@ -149,12 +156,24 @@ export function AppSidebar() {
     return null;
   }
 
+  const isContainedShell = shellVariant === "contained";
+
   return (
     <Sidebar
       collapsible="icon"
-      className="top-16 bottom-auto h-[calc(100svh-4rem)]"
+      variant={isContainedShell ? "contained" : "sidebar"}
+      className={cn(
+        "top-16 bottom-auto h-[calc(100svh-4rem)]",
+        isContainedShell &&
+          "md:top-20 md:bottom-auto md:h-auto md:max-h-[calc(100svh-6rem)] md:px-layout-sm",
+      )}
     >
-      <SidebarContent>
+      <SidebarContent
+        className={cn(
+          isContainedShell &&
+            "relative h-full max-h-full w-full shrink-0 flex-none gap-layout-xs border-sidebar-border/60 bg-sidebar text-sidebar-foreground backdrop-blur md:h-fit md:max-h-[calc(100svh-6rem)] md:w-[calc(var(--sidebar-width-contained)-theme(spacing.4))] md:rounded-lg md:border md:p-layout-xs md:shadow-surface group-data-[collapsible=icon]:w-[var(--sidebar-width-icon)] group-data-[collapsible=icon]:p-0 supports-[backdrop-filter]:bg-sidebar/95",
+        )}
+      >
         {/* Store section */}
         <SidebarGroup>
           <SidebarGroupLabel>Store</SidebarGroupLabel>
@@ -927,7 +946,7 @@ export function AppSidebar() {
           </SidebarGroup>
         </PermissionGate>
       </SidebarContent>
-      <SidebarRail />
+      {isContainedShell ? null : <SidebarRail />}
     </Sidebar>
   );
 }

@@ -1015,6 +1015,56 @@ describe("useRegisterViewModel", () => {
     expect(result.current.authDialog?.open).toBe(true);
   });
 
+  it("falls through to cashier sign-in when cashier presence restore stalls", async () => {
+    vi.useFakeTimers();
+    try {
+      const pendingPresence = deferred<{ ok: true; value: null }>();
+      mockReadCashierPresence.mockReturnValueOnce(pendingPresence.promise);
+
+      const { useRegisterViewModel } = await import("./useRegisterViewModel");
+      const { result } = renderHook(() => useRegisterViewModel());
+
+      expect(result.current.cashierPresenceRestore.status).toBe("pending");
+      expect(result.current.readinessGuard).toEqual({
+        reason: "cashierPresence",
+        status: "settling",
+      });
+      expect(result.current.authDialog?.open).toBe(false);
+
+      await act(async () => {
+        vi.advanceTimersByTime(1_499);
+      });
+
+      expect(result.current.readinessGuard).toEqual({
+        reason: "cashierPresence",
+        status: "settling",
+      });
+      expect(result.current.authDialog?.open).toBe(false);
+
+      await act(async () => {
+        vi.advanceTimersByTime(1);
+      });
+
+      expect(result.current.cashierPresenceRestore.status).toBe("pending");
+      expect(result.current.readinessGuard).toBeNull();
+      expect(result.current.authDialog?.open).toBe(true);
+
+      vi.useRealTimers();
+
+      await act(async () => {
+        pendingPresence.resolve({ ok: true, value: null });
+      });
+
+      await waitFor(() =>
+        expect(result.current.cashierPresenceRestore.status).toBe("missing"),
+      );
+      expect(result.current.readinessGuard).toBeNull();
+      expect(result.current.authDialog?.open).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("does not let a delayed presence restore clear a fresh cashier sign-in", async () => {
     const pendingPresence = deferred<{
       ok: true;

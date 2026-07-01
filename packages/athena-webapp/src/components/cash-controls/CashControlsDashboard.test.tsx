@@ -374,6 +374,12 @@ describe("CashControlsDashboardContent", () => {
     expect(
       screen.getByText("Showing latest 3 of 4 closed sessions."),
     ).toBeInTheDocument();
+    expect(screen.getByTestId("closed-sessions-table")).toHaveClass(
+      "bg-transparent",
+    );
+    expect(screen.getByTestId("closed-sessions-table")).not.toHaveClass(
+      "bg-background",
+    );
     expect(
       screen.getByRole("link", { name: /View all register sessions/i }),
     ).toHaveAttribute(

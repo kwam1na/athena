@@ -132,6 +132,41 @@ with reason `cloud_closed` should not be treated as support-blocked when the
 matching cloud register session is closed for the same store and terminal. That
 is a clean drawer lifecycle, so support should not offer drawer repair.
 
+## Local Register Recovery
+
+The POS register has a second recovery boundary inside the browser. A terminal
+can need local IndexedDB reprovisioning when the cached setup state is stale or
+corrupt, but the same database also contains protected local business records.
+The register UI must not collapse those into one destructive repair action.
+
+Before clearing local POS state, inspect the record stores that can contain
+operator-owned work:
+
+- local sale/register events,
+- drawer or terminal authority records, and
+- active cashier presence records.
+
+If any of those records exist, block the clear action and route the operator to
+Terminal Health or support recovery. Missing object stores are different from
+protected records; they indicate a broken or old local schema and should remain
+clearable so the terminal can be reprovisioned.
+
+The register should also keep normal cashier readiness separate from repair
+readiness. Cashier-presence restore may briefly settle so the sign-in gate does
+not flicker, but that settling window must be bounded. If the local read stalls,
+fall through to the cashier sign-in gate instead of leaving an empty register
+workspace or showing terminal repair copy. Show the repair/readiness guard only
+after the register setup condition remains visible past the grace period.
+
+Regression coverage should prove:
+
+- clear succeeds for missing local record stores,
+- clear is blocked by unsynced local events,
+- clear is blocked by authority records,
+- clear is blocked by active cashier presence,
+- clear is blocked when the preflight inspection itself fails, and
+- stalled cashier-presence restore eventually renders the cashier sign-in path.
+
 ## Remote Command Outcomes
 
 Remote commands are scoped, allow-listed, and verified by later terminal

@@ -190,7 +190,7 @@ export default function PointOfSaleView() {
   ];
 
   return (
-    <View hideBorder hideHeaderBottomBorder className="bg-background">
+    <View hideBorder hideHeaderBottomBorder>
       <FadeIn className="container mx-auto py-layout-xl">
         <PageWorkspace>
           <PageLevelHeader title="Point of Sale" />

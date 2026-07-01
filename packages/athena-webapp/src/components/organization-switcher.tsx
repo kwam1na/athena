@@ -1,4 +1,4 @@
-import { Building2, ChevronsUpDown } from "lucide-react";
+import { Building, ChevronsUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -51,7 +51,7 @@ export default function OrganizationSwitcher({
   const orgMatchedFromParams = items.find((org) => org.slug == orgUrlSlug);
 
   const currentOrganization = formattedItems.find(
-    (item) => item.value === orgMatchedFromParams?._id
+    (item) => item.value === orgMatchedFromParams?._id,
   );
 
   const navigate = useNavigate();
@@ -96,9 +96,12 @@ export default function OrganizationSwitcher({
             role="combobox"
             aria-expanded={open}
             aria-label="Select an organization"
-            className={cn("min-w-0 justify-between", className)}
+            className={cn(
+              "w-fit min-w-0 max-w-[14rem] justify-start",
+              className,
+            )}
           >
-            <Building2 className="mr-2 h-4 w-4" />
+            <Building className="mr-2 h-4 w-4" />
             <span className="min-w-0 truncate">
               {currentOrganization?.label}
             </span>
@@ -117,7 +120,7 @@ export default function OrganizationSwitcher({
                     onSelect={() => onOrganizationSelect(organization)}
                     className="text-sm"
                   >
-                    <Building2 className="mr-2 h-4 w-4" />
+                    <Building className="mr-2 h-4 w-4" />
                     {organization.label}
                     {/* <Check
                       className={cn(

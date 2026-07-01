@@ -931,6 +931,7 @@ export function useExpenseRegisterViewModel(): RegisterViewModel {
         }
       : null,
     cashierPresenceRestore: { status: "missing" },
+    readinessGuard: null,
     drawerGate: null,
     closeoutControl: null,
     updateApplyBlocker,

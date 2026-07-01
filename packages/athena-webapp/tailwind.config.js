@@ -45,6 +45,8 @@ export default {
         "control-compact": "var(--control-height-compact)",
       },
       colors: {
+        "app-canvas": "rgb(var(--app-canvas) / <alpha-value>)",
+        "workspace-panel": "rgb(var(--workspace-panel) / <alpha-value>)",
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
         card: {

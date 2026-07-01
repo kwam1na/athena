@@ -416,6 +416,9 @@ describe("RegisterSessionViewContent", () => {
       "py-3",
       "sm:py-4",
     );
+    expect(screen.getByTestId("register-session-page-header")).not.toHaveClass(
+      "bg-background",
+    );
     expect(screen.getByRole("link", { name: "View trace" })).not.toHaveClass(
       "w-full",
     );

@@ -29,6 +29,8 @@
     --font-mono: var(--font-preset-athena-story-mono);
     --font-numeric: var(--font-preset-athena-story-numeric);
 
+    --app-canvas: 252 252 251;
+    --workspace-panel: 248 248 247;
     --background: 0 0% 100%;
     --foreground: 222 28% 16%;
     --card: 40 42% 99%;
@@ -133,6 +135,8 @@
 
   .dark {
     color-scheme: dark;
+    --app-canvas: 17 19 28;
+    --workspace-panel: 31 34 44;
     --background: 224 24% 9%;
     --foreground: 36 34% 95%;
     --card: 223 18% 13%;
@@ -319,7 +323,42 @@
   }
 }
 
+@keyframes athena-theme-fade-out {
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes athena-theme-fade-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
 @media (prefers-reduced-motion: no-preference) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation-duration: var(--motion-fast);
+    animation-timing-function: var(--ease-standard);
+    mix-blend-mode: normal;
+  }
+
+  ::view-transition-old(root) {
+    animation-name: athena-theme-fade-out;
+  }
+
+  ::view-transition-new(root) {
+    animation-name: athena-theme-fade-in;
+  }
+
   .store-pulse-sales-trend-chart .recharts-area-curve {
     animation: store-pulse-sales-trend-draw 520ms
       var(--ease-emphasized) both;

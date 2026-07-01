@@ -60,6 +60,7 @@ export default function View({
         width === "full"
           ? "box-border w-full max-w-none px-4 sm:px-6 lg:px-8"
           : "container mx-auto",
+        "bg-app-canvas",
         fullHeight && "box-border h-full max-h-full min-h-0",
         className,
       )}

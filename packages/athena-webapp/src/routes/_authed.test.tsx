@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import Layout from "./-authed-layout";
 import { LOGGED_IN_USER_ID_KEY, POS_APP_ACCOUNT_ID_KEY } from "@/lib/constants";
 import { useAppShellFullscreenMode } from "@/contexts/AppShellFullscreenContext";
+import { ATHENA_THEME_STORAGE_KEY } from "@/lib/theme";
 
 const mocked = vi.hoisted(() => ({
   OutletComponent: null as (() => ReactNode) | null,
@@ -100,7 +101,17 @@ vi.mock("../components/ui/sidebar", () => ({
     mocked.SidebarProvider(props);
     return <div data-testid="sidebar-provider">{children}</div>;
   },
-  SidebarInset: ({ children }: { children: ReactNode }) => <>{children}</>,
+  SidebarInset: ({
+    children,
+    className,
+  }: {
+    children: ReactNode;
+    className?: string;
+  }) => (
+    <main className={className} data-testid="sidebar-inset">
+      {children}
+    </main>
+  ),
   SidebarTrigger: ({
     children,
     ...props
@@ -115,7 +126,11 @@ vi.mock("../components/ui/sidebar", () => ({
 }));
 
 vi.mock("../components/app-sidebar", () => ({
-  AppSidebar: () => <div data-testid="app-sidebar">Sidebar</div>,
+  AppSidebar: ({ shellVariant }: { shellVariant?: string }) => (
+    <div data-shell-variant={shellVariant} data-testid="app-sidebar">
+      Sidebar
+    </div>
+  ),
 }));
 
 vi.mock("@/components/Navbar", () => ({
@@ -414,7 +429,7 @@ describe("Authed layout", () => {
     expect(mocked.navigate).not.toHaveBeenCalled();
   });
 
-  it("renders the POS register shell for recoverable app-session drift without generic app chrome", () => {
+  it("renders the POS sign-in gate for recoverable app-session drift without generic app chrome", () => {
     mocked.useAuth.mockReturnValue({
       user: null,
       isLoading: false,
@@ -429,7 +444,19 @@ describe("Authed layout", () => {
 
     render(<Layout />);
 
-    expect(screen.getByTestId("authed-outlet")).toBeInTheDocument();
+    expect(screen.queryByTestId("authed-outlet")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Sign in required" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Sign in again to continue using this register."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Sign in to POS" }),
+    ).toHaveAttribute(
+      "href",
+      "/login?redirectTo=%2Fwigclub%2Fstore%2Fwigclub%2Fpos%2Fregister",
+    );
     expect(screen.queryByTestId("app-sidebar")).not.toBeInTheDocument();
     expect(screen.queryByTestId("app-header")).not.toBeInTheDocument();
     expect(screen.queryByTestId("store-modal")).not.toBeInTheDocument();
@@ -500,7 +527,10 @@ describe("Authed layout", () => {
 
     render(<Layout />);
 
-    expect(screen.getByTestId("authed-outlet")).toBeInTheDocument();
+    expect(screen.queryByTestId("authed-outlet")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Sign in required" }),
+    ).toBeInTheDocument();
     expect(screen.queryByTestId("app-sidebar")).not.toBeInTheDocument();
     expect(mocked.navigate).not.toHaveBeenCalled();
     expect(mocked.useLocalPosEntryContext).toHaveBeenCalledWith({
@@ -529,7 +559,7 @@ describe("Authed layout", () => {
     expect(mocked.navigate).not.toHaveBeenCalled();
   });
 
-  it("keeps the recoverable POS register child compatible with fullscreen outlets", () => {
+  it("keeps recoverable app-session drift from mounting fullscreen outlets before sign-in", () => {
     mocked.useAuth.mockReturnValue({
       user: null,
       isLoading: false,
@@ -545,7 +575,10 @@ describe("Authed layout", () => {
 
     render(<Layout />);
 
-    expect(screen.getByTestId("fullscreen-outlet")).toBeInTheDocument();
+    expect(screen.queryByTestId("fullscreen-outlet")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Sign in required" }),
+    ).toBeInTheDocument();
     expect(screen.queryByTestId("app-header")).not.toBeInTheDocument();
     expect(screen.queryByTestId("app-sidebar")).not.toBeInTheDocument();
   });
@@ -559,13 +592,68 @@ describe("Authed layout", () => {
     render(<Layout />);
 
     expect(screen.getByTestId("app-sidebar")).toBeInTheDocument();
+    expect(screen.getByTestId("app-sidebar")).toHaveAttribute(
+      "data-shell-variant",
+      "contained",
+    );
+    expect(mocked.SidebarProvider).toHaveBeenCalledWith(
+      expect.objectContaining({
+        className:
+          "fixed inset-0 h-svh !min-h-0 flex-col overflow-hidden bg-app-canvas",
+      }),
+    );
     expect(screen.getByTestId("app-header")).toBeInTheDocument();
+    expect(screen.getByTestId("app-header").parentElement).toHaveClass(
+      "rounded-lg",
+      "px-layout-xs",
+      "py-layout-2xs",
+    );
+    expect(screen.getByTestId("app-header").parentElement).not.toHaveClass(
+      "bg-background/90",
+      "border",
+    );
+    expect(
+      screen.getByTestId("app-header").parentElement?.parentElement,
+    ).toHaveClass("px-layout-sm", "justify-start");
+    expect(
+      screen.getByTestId("app-header").parentElement?.parentElement,
+    ).not.toHaveClass(
+      "md:w-[var(--topbar-sidebar-width)]",
+      "md:px-layout-xl",
+      "transition-[width]",
+    );
     expect(
       screen.getByRole("button", { name: "Open navigation" }),
     ).toBeInTheDocument();
     expect(screen.getByTestId("store-modal")).toBeInTheDocument();
     expect(screen.getByTestId("organization-modal")).toBeInTheDocument();
     expect(screen.getByTestId("authed-outlet")).toBeInTheDocument();
+  });
+
+  it("keeps the contained app header independent of the collapsed sidebar state", () => {
+    mocked.useAuth.mockReturnValue({
+      user: { _id: "user-1" },
+      isLoading: false,
+    });
+    mocked.useSidebar.mockReturnValue({
+      isMobile: false,
+      setOpenMobile: mocked.setOpenMobile,
+      state: "collapsed",
+    });
+
+    render(<Layout />);
+
+    const headerCell = screen.getByTestId("app-header").parentElement
+      ?.parentElement as HTMLElement;
+
+    expect(headerCell).toHaveClass("w-auto", "justify-start");
+    expect(headerCell).not.toHaveClass(
+      "md:w-[var(--topbar-sidebar-width)]",
+      "transition-[width]",
+    );
+    expect(headerCell.style.getPropertyValue("--topbar-sidebar-width")).toBe(
+      "",
+    );
   });
 
   it("keeps the Remote Assist runtime mounted on non-POS store workspace routes when a terminal seed is ready", () => {
@@ -737,7 +825,7 @@ describe("Authed layout", () => {
       "POS terminal health detail child",
     ],
   ])(
-    "renders the POS shell for recoverable app-session drift on the %s route",
+    "renders the POS sign-in gate for recoverable app-session drift on the %s route",
     (pathname) => {
       mocked.useAuth.mockReturnValue({
         user: null,
@@ -755,7 +843,10 @@ describe("Authed layout", () => {
 
       render(<Layout />);
 
-      expect(screen.getByTestId("authed-outlet")).toBeInTheDocument();
+      expect(screen.queryByTestId("authed-outlet")).not.toBeInTheDocument();
+      expect(
+        screen.getByRole("heading", { name: "Sign in required" }),
+      ).toBeInTheDocument();
       expect(screen.queryByTestId("app-sidebar")).not.toBeInTheDocument();
       expect(screen.queryByTestId("app-header")).not.toBeInTheDocument();
       expect(
@@ -1066,6 +1157,56 @@ describe("Authed layout", () => {
     expect(mocked.navigate).toHaveBeenCalledWith({ to: "/login" });
   });
 
+  it("places an icon-only theme toggle after the account menu", async () => {
+    const user = userEvent.setup();
+
+    mocked.useAuth.mockReturnValue({
+      user: { _id: "user-1", email: "operator@example.com" },
+      isLoading: false,
+    });
+
+    render(<Layout />);
+
+    expect(
+      screen.queryByRole("button", { name: "Light" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Dark" }),
+    ).not.toBeInTheDocument();
+
+    const accountMenuButton = screen.getByRole("button", {
+      name: "Open account menu for operator@example.com",
+    });
+    const themeToggleButton = screen.getByRole("button", {
+      name: "Switch to dark theme",
+    });
+
+    expect(accountMenuButton).toHaveClass(
+      "h-9",
+      "rounded-lg",
+      "border",
+      "shadow-surface",
+    );
+    expect(themeToggleButton).toHaveClass(
+      "h-9",
+      "rounded-lg",
+      "border",
+      "shadow-surface",
+    );
+    expect(themeToggleButton.parentElement).not.toHaveClass("border");
+    expect(
+      accountMenuButton.compareDocumentPosition(themeToggleButton) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
+    await user.click(themeToggleButton);
+
+    expect(window.localStorage.setItem).toHaveBeenCalledWith(
+      ATHENA_THEME_STORAGE_KEY,
+      "dark",
+    );
+  });
+
   it("keeps the account email visible while manager elevation is active", async () => {
     const user = userEvent.setup();
     mocked.useAuth.mockReturnValue({
@@ -1149,7 +1290,7 @@ describe("Authed layout", () => {
     render(<Layout />);
 
     expect(screen.queryByTestId("app-header")).not.toBeInTheDocument();
-    expect(screen.getByTestId("app-sidebar")).toBeInTheDocument();
+    expect(screen.queryByTestId("app-sidebar")).not.toBeInTheDocument();
     expect(screen.getByTestId("authed-outlet").closest("main")).toHaveClass(
       "box-border",
       "h-full",
@@ -1163,19 +1304,19 @@ describe("Authed layout", () => {
   ])(
     "starts fullscreen from the browser pathname on first %s render",
     (browserPathname) => {
-    mocked.useAuth.mockReturnValue({
-      user: { _id: "user-1", email: "operator@example.com" },
-      isLoading: false,
-    });
-    mocked.useRouterState.mockImplementation(({ select }) =>
-      select({ location: { pathname: "/" } }),
-    );
-    window.history.replaceState({}, "", browserPathname);
+      mocked.useAuth.mockReturnValue({
+        user: { _id: "user-1", email: "operator@example.com" },
+        isLoading: false,
+      });
+      mocked.useRouterState.mockImplementation(({ select }) =>
+        select({ location: { pathname: "/" } }),
+      );
+      window.history.replaceState({}, "", browserPathname);
 
-    render(<Layout />);
+      render(<Layout />);
 
-    expect(screen.queryByTestId("app-header")).not.toBeInTheDocument();
-    expect(screen.getByTestId("app-sidebar")).toBeInTheDocument();
+      expect(screen.queryByTestId("app-header")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("app-sidebar")).not.toBeInTheDocument();
     },
   );
 
@@ -1194,6 +1335,7 @@ describe("Authed layout", () => {
     render(<Layout />);
 
     expect(screen.queryByTestId("app-header")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("app-sidebar")).not.toBeInTheDocument();
 
     fireEvent.keyDown(document, { key: "f" });
 
@@ -1203,6 +1345,7 @@ describe("Authed layout", () => {
     fireEvent.keyDown(document, { key: "F" });
 
     expect(screen.queryByTestId("app-header")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("app-sidebar")).not.toBeInTheDocument();
   });
 
   it("uses the route default again after toggling away and returning to the register flow", () => {
@@ -1228,6 +1371,7 @@ describe("Authed layout", () => {
     pathname = "/wigclub/store/wigclub/pos/register";
     rerender(<Layout />);
     expect(screen.queryByTestId("app-header")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("app-sidebar")).not.toBeInTheDocument();
   });
 
   it("shows the global nav after leaving the register flow even if the browser pathname is stale", () => {
