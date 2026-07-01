@@ -621,6 +621,8 @@ async function resolveCloseoutActorStaffProfileId(
 async function cancelPendingApprovalIfNeeded(args: {
   ctx: Pick<MutationCtx, "db">;
   approvalRequestId?: Id<"approvalRequest">;
+  decisionApprovedByStaffProfileId?: Id<"staffProfile">;
+  decisionApprovalProofId?: Id<"approvalProof">;
   decisionNotes?: string;
   registerSessionId?: Id<"registerSession">;
   reviewedByUserId?: Id<"athenaUser">;
@@ -651,6 +653,11 @@ async function cancelPendingApprovalIfNeeded(args: {
 
   await args.ctx.db.patch("approvalRequest", approvalRequest._id, {
     status: "cancelled",
+    ...omitUndefined({
+      decisionApprovedByStaffProfileId:
+        args.decisionApprovedByStaffProfileId,
+      decisionApprovalProofId: args.decisionApprovalProofId,
+    }),
     reviewedByStaffProfileId: args.reviewedByStaffProfileId,
     reviewedByUserId: args.reviewedByUserId,
     decisionNotes:
@@ -2133,6 +2140,8 @@ export const reviewRegisterSessionCloseout = mutation({
       {
         approvalRequestId: approvalRequest._id,
         decision: args.decision,
+        decisionApprovedByStaffProfileId: reviewedByStaffProfileId,
+        decisionApprovalProofId: args.approvalProofId,
         decisionNotes: trimOptional(args.decisionNotes),
         reviewedByStaffProfileId,
         reviewedByUserId,

@@ -3,10 +3,12 @@ import type { Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import { buildApprovalRequest } from "./approvalRequestHelpers";
 import {
+  decideApprovalRequest,
   decideApprovalRequestAsCommandWithCtx,
   decideApprovalRequestAsAuthenticatedUserWithCtx,
   decideApprovalRequestWithCtx,
 } from "./approvalRequests";
+import { assertConformsToExportedReturns } from "../lib/returnValidatorContract";
 import { resolveTransactionItemAdjustmentApprovalDecisionWithCtx } from "../pos/application/commands/adjustTransactionItems";
 import { resolveTransactionVoidApprovalDecisionWithCtx } from "../pos/application/commands/completeTransaction";
 
@@ -534,13 +536,26 @@ describe("approval request helpers", () => {
       role: "full_admin",
     });
 
-    await decideApprovalRequestAsAuthenticatedUserWithCtx(ctx, {
+    const result = await decideApprovalRequestAsCommandWithCtx(ctx, {
       approvalRequestId: "approval-1" as Id<"approvalRequest">,
       approvalProofId: "proof-1" as Id<"approvalProof">,
       decision: "approved",
     });
 
+    assertConformsToExportedReturns(decideApprovalRequest, result);
+    expect(result).toMatchObject({
+      kind: "ok",
+      data: {
+        decisionApprovalProofId: "proof-1",
+        decisionApprovedByStaffProfileId: "staff-manager-1",
+        reviewedByStaffProfileId: "staff-manager-1",
+        reviewedByUserId: "manager-1",
+        status: "approved",
+      },
+    });
     expect(tables.approvalRequest.get("approval-1")).toMatchObject({
+      decisionApprovalProofId: "proof-1",
+      decisionApprovedByStaffProfileId: "staff-manager-1",
       reviewedByStaffProfileId: "staff-manager-1",
       reviewedByUserId: "manager-1",
       status: "approved",
@@ -637,6 +652,12 @@ describe("approval request helpers", () => {
     });
     expect(tables.approvalRequest.get("approval-item-1")).toMatchObject({
       decisionNotes: "Register session expected cash cannot be negative.",
+      decisionApprovalProofId: "proof-1",
+      decisionApprovedByStaffProfileId: "staff-manager-1",
+      failedAt: expect.any(Number),
+      failureCode: "decision_apply_failed",
+      failureMessage: "Register session expected cash cannot be negative.",
+      freshApprovalRequired: true,
       reviewedByStaffProfileId: "staff-manager-1",
       reviewedByUserId: "manager-1",
       status: "cancelled",

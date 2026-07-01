@@ -556,6 +556,7 @@ describe("voidTransaction", () => {
       expect.objectContaining({
         status: "void",
         voidApprovalProofId: "approval-proof-1",
+        voidDecisionApprovalProofId: "approval-proof-1",
         voidOperationalEventId: "void-event-1",
         voidReason: "Duplicate sale",
         voidedByStaffProfileId: "staff-1",
@@ -746,6 +747,8 @@ describe("voidTransaction", () => {
       expect.objectContaining({
         status: "approved",
         reviewedByStaffProfileId: "manager-1",
+        decisionApprovalProofId: "approval-proof-1",
+        decisionApprovedByStaffProfileId: "manager-1",
       }),
     );
     expect(ctx.db.patch).not.toHaveBeenCalledWith(
@@ -791,9 +794,9 @@ describe("voidTransaction", () => {
         reviewedByUserId: "manager-user-1" as Id<"athenaUser">,
       }),
     ).resolves.toMatchObject({
-      approvalProofId: "decision-proof-1",
       approvalRequestId: "approval-request-1",
       approverStaffProfileId: "manager-1",
+      decisionApprovalProofId: "decision-proof-1",
       transactionId: "txn-1",
     });
 
@@ -830,6 +833,7 @@ describe("voidTransaction", () => {
         eventType: "pos_transaction_voided",
         metadata: expect.objectContaining({
           approverStaffProfileId: "manager-1",
+          decisionApprovalProofId: "decision-proof-1",
           reviewerUserId: "manager-user-1",
         }),
       }),
@@ -839,9 +843,9 @@ describe("voidTransaction", () => {
       "txn-1",
       expect.objectContaining({
         status: "void",
-        voidApprovalProofId: "decision-proof-1",
         voidApprovalRequestId: "approval-request-1",
         voidApprovedByStaffProfileId: "manager-1",
+        voidDecisionApprovalProofId: "decision-proof-1",
       }),
     );
     expect(ctx.db.patch).not.toHaveBeenCalledWith(
@@ -884,9 +888,9 @@ describe("voidTransaction", () => {
         reviewedByUserId: "manager-user-1" as Id<"athenaUser">,
       }),
     ).resolves.toMatchObject({
-      approvalProofId: "decision-proof-1",
       approvalRequestId: "approval-request-1",
       approverStaffProfileId: "manager-1",
+      decisionApprovalProofId: "decision-proof-1",
       transactionId: "txn-1",
     });
     expect(recordRetailVoidPaymentAllocations).toHaveBeenCalledWith(
@@ -909,9 +913,9 @@ describe("voidTransaction", () => {
       "txn-1",
       expect.objectContaining({
         status: "void",
-        voidApprovalProofId: "decision-proof-1",
         voidApprovalRequestId: "approval-request-1",
         voidApprovedByStaffProfileId: "manager-1",
+        voidDecisionApprovalProofId: "decision-proof-1",
       }),
     );
     expect(ctx.db.patch).not.toHaveBeenCalledWith(

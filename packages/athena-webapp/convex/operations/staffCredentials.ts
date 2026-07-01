@@ -231,6 +231,43 @@ async function requireStaffAuthenticationStoreAccessWithCtx(
   });
 }
 
+async function validateApprovalRequesterStaffProfileWithCtx(
+  ctx: MutationCtx,
+  args: {
+    requestedByStaffProfileId?: Id<"staffProfile">;
+    storeId: Id<"store">;
+  },
+): Promise<CommandResult<{ requestedByStaffProfileId?: Id<"staffProfile"> }>> {
+  if (!args.requestedByStaffProfileId) {
+    return ok({});
+  }
+
+  const [athenaUser, requestedStaffProfile] = await Promise.all([
+    requireAuthenticatedAthenaUserWithCtx(ctx),
+    ctx.db.get("staffProfile", args.requestedByStaffProfileId),
+  ]);
+
+  if (
+    !requestedStaffProfile ||
+    requestedStaffProfile.storeId !== args.storeId ||
+    requestedStaffProfile.status !== "active"
+  ) {
+    return userError({
+      code: "authorization_failed",
+      message: "Requested staff profile is not valid for this approval.",
+    });
+  }
+
+  if (requestedStaffProfile.linkedUserId !== athenaUser._id) {
+    return userError({
+      code: "authorization_failed",
+      message: "Requested staff profile does not match the signed-in user.",
+    });
+  }
+
+  return ok({ requestedByStaffProfileId: args.requestedByStaffProfileId });
+}
+
 async function requirePosTerminalAuthorityWithCtx(
   ctx: MutationCtx,
   args: {
@@ -992,7 +1029,7 @@ export async function validateRestoredPosLocalStaffProofWithCtx(
 }
 
 export async function authenticateStaffCredentialForApprovalWithCtx(
-  ctx: Pick<MutationCtx, "db">,
+  ctx: MutationCtx,
   args: {
     actionKey: string;
     pinHash: string;
@@ -1015,6 +1052,15 @@ export async function authenticateStaffCredentialForApprovalWithCtx(
     return authentication;
   }
 
+  const requester = await validateApprovalRequesterStaffProfileWithCtx(ctx, {
+    requestedByStaffProfileId: args.requestedByStaffProfileId,
+    storeId: args.storeId,
+  });
+
+  if (requester.kind !== "ok") {
+    return requester;
+  }
+
   return createApprovalProofWithCtx(ctx as MutationCtx, {
     actionKey: args.actionKey,
     approvedByCredentialId: authentication.data.credentialId,
@@ -1022,7 +1068,7 @@ export async function authenticateStaffCredentialForApprovalWithCtx(
     organizationId: authentication.data.staffProfile.organizationId,
     reason: args.reason,
     requiredRole: args.requiredRole,
-    requestedByStaffProfileId: args.requestedByStaffProfileId,
+    requestedByStaffProfileId: requester.data.requestedByStaffProfileId,
     storeId: args.storeId,
     subject: args.subject,
   });

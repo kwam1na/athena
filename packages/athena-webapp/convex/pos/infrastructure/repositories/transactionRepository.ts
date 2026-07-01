@@ -17,6 +17,8 @@ type PosTransactionAdjustmentInsert = {
   requestedByStaffProfileId?: Id<"staffProfile">;
   approvalRequestId?: Id<"approvalRequest">;
   approvalProofId?: Id<"approvalProof">;
+  decisionApprovalProofId?: Id<"approvalProof">;
+  decisionApprovedByStaffProfileId?: Id<"staffProfile">;
   paymentAllocationId?: Id<"paymentAllocation">;
   operationalEventId?: Id<"operationalEvent">;
   status: PosTransactionAdjustmentStatus;

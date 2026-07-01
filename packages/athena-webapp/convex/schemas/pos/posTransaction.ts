@@ -42,6 +42,7 @@ export const posTransactionSchema = v.object({
   voidedByStaffProfileId: v.optional(v.id("staffProfile")),
   voidApprovalRequestId: v.optional(v.id("approvalRequest")),
   voidApprovalProofId: v.optional(v.id("approvalProof")),
+  voidDecisionApprovalProofId: v.optional(v.id("approvalProof")),
   voidApprovedByStaffProfileId: v.optional(v.id("staffProfile")),
   voidOperationalEventId: v.optional(v.id("operationalEvent")),
   receiptPrinted: v.optional(v.boolean()),

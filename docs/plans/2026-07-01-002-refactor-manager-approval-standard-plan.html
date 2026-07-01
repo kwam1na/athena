@@ -1,0 +1,384 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>refactor: Standardize manager approval identity</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f8fa;
+      --surface: #ffffff;
+      --ink: #18202a;
+      --muted: #5c6877;
+      --line: #d8dee8;
+      --accent: #185a6f;
+      --accent-soft: #dcecf1;
+      --warn: #7a4d00;
+      --warn-soft: #f6ead2;
+      --ok: #27613a;
+      --ok-soft: #ddeddf;
+      --code: #f1f4f7;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.55;
+    }
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--line);
+      padding: 36px 28px 28px;
+    }
+    main {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 28px;
+    }
+    h1, h2, h3 {
+      line-height: 1.2;
+      letter-spacing: 0;
+      margin: 0;
+    }
+    h1 {
+      max-width: 980px;
+      margin: 0 auto 12px;
+      font-size: clamp(2rem, 4vw, 3.2rem);
+    }
+    header p {
+      max-width: 980px;
+      margin: 0 auto;
+      color: var(--muted);
+      font-size: 1.05rem;
+    }
+    section {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 24px;
+      margin: 0 0 18px;
+    }
+    h2 {
+      color: var(--accent);
+      font-size: 1.35rem;
+      margin-bottom: 14px;
+    }
+    h3 {
+      font-size: 1.05rem;
+      margin: 20px 0 8px;
+    }
+    p { margin: 0 0 12px; }
+    ul, ol { margin: 0 0 12px 1.2rem; padding: 0; }
+    li { margin: 4px 0; }
+    code {
+      background: var(--code);
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-size: 0.92em;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 14px 0 4px;
+      font-size: 0.95rem;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 10px;
+      vertical-align: top;
+      text-align: left;
+    }
+    th {
+      background: var(--code);
+      color: var(--ink);
+    }
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      max-width: 980px;
+      margin: 18px auto 0;
+    }
+    .pill {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 5px 10px;
+      color: var(--muted);
+      background: var(--bg);
+      font-size: 0.9rem;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 14px;
+    }
+    .unit {
+      border-left: 4px solid var(--accent);
+      padding-left: 14px;
+    }
+    .callout {
+      background: var(--accent-soft);
+      border-color: #b7d4dc;
+    }
+    .warning {
+      background: var(--warn-soft);
+      border-color: #e1c27d;
+      color: #392a10;
+    }
+    .success {
+      background: var(--ok-soft);
+      border-color: #b9d3bf;
+      color: #14351f;
+    }
+    .diagram {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .node {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      min-height: 80px;
+      background: var(--bg);
+    }
+    .node strong {
+      display: block;
+      margin-bottom: 4px;
+      color: var(--accent);
+    }
+    @media (max-width: 700px) {
+      header { padding: 28px 18px 22px; }
+      main { padding: 18px; }
+      section { padding: 18px; }
+      table { display: block; overflow-x: auto; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>refactor: Standardize manager approval identity</h1>
+    <p>Deep plan for making manager approval a foundational, server-owned authority contract across Athena while separating app-account authorization, staff actor attribution, manager credentials, elevation, async decisions, and automation evidence.</p>
+    <div class="meta">
+      <span class="pill">type: refactor</span>
+      <span class="pill">status: active</span>
+      <span class="pill">date: 2026-07-01</span>
+      <span class="pill">deepened: 2026-07-01</span>
+      <span class="pill">scope: planning only</span>
+    </div>
+  </header>
+
+  <main>
+    <section class="callout">
+      <h2>Plan Summary</h2>
+      <p>The current code does not appear to auto-link the signed-in Athena user to the staff profile that approves a request. The validated gap is semantic drift: ordinary actor attribution, manager credential authentication, manager elevation, async approval decisions, automation evidence, and proof-backed approval authority all exist, but consumers name and persist them differently.</p>
+      <p>The remedy is to define one authority vocabulary and shared server-side helper contract, then migrate the high-risk approval consumers to record requester, approver, reviewer, applier, proof, request, and automation evidence without overloading <code>actorStaffProfileId</code>.</p>
+    </section>
+
+    <section>
+      <h2>Core Requirements</h2>
+      <ol>
+        <li>Manager approval authority comes from consumed <code>approvalProof</code>, with approver identity from <code>approvedByStaffProfileId</code>.</li>
+        <li>The signed-in Athena user remains session/account authorization and submitter/reviewer attribution, not implicit approver identity.</li>
+        <li>Ordinary staff actor attribution remains separate from proof-backed manager approval.</li>
+        <li>Manager elevation remains route/surface capability and never satisfies command approval.</li>
+        <li>Async decisions distinguish reviewer account, decision proof, approving manager, and original domain request.</li>
+        <li>Domain events use consistent <code>requestedBy*</code>, <code>approvedBy*</code>, <code>reviewedBy*</code>, and <code>appliedBy*</code> semantics.</li>
+        <li>Protected commands retry the same command with <code>approvalProofId</code>; no parallel manager-only mutations.</li>
+        <li>Automation policy evidence stays separate from human manager approval.</li>
+        <li>Financial, POS, Cash Controls, and Daily Operations audit records carry typed approval evidence where operators and auditors read from.</li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>Authority Standard</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Lane</th>
+            <th>Meaning</th>
+            <th>Trusted Source</th>
+            <th>May Approve Commands?</th>
+            <th>Example Fields</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Account session</td>
+            <td>Signed-in Athena account authorized to use an app surface or submit a decision</td>
+            <td>Convex auth plus Athena user membership</td>
+            <td>No</td>
+            <td><code>actorUserId</code>, <code>reviewedByUserId</code></td>
+          </tr>
+          <tr>
+            <td>Ordinary staff actor</td>
+            <td>Cashier/operator/requester business identity</td>
+            <td>Linked staff/user validation or local staff authentication</td>
+            <td>No</td>
+            <td><code>actorStaffProfileId</code>, <code>requestedByStaffProfileId</code></td>
+          </tr>
+          <tr>
+            <td>Staff credential authentication</td>
+            <td>Fresh credential check for a staff profile</td>
+            <td><code>staffCredentials</code></td>
+            <td>Only by minting proof</td>
+            <td><code>approvedByCredentialId</code></td>
+          </tr>
+          <tr>
+            <td>Manager approval proof</td>
+            <td>One-use action/subject/requester-bound approval evidence</td>
+            <td>Consumed <code>approvalProof</code></td>
+            <td>Yes</td>
+            <td><code>approvalProofId</code>, <code>approvedByStaffProfileId</code></td>
+          </tr>
+          <tr>
+            <td>Manager elevation</td>
+            <td>Temporary terminal or route capability</td>
+            <td><code>managerElevations</code></td>
+            <td>No</td>
+            <td><code>managerElevationId</code></td>
+          </tr>
+          <tr>
+            <td>Automation policy evidence</td>
+            <td>System completion or policy-run evidence</td>
+            <td>Automation job and policy result</td>
+            <td>No human approval</td>
+            <td><code>automationRunId</code>, policy metadata</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Durable Evidence Contract</h2>
+      <p>Untyped metadata can carry supporting context, but it cannot be the only durable location for approval authority. Async approval requests should add top-level <code>decisionApprovalProofId</code> and <code>decisionApprovedByStaffProfileId</code>. <code>reviewedByUserId</code> remains the account reviewer, while <code>reviewedByStaffProfileId</code> is only a legacy-compatible mirror during migration.</p>
+      <p>Cash Controls, POS, and Daily Operations records must either persist <code>approvalProofId</code> and <code>approvedByStaffProfileId</code> directly where auditors read, persist a typed approval evidence object, or include the proof id needed to join to the canonical <code>approvalProof</code> record.</p>
+    </section>
+
+    <section>
+      <h2>Technical Shape</h2>
+      <div class="diagram" aria-label="approval authority flow">
+        <div class="node"><strong>Authenticated user</strong>Server-owned account authorization and reviewer attribution.</div>
+        <div class="node"><strong>Ordinary actor</strong>Linked staff/requester validation for business action attribution.</div>
+        <div class="node"><strong>Manager credential</strong>Fresh credential check that can mint an approval proof.</div>
+        <div class="node"><strong>Approval proof</strong>Action/subject/requester-bound proof consumed once by the protected command.</div>
+        <div class="node"><strong>Command apply</strong>Records requester/applier and proof-backed approver separately.</div>
+        <div class="node"><strong>Separate lanes</strong>Elevation and automation evidence cannot masquerade as proof-backed approval.</div>
+      </div>
+      <p>The implementation should add or consolidate helpers such as <code>resolveOrdinaryActorStaffProfile</code>, <code>consumeManagerApprovalAuthority</code>, <code>recordApprovalAuthorityAudit</code>, and <code>resolveAsyncApprovalDecisionAuthority</code>. Exact names can change, but the contract should not.</p>
+    </section>
+
+    <section>
+      <h2>Failure State Contract</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Flow</th>
+            <th>Before Proof Consume</th>
+            <th>After Proof Consume Failure</th>
+            <th>Retry Rule</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Inline POS/Cash/Daily command</td>
+            <td>Validate subject status, payload fingerprint, requester, terminal state, and duplicates.</td>
+            <td>Persist <code>failureCode: "approval_apply_failed"</code> with proof, requester, approver, action, subject, and message.</td>
+            <td>Changed facts require a fresh command attempt and fresh proof.</td>
+          </tr>
+          <tr>
+            <td>Operations Queue decision</td>
+            <td>Validate pending request, reviewer authorization, domain subject freshness, and duplicate policy.</td>
+            <td>Patch request to terminal <code>cancelled</code> with <code>decisionApprovalProofId</code>, approver, reviewer, and failure message.</td>
+            <td>Fresh request and proof required after stale or failed apply.</td>
+          </tr>
+          <tr>
+            <td>Cash Controls sync review</td>
+            <td>Validate review ownership, closeout facts, holds, duplicates, and requester identity.</td>
+            <td>Persist failed approval evidence on review/register-session history.</td>
+            <td>Same facts reuse pending review; changed facts conflict or cancel by explicit policy.</td>
+          </tr>
+          <tr>
+            <td>Daily Operations</td>
+            <td>Validate store day status, blockers, carry-forward facts, requester, and subject version.</td>
+            <td>Persist Daily Operations approval failure evidence with fresh-proof-required flag.</td>
+            <td>Do not reuse proof across changed daily-operation facts.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Implementation Units</h2>
+      <div class="grid">
+        <div class="unit">
+          <h3>U1. Shared Authority Contract</h3>
+          <p>Define the typed proof authority result and central requester/action/subject validation around existing <code>approvalProofs</code>, <code>approvalActions</code>, <code>staffCredentials</code>, and approval audit helpers.</p>
+        </div>
+        <div class="unit">
+          <h3>U2. Async Approval Requests</h3>
+          <p>Add top-level <code>decisionApprovalProofId</code> and <code>decisionApprovedByStaffProfileId</code>, while keeping reviewer account and legacy staff fields distinct in <code>approvalRequests</code> and Operations Queue.</p>
+        </div>
+        <div class="unit">
+          <h3>U3. Cash Controls</h3>
+          <p>Migrate closeouts, deposits, register-session sync reviews, and Register Session UI to the shared authority standard after the async decision contract exists.</p>
+        </div>
+        <div class="unit">
+          <h3>U4. POS Commands</h3>
+          <p>Audit payment corrections, voids, item adjustments, transaction public APIs, and Transaction UI for proof/requester/approver clarity.</p>
+        </div>
+        <div class="unit">
+          <h3>U5. Daily Ops and Elevation</h3>
+          <p>Separate manual Daily Close approval, Daily Opening continuity, manager elevation, and automation policy evidence.</p>
+        </div>
+        <div class="unit">
+          <h3>U6. UI Runners</h3>
+          <p>Keep inline approval on the retry-with-proof path and make expired, consumed, mismatched, and stale approval states consistent.</p>
+        </div>
+        <div class="unit">
+          <h3>U7. Docs and Validation</h3>
+          <p>Update package agent docs and add a solution note, then run focused Vitest, Convex, TypeScript, and graphify validation after code changes.</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Key Decisions</h2>
+      <ul>
+        <li>Do not add or infer <code>approvedByUserId</code>.</li>
+        <li>Keep Operations Queue <code>full_admin</code> reviewer gating unless product/security explicitly changes it later.</li>
+        <li>Store async decision proof in top-level <code>decisionApprovalProofId</code> when it is bound to <code>approval_request</code>.</li>
+        <li>Move deterministic validation before proof consumption by default and persist named failure states for remaining races.</li>
+        <li>Preserve current self-approval policy and test it per action.</li>
+        <li>Require requester identity for POS and cash-control approvals where staff attribution is available.</li>
+      </ul>
+    </section>
+
+    <section class="warning">
+      <h2>Primary Risks</h2>
+      <ul>
+        <li>Schema churn could expand scope; start with helper contracts and metadata naming.</li>
+        <li>Operations Queue access semantics could change unintentionally; keep the existing reviewer gate and test it.</li>
+        <li>Proofs can be consumed before stale application failures; validate earlier where possible and standardize retry/terminal metadata.</li>
+        <li>Automation records could look like human approval; keep policy evidence in its own lane.</li>
+      </ul>
+    </section>
+
+    <section class="success">
+      <h2>Success Criteria</h2>
+      <ul>
+        <li>Staff A can request while Staff B approves, with Staff B recorded only as approver and no staff/user link mutation.</li>
+        <li>No protected command accepts <code>managerElevationId</code> or raw client <code>staffProfileId</code> as approval.</li>
+        <li>Async decisions preserve reviewer, approving manager, decision proof, and original domain request separately.</li>
+        <li>Cash Controls, POS, Daily Operations, and Operations Queue tests share one authority vocabulary.</li>
+        <li>Agent docs and solution docs make the standard durable for future work.</li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>

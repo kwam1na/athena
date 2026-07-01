@@ -987,6 +987,7 @@ type VoidTransactionResult = {
   inventoryMovementIds: Array<Id<"inventoryMovement">>;
   operationalEventId?: Id<"operationalEvent">;
   approvalProofId?: Id<"approvalProof">;
+  decisionApprovalProofId?: Id<"approvalProof">;
   approvalRequestId?: Id<"approvalRequest">;
   approverStaffProfileId?: Id<"staffProfile">;
 };
@@ -1365,7 +1366,9 @@ async function applyApprovedTransactionVoid(
   ctx: MutationCtx,
   args: {
     approvalMode: "inline_manager_proof" | "async_approval_request";
-    approvalProofId: Id<"approvalProof">;
+    approvalProofId?: Id<"approvalProof">;
+    decisionApprovalProofId?: Id<"approvalProof">;
+    decisionApprovedByStaffProfileId?: Id<"staffProfile">;
     approvalRequestId?: Id<"approvalRequest">;
     approverStaffProfileId: Id<"staffProfile">;
     items: Array<{
@@ -1398,7 +1401,18 @@ async function applyApprovedTransactionVoid(
     metadata: {
       actionKey: TRANSACTION_VOID_ACTION.key,
       approvalMode: args.approvalMode,
-      approvalProofId: args.approvalProofId,
+      ...(args.approvalProofId
+        ? { approvalProofId: args.approvalProofId }
+        : {}),
+      ...(args.decisionApprovalProofId
+        ? { decisionApprovalProofId: args.decisionApprovalProofId }
+        : {}),
+      ...(args.decisionApprovedByStaffProfileId
+        ? {
+            decisionApprovedByStaffProfileId:
+              args.decisionApprovedByStaffProfileId,
+          }
+        : {}),
       approverStaffProfileId: args.approverStaffProfileId,
       requesterStaffProfileId: args.requesterStaffProfileId,
       reviewerUserId: args.reviewerUserId,
@@ -1542,7 +1556,18 @@ async function applyApprovedTransactionVoid(
       actionKey: TRANSACTION_VOID_ACTION.key,
       approvalMode: args.approvalMode,
       approvalOperationalEventId: approvalEvent?._id,
-      approvalProofId: args.approvalProofId,
+      ...(args.approvalProofId
+        ? { approvalProofId: args.approvalProofId }
+        : {}),
+      ...(args.decisionApprovalProofId
+        ? { decisionApprovalProofId: args.decisionApprovalProofId }
+        : {}),
+      ...(args.decisionApprovedByStaffProfileId
+        ? {
+            decisionApprovedByStaffProfileId:
+              args.decisionApprovedByStaffProfileId,
+          }
+        : {}),
       approverStaffProfileId: args.approverStaffProfileId,
       inventoryMovementIds,
       paymentAllocationIds,
@@ -1569,6 +1594,7 @@ async function applyApprovedTransactionVoid(
     voidReason: args.reason,
     voidedByStaffProfileId: args.requesterStaffProfileId,
     voidApprovalProofId: args.approvalProofId,
+    voidDecisionApprovalProofId: args.decisionApprovalProofId,
     voidApprovalRequestId: args.approvalRequestId,
     voidApprovedByStaffProfileId: args.approverStaffProfileId,
     voidOperationalEventId: event?._id,
@@ -1584,6 +1610,7 @@ async function applyApprovedTransactionVoid(
     inventoryMovementIds,
     operationalEventId: event?._id,
     approvalProofId: args.approvalProofId,
+    decisionApprovalProofId: args.decisionApprovalProofId,
     approvalRequestId: args.approvalRequestId,
     approverStaffProfileId: args.approverStaffProfileId,
   });
@@ -1681,11 +1708,13 @@ export async function voidTransaction(
   return applyApprovedTransactionVoid(ctx, {
     approvalMode: "inline_manager_proof",
     approvalProofId: approvalProof.data.approvalProofId,
+    decisionApprovalProofId: approvalProof.data.approvalProofId,
     approvalRequestId:
       matchingApprovalRequest?.kind === "ok"
         ? matchingApprovalRequest.data._id
         : undefined,
     approverStaffProfileId: approvalProof.data.approvedByStaffProfileId,
+    decisionApprovedByStaffProfileId: approvalProof.data.approvedByStaffProfileId,
     items: preconditions.data.items,
     reason,
     requesterStaffProfileId: actorStaffProfileId,
@@ -1696,6 +1725,9 @@ export async function voidTransaction(
       await ctx.db.patch("approvalRequest", matchingApprovalRequest.data._id, {
         status: "approved",
         reviewedByStaffProfileId: approvalProof.data.approvedByStaffProfileId,
+        decisionApprovalProofId: approvalProof.data.approvalProofId,
+        decisionApprovedByStaffProfileId:
+          approvalProof.data.approvedByStaffProfileId,
         decisionNotes: reason,
         decidedAt: result.data.voidedAt,
       });
@@ -1710,6 +1742,8 @@ export async function resolveTransactionVoidApprovalDecisionWithCtx(
   args: {
     approvalProofId?: Id<"approvalProof">;
     approvalRequestId: Id<"approvalRequest">;
+    decisionApprovedByStaffProfileId?: Id<"staffProfile">;
+    decisionApprovalProofId?: Id<"approvalProof">;
     decision: "approved" | "rejected" | "cancelled";
     decisionNotes?: string;
     reviewedByStaffProfileId?: Id<"staffProfile">;
@@ -1733,7 +1767,12 @@ export async function resolveTransactionVoidApprovalDecisionWithCtx(
     return null;
   }
 
-  if (!args.approvalProofId || !args.reviewedByStaffProfileId) {
+  const approverStaffProfileId =
+    args.decisionApprovedByStaffProfileId ?? args.reviewedByStaffProfileId;
+  const decisionApprovalProofId =
+    args.decisionApprovalProofId ?? args.approvalProofId;
+
+  if (!decisionApprovalProofId || !approverStaffProfileId) {
     throw new Error("Manager approval is required to void a completed sale.");
   }
 
@@ -1773,9 +1812,10 @@ export async function resolveTransactionVoidApprovalDecisionWithCtx(
 
   const result = await applyApprovedTransactionVoid(ctx, {
     approvalMode: "async_approval_request",
-    approvalProofId: args.approvalProofId,
+    decisionApprovalProofId,
+    decisionApprovedByStaffProfileId: approverStaffProfileId,
     approvalRequestId: args.approvalRequestId,
-    approverStaffProfileId: args.reviewedByStaffProfileId,
+    approverStaffProfileId,
     items: preconditions.data.items,
     reason:
       args.decisionNotes?.trim() ||

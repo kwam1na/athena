@@ -2711,6 +2711,7 @@ describe("cash control closeouts", () => {
         registerSession,
       },
     });
+    assertConformsToExportedReturns(reviewRegisterSessionCloseout, result);
     expect(runMutation).toHaveBeenCalledTimes(1);
     expect(runMutation).toHaveBeenCalledWith(
       expect.anything(),

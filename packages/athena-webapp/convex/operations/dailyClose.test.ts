@@ -481,6 +481,110 @@ describe("end-of-day review backend foundation", () => {
     ).not.toThrow();
   });
 
+  it("derives public daily close completion requester user from auth instead of caller args", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 4, 7, 22));
+    vi.mocked(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).mockResolvedValue({
+      _creationTime: 0,
+      _id: "auth-user-1" as Id<"athenaUser">,
+      email: "auth@wigclub.store",
+    });
+    const { db } = createDb({
+      approvalProof: [dailyCloseApprovalProof()],
+      posTransaction: [
+        {
+          _id: "txn-1",
+          completedAt: Date.UTC(2026, 4, 7, 14),
+          payments: [{ amount: 12000, method: "cash", timestamp: 1 }],
+          status: "completed",
+          storeId: "store-1",
+          subtotal: 12000,
+          tax: 0,
+          total: 12000,
+          totalPaid: 12000,
+          transactionNumber: "TXN-1",
+        },
+      ],
+      store: [store],
+    });
+
+    const result = await getHandler(completeDailyClose)(
+      { db } as unknown as MutationCtx,
+      {
+        actorStaffProfileId: "staff-1" as Id<"staffProfile">,
+        actorUserId: "spoofed-user" as Id<"athenaUser">,
+        approvalProofId: "approval-proof-1" as Id<"approvalProof">,
+        operatingDate: "2026-05-07",
+        storeId: "store-1" as Id<"store">,
+      } as never,
+    );
+
+    expect(result).toMatchObject({
+      kind: "ok",
+      data: {
+        dailyClose: {
+          completedByUserId: "auth-user-1",
+          completionRequestedByUserId: "auth-user-1",
+        },
+      },
+    });
+  });
+
+  it("derives public daily close reopen requester user from auth instead of caller args", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 4, 8, 10));
+    vi.mocked(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).mockResolvedValue({
+      _creationTime: 0,
+      _id: "auth-user-1" as Id<"athenaUser">,
+      email: "auth@wigclub.store",
+    });
+    const { db } = createDb({
+      approvalProof: [dailyCloseReopenApprovalProof()],
+      dailyClose: [completedDailyCloseRow()],
+      posTransaction: [
+        {
+          _id: "txn-1",
+          completedAt: Date.UTC(2026, 4, 7, 14),
+          payments: [{ amount: 12000, method: "cash", timestamp: 1 }],
+          status: "completed",
+          storeId: "store-1",
+          subtotal: 12000,
+          tax: 0,
+          total: 12000,
+          totalPaid: 12000,
+          transactionNumber: "TXN-1",
+        },
+      ],
+      store: [store],
+    });
+
+    const result = await getHandler(reopenDailyClose)(
+      { db } as unknown as MutationCtx,
+      {
+        actorStaffProfileId: "staff-1" as Id<"staffProfile">,
+        actorUserId: "spoofed-user" as Id<"athenaUser">,
+        approvalProofId: "approval-proof-reopen-1" as Id<"approvalProof">,
+        dailyCloseId: "daily-close-1" as Id<"dailyClose">,
+        reason: "Late cash sale was missed.",
+        storeId: "store-1" as Id<"store">,
+      } as never,
+    );
+
+    expect(result).toMatchObject({
+      kind: "ok",
+      data: {
+        originalDailyClose: {
+          reopenRequestedByUserId: "auth-user-1",
+        },
+        reopenedDailyClose: {
+          reopenRequestedByUserId: "auth-user-1",
+        },
+      },
+    });
+  });
+
   it("includes the latest EOD automation preparation status when present", async () => {
     const { db } = createDb({
       automationRun: [
@@ -2688,6 +2792,10 @@ describe("end-of-day review backend foundation", () => {
         dailyClose: {
           completedByStaffProfileId: "staff-manager-1",
           completedByUserId: "user-1",
+          completionApprovalProofId: "approval-proof-1",
+          completionApprovedByStaffProfileId: "staff-manager-1",
+          completionRequestedByStaffProfileId: "staff-1",
+          completionRequestedByUserId: "user-1",
           isCurrent: true,
           notes: "Close reviewed.",
           operatingDate: "2026-05-07",
@@ -2708,6 +2816,10 @@ describe("end-of-day review backend foundation", () => {
         completedAt: Date.UTC(2026, 4, 7, 22),
         completedByStaffProfileId: "staff-manager-1",
         completedByUserId: "user-1",
+        completionApprovalProofId: "approval-proof-1",
+        completionApprovedByStaffProfileId: "staff-manager-1",
+        completionRequestedByStaffProfileId: "staff-1",
+        completionRequestedByUserId: "user-1",
         notes: "Close reviewed.",
         operatingDate: "2026-05-07",
         organizationId: "org-1",
@@ -2785,12 +2897,14 @@ describe("end-of-day review backend foundation", () => {
           insert.value.eventType === "daily_close_completed",
       )?.value,
     ).toMatchObject({
-      actorStaffProfileId: "staff-manager-1",
+      actorStaffProfileId: "staff-1",
       eventType: "daily_close_completed",
       subjectType: "daily_close",
       metadata: {
         approvalProofId: "approval-proof-1",
         approvedByStaffProfileId: "staff-manager-1",
+        requestedByStaffProfileId: "staff-1",
+        requestedByUserId: "user-1",
       },
     });
   });
@@ -4120,12 +4234,20 @@ describe("end-of-day review backend foundation", () => {
           isCurrent: false,
           lifecycleStatus: "reopened",
           reportSnapshot: originalSnapshot,
+          reopenApprovalProofId: "approval-proof-reopen-1",
+          reopenApprovedByStaffProfileId: "staff-manager-1",
+          reopenRequestedByStaffProfileId: "staff-1",
+          reopenRequestedByUserId: "user-1",
           reopenReason: "Late cash sale was missed.",
           status: "completed",
         },
         reopenedDailyClose: {
           isCurrent: true,
           lifecycleStatus: "active",
+          reopenApprovalProofId: "approval-proof-reopen-1",
+          reopenApprovedByStaffProfileId: "staff-manager-1",
+          reopenRequestedByStaffProfileId: "staff-1",
+          reopenRequestedByUserId: "user-1",
           reopenedFromDailyCloseId: "daily-close-1",
           status: "open",
           supersedesDailyCloseId: "daily-close-1",
@@ -4184,11 +4306,14 @@ describe("end-of-day review backend foundation", () => {
           insert.value.eventType === "daily_close_reopened",
       )?.value,
     ).toMatchObject({
-      actorStaffProfileId: "staff-manager-1",
+      actorStaffProfileId: "staff-1",
       metadata: {
         approvalProofId: "approval-proof-reopen-1",
+        approvedByStaffProfileId: "staff-manager-1",
         reason: "Late cash sale was missed.",
         reopenedDailyCloseId: "dailyClose-2",
+        requestedByStaffProfileId: "staff-1",
+        requestedByUserId: "user-1",
       },
     });
   });
