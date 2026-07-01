@@ -184,6 +184,10 @@ type DailyCloseSnapshot = {
     completedByStaffProfileId?: Id<"staffProfile">;
     completedByStaffName?: string | null;
     completedByUserId?: Id<"athenaUser">;
+    completionApprovalProofId?: Id<"approvalProof">;
+    completionApprovedByStaffProfileId?: Id<"staffProfile">;
+    completionRequestedByStaffProfileId?: Id<"staffProfile">;
+    completionRequestedByUserId?: Id<"athenaUser">;
     notes?: string;
     policyReviewedItemKeys?: string[];
     restrictedDetailsRedacted?: boolean;
@@ -230,6 +234,10 @@ type DailyCloseReportSnapshot = {
     completedAt: number;
     completedByUserId?: Id<"athenaUser">;
     completedByStaffProfileId?: Id<"staffProfile">;
+    completionApprovalProofId?: Id<"approvalProof">;
+    completionApprovedByStaffProfileId?: Id<"staffProfile">;
+    completionRequestedByStaffProfileId?: Id<"staffProfile">;
+    completionRequestedByUserId?: Id<"athenaUser">;
     actorType?: "human" | "automation";
     automationRunId?: Id<"automationRun">;
     automationPolicyVersion?: string;
@@ -289,6 +297,12 @@ function normalizeCompletedDailyCloseSnapshot(args: {
       completedByStaffProfileId: attribution.completedByStaffProfileId,
       completedByStaffName: args.completedByStaffName ?? null,
       completedByUserId: attribution.completedByUserId,
+      completionApprovalProofId: attribution.completionApprovalProofId,
+      completionApprovedByStaffProfileId:
+        attribution.completionApprovedByStaffProfileId,
+      completionRequestedByStaffProfileId:
+        attribution.completionRequestedByStaffProfileId,
+      completionRequestedByUserId: attribution.completionRequestedByUserId,
       notes: reportSnapshot.closeMetadata.notes,
       ...(attribution.policyReviewedItemKeys
         ? { policyReviewedItemKeys: attribution.policyReviewedItemKeys }
@@ -411,6 +425,10 @@ type DailyCloseHistoryListItem = {
   completedByUserId?: Id<"athenaUser">;
   completedByStaffProfileId?: Id<"staffProfile">;
   completedByStaffName?: string | null;
+  completionApprovalProofId?: Id<"approvalProof">;
+  completionApprovedByStaffProfileId?: Id<"staffProfile">;
+  completionRequestedByStaffProfileId?: Id<"staffProfile">;
+  completionRequestedByUserId?: Id<"athenaUser">;
   readinessStatus: DailyCloseReadinessStatus;
   blockerCount: number;
   reviewCount: number;
@@ -426,6 +444,10 @@ type DailyCloseCompletionAttribution = {
   automationRunId?: Id<"automationRun">;
   completedByStaffProfileId?: Id<"staffProfile">;
   completedByUserId?: Id<"athenaUser">;
+  completionApprovalProofId?: Id<"approvalProof">;
+  completionApprovedByStaffProfileId?: Id<"staffProfile">;
+  completionRequestedByStaffProfileId?: Id<"staffProfile">;
+  completionRequestedByUserId?: Id<"athenaUser">;
   policyReviewedItemKeys?: string[];
 };
 
@@ -1848,6 +1870,10 @@ function buildDailyCloseReportSnapshot(args: {
   completedAt: number;
   completedByStaffProfileId?: Id<"staffProfile">;
   completedByUserId?: Id<"athenaUser">;
+  completionApprovalProofId?: Id<"approvalProof">;
+  completionApprovedByStaffProfileId?: Id<"staffProfile">;
+  completionRequestedByStaffProfileId?: Id<"staffProfile">;
+  completionRequestedByUserId?: Id<"athenaUser">;
   currentnessMode?: "mark_current" | "historical_record";
   notes?: string;
   policyReviewedItemKeys?: string[];
@@ -1866,6 +1892,12 @@ function buildDailyCloseReportSnapshot(args: {
       completedAt: args.completedAt,
       completedByUserId: args.completedByUserId,
       completedByStaffProfileId: args.completedByStaffProfileId,
+      completionApprovalProofId: args.completionApprovalProofId,
+      completionApprovedByStaffProfileId:
+        args.completionApprovedByStaffProfileId,
+      completionRequestedByStaffProfileId:
+        args.completionRequestedByStaffProfileId,
+      completionRequestedByUserId: args.completionRequestedByUserId,
       actorType: args.actorType,
       automationRunId: args.automationRunId,
       automationPolicyVersion: args.automationPolicyVersion,
@@ -2107,6 +2139,18 @@ function completionAttributionForDailyClose(
     completedByStaffProfileId,
     completedByUserId:
       dailyClose.completedByUserId ?? closeMetadata?.completedByUserId,
+    completionApprovalProofId:
+      dailyClose.completionApprovalProofId ??
+      closeMetadata?.completionApprovalProofId,
+    completionApprovedByStaffProfileId:
+      dailyClose.completionApprovedByStaffProfileId ??
+      closeMetadata?.completionApprovedByStaffProfileId,
+    completionRequestedByStaffProfileId:
+      dailyClose.completionRequestedByStaffProfileId ??
+      closeMetadata?.completionRequestedByStaffProfileId,
+    completionRequestedByUserId:
+      dailyClose.completionRequestedByUserId ??
+      closeMetadata?.completionRequestedByUserId,
     policyReviewedItemKeys:
       dailyClose.policyReviewedItemKeys ?? closeMetadata?.policyReviewedItemKeys,
   };
@@ -2263,6 +2307,12 @@ function toDailyCloseHistoryListItem(
     completedByUserId: attribution.completedByUserId,
     completedByStaffProfileId: attribution.completedByStaffProfileId,
     completedByStaffName,
+    completionApprovalProofId: attribution.completionApprovalProofId,
+    completionApprovedByStaffProfileId:
+      attribution.completionApprovedByStaffProfileId,
+    completionRequestedByStaffProfileId:
+      attribution.completionRequestedByStaffProfileId,
+    completionRequestedByUserId: attribution.completionRequestedByUserId,
     readinessStatus: dailyClose.readiness.status,
     blockerCount: dailyClose.readiness.blockerCount,
     reviewCount: dailyClose.readiness.reviewCount,
@@ -3585,6 +3635,8 @@ async function recordDailyCloseCompletedEvent(
     operatingDate: string;
     organizationId: Id<"organization">;
     policyReviewedItemKeys?: string[];
+    requestedByStaffProfileId?: Id<"staffProfile">;
+    requestedByUserId?: Id<"athenaUser">;
     storeId: Id<"store">;
   },
 ) {
@@ -3611,6 +3663,12 @@ async function recordDailyCloseCompletedEvent(
         : {}),
       ...(args.approvedByStaffProfileId
         ? { approvedByStaffProfileId: args.approvedByStaffProfileId }
+        : {}),
+      ...(args.requestedByStaffProfileId
+        ? { requestedByStaffProfileId: args.requestedByStaffProfileId }
+        : {}),
+      ...(args.requestedByUserId
+        ? { requestedByUserId: args.requestedByUserId }
         : {}),
       ...(args.policyReviewedItemKeys
         ? { policyReviewedItemKeys: args.policyReviewedItemKeys }
@@ -3741,7 +3799,12 @@ export async function completeDailyCloseWithCtx(
   }
 
   const now = Date.now();
-  const completedByStaffProfileId = approvalProof.data.approvedByStaffProfileId;
+  const completionApprovalProofId = approvalProof.data.approvalProofId;
+  const completionApprovedByStaffProfileId =
+    approvalProof.data.approvedByStaffProfileId;
+  const completionRequestedByStaffProfileId = args.actorStaffProfileId;
+  const completionRequestedByUserId = args.actorUserId;
+  const completedByStaffProfileId = completionApprovedByStaffProfileId;
   const reviewedItemKeys = snapshot.reviewItems.map((item) => item.key);
   const carryForwardWorkItemIds = uniqueOperationalWorkItemIds(
     [
@@ -3783,6 +3846,10 @@ export async function completeDailyCloseWithCtx(
       completedAt: now,
       completedByStaffProfileId,
       completedByUserId: args.actorUserId,
+      completionApprovalProofId,
+      completionApprovedByStaffProfileId,
+      completionRequestedByStaffProfileId,
+      completionRequestedByUserId,
       actorType: "human",
       notes,
       readiness,
@@ -3797,6 +3864,10 @@ export async function completeDailyCloseWithCtx(
     completedAt: now,
     completedByUserId: args.actorUserId,
     completedByStaffProfileId,
+    completionApprovalProofId,
+    completionApprovedByStaffProfileId,
+    completionRequestedByStaffProfileId,
+    completionRequestedByUserId,
     actorType: "human" as const,
   };
 
@@ -3840,9 +3911,11 @@ export async function completeDailyCloseWithCtx(
     organizationId: store.organizationId,
     actorType: "human",
     actorUserId: args.actorUserId,
-    actorStaffProfileId: completedByStaffProfileId,
-    approvalProofId: approvalProof.data.approvalProofId,
-    approvedByStaffProfileId: approvalProof.data.approvedByStaffProfileId,
+    actorStaffProfileId: args.actorStaffProfileId,
+    approvalProofId: completionApprovalProofId,
+    approvedByStaffProfileId: completionApprovedByStaffProfileId,
+    requestedByStaffProfileId: completionRequestedByStaffProfileId,
+    requestedByUserId: completionRequestedByUserId,
     dailyClose,
     operatingDate: args.operatingDate,
   });
@@ -4269,6 +4342,11 @@ export async function reopenDailyCloseWithCtx(
   }
 
   const now = Date.now();
+  const reopenApprovalProofId = approvalProof.data.approvalProofId;
+  const reopenApprovedByStaffProfileId =
+    approvalProof.data.approvedByStaffProfileId;
+  const reopenRequestedByStaffProfileId = args.actorStaffProfileId;
+  const reopenRequestedByUserId = args.actorUserId;
   const originalReportSnapshot =
     originalDailyClose.reportSnapshot as DailyCloseReportSnapshot;
   const reopenedShouldBeCurrent =
@@ -4291,7 +4369,11 @@ export async function reopenDailyCloseWithCtx(
     updatedAt: now,
     reopenedAt: now,
     reopenedByUserId: args.actorUserId,
-    reopenedByStaffProfileId: approvalProof.data.approvedByStaffProfileId,
+    reopenedByStaffProfileId: reopenApprovedByStaffProfileId,
+    reopenApprovalProofId,
+    reopenApprovedByStaffProfileId,
+    reopenRequestedByStaffProfileId,
+    reopenRequestedByUserId,
     reopenReason: reason,
     reopenedFromDailyCloseId: originalDailyClose._id,
     supersedesDailyCloseId: originalDailyClose._id,
@@ -4302,7 +4384,11 @@ export async function reopenDailyCloseWithCtx(
     isCurrent: false,
     reopenedAt: now,
     reopenedByUserId: args.actorUserId,
-    reopenedByStaffProfileId: approvalProof.data.approvedByStaffProfileId,
+    reopenedByStaffProfileId: reopenApprovedByStaffProfileId,
+    reopenApprovalProofId,
+    reopenApprovedByStaffProfileId,
+    reopenRequestedByStaffProfileId,
+    reopenRequestedByUserId,
     reopenReason: reason,
     supersededByDailyCloseId: reopenedDailyCloseId,
     updatedAt: now,
@@ -4341,10 +4427,16 @@ export async function reopenDailyCloseWithCtx(
     subjectLabel: `EOD Review ${originalDailyClose.operatingDate}`,
     message: `EOD Review reopened for ${originalDailyClose.operatingDate}.`,
     actorUserId: args.actorUserId,
-    actorStaffProfileId: approvalProof.data.approvedByStaffProfileId,
+    actorStaffProfileId: args.actorStaffProfileId,
     metadata: {
-      approvalProofId: approvalProof.data.approvalProofId,
-      approvedByStaffProfileId: approvalProof.data.approvedByStaffProfileId,
+      approvalProofId: reopenApprovalProofId,
+      approvedByStaffProfileId: reopenApprovedByStaffProfileId,
+      ...(reopenRequestedByStaffProfileId
+        ? { requestedByStaffProfileId: reopenRequestedByStaffProfileId }
+        : {}),
+      ...(reopenRequestedByUserId
+        ? { requestedByUserId: reopenRequestedByUserId }
+        : {}),
       operatingDate: originalDailyClose.operatingDate,
       reason,
       reopenedDailyCloseId,
@@ -4555,7 +4647,6 @@ export const getDailyCloseSnapshot = query({
 
 export const completeDailyClose = mutation({
   args: {
-    actorUserId: v.optional(v.id("athenaUser")),
     actorStaffProfileId: v.optional(v.id("staffProfile")),
     approvalProofId: v.optional(v.id("approvalProof")),
     carryForwardWorkItemIds: v.optional(v.array(v.id("operationalWorkItem"))),
@@ -4580,7 +4671,24 @@ export const completeDailyClose = mutation({
     storeId: v.id("store"),
   },
   returns: commandResultValidator(v.any()),
-  handler: (ctx, args) => completeDailyCloseWithCtx(ctx, args),
+  handler: async (ctx, args) => {
+    let athenaUser: Awaited<
+      ReturnType<typeof requireAuthenticatedAthenaUserWithCtx>
+    >;
+    try {
+      athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+    } catch {
+      return userError({
+        code: "authorization_failed",
+        message: "Sign in again to continue.",
+      });
+    }
+
+    return completeDailyCloseWithCtx(ctx, {
+      ...args,
+      actorUserId: athenaUser._id,
+    });
+  },
 });
 
 export const completeDailyCloseForAutomation = internalMutation({
@@ -4623,7 +4731,6 @@ export const completeDailyCloseForAutomation = internalMutation({
 
 export const reopenDailyClose = mutation({
   args: {
-    actorUserId: v.optional(v.id("athenaUser")),
     actorStaffProfileId: v.optional(v.id("staffProfile")),
     approvalProofId: v.optional(v.id("approvalProof")),
     dailyCloseId: v.id("dailyClose"),
@@ -4632,7 +4739,24 @@ export const reopenDailyClose = mutation({
     storeId: v.id("store"),
   },
   returns: commandResultValidator(v.any()),
-  handler: (ctx, args) => reopenDailyCloseWithCtx(ctx, args),
+  handler: async (ctx, args) => {
+    let athenaUser: Awaited<
+      ReturnType<typeof requireAuthenticatedAthenaUserWithCtx>
+    >;
+    try {
+      athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+    } catch {
+      return userError({
+        code: "authorization_failed",
+        message: "Sign in again to continue.",
+      });
+    }
+
+    return reopenDailyCloseWithCtx(ctx, {
+      ...args,
+      actorUserId: athenaUser._id,
+    });
+  },
 });
 
 export const getDailyCloseOpeningContext = query({

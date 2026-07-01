@@ -234,6 +234,7 @@ describe("getCompletedTransactions", () => {
         voidReason: "Duplicate sale",
         voidApprovalRequestId: "approval-request-1" as Id<"approvalRequest">,
         voidApprovalProofId: "approval-proof-1" as Id<"approvalProof">,
+        voidDecisionApprovalProofId: "decision-proof-1" as Id<"approvalProof">,
       },
     ] as never);
     vi.mocked(getCashierById).mockResolvedValue(null as never);
@@ -254,6 +255,7 @@ describe("getCompletedTransactions", () => {
         voidReason: "Duplicate sale",
         voidApprovalRequestId: "approval-request-1",
         voidApprovalProofId: "approval-proof-1",
+        voidDecisionApprovalProofId: "decision-proof-1",
       }),
     ]);
   });
@@ -1828,6 +1830,7 @@ describe("getTransactionById", () => {
       voidedByStaffProfileId: "staff-1" as Id<"staffProfile">,
       voidApprovalRequestId: "approval-request-1" as Id<"approvalRequest">,
       voidApprovalProofId: "approval-proof-1" as Id<"approvalProof">,
+      voidDecisionApprovalProofId: "decision-proof-1" as Id<"approvalProof">,
       voidApprovedByStaffProfileId: "manager-1" as Id<"staffProfile">,
       voidOperationalEventId: "event-void" as Id<"operationalEvent">,
     } as never);
@@ -1877,6 +1880,7 @@ describe("getTransactionById", () => {
         voidedByStaffProfileId: "staff-1",
         voidApprovalRequestId: "approval-request-1",
         voidApprovalProofId: "approval-proof-1",
+        voidDecisionApprovalProofId: "decision-proof-1",
         voidApprovedByStaffProfileId: "manager-1",
         voidOperationalEventId: "event-void",
         correctionHistory: [

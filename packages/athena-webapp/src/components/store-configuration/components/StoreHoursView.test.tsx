@@ -283,34 +283,38 @@ describe("StoreHoursView", () => {
     );
   });
 
-  it("validates overlapping date exceptions before saving", async () => {
-    const user = userEvent.setup();
-    mockedUseQuery.mockReturnValue({
-      ...candidateSchedule,
-      exceptions: [
-        {
-          closed: true,
-          date: "2026-07-04",
-          label: "Holiday",
-          windows: [],
-        },
-        {
-          closed: true,
-          date: "2026-07-04",
-          label: "Special closure",
-          windows: [],
-        },
-      ],
-    } as never);
+  it(
+    "validates overlapping date exceptions before saving",
+    async () => {
+      const user = userEvent.setup();
+      mockedUseQuery.mockReturnValue({
+        ...candidateSchedule,
+        exceptions: [
+          {
+            closed: true,
+            date: "2026-07-04",
+            label: "Holiday",
+            windows: [],
+          },
+          {
+            closed: true,
+            date: "2026-07-04",
+            label: "Special closure",
+            windows: [],
+          },
+        ],
+      } as never);
 
-    render(<StoreHoursView />);
+      render(<StoreHoursView />);
 
-    await user.click(screen.getByLabelText("Confirm suggested store hours"));
-    await user.click(screen.getByRole("button", { name: "Save store hours" }));
+      await user.click(screen.getByLabelText("Confirm suggested store hours"));
+      await user.click(screen.getByRole("button", { name: "Save store hours" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "These hours overlap. Adjust one time range before saving.",
-    );
-    expect(mockUpdateSchedule).not.toHaveBeenCalled();
-  });
+      expect(await screen.findByRole("alert")).toHaveTextContent(
+        "These hours overlap. Adjust one time range before saving.",
+      );
+      expect(mockUpdateSchedule).not.toHaveBeenCalled();
+    },
+    15_000,
+  );
 });

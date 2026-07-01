@@ -86,7 +86,30 @@ describe("POS public transaction query validators", () => {
     };
 
     assertConformsToExportedReturns(completeTransaction, validationError);
-    assertConformsToExportedReturns(getCompletedTransactions, []);
+    assertConformsToExportedReturns(getCompletedTransactions, [
+      {
+        _id: "txn-void" as Id<"posTransaction">,
+        cashierName: null,
+        completedAt: 1,
+        customerName: null,
+        hasMultiplePaymentMethods: false,
+        hasTrace: false,
+        itemCount: 0,
+        paymentMethod: "cash",
+        paymentMethods: ["cash"],
+        serviceLineCount: 0,
+        servicePaymentTotal: 0,
+        sessionTraceId: null,
+        status: "void",
+        total: 210000,
+        transactionNumber: "584065",
+        voidApprovalProofId: "legacy-proof-1" as Id<"approvalProof">,
+        voidApprovalRequestId: "request-1" as Id<"approvalRequest">,
+        voidDecisionApprovalProofId: "decision-proof-1" as Id<"approvalProof">,
+        voidReason: "Duplicate sale",
+        voidedAt: 2,
+      },
+    ]);
     assertConformsToExportedReturns(getTransactionById, null);
     assertConformsToExportedReturns(getTransactionById, {
       _id: "txn-1" as Id<"posTransaction">,
@@ -130,8 +153,24 @@ describe("POS public transaction query validators", () => {
       totalAppliedAdjustmentDelta: 0,
       totalPaid: 210000,
       transactionNumber: "584065",
+      voidDecisionApprovalProofId: "decision-proof-1" as Id<"approvalProof">,
     });
     assertConformsToExportedReturns(voidTransaction, validationError);
+    assertConformsToExportedReturns(voidTransaction, {
+      kind: "ok" as const,
+      data: {
+        approvalProofId: "legacy-proof-1" as Id<"approvalProof">,
+        approvalRequestId: "request-1" as Id<"approvalRequest">,
+        approverStaffProfileId: "manager-1" as Id<"staffProfile">,
+        decisionApprovalProofId: "decision-proof-1" as Id<"approvalProof">,
+        inventoryMovementIds: ["movement-1" as Id<"inventoryMovement">],
+        operationalEventId: "event-1" as Id<"operationalEvent">,
+        paymentAllocationIds: ["payment-allocation-1" as Id<"paymentAllocation">],
+        transactionId: "txn-void" as Id<"posTransaction">,
+        transactionNumber: "584065",
+        voidedAt: 2,
+      },
+    });
     assertConformsToExportedReturns(createTransactionFromSession, validationError);
     assertConformsToExportedReturns(correctTransactionCustomer, validationError);
     assertConformsToExportedReturns(
@@ -139,6 +178,25 @@ describe("POS public transaction query validators", () => {
       validationError,
     );
     assertConformsToExportedReturns(adjustTransactionItems, validationError);
+    assertConformsToExportedReturns(adjustTransactionItems, {
+      kind: "ok" as const,
+      data: {
+        adjustmentId: "adjustment-1" as Id<"posTransactionAdjustment">,
+        approvalProofId: "legacy-proof-1" as Id<"approvalProof">,
+        approvalRequestId: "request-1" as Id<"approvalRequest">,
+        approverStaffProfileId: "manager-1" as Id<"staffProfile">,
+        decisionApprovalProofId: "decision-proof-1" as Id<"approvalProof">,
+        decisionApprovedByStaffProfileId: "manager-1" as Id<"staffProfile">,
+        inventoryMovementIds: ["movement-1" as Id<"inventoryMovement">],
+        lineIds: ["line-1" as Id<"posTransactionAdjustmentLine">],
+        operationalEventId: "event-1" as Id<"operationalEvent">,
+        paymentAllocationId: "payment-allocation-1" as Id<"paymentAllocation">,
+        payloadFingerprint: "fingerprint-1",
+        settlementAmount: 500,
+        settlementDirection: "refund",
+        transactionId: "txn-1" as Id<"posTransaction">,
+      },
+    });
     assertConformsToExportedReturns(getRecentTransactionsWithCustomers, []);
     assertConformsToExportedReturns(markReceiptPrinted, {
       kind: "ok" as const,

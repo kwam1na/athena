@@ -292,6 +292,8 @@ async function applyPaymentMethodCorrection(
     actorStaffProfileId?: Id<"staffProfile">;
     actorUserId?: Id<"athenaUser">;
     approvalOperationalEventId?: Id<"operationalEvent">;
+    decisionApprovalProofId?: Id<"approvalProof">;
+    decisionApprovedByStaffProfileId?: Id<"staffProfile">;
     approvalProofId?: Id<"approvalProof">;
     approvalRequestId?: Id<"approvalRequest">;
     approverStaffProfileId?: Id<"staffProfile">;
@@ -349,6 +351,8 @@ async function applyPaymentMethodCorrection(
       approvalProofId: args.approvalProofId,
       approvalRequestId: args.approvalRequestId,
       approvalOperationalEventId: args.approvalOperationalEventId,
+      decisionApprovalProofId: args.decisionApprovalProofId,
+      decisionApprovedByStaffProfileId: args.decisionApprovedByStaffProfileId,
       approverStaffProfileId: args.approverStaffProfileId,
       previousPaymentMethod: payment.method,
       paymentMethod: args.paymentMethod,
@@ -556,6 +560,8 @@ export async function correctTransactionPaymentMethod(
     approvalRequestId: inlineApprovalRequest?._id,
     approvalProofId: approvalProof.approvalProofId,
     approverStaffProfileId: approvalProof.approvedByStaffProfileId,
+    decisionApprovalProofId: approvalProof.approvalProofId,
+    decisionApprovedByStaffProfileId: approvalProof.approvedByStaffProfileId,
     paymentMethod: args.paymentMethod,
     reason: args.reason,
     transaction,
@@ -566,6 +572,8 @@ export async function correctTransactionPaymentMethod(
       status: "approved",
       reviewedByUserId: args.actorUserId,
       reviewedByStaffProfileId: approvalProof.approvedByStaffProfileId,
+      decisionApprovalProofId: approvalProof.approvalProofId,
+      decisionApprovedByStaffProfileId: approvalProof.approvedByStaffProfileId,
       decisionNotes: args.reason,
       decidedAt: Date.now(),
     });
@@ -648,6 +656,8 @@ export async function resolvePaymentMethodCorrectionApprovalDecisionWithCtx(
   args: {
     approvalRequestId: Id<"approvalRequest">;
     decision: "approved" | "rejected" | "cancelled";
+    decisionApprovedByStaffProfileId?: Id<"staffProfile">;
+    decisionApprovalProofId?: Id<"approvalProof">;
     reviewedByStaffProfileId?: Id<"staffProfile">;
     reviewedByUserId?: Id<"athenaUser">;
     decisionNotes?: string;
@@ -678,6 +688,8 @@ export async function resolvePaymentMethodCorrectionApprovalDecisionWithCtx(
       metadata: {
         actionKey: PAYMENT_METHOD_CORRECTION_ACTION_KEY,
         approvalRequestId: args.approvalRequestId,
+        decisionApprovalProofId: args.decisionApprovalProofId,
+        decisionApprovedByStaffProfileId: args.decisionApprovedByStaffProfileId,
         decision: args.decision,
       },
       reason: args.decisionNotes,
@@ -736,6 +748,8 @@ export async function resolvePaymentMethodCorrectionApprovalDecisionWithCtx(
     metadata: {
       actionKey: PAYMENT_METHOD_CORRECTION_ACTION_KEY,
       approvalRequestId: args.approvalRequestId,
+      decisionApprovalProofId: args.decisionApprovalProofId,
+      decisionApprovedByStaffProfileId: args.decisionApprovedByStaffProfileId,
       paymentMethod,
       previousPaymentMethod: payment.method,
     },
@@ -753,7 +767,10 @@ export async function resolvePaymentMethodCorrectionApprovalDecisionWithCtx(
     actorUserId: approvalRequest.requestedByUserId,
     approvalOperationalEventId: approvalEvent?._id,
     approvalRequestId: args.approvalRequestId,
-    approverStaffProfileId: args.reviewedByStaffProfileId,
+    decisionApprovedByStaffProfileId: args.decisionApprovedByStaffProfileId,
+    decisionApprovalProofId: args.decisionApprovalProofId,
+    approverStaffProfileId:
+      args.decisionApprovedByStaffProfileId ?? args.reviewedByStaffProfileId,
     paymentMethod,
     reason: approvalRequest.notes ?? approvalRequest.reason,
     transaction,

@@ -186,6 +186,8 @@ const adjustTransactionItemsResultValidator = commandResultValidator(
     approvalProofId: v.optional(v.id("approvalProof")),
     approvalRequestId: v.optional(v.id("approvalRequest")),
     approverStaffProfileId: v.optional(v.id("staffProfile")),
+    decisionApprovalProofId: v.optional(v.id("approvalProof")),
+    decisionApprovedByStaffProfileId: v.optional(v.id("staffProfile")),
     inventoryMovementIds: v.array(v.id("inventoryMovement")),
     lineIds: v.array(v.id("posTransactionAdjustmentLine")),
     operationalEventId: v.optional(v.id("operationalEvent")),
@@ -212,6 +214,7 @@ const voidTransactionResultValidator = commandResultValidator(
     approvalProofId: v.optional(v.id("approvalProof")),
     approvalRequestId: v.optional(v.id("approvalRequest")),
     approverStaffProfileId: v.optional(v.id("staffProfile")),
+    decisionApprovalProofId: v.optional(v.id("approvalProof")),
   }),
 );
 
@@ -509,6 +512,7 @@ export const getCompletedTransactions = query({
       voidReason: v.optional(v.string()),
       voidApprovalRequestId: v.optional(v.id("approvalRequest")),
       voidApprovalProofId: v.optional(v.id("approvalProof")),
+      voidDecisionApprovalProofId: v.optional(v.id("approvalProof")),
       hasTrace: v.boolean(),
       sessionTraceId: v.union(v.string(), v.null()),
       cashierName: v.union(v.string(), v.null()),
@@ -575,6 +579,7 @@ export const getTransactionById = query({
       voidedByStaffProfileId: v.optional(v.id("staffProfile")),
       voidApprovalRequestId: v.optional(v.id("approvalRequest")),
       voidApprovalProofId: v.optional(v.id("approvalProof")),
+      voidDecisionApprovalProofId: v.optional(v.id("approvalProof")),
       voidApprovedByStaffProfileId: v.optional(v.id("staffProfile")),
       voidOperationalEventId: v.optional(v.id("operationalEvent")),
       pendingVoidApprovalRequest: v.union(

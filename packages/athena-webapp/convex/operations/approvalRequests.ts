@@ -35,6 +35,8 @@ type DecideApprovalRequestArgs = {
   approvalProofId?: Id<"approvalProof">;
   approvalRequestId: Id<"approvalRequest">;
   decision: "approved" | "rejected" | "cancelled";
+  decisionApprovedByStaffProfileId?: Id<"staffProfile">;
+  decisionApprovalProofId?: Id<"approvalProof">;
   reviewedByUserId?: Id<"athenaUser">;
   reviewedByStaffProfileId?: Id<"staffProfile">;
   decisionNotes?: string;
@@ -127,6 +129,8 @@ async function retireItemAdjustmentApprovalAfterApplyFailure(
   args: {
     approvalRequestId: Id<"approvalRequest">;
     error: unknown;
+    decisionApprovedByStaffProfileId?: Id<"staffProfile">;
+    decisionApprovalProofId?: Id<"approvalProof">;
     reviewedByStaffProfileId?: Id<"staffProfile">;
     reviewedByUserId?: Id<"athenaUser">;
   },
@@ -146,10 +150,17 @@ async function retireItemAdjustmentApprovalAfterApplyFailure(
   }
 
   const message = args.error instanceof Error ? args.error.message : "";
+  const failedAt = Date.now();
 
   await ctx.db.patch("approvalRequest", args.approvalRequestId, {
-    decidedAt: Date.now(),
+    decidedAt: failedAt,
     decisionNotes: message,
+    decisionApprovedByStaffProfileId: args.decisionApprovedByStaffProfileId,
+    decisionApprovalProofId: args.decisionApprovalProofId,
+    failedAt,
+    failureCode: "decision_apply_failed",
+    failureMessage: message,
+    freshApprovalRequired: true,
     metadata: {
       ...(approvalRequest.metadata ?? {}),
       applyFailureMessage: message,
@@ -224,6 +235,9 @@ export async function decideApprovalRequestWithCtx(
       ) {
         await retireItemAdjustmentApprovalAfterApplyFailure(ctx, {
           approvalRequestId: args.approvalRequestId,
+          decisionApprovedByStaffProfileId:
+            args.decisionApprovedByStaffProfileId,
+          decisionApprovalProofId: args.decisionApprovalProofId,
           error,
           reviewedByStaffProfileId: args.reviewedByStaffProfileId,
           reviewedByUserId: args.reviewedByUserId,
@@ -249,6 +263,8 @@ export async function decideApprovalRequestWithCtx(
 
   await ctx.db.patch("approvalRequest", args.approvalRequestId, {
     status: args.decision,
+    decisionApprovedByStaffProfileId: args.decisionApprovedByStaffProfileId,
+    decisionApprovalProofId: args.decisionApprovalProofId,
     reviewedByUserId: args.reviewedByUserId,
     reviewedByStaffProfileId: args.reviewedByStaffProfileId,
     ...omitUndefined({
@@ -306,6 +322,8 @@ export async function decideApprovalRequestAsAuthenticatedUserWithCtx(
   return decideApprovalRequestWithCtx(ctx, {
     ...args,
     approvalProofId: args.approvalProofId,
+    decisionApprovedByStaffProfileId: approvalProof.approvedByStaffProfileId,
+    decisionApprovalProofId: args.approvalProofId,
     reviewedByStaffProfileId: approvalProof.approvedByStaffProfileId,
     reviewedByUserId: reviewer._id,
   });
@@ -474,6 +492,8 @@ const decideApprovalRequestArgs = {
 
 const decideApprovalRequestInternalArgs = {
   ...decideApprovalRequestArgs,
+  decisionApprovedByStaffProfileId: v.optional(v.id("staffProfile")),
+  decisionApprovalProofId: v.optional(v.id("approvalProof")),
   reviewedByUserId: v.optional(v.id("athenaUser")),
   reviewedByStaffProfileId: v.optional(v.id("staffProfile")),
 };

@@ -88,6 +88,8 @@ type AppliedAdjustmentResult = {
   lineIds: Array<Id<"posTransactionAdjustmentLine">>;
   operationalEventId?: Id<"operationalEvent">;
   paymentAllocationId?: Id<"paymentAllocation">;
+  decisionApprovalProofId?: Id<"approvalProof">;
+  decisionApprovedByStaffProfileId?: Id<"staffProfile">;
   payloadFingerprint: string;
   settlementAmount: number;
   settlementDirection: TransactionAdjustmentSettlementDirection;
@@ -555,6 +557,8 @@ async function markPendingAdjustmentDecisionForApprovalRequest(
   ctx: MutationCtx,
   args: {
     approvalRequestId: Id<"approvalRequest">;
+    decisionApprovalProofId?: Id<"approvalProof">;
+    decisionApprovedByStaffProfileId?: Id<"staffProfile">;
     decision: "rejected" | "cancelled";
     now: number;
   },
@@ -572,6 +576,8 @@ async function markPendingAdjustmentDecisionForApprovalRequest(
 
   await (ctx.db as any).patch("posTransactionAdjustment", pendingAdjustment._id, {
     decidedAt: args.now,
+    decisionApprovalProofId: args.decisionApprovalProofId,
+    decisionApprovedByStaffProfileId: args.decisionApprovedByStaffProfileId,
     status: args.decision,
     updatedAt: args.now,
   });
@@ -838,6 +844,8 @@ async function applyApprovedAdjustment(
     approvalProofId?: Id<"approvalProof">;
     approvalRequestId?: Id<"approvalRequest">;
     approverStaffProfileId?: Id<"staffProfile">;
+    decisionApprovedByStaffProfileId?: Id<"staffProfile">;
+    decisionApprovalProofId?: Id<"approvalProof">;
     plan: AdjustmentPlan;
     reason?: string;
     transaction: Awaited<ReturnType<typeof requireCompletedTransaction>>;
@@ -877,6 +885,8 @@ async function applyApprovedAdjustment(
   const created = await createTransactionAdjustmentForTransaction(ctx, {
     adjustment: {
       approvalProofId: args.approvalProofId,
+      decisionApprovalProofId: args.decisionApprovalProofId,
+      decisionApprovedByStaffProfileId: args.decisionApprovedByStaffProfileId,
       approvalRequestId: args.approvalRequestId,
       correctedSubtotal: args.plan.correctedSubtotal,
       correctedTax: args.plan.correctedTax,
@@ -971,6 +981,8 @@ async function applyApprovedAdjustment(
       actionKey: ITEM_ADJUSTMENT_ACTION_KEY,
       adjustmentId,
       approvalProofId: args.approvalProofId,
+      decisionApprovalProofId: args.decisionApprovalProofId,
+      decisionApprovedByStaffProfileId: args.decisionApprovedByStaffProfileId,
       approverStaffProfileId: args.approverStaffProfileId,
       correctedTotal: args.plan.correctedTotal,
       inventoryMovementIds,
@@ -1034,6 +1046,8 @@ async function applyApprovedAdjustment(
     approvalProofId: args.approvalProofId,
     approvalRequestId: args.approvalRequestId,
     approverStaffProfileId: args.approverStaffProfileId,
+    decisionApprovalProofId: args.decisionApprovalProofId,
+    decisionApprovedByStaffProfileId: args.decisionApprovedByStaffProfileId,
     inventoryMovementIds,
     lineIds,
     operationalEventId: event?._id,
@@ -1158,6 +1172,8 @@ export async function adjustTransactionItems(
     approvalProofId: approvalProof.approvalProofId,
     approvalRequestId: approvalRequest?._id,
     approverStaffProfileId: approvalProof.approvedByStaffProfileId,
+    decisionApprovalProofId: approvalProof.approvalProofId,
+    decisionApprovedByStaffProfileId: approvalProof.approvedByStaffProfileId,
     plan,
     reason: args.reason,
     transaction,
@@ -1166,6 +1182,8 @@ export async function adjustTransactionItems(
   if (approvalRequest) {
     await ctx.db.patch("approvalRequest", approvalRequest._id, {
       decidedAt: Date.now(),
+      decisionApprovalProofId: approvalProof.approvalProofId,
+      decisionApprovedByStaffProfileId: approvalProof.approvedByStaffProfileId,
       decisionNotes: args.reason,
       reviewedByStaffProfileId: approvalProof.approvedByStaffProfileId,
       reviewedByUserId: args.actorUserId,
@@ -1192,6 +1210,8 @@ export async function resolveTransactionItemAdjustmentApprovalDecisionWithCtx(
   ctx: MutationCtx,
   args: {
     approvalRequestId: Id<"approvalRequest">;
+    decisionApprovedByStaffProfileId?: Id<"staffProfile">;
+    decisionApprovalProofId?: Id<"approvalProof">;
     decision: "approved" | "rejected" | "cancelled";
     reviewedByStaffProfileId?: Id<"staffProfile">;
     reviewedByUserId?: Id<"athenaUser">;
@@ -1215,6 +1235,8 @@ export async function resolveTransactionItemAdjustmentApprovalDecisionWithCtx(
     const decidedAt = Date.now();
     await markPendingAdjustmentDecisionForApprovalRequest(ctx, {
       approvalRequestId: args.approvalRequestId,
+      decisionApprovalProofId: args.decisionApprovalProofId,
+      decisionApprovedByStaffProfileId: args.decisionApprovedByStaffProfileId,
       decision: args.decision,
       now: decidedAt,
     });
@@ -1227,6 +1249,8 @@ export async function resolveTransactionItemAdjustmentApprovalDecisionWithCtx(
       message: `Item adjustment ${args.decision}.`,
       metadata: {
         actionKey: ITEM_ADJUSTMENT_ACTION_KEY,
+        decisionApprovalProofId: args.decisionApprovalProofId,
+        decisionApprovedByStaffProfileId: args.decisionApprovedByStaffProfileId,
         decision: args.decision,
         payloadFingerprint: approvalRequest.metadata?.payloadFingerprint,
       },
@@ -1267,11 +1291,16 @@ export async function resolveTransactionItemAdjustmentApprovalDecisionWithCtx(
     throw new Error("Item adjustment approval request does not match this payload.");
   }
 
+  const approverStaffProfileId =
+    args.decisionApprovedByStaffProfileId ?? args.reviewedByStaffProfileId;
+
   return applyApprovedAdjustment(ctx, {
     actorStaffProfileId: approvalRequest.requestedByStaffProfileId,
     actorUserId: approvalRequest.requestedByUserId,
     approvalRequestId: args.approvalRequestId,
-    approverStaffProfileId: args.reviewedByStaffProfileId,
+    approverStaffProfileId,
+    decisionApprovedByStaffProfileId: args.decisionApprovedByStaffProfileId,
+    decisionApprovalProofId: args.decisionApprovalProofId,
     plan,
     reason: approvalRequest.notes ?? approvalRequest.reason,
     transaction,

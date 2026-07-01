@@ -505,6 +505,8 @@ describe("adjustTransactionItems", () => {
       expect.objectContaining({
         eventType: "pos_transaction_item_adjustment_applied",
         metadata: expect.objectContaining({
+          decisionApprovalProofId: "proof-1",
+          decisionApprovedByStaffProfileId: "manager-1",
           lineItems: [
             expect.objectContaining({
               adjustedQuantity: 1,
@@ -561,6 +563,8 @@ describe("adjustTransactionItems", () => {
       adjustmentId: "posTransactionAdjustment-1",
       approvalProofId: "proof-1",
       approvalRequestId,
+      decisionApprovalProofId: "proof-1",
+      decisionApprovedByStaffProfileId: "manager-1",
       paymentAllocationId: "allocation-1",
       settlementDirection: "refund",
       transactionId: "txn-1",
@@ -704,6 +708,8 @@ describe("adjustTransactionItems", () => {
     await resolveTransactionItemAdjustmentApprovalDecisionWithCtx(ctx as never, {
       approvalRequestId: "approval-1" as Id<"approvalRequest">,
       decision: "rejected",
+      decisionApprovalProofId: "decision-proof-1" as Id<"approvalProof">,
+      decisionApprovedByStaffProfileId: "manager-1" as Id<"staffProfile">,
       decisionNotes: "Not enough evidence",
       reviewedByStaffProfileId: "manager-1" as Id<"staffProfile">,
       reviewedByUserId: "manager-user-1" as Id<"athenaUser">,
@@ -711,6 +717,8 @@ describe("adjustTransactionItems", () => {
 
     expect(tables.posTransactionAdjustment.get("adjustment-1")).toMatchObject({
       decidedAt: expect.any(Number),
+      decisionApprovalProofId: "decision-proof-1",
+      decisionApprovedByStaffProfileId: "manager-1",
       status: "rejected",
       updatedAt: expect.any(Number),
     });
@@ -1071,6 +1079,8 @@ describe("adjustTransactionItems", () => {
       resolveTransactionItemAdjustmentApprovalDecisionWithCtx(ctx as never, {
         approvalRequestId: approvalRequestId as Id<"approvalRequest">,
         decision: "rejected",
+        decisionApprovalProofId: "decision-proof-1" as Id<"approvalProof">,
+        decisionApprovedByStaffProfileId: "manager-1" as Id<"staffProfile">,
         decisionNotes: "Not supported by receipt.",
         reviewedByStaffProfileId: "manager-1" as Id<"staffProfile">,
         reviewedByUserId: "manager-user-1" as Id<"athenaUser">,
@@ -1082,6 +1092,10 @@ describe("adjustTransactionItems", () => {
       expect.objectContaining({
         approvalRequestId,
         eventType: "pos_transaction_item_adjustment_approval_rejected",
+        metadata: expect.objectContaining({
+          decisionApprovalProofId: "decision-proof-1",
+          decisionApprovedByStaffProfileId: "manager-1",
+        }),
       }),
     );
     expect(recordInventoryMovementWithCtx).not.toHaveBeenCalled();

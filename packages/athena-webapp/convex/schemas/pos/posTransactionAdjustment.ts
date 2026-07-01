@@ -22,6 +22,8 @@ export const posTransactionAdjustmentSchema = v.object({
   requestedByStaffProfileId: v.optional(v.id("staffProfile")),
   approvalRequestId: v.optional(v.id("approvalRequest")),
   approvalProofId: v.optional(v.id("approvalProof")),
+  decisionApprovalProofId: v.optional(v.id("approvalProof")),
+  decisionApprovedByStaffProfileId: v.optional(v.id("staffProfile")),
   paymentAllocationId: v.optional(v.id("paymentAllocation")),
   operationalEventId: v.optional(v.id("operationalEvent")),
   status: posTransactionAdjustmentStatusValidator,

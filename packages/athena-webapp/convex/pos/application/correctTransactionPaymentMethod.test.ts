@@ -299,10 +299,24 @@ describe("correctTransactionPaymentMethod", () => {
         }),
       }),
     );
+    expect(recordOperationalEventWithCtx).toHaveBeenNthCalledWith(
+      2,
+      ctx as never,
+      expect.objectContaining({
+        approvalRequestId: "approval-1",
+        eventType: "pos_transaction_payment_method_corrected",
+        metadata: expect.objectContaining({
+          decisionApprovalProofId: "proof-1",
+          decisionApprovedByStaffProfileId: "manager-1",
+        }),
+      }),
+    );
     expect(ctx.db.patch).toHaveBeenCalledWith("approvalRequest", "approval-1", {
       status: "approved",
       reviewedByUserId: "user-1",
       reviewedByStaffProfileId: "manager-1",
+      decisionApprovalProofId: "proof-1",
+      decisionApprovedByStaffProfileId: "manager-1",
       decisionNotes: "Till entry correction",
       decidedAt: expect.any(Number),
     });
