@@ -205,10 +205,14 @@ export function deriveTerminalHealthAttentionReasons(
     input.runtimeStatus?.terminalIntegrity &&
     input.runtimeStatus.terminalIntegrity.status !== "healthy"
   ) {
+    const saleReady =
+      runtimeHasActiveRegisterSession(input.runtimeStatus) &&
+      runtimeHasSaleAuthority(input.runtimeStatus);
     reasons.push({
       source: "terminal_runtime",
-      summary:
-        "Terminal setup needs repair before this checkout station can record new sales.",
+      summary: saleReady
+        ? "Terminal setup needs support repair, but this checkout station has sale authority."
+        : "Terminal setup needs repair before this checkout station can start sales.",
       type: "terminal_authorization_failed",
     });
   }

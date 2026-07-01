@@ -18,7 +18,7 @@ Landing page for packages/valkey-proxy-server. Use this page to orient around gr
 
 ## Graph Hotspots
 - `app.js` (15 edges, Community 99) - [`packages/valkey-proxy-server/app.js`](../../../packages/valkey-proxy-server/app.js)
-- `app.test.js` (6 edges, Community 201) - [`packages/valkey-proxy-server/app.test.js`](../../../packages/valkey-proxy-server/app.test.js)
+- `app.test.js` (6 edges, Community 202) - [`packages/valkey-proxy-server/app.test.js`](../../../packages/valkey-proxy-server/app.test.js)
 - `createRedisClient()` (4 edges, Community 99) - [`packages/valkey-proxy-server/app.js`](../../../packages/valkey-proxy-server/app.js)
 - `invalidateAcrossCluster()` (4 edges, Community 99) - [`packages/valkey-proxy-server/app.js`](../../../packages/valkey-proxy-server/app.js)
 - `invalidateAcrossClusterWithPipeline()` (4 edges, Community 99) - [`packages/valkey-proxy-server/app.js`](../../../packages/valkey-proxy-server/app.js)

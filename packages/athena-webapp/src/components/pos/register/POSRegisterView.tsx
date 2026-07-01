@@ -1437,7 +1437,9 @@ function DebugEventsSection({
   reviewEvents,
 }: {
   events: DebugRuntimeState["events"];
-  reviewEvents?: NonNullable<DebugRuntimeState["heartbeat"]>["sync"]["reviewEvents"];
+  reviewEvents?: NonNullable<
+    DebugRuntimeState["heartbeat"]
+  >["sync"]["reviewEvents"];
 }) {
   const [eventFilter, setEventFilter] = useState<DebugEventFilter>("all");
   const mergedEventsById = new Map<string, DebugEventRecord>();
@@ -1455,15 +1457,18 @@ function DebugEventsSection({
   );
   const eventFilterCounts = DEBUG_EVENT_FILTERS.reduce<
     Record<DebugEventFilter, number>
-  >((counts, filter) => {
-    counts[filter.value] =
-      filter.value === "all"
-        ? orderedEvents.length
-        : orderedEvents.filter((event) =>
-            debugEventMatchesFilter(event, filter.value),
-          ).length;
-    return counts;
-  }, {} as Record<DebugEventFilter, number>);
+  >(
+    (counts, filter) => {
+      counts[filter.value] =
+        filter.value === "all"
+          ? orderedEvents.length
+          : orderedEvents.filter((event) =>
+              debugEventMatchesFilter(event, filter.value),
+            ).length;
+      return counts;
+    },
+    {} as Record<DebugEventFilter, number>,
+  );
 
   return (
     <section className="rounded-md border border-border bg-background/70 p-3">
@@ -1827,8 +1832,7 @@ function POSRegisterViewContent({
   const pendingEmptyStateQuickAddRef = useRef(false);
   const pendingProductLookupFocusAfterSaleStartRef = useRef(false);
   const headerProductSearchInputRef = useRef<HTMLInputElement>(null);
-  const [isClearingLocalPosState, setIsClearingLocalPosState] =
-    useState(false);
+  const [isClearingLocalPosState, setIsClearingLocalPosState] = useState(false);
   const isDebugPanelVisible = usePosDebugPanelToggle();
   const cashierPresenceRestore =
     viewModel.cashierPresenceRestore ?? ({ status: "missing" } as const);
@@ -2502,7 +2506,6 @@ function POSRegisterViewContent({
                       onRemoveService={viewModel.cart.onRemoveService}
                       clearCart={viewModel.cart.onClearCart}
                       density="compact"
-                      className="bg-surface-raised"
                     />
                     {isEmptyStateQuickAddActive
                       ? renderProductEntry({
@@ -2575,7 +2578,6 @@ function POSRegisterViewContent({
                           ? "comfortable"
                           : "compact"
                       }
-                      className="bg-surface-raised"
                     />
                   ) : null}
 
@@ -2689,9 +2691,7 @@ function POSRegisterUnresolvedState({
       <div className="mb-6 flex h-[4.5rem] w-[4.5rem] items-center justify-center rounded-full bg-muted text-muted-foreground">
         <Loader2 className="h-7 w-7 animate-spin" />
       </div>
-      <h2 className="text-xl font-medium text-foreground/80">
-        Preparing POS
-      </h2>
+      <h2 className="text-xl font-medium text-foreground/80">Preparing POS</h2>
       <p className="mt-3 max-w-lg text-base leading-7 text-muted-foreground">
         Waiting for the active store context before loading the register.
       </p>

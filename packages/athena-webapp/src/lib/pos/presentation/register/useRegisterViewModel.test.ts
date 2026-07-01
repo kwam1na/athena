@@ -8336,7 +8336,7 @@ describe("useRegisterViewModel", () => {
     );
   });
 
-  it("routes terminal integrity blocks to the terminal repair drawer gate", async () => {
+  it("keeps an active local drawer available while terminal support repair is pending", async () => {
     mockListLocalEvents.mockResolvedValue({
       ok: true,
       value: [
@@ -8379,9 +8379,7 @@ describe("useRegisterViewModel", () => {
       );
     });
 
-    await waitFor(() =>
-      expect(result.current.drawerGate?.mode).toBe("terminalRepair"),
-    );
+    await waitFor(() => expect(result.current.drawerGate).toBeNull());
   });
 
   it("auto repairs terminal setup when the local seed matches the browser fingerprint", async () => {
@@ -8389,6 +8387,21 @@ describe("useRegisterViewModel", () => {
       fingerprintHash: "local-terminal-1",
       browserInfo: { userAgent: "test-browser" },
     });
+    mockReadProvisionedTerminalSeed.mockResolvedValue({
+      ok: true,
+      value: {
+        cloudTerminalId: "terminal-1",
+        displayName: "Front Counter",
+        loginMode: "pos_only",
+        provisionedAt: 1,
+        registerNumber: "1",
+        schemaVersion: 1,
+        syncSecretHash: "sync-secret-1",
+        storeId: "store-1",
+        terminalId: "local-terminal-1",
+        transactionCapability: "services_only",
+      },
+    });
     mockListLocalEvents.mockResolvedValue({
       ok: true,
       value: [
@@ -8421,6 +8434,33 @@ describe("useRegisterViewModel", () => {
         terminalId: "local-terminal-1",
       },
     });
+    mockUsePosLocalSyncRuntimeStatus.mockReturnValue({
+      runtimeStatus: {
+        localStore: {
+          available: true,
+          schemaVersion: 1,
+          terminalSeedReady: true,
+        },
+        reportedAt: 120,
+        source: "sync-runtime",
+        staffAuthority: {
+          status: "ready",
+        },
+        sync: {
+          failedEventCount: 0,
+          localOnlyEventCount: 0,
+          pendingEventCount: 0,
+          reviewEventCount: 0,
+          status: "idle",
+          uploadableEventCount: 0,
+        },
+        terminalIntegrity: {
+          observedAt: 110,
+          reason: "authorization_failed",
+          status: "requires_reprovision",
+        },
+      },
+    });
 
     const { useRegisterViewModel } = await import("./useRegisterViewModel");
     const { result } = renderHook(() => useRegisterViewModel());
@@ -8431,10 +8471,7 @@ describe("useRegisterViewModel", () => {
       );
     });
 
-    await waitFor(() =>
-      expect(result.current.drawerGate?.mode).toBe("terminalRepair"),
-    );
-    expect(result.current.drawerGate?.errorMessage).toBeNull();
+    await waitFor(() => expect(result.current.drawerGate).toBeNull());
 
     await waitFor(() =>
       expect(mockRegisterTerminal).toHaveBeenCalledWith(
@@ -8442,9 +8479,11 @@ describe("useRegisterViewModel", () => {
           browserInfo: { userAgent: "test-browser" },
           displayName: "Front Counter",
           fingerprintHash: "local-terminal-1",
+          loginMode: "pos_only",
           registerNumber: "1",
           storeId: "store-1",
           syncSecretHash: expect.any(String),
+          transactionCapability: "services_only",
         }),
       ),
     );
@@ -8457,6 +8496,8 @@ describe("useRegisterViewModel", () => {
         registerNumber: "1",
         storeId: "store-1",
         terminalId: "local-terminal-1",
+        loginMode: "pos_only",
+        transactionCapability: "services_only",
       }),
       terminalIntegrity: {
         storeId: "store-1",
@@ -8464,6 +8505,144 @@ describe("useRegisterViewModel", () => {
       },
     });
     expect(toast.success).not.toHaveBeenCalledWith("Terminal setup repaired");
+  });
+
+  it("auto repairs legacy terminal setup without overwriting backend terminal settings", async () => {
+    mockReadStoredTerminalFingerprint.mockReturnValue({
+      fingerprintHash: "local-terminal-1",
+      browserInfo: { userAgent: "test-browser" },
+    });
+    mockReadProvisionedTerminalSeed.mockResolvedValue({
+      ok: true,
+      value: {
+        cloudTerminalId: "terminal-1",
+        displayName: "Front Counter",
+        provisionedAt: 1,
+        registerNumber: "1",
+        schemaVersion: 1,
+        syncSecretHash: "sync-secret-1",
+        storeId: "store-1",
+        terminalId: "local-terminal-1",
+      },
+    });
+    mockRegisterTerminal.mockImplementation(async (args) =>
+      ok({
+        _id: "terminal-1",
+        _creationTime: 1,
+        browserInfo: args.browserInfo,
+        displayName: args.displayName,
+        fingerprintHash: args.fingerprintHash,
+        loginMode: "pos_only",
+        registeredAt: 1,
+        registeredByUserId: "user-1",
+        registerNumber: args.registerNumber,
+        status: "active",
+        storeId: args.storeId,
+        syncSecretHash: args.syncSecretHash,
+        transactionCapability: "services_only",
+      }),
+    );
+    mockListLocalEvents.mockResolvedValue({
+      ok: true,
+      value: [
+        {
+          localEventId: "local-event-open",
+          schemaVersion: 1,
+          sequence: 1,
+          type: "register.opened",
+          terminalId: "local-terminal-1",
+          storeId: "store-1",
+          registerNumber: "1",
+          localRegisterSessionId: "local-register-1",
+          staffProfileId: "staff-1",
+          payload: {
+            localRegisterSessionId: "local-register-1",
+            openingFloat: 5000,
+          },
+          createdAt: 100,
+          sync: { status: "synced" },
+        },
+      ],
+    });
+    mockReadTerminalIntegrityState.mockResolvedValue({
+      ok: true,
+      value: {
+        observedAt: 110,
+        reason: "authorization_failed",
+        status: "requires_reprovision",
+        storeId: "store-1",
+        terminalId: "local-terminal-1",
+      },
+    });
+    mockUsePosLocalSyncRuntimeStatus.mockReturnValue({
+      runtimeStatus: {
+        localStore: {
+          available: true,
+          schemaVersion: 1,
+          terminalSeedReady: true,
+        },
+        reportedAt: 120,
+        source: "sync-runtime",
+        staffAuthority: {
+          status: "ready",
+        },
+        sync: {
+          failedEventCount: 0,
+          localOnlyEventCount: 0,
+          pendingEventCount: 0,
+          reviewEventCount: 0,
+          status: "idle",
+          uploadableEventCount: 0,
+        },
+        terminalIntegrity: {
+          observedAt: 110,
+          reason: "authorization_failed",
+          status: "requires_reprovision",
+        },
+      },
+    });
+
+    const { useRegisterViewModel } = await import("./useRegisterViewModel");
+    const { result } = renderHook(() => useRegisterViewModel());
+
+    await act(async () => {
+      result.current.authDialog?.onAuthenticated(
+        buildStaffAuthenticationResult(),
+      );
+    });
+
+    await waitFor(() => expect(result.current.drawerGate).toBeNull());
+
+    await waitFor(() => expect(mockRegisterTerminal).toHaveBeenCalled());
+    expect(mockRegisterTerminal.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        browserInfo: { userAgent: "test-browser" },
+        displayName: "Front Counter",
+        fingerprintHash: "local-terminal-1",
+        registerNumber: "1",
+        storeId: "store-1",
+        syncSecretHash: expect.any(String),
+      }),
+    );
+    expect(mockRegisterTerminal.mock.calls[0]?.[0]).not.toHaveProperty(
+      "loginMode",
+    );
+    expect(mockRegisterTerminal.mock.calls[0]?.[0]).not.toHaveProperty(
+      "transactionCapability",
+    );
+    expect(
+      mockWriteProvisionedTerminalSeedAndClearTerminalIntegrity,
+    ).toHaveBeenCalledWith({
+      seed: expect.objectContaining({
+        cloudTerminalId: "terminal-1",
+        loginMode: "pos_only",
+        transactionCapability: "services_only",
+      }),
+      terminalIntegrity: {
+        storeId: "store-1",
+        terminalId: "local-terminal-1",
+      },
+    });
   });
 
   it("keeps the drawer usable when stale lifecycle authority exists locally", async () => {
@@ -12794,7 +12973,7 @@ describe("useRegisterViewModel", () => {
     expect(result.current.checkout.isTransactionCompleted).toBe(false);
   });
 
-  it("does not keep retrying a new sale when terminal setup blocks post-completion start", async () => {
+  it("starts the next sale after completion while terminal support repair is pending", async () => {
     mockListLocalEvents.mockResolvedValue({
       ok: true,
       value: [
@@ -12853,15 +13032,16 @@ describe("useRegisterViewModel", () => {
     });
 
     await waitFor(() =>
-      expect(result.current.drawerGate?.mode).toBe("terminalRepair"),
+      expect(mockAppendLocalEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "session.started",
+          localRegisterSessionId: "drawer-1",
+          staffProfileId: "staff-1",
+        }),
+      ),
     );
-    expect(mockAppendLocalEvent).not.toHaveBeenCalledWith(
-      expect.objectContaining({ type: "session.started" }),
-    );
-    expect(toast.error).toHaveBeenCalledTimes(1);
-    expect(toast.error).toHaveBeenCalledWith(
-      "Terminal setup needs repair before selling can continue.",
-    );
+    expect(result.current.drawerGate?.mode).not.toBe("terminalRepair");
+    expect(toast.error).not.toHaveBeenCalled();
   });
 
   it("does not resurrect a cloud-backed sale after a reload replays local completion", async () => {

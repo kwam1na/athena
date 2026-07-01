@@ -12,12 +12,18 @@ export const AppHeader = () => {
   const organizations = useGetOrganizations();
 
   return (
-    <div className="flex min-w-0 items-center gap-2">
-      <Link to="/" className="flex shrink-0 items-center">
+    <div className="flex min-w-0 flex-1 items-center gap-2">
+      <Link
+        to="/"
+        className="hidden shrink-0 items-center min-[430px]:flex"
+      >
         <p className="font-medium">athena</p>
       </Link>
       <p className="hidden text-muted-foreground sm:block">/</p>
-      <OrganizationSwitcher items={organizations || []} />
+      <OrganizationSwitcher
+        className="max-w-[10.75rem] min-[430px]:max-w-[14rem]"
+        items={organizations || []}
+      />
     </div>
   );
 };

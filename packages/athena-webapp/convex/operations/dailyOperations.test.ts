@@ -24,12 +24,14 @@ type TableName =
   | "dailyClose"
   | "dailyOpening"
   | "expenseTransaction"
+  | "onlineOrder"
   | "operationalEvent"
   | "operationalWorkItem"
   | "paymentAllocation"
   | "posLocalSyncConflict"
   | "posLocalSyncEvent"
   | "posLocalSyncMapping"
+  | "posPendingCheckoutItem"
   | "posSession"
   | "posTerminal"
   | "posTransactionAdjustment"
@@ -3005,6 +3007,17 @@ describe("daily operations overview read model", () => {
             subjectType: "pos_pending_checkout_item",
           },
           {
+            _id: "event-online-order-created",
+            createdAt: Date.UTC(2026, 4, 8, 14),
+            eventType: "online_order_created",
+            message: "Online order #273912 created.",
+            onlineOrderId: "online-order-273912",
+            storeId: "store-1",
+            subjectId: "online-order-273912",
+            subjectLabel: "273912",
+            subjectType: "online_order",
+          },
+          {
             _id: "event-pos-sale-synced",
             createdAt: Date.UTC(2026, 4, 8, 18),
             eventType: "pos_local_sync.sale_projected",
@@ -3077,6 +3090,13 @@ describe("daily operations overview read model", () => {
             storeId: "store-1",
           },
         ],
+        onlineOrder: [
+          {
+            _id: "online-order-273912",
+            orderNumber: "273912",
+            storeId: "store-1",
+          },
+        ],
         registerSession: [
           {
             _id: "register-session-80",
@@ -3110,6 +3130,7 @@ describe("daily operations overview read model", () => {
       "event-2",
       "event-pos-sale-synced",
       "event-register-opened",
+      "event-online-order-created",
       "event-pending-checkout-item",
       "event-quick-add",
       "event-1",
@@ -3133,6 +3154,17 @@ describe("daily operations overview read model", () => {
         transactionId: "txn-946956",
       },
       to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId",
+    });
+    expect(
+      snapshot.timeline.find((event) => event.id === "event-online-order-created")
+        ?.onlineOrderLink,
+    ).toEqual({
+      label: "#273912",
+      matchLabel: "273912",
+      params: {
+        orderSlug: "online-order-273912",
+      },
+      to: "/$orgUrlSlug/store/$storeUrlSlug/orders/$orderSlug",
     });
     expect(
       snapshot.timeline.find((event) => event.id === "event-register-opened")
@@ -3861,6 +3893,120 @@ describe("daily operations overview read model", () => {
         to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId",
       },
       type: "pos_transaction_void_approval_requested",
+    });
+  });
+
+  it("links applied item adjustment events to the adjusted transaction without requiring stored transaction metadata", async () => {
+    const snapshot = await buildDailyOperationsSnapshotWithCtx(
+      buildCtx({
+        dailyClose: [priorClose],
+        dailyOpening: [startedOpening],
+        operationalEvent: [
+          {
+            _id: "event-item-adjustment-applied",
+            createdAt: Date.UTC(2026, 4, 8, 15, 8),
+            eventType: "pos_transaction_item_adjustment_applied",
+            message: "Applied item adjustment for Transaction #856721.",
+            metadata: {
+              adjustmentId: "adjustment-1",
+            },
+            storeId: "store-1",
+            subjectId: "transaction-856721",
+            subjectLabel: "Transaction #856721",
+            subjectType: "pos_transaction",
+          },
+        ],
+        store: [store],
+      }),
+      { operatingDate: "2026-05-08", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(snapshot.timeline[0]).toMatchObject({
+      id: "event-item-adjustment-applied",
+      message: "Applied item adjustment for Transaction #856721.",
+      transactionLink: {
+        label: "#856721",
+        params: {
+          transactionId: "transaction-856721",
+        },
+        to: "/$orgUrlSlug/store/$storeUrlSlug/pos/transactions/$transactionId",
+      },
+      type: "pos_transaction_item_adjustment_applied",
+    });
+  });
+
+  it("links pending checkout evidence corrections to the provisional product", async () => {
+    const snapshot = await buildDailyOperationsSnapshotWithCtx(
+      buildCtx({
+        dailyClose: [priorClose],
+        dailyOpening: [startedOpening],
+        operationalEvent: [
+          {
+            _id: "event-pending-checkout-evidence-corrected",
+            createdAt: Date.UTC(2026, 4, 8, 15, 9),
+            eventType: "pos_pending_checkout_item_evidence_corrected",
+            message: "Adjusted pending checkout item hodor evidence by -2.",
+            metadata: {
+              pendingCheckoutItemId: "pending-hodor",
+              quantityDelta: -2,
+              reason: "item_adjustment",
+            },
+            storeId: "store-1",
+            subjectId: "pending-hodor",
+            subjectLabel: "hodor evidence",
+            subjectType: "pos_pending_checkout_item",
+          },
+        ],
+        posPendingCheckoutItem: [
+          {
+            _id: "pending-hodor",
+            evidence: {
+              firstSeenAt: 1,
+              lastSeenAt: 1,
+              observedLookupCodes: ["HODOR"],
+              observedPrices: [260],
+              totalQuantitySold: 1,
+              transactionCount: 1,
+            },
+            lookupCode: "HODOR",
+            name: "hodor evidence",
+            organizationId: "org-1",
+            provisionalPrice: 260,
+            provisionalProductId: "product-hodor",
+            provisionalProductSkuId: "sku-hodor",
+            reviewPriority: "normal",
+            status: "pending_review",
+            storeId: "store-1",
+          },
+        ],
+        productSku: [
+          {
+            _id: "sku-hodor",
+            productId: "product-hodor",
+            productName: "hodor evidence",
+            sku: "HODOR",
+            storeId: "store-1",
+          },
+        ],
+        store: [store],
+      }),
+      { operatingDate: "2026-05-08", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(snapshot.timeline[0]).toMatchObject({
+      id: "event-pending-checkout-evidence-corrected",
+      message: "Adjusted pending checkout item hodor evidence by -2.",
+      productLink: {
+        label: "hodor evidence",
+        params: {
+          productSlug: "product-hodor",
+        },
+        search: {
+          variant: "HODOR",
+        },
+        to: "/$orgUrlSlug/store/$storeUrlSlug/products/$productSlug",
+      },
+      type: "pos_pending_checkout_item_evidence_corrected",
     });
   });
 

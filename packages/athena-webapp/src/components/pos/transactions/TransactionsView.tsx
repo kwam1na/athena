@@ -544,25 +544,16 @@ export function TransactionsView() {
             </Tabs>
 
             {isLoadingTransactions ? null : hasTransactions ? (
-              <>
-                <div className="grid gap-layout-sm md:hidden">
-                  {filteredData.map((transaction) => (
-                    <TransactionMobileCard
-                      key={transaction._id}
-                      transaction={transaction}
-                    />
-                  ))}
-                </div>
-                <div className="hidden md:block">
-                  <GenericDataTable
-                    data={filteredData}
-                    columns={transactionColumns}
-                    pageIndex={tablePageIndex}
-                    onPageIndexChange={handleTablePageIndexChange}
-                    tableId="pos-completed-transactions"
-                  />
-                </div>
-              </>
+              <GenericDataTable
+                data={filteredData}
+                columns={transactionColumns}
+                pageIndex={tablePageIndex}
+                onPageIndexChange={handleTablePageIndexChange}
+                renderMobileCard={(transaction) => (
+                  <TransactionMobileCard transaction={transaction} />
+                )}
+                tableId="pos-completed-transactions"
+              />
             ) : (
               <div className="flex min-h-[50vh] items-center justify-center">
                 <EmptyState

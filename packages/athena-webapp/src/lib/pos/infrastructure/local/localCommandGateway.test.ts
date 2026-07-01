@@ -761,7 +761,7 @@ describe("createLocalCommandGateway", () => {
     });
   });
 
-  it("refuses to start a sale when terminal integrity is blocked", async () => {
+  it("starts a sale from an open local drawer while terminal support repair is pending", async () => {
     const store = createPosLocalStore({
       adapter: createMemoryPosLocalStorageAdapter(),
       clock: () => 10_000,
@@ -794,15 +794,18 @@ describe("createLocalCommandGateway", () => {
       registerNumber: "1",
     });
 
-    expect(result).toEqual({
-      kind: "user_error",
-      error: expect.objectContaining({
-        message: "Terminal setup needs repair before selling can continue.",
-      }),
+    expect(result).toMatchObject({
+      kind: "ok",
+      data: {
+        localPosSessionId: expect.any(String),
+      },
     });
     await expect(store.listEvents()).resolves.toMatchObject({
       ok: true,
-      value: [expect.objectContaining({ type: "register.opened" })],
+      value: [
+        expect.objectContaining({ type: "register.opened" }),
+        expect.objectContaining({ type: "session.started" }),
+      ],
     });
   });
 

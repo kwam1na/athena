@@ -513,6 +513,7 @@ describe("adjustTransactionItems", () => {
               quantityDelta: -1,
             }),
           ],
+          transactionNumber: "POS-111111",
         }),
       }),
     );

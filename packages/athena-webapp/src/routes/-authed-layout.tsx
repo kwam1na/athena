@@ -403,14 +403,14 @@ function UserMenu({
     "border border-border/70 bg-background/90 shadow-surface backdrop-blur supports-[backdrop-filter]:bg-background/75";
 
   return (
-    <div className="flex min-w-0 items-center gap-layout-xs">
+    <div className="flex shrink-0 items-center gap-1 sm:gap-layout-xs">
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
             type="button"
             aria-label={`Open account menu for ${userEmail}`}
             className={cn(
-              "flex h-9 min-w-0 items-center gap-layout-xs px-layout-xs text-sm text-foreground transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              "flex h-10 w-10 shrink-0 items-center justify-center gap-layout-xs px-0 text-sm text-foreground transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:h-9 sm:w-auto sm:min-w-0 sm:px-layout-xs",
               isContainedShell ? `rounded-lg ${containedControlSurface}` : "rounded-md",
             )}
           >
@@ -464,7 +464,7 @@ function UserMenu({
         aria-label={`Switch to ${nextTheme} theme`}
         title={`Switch to ${nextTheme} theme`}
         className={cn(
-          "group flex h-9 w-9 shrink-0 items-center justify-center text-muted-foreground transition-[background-color,color,transform] duration-fast ease-standard hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.96]",
+          "group flex h-10 w-10 shrink-0 items-center justify-center text-muted-foreground transition-[background-color,color,transform] duration-fast ease-standard hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.96] sm:h-9 sm:w-9",
           isContainedShell ? `rounded-lg ${containedControlSurface}` : "rounded-md",
         )}
         onClick={() => setAthenaThemeModeWithTransition(nextTheme)}
@@ -497,16 +497,16 @@ function TopBar({
       className={cn(
         "relative z-20 box-border flex h-16 shrink-0",
         isContainedShell
-          ? "bg-transparent px-layout-sm pt-layout-sm"
+          ? "bg-transparent px-layout-xs pt-layout-xs sm:px-layout-sm sm:pt-layout-sm"
           : "border-b border-border/70 bg-background",
       )}
     >
       <div
         className={cn(
-          "flex h-full w-auto shrink-0 items-center gap-layout-xs px-layout-sm",
+          "flex h-full min-w-0 items-center gap-layout-xs",
           isContainedShell
-            ? "justify-start"
-            : "justify-center transition-[width] duration-200 ease-linear md:w-[var(--topbar-sidebar-width)]",
+            ? "flex-1 justify-start overflow-hidden px-0 sm:px-layout-sm"
+            : "w-auto shrink-0 justify-center px-layout-sm transition-[width] duration-200 ease-linear md:w-[var(--topbar-sidebar-width)]",
           !isContainedShell &&
             state === "expanded" &&
             "md:border-r md:border-sidebar-border",
@@ -521,18 +521,25 @@ function TopBar({
       >
         <SidebarTrigger
           aria-label="Open navigation"
-          className="h-9 w-9 md:hidden"
+          className="h-10 w-10 shrink-0 md:hidden"
         />
         <div
           className={cn(
             isContainedShell &&
-              "rounded-lg px-layout-xs py-layout-2xs",
+              "min-w-0 overflow-hidden rounded-lg px-layout-xs py-layout-2xs",
           )}
         >
           <AppHeader />
         </div>
       </div>
-      <div className="flex min-w-0 flex-1 items-center justify-end px-layout-sm md:px-layout-xl">
+      <div
+        className={cn(
+          "flex items-center justify-end",
+          isContainedShell
+            ? "shrink-0 px-0 sm:px-layout-sm"
+            : "min-w-0 flex-1 px-layout-sm md:px-layout-xl",
+        )}
+      >
         <UserMenu shellVariant={shellVariant} userEmail={userEmail} />
       </div>
     </header>

@@ -94,6 +94,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`convex/operations/dailyOpening.test.ts`](../../convex/operations/dailyOpening.test.ts)
 - [`convex/operations/dailyOperations.test.ts`](../../convex/operations/dailyOperations.test.ts)
 - [`convex/operations/dailyOperationsAutomation.test.ts`](../../convex/operations/dailyOperationsAutomation.test.ts)
+- [`convex/operations/helpers/eventBuilders.test.ts`](../../convex/operations/helpers/eventBuilders.test.ts)
 - [`convex/operations/inventoryMovements.test.ts`](../../convex/operations/inventoryMovements.test.ts)
 - [`convex/operations/managerElevations.test.ts`](../../convex/operations/managerElevations.test.ts)
 - [`convex/operations/operationalEvents.test.ts`](../../convex/operations/operationalEvents.test.ts)
@@ -220,6 +221,7 @@ This index enumerates the current automated test files and ties them back to the
 
 - [`src/App.test.tsx`](../../src/App.test.tsx)
 - [`src/auth/convexAuthUrl.test.ts`](../../src/auth/convexAuthUrl.test.ts)
+- [`src/components/Navbar.test.tsx`](../../src/components/Navbar.test.tsx)
 - [`src/components/OrganizationView.test.tsx`](../../src/components/OrganizationView.test.tsx)
 - [`src/components/StoreView.test.tsx`](../../src/components/StoreView.test.tsx)
 - [`src/components/View.test.tsx`](../../src/components/View.test.tsx)
@@ -236,6 +238,7 @@ This index enumerates the current automated test files and ties them back to the
 - [`src/components/auth/Login/LoginForm.test.tsx`](../../src/components/auth/Login/LoginForm.test.tsx)
 - [`src/components/auth/Login/PosRecoveryCodeForm.test.tsx`](../../src/components/auth/Login/PosRecoveryCodeForm.test.tsx)
 - [`src/components/auth/Login/index.test.tsx`](../../src/components/auth/Login/index.test.tsx)
+- [`src/components/base/table/data-table.test.tsx`](../../src/components/base/table/data-table.test.tsx)
 - [`src/components/bulk-operations/BulkOperationsPreview.test.tsx`](../../src/components/bulk-operations/BulkOperationsPreview.test.tsx)
 - [`src/components/cash-controls/CashControlsDashboard.auth.test.tsx`](../../src/components/cash-controls/CashControlsDashboard.auth.test.tsx)
 - [`src/components/cash-controls/CashControlsDashboard.test.tsx`](../../src/components/cash-controls/CashControlsDashboard.test.tsx)

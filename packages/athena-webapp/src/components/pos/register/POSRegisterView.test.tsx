@@ -2805,7 +2805,7 @@ describe("POSRegisterView", () => {
       within(screen.getByTestId("register-workspace-sidebar")).getByTestId(
         "cart-items-compact",
       ),
-    ).toHaveClass("bg-surface-raised");
+    ).toBeInTheDocument();
     expect(screen.getByTestId("register-main-workspace")).not.toHaveClass(
       "lg:col-span-2",
     );
@@ -3174,9 +3174,6 @@ describe("POSRegisterView", () => {
       "bg-surface-raised",
     );
     expect(screen.getByTestId("cart-items-compact")).toBeInTheDocument();
-    expect(screen.getByTestId("cart-items-compact")).toHaveClass(
-      "bg-surface-raised",
-    );
     expect(screen.queryByText("product-entry")).not.toBeInTheDocument();
 
     mockUseRegisterViewModel.mockReturnValue({

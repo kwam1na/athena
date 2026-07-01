@@ -1924,6 +1924,8 @@ export function useRegisterViewModel(): RegisterViewModel {
         registerTerminalMutation,
         storeFactory: () => localStore,
         storeUrlSlug: seed.storeUrlSlug,
+        loginMode: seed.loginMode,
+        transactionCapability: seed.transactionCapability,
       });
 
       if (result.kind === "user_error") {
@@ -1955,8 +1957,15 @@ export function useRegisterViewModel(): RegisterViewModel {
     terminal?.displayName,
     terminal?.registerNumber,
   ]);
+  const runtimeTerminalIntegrityStatus =
+    localRuntimeSyncSource?.runtimeStatus?.terminalIntegrity?.status ?? null;
+  const hasRuntimeTerminalIntegrityRepair =
+    runtimeTerminalIntegrityStatus !== null &&
+    runtimeTerminalIntegrityStatus !== "healthy";
+  const shouldAutoRepairTerminalSetup =
+    drawerGateMode === "terminalRepair" || hasRuntimeTerminalIntegrityRepair;
   useEffect(() => {
-    if (drawerGateMode !== "terminalRepair") {
+    if (!shouldAutoRepairTerminalSetup) {
       autoTerminalRepairAttemptRef.current = null;
       return;
     }
@@ -1964,7 +1973,17 @@ export function useRegisterViewModel(): RegisterViewModel {
       return;
     }
 
-    const repairKey = `${activeStoreId}:${terminal._id}`;
+    const fingerprint = readStoredTerminalFingerprint();
+    if (!fingerprint && drawerGateMode !== "terminalRepair") {
+      return;
+    }
+
+    const repairKey = [
+      activeStoreId,
+      terminal._id,
+      fingerprint?.fingerprintHash ?? "missing-fingerprint",
+      drawerGateMode === "terminalRepair" ? "gate" : "background",
+    ].join(":");
     if (autoTerminalRepairAttemptRef.current === repairKey) {
       return;
     }
@@ -1975,6 +1994,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     drawerGateMode,
     handleRepairTerminalSetup,
     isRepairingTerminalSetup,
+    shouldAutoRepairTerminalSetup,
     terminal?._id,
   ]);
   const guardActiveSessionConflict = useCallback(() => {

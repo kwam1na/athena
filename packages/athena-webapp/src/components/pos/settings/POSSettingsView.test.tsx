@@ -1194,10 +1194,14 @@ describe("registerAndProvisionPosTerminal", () => {
     expect(registerTerminalMutation).toHaveBeenCalledWith(
       expect.objectContaining({
         fingerprintHash: "fingerprint-1",
-        loginMode: "standard",
         syncSecretHash: "01020304",
-        transactionCapability: "products_and_services",
       }),
+    );
+    expect(registerTerminalMutation.mock.calls[0]?.[0]).not.toHaveProperty(
+      "loginMode",
+    );
+    expect(registerTerminalMutation.mock.calls[0]?.[0]).not.toHaveProperty(
+      "transactionCapability",
     );
     expect(writeProvisionedTerminalSeed).toHaveBeenCalledWith(
       expect.objectContaining({

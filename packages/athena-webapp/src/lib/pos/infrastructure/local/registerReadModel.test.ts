@@ -1012,7 +1012,7 @@ describe("projectLocalRegisterReadModel", () => {
     ).toBe(false);
   });
 
-  it("blocks selling when terminal integrity requires repair", () => {
+  it("keeps an open local drawer sellable when terminal integrity requires support repair", () => {
     const model = projectLocalRegisterReadModel({
       terminalIntegrity: {
         observedAt: 1_010,
@@ -1031,8 +1031,8 @@ describe("projectLocalRegisterReadModel", () => {
       isOnline: false,
     });
 
-    expect(model.canSell).toBe(false);
-    expect(model.saleBlockReason).toBe("terminal_integrity");
+    expect(model.canSell).toBe(true);
+    expect(model.saleBlockReason).toBeUndefined();
     expect(model.syncStatus.state).toBe("synced");
   });
 
