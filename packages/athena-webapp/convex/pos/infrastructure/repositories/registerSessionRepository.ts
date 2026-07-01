@@ -4,6 +4,13 @@ import { internal } from "../../../_generated/api";
 
 import type { PosCashDrawerSummary } from "../../domain/types";
 import {
+  buildPendingCompletedSaleVoidApprovalSummary,
+  filterPendingCompletedSaleVoidApprovals,
+  filterPendingTransactionItemAdjustmentApprovals,
+  listPendingRegisterSessionApprovalRequests,
+  type RegisterSessionPendingVoidApprovalSummary,
+} from "../../application/sync/registerSessionCloseoutHolds";
+import {
   buildRegisterSessionLocalSyncStatus,
   listOpenLocalSyncConflictsByRegisterSession,
   type RegisterSessionSyncConflict,
@@ -18,6 +25,7 @@ type RegisterStateIdentity = {
 export function mapRegisterSessionToCashDrawerSummary(
   session: Doc<"registerSession"> | null | undefined,
   syncConflicts: RegisterSessionSyncConflict[] = [],
+  pendingVoidApprovals?: RegisterSessionPendingVoidApprovalSummary | null,
 ): PosCashDrawerSummary | null {
   if (!session) {
     return null;
@@ -36,6 +44,15 @@ export function mapRegisterSessionToCashDrawerSummary(
     notes: session.notes,
     variance: session.variance,
     workflowTraceId: session.workflowTraceId,
+    pendingVoidApprovals: pendingVoidApprovals
+      ? {
+          cashAffectingCount: pendingVoidApprovals.cashAffectingCount,
+          cashAdjustmentCount: pendingVoidApprovals.cashAdjustmentCount,
+          cashAdjustmentDelta: pendingVoidApprovals.cashAdjustmentDelta,
+          cashAmount: pendingVoidApprovals.cashAmount,
+          count: pendingVoidApprovals.count,
+        }
+      : null,
     localSyncStatus: buildRegisterSessionLocalSyncStatus(syncConflicts),
   };
 }
@@ -62,6 +79,27 @@ export async function getActiveRegisterSessionForRegisterState(
     session && syncConflictsBySessionId
       ? (syncConflictsBySessionId.get(session._id) ?? [])
       : [];
+  const pendingVoidApprovals = session
+    ? await (async () => {
+        const approvalRequests =
+          await listPendingRegisterSessionApprovalRequests(ctx, {
+            registerSessionId: session._id,
+            storeId: identity.storeId,
+          });
+        return buildPendingCompletedSaleVoidApprovalSummary(ctx, {
+          approvalRequests:
+            filterPendingCompletedSaleVoidApprovals(approvalRequests),
+          itemAdjustmentApprovalRequests:
+            filterPendingTransactionItemAdjustmentApprovals(approvalRequests),
+          registerSessionId: session._id,
+          storeId: identity.storeId,
+        });
+      })()
+    : null;
 
-  return mapRegisterSessionToCashDrawerSummary(session, syncConflicts);
+  return mapRegisterSessionToCashDrawerSummary(
+    session,
+    syncConflicts,
+    pendingVoidApprovals,
+  );
 }

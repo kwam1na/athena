@@ -168,6 +168,43 @@ describe("RegisterDrawerGate", () => {
     expect(screen.getByText("GH₵-0.02")).toHaveClass("text-danger");
   });
 
+  it("calls out pending cash voids in the closeout expected cash context", () => {
+    renderGate({
+      closeoutCountedCash: "6100.00",
+      closeoutDraftVariance: 0,
+      expectedCash: 610000,
+      mode: "closeoutBlocked",
+      pendingCashVoidApprovals: {
+        cashAffectingCount: 1,
+        cashAdjustmentCount: 1,
+        cashAdjustmentDelta: -2000,
+        cashAmount: 8000,
+      },
+    });
+
+    expect(screen.getByText("Expected now")).toBeInTheDocument();
+    expect(screen.getByText("GH₵6,100")).toBeInTheDocument();
+    expect(screen.getByText("After adjustments")).toBeInTheDocument();
+    expect(screen.getByText("GH₵6,000")).toBeInTheDocument();
+    const metricText =
+      screen.getByText("Expected now").closest("dl")?.textContent ?? "";
+    expect(metricText.indexOf("Expected now")).toBeLessThan(
+      metricText.indexOf("After adjustments"),
+    );
+    expect(metricText.indexOf("After adjustments")).toBeLessThan(
+      metricText.indexOf("Draft variance"),
+    );
+    expect(
+      screen.getByText(/After adjustments applies 1 pending cash void/),
+    ).toHaveTextContent("GH₵80");
+    expect(
+      screen.getByText(/1 pending cash item adjustment reducing cash/),
+    ).toHaveTextContent("GH₵20");
+    expect(
+      screen.queryByText(/expected cash becomes/),
+    ).not.toBeInTheDocument();
+  });
+
   it("runs the closeout secondary action for return-to-sale states", async () => {
     const user = userEvent.setup();
     const onCloseoutSecondaryAction = vi.fn();

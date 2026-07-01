@@ -314,6 +314,10 @@ function getRepairRegisterSessionCloseoutBoundaryAt(
   }, undefined);
   if (latestCloseoutRecord !== undefined) return latestCloseoutRecord;
 
+  if (typeof registerSession?.closeoutOwnedAt === "number") {
+    return registerSession.closeoutOwnedAt;
+  }
+
   return typeof registerSession?.closedAt === "number"
     ? registerSession.closedAt
     : null;

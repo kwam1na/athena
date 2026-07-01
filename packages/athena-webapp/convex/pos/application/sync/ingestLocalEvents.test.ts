@@ -427,6 +427,68 @@ describe("createLocalSyncIngestionService", () => {
     ]);
   });
 
+  it("reuses an active review conflict when a conflicted register open retry still conflicts", async () => {
+    const repository = createFakeSyncRepository({ hasActivePosRole: false });
+    let now = 100;
+    const service = createLocalSyncIngestionService({
+      repository,
+      projectionRepository: repository,
+      now: () => now,
+    });
+    const batch = buildBatch({
+      events: [buildRegisterOpenedEvent({ sequence: 1 })],
+    });
+
+    const first = await service.ingestBatch(batch);
+    now = 200;
+    const retry = await service.ingestBatch(batch);
+
+    expect(first.kind).toBe("ok");
+    expect(retry.kind).toBe("ok");
+    if (first.kind !== "ok" || retry.kind !== "ok") {
+      throw new Error("Expected ok results");
+    }
+    expect(first.data.conflicts).toEqual([
+      expect.objectContaining({
+        _id: "sync-conflict-2",
+        conflictType: "permission",
+        status: "needs_review",
+      }),
+    ]);
+    expect(retry.data.accepted).toEqual([
+      {
+        localEventId: "event-register-opened-1",
+        sequence: 1,
+        status: "conflicted",
+      },
+    ]);
+    expect(retry.data.conflicts).toEqual([
+      expect.objectContaining({
+        _id: "sync-conflict-2",
+        createdAt: 100,
+      }),
+    ]);
+    expect(repository.conflicts).toHaveLength(1);
+
+    const changedDetailsConflict = await repository.createConflict({
+      storeId: repository.conflicts[0].storeId,
+      terminalId: repository.conflicts[0].terminalId,
+      localRegisterSessionId: repository.conflicts[0].localRegisterSessionId,
+      localEventId: repository.conflicts[0].localEventId,
+      sequence: repository.conflicts[0].sequence,
+      conflictType: repository.conflicts[0].conflictType,
+      status: "needs_review",
+      summary: repository.conflicts[0].summary,
+      details: {
+        ...repository.conflicts[0].details,
+        hasStaffProof: false,
+      },
+      createdAt: 300,
+    });
+    expect(changedDetailsConflict._id).not.toBe("sync-conflict-2");
+    expect(repository.conflicts).toHaveLength(2);
+  });
+
   it("projects proofless offline register opens and completed sales for active terminal staff", async () => {
     const repository = createFakeSyncRepository({
       existingRegisterSession: null,
@@ -3258,6 +3320,68 @@ describe("createLocalSyncIngestionService", () => {
     );
   });
 
+  it("creates POS sync conflicts idempotently in the production repository", async () => {
+    const conflictInput = {
+      storeId: "store-1" as Id<"store">,
+      terminalId: "terminal-1" as Id<"posTerminal">,
+      localRegisterSessionId: "local-register-1",
+      localEventId: "event-register-opened-1",
+      sequence: 1,
+      conflictType: "permission" as const,
+      status: "needs_review" as const,
+      summary: "Staff access changed before this POS history synced.",
+      details: {
+        staffProfileId: "staff-1",
+        eventType: "register_opened",
+        nested: { left: 1, right: 2 },
+      },
+      createdAt: 200,
+    };
+    const ctx = createFakeConvexCtx({
+      posLocalSyncConflict: [
+        {
+          _id: "resolved-conflict",
+          ...conflictInput,
+          status: "resolved",
+          createdAt: 100,
+          resolvedAt: 150,
+        },
+      ],
+    });
+    const repository = createConvexLocalSyncRepository(ctx as never);
+
+    const first = await repository.createConflict(conflictInput);
+    const retry = await repository.createConflict({
+      ...conflictInput,
+      details: {
+        nested: { right: 2, left: 1 },
+        eventType: "register_opened",
+        staffProfileId: "staff-1",
+      },
+      createdAt: 300,
+    });
+    const changedDetails = await repository.createConflict({
+      ...conflictInput,
+      details: {
+        ...conflictInput.details,
+        hasStaffProof: false,
+      },
+      createdAt: 400,
+    });
+
+    expect(first._id).not.toBe("resolved-conflict");
+    expect(retry).toEqual(first);
+    expect(retry.createdAt).toBe(200);
+    expect(changedDetails._id).not.toBe(first._id);
+    await expect(
+      repository.listConflictsForEvent({
+        storeId: "store-1" as never,
+        terminalId: "terminal-1" as never,
+        localEventId: "event-register-opened-1",
+      }),
+    ).resolves.toHaveLength(3);
+  });
+
   it("sums only active unexpired inventory holds in the production repository", async () => {
     const ctx = createFakeConvexCtx({
       inventoryHold: [
@@ -3635,6 +3759,36 @@ function createFakeConvexCtx(
       },
     },
   };
+}
+
+function haveEquivalentConflictDetails(left: unknown, right: unknown): boolean {
+  if (Object.is(left, right)) return true;
+  if (typeof left !== typeof right) return false;
+  if (left === null || right === null) return left === right;
+
+  if (Array.isArray(left) || Array.isArray(right)) {
+    if (!Array.isArray(left) || !Array.isArray(right)) return false;
+    if (left.length !== right.length) return false;
+    return left.every((item, index) =>
+      haveEquivalentConflictDetails(item, right[index]),
+    );
+  }
+
+  if (typeof left !== "object" || typeof right !== "object") {
+    return false;
+  }
+
+  const leftRecord = left as Record<string, unknown>;
+  const rightRecord = right as Record<string, unknown>;
+  const leftKeys = Object.keys(leftRecord).sort();
+  const rightKeys = Object.keys(rightRecord).sort();
+  if (leftKeys.length !== rightKeys.length) return false;
+
+  return leftKeys.every(
+    (key, index) =>
+      key === rightKeys[index] &&
+      haveEquivalentConflictDetails(leftRecord[key], rightRecord[key]),
+  );
 }
 
 function buildRegisterOpenedEvent(
@@ -4191,6 +4345,20 @@ function createFakeSyncRepository(
       );
     },
     async createConflict(input) {
+      const existing = conflicts.find(
+        (conflict) =>
+          conflict.storeId === input.storeId &&
+          conflict.terminalId === input.terminalId &&
+          conflict.localRegisterSessionId === input.localRegisterSessionId &&
+          conflict.localEventId === input.localEventId &&
+          conflict.sequence === input.sequence &&
+          conflict.conflictType === input.conflictType &&
+          conflict.status === "needs_review" &&
+          conflict.summary === input.summary &&
+          haveEquivalentConflictDetails(conflict.details, input.details),
+      );
+      if (existing) return existing;
+
       const conflict = {
         _id: `sync-conflict-${nextId++}`,
         ...input,

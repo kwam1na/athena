@@ -623,6 +623,107 @@ describe("CashControlsDashboardContent", () => {
     expect(zeroDepositCard).not.toHaveTextContent("Deposited");
   });
 
+  it("shows pending cash void context on session cards", () => {
+    const openedAt = new Date("2026-06-30T09:00:00.000Z").getTime();
+    const session = {
+      _id: "session-pending-cash-void",
+      expectedCash: 610000,
+      openedAt,
+      openingFloat: 5000,
+      pendingVoidApprovals: {
+        cashAffectingCount: 1,
+        cashAmount: 8000,
+        count: 1,
+        items: [
+          {
+            approvalRequestId: "void-approval-1",
+            cashAmount: 8000,
+            requestedAt: openedAt + 1000,
+            transactionId: "transaction-1",
+            transactionNumber: "TXN-0031",
+          },
+        ],
+      },
+      registerNumber: "Register 1",
+      status: "closing" as const,
+      totalDeposited: 0,
+    };
+
+    render(
+      <CashControlsDashboardContent
+        currency="GHS"
+        dashboardSnapshot={{
+          ...baseSnapshot,
+          pendingCloseouts: [session],
+          registerSessions: [session],
+        }}
+        hasFinancialDetailsAccess
+        isLoading={false}
+        orgUrlSlug="v26"
+        storeUrlSlug="east-legon"
+      />,
+    );
+
+    const card = screen
+      .getAllByRole("link", { name: /Register 1/i })
+      .find((link) => within(link).queryByText("Review register"));
+
+    expect(card).toBeDefined();
+    expect(card).toHaveTextContent("Expected now");
+    expect(card).toHaveTextContent("GH₵6,100");
+    expect(card).toHaveTextContent("After adjustments");
+    expect(card).toHaveTextContent("GH₵6,020");
+    expect(card).toHaveTextContent(
+      "After adjustments applies 1 pending cash void",
+    );
+    expect(card).toHaveTextContent("GH₵80");
+  });
+
+  it("marks cash item adjustments as register-review attention", () => {
+    const openedAt = new Date("2026-06-30T09:00:00.000Z").getTime();
+    const session = {
+      _id: "session-pending-cash-adjustment",
+      expectedCash: 610000,
+      openedAt,
+      openingFloat: 5000,
+      pendingVoidApprovals: {
+        cashAdjustmentCount: 1,
+        cashAdjustmentDelta: -5000,
+        cashAmount: 0,
+        count: 0,
+        items: [],
+      },
+      registerNumber: "Register 1",
+      status: "active" as const,
+      totalDeposited: 0,
+    };
+
+    render(
+      <CashControlsDashboardContent
+        currency="GHS"
+        dashboardSnapshot={{
+          ...baseSnapshot,
+          registerSessions: [session],
+        }}
+        hasFinancialDetailsAccess
+        isLoading={false}
+        orgUrlSlug="v26"
+        storeUrlSlug="east-legon"
+      />,
+    );
+
+    const card = screen
+      .getAllByRole("link", { name: /Register 1/i })
+      .find((link) => within(link).queryByText("Review register"));
+
+    expect(card).toBeDefined();
+    expect(card).toHaveTextContent("After adjustments");
+    expect(card).toHaveTextContent("GH₵6,050");
+    expect(card).toHaveTextContent(
+      "After adjustments applies 1 pending cash item adjustment reducing cash",
+    );
+  });
+
   it("surfaces a drawer opened from POS in the cash-controls ledgers", () => {
     render(
       <CashControlsDashboardContent

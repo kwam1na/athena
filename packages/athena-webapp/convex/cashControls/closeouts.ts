@@ -81,6 +81,24 @@ function buildRegisterCloseoutVarianceTimelineMessage(args: {
   return `${registerLabel} closeout recorded with a cash variance of ${formatCloseoutVarianceAmount(args.currency, args.variance)}.`;
 }
 
+function buildRegisterCloseoutSubmittedTimelineMessage(args: {
+  currency?: string;
+  registerNumber?: string;
+  variance: number;
+}) {
+  const registerLabel = args.registerNumber?.trim()
+    ? /^register\b/i.test(args.registerNumber)
+      ? args.registerNumber
+      : `Register ${args.registerNumber}`
+    : "Register session";
+  const cashResult =
+    args.variance === 0
+      ? "an exact cash match"
+      : `a cash variance of ${formatCloseoutVarianceAmount(args.currency, args.variance)}`;
+
+  return `${registerLabel} closeout submitted with ${cashResult}. Finalize after pending register corrections are resolved.`;
+}
+
 const userErrorValidator = v.object({
   code: v.union(
     v.literal("validation_failed"),
@@ -1130,6 +1148,33 @@ export const submitRegisterSessionCloseout = mutation({
     });
 
     if (hasFinalCloseoutHold) {
+      await recordOperationalEventWithCtx(ctx, {
+        actorStaffProfileId: closeoutSubmitActorStaffProfileId,
+        actorUserId,
+        eventType: "register_session_closeout_submitted",
+        message: buildRegisterCloseoutSubmittedTimelineMessage({
+          currency: store?.currency,
+          registerNumber: registerSession.registerNumber,
+          variance: closeoutReview.variance,
+        }),
+        metadata: {
+          countedCash: args.countedCash,
+          expectedCash: registerSession.expectedCash,
+          holdKinds: closeoutHolds
+            .filter((hold) => hold.cashAffecting && hold.count > 0)
+            .map((hold) => hold.kind),
+          pendingVoidApprovalCount,
+          variance: closeoutReview.variance,
+        },
+        organizationId: registerSession.organizationId,
+        reason: closeoutReview.reason,
+        registerSessionId: registerSession._id,
+        storeId: args.storeId,
+        subjectId: registerSession._id,
+        subjectLabel: registerSession.registerNumber,
+        subjectType: "register_session",
+      });
+
       return submittedCloseoutPendingVoidsResult({
         closeoutReview,
         pendingVoidApprovalCount,

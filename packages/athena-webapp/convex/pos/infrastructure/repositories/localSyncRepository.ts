@@ -40,6 +40,36 @@ function omitUndefined<T extends Record<string, unknown>>(value: T) {
   ) as T;
 }
 
+function areConflictDetailsEquivalent(left: unknown, right: unknown): boolean {
+  if (Object.is(left, right)) return true;
+  if (typeof left !== typeof right) return false;
+  if (left === null || right === null) return left === right;
+
+  if (Array.isArray(left) || Array.isArray(right)) {
+    if (!Array.isArray(left) || !Array.isArray(right)) return false;
+    if (left.length !== right.length) return false;
+    return left.every((leftItem, index) =>
+      areConflictDetailsEquivalent(leftItem, right[index]),
+    );
+  }
+
+  if (typeof left !== "object" || typeof right !== "object") {
+    return false;
+  }
+
+  const leftRecord = left as Record<string, unknown>;
+  const rightRecord = right as Record<string, unknown>;
+  const leftKeys = Object.keys(leftRecord).sort();
+  const rightKeys = Object.keys(rightRecord).sort();
+  if (leftKeys.length !== rightKeys.length) return false;
+
+  return leftKeys.every(
+    (key, index) =>
+      key === rightKeys[index] &&
+      areConflictDetailsEquivalent(leftRecord[key], rightRecord[key]),
+  );
+}
+
 export function createConvexLocalSyncRepository(
   ctx: MutationCtx,
 ): LocalSyncRepository {
@@ -353,6 +383,26 @@ export function createConvexLocalSyncRepository(
       return mappings;
     },
     async createConflict(input) {
+      const activeConflicts = await ctx.db
+        .query("posLocalSyncConflict")
+        .withIndex("by_store_terminal_localEvent", (q) =>
+          q
+            .eq("storeId", input.storeId)
+            .eq("terminalId", input.terminalId)
+            .eq("localEventId", input.localEventId),
+        )
+        .take(500);
+      const existing = activeConflicts.find(
+        (conflict) =>
+          conflict.status === "needs_review" &&
+          conflict.localRegisterSessionId === input.localRegisterSessionId &&
+          conflict.sequence === input.sequence &&
+          conflict.conflictType === input.conflictType &&
+          conflict.summary === input.summary &&
+          areConflictDetailsEquivalent(conflict.details, input.details),
+      );
+      if (existing) return existing;
+
       const id = await ctx.db.insert("posLocalSyncConflict", input);
       return { _id: id, ...input };
     },
@@ -597,18 +647,30 @@ export function createConvexLocalSyncRepository(
     async patchRegisterSession(registerSessionId, patch) {
       let datePatch = {};
 
-      if (patch.status === "closed" && typeof patch.closedAt === "number") {
+      const closeoutOwnedAt =
+        typeof patch.closeoutOwnedAt === "number"
+          ? patch.closeoutOwnedAt
+          : patch.status === "closed" && typeof patch.closedAt === "number"
+            ? patch.closedAt
+            : undefined;
+      const closeoutOwnershipSource =
+        patch.closeoutOwnershipSource ??
+        (patch.status === "closed" && typeof patch.closedAt === "number"
+          ? "closed_record"
+          : undefined);
+
+      if (closeoutOwnedAt !== undefined && closeoutOwnershipSource) {
         const storeId =
           patch.storeId ?? (await ctx.db.get("registerSession", registerSessionId))?.storeId;
 
         if (storeId) {
           datePatch = buildRegisterSessionDateDerivationPatch({
             closeoutContext: await resolveRegisterSessionOperatingDateContext(ctx, {
-              at: patch.closedAt,
+              at: closeoutOwnedAt,
               storeId,
             }),
-            closeoutOwnedAt: patch.closedAt,
-            closeoutOwnershipSource: "closed_record",
+            closeoutOwnedAt,
+            closeoutOwnershipSource,
           });
         }
       }

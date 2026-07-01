@@ -826,10 +826,15 @@ describe("cash control deposits", () => {
         [
           "session_closing" as Id<"registerSession">,
           {
+            cashAffectingCount: 1,
+            cashAdjustmentCount: 0,
+            cashAdjustmentDelta: 0,
+            cashAmount: 8000,
             count: 2,
             items: [
               {
                 approvalRequestId: "void_approval_1" as Id<"approvalRequest">,
+                cashAmount: 8000,
                 requestedAt: 25,
                 transactionId: "txn_1",
                 transactionNumber: "POS-1001",
@@ -837,6 +842,7 @@ describe("cash control deposits", () => {
               },
               {
                 approvalRequestId: "void_approval_2" as Id<"approvalRequest">,
+                cashAmount: 0,
                 requestedAt: 26,
                 transactionId: "txn_2",
                 transactionNumber: "POS-1002",
@@ -954,6 +960,8 @@ describe("cash control deposits", () => {
         status: "pending",
       },
       pendingVoidApprovals: {
+        cashAffectingCount: 1,
+        cashAmount: 8000,
         count: 2,
         items: [
           expect.objectContaining({
@@ -7166,6 +7174,93 @@ describe("cash control deposits", () => {
     });
 
     expect(ctx.tables.get("paymentAllocation")).toEqual([]);
+  });
+
+  it("rejects new deposits while cash item adjustments are pending", async () => {
+    const ctx = createAuthorizedRegisterDepositCtx({
+      approvalRequest: [
+        {
+          _id: "item_adjustment_approval_1",
+          createdAt: 1,
+          metadata: {
+            settlementAmount: 5000,
+            settlementDirection: "refund",
+            settlementMethod: "cash",
+          },
+          organizationId: "org_1",
+          registerSessionId: "session_open",
+          requestType: "pos_item_adjustment",
+          status: "pending",
+          storeId: "store_1",
+          subjectId: "item_adjustment_1",
+          subjectType: "pos_transaction_item_adjustment",
+        },
+      ],
+    });
+
+    await expect(
+      getHandler(recordRegisterSessionDeposit)(ctx as never, {
+        actorStaffProfileId: "staff_1" as Id<"staffProfile">,
+        amount: 100,
+        registerSessionId: "session_open" as Id<"registerSession">,
+        storeId: "store_1" as Id<"store">,
+        submissionKey: "deposit-1",
+      }),
+    ).resolves.toEqual({
+      kind: "user_error",
+      error: {
+        code: "precondition_failed",
+        message:
+          "Resolve pending register corrections before recording a deposit.",
+      },
+    });
+
+    expect(ctx.tables.get("paymentAllocation")).toEqual([]);
+  });
+
+  it("allows new deposits while only non-cash item adjustments are pending", async () => {
+    const ctx = createAuthorizedRegisterDepositCtx({
+      approvalRequest: [
+        {
+          _id: "item_adjustment_approval_1",
+          createdAt: 1,
+          metadata: {
+            settlementAmount: 5000,
+            settlementDirection: "refund",
+            settlementMethod: "mobile_money",
+          },
+          organizationId: "org_1",
+          registerSessionId: "session_open",
+          requestType: "pos_item_adjustment",
+          status: "pending",
+          storeId: "store_1",
+          subjectId: "item_adjustment_1",
+          subjectType: "pos_transaction_item_adjustment",
+        },
+      ],
+    });
+
+    await expect(
+      getHandler(recordRegisterSessionDeposit)(ctx as never, {
+        actorStaffProfileId: "staff_1" as Id<"staffProfile">,
+        amount: 100,
+        registerSessionId: "session_open" as Id<"registerSession">,
+        storeId: "store_1" as Id<"store">,
+        submissionKey: "deposit-1",
+      }),
+    ).resolves.toMatchObject({
+      kind: "ok",
+      data: {
+        action: "recorded",
+      },
+    });
+
+    expect(ctx.tables.get("paymentAllocation")).toEqual([
+      expect.objectContaining({
+        amount: 10000,
+        registerSessionId: "session_open",
+      }),
+    ]);
   });
 
   it("rejects new deposits while repairable register mapping reviews are pending", async () => {

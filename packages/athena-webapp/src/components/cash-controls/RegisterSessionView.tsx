@@ -45,6 +45,10 @@ import {
   formatStoredCurrencyAmount,
   parseDisplayAmountInput,
 } from "@/lib/pos/displayAmounts";
+import {
+  formatPendingCashVoidNotice,
+  getPendingCashVoidContext,
+} from "@/lib/cashControls/pendingCashVoidPresentation";
 import { formatRegisterSessionCode } from "@/lib/pos/presentation/registerSessionCode";
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
@@ -110,9 +114,14 @@ type RegisterSessionApprovalRequest = {
 };
 
 type RegisterSessionPendingVoidApprovals = {
+  cashAffectingCount?: number | null;
+  cashAdjustmentCount?: number | null;
+  cashAdjustmentDelta?: number | null;
+  cashAmount?: number | null;
   count: number;
   items: Array<{
     approvalRequestId: string;
+    cashAmount?: number | null;
     requestedAt: number;
     transactionId: string;
     transactionNumber?: string | null;
@@ -3230,6 +3239,18 @@ export function RegisterSessionViewContent({
   );
   const expectedCash =
     registerSession?.netExpectedCash ?? registerSession?.expectedCash ?? 0;
+  const pendingCashVoidContext = getPendingCashVoidContext({
+    expectedCash,
+    pendingVoidApprovals: registerSession?.pendingVoidApprovals,
+  });
+  const pendingCashVoidText = pendingCashVoidContext
+    ? formatPendingCashVoidNotice({
+        context: pendingCashVoidContext,
+        formatAmount: (amount) => formatCurrency(currency, amount),
+      })
+    : null;
+  const pendingCashVoidApprovedExpectedCash =
+    pendingCashVoidContext?.expectedCashAfterApproval;
   const reviewReasonFormatter = currencyFormatter(currency);
   const formattedCurrency = currencyDisplaySymbol(currency);
   const parsedCountedCash = parseDisplayAmountInput(countedCash);
@@ -3239,9 +3260,7 @@ export function RegisterSessionViewContent({
       : (registerSession?.variance ?? null);
   const hasPendingCloseoutApproval =
     registerSession?.pendingApprovalRequest?.status === "pending";
-  const pendingVoidApprovalCount =
-    registerSession?.pendingVoidApprovals?.count ?? 0;
-  const hasPendingVoidApprovals = pendingVoidApprovalCount > 0;
+  const hasPendingCashCorrections = pendingCashVoidContext !== null;
   const formattedApprovalReason = formatReviewReason(
     reviewReasonFormatter,
     registerSession?.pendingApprovalRequest?.reason,
@@ -3273,20 +3292,20 @@ export function RegisterSessionViewContent({
     registerSession?.status === "closing" &&
     registerSession.countedCash !== undefined &&
     !hasPendingCloseoutApproval &&
-    !hasPendingVoidApprovals &&
+    !hasPendingCashCorrections &&
     !needsCloseoutCorrection &&
     !isReopenedCloseoutCorrection &&
     Boolean(onFinalizeCloseout);
   const isWaitingOnVoidReview =
     Boolean(registerSession) &&
     registerSession?.status === "closing" &&
-    hasPendingVoidApprovals &&
+    hasPendingCashCorrections &&
     !needsCloseoutCorrection &&
     !isReopenedCloseoutCorrection;
   const isDepositActionLocked =
     Boolean(pendingCloseoutAction) ||
     Boolean(hasPendingCloseoutApproval) ||
-    Boolean(hasPendingVoidApprovals) ||
+    Boolean(hasPendingCashCorrections) ||
     registerSession?.status === "closing" ||
     registerSession?.status === "closeout_rejected" ||
     registerSession?.status === "closed";
@@ -3502,22 +3521,24 @@ export function RegisterSessionViewContent({
       Boolean(openingFloatCorrectionSuccess) ||
       (correctionTimeline.length > 0 && !isClosedRegisterSession));
   const pendingVoidApprovalPanel =
-    registerSession && hasPendingVoidApprovals ? (
+    registerSession && hasPendingCashCorrections ? (
       <section className="space-y-3 rounded-lg border border-warning-border bg-warning-soft p-layout-md">
         <div className="space-y-1">
           <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-warning">
-            Void review pending
+            Register corrections pending
           </p>
           <h2 className="font-display text-lg font-semibold text-foreground">
-            Sale void review blocks final closeout
+            Register corrections block final closeout
           </h2>
           <p className="text-sm leading-6 text-muted-foreground">
-            Review{" "}
-            {pendingVoidApprovalCount === 1
-              ? "the pending sale void"
-              : `${pendingVoidApprovalCount} pending sale voids`}{" "}
-            before final closeout can complete.
+            Resolve pending cash-impacting sale voids or item adjustments before
+            final closeout can complete.
           </p>
+          {pendingCashVoidText ? (
+            <p className="text-sm leading-6 text-muted-foreground">
+              {pendingCashVoidText}
+            </p>
+          ) : null}
         </div>
         {orgUrlSlug && storeUrlSlug ? (
           <Button asChild size="sm" variant="outline">
@@ -3526,7 +3547,7 @@ export function RegisterSessionViewContent({
               search={{ o: getOrigin() }}
               to="/$orgUrlSlug/store/$storeUrlSlug/operations/approvals"
             >
-              Review void approvals
+              Review approvals
             </Link>
           </Button>
         ) : null}
@@ -3554,15 +3575,32 @@ export function RegisterSessionViewContent({
         </div>
 
         <div className="rounded-lg border border-warning-border bg-background/70 p-4">
-          <div className="grid gap-4 text-sm sm:grid-cols-3">
+          <div
+            className={cn(
+              "grid gap-4 text-sm",
+              pendingCashVoidApprovedExpectedCash !== undefined
+                ? "sm:grid-cols-4"
+                : "sm:grid-cols-3",
+            )}
+          >
             <div className="space-y-1">
               <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                Expected
+                {pendingCashVoidText ? "Expected now" : "Expected"}
               </p>
               <p className="font-numeric tabular-nums text-base text-foreground">
                 {formatCurrency(currency, expectedCash)}
               </p>
             </div>
+            {pendingCashVoidApprovedExpectedCash !== undefined ? (
+              <div className="space-y-1">
+                <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                  After adjustments
+                </p>
+                <p className="font-numeric tabular-nums text-base text-foreground">
+                  {formatCurrency(currency, pendingCashVoidApprovedExpectedCash)}
+                </p>
+              </div>
+            ) : null}
             <div className="space-y-1">
               <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
                 Counted
@@ -3582,6 +3620,11 @@ export function RegisterSessionViewContent({
               </p>
             </div>
           </div>
+          {pendingCashVoidText ? (
+            <p className="mt-4 border-t border-warning-border pt-3 text-xs leading-5 text-muted-foreground">
+              {pendingCashVoidText}
+            </p>
+          ) : null}
           <div className="mt-4 space-y-3 border-t border-warning-border pt-3 text-xs text-muted-foreground">
             <p>
               Requested by{" "}
@@ -3928,7 +3971,9 @@ export function RegisterSessionViewContent({
                       </dt>
                       <dd className="mt-layout-sm space-y-2 pb-1">
                         <span className="block text-xs text-muted-foreground">
-                          Expected cash
+                          {pendingCashVoidText
+                            ? "Expected now"
+                            : "Expected cash"}
                         </span>
                         <span className="block font-numeric text-2xl tabular-nums text-foreground sm:text-3xl">
                           {formatCurrency(currency, displayedExpectedCash)}
@@ -3975,7 +4020,25 @@ export function RegisterSessionViewContent({
                             {formatCurrency(currency, displayedVariance ?? 0)}
                           </dd>
                         </div>
+                        {pendingCashVoidApprovedExpectedCash !== undefined ? (
+                          <div className="flex items-center justify-between gap-layout-md px-3 py-2.5">
+                            <dt className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                              After adjustments
+                            </dt>
+                            <dd className="font-numeric tabular-nums text-sm text-foreground">
+                              {formatCurrency(
+                                currency,
+                                pendingCashVoidApprovedExpectedCash,
+                              )}
+                            </dd>
+                          </div>
+                        ) : null}
                       </div>
+                      {pendingCashVoidText ? (
+                        <p className="mt-layout-md border-t border-border/70 pt-layout-md text-xs leading-5 text-muted-foreground">
+                          {pendingCashVoidText}
+                        </p>
+                      ) : null}
                       {canCorrectOpeningFloat ||
                       showOpeningFloatCorrectionUnavailable ? (
                         <div className="mt-layout-md border-t border-border/70 pt-layout-md">
@@ -4751,15 +4814,37 @@ export function RegisterSessionViewContent({
                             : "Closed"}
                         </Badge>
                       </div>
-                      <dl className="grid gap-3 text-sm sm:grid-cols-3">
+                      <dl
+                        className={cn(
+                          "grid gap-3 text-sm",
+                          pendingCashVoidApprovedExpectedCash !== undefined
+                            ? "sm:grid-cols-4"
+                            : "sm:grid-cols-3",
+                        )}
+                      >
                         <div className="space-y-1">
                           <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                            Expected
+                            {pendingCashVoidText
+                              ? "Expected now"
+                              : "Expected"}
                           </dt>
                           <dd className="font-numeric tabular-nums text-foreground">
                             {formatCurrency(currency, expectedCash)}
                           </dd>
                         </div>
+                        {pendingCashVoidApprovedExpectedCash !== undefined ? (
+                          <div className="space-y-1">
+                            <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                              After adjustments
+                            </dt>
+                            <dd className="font-numeric tabular-nums text-foreground">
+                              {formatCurrency(
+                                currency,
+                                pendingCashVoidApprovedExpectedCash,
+                              )}
+                            </dd>
+                          </div>
+                        ) : null}
                         <div className="space-y-1">
                           <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
                             Counted
@@ -4785,6 +4870,11 @@ export function RegisterSessionViewContent({
                           </dd>
                         </div>
                       </dl>
+                      {pendingCashVoidText ? (
+                        <p className="border-t border-border/70 pt-3 text-xs leading-5 text-muted-foreground">
+                          {pendingCashVoidText}
+                        </p>
+                      ) : null}
                       <div className="space-y-3 border-t border-border/70 pt-3">
                         <p className="text-sm leading-relaxed text-muted-foreground">
                           {registerSession.status === "closeout_rejected"
@@ -4813,9 +4903,32 @@ export function RegisterSessionViewContent({
                               ? "Previous submitted closeout"
                               : "Submitted closeout"}
                           </p>
-                          <dl className="grid gap-3 text-sm sm:grid-cols-3">
-                            <div className="space-y-1">
-                              <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                          <dl className="flex flex-wrap gap-x-4 gap-y-3 text-sm">
+                            <div className="min-w-[6rem] flex-1 space-y-1">
+                              <dt className="text-[11px] uppercase leading-4 tracking-[0.14em] text-muted-foreground">
+                                {pendingCashVoidText
+                                  ? "Expected now"
+                                  : "Expected"}
+                              </dt>
+                              <dd className="font-numeric tabular-nums text-foreground">
+                                {formatCurrency(currency, expectedCash)}
+                              </dd>
+                            </div>
+                            {pendingCashVoidApprovedExpectedCash !== undefined ? (
+                              <div className="min-w-[8.5rem] flex-1 space-y-1">
+                                <dt className="text-[11px] uppercase leading-4 tracking-[0.14em] text-muted-foreground">
+                                  After adjustments
+                                </dt>
+                                <dd className="font-numeric tabular-nums text-foreground">
+                                  {formatCurrency(
+                                    currency,
+                                    pendingCashVoidApprovedExpectedCash,
+                                  )}
+                                </dd>
+                              </div>
+                            ) : null}
+                            <div className="min-w-[5.5rem] flex-1 space-y-1">
+                              <dt className="text-[11px] uppercase leading-4 tracking-[0.14em] text-muted-foreground">
                                 Counted
                               </dt>
                               <dd className="font-numeric tabular-nums text-foreground">
@@ -4826,16 +4939,8 @@ export function RegisterSessionViewContent({
                                 )}
                               </dd>
                             </div>
-                            <div className="space-y-1">
-                              <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                                Expected
-                              </dt>
-                              <dd className="font-numeric tabular-nums text-foreground">
-                                {formatCurrency(currency, expectedCash)}
-                              </dd>
-                            </div>
-                            <div className="space-y-1">
-                              <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                            <div className="min-w-[5.5rem] flex-1 space-y-1">
+                              <dt className="text-[11px] uppercase leading-4 tracking-[0.14em] text-muted-foreground">
                                 Variance
                               </dt>
                               <dd
@@ -4849,6 +4954,11 @@ export function RegisterSessionViewContent({
                               </dd>
                             </div>
                           </dl>
+                          {pendingCashVoidText ? (
+                            <p className="border-t border-border/70 pt-3 text-xs leading-5 text-muted-foreground">
+                              {pendingCashVoidText}
+                            </p>
+                          ) : null}
                           <p className="text-sm text-muted-foreground">
                             Approval required:{" "}
                             {registerSessionSnapshot.closeoutReview
@@ -4871,7 +4981,7 @@ export function RegisterSessionViewContent({
                               Ready for final closeout
                             </p>
                             <p className="text-sm leading-6 text-muted-foreground">
-                              Pending sale void review is resolved. Finalize
+                              Pending register corrections are resolved. Finalize
                               this submitted closeout against the current
                               expected cash.
                             </p>
@@ -4909,15 +5019,39 @@ export function RegisterSessionViewContent({
                           </label>
 
                           <div className="rounded-lg border border-border bg-muted/20 p-4">
-                            <dl className="grid grid-cols-2 gap-3 text-sm">
+                            <dl
+                              className={cn(
+                                "grid gap-3 text-sm",
+                                pendingCashVoidApprovedExpectedCash !==
+                                  undefined
+                                  ? "grid-cols-3"
+                                  : "grid-cols-2",
+                              )}
+                            >
                               <div className="space-y-1">
                                 <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                                  Expected
+                                  {pendingCashVoidText
+                                    ? "Expected now"
+                                    : "Expected"}
                                 </dt>
                                 <dd className="font-numeric tabular-nums text-foreground">
                                   {formatCurrency(currency, expectedCash)}
                                 </dd>
                               </div>
+                              {pendingCashVoidApprovedExpectedCash !==
+                              undefined ? (
+                                <div className="space-y-1">
+                                  <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                                    After adjustments
+                                  </dt>
+                                  <dd className="font-numeric tabular-nums text-foreground">
+                                    {formatCurrency(
+                                      currency,
+                                      pendingCashVoidApprovedExpectedCash,
+                                    )}
+                                  </dd>
+                                </div>
+                              ) : null}
                               <div className="space-y-1">
                                 <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
                                   Draft variance
@@ -4931,6 +5065,11 @@ export function RegisterSessionViewContent({
                                 </dd>
                               </div>
                             </dl>
+                            {pendingCashVoidText ? (
+                              <p className="mt-4 border-t border-border pt-3 text-xs leading-5 text-muted-foreground">
+                                {pendingCashVoidText}
+                              </p>
+                            ) : null}
                           </div>
 
                           <label className="block space-y-2">

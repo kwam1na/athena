@@ -955,6 +955,10 @@ function getRegisterSessionCloseoutBoundaryAt(
   }, undefined);
   if (latestCloseoutRecord !== undefined) return latestCloseoutRecord;
 
+  if (typeof registerSession?.closeoutOwnedAt === "number") {
+    return registerSession.closeoutOwnedAt;
+  }
+
   return typeof registerSession?.closedAt === "number"
     ? registerSession.closedAt
     : null;
@@ -3655,11 +3659,50 @@ async function projectRegisterClosed(
   if (
     closeoutHolds.some((hold) => hold.cashAffecting && hold.count > 0)
   ) {
+    const [store, terminal] = await Promise.all([
+      repository.getStore(args.storeId),
+      repository.getTerminal(args.terminalId),
+    ]);
+    const registerLabel = formatTerminalRegisterLabel({
+      registerNumber: registerSession.registerNumber ?? registerSession._id,
+      terminalName: terminal?.displayName,
+    });
+
     await repository.patchRegisterSession(registerSession._id, {
       status: "closing",
       countedCash,
       variance,
+      closeoutOwnedAt: args.event.occurredAt,
+      closeoutOwnershipSource: "closeout_submission",
       notes: payload.notes,
+    });
+    await repository.createOperationalEvent({
+      storeId: args.storeId,
+      organizationId: store?.organizationId,
+      eventType: "register_session_closeout_submitted",
+      subjectType: "register_session",
+      subjectId: registerSession._id,
+      message:
+        variance === 0
+          ? `${registerLabel} closeout submitted with an exact cash match. Finalize after pending register corrections are resolved.`
+          : `${registerLabel} closeout submitted with a cash variance of ${formatSaleTotal(store?.currency, variance)}. Finalize after pending register corrections are resolved.`,
+      metadata: {
+        countedCash,
+        expectedCash: registerSession.expectedCash,
+        holdKinds: closeoutHolds
+          .filter((hold) => hold.cashAffecting && hold.count > 0)
+          .map((hold) => hold.kind),
+        localEventId: args.event.localEventId,
+        notes: payload.notes,
+        registerNumber: registerSession.registerNumber,
+        syncOrigin: "local_sync",
+        variance,
+      },
+      createdAt: args.event.occurredAt,
+      actorStaffProfileId: args.event.staffProfileId,
+      registerSessionId: registerSession._id,
+      terminalId: args.terminalId,
+      localEventId: args.event.localEventId,
     });
     const mapping = await createMapping(repository, args, {
       localIdKind: "closeout",
@@ -3720,6 +3763,8 @@ async function projectRegisterClosed(
       status: "closing",
       countedCash,
       variance,
+      closeoutOwnedAt: args.event.occurredAt,
+      closeoutOwnershipSource: "closeout_submission",
       notes: payload.notes,
     });
     return { status: "conflicted", mappings: [], conflicts: [conflict] };

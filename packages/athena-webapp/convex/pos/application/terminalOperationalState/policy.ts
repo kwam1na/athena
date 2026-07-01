@@ -24,7 +24,7 @@ type TerminalSalesReadinessInput = {
   saleAuthorityReady: boolean;
 };
 
-const LOCAL_REVIEW_CLEAR_COMMAND_EVENT_LIMIT = 100;
+const LOCAL_REVIEW_COMMAND_EVENT_LIMIT = 100;
 
 export function buildTerminalOperationalState(
   input: TerminalOperationalPolicyInput,
@@ -699,30 +699,27 @@ function buildTerminalRecoveryActions(
       reason: "Local sync needs a terminal retry.",
     });
   }
-  const clearableReviewEvents =
-    getClearableRuntimeLocalReviewEvents(status.sync) ??
-    getClearableCollectedLocalReviewEvents(status.sync, commandStatus);
-  if (clearableReviewEvents) {
-    const localReviewEventIds = clearableReviewEvents.map(
-      (event) => event.localEventId,
-    );
+  const replayableReviewEvents =
+    getReplayableRuntimeLocalReviewEvents(status.sync) ??
+    getReplayableCollectedLocalReviewEvents(status.sync, commandStatus);
+  if (replayableReviewEvents) {
     actions.push({
-      commandType: "clear_local_review_items",
+      commandType: "retry_sync",
       expectedEvidence: {
-        localReviewClearedEventIds: localReviewEventIds,
-        localReviewEventCount: Math.max(
-          status.sync.reviewEventCount - clearableReviewEvents.length,
-          0,
-        ),
+        syncStatus: "idle",
       },
       commandContext: {
-        expectedBlockerType: "local_review",
-        localReviewEventIds,
-        reason: "Uploaded local review items can be cleared from this terminal.",
+        expectedBlockerType: "local_review_replay",
+        reason:
+          "Uploaded local review items should be replayed against current cloud rules.",
       },
-      reason: "Uploaded local review items can be cleared from this terminal.",
+      reason:
+        "Uploaded local review items should be replayed against current cloud rules.",
     });
-  } else if (status.sync.status === "needs_review" || status.sync.reviewEventCount > 0) {
+  } else if (
+    status.sync.status === "needs_review" ||
+    status.sync.reviewEventCount > 0
+  ) {
     actions.push({
       commandType: "collect_local_review",
       expectedEvidence: {
@@ -738,7 +735,7 @@ function buildTerminalRecoveryActions(
   return dedupeTerminalActions(actions);
 }
 
-function getClearableRuntimeLocalReviewEvents(
+function getReplayableRuntimeLocalReviewEvents(
   sync: NonNullable<
     TerminalOperationalPolicyInput["runtimeStatus"]
   >["sync"],
@@ -749,19 +746,18 @@ function getClearableRuntimeLocalReviewEvents(
   const reviewEvents = sync.reviewEvents ?? [];
   return reviewEvents.length > 0 &&
     reviewEvents.length <= sync.reviewEventCount &&
-    reviewEvents.every((event) => event.uploaded === true)
-    ? reviewEvents.slice(0, LOCAL_REVIEW_CLEAR_COMMAND_EVENT_LIMIT)
+    reviewEvents.every(isReplayableLocalReviewEvent)
+    ? reviewEvents.slice(0, LOCAL_REVIEW_COMMAND_EVENT_LIMIT)
     : null;
 }
 
-function getClearableCollectedLocalReviewEvents(
+function getReplayableCollectedLocalReviewEvents(
   sync: NonNullable<
     TerminalOperationalPolicyInput["runtimeStatus"]
   >["sync"],
   commandStatus: TerminalOperationalPolicyInput["commandStatus"],
 ) {
   if (
-    sync.reviewEventCount <= 0 ||
     commandStatus?.commandType !== "collect_local_review" ||
     commandStatus.verificationStatus !== "verified"
   ) {
@@ -770,6 +766,9 @@ function getClearableCollectedLocalReviewEvents(
 
   const reviewEvents = commandStatus.localReviewEvents ?? [];
   const runtimeReviewEvents = sync.reviewEvents ?? [];
+  if (sync.reviewEventCount <= 0 || runtimeReviewEvents.length === 0) {
+    return null;
+  }
   if (
     runtimeReviewEvents.length > 0 &&
     !sameLocalReviewEventIds(reviewEvents, runtimeReviewEvents)
@@ -779,9 +778,16 @@ function getClearableCollectedLocalReviewEvents(
 
   return reviewEvents.length > 0 &&
     reviewEvents.length <= sync.reviewEventCount &&
-    reviewEvents.every((event) => event.uploaded === true)
-    ? reviewEvents.slice(0, LOCAL_REVIEW_CLEAR_COMMAND_EVENT_LIMIT)
+    reviewEvents.every(isReplayableLocalReviewEvent)
+    ? reviewEvents.slice(0, LOCAL_REVIEW_COMMAND_EVENT_LIMIT)
     : null;
+}
+
+function isReplayableLocalReviewEvent(event: {
+  type: string;
+  uploaded?: boolean;
+}) {
+  return event.uploaded === true && event.type === "register.opened";
 }
 
 function sameLocalReviewEventIds(

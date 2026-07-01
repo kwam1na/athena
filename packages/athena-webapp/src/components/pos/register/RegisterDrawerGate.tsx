@@ -11,6 +11,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LoadingButton } from "@/components/ui/loading-button";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  formatPendingCashVoidNotice,
+  getPendingCashVoidContext,
+} from "@/lib/cashControls/pendingCashVoidPresentation";
 import { formatStoredAmount } from "@/lib/pos/displayAmounts";
 import type { RegisterDrawerGateState } from "@/lib/pos/presentation/register/registerUiState";
 import { getOrigin } from "~/src/lib/navigationUtils";
@@ -326,6 +330,18 @@ export function RegisterDrawerGate({
       registerLabel: drawerGate.registerLabel,
       registerNumber: drawerGate.registerNumber,
     });
+    const pendingCashVoidContext = getPendingCashVoidContext({
+      expectedCash: drawerGate.expectedCash,
+      pendingVoidApprovals: drawerGate.pendingCashVoidApprovals,
+    });
+    const pendingCashVoidText = pendingCashVoidContext
+      ? formatPendingCashVoidNotice({
+          context: pendingCashVoidContext,
+          formatAmount: (amount) => formatCurrency(currency, amount),
+        })
+      : null;
+    const pendingCashVoidApprovedExpectedCash =
+      pendingCashVoidContext?.expectedCashAfterApproval;
 
     return (
       <div className="mx-auto flex max-w-2xl flex-col rounded-lg border border-border bg-surface-raised p-8 shadow-surface">
@@ -355,15 +371,34 @@ export function RegisterDrawerGate({
             </div>
 
             <div className="rounded-lg border border-warning/30 bg-warning/10 p-5">
-              <dl className="grid gap-4 text-sm sm:grid-cols-3">
+              <dl
+                className={`grid gap-4 text-sm ${
+                  pendingCashVoidApprovedExpectedCash !== undefined
+                    ? "sm:grid-cols-4"
+                    : "sm:grid-cols-3"
+                }`}
+              >
                 <div className="space-y-1">
                   <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                    Expected
+                    {pendingCashVoidText ? "Expected now" : "Expected"}
                   </dt>
                   <dd className="font-mono text-foreground">
                     {formatCurrency(currency, drawerGate.expectedCash)}
                   </dd>
                 </div>
+                {pendingCashVoidApprovedExpectedCash !== undefined ? (
+                  <div className="space-y-1">
+                    <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                      After adjustments
+                    </dt>
+                    <dd className="font-mono text-foreground">
+                      {formatCurrency(
+                        currency,
+                        pendingCashVoidApprovedExpectedCash,
+                      )}
+                    </dd>
+                  </div>
+                ) : null}
                 <div className="space-y-1">
                   <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
                     Counted
@@ -389,6 +424,11 @@ export function RegisterDrawerGate({
                   </dd>
                 </div>
               </dl>
+              {pendingCashVoidText ? (
+                <p className="mt-4 border-t border-warning/25 pt-3 text-xs leading-5 text-muted-foreground">
+                  {pendingCashVoidText}
+                </p>
+              ) : null}
             </div>
 
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -467,15 +507,34 @@ export function RegisterDrawerGate({
 
             <form className="mt-8 space-y-5" onSubmit={handleCloseoutSubmit}>
               <div className="rounded-lg border border-border bg-surface p-4">
-                <dl className="grid grid-cols-2 gap-3 text-sm">
+                <dl
+                  className={`grid gap-3 text-sm ${
+                    pendingCashVoidApprovedExpectedCash !== undefined
+                      ? "grid-cols-3"
+                      : "grid-cols-2"
+                  }`}
+                >
                   <div className="space-y-1">
                     <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
-                      Expected
+                      {pendingCashVoidText ? "Expected now" : "Expected"}
                     </dt>
                     <dd className="font-mono text-foreground">
                       {formatCurrency(currency, drawerGate.expectedCash)}
                     </dd>
                   </div>
+                  {pendingCashVoidApprovedExpectedCash !== undefined ? (
+                    <div className="space-y-1">
+                      <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+                        After adjustments
+                      </dt>
+                      <dd className="font-mono text-foreground">
+                        {formatCurrency(
+                          currency,
+                          pendingCashVoidApprovedExpectedCash,
+                        )}
+                      </dd>
+                    </div>
+                  ) : null}
                   <div className="space-y-1">
                     <dt className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
                       Draft variance
@@ -492,6 +551,11 @@ export function RegisterDrawerGate({
                     </dd>
                   </div>
                 </dl>
+                {pendingCashVoidText ? (
+                  <p className="mt-4 border-t border-border pt-3 text-xs leading-5 text-muted-foreground">
+                    {pendingCashVoidText}
+                  </p>
+                ) : null}
               </div>
 
               <label className="block space-y-2">

@@ -1753,7 +1753,9 @@ function isLocalReviewTerminalAction(action: TerminalRecoveryAction) {
   return (
     action.kind === "terminal_command" &&
     (action.commandType === "clear_local_review_items" ||
-      action.commandType === "collect_local_review")
+      action.commandType === "collect_local_review" ||
+      (action.commandType === "retry_sync" &&
+        action.commandContext?.expectedBlockerType === "local_review_replay"))
   );
 }
 

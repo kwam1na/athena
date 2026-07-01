@@ -3459,6 +3459,58 @@ describe("daily operations overview read model", () => {
     });
   });
 
+  it("formats raw generic register session close variance amounts", async () => {
+    const snapshot = await buildDailyOperationsSnapshotWithCtx(
+      buildCtx({
+        dailyClose: [priorClose],
+        dailyOpening: [startedOpening],
+        operationalEvent: [
+          {
+            _id: "event-register-session-closed-variance",
+            createdAt: Date.UTC(2026, 4, 8, 20, 45),
+            eventType: "register_session_closed",
+            message: "Register session closed with a variance of 8000.",
+            metadata: {
+              countedCash: 85500,
+              expectedCash: 77500,
+              variance: 8000,
+            },
+            storeId: "store-1",
+            subjectId: "register-session-1",
+            subjectLabel: "1",
+            subjectType: "register_session",
+          },
+        ],
+        posTerminal: [
+          {
+            _id: "terminal-1",
+            displayName: "M Supplies",
+            storeId: "store-1",
+          },
+        ],
+        registerSession: [
+          {
+            _id: "register-session-1",
+            expectedCash: 77500,
+            openedAt: Date.UTC(2026, 4, 8, 8),
+            registerNumber: "1",
+            status: "closed",
+            storeId: "store-1",
+            terminalId: "terminal-1",
+          },
+        ],
+        store: [store],
+      }),
+      { operatingDate: "2026-05-08", storeId: "store-1" as Id<"store"> },
+    );
+
+    expect(snapshot.timeline[0]).toMatchObject({
+      id: "event-register-session-closed-variance",
+      message: "M Supplies / Register 1 closed with a variance of GH₵80.",
+      type: "register_session_closed",
+    });
+  });
+
   it("normalizes raw closeout variance approval events for the timeline", async () => {
     const snapshot = await buildDailyOperationsSnapshotWithCtx(
       buildCtx({

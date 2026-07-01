@@ -205,10 +205,17 @@ export function canSupersedeReviewedRegisterSessionForLocalOpen(input: {
       input.registerSession?.cloudRegisterSessionId;
   const hasSubmittedCloseout =
     input.registerSession?.status === "closing";
+  const closeoutReviewBoundaryAt = input.closeoutReviewBoundaryAt;
+  const replacementOpenedAt = input.replacementOpenedAt;
+  const hasKnownCloseoutBoundary =
+    typeof closeoutReviewBoundaryAt === "number";
+  const hasKnownReplacementOpenedAt =
+    typeof replacementOpenedAt === "number";
   const hasFreshReplacement =
     input.allowUnknownCloseoutReviewBoundary === true ||
-    (typeof input.closeoutReviewBoundaryAt === "number" &&
-      input.replacementOpenedAt > input.closeoutReviewBoundaryAt);
+    (hasKnownCloseoutBoundary &&
+      hasKnownReplacementOpenedAt &&
+      replacementOpenedAt > closeoutReviewBoundaryAt);
   const hasReplacementHold =
     input.hasOpenRegisterCloseoutReview || hasSubmittedCloseout;
 

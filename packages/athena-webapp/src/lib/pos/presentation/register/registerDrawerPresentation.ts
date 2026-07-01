@@ -3,6 +3,8 @@ import { isPosUsableRegisterSessionStatus } from "~/shared/registerSessionStatus
 
 import { toOperatorMessage } from "@/lib/errors/operatorMessages";
 import type { PosLocalRegisterReadModel } from "@/lib/pos/infrastructure/local/registerReadModel";
+import { calculateLocalSaleExpectedCashDelta } from "@/lib/pos/infrastructure/local/registerReadModel";
+import { isLocallySettledSyncStatus } from "@/lib/pos/infrastructure/local/syncStatus";
 import {
   buildPosSyncStatusPresentation,
   isRegisterCloseoutReviewItem,
@@ -256,4 +258,74 @@ export function getPendingLocalCloseoutRegisterSession(
       pendingEventCount: 1,
     },
   };
+}
+
+export function getPendingLocalCashVoidApprovals(
+  model: PosLocalRegisterReadModel | null,
+) {
+  const activeRegisterSession = model?.activeRegisterSession;
+  if (!model || !activeRegisterSession) return null;
+
+  const registerSessionIds = new Set(
+    [
+      activeRegisterSession.localRegisterSessionId,
+      activeRegisterSession.cloudRegisterSessionId,
+    ].filter(Boolean),
+  );
+  const completedSalesBySessionId = new Map(
+    model.completedSales.map((sale) => [sale.localPosSessionId, sale]),
+  );
+  const pendingClearedSaleIds = new Set<string>();
+
+  for (const event of model.sourceEvents) {
+    if (
+      event.type !== "cart.cleared" ||
+      isLocallySettledSyncStatus(event.sync.status)
+    ) {
+      continue;
+    }
+
+    const localRegisterSessionId =
+      event.localRegisterSessionId ??
+      stringField(event.payload, "localRegisterSessionId");
+    if (!localRegisterSessionId || !registerSessionIds.has(localRegisterSessionId)) {
+      continue;
+    }
+
+    const localPosSessionId =
+      event.localPosSessionId ?? stringField(event.payload, "localPosSessionId");
+    if (localPosSessionId && completedSalesBySessionId.has(localPosSessionId)) {
+      pendingClearedSaleIds.add(localPosSessionId);
+    }
+  }
+
+  if (pendingClearedSaleIds.size === 0) return null;
+
+  let cashAffectingCount = 0;
+  let cashAmount = 0;
+  for (const localPosSessionId of pendingClearedSaleIds) {
+    const sale = completedSalesBySessionId.get(localPosSessionId);
+    if (!sale) continue;
+
+    const saleCashAmount = calculateLocalSaleExpectedCashDelta(
+      sale.payments,
+      sale.total,
+    );
+    if (saleCashAmount > 0) {
+      cashAffectingCount += 1;
+      cashAmount += saleCashAmount;
+    }
+  }
+
+  return {
+    cashAffectingCount,
+    cashAmount,
+    count: pendingClearedSaleIds.size,
+  };
+}
+
+function stringField(value: unknown, key: string): string | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const field = (value as Record<string, unknown>)[key];
+  return typeof field === "string" && field.trim() ? field : undefined;
 }

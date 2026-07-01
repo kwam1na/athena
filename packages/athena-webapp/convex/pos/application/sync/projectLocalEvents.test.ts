@@ -4005,12 +4005,58 @@ describe("projectLocalSyncEvent", () => {
     ]);
   });
 
-  it("creates a new register open when the blocking drawer already submitted closeout", async () => {
+  it("conflicts a replacement register open when the closing drawer has no closeout boundary", async () => {
+    const repository = createProjectionRepository({
+      blockingRegisterSession: {
+        _id: "register-session-closing-without-boundary",
+        expectedCash: 100,
+        closeoutRecords: [],
+        registerNumber: "1",
+        status: "closing",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      },
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: {
+        localEventId: "event-register-opened-after-closing-state",
+        localRegisterSessionId: "local-register-after-closing-state",
+        sequence: 1,
+        eventType: "register_opened",
+        occurredAt: 10,
+        staffProfileId: "staff-1" as never,
+        staffProofToken: "proof-token-1",
+        payload: {
+          openingFloat: 250,
+          registerNumber: "1",
+        },
+      },
+      syncEventId: "sync-event-1",
+      now: 100,
+    });
+
+    expect(result.status).toBe("conflicted");
+    expect(result.conflicts).toEqual([
+      expect.objectContaining({
+        conflictType: "permission",
+        summary: "A register session is already open for this terminal.",
+      }),
+    ]);
+    expect(result.mappings).toEqual([]);
+    expect(repository.createdRegisterSessions).toEqual([]);
+  });
+
+  it("creates a new register open when the blocking drawer already submitted closeout ownership", async () => {
     const repository = createProjectionRepository({
       blockingRegisterSession: {
         _id: "register-session-closing",
         expectedCash: 100,
-        closeoutRecords: [{ occurredAt: 5 }],
+        closeoutOwnedAt: 5,
+        closeoutOwnershipSource: "closeout_submission",
+        closeoutRecords: [],
         registerNumber: "1",
         status: "closing",
         storeId: "store-1",
@@ -4055,6 +4101,52 @@ describe("projectLocalSyncEvent", () => {
         registerNumber: "1",
       }),
     ]);
+  });
+
+  it("conflicts a stale register open before submitted closeout ownership", async () => {
+    const repository = createProjectionRepository({
+      blockingRegisterSession: {
+        _id: "register-session-closing",
+        expectedCash: 100,
+        closeoutOwnedAt: 50,
+        closeoutOwnershipSource: "closeout_submission",
+        closeoutRecords: [],
+        registerNumber: "1",
+        status: "closing",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      },
+    });
+
+    const result = await projectLocalSyncEvent(repository, {
+      storeId: "store-1" as never,
+      terminalId: "terminal-1" as never,
+      event: {
+        localEventId: "event-register-opened-stale-closeout",
+        localRegisterSessionId: "local-register-stale-closeout",
+        sequence: 1,
+        eventType: "register_opened",
+        occurredAt: 10,
+        staffProfileId: "staff-1" as never,
+        staffProofToken: "proof-token-1",
+        payload: {
+          openingFloat: 250,
+          registerNumber: "1",
+        },
+      },
+      syncEventId: "sync-event-1",
+      now: 100,
+    });
+
+    expect(result.status).toBe("conflicted");
+    expect(result.conflicts).toEqual([
+      expect.objectContaining({
+        conflictType: "permission",
+        summary: "A register session is already open for this terminal.",
+      }),
+    ]);
+    expect(result.mappings).toEqual([]);
+    expect(repository.createdRegisterSessions).toEqual([]);
   });
 
   it("maps a direct cloud register open after staff authorization", async () => {
@@ -4458,6 +4550,8 @@ describe("projectLocalSyncEvent", () => {
       {
         registerSessionId: "register-session-1",
         patch: expect.objectContaining({
+          closeoutOwnedAt: 30,
+          closeoutOwnershipSource: "closeout_submission",
           status: "closing",
           countedCash: 90,
           notes: "Closed drawer with pending void review",
@@ -4465,8 +4559,42 @@ describe("projectLocalSyncEvent", () => {
         }),
       },
     ]);
+    const registerSessionPatch = repository.registerSessionPatches[0] as
+      | { patch: Record<string, unknown> }
+      | undefined;
+    expect(registerSessionPatch?.patch).not.toHaveProperty(
+      "closeoutRecords",
+    );
     expect(repository.recordedRegisterSessionTraces).toEqual([]);
-    expect(repository.createdOperationalEvents).toEqual([]);
+    expect(repository.createdOperationalEvents).toEqual([
+      expect.objectContaining({
+        createdAt: 30,
+        eventType: "register_session_closeout_submitted",
+        localEventId: "event-register-closed-1",
+        message: expect.stringContaining(
+          "closeout submitted with a cash variance",
+        ),
+        metadata: expect.objectContaining({
+          countedCash: 90,
+          expectedCash: 100,
+          holdKinds: ["pending_completed_sale_void_approvals"],
+          localEventId: "event-register-closed-1",
+          notes: "Closed drawer with pending void review",
+          syncOrigin: "local_sync",
+          variance: -10,
+        }),
+        registerSessionId: "register-session-1",
+        subjectId: "register-session-1",
+        subjectType: "register_session",
+      }),
+    ]);
+    expect(repository.createdOperationalEvents[0]).toEqual(
+      expect.objectContaining({
+        message: expect.stringContaining(
+          "Finalize after pending register corrections are resolved.",
+        ),
+      }),
+    );
   });
 
   it("keeps synced register closeout unresolved when repairable mapping holds exist", async () => {
@@ -4512,7 +4640,20 @@ describe("projectLocalSyncEvent", () => {
         }),
       },
     ]);
-    expect(repository.createdOperationalEvents).toEqual([]);
+    expect(repository.createdOperationalEvents).toEqual([
+      expect.objectContaining({
+        createdAt: 30,
+        eventType: "register_session_closeout_submitted",
+        localEventId: "event-register-closed-1",
+        metadata: expect.objectContaining({
+          holdKinds: ["repairable_missing_register_session_mapping_sales"],
+          syncOrigin: "local_sync",
+        }),
+        registerSessionId: "register-session-1",
+        subjectId: "register-session-1",
+        subjectType: "register_session",
+      }),
+    ]);
   });
 
   it("conflicts non-zero offline closeout variance for manager review", async () => {
@@ -4543,6 +4684,8 @@ describe("projectLocalSyncEvent", () => {
       {
         registerSessionId: "register-session-1",
         patch: {
+          closeoutOwnedAt: 30,
+          closeoutOwnershipSource: "closeout_submission",
           countedCash: 90,
           notes: "Short drawer",
           status: "closing",
@@ -4550,6 +4693,12 @@ describe("projectLocalSyncEvent", () => {
         },
       },
     ]);
+    const registerSessionPatch = repository.registerSessionPatches[0] as
+      | { patch: Record<string, unknown> }
+      | undefined;
+    expect(registerSessionPatch?.patch).not.toHaveProperty(
+      "closeoutRecords",
+    );
     expect(result.conflicts).toEqual([
       expect.objectContaining({
         conflictType: "permission",
@@ -5911,6 +6060,8 @@ function createProjectionRepository(
     registerSession: {
       _id: string;
       expectedCash: number;
+      closeoutOwnedAt?: number;
+      closeoutOwnershipSource?: string;
       closeoutRecords: unknown[];
       closedAt?: number;
       closedByStaffProfileId?: string;
@@ -5923,6 +6074,8 @@ function createProjectionRepository(
     blockingRegisterSession: {
       _id: string;
       expectedCash: number;
+      closeoutOwnedAt?: number;
+      closeoutOwnershipSource?: string;
       closeoutRecords: unknown[];
       registerNumber?: string;
       status: string;
