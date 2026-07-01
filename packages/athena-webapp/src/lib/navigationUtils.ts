@@ -3,3 +3,7 @@ export const getOrigin = () => {
     `${window.location.pathname}${window.location.search}`
   );
 };
+
+export const reloadWindow = () => {
+  window.location.reload();
+};

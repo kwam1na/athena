@@ -56,6 +56,9 @@ import {
 import { usePosTerminalAppSessionRecoveryRuntimeInput } from "@/lib/pos/infrastructure/terminal/posTerminalAppSessionRecoveryContext";
 import type { PosTerminalRuntimeAppSessionRecoveryInput } from "@/lib/pos/infrastructure/local/terminalRuntimeStatus";
 import { getOrigin } from "@/lib/navigationUtils";
+import { parseDisplayAmountInput } from "@/lib/pos/displayAmounts";
+import { toDisplayAmount } from "~/convex/lib/currency";
+import { currencyDisplaySymbol } from "~/shared/currencyFormatter";
 
 type HealthLinkProps = {
   children: ReactNode;
@@ -440,6 +443,15 @@ function parseNonNegativeIntegerInput(value: string) {
   return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;
 }
 
+function parseNonNegativeMoneyInput(value: string) {
+  const parsed = parseDisplayAmountInput(value);
+  return parsed !== undefined && Number.isSafeInteger(parsed) ? parsed : null;
+}
+
+function formatMinorUnitInputValue(value?: number | null) {
+  return String(toDisplayAmount(value ?? 0));
+}
+
 function normalizeMinuteOfDay(value: number) {
   return ((value % (24 * 60)) + 24 * 60) % (24 * 60);
 }
@@ -652,8 +664,10 @@ function StoreHoursTimingReadout({
 }
 
 function EodCompletionAutomationAdminPanel({
+  currency,
   storeId,
 }: {
+  currency: string;
   storeId?: Id<"store"> | null;
 }) {
   const { hasFullAdminAccess, isLoading } = usePermissions();
@@ -690,6 +704,7 @@ function EodCompletionAutomationAdminPanel({
   const policyMaxAbsoluteCashVariance = policy?.maxAbsoluteCashVariance;
   const policyMaxVoidedSaleCount = policy?.maxVoidedSaleCount;
   const policyMaxVoidedSaleTotal = policy?.maxVoidedSaleTotal;
+  const currencySymbol = currencyDisplaySymbol(currency);
   const scheduleContext = scheduleSummary?.context;
   const currentOrNextWindow =
     scheduleContext?.currentWindow ?? scheduleContext?.nextWindow ?? null;
@@ -753,9 +768,11 @@ function EodCompletionAutomationAdminPanel({
     setCleanDayAutoCompleteEnabled(
       Boolean(policyCleanDayAutoCompleteEnabled),
     );
-    setMaxAbsoluteCashVariance(String(policyMaxAbsoluteCashVariance ?? 0));
+    setMaxAbsoluteCashVariance(
+      formatMinorUnitInputValue(policyMaxAbsoluteCashVariance),
+    );
     setMaxVoidedSaleCount(String(policyMaxVoidedSaleCount ?? 0));
-    setMaxVoidedSaleTotal(String(policyMaxVoidedSaleTotal ?? 0));
+    setMaxVoidedSaleTotal(formatMinorUnitInputValue(policyMaxVoidedSaleTotal));
   }, [
     policyCleanDayAutoCompleteEnabled,
     policyMaxAbsoluteCashVariance,
@@ -768,13 +785,13 @@ function EodCompletionAutomationAdminPanel({
     return null;
   }
 
-  const parsedMaxAbsoluteCashVariance = parseNonNegativeIntegerInput(
+  const parsedMaxAbsoluteCashVariance = parseNonNegativeMoneyInput(
     maxAbsoluteCashVariance,
   );
   const parsedMaxVoidedSaleCount = parseNonNegativeIntegerInput(
     maxVoidedSaleCount,
   );
-  const parsedMaxVoidedSaleTotal = parseNonNegativeIntegerInput(
+  const parsedMaxVoidedSaleTotal = parseNonNegativeMoneyInput(
     maxVoidedSaleTotal,
   );
   const canSave =
@@ -967,7 +984,7 @@ function EodCompletionAutomationAdminPanel({
         <div className="grid gap-layout-md sm:grid-cols-[repeat(3,minmax(10rem,14rem))]">
           <div className="space-y-layout-xs min-w-0">
             <Label htmlFor="eod-cash-variance-threshold">
-              Cash variance threshold
+              Cash variance threshold ({currencySymbol})
             </Label>
             <Input
               id="eod-cash-variance-threshold"
@@ -975,6 +992,7 @@ function EodCompletionAutomationAdminPanel({
               onChange={(event) =>
                 setMaxAbsoluteCashVariance(event.target.value)
               }
+              step="0.01"
               type="number"
               value={maxAbsoluteCashVariance}
             />
@@ -993,12 +1011,13 @@ function EodCompletionAutomationAdminPanel({
           </div>
           <div className="space-y-layout-xs min-w-0">
             <Label htmlFor="eod-voided-sale-total-threshold">
-              Voided sale total threshold
+              Voided sale total threshold ({currencySymbol})
             </Label>
             <Input
               id="eod-voided-sale-total-threshold"
               min={0}
               onChange={(event) => setMaxVoidedSaleTotal(event.target.value)}
+              step="0.01"
               type="number"
               value={maxVoidedSaleTotal}
             />
@@ -2000,7 +2019,10 @@ export function POSSettingsView({
             storeUrlSlug={routeParams?.storeUrlSlug}
           />
 
-          <EodCompletionAutomationAdminPanel storeId={activeStore?._id ?? null} />
+          <EodCompletionAutomationAdminPanel
+            currency={activeStore?.currency ?? "GHS"}
+            storeId={activeStore?._id ?? null}
+          />
 
           <POSRecoveryCodeAdminPanel storeId={activeStore?._id ?? null} />
 

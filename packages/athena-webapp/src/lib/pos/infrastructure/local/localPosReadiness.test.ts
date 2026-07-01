@@ -66,6 +66,7 @@ const registerReadModel = {
 const originalIndexedDb = globalThis.indexedDB;
 
 afterEach(() => {
+  vi.useRealTimers();
   posLocalStoreMocks.createIndexedDbPosLocalStorageAdapter.mockClear();
   posLocalStoreMocks.createPosLocalStore.mockClear();
   posLocalStoreMocks.state.currentStore = null;
@@ -631,7 +632,13 @@ describe("localPosReadiness", () => {
       }),
     );
 
-    expect(result.current).toEqual({ status: "loading" });
+    expect(result.current).toMatchObject({
+      diagnostics: {
+        stage: "reading_local_store",
+        stateKey: "store-1:2026-05-14:no-terminal",
+      },
+      status: "loading",
+    });
 
     await act(async () => {
       resolveRegisterRead?.({
@@ -645,6 +652,101 @@ describe("localPosReadiness", () => {
       expect(result.current).toMatchObject({
         status: "blocked",
         reason: "local_closeout",
+      });
+    });
+  });
+
+  it("keeps POS loading when the local readiness read stalls", async () => {
+    vi.useFakeTimers();
+    Object.defineProperty(globalThis, "indexedDB", {
+      configurable: true,
+      value: {},
+    });
+    posLocalStoreMocks.state.currentStore = {
+      readStoreDayReadiness: vi.fn(
+        () => new Promise<never>(() => undefined),
+      ),
+      writeStoreDayReadiness: vi.fn().mockResolvedValue({
+        ok: true,
+        value: null,
+      }),
+    };
+    localRegisterReaderMocks.readProjectedLocalRegisterModel.mockReturnValue(
+      new Promise<never>(() => undefined),
+    );
+
+    const { result } = renderHook(() =>
+      useLocalPosReadiness({
+        closeSnapshot: { status: "ready" },
+        entryContext,
+        openingSnapshot: { status: "started" },
+        operatingDate: "2026-05-14",
+      }),
+    );
+
+    expect(result.current).toMatchObject({
+      diagnostics: {
+        stage: "reading_local_store",
+      },
+      status: "loading",
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(3_000);
+    });
+
+    expect(result.current).toMatchObject({
+      diagnostics: {
+        activeStateKey: "store-1:2026-05-14:no-terminal",
+        stage: "reading_local_store",
+      },
+      status: "loading",
+    });
+  });
+
+  it("blocks with local store details when IndexedDB is missing POS object stores", async () => {
+    Object.defineProperty(globalThis, "indexedDB", {
+      configurable: true,
+      value: {},
+    });
+    posLocalStoreMocks.state.currentStore = {
+      readStoreDayReadiness: vi.fn().mockResolvedValue({
+        ok: false,
+        error: {
+          code: "missing_object_stores",
+          message:
+            "POS local store is missing required IndexedDB object stores: meta, readiness, registerCatalog.",
+        },
+      }),
+      writeStoreDayReadiness: vi.fn().mockResolvedValue({
+        ok: true,
+        value: null,
+      }),
+    };
+    localRegisterReaderMocks.readProjectedLocalRegisterModel.mockResolvedValue({
+      ok: true,
+      value: {
+        canSell: true,
+        closeoutState: null,
+        sourceEvents: [],
+      },
+    });
+
+    const { result } = renderHook(() =>
+      useLocalPosReadiness({
+        closeSnapshot: { status: "ready" },
+        entryContext,
+        openingSnapshot: { status: "started" },
+        operatingDate: "2026-05-14",
+      }),
+    );
+
+    await waitFor(() => {
+      expect(result.current).toEqual({
+        status: "blocked",
+        reason: "local_store_unavailable",
+        message:
+          "POS local storage is unavailable. POS local store is missing required IndexedDB object stores: meta, readiness, registerCatalog.",
       });
     });
   });

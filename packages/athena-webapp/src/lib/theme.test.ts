@@ -4,11 +4,15 @@ import {
   ATHENA_THEME_STORAGE_KEY,
   initializeAthenaTheme,
   setAthenaThemeMode,
+  setAthenaThemeModeWithTransition,
 } from "./theme";
 
-function installMatchMedia(matches: boolean) {
+function installMatchMedia(
+  matches: boolean,
+  options?: { reducedMotion?: boolean },
+) {
   const listeners = new Set<(event: MediaQueryListEvent) => void>();
-  const mediaQuery = {
+  const darkMediaQuery = {
     matches,
     media: "(prefers-color-scheme: dark)",
     onchange: null,
@@ -22,16 +26,29 @@ function installMatchMedia(matches: boolean) {
     removeListener: vi.fn(),
     dispatchEvent: vi.fn(),
   } satisfies MediaQueryList;
+  const reducedMotionMediaQuery = {
+    ...darkMediaQuery,
+    matches: options?.reducedMotion ?? false,
+    media: "(prefers-reduced-motion: reduce)",
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+  } satisfies MediaQueryList;
 
   Object.defineProperty(window, "matchMedia", {
     configurable: true,
-    value: vi.fn(() => mediaQuery),
+    value: vi.fn((query: string) =>
+      query === "(prefers-reduced-motion: reduce)"
+        ? reducedMotionMediaQuery
+        : darkMediaQuery,
+    ),
   });
 
   return {
-    mediaQuery,
+    mediaQuery: darkMediaQuery,
     setMatches(nextMatches: boolean) {
-      mediaQuery.matches = nextMatches;
+      darkMediaQuery.matches = nextMatches;
       listeners.forEach((listener) =>
         listener({ matches: nextMatches } as MediaQueryListEvent),
       );
@@ -46,6 +63,10 @@ describe("Athena theme runtime", () => {
     document.documentElement.removeAttribute("data-theme");
     document.documentElement.removeAttribute("data-theme-mode");
     document.documentElement.style.colorScheme = "";
+    Object.defineProperty(document, "startViewTransition", {
+      configurable: true,
+      value: undefined,
+    });
   });
 
   it("defaults to the system theme without storing an override", () => {
@@ -91,5 +112,44 @@ describe("Athena theme runtime", () => {
     systemTheme.setMatches(true);
     expect(document.documentElement).toHaveClass("dark");
     expect(document.documentElement.dataset.themeMode).toBe("system");
+  });
+
+  it("uses a view transition when explicitly toggling themes with motion allowed", () => {
+    installMatchMedia(false);
+    const startViewTransition = vi.fn(function (
+      this: Document,
+      callback: () => void,
+    ) {
+      expect(this).toBe(document);
+      callback();
+      return { finished: Promise.resolve() };
+    });
+    Object.defineProperty(document, "startViewTransition", {
+      configurable: true,
+      value: startViewTransition,
+    });
+
+    setAthenaThemeModeWithTransition("dark");
+
+    expect(startViewTransition).toHaveBeenCalledTimes(1);
+    expect(document.documentElement).toHaveClass("dark");
+    expect(window.localStorage.setItem).toHaveBeenCalledWith(
+      ATHENA_THEME_STORAGE_KEY,
+      "dark",
+    );
+  });
+
+  it("skips view transitions when reduced motion is requested", () => {
+    installMatchMedia(false, { reducedMotion: true });
+    const startViewTransition = vi.fn();
+    Object.defineProperty(document, "startViewTransition", {
+      configurable: true,
+      value: startViewTransition,
+    });
+
+    setAthenaThemeModeWithTransition("dark");
+
+    expect(startViewTransition).not.toHaveBeenCalled();
+    expect(document.documentElement).toHaveClass("dark");
   });
 });

@@ -279,6 +279,7 @@ export interface PosLocalRegisterAvailabilitySnapshot {
 }
 
 export type PosLocalStoreErrorCode =
+  | "missing_object_stores"
   | "unsupported_schema_version"
   | "write_failed";
 
@@ -355,6 +356,19 @@ const META_UPLOAD_SEQUENCE_PREFIX = "uploadSequence:";
 const TERMINAL_SEED_KEY = "current";
 const TERMINAL_INTEGRITY_PREFIX = "terminalIntegrity:";
 const DRAWER_AUTHORITY_PREFIX = "drawerAuthority:";
+const POS_LOCAL_OBJECT_STORE_NAMES = [
+  "authority",
+  "meta",
+  "terminalSeed",
+  "events",
+  "mappings",
+  "readiness",
+  "cashierPresence",
+  "staffAuthority",
+  "registerCatalog",
+  "registerServiceCatalog",
+  "registerAvailability",
+] satisfies PosLocalObjectStoreName[];
 
 class PosLocalStoreSchemaError extends Error {
   readonly code = "unsupported_schema_version" as const;
@@ -362,6 +376,16 @@ class PosLocalStoreSchemaError extends Error {
   constructor(schemaVersion: number) {
     super(
       `POS local store schema version ${schemaVersion} is newer than supported version ${POS_LOCAL_STORE_SCHEMA_VERSION}.`,
+    );
+  }
+}
+
+class PosLocalStoreMissingObjectStoresError extends Error {
+  readonly code = "missing_object_stores" as const;
+
+  constructor(readonly storeNames: string[]) {
+    super(
+      `POS local store is missing required IndexedDB object stores: ${storeNames.join(", ")}.`,
     );
   }
 }
@@ -397,6 +421,16 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
 
   function toFailure<T>(error: unknown): PosLocalStoreResult<T> {
     if (error instanceof PosLocalStoreSchemaError) {
+      return {
+        ok: false,
+        error: {
+          code: error.code,
+          message: error.message,
+        },
+      };
+    }
+
+    if (error instanceof PosLocalStoreMissingObjectStoresError) {
       return {
         ok: false,
         error: {
@@ -666,7 +700,7 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
           },
         );
 
-        return { ok: true, value: null };
+        return { ok: true as const, value: null };
       } catch (error) {
         return toFailure(error);
       }
@@ -752,7 +786,7 @@ export function createPosLocalStore(options: PosLocalStoreOptions) {
           },
         );
 
-        return { ok: true, value: null };
+        return { ok: true as const, value: null };
       } catch (error) {
         return toFailure(error);
       }
@@ -2176,27 +2210,27 @@ export function createIndexedDbPosLocalStorageAdapter(options?: {
 
       request.onupgradeneeded = () => {
         const database = request.result;
-        for (const storeName of [
-          "authority",
-          "meta",
-          "terminalSeed",
-          "events",
-          "mappings",
-          "readiness",
-          "cashierPresence",
-          "staffAuthority",
-          "cashierPresence",
-          "registerCatalog",
-          "registerServiceCatalog",
-          "registerAvailability",
-        ] satisfies PosLocalObjectStoreName[]) {
+        for (const storeName of POS_LOCAL_OBJECT_STORE_NAMES) {
           if (!database.objectStoreNames.contains(storeName)) {
             database.createObjectStore(storeName);
           }
         }
       };
       request.onerror = () => reject(request.error);
-      request.onsuccess = () => resolve(request.result);
+      request.onsuccess = () => {
+        const database = request.result;
+        const missingStoreNames = POS_LOCAL_OBJECT_STORE_NAMES.filter(
+          (storeName) => !database.objectStoreNames.contains(storeName),
+        );
+
+        if (missingStoreNames.length > 0) {
+          database.close();
+          reject(new PosLocalStoreMissingObjectStoresError(missingStoreNames));
+          return;
+        }
+
+        resolve(database);
+      };
     });
   }
 
@@ -2283,6 +2317,181 @@ export function createIndexedDbPosLocalStorageAdapter(options?: {
       }
     },
   };
+}
+
+export function clearIndexedDbPosLocalStore(options?: {
+  databaseName?: string;
+}): Promise<PosLocalStoreResult<null>> {
+  const databaseName = options?.databaseName ?? "athena-pos-local";
+
+  if (typeof indexedDB === "undefined") {
+    return Promise.resolve({
+      ok: false,
+      error: {
+        code: "write_failed",
+        message: "POS local storage is unavailable in this browser.",
+      },
+    });
+  }
+
+  return assertCanClearIndexedDbPosLocalStore({ databaseName }).then(
+    (preflight) => {
+      if (!preflight.ok) {
+        return preflight;
+      }
+
+      return deleteIndexedDbPosLocalStore(databaseName);
+    },
+  );
+}
+
+function assertCanClearIndexedDbPosLocalStore(options: {
+  databaseName: string;
+}): Promise<PosLocalStoreResult<null>> {
+  return inspectIndexedDbStoresForClear(options.databaseName)
+    .then(({ authorityRecords, cashierPresenceRecords, events }) => {
+      if (events.length > 0) {
+        return blockedLocalClear(
+          "POS local state has sale or register records that may not be synced. Use terminal health or support recovery before clearing this terminal.",
+        );
+      }
+
+      if (authorityRecords.length > 0) {
+        return blockedLocalClear(
+          "POS local state has drawer or terminal authority records. Use terminal health or support recovery before clearing this terminal.",
+        );
+      }
+
+      if (cashierPresenceRecords.some(isCashierPresenceRecord)) {
+        return blockedLocalClear(
+          "POS local state has an active cashier sign-in. Sign out or use terminal health before clearing this terminal.",
+        );
+      }
+
+      return { ok: true as const, value: null };
+    })
+    .catch(() =>
+      blockedLocalClear(
+        "POS local state could not be inspected. Use terminal health or support recovery before clearing this terminal.",
+      ),
+    );
+}
+
+function inspectIndexedDbStoresForClear(databaseName: string): Promise<{
+  authorityRecords: unknown[];
+  cashierPresenceRecords: unknown[];
+  events: unknown[];
+}> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(databaseName, POS_LOCAL_STORE_SCHEMA_VERSION);
+
+    request.onupgradeneeded = () => {
+      const database = request.result;
+      for (const storeName of POS_LOCAL_OBJECT_STORE_NAMES) {
+        if (!database.objectStoreNames.contains(storeName)) {
+          database.createObjectStore(storeName);
+        }
+      }
+    };
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      const database = request.result;
+      const storeNames = [
+        "events",
+        "authority",
+        "cashierPresence",
+      ].filter((storeName): storeName is
+        | "events"
+        | "authority"
+        | "cashierPresence" => database.objectStoreNames.contains(storeName));
+
+      if (storeNames.length === 0) {
+        database.close();
+        resolve({
+          authorityRecords: [],
+          cashierPresenceRecords: [],
+          events: [],
+        });
+        return;
+      }
+
+      const transaction = database.transaction(storeNames, "readonly");
+      const records = new Map<string, unknown[]>();
+      let remaining = storeNames.length;
+
+      const finishStore = (storeName: string, value: unknown[]) => {
+        records.set(storeName, value);
+        remaining -= 1;
+        if (remaining === 0) {
+          database.close();
+          resolve({
+            authorityRecords: records.get("authority") ?? [],
+            cashierPresenceRecords: records.get("cashierPresence") ?? [],
+            events: records.get("events") ?? [],
+          });
+        }
+      };
+
+      transaction.onerror = () => {
+        database.close();
+        reject(transaction.error);
+      };
+      transaction.onabort = () => {
+        database.close();
+        reject(transaction.error);
+      };
+
+      for (const storeName of storeNames) {
+        const getAllRequest = transaction.objectStore(storeName).getAll();
+        getAllRequest.onerror = () => {
+          database.close();
+          reject(getAllRequest.error);
+        };
+        getAllRequest.onsuccess = () => {
+          finishStore(storeName, getAllRequest.result);
+        };
+      }
+    };
+  });
+}
+
+function blockedLocalClear(message: string): PosLocalStoreResult<null> {
+  return {
+    ok: false,
+    error: {
+      code: "write_failed",
+      message,
+    },
+  };
+}
+
+function deleteIndexedDbPosLocalStore(databaseName: string) {
+  return new Promise<PosLocalStoreResult<null>>((resolve) => {
+    const request = indexedDB.deleteDatabase(databaseName);
+
+    request.onsuccess = () => {
+      resolve({ ok: true, value: null });
+    };
+    request.onerror = () => {
+      resolve({
+        ok: false,
+        error: {
+          code: "write_failed",
+          message: "POS local state could not be cleared.",
+        },
+      });
+    };
+    request.onblocked = () => {
+      resolve({
+        ok: false,
+        error: {
+          code: "write_failed",
+          message:
+            "POS local state is open in another tab. Close other Athena POS tabs and try again.",
+        },
+      });
+    };
+  });
 }
 
 export function createMemoryPosLocalStorageAdapter(options?: {

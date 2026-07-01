@@ -5,9 +5,18 @@ export const ATHENA_THEME_STORAGE_KEY = "athena-theme-mode";
 export type AthenaThemeMode = "system" | "light" | "dark";
 export type AthenaResolvedTheme = "light" | "dark";
 
+type ThemeViewTransition = {
+  finished?: Promise<void>;
+};
+
+type ThemeTransitionDocument = Document & {
+  startViewTransition?: (callback: () => void) => ThemeViewTransition;
+};
+
 const THEME_MODES = new Set<AthenaThemeMode>(["system", "light", "dark"]);
 const THEME_CHANGE_EVENT = "athena-theme-change";
 const DARK_MEDIA_QUERY = "(prefers-color-scheme: dark)";
+const REDUCED_MOTION_MEDIA_QUERY = "(prefers-reduced-motion: reduce)";
 
 function isThemeMode(value: string | null): value is AthenaThemeMode {
   return Boolean(value && THEME_MODES.has(value as AthenaThemeMode));
@@ -41,6 +50,13 @@ function getSystemTheme(): AthenaResolvedTheme {
   }
 
   return "light";
+}
+
+function prefersReducedMotion() {
+  return Boolean(
+    typeof window !== "undefined" &&
+      window.matchMedia?.(REDUCED_MOTION_MEDIA_QUERY).matches,
+  );
 }
 
 function resolveTheme(mode: AthenaThemeMode): AthenaResolvedTheme {
@@ -103,6 +119,25 @@ export function setAthenaThemeMode(mode: AthenaThemeMode) {
 
   applyTheme(mode);
   emitThemeChange();
+}
+
+export function setAthenaThemeModeWithTransition(mode: AthenaThemeMode) {
+  if (typeof document === "undefined" || prefersReducedMotion()) {
+    setAthenaThemeMode(mode);
+    return;
+  }
+
+  const transitionDocument = document as ThemeTransitionDocument;
+
+  if (!transitionDocument.startViewTransition) {
+    setAthenaThemeMode(mode);
+    return;
+  }
+
+  const transition = transitionDocument.startViewTransition(() =>
+    setAthenaThemeMode(mode),
+  );
+  void transition.finished?.catch(() => {});
 }
 
 function subscribeToThemeStore(onStoreChange: () => void) {

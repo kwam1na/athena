@@ -6,6 +6,7 @@ import type {
 } from "@/lib/pos/application/dto";
 import {
   POS_LOCAL_STORE_SCHEMA_VERSION,
+  clearIndexedDbPosLocalStore,
   createIndexedDbPosLocalStorageAdapter,
   createMemoryPosLocalStorageAdapter,
   createPosLocalStore,
@@ -105,6 +106,77 @@ function buildServiceCatalogRow(
       suggestedAmount: 4_500,
     },
     ...overrides,
+  };
+}
+
+function installClearableIndexedDbMock(
+  stores: Partial<Record<"authority" | "cashierPresence" | "events", unknown[]>>,
+  options?: { existingStoreNames?: string[] },
+) {
+  const existingStoreNames =
+    options?.existingStoreNames ??
+    ["authority", "cashierPresence", "events"];
+  const deleteDatabaseMock = vi.fn(() => {
+    const request = {
+      error: null,
+      onblocked: null,
+      onerror: null,
+      onsuccess: null,
+    } as unknown as IDBOpenDBRequest;
+    queueMicrotask(() => {
+      request.onsuccess?.({} as Event);
+    });
+    return request;
+  });
+  const database = {
+    close: vi.fn(),
+    createObjectStore: vi.fn(),
+    objectStoreNames: {
+      contains: vi.fn((storeName: string) =>
+        existingStoreNames.includes(storeName),
+      ),
+    },
+    transaction: vi.fn(() => {
+      const transaction = {
+        objectStore: (storeName: "authority" | "cashierPresence" | "events") => ({
+          getAll: () => createSuccessfulRequest(stores[storeName] ?? []),
+        }),
+        onabort: null,
+        oncomplete: null,
+        onerror: null,
+      } as unknown as IDBTransaction;
+      queueMicrotask(() => {
+        transaction.oncomplete?.({} as Event);
+      });
+      return transaction;
+    }),
+  };
+  const openMock = vi.fn(() => {
+    const request = {
+      error: null,
+      result: database,
+      onerror: null,
+      onsuccess: null,
+      onupgradeneeded: null,
+    } as unknown as IDBOpenDBRequest;
+    queueMicrotask(() => {
+      request.onsuccess?.({} as Event);
+    });
+    return request;
+  });
+
+  Object.defineProperty(globalThis, "indexedDB", {
+    configurable: true,
+    value: {
+      deleteDatabase: deleteDatabaseMock,
+      open: openMock,
+    },
+  });
+
+  return {
+    database,
+    deleteDatabaseMock,
+    openMock,
   };
 }
 
@@ -1569,6 +1641,288 @@ describe("posLocalStore", () => {
         } is newer than supported version ${POS_LOCAL_STORE_SCHEMA_VERSION}.`,
       },
     });
+  });
+
+  it("returns an explicit failure when IndexedDB is missing required object stores", async () => {
+    const originalIndexedDb = globalThis.indexedDB;
+    const database = {
+      close: vi.fn(),
+      objectStoreNames: {
+        contains: () => false,
+      },
+    };
+    Object.defineProperty(globalThis, "indexedDB", {
+      configurable: true,
+      value: {
+        open: vi.fn(() => {
+          const request = {
+            error: null,
+            result: database,
+            onerror: null,
+            onsuccess: null,
+            onupgradeneeded: null,
+          } as unknown as IDBOpenDBRequest;
+          queueMicrotask(() => {
+            request.onsuccess?.({} as Event);
+          });
+          return request;
+        }),
+      },
+    });
+
+    try {
+      const store = createPosLocalStore({
+        adapter: createIndexedDbPosLocalStorageAdapter({
+          databaseName: "athena-pos-local-missing-store-test",
+        }),
+      });
+
+      await expect(store.readProvisionedTerminalSeed()).resolves.toEqual({
+        ok: false,
+        error: {
+          code: "missing_object_stores",
+          message:
+            "POS local store is missing required IndexedDB object stores: authority, meta, terminalSeed, events, mappings, readiness, cashierPresence, staffAuthority, registerCatalog, registerServiceCatalog, registerAvailability.",
+        },
+      });
+      expect(database.close).toHaveBeenCalled();
+    } finally {
+      Object.defineProperty(globalThis, "indexedDB", {
+        configurable: true,
+        value: originalIndexedDb,
+      });
+    }
+  });
+
+  it("clears the IndexedDB POS local database", async () => {
+    const originalIndexedDb = globalThis.indexedDB;
+    const { deleteDatabaseMock, openMock } = installClearableIndexedDbMock({});
+
+    try {
+      await expect(
+        clearIndexedDbPosLocalStore({
+          databaseName: "athena-pos-local-clear-test",
+        }),
+      ).resolves.toEqual({ ok: true, value: null });
+      expect(openMock).toHaveBeenCalledWith(
+        "athena-pos-local-clear-test",
+        POS_LOCAL_STORE_SCHEMA_VERSION,
+      );
+      expect(deleteDatabaseMock).toHaveBeenCalledWith(
+        "athena-pos-local-clear-test",
+      );
+    } finally {
+      Object.defineProperty(globalThis, "indexedDB", {
+        configurable: true,
+        value: originalIndexedDb,
+      });
+    }
+  });
+
+  it("does not clear IndexedDB POS local state while local events remain", async () => {
+    const originalIndexedDb = globalThis.indexedDB;
+    const { deleteDatabaseMock } = installClearableIndexedDbMock({
+      events: [
+        {
+          localEventId: "event-1",
+          sequence: 1,
+          sync: { status: "pending" },
+          type: "transaction.completed",
+        },
+      ],
+    });
+
+    try {
+      await expect(clearIndexedDbPosLocalStore()).resolves.toEqual({
+        ok: false,
+        error: {
+          code: "write_failed",
+          message:
+            "POS local state has sale or register records that may not be synced. Use terminal health or support recovery before clearing this terminal.",
+        },
+      });
+      expect(deleteDatabaseMock).not.toHaveBeenCalled();
+    } finally {
+      Object.defineProperty(globalThis, "indexedDB", {
+        configurable: true,
+        value: originalIndexedDb,
+      });
+    }
+  });
+
+  it("does not clear IndexedDB POS local state while authority records remain", async () => {
+    const originalIndexedDb = globalThis.indexedDB;
+    const { deleteDatabaseMock } = installClearableIndexedDbMock({
+      authority: [
+        {
+          status: "ready",
+          terminalId: "terminal-1",
+        },
+      ],
+    });
+
+    try {
+      await expect(clearIndexedDbPosLocalStore()).resolves.toEqual({
+        ok: false,
+        error: {
+          code: "write_failed",
+          message:
+            "POS local state has drawer or terminal authority records. Use terminal health or support recovery before clearing this terminal.",
+        },
+      });
+      expect(deleteDatabaseMock).not.toHaveBeenCalled();
+    } finally {
+      Object.defineProperty(globalThis, "indexedDB", {
+        configurable: true,
+        value: originalIndexedDb,
+      });
+    }
+  });
+
+  it("does not clear IndexedDB POS local state while cashier presence remains", async () => {
+    const originalIndexedDb = globalThis.indexedDB;
+    const now = Date.now();
+    const { deleteDatabaseMock } = installClearableIndexedDbMock({
+      cashierPresence: [
+        {
+          activeRoles: ["cashier"],
+          credentialId: "credential-1",
+          credentialVersion: 1,
+          expiresAt: now + 60_000,
+          lastValidatedAt: now,
+          offlineFreshUntil: now + 60_000,
+          operatingDate: "2026-07-01",
+          organizationId: "org-1",
+          signedInAt: now,
+          staffProfileId: "staff-1",
+          storeId: "store-1",
+          terminalId: "terminal-1",
+          username: "ama",
+          wrappedPosLocalStaffProof: {
+            ciphertext: "ciphertext",
+            expiresAt: now + 60_000,
+            iv: "iv",
+          },
+        },
+      ],
+    });
+
+    try {
+      await expect(clearIndexedDbPosLocalStore()).resolves.toEqual({
+        ok: false,
+        error: {
+          code: "write_failed",
+          message:
+            "POS local state has an active cashier sign-in. Sign out or use terminal health before clearing this terminal.",
+        },
+      });
+      expect(deleteDatabaseMock).not.toHaveBeenCalled();
+    } finally {
+      Object.defineProperty(globalThis, "indexedDB", {
+        configurable: true,
+        value: originalIndexedDb,
+      });
+    }
+  });
+
+  it("does not clear IndexedDB POS local state when preflight inspection fails", async () => {
+    const originalIndexedDb = globalThis.indexedDB;
+    const deleteDatabaseMock = vi.fn();
+    Object.defineProperty(globalThis, "indexedDB", {
+      configurable: true,
+      value: {
+        deleteDatabase: deleteDatabaseMock,
+        open: vi.fn(() => {
+          const request = {
+            error: new Error("open failed"),
+            onerror: null,
+            onsuccess: null,
+            onupgradeneeded: null,
+          } as unknown as IDBOpenDBRequest;
+          queueMicrotask(() => {
+            request.onerror?.({} as Event);
+          });
+          return request;
+        }),
+      },
+    });
+
+    try {
+      await expect(clearIndexedDbPosLocalStore()).resolves.toEqual({
+        ok: false,
+        error: {
+          code: "write_failed",
+          message:
+            "POS local state could not be inspected. Use terminal health or support recovery before clearing this terminal.",
+        },
+      });
+      expect(deleteDatabaseMock).not.toHaveBeenCalled();
+    } finally {
+      Object.defineProperty(globalThis, "indexedDB", {
+        configurable: true,
+        value: originalIndexedDb,
+      });
+    }
+  });
+
+  it("clears IndexedDB POS local state when record stores are missing", async () => {
+    const originalIndexedDb = globalThis.indexedDB;
+    const { deleteDatabaseMock } = installClearableIndexedDbMock(
+      {},
+      { existingStoreNames: ["meta", "terminalSeed"] },
+    );
+
+    try {
+      await expect(clearIndexedDbPosLocalStore()).resolves.toEqual({
+        ok: true,
+        value: null,
+      });
+      expect(deleteDatabaseMock).toHaveBeenCalledWith("athena-pos-local");
+    } finally {
+      Object.defineProperty(globalThis, "indexedDB", {
+        configurable: true,
+        value: originalIndexedDb,
+      });
+    }
+  });
+
+  it("reports when clearing IndexedDB POS local state is blocked", async () => {
+    const originalIndexedDb = globalThis.indexedDB;
+    const { openMock } = installClearableIndexedDbMock({});
+    Object.defineProperty(globalThis, "indexedDB", {
+      configurable: true,
+      value: {
+        open: openMock,
+        deleteDatabase: vi.fn(() => {
+          const request = {
+            error: null,
+            onblocked: null,
+            onerror: null,
+            onsuccess: null,
+          } as unknown as IDBOpenDBRequest;
+          queueMicrotask(() => {
+            request.onblocked?.({} as IDBVersionChangeEvent);
+          });
+          return request;
+        }),
+      },
+    });
+
+    try {
+      await expect(clearIndexedDbPosLocalStore()).resolves.toEqual({
+        ok: false,
+        error: {
+          code: "write_failed",
+          message:
+            "POS local state is open in another tab. Close other Athena POS tabs and try again.",
+        },
+      });
+    } finally {
+      Object.defineProperty(globalThis, "indexedDB", {
+        configurable: true,
+        value: originalIndexedDb,
+      });
+    }
   });
 
   it("stores POS store-day readiness separately from register events", async () => {

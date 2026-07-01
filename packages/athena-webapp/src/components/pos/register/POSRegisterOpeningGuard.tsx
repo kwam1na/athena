@@ -1,7 +1,7 @@
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "@tanstack/react-router";
 import { useMutation, useQuery } from "convex/react";
-import { ArrowUpRight, CheckCircle2, Store } from "lucide-react";
+import { ArrowUpRight, CheckCircle2, Loader2, RefreshCw, Store } from "lucide-react";
 import { toast } from "sonner";
 
 import { ComposedPageHeader } from "@/components/common/PageHeader";
@@ -29,11 +29,13 @@ import {
   useLocalPosReadiness,
 } from "@/lib/pos/infrastructure/local/localPosReadiness";
 import {
+  clearIndexedDbPosLocalStore,
   createIndexedDbPosLocalStorageAdapter,
   createPosLocalStore,
 } from "@/lib/pos/infrastructure/local/posLocalStore";
 import { refreshAndStoreTerminalStaffAuthority } from "@/lib/pos/infrastructure/local/terminalStaffAuthorityRefresh";
 import { logger } from "@/lib/logger";
+import { reloadWindow } from "@/lib/navigationUtils";
 
 type DailyOpeningSnapshot = {
   status?: "blocked" | "needs_attention" | "ready" | "started";
@@ -132,6 +134,28 @@ export function POSRegisterOpeningGuard({
       }),
     [],
   );
+  const [isClearingLocalPosState, setIsClearingLocalPosState] =
+    useState(false);
+  const handleClearLocalPosState = useCallback(async () => {
+    if (isClearingLocalPosState) {
+      return;
+    }
+
+    setIsClearingLocalPosState(true);
+    try {
+      const result = await clearIndexedDbPosLocalStore();
+
+      if (!result.ok) {
+        toast.error(result.error.message);
+        return;
+      }
+
+      toast.success("Local POS state cleared. Reopening terminal setup.");
+      reloadWindow();
+    } finally {
+      setIsClearingLocalPosState(false);
+    }
+  }, [isClearingLocalPosState]);
   const refreshTerminalStaffAuthority = useMutation(
     api.operations.staffCredentials.refreshTerminalStaffAuthority,
   );
@@ -192,7 +216,17 @@ export function POSRegisterOpeningGuard({
   }
 
   if (effectiveReadiness.status === "loading") {
-    return null;
+    return (
+      <POSReadinessLoadingState
+        closeSnapshot={dailyCloseSnapshot}
+        entryContext={entryContext}
+        isLoadingStores={isLoadingStores}
+        localReadiness={localReadiness}
+        openingSnapshot={snapshot}
+        operatingDate={operatingDateRange.operatingDate}
+        storeId={storeId}
+      />
+    );
   }
 
   if (
@@ -227,10 +261,254 @@ export function POSRegisterOpeningGuard({
   }
 
   if (effectiveReadiness.status === "blocked") {
-    return <POSSetupRequiredState message={effectiveReadiness.message} />;
+    return (
+      <POSSetupRequiredState
+        isClearingLocalPosState={isClearingLocalPosState}
+        message={effectiveReadiness.message}
+        onClearLocalPosState={handleClearLocalPosState}
+      />
+    );
   }
 
   return <>{children}</>;
+}
+
+function POSReadinessLoadingState({
+  closeSnapshot,
+  entryContext,
+  isLoadingStores,
+  localReadiness,
+  openingSnapshot,
+  operatingDate,
+  storeId,
+}: {
+  closeSnapshot?: DailyCloseSnapshot;
+  entryContext: ReturnType<typeof useLocalPosEntryContext>;
+  isLoadingStores: boolean;
+  localReadiness: LocalPosReadiness;
+  openingSnapshot?: DailyOpeningSnapshot;
+  operatingDate: string;
+  storeId?: Id<"store">;
+}) {
+  const blockers = getReadinessLoadingBlockers({
+    closeSnapshot,
+    entryContext,
+    isLoadingStores,
+    localReadiness,
+    openingSnapshot,
+    storeId,
+  });
+  const rows = getReadinessDiagnosticRows({
+    closeSnapshot,
+    entryContext,
+    isLoadingStores,
+    localReadiness,
+    openingSnapshot,
+    operatingDate,
+    storeId,
+  });
+
+  return (
+    <View
+      className="bg-transparent"
+      fullHeight
+      width="full"
+      contentClassName="flex h-full max-h-full flex-col overflow-hidden rounded-2xl border border-border/80 bg-surface"
+      headerClassName="shrink-0"
+      mainClassName="min-h-0 flex-1"
+      header={
+        <ComposedPageHeader
+          width="full"
+          className="h-auto flex-wrap gap-x-4 gap-y-3 py-4"
+          leadingContent={
+            <div className="flex min-w-0 flex-1 items-center gap-3">
+              <div className="w-2 h-2 bg-background rounded-full" />
+              <p className="text-lg font-semibold text-gray-900">POS</p>
+            </div>
+          }
+        />
+      }
+    >
+      <FadeIn className="flex h-full min-h-0 items-center justify-center p-6">
+        <div className="flex w-full max-w-3xl flex-col items-center rounded-lg border border-border bg-surface px-10 py-12 text-center shadow-sm">
+          <div className="mb-6 flex h-[4.5rem] w-[4.5rem] items-center justify-center rounded-full bg-muted text-muted-foreground">
+            <Loader2 className="h-7 w-7 animate-spin" />
+          </div>
+          <h2 className="text-xl font-medium text-foreground/80">
+            Preparing POS
+          </h2>
+          <p className="mt-3 max-w-lg text-base leading-7 text-muted-foreground">
+            Checking register readiness.
+          </p>
+          <div className="mt-8 w-full rounded-lg border border-border bg-muted/30 p-4 text-left">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                Waiting on
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {blockers.map((blocker) => (
+                  <span
+                    className="rounded-full border border-border bg-surface px-3 py-1 text-xs font-medium text-foreground"
+                    key={blocker}
+                  >
+                    {blocker}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <div className="mt-5 grid gap-2 sm:grid-cols-2">
+              {rows.map((row) => (
+                <div
+                  className="rounded-md border border-border/70 bg-surface px-3 py-2"
+                  key={row.label}
+                >
+                  <p className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                    {row.label}
+                  </p>
+                  <p className="mt-1 break-words text-sm font-medium text-foreground">
+                    {row.value}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </FadeIn>
+    </View>
+  );
+}
+
+function getReadinessLoadingBlockers({
+  closeSnapshot,
+  entryContext,
+  isLoadingStores,
+  localReadiness,
+  openingSnapshot,
+  storeId,
+}: {
+  closeSnapshot?: DailyCloseSnapshot;
+  entryContext: ReturnType<typeof useLocalPosEntryContext>;
+  isLoadingStores: boolean;
+  localReadiness: LocalPosReadiness;
+  openingSnapshot?: DailyOpeningSnapshot;
+  storeId?: Id<"store">;
+}) {
+  const blockers: string[] = [];
+
+  if (isLoadingStores) {
+    blockers.push("active store lookup");
+  }
+
+  if (entryContext.status === "loading") {
+    blockers.push("local terminal setup");
+  }
+
+  if (!storeId) {
+    blockers.push("store id");
+  }
+
+  if (storeId && !openingSnapshot) {
+    blockers.push("opening snapshot");
+  }
+
+  if (openingSnapshot?.status === "started" && !closeSnapshot) {
+    blockers.push("close snapshot");
+  }
+
+  if (entryContext.status === "ready" && localReadiness.status === "loading") {
+    blockers.push("local register readiness");
+  }
+
+  return blockers.length > 0 ? blockers : ["readiness evaluation"];
+}
+
+function getReadinessDiagnosticRows({
+  closeSnapshot,
+  entryContext,
+  isLoadingStores,
+  localReadiness,
+  openingSnapshot,
+  operatingDate,
+  storeId,
+}: {
+  closeSnapshot?: DailyCloseSnapshot;
+  entryContext: ReturnType<typeof useLocalPosEntryContext>;
+  isLoadingStores: boolean;
+  localReadiness: LocalPosReadiness;
+  openingSnapshot?: DailyOpeningSnapshot;
+  operatingDate: string;
+  storeId?: Id<"store">;
+}) {
+  const terminalStatus =
+    entryContext.status === "ready"
+      ? `${entryContext.source}; seed ${entryContext.terminalSeed ? "present" : "missing"}`
+      : entryContext.status;
+  const localLoadingDiagnostics =
+    localReadiness.status === "loading" ? localReadiness.diagnostics : null;
+
+  const rows = [
+    {
+      label: "Store",
+      value: isLoadingStores
+        ? "loading"
+        : storeId
+          ? `ready: ${storeId}`
+          : "missing",
+    },
+    {
+      label: "Terminal",
+      value: terminalStatus,
+    },
+    {
+      label: "Operating date",
+      value: operatingDate,
+    },
+    {
+      label: "Opening snapshot",
+      value: storeId ? (openingSnapshot?.status ?? "loading") : "skipped",
+    },
+    {
+      label: "Close snapshot",
+      value: storeId
+        ? (closeSnapshot?.status ??
+          (openingSnapshot?.status === "started" ? "loading" : "pending"))
+        : "skipped",
+    },
+    {
+      label: "Local readiness",
+      value: localReadiness.status,
+    },
+  ];
+
+  if (localLoadingDiagnostics) {
+    rows.push({
+      label: "Local read stage",
+      value: localLoadingDiagnostics.stage,
+    });
+
+    if (localLoadingDiagnostics.stateKey) {
+      rows.push({
+        label: "Local read key",
+        value: localLoadingDiagnostics.stateKey,
+      });
+    }
+
+    if (localLoadingDiagnostics.activeStateKey) {
+      rows.push({
+        label: "Active read key",
+        value: localLoadingDiagnostics.activeStateKey,
+      });
+    }
+
+    if (localLoadingDiagnostics.startedAt) {
+      rows.push({
+        label: "Local read started",
+        value: new Date(localLoadingDiagnostics.startedAt).toLocaleTimeString(),
+      });
+    }
+  }
+
+  return rows;
 }
 
 function StoreDayNotStartedState({
@@ -350,6 +628,7 @@ function StoreDayNotStartedState({
 
   return (
     <View
+      className="bg-transparent"
       fullHeight
       width="full"
       contentClassName="flex h-full max-h-full flex-col overflow-hidden rounded-2xl border border-border/80 bg-white"
@@ -459,6 +738,7 @@ function StoreDayClosedState() {
 
   return (
     <View
+      className="bg-transparent"
       fullHeight
       width="full"
       contentClassName="flex h-full max-h-full flex-col overflow-hidden rounded-2xl border border-border/80 bg-white"
@@ -514,9 +794,18 @@ function StoreDayClosedState() {
   );
 }
 
-function POSSetupRequiredState({ message }: { message: string }) {
+function POSSetupRequiredState({
+  isClearingLocalPosState,
+  message,
+  onClearLocalPosState,
+}: {
+  isClearingLocalPosState: boolean;
+  message: string;
+  onClearLocalPosState: () => void;
+}) {
   return (
     <View
+      className="bg-transparent"
       fullHeight
       width="full"
       contentClassName="flex h-full max-h-full flex-col overflow-hidden rounded-2xl border border-border/80 bg-white"
@@ -546,6 +835,36 @@ function POSSetupRequiredState({ message }: { message: string }) {
           <p className="mt-3 max-w-lg text-base leading-7 text-muted-foreground">
             {message}
           </p>
+          <div className="mt-8 w-full rounded-lg border border-warning/30 bg-warning/5 p-4 text-left">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div className="space-y-1">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-warning">
+                  Local recovery
+                </p>
+                <p className="text-sm leading-6 text-muted-foreground">
+                  Clear this browser's cached POS terminal state and reload
+                  setup. This also removes pending local POS records on this
+                  terminal.
+                </p>
+              </div>
+              <Button
+                className="shrink-0 gap-2"
+                disabled={isClearingLocalPosState}
+                onClick={onClearLocalPosState}
+                type="button"
+                variant="outline"
+              >
+                {isClearingLocalPosState ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-4 w-4" />
+                )}
+                {isClearingLocalPosState
+                  ? "Clearing..."
+                  : "Clear and reprovision terminal"}
+              </Button>
+            </div>
+          </div>
         </div>
       </FadeIn>
     </View>

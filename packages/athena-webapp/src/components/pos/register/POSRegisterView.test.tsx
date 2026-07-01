@@ -7,11 +7,14 @@ import {
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
+import { toast } from "sonner";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockUseRegisterViewModel = vi.fn();
 const mockOpenQuickAddProduct = vi.fn(() => true);
 const mockUseAppActionBlocker = vi.fn();
+const clearIndexedDbPosLocalStoreMock = vi.fn();
+const reloadWindowMock = vi.fn();
 
 function pressDebugPanelShortcut(
   modifiers: { metaKey?: boolean; ctrlKey?: boolean } = { metaKey: true },
@@ -38,6 +41,23 @@ vi.mock("@/lib/app-messages", () => ({
 
 vi.mock("@/lib/app-update", () => ({
   APP_UPDATE_APPLY_ACTION_ID: "app-update.apply",
+}));
+
+vi.mock("sonner", () => ({
+  toast: {
+    error: vi.fn(),
+    success: vi.fn(),
+  },
+}));
+
+vi.mock("@/lib/pos/infrastructure/local/posLocalStore", () => ({
+  clearIndexedDbPosLocalStore: (...args: unknown[]) =>
+    clearIndexedDbPosLocalStoreMock(...args),
+}));
+
+vi.mock("~/src/lib/navigationUtils", () => ({
+  getOrigin: () => "%2F",
+  reloadWindow: () => reloadWindowMock(),
 }));
 
 vi.mock("@/components/ui/sidebar", () => ({
@@ -85,13 +105,15 @@ vi.mock("@tanstack/react-router", () => ({
 
 vi.mock("@/components/View", () => ({
   default: ({
+    className,
     header,
     children,
   }: {
+    className?: string;
     header: ReactNode;
     children: ReactNode;
   }) => (
-    <div>
+    <div className={className} data-testid="view-root">
       <div data-testid="view-header">{header}</div>
       <div>{children}</div>
     </div>
@@ -236,16 +258,18 @@ vi.mock("@/components/pos/ProductEntry", async () => {
 vi.mock("@/components/pos/CartItems", () => ({
   CartItems: ({
     cartItems = [],
+    className,
     density,
     readOnly = false,
     serviceItems = [],
   }: {
     cartItems?: Array<{ name?: string; quantity: number }>;
+    className?: string;
     density?: string;
     readOnly?: boolean;
     serviceItems?: Array<{ quantity: number }>;
   }) => (
-    <div data-testid={`cart-items-${density ?? "default"}`}>
+    <div className={className} data-testid={`cart-items-${density ?? "default"}`}>
       <span>cart-items</span>
       <span>
         {`cart-items-count-${
@@ -380,11 +404,30 @@ describe("POSRegisterView", () => {
   beforeEach(() => {
     mockUseRegisterViewModel.mockReset();
     mockUseAppActionBlocker.mockClear();
+    clearIndexedDbPosLocalStoreMock.mockReset();
+    clearIndexedDbPosLocalStoreMock.mockResolvedValue({
+      ok: true,
+      value: null,
+    });
+    reloadWindowMock.mockClear();
+    vi.mocked(toast.error).mockClear();
+    vi.mocked(toast.success).mockClear();
   });
 
   it("renders a lightweight empty state while the active store is unresolved", async () => {
     mockUseRegisterViewModel.mockReturnValue({
       hasActiveStore: false,
+      debug: {
+        activeStoreSource: "missing",
+        authDialogOpen: false,
+        cashierPresence: "missing",
+        hasLiveActiveStore: false,
+        localEntryStatus: "ready",
+        localStaffAuthorityStatus: "missing",
+        online: true,
+        staffSignedIn: false,
+        terminalSource: "live",
+      },
       header: {
         title: "POS",
         isSessionActive: false,
@@ -399,6 +442,15 @@ describe("POSRegisterView", () => {
     render(<POSRegisterView />);
 
     expect(screen.getByText("POS")).toBeInTheDocument();
+    expect(screen.getByText("Preparing POS")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Waiting for the active store context before loading the register.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Register context")).toBeInTheDocument();
+    expect(screen.getByText("Active store")).toBeInTheDocument();
+    expect(screen.getAllByText("missing").length).toBeGreaterThan(0);
     expect(
       screen.queryByText("register-checkout-panel"),
     ).not.toBeInTheDocument();
@@ -498,6 +550,17 @@ describe("POSRegisterView", () => {
         open: false,
       },
       drawerGate: null,
+      debug: {
+        activeStoreSource: "live",
+        authDialogOpen: false,
+        cashierPresence: "pending",
+        hasLiveActiveStore: true,
+        localEntryStatus: "ready",
+        localStaffAuthorityStatus: "ready",
+        online: true,
+        staffSignedIn: false,
+        terminalSource: "live",
+      },
       onNavigateBack: vi.fn(),
     });
 
@@ -530,6 +593,8 @@ describe("POSRegisterView", () => {
     expect(
       screen.getByTestId("register-main-workspace").closest(".box-border"),
     ).toBeInTheDocument();
+    expect(screen.getByTestId("view-root")).toHaveClass("bg-transparent");
+    expect(screen.getByTestId("view-root")).not.toHaveClass("bg-app-canvas");
     expect(screen.queryByText("cashier-auth-dialog")).not.toBeInTheDocument();
   });
 
@@ -586,6 +651,17 @@ describe("POSRegisterView", () => {
         open: false,
       },
       drawerGate: null,
+      debug: {
+        activeStoreSource: "live",
+        authDialogOpen: false,
+        cashierPresence: "pending",
+        hasLiveActiveStore: true,
+        localEntryStatus: "ready",
+        localStaffAuthorityStatus: "ready",
+        online: true,
+        staffSignedIn: false,
+        terminalSource: "live",
+      },
       onNavigateBack: vi.fn(),
     });
 
@@ -656,6 +732,17 @@ describe("POSRegisterView", () => {
         open: false,
       },
       drawerGate: null,
+      debug: {
+        activeStoreSource: "live",
+        authDialogOpen: false,
+        cashierPresence: "pending",
+        hasLiveActiveStore: true,
+        localEntryStatus: "ready",
+        localStaffAuthorityStatus: "ready",
+        online: true,
+        staffSignedIn: false,
+        terminalSource: "live",
+      },
       onNavigateBack: vi.fn(),
     });
 
@@ -724,6 +811,17 @@ describe("POSRegisterView", () => {
         open: false,
       },
       drawerGate: null,
+      debug: {
+        activeStoreSource: "live",
+        authDialogOpen: false,
+        cashierPresence: "pending",
+        hasLiveActiveStore: true,
+        localEntryStatus: "ready",
+        localStaffAuthorityStatus: "ready",
+        online: true,
+        staffSignedIn: false,
+        terminalSource: "live",
+      },
       onNavigateBack: vi.fn(),
     });
 
@@ -1281,6 +1379,7 @@ describe("POSRegisterView", () => {
             onSignOut: vi.fn(),
           },
           cashierPresenceRestore: { status: "missing" },
+          readinessGuard: null,
           closeoutControl: null,
           updateApplyBlocker: {
             active: false,
@@ -2223,6 +2322,10 @@ describe("POSRegisterView", () => {
       },
       sessionPanel: null,
       cashierCard: null,
+      readinessGuard: {
+        reason: "registerSetup",
+        status: "settling",
+      },
       authDialog: null,
       drawerGate: null,
       onNavigateBack: vi.fn(),
@@ -2364,8 +2467,191 @@ describe("POSRegisterView", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("holds a blank register workspace while cashier presence restore is pending", async () => {
+  it("clears local POS state from register setup recovery", async () => {
+    const user = userEvent.setup();
     mockUseRegisterViewModel.mockReturnValue({
+      hasActiveStore: true,
+      header: {
+        title: "POS",
+        isSessionActive: false,
+      },
+      registerInfo: {
+        customerName: undefined,
+        registerLabel: "No terminal configured",
+        hasTerminal: false,
+      },
+      onboarding: {
+        shouldShow: false,
+        terminalReady: false,
+        cashierSetupReady: true,
+        cashierSignedIn: false,
+        cashierCount: 1,
+        nextStep: "ready",
+      },
+      customerPanel: {},
+      productEntry: {
+        disabled: true,
+        productSearchQuery: "",
+        setProductSearchQuery: vi.fn(),
+        onBarcodeSubmit: vi.fn(),
+      },
+      cart: {
+        items: [],
+      },
+      checkout: {
+        isTransactionCompleted: false,
+      },
+      sessionPanel: null,
+      cashierCard: null,
+      cashierPresenceRestore: {
+        status: "missing",
+      },
+      readinessGuard: {
+        reason: "registerSetup",
+        status: "visible",
+      },
+      closeoutControl: null,
+      authDialog: null,
+      drawerGate: null,
+      debug: {
+        activeStoreSource: "live",
+        authDialogOpen: false,
+        cashierPresence: "missing",
+        hasLiveActiveStore: true,
+        localEntryStatus: "ready",
+        localStaffAuthorityStatus: "ready",
+        online: true,
+        staffSignedIn: false,
+        terminalSource: "missing",
+      },
+      onNavigateBack: vi.fn(),
+    });
+
+    const { POSRegisterView } = await import("./POSRegisterView");
+    render(<POSRegisterView />);
+
+    expect(screen.queryByText("product-search-input")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("register-customer-panel"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("cart-items")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("register-checkout-panel"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("cashier-auth-dialog")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Ready for product lookup"),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("Terminal recovery")).toBeInTheDocument();
+    expect(
+      screen.getByText("Register setup needs attention"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Cashier signed in")).toBeInTheDocument();
+    expect(screen.getByText("Entry context")).toBeInTheDocument();
+    expect(screen.getByText("live route ready")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Clear and reprovision terminal" }),
+    ).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: "Clear and reprovision terminal" }),
+    );
+
+    await waitFor(() => {
+      expect(clearIndexedDbPosLocalStoreMock).toHaveBeenCalledTimes(1);
+      expect(toast.success).toHaveBeenCalledWith(
+        "Local POS state cleared. Reopening terminal setup.",
+      );
+      expect(reloadWindowMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("keeps register setup recovery on-screen when local POS state cannot be cleared", async () => {
+    const user = userEvent.setup();
+    clearIndexedDbPosLocalStoreMock.mockResolvedValue({
+      ok: false,
+      error: {
+        code: "write_failed",
+        message: "POS local state has sale records that may not be synced.",
+      },
+    });
+    mockUseRegisterViewModel.mockReturnValue({
+      hasActiveStore: true,
+      header: {
+        title: "POS",
+        isSessionActive: false,
+      },
+      registerInfo: {
+        customerName: undefined,
+        registerLabel: "No terminal configured",
+        hasTerminal: false,
+      },
+      onboarding: {
+        shouldShow: false,
+        terminalReady: false,
+        cashierSetupReady: true,
+        cashierSignedIn: false,
+        cashierCount: 1,
+        nextStep: "ready",
+      },
+      customerPanel: {},
+      productEntry: {
+        disabled: true,
+        productSearchQuery: "",
+        setProductSearchQuery: vi.fn(),
+        onBarcodeSubmit: vi.fn(),
+      },
+      cart: {
+        items: [],
+      },
+      checkout: {
+        isTransactionCompleted: false,
+      },
+      sessionPanel: null,
+      cashierCard: null,
+      cashierPresenceRestore: {
+        status: "missing",
+      },
+      readinessGuard: {
+        reason: "registerSetup",
+        status: "visible",
+      },
+      closeoutControl: null,
+      authDialog: null,
+      drawerGate: null,
+      debug: {
+        activeStoreSource: "live",
+        authDialogOpen: false,
+        cashierPresence: "missing",
+        hasLiveActiveStore: true,
+        localEntryStatus: "ready",
+        localStaffAuthorityStatus: "ready",
+        online: true,
+        staffSignedIn: false,
+        terminalSource: "missing",
+      },
+      onNavigateBack: vi.fn(),
+    });
+
+    const { POSRegisterView } = await import("./POSRegisterView");
+    render(<POSRegisterView />);
+
+    await user.click(
+      screen.getByRole("button", { name: "Clear and reprovision terminal" }),
+    );
+
+    await waitFor(() => {
+      expect(clearIndexedDbPosLocalStoreMock).toHaveBeenCalledTimes(1);
+      expect(toast.error).toHaveBeenCalledWith(
+        "POS local state has sale records that may not be synced.",
+      );
+      expect(reloadWindowMock).not.toHaveBeenCalled();
+    });
+    expect(screen.getByText("Terminal recovery")).toBeInTheDocument();
+  });
+
+  it("keeps the readiness guard hidden while the view model is settling", async () => {
+    const pendingRestoreViewModel = {
       hasActiveStore: true,
       header: {
         title: "POS",
@@ -2394,29 +2680,56 @@ describe("POSRegisterView", () => {
       cashierPresenceRestore: {
         status: "pending",
       },
+      readinessGuard: {
+        reason: "cashierPresence",
+        status: "settling",
+      },
       closeoutControl: null,
       authDialog: {
         open: false,
       },
       drawerGate: null,
+      debug: {
+        activeStoreSource: "live",
+        authDialogOpen: false,
+        cashierPresence: "pending",
+        hasLiveActiveStore: true,
+        localEntryStatus: "ready",
+        localStaffAuthorityStatus: "ready",
+        online: true,
+        staffSignedIn: false,
+        terminalSource: "live",
+      },
       onNavigateBack: vi.fn(),
-    });
+    };
+    const authReadyViewModel = {
+      ...pendingRestoreViewModel,
+      cashierPresenceRestore: {
+        status: "missing",
+      },
+      readinessGuard: null,
+      authDialog: {
+        open: true,
+      },
+      debug: {
+        ...pendingRestoreViewModel.debug,
+        authDialogOpen: true,
+        cashierPresence: "missing",
+      },
+    };
 
+    mockUseRegisterViewModel.mockReturnValue(pendingRestoreViewModel);
     const { POSRegisterView } = await import("./POSRegisterView");
-    render(<POSRegisterView />);
+    const { rerender } = render(<POSRegisterView />);
 
-    expect(screen.queryByText("product-search-input")).not.toBeInTheDocument();
-    expect(
-      screen.queryByText("register-customer-panel"),
-    ).not.toBeInTheDocument();
-    expect(screen.queryByText("cart-items")).not.toBeInTheDocument();
-    expect(
-      screen.queryByText("register-checkout-panel"),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Terminal recovery")).not.toBeInTheDocument();
     expect(screen.queryByText("cashier-auth-dialog")).not.toBeInTheDocument();
-    expect(
-      screen.queryByText("Ready for product lookup"),
-    ).not.toBeInTheDocument();
+
+    mockUseRegisterViewModel.mockReturnValue(authReadyViewModel);
+    rerender(<POSRegisterView />);
+
+    expect(screen.queryByText("Terminal recovery")).not.toBeInTheDocument();
+    expect(screen.getByText("cashier-auth-dialog")).toBeInTheDocument();
   });
 
   it("keeps the full POS rail while hiding main sale controls when cashier authentication is locked", async () => {
@@ -2488,6 +2801,11 @@ describe("POSRegisterView", () => {
     expect(
       screen.getByTestId("register-workspace-sidebar"),
     ).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId("register-workspace-sidebar")).getByTestId(
+        "cart-items-compact",
+      ),
+    ).toHaveClass("bg-surface-raised");
     expect(screen.getByTestId("register-main-workspace")).not.toHaveClass(
       "lg:col-span-2",
     );
@@ -2852,7 +3170,13 @@ describe("POSRegisterView", () => {
     await userEvent.click(screen.getByText("show-payment-methods"));
 
     expect(screen.getByText("Ready for checkout lookup")).toBeInTheDocument();
+    expect(screen.getByTestId("product-lookup-empty-state")).toHaveClass(
+      "bg-surface-raised",
+    );
     expect(screen.getByTestId("cart-items-compact")).toBeInTheDocument();
+    expect(screen.getByTestId("cart-items-compact")).toHaveClass(
+      "bg-surface-raised",
+    );
     expect(screen.queryByText("product-entry")).not.toBeInTheDocument();
 
     mockUseRegisterViewModel.mockReturnValue({

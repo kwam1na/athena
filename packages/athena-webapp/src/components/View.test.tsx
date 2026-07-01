@@ -19,4 +19,16 @@ describe("View", () => {
     expect(section).toHaveClass("box-border");
     expect(section?.firstElementChild).toHaveClass("box-border");
   });
+
+  it("uses the app canvas token for the shared view surface", () => {
+    render(
+      <View>
+        <div>Canvas content</div>
+      </View>,
+    );
+
+    expect(screen.getByText("Canvas content").closest("section")).toHaveClass(
+      "bg-app-canvas",
+    );
+  });
 });

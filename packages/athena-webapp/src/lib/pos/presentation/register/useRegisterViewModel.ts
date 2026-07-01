@@ -68,6 +68,7 @@ import {
 
 import type {
   RegisterCommandApprovalDialogState,
+  RegisterReadinessGuardState,
   RegisterServiceLineState,
   RegisterServiceSearchResult,
   RegisterViewModel,
@@ -511,6 +512,8 @@ function isEmptyLocalSaleShell(
   );
 }
 
+const POS_READINESS_REPAIR_GUARD_DELAY_MS = 1_500;
+
 export function useRegisterViewModel(): RegisterViewModel {
   const { activeStore } = useGetActiveStore();
   const { user } = useAuth();
@@ -545,6 +548,14 @@ export function useRegisterViewModel(): RegisterViewModel {
     useState<LocalAuthenticatedStaff>(null);
   const [cashierPresenceRestore, setCashierPresenceRestore] =
     useState<CashierPresenceRestoreState>({ status: "pending" });
+  const [
+    hasCashierPresenceRestoreGraceElapsed,
+    setHasCashierPresenceRestoreGraceElapsed,
+  ] = useState(false);
+  const [
+    visibleReadinessGuardReason,
+    setVisibleReadinessGuardReason,
+  ] = useState<RegisterReadinessGuardState["reason"] | null>(null);
   const terminalRegisterNumber = terminal?.registerNumber
     ? trimOptional(terminal.registerNumber)
     : undefined;
@@ -1175,6 +1186,21 @@ export function useRegisterViewModel(): RegisterViewModel {
     localStore,
     terminal?._id,
   ]);
+
+  useEffect(() => {
+    if (cashierPresenceRestore.status !== "pending" || staffProfileId) {
+      setHasCashierPresenceRestoreGraceElapsed(false);
+      return;
+    }
+
+    setHasCashierPresenceRestoreGraceElapsed(false);
+    const timeoutId = window.setTimeout(() => {
+      setHasCashierPresenceRestoreGraceElapsed(true);
+    }, POS_READINESS_REPAIR_GUARD_DELAY_MS);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [cashierPresenceRestore.status, staffProfileId]);
+
   const clearProjectedLocalSaleForStaff = useCallback(
     async (
       actingStaffProfileId: Id<"staffProfile">,
@@ -5514,7 +5540,9 @@ export function useRegisterViewModel(): RegisterViewModel {
       : null;
   const shouldOpenCashierAuth =
     cashierPresenceRestore.status === "validation_pending" ||
-    (!staffProfileId && cashierPresenceRestore.status !== "pending");
+    (!staffProfileId &&
+      (cashierPresenceRestore.status !== "pending" ||
+        hasCashierPresenceRestoreGraceElapsed));
   const updateApplyBlocker = buildRegisterUpdateApplyBlockerState({
     hasActiveSaleWork: hasInProgressSaleDraft && !isTransactionCompleted,
     hasCheckoutMutationInFlight: isCheckoutMutationInFlight,
@@ -5551,6 +5579,54 @@ export function useRegisterViewModel(): RegisterViewModel {
           onDismiss: handleNavigateBack,
         }
       : null;
+
+  const readinessGuardCandidateReason: RegisterReadinessGuardState["reason"] | null =
+    !isTransactionCompleted &&
+    cashierPresenceRestore.status === "pending" &&
+    !staffProfileId &&
+    !hasCashierPresenceRestoreGraceElapsed
+      ? "cashierPresence"
+      : activeStoreId &&
+          !isTransactionCompleted &&
+          !onboarding.shouldShow &&
+          !onboarding.terminalReady &&
+          !authDialog &&
+          !drawerGate
+        ? "registerSetup"
+        : null;
+
+  useEffect(() => {
+    if (
+      !readinessGuardCandidateReason ||
+      readinessGuardCandidateReason === "cashierPresence"
+    ) {
+      setVisibleReadinessGuardReason(null);
+      return;
+    }
+
+    setVisibleReadinessGuardReason(null);
+    const timeoutId = window.setTimeout(() => {
+      setVisibleReadinessGuardReason(readinessGuardCandidateReason);
+    }, POS_READINESS_REPAIR_GUARD_DELAY_MS);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [readinessGuardCandidateReason]);
+
+  let readinessGuard: RegisterReadinessGuardState | null = null;
+  if (readinessGuardCandidateReason === "cashierPresence") {
+    readinessGuard = {
+      reason: "cashierPresence",
+      status: "settling",
+    };
+  } else if (readinessGuardCandidateReason === "registerSetup") {
+    readinessGuard = {
+      reason: "registerSetup",
+      status:
+        visibleReadinessGuardReason === "registerSetup"
+          ? "visible"
+          : "settling",
+    };
+  }
 
   const commandApprovalDialog =
     closeoutApprovalRunner.approvalDialog as RegisterCommandApprovalDialogState | null;
@@ -5852,6 +5928,7 @@ export function useRegisterViewModel(): RegisterViewModel {
     sessionPanel,
     cashierCard,
     cashierPresenceRestore,
+    readinessGuard,
     drawerGate,
     closeoutControl,
     updateApplyBlocker,

@@ -834,7 +834,10 @@ function ClosedSessionsSummary({
           Closed sessions will appear after closeout.
         </p>
       ) : (
-        <div className="overflow-hidden rounded-lg border border-border bg-background">
+        <div
+          className="overflow-hidden rounded-lg border border-border bg-transparent"
+          data-testid="closed-sessions-table"
+        >
           <Table>
             <TableHeader>
               <TableRow className="border-b border-border hover:bg-transparent">

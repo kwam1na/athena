@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
+import { toast } from "sonner";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { POSRegisterOpeningGuard } from "./POSRegisterOpeningGuard";
@@ -10,6 +11,8 @@ const authenticateStaffCredentialMock = vi.fn();
 const refreshTerminalStaffAuthorityMock = vi.fn();
 const useLocalPosEntryContextMock = vi.fn();
 const useLocalPosReadinessMock = vi.fn();
+const clearIndexedDbPosLocalStoreMock = vi.fn();
+const reloadWindowMock = vi.fn();
 const replaceStaffAuthoritySnapshotMock = vi.fn();
 const writeStoreDayReadinessMock = vi.fn();
 
@@ -97,12 +100,23 @@ vi.mock("@tanstack/react-router", () => ({
 vi.mock("@/components/View", () => ({
   default: ({
     children,
+    className,
+    contentClassName,
     header,
+    lockDocumentScroll,
   }: {
     children?: React.ReactNode;
+    className?: string;
+    contentClassName?: string;
     header?: React.ReactNode;
+    lockDocumentScroll?: boolean;
   }) => (
-    <div>
+    <div
+      className={className}
+      data-content-class={contentClassName}
+      data-lock-document-scroll={lockDocumentScroll ? "true" : "false"}
+      data-testid="view-root"
+    >
       {header}
       {children}
     </div>
@@ -155,7 +169,13 @@ vi.mock("@/lib/pos/infrastructure/local/localPosReadiness", () => ({
     useLocalPosReadinessMock(...args),
 }));
 
+vi.mock("@/lib/navigationUtils", () => ({
+  reloadWindow: () => reloadWindowMock(),
+}));
+
 vi.mock("@/lib/pos/infrastructure/local/posLocalStore", () => ({
+  clearIndexedDbPosLocalStore: (...args: unknown[]) =>
+    clearIndexedDbPosLocalStoreMock(...args),
   createIndexedDbPosLocalStorageAdapter: vi.fn(() => ({})),
   createPosLocalStore: vi.fn(() => ({
     replaceStaffAuthoritySnapshot: replaceStaffAuthoritySnapshotMock,
@@ -212,6 +232,13 @@ describe("POSRegisterOpeningGuard", () => {
       data: [],
       kind: "ok",
     });
+    clearIndexedDbPosLocalStoreMock.mockResolvedValue({
+      ok: true,
+      value: null,
+    });
+    reloadWindowMock.mockClear();
+    vi.mocked(toast.error).mockClear();
+    vi.mocked(toast.success).mockClear();
     replaceStaffAuthoritySnapshotMock.mockResolvedValue({
       ok: true,
       value: [],
@@ -276,6 +303,60 @@ describe("POSRegisterOpeningGuard", () => {
     );
   });
 
+  it("shows the POS shell while local readiness is loading", () => {
+    useLocalPosReadinessMock.mockReturnValue({
+      status: "loading",
+      diagnostics: {
+        stage: "reading_local_store",
+        stateKey: "store-1:2026-05-09:no-terminal",
+      },
+    });
+    useQueryMock.mockImplementation((queryName: string) => {
+      if (queryName === "getDailyOpeningSnapshot") {
+        return { status: "started" };
+      }
+
+      if (queryName === "getDailyCloseSnapshot") {
+        return undefined;
+      }
+
+      return undefined;
+    });
+
+    render(
+      <POSRegisterOpeningGuard>
+        <div>Register workspace</div>
+      </POSRegisterOpeningGuard>,
+    );
+
+    expect(screen.queryByText("Register workspace")).not.toBeInTheDocument();
+    expect(screen.getByTestId("view-root")).toHaveClass("bg-transparent");
+    expect(screen.getByTestId("view-root")).toHaveAttribute(
+      "data-lock-document-scroll",
+      "false",
+    );
+    expect(screen.getByTestId("view-root")).toHaveAttribute(
+      "data-content-class",
+      expect.stringContaining("bg-surface"),
+    );
+    expect(screen.getByText("POS")).toBeInTheDocument();
+    expect(screen.getByText("Preparing POS")).toBeInTheDocument();
+    expect(screen.getByText("Checking register readiness.")).toBeInTheDocument();
+    expect(screen.getByText("Waiting on")).toBeInTheDocument();
+    expect(screen.getByText("close snapshot")).toBeInTheDocument();
+    expect(screen.getByText("local register readiness")).toBeInTheDocument();
+    expect(screen.getByText("Opening snapshot")).toBeInTheDocument();
+    expect(screen.getByText("started")).toBeInTheDocument();
+    expect(screen.getByText("Close snapshot")).toBeInTheDocument();
+    expect(screen.getAllByText("loading").length).toBeGreaterThan(0);
+    expect(screen.getByText("Local read stage")).toBeInTheDocument();
+    expect(screen.getByText("reading_local_store")).toBeInTheDocument();
+    expect(screen.getByText("Local read key")).toBeInTheDocument();
+    expect(
+      screen.getByText("store-1:2026-05-09:no-terminal"),
+    ).toBeInTheDocument();
+  });
+
   it("shows a blocked state when the store day has not started", () => {
     useQueryMock.mockImplementation((queryName: string) => {
       if (queryName === "getDailyOpeningSnapshot") {
@@ -302,6 +383,7 @@ describe("POSRegisterOpeningGuard", () => {
     );
 
     expect(screen.queryByText("Register workspace")).not.toBeInTheDocument();
+    expect(screen.getByTestId("view-root")).toHaveClass("bg-transparent");
     expect(screen.getByText("Store day not started")).toBeInTheDocument();
     expect(
       screen.getByText("Start the store day to begin POS sales."),
@@ -678,7 +760,7 @@ describe("POSRegisterOpeningGuard", () => {
     );
   });
 
-  it("shows setup-required guidance when local authority is missing", () => {
+  it("clears local POS state from setup-required guidance", async () => {
     useLocalPosReadinessMock.mockReturnValue({
       status: "blocked",
       reason: "missing_seed",
@@ -696,6 +778,55 @@ describe("POSRegisterOpeningGuard", () => {
     expect(
       screen.getByText("POS setup required. Connect this terminal before starting sales."),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Clear and reprovision terminal" }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Clear and reprovision terminal" }),
+    );
+
+    await act(async () => {});
+
+    expect(clearIndexedDbPosLocalStoreMock).toHaveBeenCalledTimes(1);
+    expect(toast.success).toHaveBeenCalledWith(
+      "Local POS state cleared. Reopening terminal setup.",
+    );
+    expect(reloadWindowMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps setup-required guidance on-screen when local POS state cannot be cleared", async () => {
+    clearIndexedDbPosLocalStoreMock.mockResolvedValue({
+      ok: false,
+      error: {
+        code: "write_failed",
+        message: "POS local state has sale records that may not be synced.",
+      },
+    });
+    useLocalPosReadinessMock.mockReturnValue({
+      status: "blocked",
+      reason: "missing_seed",
+      message: "POS setup required. Connect this terminal before starting sales.",
+    });
+
+    render(
+      <POSRegisterOpeningGuard>
+        <div>Register workspace</div>
+      </POSRegisterOpeningGuard>,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Clear and reprovision terminal" }),
+    );
+
+    await act(async () => {});
+
+    expect(clearIndexedDbPosLocalStoreMock).toHaveBeenCalledTimes(1);
+    expect(toast.error).toHaveBeenCalledWith(
+      "POS local state has sale records that may not be synced.",
+    );
+    expect(reloadWindowMock).not.toHaveBeenCalled();
+    expect(screen.getByText("POS setup required")).toBeInTheDocument();
   });
 
   it("lets the register shell handle local drawer closeout recovery", () => {

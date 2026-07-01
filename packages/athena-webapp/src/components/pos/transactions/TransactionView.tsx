@@ -1980,81 +1980,87 @@ export function TransactionView() {
                         </div>
 
                         <div className="divide-y divide-border/70 rounded-lg border border-border bg-background">
-                          {itemAdjustmentDraft.lines.map((line) => (
-                            <div
-                              className="grid gap-3 px-3 py-3"
-                              key={line.item._id}
-                            >
-                              <div className="min-w-0">
-                                <p className="truncate text-sm font-medium text-foreground">
-                                  {line.item.productName}
-                                </p>
-                                <p className="mt-1 truncate text-xs text-muted-foreground">
-                                  {line.item.productSku}
-                                </p>
-                              </div>
-                              <div className="flex items-center justify-between gap-3">
-                                <p className="text-xs text-muted-foreground">
-                                  Original {line.item.quantity}
-                                </p>
-                                <div className="flex items-center gap-2">
-                                  <Button
-                                    aria-label={`Decrease ${line.item.productName}`}
-                                    disabled={line.correctedQuantity <= 0}
-                                    onClick={() =>
-                                      setCorrectedQuantities((current) => ({
-                                        ...current,
-                                        [line.item._id]: Math.max(
-                                          0,
-                                          line.correctedQuantity - 1,
-                                        ),
-                                      }))
-                                    }
-                                    size="icon"
-                                    type="button"
-                                    variant="outline"
-                                  >
-                                    <Minus aria-hidden="true" />
-                                  </Button>
-                                  <Input
-                                    aria-label={`Adjusted quantity for ${line.item.productName}`}
-                                    className="h-9 w-20 border-input bg-background text-center font-numeric"
-                                    min={0}
-                                    onChange={(event) => {
-                                      const quantity = Number(
-                                        event.target.value,
-                                      );
-                                      setCorrectedQuantities((current) => ({
-                                        ...current,
-                                        [line.item._id]:
-                                          Number.isFinite(quantity) &&
-                                          quantity >= 0
-                                            ? Math.trunc(quantity)
-                                            : line.correctedQuantity,
-                                      }));
-                                    }}
-                                    type="number"
-                                    value={line.correctedQuantity}
-                                  />
-                                  <Button
-                                    aria-label={`Increase ${line.item.productName}`}
-                                    onClick={() =>
-                                      setCorrectedQuantities((current) => ({
-                                        ...current,
-                                        [line.item._id]:
-                                          line.correctedQuantity + 1,
-                                      }))
-                                    }
-                                    size="icon"
-                                    type="button"
-                                    variant="outline"
-                                  >
-                                    <Plus aria-hidden="true" />
-                                  </Button>
+                          {itemAdjustmentDraft.lines.map((line) => {
+                            const productDisplayName = capitalizeWords(
+                              line.item.productName,
+                            );
+
+                            return (
+                              <div
+                                className="grid gap-3 px-3 py-3"
+                                key={line.item._id}
+                              >
+                                <div className="min-w-0">
+                                  <p className="truncate text-sm font-medium text-foreground">
+                                    {productDisplayName}
+                                  </p>
+                                  <p className="mt-1 truncate text-xs text-muted-foreground">
+                                    {line.item.productSku}
+                                  </p>
+                                </div>
+                                <div className="flex items-center justify-between gap-3">
+                                  <p className="text-xs text-muted-foreground">
+                                    Original {line.item.quantity}
+                                  </p>
+                                  <div className="flex items-center gap-2">
+                                    <Button
+                                      aria-label={`Decrease ${productDisplayName}`}
+                                      disabled={line.correctedQuantity <= 0}
+                                      onClick={() =>
+                                        setCorrectedQuantities((current) => ({
+                                          ...current,
+                                          [line.item._id]: Math.max(
+                                            0,
+                                            line.correctedQuantity - 1,
+                                          ),
+                                        }))
+                                      }
+                                      size="icon"
+                                      type="button"
+                                      variant="outline"
+                                    >
+                                      <Minus aria-hidden="true" />
+                                    </Button>
+                                    <Input
+                                      aria-label={`Adjusted quantity for ${productDisplayName}`}
+                                      className="h-9 w-20 border-input bg-background text-center font-numeric"
+                                      min={0}
+                                      onChange={(event) => {
+                                        const quantity = Number(
+                                          event.target.value,
+                                        );
+                                        setCorrectedQuantities((current) => ({
+                                          ...current,
+                                          [line.item._id]:
+                                            Number.isFinite(quantity) &&
+                                            quantity >= 0
+                                              ? Math.trunc(quantity)
+                                              : line.correctedQuantity,
+                                        }));
+                                      }}
+                                      type="number"
+                                      value={line.correctedQuantity}
+                                    />
+                                    <Button
+                                      aria-label={`Increase ${productDisplayName}`}
+                                      onClick={() =>
+                                        setCorrectedQuantities((current) => ({
+                                          ...current,
+                                          [line.item._id]:
+                                            line.correctedQuantity + 1,
+                                        }))
+                                      }
+                                      size="icon"
+                                      type="button"
+                                      variant="outline"
+                                    >
+                                      <Plus aria-hidden="true" />
+                                    </Button>
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
 
                         <div className="grid gap-3 rounded-lg border border-border bg-background p-3 text-sm">

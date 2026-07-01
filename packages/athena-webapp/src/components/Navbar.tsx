@@ -17,10 +17,7 @@ export const AppHeader = () => {
         <p className="font-medium">athena</p>
       </Link>
       <p className="hidden text-muted-foreground sm:block">/</p>
-      <OrganizationSwitcher
-        className="max-w-[9.5rem] sm:max-w-[14rem]"
-        items={organizations || []}
-      />
+      <OrganizationSwitcher items={organizations || []} />
     </div>
   );
 };

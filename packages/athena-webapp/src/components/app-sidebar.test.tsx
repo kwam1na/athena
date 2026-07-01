@@ -67,11 +67,39 @@ vi.mock("../hooks/usePermissions", () => ({
 }));
 
 vi.mock("@/components/ui/sidebar", () => {
-  const Passthrough = ({ children }: { children: ReactNode }) => <>{children}</>;
+  const Passthrough = ({
+    children,
+    className,
+  }: {
+    children: ReactNode;
+    className?: string;
+  }) => <div className={className}>{children}</div>;
 
   return {
-    Sidebar: Passthrough,
-    SidebarContent: Passthrough,
+    Sidebar: ({
+      children,
+      className,
+      variant,
+    }: {
+      children: ReactNode;
+      className?: string;
+      variant?: string;
+    }) => (
+      <aside className={className} data-sidebar-variant={variant}>
+        {children}
+      </aside>
+    ),
+    SidebarContent: ({
+      children,
+      className,
+    }: {
+      children: ReactNode;
+      className?: string;
+    }) => (
+      <div className={className} data-testid="sidebar-content">
+        {children}
+      </div>
+    ),
     SidebarGroup: ({ children }: { children: ReactNode }) => (
       <section>{children}</section>
     ),
@@ -196,5 +224,43 @@ describe("AppSidebar capability gates", () => {
     );
     expect(screen.queryByRole("heading", { name: /services/i })).toBeNull();
     expect(screen.queryByRole("heading", { name: /organization/i })).toBeNull();
+  });
+
+  it("renders the contained shell variant full-height on mobile and fit-height on desktop", () => {
+    mocks.usePermissions.mockReturnValue({
+      canAccessAdmin: () => true,
+      canAccessFullAdminSurfaces: () => true,
+      canAccessPOS: () => true,
+      canAccessOperations: () => true,
+      canAccessStoreDaySurfaces: () => true,
+      hasFullAdminAccess: true,
+      hasStoreDaySurfaceAccess: true,
+      isLoading: false,
+      role: "admin",
+    });
+
+    render(<AppSidebar shellVariant="contained" />);
+
+    expect(screen.getByTestId("sidebar-content")).toHaveClass(
+      "h-full",
+      "max-h-full",
+      "flex-none",
+      "relative",
+      "w-full",
+      "md:h-fit",
+      "md:max-h-[calc(100svh-6rem)]",
+      "md:w-[calc(var(--sidebar-width-contained)-theme(spacing.4))]",
+      "md:rounded-lg",
+      "md:border",
+      "border-sidebar-border/60",
+      "bg-sidebar",
+      "md:shadow-surface",
+      "group-data-[collapsible=icon]:w-[var(--sidebar-width-icon)]",
+      "group-data-[collapsible=icon]:p-0",
+    );
+    expect(screen.getByRole("complementary")).toHaveAttribute(
+      "data-sidebar-variant",
+      "contained",
+    );
   });
 });

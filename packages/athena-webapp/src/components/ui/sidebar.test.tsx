@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  SidebarInset,
   SidebarMenuButton,
   SidebarProvider,
 } from "@/components/ui/sidebar";
@@ -36,5 +37,17 @@ describe("SidebarMenuButton", () => {
     expect(screen.getByRole("button", { name: /procurement/i })).not.toHaveAttribute(
       "data-remote-assist-control",
     );
+  });
+});
+
+describe("SidebarInset", () => {
+  it("uses the app canvas token for the shared content inset", () => {
+    render(
+      <SidebarProvider>
+        <SidebarInset>Workspace</SidebarInset>
+      </SidebarProvider>,
+    );
+
+    expect(screen.getByText("Workspace")).toHaveClass("bg-app-canvas");
   });
 });

@@ -14,6 +14,8 @@ import {
   type PosLocalStoreResult,
 } from "./posLocalStore";
 
+const LOCAL_POS_READINESS_READ_TIMEOUT_MS = 3_000;
+
 export type PosLocalDailyOpeningSnapshot = {
   status?: "blocked" | "needs_attention" | "ready" | "started";
 };
@@ -26,7 +28,10 @@ export type PosLocalDailyCloseSnapshot = {
 };
 
 export type LocalPosReadiness =
-  | { status: "loading" }
+  | {
+      status: "loading";
+      diagnostics?: LocalPosReadinessLoadingDiagnostics;
+    }
   | {
       status: "ready";
       source: "live" | "local_readiness" | "local_register";
@@ -45,6 +50,13 @@ export type LocalPosReadiness =
       canStartLocally?: boolean;
       message: string;
     };
+
+export type LocalPosReadinessLoadingDiagnostics = {
+  activeStateKey?: string;
+  stage: "initializing" | "reading_local_store" | "state_key_mismatch";
+  startedAt?: number;
+  stateKey?: string;
+};
 
 export type LocalPosServiceCatalogReadiness =
   | {
@@ -398,31 +410,52 @@ export function useLocalPosReadiness(input: {
   const openingStatus = input.openingSnapshot?.status ?? null;
   const [refreshVersion, setRefreshVersion] = useState(0);
   const [localState, setLocalState] = useState<
-    | { status: "loading" }
+    | {
+        status: "loading";
+        diagnostics?: LocalPosReadinessLoadingDiagnostics;
+      }
+    | {
+        status: "failed";
+        errorCode?: string;
+        message?: string;
+        reason: "local_store_error" | "timeout";
+      }
     | {
         status: "ready";
         localReadiness: PosLocalStoreDayReadiness | null;
         registerReadModel: PosLocalRegisterReadModel;
         stateKey: PosLocalReadinessStateKey;
       }
-    | { status: "failed" }
   >({ status: "loading" });
 
   useEffect(() => {
     let cancelled = false;
 
     if (input.entryContext.status !== "ready") {
-      setLocalState({ status: "failed" });
+      setLocalState({ status: "failed", reason: "local_store_error" });
       return;
     }
 
     if (typeof indexedDB === "undefined") {
-      setLocalState({ status: "failed" });
+      setLocalState({ status: "failed", reason: "local_store_error" });
       return;
     }
 
     const stateKey = readinessStateKey(input.entryContext, input.operatingDate);
-    setLocalState({ status: "loading" });
+    const timeout = setTimeout(() => {
+      if (!cancelled) {
+        setLocalState({ status: "failed", reason: "timeout" });
+      }
+    }, LOCAL_POS_READINESS_READ_TIMEOUT_MS);
+
+    setLocalState({
+      status: "loading",
+      diagnostics: {
+        stage: "reading_local_store",
+        startedAt: Date.now(),
+        stateKey: formatReadinessStateKey(stateKey),
+      },
+    });
 
     void (async () => {
       const store = createPosLocalStore({
@@ -435,6 +468,7 @@ export function useLocalPosReadiness(input: {
       });
 
       if (cancelled) return;
+      clearTimeout(timeout);
 
       if (result.ok) {
         setLocalState({
@@ -446,11 +480,17 @@ export function useLocalPosReadiness(input: {
         return;
       }
 
-      setLocalState({ status: "failed" });
+      setLocalState({
+        status: "failed",
+        errorCode: result.error.code,
+        message: result.error.message,
+        reason: "local_store_error",
+      });
     })();
 
     return () => {
       cancelled = true;
+      clearTimeout(timeout);
     };
   }, [input.entryContext, input.operatingDate, refreshVersion]);
 
@@ -509,20 +549,45 @@ export function useLocalPosReadiness(input: {
     }
 
     if (localState.status === "loading") {
-      return { status: "loading" as const };
+      return {
+        status: "loading" as const,
+        ...(localState.diagnostics
+          ? { diagnostics: localState.diagnostics }
+          : {}),
+      };
+    }
+
+    if (
+      localState.status === "failed" &&
+      localState.reason === "local_store_error"
+    ) {
+      return blocked(
+        "local_store_unavailable",
+        localState.message
+          ? `POS local storage is unavailable. ${localState.message}`
+          : "POS local storage is unavailable. Refresh this terminal setup before starting sales.",
+      );
     }
 
     if (localState.status === "failed") {
-      return evaluateLocalPosReadiness({
-        closeSnapshot: input.closeSnapshot,
-        entryContext: input.entryContext,
-        openingSnapshot: input.openingSnapshot,
-        operatingDate: input.operatingDate,
-      });
+      return {
+        status: "loading" as const,
+        diagnostics: {
+          activeStateKey: formatReadinessStateKey(activeStateKey),
+          stage: "reading_local_store" as const,
+        },
+      };
     }
 
     if (!readinessStateKeysEqual(localState.stateKey, activeStateKey)) {
-      return { status: "loading" as const };
+      return {
+        status: "loading" as const,
+        diagnostics: {
+          activeStateKey: formatReadinessStateKey(activeStateKey),
+          stage: "state_key_mismatch",
+          stateKey: formatReadinessStateKey(localState.stateKey),
+        },
+      } satisfies LocalPosReadiness;
     }
 
     return evaluateLocalPosReadiness({
@@ -541,6 +606,16 @@ export function useLocalPosReadiness(input: {
     input.operatingDate,
     localState,
   ]);
+}
+
+function formatReadinessStateKey(stateKey: PosLocalReadinessStateKey) {
+  if (stateKey.status !== "ready") return "not-ready";
+
+  return [
+    stateKey.storeId,
+    stateKey.operatingDate,
+    stateKey.terminalId ?? "no-terminal",
+  ].join(":");
 }
 
 type PosLocalReadinessStateKey =

@@ -191,7 +191,7 @@ export function CartItems({
   return (
     <div
       className={cn(
-        "flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-gray-200 bg-gradient-to-br from-gray-50/50 to-gray-100/30",
+        "flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-workspace-panel",
         isCompact && "min-h-72 basis-0",
         className,
       )}

@@ -3691,7 +3691,7 @@ export function RegisterSessionViewContent({
     <View
       header={
         <ComposedPageHeader
-          className="h-auto min-h-16 items-start gap-3 border-b border-border bg-background px-4 py-3 sm:items-center sm:border-0 sm:py-4"
+          className="h-auto min-h-16 items-start gap-3 border-b border-border px-4 py-3 sm:items-center sm:border-0 sm:py-4"
           leadingContent={
             <div className="flex min-w-0 flex-1 flex-col gap-2.5 sm:flex-row sm:items-baseline sm:gap-4">
               <div className="flex min-w-0 flex-wrap items-baseline gap-x-4 gap-y-0.5">

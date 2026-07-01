@@ -24,6 +24,8 @@ import {
   CheckCircle2,
   Circle,
   Cloud,
+  Loader2,
+  MonitorCog,
   PackagePlus,
   RefreshCw,
   ScanBarcode,
@@ -34,6 +36,7 @@ import {
   Users,
 } from "lucide-react";
 import { Link } from "@tanstack/react-router";
+import { toast } from "sonner";
 import {
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent,
@@ -50,6 +53,7 @@ import {
   type RegisterWorkflowMode,
 } from "@/lib/pos/presentation/register/registerUiState";
 import { usePosTerminalAppSessionRecoveryRuntimeInput } from "@/lib/pos/infrastructure/terminal/posTerminalAppSessionRecoveryContext";
+import { clearIndexedDbPosLocalStore } from "@/lib/pos/infrastructure/local/posLocalStore";
 import { useRegisterViewModel } from "@/lib/pos/presentation/register/useRegisterViewModel";
 import { useAppActionBlocker } from "@/lib/app-messages";
 import { APP_UPDATE_APPLY_ACTION_ID } from "@/lib/app-update";
@@ -61,7 +65,7 @@ import { RegisterCheckoutPanel } from "./RegisterCheckoutPanel";
 import { RegisterCustomerPanel } from "./RegisterCustomerPanel";
 import { RegisterDrawerGate } from "./RegisterDrawerGate";
 import { ExpenseCompletionPanel } from "./ExpenseCompletionPanel";
-import { getOrigin } from "~/src/lib/navigationUtils";
+import { getOrigin, reloadWindow } from "~/src/lib/navigationUtils";
 
 function useCollapseSidebarForPosFlow() {
   const { isMobile, open, setOpen } = useSidebar();
@@ -323,9 +327,125 @@ function DrawerGateWorkspace({
   );
 }
 
-function RegisterSetupResolvingWorkspace() {
+function LocalPosStateRecoveryAction({
+  isClearingLocalPosState,
+  onClearLocalPosState,
+}: {
+  isClearingLocalPosState: boolean;
+  onClearLocalPosState: () => void;
+}) {
   return (
-    <div className="h-full min-h-0 rounded-lg border border-border bg-background" />
+    <div className="mt-6 rounded-lg border border-warning/30 bg-warning/5 p-4 text-left">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="space-y-1">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-warning">
+            Local recovery
+          </p>
+          <p className="text-sm leading-6 text-muted-foreground">
+            Clear this browser's cached POS terminal state and reload setup.
+            This also removes pending local POS records on this terminal.
+          </p>
+        </div>
+        <Button
+          className="shrink-0 gap-2"
+          disabled={isClearingLocalPosState}
+          onClick={onClearLocalPosState}
+          type="button"
+          variant="outline"
+        >
+          {isClearingLocalPosState ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <RefreshCw className="h-4 w-4" />
+          )}
+          {isClearingLocalPosState
+            ? "Clearing..."
+            : "Clear and reprovision terminal"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function RegisterSetupResolvingWorkspace({
+  debug,
+  isClearingLocalPosState,
+  onClearLocalPosState,
+  onboarding,
+}: {
+  debug?: RegisterViewModel["debug"];
+  isClearingLocalPosState: boolean;
+  onClearLocalPosState: () => void;
+  onboarding: NonNullable<RegisterViewModel["onboarding"]>;
+}) {
+  const rows = [
+    {
+      label: "Terminal ready",
+      value: onboarding.terminalReady ? "yes" : "no",
+    },
+    {
+      label: "Cashier setup",
+      value: onboarding.cashierSetupReady ? "ready" : "missing",
+    },
+    {
+      label: "Cashier signed in",
+      value: onboarding.cashierSignedIn ? "yes" : "no",
+    },
+    {
+      label: "Active store",
+      value: debug?.activeStoreSource ?? "unknown",
+    },
+    {
+      label: "Entry context",
+      value: formatEntryContextStatus(debug),
+    },
+    {
+      label: "Terminal source",
+      value: debug?.terminalSource ?? "unknown",
+    },
+  ];
+
+  return (
+    <section
+      aria-live="polite"
+      className="flex h-full min-h-0 items-center justify-center rounded-lg border border-border bg-background p-8 text-center"
+    >
+      <div className="w-full max-w-2xl">
+        <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full border border-warning/30 bg-warning/10 text-warning">
+          <MonitorCog className="h-6 w-6" />
+        </div>
+        <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+          Terminal recovery
+        </p>
+        <h2 className="mt-2 text-xl font-semibold text-foreground">
+          Register setup needs attention
+        </h2>
+        <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-muted-foreground">
+          The register shell is ready, but setup details are not resolving.
+          Review the diagnostics or clear local POS state to reprovision this
+          terminal.
+        </p>
+        <div className="mt-6 grid gap-2 text-left sm:grid-cols-2">
+          {rows.map((row) => (
+            <div
+              className="rounded-md border border-border/70 bg-surface px-3 py-2"
+              key={row.label}
+            >
+              <p className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                {row.label}
+              </p>
+              <p className="mt-1 break-words text-sm font-medium text-foreground">
+                {row.value}
+              </p>
+            </div>
+          ))}
+        </div>
+        <LocalPosStateRecoveryAction
+          isClearingLocalPosState={isClearingLocalPosState}
+          onClearLocalPosState={onClearLocalPosState}
+        />
+      </div>
+    </section>
   );
 }
 
@@ -471,6 +591,18 @@ function formatDebugStatus(value?: string | null) {
   return value
     .replace(/[-_]/g, " ")
     .replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+function formatEntryContextStatus(debug?: RegisterViewModel["debug"]) {
+  if (!debug?.localEntryStatus) return "unknown";
+
+  if (debug.localEntryStatus === "ready") {
+    if (debug.activeStoreSource === "live") return "live route ready";
+    if (debug.activeStoreSource === "local") return "local seed ready";
+    return "ready";
+  }
+
+  return debug.localEntryStatus.replace(/_/g, " ");
 }
 
 function formatDebugSource(value?: string | null) {
@@ -1695,6 +1827,8 @@ function POSRegisterViewContent({
   const pendingEmptyStateQuickAddRef = useRef(false);
   const pendingProductLookupFocusAfterSaleStartRef = useRef(false);
   const headerProductSearchInputRef = useRef<HTMLInputElement>(null);
+  const [isClearingLocalPosState, setIsClearingLocalPosState] =
+    useState(false);
   const isDebugPanelVisible = usePosDebugPanelToggle();
   const cashierPresenceRestore =
     viewModel.cashierPresenceRestore ?? ({ status: "missing" } as const);
@@ -1748,11 +1882,19 @@ function POSRegisterViewContent({
     !viewModel.drawerGate;
   const isResolvingRegisterSetup =
     isPosWorkflow &&
+    !viewModel.checkout.isTransactionCompleted &&
     !onboardingState.shouldShow &&
     !onboardingState.terminalReady &&
     !viewModel.authDialog &&
-    !viewModel.drawerGate &&
-    !viewModel.checkout.isTransactionCompleted;
+    !viewModel.drawerGate;
+  const readinessGuard = isPosWorkflow ? viewModel.readinessGuard : null;
+  const isPosReadinessGuardSettling =
+    readinessGuard?.status === "settling" &&
+    (readinessGuard.reason === "cashierPresence" ||
+      readinessGuard.reason === "registerSetup");
+  const shouldShowPosReadinessGuard =
+    readinessGuard?.reason === "registerSetup" &&
+    readinessGuard.status === "visible";
   const terminalCanSearchProducts =
     viewModel.productEntry?.canSearchProducts !== false;
   const terminalCanSearchServices =
@@ -1795,6 +1937,26 @@ function POSRegisterViewContent({
     !isPosWorkflow && !shouldRenderExpenseCompletionWorkspace;
   const shouldRenderCheckoutPanel =
     isPosWorkflow || shouldRenderExpenseCompletionPanel;
+  const handleClearLocalPosState = useCallback(async () => {
+    if (isClearingLocalPosState) {
+      return;
+    }
+
+    setIsClearingLocalPosState(true);
+    try {
+      const result = await clearIndexedDbPosLocalStore();
+
+      if (!result.ok) {
+        toast.error(result.error.message);
+        return;
+      }
+
+      toast.success("Local POS state cleared. Reopening terminal setup.");
+      reloadWindow();
+    } finally {
+      setIsClearingLocalPosState(false);
+    }
+  }, [isClearingLocalPosState]);
   const shouldShowDrawerRecoveryActionBar =
     isPosWorkflow &&
     viewModel.drawerGate?.mode === "recovery" &&
@@ -2108,6 +2270,8 @@ function POSRegisterViewContent({
   if (!viewModel.hasActiveStore) {
     return (
       <View
+        className="bg-transparent"
+        fullHeight
         header={
           <ComposedPageHeader
             leadingContent={
@@ -2122,8 +2286,12 @@ function POSRegisterViewContent({
           />
         }
       >
-        <FadeIn className="container mx-auto h-full w-full p-6">
-          <div className="flex items-center justify-center h-64" />
+        <FadeIn className="flex h-full min-h-0 items-center justify-center p-6">
+          <POSRegisterUnresolvedState
+            debug={viewModel.debug}
+            isClearingLocalPosState={isClearingLocalPosState}
+            onClearLocalPosState={handleClearLocalPosState}
+          />
         </FadeIn>
       </View>
     );
@@ -2131,6 +2299,7 @@ function POSRegisterViewContent({
 
   return (
     <View
+      className="bg-transparent"
       fullHeight
       lockDocumentScroll
       width={registerViewWidth}
@@ -2267,10 +2436,15 @@ function POSRegisterViewContent({
                   />
                 ) : shouldShowOnboarding ? (
                   <POSOnboardingWorkspace onboarding={onboardingState} />
-                ) : isResolvingCashierPresence ? (
-                  <RegisterSetupResolvingWorkspace />
-                ) : isResolvingRegisterSetup ? (
-                  <RegisterSetupResolvingWorkspace />
+                ) : isPosReadinessGuardSettling ? (
+                  <div className="h-full min-h-0 rounded-lg border border-border bg-background" />
+                ) : shouldShowPosReadinessGuard && isResolvingRegisterSetup ? (
+                  <RegisterSetupResolvingWorkspace
+                    debug={viewModel.debug}
+                    isClearingLocalPosState={isClearingLocalPosState}
+                    onClearLocalPosState={handleClearLocalPosState}
+                    onboarding={onboardingState}
+                  />
                 ) : isPosWorkflow && viewModel.drawerGate ? (
                   <DrawerGateWorkspace drawerGate={viewModel.drawerGate} />
                 ) : isAwaitingCashierAuth && viewModel.authDialog ? (
@@ -2328,6 +2502,7 @@ function POSRegisterViewContent({
                       onRemoveService={viewModel.cart.onRemoveService}
                       clearCart={viewModel.cart.onClearCart}
                       density="compact"
+                      className="bg-surface-raised"
                     />
                     {isEmptyStateQuickAddActive
                       ? renderProductEntry({
@@ -2400,6 +2575,7 @@ function POSRegisterViewContent({
                           ? "comfortable"
                           : "compact"
                       }
+                      className="bg-surface-raised"
                     />
                   ) : null}
 
@@ -2469,5 +2645,80 @@ function POSRegisterViewContent({
         />
       ) : null}
     </View>
+  );
+}
+
+function POSRegisterUnresolvedState({
+  debug,
+  isClearingLocalPosState,
+  onClearLocalPosState,
+}: {
+  debug?: RegisterViewModel["debug"];
+  isClearingLocalPosState: boolean;
+  onClearLocalPosState: () => void;
+}) {
+  const rows = [
+    {
+      label: "Active store",
+      value: debug?.activeStoreSource ?? "missing",
+    },
+    {
+      label: "Live store",
+      value: debug?.hasLiveActiveStore ? "ready" : "missing",
+    },
+    {
+      label: "Store id",
+      value: debug?.storeId ?? "missing",
+    },
+    {
+      label: "Entry context",
+      value: formatEntryContextStatus(debug),
+    },
+    {
+      label: "Terminal",
+      value: debug?.terminalSource ?? "unknown",
+    },
+    {
+      label: "Cashier",
+      value: debug?.staffSignedIn ? "signed in" : "missing",
+    },
+  ];
+
+  return (
+    <div className="flex w-full max-w-3xl flex-col items-center rounded-lg border border-border bg-surface px-10 py-12 text-center shadow-sm">
+      <div className="mb-6 flex h-[4.5rem] w-[4.5rem] items-center justify-center rounded-full bg-muted text-muted-foreground">
+        <Loader2 className="h-7 w-7 animate-spin" />
+      </div>
+      <h2 className="text-xl font-medium text-foreground/80">
+        Preparing POS
+      </h2>
+      <p className="mt-3 max-w-lg text-base leading-7 text-muted-foreground">
+        Waiting for the active store context before loading the register.
+      </p>
+      <div className="mt-8 w-full rounded-lg border border-border bg-muted/30 p-4 text-left">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+          Register context
+        </p>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          {rows.map((row) => (
+            <div
+              className="rounded-md border border-border/70 bg-surface px-3 py-2"
+              key={row.label}
+            >
+              <p className="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                {row.label}
+              </p>
+              <p className="mt-1 break-words text-sm font-medium text-foreground">
+                {row.value}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+      <LocalPosStateRecoveryAction
+        isClearingLocalPosState={isClearingLocalPosState}
+        onClearLocalPosState={onClearLocalPosState}
+      />
+    </div>
   );
 }
