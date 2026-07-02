@@ -3574,7 +3574,7 @@ describe("usePosLocalSyncRuntimeStatus", () => {
           ...event,
           localEventId: "event-seeded-open",
           sequence: events.length + 1,
-          sync: { status: "pending" },
+          sync: { status: event.initialSyncStatus ?? "pending" },
         });
         events.push(localEvent);
         return { ok: true, value: localEvent };
@@ -3600,6 +3600,10 @@ describe("usePosLocalSyncRuntimeStatus", () => {
           terminalId: "local-terminal-1",
         },
       })),
+      writeLocalCloudMapping: vi.fn(async (mapping) => ({
+        ok: true,
+        value: mapping,
+      })),
     };
 
     const { result } = renderHook(() =>
@@ -3621,6 +3625,7 @@ describe("usePosLocalSyncRuntimeStatus", () => {
           storeId: "store-1",
           terminalId: "terminal-cloud-1",
           type: "register.opened",
+          initialSyncStatus: "synced",
           payload: expect.objectContaining({
             expectedCash: 13_000,
             localRegisterSessionId: "cloud-register-1",
@@ -3630,6 +3635,12 @@ describe("usePosLocalSyncRuntimeStatus", () => {
         }),
       ),
     );
+    expect(store.writeLocalCloudMapping).toHaveBeenCalledWith({
+      entity: "registerSession",
+      localId: "cloud-register-1",
+      cloudId: "cloud-register-1",
+      mappedAt: expect.any(Number),
+    });
     expect(onLocalEventsChanged).toHaveBeenCalled();
     await waitFor(() =>
       expect(result.current?.debug?.activeRegisterSessionRepair).toMatchObject({

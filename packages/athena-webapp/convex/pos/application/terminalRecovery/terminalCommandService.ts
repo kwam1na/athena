@@ -539,6 +539,40 @@ function validateTerminalRecoveryCommandShape(input: {
   }
 
   const eventIds = input.commandContext.localReviewEventIds ?? [];
+  if (input.commandContext.localReviewClearAll === true) {
+    if (eventIds.length === 0) {
+      return "Local review clear-all commands require evidenced local review item ids.";
+    }
+    if (eventIds.length > LOCAL_REVIEW_CLEAR_COMMAND_EVENT_LIMIT) {
+      return `Local review clear-all commands can include at most ${LOCAL_REVIEW_CLEAR_COMMAND_EVENT_LIMIT} item ids.`;
+    }
+    if (uniqueStrings(eventIds).length !== eventIds.length) {
+      return "Local review clear-all commands require unique local review item ids.";
+    }
+    if (
+      input.commandContext.localReviewClearLimit !== undefined &&
+      (!Number.isInteger(input.commandContext.localReviewClearLimit) ||
+        input.commandContext.localReviewClearLimit <= 0 ||
+        input.commandContext.localReviewClearLimit >
+          LOCAL_REVIEW_CLEAR_COMMAND_EVENT_LIMIT)
+    ) {
+      return `Local review clear-all commands can include at most ${LOCAL_REVIEW_CLEAR_COMMAND_EVENT_LIMIT} items.`;
+    }
+    if (input.expectedEvidence.localReviewEventCount === undefined) {
+      return "Local review clear-all commands require expected local review count evidence.";
+    }
+    const expectedClearedIds =
+      input.expectedEvidence.localReviewClearedEventIds ?? [];
+    if (uniqueStrings(expectedClearedIds).length !== expectedClearedIds.length) {
+      return "Local review clear-all commands require unique cleared item evidence.";
+    }
+    if (!arraysEqualAsSets(eventIds, expectedClearedIds)) {
+      return "Local review clear-all commands require matching evidenced item ids.";
+    }
+
+    return null;
+  }
+
   if (eventIds.length === 0) {
     return "Local review cleanup commands require explicit local review item ids.";
   }
@@ -549,7 +583,6 @@ function validateTerminalRecoveryCommandShape(input: {
     return "Local review cleanup commands require unique local review item ids.";
   }
   if (
-    input.commandContext.localReviewClearAll === true ||
     input.commandContext.localReviewClearLimit !== undefined
   ) {
     return "Local review cleanup commands must target explicit reviewed item ids.";

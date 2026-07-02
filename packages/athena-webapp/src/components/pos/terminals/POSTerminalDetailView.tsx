@@ -10,6 +10,7 @@ import {
   MonitorUp,
   Send,
   ShieldCheck,
+  Trash2,
   Wrench,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -1115,6 +1116,8 @@ function ConflictSection({
   const hasLocalReviewTableAction = Boolean(
     getAttentionReasonRecoveryAction(localReviewActionReason, detail),
   );
+  const localReviewClearAllAction =
+    getLocalReviewClearAllAction(recoveryPreview);
 
   return (
     <DetailPanel
@@ -1230,6 +1233,14 @@ function ConflictSection({
                 />
               </div>
             ) : null}
+            {localReviewClearAllAction && detail ? (
+              <LocalReviewClearAllAction
+                action={localReviewClearAllAction}
+                onIssueTerminalRecoveryCommand={onIssueTerminalRecoveryCommand}
+                reviewCount={runtimeReviewCount}
+                terminalId={detail.terminal._id}
+              />
+            ) : null}
           </div>
         ) : null}
 
@@ -1262,6 +1273,157 @@ function ConflictSection({
       </div>
     </DetailPanel>
   );
+}
+
+function LocalReviewClearAllAction({
+  action,
+  onIssueTerminalRecoveryCommand,
+  reviewCount,
+  terminalId,
+}: {
+  action: TerminalRecoveryAction;
+  onIssueTerminalRecoveryCommand?: POSTerminalDetailViewContentProps["onIssueTerminalRecoveryCommand"];
+  reviewCount: number;
+  terminalId: Id<"posTerminal"> | string;
+}) {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+  const canIssue = isRecoveryActionIssuable(action);
+
+  const submitClearAll = async () => {
+    if (!canIssue || !onIssueTerminalRecoveryCommand || isSubmitting) {
+      return;
+    }
+
+    setIsSubmitting(true);
+    setErrorMessage("");
+    const result = await onIssueTerminalRecoveryCommand({ action, terminalId });
+    setIsSubmitting(false);
+
+    if (result.kind === "ok") {
+      toast.success("Terminal command queued.");
+      return;
+    }
+
+    const message = normalizeRecoveryActionError(result.error.message);
+    setErrorMessage(message);
+    toast.error(message);
+  };
+
+  return (
+    <div className="grid gap-layout-sm rounded-md border border-danger/25 bg-danger/10 px-layout-md py-layout-sm md:grid-cols-[minmax(0,1fr)_auto] md:items-start">
+      <div className="min-w-0">
+        <div className="flex items-center gap-layout-xs">
+          <AlertTriangle className="h-4 w-4 text-danger" aria-hidden="true" />
+          <p className="text-sm font-medium text-foreground">
+            Dangerous action
+          </p>
+        </div>
+        <p className="mt-1 max-w-2xl text-xs text-muted-foreground">
+          Clears all local review items reported by this terminal. Use only
+          after confirming the review state is safe to discard.
+        </p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          {reviewCount} local review{" "}
+          {reviewCount === 1 ? "item is" : "items are"} currently reported.
+        </p>
+        {action.status && action.status !== "available" ? (
+          <p className="mt-1 text-xs text-muted-foreground">
+            {getRecoveryActionStatusCopy(action)}
+          </p>
+        ) : null}
+        {errorMessage ? (
+          <p className="mt-1 text-xs text-danger">{errorMessage}</p>
+        ) : null}
+      </div>
+      <Button
+        disabled={!canIssue || !onIssueTerminalRecoveryCommand || isSubmitting}
+        onClick={() => {
+          void submitClearAll();
+        }}
+        size="sm"
+        type="button"
+        variant="destructive"
+      >
+        <Trash2 aria-hidden="true" />
+        {isSubmitting ? "Sending..." : "Clear all review items"}
+      </Button>
+    </div>
+  );
+}
+
+function getLocalReviewClearAllAction(
+  recoveryPreview: TerminalHealthDetail["recoveryPreview"] | null | undefined,
+): TerminalRecoveryAction | null {
+  const action = recoveryPreview?.terminalActions?.find(
+    (candidate) =>
+      candidate.commandType === "clear_local_review_items" &&
+      isValidLocalReviewClearAllAction(candidate),
+  );
+  if (!action) {
+    return null;
+  }
+
+  return {
+    commandContext: action.commandContext,
+    commandType: action.commandType,
+    expectedEvidence: action.expectedEvidence,
+    kind: "terminal_command",
+    label: "Clear all review items",
+    status: getLocalReviewClearAllStatus(recoveryPreview),
+  };
+}
+
+function isValidLocalReviewClearAllAction(
+  action: NonNullable<
+    NonNullable<TerminalHealthDetail["recoveryPreview"]>["terminalActions"]
+  >[number],
+) {
+  if (action.commandContext.localReviewClearAll !== true) {
+    return false;
+  }
+  const eventIds = action.commandContext.localReviewEventIds ?? [];
+  const clearedEventIds = action.expectedEvidence.localReviewClearedEventIds ?? [];
+  return (
+    eventIds.length > 0 &&
+    action.commandContext.localReviewClearLimit === eventIds.length &&
+    arraysEqualAsSets(eventIds, clearedEventIds)
+  );
+}
+
+function arraysEqualAsSets(left: string[], right: string[]) {
+  if (left.length !== right.length) {
+    return false;
+  }
+  const leftIds = new Set(left);
+  const rightIds = new Set(right);
+  return (
+    leftIds.size === left.length &&
+    rightIds.size === right.length &&
+    left.every((id) => rightIds.has(id))
+  );
+}
+
+function getLocalReviewClearAllStatus(
+  recoveryPreview: TerminalHealthDetail["recoveryPreview"] | null | undefined,
+) {
+  const commandStatus = recoveryPreview?.commandStatus;
+  if (commandStatus?.commandType !== "clear_local_review_items") {
+    return "available";
+  }
+  if (commandStatus.verificationStatus === "verified") {
+    return "verified";
+  }
+  if (commandStatus.verificationStatus === "runtime_verification_ready") {
+    return "waiting_for_check_in";
+  }
+  if (
+    commandStatus.status === "precondition_failed" ||
+    commandStatus.status === "superseded"
+  ) {
+    return "failed";
+  }
+  return commandStatus.status ?? "available";
 }
 
 function OperationalExplanationReviewSummary({

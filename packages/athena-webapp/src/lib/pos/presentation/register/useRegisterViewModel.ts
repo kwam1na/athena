@@ -2170,6 +2170,7 @@ export function useRegisterViewModel(): RegisterViewModel {
         terminalId: terminal._id,
         storeId: activeStoreId!,
         registerNumber,
+        cloudRegisterSessionId: usableActiveRegisterSession._id,
         localRegisterSessionId,
         staffProfileId: actingStaffProfileId,
         validationMetadata: localSaleValidationMetadata,

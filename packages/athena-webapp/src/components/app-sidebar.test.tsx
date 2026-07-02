@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import React, { type ReactElement, type ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -10,6 +10,8 @@ const mocks = vi.hoisted(() => ({
   useGetActiveOrganization: vi.fn(),
   usePermissions: vi.fn(),
   useQuery: vi.fn(),
+  useSidebar: vi.fn(),
+  toggleSidebar: vi.fn(),
 }));
 
 vi.mock("@tanstack/react-router", () => ({
@@ -142,6 +144,7 @@ vi.mock("@/components/ui/sidebar", () => {
     SidebarMenuSub: Passthrough,
     SidebarMenuSubItem: Passthrough,
     SidebarRail: () => null,
+    useSidebar: mocks.useSidebar,
   };
 });
 
@@ -161,6 +164,10 @@ describe("AppSidebar capability gates", () => {
       activeOrganization: { _id: "org-1", slug: "org" },
     });
     mocks.useQuery.mockReturnValue([]);
+    mocks.useSidebar.mockReturnValue({
+      state: "expanded",
+      toggleSidebar: mocks.toggleSidebar,
+    });
   });
 
   it("lets POS-only accounts open store-day surfaces without admin surfaces", () => {
@@ -262,5 +269,32 @@ describe("AppSidebar capability gates", () => {
       "data-sidebar-variant",
       "contained",
     );
+  });
+
+  it("places a collapse toggle under the contained desktop sidebar", () => {
+    mocks.usePermissions.mockReturnValue({
+      canAccessAdmin: () => true,
+      canAccessFullAdminSurfaces: () => true,
+      canAccessPOS: () => true,
+      canAccessOperations: () => true,
+      canAccessStoreDaySurfaces: () => true,
+      hasFullAdminAccess: true,
+      hasStoreDaySurfaceAccess: true,
+      isLoading: false,
+      role: "admin",
+    });
+
+    render(<AppSidebar shellVariant="contained" />);
+
+    const toggle = screen.getByRole("button", { name: "Collapse sidebar" });
+
+    expect(toggle).toHaveClass(
+      "mt-layout-xs",
+      "w-[var(--sidebar-width-icon)]",
+      "self-start",
+      "md:flex",
+    );
+    fireEvent.click(toggle);
+    expect(mocks.toggleSidebar).toHaveBeenCalledTimes(1);
   });
 });

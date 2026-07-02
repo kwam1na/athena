@@ -8,14 +8,14 @@ Graphify is the navigation layer for the repo graph. Use the entry docs below fo
 
 ## Repo Summary
 - Code files discovered: 2154
-- Graph nodes: 8386
-- Graph edges: 10028
+- Graph nodes: 8394
+- Graph edges: 10045
 - Communities: 2081
 
 ## Graph Hotspots
 - `dailyClose.ts` (90 edges, Community 0) - [`packages/athena-webapp/convex/operations/dailyClose.ts`](../../packages/athena-webapp/convex/operations/dailyClose.ts)
 - `harness-inferential-review.ts` (86 edges, Community 1) - [`scripts/harness-inferential-review.ts`](../../scripts/harness-inferential-review.ts)
-- `terminalHealthPresentation.ts` (75 edges, Community 2) - [`packages/athena-webapp/src/components/pos/terminals/terminalHealthPresentation.ts`](../../packages/athena-webapp/src/components/pos/terminals/terminalHealthPresentation.ts)
+- `terminalHealthPresentation.ts` (76 edges, Community 2) - [`packages/athena-webapp/src/components/pos/terminals/terminalHealthPresentation.ts`](../../packages/athena-webapp/src/components/pos/terminals/terminalHealthPresentation.ts)
 - `dailyOperations.ts` (71 edges, Community 3) - [`packages/athena-webapp/convex/operations/dailyOperations.ts`](../../packages/athena-webapp/convex/operations/dailyOperations.ts)
 - `DailyCloseView.tsx` (65 edges, Community 5) - [`packages/athena-webapp/src/components/operations/DailyCloseView.tsx`](../../packages/athena-webapp/src/components/operations/DailyCloseView.tsx)
 - `projectLocalEvents.ts` (65 edges, Community 4) - [`packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.ts`](../../packages/athena-webapp/convex/pos/application/sync/projectLocalEvents.ts)

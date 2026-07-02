@@ -134,7 +134,9 @@ type ClearStaleDrawerAuthorityPreconditions = {
   localRegisterSessionId: string;
 };
 
-type ClearLocalReviewItemsRequest = { localEventIds: string[] };
+type ClearLocalReviewItemsRequest =
+  | { clearAll: true; limit: number; localEventIds: string[] }
+  | { clearAll: false; localEventIds: string[] };
 
 const CLEAR_LOCAL_REVIEW_ITEMS_HARD_CAP = 100;
 const COLLECT_LOCAL_REVIEW_ITEMS_HARD_CAP = 100;
@@ -381,7 +383,9 @@ async function executeClearLocalReviewItems(
     });
   }
 
-  const reviewEvents = getScopedUploadedLocalReviewEvents(events.value, context);
+  const reviewEvents = request.clearAll
+    ? getScopedLocalReviewEvents(events.value, context)
+    : getScopedUploadedLocalReviewEvents(events.value, context);
   const previouslyClearedEvents = getScopedTerminalRecoveryClearedReviewEvents(
     events.value,
     context,
@@ -410,13 +414,13 @@ async function executeClearLocalReviewItems(
   }
 
   const clearedReviewEventCount = clear.value.length;
-  const remainingReviewEventCount = getScopedUploadedLocalReviewEvents(
-    remainingEvents.value,
-    context,
-  ).length;
+  const remainingReviewEventCount = (request.clearAll
+    ? getScopedLocalReviewEvents
+    : getScopedUploadedLocalReviewEvents)(remainingEvents.value, context)
+    .length;
 
   return completed(context.command, {
-    clearedLocalReviewEventIds: request.localEventIds,
+    clearedLocalReviewEventIds: selection.idsForAcknowledgement,
     diagnostics: {
       clearedReviewEventCount,
       remainingReviewEventCount,
@@ -714,6 +718,41 @@ function selectLocalReviewEventIdsForClear(
   reviewEvents: PosLocalEventRecord[],
   previouslyClearedEvents: PosLocalEventRecord[],
 ) {
+  if (request.clearAll) {
+    const scopedReviewIds = new Set(
+      reviewEvents.map((event) => event.localEventId),
+    );
+    const scopedPreviouslyClearedIds = new Set(
+      previouslyClearedEvents.map((event) => event.localEventId),
+    );
+    const requestedIds = request.localEventIds.slice(
+      0,
+      Math.min(request.limit, CLEAR_LOCAL_REVIEW_ITEMS_HARD_CAP),
+    );
+    const idsToClear = requestedIds.filter((localEventId) =>
+      reviewEvents.some(
+        (event) =>
+          event.localEventId === localEventId &&
+          isClearableLocalReviewEvent(event),
+      ),
+    );
+    return {
+      allRequestedIdsAccountedFor:
+        request.localEventIds.length <= request.limit &&
+        request.localEventIds.every(
+          (localEventId) =>
+            scopedReviewIds.has(localEventId) ||
+            scopedPreviouslyClearedIds.has(localEventId),
+        ) &&
+        reviewEvents.every((event) =>
+          request.localEventIds.includes(event.localEventId) &&
+          isClearableLocalReviewEvent(event),
+        ),
+      idsForAcknowledgement: request.localEventIds,
+      idsToClear,
+    };
+  }
+
   const scopedReviewIds = new Set(
     reviewEvents.map((event) => event.localEventId),
   );
@@ -729,6 +768,7 @@ function selectLocalReviewEventIdsForClear(
         scopedReviewIds.has(localEventId) ||
         scopedPreviouslyClearedIds.has(localEventId),
     ),
+    idsForAcknowledgement: request.localEventIds,
     idsToClear,
   };
 }
@@ -757,6 +797,10 @@ function isDrawerAuthorityLifecycleEvent(event: PosLocalEventRecord) {
     event.type === "register.reopened" ||
     event.type === "transaction.completed"
   );
+}
+
+function isClearableLocalReviewEvent(event: PosLocalEventRecord) {
+  return event.sync.uploaded === true && event.type === "register.opened";
 }
 
 function toRepairTerminalSeedPayload(
@@ -808,13 +852,45 @@ function toClearLocalReviewItemsRequest(
 ): ClearLocalReviewItemsRequest | null {
   const candidates = [command.commandContext, command.payload];
   for (const candidate of candidates) {
+    if (isClearAllLocalReviewRequest(candidate)) {
+      const ids = firstLocalReviewEventIds(candidate);
+      if (ids.length === 0) {
+        return null;
+      }
+      return {
+        clearAll: true,
+        localEventIds: ids,
+        limit: getLocalReviewClearLimit(candidate),
+      };
+    }
+
     const ids = firstLocalReviewEventIds(candidate);
     if (ids.length > 0) {
-      return { localEventIds: ids };
+      return { clearAll: false, localEventIds: ids };
     }
   }
 
   return null;
+}
+
+function isClearAllLocalReviewRequest(value: unknown) {
+  return isRecord(value) && value.localReviewClearAll === true;
+}
+
+function getLocalReviewClearLimit(value: unknown) {
+  if (
+    isRecord(value) &&
+    typeof value.localReviewClearLimit === "number" &&
+    Number.isFinite(value.localReviewClearLimit) &&
+    value.localReviewClearLimit > 0
+  ) {
+    return Math.min(
+      Math.floor(value.localReviewClearLimit),
+      CLEAR_LOCAL_REVIEW_ITEMS_HARD_CAP,
+    );
+  }
+
+  return CLEAR_LOCAL_REVIEW_ITEMS_HARD_CAP;
 }
 
 function firstLocalReviewEventIds(value: unknown): string[] {

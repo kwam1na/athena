@@ -1157,6 +1157,204 @@ describe("POSTerminalDetailViewContent", () => {
     expect(mocks.toastSuccess).toHaveBeenCalledWith("Terminal command queued.");
   });
 
+  it("lets support send the dangerous clear-all local review command from the review table", async () => {
+    const onIssueTerminalRecoveryCommand = vi.fn(async () => ({
+      data: { _id: "command-clear-all" },
+      kind: "ok" as const,
+    }));
+
+    render(
+      <POSTerminalDetailViewContent
+        detail={{
+          ...detail,
+          runtimeStatus: {
+            ...detail.runtimeStatus!,
+            sync: {
+              ...detail.runtimeStatus!.sync,
+              reviewEventCount: 2,
+              reviewEvents: [
+                {
+                  createdAt: Date.now() - 6 * 60_000,
+                  localEventId: "local-review-1",
+                  localRegisterSessionId: "local-session-2",
+                  sequence: 5,
+                  status: "needs_review",
+                  type: "register.opened",
+                  uploaded: true,
+                  uploadSequence: 1,
+                },
+                {
+                  createdAt: Date.now() - 5 * 60_000,
+                  localEventId: "local-review-2",
+                  localRegisterSessionId: "local-session-2",
+                  sequence: 9,
+                  status: "needs_review",
+                  type: "register.opened",
+                  uploaded: true,
+                  uploadSequence: 2,
+                },
+              ],
+              status: "needs_review",
+            },
+          },
+          recovery: {
+            readiness: "needs_terminal_action",
+            terminalActions: [
+              {
+                commandContext: {
+                  expectedBlockerType: "local_review_clear_all",
+                  localReviewClearAll: true,
+                  localReviewClearLimit: 2,
+                  localReviewEventIds: ["local-review-1", "local-review-2"],
+                  reason: "Dangerous cleanup for local review items.",
+                },
+                commandType: "clear_local_review_items",
+                expectedEvidence: {
+                  localReviewClearedEventIds: [
+                    "local-review-1",
+                    "local-review-2",
+                  ],
+                  localReviewEventCount: 0,
+                },
+                reason:
+                  "Dangerous cleanup can clear all local review items from this terminal.",
+              },
+            ],
+          },
+        }}
+        isLoading={false}
+        onIssueTerminalRecoveryCommand={onIssueTerminalRecoveryCommand}
+      />,
+    );
+
+    expect(screen.getByText("Dangerous action")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /Clears all local review items reported by this terminal\.\s+Use only after confirming the review state is safe to discard\./i,
+      ),
+    ).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /clear all review items/i }),
+    );
+
+    await waitFor(() => {
+      expect(onIssueTerminalRecoveryCommand).toHaveBeenCalledWith({
+        action: expect.objectContaining({
+          commandContext: expect.objectContaining({
+            expectedBlockerType: "local_review_clear_all",
+            localReviewClearAll: true,
+            localReviewClearLimit: 2,
+            localReviewEventIds: ["local-review-1", "local-review-2"],
+          }),
+          commandType: "clear_local_review_items",
+          expectedEvidence: {
+            localReviewClearedEventIds: ["local-review-1", "local-review-2"],
+            localReviewEventCount: 0,
+          },
+          kind: "terminal_command",
+        }),
+        terminalId: "terminal-1",
+      });
+    });
+    expect(mocks.toastSuccess).toHaveBeenCalledWith("Terminal command queued.");
+  });
+
+  it("hides dangerous clear-all when the action lacks evidenced review ids", () => {
+    render(
+      <POSTerminalDetailViewContent
+        detail={{
+          ...detail,
+          runtimeStatus: {
+            ...detail.runtimeStatus!,
+            sync: {
+              ...detail.runtimeStatus!.sync,
+              reviewEventCount: 2,
+              reviewEvents: [],
+              status: "needs_review",
+            },
+          },
+          recovery: {
+            readiness: "needs_terminal_action",
+            terminalActions: [
+              {
+                commandContext: {
+                  expectedBlockerType: "local_review_clear_all",
+                  localReviewClearAll: true,
+                  localReviewClearLimit: 2,
+                  reason: "Dangerous cleanup for local review items.",
+                },
+                commandType: "clear_local_review_items",
+                expectedEvidence: {
+                  localReviewEventCount: 0,
+                },
+                reason:
+                  "Dangerous cleanup can clear all local review items from this terminal.",
+              },
+            ],
+          },
+        }}
+        isLoading={false}
+        onIssueTerminalRecoveryCommand={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByText("Dangerous action")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /clear all review items/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("hides dangerous clear-all when evidenced review ids do not match", () => {
+    render(
+      <POSTerminalDetailViewContent
+        detail={{
+          ...detail,
+          runtimeStatus: {
+            ...detail.runtimeStatus!,
+            sync: {
+              ...detail.runtimeStatus!.sync,
+              reviewEventCount: 2,
+              reviewEvents: [],
+              status: "needs_review",
+            },
+          },
+          recovery: {
+            readiness: "needs_terminal_action",
+            terminalActions: [
+              {
+                commandContext: {
+                  expectedBlockerType: "local_review_clear_all",
+                  localReviewClearAll: true,
+                  localReviewClearLimit: 2,
+                  localReviewEventIds: ["local-review-1", "local-review-1"],
+                  reason: "Dangerous cleanup for local review items.",
+                },
+                commandType: "clear_local_review_items",
+                expectedEvidence: {
+                  localReviewClearedEventIds: [
+                    "local-review-1",
+                    "local-review-2",
+                  ],
+                  localReviewEventCount: 0,
+                },
+                reason:
+                  "Dangerous cleanup can clear all local review items from this terminal.",
+              },
+            ],
+          },
+        }}
+        isLoading={false}
+        onIssueTerminalRecoveryCommand={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByText("Dangerous action")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /clear all review items/i }),
+    ).not.toBeInTheDocument();
+  });
+
   it("issues Update app from active terminals even when update readiness is unknown", async () => {
     const onIssueTerminalRecoveryCommand = vi.fn(async () => ({
       data: { _id: "command-update" },

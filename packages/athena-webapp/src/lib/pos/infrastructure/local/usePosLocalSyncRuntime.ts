@@ -1746,6 +1746,7 @@ async function seedRuntimeActiveRegisterSessionDirective(input: {
   });
 
   const seeded = await gateway.seedRegisterSession({
+    cloudRegisterSessionId: input.directive.cloudRegisterSessionId,
     expectedCash: input.directive.expectedCash,
     localRegisterSessionId: input.directive.localRegisterSessionId,
     openingFloat: input.directive.openingFloat,

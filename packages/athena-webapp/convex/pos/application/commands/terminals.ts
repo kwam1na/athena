@@ -594,7 +594,6 @@ async function buildRuntimeActiveRegisterSessionDirective(
   },
 ): Promise<ActiveRegisterSessionDirective | undefined> {
   if (
-    args.activeRegisterSession ||
     !args.runtimeStatus.localStore.available ||
     !args.runtimeStatus.localStore.terminalSeedReady
   ) {
@@ -612,6 +611,22 @@ async function buildRuntimeActiveRegisterSessionDirective(
   if (!cloudRegisterSession) {
     return undefined;
   }
+  if (args.activeRegisterSession) {
+    const runtimeCloudRegisterSession =
+      await getRuntimeActiveCloudRegisterSession(ctx, {
+        activeRegisterSession: args.activeRegisterSession,
+        storeId: args.storeId,
+      });
+    if (
+      !runtimeCloudRegisterSession ||
+      isRegisterSessionSaleUsable(runtimeCloudRegisterSession)
+    ) {
+      return undefined;
+    }
+    if (runtimeCloudRegisterSession._id === cloudRegisterSession._id) {
+      return undefined;
+    }
+  }
 
   return omitUndefined({
     cloudRegisterSessionId: cloudRegisterSession._id,
@@ -624,6 +639,32 @@ async function buildRuntimeActiveRegisterSessionDirective(
     staffProfileId: cloudRegisterSession.openedByStaffProfileId,
     status: "active" as const,
   });
+}
+
+async function getRuntimeActiveCloudRegisterSession(
+  ctx: MutationCtx,
+  args: {
+    activeRegisterSession: NonNullable<
+      ReturnType<typeof cleanActiveRegisterSession>
+    >;
+    storeId: Id<"store">;
+  },
+): Promise<Doc<"registerSession"> | null> {
+  const registerSessionId = ctx.db.normalizeId(
+    "registerSession",
+    args.activeRegisterSession.cloudRegisterSessionId ??
+      args.activeRegisterSession.localRegisterSessionId,
+  );
+  if (!registerSessionId) {
+    return null;
+  }
+
+  const registerSession = await ctx.db.get("registerSession", registerSessionId);
+  if (!registerSession || registerSession.storeId !== args.storeId) {
+    return null;
+  }
+
+  return registerSession;
 }
 
 async function getSaleUsableRegisterSessionForTerminal(

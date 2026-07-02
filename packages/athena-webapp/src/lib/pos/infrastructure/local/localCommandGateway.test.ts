@@ -1496,6 +1496,7 @@ describe("createLocalCommandGateway", () => {
         terminalId: "terminal-1",
         storeId: "store-1",
         registerNumber: "1",
+        cloudRegisterSessionId: "cloud-drawer-1",
         localRegisterSessionId: "cloud-drawer-1",
         staffProfileId: "staff-1",
         openingFloat: 100,
@@ -1510,10 +1511,118 @@ describe("createLocalCommandGateway", () => {
       value: expect.arrayContaining([
         expect.objectContaining({
           localRegisterSessionId: "cloud-drawer-1",
+          sync: { status: "synced" },
           type: "register.opened",
         }),
       ]),
     });
+    const events = await store.listEvents();
+    expect(events.ok).toBe(true);
+    if (events.ok) {
+      const seededEvent = events.value.find(
+        (event) => event.localRegisterSessionId === "cloud-drawer-1",
+      );
+      expect(seededEvent).not.toHaveProperty("uploadSequence");
+    }
+  });
+
+  it("does not duplicate runtime directive register seeding once the drawer is active", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+    });
+    const gateway = createLocalCommandGateway({
+      allowExplicitRegisterSessionWithoutProjection: true,
+      allowRegisterSessionSeedFromRuntimeDirective: true,
+      store,
+    });
+    const seedInput = {
+      terminalId: "terminal-1",
+      storeId: "store-1",
+      registerNumber: "1",
+      cloudRegisterSessionId: "cloud-drawer-1",
+      localRegisterSessionId: "cloud-drawer-1",
+      staffProfileId: "staff-1",
+      openingFloat: 100,
+      expectedCash: 100,
+      runtimeDirectiveRepair: true,
+      status: "active" as const,
+    };
+
+    await expect(gateway.seedRegisterSession(seedInput)).resolves.toBe(true);
+    await expect(gateway.seedRegisterSession(seedInput)).resolves.toBe(true);
+
+    const events = await store.listEvents();
+    expect(events).toMatchObject({ ok: true });
+    if (!events.ok) throw new Error(events.error.message);
+    expect(
+      events.value.filter(
+        (event) =>
+          event.type === "register.opened" &&
+          event.localRegisterSessionId === "cloud-drawer-1",
+      ),
+    ).toHaveLength(1);
+    expect(events.value[0]).toMatchObject({
+      sync: { status: "synced" },
+    });
+    expect(events.value[0]).not.toHaveProperty("uploadSequence");
+    await expect(store.readLocalCloudMapping({
+      entity: "registerSession",
+      localId: "cloud-drawer-1",
+    })).resolves.toMatchObject({
+      ok: true,
+      value: {
+        cloudId: "cloud-drawer-1",
+        localId: "cloud-drawer-1",
+      },
+    });
+  });
+
+  it("writes a missing cloud mapping when runtime directive seeding is already active", async () => {
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+    });
+    await appendOpenDrawer(store);
+    const gateway = createLocalCommandGateway({
+      allowExplicitRegisterSessionWithoutProjection: true,
+      allowRegisterSessionSeedFromRuntimeDirective: true,
+      store,
+    });
+
+    await expect(
+      gateway.seedRegisterSession({
+        terminalId: "terminal-1",
+        storeId: "store-1",
+        registerNumber: "1",
+        cloudRegisterSessionId: "cloud-drawer-1",
+        localRegisterSessionId: "drawer-1",
+        staffProfileId: "staff-1",
+        openingFloat: 100,
+        expectedCash: 100,
+        runtimeDirectiveRepair: true,
+        status: "active",
+      }),
+    ).resolves.toBe(true);
+
+    await expect(store.readLocalCloudMapping({
+      entity: "registerSession",
+      localId: "drawer-1",
+    })).resolves.toMatchObject({
+      ok: true,
+      value: {
+        cloudId: "cloud-drawer-1",
+        localId: "drawer-1",
+      },
+    });
+    const events = await store.listEvents();
+    expect(events).toMatchObject({ ok: true });
+    if (!events.ok) throw new Error(events.error.message);
+    expect(
+      events.value.filter(
+        (event) =>
+          event.type === "register.opened" &&
+          event.localRegisterSessionId === "drawer-1",
+      ),
+    ).toHaveLength(1);
   });
 
   it("rejects runtime directive register seeding when a different local drawer is already operable", async () => {
