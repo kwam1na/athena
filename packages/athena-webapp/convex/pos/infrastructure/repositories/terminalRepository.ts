@@ -205,7 +205,6 @@ function runtimeStatusMaterialSignature(
     source: status.source,
     staffAuthority: status.staffAuthority,
     storeId: status.storeId,
-    sync: stripRuntimeSyncVolatileFields(status.sync),
     terminalId: status.terminalId,
     terminalIntegrity: stripObservedAt(status.terminalIntegrity),
   });
@@ -221,17 +220,6 @@ function stripObservedAt<T extends Record<string, unknown> | undefined>(
   }
 
   const { observedAt: _observedAt, ...rest } = value;
-  return stripUndefined(rest);
-}
-
-function stripRuntimeSyncVolatileFields(
-  sync: Doc<"posTerminalRuntimeStatus">["sync"] | undefined,
-) {
-  if (!sync) {
-    return undefined;
-  }
-
-  const { lastTrigger: _lastTrigger, status: _status, ...rest } = sync;
   return stripUndefined(rest);
 }
 

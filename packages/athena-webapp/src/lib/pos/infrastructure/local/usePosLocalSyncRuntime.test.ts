@@ -4394,6 +4394,7 @@ describe("usePosLocalSyncRuntimeStatus", () => {
           },
           sync: {
             ...runtimeStatus.sync,
+            pendingEventCount: 7,
             lastTrigger: "foreground-interval",
             status: "needs_review",
           },

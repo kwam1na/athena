@@ -134,6 +134,7 @@ describe("terminalRepository runtime status", () => {
       sync: {
         ...buildRuntimeStatus().sync,
         lastTrigger: "interval",
+        pendingEventCount: 3,
         status: "syncing" as const,
       },
     };
