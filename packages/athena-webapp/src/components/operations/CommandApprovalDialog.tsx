@@ -2,7 +2,6 @@ import { useRef } from "react";
 
 import {
   StaffAuthenticationDialog,
-  type StaffAuthMode,
   type StaffAuthenticationResult,
 } from "@/components/staff-auth/StaffAuthenticationDialog";
 import { Button } from "@/components/ui/button";
@@ -17,6 +16,7 @@ import { type NormalizedCommandResult } from "@/lib/errors/runCommand";
 import { presentCommandToast } from "@/lib/errors/presentCommandToast";
 import type { Id } from "~/convex/_generated/dataModel";
 import type {
+  ApprovalRequesterBinding,
   ApprovalRequirement,
   ApprovalResolutionMode,
 } from "~/shared/approvalPolicy";
@@ -53,6 +53,7 @@ export type CommandApprovalDialogProps = {
     pinHash: string;
     reason?: string;
     requiredRole: ApprovalRequirement["requiredRole"];
+    requesterBinding?: ApprovalRequesterBinding;
     requestedByStaffProfileId?: Id<"staffProfile">;
     storeId: Id<"store">;
     subject: ApprovalRequirement["subject"];
@@ -97,7 +98,6 @@ export function CommandApprovalDialog({
   onAuthenticateForApproval,
   onDismiss,
   open,
-  requestedByStaffProfileId,
   storeId,
 }: CommandApprovalDialogProps) {
   const approvedProofRef = useRef<CommandApprovalProofResult | null>(null);
@@ -173,7 +173,8 @@ export function CommandApprovalDialog({
                 pinHash: args.pinHash,
                 reason: approval.reason,
                 requiredRole: approval.requiredRole,
-                requestedByStaffProfileId,
+                requesterBinding: approval.requesterBinding,
+                requestedByStaffProfileId: undefined,
                 storeId,
                 subject: approval.subject,
                 username: args.username,
@@ -189,10 +190,7 @@ export function CommandApprovalDialog({
                 data: toStaffAuthenticationResult(proofResult.data),
               };
             }}
-            onAuthenticated={(
-              _result: StaffAuthenticationResult,
-              _mode: StaffAuthMode,
-            ) => {
+            onAuthenticated={() => {
               const proof = approvedProofRef.current;
               approvedProofRef.current = null;
 

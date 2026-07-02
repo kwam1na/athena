@@ -12,6 +12,10 @@ import { commandResultValidator } from "../lib/commandResultValidators";
 import type { ApprovalSubjectIdentity } from "../../shared/approvalPolicy";
 import { createApprovalProofWithCtx } from "./approvalProofs";
 import {
+  approvalRequesterBindingArgValidator,
+  consumeApprovalRequesterChallengeWithCtx,
+} from "./approvalRequesterChallenges";
+import {
   createPosLocalStaffProofToken,
   hashPosLocalStaffProofToken,
   POS_LOCAL_STAFF_PROOF_TTL_MS,
@@ -234,10 +238,36 @@ async function requireStaffAuthenticationStoreAccessWithCtx(
 async function validateApprovalRequesterStaffProfileWithCtx(
   ctx: MutationCtx,
   args: {
+    requesterBinding?: {
+      challengeId: Id<"approvalRequesterChallenge">;
+      kind: "operational_staff_challenge";
+      requestedByStaffProfileId: Id<"staffProfile">;
+    };
     requestedByStaffProfileId?: Id<"staffProfile">;
+    actionKey: string;
+    requiredRole: OperationalRole;
     storeId: Id<"store">;
+    subject: ApprovalSubjectIdentity;
   },
 ): Promise<CommandResult<{ requestedByStaffProfileId?: Id<"staffProfile"> }>> {
+  if (args.requesterBinding && args.requestedByStaffProfileId) {
+    return userError({
+      code: "validation_failed",
+      message:
+        "Approval requester must use either a direct staff profile or a requester binding.",
+    });
+  }
+
+  if (args.requesterBinding) {
+    return consumeApprovalRequesterChallengeWithCtx(ctx, {
+      actionKey: args.actionKey,
+      binding: args.requesterBinding,
+      requiredRole: args.requiredRole,
+      storeId: args.storeId,
+      subject: args.subject,
+    });
+  }
+
   if (!args.requestedByStaffProfileId) {
     return ok({});
   }
@@ -1035,6 +1065,11 @@ export async function authenticateStaffCredentialForApprovalWithCtx(
     pinHash: string;
     reason?: string;
     requiredRole: OperationalRole;
+    requesterBinding?: {
+      challengeId: Id<"approvalRequesterChallenge">;
+      kind: "operational_staff_challenge";
+      requestedByStaffProfileId: Id<"staffProfile">;
+    };
     requestedByStaffProfileId?: Id<"staffProfile">;
     storeId: Id<"store">;
     subject: ApprovalSubjectIdentity;
@@ -1053,8 +1088,12 @@ export async function authenticateStaffCredentialForApprovalWithCtx(
   }
 
   const requester = await validateApprovalRequesterStaffProfileWithCtx(ctx, {
+    actionKey: args.actionKey,
+    requesterBinding: args.requesterBinding,
     requestedByStaffProfileId: args.requestedByStaffProfileId,
+    requiredRole: args.requiredRole,
     storeId: args.storeId,
+    subject: args.subject,
   });
 
   if (requester.kind !== "ok") {
@@ -1409,6 +1448,7 @@ export const authenticateStaffCredentialForApproval = mutation({
     pinHash: v.string(),
     reason: v.optional(v.string()),
     requiredRole: operationalRoleValidator,
+    requesterBinding: v.optional(approvalRequesterBindingArgValidator),
     requestedByStaffProfileId: v.optional(v.id("staffProfile")),
     storeId: v.id("store"),
     subject: v.object({

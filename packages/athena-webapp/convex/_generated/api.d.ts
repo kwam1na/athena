@@ -158,6 +158,7 @@ import type * as operations_approvalActions from "../operations/approvalActions.
 import type * as operations_approvalAuditEvents from "../operations/approvalAuditEvents.js";
 import type * as operations_approvalProofs from "../operations/approvalProofs.js";
 import type * as operations_approvalRequestHelpers from "../operations/approvalRequestHelpers.js";
+import type * as operations_approvalRequesterChallenges from "../operations/approvalRequesterChallenges.js";
 import type * as operations_approvalRequests from "../operations/approvalRequests.js";
 import type * as operations_customerProfiles from "../operations/customerProfiles.js";
 import type * as operations_dailyClose from "../operations/dailyClose.js";
@@ -583,6 +584,7 @@ declare const fullApi: ApiFromModules<{
   "operations/approvalAuditEvents": typeof operations_approvalAuditEvents;
   "operations/approvalProofs": typeof operations_approvalProofs;
   "operations/approvalRequestHelpers": typeof operations_approvalRequestHelpers;
+  "operations/approvalRequesterChallenges": typeof operations_approvalRequesterChallenges;
   "operations/approvalRequests": typeof operations_approvalRequests;
   "operations/customerProfiles": typeof operations_customerProfiles;
   "operations/dailyClose": typeof operations_dailyClose;

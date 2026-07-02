@@ -31,6 +31,7 @@ import { parseDisplayAmountInput } from "@/lib/pos/displayAmounts";
 import { toOperatorMessage } from "@/lib/errors/operatorMessages";
 import { isApprovalRequiredResult, runCommand } from "@/lib/errors/runCommand";
 import type { CommandApprovalProofResult } from "@/components/operations/CommandApprovalDialog";
+import { toApprovalRequesterBindingArg } from "@/components/operations/approvalRequesterBinding";
 import type { StaffAuthenticationResult } from "@/components/staff-auth/StaffAuthenticationDialog";
 import { useApprovedCommand } from "@/components/operations/useApprovedCommand";
 import { logger } from "@/lib/logger";
@@ -52,7 +53,10 @@ import {
 import { useConvexRegisterState } from "@/lib/pos/infrastructure/convex/registerGateway";
 import { isRegisterSessionSaleUsable } from "~/shared/registerSessionLifecyclePolicy";
 import { userError, type CommandResult } from "~/shared/commandResult";
-import type { ApprovalRequirement } from "~/shared/approvalPolicy";
+import type {
+  ApprovalRequesterBinding,
+  ApprovalRequirement,
+} from "~/shared/approvalPolicy";
 import {
   normalizePosTerminalTransactionCapability,
   posTerminalCanTransactProducts,
@@ -963,6 +967,7 @@ export function useRegisterViewModel(): RegisterViewModel {
       pinHash: string;
       reason?: string;
       requiredRole: ApprovalRequirement["requiredRole"];
+      requesterBinding?: ApprovalRequesterBinding;
       requestedByStaffProfileId?: Id<"staffProfile">;
       storeId: Id<"store">;
       subject: ApprovalRequirement["subject"];
@@ -984,6 +989,9 @@ export function useRegisterViewModel(): RegisterViewModel {
             pinHash: args.pinHash,
             reason: args.reason,
             requiredRole: args.requiredRole,
+            requesterBinding: toApprovalRequesterBindingArg(
+              args.requesterBinding,
+            ),
             requestedByStaffProfileId: args.requestedByStaffProfileId,
             storeId: activeStoreId!,
             subject: args.subject,

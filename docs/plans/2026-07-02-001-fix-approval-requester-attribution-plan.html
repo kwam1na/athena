@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>fix: Separate approval requester attribution</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #172033;
+      --muted: #5e6a7d;
+      --line: #d9dee8;
+      --panel: #f7f9fc;
+      --accent: #315f8f;
+      --risk: #8f3d31;
+      --ok: #28684a;
+    }
+    body {
+      margin: 0;
+      background: #ffffff;
+      color: var(--ink);
+      font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 40px 28px 56px;
+    }
+    header {
+      border-bottom: 1px solid var(--line);
+      margin-bottom: 28px;
+      padding-bottom: 22px;
+    }
+    h1 {
+      font-size: 32px;
+      line-height: 1.15;
+      margin: 0 0 12px;
+      letter-spacing: 0;
+    }
+    h2 {
+      border-top: 1px solid var(--line);
+      font-size: 21px;
+      margin: 30px 0 12px;
+      padding-top: 24px;
+      letter-spacing: 0;
+    }
+    h3 {
+      font-size: 16px;
+      margin: 18px 0 8px;
+      letter-spacing: 0;
+    }
+    a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+    .meta {
+      color: var(--muted);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 18px;
+      margin: 0;
+    }
+    .summary {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 18px 20px;
+    }
+    .grid {
+      display: grid;
+      gap: 16px;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    }
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .card h3 {
+      margin-top: 0;
+    }
+    .tag {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--muted);
+      display: inline-block;
+      font-size: 12px;
+      margin: 2px 5px 2px 0;
+      padding: 2px 8px;
+    }
+    code {
+      background: #eef2f7;
+      border-radius: 4px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.92em;
+      padding: 1px 4px;
+    }
+    ul {
+      padding-left: 21px;
+    }
+    li {
+      margin: 5px 0;
+    }
+    table {
+      border-collapse: collapse;
+      margin: 12px 0;
+      width: 100%;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 9px 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      background: var(--panel);
+    }
+    .risk {
+      border-left: 4px solid var(--risk);
+    }
+    .ok {
+      border-left: 4px solid var(--ok);
+    }
+    @media (max-width: 720px) {
+      main {
+        padding: 28px 18px 44px;
+      }
+      h1 {
+        font-size: 27px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>fix: Separate approval requester attribution</h1>
+      <p class="meta">
+        <span>Type: fix</span>
+        <span>Status: active</span>
+        <span>Date: 2026-07-02</span>
+        <span>Source: <a href="2026-07-02-001-fix-approval-requester-attribution-plan.md">markdown plan</a></span>
+      </p>
+    </header>
+
+    <section class="summary">
+      <h2>Summary</h2>
+      <p>Approval proof minting should stop treating every <code>requestedByStaffProfileId</code> as a staff profile linked to the signed-in Athena account. The plan keeps the anti-spoofing guard for signed-in requester claims, while adding a first-class, server-held requester challenge for POS and Cash Controls workflows where the requester is an operational staff actor.</p>
+    </section>
+
+    <section>
+      <h2>Problem</h2>
+      <p>Valid manager credentials can fail with <code>Requested staff profile does not match the signed-in user.</code> The failure is in proof minting, not manager credential validation. Current POS and Cash Controls workflows can send an operational requester staff profile through a field now interpreted as signed-in-user staff attribution.</p>
+    </section>
+
+    <section>
+      <h2>Core Requirements</h2>
+      <ul>
+        <li>Valid manager credentials must not fail solely because the operational requester staff profile is unlinked.</li>
+        <li>The linked-user guard remains for direct signed-in requester claims.</li>
+        <li>Proof creation and consumption keep exact requester binding.</li>
+        <li>POS corrections, POS opening-float correction, and Cash Controls register workflows are fixed together.</li>
+        <li>Operations Queue, Daily Close, and Daily Opening are characterized for non-regression.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Key Decisions</h2>
+      <div class="grid">
+        <article class="card ok">
+          <h3>First-Class Binding</h3>
+          <p>Add an <code>ApprovalRequesterBinding</code> shape in shared approval policy and matching Convex validation instead of carrying requester data through untyped metadata.</p>
+        </article>
+        <article class="card ok">
+          <h3>Server-Held Challenge</h3>
+          <p>Operational requester binding uses a short-lived Convex challenge that stores requester, action, store, subject, role, expiry, and proof-minting state.</p>
+        </article>
+        <article class="card ok">
+          <h3>Preserve Proof Consumption</h3>
+          <p><code>consumeApprovalProofWithCtx</code> keeps exact action, store, subject, role, requester, expiry, and one-use checks.</p>
+        </article>
+        <article class="card risk">
+          <h3>No React-Trusted Fallback</h3>
+          <p>Protected operational flows must use a server challenge or mint with no requester; caller-provided staff ids are not trusted fallbacks.</p>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <h2>Implementation Units</h2>
+      <div class="grid">
+        <article class="card">
+          <h3>U1. Requester Binding Foundation</h3>
+          <p>Add the shared requester-binding type and Convex-backed requester challenge used by proof minting.</p>
+          <span class="tag">staffCredentials</span><span class="tag">approval challenges</span>
+        </article>
+        <article class="card">
+          <h3>U2. Shared Runner Contract</h3>
+          <p>Update <code>useApprovedCommand</code> and <code>CommandApprovalDialog</code> to pass first-class requester bindings and remove React-trusted operational fallback.</p>
+          <span class="tag">React</span><span class="tag">approval UI</span>
+        </article>
+        <article class="card">
+          <h3>U3. POS Corrections</h3>
+          <p>Fix payment correction, item adjustment, void, and opening-float correction with Staff A requester and Manager Staff B approval coverage.</p>
+          <span class="tag">POS</span><span class="tag">financial correction</span>
+        </article>
+        <article class="card">
+          <h3>U4. Cash Controls</h3>
+          <p>Fix closeout submit, finalize, reopen, reopened submit, opening-float correction, and sync-review requester binding.</p>
+          <span class="tag">cash controls</span><span class="tag">closeout</span>
+        </article>
+        <article class="card">
+          <h3>U5. Adjacent Characterization</h3>
+          <p>Characterize Operations Queue, Daily Close, and Daily Opening so the shared helper changes do not broaden authority.</p>
+          <span class="tag">daily ops</span><span class="tag">queue</span>
+        </article>
+        <article class="card">
+          <h3>U6. Docs and Validation</h3>
+          <p>Add durable solution guidance, run focused approval/POS/cash-control tests, and rebuild graphify after code changes.</p>
+          <span class="tag">docs</span><span class="tag">validation</span>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <h2>Primary Files</h2>
+      <ul>
+        <li><code>packages/athena-webapp/convex/operations/staffCredentials.ts</code></li>
+        <li><code>packages/athena-webapp/convex/operations/approvalProofs.ts</code></li>
+        <li><code>packages/athena-webapp/src/components/operations/useApprovedCommand.tsx</code></li>
+        <li><code>packages/athena-webapp/src/components/pos/transactions/TransactionView.tsx</code></li>
+        <li><code>packages/athena-webapp/src/lib/pos/presentation/register/useRegisterViewModel.ts</code></li>
+        <li><code>packages/athena-webapp/src/components/cash-controls/RegisterSessionView.tsx</code></li>
+        <li><code>packages/athena-webapp/convex/cashControls/closeouts.ts</code></li>
+        <li><code>packages/athena-webapp/convex/cashControls/deposits.ts</code></li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Risk Summary</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Risk</th>
+            <th>Mitigation</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Requester validation relaxes into spoofing.</td>
+            <td>Make requester source explicit and keep linked-user validation for signed-in requester claims.</td>
+          </tr>
+          <tr>
+            <td>UI forwards stale requester ids.</td>
+            <td>Use server-returned requester context in shared runners and test mismatches.</td>
+          </tr>
+          <tr>
+            <td>Manager elevation becomes approval.</td>
+            <td>Add non-regression coverage that elevation cannot satisfy command approval.</td>
+          </tr>
+          <tr>
+            <td>Scope expands into full approval refactor.</td>
+            <td>Defer broader audit normalization to the existing July 1 standard plan.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Verification Focus</h2>
+      <ul>
+        <li>Staff A requester unlinked to signed-in user plus Manager Staff B valid credentials succeeds through a server-held requester challenge for affected POS and Cash Controls workflows.</li>
+        <li>Direct signed-in requester mismatch still fails.</li>
+        <li>Wrong requester, action, store, subject, role, forged challenge, stale challenge, expired proof, and consumed proof fail closed.</li>
+        <li>Operations Queue records reviewer account and approving manager separately.</li>
+        <li>Daily Opening remains free of a manager approval start-day blocker.</li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>

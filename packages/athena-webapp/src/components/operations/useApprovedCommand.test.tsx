@@ -8,6 +8,11 @@ import { useApprovedCommand } from "./useApprovedCommand";
 
 const storeId = "store-1" as Id<"store">;
 const requesterId = "staff-requester" as Id<"staffProfile">;
+const serverRequesterBinding = {
+  kind: "operational_staff_challenge",
+  challengeId: "requester-challenge-1",
+  requestedByStaffProfileId: "staff-server-requester",
+} as const;
 const approval = {
   action: {
     key: "cash_controls.register_session.review_variance",
@@ -26,6 +31,10 @@ const approval = {
     label: "Register 1",
     type: "register_session",
   },
+} satisfies ApprovalRequirement;
+const approvalWithRequesterBinding = {
+  ...approval,
+  requesterBinding: serverRequesterBinding,
 } satisfies ApprovalRequirement;
 
 vi.mock("./CommandApprovalDialog", () => ({
@@ -76,9 +85,11 @@ describe("useApprovedCommand", () => {
 
     expect(result.current.approvalDialog).toMatchObject({
       approval,
-      requestedByStaffProfileId: requesterId,
       storeId,
     });
+    expect(result.current.approvalDialog).not.toHaveProperty(
+      "requestedByStaffProfileId",
+    );
 
     await act(async () => {
       await result.current.approvalDialog?.onApproved({
@@ -135,7 +146,8 @@ describe("useApprovedCommand", () => {
       pinHash: "pin-hash",
       reason: approval.reason,
       requiredRole: approval.requiredRole,
-      requestedByStaffProfileId: requesterId,
+      requesterBinding: undefined,
+      requestedByStaffProfileId: undefined,
       storeId,
       subject: approval.subject,
       username: "manager",
@@ -146,6 +158,62 @@ describe("useApprovedCommand", () => {
     expect(onResult).toHaveBeenCalledWith(ok({ action: "closed" }));
     expect(result.current.pendingApproval).toBeNull();
     expect(result.current.approvalDialog).toBeNull();
+  });
+
+  it("passes the server-returned requester binding instead of React requester fallbacks", async () => {
+    const onResult = vi.fn();
+    const onAuthenticateForApproval = vi.fn().mockResolvedValue(
+      ok({
+        approvalProofId: "proof-1" as Id<"approvalProof">,
+        approvedByStaffProfileId: "manager-1" as Id<"staffProfile">,
+        expiresAt: 123,
+      }),
+    );
+    const execute = vi
+      .fn()
+      .mockResolvedValueOnce({
+        kind: "approval_required",
+        approval: approvalWithRequesterBinding,
+      })
+      .mockResolvedValueOnce(ok({ action: "closed" }));
+    const { result } = renderHook(() =>
+      useApprovedCommand({
+        storeId,
+        onAuthenticateForApproval,
+      }),
+    );
+
+    await act(async () => {
+      await result.current.run({
+        execute,
+        onResult,
+        requestedByStaffProfileId: requesterId,
+        sameSubmissionApproval: {
+          canAttemptInlineManagerProof: true,
+          pinHash: "pin-hash",
+          requestedByStaffProfileId:
+            "staff-react-requester" as Id<"staffProfile">,
+          username: "manager",
+        },
+      });
+    });
+
+    expect(onAuthenticateForApproval).toHaveBeenCalledWith({
+      actionKey: approval.action.key,
+      pinHash: "pin-hash",
+      reason: approval.reason,
+      requiredRole: approval.requiredRole,
+      requesterBinding: serverRequesterBinding,
+      requestedByStaffProfileId: undefined,
+      storeId,
+      subject: approval.subject,
+      username: "manager",
+    });
+    expect(execute).toHaveBeenLastCalledWith({
+      approvalProofId: "proof-1",
+    });
+    expect(onResult).toHaveBeenCalledWith(ok({ action: "closed" }));
+    expect(result.current.pendingApproval).toBeNull();
   });
 
   it("retries same-submission approvals with the queued approval request id", async () => {
@@ -234,9 +302,11 @@ describe("useApprovedCommand", () => {
     expect(onAuthenticateForApproval).not.toHaveBeenCalled();
     expect(result.current.approvalDialog).toMatchObject({
       approval,
-      requestedByStaffProfileId: requesterId,
       storeId,
     });
+    expect(result.current.approvalDialog).not.toHaveProperty(
+      "requestedByStaffProfileId",
+    );
   });
 
   it("surfaces same-submission proof failures without retrying", async () => {

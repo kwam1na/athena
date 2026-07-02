@@ -22,6 +22,7 @@ import {
   type RegisterSessionCloseoutReview,
 } from "../operations/registerSessionCloseoutGate";
 import { recordRegisterSessionTraceBestEffort } from "../operations/registerSessionTracing";
+import { createApprovalRequesterChallengeWithCtx } from "../operations/approvalRequesterChallenges";
 import { authenticateStaffCredentialWithCtx } from "../operations/staffCredentials";
 import type { OperationalRole } from "../operations/staffRoles";
 import { commandResultValidator } from "../lib/commandResultValidators";
@@ -43,7 +44,10 @@ import {
   type ApprovalCommandResult,
   type CommandResult,
 } from "../../shared/commandResult";
-import type { ApprovalRequirement } from "../../shared/approvalPolicy";
+import type {
+  ApprovalRequirement,
+  ApprovalRequesterBinding,
+} from "../../shared/approvalPolicy";
 import { formatStaffDisplayName } from "../../shared/staffDisplayName";
 
 export {
@@ -76,6 +80,35 @@ function formatCloseoutVarianceAmount(
   } catch {
     return currencyFormatter("GHS").format(toDisplayAmount(amount));
   }
+}
+
+async function createApprovalRequesterBindingForCloseout(
+  ctx: MutationCtx,
+  args: {
+    actionKey: string;
+    organizationId?: Id<"organization">;
+    registerSession: Pick<Doc<"registerSession">, "_id" | "registerNumber">;
+    requestedByStaffProfileId?: Id<"staffProfile">;
+    requiredRole: "manager";
+    storeId: Id<"store">;
+  },
+): Promise<CommandResult<{ requesterBinding?: ApprovalRequesterBinding }>> {
+  if (!args.requestedByStaffProfileId) {
+    return ok({});
+  }
+
+  return createApprovalRequesterChallengeWithCtx(ctx, {
+    actionKey: args.actionKey,
+    organizationId: args.organizationId,
+    requestedByStaffProfileId: args.requestedByStaffProfileId,
+    requiredRole: args.requiredRole,
+    storeId: args.storeId,
+    subject: {
+      id: args.registerSession._id,
+      label: args.registerSession.registerNumber,
+      type: "register_session",
+    },
+  });
 }
 
 function buildRegisterCloseoutVarianceTimelineMessage(args: {
@@ -252,6 +285,7 @@ function buildOpeningFloatCorrectionApprovalRequirement(args: {
   previousOpeningFloat: number;
   reason: string;
   registerSession: Doc<"registerSession">;
+  requesterBinding?: ApprovalRequesterBinding;
 }) {
   return {
     action: {
@@ -275,6 +309,7 @@ function buildOpeningFloatCorrectionApprovalRequirement(args: {
       secondaryActionLabel: "Cancel",
     },
     resolutionModes: [{ kind: "inline_manager_proof" as const }],
+    ...(args.requesterBinding ? { requesterBinding: args.requesterBinding } : {}),
     metadata: {
       correctedOpeningFloat: args.correctedOpeningFloat,
       previousOpeningFloat: args.previousOpeningFloat,
@@ -404,6 +439,7 @@ export function buildRegisterSessionVarianceApprovalRequirement(args: {
   countedCash: number;
   expectedCash: number;
   registerSession: Pick<Doc<"registerSession">, "_id" | "registerNumber">;
+  requesterBinding?: ApprovalRequesterBinding;
 }): ApprovalRequirement {
   return {
     action: REGISTER_VARIANCE_REVIEW_ACTION,
@@ -440,6 +476,7 @@ export function buildRegisterSessionVarianceApprovalRequirement(args: {
             kind: "inline_manager_proof",
           },
         ],
+    ...(args.requesterBinding ? { requesterBinding: args.requesterBinding } : {}),
     selfApproval: "allowed",
     subject: {
       id: args.registerSession._id,
@@ -859,6 +896,10 @@ export const submitRegisterSessionCloseout = mutation({
     const latestReopenedCloseout = getLatestReopenedCloseoutRecord(registerSession);
     let closeoutSubmitActorStaffProfileId = submitActorStaffProfileId;
     let approvedByStaffProfileId: Id<"staffProfile"> | undefined;
+    let hasMatchingPendingVarianceApprovalRequest = false;
+    let pendingVarianceApprovalRequesterStaffProfileId:
+      | Id<"staffProfile">
+      | undefined;
 
     if (
       registerSession.status === "closing" &&
@@ -895,15 +936,36 @@ export const submitRegisterSessionCloseout = mutation({
           pendingVariance === closeoutReview.variance &&
           pendingNotes === submittedNotes
         ) {
-          return approvalRequired(
-            buildRegisterSessionVarianceApprovalRequirement({
-              approvalRequestId: pendingApprovalRequest._id,
-              closeoutReview,
-              countedCash: args.countedCash,
-              expectedCash: registerSession.expectedCash,
-              registerSession,
-            }),
-          );
+          hasMatchingPendingVarianceApprovalRequest = true;
+          pendingVarianceApprovalRequesterStaffProfileId =
+            pendingApprovalRequest.requestedByStaffProfileId;
+
+          if (!args.approvalProofId) {
+            const requesterBindingResult =
+              await createApprovalRequesterBindingForCloseout(ctx, {
+                actionKey: REGISTER_VARIANCE_REVIEW_ACTION_KEY,
+                organizationId: registerSession.organizationId,
+                registerSession,
+                requestedByStaffProfileId:
+                  pendingApprovalRequest.requestedByStaffProfileId,
+                requiredRole: "manager",
+                storeId: args.storeId,
+              });
+            if (requesterBindingResult.kind !== "ok") {
+              return requesterBindingResult;
+            }
+
+            return approvalRequired(
+              buildRegisterSessionVarianceApprovalRequirement({
+                approvalRequestId: pendingApprovalRequest._id,
+                closeoutReview,
+                countedCash: args.countedCash,
+                expectedCash: registerSession.expectedCash,
+                registerSession,
+                requesterBinding: requesterBindingResult.data.requesterBinding,
+              }),
+            );
+          }
         }
 
         // A changed count or note is a correction before review. Let the
@@ -929,7 +991,6 @@ export const submitRegisterSessionCloseout = mutation({
         action: REGISTER_CLOSEOUT_MODIFICATION_SUBMIT_ACTION,
         approvalProofId: args.closeoutModificationApprovalProofId,
         requiredRole: "manager",
-        requestedByStaffProfileId: closeoutSubmitActorStaffProfileId,
         storeId: args.storeId,
         subject: {
           type: "register_session",
@@ -973,7 +1034,10 @@ export const submitRegisterSessionCloseout = mutation({
         action: REGISTER_VARIANCE_REVIEW_ACTION,
         approvalProofId: args.approvalProofId,
         requiredRole: "manager",
-        requestedByStaffProfileId: closeoutSubmitActorStaffProfileId,
+        requestedByStaffProfileId:
+          hasMatchingPendingVarianceApprovalRequest
+            ? pendingVarianceApprovalRequesterStaffProfileId
+            : closeoutSubmitActorStaffProfileId,
         storeId: args.storeId,
         subject: {
           type: "register_session",
@@ -1020,12 +1084,26 @@ export const submitRegisterSessionCloseout = mutation({
       );
 
       if (actorCanReviewVariance) {
+        const requesterBindingResult =
+          await createApprovalRequesterBindingForCloseout(ctx, {
+            actionKey: REGISTER_VARIANCE_REVIEW_ACTION_KEY,
+            organizationId: registerSession.organizationId,
+            registerSession,
+            requestedByStaffProfileId: closeoutSubmitActorStaffProfileId,
+            requiredRole: "manager",
+            storeId: args.storeId,
+          });
+        if (requesterBindingResult.kind !== "ok") {
+          return requesterBindingResult;
+        }
+
         return approvalRequired(
           buildRegisterSessionVarianceApprovalRequirement({
             closeoutReview,
             countedCash: args.countedCash,
             expectedCash: registerSession.expectedCash,
             registerSession,
+            requesterBinding: requesterBindingResult.data.requesterBinding,
           }),
         );
       }
@@ -1103,14 +1181,30 @@ export const submitRegisterSessionCloseout = mutation({
     }
 
     if (closeoutReview.requiresApproval) {
-      await cancelPendingApprovalIfNeeded({
-        approvalRequestId: registerSession.managerApprovalRequestId,
-        ctx,
-        registerSessionId: registerSession._id,
-        reviewedByStaffProfileId: closeoutSubmitActorStaffProfileId,
-        reviewedByUserId: actorUserId,
-        storeId: args.storeId,
-      });
+      if (
+        approvedByStaffProfileId &&
+        hasMatchingPendingVarianceApprovalRequest &&
+        registerSession.managerApprovalRequestId &&
+        args.approvalProofId
+      ) {
+        await ctx.db.patch("approvalRequest", registerSession.managerApprovalRequestId, {
+          status: "approved",
+          decisionApprovedByStaffProfileId: approvedByStaffProfileId,
+          decisionApprovalProofId: args.approvalProofId,
+          reviewedByStaffProfileId: approvedByStaffProfileId,
+          reviewedByUserId: actorUserId,
+          decidedAt: Date.now(),
+        });
+      } else {
+        await cancelPendingApprovalIfNeeded({
+          approvalRequestId: registerSession.managerApprovalRequestId,
+          ctx,
+          registerSessionId: registerSession._id,
+          reviewedByStaffProfileId: closeoutSubmitActorStaffProfileId,
+          reviewedByUserId: actorUserId,
+          storeId: args.storeId,
+        });
+      }
 
       if (approvedByStaffProfileId) {
         const closedSession = await ctx.runMutation(
@@ -1213,6 +1307,21 @@ export const submitRegisterSessionCloseout = mutation({
         })
       );
       const approvalRequest = await ctx.db.get("approvalRequest", approvalRequestId);
+      const requesterBindingResult = await createApprovalRequesterBindingForCloseout(
+        ctx,
+        {
+          actionKey: REGISTER_VARIANCE_REVIEW_ACTION_KEY,
+          organizationId: registerSession.organizationId,
+          registerSession,
+          requestedByStaffProfileId: closeoutSubmitActorStaffProfileId,
+          requiredRole: "manager",
+          storeId: args.storeId,
+        },
+      );
+      if (requesterBindingResult.kind !== "ok") {
+        return requesterBindingResult;
+      }
+
       const approvalRequirement =
         buildRegisterSessionVarianceApprovalRequirement({
           approvalRequestId,
@@ -1220,6 +1329,7 @@ export const submitRegisterSessionCloseout = mutation({
           countedCash: args.countedCash,
           expectedCash: registerSession.expectedCash,
           registerSession,
+          requesterBinding: requesterBindingResult.data.requesterBinding,
         });
       const approvalRequestCreatedAt = approvalRequest?.createdAt ?? Date.now();
       const closeoutContext = await resolveRegisterSessionOperatingDateContext(ctx, {
@@ -1481,12 +1591,25 @@ export const finalizeRegisterSessionCloseout = mutation({
     }
 
     if (closeoutReview.requiresApproval && !args.approvalProofId) {
+      const requesterBindingResult = await createApprovalRequesterBindingForCloseout(ctx, {
+        actionKey: REGISTER_VARIANCE_REVIEW_ACTION_KEY,
+        organizationId: registerSession.organizationId,
+        registerSession,
+        requestedByStaffProfileId,
+        requiredRole: "manager",
+        storeId: args.storeId,
+      });
+      if (requesterBindingResult.kind !== "ok") {
+        return requesterBindingResult;
+      }
+
       return approvalRequired(
         buildRegisterSessionVarianceApprovalRequirement({
           closeoutReview,
           countedCash: registerSession.countedCash,
           expectedCash: registerSession.expectedCash,
           registerSession,
+          requesterBinding: requesterBindingResult.data.requesterBinding,
         }),
       );
     }
@@ -1495,12 +1618,26 @@ export const finalizeRegisterSessionCloseout = mutation({
       const approvalProofId = args.approvalProofId;
 
       if (!approvalProofId) {
+        const requesterBindingResult =
+          await createApprovalRequesterBindingForCloseout(ctx, {
+            actionKey: REGISTER_VARIANCE_REVIEW_ACTION_KEY,
+            organizationId: registerSession.organizationId,
+            registerSession,
+            requestedByStaffProfileId,
+            requiredRole: "manager",
+            storeId: args.storeId,
+          });
+        if (requesterBindingResult.kind !== "ok") {
+          return requesterBindingResult;
+        }
+
         return approvalRequired(
           buildRegisterSessionVarianceApprovalRequirement({
             closeoutReview,
             countedCash: registerSession.countedCash,
             expectedCash: registerSession.expectedCash,
             registerSession,
+            requesterBinding: requesterBindingResult.data.requesterBinding,
           }),
         );
       }
@@ -1947,12 +2084,25 @@ export const correctRegisterSessionOpeningFloat = mutation({
     const previousOpeningFloat = registerSession.openingFloat;
 
     if (!args.approvalProofId) {
+      const requesterBindingResult = await createApprovalRequesterBindingForCloseout(ctx, {
+        actionKey: REGISTER_OPENING_FLOAT_CORRECTION_ACTION_KEY,
+        organizationId: registerSession.organizationId,
+        registerSession,
+        requestedByStaffProfileId: actorStaffProfileId,
+        requiredRole: "manager",
+        storeId: args.storeId,
+      });
+      if (requesterBindingResult.kind !== "ok") {
+        return requesterBindingResult;
+      }
+
       return approvalRequired(
         buildOpeningFloatCorrectionApprovalRequirement({
           correctedOpeningFloat: args.correctedOpeningFloat,
           previousOpeningFloat,
           reason,
           registerSession,
+          requesterBinding: requesterBindingResult.data.requesterBinding,
         }),
       );
     }

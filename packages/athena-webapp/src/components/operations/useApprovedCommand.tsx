@@ -1,7 +1,10 @@
 import { useCallback, useMemo, useState } from "react";
 
 import type { Id } from "~/convex/_generated/dataModel";
-import type { ApprovalRequirement } from "~/shared/approvalPolicy";
+import type {
+  ApprovalRequesterBinding,
+  ApprovalRequirement,
+} from "~/shared/approvalPolicy";
 import {
   isApprovalRequiredResult,
   type NormalizedApprovalCommandResult,
@@ -51,6 +54,7 @@ type UseApprovedCommandArgs = {
     pinHash: string;
     reason?: string;
     requiredRole: ApprovalRequirement["requiredRole"];
+    requesterBinding?: ApprovalRequesterBinding;
     requestedByStaffProfileId?: Id<"staffProfile">;
     storeId: Id<"store">;
     subject: ApprovalRequirement["subject"];
@@ -145,9 +149,8 @@ export function useApprovedCommand({ onAuthenticateForApproval, storeId }: UseAp
           pinHash: args.sameSubmissionApproval.pinHash,
           reason: result.approval.reason,
           requiredRole: result.approval.requiredRole,
-          requestedByStaffProfileId:
-            args.sameSubmissionApproval.requestedByStaffProfileId ??
-            args.requestedByStaffProfileId,
+          requesterBinding: result.approval.requesterBinding,
+          requestedByStaffProfileId: undefined,
           storeId,
           subject: result.approval.subject,
           username: args.sameSubmissionApproval.username,
@@ -195,7 +198,6 @@ export function useApprovedCommand({ onAuthenticateForApproval, storeId }: UseAp
       },
       onDismiss: () => setPendingApproval(null),
       open: Boolean(pendingApproval),
-      requestedByStaffProfileId: pendingApproval.requestedByStaffProfileId,
       storeId,
     };
   }, [handleResult, onAuthenticateForApproval, pendingApproval, storeId]);

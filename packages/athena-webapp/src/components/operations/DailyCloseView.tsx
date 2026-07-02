@@ -39,7 +39,10 @@ import type {
   ApprovalCommandResult,
   CommandResult,
 } from "~/shared/commandResult";
-import type { ApprovalRequirement } from "~/shared/approvalPolicy";
+import type {
+  ApprovalRequesterBinding,
+  ApprovalRequirement,
+} from "~/shared/approvalPolicy";
 import { currencyFormatter } from "~/shared/currencyFormatter";
 import View from "../View";
 import { FadeIn } from "../common/FadeIn";
@@ -70,6 +73,7 @@ import {
   useApprovedCommand,
   type ApprovalRetryArgs,
 } from "./useApprovedCommand";
+import { toApprovalRequesterBindingArg } from "./approvalRequesterBinding";
 import { OperationReviewWorkspace } from "./OperationReviewWorkspace";
 import { OperationReviewItemCard } from "./OperationReviewItemCard";
 import { OperationsSummaryMetric } from "./OperationsSummaryMetric";
@@ -298,6 +302,7 @@ type DailyCloseViewContentProps = {
     pinHash: string;
     reason?: string;
     requiredRole: ApprovalRequirement["requiredRole"];
+    requesterBinding?: ApprovalRequesterBinding;
     requestedByStaffProfileId?: Id<"staffProfile">;
     storeId: Id<"store">;
     subject: ApprovalRequirement["subject"];
@@ -3932,6 +3937,9 @@ function DailyCloseConnectedView({
               pinHash: args.pinHash,
               reason: args.reason,
               requiredRole: args.requiredRole,
+              requesterBinding: toApprovalRequesterBindingArg(
+                args.requesterBinding,
+              ),
               requestedByStaffProfileId: args.requestedByStaffProfileId,
               storeId: args.storeId,
               subject: args.subject,

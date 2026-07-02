@@ -90,6 +90,11 @@ vi.mock("@/components/ui/dialog", () => {
 const storeId = "store-1" as Id<"store">;
 const staffProfileId = "staff-1" as Id<"staffProfile">;
 const approvalProofId = "proof-1" as Id<"approvalProof">;
+const requesterBinding = {
+  kind: "operational_staff_challenge",
+  challengeId: "requester-challenge-1",
+  requestedByStaffProfileId: "staff-server-requester",
+} as const;
 
 const inlineApproval = {
   action: {
@@ -240,6 +245,7 @@ describe("CommandApprovalDialog", () => {
         pinHash: "hashed:1234",
         reason: "Payment method changes need manager approval.",
         requiredRole: "manager",
+        requesterBinding: undefined,
         requestedByStaffProfileId: undefined,
         storeId,
         subject: inlineApproval.subject,
@@ -252,6 +258,55 @@ describe("CommandApprovalDialog", () => {
       approvedByStaffProfileId: staffProfileId,
       expiresAt: 1234,
     });
+  });
+
+  it("passes server requester binding unchanged for proof creation", async () => {
+    const approvalWithRequesterBinding = {
+      ...inlineApproval,
+      requesterBinding,
+    } satisfies CommandApprovalDialogProps["approval"];
+    const { user, onAuthenticateForApproval } = renderDialog({
+      approval: approvalWithRequesterBinding,
+      requestedByStaffProfileId: "staff-react-requester" as Id<"staffProfile">,
+    });
+
+    await submitCredentials(user);
+
+    await waitFor(() =>
+      expect(onAuthenticateForApproval).toHaveBeenCalledWith({
+        actionKey: "transaction.payment_method_correction",
+        pinHash: "hashed:1234",
+        reason: "Payment method changes need manager approval.",
+        requiredRole: "manager",
+        requesterBinding,
+        requestedByStaffProfileId: undefined,
+        storeId,
+        subject: inlineApproval.subject,
+        username: "manager",
+      }),
+    );
+  });
+
+  it("does not fall back to a React requester when approval has no binding", async () => {
+    const { user, onAuthenticateForApproval } = renderDialog({
+      requestedByStaffProfileId: "staff-react-requester" as Id<"staffProfile">,
+    });
+
+    await submitCredentials(user);
+
+    await waitFor(() =>
+      expect(onAuthenticateForApproval).toHaveBeenCalledWith({
+        actionKey: "transaction.payment_method_correction",
+        pinHash: "hashed:1234",
+        reason: "Payment method changes need manager approval.",
+        requiredRole: "manager",
+        requesterBinding: undefined,
+        requestedByStaffProfileId: undefined,
+        storeId,
+        subject: inlineApproval.subject,
+        username: "manager",
+      }),
+    );
   });
 
   it("dismisses without reporting an approval proof", async () => {

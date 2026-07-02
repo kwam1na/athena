@@ -56,6 +56,7 @@ import {
   type StaffAuthenticationResult,
 } from "../../staff-auth/StaffAuthenticationDialog";
 import { useProtectedAdminPageState } from "~/src/hooks/useProtectedAdminPageState";
+import { toApprovalRequesterBindingArg } from "../../operations/approvalRequesterBinding";
 import { useApprovedCommand } from "../../operations/useApprovedCommand";
 import type { ApprovalRequirement } from "~/shared/approvalPolicy";
 import { formatStoredAmount } from "~/src/lib/pos/displayAmounts";
@@ -422,6 +423,9 @@ export function TransactionView() {
             pinHash: args.pinHash,
             reason: args.reason,
             requiredRole: args.requiredRole,
+            requesterBinding: toApprovalRequesterBindingArg(
+              args.requesterBinding,
+            ),
             requestedByStaffProfileId: args.requestedByStaffProfileId,
             storeId: activeStore._id,
             subject: args.subject,
@@ -457,6 +461,9 @@ export function TransactionView() {
             pinHash: args.pinHash,
             reason: args.reason,
             requiredRole: args.requiredRole,
+            requesterBinding: toApprovalRequesterBindingArg(
+              args.requesterBinding,
+            ),
             requestedByStaffProfileId: args.requestedByStaffProfileId,
             storeId: activeStore._id,
             subject: args.subject,
@@ -492,6 +499,9 @@ export function TransactionView() {
             pinHash: args.pinHash,
             reason: args.reason,
             requiredRole: args.requiredRole,
+            requesterBinding: toApprovalRequesterBindingArg(
+              args.requesterBinding,
+            ),
             requestedByStaffProfileId: args.requestedByStaffProfileId,
             storeId: activeStore._id,
             subject: args.subject,
@@ -1032,6 +1042,7 @@ export function TransactionView() {
                 approvalArgs.approvalProofId ?? args?.approvalProofId,
               paymentMethod,
               reason,
+              staffProofToken: args?.staff?.posLocalStaffProof?.token,
               transactionId: transactionId as Id<"posTransaction">,
             }) as Promise<
               ApprovalCommandResult<PaymentMethodCorrectionResultData>

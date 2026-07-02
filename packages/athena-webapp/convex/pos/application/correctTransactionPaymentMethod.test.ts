@@ -6,6 +6,7 @@ import {
   resolvePaymentMethodCorrectionApprovalDecisionWithCtx,
 } from "./commands/correctTransaction";
 import { consumeCommandApprovalProofWithCtx } from "../../operations/approvalActions";
+import { createApprovalRequesterChallengeWithCtx } from "../../operations/approvalRequesterChallenges";
 import { recordOperationalEventWithCtx } from "../../operations/operationalEvents";
 import { correctSameAmountSinglePaymentAllocationWithCtx } from "../../operations/paymentAllocations";
 import {
@@ -27,6 +28,21 @@ vi.mock("../../operations/approvalActions", () => ({
   consumeCommandApprovalProofWithCtx: vi.fn(),
 }));
 
+vi.mock(
+  "../../operations/approvalRequesterChallenges",
+  async (importOriginal) => {
+    const actual =
+      await importOriginal<
+        typeof import("../../operations/approvalRequesterChallenges")
+      >();
+
+    return {
+      ...actual,
+      createApprovalRequesterChallengeWithCtx: vi.fn(),
+    };
+  },
+);
+
 vi.mock("../../operations/paymentAllocations", () => ({
   correctSameAmountSinglePaymentAllocationWithCtx: vi.fn(),
 }));
@@ -38,6 +54,16 @@ vi.mock("../infrastructure/repositories/transactionRepository", () => ({
 
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.mocked(createApprovalRequesterChallengeWithCtx).mockResolvedValue({
+    kind: "ok",
+    data: {
+      requesterBinding: {
+        kind: "operational_staff_challenge",
+        challengeId: "requester-challenge-1",
+        requestedByStaffProfileId: "cashier-1",
+      },
+    },
+  } as never);
 });
 
 describe("correctTransactionPaymentMethod", () => {
@@ -94,6 +120,11 @@ describe("correctTransactionPaymentMethod", () => {
           id: "txn-1",
           type: "pos_transaction",
         },
+        requesterBinding: {
+          kind: "operational_staff_challenge",
+          challengeId: "requester-challenge-1",
+          requestedByStaffProfileId: "cashier-1",
+        },
         resolutionModes: [
           {
             kind: "inline_manager_proof",
@@ -123,6 +154,21 @@ describe("correctTransactionPaymentMethod", () => {
           paymentMethod: "card",
           previousPaymentMethod: "cash",
         }),
+      }),
+    );
+    expect(createApprovalRequesterChallengeWithCtx).toHaveBeenCalledWith(
+      ctx as never,
+      expect.objectContaining({
+        actionKey: "pos.transaction.correct_payment_method",
+        organizationId: "org-1",
+        requestedByStaffProfileId: "cashier-1",
+        requiredRole: "manager",
+        storeId: "store-1",
+        subject: {
+          id: "txn-1",
+          label: "Transaction #POS-111111",
+          type: "pos_transaction",
+        },
       }),
     );
     expect(correctSameAmountSinglePaymentAllocationWithCtx).not.toHaveBeenCalled();

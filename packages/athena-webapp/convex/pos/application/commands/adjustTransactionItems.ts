@@ -2,6 +2,7 @@ import type { Id } from "../../../_generated/dataModel";
 import type { MutationCtx } from "../../../_generated/server";
 import type { ApprovalRequirement } from "../../../../shared/approvalPolicy";
 import { buildApprovalRequest } from "../../../operations/approvalRequestHelpers";
+import { createApprovalRequesterChallengeWithCtx } from "../../../operations/approvalRequesterChallenges";
 import {
   APPROVAL_ACTIONS,
   consumeCommandApprovalProofWithCtx,
@@ -258,6 +259,7 @@ async function buildServerAdjustmentPlan(
 function buildAdjustmentApprovalRequirement(args: {
   approvalRequestId?: Id<"approvalRequest">;
   plan: AdjustmentPlan;
+  requesterBinding?: ApprovalRequirement["requesterBinding"];
   transaction: {
     _id: Id<"posTransaction">;
     transactionNumber: string;
@@ -289,6 +291,9 @@ function buildAdjustmentApprovalRequirement(args: {
         approvalRequestId: args.approvalRequestId,
       },
     ],
+    ...(args.requesterBinding
+      ? { requesterBinding: args.requesterBinding }
+      : {}),
     metadata: {
       correctedTotal: args.plan.correctedTotal,
       deltaTotal: args.plan.deltaTotal,
@@ -448,6 +453,25 @@ async function createApprovalRequestForAdjustment(
   },
 ) {
   const store = await getStoreById(ctx, args.transaction.storeId);
+  const requesterBindingResult = args.actorStaffProfileId
+    ? await createApprovalRequesterChallengeWithCtx(ctx, {
+        actionKey: ITEM_ADJUSTMENT_ACTION_KEY,
+        organizationId: store?.organizationId,
+        requestedByStaffProfileId: args.actorStaffProfileId,
+        requiredRole: "manager",
+        storeId: args.transaction.storeId,
+        subject: {
+          id: args.plan.payloadSubject,
+          label: `${transactionLabel(args.transaction)} item adjustment`,
+          type: ITEM_ADJUSTMENT_SUBJECT_TYPE,
+        },
+      })
+    : null;
+
+  if (requesterBindingResult?.kind === "user_error") {
+    throw new Error(requesterBindingResult.error.message);
+  }
+
   const approvalRequestId = await ctx.db.insert(
     "approvalRequest",
     buildApprovalRequest({
@@ -507,7 +531,10 @@ async function createApprovalRequestForAdjustment(
     transaction: args.transaction,
   });
 
-  return approvalRequestId;
+  return {
+    approvalRequestId,
+    requesterBinding: requesterBindingResult?.data.requesterBinding,
+  };
 }
 
 async function findPendingItemAdjustmentApprovalRequest(
@@ -632,13 +659,14 @@ async function consumeItemAdjustmentApprovalProof(
     actorStaffProfileId?: Id<"staffProfile">;
     approvalProofId: Id<"approvalProof">;
     plan: AdjustmentPlan;
+    requestedByStaffProfileId?: Id<"staffProfile">;
     storeId: Id<"store">;
   },
 ) {
   const proof = await consumeCommandApprovalProofWithCtx(ctx, {
     action: ITEM_ADJUSTMENT_ACTION,
     approvalProofId: args.approvalProofId,
-    requestedByStaffProfileId: args.actorStaffProfileId,
+    requestedByStaffProfileId: args.requestedByStaffProfileId,
     requiredRole: "manager",
     storeId: args.storeId,
     subject: {
@@ -1121,21 +1149,45 @@ export async function adjustTransactionItems(
       });
     }
 
-    const approvalRequestId =
-      pendingApprovalRequest?._id ??
-      (await createApprovalRequestForAdjustment(ctx, {
+    const pendingRequesterBindingResult =
+      pendingApprovalRequest?.requestedByStaffProfileId
+        ? await createApprovalRequesterChallengeWithCtx(ctx, {
+            actionKey: ITEM_ADJUSTMENT_ACTION_KEY,
+            requestedByStaffProfileId:
+              pendingApprovalRequest.requestedByStaffProfileId,
+            requiredRole: "manager",
+            storeId: transaction.storeId,
+            subject: {
+              id: plan.payloadSubject,
+              label: `${transactionLabel(transaction)} item adjustment`,
+              type: ITEM_ADJUSTMENT_SUBJECT_TYPE,
+            },
+          })
+        : null;
+
+    if (pendingRequesterBindingResult?.kind === "user_error") {
+      throw new Error(pendingRequesterBindingResult.error.message);
+    }
+
+    const createdApprovalRequest = pendingApprovalRequest
+      ? null
+      : await createApprovalRequestForAdjustment(ctx, {
         actorStaffProfileId: args.actorStaffProfileId,
         actorUserId: args.actorUserId,
         plan,
         reason: args.reason,
         transaction,
-      }));
+      });
 
     return {
       action: "approval_required" as const,
       approval: buildAdjustmentApprovalRequirement({
-        approvalRequestId,
+        approvalRequestId:
+          pendingApprovalRequest?._id ?? createdApprovalRequest?.approvalRequestId,
         plan,
+        requesterBinding:
+          pendingRequesterBindingResult?.data.requesterBinding ??
+          createdApprovalRequest?.requesterBinding,
         transaction,
       }),
       payloadFingerprint: plan.fingerprint,
@@ -1164,6 +1216,8 @@ export async function adjustTransactionItems(
     actorStaffProfileId: args.actorStaffProfileId,
     approvalProofId: args.approvalProofId,
     plan,
+    requestedByStaffProfileId:
+      approvalRequest ? approvalRequest.requestedByStaffProfileId : args.actorStaffProfileId,
     storeId: transaction.storeId,
   });
   const result = await applyApprovedAdjustment(ctx, {

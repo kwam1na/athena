@@ -1070,7 +1070,9 @@ describe("cash control closeouts", () => {
   it("requires the same manager to submit a reopened closeout correction", async () => {
     const runMutation = vi.fn();
     const patch = vi.fn();
-    const insert = vi.fn();
+    const insert = vi.fn(async (table: string) =>
+      table === "approvalRequesterChallenge" ? "requester-challenge-1" : "event-1",
+    );
     const registerSession = {
       _id: "session-1",
       closeoutRecords: [
@@ -1101,7 +1103,6 @@ describe("cash control closeouts", () => {
               actionKey: "cash_controls.register_session.submit_reopened_closeout",
               approvedByStaffProfileId: "manager-2",
               expiresAt: Date.now() + 60_000,
-              requestedByStaffProfileId: "staff-1",
               requiredRole: "manager",
               storeId: "store-1",
               subjectId: "session-1",
@@ -1173,7 +1174,9 @@ describe("cash control closeouts", () => {
       countedCash: 20000,
       status: "closing",
     }));
-    const insert = vi.fn();
+    const insert = vi.fn(async (table: string) =>
+      table === "approvalRequesterChallenge" ? "requester-challenge-1" : "event-1",
+    );
     const ctx = {
       db: {
         get: vi.fn(async (table: string) => {
@@ -1228,6 +1231,11 @@ describe("cash control closeouts", () => {
           key: "cash_controls.register_session.review_variance",
         },
         requiredRole: "manager",
+        requesterBinding: {
+          challengeId: "requester-challenge-1",
+          kind: "operational_staff_challenge",
+          requestedByStaffProfileId: "staff-1",
+        },
         resolutionModes: [{ kind: "inline_manager_proof" }],
         subject: {
           id: "session-1",
@@ -1238,7 +1246,21 @@ describe("cash control closeouts", () => {
     expect(result.approval.resolutionModes).not.toContainEqual(
       expect.objectContaining({ kind: "async_request" }),
     );
-    expect(insert).not.toHaveBeenCalled();
+    expect(insert).toHaveBeenCalledWith(
+      "approvalRequesterChallenge",
+      expect.objectContaining({
+        actionKey: "cash_controls.register_session.review_variance",
+        requestedByStaffProfileId: "staff-1",
+        requiredRole: "manager",
+        storeId: "store-1",
+        subjectId: "session-1",
+        subjectType: "register_session",
+      }),
+    );
+    expect(insert).not.toHaveBeenCalledWith(
+      "approvalRequest",
+      expect.anything(),
+    );
   });
 
   it("submits closeout without final closure when pending void approvals exist", async () => {
@@ -1530,6 +1552,134 @@ describe("cash control closeouts", () => {
     );
   });
 
+  it("returns an operational requester binding for unlinked staff variance closeout submissions", async () => {
+    const registerSession = {
+      _id: "session-1",
+      expectedCash: 70000,
+      openedAt: 1,
+      organizationId: "org-1",
+      registerNumber: "A1",
+      status: "active",
+      storeId: "store-1",
+      terminalId: "terminal-1",
+    };
+    const runMutation = vi.fn(async () => ({
+      ...registerSession,
+      countedCash: 60000,
+      status: "closing",
+    }));
+    const patch = vi.fn();
+    const insert = vi.fn(async (table: string) => {
+      if (table === "approvalRequest") return "approval-1";
+      if (table === "approvalRequesterChallenge") return "requester-challenge-1";
+      return "event-1";
+    });
+    const ctx = {
+      db: {
+        get: vi.fn(async (table: string, id?: string) => {
+          if (table === "store") {
+            return { _id: "store-1", currency: "GHS", organizationId: "org-1" };
+          }
+          if (table === "registerSession") {
+            return registerSession;
+          }
+          if (table === "approvalRequest" && id === "approval-1") {
+            return {
+              _id: "approval-1",
+              createdAt: 1234,
+              requestedByStaffProfileId: "cashier-1",
+            };
+          }
+          if (table === "staffProfile") {
+            return {
+              _id: "cashier-1",
+              linkedUserId: "other-user-1",
+              organizationId: "org-1",
+              status: "active",
+              storeId: "store-1",
+            };
+          }
+          return null;
+        }),
+        insert,
+        patch,
+        query: vi.fn((table: string) => ({
+          withIndex: vi.fn(() => ({
+            collect: vi.fn(async () => []),
+            order: vi.fn(() => ({
+              first: vi.fn(async () => null),
+              take: vi.fn(async () => []),
+            })),
+            take: vi.fn(async () => {
+              if (table === "staffCredential") {
+                return [
+                  {
+                    _id: "credential-1",
+                    organizationId: "org-1",
+                    pinHash: "hashed-pin",
+                    staffProfileId: "cashier-1",
+                    status: "active",
+                    storeId: "store-1",
+                    username: "cashier",
+                  },
+                ];
+              }
+              if (table === "staffRoleAssignment") {
+                return [
+                  {
+                    organizationId: "org-1",
+                    role: "cashier",
+                    status: "active",
+                    storeId: "store-1",
+                  },
+                ];
+              }
+              return [];
+            }),
+            unique: vi.fn(async () => null),
+          })),
+        })),
+      },
+      runMutation,
+      runQuery: vi.fn(async () => ({ _id: "store-1" })),
+    };
+
+    const result = await getHandler(submitRegisterSessionCloseout)(ctx, {
+      actorStaffProfileId: "cashier-1",
+      countedCash: 60000,
+      registerSessionId: "session-1",
+      staffPinHash: "hashed-pin",
+      staffUsername: "cashier",
+      storeId: "store-1",
+    });
+
+    expect(result).toMatchObject({
+      kind: "approval_required",
+      approval: {
+        requesterBinding: {
+          challengeId: "requester-challenge-1",
+          kind: "operational_staff_challenge",
+          requestedByStaffProfileId: "cashier-1",
+        },
+      },
+    });
+    expect(insert).toHaveBeenCalledWith(
+      "approvalRequesterChallenge",
+      expect.objectContaining({
+        actionKey: "cash_controls.register_session.review_variance",
+        requestedByStaffProfileId: "cashier-1",
+        requiredRole: "manager",
+        storeId: "store-1",
+        subjectId: "session-1",
+      }),
+    );
+    expect(patch).toHaveBeenCalledWith("staffCredential", "credential-1", {
+      authenticationLockedUntil: undefined,
+      failedAuthenticationAttempts: 0,
+      lastAuthenticatedAt: expect.any(Number),
+    });
+  });
+
   it("rejects closeout submit when staff credentials authenticate a different actor", async () => {
     const runMutation = vi.fn();
     const patch = vi.fn();
@@ -1664,7 +1814,9 @@ describe("cash control closeouts", () => {
   });
 
   it("returns the existing pending approval for duplicate variance closeout submissions", async () => {
-    const insert = vi.fn();
+    const insert = vi.fn(async (table: string) =>
+      table === "approvalRequesterChallenge" ? "requester-challenge-1" : "event-1",
+    );
     const patch = vi.fn();
     const runMutation = vi.fn();
     const ctx = {
@@ -1749,6 +1901,11 @@ describe("cash control closeouts", () => {
           expectedCash: 70000,
           variance: -70000,
         },
+        requesterBinding: {
+          challengeId: "requester-challenge-1",
+          kind: "operational_staff_challenge",
+          requestedByStaffProfileId: "cashier-1",
+        },
       },
     });
     expect(result.kind === "approval_required" && result.approval.resolutionModes).toContainEqual({
@@ -1757,8 +1914,169 @@ describe("cash control closeouts", () => {
       requestType: "variance_review",
     });
     expect(runMutation).not.toHaveBeenCalled();
-    expect(insert).not.toHaveBeenCalled();
+    expect(insert).toHaveBeenCalledWith(
+      "approvalRequesterChallenge",
+      expect.objectContaining({
+        actionKey: "cash_controls.register_session.review_variance",
+        requestedByStaffProfileId: "cashier-1",
+        storeId: "store-1",
+        subjectId: "session-1",
+      }),
+    );
+    expect(insert).not.toHaveBeenCalledWith(
+      "approvalRequest",
+      expect.anything(),
+    );
     expect(patch).not.toHaveBeenCalled();
+  });
+
+  it("marks matched pending variance approvals approved on inline proof retry", async () => {
+    const closedSession = {
+      _id: "session-1",
+      closedAt: 2,
+      countedCash: 0,
+      expectedCash: 70000,
+      status: "closed",
+      storeId: "store-1",
+    };
+    const patch = vi.fn();
+    const runMutation = vi.fn(async (_mutation, args) =>
+      "closedByStaffProfileId" in args
+        ? closedSession
+        : {
+            _id: "session-1",
+            countedCash: 0,
+            expectedCash: 70000,
+            status: "closing",
+            storeId: "store-1",
+          },
+    );
+    const ctx = {
+      db: {
+        get: vi.fn(async (table: string, id?: string) => {
+          if (table === "store") {
+            return { _id: "store-1", currency: "GHS", organizationId: "org-1" };
+          }
+          if (table === "registerSession") {
+            return {
+              _id: "session-1",
+              expectedCash: 70000,
+              managerApprovalRequestId: "approval-1",
+              openedAt: 1,
+              organizationId: "org-1",
+              registerNumber: "A1",
+              status: "closing",
+              storeId: "store-1",
+              terminalId: "terminal-1",
+            };
+          }
+          if (table === "approvalRequest" && id === "approval-1") {
+            return {
+              _id: "approval-1",
+              createdAt: 1,
+              metadata: {
+                countedCash: 0,
+                expectedCash: 70000,
+                variance: -70000,
+              },
+              notes: "Recounted drawer.",
+              registerSessionId: "session-1",
+              requestType: "variance_review",
+              requestedByStaffProfileId: "cashier-1",
+              status: "pending",
+              storeId: "store-1",
+            };
+          }
+          if (table === "approvalProof") {
+            return {
+              _id: "proof-1",
+              actionKey: "cash_controls.register_session.review_variance",
+              approvedByStaffProfileId: "manager-1",
+              expiresAt: Date.now() + 60_000,
+              requestedByStaffProfileId: "cashier-1",
+              requiredRole: "manager",
+              storeId: "store-1",
+              subjectId: "session-1",
+              subjectLabel: "A1",
+              subjectType: "register_session",
+            };
+          }
+          if (table === "staffProfile" && id === "cashier-1") {
+            return {
+              _id: "cashier-1",
+              linkedUserId: "manager-user-1",
+              organizationId: "org-1",
+              status: "active",
+              storeId: "store-1",
+            };
+          }
+          if (table === "staffProfile" && id === "manager-1") {
+            return {
+              _id: "manager-1",
+              organizationId: "org-1",
+              status: "active",
+              storeId: "store-1",
+            };
+          }
+          return null;
+        }),
+        insert: vi.fn(async () => "event-1"),
+        patch,
+        query: vi.fn((table: string) => ({
+          withIndex: vi.fn(() => ({
+            collect: vi.fn(async () => []),
+            order: vi.fn(() => ({
+              first: vi.fn(async () => null),
+              take: vi.fn(async () => []),
+            })),
+            take: vi.fn(async () =>
+              table === "staffRoleAssignment"
+                ? [
+                    {
+                      organizationId: "org-1",
+                      role: "manager",
+                      status: "active",
+                      storeId: "store-1",
+                    },
+                  ]
+                : [],
+            ),
+          })),
+        })),
+      },
+      runMutation,
+      runQuery: vi.fn(async () => ({ _id: "store-1" })),
+    };
+
+    const result = await getHandler(submitRegisterSessionCloseout)(ctx, {
+      actorStaffProfileId: "cashier-1",
+      approvalProofId: "proof-1",
+      countedCash: 0,
+      notes: "Recounted drawer.",
+      registerSessionId: "session-1",
+      storeId: "store-1",
+    });
+
+    expect(result).toMatchObject({
+      kind: "ok",
+      data: {
+        action: "closed",
+        registerSession: closedSession,
+      },
+    });
+    expect(patch).toHaveBeenCalledWith("approvalRequest", "approval-1", {
+      status: "approved",
+      decisionApprovedByStaffProfileId: "manager-1",
+      decisionApprovalProofId: "proof-1",
+      reviewedByStaffProfileId: "manager-1",
+      reviewedByUserId: "manager-user-1",
+      decidedAt: expect.any(Number),
+    });
+    expect(patch).not.toHaveBeenCalledWith(
+      "approvalRequest",
+      "approval-1",
+      expect.objectContaining({ status: "cancelled" }),
+    );
   });
 
   it("replaces pending variance approval when a corrected closeout count changes before review", async () => {
@@ -2448,6 +2766,9 @@ describe("cash control closeouts", () => {
       storeId: "store-1",
       terminalId: "terminal-1",
     };
+    const insert = vi.fn(async (table: string) =>
+      table === "approvalRequesterChallenge" ? "requester-challenge-1" : "event-1",
+    );
     const ctx = {
       db: {
         get: vi.fn(async (table: string) => {
@@ -2471,6 +2792,7 @@ describe("cash control closeouts", () => {
             collect: vi.fn(async () => []),
           })),
         })),
+        insert,
       },
       runMutation: vi.fn(),
       runQuery: vi.fn(async () => ({ _id: "store-1" })),
@@ -2490,8 +2812,21 @@ describe("cash control closeouts", () => {
           key: "cash_controls.register_session.review_variance",
         },
         requiredRole: "manager",
+        requesterBinding: {
+          challengeId: "requester-challenge-1",
+          kind: "operational_staff_challenge",
+          requestedByStaffProfileId: "manager-1",
+        },
       },
     });
+    expect(insert).toHaveBeenCalledWith(
+      "approvalRequesterChallenge",
+      expect.objectContaining({
+        actionKey: "cash_controls.register_session.review_variance",
+        requestedByStaffProfileId: "manager-1",
+        subjectId: "session-1",
+      }),
+    );
   });
 
   it("allows managers to finalize variance closeout after pending void approvals clear", async () => {
@@ -2799,6 +3134,82 @@ describe("cash control closeouts", () => {
         },
       },
     });
+    expect(runMutation).not.toHaveBeenCalled();
+  });
+
+  it("binds opening float approval to the active staff requester", async () => {
+    const insert = vi.fn(async (table: string) =>
+      table === "approvalRequesterChallenge" ? "requester-challenge-1" : "event-1",
+    );
+    const runMutation = vi.fn();
+    const ctx = {
+      db: {
+        get: vi.fn(async (table: string) => {
+          if (table === "registerSession") {
+            return {
+              _id: "session-1",
+              expectedCash: 30000,
+              openingFloat: 30000,
+              openedAt: 1,
+              organizationId: "org-1",
+              registerNumber: "A1",
+              status: "open",
+              storeId: "store-1",
+            };
+          }
+
+          if (table === "store") {
+            return { _id: "store-1", currency: "GHS", organizationId: "org-1" };
+          }
+
+          if (table === "staffProfile") {
+            return {
+              _id: "staff-1",
+              linkedUserId: "manager-user-1",
+              organizationId: "org-1",
+              status: "active",
+              storeId: "store-1",
+            };
+          }
+
+          return null;
+        }),
+        insert,
+      },
+      runMutation,
+    };
+
+    const result = await getHandler(correctRegisterSessionOpeningFloat)(ctx, {
+      actorStaffProfileId: "staff-1",
+      correctedOpeningFloat: 20000,
+      reason: "Drawer counted wrong at open.",
+      registerSessionId: "session-1",
+      storeId: "store-1",
+    });
+
+    expect(result).toMatchObject({
+      kind: "approval_required",
+      approval: {
+        requesterBinding: {
+          kind: "operational_staff_challenge",
+          challengeId: "requester-challenge-1",
+          requestedByStaffProfileId: "staff-1",
+        },
+      },
+    });
+    expect(insert).toHaveBeenCalledWith(
+      "approvalRequesterChallenge",
+      expect.objectContaining({
+        actionKey: "cash_controls.register_session.correct_opening_float",
+        organizationId: "org-1",
+        requestedByStaffProfileId: "staff-1",
+        requiredRole: "manager",
+        storeId: "store-1",
+        subjectId: "session-1",
+        subjectLabel: "A1",
+        subjectType: "register_session",
+      }),
+    );
     expect(runMutation).not.toHaveBeenCalled();
   });
 
