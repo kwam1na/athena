@@ -28,7 +28,10 @@ import {
 import { getOrigin } from "@/lib/navigationUtils";
 import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
-import type { ApprovalRequirement } from "~/shared/approvalPolicy";
+import type {
+  ApprovalRequesterBinding,
+  ApprovalRequirement,
+} from "~/shared/approvalPolicy";
 import type { CommandResult } from "~/shared/commandResult";
 import View from "../View";
 import { FadeIn } from "../common/FadeIn";
@@ -40,6 +43,7 @@ import {
 } from "../common/PageLevelHeader";
 import { EmptyState } from "../states/empty/empty-state";
 import type { CommandApprovalDialogProps } from "./CommandApprovalDialog";
+import { toApprovalRequesterBindingArg } from "./approvalRequesterBinding";
 import { NoPermissionView } from "../states/no-permission/NoPermissionView";
 import { ProtectedAdminSignInView } from "../states/signed-out/ProtectedAdminSignInView";
 import { Badge } from "../ui/badge";
@@ -2010,6 +2014,7 @@ function DailyOpeningConnectedView({
     pinHash: string;
     reason?: string;
     requiredRole: ApprovalRequirement["requiredRole"];
+    requesterBinding?: ApprovalRequesterBinding;
     requestedByStaffProfileId?: Id<"staffProfile">;
     storeId: Id<"store">;
     subject: ApprovalRequirement["subject"];
@@ -2036,6 +2041,7 @@ function DailyOpeningConnectedView({
         pinHash: args.pinHash,
         reason: args.reason,
         requiredRole: args.requiredRole,
+        requesterBinding: toApprovalRequesterBindingArg(args.requesterBinding),
         requestedByStaffProfileId: args.requestedByStaffProfileId,
         storeId: args.storeId,
         subject: args.subject,

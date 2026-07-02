@@ -27,6 +27,7 @@ import {
   CommandApprovalApprovedResult,
   CommandApprovalProofResult,
 } from "@/components/operations/CommandApprovalDialog";
+import { toApprovalRequesterBindingArg } from "@/components/operations/approvalRequesterBinding";
 import { useApprovedCommand } from "@/components/operations/useApprovedCommand";
 import {
   isApprovalRequiredResult,
@@ -54,7 +55,10 @@ import { api } from "~/convex/_generated/api";
 import type { Id } from "~/convex/_generated/dataModel";
 import { toDisplayAmount } from "~/convex/lib/currency";
 import { userError, type CommandResult } from "~/shared/commandResult";
-import type { ApprovalRequirement } from "~/shared/approvalPolicy";
+import type {
+  ApprovalRequesterBinding,
+  ApprovalRequirement,
+} from "~/shared/approvalPolicy";
 import { currencyDisplaySymbol } from "~/shared/currencyFormatter";
 import { formatStaffDisplayName } from "~/shared/staffDisplayName";
 import View from "../View";
@@ -348,6 +352,7 @@ type RegisterSessionViewContentProps = {
     pinHash: string;
     reason?: string;
     registerSessionId: string;
+    requesterBinding?: ApprovalRequesterBinding;
     requestedByStaffProfileId?: Id<"staffProfile">;
     username: string;
   }) => Promise<CloseoutApprovalAuthenticationCommandResult>;
@@ -2959,8 +2964,7 @@ export function RegisterSessionViewContent({
           approvalProofId: result.approvalProofId,
           decision: intent.decision,
           registerSessionId: intent.registerSessionId,
-          requestedByStaffProfileId:
-            result.requestedByStaffProfileId ?? actorStaffProfileId,
+          requestedByStaffProfileId: result.requestedByStaffProfileId,
           reviewConflictIds: intent.reviewConflictIds,
         });
 
@@ -3001,14 +3005,10 @@ export function RegisterSessionViewContent({
       const commandResult =
         intent.kind === "submit"
           ? await closeoutApprovalRunner.run({
-              requestedByStaffProfileId:
-                result.staffProfileId as Id<"staffProfile">,
               sameSubmissionApproval: credentials
                 ? {
                     canAttemptInlineManagerProof: isManagerStaff(result),
                     pinHash: credentials.pinHash,
-                    requestedByStaffProfileId:
-                      result.staffProfileId as Id<"staffProfile">,
                     username: credentials.username,
                   }
                 : undefined,
@@ -3028,14 +3028,10 @@ export function RegisterSessionViewContent({
           : intent.kind === "finalize"
             ? onFinalizeCloseout
               ? await closeoutApprovalRunner.run({
-                  requestedByStaffProfileId:
-                    result.staffProfileId as Id<"staffProfile">,
                   sameSubmissionApproval: credentials
                     ? {
                         canAttemptInlineManagerProof: isManagerStaff(result),
                         pinHash: credentials.pinHash,
-                        requestedByStaffProfileId:
-                          result.staffProfileId as Id<"staffProfile">,
                         username: credentials.username,
                       }
                     : undefined,
@@ -3045,7 +3041,6 @@ export function RegisterSessionViewContent({
                       approvalProofId:
                         approvalArgs.approvalProofId ?? result.approvalProofId,
                       registerSessionId: intent.registerSessionId,
-                      requestedByStaffProfileId: result.staffProfileId,
                       staffPinHash: credentials?.pinHash,
                       staffUsername: credentials?.username,
                     }),
@@ -3167,7 +3162,6 @@ export function RegisterSessionViewContent({
         actorStaffProfileId: result.approvedByStaffProfileId,
         approvalProofId: result.approvalProofId,
         registerSessionId: registerSession._id,
-        requestedByStaffProfileId: actorStaffProfileId,
       });
 
       applyCloseoutCommandResult(commandResult);
@@ -3213,7 +3207,6 @@ export function RegisterSessionViewContent({
         countedCash: intent.countedCash,
         notes: intent.notes,
         registerSessionId: intent.registerSessionId,
-        requestedByStaffProfileId: actorStaffProfileId,
       });
 
       if (!applyCloseoutCommandResult(commandResult)) {
@@ -3884,9 +3877,6 @@ export function RegisterSessionViewContent({
           setOpeningFloatCorrectionIntent(null);
         }}
         open={Boolean(pendingOpeningFloatApproval)}
-        requestedByStaffProfileId={
-          actorStaffProfileId as Id<"staffProfile"> | undefined
-        }
         storeId={(storeId ?? "missing-store") as Id<"store">}
       />
       <CommandApprovalDialog
@@ -3907,9 +3897,6 @@ export function RegisterSessionViewContent({
         }}
         onDismiss={() => setIsReopenApprovalOpen(false)}
         open={isReopenApprovalOpen}
-        requestedByStaffProfileId={
-          actorStaffProfileId as Id<"staffProfile"> | undefined
-        }
         storeId={(storeId ?? "missing-store") as Id<"store">}
       />
       <CommandApprovalDialog
@@ -3933,9 +3920,6 @@ export function RegisterSessionViewContent({
           setReopenedCloseoutSubmitIntent(null);
         }}
         open={isReopenedCloseoutSubmitApprovalOpen}
-        requestedByStaffProfileId={
-          actorStaffProfileId as Id<"staffProfile"> | undefined
-        }
         storeId={(storeId ?? "missing-store") as Id<"store">}
       />
       <FadeIn>
@@ -5486,6 +5470,7 @@ export function RegisterSessionView() {
     pinHash: string;
     reason?: string;
     registerSessionId: string;
+    requesterBinding?: ApprovalRequesterBinding;
     requestedByStaffProfileId?: Id<"staffProfile">;
     username: string;
   }): Promise<CloseoutApprovalAuthenticationCommandResult> {
@@ -5504,6 +5489,9 @@ export function RegisterSessionView() {
           pinHash: args.pinHash,
           reason: args.reason,
           requiredRole: "manager",
+          requesterBinding: toApprovalRequesterBindingArg(
+            args.requesterBinding,
+          ),
           requestedByStaffProfileId: args.requestedByStaffProfileId,
           storeId: activeStore._id,
           subject: {
@@ -5548,6 +5536,9 @@ export function RegisterSessionView() {
           pinHash: args.pinHash,
           reason: args.reason,
           requiredRole: args.requiredRole,
+          requesterBinding: toApprovalRequesterBindingArg(
+            args.requesterBinding,
+          ),
           requestedByStaffProfileId: args.requestedByStaffProfileId,
           storeId: activeStore._id,
           subject: args.subject,

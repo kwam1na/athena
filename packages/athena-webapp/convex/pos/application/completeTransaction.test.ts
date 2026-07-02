@@ -43,6 +43,7 @@ import {
 } from "../infrastructure/integrations/paymentAllocationService";
 import { updateCustomerStats } from "../infrastructure/repositories/customerRepository";
 import { consumeCommandApprovalProofWithCtx } from "../../operations/approvalActions";
+import { createApprovalRequesterChallengeWithCtx } from "../../operations/approvalRequesterChallenges";
 import { recordOperationalEventWithCtx } from "../../operations/operationalEvents";
 
 vi.mock("../../workflowTraces/core", () => ({
@@ -105,6 +106,21 @@ vi.mock("../../operations/approvalActions", () => ({
   },
   consumeCommandApprovalProofWithCtx: vi.fn(),
 }));
+
+vi.mock(
+  "../../operations/approvalRequesterChallenges",
+  async (importOriginal) => {
+    const actual =
+      await importOriginal<
+        typeof import("../../operations/approvalRequesterChallenges")
+      >();
+
+    return {
+      ...actual,
+      createApprovalRequesterChallengeWithCtx: vi.fn(),
+    };
+  },
+);
 
 vi.mock("../../operations/operationalEvents", () => ({
   recordOperationalEventWithCtx: vi.fn(),
@@ -335,6 +351,16 @@ describe("voidTransaction", () => {
         approvedByStaffProfileId: "manager-1",
       },
     } as never);
+    vi.mocked(createApprovalRequesterChallengeWithCtx).mockResolvedValue({
+      kind: "ok",
+      data: {
+        requesterBinding: {
+          kind: "operational_staff_challenge",
+          challengeId: "requester-challenge-1",
+          requestedByStaffProfileId: "staff-1",
+        },
+      },
+    } as never);
   });
 
   it("returns approval_required without mutating ledger state on the first attempt", async () => {
@@ -367,6 +393,11 @@ describe("voidTransaction", () => {
           id: "txn-1",
           type: "pos_transaction",
         },
+        requesterBinding: {
+          kind: "operational_staff_challenge",
+          challengeId: "requester-challenge-1",
+          requestedByStaffProfileId: "staff-1",
+        },
       },
     });
 
@@ -376,6 +407,21 @@ describe("voidTransaction", () => {
         requestType: "pos_transaction_void",
         subjectId: "txn-1",
         subjectType: "pos_transaction",
+      }),
+    );
+    expect(createApprovalRequesterChallengeWithCtx).toHaveBeenCalledWith(
+      ctx as never,
+      expect.objectContaining({
+        actionKey: "pos.transaction.void",
+        organizationId: "org-1",
+        requestedByStaffProfileId: "staff-1",
+        requiredRole: "manager",
+        storeId: "store-1",
+        subject: {
+          id: "txn-1",
+          label: "Transaction #POS-0001",
+          type: "pos_transaction",
+        },
       }),
     );
     expectNoVoidBusinessSideEffects();
@@ -411,6 +457,7 @@ describe("voidTransaction", () => {
         {
           _id: "approval-existing-1",
           requestType: "pos_transaction_void",
+          requestedByStaffProfileId: "staff-existing-1",
           status: "pending",
           storeId: "store-1",
           subjectId: "txn-1",
@@ -418,10 +465,20 @@ describe("voidTransaction", () => {
         },
       ],
     });
+    vi.mocked(createApprovalRequesterChallengeWithCtx).mockResolvedValueOnce({
+      kind: "ok",
+      data: {
+        requesterBinding: {
+          kind: "operational_staff_challenge",
+          challengeId: "requester-challenge-existing",
+          requestedByStaffProfileId: "staff-existing-1",
+        },
+      },
+    } as never);
 
     await expect(
       voidTransaction(ctx as never, {
-        actorStaffProfileId: "staff-1" as Id<"staffProfile">,
+        actorStaffProfileId: "staff-2" as Id<"staffProfile">,
         reason: "Duplicate sale",
         transactionId: "txn-1" as Id<"posTransaction">,
       }),
@@ -434,11 +491,68 @@ describe("voidTransaction", () => {
             kind: "async_request",
           }),
         ]),
+        requesterBinding: {
+          kind: "operational_staff_challenge",
+          challengeId: "requester-challenge-existing",
+          requestedByStaffProfileId: "staff-existing-1",
+        },
       },
     });
 
+    expect(createApprovalRequesterChallengeWithCtx).toHaveBeenCalledWith(
+      ctx as never,
+      expect.objectContaining({
+        actionKey: "pos.transaction.void",
+        requestedByStaffProfileId: "staff-existing-1",
+        requiredRole: "manager",
+        storeId: "store-1",
+      }),
+    );
     expect(ctx.db.insert).not.toHaveBeenCalled();
     expectNoVoidBusinessSideEffects();
+  });
+
+  it("consumes void proof against the stored requester when retrying a pending approval", async () => {
+    const ctx = createVoidCtx({
+      approvalRequests: [
+        {
+          _id: "approval-existing-1",
+          requestType: "pos_transaction_void",
+          requestedByStaffProfileId: "staff-existing-1",
+          status: "pending",
+          storeId: "store-1",
+          subjectId: "txn-1",
+          subjectType: "pos_transaction",
+        },
+      ],
+    });
+
+    await expect(
+      voidTransaction(ctx as never, {
+        actorStaffProfileId: "staff-2" as Id<"staffProfile">,
+        approvalProofId: "approval-proof-1" as Id<"approvalProof">,
+        approvalRequestId: "approval-existing-1" as Id<"approvalRequest">,
+        reason: "Duplicate sale",
+        transactionId: "txn-1" as Id<"posTransaction">,
+      }),
+    ).resolves.toMatchObject({
+      kind: "ok",
+      data: {
+        approvalProofId: "approval-proof-1",
+        approvalRequestId: "approval-existing-1",
+      },
+    });
+
+    expect(consumeCommandApprovalProofWithCtx).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        action: expect.objectContaining({ key: "pos.transaction.void" }),
+        approvalProofId: "approval-proof-1",
+        requestedByStaffProfileId: "staff-existing-1",
+        requiredRole: "manager",
+        storeId: "store-1",
+      }),
+    );
   });
 
   it("blocks mixed service sales before creating a void approval request", async () => {

@@ -26,6 +26,12 @@ export type ApprovalOperatorCopy = {
   secondaryActionLabel?: string;
 };
 
+export type ApprovalRequesterBinding = {
+  kind: "operational_staff_challenge";
+  challengeId: string;
+  requestedByStaffProfileId: string;
+};
+
 export type InlineManagerProofResolutionMode = {
   kind: "inline_manager_proof";
   proofTtlMs?: number;
@@ -48,6 +54,7 @@ export type ApprovalRequirement = {
   reason: string;
   copy: ApprovalOperatorCopy;
   resolutionModes: ApprovalResolutionMode[];
+  requesterBinding?: ApprovalRequesterBinding;
   selfApproval?: "allowed" | "disallowed";
   metadata?: Record<string, unknown>;
 };

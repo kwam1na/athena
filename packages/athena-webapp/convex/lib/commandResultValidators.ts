@@ -45,6 +45,12 @@ export const approvalOperatorCopyValidator = v.object({
   secondaryActionLabel: v.optional(v.string()),
 });
 
+export const approvalRequesterBindingValidator = v.object({
+  kind: v.literal("operational_staff_challenge"),
+  challengeId: v.string(),
+  requestedByStaffProfileId: v.string(),
+});
+
 export const approvalResolutionModeValidator = v.union(
   v.object({
     kind: v.literal("inline_manager_proof"),
@@ -64,6 +70,7 @@ export const approvalRequirementValidator = v.object({
   reason: v.string(),
   copy: approvalOperatorCopyValidator,
   resolutionModes: v.array(approvalResolutionModeValidator),
+  requesterBinding: v.optional(approvalRequesterBindingValidator),
   selfApproval: v.optional(
     v.union(v.literal("allowed"), v.literal("disallowed")),
   ),

@@ -59,6 +59,7 @@ describe("command result validators", () => {
                 reason: expect.objectContaining({ optional: false }),
                 copy: expect.objectContaining({ optional: false }),
                 resolutionModes: expect.objectContaining({ optional: false }),
+                requesterBinding: expect.objectContaining({ optional: true }),
               }),
             }),
           }),
@@ -67,6 +68,10 @@ describe("command result validators", () => {
     );
 
     expect(JSON.stringify(approvalVariant)).toContain("inline_manager_proof");
+    expect(JSON.stringify(approvalVariant)).toContain(
+      "operational_staff_challenge",
+    );
+    expect(JSON.stringify(approvalVariant)).toContain("challengeId");
   });
 
   it("accepts approval-required results with async request resolution", () => {

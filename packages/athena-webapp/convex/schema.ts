@@ -230,6 +230,34 @@ const schema = defineSchema({
       "subjectId",
     ])
     .index("by_expiresAt", ["expiresAt"]),
+  approvalRequesterChallenge: defineTable(
+    v.object({
+      storeId: v.id("store"),
+      organizationId: v.optional(v.id("organization")),
+      actionKey: v.string(),
+      subjectType: v.string(),
+      subjectId: v.string(),
+      subjectLabel: v.optional(v.string()),
+      requiredRole: v.union(
+        v.literal("manager"),
+        v.literal("front_desk"),
+        v.literal("stylist"),
+        v.literal("technician"),
+        v.literal("cashier"),
+      ),
+      requestedByStaffProfileId: v.id("staffProfile"),
+      createdAt: v.number(),
+      expiresAt: v.number(),
+      consumedAt: v.optional(v.number()),
+    }),
+  )
+    .index("by_storeId_action_subject", [
+      "storeId",
+      "actionKey",
+      "subjectType",
+      "subjectId",
+    ])
+    .index("by_expiresAt", ["expiresAt"]),
   athenaUser: defineTable(athenaUserSchema),
   contextEvent: defineTable(contextEventSchema)
     .index("by_storeId_surface_idempotencyKey", [

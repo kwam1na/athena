@@ -187,6 +187,10 @@ function createMutationCtx(seed?: {
       return null;
     }),
     insert: vi.fn(async (table: string, value: Record<string, unknown>) => {
+      if (table === "approvalRequesterChallenge") {
+        return "requester-challenge-1" as Id<"approvalRequesterChallenge">;
+      }
+
       if (table !== "approvalRequest") {
         throw new Error(`Unsupported insert into ${table}`);
       }

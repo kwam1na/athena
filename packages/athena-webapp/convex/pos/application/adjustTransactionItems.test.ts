@@ -7,6 +7,7 @@ import {
   type TransactionItemAdjustmentPayload,
 } from "./commands/adjustTransactionItems";
 import { consumeCommandApprovalProofWithCtx } from "../../operations/approvalActions";
+import { createApprovalRequesterChallengeWithCtx } from "../../operations/approvalRequesterChallenges";
 import { recordInventoryMovementWithCtx } from "../../operations/inventoryMovements";
 import { recordOperationalEventWithCtx } from "../../operations/operationalEvents";
 import { recordPaymentAllocationWithCtx } from "../../operations/paymentAllocations";
@@ -42,6 +43,21 @@ vi.mock("../../operations/approvalActions", () => ({
   },
   consumeCommandApprovalProofWithCtx: vi.fn(),
 }));
+
+vi.mock(
+  "../../operations/approvalRequesterChallenges",
+  async (importOriginal) => {
+    const actual =
+      await importOriginal<
+        typeof import("../../operations/approvalRequesterChallenges")
+      >();
+
+    return {
+      ...actual,
+      createApprovalRequesterChallengeWithCtx: vi.fn(),
+    };
+  },
+);
 
 vi.mock("../../operations/inventoryMovements", () => ({
   recordInventoryMovementWithCtx: vi.fn(),
@@ -343,6 +359,16 @@ beforeEach(() => {
     traceCreated: true,
     traceId: "register_session:register-session-1",
   } as never);
+  vi.mocked(createApprovalRequesterChallengeWithCtx).mockResolvedValue({
+    kind: "ok",
+    data: {
+      requesterBinding: {
+        kind: "operational_staff_challenge",
+        challengeId: "requester-challenge-1",
+        requestedByStaffProfileId: "cashier-1",
+      },
+    },
+  } as never);
 });
 
 describe("adjustTransactionItems", () => {
@@ -376,6 +402,11 @@ describe("adjustTransactionItems", () => {
         subject: {
           type: "pos_transaction_item_adjustment",
         },
+        requesterBinding: {
+          kind: "operational_staff_challenge",
+          challengeId: "requester-challenge-1",
+          requestedByStaffProfileId: "cashier-1",
+        },
       },
       transactionId: "txn-1",
     });
@@ -391,6 +422,18 @@ describe("adjustTransactionItems", () => {
         transactionId: "txn-1",
       }),
     });
+    expect(createApprovalRequesterChallengeWithCtx).toHaveBeenCalledWith(
+      ctx as never,
+      expect.objectContaining({
+        actionKey: "pos.transaction.adjust_items",
+        requestedByStaffProfileId: "cashier-1",
+        requiredRole: "manager",
+        storeId: "store-1",
+        subject: expect.objectContaining({
+          type: "pos_transaction_item_adjustment",
+        }),
+      }),
+    );
     expect(tables.posTransactionAdjustment.size).toBe(0);
     expect(tables.posTransactionAdjustmentLine.size).toBe(0);
     expect(recordInventoryMovementWithCtx).not.toHaveBeenCalled();
@@ -457,7 +500,7 @@ describe("adjustTransactionItems", () => {
     } as never);
 
     const result = await adjustTransactionItems(ctx as never, {
-      actorStaffProfileId: "cashier-1" as Id<"staffProfile">,
+      actorStaffProfileId: "cashier-2" as Id<"staffProfile">,
       approvalProofId: "proof-1" as Id<"approvalProof">,
       approvalRequestId,
       payload: basePayload(),
@@ -472,6 +515,7 @@ describe("adjustTransactionItems", () => {
           key: "pos.transaction.adjust_items",
         }),
         approvalProofId: "proof-1",
+        requestedByStaffProfileId: "cashier-1",
         requiredRole: "manager",
         storeId: "store-1",
         subject: expect.objectContaining({
@@ -571,6 +615,55 @@ describe("adjustTransactionItems", () => {
     });
   });
 
+  it("keeps no-requester pending adjustment approvals unbound on proof retry", async () => {
+    const { ctx } = createFakeCtx();
+    const first = await adjustTransactionItems(ctx as never, {
+      payload: basePayload(),
+      reason: "Customer was charged for two instead of one",
+      transactionId: "txn-1" as Id<"posTransaction">,
+    });
+    const approvalRequestId =
+      "action" in first && first.action === "approval_required"
+        ? (first.approval.resolutionModes[1] as { approvalRequestId?: Id<"approvalRequest"> })
+            .approvalRequestId
+        : undefined;
+    vi.mocked(consumeCommandApprovalProofWithCtx).mockResolvedValue({
+      kind: "ok",
+      data: {
+        approvalProofId: "proof-1" as Id<"approvalProof">,
+        approvedByStaffProfileId: "manager-1" as Id<"staffProfile">,
+      },
+    } as never);
+
+    await adjustTransactionItems(ctx as never, {
+      actorStaffProfileId: "cashier-2" as Id<"staffProfile">,
+      approvalProofId: "proof-1" as Id<"approvalProof">,
+      approvalRequestId,
+      payload: basePayload(),
+      reason: "Customer was charged for two instead of one",
+      transactionId: "txn-1" as Id<"posTransaction">,
+    });
+
+    expect(first).toMatchObject({
+      action: "approval_required",
+      approval: expect.not.objectContaining({
+        requesterBinding: expect.anything(),
+      }),
+    });
+    expect(consumeCommandApprovalProofWithCtx).toHaveBeenCalledWith(
+      ctx as never,
+      expect.objectContaining({
+        action: expect.objectContaining({
+          key: "pos.transaction.adjust_items",
+        }),
+        approvalProofId: "proof-1",
+        requestedByStaffProfileId: undefined,
+        requiredRole: "manager",
+        storeId: "store-1",
+      }),
+    );
+  });
+
   it("records collection allocations for higher corrected totals", async () => {
     const { ctx } = createFakeCtx();
     vi.mocked(consumeCommandApprovalProofWithCtx).mockResolvedValue({
@@ -660,7 +753,7 @@ describe("adjustTransactionItems", () => {
       transactionId: "txn-1" as Id<"posTransaction">,
     });
     const second = await adjustTransactionItems(ctx as never, {
-      actorStaffProfileId: "cashier-1" as Id<"staffProfile">,
+      actorStaffProfileId: "cashier-2" as Id<"staffProfile">,
       payload: basePayload(),
       reason: "Customer was charged for two instead of one",
       transactionId: "txn-1" as Id<"posTransaction">,
@@ -679,6 +772,24 @@ describe("adjustTransactionItems", () => {
 
     expect(firstApprovalRequestId).toBe("approvalRequest-1");
     expect(secondApprovalRequestId).toBe(firstApprovalRequestId);
+    expect(second).toMatchObject({
+      action: "approval_required",
+      approval: {
+        requesterBinding: {
+          kind: "operational_staff_challenge",
+          requestedByStaffProfileId: "cashier-1",
+        },
+      },
+    });
+    expect(createApprovalRequesterChallengeWithCtx).toHaveBeenLastCalledWith(
+      ctx as never,
+      expect.objectContaining({
+        actionKey: "pos.transaction.adjust_items",
+        requestedByStaffProfileId: "cashier-1",
+        requiredRole: "manager",
+        storeId: "store-1",
+      }),
+    );
     expect(tables.approvalRequest.size).toBe(1);
   });
 

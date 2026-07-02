@@ -3,6 +3,7 @@ import type { MutationCtx } from "../../../_generated/server";
 import { isPosUsableRegisterSessionStatus } from "../../../../shared/registerSessionStatus";
 import type { ApprovalRequirement } from "../../../../shared/approvalPolicy";
 import { buildApprovalRequest } from "../../../operations/approvalRequestHelpers";
+import { createApprovalRequesterChallengeWithCtx } from "../../../operations/approvalRequesterChallenges";
 import {
   APPROVAL_ACTIONS,
   consumeCommandApprovalProofWithCtx,
@@ -39,6 +40,7 @@ function buildPaymentMethodCorrectionApprovalRequirement(args: {
   amount: number;
   paymentMethod: string;
   previousPaymentMethod: string;
+  requesterBinding?: ApprovalRequirement["requesterBinding"];
   transaction: {
     _id: Id<"posTransaction">;
     transactionNumber: string;
@@ -75,6 +77,9 @@ function buildPaymentMethodCorrectionApprovalRequirement(args: {
         approvalRequestId: args.approvalRequestId,
       },
     ],
+    ...(args.requesterBinding
+      ? { requesterBinding: args.requesterBinding }
+      : {}),
     metadata: {
       amount: args.amount,
       paymentMethod: args.paymentMethod,
@@ -101,6 +106,25 @@ async function createPaymentMethodCorrectionApprovalRequest(
   },
 ) {
   const store = await ctx.db.get("store", args.transaction.storeId);
+  const requesterBindingResult = args.actorStaffProfileId
+    ? await createApprovalRequesterChallengeWithCtx(ctx, {
+        actionKey: PAYMENT_METHOD_CORRECTION_ACTION_KEY,
+        organizationId: store?.organizationId,
+        requestedByStaffProfileId: args.actorStaffProfileId,
+        requiredRole: "manager",
+        storeId: args.transaction.storeId,
+        subject: {
+          id: args.transaction._id,
+          label: transactionLabel(args.transaction),
+          type: "pos_transaction",
+        },
+      })
+    : null;
+
+  if (requesterBindingResult?.kind === "user_error") {
+    throw new Error(requesterBindingResult.error.message);
+  }
+
   const approvalRequestId = await ctx.db.insert(
     "approvalRequest",
     buildApprovalRequest({
@@ -150,7 +174,10 @@ async function createPaymentMethodCorrectionApprovalRequest(
     posTransactionId: args.transaction._id,
   });
 
-  return approvalRequestId;
+  return {
+    approvalRequestId,
+    requesterBinding: requesterBindingResult?.data.requesterBinding,
+  };
 }
 
 async function requireCompletedTransaction(
@@ -486,7 +513,7 @@ export async function correctTransactionPaymentMethod(
   });
 
   if (!args.approvalProofId) {
-    const approvalRequestId =
+    const approvalRequirement =
       await createPaymentMethodCorrectionApprovalRequest(ctx, {
         actorStaffProfileId: args.actorStaffProfileId,
         actorUserId: args.actorUserId,
@@ -500,10 +527,11 @@ export async function correctTransactionPaymentMethod(
     return {
       action: "approval_required" as const,
       approval: buildPaymentMethodCorrectionApprovalRequirement({
-        approvalRequestId,
+        approvalRequestId: approvalRequirement.approvalRequestId,
         amount: payment.amount,
         paymentMethod: args.paymentMethod,
         previousPaymentMethod: payment.method,
+        requesterBinding: approvalRequirement.requesterBinding,
         transaction,
       }),
       paymentMethod: args.paymentMethod,

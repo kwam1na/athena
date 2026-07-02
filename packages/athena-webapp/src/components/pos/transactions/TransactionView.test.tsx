@@ -228,6 +228,11 @@ vi.mock("../../operations/CommandApprovalDialog", () => ({
       copy: { message: string; primaryActionLabel?: string; title: string };
       reason: string;
       requiredRole: "manager";
+      requesterBinding?: {
+        kind: "operational_staff_challenge";
+        challengeId: string;
+        requestedByStaffProfileId: string;
+      };
       resolutionModes: Array<{
         kind: string;
         approvalRequestId?: string;
@@ -240,6 +245,11 @@ vi.mock("../../operations/CommandApprovalDialog", () => ({
       pinHash: string;
       reason?: string;
       requiredRole: "manager";
+      requesterBinding?: {
+        kind: "operational_staff_challenge";
+        challengeId: string;
+        requestedByStaffProfileId: string;
+      };
       requestedByStaffProfileId?: string;
       storeId: string;
       subject: { id: string; label?: string; type: string };
@@ -275,6 +285,7 @@ vi.mock("../../operations/CommandApprovalDialog", () => ({
                 pinHash: "hashed:1234",
                 reason: approval.reason,
                 requiredRole: approval.requiredRole,
+                requesterBinding: approval.requesterBinding,
                 requestedByStaffProfileId,
                 storeId: "store_1",
                 subject: approval.subject,
@@ -453,6 +464,11 @@ describe("TransactionView", () => {
       reason:
         "Manager approval is required to correct a completed transaction payment method.",
       requiredRole: "manager" as const,
+      requesterBinding: {
+        kind: "operational_staff_challenge",
+        challengeId: "requester-challenge-1",
+        requestedByStaffProfileId: "staff_1",
+      },
       resolutionModes: [
         { kind: "inline_manager_proof" },
         {
@@ -1709,6 +1725,7 @@ describe("TransactionView", () => {
       kind: "ok",
       data: {
         activeRoles: ["cashier"],
+        posLocalStaffProof: { expiresAt: 2, token: "proof-token-1" },
         staffProfile: { firstName: "Kwamina", lastName: "Mensah" },
         staffProfileId: "staff_1",
       },
@@ -1795,6 +1812,7 @@ describe("TransactionView", () => {
       approvalProofId: undefined,
       paymentMethod: "card",
       reason: "Wrong tender selected.",
+      staffProofToken: "proof-token-1",
       transactionId: "txn_13",
     });
   });
@@ -1805,6 +1823,7 @@ describe("TransactionView", () => {
       kind: "ok",
       data: {
         activeRoles: ["manager"],
+        posLocalStaffProof: { expiresAt: 2, token: "proof-token-1" },
         staffProfile: { firstName: "Kwamina", lastName: "Mensah" },
         staffProfileId: "staff_1",
       },
@@ -1858,7 +1877,12 @@ describe("TransactionView", () => {
         reason:
           "Manager approval is required to correct a completed transaction payment method.",
         requiredRole: "manager",
-        requestedByStaffProfileId: "staff_1",
+        requesterBinding: {
+          kind: "operational_staff_challenge",
+          challengeId: "requester-challenge-1",
+          requestedByStaffProfileId: "staff_1",
+        },
+        requestedByStaffProfileId: undefined,
         storeId: "store_1",
         subject: {
           id: "txn_19",
@@ -1873,6 +1897,7 @@ describe("TransactionView", () => {
         approvalProofId: "proof-1",
         paymentMethod: "card",
         reason: "Wrong tender selected.",
+        staffProofToken: "proof-token-1",
         transactionId: "txn_19",
       });
     });
@@ -2439,6 +2464,11 @@ describe("TransactionView", () => {
           reason:
             "Manager approval is required to adjust completed transaction items.",
           requiredRole: "manager",
+          requesterBinding: {
+            kind: "operational_staff_challenge",
+            challengeId: "requester-challenge-2",
+            requestedByStaffProfileId: "staff_1",
+          },
           resolutionModes: [
             { kind: "inline_manager_proof" },
             {
@@ -2515,7 +2545,12 @@ describe("TransactionView", () => {
         reason:
           "Manager approval is required to adjust completed transaction items.",
         requiredRole: "manager",
-        requestedByStaffProfileId: "staff_1",
+        requesterBinding: {
+          kind: "operational_staff_challenge",
+          challengeId: "requester-challenge-2",
+          requestedByStaffProfileId: "staff_1",
+        },
+        requestedByStaffProfileId: undefined,
         storeId: "store_1",
         subject: {
           id: "txn_items",

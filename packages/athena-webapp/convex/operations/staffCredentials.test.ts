@@ -32,10 +32,12 @@ import {
   validateRestoredPosLocalStaffProof,
   validateRestoredPosLocalStaffProofWithCtx,
 } from "./staffCredentials";
+import { createApprovalRequesterChallengeWithCtx } from "./approvalRequesterChallenges";
 import { hashPosLocalStaffProofToken } from "../pos/application/sync/staffProof";
 
 type TableName =
   | "approvalProof"
+  | "approvalRequesterChallenge"
   | "expenseSession"
   | "operationalEvent"
   | "posTerminal"
@@ -57,6 +59,7 @@ const localPinVerifier = {
 
 function createStaffCredentialsMutationCtx(seed?: {
   approvalProofs?: Row[];
+  approvalRequesterChallenges?: Row[];
   expenseSessions?: Row[];
   operationalEvents?: Row[];
   posTerminals?: Row[];
@@ -70,6 +73,9 @@ function createStaffCredentialsMutationCtx(seed?: {
   const tables: Record<TableName, Map<string, Row>> = {
     approvalProof: new Map(
       (seed?.approvalProofs ?? []).map((row) => [row._id, row])
+    ),
+    approvalRequesterChallenge: new Map(
+      (seed?.approvalRequesterChallenges ?? []).map((row) => [row._id, row])
     ),
     expenseSession: new Map(
       (seed?.expenseSessions ?? []).map((row) => [row._id, row])
@@ -121,6 +127,7 @@ function createStaffCredentialsMutationCtx(seed?: {
   };
   const insertCounters: Record<TableName, number> = {
     approvalProof: 0,
+    approvalRequesterChallenge: 0,
     expenseSession: 0,
     operationalEvent: 0,
     posTerminal: 0,
@@ -2590,6 +2597,282 @@ describe("staff credential operations", () => {
     });
   });
 
+  it("creates an approval proof for an unlinked operational requester through a server challenge", async () => {
+    const { ctx, tables } = createStaffCredentialsMutationCtx({
+      credentials: [
+        {
+          _id: "credential-1",
+          staffProfileId: "manager-1",
+          organizationId: "org_1",
+          storeId: "store_1",
+          username: "manager",
+          pinHash: "hash-1",
+          status: "active",
+        },
+      ],
+      profiles: [
+        {
+          _id: "manager-1",
+          storeId: "store_1",
+          organizationId: "org_1",
+          status: "active",
+          fullName: "Ari Mensah",
+        },
+        {
+          _id: "cashier-1",
+          storeId: "store_1",
+          organizationId: "org_1",
+          status: "active",
+          fullName: "Cashier One",
+        },
+      ],
+      roles: [
+        {
+          _id: "role_1",
+          staffProfileId: "manager-1",
+          organizationId: "org_1",
+          storeId: "store_1",
+          role: "manager",
+          isPrimary: true,
+          status: "active",
+          assignedAt: 1,
+        },
+      ],
+    });
+
+    const subject = {
+      type: "pos_transaction",
+      id: "transaction-1",
+      label: "Receipt 1001",
+    };
+    const challenge = await createApprovalRequesterChallengeWithCtx(ctx, {
+      actionKey: "pos.transaction.payment_method.correct",
+      requestedByStaffProfileId: "cashier-1" as Id<"staffProfile">,
+      requiredRole: "manager",
+      storeId: "store_1" as Id<"store">,
+      subject,
+    });
+
+    expect(challenge).toEqual({
+      kind: "ok",
+      data: {
+        requesterBinding: {
+          kind: "operational_staff_challenge",
+          challengeId: "approvalRequesterChallenge-1",
+          requestedByStaffProfileId: "cashier-1",
+        },
+      },
+    });
+
+    if (challenge.kind !== "ok") {
+      throw new Error("Expected requester challenge to be created.");
+    }
+
+    const result = await authenticateStaffCredentialForApprovalWithCtx(ctx, {
+      actionKey: "pos.transaction.payment_method.correct",
+      pinHash: "hash-1",
+      reason: "Completed transactions require manager approval.",
+      requiredRole: "manager",
+      requesterBinding: challenge.data.requesterBinding as {
+        challengeId: Id<"approvalRequesterChallenge">;
+        kind: "operational_staff_challenge";
+        requestedByStaffProfileId: Id<"staffProfile">;
+      },
+      storeId: "store_1" as Id<"store">,
+      subject,
+      username: "manager",
+    });
+
+    expect(result).toEqual({
+      kind: "ok",
+      data: expect.objectContaining({
+        approvalProofId: "approvalProof-1",
+        approvedByStaffProfileId: "manager-1",
+        requestedByStaffProfileId: "cashier-1",
+      }),
+    });
+    assertConformsToExportedReturns(authenticateStaffCredentialForApproval, result);
+    expect(tables.approvalRequesterChallenge.get("approvalRequesterChallenge-1"))
+      .toMatchObject({
+        actionKey: "pos.transaction.payment_method.correct",
+        consumedAt: expect.any(Number),
+        requestedByStaffProfileId: "cashier-1",
+        storeId: "store_1",
+        subjectId: "transaction-1",
+        subjectType: "pos_transaction",
+      });
+    expect(tables.approvalProof.get("approvalProof-1")).toMatchObject({
+      actionKey: "pos.transaction.payment_method.correct",
+      approvedByStaffProfileId: "manager-1",
+      requestedByStaffProfileId: "cashier-1",
+      storeId: "store_1",
+      subjectId: "transaction-1",
+      subjectType: "pos_transaction",
+    });
+  });
+
+  it.each([
+    {
+      name: "missing requester profile",
+      profiles: [],
+    },
+    {
+      name: "inactive requester profile",
+      profiles: [
+        {
+          _id: "cashier-1",
+          storeId: "store_1",
+          organizationId: "org_1",
+          status: "inactive",
+          fullName: "Cashier One",
+        },
+      ],
+    },
+    {
+      name: "wrong-store requester profile",
+      profiles: [
+        {
+          _id: "cashier-1",
+          storeId: "store_2",
+          organizationId: "org_1",
+          status: "active",
+          fullName: "Cashier One",
+        },
+      ],
+    },
+  ])("rejects requester challenge creation for $name", async (scenario) => {
+    const { ctx, tables } = createStaffCredentialsMutationCtx({
+      profiles: scenario.profiles,
+    });
+
+    const result = await createApprovalRequesterChallengeWithCtx(ctx, {
+      actionKey: "pos.transaction.payment_method.correct",
+      requestedByStaffProfileId: "cashier-1" as Id<"staffProfile">,
+      requiredRole: "manager",
+      storeId: "store_1" as Id<"store">,
+      subject: {
+        type: "pos_transaction",
+        id: "transaction-1",
+      },
+    });
+
+    expect(result).toEqual({
+      kind: "user_error",
+      error: {
+        code: "authorization_failed",
+        message: "Requested staff profile is not valid for this approval.",
+      },
+    });
+    expect(tables.approvalRequesterChallenge.size).toBe(0);
+  });
+
+  it.each([
+    {
+      name: "missing requester profile",
+      requesterProfile: null,
+    },
+    {
+      name: "inactive requester profile",
+      requesterProfile: {
+        _id: "cashier-1",
+        storeId: "store_1",
+        organizationId: "org_1",
+        status: "inactive",
+        fullName: "Cashier One",
+      },
+    },
+    {
+      name: "wrong-store requester profile",
+      requesterProfile: {
+        _id: "cashier-1",
+        storeId: "store_2",
+        organizationId: "org_1",
+        status: "active",
+        fullName: "Cashier One",
+      },
+    },
+  ])("rejects requester challenge consumption for $name", async (scenario) => {
+    const requesterProfiles =
+      scenario.requesterProfile === null ? [] : [scenario.requesterProfile];
+    const { ctx, tables } = createStaffCredentialsMutationCtx({
+      approvalRequesterChallenges: [
+        {
+          _id: "challenge-1",
+          actionKey: "pos.transaction.payment_method.correct",
+          createdAt: 1,
+          expiresAt: Date.now() + 60_000,
+          requestedByStaffProfileId: "cashier-1",
+          requiredRole: "manager",
+          storeId: "store_1",
+          subjectId: "transaction-1",
+          subjectType: "pos_transaction",
+        },
+      ],
+      credentials: [
+        {
+          _id: "credential-1",
+          staffProfileId: "manager-1",
+          organizationId: "org_1",
+          storeId: "store_1",
+          username: "manager",
+          pinHash: "hash-1",
+          status: "active",
+        },
+      ],
+      profiles: [
+        {
+          _id: "manager-1",
+          storeId: "store_1",
+          organizationId: "org_1",
+          status: "active",
+          fullName: "Ari Mensah",
+        },
+        ...requesterProfiles,
+      ],
+      roles: [
+        {
+          _id: "role_1",
+          staffProfileId: "manager-1",
+          organizationId: "org_1",
+          storeId: "store_1",
+          role: "manager",
+          isPrimary: true,
+          status: "active",
+          assignedAt: 1,
+        },
+      ],
+    });
+
+    const result = await authenticateStaffCredentialForApprovalWithCtx(ctx, {
+      actionKey: "pos.transaction.payment_method.correct",
+      pinHash: "hash-1",
+      requiredRole: "manager",
+      requesterBinding: {
+        challengeId: "challenge-1" as Id<"approvalRequesterChallenge">,
+        kind: "operational_staff_challenge",
+        requestedByStaffProfileId: "cashier-1" as Id<"staffProfile">,
+      },
+      storeId: "store_1" as Id<"store">,
+      subject: {
+        type: "pos_transaction",
+        id: "transaction-1",
+      },
+      username: "manager",
+    });
+
+    expect(result).toEqual({
+      kind: "user_error",
+      error: {
+        code: "authorization_failed",
+        message: "Requested staff profile is not valid for this approval.",
+      },
+    });
+    expect(tables.approvalRequesterChallenge.get("challenge-1")).not.toHaveProperty(
+      "consumedAt",
+    );
+    expect(tables.approvalProof.size).toBe(0);
+  });
+
   it("rejects approval proof requester attribution for unlinked staff profiles", async () => {
     const { ctx, tables } = createStaffCredentialsMutationCtx({
       credentials: [
@@ -2654,6 +2937,339 @@ describe("staff credential operations", () => {
         message: "Requested staff profile does not match the signed-in user.",
       },
     });
+    expect(tables.approvalProof.size).toBe(0);
+  });
+
+  it("rejects replayed operational requester challenges", async () => {
+    const { ctx, tables } = createStaffCredentialsMutationCtx({
+      approvalRequesterChallenges: [
+        {
+          _id: "challenge-1",
+          actionKey: "pos.transaction.payment_method.correct",
+          consumedAt: 100,
+          createdAt: 1,
+          expiresAt: Date.now() + 60_000,
+          requestedByStaffProfileId: "cashier-1",
+          requiredRole: "manager",
+          storeId: "store_1",
+          subjectId: "transaction-1",
+          subjectType: "pos_transaction",
+        },
+      ],
+      credentials: [
+        {
+          _id: "credential-1",
+          staffProfileId: "manager-1",
+          organizationId: "org_1",
+          storeId: "store_1",
+          username: "manager",
+          pinHash: "hash-1",
+          status: "active",
+        },
+      ],
+      profiles: [
+        {
+          _id: "manager-1",
+          storeId: "store_1",
+          organizationId: "org_1",
+          status: "active",
+          fullName: "Ari Mensah",
+        },
+        {
+          _id: "cashier-1",
+          storeId: "store_1",
+          organizationId: "org_1",
+          status: "active",
+          fullName: "Cashier One",
+        },
+      ],
+      roles: [
+        {
+          _id: "role_1",
+          staffProfileId: "manager-1",
+          organizationId: "org_1",
+          storeId: "store_1",
+          role: "manager",
+          isPrimary: true,
+          status: "active",
+          assignedAt: 1,
+        },
+      ],
+    });
+
+    const result = await authenticateStaffCredentialForApprovalWithCtx(ctx, {
+      actionKey: "pos.transaction.payment_method.correct",
+      pinHash: "hash-1",
+      requiredRole: "manager",
+      requesterBinding: {
+        challengeId: "challenge-1" as Id<"approvalRequesterChallenge">,
+        kind: "operational_staff_challenge",
+        requestedByStaffProfileId: "cashier-1" as Id<"staffProfile">,
+      },
+      storeId: "store_1" as Id<"store">,
+      subject: {
+        type: "pos_transaction",
+        id: "transaction-1",
+      },
+      username: "manager",
+    });
+
+    expect(result).toEqual({
+      kind: "user_error",
+      error: {
+        code: "precondition_failed",
+        message: "Approval requester challenge has already been used.",
+      },
+    });
+    expect(tables.approvalProof.size).toBe(0);
+  });
+
+  it("rejects mixed direct requester and operational requester binding evidence", async () => {
+    const { ctx, tables } = createStaffCredentialsMutationCtx({
+      approvalRequesterChallenges: [
+        {
+          _id: "challenge-1",
+          actionKey: "pos.transaction.payment_method.correct",
+          createdAt: 1,
+          expiresAt: Date.now() + 60_000,
+          requestedByStaffProfileId: "cashier-1",
+          requiredRole: "manager",
+          storeId: "store_1",
+          subjectId: "transaction-1",
+          subjectType: "pos_transaction",
+        },
+      ],
+      credentials: [
+        {
+          _id: "credential-1",
+          staffProfileId: "manager-1",
+          organizationId: "org_1",
+          storeId: "store_1",
+          username: "manager",
+          pinHash: "hash-1",
+          status: "active",
+        },
+      ],
+      profiles: [
+        {
+          _id: "manager-1",
+          storeId: "store_1",
+          organizationId: "org_1",
+          status: "active",
+          fullName: "Ari Mensah",
+        },
+        {
+          _id: "cashier-1",
+          storeId: "store_1",
+          organizationId: "org_1",
+          linkedUserId: "athena-user-1",
+          status: "active",
+          fullName: "Cashier One",
+        },
+      ],
+      roles: [
+        {
+          _id: "role_1",
+          staffProfileId: "manager-1",
+          organizationId: "org_1",
+          storeId: "store_1",
+          role: "manager",
+          isPrimary: true,
+          status: "active",
+          assignedAt: 1,
+        },
+      ],
+    });
+
+    const result = await authenticateStaffCredentialForApprovalWithCtx(ctx, {
+      actionKey: "pos.transaction.payment_method.correct",
+      pinHash: "hash-1",
+      requiredRole: "manager",
+      requesterBinding: {
+        challengeId: "challenge-1" as Id<"approvalRequesterChallenge">,
+        kind: "operational_staff_challenge",
+        requestedByStaffProfileId: "cashier-1" as Id<"staffProfile">,
+      },
+      requestedByStaffProfileId: "cashier-1" as Id<"staffProfile">,
+      storeId: "store_1" as Id<"store">,
+      subject: {
+        type: "pos_transaction",
+        id: "transaction-1",
+      },
+      username: "manager",
+    });
+
+    expect(result).toEqual({
+      kind: "user_error",
+      error: {
+        code: "validation_failed",
+        message:
+          "Approval requester must use either a direct staff profile or a requester binding.",
+      },
+    });
+    const storedChallenge = tables.approvalRequesterChallenge.get("challenge-1");
+    if (storedChallenge) {
+      expect(storedChallenge).not.toHaveProperty("consumedAt");
+    }
+    expect(tables.approvalProof.size).toBe(0);
+  });
+
+  it.each([
+    {
+      name: "missing challenge",
+      challenges: [],
+      binding: {
+        challengeId: "challenge-1" as Id<"approvalRequesterChallenge">,
+        kind: "operational_staff_challenge" as const,
+        requestedByStaffProfileId: "cashier-1" as Id<"staffProfile">,
+      },
+      message: "Approval requester challenge was not found.",
+    },
+    {
+      name: "wrong requester",
+      binding: {
+        challengeId: "challenge-1" as Id<"approvalRequesterChallenge">,
+        kind: "operational_staff_challenge" as const,
+        requestedByStaffProfileId: "cashier-2" as Id<"staffProfile">,
+      },
+      message: "Approval requester challenge does not match this approval.",
+    },
+    {
+      name: "wrong action",
+      args: { actionKey: "pos.transaction.void" },
+      message: "Approval requester challenge does not match this approval.",
+    },
+    {
+      name: "wrong subject id",
+      args: { subject: { type: "pos_transaction", id: "transaction-2" } },
+      message: "Approval requester challenge does not match this approval.",
+    },
+    {
+      name: "wrong subject type",
+      args: { subject: { type: "register_session", id: "transaction-1" } },
+      message: "Approval requester challenge does not match this approval.",
+    },
+    {
+      name: "wrong store",
+      challenge: { storeId: "store_2" as Id<"store"> },
+      message: "Approval requester challenge does not match this approval.",
+    },
+    {
+      name: "wrong required role",
+      args: { requiredRole: "cashier" as const },
+      message: "Approval requester challenge does not match this approval.",
+    },
+    {
+      name: "expired challenge",
+      challenge: { expiresAt: Date.now() - 1 },
+      message: "Approval requester challenge has expired.",
+    },
+  ])("rejects forged operational requester binding evidence: $name", async (scenario) => {
+    const { ctx, tables } = createStaffCredentialsMutationCtx({
+      approvalRequesterChallenges:
+        scenario.challenges ??
+        [
+          {
+            _id: "challenge-1",
+            actionKey: "pos.transaction.payment_method.correct",
+            createdAt: 1,
+            expiresAt: Date.now() + 60_000,
+            requestedByStaffProfileId: "cashier-1",
+            requiredRole: "manager",
+            storeId: "store_1",
+            subjectId: "transaction-1",
+            subjectType: "pos_transaction",
+            ...scenario.challenge,
+          },
+        ],
+      credentials: [
+        {
+          _id: "credential-1",
+          staffProfileId: "manager-1",
+          organizationId: "org_1",
+          storeId: "store_1",
+          username: "manager",
+          pinHash: "hash-1",
+          status: "active",
+        },
+      ],
+      profiles: [
+        {
+          _id: "manager-1",
+          storeId: "store_1",
+          organizationId: "org_1",
+          status: "active",
+          fullName: "Ari Mensah",
+        },
+        {
+          _id: "cashier-1",
+          storeId: "store_1",
+          organizationId: "org_1",
+          status: "active",
+          fullName: "Cashier One",
+        },
+        {
+          _id: "cashier-2",
+          storeId: "store_1",
+          organizationId: "org_1",
+          status: "active",
+          fullName: "Cashier Two",
+        },
+      ],
+      roles: [
+        {
+          _id: "role_1",
+          staffProfileId: "manager-1",
+          organizationId: "org_1",
+          storeId: "store_1",
+          role: "manager",
+          isPrimary: true,
+          status: "active",
+          assignedAt: 1,
+        },
+        {
+          _id: "role_2",
+          staffProfileId: "manager-1",
+          organizationId: "org_1",
+          storeId: "store_1",
+          role: "cashier",
+          isPrimary: false,
+          status: "active",
+          assignedAt: 1,
+        },
+      ],
+    });
+
+    const result = await authenticateStaffCredentialForApprovalWithCtx(ctx, {
+      actionKey: "pos.transaction.payment_method.correct",
+      pinHash: "hash-1",
+      requiredRole: "manager",
+      requesterBinding:
+        scenario.binding ?? {
+          challengeId: "challenge-1" as Id<"approvalRequesterChallenge">,
+          kind: "operational_staff_challenge",
+          requestedByStaffProfileId: "cashier-1" as Id<"staffProfile">,
+        },
+      storeId: "store_1" as Id<"store">,
+      subject: {
+        type: "pos_transaction",
+        id: "transaction-1",
+      },
+      username: "manager",
+      ...scenario.args,
+    });
+
+    expect(result).toEqual({
+      kind: "user_error",
+      error: {
+        code: "precondition_failed",
+        message: scenario.message,
+      },
+    });
+    const storedChallenge = tables.approvalRequesterChallenge.get("challenge-1");
+    if (storedChallenge) {
+      expect(storedChallenge).not.toHaveProperty("consumedAt");
+    }
     expect(tables.approvalProof.size).toBe(0);
   });
 

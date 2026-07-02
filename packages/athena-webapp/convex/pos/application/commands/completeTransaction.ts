@@ -9,6 +9,7 @@ import {
 } from "../../../utils";
 import { toDisplayAmount } from "../../../lib/currency";
 import { buildApprovalRequest } from "../../../operations/approvalRequestHelpers";
+import { createApprovalRequesterChallengeWithCtx } from "../../../operations/approvalRequesterChallenges";
 import {
   APPROVAL_ACTIONS,
   consumeCommandApprovalProofWithCtx,
@@ -999,6 +1000,7 @@ function completedTransactionLabel(transaction: { transactionNumber: string }) {
 function buildVoidApprovalRequirement(args: {
   approvalRequestId?: Id<"approvalRequest">;
   reason?: string;
+  requesterBinding?: ApprovalRequirement["requesterBinding"];
   transaction: {
     _id: Id<"posTransaction">;
     total: number;
@@ -1030,6 +1032,9 @@ function buildVoidApprovalRequirement(args: {
         approvalRequestId: args.approvalRequestId,
       },
     ],
+    ...(args.requesterBinding
+      ? { requesterBinding: args.requesterBinding }
+      : {}),
     metadata: {
       ...(args.reason ? { reason: args.reason } : {}),
       total: args.transaction.total,
@@ -1075,6 +1080,25 @@ async function createVoidApprovalRequest(
   },
 ) {
   const store = await getStoreById(ctx, args.transaction.storeId);
+  const requesterBindingResult = args.actorStaffProfileId
+    ? await createApprovalRequesterChallengeWithCtx(ctx, {
+        actionKey: TRANSACTION_VOID_ACTION.key,
+        organizationId: store?.organizationId,
+        requestedByStaffProfileId: args.actorStaffProfileId,
+        requiredRole: "manager",
+        storeId: args.transaction.storeId,
+        subject: {
+          id: args.transaction._id,
+          label: completedTransactionLabel(args.transaction),
+          type: "pos_transaction",
+        },
+      })
+    : null;
+
+  if (requesterBindingResult?.kind === "user_error") {
+    return requesterBindingResult;
+  }
+
   const approvalRequestId = await ctx.db.insert(
     "approvalRequest",
     buildApprovalRequest({
@@ -1122,7 +1146,10 @@ async function createVoidApprovalRequest(
     subjectType: "pos_transaction",
   });
 
-  return approvalRequestId;
+  return ok({
+    approvalRequestId,
+    requesterBinding: requesterBindingResult?.data.requesterBinding,
+  });
 }
 
 async function requireMatchingPendingVoidApprovalRequest(
@@ -1658,19 +1685,48 @@ export async function voidTransaction(
       storeId: transaction.storeId,
       transactionId: transaction._id,
     });
-    const approvalRequestId =
-      existingApprovalRequest?._id ??
-      (await createVoidApprovalRequest(ctx, {
+    const createdApprovalRequest = existingApprovalRequest
+      ? null
+      : await createVoidApprovalRequest(ctx, {
         actorStaffProfileId,
         actorUserId: args.actorUserId,
         reason,
         transaction,
-      }));
+      });
+
+    if (createdApprovalRequest?.kind === "user_error") {
+      return createdApprovalRequest;
+    }
+
+    const existingRequesterBindingResult =
+      existingApprovalRequest?.requestedByStaffProfileId
+        ? await createApprovalRequesterChallengeWithCtx(ctx, {
+            actionKey: TRANSACTION_VOID_ACTION.key,
+            requestedByStaffProfileId:
+              existingApprovalRequest.requestedByStaffProfileId,
+            requiredRole: "manager",
+            storeId: transaction.storeId,
+            subject: {
+              id: transaction._id,
+              label: completedTransactionLabel(transaction),
+              type: "pos_transaction",
+            },
+          })
+        : null;
+
+    if (existingRequesterBindingResult?.kind === "user_error") {
+      return existingRequesterBindingResult;
+    }
 
     return approvalRequired(
       buildVoidApprovalRequirement({
-        approvalRequestId,
+        approvalRequestId:
+          existingApprovalRequest?._id ??
+          createdApprovalRequest?.data.approvalRequestId,
         reason,
+        requesterBinding:
+          existingRequesterBindingResult?.data.requesterBinding ??
+          createdApprovalRequest?.data.requesterBinding,
         transaction,
       }),
     );
@@ -1689,7 +1745,10 @@ export async function voidTransaction(
   const approvalProof = await consumeCommandApprovalProofWithCtx(ctx, {
     action: TRANSACTION_VOID_ACTION,
     approvalProofId: args.approvalProofId,
-    requestedByStaffProfileId: actorStaffProfileId,
+    requestedByStaffProfileId:
+      matchingApprovalRequest?.kind === "ok"
+        ? matchingApprovalRequest.data.requestedByStaffProfileId
+        : actorStaffProfileId,
     requiredRole: "manager",
     storeId: transaction.storeId,
     subject: {

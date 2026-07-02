@@ -2730,7 +2730,6 @@ describe("RegisterSessionViewContent", () => {
         actorStaffProfileId: "staff-1",
         approvalProofId: undefined,
         registerSessionId: "session-1",
-        requestedByStaffProfileId: "staff-1",
         staffPinHash: "hashed-pin",
         staffUsername: "ato",
       }),
@@ -2975,7 +2974,6 @@ describe("RegisterSessionViewContent", () => {
         countedCash: 17600,
         notes: undefined,
         registerSessionId: "session-1",
-        requestedByStaffProfileId: "staff-1",
       }),
     );
   });
@@ -3113,7 +3111,6 @@ describe("RegisterSessionViewContent", () => {
       pinHash: "hashed-pin",
       reason: "Manager counted the overage.",
       requiredRole: "manager",
-      requestedByStaffProfileId: "staff-1",
       storeId: "store-1",
       subject: {
         id: "session-1",

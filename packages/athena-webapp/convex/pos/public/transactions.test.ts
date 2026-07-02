@@ -23,6 +23,7 @@ import * as correctionCommands from "../application/commands/correctTransaction"
 import * as itemAdjustmentCommands from "../application/commands/adjustTransactionItems";
 import * as completeTransactionCommands from "../application/commands/completeTransaction";
 import * as transactionQueries from "../application/queries/getTransactions";
+import { hashPosLocalStaffProofToken } from "../application/sync/staffProof";
 
 vi.mock("../../lib/athenaUserAuth", () => ({
   requireAuthenticatedAthenaUserWithCtx: vi.fn(),
@@ -345,9 +346,22 @@ describe("POS public transaction read and correction authorization", () => {
   });
 
   function createTransactionAuthCtx(options?: {
+    credentialStatus?: string;
+    credentialStoreId?: string;
+    credentialStaffProfileId?: string;
+    credentialVersion?: number;
     customerStoreId?: string;
+    omitProof?: boolean;
+    proofCredentialId?: string;
+    proofExpiresAt?: number;
+    proofStaffProfileId?: string;
+    proofStatus?: string;
+    proofStoreId?: string;
+    proofTerminalId?: string;
     staffStoreId?: string;
   }) {
+    const tokenHashPromise = hashPosLocalStaffProofToken("proof-token-1");
+
     return {
       db: {
         get: vi.fn(async (tableName: string, id: string) => {
@@ -361,6 +375,18 @@ describe("POS public transaction read and correction authorization", () => {
               storeId: options?.staffStoreId ?? "store-1",
             };
           }
+          if (tableName === "staffCredential" && id === "credential-1") {
+            return {
+              _id: "credential-1",
+              localVerifierVersion: options?.credentialVersion ?? 2,
+              staffProfileId:
+                options?.credentialStaffProfileId ??
+                options?.proofStaffProfileId ??
+                "staff-1",
+              status: options?.credentialStatus ?? "active",
+              storeId: options?.credentialStoreId ?? "store-1",
+            };
+          }
           if (tableName === "customerProfile" && id === "customer-1") {
             return {
               _id: "customer-1",
@@ -370,6 +396,54 @@ describe("POS public transaction read and correction authorization", () => {
           }
           return null;
         }),
+        patch: vi.fn(),
+        query: vi.fn((tableName: string) => ({
+          withIndex: vi.fn(
+            (
+              _indexName: string,
+              applyIndex?: (queryBuilder: {
+                eq: (field: string, value: unknown) => unknown;
+              }) => unknown,
+            ) => {
+              const filters: Array<[string, unknown]> = [];
+              const queryBuilder = {
+                eq(field: string, value: unknown) {
+                  filters.push([field, value]);
+                  return queryBuilder;
+                },
+              };
+              applyIndex?.(queryBuilder);
+
+              return {
+                unique: vi.fn(async () => {
+                  if (tableName !== "posLocalStaffProof") {
+                    return null;
+                  }
+
+                  if (options?.omitProof) {
+                    return null;
+                  }
+
+                  const proof: Record<string, unknown> = {
+                    _id: "proof-1",
+                    credentialId: options?.proofCredentialId ?? "credential-1",
+                    credentialVersion: 2,
+                    expiresAt: options?.proofExpiresAt ?? Date.now() + 60_000,
+                    staffProfileId: options?.proofStaffProfileId ?? "staff-1",
+                    status: options?.proofStatus ?? "active",
+                    storeId: options?.proofStoreId ?? "store-1",
+                    terminalId: options?.proofTerminalId,
+                    tokenHash: await tokenHashPromise,
+                  };
+
+                  return filters.every(([field, value]) => proof[field] === value)
+                    ? proof
+                    : null;
+                }),
+              };
+            },
+          ),
+        })),
       },
     };
   }
@@ -623,6 +697,7 @@ describe("POS public transaction read and correction authorization", () => {
         actorUserId: "forged-user" as Id<"athenaUser">,
         paymentMethod: "card",
         reason: "Wrong payment method",
+        staffProofToken: "proof-token-1",
         transactionId: "txn-1" as Id<"posTransaction">,
       }),
     ).resolves.toMatchObject({ kind: "ok" });
@@ -631,10 +706,146 @@ describe("POS public transaction read and correction authorization", () => {
       ctx,
       expect.objectContaining({
         actorUserId: "user-1",
+        actorStaffProfileId: "staff-1",
         paymentMethod: "card",
+        reason: "Wrong payment method",
         transactionId: "txn-1",
       }),
     );
+    const commandArgs = vi.mocked(
+      correctionCommands.correctTransactionPaymentMethod,
+    ).mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(commandArgs).not.toHaveProperty("staffProofToken");
+    expect(ctx.db.patch).toHaveBeenCalledWith(
+      "posLocalStaffProof",
+      "proof-1",
+      expect.objectContaining({ lastUsedAt: expect.any(Number) }),
+    );
+  });
+
+  it("rejects spoofed payment correction requester staff without matching staff proof", async () => {
+    vi.mocked(transactionQueries.getTransaction).mockResolvedValue({
+      _id: "txn-1",
+      storeId: "store-1",
+    } as never);
+    const ctx = createTransactionAuthCtx({
+      proofStaffProfileId: "other-staff",
+    });
+
+    await expect(
+      getHandler(correctTransactionPaymentMethod)(ctx as never, {
+        actorStaffProfileId: "staff-1" as Id<"staffProfile">,
+        paymentMethod: "card",
+        reason: "Wrong payment method",
+        staffProofToken: "proof-token-1",
+        transactionId: "txn-1" as Id<"posTransaction">,
+      }),
+    ).resolves.toMatchObject({
+      kind: "user_error",
+      error: {
+        code: "authentication_failed",
+        message: "Payment correction staff proof is invalid or expired.",
+      },
+    });
+
+    expect(correctionCommands.correctTransactionPaymentMethod).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    {
+      name: "missing staff actor",
+      args: { actorStaffProfileId: undefined },
+      message: "Staff sign-in is required before correcting payment method.",
+    },
+    {
+      name: "missing staff proof token",
+      args: { staffProofToken: undefined },
+      message:
+        "Payment correction staff proof is required for requester attribution.",
+    },
+    {
+      name: "missing proof",
+      options: { omitProof: true },
+      message: "Payment correction staff proof is invalid or expired.",
+    },
+    {
+      name: "wrong proof token",
+      args: { staffProofToken: "wrong-proof-token" },
+      message: "Payment correction staff proof is invalid or expired.",
+    },
+    {
+      name: "inactive proof",
+      options: { proofStatus: "revoked" },
+      message: "Payment correction staff proof is invalid or expired.",
+    },
+    {
+      name: "expired proof",
+      options: { proofExpiresAt: Date.now() - 1 },
+      message: "Payment correction staff proof is invalid or expired.",
+    },
+    {
+      name: "cross-store proof",
+      options: { proofStoreId: "store-2" },
+      message: "Payment correction staff proof is invalid or expired.",
+    },
+    {
+      name: "terminal mismatch",
+      options: { proofTerminalId: "terminal-1" },
+      transaction: { terminalId: "terminal-2" },
+      message: "Payment correction staff proof is invalid for this terminal.",
+    },
+    {
+      name: "missing credential",
+      options: { proofCredentialId: "missing-credential" },
+      message: "Payment correction staff proof is invalid or expired.",
+    },
+    {
+      name: "inactive credential",
+      options: { credentialStatus: "inactive" },
+      message: "Payment correction staff proof is invalid or expired.",
+    },
+    {
+      name: "credential staff mismatch",
+      options: { credentialStaffProfileId: "other-staff" },
+      message: "Payment correction staff proof is invalid or expired.",
+    },
+    {
+      name: "credential store mismatch",
+      options: { credentialStoreId: "store-2" },
+      message: "Payment correction staff proof is invalid or expired.",
+    },
+    {
+      name: "credential version mismatch",
+      options: { credentialVersion: 3 },
+      message: "Payment correction staff proof is invalid or expired.",
+    },
+  ])("rejects payment correction with $name", async (scenario) => {
+    vi.mocked(transactionQueries.getTransaction).mockResolvedValue({
+      _id: "txn-1",
+      storeId: "store-1",
+      ...scenario.transaction,
+    } as never);
+    const ctx = createTransactionAuthCtx(scenario.options);
+
+    await expect(
+      getHandler(correctTransactionPaymentMethod)(ctx as never, {
+        actorStaffProfileId: "staff-1" as Id<"staffProfile">,
+        paymentMethod: "card",
+        reason: "Wrong payment method",
+        staffProofToken: "proof-token-1",
+        transactionId: "txn-1" as Id<"posTransaction">,
+        ...scenario.args,
+      }),
+    ).resolves.toMatchObject({
+      kind: "user_error",
+      error: {
+        code: "authentication_failed",
+        message: scenario.message,
+      },
+    });
+
+    expect(correctionCommands.correctTransactionPaymentMethod).not.toHaveBeenCalled();
+    expect(ctx.db.patch).not.toHaveBeenCalled();
   });
 
   it("rejects cross-store customer correction before invoking the command", async () => {

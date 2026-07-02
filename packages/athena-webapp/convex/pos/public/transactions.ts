@@ -990,6 +990,7 @@ export const correctTransactionPaymentMethod = mutation({
     reason: v.string(),
     actorUserId: v.optional(v.id("athenaUser")),
     actorStaffProfileId: v.optional(v.id("staffProfile")),
+    staffProofToken: v.optional(v.string()),
   },
   returns: correctTransactionPaymentMethodResultValidator,
   handler: async (ctx, args) => {
@@ -1009,26 +1010,93 @@ export const correctTransactionPaymentMethod = mutation({
         return access;
       }
 
-      if (args.actorStaffProfileId) {
-        const staffProfile = await ctx.db.get(
-          "staffProfile",
-          args.actorStaffProfileId,
-        );
-        if (
-          !staffProfile ||
-          staffProfile.status !== "active" ||
-          staffProfile.storeId !== access.transaction.storeId
-        ) {
-          return userError({
-            code: "authentication_failed",
-            message:
-              "Payment correction staff profile is not active for this store.",
-          });
-        }
+      if (!args.actorStaffProfileId) {
+        return userError({
+          code: "authentication_failed",
+          message: "Staff sign-in is required before correcting payment method.",
+        });
       }
 
+      if (!args.staffProofToken) {
+        return userError({
+          code: "authentication_failed",
+          message:
+            "Payment correction staff proof is required for requester attribution.",
+        });
+      }
+
+      const staffProfile = await ctx.db.get(
+        "staffProfile",
+        args.actorStaffProfileId,
+      );
+      if (
+        !staffProfile ||
+        staffProfile.status !== "active" ||
+        staffProfile.storeId !== access.transaction.storeId
+      ) {
+        return userError({
+          code: "authentication_failed",
+          message:
+            "Payment correction staff profile is not active for this store.",
+        });
+      }
+
+      const staffProofTokenHash = await hashPosLocalStaffProofToken(
+        args.staffProofToken,
+      );
+      const proof = await ctx.db
+        .query("posLocalStaffProof")
+        .withIndex("by_tokenHash", (q) =>
+          q.eq("tokenHash", staffProofTokenHash),
+        )
+        .unique();
+      if (
+        !proof ||
+        proof.status !== "active" ||
+        proof.staffProfileId !== args.actorStaffProfileId ||
+        proof.storeId !== access.transaction.storeId ||
+        proof.expiresAt <= Date.now()
+      ) {
+        return userError({
+          code: "authentication_failed",
+          message: "Payment correction staff proof is invalid or expired.",
+        });
+      }
+
+      if (
+        access.transaction.terminalId &&
+        proof.terminalId !== access.transaction.terminalId
+      ) {
+        return userError({
+          code: "authentication_failed",
+          message: "Payment correction staff proof is invalid for this terminal.",
+        });
+      }
+
+      const credential = await ctx.db.get(
+        "staffCredential",
+        proof.credentialId,
+      );
+      if (
+        !credential ||
+        credential.status !== "active" ||
+        credential.staffProfileId !== args.actorStaffProfileId ||
+        credential.storeId !== access.transaction.storeId ||
+        credential.localVerifierVersion !== proof.credentialVersion
+      ) {
+        return userError({
+          code: "authentication_failed",
+          message: "Payment correction staff proof is invalid or expired.",
+        });
+      }
+
+      await ctx.db.patch("posLocalStaffProof", proof._id, {
+        lastUsedAt: Date.now(),
+      });
+
+      const { staffProofToken: _staffProofToken, ...commandArgs } = args;
       const result = await correctTransactionPaymentMethodCommand(ctx, {
-        ...args,
+        ...commandArgs,
         actorUserId: access.athenaUser._id,
       });
 
