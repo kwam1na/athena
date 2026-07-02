@@ -212,8 +212,8 @@ describe("terminalRepository runtime status", () => {
     });
     const input = {
       ...buildRuntimeStatus(),
-      reportedAt: 30_000,
-      receivedAt: 30_000,
+      reportedAt: 31_000,
+      receivedAt: 31_000,
     };
 
     const result = await upsertLatestRuntimeStatusWithOutcome(
@@ -230,6 +230,28 @@ describe("terminalRepository runtime status", () => {
       "runtime-status-1",
       input,
     );
+  });
+
+  it("coalesces duplicate runtime status reports just before the heartbeat boundary", async () => {
+    const ctx = buildCtx({
+      posTerminalRuntimeStatus: [buildRuntimeStatus()],
+    });
+    const input = {
+      ...buildRuntimeStatus(),
+      reportedAt: 28_000,
+      receivedAt: 28_000,
+    };
+
+    const result = await upsertLatestRuntimeStatusWithOutcome(
+      ctx as never,
+      input,
+    );
+
+    expect(result).toEqual({
+      didWrite: false,
+      runtimeStatusId: "runtime-status-1",
+    });
+    expect(ctx.db.patch).not.toHaveBeenCalled();
   });
 
   it("ignores delayed older runtime status reports for the latest row", async () => {

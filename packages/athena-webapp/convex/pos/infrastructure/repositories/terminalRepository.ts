@@ -169,7 +169,7 @@ export async function upsertLatestRuntimeStatusWithOutcome(
   };
 }
 
-const RUNTIME_STATUS_FAST_DUPLICATE_WINDOW_MS = 25_000;
+const RUNTIME_STATUS_FAST_DUPLICATE_WINDOW_MS = 30_000;
 
 function isFastDuplicateRuntimeStatus(
   existing: Doc<"posTerminalRuntimeStatus">,
