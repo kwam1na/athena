@@ -42,6 +42,9 @@ repo-local invariants:
   `docs/solutions/**/*.md` note even when the line count is small.
 - Changed solution notes must include the expected frontmatter and the
   `Problem`, `Solution`, and `Prevention` sections.
+- Foundational architecture solution notes must be linked from a relevant
+  package agent doc under
+  `packages/*/docs/agent/{architecture.md,code-map.md,testing.md}`.
 
 The source threshold intentionally ignores generated files, test files, and
 docs-only changes. The goal is to catch meaningful implementation deliveries,
@@ -71,14 +74,26 @@ The quality check keeps the gate from becoming a checkbox. A changed
 the problem, the fix, and the prevention rule. Placeholder notes fail in the
 same command that would otherwise accept them.
 
+The discoverability check keeps architecture foundations from becoming isolated
+archive entries. If a solution note describes a foundation, primitive,
+aggregate, contract, policy, or architecture pattern, at least one package
+agent doc must point to it. That makes the package architecture and code-map
+docs the entrypoint for future agents while `docs/solutions/` remains the
+durable knowledge store.
+
 ## Prevention
 
 - Keep `bun run compound:check` in `pr:athena`.
 - When a plan lists a future `docs/solutions/` path, create or update that file
   before merge-ready handoff.
+- Use the repo-local `.agents/skills/ce-compound` skill and template instead of
+  hand-rolling the note shape. The template is the authoring contract that
+  `compound:check` enforces.
 - Do not satisfy the gate with empty documentation. The note should capture the
   reusable boundary, failure mode, command, or workflow decision future agents
   need.
+- When a note captures foundational architecture, add a direct reference from
+  the relevant package agent architecture, code-map, or testing doc.
 - Treat the final integration branch as the unit of compounding. Parallel
   subagent work is evaluated in aggregate, so the final branch needs the durable
   learning artifact even if no single worker owned the note.

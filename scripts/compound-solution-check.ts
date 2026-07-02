@@ -10,6 +10,8 @@ type CompoundSolutionCheckInput = {
   changedFiles: string[];
   existingFiles: Set<string>;
   markdownContents: Map<string, string>;
+  solutionDocContents?: Map<string, string>;
+  agentDocContents?: Map<string, string>;
   sourceLineChanges: Map<string, LineChange>;
   threshold?: number;
 };
@@ -19,7 +21,7 @@ type CompoundSolutionFinding = {
 };
 
 const DEFAULT_SOURCE_LINE_THRESHOLD = 150;
-const REQUIRED_SOLUTION_FRONTMATTER_FIELDS = [
+export const REQUIRED_SOLUTION_FRONTMATTER_FIELDS = [
   "title",
   "date",
   "category",
@@ -30,7 +32,19 @@ const REQUIRED_SOLUTION_FRONTMATTER_FIELDS = [
   "severity",
   "tags",
 ] as const;
-const REQUIRED_SOLUTION_SECTIONS = ["Problem", "Solution", "Prevention"] as const;
+export const REQUIRED_SOLUTION_SECTIONS = ["Problem", "Solution", "Prevention"] as const;
+
+export const AGENT_SOLUTION_DISCOVERY_DOC_PATTERN =
+  /^packages\/[^/]+\/docs\/agent\/(?:architecture|code-map|testing)\.md$/;
+const FOUNDATIONAL_ARCHITECTURE_MARKERS = [
+  "foundation",
+  "foundational",
+  "architecture_pattern",
+  "primitives",
+  "aggregate",
+  "contract",
+  "policy",
+] as const;
 
 const SOURCE_PATTERNS = [
   /^packages\/[^/]+\/src\/.*\.(ts|tsx|js|jsx)$/,
@@ -131,6 +145,50 @@ function missingSolutionSections(markdown: string) {
   );
 }
 
+function solutionFrontmatterField(markdown: string, field: string) {
+  const frontmatter = extractFrontmatter(markdown);
+  const match = frontmatter.match(new RegExp(`^${field}:\\s*(.+?)\\s*$`, "m"));
+
+  return match?.[1]?.replace(/^["']|["']$/g, "").trim() ?? "";
+}
+
+function isFoundationalArchitectureSolutionNote(filePath: string, markdown: string) {
+  if (solutionFrontmatterField(markdown, "category") !== "architecture") {
+    return false;
+  }
+
+  const searchableText = [
+    filePath,
+    solutionFrontmatterField(markdown, "title"),
+    solutionFrontmatterField(markdown, "problem_type"),
+    solutionFrontmatterField(markdown, "resolution_type"),
+    solutionFrontmatterField(markdown, "tags"),
+  ]
+    .join("\n")
+    .toLowerCase();
+
+  return FOUNDATIONAL_ARCHITECTURE_MARKERS.some((marker) =>
+    searchableText.includes(marker)
+  );
+}
+
+function hasAgentDocSolutionReference(
+  solutionDocPath: string,
+  agentDocContents: Map<string, string>
+) {
+  for (const [filePath, markdown] of agentDocContents) {
+    if (!AGENT_SOLUTION_DISCOVERY_DOC_PATTERN.test(normalizeRepoPath(filePath))) {
+      continue;
+    }
+
+    if (markdown.includes(solutionDocPath)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 function totalConsiderableSourceLineChanges(
   sourceLineChanges: Map<string, LineChange>
 ) {
@@ -151,6 +209,8 @@ export function collectCompoundSolutionFindings({
   changedFiles,
   existingFiles,
   markdownContents,
+  solutionDocContents = markdownContents,
+  agentDocContents = markdownContents,
   sourceLineChanges,
   threshold = DEFAULT_SOURCE_LINE_THRESHOLD,
 }: CompoundSolutionCheckInput) {
@@ -195,6 +255,17 @@ export function collectCompoundSolutionFindings({
         message: `Changed solution note ${filePath} is missing required sections: ${missingSections.join(
           ", "
         )}.`,
+      });
+    }
+  }
+
+  for (const [filePath, markdown] of solutionDocContents) {
+    if (
+      isFoundationalArchitectureSolutionNote(filePath, markdown) &&
+      !hasAgentDocSolutionReference(filePath, agentDocContents)
+    ) {
+      findings.push({
+        message: `Foundational architecture solution note ${filePath} is missing an agent-doc discovery reference. Link it from packages/*/docs/agent/{architecture.md,code-map.md,testing.md} so future agents can find the durable concept.`,
       });
     }
   }
@@ -347,6 +418,40 @@ function collectMarkdownContents(rootDir: string, changedFiles: string[]) {
   return contents;
 }
 
+function collectAgentDocContents(rootDir: string, existingFiles: Set<string>) {
+  const contents = new Map<string, string>();
+
+  for (const filePath of existingFiles) {
+    if (!AGENT_SOLUTION_DISCOVERY_DOC_PATTERN.test(filePath)) {
+      continue;
+    }
+
+    const absolutePath = path.join(rootDir, filePath);
+    if (existsSync(absolutePath)) {
+      contents.set(filePath, readFileSync(absolutePath, "utf8"));
+    }
+  }
+
+  return contents;
+}
+
+function collectSolutionDocContents(rootDir: string, existingFiles: Set<string>) {
+  const contents = new Map<string, string>();
+
+  for (const filePath of existingFiles) {
+    if (!isSolutionDocPath(filePath)) {
+      continue;
+    }
+
+    const absolutePath = path.join(rootDir, filePath);
+    if (existsSync(absolutePath)) {
+      contents.set(filePath, readFileSync(absolutePath, "utf8"));
+    }
+  }
+
+  return contents;
+}
+
 function collectExistingFiles(rootDir: string) {
   return new Set(
     parseChangedFiles(runGit(rootDir, ["ls-files", "--cached", "--others", "--exclude-standard"]))
@@ -395,10 +500,13 @@ export function assertCompoundSolutionCheck(
   const baseRef = options.baseRef ?? "origin/main";
   const threshold = options.threshold ?? DEFAULT_SOURCE_LINE_THRESHOLD;
   const changedFiles = collectChangedFiles(rootDir, baseRef);
+  const existingFiles = collectExistingFiles(rootDir);
   const findings = collectCompoundSolutionFindings({
     changedFiles,
-    existingFiles: collectExistingFiles(rootDir),
+    existingFiles,
     markdownContents: collectMarkdownContents(rootDir, changedFiles),
+    solutionDocContents: collectSolutionDocContents(rootDir, existingFiles),
+    agentDocContents: collectAgentDocContents(rootDir, existingFiles),
     sourceLineChanges: collectSourceLineChanges(rootDir, baseRef, changedFiles),
     threshold,
   });
@@ -407,7 +515,7 @@ export function assertCompoundSolutionCheck(
     throw new Error(
       `Compound solution check failed:\n${findings
         .map((finding) => `- ${finding.message}`)
-        .join("\n")}\n\nThis is the final integration gate for the whole branch, including parallel subagent work. Add or update a complete docs/solutions note for reusable work, remove stale solution references from changed docs, or tighten this sensor with a focused regression if the branch is a proven false positive.`
+        .join("\n")}\n\nThis is the final integration gate for the whole branch, including parallel subagent work. Use the repo-local \`.agents/skills/ce-compound\` skill and its template when adding or updating solution notes. Add or update a complete docs/solutions note for reusable work, remove stale solution references from changed docs, link foundational architecture notes from package agent docs, or tighten this sensor with a focused regression if the branch is a proven false positive.`
     );
   }
 }

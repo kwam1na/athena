@@ -1,9 +1,13 @@
+import { readFileSync } from "node:fs";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
+  AGENT_SOLUTION_DISCOVERY_DOC_PATTERN,
+  REQUIRED_SOLUTION_FRONTMATTER_FIELDS,
+  REQUIRED_SOLUTION_SECTIONS,
   assertCompoundSolutionCheck,
   collectCompoundSolutionFindings,
   extractSolutionReferences,
@@ -102,6 +106,31 @@ Run the compound check before handoff.
 `;
 }
 
+function architectureSolutionNote(title = "Terminal Boundary") {
+  return solutionNote(title)
+    .replace("category: harness", "category: architecture")
+    .replace("module: repo", "module: pos")
+    .replace("component: compound-check", "component: terminal-health")
+    .replace("resolution_type: guardrail", "resolution_type: foundational_store_schedule");
+}
+
+function nonFoundationalArchitectureSolutionNote(title = "Terminal Detail") {
+  return solutionNote(title)
+    .replace("category: harness", "category: architecture")
+    .replace("module: repo", "module: pos")
+    .replace("component: compound-check", "component: terminal-health")
+    .replace("resolution_type: guardrail", "resolution_type: workflow_improvement");
+}
+
+function extractTemplateBlock(template: string, heading: string, nextHeading?: string) {
+  const start = template.indexOf(heading);
+  const end = nextHeading
+    ? template.indexOf(nextHeading, start + heading.length)
+    : -1;
+
+  return template.slice(start, end === -1 ? undefined : end);
+}
+
 describe("extractSolutionReferences", () => {
   it("finds repo-relative solution doc references in markdown", () => {
     expect(
@@ -129,6 +158,37 @@ describe("isConsiderableSourcePath", () => {
     "packages/athena-webapp/convex/_generated/api.d.ts",
   ])("ignores non-source or generated file %s", (filePath) => {
     expect(isConsiderableSourcePath(filePath)).toBe(false);
+  });
+});
+
+describe("solution authoring affordances", () => {
+  it("keeps ce-compound templates aligned with validator-required fields and sections", () => {
+    const template = readFileSync(
+      path.resolve(
+        import.meta.dirname,
+        "../.agents/skills/ce-compound/assets/resolution-template.md"
+      ),
+      "utf8"
+    );
+    const bugTemplate = extractTemplateBlock(
+      template,
+      "## Bug Track Template",
+      "## Knowledge Track Template"
+    );
+    const knowledgeTemplate = extractTemplateBlock(
+      template,
+      "## Knowledge Track Template"
+    );
+
+    for (const templateBlock of [bugTemplate, knowledgeTemplate]) {
+      for (const field of REQUIRED_SOLUTION_FRONTMATTER_FIELDS) {
+        expect(templateBlock).toContain(`${field}:`);
+      }
+
+      for (const section of REQUIRED_SOLUTION_SECTIONS) {
+        expect(templateBlock).toContain(`## ${section}`);
+      }
+    }
   });
 });
 
@@ -298,6 +358,200 @@ describe("collectCompoundSolutionFindings", () => {
       },
     ]);
   });
+
+  it("identifies a changed solution note missing only the Solution section", () => {
+    const findings = collectCompoundSolutionFindings({
+      changedFiles: ["docs/solutions/harness/partial.md"],
+      existingFiles: new Set(["docs/solutions/harness/partial.md"]),
+      markdownContents: new Map([
+        [
+          "docs/solutions/harness/partial.md",
+          solutionNote("Partial").replace(
+            "\n## Solution\n\nRequire a concrete solution note before merge.\n",
+            "\n"
+          ),
+        ],
+      ]),
+      sourceLineChanges: lineChanges([]),
+    });
+
+    expect(findings).toEqual([
+      {
+        message:
+          "Changed solution note docs/solutions/harness/partial.md is missing required sections: Solution.",
+      },
+    ]);
+  });
+
+  it("fails changed architecture solution notes without an agent-doc discovery reference", () => {
+    const findings = collectCompoundSolutionFindings({
+      changedFiles: ["docs/solutions/architecture/terminal-boundary.md"],
+      existingFiles: new Set([
+        "docs/solutions/architecture/terminal-boundary.md",
+        "packages/athena-webapp/docs/agent/architecture.md",
+      ]),
+      markdownContents: new Map([
+        [
+          "docs/solutions/architecture/terminal-boundary.md",
+          architectureSolutionNote(),
+        ],
+      ]),
+      solutionDocContents: new Map([
+        [
+          "docs/solutions/architecture/terminal-boundary.md",
+          architectureSolutionNote(),
+        ],
+      ]),
+      agentDocContents: new Map([
+        [
+          "packages/athena-webapp/docs/agent/architecture.md",
+          "# Architecture\n",
+        ],
+      ]),
+      sourceLineChanges: lineChanges([]),
+    });
+
+    expect(findings).toEqual([
+      {
+        message:
+          "Foundational architecture solution note docs/solutions/architecture/terminal-boundary.md is missing an agent-doc discovery reference. Link it from packages/*/docs/agent/{architecture.md,code-map.md,testing.md} so future agents can find the durable concept.",
+      },
+    ]);
+  });
+
+  it("passes changed architecture solution notes when an agent doc references them", () => {
+    const findings = collectCompoundSolutionFindings({
+      changedFiles: ["docs/solutions/architecture/terminal-boundary.md"],
+      existingFiles: new Set([
+        "docs/solutions/architecture/terminal-boundary.md",
+        "packages/athena-webapp/docs/agent/architecture.md",
+      ]),
+      markdownContents: new Map([
+        [
+          "docs/solutions/architecture/terminal-boundary.md",
+          architectureSolutionNote(),
+        ],
+      ]),
+      solutionDocContents: new Map([
+        [
+          "docs/solutions/architecture/terminal-boundary.md",
+          architectureSolutionNote(),
+        ],
+      ]),
+      agentDocContents: new Map([
+        [
+          "packages/athena-webapp/docs/agent/architecture.md",
+          "See docs/solutions/architecture/terminal-boundary.md.\n",
+        ],
+      ]),
+      sourceLineChanges: lineChanges([]),
+    });
+
+    expect(findings).toEqual([]);
+  });
+
+  it("fails existing foundational architecture notes that are not agent-discoverable", () => {
+    const findings = collectCompoundSolutionFindings({
+      changedFiles: ["docs/harness.md"],
+      existingFiles: new Set([
+        "docs/harness.md",
+        "docs/solutions/architecture/store-schedule.md",
+        "packages/athena-webapp/docs/agent/architecture.md",
+      ]),
+      markdownContents: new Map([["docs/harness.md", "# Harness\n"]]),
+      solutionDocContents: new Map([
+        [
+          "docs/solutions/architecture/store-schedule.md",
+          architectureSolutionNote("Store Schedule"),
+        ],
+      ]),
+      agentDocContents: new Map([
+        [
+          "packages/athena-webapp/docs/agent/architecture.md",
+          "# Architecture\n",
+        ],
+      ]),
+      sourceLineChanges: lineChanges([]),
+    });
+
+    expect(findings).toEqual([
+      {
+        message:
+          "Foundational architecture solution note docs/solutions/architecture/store-schedule.md is missing an agent-doc discovery reference. Link it from packages/*/docs/agent/{architecture.md,code-map.md,testing.md} so future agents can find the durable concept.",
+      },
+    ]);
+  });
+
+  it("keeps non-architecture solution notes out of the agent-doc reference rule", () => {
+    const findings = collectCompoundSolutionFindings({
+      changedFiles: ["docs/solutions/logic-errors/procurement.md"],
+      existingFiles: new Set([
+        "docs/solutions/logic-errors/procurement.md",
+        "packages/athena-webapp/docs/agent/architecture.md",
+      ]),
+      markdownContents: new Map([
+        ["docs/solutions/logic-errors/procurement.md", solutionNote()],
+      ]),
+      agentDocContents: new Map([
+        [
+          "packages/athena-webapp/docs/agent/architecture.md",
+          "# Architecture\n",
+        ],
+      ]),
+      sourceLineChanges: lineChanges([]),
+    });
+
+    expect(findings).toEqual([]);
+  });
+
+  it("keeps non-foundational architecture solution notes out of the agent-doc reference rule", () => {
+    const findings = collectCompoundSolutionFindings({
+      changedFiles: ["docs/solutions/architecture/terminal-detail.md"],
+      existingFiles: new Set([
+        "docs/solutions/architecture/terminal-detail.md",
+        "packages/athena-webapp/docs/agent/architecture.md",
+      ]),
+      markdownContents: new Map([
+        [
+          "docs/solutions/architecture/terminal-detail.md",
+          nonFoundationalArchitectureSolutionNote(),
+        ],
+      ]),
+      solutionDocContents: new Map([
+        [
+          "docs/solutions/architecture/terminal-detail.md",
+          nonFoundationalArchitectureSolutionNote(),
+        ],
+      ]),
+      agentDocContents: new Map([
+        [
+          "packages/athena-webapp/docs/agent/architecture.md",
+          "# Architecture\n",
+        ],
+      ]),
+      sourceLineChanges: lineChanges([]),
+    });
+
+    expect(findings).toEqual([]);
+  });
+});
+
+describe("agent solution discovery docs", () => {
+  it.each([
+    "packages/athena-webapp/docs/agent/architecture.md",
+    "packages/storefront-webapp/docs/agent/code-map.md",
+    "packages/valkey-proxy-server/docs/agent/testing.md",
+  ])("matches expected agent discovery doc %s", (filePath) => {
+    expect(AGENT_SOLUTION_DISCOVERY_DOC_PATTERN.test(filePath)).toBe(true);
+  });
+
+  it("does not treat generated agent metadata as a discovery doc", () => {
+    expect(
+      AGENT_SOLUTION_DISCOVERY_DOC_PATTERN.test(
+        "packages/athena-webapp/docs/agent/validation-map.json"
+      )
+    ).toBe(false);
+  });
 });
 
 describe("assertCompoundSolutionCheck", () => {
@@ -359,5 +613,20 @@ describe("assertCompoundSolutionCheck", () => {
         threshold: 10,
       })
     ).not.toThrow();
+  });
+
+  it("points agents to the repo-local ce-compound skill when the gate fails", async () => {
+    const rootDir = await createFixtureRepo();
+    await write(
+      rootDir,
+      "docs/plans/procurement.md",
+      "Compound in docs/solutions/logic-errors/procurement.md.\n"
+    );
+
+    expect(() =>
+      assertCompoundSolutionCheck(rootDir, {
+        baseRef: "HEAD",
+      })
+    ).toThrow("Use the repo-local `.agents/skills/ce-compound` skill");
   });
 });
