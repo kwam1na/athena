@@ -4541,6 +4541,48 @@ describe("usePosLocalSyncRuntimeStatus", () => {
     ).toEqual(["event-held", "event-held-later"]);
   });
 
+  it("treats server-owned inventory review sales as locally settled", () => {
+    const accepted = [
+      { localEventId: "event-sale", status: "conflicted" },
+      { localEventId: "event-payment", status: "conflicted" },
+    ];
+    const mappings = [
+      {
+        cloudTable: "posTransaction",
+        localEventId: "event-sale",
+        localIdKind: "transaction",
+      },
+      {
+        cloudTable: "operationalWorkItem",
+        localEventId: "event-sale",
+        localIdKind: "inventoryReviewWorkItem",
+      },
+      {
+        cloudTable: "posTransaction",
+        localEventId: "event-payment",
+        localIdKind: "transaction",
+      },
+    ];
+    const conflicts = [
+      {
+        conflictType: "inventory",
+        localEventId: "event-sale",
+        status: "needs_review",
+      },
+      {
+        conflictType: "payment",
+        localEventId: "event-payment",
+        status: "needs_review",
+      },
+    ];
+
+    expect(
+      collectServerSettledLocalEventIds(accepted, mappings, conflicts),
+    ).toEqual(["event-sale"]);
+    expect(collectServerReviewLocalEventIds(accepted, mappings, conflicts))
+      .toEqual(["event-payment"]);
+  });
+
   it("marks cleared-sale local precursors synced when the clear event uploads", () => {
     expect(
       collectSyncedLocalEventIds(

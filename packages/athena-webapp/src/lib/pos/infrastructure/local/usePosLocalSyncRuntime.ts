@@ -659,6 +659,8 @@ export function usePosLocalSyncRuntimeStatus(input: {
             }
             const reviewEventIds = collectServerReviewLocalEventIds(
               result.data.accepted,
+              result.data.mappings,
+              result.data.conflicts,
             );
             const rejectedEventIds = collectServerRejectedLocalEventIds(
               result.data.accepted,
@@ -686,7 +688,11 @@ export function usePosLocalSyncRuntimeStatus(input: {
             });
             const syncedEventIds = collectSyncedLocalEventIds(
               latestEvents.value.events,
-              collectServerSettledLocalEventIds(result.data.accepted),
+              collectServerSettledLocalEventIds(
+                result.data.accepted,
+                result.data.mappings,
+                result.data.conflicts,
+              ),
             );
             const localSyncedEventIds = mergeEventIds(
               locallySettledEventIds,
@@ -2048,9 +2054,27 @@ export function collectServerSettledLocalEventIds(
     localEventId: string;
     status: string;
   }>,
+  mappings: Array<{
+    cloudTable: string;
+    localEventId: string;
+    localIdKind: string;
+  }> = [],
+  conflicts: Array<{
+    conflictType: string;
+    localEventId: string;
+    status: string;
+  }> = [],
 ) {
   return acceptedEvents
-    .filter((event) => event.status === "projected")
+    .filter(
+      (event) =>
+        event.status === "projected" ||
+        isServerOwnedInventoryReviewSettlement(
+          event.localEventId,
+          mappings,
+          conflicts,
+        ),
+    )
     .map((event) => event.localEventId);
 }
 
@@ -2059,10 +2083,68 @@ export function collectServerReviewLocalEventIds(
     localEventId: string;
     status: string;
   }>,
+  mappings: Array<{
+    cloudTable: string;
+    localEventId: string;
+    localIdKind: string;
+  }> = [],
+  conflicts: Array<{
+    conflictType: string;
+    localEventId: string;
+    status: string;
+  }> = [],
 ) {
   return acceptedEvents
-    .filter((event) => event.status === "conflicted")
+    .filter(
+      (event) =>
+        event.status === "conflicted" &&
+        !isServerOwnedInventoryReviewSettlement(
+          event.localEventId,
+          mappings,
+          conflicts,
+        ),
+    )
     .map((event) => event.localEventId);
+}
+
+function isServerOwnedInventoryReviewSettlement(
+  localEventId: string,
+  mappings: Array<{
+    cloudTable: string;
+    localEventId: string;
+    localIdKind: string;
+  }>,
+  conflicts: Array<{
+    conflictType: string;
+    localEventId: string;
+    status: string;
+  }>,
+) {
+  const hasOpenInventoryReviewConflict = conflicts.some(
+    (conflict) =>
+      conflict.localEventId === localEventId &&
+      conflict.conflictType === "inventory" &&
+      conflict.status === "needs_review",
+  );
+  if (!hasOpenInventoryReviewConflict) {
+    return false;
+  }
+
+  const localMappings = mappings.filter(
+    (mapping) => mapping.localEventId === localEventId,
+  );
+  const hasProjectedTransaction = localMappings.some(
+    (mapping) =>
+      mapping.localIdKind === "transaction" &&
+      mapping.cloudTable === "posTransaction",
+  );
+  const hasInventoryReviewWork = localMappings.some(
+    (mapping) =>
+      mapping.localIdKind === "inventoryReviewWorkItem" &&
+      mapping.cloudTable === "operationalWorkItem",
+  );
+
+  return hasProjectedTransaction && hasInventoryReviewWork;
 }
 
 export function collectServerRejectedLocalEventIds(
