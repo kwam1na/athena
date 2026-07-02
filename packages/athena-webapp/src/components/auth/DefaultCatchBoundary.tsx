@@ -5,7 +5,9 @@ import {
   useMatch,
   useRouter,
 } from "@tanstack/react-router";
+import { ArrowLeft, Home } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
 import {
   GENERIC_UNEXPECTED_ERROR_MESSAGE,
   GENERIC_UNEXPECTED_ERROR_TITLE,
@@ -17,49 +19,66 @@ export function DefaultCatchBoundary({ error }: ErrorComponentProps) {
     strict: false,
     select: (state) => state.id === rootRouteId,
   });
+  const actionClassName =
+    "transition-transform duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-[0.98]";
 
   console.error(error);
 
   return (
-    <div className="min-w-0 flex-1 p-4 flex flex-col items-center justify-center gap-6">
-      <div className="max-w-md space-y-3 text-center">
-        <h1 className="text-2xl font-bold">
-          {GENERIC_UNEXPECTED_ERROR_TITLE}
-        </h1>
-        <p className="text-sm text-gray-300">
-          {GENERIC_UNEXPECTED_ERROR_MESSAGE} If the problem keeps happening, go
-          back and retry the action.
-        </p>
-      </div>
-      <div className="flex gap-2 items-center flex-wrap">
-        <button
-          onClick={() => {
-            router.invalidate();
-          }}
-          className={`px-2 py-1 bg-gray-600 rounded text-white uppercase font-extrabold`}
-        >
-          Try Again
-        </button>
-        {isRoot ? (
-          <Link
-            to="/"
-            className={`px-2 py-1 bg-gray-600 rounded text-white uppercase font-extrabold`}
-          >
-            Home
-          </Link>
-        ) : (
-          <Link
-            to="/"
-            className={`px-2 py-1 bg-gray-600 rounded text-white uppercase font-extrabold`}
-            onClick={(e) => {
-              e.preventDefault();
-              window.history.back();
+    <section
+      aria-labelledby="default-catch-boundary-title"
+      className="flex min-h-[100svh] min-w-0 flex-1 items-center justify-center bg-background px-6 py-12 text-foreground sm:px-10 lg:px-14"
+    >
+      <div className="mx-auto w-full max-w-3xl space-y-layout-2xl">
+        <div className="space-y-layout-lg">
+          <div className="space-y-3">
+            <h1
+              id="default-catch-boundary-title"
+              className="font-display text-4xl leading-tight tracking-normal text-foreground sm:text-[clamp(2.75rem,4.6vw,4.75rem)] sm:leading-[0.95] sm:tracking-[-0.05em]"
+            >
+              {GENERIC_UNEXPECTED_ERROR_TITLE}
+            </h1>
+            <p className="text-sm leading-6 text-muted-foreground md:text-lg md:leading-7">
+              {GENERIC_UNEXPECTED_ERROR_MESSAGE} If the problem keeps happening,
+              go back and retry the action.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-col items-start gap-2 sm:flex-row sm:flex-wrap">
+          {isRoot ? (
+            <Button asChild className={actionClassName} variant="outline">
+              <Link to="/">
+                <Home aria-hidden="true" className="h-4 w-4" />
+                Home
+              </Link>
+            </Button>
+          ) : (
+            <Button asChild className={actionClassName} variant="outline">
+              <Link
+                to="/"
+                onClick={(event) => {
+                  event.preventDefault();
+                  window.history.back();
+                }}
+              >
+                <ArrowLeft aria-hidden="true" className="h-4 w-4" />
+                Go back
+              </Link>
+            </Button>
+          )}
+
+          <Button
+            onClick={() => {
+              router.invalidate();
             }}
+            className={actionClassName}
+            variant="workflow"
           >
-            Go Back
-          </Link>
-        )}
+            Try again
+          </Button>
+        </div>
       </div>
-    </div>
+    </section>
   );
 }
