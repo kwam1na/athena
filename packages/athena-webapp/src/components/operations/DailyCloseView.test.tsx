@@ -1561,6 +1561,161 @@ describe("DailyCloseViewContent", () => {
     });
   });
 
+  it("routes carry-forward item completion through the resolver action", async () => {
+    const user = userEvent.setup();
+    const onResolveCarryForward = vi.fn(async () =>
+      ok({ workItemId: "carry-1" }),
+    );
+    const snapshot: DailyCloseSnapshot = {
+      ...readySnapshot,
+      carryForwardItems: [
+        {
+          carryForwardResolution: {
+            businessDate: "2026-05-07",
+            dailyCloseId: "daily-close-1" as Id<"dailyClose">,
+            sourceId: "customer-follow-up",
+            workItemId: "carry-1" as Id<"operationalWorkItem">,
+          },
+          description: "Call customer during opening.",
+          id: "carry-1",
+          statusLabel: "Carry forward",
+          subject: {
+            id: "carry-1",
+            label: "Customer follow-up",
+            type: "operational_work_item",
+          },
+          title: "Customer follow-up",
+        },
+      ],
+      status: "carry_forward",
+      summary: {
+        ...baseSummary,
+        carryForwardCount: 1,
+      },
+    };
+
+    renderContent(snapshot, { onResolveCarryForward });
+
+    await user.click(screen.getByRole("button", { name: /mark complete/i }));
+
+    await waitFor(() => {
+      expect(onResolveCarryForward).toHaveBeenCalledWith({
+        businessDate: "2026-05-07",
+        dailyCloseId: "daily-close-1",
+        outcome: "completed",
+        reason: "Carry-forward follow-up completed from EOD Review.",
+        sourceId: "customer-follow-up",
+        workItemId: "carry-1",
+      });
+    });
+  });
+
+  it("routes carry-forward item cancellation through the resolver action", async () => {
+    const user = userEvent.setup();
+    const onResolveCarryForward = vi.fn(async () =>
+      ok({ workItemId: "carry-1" }),
+    );
+    const snapshot: DailyCloseSnapshot = {
+      ...readySnapshot,
+      carryForwardItems: [
+        {
+          carryForwardResolution: {
+            businessDate: "2026-05-07",
+            dailyCloseId: "daily-close-1" as Id<"dailyClose">,
+            sourceId: "customer-follow-up",
+            workItemId: "carry-1" as Id<"operationalWorkItem">,
+          },
+          description: "Call customer during opening.",
+          id: "carry-1",
+          statusLabel: "Carry forward",
+          subject: {
+            id: "carry-1",
+            label: "Customer follow-up",
+            type: "operational_work_item",
+          },
+          title: "Customer follow-up",
+        },
+      ],
+      status: "carry_forward",
+      summary: {
+        ...baseSummary,
+        carryForwardCount: 1,
+      },
+    };
+
+    renderContent(snapshot, { onResolveCarryForward });
+
+    await user.click(screen.getByRole("button", { name: /cancel follow-up/i }));
+
+    await waitFor(() => {
+      expect(onResolveCarryForward).toHaveBeenCalledWith({
+        businessDate: "2026-05-07",
+        dailyCloseId: "daily-close-1",
+        outcome: "cancelled",
+        reason: "Carry-forward follow-up cancelled from EOD Review.",
+        sourceId: "customer-follow-up",
+        workItemId: "carry-1",
+      });
+    });
+  });
+
+  it("shows cancellation loading on the cancel action without replacing mark complete", async () => {
+    const user = userEvent.setup();
+    let resolveAction!: (value: ReturnType<typeof ok>) => void;
+    const pendingAction = new Promise<ReturnType<typeof ok>>((resolve) => {
+      resolveAction = resolve;
+    });
+    const onResolveCarryForward = vi.fn(() => pendingAction);
+    const snapshot: DailyCloseSnapshot = {
+      ...readySnapshot,
+      carryForwardItems: [
+        {
+          carryForwardResolution: {
+            businessDate: "2026-05-07",
+            dailyCloseId: "daily-close-1" as Id<"dailyClose">,
+            sourceId: "customer-follow-up",
+            workItemId: "carry-1" as Id<"operationalWorkItem">,
+          },
+          description: "Call customer during opening.",
+          id: "carry-1",
+          statusLabel: "Carry forward",
+          subject: {
+            id: "carry-1",
+            label: "Customer follow-up",
+            type: "operational_work_item",
+          },
+          title: "Customer follow-up",
+        },
+      ],
+      status: "carry_forward",
+      summary: {
+        ...baseSummary,
+        carryForwardCount: 1,
+      },
+    };
+
+    renderContent(snapshot, { onResolveCarryForward });
+
+    await user.click(screen.getByRole("button", { name: /cancel follow-up/i }));
+
+    await waitFor(() => {
+      expect(onResolveCarryForward).toHaveBeenCalled();
+    });
+    expect(
+      screen.getByRole("button", { name: /mark complete/i }),
+    ).toBeDisabled();
+    expect(
+      screen.queryByRole("button", { name: /cancel follow-up/i }),
+    ).not.toBeInTheDocument();
+
+    resolveAction(ok({ workItemId: "carry-1" }));
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: /cancel follow-up/i }),
+      ).toBeInTheDocument();
+    });
+  });
+
   it("does not send redacted carry-forward placeholders as completion ids", async () => {
     const user = userEvent.setup();
     const onComplete = vi.fn(async () => ok({ closeId: "close-1" }));

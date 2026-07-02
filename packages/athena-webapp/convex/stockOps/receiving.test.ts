@@ -85,7 +85,9 @@ function createReceivingMutationCtx(args?: {
       ],
     ]),
     catalogSummary: new Map<string, Record<string, unknown>>(),
+    inventoryMovement: new Map<string, Record<string, unknown>>(),
     receivingBatch: new Map<string, Record<string, unknown>>(),
+    skuActivityEvent: new Map<string, Record<string, unknown>>(),
     store: new Map<string, Record<string, unknown>>([
       ["store-1", { _id: "store-1", organizationId: "org-1" }],
     ]),
@@ -94,12 +96,16 @@ function createReceivingMutationCtx(args?: {
     ]),
   };
   const insertCounters: Record<
-    "catalogSummary" | "receivingBatch" | "inventoryMovement",
+    | "catalogSummary"
+    | "receivingBatch"
+    | "inventoryMovement"
+    | "skuActivityEvent",
     number
   > = {
     catalogSummary: 0,
     inventoryMovement: 0,
     receivingBatch: 0,
+    skuActivityEvent: 0,
   };
 
   const ctx = {
@@ -108,11 +114,16 @@ function createReceivingMutationCtx(args?: {
         return tables[table].get(id) ?? null;
       },
       async insert(
-        table: "catalogSummary" | "inventoryMovement" | "receivingBatch",
+        table:
+          | "catalogSummary"
+          | "inventoryMovement"
+          | "receivingBatch"
+          | "skuActivityEvent",
         value: Record<string, unknown>
       ) {
         insertCounters[table] += 1;
         const id = `${table}-${insertCounters[table]}`;
+        tables[table].set(id, { _id: id, ...value });
         return id;
       },
       async patch(
@@ -190,6 +201,35 @@ function createReceivingMutationCtx(args?: {
                     }
                   }
                 },
+              };
+            },
+          };
+        }
+
+        if (table === "inventoryMovement") {
+          return {
+            withIndex(
+              _index: string,
+              applyIndex: (queryBuilder: {
+                eq: (field: string, value: unknown) => unknown;
+              }) => unknown
+            ) {
+              const filters: Array<[string, unknown]> = [];
+              const queryBuilder = {
+                eq(field: string, value: unknown) {
+                  filters.push([field, value]);
+                  return queryBuilder;
+                },
+              };
+
+              applyIndex(queryBuilder);
+
+              return {
+                collect: async () =>
+                  Array.from(tables.inventoryMovement.values()).filter(
+                    (record) =>
+                      filters.every(([field, value]) => record[field] === value)
+                  ),
               };
             },
           };
@@ -408,5 +448,55 @@ describe("stock ops receiving", () => {
         message: "You cannot receive more than ordered.",
       },
     });
+  });
+
+  it("keeps linked purchase-order work in progress until the order is fully received", async () => {
+    const partial = createReceivingMutationCtx();
+
+    await receivePurchaseOrderBatchCommandWithCtx(partial.ctx, {
+      lineItems: [
+        {
+          purchaseOrderLineItemId: "line-item-1" as Id<"purchaseOrderLineItem">,
+          receivedQuantity: 1,
+        },
+      ],
+      notes: undefined,
+      purchaseOrderId: "purchase-order-1" as Id<"purchaseOrder">,
+      receivedByUserId: undefined,
+      storeId: "store-1" as Id<"store">,
+      submissionKey: "receive-partial",
+    });
+
+    expect(partial.ctx.runMutation).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        status: "in_progress",
+        workItemId: "work-item-1",
+      }),
+    );
+
+    const complete = createReceivingMutationCtx();
+
+    await receivePurchaseOrderBatchCommandWithCtx(complete.ctx, {
+      lineItems: [
+        {
+          purchaseOrderLineItemId: "line-item-1" as Id<"purchaseOrderLineItem">,
+          receivedQuantity: 3,
+        },
+      ],
+      notes: undefined,
+      purchaseOrderId: "purchase-order-1" as Id<"purchaseOrder">,
+      receivedByUserId: undefined,
+      storeId: "store-1" as Id<"store">,
+      submissionKey: "receive-complete",
+    });
+
+    expect(complete.ctx.runMutation).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        status: "completed",
+        workItemId: "work-item-1",
+      }),
+    );
   });
 });

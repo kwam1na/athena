@@ -13,10 +13,372 @@ import {
 import { listOpenLocalSyncConflictsByRegisterSession } from "../cashControls/deposits";
 
 const MAX_QUEUE_ITEMS = 100;
+const QUEUE_LANE_PROBE_LIMIT = 1_000;
+const APPROVAL_REQUEST_PROBE_LIMIT = MAX_QUEUE_ITEMS + 1;
 const TERMINAL_WORK_ITEM_STATUSES = new Set(["completed", "cancelled"]);
 const OPEN_WORK_ITEM_STATUSES = ["open", "in_progress"] as const;
 const REGISTER_SYNC_REVIEW_REQUEST_TYPE = "register_sync_review";
 const REGISTER_SYNC_REVIEW_SUBJECT_TYPE = "register_session_sync_review";
+const QUEUE_APPROVAL_REQUEST_TYPES = [
+  "inventory_adjustment_review",
+  "online_order_return_review",
+  "payment_method_correction",
+  "pos_item_adjustment",
+  "pos_item_adjustment_review",
+  "pos_transaction_void",
+  "service_deposit_review",
+  "variance_review",
+] as const;
+const QUEUE_WORK_ITEM_TYPES = [
+  "daily_close_carry_forward",
+  "pos_pending_checkout_item_review",
+  "purchase_order",
+  "service_appointment",
+  "service_case",
+  "service_intake",
+  "stock_adjustment_review",
+  "synced_sale_inventory_review",
+] as const;
+const APPROVAL_BLOCKED_WORK_ITEM_TYPES = new Set([
+  "stock_adjustment_review",
+]);
+const SOURCE_RESOLVER_WORK_ITEM_TYPES = new Set([
+  "daily_close_carry_forward",
+  "pos_pending_checkout_item_review",
+  "synced_sale_inventory_review",
+]);
+const SOURCE_CONTINUATION_WORK_ITEM_TYPES = new Set([
+  "purchase_order",
+  "service_appointment",
+  "service_case",
+]);
+
+function metadataString(
+  metadata: Record<string, unknown> | undefined,
+  key: string,
+) {
+  const value = metadata?.[key];
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function joinSourceIdentity(parts: Array<string | null | undefined>) {
+  return parts.filter((part): part is string => Boolean(part)).join(":");
+}
+
+function stableOperationalWorkItemSourceIdentity(
+  item: Doc<"operationalWorkItem">,
+) {
+  const metadata = item.metadata;
+
+  switch (item.type) {
+    case "daily_close_carry_forward": {
+      const businessDate = metadataString(metadata, "businessDate");
+      const sourceId =
+        metadataString(metadata, "carryForwardSourceId") ??
+        metadataString(metadata, "dailyCloseId") ??
+        metadataString(metadata, "sourceId");
+      if (businessDate || sourceId) {
+        return joinSourceIdentity([
+          item.type,
+          businessDate ?? item.storeId,
+          sourceId ?? item._id,
+        ]);
+      }
+      break;
+    }
+    case "pos_pending_checkout_item_review": {
+      const pendingCheckoutItemId =
+        metadataString(metadata, "posPendingCheckoutItemId") ??
+        metadataString(metadata, "pendingCheckoutItemId");
+      if (pendingCheckoutItemId) {
+        return joinSourceIdentity([item.type, pendingCheckoutItemId]);
+      }
+
+      const localIdentity = joinSourceIdentity([
+        item.type,
+        String(item.storeId),
+        metadataString(metadata, "terminalId"),
+        metadataString(metadata, "localRegisterSessionId"),
+        "pendingCheckoutItem",
+        metadataString(metadata, "localPendingCheckoutItemId") ??
+          metadataString(metadata, "localId") ??
+          metadataString(metadata, "localItemId"),
+      ]);
+      if (localIdentity !== item.type) {
+        return localIdentity;
+      }
+      break;
+    }
+    case "purchase_order": {
+      const purchaseOrderId = metadataString(metadata, "purchaseOrderId");
+      if (purchaseOrderId) {
+        return joinSourceIdentity([item.type, purchaseOrderId]);
+      }
+      break;
+    }
+    case "service_appointment": {
+      const appointmentId = item.appointmentId
+        ? String(item.appointmentId)
+        : metadataString(metadata, "appointmentId");
+      if (appointmentId) {
+        return joinSourceIdentity([item.type, appointmentId]);
+      }
+      break;
+    }
+    case "service_case": {
+      const serviceCaseId =
+        metadataString(metadata, "serviceCaseId") ??
+        metadataString(metadata, "sourceId");
+      if (serviceCaseId) {
+        return joinSourceIdentity([item.type, serviceCaseId]);
+      }
+      break;
+    }
+    case "stock_adjustment_review": {
+      const stockAdjustmentBatchId = metadataString(
+        metadata,
+        "stockAdjustmentBatchId",
+      );
+      if (item.approvalRequestId || stockAdjustmentBatchId) {
+        return joinSourceIdentity([
+          item.type,
+          item.approvalRequestId ? String(item.approvalRequestId) : null,
+          stockAdjustmentBatchId,
+        ]);
+      }
+      break;
+    }
+    case "synced_sale_inventory_review": {
+      const localTransactionId = metadataString(metadata, "localTransactionId");
+      const localRegisterSessionId = metadataString(
+        metadata,
+        "localRegisterSessionId",
+      );
+      if (localTransactionId || localRegisterSessionId) {
+        return joinSourceIdentity([
+          item.type,
+          String(item.storeId),
+          metadataString(metadata, "terminalId"),
+          localRegisterSessionId,
+          localTransactionId ??
+            metadataString(metadata, "localEventId") ??
+            metadataString(metadata, "receiptNumber"),
+        ]);
+      }
+      break;
+    }
+  }
+
+  const sourceType = metadataString(metadata, "sourceType");
+  const sourceId = metadataString(metadata, "sourceId");
+  if (sourceType || sourceId) {
+    return joinSourceIdentity([
+      item.type,
+      sourceType,
+      sourceId ?? String(item._id),
+    ]);
+  }
+
+  return joinSourceIdentity([item.type, String(item._id)]);
+}
+
+function workItemPriorityBucket(item: Doc<"operationalWorkItem">) {
+  if (
+    item.approvalRequestId ||
+    item.approvalState === "pending" ||
+    APPROVAL_BLOCKED_WORK_ITEM_TYPES.has(item.type)
+  ) {
+    return 0;
+  }
+
+  if (SOURCE_RESOLVER_WORK_ITEM_TYPES.has(item.type)) {
+    return 1;
+  }
+
+  if (SOURCE_CONTINUATION_WORK_ITEM_TYPES.has(item.type)) {
+    return 2;
+  }
+
+  return 3;
+}
+
+function workItemStatusUrgency(item: Doc<"operationalWorkItem">) {
+  if (item.status === "in_progress") {
+    return 0;
+  }
+
+  if (item.status === "open") {
+    return 1;
+  }
+
+  return 2;
+}
+
+function actionableWorkItemTimestamp(item: Doc<"operationalWorkItem">) {
+  return item.dueAt ?? item.startedAt ?? item.createdAt ?? 0;
+}
+
+function resolverCompletenessBucket(item: Doc<"operationalWorkItem">) {
+  if (item.type !== "synced_sale_inventory_review") {
+    return 0;
+  }
+
+  const metadata = item.metadata;
+  const hasRequiredResolverContext = Boolean(
+    metadataString(metadata, "terminalId") &&
+      metadataString(metadata, "localRegisterSessionId") &&
+      metadataString(metadata, "localTransactionId") &&
+      metadataString(metadata, "registerSessionId") &&
+      metadataString(metadata, "sourceId") &&
+      metadataString(metadata, "sourceType") === "posTransaction",
+  );
+
+  return hasRequiredResolverContext ? 0 : 1;
+}
+
+function compareStrings(left: string, right: string) {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
+function compareOperationalWorkItems(
+  left: Doc<"operationalWorkItem">,
+  right: Doc<"operationalWorkItem">,
+) {
+  return (
+    workItemPriorityBucket(left) - workItemPriorityBucket(right) ||
+    workItemStatusUrgency(left) - workItemStatusUrgency(right) ||
+    resolverCompletenessBucket(left) - resolverCompletenessBucket(right) ||
+    actionableWorkItemTimestamp(left) - actionableWorkItemTimestamp(right) ||
+    compareStrings(
+      stableOperationalWorkItemSourceIdentity(left),
+      stableOperationalWorkItemSourceIdentity(right),
+    ) ||
+    compareStrings(String(left._id), String(right._id))
+  );
+}
+
+function sortAndDedupeCurrentWorkItems(items: Array<Doc<"operationalWorkItem">>) {
+  const seenSourceIdentities = new Set<string>();
+
+  return [...items].sort(compareOperationalWorkItems).filter((item) => {
+    const sourceIdentity = stableOperationalWorkItemSourceIdentity(item);
+    if (seenSourceIdentities.has(sourceIdentity)) {
+      return false;
+    }
+    seenSourceIdentities.add(sourceIdentity);
+    return true;
+  });
+}
+
+function metadataNumber(
+  metadata: Record<string, unknown> | undefined,
+  key: string,
+) {
+  const value = metadata?.[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function metadataArrayCount(
+  metadata: Record<string, unknown> | undefined,
+  key: string,
+) {
+  const value = metadata?.[key];
+  return Array.isArray(value) ? value.length : null;
+}
+
+function sanitizeOperationalWorkItemDetails(
+  item: Doc<"operationalWorkItem">,
+) {
+  const metadata = item.metadata;
+
+  switch (item.type) {
+    case "daily_close_carry_forward":
+      return {
+        businessDate: metadataString(metadata, "businessDate"),
+        followUpReason: metadataString(metadata, "followUpReason"),
+      };
+    case "pos_pending_checkout_item_review":
+      return {
+        lookupCode: metadataString(metadata, "lookupCode"),
+        price: metadataNumber(metadata, "price"),
+        quantitySold: metadataNumber(metadata, "quantitySold"),
+        totalQuantitySold: metadataNumber(metadata, "totalQuantitySold"),
+      };
+    case "purchase_order":
+      return {
+        displayNumber: metadataString(metadata, "displayNumber"),
+        itemCount: metadataNumber(metadata, "itemCount"),
+        purchaseOrderNumber: metadataString(metadata, "purchaseOrderNumber"),
+        vendorName: metadataString(metadata, "vendorName"),
+      };
+    case "stock_adjustment_review":
+      return {
+        reasonLabel: metadataString(metadata, "reasonLabel"),
+      };
+    case "synced_sale_inventory_review": {
+      const skippedLineCount = metadataArrayCount(
+        metadata,
+        "skippedMutationItems",
+      );
+      const trustedLineCount = metadataArrayCount(
+        metadata,
+        "trustedInventoryLines",
+      );
+
+      return {
+        inventoryReviewLineCount:
+          skippedLineCount && skippedLineCount > 0
+            ? skippedLineCount
+            : trustedLineCount,
+        localRegisterSessionId: metadataString(
+          metadata,
+          "localRegisterSessionId",
+        ),
+        localTransactionId: metadataString(metadata, "localTransactionId"),
+        primaryProductSkuId: metadataString(metadata, "primaryProductSkuId"),
+        receiptNumber: metadataString(metadata, "receiptNumber"),
+        registerSessionId: metadataString(metadata, "registerSessionId"),
+        sourceId:
+          metadataString(metadata, "sourceType") === "posTransaction"
+            ? metadataString(metadata, "sourceId")
+            : null,
+        terminalId: metadataString(metadata, "terminalId"),
+      };
+    }
+    default:
+      return {};
+  }
+}
+
+function projectOperationalWorkItemForQueue(args: {
+  customerMap: Map<Id<"customerProfile">, Doc<"customerProfile">>;
+  item: Doc<"operationalWorkItem">;
+  staffMap: Map<Id<"staffProfile">, Doc<"staffProfile">>;
+}) {
+  const { customerMap, item, staffMap } = args;
+
+  return {
+    _id: item._id,
+    approvalRequestId: item.approvalRequestId,
+    approvalState: item.approvalState,
+    assignedStaffName: item.assignedToStaffProfileId
+      ? staffMap.get(item.assignedToStaffProfileId)?.fullName
+      : null,
+    completedAt: item.completedAt,
+    createdAt: item.createdAt,
+    customerName: item.customerProfileId
+      ? customerMap.get(item.customerProfileId)?.fullName
+      : null,
+    details: sanitizeOperationalWorkItemDetails(item),
+    dueAt: item.dueAt,
+    priority: item.priority,
+    sourceIdentity: stableOperationalWorkItemSourceIdentity(item),
+    startedAt: item.startedAt,
+    status: item.status,
+    title: item.title,
+    type: item.type,
+  };
+}
 
 function approvalRequestTransactionId(request: Doc<"approvalRequest">) {
   if (
@@ -121,6 +483,7 @@ export function buildOperationalWorkItem(args: {
   assignedToStaffProfileId?: Id<"staffProfile">;
   customerProfileId?: Id<"customerProfile">;
   approvalRequestId?: Id<"approvalRequest">;
+  appointmentId?: Id<"serviceAppointment">;
 }) {
   return {
     ...args,
@@ -157,6 +520,7 @@ export const createOperationalWorkItem = internalMutation({
     assignedToStaffProfileId: v.optional(v.id("staffProfile")),
     customerProfileId: v.optional(v.id("customerProfile")),
     approvalRequestId: v.optional(v.id("approvalRequest")),
+    appointmentId: v.optional(v.id("serviceAppointment")),
   },
   handler: (ctx, args) => createOperationalWorkItemWithCtx(ctx, args),
 });
@@ -236,28 +600,70 @@ export const getQueueSnapshot = query({
       userId: athenaUser._id,
     });
 
-    const [workItems, approvalRequests, syncConflictsBySessionId] =
+    const [workItemLanes, approvalRequestLanes, syncConflictsBySessionId] =
       await Promise.all([
-      Promise.all(
-        OPEN_WORK_ITEM_STATUSES.map((status) =>
-          ctx.db
-            .query("operationalWorkItem")
-            .withIndex("by_storeId_status", (q) =>
-              q.eq("storeId", args.storeId).eq("status", status),
-            )
-            .take(MAX_QUEUE_ITEMS),
-        ),
-      ).then((items) => items.flat()),
-      ctx.db
-        .query("approvalRequest")
-        .withIndex("by_storeId_status", (q) =>
-          q.eq("storeId", args.storeId).eq("status", "pending"),
-        )
-        .take(MAX_QUEUE_ITEMS),
-      listOpenLocalSyncConflictsByRegisterSession(ctx, args.storeId),
-    ]);
+        Promise.all(
+          OPEN_WORK_ITEM_STATUSES.flatMap((status) =>
+            QUEUE_WORK_ITEM_TYPES.map(async (type) => {
+              const items = await ctx.db
+                .query("operationalWorkItem")
+                .withIndex("by_storeId_type_status", (q) =>
+                  q
+                    .eq("storeId", args.storeId)
+                    .eq("type", type)
+                    .eq("status", status),
+                )
+                .take(QUEUE_LANE_PROBE_LIMIT);
 
-    const openWorkItems = workItems;
+              return {
+                items,
+                overflow: items.length > MAX_QUEUE_ITEMS,
+                status,
+                type,
+              };
+            }),
+          ),
+        ),
+        Promise.all(
+          QUEUE_APPROVAL_REQUEST_TYPES.map(async (requestType) => {
+            const requests = await ctx.db
+              .query("approvalRequest")
+              .withIndex("by_storeId_status_requestType", (q) =>
+                q
+                  .eq("storeId", args.storeId)
+                  .eq("status", "pending")
+                  .eq("requestType", requestType),
+              )
+              .take(APPROVAL_REQUEST_PROBE_LIMIT);
+
+            return {
+              items: requests.slice(0, MAX_QUEUE_ITEMS),
+              overflow: requests.length > MAX_QUEUE_ITEMS,
+              requestType,
+            };
+          }),
+        ),
+        listOpenLocalSyncConflictsByRegisterSession(ctx, args.storeId),
+      ]);
+
+    const sortedWorkItems = sortAndDedupeCurrentWorkItems(
+      workItemLanes.flatMap((lane) => lane.items),
+    );
+    const openWorkItems = sortedWorkItems.slice(0, MAX_QUEUE_ITEMS);
+    const approvalRequests = approvalRequestLanes
+      .flatMap((lane) => lane.items)
+      .sort((left, right) => (right.createdAt ?? 0) - (left.createdAt ?? 0))
+      .slice(0, MAX_QUEUE_ITEMS);
+    const hiddenWorkItems = sortedWorkItems.slice(MAX_QUEUE_ITEMS);
+    const workItemOverflow = {
+      inProgress:
+        workItemLanes.some(
+          (lane) => lane.status === "in_progress" && lane.overflow,
+        ) || hiddenWorkItems.some((item) => item.status === "in_progress"),
+      open:
+        workItemLanes.some((lane) => lane.status === "open" && lane.overflow) ||
+        hiddenWorkItems.some((item) => item.status === "open"),
+    };
 
     const customerIds = new Set<string>();
     const posTransactionIds = new Set<string>();
@@ -564,19 +970,26 @@ export const getQueueSnapshot = query({
       };
     });
 
+    const combinedApprovalRequests = [
+      ...mappedApprovalRequests,
+      ...mappedSyncReviewRequests,
+    ].sort((left, right) => (right.createdAt ?? 0) - (left.createdAt ?? 0));
+
     return {
-      approvalRequests: [...mappedApprovalRequests, ...mappedSyncReviewRequests]
-        .sort((left, right) => (right.createdAt ?? 0) - (left.createdAt ?? 0))
-        .slice(0, MAX_QUEUE_ITEMS),
-      workItems: openWorkItems.map((item) => ({
-        ...item,
-        assignedStaffName: item.assignedToStaffProfileId
-          ? staffMap.get(item.assignedToStaffProfileId)?.fullName
-          : null,
-        customerName: item.customerProfileId
-          ? customerMap.get(item.customerProfileId)?.fullName
-          : null,
-      })),
+      approvalRequests: combinedApprovalRequests.slice(0, MAX_QUEUE_ITEMS),
+      overflow: {
+        approvalRequests:
+          approvalRequestLanes.some((lane) => lane.overflow) ||
+          combinedApprovalRequests.length > MAX_QUEUE_ITEMS,
+        workItems: workItemOverflow,
+      },
+      workItems: openWorkItems.map((item) =>
+        projectOperationalWorkItemForQueue({
+          customerMap,
+          item,
+          staffMap,
+        }),
+      ),
     };
   },
 });

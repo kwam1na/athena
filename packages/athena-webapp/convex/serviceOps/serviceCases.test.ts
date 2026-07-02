@@ -5,6 +5,7 @@ import {
   assertValidServiceCaseStatusTransition,
   buildServiceCase,
   buildServiceCaseLineItem,
+  mapServiceCaseStatusToWorkItemStatus,
 } from "./serviceCases";
 
 type IndexExpectation = {
@@ -88,6 +89,22 @@ describe("service ops schema foundations", () => {
         message: "Invalid service case status transition.",
       },
     });
+  });
+
+  it("maps terminal service-case statuses out of Open Work", () => {
+    expect(mapServiceCaseStatusToWorkItemStatus("intake")).toBe("open");
+    expect(mapServiceCaseStatusToWorkItemStatus("scheduled")).toBe("open");
+    expect(mapServiceCaseStatusToWorkItemStatus("in_progress")).toBe(
+      "in_progress",
+    );
+    expect(mapServiceCaseStatusToWorkItemStatus("awaiting_approval")).toBe(
+      "in_progress",
+    );
+    expect(mapServiceCaseStatusToWorkItemStatus("awaiting_pickup")).toBe(
+      "in_progress",
+    );
+    expect(mapServiceCaseStatusToWorkItemStatus("completed")).toBe("completed");
+    expect(mapServiceCaseStatusToWorkItemStatus("cancelled")).toBe("cancelled");
   });
 
   it("shapes service cases and line items with persistence-safe defaults", () => {

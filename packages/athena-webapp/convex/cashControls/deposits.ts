@@ -1505,7 +1505,8 @@ export const resolveRegisterSessionSyncReview = mutation({
     }
 
     const decision = args.decision ?? "approved";
-    const isAutomaticResolution = !args.actorStaffProfileId;
+    const isAutomaticResolution =
+      !args.actorStaffProfileId && !args.approvalProofId;
     let reviewActorStaffProfileId: Id<"staffProfile"> | undefined;
     if (decision === "rejected" && isAutomaticResolution) {
       return userError({

@@ -154,6 +154,11 @@ const schema = defineSchema({
   approvalRequest: defineTable(approvalRequestSchema)
     .index("by_storeId", ["storeId"])
     .index("by_storeId_status", ["storeId", "status"])
+    .index("by_storeId_status_requestType", [
+      "storeId",
+      "status",
+      "requestType",
+    ])
     .index("by_storeId_subject", ["storeId", "subjectType", "subjectId"])
     .index("by_storeId_status_posTransactionId", [
       "storeId",
@@ -895,6 +900,12 @@ const schema = defineSchema({
     .index("by_storeId_status", ["storeId", "status"])
     .index("by_storeId_type", ["storeId", "type"])
     .index("by_storeId_type_status", ["storeId", "type", "status"])
+    .index("by_storeId_type_status_appointmentId", [
+      "storeId",
+      "type",
+      "status",
+      "appointmentId",
+    ])
     .index("by_storeId_assignedTo", ["storeId", "assignedToStaffProfileId"])
     .index("by_customerProfileId", ["customerProfileId"])
     .index("by_approvalState", ["approvalState"]),

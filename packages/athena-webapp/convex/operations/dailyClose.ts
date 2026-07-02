@@ -34,6 +34,7 @@ import { buildPaymentTotals, transactionCashDelta } from "./paymentTotals";
 import type { AutomationDecisionEvidence } from "../automation/runLedger";
 
 const DAILY_CLOSE_QUERY_LIMIT = 200;
+const DAILY_CLOSE_CARRY_FORWARD_SOURCE_PROBE_LIMIT = 1_000;
 const REGISTER_SESSION_DAILY_CLOSE_SOURCE_LIMIT = 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_OPERATING_DATE_RANGE_MS = 36 * 60 * 60 * 1000;
@@ -50,6 +51,10 @@ const REVIEW_ONLY_REGISTER_CLOSEOUT_STATUSES = ["closeout_rejected"] as const;
 const OPEN_POS_SESSION_STATUSES = ["active", "held"] as const;
 const DAILY_CLOSE_COMPLETION_ACTION = APPROVAL_ACTIONS.dailyCloseCompletion;
 const DAILY_CLOSE_REOPEN_ACTION = APPROVAL_ACTIONS.dailyCloseReopen;
+const DAILY_CLOSE_CARRY_FORWARD_RESOLUTION_ACTION = {
+  key: "operations.daily_close.resolve_carry_forward",
+  label: "Resolve carry-forward work",
+} as const;
 const DAILY_CLOSE_BLOCKER_CATEGORY_PRECEDENCE: Record<string, number> = {
   approval: 0,
   register_session: 10,
@@ -75,6 +80,12 @@ type DailyCloseItem = {
     params?: Record<string, string>;
     search?: Record<string, string>;
     to?: string;
+  };
+  carryForwardResolution?: {
+    businessDate: string;
+    dailyCloseId: Id<"dailyClose">;
+    sourceId: string;
+    workItemId: Id<"operationalWorkItem">;
   };
   metadata?: Record<string, unknown>;
 };
@@ -524,6 +535,26 @@ type ReopenDailyCloseResult = ApprovalCommandResult<{
   reopenedDailyClose: Doc<"dailyClose">;
 }>;
 
+type ResolveDailyCloseCarryForwardArgs = {
+  actorUserId?: Id<"athenaUser">;
+  actorStaffProfileId?: Id<"staffProfile">;
+  approvalProofId?: Id<"approvalProof">;
+  businessDate: string;
+  dailyCloseId: Id<"dailyClose">;
+  organizationId?: Id<"organization">;
+  outcome: "completed" | "cancelled";
+  reason: string;
+  sourceId: string;
+  storeId: Id<"store">;
+  workItemId: Id<"operationalWorkItem">;
+};
+
+type ResolveDailyCloseCarryForwardResult = ApprovalCommandResult<{
+  action: "completed" | "cancelled";
+  operationalEventId?: Id<"operationalEvent">;
+  workItem: Doc<"operationalWorkItem">;
+}>;
+
 function buildDailyCloseApprovalSubject(args: {
   operatingDate: string;
   storeId: Id<"store">;
@@ -593,6 +624,57 @@ function buildDailyCloseReopenApprovalRequirement(args: {
     metadata: {
       dailyCloseId: args.dailyCloseId,
       operatingDate: args.operatingDate,
+    },
+  };
+}
+
+function buildDailyCloseCarryForwardApprovalSubject(args: {
+  businessDate: string;
+  dailyCloseId: Id<"dailyClose">;
+  outcome: "completed" | "cancelled";
+  sourceId: string;
+}) {
+  return {
+    id: `${args.dailyCloseId}:${args.sourceId}:${args.outcome}`,
+    label: `Carry-forward follow-up for EOD Review ${args.businessDate}`,
+    type: DAILY_CLOSE_CARRY_FORWARD_TYPE,
+  };
+}
+
+function buildDailyCloseCarryForwardApprovalRequirement(args: {
+  businessDate: string;
+  dailyCloseId: Id<"dailyClose">;
+  outcome: "completed" | "cancelled";
+  sourceId: string;
+}): ApprovalRequirement {
+  return {
+    action: DAILY_CLOSE_CARRY_FORWARD_RESOLUTION_ACTION,
+    reason: "Manager approval is required to resolve carry-forward work.",
+    requiredRole: "manager",
+    selfApproval: "allowed",
+    subject: buildDailyCloseCarryForwardApprovalSubject(args),
+    copy: {
+      title: "Manager approval required",
+      message:
+        args.outcome === "completed"
+          ? "A manager needs to approve completing this carry-forward follow-up."
+          : "A manager needs to approve cancelling this carry-forward follow-up.",
+      primaryActionLabel:
+        args.outcome === "completed"
+          ? "Approve and complete"
+          : "Approve and cancel",
+      secondaryActionLabel: "Cancel",
+    },
+    resolutionModes: [
+      {
+        kind: "inline_manager_proof",
+      },
+    ],
+    metadata: {
+      businessDate: args.businessDate,
+      dailyCloseId: args.dailyCloseId,
+      outcome: args.outcome,
+      sourceId: args.sourceId,
     },
   };
 }
@@ -879,7 +961,31 @@ async function buildExpenseSessionsById(
 
 function asCarryForwardItem(
   workItem: Doc<"operationalWorkItem">,
+  fallback?: {
+    businessDate?: string;
+    dailyCloseId?: Id<"dailyClose">;
+    sourceId?: string;
+  },
 ): DailyCloseItem {
+  const businessDate =
+    carryForwardBusinessDate(workItem) ?? fallback?.businessDate;
+  const dailyCloseId =
+    stringFromMetadata(workItem.metadata, "dailyCloseId") ??
+    fallback?.dailyCloseId;
+  const sourceId = fallback?.sourceId ?? carryForwardSourceId(workItem);
+  const carryForwardResolution =
+    workItem.type === DAILY_CLOSE_CARRY_FORWARD_TYPE &&
+    businessDate &&
+    dailyCloseId &&
+    sourceId
+      ? {
+          businessDate,
+          dailyCloseId: dailyCloseId as Id<"dailyClose">,
+          sourceId,
+          workItemId: workItem._id,
+        }
+      : undefined;
+
   return {
     key: `operational_work_item:${workItem._id}:carry_forward`,
     severity: "carry_forward",
@@ -897,7 +1003,34 @@ function asCarryForwardItem(
       status: workItem.status,
       type: workItem.type,
     },
+    ...(carryForwardResolution ? { carryForwardResolution } : {}),
   };
+}
+
+async function patchDailyCloseCarryForwardWorkItemMetadata(
+  ctx: MutationCtx,
+  args: {
+    dailyCloseId: Id<"dailyClose">;
+    operatingDate: string;
+    workItems: Array<Doc<"operationalWorkItem">>;
+  },
+) {
+  for (const workItem of args.workItems) {
+    if (workItem.type !== DAILY_CLOSE_CARRY_FORWARD_TYPE) {
+      continue;
+    }
+
+    await ctx.db.patch("operationalWorkItem", workItem._id, {
+      metadata: {
+        ...(workItem.metadata ?? {}),
+        businessDate:
+          carryForwardBusinessDate(workItem) ?? args.operatingDate,
+        carryForwardSourceId: carryForwardSourceId(workItem),
+        dailyCloseId: args.dailyCloseId,
+        source: DAILY_CLOSE_SUBJECT_TYPE,
+      },
+    });
+  }
 }
 
 async function getStore(
@@ -1875,6 +2008,7 @@ function buildDailyCloseReportSnapshot(args: {
   completionRequestedByStaffProfileId?: Id<"staffProfile">;
   completionRequestedByUserId?: Id<"athenaUser">;
   currentnessMode?: "mark_current" | "historical_record";
+  dailyCloseId?: Id<"dailyClose">;
   notes?: string;
   policyReviewedItemKeys?: string[];
   readiness: DailyCloseReadiness;
@@ -1913,7 +2047,13 @@ function buildDailyCloseReportSnapshot(args: {
     reviewedItems: snapshotReviewedItems(args.snapshot, args.reviewedItemKeys),
     carryForwardItems: uniqueDailyCloseItems([
       ...args.snapshot.carryForwardItems,
-      ...args.carryForwardWorkItems.map(asCarryForwardItem),
+      ...args.carryForwardWorkItems.map((workItem) =>
+        asCarryForwardItem(workItem, {
+          businessDate: args.snapshot.operatingDate,
+          dailyCloseId: args.dailyCloseId,
+          sourceId: carryForwardSourceId(workItem),
+        }),
+      ),
     ]),
     readyItems: args.snapshot.readyItems,
     sourceCompleteness: args.snapshot.sourceCompleteness,
@@ -2675,7 +2815,9 @@ export async function buildDailyCloseSnapshotWithCtx(
   const blockers: DailyCloseItem[] = [];
   const reviewItems: DailyCloseItem[] = [];
   const readyItems: DailyCloseItem[] = [];
-  const carryForwardItems = openWorkItems.map(asCarryForwardItem);
+  const carryForwardItems = openWorkItems.map((workItem) =>
+    asCarryForwardItem(workItem),
+  );
 
   activeRegisterSessions.forEach((session) => {
     const terminalLabel = session.terminalId
@@ -3438,6 +3580,89 @@ function uniqueOperationalWorkItemIds(
   return Array.from(new Set(workItemIds));
 }
 
+function stringFromMetadata(
+  metadata: Record<string, unknown> | undefined,
+  key: string,
+) {
+  const value = metadata?.[key];
+
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function carryForwardBusinessDate(
+  workItem: Pick<Doc<"operationalWorkItem">, "metadata">,
+) {
+  return (
+    stringFromMetadata(workItem.metadata, "businessDate") ??
+    stringFromMetadata(workItem.metadata, "operatingDate")
+  );
+}
+
+function carryForwardSourceId(
+  workItem: Pick<Doc<"operationalWorkItem">, "_id" | "metadata">,
+) {
+  return (
+    stringFromMetadata(workItem.metadata, "carryForwardSourceId") ??
+    stringFromMetadata(workItem.metadata, "sourceId") ??
+    workItem._id
+  );
+}
+
+function sourceIdFromCarryForwardInput(
+  item: NonNullable<CompleteDailyCloseArgs["createCarryForwardWorkItems"]>[number],
+) {
+  return (
+    stringFromMetadata(item.metadata, "carryForwardSourceId") ??
+    stringFromMetadata(item.metadata, "sourceId")
+  );
+}
+
+function carryForwardMetadataMatches(args: {
+  businessDate: string;
+  sourceId: string;
+  workItem: Pick<Doc<"operationalWorkItem">, "_id" | "metadata">;
+}) {
+  return (
+    carryForwardBusinessDate(args.workItem) === args.businessDate &&
+    carryForwardSourceId(args.workItem) === args.sourceId
+  );
+}
+
+async function findCurrentCarryForwardWorkItemBySource(
+  ctx: Pick<QueryCtx, "db">,
+  args: {
+    businessDate: string;
+    sourceId: string;
+    storeId: Id<"store">;
+  },
+) {
+  const pages = await Promise.all(
+    OPEN_OPERATIONAL_WORK_ITEM_STATUSES.map((status) =>
+      ctx.db
+        .query("operationalWorkItem")
+        .withIndex("by_storeId_type_status", (q) =>
+          q
+            .eq("storeId", args.storeId)
+            .eq("type", DAILY_CLOSE_CARRY_FORWARD_TYPE)
+            .eq("status", status),
+        )
+        .take(DAILY_CLOSE_CARRY_FORWARD_SOURCE_PROBE_LIMIT),
+    ),
+  );
+
+  return (
+    pages
+      .flat()
+      .find((workItem) =>
+        carryForwardMetadataMatches({
+          businessDate: args.businessDate,
+          sourceId: args.sourceId,
+          workItem,
+        }),
+      ) ?? null
+  );
+}
+
 function carryForwardWorkItemIdFromItem(
   item: DailyCloseItem,
 ): Id<"operationalWorkItem"> | null {
@@ -3533,6 +3758,7 @@ async function createCarryForwardWorkItems(
   },
 ) {
   const workItems: Array<Doc<"operationalWorkItem">> = [];
+  const createdWorkItems: Array<Doc<"operationalWorkItem">> = [];
 
   for (const item of args.items) {
     const title = trimOptional(item.title);
@@ -3542,6 +3768,24 @@ async function createCarryForwardWorkItems(
         ok: false as const,
         message: "Carry-forward work items require a title.",
       };
+    }
+
+    const sourceId = sourceIdFromCarryForwardInput(item);
+
+    if (sourceId) {
+      const existingWorkItem = await findCurrentCarryForwardWorkItemBySource(
+        ctx,
+        {
+          businessDate: args.operatingDate,
+          sourceId,
+          storeId: args.storeId,
+        },
+      );
+
+      if (existingWorkItem) {
+        workItems.push(existingWorkItem);
+        continue;
+      }
     }
 
     const workItem = await createOperationalWorkItemWithCtx(ctx, {
@@ -3558,6 +3802,8 @@ async function createCarryForwardWorkItems(
       assignedToStaffProfileId: item.assignedToStaffProfileId,
       metadata: {
         ...(item.metadata ?? {}),
+        businessDate: args.operatingDate,
+        ...(sourceId ? { carryForwardSourceId: sourceId } : {}),
         operatingDate: args.operatingDate,
         source: DAILY_CLOSE_SUBJECT_TYPE,
       },
@@ -3565,11 +3811,13 @@ async function createCarryForwardWorkItems(
 
     if (workItem) {
       workItems.push(workItem);
+      createdWorkItems.push(workItem);
     }
   }
 
   return {
     ok: true as const,
+    createdWorkItems,
     workItems,
   };
 }
@@ -3829,6 +4077,23 @@ export async function completeDailyCloseWithCtx(
     ...snapshot.summary,
     carryForwardWorkItemCount: carryForwardWorkItemIds.length,
   };
+  const reportSnapshotArgs = {
+    carryForwardWorkItemIds,
+    carryForwardWorkItems,
+    completedAt: now,
+    completedByStaffProfileId,
+    completedByUserId: args.actorUserId,
+    completionApprovalProofId,
+    completionApprovedByStaffProfileId,
+    completionRequestedByStaffProfileId,
+    completionRequestedByUserId,
+    actorType: "human" as const,
+    notes,
+    readiness,
+    reviewedItemKeys,
+    snapshot,
+    summary,
+  };
   const closeFields = {
     storeId: args.storeId,
     organizationId: store.organizationId,
@@ -3840,23 +4105,7 @@ export async function completeDailyCloseWithCtx(
     summary,
     sourceCompleteness: snapshot.sourceCompleteness,
     sourceSubjects: snapshot.sourceSubjects,
-    reportSnapshot: buildDailyCloseReportSnapshot({
-      carryForwardWorkItemIds,
-      carryForwardWorkItems,
-      completedAt: now,
-      completedByStaffProfileId,
-      completedByUserId: args.actorUserId,
-      completionApprovalProofId,
-      completionApprovedByStaffProfileId,
-      completionRequestedByStaffProfileId,
-      completionRequestedByUserId,
-      actorType: "human",
-      notes,
-      readiness,
-      reviewedItemKeys,
-      snapshot,
-      summary,
-    }),
+    reportSnapshot: buildDailyCloseReportSnapshot(reportSnapshotArgs),
     carryForwardWorkItemIds,
     reviewedItemKeys,
     notes,
@@ -3882,6 +4131,13 @@ export async function completeDailyCloseWithCtx(
     });
   }
 
+  await ctx.db.patch("dailyClose", dailyCloseId, {
+    reportSnapshot: buildDailyCloseReportSnapshot({
+      ...reportSnapshotArgs,
+      dailyCloseId,
+    }),
+  });
+
   await markOtherDailyClosesNotCurrent(ctx, {
     currentCloseId: dailyCloseId,
     storeId: args.storeId,
@@ -3906,6 +4162,12 @@ export async function completeDailyCloseWithCtx(
     });
   }
 
+  await patchDailyCloseCarryForwardWorkItemMetadata(ctx, {
+    dailyCloseId: dailyClose._id,
+    operatingDate: args.operatingDate,
+    workItems: carryForwardWorkItems,
+  });
+
   const operationalEvent = await recordDailyCloseCompletedEvent(ctx, {
     storeId: args.storeId,
     organizationId: store.organizationId,
@@ -3920,7 +4182,7 @@ export async function completeDailyCloseWithCtx(
     operatingDate: args.operatingDate,
   });
 
-  for (const workItem of createdWorkItemResult.workItems) {
+  for (const workItem of createdWorkItemResult.createdWorkItems) {
     await recordOperationalEventWithCtx(ctx, {
       storeId: args.storeId,
       organizationId: store.organizationId,
@@ -4135,6 +4397,21 @@ export async function completeDailyCloseForAutomationWithCtx(
     policy: args.eodAutoCompletePolicy,
     snapshot,
   });
+  const reportSnapshotArgs = {
+    actorType: "automation" as const,
+    automationDecisionReason: args.automationDecisionReason,
+    automationPolicyVersion: args.automationPolicyVersion,
+    automationRunId: args.automationRunId,
+    carryForwardWorkItemIds,
+    carryForwardWorkItems,
+    completedAt: now,
+    currentnessMode,
+    policyReviewedItemKeys: args.policyReviewedItemKeys,
+    readiness,
+    reviewedItemKeys: args.policyReviewedItemKeys,
+    snapshot,
+    summary,
+  };
   const closeFields = {
     storeId: args.storeId,
     organizationId: store.organizationId,
@@ -4146,21 +4423,7 @@ export async function completeDailyCloseForAutomationWithCtx(
     summary,
     sourceCompleteness: snapshot.sourceCompleteness,
     sourceSubjects: snapshot.sourceSubjects,
-    reportSnapshot: buildDailyCloseReportSnapshot({
-      actorType: "automation",
-      automationDecisionReason: args.automationDecisionReason,
-      automationPolicyVersion: args.automationPolicyVersion,
-      automationRunId: args.automationRunId,
-      carryForwardWorkItemIds,
-      carryForwardWorkItems,
-      completedAt: now,
-      currentnessMode,
-      policyReviewedItemKeys: args.policyReviewedItemKeys,
-      readiness,
-      reviewedItemKeys: args.policyReviewedItemKeys,
-      snapshot,
-      summary,
-    }),
+    reportSnapshot: buildDailyCloseReportSnapshot(reportSnapshotArgs),
     carryForwardWorkItemIds,
     reviewedItemKeys: args.policyReviewedItemKeys,
     actorType: "automation" as const,
@@ -4182,6 +4445,13 @@ export async function completeDailyCloseForAutomationWithCtx(
       createdAt: now,
     });
   }
+
+  await ctx.db.patch("dailyClose", dailyCloseId, {
+    reportSnapshot: buildDailyCloseReportSnapshot({
+      ...reportSnapshotArgs,
+      dailyCloseId,
+    }),
+  });
 
   if (markAsCurrent) {
     await markOtherDailyClosesNotCurrent(ctx, {
@@ -4209,6 +4479,12 @@ export async function completeDailyCloseForAutomationWithCtx(
     });
   }
 
+  await patchDailyCloseCarryForwardWorkItemMetadata(ctx, {
+    dailyCloseId: dailyClose._id,
+    operatingDate: args.operatingDate,
+    workItems: carryForwardWorkItems,
+  });
+
   const operationalEvent = await recordDailyCloseCompletedEvent(ctx, {
     storeId: args.storeId,
     organizationId: store.organizationId,
@@ -4227,6 +4503,303 @@ export async function completeDailyCloseForAutomationWithCtx(
     dailyClose,
     carryForwardWorkItems,
     operationalEventId: operationalEvent?._id,
+  });
+}
+
+async function listDailyOpeningHandoffsForCarryForward(
+  ctx: Pick<QueryCtx, "db">,
+  args: {
+    dailyCloseId: Id<"dailyClose">;
+    storeId: Id<"store">;
+    workItemId: Id<"operationalWorkItem">;
+  },
+) {
+  const openings = await ctx.db
+    .query("dailyOpening")
+    .withIndex("by_storeId_status", (q) =>
+      q.eq("storeId", args.storeId).eq("status", "started"),
+    )
+    .take(DAILY_CLOSE_QUERY_LIMIT);
+
+  return openings
+    .filter(
+      (opening) =>
+        opening.priorDailyCloseId === args.dailyCloseId &&
+        opening.carryForwardWorkItemIds.includes(args.workItemId),
+    )
+    .map((opening) => ({
+      dailyOpeningId: opening._id,
+      operatingDate: opening.operatingDate,
+      acknowledgedItemKeys: opening.acknowledgedItemKeys,
+      startedAt: opening.startedAt,
+    }));
+}
+
+function carryForwardResolutionValidationError(message: string) {
+  return userError({
+    code: "precondition_failed",
+    message,
+  });
+}
+
+export async function resolveDailyCloseCarryForwardWithCtx(
+  ctx: MutationCtx,
+  args: ResolveDailyCloseCarryForwardArgs,
+): Promise<ResolveDailyCloseCarryForwardResult> {
+  const reason = trimOptional(args.reason);
+
+  if (!reason) {
+    return userError({
+      code: "validation_failed",
+      message: "A carry-forward resolution reason is required.",
+    });
+  }
+
+  const store = await getStore(ctx, args.storeId);
+
+  if (!store) {
+    return userError({
+      code: "not_found",
+      message: "Store not found.",
+    });
+  }
+
+  if (args.organizationId && args.organizationId !== store.organizationId) {
+    return userError({
+      code: "authorization_failed",
+      message: "Carry-forward work does not belong to this organization.",
+    });
+  }
+
+  const dailyClose = await ctx.db.get("dailyClose", args.dailyCloseId);
+
+  if (!dailyClose || dailyClose.storeId !== args.storeId) {
+    return userError({
+      code: "not_found",
+      message: "EOD Review was not found for this store.",
+    });
+  }
+
+  if (dailyClose.operatingDate !== args.businessDate) {
+    return carryForwardResolutionValidationError(
+      "Carry-forward work does not match this business date.",
+    );
+  }
+
+  const workItem = await ctx.db.get("operationalWorkItem", args.workItemId);
+
+  if (!workItem || workItem.storeId !== args.storeId) {
+    return userError({
+      code: "not_found",
+      message: "Carry-forward work was not found for this store.",
+    });
+  }
+
+  if (workItem.organizationId !== store.organizationId) {
+    return userError({
+      code: "authorization_failed",
+      message: "Carry-forward work does not belong to this organization.",
+    });
+  }
+
+  if (!dailyClose.carryForwardWorkItemIds.includes(workItem._id)) {
+    return carryForwardResolutionValidationError(
+      "Carry-forward work is not linked to this EOD Review.",
+    );
+  }
+
+  if (workItem.type !== DAILY_CLOSE_CARRY_FORWARD_TYPE) {
+    return carryForwardResolutionValidationError(
+      "Only Daily Close carry-forward work can be resolved here.",
+    );
+  }
+
+  if (TERMINAL_WORK_ITEM_STATUSES.has(workItem.status)) {
+    return carryForwardResolutionValidationError(
+      "Carry-forward work is already completed or cancelled.",
+    );
+  }
+
+  if (
+    !OPEN_OPERATIONAL_WORK_ITEM_STATUSES.includes(
+      workItem.status as (typeof OPEN_OPERATIONAL_WORK_ITEM_STATUSES)[number],
+    )
+  ) {
+    return carryForwardResolutionValidationError(
+      "Carry-forward work must be open before it can be resolved.",
+    );
+  }
+
+  const metadataBusinessDate = carryForwardBusinessDate(workItem);
+
+  if (metadataBusinessDate !== args.businessDate) {
+    return carryForwardResolutionValidationError(
+      "Carry-forward source metadata does not match this business date.",
+    );
+  }
+
+  if (stringFromMetadata(workItem.metadata, "source") !== DAILY_CLOSE_SUBJECT_TYPE) {
+    return carryForwardResolutionValidationError(
+      "Carry-forward source metadata is incomplete.",
+    );
+  }
+
+  const metadataDailyCloseId = stringFromMetadata(
+    workItem.metadata,
+    "dailyCloseId",
+  );
+
+  if (metadataDailyCloseId !== args.dailyCloseId) {
+    return carryForwardResolutionValidationError(
+      "Carry-forward source metadata does not match this EOD Review.",
+    );
+  }
+
+  const metadataSourceId = carryForwardSourceId(workItem);
+
+  if (metadataSourceId !== args.sourceId) {
+    return carryForwardResolutionValidationError(
+      "Carry-forward source metadata does not match this source.",
+    );
+  }
+
+  if (!args.approvalProofId) {
+    return approvalRequired(
+      buildDailyCloseCarryForwardApprovalRequirement({
+        businessDate: args.businessDate,
+        dailyCloseId: args.dailyCloseId,
+        outcome: args.outcome,
+        sourceId: args.sourceId,
+      }),
+    );
+  }
+
+  const approvalProofRecord = await ctx.db.get("approvalProof", args.approvalProofId);
+  const approvalProof = await consumeCommandApprovalProofWithCtx(ctx, {
+    action: DAILY_CLOSE_CARRY_FORWARD_RESOLUTION_ACTION,
+    approvalProofId: args.approvalProofId,
+    requiredRole: "manager",
+    requestedByStaffProfileId: approvalProofRecord?.requestedByStaffProfileId
+      ? args.actorStaffProfileId
+      : undefined,
+    storeId: args.storeId,
+    subject: buildDailyCloseCarryForwardApprovalSubject({
+      businessDate: args.businessDate,
+      dailyCloseId: args.dailyCloseId,
+      outcome: args.outcome,
+      sourceId: args.sourceId,
+    }),
+  });
+
+  if (approvalProof.kind !== "ok") {
+    return approvalProof;
+  }
+
+  const now = Date.now();
+  const nextStatus = args.outcome === "completed" ? "completed" : "cancelled";
+  const handoffs = await listDailyOpeningHandoffsForCarryForward(ctx, {
+    dailyCloseId: args.dailyCloseId,
+    storeId: args.storeId,
+    workItemId: args.workItemId,
+  });
+  const handoff = {
+    dailyOpeningIds: handoffs.map((opening) => opening.dailyOpeningId),
+    openings: handoffs,
+  };
+  const priorState = {
+    approvalState: workItem.approvalState,
+    status: workItem.status,
+  };
+  const nextState = {
+    approvalState: workItem.approvalState,
+    status: nextStatus,
+  };
+  const resolutionEvidence = {
+    actorStaffProfileId: args.actorStaffProfileId,
+    actorUserId: args.actorUserId,
+    approvalBasis: {
+      actionKey: DAILY_CLOSE_CARRY_FORWARD_RESOLUTION_ACTION.key,
+      approvalProofId: approvalProof.data.approvalProofId,
+      approvedByStaffProfileId: approvalProof.data.approvedByStaffProfileId,
+      requiredRole: "manager",
+      subject: buildDailyCloseCarryForwardApprovalSubject({
+        businessDate: args.businessDate,
+        dailyCloseId: args.dailyCloseId,
+        outcome: args.outcome,
+        sourceId: args.sourceId,
+      }),
+    },
+    approvalProofId: approvalProof.data.approvalProofId,
+    approvedByStaffProfileId: approvalProof.data.approvedByStaffProfileId,
+    businessDate: args.businessDate,
+    dailyCloseId: args.dailyCloseId,
+    handoff,
+    nextStatus,
+    outcome: args.outcome,
+    priorStatus: workItem.status,
+    reason,
+    resolvedAt: now,
+    sourceId: args.sourceId,
+  };
+
+  await ctx.db.patch("operationalWorkItem", workItem._id, {
+    status: nextStatus,
+    ...(nextStatus === "completed" ? { completedAt: now } : {}),
+    metadata: {
+      ...(workItem.metadata ?? {}),
+      carryForwardResolution: resolutionEvidence,
+    },
+  });
+
+  const updatedWorkItem = await ctx.db.get("operationalWorkItem", workItem._id);
+
+  if (!updatedWorkItem) {
+    return userError({
+      code: "unavailable",
+      message: "Carry-forward work could not be loaded after resolution.",
+      retryable: true,
+    });
+  }
+
+  const event = await recordOperationalEventWithCtx(ctx, {
+    storeId: args.storeId,
+    organizationId: store.organizationId,
+    eventType: `daily_close_carry_forward_${nextStatus}`,
+    subjectType: DAILY_CLOSE_CARRY_FORWARD_TYPE,
+    subjectId: workItem._id,
+    subjectLabel: workItem.title,
+    message:
+      nextStatus === "completed"
+        ? "Daily Close carry-forward work completed."
+        : "Daily Close carry-forward work cancelled.",
+    reason,
+    actorUserId: args.actorUserId,
+    actorStaffProfileId: args.actorStaffProfileId,
+    workItemId: workItem._id,
+    metadata: {
+      approvalBasis: resolutionEvidence.approvalBasis,
+      approvalProofId: approvalProof.data.approvalProofId,
+      approvedByStaffProfileId: approvalProof.data.approvedByStaffProfileId,
+      businessDate: args.businessDate,
+      dailyCloseId: args.dailyCloseId,
+      handoff,
+      nextState,
+      outcome: args.outcome,
+      priorState,
+      reason,
+      resolvedAt: now,
+      sourceReference: {
+        dailyCloseId: args.dailyCloseId,
+        sourceId: args.sourceId,
+        workItemId: workItem._id,
+      },
+    },
+  });
+
+  return ok({
+    action: args.outcome,
+    operationalEventId: event?._id,
+    workItem: updatedWorkItem,
   });
 }
 
@@ -4727,6 +5300,73 @@ export const completeDailyCloseForAutomation = internalMutation({
   },
   returns: commandResultValidator(v.any()),
   handler: (ctx, args) => completeDailyCloseForAutomationWithCtx(ctx, args),
+});
+
+export const resolveDailyCloseCarryForward = mutation({
+  args: {
+    actorStaffProfileId: v.optional(v.id("staffProfile")),
+    approvalProofId: v.optional(v.id("approvalProof")),
+    businessDate: v.string(),
+    dailyCloseId: v.id("dailyClose"),
+    organizationId: v.optional(v.id("organization")),
+    outcome: v.union(v.literal("completed"), v.literal("cancelled")),
+    reason: v.string(),
+    sourceId: v.string(),
+    storeId: v.id("store"),
+    workItemId: v.id("operationalWorkItem"),
+  },
+  returns: commandResultValidator(v.any()),
+  handler: async (ctx, args) => {
+    let athenaUser: Awaited<
+      ReturnType<typeof requireAuthenticatedAthenaUserWithCtx>
+    >;
+    try {
+      athenaUser = await requireAuthenticatedAthenaUserWithCtx(ctx);
+    } catch {
+      return userError({
+        code: "authorization_failed",
+        message: "Sign in again to continue.",
+      });
+    }
+
+    const store = await ctx.db.get("store", args.storeId);
+
+    if (!store) {
+      return userError({
+        code: "not_found",
+        message: "Store not found.",
+      });
+    }
+
+    try {
+      await requireOrganizationMemberRoleWithCtx(ctx, {
+        allowedRoles: ["full_admin", "pos_only"],
+        failureMessage:
+          "You cannot resolve carry-forward work for this store.",
+        organizationId: store.organizationId,
+        userId: athenaUser._id,
+      });
+    } catch {
+      return userError({
+        code: "authorization_failed",
+        message: "You cannot resolve carry-forward work for this store.",
+      });
+    }
+
+    const actorStaffProfile = await ctx.db
+      .query("staffProfile")
+      .withIndex("by_storeId_linkedUserId", (q) =>
+        q.eq("storeId", args.storeId).eq("linkedUserId", athenaUser._id),
+      )
+      .first();
+
+    return resolveDailyCloseCarryForwardWithCtx(ctx, {
+      ...args,
+      actorStaffProfileId: actorStaffProfile?._id,
+      actorUserId: athenaUser._id,
+      organizationId: args.organizationId ?? store.organizationId,
+    });
+  },
 });
 
 export const reopenDailyClose = mutation({

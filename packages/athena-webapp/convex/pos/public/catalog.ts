@@ -144,6 +144,29 @@ const pendingCheckoutReviewItemValidator = v.object({
   createdFrom: v.union(v.literal("online"), v.literal("offline_sync")),
 });
 
+type PendingCheckoutReviewStatus =
+  | "approved"
+  | "linked_to_catalog"
+  | "rejected"
+  | "flagged";
+
+export function mapPendingCheckoutReviewStatusToWorkItemPatch(
+  status: PendingCheckoutReviewStatus,
+) {
+  if (status === "flagged") {
+    return {
+      approvalState: "needs_review" as const,
+      status: "open" as const,
+    };
+  }
+
+  return {
+    approvalState:
+      status === "rejected" ? ("rejected" as const) : ("approved" as const),
+    status: "completed" as const,
+  };
+}
+
 async function requireRegisterCatalogStoreAccess(
   ctx: Pick<QueryCtx, "auth" | "db">,
   args: {
@@ -509,14 +532,12 @@ export const resolvePendingCheckoutItemReview = mutation({
     });
 
     if (item.operationalWorkItemId) {
+      const workItemPatch = mapPendingCheckoutReviewStatusToWorkItemPatch(
+        args.status,
+      );
       await updateOperationalWorkItemStatusWithCtx(ctx, {
-        approvalState:
-          args.status === "rejected"
-            ? "rejected"
-            : args.status === "flagged"
-              ? "needs_review"
-              : "approved",
-        status: args.status === "flagged" ? "open" : "completed",
+        approvalState: workItemPatch.approvalState,
+        status: workItemPatch.status,
         workItemId: item.operationalWorkItemId,
       });
     }

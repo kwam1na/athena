@@ -88,6 +88,7 @@ type DailyCloseApi = {
   completeDailyClose?: unknown;
   getDailyCloseSnapshot?: unknown;
   reopenDailyClose?: unknown;
+  resolveDailyCloseCarryForward?: unknown;
 };
 
 const useExpectedDailyCloseQuery = useQuery as unknown as (
@@ -117,6 +118,8 @@ export type DailyCloseStatus =
   | "ready"
   | "completed";
 
+type CarryForwardResolutionOutcome = "completed" | "cancelled";
+
 export type DailyCloseItemLink = {
   href?: string;
   label?: string;
@@ -126,6 +129,12 @@ export type DailyCloseItemLink = {
 };
 
 export type DailyCloseItem = {
+  carryForwardResolution?: {
+    businessDate: string;
+    dailyCloseId: Id<"dailyClose"> | string;
+    sourceId: string;
+    workItemId: Id<"operationalWorkItem"> | string;
+  };
   category?: string;
   description?: string | null;
   id?: string;
@@ -260,6 +269,16 @@ type ReopenArgs = {
   reason: string;
 };
 
+type CarryForwardResolutionArgs = {
+  approvalProofId?: Id<"approvalProof">;
+  businessDate: string;
+  dailyCloseId: Id<"dailyClose"> | string;
+  outcome: "completed" | "cancelled";
+  reason: string;
+  sourceId: string;
+  workItemId: Id<"operationalWorkItem"> | string;
+};
+
 export type BucketStatus = "blocked" | "carry-forward" | "ready" | "review";
 
 const bucketTabValues: BucketStatus[] = [
@@ -295,6 +314,9 @@ type DailyCloseViewContentProps = {
   ) => Promise<NormalizedApprovalCommandResult<unknown>>;
   onReopen?: (
     args: ReopenArgs,
+  ) => Promise<NormalizedApprovalCommandResult<unknown>>;
+  onResolveCarryForward?: (
+    args: CarryForwardResolutionArgs,
   ) => Promise<NormalizedApprovalCommandResult<unknown>>;
   onOperatingDateChange?: (date: Date) => void;
   onAuthenticateForApproval?: (args: {
@@ -890,6 +912,21 @@ function getCarryForwardWorkItemIds(items: DailyCloseItem[]) {
     const workItemId = getCarryForwardWorkItemId(item);
     return workItemId ? [workItemId] : [];
   });
+}
+
+function getCarryForwardResolutionContext(item: DailyCloseItem) {
+  const resolution = item.carryForwardResolution;
+
+  if (
+    !resolution?.businessDate ||
+    !resolution.dailyCloseId ||
+    !resolution.sourceId ||
+    !resolution.workItemId
+  ) {
+    return null;
+  }
+
+  return resolution;
 }
 
 function getItemDescription(item: DailyCloseItem) {
@@ -2183,6 +2220,7 @@ function ItemLink({
 }
 
 function DailyCloseItemCard({
+  actionSlot,
   canViewFinancialDetails,
   currency,
   item,
@@ -2192,6 +2230,7 @@ function DailyCloseItemCard({
   storeUrlSlug,
   onSelectedChange,
 }: {
+  actionSlot?: ReactNode;
   canViewFinancialDetails: boolean;
   currency: string;
   item: DailyCloseItem;
@@ -2214,6 +2253,13 @@ function DailyCloseItemCard({
   );
   const collapsedMetadataEntries = getCollapsedMetadataEntries(metadataEntries);
   const hasSourceLink = Boolean(item.link);
+  const sourceAction = hasSourceLink ? (
+    <ItemLink
+      link={item.link}
+      orgUrlSlug={orgUrlSlug}
+      storeUrlSlug={storeUrlSlug}
+    />
+  ) : null;
   const badgeSlot = isVarianceApprovalItem(item) ? (
     <Badge className="border-warning/30 bg-warning/10 text-warning-foreground">
       Variance review
@@ -2223,12 +2269,11 @@ function DailyCloseItemCard({
   return (
     <OperationReviewItemCard
       actionSlot={
-        hasSourceLink ? (
-          <ItemLink
-            link={item.link}
-            orgUrlSlug={orgUrlSlug}
-            storeUrlSlug={storeUrlSlug}
-          />
+        actionSlot || sourceAction ? (
+          <div className="flex flex-wrap items-center gap-2">
+            {actionSlot}
+            {sourceAction}
+          </div>
         ) : null
       }
       collapsedMetadataEntries={collapsedMetadataEntries}
@@ -2254,6 +2299,47 @@ function DailyCloseItemCard({
   );
 }
 
+function CarryForwardResolutionActions({
+  isDisabled,
+  resolvingOutcome,
+  onResolve,
+}: {
+  isDisabled?: boolean;
+  resolvingOutcome?: CarryForwardResolutionOutcome | null;
+  onResolve: (outcome: CarryForwardResolutionOutcome) => void;
+}) {
+  const isResolving = Boolean(resolvingOutcome);
+
+  return (
+    <>
+      <LoadingButton
+        className="h-8 px-3 text-xs"
+        disabled={Boolean(isDisabled || isResolving)}
+        isLoading={resolvingOutcome === "completed"}
+        onClick={() => onResolve("completed")}
+        size="sm"
+        type="button"
+        variant="secondary"
+      >
+        <Check aria-hidden="true" className="h-3.5 w-3.5" />
+        Mark complete
+      </LoadingButton>
+      <LoadingButton
+        className="h-8 px-3 text-xs"
+        disabled={Boolean(isDisabled || isResolving)}
+        isLoading={resolvingOutcome === "cancelled"}
+        onClick={() => onResolve("cancelled")}
+        size="sm"
+        type="button"
+        variant="outline"
+      >
+        <Ban aria-hidden="true" className="h-3.5 w-3.5" />
+        Cancel follow-up
+      </LoadingButton>
+    </>
+  );
+}
+
 function BucketSection({
   ariaLabel,
   canViewFinancialDetails,
@@ -2269,7 +2355,10 @@ function BucketSection({
   storeUrlSlug,
   title,
   onPageChange,
+  onResolveCarryForward,
   onSelectedIdsChange,
+  resolvingCarryForwardOutcome,
+  resolvingCarryForwardKey,
 }: {
   ariaLabel: string;
   canViewFinancialDetails: boolean;
@@ -2278,12 +2367,18 @@ function BucketSection({
   emptyText: string;
   items: DailyCloseItem[];
   onPageChange: (page: number) => void;
+  onResolveCarryForward?: (
+    item: DailyCloseItem,
+    outcome: CarryForwardResolutionOutcome,
+  ) => void;
   onSelectedIdsChange?: (ids: string[]) => void;
   orgUrlSlug: string;
   page: number;
   selectedIds?: string[];
   showCountBadge?: boolean;
   status: "blocked" | "carry-forward" | "ready" | "review";
+  resolvingCarryForwardOutcome?: CarryForwardResolutionOutcome | null;
+  resolvingCarryForwardKey?: string | null;
   storeUrlSlug: string;
   title: string;
 }) {
@@ -2357,6 +2452,26 @@ function BucketSection({
 
             return (
               <DailyCloseItemCard
+                actionSlot={
+                  status === "carry-forward" &&
+                  onResolveCarryForward &&
+                  getCarryForwardResolutionContext(item) ? (
+                    <CarryForwardResolutionActions
+                      isDisabled={Boolean(
+                        resolvingCarryForwardKey &&
+                          resolvingCarryForwardKey !== getItemId(item),
+                      )}
+                      resolvingOutcome={
+                        resolvingCarryForwardKey === getItemId(item)
+                          ? resolvingCarryForwardOutcome
+                          : null
+                      }
+                      onResolve={(outcome) =>
+                        onResolveCarryForward(item, outcome)
+                      }
+                    />
+                  ) : null
+                }
                 canViewFinancialDetails={canViewFinancialDetails}
                 currency={currency}
                 item={item}
@@ -2404,19 +2519,28 @@ function BucketTabs({
   selectedIds,
   storeUrlSlug,
   onPageChange,
+  onResolveCarryForward,
   onValueChange,
   onSelectedIdsChange,
+  resolvingCarryForwardOutcome,
+  resolvingCarryForwardKey,
 }: {
   buckets: BucketConfig[];
   canViewFinancialDetails: boolean;
   currency: string;
   value: BucketStatus;
   onPageChange: (page: number) => void;
+  onResolveCarryForward?: (
+    item: DailyCloseItem,
+    outcome: CarryForwardResolutionOutcome,
+  ) => void;
   onValueChange: (value: BucketStatus) => void;
   onSelectedIdsChange: (ids: string[]) => void;
   orgUrlSlug: string;
   page: number;
   selectedIds: string[];
+  resolvingCarryForwardOutcome?: CarryForwardResolutionOutcome | null;
+  resolvingCarryForwardKey?: string | null;
   storeUrlSlug: string;
 }) {
   return (
@@ -2463,6 +2587,11 @@ function BucketTabs({
             emptyText={bucket.emptyText}
             items={bucket.items}
             onPageChange={onPageChange}
+            onResolveCarryForward={
+              bucket.value === "carry-forward"
+                ? onResolveCarryForward
+                : undefined
+            }
             onSelectedIdsChange={
               bucket.value === "carry-forward" ? onSelectedIdsChange : undefined
             }
@@ -2471,6 +2600,8 @@ function BucketTabs({
             selectedIds={
               bucket.value === "carry-forward" ? selectedIds : undefined
             }
+            resolvingCarryForwardKey={resolvingCarryForwardKey}
+            resolvingCarryForwardOutcome={resolvingCarryForwardOutcome}
             showCountBadge={false}
             status={bucket.status}
             storeUrlSlug={storeUrlSlug}
@@ -3242,6 +3373,7 @@ export function DailyCloseViewContent({
   onComplete,
   onOperatingDateChange,
   onReopen,
+  onResolveCarryForward,
   onAuthenticateForApproval,
   orgUrlSlug,
   snapshot,
@@ -3257,6 +3389,11 @@ export function DailyCloseViewContent({
   const [selectedCarryForwardIds, setSelectedCarryForwardIds] = useState<
     string[] | null
   >(null);
+  const [resolvingCarryForwardKey, setResolvingCarryForwardKey] = useState<
+    string | null
+  >(null);
+  const [resolvingCarryForwardOutcome, setResolvingCarryForwardOutcome] =
+    useState<CarryForwardResolutionOutcome | null>(null);
   const navigate = useNavigate();
   const search = useSearch({ strict: false }) as {
     o?: unknown;
@@ -3461,6 +3598,76 @@ export function DailyCloseViewContent({
     if (result.kind === "approval_required") return;
   };
 
+  const handleResolveCarryForward = async (
+    item: DailyCloseItem,
+    outcome: "completed" | "cancelled",
+  ) => {
+    if (!onResolveCarryForward || resolvingCarryForwardKey) return;
+
+    const resolution = getCarryForwardResolutionContext(item);
+
+    if (!resolution) {
+      setCommandMessage({
+        kind: "error",
+        message:
+          "Carry-forward follow-up context unavailable. Refresh before resolving.",
+      });
+      return;
+    }
+
+    setCommandMessage(null);
+    setResolvingCarryForwardKey(getItemId(item));
+    setResolvingCarryForwardOutcome(outcome);
+
+    const reason =
+      outcome === "completed"
+        ? "Carry-forward follow-up completed from EOD Review."
+        : "Carry-forward follow-up cancelled from EOD Review.";
+
+    try {
+      const result = await completionApprovalRunner.run({
+        execute: (approvalArgs: ApprovalRetryArgs) =>
+          onResolveCarryForward({
+            businessDate: resolution.businessDate,
+            dailyCloseId: resolution.dailyCloseId,
+            outcome,
+            reason,
+            sourceId: resolution.sourceId,
+            workItemId: resolution.workItemId,
+            ...(approvalArgs.approvalProofId
+              ? { approvalProofId: approvalArgs.approvalProofId }
+              : {}),
+          }),
+        onResult: (commandResult) => {
+          if (commandResult.kind === "approval_required") {
+            return;
+          }
+
+          if (commandResult.kind === "ok") {
+            setCommandMessage({
+              kind: "success",
+              message:
+                outcome === "completed"
+                  ? "Carry-forward follow-up completed."
+                  : "Carry-forward follow-up cancelled.",
+            });
+            return;
+          }
+
+          setCommandMessage({
+            kind: "error",
+            message: normalizeCommandMessage(commandResult),
+          });
+        },
+      });
+
+      if (result.kind === "approval_required") return;
+    } finally {
+      setResolvingCarryForwardKey(null);
+      setResolvingCarryForwardOutcome(null);
+    }
+  };
+
   const handleBucketValueChange = (value: BucketStatus) => {
     void navigate({
       search: ((current: Record<string, unknown>) => ({
@@ -3534,11 +3741,14 @@ export function DailyCloseViewContent({
               canViewFinancialDetails={hasFinancialDetailsAccess}
               currency={currency}
               onPageChange={handleBucketPageChange}
+              onResolveCarryForward={handleResolveCarryForward}
               onSelectedIdsChange={setSelectedCarryForwardIds}
               onValueChange={handleBucketValueChange}
               orgUrlSlug={orgUrlSlug}
               page={selectedBucketPage}
               selectedIds={selectedIds}
+              resolvingCarryForwardOutcome={resolvingCarryForwardOutcome}
+              resolvingCarryForwardKey={resolvingCarryForwardKey}
               storeUrlSlug={storeUrlSlug}
               value={selectedBucketValue}
             />
@@ -3798,12 +4008,14 @@ type DailyCloseConnectedViewProps = {
   completeDailyClose: unknown;
   getDailyCloseSnapshot: unknown;
   reopenDailyClose?: unknown;
+  resolveDailyCloseCarryForward?: unknown;
 };
 
 function DailyCloseConnectedView({
   completeDailyClose,
   getDailyCloseSnapshot,
   reopenDailyClose,
+  resolveDailyCloseCarryForward,
 }: DailyCloseConnectedViewProps) {
   const {
     activeStore,
@@ -3840,6 +4052,9 @@ function DailyCloseConnectedView({
     useExpectedDailyCloseMutation(completeDailyClose);
   const reopenDailyCloseMutation = useExpectedDailyCloseMutation(
     reopenDailyClose ?? completeDailyClose,
+  );
+  const resolveCarryForwardMutation = useExpectedDailyCloseMutation(
+    resolveDailyCloseCarryForward ?? completeDailyClose,
   );
   const authenticateForApproval = useMutation(
     api.operations.staffCredentials.authenticateStaffCredentialForApproval,
@@ -3905,6 +4120,34 @@ function DailyCloseConnectedView({
     }
   };
 
+  const handleResolveCarryForward = async (
+    args: CarryForwardResolutionArgs,
+  ) => {
+    if (!activeStore?._id || !resolveDailyCloseCarryForward) {
+      return {
+        kind: "user_error",
+        error: {
+          code: "validation_failed",
+          message: "Carry-forward resolution is not available yet.",
+        },
+      } as NormalizedCommandResult<unknown>;
+    }
+
+    return runCommand(
+      () =>
+        resolveCarryForwardMutation({
+          approvalProofId: args.approvalProofId,
+          businessDate: args.businessDate,
+          dailyCloseId: args.dailyCloseId,
+          outcome: args.outcome,
+          reason: args.reason,
+          sourceId: args.sourceId,
+          storeId: activeStore._id,
+          workItemId: args.workItemId,
+        }) as Promise<ApprovalCommandResult<unknown>>,
+    );
+  };
+
   const handleOperatingDateChange = (date: Date) => {
     const nextRange = getLocalOperatingDateRange(date);
 
@@ -3929,6 +4172,9 @@ function DailyCloseConnectedView({
       onComplete={handleComplete}
       onOperatingDateChange={handleOperatingDateChange}
       onReopen={reopenDailyClose ? handleReopen : undefined}
+      onResolveCarryForward={
+        resolveDailyCloseCarryForward ? handleResolveCarryForward : undefined
+      }
       onAuthenticateForApproval={(args) =>
         runCommand(
           () =>
@@ -3977,6 +4223,7 @@ export function DailyCloseView() {
       completeDailyClose={dailyCloseApi.completeDailyClose}
       getDailyCloseSnapshot={dailyCloseApi.getDailyCloseSnapshot}
       reopenDailyClose={dailyCloseApi.reopenDailyClose}
+      resolveDailyCloseCarryForward={dailyCloseApi.resolveDailyCloseCarryForward}
     />
   );
 }

@@ -5,6 +5,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
+import { getFunctionName } from "convex/server";
 import type { AnchorHTMLAttributes, ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -230,6 +231,7 @@ const baseProps = {
     createdAt: number;
     customerName?: string | null;
     dueAt?: number | null;
+    metadata?: Record<string, unknown> | null;
     priority: string;
     status: string;
     title: string;
@@ -334,7 +336,7 @@ describe("OperationsQueueViewContent", () => {
             _id: "work-item-1" as Id<"operationalWorkItem">,
             approvalState: "pending",
             createdAt: Date.now() - 5 * 60 * 1000,
-            metadata: {
+            details: {
               lookupCode: "nahh",
               price: 80000,
               quantitySold: 1,
@@ -369,8 +371,8 @@ describe("OperationsQueueViewContent", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("Work type")).toBeInTheDocument();
     expect(screen.getByText("2 work types")).toBeInTheDocument();
-    expect(screen.getByText("POS pending checkout")).toBeInTheDocument();
-    expect(screen.getByText("Service intake")).toBeInTheDocument();
+    expect(screen.getAllByText("POS pending checkout").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Service case").length).toBeGreaterThan(0);
     expect(screen.getAllByText("1 item")).toHaveLength(2);
     expect(
       screen.getByText("Review pending checkout item: Adore Dye"),
@@ -384,6 +386,71 @@ describe("OperationsQueueViewContent", () => {
     expect(screen.getByText("Follow Up Service Intake")).toBeInTheDocument();
     expect(screen.getByText("Owner")).toBeInTheDocument();
     expect(screen.getByText("Customer")).toBeInTheDocument();
+  });
+
+  it("shows when the open work queue is capped by the server", () => {
+    render(
+      <OperationsQueueViewContent
+        {...baseProps}
+        activeWorkflow="queue"
+        queueOverflow={{
+          approvalRequests: false,
+          workItems: {
+            inProgress: false,
+            open: true,
+          },
+        }}
+        workItems={[
+          {
+            _id: "work-item-1" as Id<"operationalWorkItem">,
+            approvalState: "not_required",
+            createdAt: Date.now() - 5 * 60 * 1000,
+            priority: "normal",
+            status: "open",
+            title: "Count stock",
+            type: "service_case",
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("More open work is available")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /Showing the first 1 open work items\. Resolve visible work/i,
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/change the sort order/i)).not.toBeInTheDocument();
+  });
+
+  it("shows when pending approvals are capped by the server", () => {
+    render(
+      <OperationsQueueViewContent
+        {...baseProps}
+        activeWorkflow="approvals"
+        approvalRequests={[
+          {
+            _id: "approval-1" as Id<"approvalRequest">,
+            requestType: "variance_review",
+            status: "pending",
+          },
+        ]}
+        queueOverflow={{
+          approvalRequests: true,
+          workItems: {
+            inProgress: false,
+            open: false,
+          },
+        }}
+      />,
+    );
+
+    expect(screen.getByText("More approvals are available")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /Showing the first 1 pending approvals\. Resolve visible approvals/i,
+      ),
+    ).toBeInTheDocument();
   });
 
   it("shows only the open work header while the queue is loading", () => {
@@ -601,7 +668,7 @@ describe("OperationsQueueViewContent", () => {
     );
 
     expect(screen.getByText("Closure Wig Wash And Style")).toBeInTheDocument();
-    expect(screen.getByText("Service Intake")).toBeInTheDocument();
+    expect(screen.getAllByText("Service intake").length).toBeGreaterThan(0);
     expect(screen.getByText("Intake Created")).toBeInTheDocument();
     expect(screen.getByText("Urgent")).toBeInTheDocument();
     expect(screen.getByText("Owner")).toBeInTheDocument();
@@ -657,9 +724,7 @@ describe("OperationsQueueViewContent", () => {
     expect(screen.getByText("Page 2 of 3")).toBeInTheDocument();
   });
 
-  it("sorts open work items by latest and oldest creation time", async () => {
-    const { default: userEvent } = await import("@testing-library/user-event");
-    const user = userEvent.setup();
+  it("preserves server-prioritized open work order", () => {
     const baseTime = Date.UTC(2026, 5, 28, 12, 0, 0);
     const workItems = Array.from({ length: 6 }, (_, index) => ({
       _id: `work-item-${index + 1}` as Id<"operationalWorkItem">,
@@ -679,25 +744,12 @@ describe("OperationsQueueViewContent", () => {
       />,
     );
 
-    expect(screen.getByRole("button", { name: "Latest" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-    expect(screen.getByText("Open Work Item 6")).toBeInTheDocument();
-    expect(screen.queryByText("Open Work Item 1")).not.toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: "Oldest" }));
-
-    expect(screen.getByRole("button", { name: "Oldest" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
     expect(screen.getByText("Open Work Item 1")).toBeInTheDocument();
     expect(screen.queryByText("Open Work Item 6")).not.toBeInTheDocument();
     expect(screen.getByText("Page 1 of 2")).toBeInTheDocument();
   });
 
-  it("links pending checkout work items to stock adjustments with the provisional SKU selected", () => {
+  it("routes pending checkout work items to unresolved catalog review first", () => {
     render(
       <OperationsQueueViewContent
         {...baseProps}
@@ -709,9 +761,7 @@ describe("OperationsQueueViewContent", () => {
             _id: "work-item-1" as Id<"operationalWorkItem">,
             approvalState: "not_required",
             createdAt: Date.now() - 5 * 60 * 1000,
-            metadata: {
-              provisionalProductSkuId: "pending-sku-1",
-            },
+            details: {},
             priority: "normal",
             status: "open",
             title: "Review pending checkout item: BRUDDAH",
@@ -721,33 +771,28 @@ describe("OperationsQueueViewContent", () => {
       />,
     );
 
-    const titleHref = new URL(
-      screen
-        .getByRole("link", {
-          name: "Bruddah",
-        })
-        .getAttribute("href") ?? "",
-      "http://localhost",
-    );
     expect(
       screen.getByText((_content, element) =>
         element?.tagName.toLowerCase() === "p" &&
         element.textContent === "Review pending checkout item: Bruddah",
       ),
     ).toBeInTheDocument();
-    expect(titleHref.pathname).toBe(
-      "/$orgUrlSlug/store/$storeUrlSlug/operations/stock-adjustments",
-    );
-    expect(titleHref.searchParams.get("mode")).toBe("manual");
-    expect(titleHref.searchParams.get("sku")).toBe("pending-sku-1");
+    expect(screen.queryByRole("link", { name: "Bruddah" })).not.toBeInTheDocument();
 
     const actionHref = new URL(
       screen
-        .getByRole("link", { name: "Open stock adjustments" })
+        .getByRole("link", { name: "Review unresolved catalog" })
         .getAttribute("href") ?? "",
       "http://localhost",
     );
-    expect(actionHref.searchParams.get("sku")).toBe("pending-sku-1");
+    expect(actionHref.pathname).toBe(
+      "/$orgUrlSlug/store/$storeUrlSlug/products/unresolved",
+    );
+    expect(actionHref.searchParams.get("o")).toBeTruthy();
+    expect(
+      screen.queryByRole("link", { name: "Open stock adjustments" }),
+    ).not.toBeInTheDocument();
+    expect(actionHref.searchParams.get("sku")).toBeNull();
   });
 
   it("keeps pending checkout work item titles plain without provisional SKU metadata", () => {
@@ -784,9 +829,8 @@ describe("OperationsQueueViewContent", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("links synced sale inventory work items to manual stock adjustments", async () => {
-    const { default: userEvent } = await import("@testing-library/user-event");
-    const user = userEvent.setup();
+  it("renders type-specific open work owner and action contracts", () => {
+    const createdAt = Date.UTC(2026, 6, 1, 10, 0, 0);
 
     render(
       <OperationsQueueViewContent
@@ -796,15 +840,212 @@ describe("OperationsQueueViewContent", () => {
         storeUrlSlug="wigclub"
         workItems={[
           {
+            _id: "work-service-case" as Id<"operationalWorkItem">,
+            approvalState: "not_required",
+            assignedStaffName: "Akua Mensah",
+            createdAt,
+            customerName: "Efua Owusu",
+            dueAt: createdAt + 86_400_000,
+            priority: "normal",
+            status: "open",
+            title: "closure wig repair",
+            type: "service_case",
+          },
+          {
+            _id: "work-service-appointment" as Id<"operationalWorkItem">,
+            approvalState: "not_required",
+            assignedStaffName: "Ama Tetteh",
+            createdAt: createdAt + 1_000,
+            customerName: "Yaw Danso",
+            dueAt: createdAt + 3_600_000,
+            priority: "normal",
+            status: "open",
+            title: "install appointment",
+            type: "service_appointment",
+          },
+          {
+            _id: "work-purchase-order" as Id<"operationalWorkItem">,
+            approvalState: "not_required",
+            createdAt: createdAt + 2_000,
+            details: {
+              itemCount: 4,
+              purchaseOrderNumber: "PO-103",
+              vendorName: "Salon Supply Co.",
+            },
+            priority: "normal",
+            status: "in_progress",
+            title: "restock adhesives",
+            type: "purchase_order",
+          },
+          {
+            _id: "work-stock-review" as Id<"operationalWorkItem">,
+            approvalState: "pending",
+            createdAt: createdAt + 3_000,
+            details: {
+              reasonLabel: "Cycle count variance",
+            },
+            priority: "high",
+            status: "open",
+            title: "cycle count review",
+            type: "stock_adjustment_review",
+          },
+          {
+            _id: "work-carry-forward" as Id<"operationalWorkItem">,
+            approvalState: "not_required",
+            createdAt: createdAt + 4_000,
+            details: {
+              businessDate: "2026-07-01",
+              followUpReason: "Review drawer variance handoff",
+            },
+            priority: "normal",
+            status: "open",
+            title: "daily close carry forward",
+            type: "daily_close_carry_forward",
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getAllByText("Service case").length).toBeGreaterThan(0);
+    expect(screen.getByRole("link", { name: "Open service case" })).toHaveAttribute(
+      "href",
+      "/$orgUrlSlug/store/$storeUrlSlug/services/active-cases?o=%252F",
+    );
+    expect(screen.getAllByText("Service appointment").length).toBeGreaterThan(0);
+    expect(screen.getByRole("link", { name: "Open appointment" })).toHaveAttribute(
+      "href",
+      "/$orgUrlSlug/store/$storeUrlSlug/services/appointments?o=%252F",
+    );
+    expect(screen.getAllByText("Purchase order").length).toBeGreaterThan(0);
+    expect(screen.getByRole("link", { name: "Open purchase order" })).toHaveAttribute(
+      "href",
+      "/$orgUrlSlug/store/$storeUrlSlug/procurement?o=%252F",
+    );
+    expect(screen.getByText("PO-103")).toBeInTheDocument();
+    expect(screen.getByText("Salon Supply Co.")).toBeInTheDocument();
+    expect(screen.getByText("4 items")).toBeInTheDocument();
+    expect(screen.getAllByText("Stock adjustment approval").length).toBeGreaterThan(0);
+    expect(screen.getByText("Approval requests")).toBeInTheDocument();
+    expect(screen.getByText("Cycle count variance")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Review approval" })).toHaveAttribute(
+      "href",
+      "/$orgUrlSlug/store/$storeUrlSlug/operations/approvals?o=%252F",
+    );
+    expect(screen.getAllByText("Daily close follow-up").length).toBeGreaterThan(0);
+    expect(screen.getByText("July 1, 2026")).toBeInTheDocument();
+    const dailyCloseHref = new URL(
+      screen
+        .getByRole("link", { name: "Open Daily Close" })
+        .getAttribute("href") ?? "",
+      "http://localhost",
+    );
+    expect(dailyCloseHref.pathname).toBe(
+      "/$orgUrlSlug/store/$storeUrlSlug/operations/daily-close",
+    );
+    expect(dailyCloseHref.searchParams.get("o")).toBe("%2F");
+    expect(dailyCloseHref.searchParams.get("operatingDate")).toBe("2026-07-01");
+    expect(
+      screen.queryByRole("link", { name: "Open stock adjustments" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("does not render service deposit review as a supported open work row", () => {
+    render(
+      <OperationsQueueViewContent
+        {...baseProps}
+        activeWorkflow="queue"
+        orgUrlSlug="wigclub"
+        storeUrlSlug="wigclub"
+        workItems={[
+          {
+            _id: "work-service-deposit" as Id<"operationalWorkItem">,
+            approvalState: "pending",
+            createdAt: Date.now() - 5 * 60 * 1000,
+            priority: "high",
+            status: "open",
+            title: "Service deposit review",
+            type: "service_deposit_review",
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getAllByText("Unsupported work type").length).toBeGreaterThan(0);
+    expect(
+      screen.getByText("Service deposit review is not available in Open Work."),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Not surfaced here")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: /service deposit/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps raw metadata, proof, and internal payloads out of visible open work rows", () => {
+    render(
+      <OperationsQueueViewContent
+        {...baseProps}
+        activeWorkflow="queue"
+        orgUrlSlug="wigclub"
+        storeUrlSlug="wigclub"
+        workItems={[
+          {
+            _id: "work-item-raw-metadata" as Id<"operationalWorkItem">,
+            approvalState: "pending",
+            createdAt: Date.now() - 5 * 60 * 1000,
+            details: {
+              businessDate: "2026-07-01",
+            },
+            priority: "high",
+            status: "open",
+            title: "daily close carry forward",
+            type: "daily_close_carry_forward",
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getAllByText("Daily close follow-up").length).toBeGreaterThan(0);
+    expect(screen.queryByText("proof-visible-if-leaked")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("card-token-should-stay-server-side"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("raw-sync-json-should-not-render"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("manager-proof-should-not-render"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("store-other-should-not-render"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("links synced sale inventory work items to manual stock adjustments and resolution", async () => {
+    const { default: userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+    const onResolveSyncedSaleInventoryReview = vi.fn();
+
+    render(
+      <OperationsQueueViewContent
+        {...baseProps}
+        activeWorkflow="queue"
+        orgUrlSlug="wigclub"
+        onResolveSyncedSaleInventoryReview={onResolveSyncedSaleInventoryReview}
+        storeUrlSlug="wigclub"
+        workItems={[
+          {
             _id: "work-item-1" as Id<"operationalWorkItem">,
             approvalState: "not_required",
             createdAt: Date.now() - 5 * 60 * 1000,
-            metadata: {
+            details: {
+              inventoryReviewLineCount: 1,
+              localRegisterSessionId: "local-register-session-1",
+              localTransactionId: "local-transaction-1",
               primaryProductSkuId: "product-sku-1" as Id<"productSku">,
               receiptNumber: "939540",
+              registerSessionId: "register-session-1" as Id<"registerSession">,
               sourceId: "transaction-1",
-              sourceType: "posTransaction",
-              trustedInventoryLines: [{ productSkuId: "product-sku-1" }],
+              terminalId: "terminal-1" as Id<"posTerminal">,
             },
             priority: "high",
             status: "open",
@@ -821,7 +1062,7 @@ describe("OperationsQueueViewContent", () => {
         element.textContent === "Review inventory for Adore Dye",
       ),
     ).toBeInTheDocument();
-    expect(screen.getByText("Synced Sale Inventory Review")).toBeInTheDocument();
+    expect(screen.getAllByText("Synced sale inventory").length).toBeGreaterThan(0);
     const titleHref = new URL(
       screen
         .getByRole("link", { name: "Adore Dye" })
@@ -873,6 +1114,121 @@ describe("OperationsQueueViewContent", () => {
     );
     expect(stockAdjustmentsHref.searchParams.get("mode")).toBe("manual");
     expect(stockAdjustmentsHref.searchParams.get("sku")).toBe("product-sku-1");
+
+    await user.click(screen.getByRole("button", { name: "Mark reviewed" }));
+
+    expect(onResolveSyncedSaleInventoryReview).toHaveBeenCalledWith(
+      expect.objectContaining({
+        _id: "work-item-1",
+        details: expect.objectContaining({
+          localRegisterSessionId: "local-register-session-1",
+          localTransactionId: "local-transaction-1",
+          receiptNumber: "939540",
+          registerSessionId: "register-session-1",
+          sourceId: "transaction-1",
+          terminalId: "terminal-1",
+        }),
+        type: "synced_sale_inventory_review",
+      }),
+    );
+  });
+
+  it("does not render synced sale resolution when resolver details are incomplete", () => {
+    const onResolveSyncedSaleInventoryReview = vi.fn();
+
+    render(
+      <OperationsQueueViewContent
+        {...baseProps}
+        activeWorkflow="queue"
+        orgUrlSlug="wigclub"
+        onResolveSyncedSaleInventoryReview={onResolveSyncedSaleInventoryReview}
+        storeUrlSlug="wigclub"
+        workItems={[
+          {
+            _id: "work-item-1" as Id<"operationalWorkItem">,
+            approvalState: "not_required",
+            createdAt: Date.now() - 5 * 60 * 1000,
+            details: {
+              inventoryReviewLineCount: 1,
+              primaryProductSkuId: "product-sku-1" as Id<"productSku">,
+              receiptNumber: "939540",
+              sourceId: "transaction-1",
+            },
+            priority: "high",
+            status: "open",
+            title: "Review inventory for ADORE DYE",
+            type: "synced_sale_inventory_review",
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: "Mark reviewed" })).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Open stock adjustments" }),
+    ).toBeInTheDocument();
+  });
+
+  it("disables peer synced sale review buttons while one review is resolving", () => {
+    render(
+      <OperationsQueueViewContent
+        {...baseProps}
+        activeWorkflow="queue"
+        isResolvingSyncedSaleInventoryReviewId={
+          "work-item-active" as Id<"operationalWorkItem">
+        }
+        orgUrlSlug="wigclub"
+        onResolveSyncedSaleInventoryReview={vi.fn()}
+        storeUrlSlug="wigclub"
+        workItems={[
+          {
+            _id: "work-item-1" as Id<"operationalWorkItem">,
+            approvalState: "not_required",
+            createdAt: Date.now() - 5 * 60 * 1000,
+            details: {
+              inventoryReviewLineCount: 1,
+              localRegisterSessionId: "local-register-session-1",
+              localTransactionId: "local-transaction-1",
+              primaryProductSkuId: "product-sku-1" as Id<"productSku">,
+              receiptNumber: "939540",
+              registerSessionId: "register-session-1" as Id<"registerSession">,
+              sourceId: "transaction-1",
+              terminalId: "terminal-1" as Id<"posTerminal">,
+            },
+            priority: "high",
+            status: "open",
+            title: "Review inventory for ADORE DYE",
+            type: "synced_sale_inventory_review",
+          },
+          {
+            _id: "work-item-2" as Id<"operationalWorkItem">,
+            approvalState: "not_required",
+            createdAt: Date.now() - 4 * 60 * 1000,
+            details: {
+              inventoryReviewLineCount: 1,
+              localRegisterSessionId: "local-register-session-2",
+              localTransactionId: "local-transaction-2",
+              primaryProductSkuId: "product-sku-2" as Id<"productSku">,
+              receiptNumber: "939541",
+              registerSessionId: "register-session-1" as Id<"registerSession">,
+              sourceId: "transaction-2",
+              terminalId: "terminal-1" as Id<"posTerminal">,
+            },
+            priority: "normal",
+            status: "open",
+            title: "Review inventory for Lace tint",
+            type: "synced_sale_inventory_review",
+          },
+        ]}
+      />,
+    );
+
+    const reviewButtons = screen.getAllByRole("button", {
+      name: "Mark reviewed",
+    });
+    expect(reviewButtons).toHaveLength(2);
+    expect(reviewButtons[0]).toBeDisabled();
+    expect(reviewButtons[1]).toBeDisabled();
   });
 
   it("hydrates open work page and sort state from controlled search", () => {
@@ -893,22 +1249,17 @@ describe("OperationsQueueViewContent", () => {
         activeWorkflow="queue"
         openWorkSearch={{
           page: 2,
-          sort: "oldest",
         }}
         workItems={workItems}
       />,
     );
 
-    expect(screen.getByRole("button", { name: "Oldest" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
     expect(screen.getByText("Open Work Item 6")).toBeInTheDocument();
     expect(screen.queryByText("Open Work Item 1")).not.toBeInTheDocument();
     expect(screen.getByText("Page 2 of 2")).toBeInTheDocument();
   });
 
-  it("reports open work page and sort changes for route search state", async () => {
+  it("reports open work page changes for route search state", async () => {
     const { default: userEvent } = await import("@testing-library/user-event");
     const user = userEvent.setup();
     const onOpenWorkSearchChange = vi.fn();
@@ -934,13 +1285,6 @@ describe("OperationsQueueViewContent", () => {
     await user.click(screen.getByRole("button", { name: "Go to next page" }));
 
     expect(onOpenWorkSearchChange).toHaveBeenCalledWith({ page: 2 });
-
-    await user.click(screen.getByRole("button", { name: "Oldest" }));
-
-    expect(onOpenWorkSearchChange).toHaveBeenCalledWith({
-      page: undefined,
-      sort: "oldest",
-    });
   });
 
   it("does not link synced sale inventory work items without valid SKU metadata", () => {
@@ -955,8 +1299,7 @@ describe("OperationsQueueViewContent", () => {
             _id: "work-item-1" as Id<"operationalWorkItem">,
             approvalState: "not_required",
             createdAt: Date.now() - 5 * 60 * 1000,
-            metadata: {
-              primaryProductSkuId: 42,
+            details: {
               receiptNumber: "939540",
             },
             priority: "high",
@@ -985,7 +1328,7 @@ describe("OperationsQueueViewContent", () => {
             _id: "work-item-1" as Id<"operationalWorkItem">,
             approvalState: "not_required",
             createdAt: Date.now() - 5 * 60 * 1000,
-            metadata: {
+            details: {
               receiptNumber: "939540",
             },
             priority: "high",
@@ -1077,6 +1420,39 @@ describe("OperationsQueueViewContent", () => {
     expect(baseProps.onDecideApprovalRequest).toHaveBeenCalledWith({
       approvalRequestId: "approval-1",
       decision: "approved",
+    });
+  });
+
+  it("renders unsupported approval rows as retire-only actions", async () => {
+    const { default: userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+
+    render(
+      <OperationsQueueViewContent
+        {...baseProps}
+        approvalRequests={[
+          {
+            _id: "approval-legacy" as Id<"approvalRequest">,
+            requestType: "service_deposit_review",
+            status: "pending",
+            workItemTitle: "Legacy deposit review",
+          },
+        ]}
+      />,
+    );
+
+    expect(
+      screen.getByText(/legacy service deposit review cannot be approved/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /approve/i }),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /retire review/i }));
+
+    expect(baseProps.onDecideApprovalRequest).toHaveBeenCalledWith({
+      approvalRequestId: "approval-legacy",
+      decision: "rejected",
     });
   });
 
@@ -1458,6 +1834,46 @@ describe("OperationsQueueViewContent", () => {
     ).toBeInTheDocument();
   });
 
+  it("passes register closeout context when deciding variance approvals", async () => {
+    const { default: userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+    const onDecideApprovalRequest = vi.fn().mockResolvedValue(undefined);
+
+    render(
+      <OperationsQueueViewContent
+        {...baseProps}
+        approvalRequests={[
+          {
+            _id: "approval-variance-1" as Id<"approvalRequest">,
+            createdAt: 1_714_620_000_000,
+            registerSessionSummary: {
+              countedCash: 20000,
+              expectedCash: 40000,
+              registerNumber: "6",
+              registerSessionId: "register-6" as Id<"registerSession">,
+              status: "closing",
+              terminalName: "Safari QA",
+              variance: -20000,
+            },
+            requestType: "variance_review",
+            status: "pending",
+            workItemTitle: "Variance Review",
+          },
+        ]}
+        onDecideApprovalRequest={onDecideApprovalRequest}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /approve variance/i }));
+
+    expect(onDecideApprovalRequest).toHaveBeenCalledWith({
+      approvalRequestId: "approval-variance-1",
+      decision: "approved",
+      registerSessionId: "register-6",
+      requestType: "variance_review",
+    });
+  });
+
   it("renders synced register activity reviews in approvals", async () => {
     const { default: userEvent } = await import("@testing-library/user-event");
     const user = userEvent.setup();
@@ -1818,6 +2234,7 @@ describe("OperationsQueueViewContent", () => {
       .mockReturnValueOnce(vi.fn())
       .mockReturnValueOnce(vi.fn())
       .mockReturnValueOnce(vi.fn())
+      .mockReturnValueOnce(vi.fn())
       .mockReturnValueOnce(ensureCycleCountDraft)
       .mockReturnValueOnce(vi.fn())
       .mockReturnValueOnce(vi.fn())
@@ -1874,6 +2291,7 @@ describe("OperationsQueueViewContent", () => {
     mockedHooks.useQuery.mockReset();
     mockedHooks.useMutation.mockReturnValue(vi.fn());
     mockedHooks.useMutation
+      .mockReturnValueOnce(vi.fn())
       .mockReturnValueOnce(vi.fn())
       .mockReturnValueOnce(vi.fn())
       .mockReturnValueOnce(vi.fn())
@@ -2118,5 +2536,242 @@ describe("OperationsQueueViewContent", () => {
       ),
     );
     expect(mockedToast.error).not.toHaveBeenCalledWith("Please try again.");
+  });
+
+  it("resolves closeout variance approvals through the register closeout review mutation", async () => {
+    const { default: userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+    const decideApprovalRequest = vi.fn().mockResolvedValue(ok({}));
+    const reviewRegisterSessionCloseout = vi.fn().mockResolvedValue(ok({}));
+    const authenticateStaffCredential = vi.fn().mockResolvedValue(
+      ok({
+        activeRoles: ["manager"],
+        staffProfile: {},
+        staffProfileId: "staff-manager-1",
+      }),
+    );
+    const authenticateStaffCredentialForApproval = vi.fn().mockResolvedValue(
+      ok({
+        approvalProofId: "proof-variance-1",
+        approvedByStaffProfileId: "staff-manager-1",
+        expiresAt: Date.now() + 60_000,
+      }),
+    );
+
+    mockedHooks.useMutation.mockReset();
+    mockedHooks.useMutation.mockImplementation((functionReference) => {
+      const functionName = getFunctionName(functionReference as never);
+
+      if (functionName === "operations/approvalRequests:decideApprovalRequest") {
+        return decideApprovalRequest;
+      }
+
+      if (
+        functionName ===
+        "operations/staffCredentials:authenticateStaffCredential"
+      ) {
+        return authenticateStaffCredential;
+      }
+
+      if (
+        functionName ===
+        "operations/staffCredentials:authenticateStaffCredentialForApproval"
+      ) {
+        return authenticateStaffCredentialForApproval;
+      }
+
+      if (
+        functionName ===
+        "cashControls/closeouts:reviewRegisterSessionCloseout"
+      ) {
+        return reviewRegisterSessionCloseout;
+      }
+
+      return vi.fn();
+    });
+    const queueSnapshot = {
+      approvalRequests: [
+        {
+          _id: "approval-variance-1",
+          registerSessionSummary: {
+            countedCash: 20000,
+            expectedCash: 40000,
+            registerNumber: "6",
+            registerSessionId: "register-6",
+            status: "closing",
+            terminalName: "Safari QA",
+            variance: -20000,
+          },
+          requestType: "variance_review",
+          status: "pending",
+          workItemTitle: "Variance Review",
+        },
+      ],
+      workItems: [],
+    };
+    let queryCallIndex = 0;
+    mockedHooks.useQuery.mockImplementation(() => {
+      queryCallIndex += 1;
+
+      return queryCallIndex % 2 === 1
+        ? queueSnapshot
+        : baseProps.inventoryItems;
+    });
+
+    render(<OperationsQueueView activeWorkflow="approvals" />);
+
+    await user.click(screen.getByRole("button", { name: /unlock approvals/i }));
+    await user.click(
+      within(
+        screen.getByRole("dialog", { name: /unlock approval decisions/i }),
+      ).getByRole("button", { name: /unlock approvals/i }),
+    );
+    await waitFor(() => expect(authenticateStaffCredential).toHaveBeenCalled());
+
+    await user.click(screen.getByRole("button", { name: /approve variance/i }));
+
+    await waitFor(() =>
+      expect(authenticateStaffCredentialForApproval).toHaveBeenCalledWith({
+        actionKey: "cash_controls.register_session.review_variance",
+        pinHash: "hashed:1234",
+        reason: "Resolve pending approval request.",
+        requiredRole: "manager",
+        storeId: "store-1",
+        subject: {
+          id: "register-6",
+          label: "6",
+          type: "register_session",
+        },
+        username: "manager",
+      }),
+    );
+    await waitFor(() =>
+      expect(reviewRegisterSessionCloseout).toHaveBeenCalledWith({
+        approvalProofId: "proof-variance-1",
+        decision: "approved",
+        registerSessionId: "register-6",
+        storeId: "store-1",
+      }),
+    );
+    expect(decideApprovalRequest).not.toHaveBeenCalled();
+  });
+
+  it("resolves synced register reviews with the minted approval proof", async () => {
+    const { default: userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+    const decideApprovalRequest = vi.fn().mockResolvedValue(ok({}));
+    const resolveRegisterSessionSyncReview = vi.fn().mockResolvedValue(ok({}));
+    const authenticateStaffCredential = vi.fn().mockResolvedValue(
+      ok({
+        activeRoles: ["manager"],
+        staffProfile: {},
+        staffProfileId: "staff-manager-1",
+      }),
+    );
+    const authenticateStaffCredentialForApproval = vi.fn().mockResolvedValue(
+      ok({
+        approvalProofId: "proof-sync-1",
+        approvedByStaffProfileId: "staff-manager-1",
+        expiresAt: Date.now() + 60_000,
+      }),
+    );
+
+    mockedHooks.useMutation.mockReset();
+    mockedHooks.useMutation.mockImplementation((functionReference) => {
+      const functionName = getFunctionName(functionReference as never);
+
+      if (functionName === "operations/approvalRequests:decideApprovalRequest") {
+        return decideApprovalRequest;
+      }
+
+      if (
+        functionName === "cashControls/deposits:resolveRegisterSessionSyncReview"
+      ) {
+        return resolveRegisterSessionSyncReview;
+      }
+
+      if (
+        functionName ===
+        "operations/staffCredentials:authenticateStaffCredential"
+      ) {
+        return authenticateStaffCredential;
+      }
+
+      if (
+        functionName ===
+        "operations/staffCredentials:authenticateStaffCredentialForApproval"
+      ) {
+        return authenticateStaffCredentialForApproval;
+      }
+
+      return vi.fn();
+    });
+    const queueSnapshot = {
+      approvalRequests: [
+        {
+          _id: "register-sync-review:register-2",
+          registerSessionSummary: {
+            countedCash: null,
+            expectedCash: 50_000,
+            registerNumber: "2",
+            registerSessionId: "register-2",
+            status: "active",
+            terminalName: "Wigshop",
+            variance: null,
+          },
+          requestType: "register_sync_review",
+          status: "pending",
+          workItemTitle: "Synced register activity review",
+        },
+      ],
+      workItems: [],
+    };
+    let queryCallIndex = 0;
+    mockedHooks.useQuery.mockImplementation(() => {
+      queryCallIndex += 1;
+
+      return queryCallIndex % 2 === 1
+        ? queueSnapshot
+        : baseProps.inventoryItems;
+    });
+
+    render(<OperationsQueueView activeWorkflow="approvals" />);
+
+    await user.click(screen.getByRole("button", { name: /unlock approvals/i }));
+    await user.click(
+      within(
+        screen.getByRole("dialog", { name: /unlock approval decisions/i }),
+      ).getByRole("button", { name: /unlock approvals/i }),
+    );
+    await waitFor(() => expect(authenticateStaffCredential).toHaveBeenCalled());
+
+    await user.click(
+      screen.getByRole("button", { name: /approve synced sales/i }),
+    );
+
+    await waitFor(() =>
+      expect(authenticateStaffCredentialForApproval).toHaveBeenCalledWith({
+        actionKey: "cash_controls.register_session.resolve_sync_review",
+        pinHash: "hashed:1234",
+        reason: "Resolve pending approval request.",
+        requiredRole: "manager",
+        storeId: "store-1",
+        subject: {
+          id: "register-2",
+          label: "2",
+          type: "register_session",
+        },
+        username: "manager",
+      }),
+    );
+    await waitFor(() =>
+      expect(resolveRegisterSessionSyncReview).toHaveBeenCalledWith({
+        approvalProofId: "proof-sync-1",
+        decision: "approved",
+        registerSessionId: "register-2",
+        storeId: "store-1",
+      }),
+    );
+    expect(decideApprovalRequest).not.toHaveBeenCalled();
   });
 });

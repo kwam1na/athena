@@ -7,7 +7,6 @@ import type { OpenWorkSearchPatch } from "~/src/components/operations/Operations
 const openWorkSearchSchema = z.object({
   o: z.string().optional(),
   page: z.coerce.number().int().positive().optional(),
-  sort: z.enum(["latest", "oldest"]).optional(),
 });
 
 export const Route = createFileRoute(
@@ -29,10 +28,6 @@ function OpenWorkRoute() {
 
         if (next.page === undefined) {
           delete next.page;
-        }
-
-        if (next.sort === undefined) {
-          delete next.sort;
         }
 
         return next;

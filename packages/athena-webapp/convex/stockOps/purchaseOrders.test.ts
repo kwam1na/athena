@@ -19,6 +19,7 @@ import {
   advancePurchaseOrderToOrderedCommand,
   createPurchaseOrderCommand,
   createPurchaseOrderWithCtx,
+  mapPurchaseOrderStatusToWorkItemStatus,
   mapPurchaseOrderCommandError,
   updatePurchaseOrderStatusCommand,
   updatePurchaseOrderStatusWithCtx,
@@ -105,6 +106,18 @@ describe("stock ops purchase orders", () => {
     ).toThrow("Cannot change purchase order from ordered to received.");
   });
 
+  it("preserves purchase-order terminal semantics on linked work items", () => {
+    expect(mapPurchaseOrderStatusToWorkItemStatus("received")).toBe(
+      "completed",
+    );
+    expect(mapPurchaseOrderStatusToWorkItemStatus("cancelled")).toBe(
+      "cancelled",
+    );
+    expect(mapPurchaseOrderStatusToWorkItemStatus("partially_received")).toBe(
+      "in_progress",
+    );
+  });
+
   it("writes purchase-order workflow changes through the shared operations rails", () => {
     const source = getSource("./purchaseOrders.ts");
 
@@ -165,6 +178,80 @@ describe("stock ops purchase orders", () => {
       }),
     ).rejects.toThrow("Authentication required.");
     expect(patch).not.toHaveBeenCalled();
+  });
+
+  it("syncs terminal purchase-order cancellation to the linked operations work item", async () => {
+    mockedAuthServer.getAuthUserId.mockResolvedValue("auth-user-1");
+
+    const purchaseOrder = {
+      _id: "purchase-order-1",
+      operationalWorkItemId: "work-item-1",
+      organizationId: "org-1",
+      poNumber: "PO-001",
+      status: "ordered",
+      storeId: "store-1",
+    };
+    const insert = vi.fn(async () => "operational-event-1");
+    const patch = vi.fn(async (_table: string, _id: string, updates: object) => {
+      Object.assign(purchaseOrder, updates);
+    });
+    const runMutation = vi.fn();
+    const ctx = {
+      db: {
+        get: vi.fn(async (table: string, id: string) => {
+          if (table === "users" && id === "auth-user-1") {
+            return { _id: "auth-user-1", email: "admin@example.com" };
+          }
+          if (table === "store" && id === "store-1") {
+            return { _id: "store-1", organizationId: "org-1" };
+          }
+          if (table === "purchaseOrder" && id === "purchase-order-1") {
+            return purchaseOrder;
+          }
+          return null;
+        }),
+        insert,
+        patch,
+        query: vi.fn((table: string) => ({
+          filter: vi.fn(() => ({
+            first: vi.fn(async () => {
+              if (table === "athenaUser") {
+                return { _id: "athena-user-1", email: "admin@example.com" };
+              }
+              if (table === "organizationMember") {
+                return {
+                  _id: "member-1",
+                  organizationId: "org-1",
+                  role: "full_admin",
+                  userId: "athena-user-1",
+                };
+              }
+              return null;
+            }),
+          })),
+          withIndex: vi.fn(() => ({
+            collect: vi.fn(async () => []),
+            first: vi.fn(async () => null),
+            take: vi.fn(async () => []),
+          })),
+        })),
+      },
+      runMutation,
+    } as unknown as MutationCtx;
+
+    const result = await updatePurchaseOrderStatusWithCtx(ctx, {
+      nextStatus: "cancelled",
+      purchaseOrderId: "purchase-order-1" as Id<"purchaseOrder">,
+    });
+
+    expect(result).toMatchObject({
+      _id: "purchase-order-1",
+      status: "cancelled",
+    });
+    expect(runMutation).toHaveBeenCalledWith(expect.anything(), {
+      status: "cancelled",
+      workItemId: "work-item-1",
+    });
   });
 
   it("maps expected purchase-order creation failures to command-result user errors", () => {

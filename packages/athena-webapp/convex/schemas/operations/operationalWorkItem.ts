@@ -19,4 +19,5 @@ export const operationalWorkItemSchema = v.object({
   assignedToStaffProfileId: v.optional(v.id("staffProfile")),
   customerProfileId: v.optional(v.id("customerProfile")),
   approvalRequestId: v.optional(v.id("approvalRequest")),
+  appointmentId: v.optional(v.id("serviceAppointment")),
 });

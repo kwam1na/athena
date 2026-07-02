@@ -315,36 +315,51 @@ async function hasInventoryReviewWorkItemForProjectedSale(
   const localTransactionId =
     stringDetail(conflict.details, "localTransactionId") ??
     stringDetail(syncEvent.payload, "localTransactionId");
-  const receiptNumber = stringDetail(syncEvent.payload, "receiptNumber");
-  const inventoryReviewWorkItems = await ctx.db
-    .query("operationalWorkItem")
-    .withIndex("by_storeId_type", (q) =>
+  if (!localTransactionId || !conflict.terminalId) {
+    return false;
+  }
+
+  const canonicalLocalId = `${localTransactionId}:inventory-review`;
+  const mapping = await ctx.db
+    .query("posLocalSyncMapping")
+    .withIndex("by_store_terminal_local", (q) =>
       q
         .eq("storeId", storeId)
-        .eq("type", SYNCED_SALE_INVENTORY_REVIEW_WORK_ITEM_TYPE),
+        .eq("terminalId", conflict.terminalId!)
+        .eq("localRegisterSessionId", conflict.localRegisterSessionId)
+        .eq("localIdKind", "inventoryReviewWorkItem")
+        .eq("localId", canonicalLocalId),
     )
-    .take(SYNC_CONFLICT_LIMIT);
+    .unique();
+  if (
+    !mapping ||
+    mapping.cloudTable !== "operationalWorkItem" ||
+    !ctx.db.normalizeId("operationalWorkItem", mapping.cloudId)
+  ) {
+    return false;
+  }
 
-  return inventoryReviewWorkItems.some((workItem) => {
-    if (workItem.status !== "open") {
-      return false;
-    }
+  const workItem = await ctx.db.get(
+    "operationalWorkItem",
+    mapping.cloudId as Id<"operationalWorkItem">,
+  );
+  if (
+    !workItem ||
+    workItem.storeId !== storeId ||
+    !["open", "in_progress", "completed", "cancelled"].includes(
+      workItem.status,
+    ) ||
+    workItem.type !== SYNCED_SALE_INVENTORY_REVIEW_WORK_ITEM_TYPE
+  ) {
+    return false;
+  }
 
-    const metadata = workItem.metadata ?? {};
-    const metadataLocalRegisterSessionId =
-      typeof metadata.localRegisterSessionId === "string"
-        ? metadata.localRegisterSessionId
-        : null;
-
-    return (
-      metadata.localEventId === conflict.localEventId ||
-      (localTransactionId !== null &&
-        metadata.localTransactionId === localTransactionId) ||
-      (receiptNumber !== null &&
-        metadata.receiptNumber === receiptNumber &&
-        metadataLocalRegisterSessionId === conflict.localRegisterSessionId)
-    );
-  });
+  const metadata = workItem.metadata ?? {};
+  return (
+    metadata.localEventId === conflict.localEventId &&
+    metadata.localRegisterSessionId === conflict.localRegisterSessionId &&
+    metadata.localTransactionId === localTransactionId
+  );
 }
 
 async function isNonSaleMissingRegisterSessionMappingConflict(

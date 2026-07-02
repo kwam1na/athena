@@ -1,5 +1,6 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Id } from "../_generated/dataModel";
+import * as athenaUserAuth from "../lib/athenaUserAuth";
 import {
   buildPosServiceCatalogRow,
   buildServiceCatalogItem,
@@ -8,8 +9,35 @@ import {
 } from "./catalog";
 import {
   buildServiceAppointment,
+  cancelAppointment,
+  closeCurrentServiceAppointmentWorkItemsWithCtx,
+  convertAppointmentToWalkIn,
   findOverlappingAppointment,
 } from "./appointments";
+
+vi.mock("../lib/athenaUserAuth", () => ({
+  requireAuthenticatedAthenaUserWithCtx: vi.fn(),
+  requireOrganizationMemberRoleWithCtx: vi.fn(),
+}));
+
+function getHandler(definition: unknown) {
+  return (definition as { _handler: Function })._handler;
+}
+
+beforeEach(() => {
+  vi.resetAllMocks();
+  vi.mocked(athenaUserAuth.requireAuthenticatedAthenaUserWithCtx).mockResolvedValue({
+    _id: "user-admin" as Id<"athenaUser">,
+  } as never);
+  vi.mocked(athenaUserAuth.requireOrganizationMemberRoleWithCtx).mockResolvedValue(
+    {
+      _id: "member-1",
+      organizationId: "org-1",
+      role: "full_admin",
+      userId: "user-admin",
+    } as never,
+  );
+});
 
 describe("service catalog and appointment helpers", () => {
   it("lists POS service catalog snapshot rows without requiring admin auth", async () => {
@@ -304,4 +332,445 @@ describe("service catalog and appointment helpers", () => {
       )
     ).toBeNull();
   });
+
+  it("terminal appointment transitions patch only current work for the appointment source", async () => {
+    const patch = vi.fn();
+    const workItems: Array<Record<string, unknown>> = [
+      {
+        _id: "work-current-open",
+        appointmentId: "appointment-1",
+        metadata: { appointmentId: "appointment-1" },
+        status: "open",
+        storeId: "store-1",
+        type: "service_appointment",
+      },
+      {
+        _id: "work-other-appointment",
+        appointmentId: "appointment-2",
+        metadata: { appointmentId: "appointment-2" },
+        status: "open",
+        storeId: "store-1",
+        type: "service_appointment",
+      },
+      {
+        _id: "work-current-progress",
+        metadata: { appointmentId: "appointment-1" },
+        status: "in_progress",
+        storeId: "store-1",
+        type: "service_appointment",
+      },
+    ];
+    const ctx = {
+      db: {
+        get: vi.fn(async (_table: string, id: string) => ({
+          _id: id,
+        })),
+        patch,
+        query: vi.fn(() => ({
+          withIndex: vi.fn(
+            (
+              _index: string,
+              applyIndex: (queryBuilder: {
+                eq: (field: string, value: unknown) => unknown;
+              }) => unknown,
+            ) => {
+              const constraints = new Map<string, unknown>();
+              const queryBuilder = {
+                eq(field: string, value: unknown) {
+                  constraints.set(field, value);
+                  return queryBuilder;
+                },
+              };
+
+              applyIndex(queryBuilder);
+              const matchingRows = () =>
+                workItems.filter((workItem) =>
+                  Array.from(constraints.entries()).every(
+                    ([field, value]) => workItem[field] === value,
+                  ),
+                );
+
+              return {
+                collect: vi.fn(async () => matchingRows()),
+                take: vi.fn(async (limit: number) =>
+                  matchingRows().slice(0, limit),
+                ),
+              };
+            },
+          ),
+        })),
+      },
+    };
+
+    const patchedIds = await closeCurrentServiceAppointmentWorkItemsWithCtx(
+      ctx as never,
+      {
+        appointmentId: "appointment-1" as Id<"serviceAppointment">,
+        status: "completed",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(patchedIds).toEqual(["work-current-open", "work-current-progress"]);
+    expect(patch).toHaveBeenCalledWith(
+      "operationalWorkItem",
+      "work-current-open",
+      expect.objectContaining({ status: "completed" }),
+    );
+    expect(patch).toHaveBeenCalledWith(
+      "operationalWorkItem",
+      "work-current-progress",
+      expect.objectContaining({ status: "completed" }),
+    );
+    expect(patch).not.toHaveBeenCalledWith(
+      "operationalWorkItem",
+      "work-other-appointment",
+      expect.anything(),
+    );
+  });
+
+  it("requires full-admin access before terminal appointment mutations write", async () => {
+    vi.mocked(athenaUserAuth.requireOrganizationMemberRoleWithCtx).mockRejectedValue(
+      new Error("Only store admins can update service appointments."),
+    );
+    const cancelCtx = createAppointmentMutationCtx();
+
+    await expect(
+      getHandler(cancelAppointment)(cancelCtx, {
+        appointmentId: "appointment-1" as Id<"serviceAppointment">,
+      }),
+    ).rejects.toThrow("Only store admins can update service appointments.");
+    expect(cancelCtx.db.patch).not.toHaveBeenCalled();
+    expect(cancelCtx.db.insert).not.toHaveBeenCalled();
+
+    vi.mocked(athenaUserAuth.requireOrganizationMemberRoleWithCtx).mockRejectedValue(
+      new Error("Only store admins can convert service appointments to cases."),
+    );
+    const convertCtx = createAppointmentMutationCtx();
+
+    await expect(
+      getHandler(convertAppointmentToWalkIn)(convertCtx, {
+        appointmentId: "appointment-1" as Id<"serviceAppointment">,
+        createdByUserId: "user-spoof" as Id<"athenaUser">,
+      }),
+    ).rejects.toThrow(
+      "Only store admins can convert service appointments to cases.",
+    );
+    expect(convertCtx.db.patch).not.toHaveBeenCalled();
+    expect(convertCtx.db.insert).not.toHaveBeenCalled();
+  });
+
+  it("rejects appointment cancellation when the appointment store belongs to another organization", async () => {
+    const ctx = createAppointmentMutationCtx();
+    ctx.rows.store.set("store-1", {
+      _id: "store-1",
+      organizationId: "org-other",
+    });
+
+    const result = await getHandler(cancelAppointment)(ctx, {
+      appointmentId: "appointment-1" as Id<"serviceAppointment">,
+    });
+
+    expect(result).toMatchObject({
+      kind: "user_error",
+      error: {
+        code: "precondition_failed",
+        message: "Appointment store does not match its organization.",
+      },
+    });
+    expect(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).not.toHaveBeenCalled();
+    expect(ctx.db.patch).not.toHaveBeenCalled();
+    expect(ctx.db.insert).not.toHaveBeenCalled();
+  });
+
+  it("rejects appointment conversion when the appointment store belongs to another organization", async () => {
+    const ctx = createAppointmentMutationCtx();
+    ctx.rows.store.set("store-1", {
+      _id: "store-1",
+      organizationId: "org-other",
+    });
+
+    const result = await getHandler(convertAppointmentToWalkIn)(ctx, {
+      appointmentId: "appointment-1" as Id<"serviceAppointment">,
+      createdByUserId: "user-spoof" as Id<"athenaUser">,
+    });
+
+    expect(result).toMatchObject({
+      kind: "user_error",
+      error: {
+        code: "precondition_failed",
+        message: "Appointment store does not match its organization.",
+      },
+    });
+    expect(
+      athenaUserAuth.requireAuthenticatedAthenaUserWithCtx,
+    ).not.toHaveBeenCalled();
+    expect(ctx.db.patch).not.toHaveBeenCalled();
+    expect(ctx.db.insert).not.toHaveBeenCalled();
+  });
+
+  it("rejects conversion for cancelled appointments before creating case work", async () => {
+    const ctx = createAppointmentMutationCtx();
+    ctx.rows.serviceAppointment.set("appointment-1", {
+      ...ctx.rows.serviceAppointment.get("appointment-1"),
+      status: "cancelled",
+    });
+
+    const result = await getHandler(convertAppointmentToWalkIn)(ctx, {
+      appointmentId: "appointment-1" as Id<"serviceAppointment">,
+      createdByUserId: "user-spoof" as Id<"athenaUser">,
+    });
+
+    expect(result).toMatchObject({
+      kind: "user_error",
+      error: {
+        code: "precondition_failed",
+        message: "This appointment can no longer be converted.",
+      },
+    });
+    expect(ctx.db.patch).not.toHaveBeenCalled();
+    expect(ctx.db.insert).not.toHaveBeenCalled();
+  });
+
+  it("attributes walk-in conversion to the authenticated user instead of the caller supplied user", async () => {
+    const ctx = createAppointmentMutationCtx();
+
+    const result = await getHandler(convertAppointmentToWalkIn)(ctx, {
+      appointmentId: "appointment-1" as Id<"serviceAppointment">,
+      createdByUserId: "user-spoof" as Id<"athenaUser">,
+    });
+
+    expect(result).toMatchObject({
+      kind: "ok",
+      data: {
+        serviceCaseId: "serviceCase-1",
+        workItemId: "operationalWorkItem-1",
+      },
+    });
+    expect(ctx.staffLookupConstraints).toContainEqual({
+      linkedUserId: "user-admin",
+      storeId: "store-1",
+    });
+    expect(ctx.inserts).toContainEqual(
+      expect.objectContaining({
+        table: "operationalWorkItem",
+        value: expect.objectContaining({
+          createdByStaffProfileId: "staff-admin",
+          createdByUserId: "user-admin",
+          metadata: expect.objectContaining({
+            appointmentId: "appointment-1",
+            serviceCatalogId: "catalog-1",
+            startAt: 1_772_550_000_000,
+          }),
+          type: "service_case",
+        }),
+      }),
+    );
+    expect(ctx.inserts).toContainEqual(
+      expect.objectContaining({
+        table: "operationalEvent",
+        value: expect.objectContaining({
+          actorUserId: "user-admin",
+          eventType: "service_case_created",
+        }),
+      }),
+    );
+    expect(ctx.inserts).toContainEqual(
+      expect.objectContaining({
+        table: "operationalEvent",
+        value: expect.objectContaining({
+          actorStaffProfileId: "staff-admin",
+          actorUserId: "user-admin",
+          eventType: "service_appointment_converted_to_walk_in",
+        }),
+      }),
+    );
+    expect(JSON.stringify(ctx.inserts)).not.toContain("user-spoof");
+  });
+
+  it("attributes appointment cancellation events to the authenticated user", async () => {
+    const ctx = createAppointmentMutationCtx();
+
+    const result = await getHandler(cancelAppointment)(ctx, {
+      appointmentId: "appointment-1" as Id<"serviceAppointment">,
+      notes: "Customer cancelled.",
+    });
+
+    expect(result).toMatchObject({
+      kind: "ok",
+      data: {
+        _id: "appointment-1",
+        status: "cancelled",
+      },
+    });
+    await expect(
+      ctx.db.get("operationalWorkItem", "work-appointment-1"),
+    ).resolves.toMatchObject({
+      status: "cancelled",
+    });
+    expect(ctx.inserts).toContainEqual(
+      expect.objectContaining({
+        table: "operationalEvent",
+        value: expect.objectContaining({
+          actorStaffProfileId: "staff-admin",
+          actorUserId: "user-admin",
+          eventType: "service_appointment_cancelled",
+          metadata: expect.objectContaining({
+            nextWorkItemStatus: "cancelled",
+            previousStatus: "scheduled",
+          }),
+        }),
+      }),
+    );
+  });
 });
+
+function createAppointmentMutationCtx() {
+  const now = 1_772_550_000_000;
+  vi.spyOn(Date, "now").mockReturnValue(now);
+  const inserts: Array<{ table: string; value: Record<string, unknown> }> = [];
+  const staffLookupConstraints: Array<Record<string, unknown>> = [];
+  const rows: Record<string, Map<string, Record<string, unknown>>> = {
+    customerProfile: new Map([
+      [
+        "customer-1",
+        {
+          _id: "customer-1",
+          storeId: "store-1",
+        },
+      ],
+    ]),
+    operationalWorkItem: new Map([
+      [
+        "work-appointment-1",
+        {
+          _id: "work-appointment-1",
+          approvalState: "not_required",
+          createdAt: now - 1,
+          metadata: {
+            appointmentId: "appointment-1",
+          },
+          organizationId: "org-1",
+          priority: "normal",
+          status: "open",
+          storeId: "store-1",
+          title: "Closure Repair appointment",
+          type: "service_appointment",
+        },
+      ],
+    ]),
+    serviceAppointment: new Map([
+      [
+        "appointment-1",
+        {
+          _id: "appointment-1",
+          assignedStaffProfileId: "staff-assigned",
+          customerProfileId: "customer-1",
+          durationMinutes: 60,
+          endAt: now + 60 * 60 * 1000,
+          notes: "Walk-in ready",
+          organizationId: "org-1",
+          serviceCatalogId: "catalog-1",
+          startAt: now,
+          status: "scheduled",
+          storeId: "store-1",
+        },
+      ],
+    ]),
+    serviceCase: new Map(),
+    serviceCatalog: new Map([
+      [
+        "catalog-1",
+        {
+          _id: "catalog-1",
+          basePrice: 4_500,
+          name: "Closure Repair",
+          serviceMode: "repair",
+          storeId: "store-1",
+        },
+      ],
+    ]),
+    staffProfile: new Map([
+      [
+        "staff-admin",
+        {
+          _id: "staff-admin",
+          linkedUserId: "user-admin",
+          storeId: "store-1",
+        },
+      ],
+    ]),
+    store: new Map([
+      [
+        "store-1",
+        {
+          _id: "store-1",
+          organizationId: "org-1",
+        },
+      ],
+    ]),
+  };
+  const get = vi.fn(async (tableName: string, id: string) => {
+    return rows[tableName]?.get(id) ?? null;
+  });
+  const patch = vi.fn(
+    async (tableName: string, id: string, patchValue: Record<string, unknown>) => {
+      const row = rows[tableName]?.get(id);
+      if (row) {
+        rows[tableName].set(id, { ...row, ...patchValue });
+      }
+    },
+  );
+  const insert = vi.fn(async (tableName: string, value: Record<string, unknown>) => {
+    const id = `${tableName}-1`;
+    inserts.push({ table: tableName, value });
+    rows[tableName] ??= new Map();
+    rows[tableName].set(id, { _id: id, ...value });
+    return id;
+  });
+  const query = vi.fn((tableName: string) => ({
+    withIndex: vi.fn((_indexName: string, applyIndex: Function) => {
+      const constraints: Record<string, unknown> = {};
+      const queryBuilder = {
+        eq(field: string, value: unknown) {
+          constraints[field] = value;
+          return queryBuilder;
+        },
+      };
+      applyIndex(queryBuilder);
+
+      if (tableName === "staffProfile") {
+        staffLookupConstraints.push({ ...constraints });
+      }
+
+      const matchingRows = () =>
+        Array.from(rows[tableName]?.values() ?? []).filter((row) =>
+          Object.entries(constraints).every(([field, value]) => row[field] === value),
+        );
+
+      return {
+        collect: vi.fn(async () => matchingRows()),
+        first: vi.fn(async () => matchingRows()[0] ?? null),
+        order: vi.fn(() => ({
+          first: vi.fn(async () => matchingRows()[0] ?? null),
+        })),
+        take: vi.fn(async (limit: number) => matchingRows().slice(0, limit)),
+        unique: vi.fn(async () => matchingRows()[0] ?? null),
+      };
+    }),
+  }));
+
+  return {
+    db: {
+      get,
+      insert,
+      patch,
+      query,
+    },
+    inserts,
+    rows,
+    staffLookupConstraints,
+  };
+}

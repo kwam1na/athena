@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>fix: Close Open Work resolution gaps</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f6f7f9;
+      --panel: #ffffff;
+      --ink: #17202b;
+      --muted: #617180;
+      --line: #d8e0e8;
+      --accent: #1f6f8b;
+      --accent-soft: #e7f5f8;
+      --risk: #8a4b12;
+      --risk-soft: #fff3e5;
+      --ok: #23623a;
+      --ok-soft: #e8f5ed;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    main {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 32px 24px 56px;
+    }
+    header, section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 22px 24px;
+      margin-bottom: 18px;
+    }
+    h1, h2, h3 {
+      line-height: 1.2;
+      margin: 0 0 12px;
+      text-wrap: balance;
+    }
+    h1 { font-size: 29px; }
+    h2 { font-size: 20px; }
+    h3 { font-size: 16px; color: var(--muted); }
+    p { margin: 0 0 12px; text-wrap: pretty; }
+    a { color: var(--accent); }
+    .meta {
+      color: var(--muted);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 18px;
+      margin-top: 12px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+      gap: 12px;
+    }
+    .callout {
+      border-left: 4px solid var(--accent);
+      background: var(--accent-soft);
+      padding: 12px 14px;
+      border-radius: 6px;
+    }
+    .risk {
+      border-left-color: var(--risk);
+      background: var(--risk-soft);
+    }
+    .ok {
+      border-left-color: var(--ok);
+      background: var(--ok-soft);
+    }
+    ul, ol { margin: 8px 0 0 20px; padding: 0; }
+    li { margin: 5px 0; text-wrap: pretty; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 8px 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: #f1f4f7; }
+    code {
+      background: #eef2f5;
+      border-radius: 4px;
+      padding: 1px 4px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.92em;
+    }
+    .unit {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin-top: 12px;
+    }
+    .unit strong { color: var(--accent); }
+    .num { font-variant-numeric: tabular-nums; }
+    .small { color: var(--muted); font-size: 13px; }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>fix: Close Open Work resolution gaps</h1>
+      <p>Open Work stays the dense operations workspace. This plan adds source-owned resolution, type-specific row actions, and focused validation for the work types that can currently strand operators or leave stale rows behind.</p>
+      <div class="meta">
+        <span>Type: fix</span>
+        <span>Status: active</span>
+        <span>Date: <span class="num">2026-07-02</span></span>
+        <span>Worktree: <code>.worktrees/codex/open-work-resolution-gaps</code></span>
+        <span>Source: <a href="2026-07-02-001-fix-open-work-resolution-plan.md">Markdown plan</a></span>
+      </div>
+    </header>
+
+    <section>
+      <h2>Direction</h2>
+      <div class="grid">
+        <div class="callout ok">
+          <h3>Keep</h3>
+          <p>Existing route, operations shell, queue density, filters, pagination, row shell, and restrained operator copy.</p>
+        </div>
+        <div class="callout">
+          <h3>Improve</h3>
+          <p>Per-type owner/action labels, destination links, metadata, focus states, and stable numeric facts inside existing rows.</p>
+        </div>
+        <div class="callout risk">
+          <h3>Avoid</h3>
+          <p>No generic resolve-all button, no card-heavy redesign, no client-side approval authority, and no raw backend labels or metadata in visible copy.</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Resolution Contract</h2>
+      <table>
+        <thead>
+          <tr><th>Work type/state</th><th>Source identity</th><th>Primary owner</th><th>Primary action</th><th>Terminal rule</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>service_case</code></td><td><code>serviceCaseId</code></td><td>Service case workflow</td><td>Open service case</td><td>Completed/cancelled case status</td></tr>
+          <tr><td><code>service_appointment</code> while open</td><td><code>appointmentId</code></td><td>Appointment workflow</td><td>Open appointment</td><td>Cancel closes work; conversion closes appointment work and transfers context to service case if needed</td></tr>
+          <tr><td><code>purchase_order</code></td><td><code>purchaseOrderId</code></td><td>Procurement/receiving</td><td>Open purchase order</td><td>Received/completed completes; cancelled cancels</td></tr>
+          <tr><td><code>stock_adjustment_review</code> pending approval</td><td>Approval + adjustment ids</td><td>Approval requests</td><td>Review adjustment approval</td><td>Approval applies or rejects adjustment</td></tr>
+          <tr><td><code>pos_pending_checkout_item_review</code></td><td>Canonical: <code>posPendingCheckoutItem._id</code>; local-sync fallback uses store, terminal, local register session, <code>localIdKind: "pendingCheckoutItem"</code>, and local pending item id</td><td>Unresolved catalog review</td><td>Review catalog item</td><td>Link/approve/reject completes; flag stays open</td></tr>
+          <tr><td><code>synced_sale_inventory_review</code></td><td>Mapping key: store, terminal, <code>localRegisterSessionId</code>, <code>localIdKind: "inventoryReviewWorkItem"</code>, <code>localId: "${localTransactionId}:inventory-review"</code></td><td>Operations inventory review</td><td>Resolve sale inventory review</td><td>Operations resolver completes, cancels, or supersedes with audit evidence</td></tr>
+          <tr><td><code>daily_close_carry_forward</code></td><td>Store, business date, carry-forward source</td><td>Daily Close</td><td>Resolve carry-forward follow-up</td><td>Daily Close completes or cancels with handoff evidence</td></tr>
+          <tr><td><code>service_deposit_review</code></td><td>Deposit subject</td><td>Not surfaced this release</td><td>Not surfaced</td><td>Suppress until full proof-bound approval semantics exist</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Queue Ordering</h2>
+      <ul>
+        <li>Sort by priority bucket, status urgency, oldest actionable timestamp, stable source identity, then work item id.</li>
+        <li>Keep <code>MAX_QUEUE_ITEMS = 100</code> per server lane: <code>open</code>, <code>in_progress</code>, and pending approvals.</li>
+        <li>Probe each lane with <code>MAX_QUEUE_ITEMS + 1</code> and return <code>overflow.workItems.open</code>, <code>overflow.workItems.inProgress</code>, and <code>overflow.approvalRequests</code>.</li>
+        <li>Tests seed more than <code>100</code> rows per lane and prove the first page contains the highest-priority actionable rows.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Implementation Units</h2>
+      <div class="unit">
+        <p><strong>U1. Characterize Open Work projection</strong></p>
+        <p>Lock down queue inclusion/exclusion, approval separation, source identity, duplicate policy, ordering, caps, mixed work fixtures, and existing terminal behavior in Convex and UI tests.</p>
+      </div>
+      <div class="unit">
+        <p><strong>U2. Add type-specific row contracts</strong></p>
+        <p>Improve titles, owner labels, action destinations, and sanitized row DTO metadata inside the current <code>OperationsQueueView</code> direction. Preserve density and visual language.</p>
+      </div>
+      <div class="unit">
+        <p><strong>U3. Implement synced-sale inventory review ownership</strong></p>
+        <p>Add the Operations-owned <code>openWorkInventoryReviews.resolveSyncedSaleInventoryReview</code> boundary so current inventory review work can complete, cancel, or become superseded with authz checks and audit evidence.</p>
+      </div>
+      <div class="unit">
+        <p><strong>U4. Add daily carry-forward terminal path</strong></p>
+        <p>Keep Opening acknowledgment as handoff evidence and add a Daily Close-owned typed completion/cancellation path requiring consumed manager proof bound to the carry-forward source.</p>
+      </div>
+      <div class="unit">
+        <p><strong>U5. Harden source workflow terminal transitions</strong></p>
+        <p>Cover service appointments, service cases, purchase orders, receiving, and pending checkout item review with source-owned terminal tests and fixes.</p>
+      </div>
+      <div class="unit">
+        <p><strong>U6. Resolve approval ownership ambiguity</strong></p>
+        <p>Keep stock/register approvals approval-owned and fail closed for <code>service_deposit_review</code> by suppressing it from surfaced queue data unless full proof-bound semantics are implemented.</p>
+      </div>
+      <div class="unit">
+        <p><strong>U7. Validate integration, UI direction, and graph</strong></p>
+        <p>Run focused tests, audit current visible rows, verify queue ordering/caps and sanitized DTOs, browser-review the Open Work route against the current workspace direction, and rebuild graph after code changes.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>Highest-Risk Gaps</h2>
+      <div class="grid">
+        <div class="callout risk">
+          <h3>Synced sale inventory review</h3>
+          <p>No clear terminal path was found. Resolution needs source validation, not SKU-only matching.</p>
+        </div>
+        <div class="callout risk">
+          <h3>Daily close carry-forward</h3>
+          <p>Opening acknowledgment currently leaves work open, so a separate terminal action is needed.</p>
+        </div>
+        <div class="callout risk">
+          <h3>Service deposit review</h3>
+          <p>It is fail-closed for this release: suppress it from surfaced queue data unless full proof-bound behavior is implemented.</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Validation</h2>
+      <ul>
+        <li>Queue projection and row rendering tests cover every intentionally surfaced type.</li>
+        <li>POS sync and terminal currentness tests prove resolved inventory review work stops counting as current.</li>
+        <li>Daily Close and Opening tests separate acknowledgment evidence from terminal work status.</li>
+        <li>Service, procurement, receiving, pending checkout, stock adjustment, and approval tests prove source-owned terminal transitions.</li>
+        <li>Source identity and duplicate-policy tests prevent retries, reprojection, or reopen flows from creating duplicate current rows.</li>
+        <li>Queue ordering and cap/overflow tests prove actionable work remains visible or explicitly paginated.</li>
+        <li>Sanitized row DTO tests prevent raw metadata, proof ids, hidden financial evidence, and internal sync payloads from reaching the UI.</li>
+        <li>Pre-ship visible-row audit migrates, terminally updates, or suppresses any row without a resolvable source target.</li>
+        <li>Browser verification confirms Open Work still looks and behaves like the existing workspace, with clearer rows rather than a new design.</li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>
