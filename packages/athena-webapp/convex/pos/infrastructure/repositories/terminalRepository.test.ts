@@ -119,6 +119,60 @@ describe("terminalRepository runtime status", () => {
     expect(ctx.db.insert).not.toHaveBeenCalled();
   });
 
+  it("preserves same-status staff identity when another runtime publisher omits it", async () => {
+    const ctx = buildCtx({
+      posTerminalRuntimeStatus: [
+        buildRuntimeStatus({
+          receivedAt: 100,
+          saleAuthority: {
+            observedAt: 100,
+            staffProfileId: "staff-1" as Id<"staffProfile">,
+            status: "ready",
+          },
+          staffAuthority: {
+            staffProfileId: "staff-1" as Id<"staffProfile">,
+            status: "ready",
+          },
+        }),
+      ],
+    });
+    const input = {
+      ...buildRuntimeStatus(),
+      receivedAt: 30_000,
+      saleAuthority: {
+        observedAt: 30_000,
+        status: "ready" as const,
+      },
+      staffAuthority: {
+        status: "ready" as const,
+      },
+    };
+
+    const result = await upsertLatestRuntimeStatusWithOutcome(
+      ctx as never,
+      input,
+    );
+
+    expect(result).toEqual({
+      didWrite: true,
+      runtimeStatusId: "runtime-status-1",
+    });
+    expect(ctx.db.patch).toHaveBeenCalledWith(
+      "posTerminalRuntimeStatus",
+      "runtime-status-1",
+      expect.objectContaining({
+        saleAuthority: expect.objectContaining({
+          staffProfileId: "staff-1",
+          status: "ready",
+        }),
+        staffAuthority: {
+          staffProfileId: "staff-1",
+          status: "ready",
+        },
+      }),
+    );
+  });
+
   it("coalesces fast duplicate runtime status reports without patching", async () => {
     const ctx = buildCtx({
       posTerminalRuntimeStatus: [buildRuntimeStatus()],

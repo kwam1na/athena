@@ -233,13 +233,57 @@ function mergeRuntimeStatusPatch(
   existing: Doc<"posTerminalRuntimeStatus">,
   input: Omit<Doc<"posTerminalRuntimeStatus">, "_id" | "_creationTime">,
 ) {
-  if (input.appUpdate !== undefined || existing.appUpdate === undefined) {
+  return {
+    ...input,
+    appUpdate:
+      input.appUpdate !== undefined || existing.appUpdate === undefined
+        ? input.appUpdate
+        : existing.appUpdate,
+    saleAuthority: mergeRuntimeSaleAuthority(
+      existing.saleAuthority,
+      input.saleAuthority,
+    ),
+    staffAuthority: mergeRuntimeStaffAuthority(
+      existing.staffAuthority,
+      input.staffAuthority,
+    ),
+  };
+}
+
+function mergeRuntimeStaffAuthority(
+  existing: Doc<"posTerminalRuntimeStatus">["staffAuthority"],
+  input: Doc<"posTerminalRuntimeStatus">["staffAuthority"],
+) {
+  if (
+    input.staffProfileId !== undefined ||
+    existing.staffProfileId === undefined ||
+    input.status !== existing.status
+  ) {
     return input;
   }
 
   return {
     ...input,
-    appUpdate: existing.appUpdate,
+    staffProfileId: existing.staffProfileId,
+  };
+}
+
+function mergeRuntimeSaleAuthority(
+  existing: Doc<"posTerminalRuntimeStatus">["saleAuthority"],
+  input: Doc<"posTerminalRuntimeStatus">["saleAuthority"],
+) {
+  if (
+    !input ||
+    input.staffProfileId !== undefined ||
+    existing?.staffProfileId === undefined ||
+    input.status !== existing.status
+  ) {
+    return input;
+  }
+
+  return {
+    ...input,
+    staffProfileId: existing.staffProfileId,
   };
 }
 
