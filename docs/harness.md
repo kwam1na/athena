@@ -144,9 +144,16 @@ The sensor also treats workflow-critical files as compound-sensitive even when
 the line count is small. Changes to repo harness scripts, PR validation wiring,
 GitHub workflows, Husky hooks, package-level command wiring, or the core
 delivery skills need a solution note because those paths affect how future
-agents deliver work. A changed solution note must include the expected
-frontmatter and the `Problem`, `Solution`, and `Prevention` sections; placeholder
-notes do not satisfy the gate.
+agents deliver work. Use the repo-local `.agents/skills/ce-compound` skill and
+template to author those notes; changed solution notes must include the expected
+frontmatter and the `Problem`, `Solution`, and `Prevention` sections, and
+placeholder notes do not satisfy the gate.
+
+Foundational architecture solution notes also need an agent-doc discovery link.
+If a solution note is an architecture foundation, primitive, aggregate, contract,
+policy, or architecture pattern, link it from the relevant
+`packages/*/docs/agent/{architecture.md,code-map.md,testing.md}` surface so a
+future agent can find the durable concept before editing the boundary.
 
 ### Coverage Sensors
 

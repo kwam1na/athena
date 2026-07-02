@@ -137,10 +137,10 @@ Launch research subagents. Each returns text data to the orchestrator.
 
    **Knowledge track output sections:**
 
-   - **Context**: What situation, gap, or friction prompted this guidance
-   - **Guidance**: The practice, pattern, or recommendation with code examples when useful
+   - **Problem**: What situation, gap, or friction prompted this guidance
+   - **Solution**: The practice, pattern, or recommendation with code examples when useful
    - **Why This Matters**: Rationale and impact of following or not following this guidance
-   - **When to Apply**: Conditions or situations where this applies
+   - **Prevention**: Conditions or situations where this applies, plus concrete practices, tests, or guardrails
    - **Examples**: Concrete before/after or usage examples showing the practice in action
 
 #### 3. **Related Docs Finder**
@@ -222,7 +222,7 @@ The orchestrating agent (main conversation) performs these steps:
    When updating an existing doc, preserve its file path and frontmatter structure. Update the solution, code examples, prevention tips, and any stale references. Add a `last_updated: YYYY-MM-DD` field to the frontmatter. Do not change the title unless the problem framing has materially shifted.
 
 3. **Incorporate session history findings** (if available). When the Session History Researcher returned relevant prior-session context:
-   - Fold investigation dead ends and failed approaches into the **What Didn't Work** section (bug track) or **Context** section (knowledge track)
+   - Fold investigation dead ends and failed approaches into the **What Didn't Work** section (bug track) or **Problem** section (knowledge track)
    - Use cross-session patterns to enrich the **Prevention** or **Why This Matters** sections
    - Tag session-sourced content with "(session history)" so its origin is clear to future readers
    - If findings are thin or "no relevant prior sessions," proceed without session context
@@ -354,7 +354,7 @@ The orchestrator (main conversation) performs ALL of the following in one sequen
 3. **Write minimal doc**: Create `docs/solutions/[category]/[filename].md` using the appropriate track template from `assets/resolution-template.md`, with:
    - YAML frontmatter with track-appropriate fields, applying the YAML-safety quoting rule for array items (see `references/yaml-schema.md` > YAML Safety Rules)
    - Bug track: Problem, root cause, solution with key code snippets, one prevention tip
-   - Knowledge track: Context, guidance with key examples, one applicability note
+   - Knowledge track: Problem, solution/guidance with key examples, one prevention/applicability note
 4. **Skip specialized agent reviews** (Phase 3) to conserve context
 
 **Lightweight output:**

@@ -207,7 +207,7 @@ After opening the PR:
 ### 9. Compound The Learning
 
 - Before final ticket closure, decide whether the work taught the system something reusable.
-- Use `$ce-compound` or an equivalent solution-doc workflow when the repo has a `docs/solutions/` knowledge base and the learning is repo-specific.
+- Use the repo-local `$ce-compound` skill when the repo has a `docs/solutions/` knowledge base and the learning is repo-specific. In Athena, do not hand-roll solution-note structure; the repo-local `ce-compound` template is the authoring contract enforced by `compound:check`.
 - Update a skill when the learning changes how agents should deliver work across repos.
 - Create a follow-up Linear issue when the learning is a concrete missing repo sensor, missing validation map coverage, missing reviewer, or tooling gap that should be implemented later; include the source evidence and why it is separate from the current ticket.
 - Record `No durable learning` only when the change is local, obvious, and unlikely to recur.

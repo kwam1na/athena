@@ -66,6 +66,7 @@ category: [docs/solutions subdirectory]
 module: [Module or area]
 problem_type: [schema enum]
 component: [schema enum]
+resolution_type: [schema enum]
 severity: [schema enum]
 applies_when:
   - [Condition where this applies]
@@ -74,17 +75,18 @@ tags: [keyword-one, keyword-two]
 
 # [Clear, descriptive title]
 
-## Context
+## Problem
 [What situation, gap, or friction prompted this guidance]
 
-## Guidance
+## Solution
 [The practice, pattern, or recommendation with code examples when useful]
 
 ## Why This Matters
 [Rationale and impact of following or not following this guidance]
 
-## When to Apply
+## Prevention
 - [Conditions or situations where this applies]
+- [Concrete practice, test, or guardrail]
 
 ## Examples
 [Concrete before/after or usage examples showing the practice in action]
