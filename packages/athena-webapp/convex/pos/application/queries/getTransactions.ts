@@ -794,10 +794,20 @@ async function resolveCurrentPosSummaryWindow(
     };
   }
 
+  const latestStoreDay = currentStoreDay
+    ? null
+    : await findLatestStoreDayOpening(ctx, { storeId: args.storeId });
+  const fallbackRangeStart =
+    latestStoreDay &&
+    latestStoreDay.endAt > fallbackStartOfDay &&
+    latestStoreDay.endAt <= fallbackStartOfDay + DAY_MS
+      ? latestStoreDay.endAt
+      : fallbackStartOfDay;
+
   return {
-    endOfDay: storeDayRange?.endOfDay ?? fallbackStartOfDay + DAY_MS - 1,
+    endOfDay: storeDayRange?.endOfDay ?? fallbackRangeStart + DAY_MS - 1,
     operatingDate,
-    startOfDay: storeDayRange?.startOfDay ?? fallbackStartOfDay,
+    startOfDay: storeDayRange?.startOfDay ?? fallbackRangeStart,
   };
 }
 
@@ -853,6 +863,38 @@ async function findCurrentStoreDayOpening(
 
     if (!hasCompletedActiveClose) {
       return opening;
+    }
+  }
+
+  return null;
+}
+
+async function findLatestStoreDayOpening(
+  ctx: Pick<QueryCtx, "db">,
+  args: {
+    storeId: Id<"store">;
+  },
+): Promise<CurrentStoreDayOpening | null> {
+  const startedOpenings = await ctx.db
+    .query("dailyOpening")
+    .withIndex("by_storeId_status_operatingDate", (q) =>
+      q.eq("storeId", args.storeId).eq("status", "started"),
+    )
+    .order("desc")
+    .take(10);
+
+  for (const opening of startedOpenings) {
+    const { endAt, startAt } = opening;
+    if (
+      typeof startAt === "number" &&
+      typeof endAt === "number" &&
+      isValidPosSummaryWindowRange(startAt, endAt)
+    ) {
+      return {
+        endAt,
+        operatingDate: opening.operatingDate,
+        startAt,
+      };
     }
   }
 
