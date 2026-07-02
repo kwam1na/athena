@@ -709,6 +709,7 @@ export async function getTodaySummary(
   },
 ) {
   const summaryWindow = await resolveCurrentPosSummaryWindow(ctx, {
+    allowActivePriorOperatingDate: args.pulseWindow !== "today",
     now: Date.now(),
     storeId: args.storeId,
   });
@@ -763,11 +764,13 @@ export async function getTodaySummary(
 async function resolveCurrentPosSummaryWindow(
   ctx: Pick<QueryCtx, "db">,
   args: {
+    allowActivePriorOperatingDate: boolean;
     now: number;
     storeId: Id<"store">;
   },
 ) {
   const currentStoreDay = await findCurrentStoreDayOpening(ctx, {
+    allowActivePriorOperatingDate: args.allowActivePriorOperatingDate,
     now: args.now,
     storeId: args.storeId,
   });
@@ -800,7 +803,8 @@ async function resolveCurrentPosSummaryWindow(
   const fallbackRangeStart =
     latestStoreDay &&
     latestStoreDay.endAt > fallbackStartOfDay &&
-    latestStoreDay.endAt <= fallbackStartOfDay + DAY_MS
+    latestStoreDay.endAt <= fallbackStartOfDay + DAY_MS &&
+    latestStoreDay.endAt <= args.now
       ? latestStoreDay.endAt
       : fallbackStartOfDay;
 
@@ -831,6 +835,7 @@ type CurrentStoreDayOpening = {
 async function findCurrentStoreDayOpening(
   ctx: Pick<QueryCtx, "db">,
   args: {
+    allowActivePriorOperatingDate: boolean;
     now: number;
     storeId: Id<"store">;
   },
@@ -844,6 +849,13 @@ async function findCurrentStoreDayOpening(
     .take(10);
 
   for (const opening of startedOpenings) {
+    if (
+      !args.allowActivePriorOperatingDate &&
+      opening.operatingDate !== new Date(args.now).toISOString().slice(0, 10)
+    ) {
+      continue;
+    }
+
     if (!isActivePosSummaryOpeningAt(opening, args.now)) {
       continue;
     }
