@@ -563,6 +563,91 @@ describe("getTodaySummary", () => {
     });
   });
 
+  it("does not keep the POS pulse on a prior operating date that still overlaps now", async () => {
+    vi.setSystemTime(new Date("2026-07-02T00:49:30.000Z"));
+    vi.mocked(listCompletedTransactionsForRange)
+      .mockResolvedValueOnce([
+        {
+          _id: "txn-current-date" as Id<"posTransaction">,
+          completedAt: Date.parse("2026-07-02T00:30:00.000Z"),
+          payments: [{ amount: 3_315, method: "cash", timestamp: 1 }],
+          storeId: "store-1" as Id<"store">,
+          total: 3_315,
+        },
+      ] as never)
+      .mockResolvedValueOnce([
+        {
+          _id: "txn-previous-date" as Id<"posTransaction">,
+          completedAt: Date.parse("2026-07-01T16:00:00.000Z"),
+          payments: [{ amount: 56_131, method: "cash", timestamp: 1 }],
+          storeId: "store-1" as Id<"store">,
+          total: 56_131,
+        },
+      ] as never);
+    vi.mocked(listTransactionItems)
+      .mockResolvedValueOnce([{ quantity: 1 }] as never)
+      .mockResolvedValueOnce([{ quantity: 17 }] as never);
+    const query = vi.fn((tableName: string) => ({
+      withIndex: vi.fn(() => ({
+        collect: vi.fn().mockResolvedValue([]),
+        take: vi.fn().mockResolvedValue([]),
+        order: vi.fn(() => ({
+          take: vi.fn().mockResolvedValue(
+            tableName === "dailyOpening"
+              ? [
+                  {
+                    _id: "opening-2026-07-01",
+                    endAt: Date.parse("2026-07-02T04:00:00.000Z"),
+                    operatingDate: "2026-07-01",
+                    startAt: Date.parse("2026-07-01T04:00:00.000Z"),
+                    status: "started",
+                    storeId: "store-1",
+                  },
+                ]
+              : [],
+          ),
+        })),
+      })),
+    }));
+
+    const result = await getTodaySummary(
+      {
+        db: { query },
+      } as never,
+      {
+        pulseWindow: "today",
+        storeId: "store-1" as Id<"store">,
+      },
+    );
+
+    expect(listCompletedTransactionsForRange).toHaveBeenNthCalledWith(
+      1,
+      expect.anything(),
+      {
+        completedFrom: Date.parse("2026-07-02T00:00:00.000Z"),
+        completedTo: Date.parse("2026-07-02T23:59:59.999Z"),
+        storeId: "store-1",
+      },
+    );
+    expect(result).toEqual(
+      expect.objectContaining({
+        averageTransaction: 3_315,
+        date: "2026-07-02",
+        totalItemsSold: 1,
+        totalSales: 3_315,
+        totalTransactions: 1,
+      }),
+    );
+    expect(result.operatorSnapshot.comparison).toMatchObject({
+      currentItemsSold: 1,
+      currentSales: 3_315,
+      currentTransactions: 1,
+      yesterdayItemsSold: 17,
+      yesterdaySales: 56_131,
+      yesterdayTransactions: 1,
+    });
+  });
+
   it("does not include the closed previous store day in the fallback POS summary window", async () => {
     vi.setSystemTime(new Date("2026-07-02T04:03:59.000Z"));
     vi.mocked(listCompletedTransactionsForDay).mockResolvedValue([] as never);
