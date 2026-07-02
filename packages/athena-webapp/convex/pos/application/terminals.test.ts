@@ -30,7 +30,7 @@ import {
   patchTerminalRecord,
   registerTerminalRecord,
   resolveTerminalRegisterSessionActionTarget,
-  upsertLatestRuntimeStatus,
+  upsertLatestRuntimeStatusWithOutcome,
 } from "../infrastructure/repositories/terminalRepository";
 import {
   createTerminalRecoveryCommandReadRepository,
@@ -87,7 +87,7 @@ vi.mock("../infrastructure/repositories/terminalRepository", () => ({
   patchTerminalRecord: vi.fn(),
   registerTerminalRecord: vi.fn(),
   resolveTerminalRegisterSessionActionTarget: vi.fn(),
-  upsertLatestRuntimeStatus: vi.fn(),
+  upsertLatestRuntimeStatusWithOutcome: vi.fn(),
   deleteTerminalRecord: vi.fn(),
 }));
 
@@ -400,9 +400,10 @@ describe("submitTerminalRuntimeStatus", () => {
 
   it("upserts one redacted latest runtime status record per terminal", async () => {
     vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
-    vi.mocked(upsertLatestRuntimeStatus).mockResolvedValue(
-      "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
-    );
+    vi.mocked(upsertLatestRuntimeStatusWithOutcome).mockResolvedValue({
+      didWrite: true,
+      runtimeStatusId: "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
+    });
 
     const result = await submitTerminalRuntimeStatus(
       { db: null as never } as never,
@@ -443,9 +444,10 @@ describe("submitTerminalRuntimeStatus", () => {
         terminalId: "terminal-1",
         reportedAt: 100,
         receivedAt: 200,
+        acceptedForSideEffects: true,
       },
     });
-    expect(vi.mocked(upsertLatestRuntimeStatus)).toHaveBeenCalledWith(
+    expect(vi.mocked(upsertLatestRuntimeStatusWithOutcome)).toHaveBeenCalledWith(
       expect.anything(),
       expect.not.objectContaining({
         staffProofToken: expect.anything(),
@@ -455,7 +457,7 @@ describe("submitTerminalRuntimeStatus", () => {
         customerInfo: expect.anything(),
       }),
     );
-    expect(vi.mocked(upsertLatestRuntimeStatus)).toHaveBeenCalledWith(
+    expect(vi.mocked(upsertLatestRuntimeStatusWithOutcome)).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         storeId: "store-1",
@@ -488,9 +490,10 @@ describe("submitTerminalRuntimeStatus", () => {
 
   it("preserves closeout-rejected active register status in runtime status", async () => {
     vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
-    vi.mocked(upsertLatestRuntimeStatus).mockResolvedValue(
-      "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
-    );
+    vi.mocked(upsertLatestRuntimeStatusWithOutcome).mockResolvedValue({
+      didWrite: true,
+      runtimeStatusId: "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
+    });
 
     await submitTerminalRuntimeStatus(
       { db: null as never } as never,
@@ -509,7 +512,7 @@ describe("submitTerminalRuntimeStatus", () => {
       },
     );
 
-    expect(vi.mocked(upsertLatestRuntimeStatus)).toHaveBeenCalledWith(
+    expect(vi.mocked(upsertLatestRuntimeStatusWithOutcome)).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         activeRegisterSession: expect.objectContaining({
@@ -522,9 +525,10 @@ describe("submitTerminalRuntimeStatus", () => {
 
   it("persists support-safe app-session recovery status in runtime status", async () => {
     vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
-    vi.mocked(upsertLatestRuntimeStatus).mockResolvedValue(
-      "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
-    );
+    vi.mocked(upsertLatestRuntimeStatusWithOutcome).mockResolvedValue({
+      didWrite: true,
+      runtimeStatusId: "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
+    });
 
     await submitTerminalRuntimeStatus(
       { db: null as never } as never,
@@ -540,7 +544,7 @@ describe("submitTerminalRuntimeStatus", () => {
       },
     );
 
-    expect(vi.mocked(upsertLatestRuntimeStatus)).toHaveBeenCalledWith(
+    expect(vi.mocked(upsertLatestRuntimeStatusWithOutcome)).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         appSessionRecovery: {
@@ -552,9 +556,10 @@ describe("submitTerminalRuntimeStatus", () => {
 
   it("returns a cloud-closed drawer authority directive when the mapped cloud register is no longer usable", async () => {
     vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
-    vi.mocked(upsertLatestRuntimeStatus).mockResolvedValue(
-      "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
-    );
+    vi.mocked(upsertLatestRuntimeStatusWithOutcome).mockResolvedValue({
+      didWrite: true,
+      runtimeStatusId: "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
+    });
     const db = {
       normalizeId: vi.fn(() => "cloud-register-1"),
       get: vi.fn(async () => ({
@@ -607,9 +612,10 @@ describe("submitTerminalRuntimeStatus", () => {
 
   it("returns an active register session directive when cloud has a usable drawer but runtime does not", async () => {
     vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
-    vi.mocked(upsertLatestRuntimeStatus).mockResolvedValue(
-      "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
-    );
+    vi.mocked(upsertLatestRuntimeStatusWithOutcome).mockResolvedValue({
+      didWrite: true,
+      runtimeStatusId: "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
+    });
     const registerSessions = [
       {
         _creationTime: 300,
@@ -677,9 +683,10 @@ describe("submitTerminalRuntimeStatus", () => {
 
   it("returns an active register session directive when runtime is stuck on a closed cloud drawer", async () => {
     vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
-    vi.mocked(upsertLatestRuntimeStatus).mockResolvedValue(
-      "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
-    );
+    vi.mocked(upsertLatestRuntimeStatusWithOutcome).mockResolvedValue({
+      didWrite: true,
+      runtimeStatusId: "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
+    });
     const registerSessions = [
       {
         _creationTime: 300,
@@ -767,9 +774,10 @@ describe("submitTerminalRuntimeStatus", () => {
 
   it("returns a cloud-closed drawer authority directive for closing local runtime evidence", async () => {
     vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
-    vi.mocked(upsertLatestRuntimeStatus).mockResolvedValue(
-      "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
-    );
+    vi.mocked(upsertLatestRuntimeStatusWithOutcome).mockResolvedValue({
+      didWrite: true,
+      runtimeStatusId: "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
+    });
     const db = {
       normalizeId: vi.fn(() => "cloud-register-1"),
       get: vi.fn(async () => ({
@@ -818,9 +826,10 @@ describe("submitTerminalRuntimeStatus", () => {
 
   it("ignores malformed cloud register ids in runtime drawer authority evidence", async () => {
     vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
-    vi.mocked(upsertLatestRuntimeStatus).mockResolvedValue(
-      "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
-    );
+    vi.mocked(upsertLatestRuntimeStatusWithOutcome).mockResolvedValue({
+      didWrite: true,
+      runtimeStatusId: "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
+    });
     const db = {
       normalizeId: vi.fn(() => null),
       get: vi.fn(),
@@ -860,9 +869,10 @@ describe("submitTerminalRuntimeStatus", () => {
 
   it("persists sanitized app-update runtime evidence", async () => {
     vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
-    vi.mocked(upsertLatestRuntimeStatus).mockResolvedValue(
-      "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
-    );
+    vi.mocked(upsertLatestRuntimeStatusWithOutcome).mockResolvedValue({
+      didWrite: true,
+      runtimeStatusId: "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
+    });
 
     await submitTerminalRuntimeStatus(
       { db: null as never } as never,
@@ -893,7 +903,7 @@ describe("submitTerminalRuntimeStatus", () => {
       },
     );
 
-    expect(vi.mocked(upsertLatestRuntimeStatus)).toHaveBeenCalledWith(
+    expect(vi.mocked(upsertLatestRuntimeStatusWithOutcome)).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         appUpdate: {
@@ -919,9 +929,10 @@ describe("submitTerminalRuntimeStatus", () => {
 
   it("clears stale app-update evidence when older clients omit it", async () => {
     vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
-    vi.mocked(upsertLatestRuntimeStatus).mockResolvedValue(
-      "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
-    );
+    vi.mocked(upsertLatestRuntimeStatusWithOutcome).mockResolvedValue({
+      didWrite: true,
+      runtimeStatusId: "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
+    });
 
     await submitTerminalRuntimeStatus(
       { db: null as never } as never,
@@ -932,7 +943,7 @@ describe("submitTerminalRuntimeStatus", () => {
       },
     );
 
-    expect(vi.mocked(upsertLatestRuntimeStatus)).toHaveBeenCalledWith(
+    expect(vi.mocked(upsertLatestRuntimeStatusWithOutcome)).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         appUpdate: undefined,
@@ -942,9 +953,10 @@ describe("submitTerminalRuntimeStatus", () => {
 
   it("clears stale app-session recovery status when runtime check-ins omit it", async () => {
     vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
-    vi.mocked(upsertLatestRuntimeStatus).mockResolvedValue(
-      "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
-    );
+    vi.mocked(upsertLatestRuntimeStatusWithOutcome).mockResolvedValue({
+      didWrite: true,
+      runtimeStatusId: "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
+    });
 
     await submitTerminalRuntimeStatus(
       { db: null as never } as never,
@@ -955,7 +967,7 @@ describe("submitTerminalRuntimeStatus", () => {
       },
     );
 
-    expect(vi.mocked(upsertLatestRuntimeStatus)).toHaveBeenCalledWith(
+    expect(vi.mocked(upsertLatestRuntimeStatusWithOutcome)).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         appSessionRecovery: undefined,
@@ -965,9 +977,10 @@ describe("submitTerminalRuntimeStatus", () => {
 
   it("clears stale terminal diagnostics when runtime check-ins omit them", async () => {
     vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
-    vi.mocked(upsertLatestRuntimeStatus).mockResolvedValue(
-      "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
-    );
+    vi.mocked(upsertLatestRuntimeStatusWithOutcome).mockResolvedValue({
+      didWrite: true,
+      runtimeStatusId: "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
+    });
 
     await submitTerminalRuntimeStatus(
       { db: null as never } as never,
@@ -978,7 +991,7 @@ describe("submitTerminalRuntimeStatus", () => {
       },
     );
 
-    expect(vi.mocked(upsertLatestRuntimeStatus)).toHaveBeenCalledWith(
+    expect(vi.mocked(upsertLatestRuntimeStatusWithOutcome)).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         drawerAuthority: undefined,
@@ -1008,7 +1021,9 @@ describe("submitTerminalRuntimeStatus", () => {
         message: "This terminal is not active for this store.",
       }),
     );
-    expect(vi.mocked(upsertLatestRuntimeStatus)).not.toHaveBeenCalled();
+    expect(
+      vi.mocked(upsertLatestRuntimeStatusWithOutcome),
+    ).not.toHaveBeenCalled();
   });
 });
 
