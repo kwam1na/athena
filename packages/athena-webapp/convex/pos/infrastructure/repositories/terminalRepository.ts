@@ -231,7 +231,7 @@ function stripRuntimeSyncVolatileFields(
     return undefined;
   }
 
-  const { lastTrigger: _lastTrigger, ...rest } = sync;
+  const { lastTrigger: _lastTrigger, status: _status, ...rest } = sync;
   return stripUndefined(rest);
 }
 
