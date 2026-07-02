@@ -49,6 +49,10 @@ export function buildTerminalOperationalState(
     effectiveRuntimeStatus,
     input.commandStatus,
   );
+  const terminalPreviewActions = dedupeTerminalActions([
+    ...terminalActions,
+    ...buildTerminalSupportCleanupActions(effectiveRuntimeStatus, input.runtimeFresh),
+  ]);
   const manualReview = buildTerminalRecoveryManualReview({
     attentionReasons,
     safeConflictIds: input.cloudRepair.safeConflictIds,
@@ -123,7 +127,7 @@ export function buildTerminalOperationalState(
       },
       cloudRepair: input.cloudRepair,
       commandStatus: input.commandStatus,
-      terminalActions,
+      terminalActions: terminalPreviewActions,
       manualReview,
     },
     registerEvidence: {
@@ -737,6 +741,66 @@ function buildTerminalRecoveryActions(
     });
   }
   return dedupeTerminalActions(actions);
+}
+
+function buildTerminalSupportCleanupActions(
+  status: TerminalOperationalPolicyInput["runtimeStatus"],
+  runtimeFresh: boolean,
+): TerminalOperationalState["recoveryEvidence"]["terminalActions"] {
+  const clearableReviewIds = getClearableLocalReviewIds(status, runtimeFresh);
+  if (!clearableReviewIds) {
+    return [];
+  }
+
+  return [
+    {
+      commandType: "clear_local_review_items",
+      expectedEvidence: {
+        localReviewClearedEventIds: clearableReviewIds,
+        localReviewEventCount: 0,
+      },
+      commandContext: {
+        expectedBlockerType: "local_review_clear_all",
+        localReviewClearAll: true,
+        localReviewClearLimit: clearableReviewIds.length,
+        localReviewEventIds: clearableReviewIds,
+        reason: "Dangerous cleanup for local review items.",
+      },
+      reason:
+        "Dangerous cleanup can clear all local review items from this terminal.",
+    },
+  ];
+}
+
+function getClearableLocalReviewIds(
+  status: TerminalOperationalPolicyInput["runtimeStatus"],
+  runtimeFresh: boolean,
+) {
+  const sync = status?.sync;
+  if (!sync) {
+    return null;
+  }
+  if (!runtimeFresh) {
+    return null;
+  }
+  if (
+    sync.reviewEventCount <= 0 ||
+    sync.reviewEventCount > LOCAL_REVIEW_COMMAND_EVENT_LIMIT
+  ) {
+    return null;
+  }
+
+  const reviewEvents = sync.reviewEvents ?? [];
+  if (
+    reviewEvents.length >= sync.reviewEventCount &&
+    reviewEvents.every(isReplayableLocalReviewEvent)
+  ) {
+    return reviewEvents
+      .slice(0, sync.reviewEventCount)
+      .map((event) => event.localEventId);
+  }
+
+  return null;
 }
 
 function getReplayableRuntimeLocalReviewEvents(

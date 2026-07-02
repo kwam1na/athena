@@ -1659,6 +1659,67 @@ describe("POS terminal public mutations", () => {
     expect(result.kind).toBe("ok");
   });
 
+  it("issues preview-matched local review clear-all commands", async () => {
+    const ctx = buildCtx();
+    const clearAllAction = {
+      commandType: "clear_local_review_items",
+      commandContext: {
+        expectedBlockerType: "local_review_clear_all",
+        localReviewClearAll: true,
+        localReviewClearLimit: 2,
+        localReviewEventIds: ["event-review-1", "event-review-2"],
+        reason: "Dangerous cleanup for local review items.",
+      },
+      expectedEvidence: {
+        localReviewClearedEventIds: ["event-review-1", "event-review-2"],
+        localReviewEventCount: 0,
+      },
+      reason:
+        "Dangerous cleanup can clear all local review items from this terminal.",
+    };
+    mocks.previewTerminalRecoveryQuery.mockResolvedValue({
+      appUpdate: {
+        description: "Current",
+        status: "current",
+      },
+      readiness: "needs_terminal_action",
+      runtimeFresh: true,
+      evidence: {
+        activeRegisterSession: false,
+        freshRuntimeRequiredForAbleToTransactNow: true,
+      },
+      cloudRepair: {
+        preconditionHash: "hash",
+        safeConflictIds: [],
+        skippedConflictIds: [],
+      },
+      commandStatus: null,
+      terminalActions: [clearAllAction],
+      manualReview: [],
+    });
+
+    const result = await getHandler(issueTerminalRecoveryCommand)(ctx as never, {
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      commandType: "clear_local_review_items",
+      commandContext: clearAllAction.commandContext,
+      expectedEvidence: clearAllAction.expectedEvidence,
+    });
+
+    expect(mocks.issueTerminalRecoveryCommandService).toHaveBeenCalledWith(
+      { repository: "write" },
+      expect.objectContaining({
+        commandContext: clearAllAction.commandContext,
+        commandType: "clear_local_review_items",
+        expectedEvidence: clearAllAction.expectedEvidence,
+        issuedByUserId: "athena-user-1",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      }),
+    );
+    expect(result.kind).toBe("ok");
+  });
+
   it("rejects terminal recovery commands that are not in the current server preview", async () => {
     const ctx = buildCtx();
     mocks.previewTerminalRecoveryQuery.mockResolvedValue({

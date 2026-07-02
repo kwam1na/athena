@@ -1053,6 +1053,56 @@ describe("terminal health presentation", () => {
     );
   });
 
+  it("keeps clear-all local review cleanup out of safe actions", () => {
+    const presentation = buildTerminalRecoveryPresentation({
+      recovery: {
+        terminalActions: [
+          {
+            commandContext: {
+              expectedBlockerType: "local_review_clear_all",
+              localReviewClearAll: true,
+              localReviewClearLimit: 2,
+              reason: "Dangerous cleanup for local review items.",
+            },
+            commandType: "clear_local_review_items",
+            expectedEvidence: {
+              localReviewEventCount: 0,
+            },
+            reason:
+              "Dangerous cleanup can clear all local review items from this terminal.",
+          },
+        ],
+      },
+      runtimeStatus: {
+        receivedAt: Date.now(),
+        sync: {
+          failedEventCount: 0,
+          localOnlyEventCount: 0,
+          pendingEventCount: 0,
+          reviewEventCount: 2,
+          reviewEvents: [
+            {
+              createdAt: Date.now() - 1_000,
+              localEventId: "event-review-1",
+              sequence: 12,
+              status: "needs_review",
+              type: "register.opened",
+              uploaded: true,
+              uploadSequence: 12,
+            },
+          ],
+          status: "needs_review",
+          uploadableEventCount: 0,
+        },
+      },
+      syncEvidence: {},
+      terminal: { status: "active" },
+    });
+
+    expect(presentation.safeActions).toEqual([]);
+    expect(presentation.groups.terminalRequired).toEqual([]);
+  });
+
   it("allows recovery actions after the latest command expires", () => {
     const presentation = buildTerminalRecoveryPresentation({
       recovery: {

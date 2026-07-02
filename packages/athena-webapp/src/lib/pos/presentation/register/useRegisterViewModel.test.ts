@@ -4849,7 +4849,13 @@ describe("useRegisterViewModel", () => {
       }),
     );
     expect(mockAddItem).not.toHaveBeenCalled();
-    expect(mockWriteLocalCloudMapping).not.toHaveBeenCalled();
+    expect(mockWriteLocalCloudMapping).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cloudId: "drawer-1",
+        entity: "registerSession",
+        localId: "drawer-1",
+      }),
+    );
   });
 
   it("durably clears an empty local sale when voiding it", async () => {

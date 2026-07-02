@@ -103,26 +103,49 @@ describe("terminal command service", () => {
     expect(repository.insertCommand).not.toHaveBeenCalled();
   });
 
-  it("rejects local review cleanup commands without bounded explicit ids", async () => {
+  it("issues bounded local review clear-all commands", async () => {
     const repository = buildRepository();
 
-    await expect(
-      issueTerminalRecoveryCommand(repository, {
-        commandType: "clear_local_review_items",
-        expectedEvidence: { localReviewEventCount: 0 },
-        issuedAt: now,
-        issuedByUserId: "user-1" as Id<"athenaUser">,
-        commandContext: {
-          localReviewClearAll: true,
-          reason: "Clear all local review items.",
-        },
-        storeId,
-        terminalId,
-      }),
-    ).resolves.toMatchObject({
-      error: { code: "validation_failed" },
-      kind: "user_error",
+    const result = await issueTerminalRecoveryCommand(repository, {
+      commandType: "clear_local_review_items",
+      expectedEvidence: {
+        localReviewClearedEventIds: ["event-review-1", "event-review-2"],
+        localReviewEventCount: 0,
+      },
+      issuedAt: now,
+      issuedByUserId: "user-1" as Id<"athenaUser">,
+      commandContext: {
+        expectedBlockerType: "local_review_clear_all",
+        localReviewClearAll: true,
+        localReviewClearLimit: 2,
+        localReviewEventIds: ["event-review-1", "event-review-2"],
+        reason: "Clear all local review items.",
+      },
+      storeId,
+      terminalId,
     });
+
+    expect(result).toMatchObject({
+      data: {
+        commandContext: {
+          expectedBlockerType: "local_review_clear_all",
+          localReviewClearAll: true,
+          localReviewClearLimit: 2,
+          localReviewEventIds: ["event-review-1", "event-review-2"],
+        },
+        commandType: "clear_local_review_items",
+        expectedEvidence: {
+          localReviewClearedEventIds: ["event-review-1", "event-review-2"],
+          localReviewEventCount: 0,
+        },
+      },
+      kind: "ok",
+    });
+    expect(repository.insertCommand).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects local review cleanup commands without bounded explicit ids or clear-all scope", async () => {
+    const repository = buildRepository();
 
     await expect(
       issueTerminalRecoveryCommand(repository, {
@@ -154,6 +177,101 @@ describe("terminal command service", () => {
         commandContext: {
           localReviewEventIds: ["event-review-1"],
           reason: "Clear reviewed local review items.",
+        },
+        storeId,
+        terminalId,
+      }),
+    ).resolves.toMatchObject({
+      error: { code: "validation_failed" },
+      kind: "user_error",
+    });
+
+    expect(repository.insertCommand).not.toHaveBeenCalled();
+  });
+
+  it("rejects malformed local review clear-all commands", async () => {
+    const repository = buildRepository();
+
+    await expect(
+      issueTerminalRecoveryCommand(repository, {
+        commandType: "clear_local_review_items",
+        expectedEvidence: { localReviewEventCount: 0 },
+        issuedAt: now,
+        issuedByUserId: "user-1" as Id<"athenaUser">,
+        commandContext: {
+          localReviewClearAll: true,
+          localReviewClearLimit: 101,
+          localReviewEventIds: Array.from(
+            { length: 101 },
+            (_, index) => `event-review-${index}`,
+          ),
+          reason: "Clear all local review items.",
+        },
+        storeId,
+        terminalId,
+      }),
+    ).resolves.toMatchObject({
+      error: { code: "validation_failed" },
+      kind: "user_error",
+    });
+
+    await expect(
+      issueTerminalRecoveryCommand(repository, {
+        commandType: "clear_local_review_items",
+        expectedEvidence: {
+          localReviewClearedEventIds: ["event-review-2"],
+          localReviewEventCount: 0,
+        },
+        issuedAt: now,
+        issuedByUserId: "user-1" as Id<"athenaUser">,
+        commandContext: {
+          localReviewClearAll: true,
+          localReviewEventIds: ["event-review-1"],
+          reason: "Clear all local review items.",
+        },
+        storeId,
+        terminalId,
+      }),
+    ).resolves.toMatchObject({
+      error: { code: "validation_failed" },
+      kind: "user_error",
+    });
+
+    await expect(
+      issueTerminalRecoveryCommand(repository, {
+        commandType: "clear_local_review_items",
+        expectedEvidence: { localReviewEventCount: 0 },
+        issuedAt: now,
+        issuedByUserId: "user-1" as Id<"athenaUser">,
+        commandContext: {
+          localReviewClearAll: true,
+          localReviewEventIds: ["event-review-1"],
+          reason: "Clear all local review items.",
+        },
+        storeId,
+        terminalId,
+      }),
+    ).resolves.toMatchObject({
+      error: { code: "validation_failed" },
+      kind: "user_error",
+    });
+
+    expect(repository.insertCommand).not.toHaveBeenCalled();
+  });
+
+  it("rejects local review clear-all commands without evidenced ids", async () => {
+    const repository = buildRepository();
+
+    await expect(
+      issueTerminalRecoveryCommand(repository, {
+        commandType: "clear_local_review_items",
+        expectedEvidence: { localReviewEventCount: 0 },
+        issuedAt: now,
+        issuedByUserId: "user-1" as Id<"athenaUser">,
+        commandContext: {
+          localReviewClearAll: true,
+          localReviewClearLimit: 2,
+          reason: "Clear all local review items.",
         },
         storeId,
         terminalId,

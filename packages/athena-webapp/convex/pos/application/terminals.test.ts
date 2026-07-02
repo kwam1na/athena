@@ -675,6 +675,96 @@ describe("submitTerminalRuntimeStatus", () => {
     });
   });
 
+  it("returns an active register session directive when runtime is stuck on a closed cloud drawer", async () => {
+    vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
+    vi.mocked(upsertLatestRuntimeStatus).mockResolvedValue(
+      "runtime-status-1" as Id<"posTerminalRuntimeStatus">,
+    );
+    const registerSessions = [
+      {
+        _creationTime: 300,
+        _id: "cloud-register-active",
+        expectedCash: 10_000,
+        openedAt: 180,
+        openingFloat: 10_000,
+        openedByStaffProfileId: "staff-2",
+        registerNumber: "A1",
+        status: "active",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      },
+      {
+        _creationTime: 200,
+        _id: "cloud-register-closed",
+        expectedCash: 9_000,
+        openedAt: 100,
+        openingFloat: 9_000,
+        registerNumber: "A1",
+        status: "closed",
+        storeId: "store-1",
+        terminalId: "terminal-1",
+      },
+    ];
+    const db = {
+      get: vi.fn(async (tableName: string, id: string) =>
+        tableName === "registerSession"
+          ? (registerSessions.find((session) => session._id === id) ?? null)
+          : null,
+      ),
+      normalizeId: vi.fn((tableName: string, value: string) =>
+        tableName === "registerSession" &&
+        registerSessions.some((session) => session._id === value)
+          ? value
+          : null,
+      ),
+      query: vi.fn(() => buildTerminalHealthQuery(registerSessions)),
+    };
+
+    const result = await submitTerminalRuntimeStatus(
+      { db } as never,
+      {
+        storeId: "store-1" as Id<"store">,
+        terminalId: "terminal-1" as Id<"posTerminal">,
+        status: {
+          ...buildRuntimeStatus(),
+          activeRegisterSession: {
+            localRegisterSessionId: "cloud-register-closed",
+            observedAt: 190,
+            openedAt: 100,
+            registerNumber: "A1",
+            status: "active",
+          },
+          localStore: {
+            available: true,
+            schemaVersion: 1,
+            terminalSeedReady: true,
+          },
+        },
+      },
+    );
+
+    expect(db.get).toHaveBeenCalledWith(
+      "registerSession",
+      "cloud-register-closed",
+    );
+    expect(result).toEqual({
+      kind: "ok",
+      data: expect.objectContaining({
+        activeRegisterSessionDirective: {
+          cloudRegisterSessionId: "cloud-register-active",
+          expectedCash: 10_000,
+          localRegisterSessionId: "cloud-register-active",
+          observedAt: 200,
+          openedAt: 180,
+          openingFloat: 10_000,
+          registerNumber: "A1",
+          staffProfileId: "staff-2",
+          status: "active",
+        },
+      }),
+    });
+  });
+
   it("returns a cloud-closed drawer authority directive for closing local runtime evidence", async () => {
     vi.mocked(getTerminalById).mockResolvedValue(existingTerminal);
     vi.mocked(upsertLatestRuntimeStatus).mockResolvedValue(

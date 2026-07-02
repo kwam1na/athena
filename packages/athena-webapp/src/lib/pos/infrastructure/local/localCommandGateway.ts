@@ -29,6 +29,9 @@ type PosLocalCommandStore = {
   ): Promise<PosLocalStoreResult<PosLocalEventRecord>>;
   listEvents(): Promise<PosLocalStoreResult<PosLocalEventRecord[]>>;
   listLocalCloudMappings?(): Promise<PosLocalStoreResult<PosLocalCloudMapping[]>>;
+  writeLocalCloudMapping?(
+    mapping: PosLocalCloudMapping,
+  ): Promise<PosLocalStoreResult<PosLocalCloudMapping>>;
   readDrawerAuthorityState?(input: {
     localRegisterSessionId: string;
     storeId: string;
@@ -53,6 +56,8 @@ type CreateLocalCommandGatewayOptions = {
   onEventAppended?: () => void;
   staffProofToken?: string | ((staffProfileId: string) => string | undefined);
 };
+
+type RegisterSessionSeedDecision = "append" | "already_seeded" | "blocked";
 
 export type LocalOpenDrawerResult = CommandResult<{
   localRegisterSessionId: string;
@@ -259,17 +264,21 @@ export function createLocalCommandGateway(
     return !blocker;
   }
 
-  async function canSeedRegisterSession(input: SeedLocalRegisterSessionInput) {
-    if (!hasCommandIdentity(input)) return false;
+  async function resolveRegisterSessionSeedDecision(
+    input: SeedLocalRegisterSessionInput,
+  ): Promise<RegisterSessionSeedDecision> {
+    if (!hasCommandIdentity(input)) return "blocked";
     const model = await readModel({
       storeId: input.storeId,
       terminalId: input.terminalId,
     });
-    if (!model.ok) return false;
+    if (!model.ok) return "blocked";
     if (model.value.canSell) {
       return (
         model.value.activeRegisterSession?.localRegisterSessionId ===
         input.localRegisterSessionId
+          ? "already_seeded"
+          : "blocked"
       );
     }
     const hasSettledCloseoutSession =
@@ -288,13 +297,13 @@ export function createLocalCommandGateway(
     const canSeedAfterExistingHistory =
       canSeedAfterSettledHistory || canSeedFromRuntimeDirective;
     if (model.value.saleBlockReason && !canSeedAfterExistingHistory) {
-      return false;
+      return "blocked";
     }
     if (
       !options.allowExplicitRegisterSessionWithoutProjection ||
       (model.eventCount > 0 && !canSeedAfterExistingHistory)
     ) {
-      return false;
+      return "blocked";
     }
 
     const drawerAuthority = await readDrawerAuthorityBlock({
@@ -302,7 +311,9 @@ export function createLocalCommandGateway(
       storeId: input.storeId,
       terminalId: input.terminalId,
     });
-    return drawerAuthority.ok && !drawerAuthority.blocked;
+    return drawerAuthority.ok && !drawerAuthority.blocked
+      ? "append"
+      : "blocked";
   }
 
   async function appendWithResult(input: PosLocalAppendEventInput) {
@@ -310,6 +321,22 @@ export function createLocalCommandGateway(
     if (!result.ok) return toLocalUserError(result.error.message);
     options.onEventAppended?.();
     return ok({ event: result.value });
+  }
+
+  async function writeSeedRegisterSessionMapping(
+    input: SeedLocalRegisterSessionInput,
+  ) {
+    if (!input.cloudRegisterSessionId || !options.store.writeLocalCloudMapping) {
+      return true;
+    }
+
+    const result = await options.store.writeLocalCloudMapping({
+      entity: "registerSession",
+      localId: input.localRegisterSessionId,
+      cloudId: input.cloudRegisterSessionId,
+      mappedAt: clock(),
+    });
+    return result.ok;
   }
 
   return {
@@ -555,7 +582,12 @@ export function createLocalCommandGateway(
     },
 
     async seedRegisterSession(input: SeedLocalRegisterSessionInput) {
-      if (!(await canSeedRegisterSession(input))) return false;
+      const seedDecision = await resolveRegisterSessionSeedDecision(input);
+      if (seedDecision === "blocked") return false;
+      if (seedDecision === "already_seeded") {
+        return writeSeedRegisterSessionMapping(input);
+      }
+      if (!(await writeSeedRegisterSessionMapping(input))) return false;
       return appendBoolean({
         type: "register.opened",
         terminalId: input.terminalId,
@@ -568,6 +600,7 @@ export function createLocalCommandGateway(
           input.staffProfileId,
         ),
         validationMetadata: input.validationMetadata,
+        initialSyncStatus: "synced",
         payload: {
           localRegisterSessionId: input.localRegisterSessionId,
           openingFloat: input.openingFloat,
@@ -848,6 +881,7 @@ type ReopenLocalRegisterInput = LocalCommandContext & {
 };
 
 type SeedLocalRegisterSessionInput = LocalCommandContext & {
+  cloudRegisterSessionId?: string;
   expectedCash: number;
   notes?: string | null;
   openingFloat: number;

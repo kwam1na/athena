@@ -1498,6 +1498,10 @@ function buildRecoveryBlockersFromPreview(
   }
 
   preview.terminalActions?.forEach((action, index) => {
+    if (isDangerousLocalReviewClearAllAction(action)) {
+      return;
+    }
+
     const actionStatus = getTerminalActionStatusForCurrentRuntime(
       summary,
       preview,
@@ -1542,6 +1546,15 @@ function buildRecoveryBlockersFromPreview(
   });
 
   return blockers;
+}
+
+function isDangerousLocalReviewClearAllAction(
+  action: NonNullable<TerminalRecoveryPreview["terminalActions"]>[number],
+) {
+  return (
+    action.commandType === "clear_local_review_items" &&
+    action.commandContext.localReviewClearAll === true
+  );
 }
 
 function getTerminalActionStatusForCurrentRuntime(

@@ -606,7 +606,7 @@ describe("terminalRecoveryCommands", () => {
       payload: {},
       storeId: "store-1",
       terminalId: "local-terminal-1",
-      type: "register.opened",
+      type: "transaction.completed",
     });
     await store.writeDrawerAuthorityState({
       cloudRegisterSessionId: "register-cloud-1",
@@ -1003,7 +1003,7 @@ describe("terminalRecoveryCommands", () => {
       staffProofToken: "proof-token-1",
       storeId: "store-1",
       terminalId: "local-terminal-1",
-      type: "transaction.completed",
+      type: "register.opened",
     });
     await store.markEventsNeedsReview(["event-review-1"], undefined, {
       uploaded: true,
@@ -1193,7 +1193,7 @@ describe("terminalRecoveryCommands", () => {
       staffProofToken: "proof-token-1",
       storeId: "store-1",
       terminalId: "local-terminal-1",
-      type: "transaction.completed",
+      type: "register.opened",
     });
 
     const result = await executeTerminalRecoveryCommand({
@@ -1223,21 +1223,50 @@ describe("terminalRecoveryCommands", () => {
     });
   });
 
-  it("fails clear-all local review cleanup commands without explicit ids", async () => {
+  it("clears all terminal-local review items", async () => {
+    let nextLocalId = 1;
     const store = createPosLocalStore({
       adapter: createMemoryPosLocalStorageAdapter(),
-      createLocalId: () => "event-review-1",
+      clock: () => 4_500,
+      createLocalId: () => `event-review-${nextLocalId++}`,
     });
     await store.appendEvent({
       initialSyncStatus: "needs_review",
       localRegisterSessionId: "register-local-1",
       payload: { total: 1000 },
       staffProfileId: "staff-1",
+      staffProofToken: "proof-token-1",
       storeId: "store-1",
       terminalId: "local-terminal-1",
-      type: "transaction.completed",
+      type: "register.opened",
     });
     await store.markEventsNeedsReview(["event-review-1"], undefined, {
+      uploaded: true,
+    });
+    await store.appendEvent({
+      initialSyncStatus: "needs_review",
+      localRegisterSessionId: "register-local-1",
+      payload: { total: 2000 },
+      staffProfileId: "staff-1",
+      staffProofToken: "proof-token-2",
+      storeId: "store-1",
+      terminalId: "local-terminal-1",
+      type: "register.opened",
+    });
+    await store.markEventsNeedsReview(["event-review-2"], undefined, {
+      uploaded: true,
+    });
+    await store.appendEvent({
+      initialSyncStatus: "needs_review",
+      localRegisterSessionId: "register-local-1",
+      payload: { total: 3000 },
+      staffProfileId: "staff-1",
+      staffProofToken: "proof-token-3",
+      storeId: "store-1",
+      terminalId: "local-terminal-1",
+      type: "register.opened",
+    });
+    await store.markEventsNeedsReview(["event-review-3"], undefined, {
       uploaded: true,
     });
 
@@ -1245,6 +1274,112 @@ describe("terminalRecoveryCommands", () => {
       command: buildCommand({
         commandContext: {
           localReviewClearAll: true,
+          localReviewClearLimit: 3,
+          localReviewEventIds: [
+            "event-review-1",
+            "event-review-2",
+            "event-review-3",
+          ],
+        },
+        type: "clear_local_review_items",
+      }),
+      store,
+      storeId: "store-1",
+      terminalId: "terminal-cloud-1",
+      terminalSeed: seed,
+    });
+
+    expect(result).toEqual({
+      clearedLocalReviewEventIds: [
+        "event-review-1",
+        "event-review-2",
+        "event-review-3",
+      ],
+      commandId: "command-1",
+      diagnostics: {
+        clearedReviewEventCount: 3,
+        remainingReviewEventCount: 0,
+        terminalId: "terminal-cloud-1",
+      },
+      message: "3 local review items were cleared on this terminal.",
+      status: "completed",
+      type: "clear_local_review_items",
+    });
+    await expect(store.listEvents()).resolves.toMatchObject({
+      ok: true,
+      value: [
+        expect.objectContaining({
+          localEventId: "event-review-1",
+          sync: expect.objectContaining({
+            localResolution: {
+              reason: "terminal_recovery_command",
+              resolvedAt: 4_500,
+              status: "local_review_cleared",
+            },
+            status: "locally_resolved",
+          }),
+        }),
+        expect.objectContaining({
+          localEventId: "event-review-2",
+          sync: expect.objectContaining({
+            localResolution: {
+              reason: "terminal_recovery_command",
+              resolvedAt: 4_500,
+              status: "local_review_cleared",
+            },
+            status: "locally_resolved",
+          }),
+        }),
+        expect.objectContaining({
+          localEventId: "event-review-3",
+          sync: expect.objectContaining({
+            localResolution: {
+              reason: "terminal_recovery_command",
+              resolvedAt: 4_500,
+              status: "local_review_cleared",
+            },
+            status: "locally_resolved",
+          }),
+        }),
+      ],
+    });
+    expect(JSON.stringify(result)).not.toMatch(/staff|proof-token|payload/i);
+  });
+
+  it("rejects clear-all local review commands when terminal review state drifted", async () => {
+    let nextLocalId = 1;
+    const store = createPosLocalStore({
+      adapter: createMemoryPosLocalStorageAdapter(),
+      clock: () => 4_500,
+      createLocalId: () => `event-review-${nextLocalId++}`,
+    });
+    await store.appendEvent({
+      initialSyncStatus: "needs_review",
+      localRegisterSessionId: "register-local-1",
+      payload: { total: 1000 },
+      staffProfileId: "staff-1",
+      staffProofToken: "proof-token-1",
+      storeId: "store-1",
+      terminalId: "local-terminal-1",
+      type: "transaction.completed",
+    });
+    await store.appendEvent({
+      initialSyncStatus: "needs_review",
+      localRegisterSessionId: "register-local-1",
+      payload: { total: 2000 },
+      staffProfileId: "staff-2",
+      staffProofToken: "proof-token-2",
+      storeId: "store-1",
+      terminalId: "local-terminal-1",
+      type: "register.opened",
+    });
+
+    const result = await executeTerminalRecoveryCommand({
+      command: buildCommand({
+        commandContext: {
+          localReviewClearAll: true,
+          localReviewClearLimit: 1,
+          localReviewEventIds: ["event-review-1"],
         },
         type: "clear_local_review_items",
       }),
@@ -1266,7 +1401,11 @@ describe("terminalRecoveryCommands", () => {
       value: [
         expect.objectContaining({
           localEventId: "event-review-1",
-          sync: expect.objectContaining({ status: "needs_review" }),
+          sync: { status: "needs_review" },
+        }),
+        expect.objectContaining({
+          localEventId: "event-review-2",
+          sync: { status: "needs_review" },
         }),
       ],
     });

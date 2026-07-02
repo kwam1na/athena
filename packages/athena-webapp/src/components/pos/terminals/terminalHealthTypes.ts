@@ -339,6 +339,7 @@ export type TerminalRecoveryExpectedEvidence = {
   localRegisterSessionId?: string;
   localStoreAvailable?: boolean;
   localReviewDetailsCollected?: boolean;
+  localReviewClearedEventIds?: string[];
   localReviewEventCount?: number;
   saleAuthorityStatus?: "ready" | "missing" | "blocked" | "unknown";
   staffAuthorityStatus?: "ready" | "missing" | "expired" | "unknown";

@@ -442,6 +442,16 @@ describe("terminal operational state policy", () => {
       commandType: "collect_local_review",
       expectedEvidence: { localReviewDetailsCollected: true },
     });
+    expect(state.recoveryPreview.terminalActions).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          commandContext: expect.objectContaining({
+            expectedBlockerType: "local_review_clear_all",
+          }),
+          commandType: "clear_local_review_items",
+        }),
+      ]),
+    );
   });
 
   it("does not replay stale collected local review evidence after the runtime count clears", () => {
@@ -625,6 +635,67 @@ describe("terminal operational state policy", () => {
         syncStatus: "idle",
       },
     });
+  });
+
+  it("adds bounded clear-all cleanup to the preview without changing primary recovery", () => {
+    const state = buildTerminalOperationalState(
+      baseInput({
+        runtimeStatus: buildRuntimeStatus({
+          sync: {
+            failedEventCount: 0,
+            localOnlyEventCount: 0,
+            pendingEventCount: 0,
+            reviewEventCount: 2,
+            reviewEvents: [
+              {
+                createdAt: now - 1_000,
+                localEventId: "event-review-1",
+                sequence: 12,
+                status: "needs_review",
+                type: "register.opened",
+                uploaded: true,
+                uploadSequence: 12,
+              },
+              {
+                createdAt: now - 500,
+                localEventId: "event-review-2",
+                sequence: 13,
+                status: "needs_review",
+                type: "register.opened",
+                uploaded: true,
+                uploadSequence: 13,
+              },
+            ],
+            status: "needs_review",
+            uploadableEventCount: 0,
+          },
+        }),
+      }),
+    );
+
+    expect(state.recoveryEvidence.terminalActions[0]).toMatchObject({
+      commandContext: {
+        expectedBlockerType: "local_review_replay",
+      },
+      commandType: "retry_sync",
+    });
+    expect(state.recoveryPreview.terminalActions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          commandContext: expect.objectContaining({
+            expectedBlockerType: "local_review_clear_all",
+            localReviewClearAll: true,
+            localReviewClearLimit: 2,
+            localReviewEventIds: ["event-review-1", "event-review-2"],
+          }),
+          commandType: "clear_local_review_items",
+          expectedEvidence: {
+            localReviewClearedEventIds: ["event-review-1", "event-review-2"],
+            localReviewEventCount: 0,
+          },
+        }),
+      ]),
+    );
   });
 
   it("keeps collecting local review evidence when any reported local review item was not uploaded", () => {

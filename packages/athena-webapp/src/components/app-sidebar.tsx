@@ -10,6 +10,7 @@ import {
   SidebarMenuSub,
   SidebarMenuSubItem,
   SidebarRail,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 import * as Collapsible from "@radix-ui/react-collapsible";
@@ -39,6 +40,8 @@ import {
   Layers,
   Banknote,
   ChevronRight,
+  PanelLeftClose,
+  PanelLeftOpen,
   Workflow,
 } from "lucide-react";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
@@ -58,6 +61,28 @@ type SidebarOrderSummary = {
 };
 
 type AppSidebarShellVariant = "classic" | "contained";
+
+function ContainedSidebarToggle() {
+  const { state, toggleSidebar } = useSidebar();
+  const isCollapsed = state === "collapsed";
+  const label = isCollapsed ? "Expand sidebar" : "Collapse sidebar";
+  const Icon = isCollapsed ? PanelLeftOpen : PanelLeftClose;
+
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      onClick={toggleSidebar}
+      className={cn(
+        "mt-layout-xs hidden h-9 w-[var(--sidebar-width-icon)] shrink-0 items-center justify-center self-start rounded-lg border border-sidebar-border/70 bg-sidebar text-sidebar-foreground shadow-surface transition-[background-color,border-color,color,transform] duration-fast ease-standard hover:border-sidebar-border hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring active:scale-[0.96] md:flex",
+      )}
+    >
+      <Icon aria-hidden="true" className="h-4 w-4" />
+      <span className="sr-only">{label}</span>
+    </button>
+  );
+}
 
 function SidebarMenuCollapsible({
   icon: Icon,
@@ -165,7 +190,7 @@ export function AppSidebar({
       className={cn(
         "top-16 bottom-auto h-[calc(100svh-4rem)]",
         isContainedShell &&
-          "md:top-20 md:bottom-auto md:h-auto md:max-h-[calc(100svh-6rem)] md:px-layout-sm",
+          "md:top-20 md:bottom-auto md:h-auto md:max-h-[calc(100svh-6rem)] md:flex-col md:px-layout-sm",
       )}
     >
       <SidebarContent
@@ -946,7 +971,7 @@ export function AppSidebar({
           </SidebarGroup>
         </PermissionGate>
       </SidebarContent>
-      {isContainedShell ? null : <SidebarRail />}
+      {isContainedShell ? <ContainedSidebarToggle /> : <SidebarRail />}
     </Sidebar>
   );
 }
