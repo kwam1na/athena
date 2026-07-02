@@ -25,7 +25,7 @@ import {
   mapTerminalRecord,
   patchTerminalRecord,
   registerTerminalRecord,
-  upsertLatestRuntimeStatus,
+  upsertLatestRuntimeStatusWithOutcome,
 } from "../../infrastructure/repositories/terminalRepository";
 import { deleteTerminalRecord } from "../../infrastructure/repositories/terminalRepository";
 
@@ -453,6 +453,7 @@ export async function submitTerminalRuntimeStatus(
 ): Promise<
   CommandResult<{
     activeRegisterSessionDirective?: ActiveRegisterSessionDirective;
+    acceptedForSideEffects: boolean;
     drawerAuthorityDirective?: DrawerAuthorityDirective;
     terminalId: Id<"posTerminal">;
     reportedAt: number;
@@ -480,7 +481,7 @@ export async function submitTerminalRuntimeStatus(
     args.status.activeRegisterSession,
   );
   const drawerAuthority = cleanDrawerAuthority(args.status.drawerAuthority);
-  await upsertLatestRuntimeStatus(ctx, {
+  const runtimeStatusWrite = await upsertLatestRuntimeStatusWithOutcome(ctx, {
     storeId: args.storeId,
     terminalId: args.terminalId,
     reportedAt,
@@ -575,6 +576,7 @@ export async function submitTerminalRuntimeStatus(
       activeRegisterSessionDirective,
       drawerAuthorityDirective,
     }),
+    acceptedForSideEffects: runtimeStatusWrite.didWrite,
     terminalId: args.terminalId,
     reportedAt,
     receivedAt,

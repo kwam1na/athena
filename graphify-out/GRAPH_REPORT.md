@@ -5,7 +5,7 @@
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 8476 nodes · 10202 edges · 2085 communities detected
+- 8482 nodes · 10216 edges · 2085 communities detected
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
 - Token cost: 0 input · 0 output
 
@@ -2179,36 +2179,36 @@ Cohesion: 0.06
 Nodes (24): cn(), formatMetadataDisplayValue(), formatMetadataValue(), formatOperatingDate(), formatTimestamp(), getAcknowledgementKey(), getArrayMetadataStringValue(), getBucketConfigs() (+16 more)
 
 ### Community 14 - "Community 14"
+Cohesion: 0.08
+Nodes (27): buildDisplaySafeConflictSummary(), buildTerminalSyncReviewSummary(), classifyTerminalSyncReviewConflict(), dedupeConflictsById(), emptyTerminalSyncReviewSummary(), getConflictBusinessKey(), getCurrentConflictKey(), getLatestRuntimeStatusForTerminal() (+19 more)
+
+### Community 15 - "Community 15"
 Cohesion: 0.09
 Nodes (28): buildRosterRecoveryPreview(), buildTerminalAppUpdatePreview(), buildTerminalHealthSummary(), buildTerminalOperationalStateForSummary(), buildTerminalRecoveryCloudRepairPreview(), buildTerminalRecoveryCommandStatus(), createTerminalCloudRepairQueryRepository(), formatRuntimeAppUpdateAssetSummary() (+20 more)
 
-### Community 15 - "Community 15"
+### Community 16 - "Community 16"
 Cohesion: 0.07
 Nodes (20): formatStatus(), formatUnitCount(), getPurchaseOrderMode(), getRecommendationForPurchaseOrder(), getRecommendationStateNote(), getRecommendationUrlSku(), handleAdvancePurchaseOrderToOrdered(), handleClearRecommendationFilters() (+12 more)
 
-### Community 16 - "Community 16"
+### Community 17 - "Community 17"
 Cohesion: 0.07
 Nodes (19): Boolean(), buildMissingDraftResult(), formatQueueWorkItemValue(), formatWorkItemTitle(), getQueueWorkItemInventoryReviewLineCount(), getQueueWorkItemNumberDetail(), getQueueWorkItemStockAdjustmentSkuId(), getQueueWorkItemStringDetail() (+11 more)
 
-### Community 17 - "Community 17"
+### Community 18 - "Community 18"
 Cohesion: 0.08
 Nodes (22): cleanInventoryMetadataValue(), formatInventoryItemPriceLabel(), formatInventoryNumber(), formatReservationSourceSummary(), getCountScopeLabel(), getInventoryItemDisplayName(), getInventoryItemOperationalPrice(), getReservationLabels() (+14 more)
 
-### Community 18 - "Community 18"
+### Community 19 - "Community 19"
 Cohesion: 0.14
 Nodes (35): asRecord(), calculateLocalSaleExpectedCashDelta(), canUploadedRegisterOpenReplaceBlockedDrawer(), cartItemSourceKey(), createMappingIndex(), errorFor(), errorMessage(), getCompletedSale() (+27 more)
 
-### Community 19 - "Community 19"
+### Community 20 - "Community 20"
 Cohesion: 0.11
 Nodes (33): approvalMetadataEntries(), approvalRequestTypeLabel(), buildDailyOpeningSnapshotWithCtx(), buildReadiness(), compactMetadataEntries(), formatPaymentMethodLabel(), getDailyOpeningForDate(), getMissingCarryForwardItems() (+25 more)
 
-### Community 20 - "Community 20"
+### Community 21 - "Community 21"
 Cohesion: 0.13
 Nodes (30): applyApprovedTransactionVoid(), buildCompleteTransactionResult(), buildVoidApprovalRequirement(), calculateCanonicalTransactionTotals(), calculateTotalPaid(), completedTransactionLabel(), completeTransaction(), createTransactionFromSessionHandler() (+22 more)
-
-### Community 21 - "Community 21"
-Cohesion: 0.08
-Nodes (21): buildDisplaySafeConflictSummary(), buildTerminalSyncReviewSummary(), classifyTerminalSyncReviewConflict(), dedupeConflictsById(), emptyTerminalSyncReviewSummary(), getConflictBusinessKey(), getCurrentConflictKey(), getLatestRuntimeStatusForTerminal() (+13 more)
 
 ### Community 22 - "Community 22"
 Cohesion: 0.1
@@ -2707,56 +2707,56 @@ Cohesion: 0.29
 Nodes (8): activeSchedulesOverlap(), findActiveScheduleForStoreAt(), getStoreScheduleContextForStoreAtWithCtx(), listActiveSchedulesForStore(), resolveStoreOperatingRangeForDateWithCtx(), toDraft(), toSummary(), upsertStoreScheduleCommandWithCtx()
 
 ### Community 146 - "Community 146"
-Cohesion: 0.29
-Nodes (7): formatDeliveryAddress(), getAmountPaidForOrder(), getDiscountValue(), getOrderAmount(), getOrderState(), getPickupActionState(), getPotentialPoints()
-
-### Community 147 - "Community 147"
 Cohesion: 0.35
 Nodes (10): buildCtx(), buildMapping(), buildRegisterSession(), buildStaffProfile(), buildStore(), buildTerminal(), buildTransaction(), buildWorkItem() (+2 more)
 
-### Community 148 - "Community 148"
+### Community 147 - "Community 147"
 Cohesion: 0.36
 Nodes (10): buildQuickAddEventMessage(), findExistingSku(), findOrCreateQuickAddCategory(), findOrCreateQuickAddSubcategory(), generateSKU(), getActorLabel(), isBarcodeLike(), mapSkuToCatalogResult() (+2 more)
 
-### Community 149 - "Community 149"
+### Community 148 - "Community 148"
 Cohesion: 0.2
 Nodes (2): listProductSkusByProductId(), readAllQueryResults()
 
-### Community 150 - "Community 150"
+### Community 149 - "Community 149"
 Cohesion: 0.18
 Nodes (0):
 
-### Community 151 - "Community 151"
+### Community 150 - "Community 150"
 Cohesion: 0.33
 Nodes (2): OrdersTableToolbarProvider(), useOrdersTableToolbar()
 
-### Community 152 - "Community 152"
+### Community 151 - "Community 151"
 Cohesion: 0.24
 Nodes (5): formatBackendLabel(), formatInventoryNumber(), formatQuantity(), getActivityTitle(), pluralize()
 
-### Community 153 - "Community 153"
+### Community 152 - "Community 152"
 Cohesion: 0.31
 Nodes (7): buildCustomerCreateInput(), cancelPendingAdd(), commitCustomer(), handleAddFromSearch(), handleClearCustomer(), handleSelectCustomer(), toCustomerInfo()
 
-### Community 154 - "Community 154"
+### Community 153 - "Community 153"
 Cohesion: 0.35
 Nodes (9): assertPosLocalStoreOk(), clearRecoverableDrawerAuthorityForSyncedEvents(), clearSettledRecoverableDrawerAuthorityBlock(), clearSupersededRecoverableDrawerAuthorityBlocks(), drawerAuthorityEventKey(), findDrawerAuthorityBlockForReview(), isDrawerAuthorityLifecycleEvent(), isRecoverableDrawerAuthorityReason() (+1 more)
 
-### Community 155 - "Community 155"
+### Community 154 - "Community 154"
 Cohesion: 0.25
 Nodes (5): getRuntimeStatusPublishMaterialSignature(), getRuntimeStatusPublishSignature(), getRuntimeStatusSignature(), normalizeRuntimeStatusPublishMaterial(), normalizeRuntimeStatusSignature()
 
-### Community 156 - "Community 156"
+### Community 155 - "Community 155"
 Cohesion: 0.2
 Nodes (2): runSharedRecovery(), runWithTimeout()
 
-### Community 157 - "Community 157"
+### Community 156 - "Community 156"
 Cohesion: 0.18
 Nodes (0):
 
-### Community 158 - "Community 158"
+### Community 157 - "Community 157"
 Cohesion: 0.24
 Nodes (5): collectOfflineAppShellDiagnostics(), expectPosRegisterRouteChunksCached(), formatRuntimeSignals(), getPosAppShellCachedUrls(), waitForRenderedAppShell()
+
+### Community 158 - "Community 158"
+Cohesion: 0.29
+Nodes (7): formatDeliveryAddress(), getAmountPaidForOrder(), getDiscountValue(), getOrderAmount(), getOrderState(), getPickupActionState(), getPotentialPoints()
 
 ### Community 159 - "Community 159"
 Cohesion: 0.18
@@ -2840,27 +2840,27 @@ Nodes (9): buildPartialDeliveryRunBaseline(), countBy(), createDeliveryRunLedger
 
 ### Community 179 - "Community 179"
 Cohesion: 0.39
-Nodes (6): buildInventoryMovement(), buildSkuActivityForInventoryMovement(), getSkuActivityTypeForMovement(), recordInventoryMovementWithCtx(), recordInventoryMovementWithDispositionWithCtx(), recordSkuActivityForInventoryMovementWithCtx()
+Nodes (7): resolveVerificationCodeRecipient(), sendDiscountCodeEmail(), sendDiscountReminderEmail(), sendFeedbackRequestEmail(), sendNewOrderEmail(), sendOrderEmail(), sendVerificationCode()
 
 ### Community 180 - "Community 180"
 Cohesion: 0.39
-Nodes (7): assertActiveTerminal(), getActiveManagerElevationByIdWithCtx(), getActiveManagerElevationWithCtx(), getCandidateElevations(), getStaffDisplayName(), startManagerElevationWithCtx(), toActiveElevation()
+Nodes (6): buildInventoryMovement(), buildSkuActivityForInventoryMovement(), getSkuActivityTypeForMovement(), recordInventoryMovementWithCtx(), recordInventoryMovementWithDispositionWithCtx(), recordSkuActivityForInventoryMovementWithCtx()
 
 ### Community 181 - "Community 181"
+Cohesion: 0.39
+Nodes (7): assertActiveTerminal(), getActiveManagerElevationByIdWithCtx(), getActiveManagerElevationWithCtx(), getCandidateElevations(), getStaffDisplayName(), startManagerElevationWithCtx(), toActiveElevation()
+
+### Community 182 - "Community 182"
 Cohesion: 0.22
 Nodes (0):
 
-### Community 182 - "Community 182"
+### Community 183 - "Community 183"
 Cohesion: 0.31
 Nodes (5): createTerminalRecoveryCommandReadRepository(), createTerminalRecoveryCommandRepository(), dedupeRecoveryConflictsById(), listTerminalRecoveryConflictsForRepair(), listTerminalRecoveryConflictSources()
 
-### Community 183 - "Community 183"
+### Community 184 - "Community 184"
 Cohesion: 0.22
 Nodes (0):
-
-### Community 184 - "Community 184"
-Cohesion: 0.39
-Nodes (7): resolveVerificationCodeRecipient(), sendDiscountCodeEmail(), sendDiscountReminderEmail(), sendFeedbackRequestEmail(), sendNewOrderEmail(), sendOrderEmail(), sendVerificationCode()
 
 ### Community 185 - "Community 185"
 Cohesion: 0.39

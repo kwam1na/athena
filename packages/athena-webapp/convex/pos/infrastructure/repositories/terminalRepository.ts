@@ -121,6 +121,17 @@ export async function upsertLatestRuntimeStatus(
   ctx: MutationCtx,
   input: Omit<Doc<"posTerminalRuntimeStatus">, "_id" | "_creationTime">,
 ) {
+  const result = await upsertLatestRuntimeStatusWithOutcome(ctx, input);
+  return result.runtimeStatusId;
+}
+
+export async function upsertLatestRuntimeStatusWithOutcome(
+  ctx: MutationCtx,
+  input: Omit<Doc<"posTerminalRuntimeStatus">, "_id" | "_creationTime">,
+): Promise<{
+  didWrite: boolean;
+  runtimeStatusId: Id<"posTerminalRuntimeStatus">;
+}> {
   const existing = await getLatestRuntimeStatusForTerminal(ctx, {
     storeId: input.storeId,
     terminalId: input.terminalId,
@@ -128,18 +139,106 @@ export async function upsertLatestRuntimeStatus(
 
   if (existing) {
     if (input.reportedAt < existing.reportedAt) {
-      return existing._id;
+      return {
+        didWrite: false,
+        runtimeStatusId: existing._id,
+      };
     }
 
-    await ctx.db.patch(
-      "posTerminalRuntimeStatus",
-      existing._id,
-      mergeRuntimeStatusPatch(existing, input),
-    );
-    return existing._id;
+    const patch = mergeRuntimeStatusPatch(existing, input);
+    if (isFastDuplicateRuntimeStatus(existing, patch)) {
+      return {
+        didWrite: false,
+        runtimeStatusId: existing._id,
+      };
+    }
+
+    await ctx.db.patch("posTerminalRuntimeStatus", existing._id, patch);
+    return {
+      didWrite: true,
+      runtimeStatusId: existing._id,
+    };
   }
 
-  return ctx.db.insert("posTerminalRuntimeStatus", omitUndefined(input));
+  return {
+    didWrite: true,
+    runtimeStatusId: await ctx.db.insert(
+      "posTerminalRuntimeStatus",
+      omitUndefined(input),
+    ),
+  };
+}
+
+const RUNTIME_STATUS_FAST_DUPLICATE_WINDOW_MS = 25_000;
+
+function isFastDuplicateRuntimeStatus(
+  existing: Doc<"posTerminalRuntimeStatus">,
+  patch: Omit<Doc<"posTerminalRuntimeStatus">, "_id" | "_creationTime">,
+) {
+  if (
+    patch.receivedAt - existing.receivedAt >=
+    RUNTIME_STATUS_FAST_DUPLICATE_WINDOW_MS
+  ) {
+    return false;
+  }
+
+  return (
+    runtimeStatusMaterialSignature(existing) ===
+    runtimeStatusMaterialSignature(patch)
+  );
+}
+
+function runtimeStatusMaterialSignature(
+  status: Partial<Doc<"posTerminalRuntimeStatus">>,
+) {
+  const material = stripUndefined({
+    activeRegisterSession: stripObservedAt(status.activeRegisterSession),
+    appSessionRecovery: status.appSessionRecovery,
+    appShell: stripObservedAt(status.appShell),
+    appUpdate: stripObservedAt(status.appUpdate),
+    appVersion: status.appVersion,
+    browserInfo: status.browserInfo,
+    buildSha: status.buildSha,
+    drawerAuthority: stripObservedAt(status.drawerAuthority),
+    localStore: status.localStore,
+    saleAuthority: stripObservedAt(status.saleAuthority),
+    source: status.source,
+    staffAuthority: status.staffAuthority,
+    storeId: status.storeId,
+    sync: stripRuntimeSyncVolatileFields(status.sync),
+    terminalId: status.terminalId,
+    terminalIntegrity: stripObservedAt(status.terminalIntegrity),
+  });
+
+  return JSON.stringify(material);
+}
+
+function stripObservedAt<T extends Record<string, unknown> | undefined>(
+  value: T,
+) {
+  if (!value) {
+    return undefined;
+  }
+
+  const { observedAt: _observedAt, ...rest } = value;
+  return stripUndefined(rest);
+}
+
+function stripRuntimeSyncVolatileFields(
+  sync: Doc<"posTerminalRuntimeStatus">["sync"] | undefined,
+) {
+  if (!sync) {
+    return undefined;
+  }
+
+  const { lastTrigger: _lastTrigger, ...rest } = sync;
+  return stripUndefined(rest);
+}
+
+function stripUndefined<T extends Record<string, unknown>>(input: T) {
+  return Object.fromEntries(
+    Object.entries(input).filter((entry) => entry[1] !== undefined),
+  ) as T;
 }
 
 function mergeRuntimeStatusPatch(
