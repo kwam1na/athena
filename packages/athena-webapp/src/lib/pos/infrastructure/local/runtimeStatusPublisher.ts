@@ -158,11 +158,7 @@ function normalizeRuntimeStatusPublishMaterial(
     };
   }
   if (stableStatus.sync) {
-    stableStatus.sync = { ...stableStatus.sync };
-    delete (stableStatus.sync as Partial<PosTerminalRuntimeStatusPayload["sync"]>)
-      .lastTrigger;
-    delete (stableStatus.sync as Partial<PosTerminalRuntimeStatusPayload["sync"]>)
-      .status;
+    delete stableStatus.sync;
   }
 
   return stableStatus;

@@ -66,6 +66,7 @@ import {
   derivePosLocalRuntimeSyncStatus,
   getRuntimeStatusSignature,
   isPosLocalRuntimeDrainCandidate,
+  resetRuntimeStatusPublishStateForTests,
   usePosLocalSyncRuntimeStatus,
   writeReturnedLocalCloudMappings,
 } from "./usePosLocalSyncRuntime";
@@ -123,6 +124,7 @@ describe("usePosLocalSyncRuntimeStatus", () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    resetRuntimeStatusPublishStateForTests();
     vi.useRealTimers();
   });
 
@@ -3958,6 +3960,64 @@ describe("usePosLocalSyncRuntimeStatus", () => {
     expect(mocks.reportTerminalRuntimeStatus).toHaveBeenCalledTimes(1);
   });
 
+  it("coalesces duplicate runtime check-in publishers for the same terminal", async () => {
+    const nextPublish = deferred<{
+      kind: "ok";
+      data: Record<string, never>;
+    }>();
+    mocks.reportTerminalRuntimeStatus.mockReturnValue(nextPublish.promise);
+    const store = {
+      listEvents: vi.fn(async () => ({
+        ok: true,
+        value: [],
+      })),
+      readProvisionedTerminalSeed: vi.fn(async () => ({
+        ok: true,
+        value: {
+          cloudTerminalId: "terminal-cloud-1",
+          displayName: "Front",
+          provisionedAt: 1,
+          schemaVersion: 1,
+          syncSecretHash: "sync-secret-1",
+          storeId: "store-1",
+          terminalId: "local-terminal-1",
+        },
+      })),
+    };
+
+    const storeFactory = () => store as never;
+    renderHook(() =>
+      usePosLocalSyncRuntimeStatus({
+        mode: "status-only",
+        storeFactory,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+    renderHook(() =>
+      usePosLocalSyncRuntimeStatus({
+        mode: "status-only",
+        storeFactory,
+        storeId: "store-1",
+        terminalId: "terminal-cloud-1",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(mocks.reportTerminalRuntimeStatus).toHaveBeenCalledTimes(1),
+    );
+    await act(async () => {
+      nextPublish.resolve({
+        kind: "ok",
+        data: {},
+      });
+      await nextPublish.promise;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(mocks.reportTerminalRuntimeStatus).toHaveBeenCalledTimes(1);
+  });
+
   it("starts runtime check-in heartbeat wakeups on the freshness cadence", () => {
     const heartbeat = vi.fn();
     const setIntervalFn = vi.fn(() => "timer-1");
@@ -4334,6 +4394,7 @@ describe("usePosLocalSyncRuntimeStatus", () => {
           },
           sync: {
             ...runtimeStatus.sync,
+            pendingEventCount: 7,
             lastTrigger: "foreground-interval",
             status: "needs_review",
           },

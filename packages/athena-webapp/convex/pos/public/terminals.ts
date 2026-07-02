@@ -7,7 +7,7 @@ import {
   requireAuthenticatedAthenaUserWithCtx,
   requireOrganizationMemberRoleWithCtx,
 } from "../../lib/athenaUserAuth";
-import { userError } from "../../../shared/commandResult";
+import { ok, userError } from "../../../shared/commandResult";
 import {
   deleteTerminal as deleteTerminalCommand,
   registerTerminal as registerTerminalCommand,
@@ -933,7 +933,13 @@ export const submitTerminalRuntimeStatus = mutation({
       terminalId: args.terminalId,
       status: safeStatus,
     });
-    if (result.kind === "ok") {
+    if (result.kind !== "ok") {
+      return result;
+    }
+
+    const { acceptedForSideEffects, ...runtimeStatusWriteResult } =
+      result.data;
+    if (acceptedForSideEffects !== false) {
       await runAcceptedRuntimeStatusSideEffects({
         ctx,
         receivedAt: result.data.receivedAt,
@@ -943,7 +949,7 @@ export const submitTerminalRuntimeStatus = mutation({
         terminalId: args.terminalId,
       });
     }
-    return result;
+    return ok(runtimeStatusWriteResult);
   },
 });
 

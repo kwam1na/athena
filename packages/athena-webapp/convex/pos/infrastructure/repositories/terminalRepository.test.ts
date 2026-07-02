@@ -8,6 +8,7 @@ import {
   TERMINAL_SYNC_REVIEW_SUMMARY_CAP,
   TERMINAL_SYNC_REVIEW_TARGET_LOOKUP_CAP,
   upsertLatestRuntimeStatus,
+  upsertLatestRuntimeStatusWithOutcome,
 } from "./terminalRepository";
 
 describe("terminalRepository runtime status", () => {
@@ -27,6 +28,11 @@ describe("terminalRepository runtime status", () => {
     });
     const input = {
       ...buildRuntimeStatus(),
+      localStore: {
+        available: true,
+        schemaVersion: 2,
+        terminalSeedReady: true,
+      },
       reportedAt: 250,
       receivedAt: 260,
     };
@@ -95,7 +101,7 @@ describe("terminalRepository runtime status", () => {
       ...buildRuntimeStatus(),
       appUpdate: undefined,
       reportedAt: 250,
-      receivedAt: 260,
+      receivedAt: 30_260,
     };
 
     const result = await upsertLatestRuntimeStatus(ctx as never, input);
@@ -107,10 +113,145 @@ describe("terminalRepository runtime status", () => {
       expect.objectContaining({
         appUpdate,
         reportedAt: 250,
-        receivedAt: 260,
+        receivedAt: 30_260,
       }),
     );
     expect(ctx.db.insert).not.toHaveBeenCalled();
+  });
+
+  it("preserves same-status staff identity when another runtime publisher omits it", async () => {
+    const ctx = buildCtx({
+      posTerminalRuntimeStatus: [
+        buildRuntimeStatus({
+          receivedAt: 100,
+          saleAuthority: {
+            observedAt: 100,
+            staffProfileId: "staff-1" as Id<"staffProfile">,
+            status: "ready",
+          },
+          staffAuthority: {
+            staffProfileId: "staff-1" as Id<"staffProfile">,
+            status: "ready",
+          },
+        }),
+      ],
+    });
+    const input = {
+      ...buildRuntimeStatus(),
+      receivedAt: 30_000,
+      saleAuthority: {
+        observedAt: 30_000,
+        status: "ready" as const,
+      },
+      staffAuthority: {
+        status: "ready" as const,
+      },
+    };
+
+    const result = await upsertLatestRuntimeStatusWithOutcome(
+      ctx as never,
+      input,
+    );
+
+    expect(result).toEqual({
+      didWrite: true,
+      runtimeStatusId: "runtime-status-1",
+    });
+    expect(ctx.db.patch).toHaveBeenCalledWith(
+      "posTerminalRuntimeStatus",
+      "runtime-status-1",
+      expect.objectContaining({
+        saleAuthority: expect.objectContaining({
+          staffProfileId: "staff-1",
+          status: "ready",
+        }),
+        staffAuthority: {
+          staffProfileId: "staff-1",
+          status: "ready",
+        },
+      }),
+    );
+  });
+
+  it("coalesces fast duplicate runtime status reports without patching", async () => {
+    const ctx = buildCtx({
+      posTerminalRuntimeStatus: [buildRuntimeStatus()],
+    });
+    const input = {
+      ...buildRuntimeStatus(),
+      reportedAt: 250,
+      receivedAt: 260,
+      snapshots: {
+        catalogAgeMs: 1500,
+        serviceCatalogAgeMs: 1500,
+      },
+      sync: {
+        ...buildRuntimeStatus().sync,
+        lastTrigger: "interval",
+        pendingEventCount: 3,
+        status: "syncing" as const,
+      },
+    };
+
+    const result = await upsertLatestRuntimeStatusWithOutcome(
+      ctx as never,
+      input,
+    );
+
+    expect(result).toEqual({
+      didWrite: false,
+      runtimeStatusId: "runtime-status-1",
+    });
+    expect(ctx.db.patch).not.toHaveBeenCalled();
+    expect(ctx.db.insert).not.toHaveBeenCalled();
+  });
+
+  it("refreshes duplicate runtime status after the server heartbeat window", async () => {
+    const ctx = buildCtx({
+      posTerminalRuntimeStatus: [buildRuntimeStatus()],
+    });
+    const input = {
+      ...buildRuntimeStatus(),
+      reportedAt: 31_000,
+      receivedAt: 31_000,
+    };
+
+    const result = await upsertLatestRuntimeStatusWithOutcome(
+      ctx as never,
+      input,
+    );
+
+    expect(result).toEqual({
+      didWrite: true,
+      runtimeStatusId: "runtime-status-1",
+    });
+    expect(ctx.db.patch).toHaveBeenCalledWith(
+      "posTerminalRuntimeStatus",
+      "runtime-status-1",
+      input,
+    );
+  });
+
+  it("coalesces duplicate runtime status reports just before the heartbeat boundary", async () => {
+    const ctx = buildCtx({
+      posTerminalRuntimeStatus: [buildRuntimeStatus()],
+    });
+    const input = {
+      ...buildRuntimeStatus(),
+      reportedAt: 28_000,
+      receivedAt: 28_000,
+    };
+
+    const result = await upsertLatestRuntimeStatusWithOutcome(
+      ctx as never,
+      input,
+    );
+
+    expect(result).toEqual({
+      didWrite: false,
+      runtimeStatusId: "runtime-status-1",
+    });
+    expect(ctx.db.patch).not.toHaveBeenCalled();
   });
 
   it("ignores delayed older runtime status reports for the latest row", async () => {

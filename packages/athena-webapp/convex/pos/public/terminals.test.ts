@@ -838,6 +838,48 @@ describe("POS terminal public mutations", () => {
     );
   });
 
+  it("skips runtime side effects when the backend coalesces a fast duplicate check-in", async () => {
+    mocks.submitTerminalRuntimeStatusCommand.mockResolvedValue({
+      kind: "ok",
+      data: {
+        acceptedForSideEffects: false,
+        terminalId: "terminal-1",
+        reportedAt: 100,
+        receivedAt: 200,
+      },
+    });
+    const ctx = buildCtx({
+      terminal: {
+        _id: "terminal-1",
+        storeId: "store-1",
+        status: "active",
+        registeredByUserId: "athena-user-2",
+        syncSecretHash: SYNC_SECRET_HASH,
+        displayName: "Front register",
+      },
+    });
+
+    const result = await getHandler(submitTerminalRuntimeStatus)(ctx as never, {
+      storeId: "store-1",
+      terminalId: "terminal-1",
+      syncSecretHash: "sync-secret-1",
+      status: buildRuntimeStatus(),
+    });
+
+    expect(result).toEqual({
+      kind: "ok",
+      data: {
+        terminalId: "terminal-1",
+        reportedAt: 100,
+        receivedAt: 200,
+      },
+    });
+    expect(mocks.remoteAssistUpsertClient).not.toHaveBeenCalled();
+    expect(
+      mocks.verifyTerminalRecoveryCommandsFromRuntime,
+    ).not.toHaveBeenCalled();
+  });
+
   it("claims a connecting Remote Assist session after a successful runtime check-in", async () => {
     const session = buildRemoteAssistSession({ status: "connecting" });
     mocks.remoteAssistGetCurrentSessionForClient.mockResolvedValue(session);
